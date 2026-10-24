@@ -64,9 +64,9 @@ export type CursorSdkHarnessSettings = {
    */
   readonly requireCredentialBrokering?: boolean
   /**
-   * Model parameters, e.g. `{ fast: 'false' }` for `composer-2.5`. Parameters left unset take the
-   * catalog's default variant (`isDefault`; `composer-2.5` is `fast=true`), which the adapter
-   * passes explicitly, so the turn asks for exactly what it records.
+   * Model parameters, e.g. `{ fast: 'true' }` for `composer-2.5`. Parameters left unset take the
+   * catalog's default variant (`isDefault`), except `fast`, which is `false` wherever the model
+   * takes it; the adapter passes them explicitly, so the turn asks for exactly what it records.
    */
   readonly modelParams?: Readonly<Record<string, string>>
   /**
@@ -420,7 +420,10 @@ function mergeEffortParams(
 
 /**
  * The model with every parameter set: the ones given, then the rest from the catalog's default
- * variant (the SDK's own choice for an unset parameter), so nothing is left for the SDK to pick.
+ * variant, so nothing is left for the SDK to pick. An unset `fast` is `false` when the model
+ * takes it, whatever the default variant says: Fast is a price tier (`composer-2.5`'s default
+ * variant is Fast, at several times the standard price), so a run opts into it with
+ * `fast: 'true'`.
  */
 export function withParams(
   id: string,
@@ -435,9 +438,29 @@ export function withParams(
       }>)
     : []
   const fallback = (variants.find((v) => v.isDefault) ?? variants[0])?.params ?? []
+  const standard = takesStandardSpeed(entry, variants)
   const params = [
     ...Object.entries(given ?? {}).map(([pid, value]) => ({ id: pid, value })),
-    ...fallback.filter((p) => !given || !(p.id in given)),
+    ...fallback
+      .filter((p) => !given || !(p.id in given))
+      .map((p) => (p.id === 'fast' && standard ? { id: p.id, value: 'false' } : p)),
   ]
+  if (standard && !params.some((p) => p.id === 'fast')) {
+    params.push({ id: 'fast', value: 'false' })
+  }
   return params.length ? { id, params } : { id }
+}
+
+/** Whether the catalog entry lets `fast` be `false`, in its parameters or any variant. */
+function takesStandardSpeed(
+  entry: CursorSdkModelEntry | undefined,
+  variants: ReadonlyArray<{ params?: Array<{ id: string; value: string }> }>,
+): boolean {
+  const parameters = Array.isArray(entry?.parameters)
+    ? (entry.parameters as Array<{ id?: unknown; values?: Array<{ value?: unknown }> }>)
+    : []
+  return (
+    parameters.some((p) => p.id === 'fast' && p.values?.some((v) => v.value === 'false')) ||
+    variants.some((v) => v.params?.some((p) => p.id === 'fast' && p.value === 'false'))
+  )
 }

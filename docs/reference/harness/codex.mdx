@@ -28,6 +28,10 @@ export default defineConfig({
   The harness's id in cell keys, filters and the record. Default `codex:<model>`, or `codex:<model>[effort=<value>]` when `effort` is set.
 </Property>
 
+<Property name="gateway" type="'direct' | Gateway" optional>
+  The gateway this harness's model calls go through, by name or helper, such as `direct()`. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness. See [Gateways](/reference/gateway#pinning-a-harness).
+</Property>
+
 <Property name="maxConcurrent" type="number" optional>
   The most Codex attempts at once across the run, for example for your key's rate limits.
 </Property>
@@ -42,10 +46,10 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `OPENAI_API_KEY` (an OpenAI API key) |
-| Adapter | `@reeval/harness-codex` 0.1.7, bundled with reeval |
-| CLI | `@openai/codex` 0.163.0, its native Linux build, checked against npm's sha512 |
+| Adapter | `@reeval/harness-codex` 0.1.8, bundled with reeval |
+| CLI | `@openai/codex` 0.164.0, its native Linux build, checked against npm's sha512 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:codex-0.1.7` |
+| Image | `reeval-sandbox:codex-0.1.8` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.agents/skills` |
 | Skills (`placement: 'workspace'`) | `.agents/skills` in the workspace |
@@ -53,6 +57,7 @@ export default defineConfig({
 | Tokens | Reported for each turn, reasoning included |
 | Served model | The dated model and reasoning effort, from each API response |
 | MCP | `mcp.stdio` and `mcp.http` (no `mcp.sse`) |
+| Plugins | `skills` and `mcp`, added with `codex plugin add` (below) |
 
 Build its image once with `reeval image build` in a project whose config uses `codex()`. `gpt-5.6-luna` is in Codex's catalogue and passes the harness contract; pin the model you mean to measure.
 
@@ -74,6 +79,8 @@ reeval passes `OPENAI_API_KEY` to the adapter explicitly, and Codex gets a place
 
 The adapter refuses to run in a sandbox that can't broker the key.
 
+On a [`gateway` list](/reference/gateway#vercel-ai-gateway) that resolves the harness to `vercel()`, the key is `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`), Codex's provider is Vercel's Responses API (`https://ai-gateway.vercel.sh/v1`), and the gateway brokers `POST /v1/responses` on `ai-gateway.vercel.sh` instead. A model id without a provider is sent as `openai/<model>`.
+
 ## Tokens and the served model
 
 | `model` | Served model recorded |
@@ -83,7 +90,7 @@ The adapter refuses to run in a sandbox that can't broker the key.
 
 Each turn is one step, with the tokens `turn.completed` reports: input (uncached, and cache reads and writes) and output, with its reasoning tokens.
 
-Codex doesn't say which model served a turn, so the gateway reads it from each response: the Responses API names the model (a dated snapshot for some) and the reasoning effort Codex asked for. The same value is in the attempt's `servedModels` and the run's `resolvedModels`.
+Codex doesn't say which model served a turn, so the gateway reads it from each response: the Responses API names the model (a dated snapshot for some) and the reasoning effort Codex asked for. The same value is in the attempt's `servedModels` and the run's `resolvedModels`. On `vercel()` it's Vercel's id, such as `openai/gpt-5.6-luna[effort=medium]`.
 
 ## Turns and settings
 
@@ -103,7 +110,7 @@ The adapter writes `~/.codex/config.toml` with Codex's defaults but for what it 
 | Setting | Stops |
 |---|---|
 | `analytics.enabled = false` | Analytics to `ab.chatgpt.com` |
-| `features.plugins = false` | The plugin sync from `github.com` and `chatgpt.com` |
+| `features.plugins = false` | The plugin sync from `github.com` and `chatgpt.com`, in a session without [plugins](#plugins) |
 
 With them, a turn contacts only `api.openai.com`, so `egress: 'deny-all'` needs nothing else. Codex's web search and the pages it opens run on OpenAI's side: a restricted policy doesn't limit them, and each is a `web-search` or `web-fetch` event in the [transcript](/reference/transcript).
 
@@ -114,6 +121,33 @@ With them, a turn contacts only `api.openai.com`, so `egress: 'deny-all'` needs 
 | `mcp.stdio` | `command`, `args` and `env` |
 | `mcp.http` | `url` and `http_headers` |
 | `mcp.sse` | Refused at plan time, naming the server: Codex has no SSE transport |
+
+## Plugins
+
+```json title="~/.agents/plugins/marketplace.json"
+{
+  "name": "reeval",
+  "plugins": [
+    {
+      "name": "review",
+      "source": { "source": "local", "path": "./.reeval/plugins/review" }
+    }
+  ]
+}
+```
+
+reeval copies each plugin to `~/.reeval/plugins/<name>/` and lists it in Codex's home marketplace. Before the first turn the adapter runs `codex plugin add review@reeval`, offline, which copies the plugin into `~/.codex/plugins/cache/reeval/` and enables it in `config.toml`. Codex loads each plugin namespaced, so its skills don't clash with yours.
+
+A session with plugins sets `features.plugins = true`, and Codex then syncs its plugin catalogue on every turn. Under a restricted policy, its calls to `github.com`, `api.github.com` and `chatgpt.com` are refused and recorded under `egress.expectedBlocked`. In a session without plugins, a refused call to those hosts is the agent's own, so it stays in `egress.blocked`.
+
+Codex starts a plugin's MCP servers itself, so reeval leaves them out of `mcp_servers`. It names them by their own keys, so the transcript names a call `mcp__docs__<tool>`, and the plan refuses a plugin server named like one in the environment's `mcp`, which Codex would drop. As for [Claude Code](/reference/harness/claude-code#plugins), the placed `.mcp.json` runs each through reeval's MCP timer, and a plugin server that reads a host secret is refused at plan time; declare that server in `mcp`. The plan refuses any part Codex doesn't load:
+
+```text
+reeval: evals/p.eval.ts: evaluate("reviews") on codex:gpt-5.4-mini: Codex can't load the review plugin's hooks (hooks/hooks.json): use only: ['skills'], or leave the plugin out of this cell
+reeval: evals/p.eval.ts: evaluate("reviews") on codex:gpt-5.4-mini: Codex can't load the chat plugin's apps: they need a ChatGPT login
+```
+
+A plugin has apps when its manifest names `apps` or it has an `.app.json`. Codex reads a plugin's `.codex-plugin/plugin.json`, or a root `plugin.json` with an Agent Plugins `$schema`, in place of its `.claude-plugin/plugin.json`, so the plan refuses a plugin that has either: reeval couldn't hold Codex to the parts it places.
 
 ## Errors
 

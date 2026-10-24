@@ -6,17 +6,19 @@ import http from 'node:http'
 import { after, describe, test } from 'node:test'
 import { PROXY_PORT } from '../src/egress/gateway.ts'
 import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
-import { createDockerSession, type DockerSession } from '../src/session.ts'
+import type { DockerSession } from '../src/session.ts'
+import { type DockerCommand, onDockerCommand } from '../src/trace.ts'
+import { CLI, createSession, REQUIRE_ENGINE } from './engine.ts'
 
 const dockerReady = (() => {
   try {
-    execFileSync('docker', ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })
+    execFileSync(CLI, ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })
     return true
   } catch {
     return false
   }
 })()
-const requireDocker = process.env.REEVAL_TEST_REQUIRE_DOCKER === '1'
+const requireDocker = REQUIRE_ENGINE
 const skip = !dockerReady && !requireDocker && `needs Docker and ${DEFAULT_IMAGE}`
 
 /** Polls until `check` returns true, failing with `what` after the deadline. */
@@ -41,7 +43,7 @@ const longCommand = () => `sleep 3000.${process.pid}${++n}`
 
 /** Containers, running or not, with the test label `value`. */
 const labelled = (value: string) =>
-  execFileSync('docker', ['ps', '-aq', '--filter', `label=ai.reeval.test=${value}`], {
+  execFileSync(CLI, ['ps', '-aq', '--filter', `label=ai.reeval.test=${value}`], {
     encoding: 'utf8',
   }).trim()
 
@@ -59,7 +61,7 @@ describe('create and abort', { skip, timeout: 120_000 }, () => {
         const controller = new AbortController()
         setTimeout(() => controller.abort(new Error('stop')), ms)
         try {
-          const s = await createDockerSession({
+          const s = await createSession({
             image: DEFAULT_IMAGE,
             labels: { 'ai.reeval.test': label },
             abortSignal: controller.signal,
@@ -73,10 +75,8 @@ describe('create and abort', { skip, timeout: 120_000 }, () => {
           await eventually(`a container for ${label}`, async () => labelled(label) === '', 10_000)
         } catch {
           left.push(`${ms}ms`)
-          execFileSync('sh', [
-            '-c',
-            `docker rm -f $(docker ps -aq --filter label=ai.reeval.test=${label})`,
-          ])
+          const ids = labelled(label).split(/\s+/).filter(Boolean)
+          if (ids.length) execFileSync(CLI, ['rm', '-f', ...ids])
         }
       }),
     )
@@ -89,7 +89,7 @@ describe('create and abort', { skip, timeout: 120_000 }, () => {
 
   test('the leak check sees a live container (twin: it can fail)', async () => {
     const label = `twin-${process.pid}`
-    const s = await createDockerSession({
+    const s = await createSession({
       image: DEFAULT_IMAGE,
       labels: { 'ai.reeval.test': label },
     })
@@ -118,7 +118,7 @@ const get = (url: string, ms: number) =>
 
 describe('the gateway when its forwarder dies', { skip, timeout: 60_000 }, () => {
   test('the session reports it, and ports fail fast with the reason', async () => {
-    const s = await createDockerSession({
+    const s = await createSession({
       image: DEFAULT_IMAGE,
       labels: { 'ai.reeval.test': 'forwarder' },
       egress: true,
@@ -137,7 +137,7 @@ describe('the gateway when its forwarder dies', { skip, timeout: 60_000 }, () =>
       // The forwarder is the one process whose command line has the proxy port. It runs as root,
       // out of the sandbox user's reach, so kill it as root.
       const pattern = `[${String(PROXY_PORT)[0]}]${String(PROXY_PORT).slice(1)}`
-      const killed = spawnSync('docker', [
+      const killed = spawnSync(CLI, [
         'exec',
         '--user',
         '0:0',
@@ -171,7 +171,7 @@ describe('the gateway when its forwarder dies', { skip, timeout: 60_000 }, () =>
 describe('exec in a container', { skip, timeout: 60_000 }, () => {
   const sessions: DockerSession[] = []
   const open = async () => {
-    const s = await createDockerSession({
+    const s = await createSession({
       image: DEFAULT_IMAGE,
       labels: { 'ai.reeval.test': 'session' },
     })
@@ -219,6 +219,40 @@ describe('exec in a container', { skip, timeout: 60_000 }, () => {
       `${command} is still running in the container after the abort`,
       async () => (await processes(s, command)) === '',
     )
+  })
+
+  test('an empty file write attaches no stdin, and empties the file; a non-empty one pipes it', async () => {
+    const s = await open()
+    // `docker exec -i` can lose the EOF of a stdin that's empty, a few times in a thousand on a
+    // loaded host, and leave `cat` waiting forever: an empty write must not attach one.
+    const execs: DockerCommand[] = []
+    onDockerCommand((c) => c.args[0] === 'exec' && execs.push(c))
+    try {
+      await s.writeTextFile({ path: 'filled.txt', content: 'full' })
+      assert.equal(await s.readTextFile({ path: 'filled.txt' }), 'full')
+      const filled = execs.splice(0)
+      assert.ok(
+        filled.some((c) => c.args.includes('--interactive') && c.stdin === 4),
+        JSON.stringify(filled),
+      )
+      await s.writeTextFile({ path: 'filled.txt', content: '' })
+      await Promise.all(
+        Array.from({ length: 50 }, (_, i) =>
+          s.writeTextFile({ path: `empty/${i}.txt`, content: '' }),
+        ),
+      )
+      const empty = execs.splice(0)
+      assert.equal(empty.length, 51)
+      assert.deepEqual(
+        empty.filter((c) => c.args.includes('--interactive')),
+        [],
+      )
+    } finally {
+      onDockerCommand(undefined)
+    }
+    assert.equal(await s.readTextFile({ path: 'filled.txt' }), '')
+    const sizes = await s.run({ command: 'find empty -type f -size 0 | wc -l' })
+    assert.equal(sizes.stdout.trim(), '50')
   })
 
   test('the process check sees a running command (twin: it can fail)', async () => {

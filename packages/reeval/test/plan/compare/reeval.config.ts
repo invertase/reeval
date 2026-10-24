@@ -6,5 +6,6 @@ export default defineConfig({
   profiles: {
     lean: { limit: { compare: { maxVariants: 1 } } },
     off: { limit: { compare: false } },
+    none: { limit: { compare: { maxVariants: 0 } } },
   },
 })

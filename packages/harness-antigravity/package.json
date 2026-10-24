@@ -1,6 +1,6 @@
 {
   "name": "@reeval/harness-antigravity",
-  "version": "0.1.8",
+  "version": "0.1.12",
   "private": true,
   "description": "An AI SDK harness adapter for the Google Antigravity CLI (agy), over its stream-json headless mode",
   "license": "Apache-2.0",
@@ -38,9 +38,9 @@
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
   },
   "dependencies": {
-    "@ai-sdk/harness": "1.0.154",
-    "@ai-sdk/provider": "4.0.29",
-    "@ai-sdk/provider-utils": "5.0.62",
+    "@ai-sdk/harness": "1.0.156",
+    "@ai-sdk/provider": "4.0.30",
+    "@ai-sdk/provider-utils": "5.0.63",
     "zod": "4.6.7"
   }
 }

@@ -1,21 +1,22 @@
 // One eval file's worker: loads the file, reports what it declares, and with a selection, runs
 // those attempts and exits. The main process starts a fresh one per file (./pool.ts), from the
 // copy of reeval the project itself resolves, so the file registers with the reeval it imports.
-import { matchers } from '../matchers.ts'
+
+import { loadEvalModule } from '../language-runner/load.ts'
+import { evalMatchers } from '../matchers.ts'
 import { useSchedulerChannel } from '../scheduler/client.ts'
 import type { RunContext } from '../types.ts'
 import { collect, collectingFile, registerGroup, registerTest } from './collector.ts'
 import { extendExpect } from './expect.ts'
-import { loadEvalFile } from './loader.ts'
 import { type FromWorker, PROTOCOL, type ToWorker } from './protocol.ts'
 import { type Reporter, routeConsole, runTests, serializeError } from './run.ts'
 import { useEngine } from './runtime.ts'
 
 /** The worker's side of its IPC channel. */
 export type Channel = {
-  send(message: FromWorker, sent?: () => void): void
+  send(message: FromWorker): void
   onMessage(listener: (message: ToWorker) => void): void
-  /** The main process is gone. */
+  /** The main process closed the channel, after `done` or because it's gone. */
   onDisconnect(listener: () => void): void
   exit(code: number): void
 }
@@ -36,7 +37,8 @@ export function startWorker(channel: Channel): Worker {
     else if (message.t === 'grant') grant?.(message.id)
     else stop()
   })
-  // Orphaned (the CLI was killed): cancel, let every attempt clean up, then go.
+  // The main process closed the channel after `done`, or is gone (the CLI was killed): cancel, let
+  // every attempt clean up, then go.
   channel.onDisconnect(() => {
     stop()
     void working.finally(() => channel.exit(0))
@@ -54,10 +56,10 @@ export function startWorker(channel: Channel): Worker {
 
   async function init(run: RunContext, file: string, select: number[] | null): Promise<void> {
     useEngine({ registerTest, registerGroup, getRunContext: () => run, collectingFile })
-    extendExpect(matchers)
+    extendExpect(evalMatchers)
     routeConsole(reporter)
     try {
-      const tests = await collect(file, () => loadEvalFile(file, run.config.root))
+      const tests = await collect(file, () => loadEvalModule(file, run.config.root))
       channel.send({
         t: 'collected',
         tests: tests.map(({ index, name, groups, mode, options }) => ({
@@ -81,7 +83,8 @@ export function startWorker(channel: Channel): Worker {
     } catch (error) {
       channel.send({ t: 'load-error', error: serializeError(error) })
     }
-    channel.send({ t: 'done' }, () => channel.exit(0))
+    // The last message: the main process closes the channel once it has it, and the worker exits.
+    channel.send({ t: 'done' })
   }
 
   channel.send({ t: 'hello', protocol: PROTOCOL })

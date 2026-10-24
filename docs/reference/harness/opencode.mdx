@@ -32,6 +32,10 @@ export default defineConfig({
   The harness's id in cell keys, filters and the record. Default `opencode:<model>`, with the model's last segment: `opencode:claude-haiku-4-5`, or `opencode:<model>[effort=<value>]` when `effort` is set. Two cells whose models end the same, on different providers, need an `id` each.
 </Property>
 
+<Property name="gateway" type="'direct' | Gateway" optional>
+  The gateway this harness's model calls go through, by name or helper, such as `direct()`. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness. See [Gateways](/reference/gateway#pinning-a-harness).
+</Property>
+
 <Property name="maxConcurrent" type="number" optional>
   The most OpenCode attempts at once across the run, for example for your key's rate limits.
 </Property>
@@ -47,12 +51,13 @@ export default defineConfig({
 | Import | `'{{ pkg }}/harness'` |
 | Credential | The model's provider's, such as `GOOGLE_GENERATIVE_AI_API_KEY` for `google/…` ([every provider](#supported-providers)) |
 | Adapter | `@reeval/harness-opencode` 0.2.8 (over `@ai-sdk/harness-acp`), bundled with reeval |
-| CLI | `@opencode/cli` 2.0.32 |
+| CLI | `@opencode/cli` 2.1.4 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:opencode-0.2.8` |
+| Image | `reeval-sandbox:opencode-0.2.10` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.config/opencode/skills` |
 | Skills (`placement: 'workspace'`) | `.opencode/skills` in the workspace |
+| Plugins | Skills, subagents, commands and MCP servers ([below](#plugins)) |
 | Egress hosts added | The provider's API hosts, such as `api.anthropic.com`, and `mcp.exa.ai` (web search) |
 | Tokens | Reported per turn (below) |
 
@@ -88,6 +93,15 @@ Each provider's hosts, paths and headers come from running the pinned OpenCode a
 OpenCode's ACP server names no model, so each turn records the one the gateway saw serve its last model call. Gemini's API names it in the URL; every other provider's response body does, as its first `"model"` field, with the reasoning effort when the response reports one (OpenAI's Responses API).
 
 reeval runs the provider's calls over HTTP (`transport: 'http'`, below): OpenCode's default for OpenAI and xAI is a WebSocket, whose frames the gateway doesn't read.
+
+## On Vercel AI Gateway
+
+```ts title="reeval.config.ts"
+harness: opencode({ model: 'google/gemini-3.8-flash' }),
+gateway: [vercel(), direct()],
+```
+
+With [`vercel()`](/reference/gateway#vercel-ai-gateway) in the config's `gateway`, OpenCode runs on its own `vercel` provider, as `vercel/<model>`, on `vercel()`'s key. Write the model as its provider's id: a `vercel/…` id would skip the gateway list, so it exits 2 at plan time. On Vercel any `<provider>/<model>` Vercel serves runs; the provider table below gates `direct()` only, where a provider reeval can't run stops the plan with exit 2. `effort` isn't taken on `vercel()` yet: nothing checks the model gets it, so such a cell falls through to the next gateway.
 
 ## Amazon Bedrock
 
@@ -194,25 +208,64 @@ An `sse` server is refused at plan time (exit 2).
 
 OpenCode connects config MCP servers in the background once the session exists. reeval runs `opencode acp` behind a small gate that holds the first prompt until each server has connected or failed (at most 30 seconds), so the first step has their tools.
 
+## Plugins
+
+```text title="reeval run -v"
+env       plugin house → ~/.reeval/plugins/house/ (6 files; skills, agents, commands, mcp)
+env       plugin part → .opencode/agents/reviewer.md (unpacked for the agent)
+env       plugin part → .opencode/commands/ship.md (unpacked for the agent)
+```
+
+OpenCode loads a plugin's skills, subagents, commands and MCP servers. reeval unpacks the subagents and commands into the workspace's `.opencode/` before the snapshot, so the diff leaves them out and `context` lists them. OpenCode's own plugins (JavaScript modules) aren't Claude Code plugins and aren't used.
+
+| Part | Where it goes |
+|---|---|
+| `skills/` | `~/.config/opencode/skills`, with the environment's own skills |
+| `agents/<name>.md` | `.opencode/agents/<name>.md`, a subagent (`mode: subagent`) |
+| `commands/<name>.md` | `.opencode/commands/<name>.md` |
+| `.mcp.json` | OpenCode's config (`mcp.servers`), as `<plugin>:<server>` |
+
+OpenCode silently skips a subagent or command whose frontmatter it doesn't take, and Claude Code's `tools: Read, Grep`, `model: sonnet` and `color` are among those, so reeval keeps only `description`:
+
+```md title="agents/reviewer.md (in the plugin)"
+---
+name: reviewer
+description: Reviews a change against the house style.
+tools: Read, Grep
+model: sonnet
+---
+```
+
+```md title=".opencode/agents/reviewer.md (unpacked)"
+---
+description: Reviews a change against the house style.
+mode: subagent
+---
+```
+
+Items are flat, not namespaced, so two plugins' subagents or commands with the same name clash. A plugin's `hooks/` or `rules/` exit 2 at plan time; `only` leaves them out (see [Errors](#errors)).
+
 ## Errors
 
 | Situation | Message |
 |---|---|
 | No model | `opencode(): needs a model, <provider>/<model>, e.g. opencode({ model: 'google/gemini-3.8-flash' }) (got …)` |
 | A model without a provider (at plan time, exit 2) | `opencode(): an OpenCode model id names its provider, <provider>/<model>, such as 'google/gemini-3.8-flash' or 'anthropic/claude-haiku-4-5' (got "gemini-3.8-flash")` |
-| A provider OpenCode doesn't know (exit 2) | `opencode(): OpenCode has no provider "…" (in "…"); a model id is <provider>/<model>, such as 'google/gemini-3.8-flash'` |
-| A provider reeval refuses (exit 2) | `opencode(): reeval can't run OpenCode on Vertex (google-vertex): it takes a service account (Vertex refuses API keys for most models), not a key in a header, so the gateway can't keep its key out of the sandbox` |
-| A malformed `AWS_REGION` on Bedrock (exit 2) | `opencode(): AWS_REGION is "…", which isn't one Amazon Bedrock (amazon-bedrock) takes: OpenCode builds its API's host from it, so it must match /^[a-z]{2}(-[a-z]+)+-\d{1,2}$/, such as "us-east-1"` |
+| A provider OpenCode doesn't know, on `direct()` (exit 2) | `evaluate("<eval>") on opencode:<model>: no gateway in the list can serve it (direct: OpenCode has no provider "…" (in "…"); a model id is <provider>/<model>, such as 'google/gemini-3.8-flash'). Add vercel() to gateway.` |
+| A `vercel/…` model (exit 2) | `opencode(): a vercel/… id would bypass the config's gateway list: write the model as 'anthropic/claude-haiku-4.5' and add vercel() to gateway (got "vercel/anthropic/claude-haiku-4.5")` |
+| A provider reeval refuses, on `direct()` (exit 2) | `… (direct: reeval can't run OpenCode on Vertex (google-vertex): it takes a service account (Vertex refuses API keys for most models), not a key in a header, so the gateway can't keep its key out of the sandbox). …` |
+| A malformed `AWS_REGION` on Bedrock, on `direct()` (exit 2) | `… (direct: AWS_REGION is "…", which isn't one Amazon Bedrock (amazon-bedrock) takes: OpenCode builds its API's host from it, so it must match /^[a-z]{2}(-[a-z]+)+-\d{1,2}$/, such as "us-east-1"). …` |
 | No key for the run's providers | `Missing credentials: ANTHROPIC_API_KEY. Set them in the environment or .env.local.` |
 | A non-Docker sandbox | `The OpenCode harness needs the Docker sandbox: set sandbox: docker() …` |
 | An `mcp.sse` server (at plan time, exit 2) | `evaluate("<eval>") on opencode:<model>: OpenCode has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
+| A plugin with hooks or rules (at plan time, exit 2) | `evaluate("<eval>") on opencode:<model>: OpenCode can't load the <plugin> plugin's rules (rules/): use only: ['skills', 'agents', 'commands', 'mcp'], or leave the plugin out of this cell` |
 | OpenCode doesn't start | `OpenCode harness failed to start: …` |
 | A model OpenCode's catalogue doesn't have | The turn fails with `Invalid params: model not found: <provider>/<model>` |
 | A key the API rejects | The turn fails with `The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key in the environment or .env.local. ACP prompt update stream failed: Internal error: API key not valid. …`, naming the provider's variable |
 
 ## Supported providers
 
-Every provider OpenCode 2.0.32 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
+Every provider OpenCode 2.1.4 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
 
 [//]: # (generated:opencode-providers)
 
@@ -229,7 +282,7 @@ Every provider OpenCode 2.0.32 knows whose key it sends in a header on known hos
 | ai& | `aiand/…` | `AIAND_API_KEY` | `Authorization: Bearer` | `api.aiand.com` |
 | AI/ML API | `aimlapi/…` | `AIMLAPI_API_KEY` | `Authorization: Bearer` | `api.aimlapi.com` |
 | ainetcafe | `ainetcafe/…` | `AINETCAFE_API_KEY` | `Authorization: Bearer` | `microquickjs.com` |
-| Aixy | `aixy/…` | `AIXY_API_KEY` | `x-api-key`, `Authorization: Bearer` | `api.aixy-gateway.com` |
+| Aixy | `aixy/…` | `AIXY_API_KEY` | `Authorization: Bearer`, `x-api-key` | `api.aixy-gateway.com` |
 | AKI.IO | `aki-io/…` | `AKI_IO_API_KEY` | `Authorization: Bearer` | `aki.io` |
 | Alibaba | `alibaba/…` | `DASHSCOPE_API_KEY` | `Authorization: Bearer` | `dashscope-intl.aliyuncs.com` |
 | Alibaba (China) | `alibaba-cn/…` | `DASHSCOPE_API_KEY` | `Authorization: Bearer` | `dashscope.aliyuncs.com` |
@@ -258,9 +311,9 @@ Every provider OpenCode 2.0.32 knows whose key it sends in a header on known hos
 | ClinePass | `cline-pass/…` | `CLINE_API_KEY` | `Authorization: Bearer` | `api.cline.bot` |
 | CloudFerro Sherlock | `cloudferro-sherlock/…` | `CLOUDFERRO_SHERLOCK_API_KEY` | `Authorization: Bearer` | `api-sherlock.cloudferro.com` |
 | Cohere | `cohere/…` | `COHERE_API_KEY` | `Authorization: Bearer` | `api.cohere.ai`, `api.cohere.com` |
+| CommandCode | `commandcode/…` | `CMD_API_KEY` | `Authorization: Bearer`, `x-api-key` | `api.commandcode.ai` |
 | CoralBricks | `coralbricks/…` | `CORAL_API_KEY` | `Authorization: Bearer` | `inference.coralbricks.ai` |
 | Cortecs | `cortecs/…` | `CORTECS_API_KEY` | `Authorization: Bearer` | `api.cortecs.ai` |
-| CrofAI | `crof/…` | `CROF_API_KEY` | `Authorization: Bearer` | `crof.ai` |
 | CrossModel | `crossmodel/…` | `CROSSMODEL_API_KEY` | `Authorization: Bearer` | `api.crossmodel.ai` |
 | Crusoe | `crusoe/…` | `CRUSOE_API_KEY` | `Authorization: Bearer` | `api.inference.crusoecloud.com` |
 | DaoXE | `daoxe/…` | `DAOXE_API_KEY` | `Authorization: Bearer` | `daoxe.com` |
@@ -289,7 +342,6 @@ Every provider OpenCode 2.0.32 knows whose key it sends in a header on known hos
 | HPC-AI | `hpc-ai/…` | `HPC_AI_API_KEY` | `Authorization: Bearer` | `api.hpc-ai.com` |
 | Hugging Face | `huggingface/…` | `HF_TOKEN` | `Authorization: Bearer` | `router.huggingface.co` |
 | Charm Hyper | `hyper/…` | `HYPER_API_KEY` | `Authorization: Bearer` | `hyper.charm.land` |
-| iFlow | `iflowcn/…` | `IFLOW_API_KEY` | `Authorization: Bearer` | `apis.iflow.cn` |
 | Impossibl | `impossibl/…` | `IMPOSSIBL_API_KEY` | `Authorization: Bearer` | `api.impossibl.com` |
 | Inception | `inception/…` | `INCEPTION_API_KEY` | `Authorization: Bearer` | `api.inceptionlabs.ai` |
 | Inceptron | `inceptron/…` | `INCEPTRON_API_KEY` | `Authorization: Bearer` | `api.inceptron.io` |
@@ -308,8 +360,7 @@ Every provider OpenCode 2.0.32 knows whose key it sends in a header on known hos
 | klokintegration.se | `klokintegration/…` | `KLOKINTEGRATION_API_KEY` | `Authorization: Bearer` | `api-gw.klok.ipaas.se` |
 | Kosmik Compute | `kosmik/…` | `KOSMIK_API_KEY` | `Authorization: Bearer` | `api.koscompute.com` |
 | KUAE Cloud Coding Plan | `kuae-cloud-coding-plan/…` | `KUAE_API_KEY` | `Authorization: Bearer` | `coding-plan-endpoint.kuaecloud.net` |
-| Lilac | `lilac/…` | `LILAC_API_KEY` | `Authorization: Bearer` | `api.getlilac.com` |
-| Llama | `llama/…` | `LLAMA_API_KEY` | `Authorization: Bearer` | `api.llama.com` |
+| Liquid Inference | `liquid/…` | `LIQUID_API_KEY` | `Authorization: Bearer` | `router.inference.ai.exchange` |
 | DevPass (LLM Gateway) | `llmgateway/…` | `LLMGATEWAY_API_KEY` | `Authorization: Bearer` | `api.llmgateway.io` |
 | LLM Gateway | `llmgateway-providers/…` | `LLMGATEWAY_API_KEY` | `Authorization: Bearer` | `api.llmgateway.io` |
 | LLM Tech | `llmtech/…` | `LLMTECH_API_KEY` | `Authorization: Bearer` | `api.llmtech.eu` |
@@ -343,7 +394,7 @@ Every provider OpenCode 2.0.32 knows whose key it sends in a header on known hos
 | Novita AI | `novita-ai/…` | `NOVITA_API_KEY` | `Authorization: Bearer` | `api.novita.ai` |
 | Nvidia | `nvidia/…` | `NVIDIA_API_KEY` | `Authorization: Bearer` | `integrate.api.nvidia.com` |
 | OCI Generative AI | `oci/…` | `OCI_GENAI_API_KEY` | `Authorization: Bearer` | `inference.generativeai.us-chicago-1.oci.oraclecloud.com` |
-| Ofox | `ofox/…` | `OFOX_API_KEY` | `x-goog-api-key`, `x-api-key`, `Authorization: Bearer` | `api.ofox.ai` |
+| Ofox | `ofox/…` | `OFOX_API_KEY` | `Authorization: Bearer`, `x-goog-api-key`, `x-api-key` | `api.ofox.ai` |
 | Ollama Cloud | `ollama-cloud/…` | `OLLAMA_API_KEY` | `Authorization: Bearer` | `ollama.com` |
 | OpenAI | `openai/…` | `OPENAI_API_KEY` | `Authorization: Bearer` | `api.openai.com` |
 | OpenCode Console | `opencode/…` | `OPENCODE_API_KEY` | `Authorization: Bearer`, `x-goog-api-key`, `x-api-key` | `opencode.ai` |
@@ -362,6 +413,7 @@ Every provider OpenCode 2.0.32 knows whose key it sends in a header on known hos
 | Prime Inference | `prime/…` | `PRIME_API_KEY` | `Authorization: Bearer` | `api.pinference.ai` |
 | QiHang | `qihang-ai/…` | `QIHANG_API_KEY` | `Authorization: Bearer` | `api.qhaigc.net` |
 | Qiniu | `qiniu-ai/…` | `QINIU_API_KEY` | `Authorization: Bearer` | `api.qnaigc.com` |
+| Reflection | `reflection/…` | `REFLECTION_API_KEY` | `Authorization: Bearer` | `api.reflection.ai` |
 | Regolo AI | `regolo-ai/…` | `REGOLO_API_KEY` | `Authorization: Bearer` | `api.regolo.ai` |
 | Requesty | `requesty/…` | `REQUESTY_API_KEY` | `Authorization: Bearer` | `router.requesty.ai` |
 | routing.run | `routing-run/…` | `ROUTING_RUN_API_KEY` | `Authorization: Bearer` | `api.routing.run` |
@@ -445,6 +497,7 @@ The providers OpenCode knows whose key the gateway can't swap in, or that can't 
 | GitLab Duo | `gitlab/…` | It runs on a GitLab Duo subscription, through a GitLab login. |
 | Vertex | `google-vertex/…` | It takes a service account (Vertex refuses API keys for most models), not a key in a header. |
 | Infomaniak | `infomaniak/…` | Its API host is per account (INFOMANIAK_PRODUCT_ID), which reeval doesn't pass. |
+| Lilac | `lilac/…` | Every one of its models is deprecated, and OpenCode runs none of them. |
 | LMStudio | `lmstudio/…` | It runs on your machine, and the sandbox can't reach the host's localhost. |
 | Lynkr | `lynkr/…` | It runs on your machine, and the sandbox can't reach the host's localhost. |
 | Merge Gateway | `merge-gateway/…` | OpenCode installs its provider package from npm when it starts, so where it sends the key is unknown. |

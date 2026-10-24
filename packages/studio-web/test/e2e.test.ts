@@ -199,7 +199,8 @@ describe('studio in a browser', () => {
 
     await page.waitForSelector('tbody tr')
     assert.equal(await page.locator('tbody tr').count(), 4)
-    assert.equal(await page.getByText('Snapshot').count(), 1)
+    // Anchored: on CI every run's branch is the PR's, which can contain the word.
+    assert.equal(await page.getByText(/^Snapshot · /).count(), 1)
 
     await page.locator('tbody tr', { hasText: 'grace-hopper' }).click()
     await page.waitForSelector('h2')
@@ -272,58 +273,6 @@ describe('studio in a browser', () => {
     await page.getByRole('link', { name: 'Compare', exact: true }).click()
     await page.getByText('Regressed').first().waitFor()
     assert.deepEqual(errors, [])
-  })
-
-  test("reeval studio shows analysis.agent's notes and summary, and a failed summary in place of the empty tab", async (t) => {
-    if (!browser) return t.skip('no Chrome or Chromium found')
-    const cache = join(demo, '.reeval/analysis')
-    const [matrix, scratch] = readdirSync(cache)
-      .filter((n) => !n.endsWith('.json'))
-      .sort()
-    const child = spawn(process.execPath, [cli, 'studio', '--config', config, '--port', '47413'], {
-      env: { ...process.env, NO_COLOR: '1' },
-    })
-    children.push(child)
-    const url = await new Promise<string>((resolve, reject) => {
-      let out = ''
-      child.stdout.on('data', (d) => {
-        out += d
-        const m = /http:\/\/127\.0\.0\.1:\d+\/\?token=[\w-]+/.exec(out)
-        if (m) resolve(m[0])
-      })
-      child.on('exit', () => reject(new Error(out)))
-    })
-    const { page, errors } = await open(url)
-    await page.waitForSelector('tbody tr')
-
-    await page.goto(new URL(`/#/runs/${matrix}`, url).href)
-    await page.getByRole('tab', { name: 'Analysis' }).click()
-    await page
-      .getByRole('tabpanel', { name: 'Analysis' })
-      .getByText('The house-greeting skill makes both agents say Ahoy; hasty is flaky either way.')
-      .waitFor()
-    await page.getByText('local cache').first().waitFor()
-    const notes = page.getByRole('region', { name: 'Notes by harness' })
-    await notes.waitFor()
-    assert.equal(await notes.getByText(/attempts passed on careful\.$/).count(), 4, 'one per eval')
-    assert.equal(
-      await notes.getByText('the analysis model timed out').count(),
-      4,
-      "hasty's notes show their error",
-    )
-
-    await page.goto(new URL(`/#/runs/${scratch}`, url).href)
-    await page.getByRole('tab', { name: 'Analysis' }).click()
-    await page.getByText("The run's summary failed:").waitFor()
-    await page.getByText('the analysis model is overloaded').waitFor()
-    assert.equal(await page.getByText('No analysis for this run yet').count(), 0)
-    assert.equal(
-      await page.getByText('The fake agent passed every attempt.').count(),
-      9,
-      'its notes still show',
-    )
-    assert.deepEqual(errors, [])
-    child.kill('SIGINT')
   })
 
   /** Copies a corpus entry into a project, adds `extra` runs, and builds its static studio. */

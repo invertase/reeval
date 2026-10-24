@@ -192,10 +192,10 @@ plan  profile pr (auto: CI is set) · 2 evals · 2 cells · 2 attempts · ~6m 00
 
 ```text
 images  2 sandbox images (nothing built: --dry-run)
-docker · 2 evals
+docker · cursor · 2 evals
   base  reeval-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 docker · claude-code · 2 evals
-  base  reeval-sandbox:claude-code-1.0.158-patch.6c1cff12  (rebuild: the harness bootstrap)
+  base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (rebuild: the harness bootstrap)
 ```
 
 ## Record and commit
@@ -221,7 +221,7 @@ built ../capsite/: 2 runs, 83 files, 913 KB (records, transcripts, diffs, logs a
 Serve it from any static host. Anyone who can open it can read every included file.
 ```
 
-That output is from `examples/hello` under the fake config, with `--out /tmp/capsite`. The site uses hash routing and relative paths, so it works under a Pages project path.
+That output is from a project of greeting evals on the fake harness, with `--out /tmp/capsite`. The site uses hash routing and relative paths, so it works under a Pages project path.
 
 <Image src="/assets/studio/runs.png" alt="The studio's runs list: each run's commit, who ran it, passed count and duration" width={800} />
 

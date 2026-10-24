@@ -8,8 +8,20 @@ export interface Sandbox {
   readonly workdir: string
   /** Absolute path of the home directory; `~/` paths in `writeFile` resolve here. */
   readonly home: string
+  /**
+   * Absolute path of a directory for reeval's own state (the diff's snapshot), outside the
+   * workspace and home. In Docker without `root` the agent's user can't read it; a `root`
+   * container's agent and the fake sandbox's host user can.
+   */
+  readonly stateDir: string
   /** `cwd` is relative to the workspace; `env` adds variables for this command only. */
   exec(command: string, opts?: ExecOptions): Promise<ExecResult>
+  /**
+   * Runs one of reeval's own commands, able to read every file in the workspace and to write
+   * {@link stateDir}. In Docker it runs in {@link stateDir}, not the workspace, so a command
+   * names {@link workdir} itself. Without the eval's per-command variables or the gateway's.
+   */
+  execOwn(command: string, opts?: { signal?: AbortSignal }): Promise<ExecResult>
   readFile(path: string): Promise<string | null>
   /** Strings are written as UTF-8; bytes as they are. */
   writeFile(path: string, content: string | Uint8Array): Promise<void>
@@ -24,6 +36,13 @@ export interface Sandbox {
   servedModels?(): string[]
   /** The same, one entry per brokered request that named its model, in order. */
   servedRequests?(): string[]
+  /**
+   * When the harness's successful requests say which model they asked for but nothing names the
+   * one that served them: each model asked for so far, in first-seen order.
+   */
+  askedModels?(): string[]
+  /** With credential brokering: the HTTP status of each brokered request so far, in order. */
+  brokeredStatuses?(): number[]
   /**
    * When the sandbox has a memory limit: how many processes the kernel killed at it so far, and
    * the limit and the swap on top as the eval set them (`swap` is `null` without any). `null`

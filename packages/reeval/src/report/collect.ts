@@ -8,7 +8,7 @@ import { configPathFor, loadConfig } from '../config.ts'
 import { attemptDebugDir, parseAttemptKey } from '../debug/files.ts'
 import type { DoctorReport } from '../doctor.ts'
 import { inCI, loadEnvFiles } from '../env.ts'
-import { environmentSandbox } from '../environment.ts'
+import { environmentSandbox, profileSandbox } from '../environment.ts'
 import type { AttemptRecord, RunRecord } from '../history/types.ts'
 import { SECRET_NAME } from '../redact.ts'
 import { PACKAGE_VERSION } from '../root.ts'
@@ -76,9 +76,7 @@ export function configShape(config: ResolvedConfig): NonNullable<ReportBundle['c
   const sandboxes = new Set([environmentSandbox(config.environment, config.sandbox).kind])
   for (const profile of Object.values(config.profiles)) {
     for (const h of [profile.defaults?.harness ?? []].flat()) harnesses.add(h.kind)
-    if (profile.defaults?.environment) {
-      sandboxes.add(environmentSandbox(profile.defaults.environment, config.sandbox).kind)
-    }
+    sandboxes.add(profileSandbox(config, profile.defaults).kind)
   }
   return {
     file: config.file,

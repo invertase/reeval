@@ -19,7 +19,10 @@ const native = (
 /*
  * Names and parameter keys from the CLI's `stream-json` output (`step_update.tool_info`).
  * The CLI reports only some parameters (never file contents), so the common-name schemas keep
- * everything else optional.
+ * everything else optional. Its `init` event still declares the file tools as `view_file`,
+ * `write_to_file` and `replace_file_content` (path in `AbsolutePath` or `TargetFile`), while
+ * `step_update` reports them as `read_file`, `write_file` and `edit_file` (path in `Path`), so
+ * `projectToolCall` accepts both.
  */
 export const ANTIGRAVITY_BUILTIN_TOOLS = {
   bash: {
@@ -32,7 +35,7 @@ export const ANTIGRAVITY_BUILTIN_TOOLS = {
   },
   read: {
     ...commonTool('read', {
-      nativeName: 'view_file',
+      nativeName: 'read_file',
       toolUseKind: 'readonly',
       inputSchema: z.looseObject({ file_path: z.string() }),
     }),
@@ -40,7 +43,7 @@ export const ANTIGRAVITY_BUILTIN_TOOLS = {
   },
   write: {
     ...commonTool('write', {
-      nativeName: 'write_to_file',
+      nativeName: 'write_file',
       toolUseKind: 'edit',
       inputSchema: z.looseObject({ file_path: z.string(), content: z.string().optional() }),
     }),
@@ -48,7 +51,7 @@ export const ANTIGRAVITY_BUILTIN_TOOLS = {
   },
   edit: {
     ...commonTool('edit', {
-      nativeName: 'replace_file_content',
+      nativeName: 'edit_file',
       toolUseKind: 'edit',
       inputSchema: z.looseObject({
         file_path: z.string(),
@@ -93,6 +96,11 @@ export const ANTIGRAVITY_BUILTIN_TOOLS = {
   call_mcp_tool: native('call_mcp_tool', 'Call MCP Tool'),
   generate_image: native('generate_image', 'Generate Image'),
   invoke_subagent: native('invoke_subagent', 'Invoke Subagent'),
+  manage_subagents: native('manage_subagents', 'Manage Subagents'),
+  // What it waits on a subagent with: `schedule` prompts it again after `DurationSeconds`.
+  schedule: native('schedule', 'Schedule'),
+  wait: native('wait', 'Wait'),
+  wait_5_seconds: native('wait_5_seconds', 'Wait 5 Seconds'),
   browser_subagent: native('browser_subagent', 'Browser Subagent'),
   notebook_edit: native('notebook_edit', 'Edit Notebook', 'edit'),
   ask_question: native('ask_question', 'Ask Question'),
@@ -105,7 +113,15 @@ export type AntigravityBuiltinTools = typeof ANTIGRAVITY_BUILTIN_TOOLS
 const str = (value: unknown) => (typeof value === 'string' ? value : undefined)
 
 /** Native edit tools that all surface as `edit`, since the key must be unique. */
-const EDIT_TOOLS = new Set(['replace_file_content', 'multi_replace_file_content', 'sed_file'])
+const EDIT_TOOLS = new Set([
+  'edit_file',
+  'replace_file_content',
+  'multi_replace_file_content',
+  'sed_file',
+])
+
+const filePath = (p: Record<string, unknown>) =>
+  str(p.Path) ?? str(p.TargetFile) ?? str(p.AbsolutePath) ?? ''
 
 const BY_NATIVE_NAME = new Map<string, string>(
   Object.entries(ANTIGRAVITY_BUILTIN_TOOLS).map(([key, t]) => [
@@ -137,7 +153,7 @@ export function projectToolCall(
     dynamic: false,
   })
   if (EDIT_TOOLS.has(nativeName)) {
-    return common('edit', { file_path: str(p.TargetFile) ?? str(p.AbsolutePath) ?? '' })
+    return common('edit', { file_path: filePath(p) })
   }
   // MCP tools go by `mcp__<server>__<tool>` on every harness, not by the CLI's one generic tool.
   const server = str(p.ServerName)
@@ -148,10 +164,12 @@ export function projectToolCall(
   switch (nativeName) {
     case 'run_command':
       return common('bash', { command: str(p.CommandLine) ?? str(p.command) ?? '' })
+    case 'read_file':
     case 'view_file':
-      return common('read', { file_path: str(p.AbsolutePath) ?? str(p.TargetFile) ?? '' })
+      return common('read', { file_path: filePath(p) })
+    case 'write_file':
     case 'write_to_file':
-      return common('write', { file_path: str(p.TargetFile) ?? '' })
+      return common('write', { file_path: filePath(p) })
     case 'grep_search':
       return common('grep', {
         pattern: str(p.Query) ?? str(p.Pattern) ?? str(p.query) ?? '',
@@ -163,6 +181,29 @@ export function projectToolCall(
       return common('webSearch', { query: str(p.query) ?? str(p.Query) ?? '' })
     case 'read_url_content':
       return common('webFetch', { url: str(p.Url) ?? str(p.url) ?? '' })
+    // A `tool` step's call, in the shape the translator gives a `subagent` step's: the CLI reports
+    // the same call either way. Its parameters list the `Subagents`, or name the one it runs.
+    case 'invoke_subagent': {
+      const subagents = Array.isArray(p.Subagents)
+        ? (p.Subagents as Array<Record<string, unknown> | null>)
+        : str(p.TypeName)
+          ? [p]
+          : undefined
+      if (!subagents) break
+      return {
+        toolName: 'invoke_subagent',
+        nativeName,
+        input: {
+          ...p,
+          subagents: subagents.map((a) => ({
+            agent: str(a?.TypeName),
+            role: str(a?.Role),
+            prompt: str(a?.Prompt),
+          })),
+        },
+        dynamic: false,
+      }
+    }
   }
   const key = BY_NATIVE_NAME.get(nativeName)
   return key

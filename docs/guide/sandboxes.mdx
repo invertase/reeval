@@ -111,20 +111,20 @@ npx reeval image build --dry-run
 
 ```text
 images  7 sandbox images (nothing built: --dry-run)
-docker · 23 evals
-  + base  reeval-sandbox:cursor-0.1.5  (to build: not built yet)
+docker · cursor · 23 evals
+  + base  reeval-sandbox:cursor-0.1.6  (to build: not built yet)
 docker · claude-code · 1 eval
-  + base  reeval-sandbox:claude-code-1.0.158-patch.6c1cff12  (to build: not built yet)
+  + base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (to build: not built yet)
 …
-docker+0ab0e263 + install · 1 eval
-  + base               reeval-sandbox:cursor-0.1.5  (to build: not built yet)
+docker+0ab0e263 · cursor + install · 1 eval
+  + base               reeval-sandbox:cursor-0.1.6  (to build: not built yet)
   + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
-python · 1 eval
-  + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-9f93541e  (to build: on python:3.12-slim (a6e34c598f24))
+python · cursor · 1 eval
+  + from python:3.12-slim  reeval-sandbox:cursor-0.1.6-python-3-12-slim-375f4a61  (to build: on python:3.12-slim (a6e34c598f24))
 …
-docker:sqlite · 1 eval
+docker:sqlite · cursor · 1 eval
   + dockerfile docker/sqlite/Dockerfile  reeval-dockerfile:sqlite-<context + reeval image id>  (to build: not built yet (reeval-dockerfile:sqlite-9efec1fbf61588d3))
-  + harness                              reeval-dockerfile:sqlite-<context + reeval image id>  (to build: reeval-sandbox:cursor-0.1.5 not built yet)
+  + harness                              reeval-dockerfile:sqlite-<context + reeval image id>  (to build: reeval-sandbox:cursor-0.1.6 not built yet)
 ```
 
 Each step says how it stands: `✓` ready, `+` to build, `~` stale, `✗` missing. `reeval image build` builds what's missing or stale, three at a time, and reports every image that failed (exit 3). Filters, `--profile` and `REEVAL_PROFILE` apply; `--tag` doesn't.
@@ -140,19 +140,25 @@ npx reeval run --ui plain
 ```
 
 ```text
-plan  2 evals · 2 cells · 2 attempts · ~2s serial (~1s at concurrency 4)
-preparing 2 sandboxes: docker, docker+0ab0e263 + install
-✗ docker+0ab0e263 + install failed to prepare (set by evaluate("summarises a JSON file with jq"); only its attempts fail)
+plan  run 20261020T214011Z_… · 2 evals · 2 cells · 2 attempts · ~2s serial (~1s at concurrency 4)
+preparing 2 sandboxes: docker, docker+048fc5d7 + install
+✗ docker+048fc5d7 + install failed to prepare (set by evaluate("summarises a JSON file with jq"); only its attempts fail)
   Building the install layer (1 command) failed: install 1/1 exited 100: apt-get update && apt-get install -y jqq
+    | …
     | Reading package lists...
     | Building dependency tree...
     | Reading state information...
     | E: Unable to locate package jqq
-  (full log: .reeval/cache/images/reeval-install-a2eeb3bf29b33bdd.log)
+  (full log: .reeval/cache/images/reeval-install-e19a593383099e07.log)
 …
-[greets#1 fake] ✓ evals/greet.eval.ts › greets  1s
-…
-   Evals  1 passed · 1 infra error (2)
+pass             greets
+
+infra error      summarises a JSON file with jq
+  infra error      Building the install layer (1 command) failed: install 1/1 exited 100: apt-get update && apt-get install -y jqq
+
+5s · results .reeval/runs/20261020T214011Z_…/summary.md
+1 pass · 1 infra error
+Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
 
 An image that fails fails only the attempts that need it, once each: they're infra errors that name the image and the level that set it, and everything else runs. When the config (or a profile) sets the failing sandbox, every eval needs it, so `reeval run` stops before any attempt with exit 3 (exit 2 for a missing `docker({ image })`).
@@ -162,26 +168,25 @@ The headline says which step failed and why, then the step's own last lines and 
 ## Run them
 
 ```bash
-npx reeval run python sqlite jq --log-order grouped
+npx reeval run python sqlite jq --log-order grouped --output-logs full
 ```
 
 ```text
-plan  3 evals · 3 cells · 3 attempts · ~35s serial (~12s at concurrency 4)
+plan  run 20261020T214032Z_… · 3 evals · 3 cells · 3 attempts · ~34s serial (~11s at concurrency 4)
+preparing 3 sandboxes: docker+0ab0e263 + install, python, docker:sqlite
 …
-[writes#1 cursor] ✓ evals/python.eval.ts › writes and tests fizzbuzz in python  10s
+[writes#1 cursor] ▶ evals/python.eval.ts › writes and tests fizzbuzz in python
 [writes#1 cursor]  +0:00 sandbox ready 2s
-[writes#1 cursor]  +0:01 turn 1 done 7s · 1 tool call, 2 file edits
-[writes#1 cursor]  +0:09 $ python3 --version  exit 0 149ms
-[writes#1 cursor]  +0:09 $ python3 -m unittest -q  exit 0 119ms
+[writes#1 cursor]  +0:02 turn 1 done 6s · 1 tool call, 2 file edits
+[writes#1 cursor]  +0:08 $ python3 --version  exit 0 65ms
+[writes#1 cursor]  +0:08 $ python3 -m unittest -q  exit 0 231ms
 …
-Summary
- evals/jq.eval.ts
-   ✓ summarises a JSON file with jq           10s  1 turn
- evals/python.eval.ts
-   ✓ writes and tests fizzbuzz in python      10s  1 turn
- evals/sqlite.eval.ts
-   ✓ queries a seeded SQLite database         13s  1 turn
-…
+pass             summarises a JSON file with jq
+pass             writes and tests fizzbuzz in python
+pass             queries a seeded SQLite database
+
+37s · 167k in (79k cached) · 1,653 out · results .reeval/runs/20261020T214032Z_…/summary.md
+3 pass
 ```
 
 ## Sandbox security
@@ -199,7 +204,7 @@ The agent runs code you didn't write, so each container is locked down without a
 |---|---|
 | Your keys | The harness's API key and brokered secrets never enter the container. The agent sees a placeholder, and the egress gateway on your machine swaps in the real value on the way out, only to that secret's hosts. See [credential brokering](/concepts/credential-brokering) |
 | The network | Under a restricted [egress policy](/guide/secrets-and-egress) the container is detached from every Docker network, so the gateway is its only way out. The agent can't edit routes or firewall rules, and the gateway's process runs as root, so the agent can't stop or replace it |
-| Privileges | The agent, setup steps and `c.exec` checks run as `reeval` (uid 10001, home `/home/reeval`), not root. Every Linux capability is dropped and `no-new-privileges` is set. Image builds (`install`, your Dockerfile, `from`) still run as root |
+| Privileges | The agent, setup steps and `c.exec` checks run as `reeval` (uid 10001, home `/home/reeval`), not root. That user holds no Linux capabilities and `no-new-privileges` is set. Image builds (`install`, your Dockerfile, `from`) still run as root |
 | Resources | A runaway agent or fork bomb hits the container's limits, not your machine (below) |
 
 | Limit | Default | Option |
@@ -216,7 +221,7 @@ Everything else works as the `reeval` user: `npm i`, `pip install` (as a user in
 | Gap | What it means |
 |---|---|
 | It's a container, not a VM | It shares your machine's kernel. The steps above make a kernel or Docker bug much harder to reach, but they aren't a hardware boundary |
-| `allow-all` reaches anything | That's the default when no eval sets a policy. The keys are still brokered, but the agent can go around the proxy to any host |
+| `allow-all` reaches anything | Only when an eval or the config sets it; the default, `proxy`, sends everything through the gateway. Under it the keys are still brokered, but the agent can go around the proxy to any host, cloud metadata and your LAN, unrecorded |
 | WebSocket messages aren't scrubbed | Headers are, but a brokered host that echoes a real secret back inside a WebSocket message after the upgrade shows it to the agent |
 | Secrets sent `to: 'checks'` are real values in setup steps and checks | Those run as the same `reeval` user as the agent, so a process the agent left running could read them while they run |
 
@@ -230,6 +235,23 @@ warning: extra capabilities in the sandbox: reeval.config.ts (docker({ capabilit
 `docker({ root: true })` runs the agent, setup and checks as root, with only the capabilities `apt-get` needs (`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`). Prefer baking packages in with `install`, which needs no opt-in. `capabilities` adds a specific one, such as `NET_RAW` for `ping`.
 
 Either one is printed at the start of every run that uses it, naming where it was set, and kept in the run record.
+
+## Run on Podman
+
+```ts title="evals/env.ts"
+import { defineEnvironment } from '{{ pkg }}'
+import { podman } from '{{ pkg }}/sandbox'
+
+export const python = defineEnvironment('python', {
+  sandbox: podman({ from: 'python:3.12-slim' }),
+})
+```
+
+`podman()` takes the same options as `docker()` and runs the same sandbox on Podman 4 or later. Every container joins Podman's bridge network with Docker's default seccomp profile, so rootless Podman confines it as Docker does, and a restricted egress policy fails closed if it can't. Podman keeps its own images; `reeval image build` and `reeval doctor` cover them. See [podman()](/reference/sandbox/podman).
+
+<Info>
+reeval is tested on rootless Podman on Linux, and on macOS with Podman 6.1 in a `podman machine` VM (`applehv`); Windows hasn't been tested yet. Give the machine 4 GB with `podman machine init --memory 4096` or `podman machine set --memory 4096`. See [macOS and Windows](/reference/sandbox/podman#macos-and-windows).
+</Info>
 
 ## One sandbox per eval
 

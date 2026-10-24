@@ -111,6 +111,7 @@ function reevalVariables() {
   }
   walk(src)
   found.delete('REEVAL_BASE_ARG') // the constant that holds the name REEVAL_BASE
+  found.delete('REEVAL_PYTHON_MODULE') // python -m target, not an env var
   return [...found].sort()
 }
 
@@ -260,10 +261,12 @@ const RECORD_TYPES = [
   'ContextFile',
   'Cell',
   'EnvironmentRecord',
+  'PluginRecord',
   'EgressRecord',
   'AttemptImage',
   'PhaseTimings',
   'FileChange',
+  'McpStartup',
 ]
 
 /** One-line aliases the record uses, shown as a table of values. */
@@ -315,7 +318,7 @@ async function blocks() {
   const config = stringList('config.ts', 'CONFIG_KEYS')
   const defaults = stringList('config.ts', 'DEFAULTS_KEYS')
   const limit = stringList('config.ts', 'LIMIT_KEYS')
-  const known = stringList('options.ts', 'KNOWN')
+  const known = stringList('options.ts', 'EVAL_OPTION_KEYS')
   const all = [...new Set([...config, ...known])]
   const yes = (list, key) => (list.includes(key) ? '✓' : '')
   out.set(
@@ -441,7 +444,10 @@ for (const [name, flags] of commands ?? []) {
 const optionsPage =
   page('reference/options') + page('reference/config') + page('reference/profiles')
 for (const key of [
-  ...new Set([...stringList('config.ts', 'CONFIG_KEYS'), ...stringList('options.ts', 'KNOWN')]),
+  ...new Set([
+    ...stringList('config.ts', 'CONFIG_KEYS'),
+    ...stringList('options.ts', 'EVAL_OPTION_KEYS'),
+  ]),
 ]) {
   if (!mentions(optionsPage, `name="${key}"`)) {
     problems.push(

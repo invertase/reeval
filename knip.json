@@ -26,6 +26,7 @@
       ],
       "project": ["src/**/*.ts", "test/**/*.{ts,mjs}", "scripts/**/*.ts"],
       "ignore": ["test/fixtures/records/**"],
+      "ignoreBinaries": ["uv", "podman", "go", "pwsh"],
       "ignoreDependencies": [
         "@ai-sdk/harness-acp",
         "@ai-sdk/provider",
@@ -40,7 +41,15 @@
       "entry": ["test/**/*.ts"],
       "ignoreDependencies": ["@ai-sdk/provider"]
     },
+    "packages/harness-fx": {
+      "entry": ["test/**/*.ts"],
+      "ignoreDependencies": ["@ai-sdk/provider"]
+    },
     "packages/harness-goose": {
+      "entry": ["test/**/*.ts"],
+      "ignoreDependencies": ["@ai-sdk/provider"]
+    },
+    "packages/harness-grok-build": {
       "entry": ["test/**/*.ts"],
       "ignoreDependencies": ["@ai-sdk/provider"]
     },
@@ -56,10 +65,12 @@
       "entry": ["test/**/*.ts"]
     },
     "packages/studio-web": {
-      "entry": ["test/**/*.ts", "scripts/**/*.mjs", "dev-data.ts"]
+      "entry": ["test/**/*.ts", "scripts/**/*.mjs", "dev-data.ts"],
+      "ignore": ["scripts/demo/**"]
     },
-    "examples/hello": {
-      "entry": ["**/*.eval.ts", "reeval*.config.ts", "scan/*.mjs"]
+    "examples/with-*": {
+      "entry": ["*.eval.ts", "reeval*.config.ts"],
+      "ignore": ["project/**", "fake-agent/**"]
     }
   },
   "ignoreFiles": ["scripts/third-party.d.mts"]

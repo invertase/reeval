@@ -10,7 +10,8 @@ if (!process.send) {
 // Workers run in their own process group, but a stray Ctrl-C must still leave cancelling to the CLI.
 process.on('SIGINT', () => {})
 const worker = startWorker({
-  send: (message, sent) => process.send?.(message, undefined, {}, () => sent?.()),
+  // With a callback, a send after the main process went away isn't an uncaught 'error'.
+  send: (message) => process.send?.(message, undefined, {}, () => {}),
   onMessage: (listener) => process.on('message', listener),
   onDisconnect: (listener) => process.on('disconnect', listener),
   exit: (code) => process.exit(code),

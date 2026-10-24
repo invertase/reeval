@@ -1,0 +1,9 @@
+profile oracle (--profile) · 2 evals · 2 cells · 2 attempts
+evals/greet.eval.ts › fixes greet             oracle/node/docker+4e3f0492  control  gated  ×1
+evals/greet.eval.ts › on the default machine  oracle/-/docker              control  gated  ×1
+excluded: —
+image docker+4e3f0492 · cursor + install · 1 evals
+  base               reeval-sandbox:cursor-0.1.6          (reeval's image: built when missing or when its base changed)
+  install 1 command  reeval-install:<base id + commands>  (build unless cached)
+image docker · cursor · 1 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

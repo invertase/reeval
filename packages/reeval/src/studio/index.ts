@@ -1,16 +1,14 @@
 import { spawn } from 'node:child_process'
 import { getRequestListener, serve } from '@hono/node-server'
 import { scratchDir } from '../history/files.ts'
-import { ownDir } from '../root.ts'
+import type { StudioAppFiles } from './app.ts'
 import { watchLive } from './live.ts'
 import { allowedHosts, createStudioApp, newToken, type StudioEvent } from './server.ts'
 import type { StudioSource } from './source.ts'
 import { watchRuns } from './watch.ts'
 
+export { embeddedApp } from './app.ts'
 export { buildStudio } from './build.ts'
-
-/** Where the prebuilt web app ships inside the package (copied from packages/studio-web). */
-export const APP_DIR = ownDir('dist/studio-app')
 
 export type StartOptions = {
   source: StudioSource
@@ -19,7 +17,7 @@ export type StartOptions = {
   token: boolean
   reeval: string
   project: string
-  appDir?: string
+  app: StudioAppFiles
 }
 
 type Listening = { close(): void; address(): unknown }
@@ -52,7 +50,7 @@ export async function startStudio(options: StartOptions) {
   for (let port = options.port; port < options.port + 20; port++) {
     const app = createStudioApp({
       source,
-      appDir: options.appDir ?? APP_DIR,
+      app: options.app,
       reeval: options.reeval,
       project: options.project,
       token,
@@ -94,11 +92,11 @@ export function openBrowser(url: string) {
     .unref()
 }
 
-/** The data routes as a Node request listener, for the studio-web dev server. No token or Host check. */
+/** The data routes as a Node request listener, for the studio-web dev server (which serves the app). No token or Host check. */
 export function devListener(source: StudioSource, version: string) {
   const app = createStudioApp({
     source,
-    appDir: APP_DIR,
+    app: new Map(),
     reeval: version,
     project: source.root.split(/[\\/]/).at(-1) ?? 'project',
     token: null,

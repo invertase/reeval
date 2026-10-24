@@ -5,7 +5,7 @@ description: Write and debug evals against a scripted fake agent, sandbox and ju
 
 **Goal:** iterate on eval files in about a second per run, with no Docker, no API keys and no model spend.
 
-Keep a second config next to your real one. It swaps in `fakeHarness()`, `fakeSandbox()` and `fakeJudge()`; the eval files stay the same.
+Keep a second config next to your real one. It swaps in `fakeHarness()`, `fakeSandbox()` and `fakeJudge()`; the eval files stay the same. This is for writing evals and trying configs without Docker. To prove an eval's checks pass and fail, run the fake harness in the eval's real sandbox: see [Oracle and canary](#oracle-and-canary).
 
 ## The files
 
@@ -59,7 +59,7 @@ export default defineConfig({
 }
 ```
 
-The evals are `examples/hello/evals/hello.eval.ts` and this one, which checks the second scripted turn:
+The evals are the Guide's [`greet` evals](/guide/first-real-run) and this one, which checks the second scripted turn:
 
 ```ts title="evals/scripted.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
@@ -78,43 +78,49 @@ evaluate('runs the tests after a follow-up', async (c) => {
 ## Run it
 
 ```bash
-npx reeval run --config reeval.fake.config.ts --log-order grouped
+npx reeval run --config reeval.fake.config.ts --log-order grouped --output-logs full
 ```
 
 ```text
-[runs#1 fake] ✓ evals/scripted.eval.ts › runs the tests after a follow-up  131ms
-[runs#1 fake]  +0:00 sandbox ready 18ms
+[runs#1 fake] ▶ evals/scripted.eval.ts › runs the tests after a follow-up
+[runs#1 fake]  +0:00 sandbox ready 21ms
 [runs#1 fake]  +0:00 turn 1 done 2ms · 0 tool calls, 3 file edits
-[runs#1 fake]  +0:00 turn 2 done 76ms · 1 tool call, 3 file edits
+[runs#1 fake]  +0:00 turn 2 done 94ms · 1 tool call, 3 file edits
 …
-Summary
- evals/hello.eval.ts
-   greet module
-     ✓ creates a tested greet module              134ms  judge 0.95  1 turn
-     ✓ adds a default name in a follow-up turn    153ms  judge 0.95  2 turns
- evals/scripted.eval.ts
-   ✓ runs the tests after a follow-up             131ms  2 turns
+pass             greet module › creates a tested greet module
+pass             greet module › adds a default name in a follow-up turn
+pass             runs the tests after a follow-up
 
-   Evals  3 passed (3)
-Duration  944ms
+1s · results .reeval/runs/20261020T214611Z_…/summary.md
+3 pass
+Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
 
 The fake agent writes `files` on every turn, after its `script` steps for that turn. Your checks (`c.exec`, `toHaveFile`, `c.judge`) run for real against what it wrote.
 
-When a coding agent runs reeval for you, agent output prints only the failures, and the expected misses of ungated cells as `MISS`. This is `examples/hello` under its fake config, where the skill compare's control misses on purpose:
+When a coding agent runs reeval for you, agent output prints the plan, the result blocks and the tally, with no per-attempt lines. This is a project of greeting evals on the fake harness, where the skill compare's control misses on purpose and the check that tells the arms apart shows its failure:
 
 ```bash
 REEVAL_UI=agent npx reeval run --config reeval.fake.config.ts
 ```
 
 ```text
-plan  10 evals · 11 cells · 11 attempts · ~3s serial (~633ms at concurrency 4)
-reeval run: 3 eval files
-MISS evals/skill.eval.ts › house greeting › greets in the house style [control] (152ms, assertion, not gated)
-  Error: expected command to succeed, exit code 1
-  record: .reeval/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/evals-skill-eval-ts-house-greeting-greets-in-the-house-style-55be48/fake-fake-70e87d/1
-10 passed, 1 missed, not gated (11 attempts, 10 evals)
-summary: .reeval/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/summary.md
+plan  run 20261020T211638Z_… · 16 evals · 23 cells · 23 attempts · ~2s serial (~426ms at concurrency 4)
+reeval run: 20261020T211638Z_… · 4 eval files
+…
+pass             house greeting › greets in the house style
+  arm                  pass
+  plain                0 of 1
+  with-house-greeting  1 of 1  can't tell yet
+  check                plain   with-house-greeting
+  house greeting       0 of 1  1 of 1
+    expected command to succeed, exit code 1
+  +2 more passed
+  question  Which greet.js reads more like our house style?
+    no pairs to judge: tries that failed their checks are left out
+
+2s · results .reeval/runs/20261020T211638Z_…/summary.md
+16 pass
 ```
 
 <Warning>
@@ -130,7 +136,7 @@ summary: .reeval/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/summary.md
 | `withSkill` | Uses these `files` and `text` instead when the environment gives it a skill, so a `compare` shows lift |
 | `script` | One list of steps per `c.send` (the last repeats): `{ exec }`, `{ write }`, `{ reply }`, `{ mcp: '<server>/<tool>' }` |
 | `failWith` | Throws before the first turn, as an infra error |
-| `layout` | `'claude-code'`, `'antigravity'`, `'opencode'`, `'goose'` or `'pi'`: reads rules and skills where that agent does, in its image |
+| `layout` | `'claude-code'`, `'antigravity'`, `'opencode'`, `'goose'`, `'pi'`, `'codex'`, `'fx'` or `'grok-build'`: reads rules and skills where that agent does, in its image |
 | `delayMs` | Waits this long per turn, and honours timeouts and Ctrl-C |
 | `ignoreAbort` | Keeps waiting out `delayMs` after a timeout or Ctrl-C, like an agent that won't stop |
 
@@ -186,72 +192,90 @@ evaluate('summarises the orders', { environment: orders }, async (c) => {
 })
 ```
 
-An oracle is a fake agent that does the task right; a canary is one that cheats or gets it wrong. Give each its own config, with the same evals:
+An oracle is a fake agent that does the task right; a canary is one that cheats or gets it wrong. Make each a profile in your one config that swaps the harness and judge, and nothing else:
 
-```ts title="reeval.oracle.config.ts"
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
-import { fakeHarness } from '{{ pkg }}/harness'
+import { cursor, fakeHarness } from '{{ pkg }}/harness'
 import { fakeJudge } from '{{ pkg }}/judge'
-import { fakeSandbox } from '{{ pkg }}/sandbox'
 
-// Does both tasks right
 export default defineConfig({
-  harness: fakeHarness({
-    files: {
-      'greet.js': 'export const greet = (name) => `Hello, ${name}!`\n',
-      'summary.js': "console.log('3 orders, total 50.00')\n",
+  harness: cursor({ model: 'composer-2.5' }),
+  judge: { model: 'google/gemini-3.8-flash' },
+  profiles: {
+    // Does both tasks right
+    oracle: {
+      defaults: {
+        harness: fakeHarness({
+          files: {
+            'greet.js': 'export const greet = (name) => `Hello, ${name}!`\n',
+            'summary.js': "console.log('3 orders, total 50.00')\n",
+          },
+        }),
+        judge: { model: fakeJudge({ score: 0.95 }) },
+      },
     },
-  }),
-  sandbox: fakeSandbox(),
-  judge: { model: fakeJudge({ score: 0.95 }) },
+    // Cheats on the test, leaves greet.js broken and prints nothing useful
+    canary: {
+      defaults: {
+        harness: fakeHarness({
+          files: {
+            'greet.test.js':
+              "import { test } from 'node:test'\ntest('greets', () => {})\n",
+            'summary.js': "console.log('done')\n",
+          },
+        }),
+        judge: { model: fakeJudge({ score: 0.1 }) },
+      },
+    },
+  },
 })
 ```
 
-```ts title="reeval.canary.config.ts"
-import { defineConfig } from '{{ pkg }}'
-import { fakeHarness } from '{{ pkg }}/harness'
-import { fakeJudge } from '{{ pkg }}/judge'
-import { fakeSandbox } from '{{ pkg }}/sandbox'
-
-// Cheats on the test, leaves greet.js broken and prints nothing useful
-export default defineConfig({
-  harness: fakeHarness({
-    files: {
-      'greet.test.js':
-        "import { test } from 'node:test'\ntest('greets', () => {})\n",
-      'summary.js': "console.log('done')\n",
-    },
-  }),
-  sandbox: fakeSandbox(),
-  judge: { model: fakeJudge({ score: 0.1 }) },
-})
-```
+The profiles set no `sandbox`, so each eval runs in the sandbox it runs in for real: its environment's `docker()` image, `install` layers, egress policy and brokered secrets. The checks then pass or fail where they will on a real agent. It needs Docker, and no keys:
 
 ```bash
-npx reeval run --config reeval.canary.config.ts
+npx reeval image build --profile oracle
+npx reeval run --profile oracle  # must pass
+npx reeval run --profile canary  # must fail
 ```
 
 ```text
-Summary
- evals/hygiene.eval.ts
-   ✗ fixes greet, not its test     53ms  1 turn
-   ✗ summarises the orders         55ms  fail 0.10/0.80  1 turn
+[fixes#1 fake]  - Expected
+[fixes#1 fake]  + Received
+[fixes#1 fake]
+[fixes#1 fake]    import { test } from 'node:test'
+[fixes#1 fake]  - import assert from 'node:assert/strict'
+[fixes#1 fake]  - import { greet } from './greet.js'
+[fixes#1 fake]  - test('greets', () => assert.equal(greet('Ada'), 'Hello, Ada!'))
+[fixes#1 fake]  + test('greets', () => {})
 …
-   - Expected
-   + Received
+fail             fixes greet, not its test
+  toBe import { test } from 'node:test' import…  failed
+    expected 'import { test } from \'node:test\'\nt…' to be 'import { test } from \'node:test\'\ni…' // Object.is equality
 
-     import { test } from 'node:test'
-   - import assert from 'node:assert/strict'
-   - import { greet } from './greet.js'
-   - test('greets', () => assert.equal(greet('Ada'), 'Hello, Ada!'))
-   + test('greets', () => {})
-…
-   Evals  2 failed (2)
+fail             summarises the orders
+  toPass Does it say 3 orders totalling 50?  failed
+    judge score 0.10 is below 0.8 for "Does it say 3 orders totalling 50?" (fake)
+  +1 more passed
+
+3s · results .reeval/runs/20261020T214629Z_…/summary.md
+2 fail
 ```
 
-`--config reeval.oracle.config.ts` passes and exits 0; the canary exits 1. The rewritten test passes `node --test`, so only the `c.readFile` guard catches it.
+`--profile oracle` passes and exits 0; the canary exits 1. The rewritten test passes `node --test`, so only the `c.readFile` guard catches it.
 
 A canary that writes `greet = () => 'Hello, Ada!'` passes the seeded test too, and fails `greetsGrace`, the check the agent never sees. Give each check you rely on a canary that only it catches, and rerun them after each edit to the eval.
+
+| To check | Do |
+|---|---|
+| The real fix, not canned files | A `script` step runs in the container as the agent: `{ exec: 'node scripts/solve.mjs' }` |
+| That a judge question passes good work | Keep the real `judge.model` on the oracle, with its key |
+| Rules and skills where your agent reads them | `fakeHarness({ layout: 'claude-code', … })`, which also uses that agent's image |
+
+<Warning>
+  Don't validate checks on `fakeSandbox()`. It runs commands on your host with your tools, brokers no secrets and enforces no egress, so a check can pass there and fail in the eval's `docker()`. An eval or group that sets its own `harness` keeps it under the profile, and an ungated cell (a `gate: 'none'` study, or a control) can fail its checks without changing the exit code: read its arm's count there.
+</Warning>
 
 ## Simulate an infra failure
 
@@ -272,13 +296,17 @@ npx reeval run --config reeval.fail.config.ts
 ```
 
 ```text
-Infra errors (1)
- ! evals/scripted.eval.ts › runs the tests after a follow-up
-   infra error
-   the agent CLI crashed on start
-…
-   Evals  1 infra error (1)
-Duration  727ms
+[runs#1 fake] ▶ evals/scripted.eval.ts › runs the tests after a follow-up
+[runs#1 fake]  +0:00 sandbox starting
+[runs#1 fake]  +0:00 cleaning up
+[runs#1 fake]  infra error
+[runs#1 fake]  the agent CLI crashed on start
+
+infra error      runs the tests after a follow-up
+  infra error      the agent CLI crashed on start
+
+765ms · results .reeval/runs/20261020T214612Z_…/summary.md
+1 infra error
 ```
 
 The run exits 3, so you can check how your CI treats an infrastructure error before a real one happens.
@@ -322,7 +350,7 @@ Both configs plan the same evals, so `--dry-run` under either shows the same eva
 | A flaky agent | `fakeHarness({ files, flakeRate: 0.3 })` writes nothing in about 30% of attempts, for trying `gate: { passRate }` |
 | Canned tool calls | `tools: [{ tool: 'read', input: {…}, output: '…' }]` adds tool events to every turn, for transcript checks |
 | Only some files | `include: ['evals/hello.eval.ts']` in the fake config leaves out evals that need a real agent or Docker |
-| Profiles | The fake config needs its own `profiles` if you pass `--profile`; `examples/hello/reeval.fake.config.ts` has `smoke` and `nightly` |
+| Profiles | The fake config needs its own `profiles` if you pass `--profile`; give it the same profile names as the real config |
 | Record fake runs | `reeval run --config reeval.fake.config.ts --record` writes history you can open in `reeval studio`, handy for trying the studio or `reeval query` |
 
 ## Next

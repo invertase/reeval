@@ -4,8 +4,6 @@ import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
-import { DEFAULT_QUESTION_STATE } from '../src/compare/state.ts'
-import type { QuestionCall } from '../src/types.ts'
 import { fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 
@@ -55,17 +53,16 @@ group('g', { runs: 2 }, () => {
 })
 `,
     })
-    const r = await runCli(p.dir)
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'])
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(r.stdout, /^plan {2}(?:run \S+ · )?1 eval · 2 cells · 4 attempts · ~/m)
-    assert.match(r.stdout, /^\[writes#1 good\] ✓ evals\/m\.eval\.ts › g › writes ok\.txt/m)
-    assert.match(r.stdout, /^\[writes#2 bad\] ✗ evals\/m\.eval\.ts › g › writes ok\.txt/m)
+    assert.match(r.stdout, /^\[writes#1 good\] ▶ evals\/m\.eval\.ts › g › writes ok\.txt$/m)
+    assert.match(r.stdout, /^\[writes#2 bad\] ▶ evals\/m\.eval\.ts › g › writes ok\.txt$/m)
     assert.match(
       r.stdout,
-      /✗ writes ok\.txt +2\/4 +pass@1 +50% +4 attempts\n +good\/fake\/fake +2\/2 +pass@1 100%/,
+      /^fail {13}g › writes ok\.txt\n {2}harness {14}pass\n {2}good {17}2 of 2\n {2}bad {18}0 of 2\n {4}toHaveFile ok\.txt {2}0 of 2\n/m,
     )
-    assert.match(r.stdout, /bad\/fake\/fake +0\/2 +pass@1 +0%/)
-    assert.match(r.stdout, /2 passed · 2 failed \(4 attempts, 1 evals\)/)
+    assert.match(r.stdout, /^1 fail$/m)
     const thirds = await project('matrix-thirds', {
       'reeval.config.ts': config('', `fakeHarness({ id: 'one' })`),
       'evals/t.eval.ts': `import { evaluate } from 'reeval'
@@ -79,9 +76,10 @@ evaluate('two of three', { runs: 3, gate: { passRate: 0.5 } }, async (c) => {
     assert.equal(rounded.code, 0, rounded.stdout + rounded.stderr)
     assert.match(
       rounded.stdout,
-      /✓ two of three +2\/3 +pass@1 +67% +3 attempts\n +one\/fake\/fake +2\/3 +pass@1 +67% /,
-      'pass rates round to the nearest percent',
+      /^pass {13}two of three\n {2}3 tries {10}2 of 3$/m,
+      'counts read N of M, never a percentage',
     )
+    assert.doesNotMatch(rounded.stdout, /\d%/)
     const { run, evals } = readRun(p.dir)
     assert.equal(run.summary.attempts, 4)
     assert.deepEqual(
@@ -295,20 +293,20 @@ evaluate.each(${cases}${options})(
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /^ +✓ writes ok\.txt for %s {2}6 cases · paired$/m)
+    // The case is outer and its arms inner; the pooled effect is on `all cases`.
     assert.match(
       r.stdout,
-      /^ +✓ ada {2}✓ grace {2}✓ linus {2}✓ margaret {2}✓ dennis {2}✓ barbara$/m,
+      /^ {17}writes ok\.txt for %s\n {2}pass {2}ada\n {4}arm {12}pass\n {4}base {11}0 of 1\n {4}skilled {8}1 of 1\n/m,
     )
-    assert.match(
-      r.stdout,
-      /fake\/skilled\/fake {2}pass@1 100% vs 0% {2}lift \+100 pts \(95% \+45…\+100, paired, 6 vs 0 discordant, p 0\.031\) \(minLift 20\)$/m,
-    )
-    assert.match(
-      r.stdout,
-      /^ ○ evals\/e\.eval\.ts › writes ok\.txt for %s {2}6 attempts on fake\/base\/fake$/m,
-    )
-    assert.match(r.stdout, /^Families {2}1 passed \(1\)$/m)
+    for (const name of ['grace', 'linus', 'margaret', 'dennis', 'barbara'])
+      assert.match(r.stdout, new RegExp(`^ {2}pass {2}${name}$`, 'm'), name)
+    const pooled =
+      /^ {2}pass {2}all cases\n {4}arm {12}pass\n {4}base {11}0 of 6\n {4}skilled {8}6 of 6 {2}helped$/m
+    assert.match(r.stdout, pooled)
+    assert.match(r.stdout, /^6 pass$/m)
+    const verbose = await runCli(p.dir, ['run', '-v'])
+    assert.match(verbose.stdout, /^ {6}skilled: 6 paired cases, 95% interval \+45…\+100$/m)
+    assert.doesNotMatch(r.stdout, /95% interval/, 'statistics only with -v')
 
     const { run, evals, read } = readRun(p.dir)
     assert.deepEqual(
@@ -344,14 +342,11 @@ evaluate.each(${cases}${options})(
       ['fake/base/fake', 6, { variantOnly: 6, controlOnly: 0 }, 'newcombe-paired', 'lift', 'pass'],
     )
     assert.equal(family?.outcome, 'pass')
-    assert.match(read('summary.md'), /^## Families$/m)
+    assert.match(read('summary.md'), pooled)
 
     const agent = await runCli(p.dir, ['run', '--ui', 'agent'])
     assert.equal(agent.code, 0, agent.stdout + agent.stderr)
-    assert.match(
-      agent.stdout,
-      /^family evals\/e\.eval\.ts › writes ok\.txt for %s: 6 cases · paired · fake\/skilled\/fake pass@1 100% vs 0% {2}lift \+100 pts .*\(minLift 20\)$/m,
-    )
+    assert.match(agent.stdout, pooled)
 
     const q = await runCli(p.dir, [
       'query',
@@ -388,10 +383,12 @@ evaluate.each(${cases}${options})(
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.match(r.stdout, /^ +✗ writes ok\.txt for %s {2}6 cases · paired$/m)
-    assert.match(r.stdout, /\(minLift 60 ✗\)$/m)
-    assert.match(r.stdout, /^Families {2}1 failed \(1\)$/m)
-    assert.match(r.stdout, /pooled pass@1 .*: its lower bound is below minLift 60$/m)
+    assert.match(
+      r.stdout,
+      /^ {2}fail {2}all cases\n {4}arm {12}pass\n {4}base {11}0 of 6\n {4}skilled {8}6 of 6 {2}helped, not by minLift 60$/m,
+    )
+    assert.match(r.stdout, /^ {2}pass {2}ada$/m, 'the case passed on its own')
+    assert.match(r.stdout, /^1 fail · 6 pass$/m, 'the pooled gate is a fail of its own')
     const { run, evals } = readRun(p.dir)
     assert.equal(run.families?.[0]?.outcome, 'fail')
     assert.ok(
@@ -408,7 +405,8 @@ evaluate.each(${cases}${options})(
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.doesNotMatch(r.stdout, /cases · paired|^Families/m)
+    assert.doesNotMatch(r.stdout, /all cases|writes ok\.txt for %s/)
+    assert.match(r.stdout, /^pass {13}writes ok\.txt for ada$/m)
     const { run, evals } = readRun(p.dir)
     assert.equal(run.families, undefined)
     assert.equal(evals.length, 6)
@@ -428,10 +426,8 @@ evaluate.each(${cases}${options})(
       [lift?.pairs, lift?.points, lift?.interval.method, lift?.verdict, lift?.outcome],
       [3, 1, 't-cases', 'insufficient', 'pass'],
     )
-    assert.match(
-      r.stdout,
-      /\(95% \+100…\+100, paired, 3 cases, p 0\.25\), insufficient \(minLift 20\)$/m,
-    )
+    // Three pairs are too few to tell, however one-sided they are.
+    assert.match(r.stdout, /^ {4}skilled {8}6 of 6 {2}can't tell yet$/m)
   })
 
   test('variants run next to the control, lift is stored, and the control is not gated', async () => {
@@ -454,21 +450,11 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(r.stdout, /^plan {2}(?:run \S+ · )?1 eval · 2 cells · 4 attempts/m)
-    assert.match(r.stdout, /^\[writes#1 control\] ○ .*\(not gated\)$/m)
-    assert.match(r.stdout, /^\[writes#1 skilled\] ✓ /m)
-    assert.match(r.stdout, /fake\/base\/fake +control +0\/2 +pass@1 +0% +not gated/)
-    assert.match(r.stdout, /fake\/skilled\/fake +variant +2\/2 +pass@1 100% +lift \+100 pts/)
-    assert.match(r.stdout, /overrides: env\.MODE/)
     // A successful compare reads as one: the control's expected misses aren't failures.
-    assert.doesNotMatch(r.stdout, /✗|Failures|Assertion failures|failed/)
-    assert.match(r.stdout, /^Expected misses, not gated \(2\)$/m)
-    assert.match(r.stdout, /^ ○ evals\/c\.eval\.ts › g › writes ok\.txt {2}fake\/base\/fake#1$/m)
-    const section = r.stdout.slice(
-      r.stdout.indexOf('Expected misses'),
-      r.stdout.indexOf('Attempts'),
-    )
-    assert.equal(section.trim().split('\n').length, 1 + 2 * 3, 'a name, a reason and a record each')
-    assert.match(r.stdout, /2 passed · 2 missed, not gated \(4 attempts, 1 evals\)/)
+    const block =
+      /^pass {13}g › writes ok\.txt\n {2}arm {16}pass\n {2}base {15}0 of 2\n {2}skilled {12}2 of 2 {2}can't tell yet\n {2}check {14}base {5}skilled\n {2}toBe base {10}2 of 2 {3}not run\n {2}toHaveFile ok\.txt {2}0 of 2 {3}2 of 2\n/m
+    assert.match(r.stdout, block)
+    assert.match(r.stdout, /^1 pass$/m)
 
     const colour = await runCli(p.dir, ['run'], { env: { FORCE_COLOR: '1' } })
     assert.equal(colour.code, 0, colour.stdout + colour.stderr)
@@ -476,14 +462,9 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
 
     const agent = await runCli(p.dir, ['run', '--ui', 'agent'])
     assert.equal(agent.code, 0, agent.stdout + agent.stderr)
-    assert.doesNotMatch(agent.stdout, /^FAIL /m)
-    assert.match(
-      agent.stdout,
-      /^MISS evals\/c\.eval\.ts › g › writes ok\.txt \[.*\] \(.*, assertion, not gated\)$/m,
-    )
-    assert.match(agent.stdout, /^2 passed, 2 missed, not gated \(4 attempts, 1 evals\)$/m)
+    assert.match(agent.stdout, block)
 
-    const gha = await runCli(p.dir, ['run', '--log-order', 'grouped'], {
+    const gha = await runCli(p.dir, ['run', '--log-order', 'grouped', '--output-logs', 'full'], {
       env: { GITHUB_ACTIONS: 'true' },
     })
     assert.equal(gha.code, 0, gha.stdout + gha.stderr)
@@ -491,8 +472,7 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
     assert.equal(gha.stdout.match(/^::group::/gm)?.length, 4, 'expected misses collapse too')
 
     const md = readRun(p.dir).read('summary.md')
-    assert.match(md, /^2 passed · 2 missed, not gated \(4 attempts, 1 evals\)/m)
-    assert.doesNotMatch(md, /✗|failed/)
+    assert.match(md, block)
     assert.match(md, /^#### ○ fake\/base\/fake#1 · missed, not gated$/m)
     assert.match(md, /^<details><summary>Why it missed<\/summary>$/m)
     const { run, evals } = readRun(p.dir)
@@ -522,7 +502,7 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
       envRecords.skilled?.skills.map((s) => [s.name, s.source, s.placement]),
       [['house-greeting', 'local:skills', 'harness']],
     )
-    assert.match(readRun(p.dir).read('summary.md'), /fake\/skilled\/fake 2\/2 \(lift \+100 pts/)
+    assert.match(readRun(p.dir).read('summary.md'), block)
   })
 
   test("gate 'all' gates the control, and minLift fails a variant cell below it", async () => {
@@ -551,14 +531,15 @@ evaluate('no worse', { compare: { baseline: base, variants: [skilled], minLift: 
     assert.equal(noWorse?.cells[1]?.outcome, 'fail')
     assert.equal(noWorse?.outcome, 'pass', "gate 'none' reports but never fails")
     // The canary: a gated control's failure is still a failure; only the ungated miss moves.
-    assert.match(r.stdout, /^Failures \(1\)$/m)
-    assert.match(r.stdout, /^ ✗ evals\/c\.eval\.ts › all gated {2}fake\/base\/fake#1$/m)
-    assert.match(r.stdout, /^Expected misses, not gated \(1\)$/m)
-    assert.match(r.stdout, /^ ○ evals\/c\.eval\.ts › no worse {2}fake\/skilled\/fake#1$/m)
     assert.match(
       r.stdout,
-      /lift −100 pts \(95% −100…\+12, 0\/1 vs 1\/1\), within noise \(minLift 50\) ✗/,
+      /^fail {13}all gated\n {2}arm {16}pass\n {2}base {15}0 of 1\n {2}skilled {12}1 of 1 {2}can't tell yet\n {2}check {14}base {4}skilled\n {2}toHaveFile ok\.txt {2}0 of 1 {2}1 of 1\n/m,
     )
+    assert.match(
+      r.stdout,
+      /^not gated {8}no worse\n {2}arm {14}pass\n {2}base {13}1 of 1\n {2}skilled {10}0 of 1 {2}can't tell yet, not by minLift 50\n {4}error {2}the variant is worse$/m,
+    )
+    assert.match(r.stdout, /^1 fail · 1 pass$/m)
   })
 
   test('compare.harness scopes variants; other harnesses run the control only', async () => {
@@ -577,513 +558,6 @@ evaluate('scoped', { compare: { baseline: base, variants: [skilled], harness: ['
       readRun(p.dir).evals[0]?.cells.map((c) => c.key),
       ['a/base/fake', 'b/base/fake', 'b/skilled/fake'],
     )
-  })
-})
-
-describe('compare questions', () => {
-  const asks = (question: string) => ({
-    'evals/envs.ts': `import { defineEnvironment } from 'reeval'
-import { fakeSandbox } from 'reeval/sandbox'
-const sandbox = fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
-export const base = defineEnvironment('base', { sandbox })
-export const skilled = defineEnvironment('skilled', { sandbox })
-`,
-    'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
-import { base, skilled } from './envs.ts'
-evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${question} } }, async (c) => {
-  await c.send('go')
-  await expect(c).toHaveFile('ok.txt')
-})
-`,
-  })
-  const OK = `fakeHarness({ files: { 'ok.txt': 'yes' } })`
-  const noKeys = { GOOGLE_GENERATIVE_AI_API_KEY: '', AI_GATEWAY_API_KEY: '', VERCEL_OIDC_TOKEN: '' }
-
-  test('--dry-run names the questions with no language model; reeval run exits 2 before any attempt', async () => {
-    const p = await project('questions-no-model', {
-      'reeval.config.ts': fakeConfig({ harness: `{ files: { 'ok.txt': 'yes' } }` }),
-      ...asks(`['Which is cleaner?']`),
-    })
-    const dry = await runCli(p.dir, ['run', '--dry-run'])
-    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
-    assert.match(
-      dry.stdout,
-      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · shows task, diff · 1 pair · needs a language model: set analysis\.model$/m,
-    )
-    const json = await runCli(p.dir, ['run', '--dry-run', '--json'])
-    assert.equal(json.code, 0, json.stdout + json.stderr)
-    assert.deepEqual(JSON.parse(json.stdout).evals[0].questions, [
-      { question: 'Which is cleaner?', model: null, pairs: 1, shows: ['task', 'diff'] },
-    ])
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(
-      r.stderr,
-      /compare\.questions "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) needs a language model to answer it\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in reeval\.config\.ts \(the judge, a fake judge, is an evaluation model: it scores yes\/no questions and can't pick between two attempts\), or give the question its own, \{ question: '…', model: 'google\/gemini-3\.8-flash' \}, or set question: \{ model \} on its group or eval\./,
-    )
-    assert.doesNotMatch(r.stdout, /✓|✗/, 'no attempt ran')
-    assert.equal(existsSync(join(p.dir, '.reeval/runs')), false)
-  })
-
-  test('an evaluation model as the judge or the analysis model exits 2 at plan time', async () => {
-    for (const [name, extra, judge, message] of [
-      [
-        'judge',
-        '',
-        `{ model: 'typesafe-ai/jev-1.14.0' }`,
-        /needs a language model to answer it\. .* \(the judge, typesafe-ai\/jev-1\.14\.0, is an evaluation model: it scores yes\/no questions and can't pick between two attempts\)/,
-      ],
-      [
-        'analysis',
-        `analysis: { model: 'typesafe-ai/jev-1.14.0' },`,
-        undefined,
-        /compare\.questions "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) would be answered by analysis\.model in reeval\.config\.ts, "typesafe-ai\/jev-1\.14\.0", an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
-      ],
-    ] as const) {
-      const p = await project(`questions-eval-model-${name}`, {
-        'reeval.config.ts': fakeConfig({ extra, ...(judge ? { judge } : {}) }),
-        ...asks(`['Which is cleaner?']`),
-      })
-      const r = await runCli(p.dir, ['run'], { env: { TYPESAFE_AI_API_KEY: 'x' } })
-      assert.equal(r.code, 2, r.stdout + r.stderr)
-      assert.match(r.stderr, message)
-      assert.equal(existsSync(join(p.dir, '.reeval/runs')), false)
-    }
-  })
-
-  test("a question's own model needs its key, and a malformed one exits 2", async () => {
-    const p = await project('questions-own-model', {
-      'reeval.config.ts': fakeConfig({ harness: `{ files: { 'ok.txt': 'yes' } }` }),
-      ...asks(`[{ question: 'Which is cleaner?', model: 'google/gemini-3.8-flash' }]`),
-    })
-    const dry = await runCli(p.dir, ['run', '--dry-run', '--json'], { env: noKeys })
-    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
-    assert.deepEqual(JSON.parse(dry.stdout).evals[0].questions, [
-      {
-        question: 'Which is cleaner?',
-        model: 'google/gemini-3.8-flash',
-        pairs: 1,
-        shows: ['task', 'diff'],
-      },
-    ])
-    const missing = await runCli(p.dir, ['run'], { env: noKeys })
-    assert.equal(missing.code, 2, missing.stdout + missing.stderr)
-    assert.match(
-      missing.stderr,
-      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN\./,
-    )
-    const malformed = await runCli(p.dir, ['run'], {
-      env: { ...noKeys, GOOGLE_GENERATIVE_AI_API_KEY: 'AIza\nrest' },
-    })
-    assert.equal(malformed.code, 2, malformed.stdout + malformed.stderr)
-    assert.match(
-      malformed.stderr,
-      /Credentials with whitespace or a line break in them: GOOGLE_GENERATIVE_AI_API_KEY \(character 5\)/,
-    )
-  })
-
-  test("question.model cascades to every question without its own; an entry's model wins", async () => {
-    const p = await project('questions-option-model', {
-      'reeval.config.ts': fakeConfig({
-        harness: `{ files: { 'ok.txt': 'yes' } }`,
-        extra: `question: { model: 'google/gemini-3.8-flash' },
-  analysis: { model: fakeAnalysis({ vote: 'tie' }) },`,
-      }).replace(
-        "import { fakeJudge } from 'reeval/judge'",
-        "import { fakeAnalysis, fakeJudge } from 'reeval/judge'",
-      ),
-      ...asks(`['Which is cleaner?', { question: 'Which is shorter?', model: 'openai/gpt-5.5' }]`),
-    })
-    const dry = await runCli(p.dir, ['run', '--dry-run', '--json'], { env: noKeys })
-    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
-    assert.deepEqual(
-      JSON.parse(dry.stdout).evals[0].questions.map((q: { model: string }) => q.model),
-      ['google/gemini-3.8-flash', 'openai/gpt-5.5'],
-      'the config question.model over analysis.model; the entry over both',
-    )
-    const missing = await runCli(p.dir, ['run'], { env: noKeys })
-    assert.equal(missing.code, 2, missing.stdout + missing.stderr)
-    assert.match(missing.stderr, /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY/)
-  })
-
-  test('with a language model the run plans its questions and the outcome is the checks', async () => {
-    const p = await project('questions-fake-model', {
-      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
-import { fakeHarness } from 'reeval/harness'
-import { fakeAnalysis, fakeJudge } from 'reeval/judge'
-import { fakeSandbox } from 'reeval/sandbox'
-export default defineConfig({
-  harness: ${OK},
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
-  judge: { model: fakeJudge({ score: 0.9 }) },
-  analysis: { model: fakeAnalysis({ output: {} }) },
-})
-`,
-      ...asks(`['Which is cleaner?', 'Which is shorter?']`),
-    })
-    const dry = await runCli(p.dir, ['run', '--dry-run'])
-    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
-    assert.match(
-      dry.stdout,
-      /^ {2}question 1\/2 {2}Which is cleaner\? · after the run · shows task, diff · 1 pair · fake$/m,
-    )
-    assert.match(
-      dry.stdout,
-      /^ {2}question 2\/2 {2}Which is shorter\? · after the run · shows task, diff · 1 pair · fake$/m,
-    )
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 0, r.stdout + r.stderr)
-    const [e] = readRun(p.dir).evals
-    assert.equal(e?.outcome, 'pass')
-    assert.deepEqual(
-      e?.cells.map((c) => [c.role, c.outcome, c.pass, c.fail]),
-      [
-        ['control', 'pass', 1, 0],
-        ['variant', 'pass', 1, 0],
-      ],
-    )
-    // fakeAnalysis() without a vote calls every pair a tie.
-    assert.deepEqual(
-      e?.answers?.map((a) => [a.question, a.votes.map((v) => v.winner), a.rates]),
-      [
-        ['Which is cleaner?', ['tie', 'tie'], []],
-        ['Which is shorter?', ['tie', 'tie'], []],
-      ],
-    )
-  })
-
-  test('a vote reason is recorded, shown and left out of pass or fail', async () => {
-    const p = await project('questions-vote-reason', {
-      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
-import { fakeHarness } from 'reeval/harness'
-import { fakeAnalysis, fakeJudge } from 'reeval/judge'
-import { fakeSandbox } from 'reeval/sandbox'
-export default defineConfig({
-  harness: ${OK},
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
-  judge: { model: fakeJudge({ score: 0.9 }) },
-  analysis: {
-    model: fakeAnalysis({
-      vote: { winner: 'A', reason: 'the first slot writes ok.txt' },
-    }),
-  },
-})
-`,
-      ...asks(`['Which is cleaner?']`),
-    })
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 0, r.stdout + r.stderr)
-    const [e] = readRun(p.dir).evals
-    assert.equal(e?.outcome, 'pass')
-    assert.ok(e?.answers?.[0]?.votes.every((v) => v.reason === 'the first slot writes ok.txt'))
-    assert.match(r.stdout, /the first slot writes ok\.txt/)
-    assert.match(readRun(p.dir).read('summary.md'), /the first slot writes ok\.txt/)
-    const { digest } = await (async () => {
-      const out = await runCli(p.dir, ['analyze', '--context', '--vs', 'none'])
-      assert.equal(out.code, 0, out.stderr)
-      const json = /```json\n([\s\S]*?)\n```/.exec(out.stdout)?.[1]
-      assert.ok(json)
-      return { digest: JSON.parse(json) as { facts: Array<Record<string, unknown>> } }
-    })()
-    const fact = digest.facts.find((f) => f.kind === 'compare-question')
-    assert.deepEqual(fact?.reasons, ['the first slot writes ok.txt'])
-  })
-
-  // Three arms, three runs, and a vote that always picks the side shown first: every pair splits
-  // with the order, which the pooled rates (each arm 50%) and a "0 ties" count hide.
-  test('three arms: head to head per pair, and pairs the order decided are splits', async () => {
-    const p = await project('questions-splits', {
-      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
-import { fakeHarness } from 'reeval/harness'
-import { fakeAnalysis, fakeJudge } from 'reeval/judge'
-import { fakeSandbox } from 'reeval/sandbox'
-export default defineConfig({
-  harness: ${OK},
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
-  judge: { model: fakeJudge({ score: 0.9 }) },
-  analysis: { model: fakeAnalysis({ vote: 'A' }) },
-})
-`,
-      'evals/envs.ts': `import { defineEnvironment } from 'reeval'
-import { fakeSandbox } from 'reeval/sandbox'
-const sandbox = fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
-export const none = defineEnvironment('no-skill', { sandbox })
-export const current = defineEnvironment('current-skill', { sandbox })
-export const next = defineEnvironment('new-skill', { sandbox })
-`,
-      'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
-import { current, next, none } from './envs.ts'
-evaluate('asks', { compare: { baseline: none, variants: [current, next], gate: 'none', questions: ['Which delivers a better user experience?'] }, runs: 3 }, async (c) => {
-  await c.send('go')
-  await expect(c).toHaveFile('ok.txt')
-})
-`,
-    })
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 0, r.stdout + r.stderr)
-    const [e] = readRun(p.dir).evals
-    assert.equal(e?.answers?.[0]?.votes.length, 18)
-    const pairs =
-      'within fake: no-skill 0–0 current-skill (3 splits) · no-skill 0–0 new-skill (3 splits) · current-skill 0–0 new-skill (3 splits)'
-    const splits = /18 votes, 0 ties, 9\/9 pairs split by order, all to the side shown first/
-    assert.match(r.stdout, splits)
-    assert.ok(r.stdout.includes(pairs), r.stdout)
-    const summary = readRun(p.dir).read('summary.md')
-    assert.match(summary, splits)
-    assert.ok(summary.includes(`  - ${pairs}`), summary)
-    const q = await runCli(p.dir, [
-      'query',
-      'SELECT a, b, pairs, a_wins, b_wins, ties, splits, splits_first FROM question_pairs',
-      '--json',
-    ])
-    assert.equal(q.code, 0, q.stderr)
-    assert.deepEqual(
-      (JSON.parse(q.stdout) as Array<Record<string, unknown>>).map((x) => Object.values(x)),
-      [
-        ['no-skill', 'current-skill', 3, 0, 0, 0, 3, 3],
-        ['no-skill', 'new-skill', 3, 0, 0, 0, 3, 3],
-        ['current-skill', 'new-skill', 3, 0, 0, 0, 3, 3],
-      ],
-    )
-    const votes = await runCli(p.dir, ['query', 'SELECT COUNT(*) AS n FROM votes', '--json'])
-    assert.deepEqual(JSON.parse(votes.stdout), [{ n: 18 }])
-    const out = await runCli(p.dir, ['analyze', '--context', '--vs', 'none'])
-    assert.equal(out.code, 0, out.stderr)
-    const json = /```json\n([\s\S]*?)\n```/.exec(out.stdout)?.[1]
-    assert.ok(json)
-    const fact = (JSON.parse(json) as { facts: Array<Record<string, unknown>> }).facts.find(
-      (f) => f.kind === 'compare-question',
-    )
-    assert.equal(fact?.splits, '9/9 pairs split by order, all to the side shown first')
-    assert.deepEqual(fact?.headToHead, [pairs])
-  })
-
-  // Three harnesses: `two` writes an extra file, which the fake vote prefers, and `bad` fails
-  // its check on every attempt, so it's in no pair but still in the pass rate and the exit code.
-  const threeHarnesses = (
-    analysis: string,
-  ) => `import { defineConfig, defineEnvironment } from 'reeval'
-import { fakeHarness } from 'reeval/harness'
-import { fakeAnalysis, fakeJudge } from 'reeval/judge'
-import { fakeSandbox } from 'reeval/sandbox'
-export default defineConfig({
-  harness: [
-    fakeHarness({ id: 'one', files: { 'ok.txt': 'yes' } }),
-    fakeHarness({ id: 'two', files: { 'ok.txt': 'yes', 'extra.txt': 'more' } }),
-    fakeHarness({ id: 'bad', files: { 'no.txt': 'no' } }),
-  ],
-  runs: 2,
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
-  judge: { model: fakeJudge({ score: 0.9 }) },
-  ${analysis}
-})
-`
-  const extra = `analysis: { model: fakeAnalysis({ vote: (p) => (p.a.diff?.includes('extra.txt') ? 'A' : p.b.diff?.includes('extra.txt') ? 'B' : 'tie') }) },`
-
-  test('votes are recorded after the attempts, and the outcome and exit code are the checks', async () => {
-    const asked = await project('questions-votes', {
-      'reeval.config.ts': threeHarnesses(extra),
-      ...asks(`['Which is cleaner?']`),
-    })
-    const plain = await project('questions-votes-none', {
-      'reeval.config.ts': threeHarnesses(extra),
-      ...asks(`undefined`),
-    })
-    const r = await runCli(asked.dir)
-    const without = await runCli(plain.dir)
-    assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.equal(r.code, without.code, 'the exit code is the checks’')
-    const [e] = readRun(asked.dir).evals
-    const [w] = readRun(plain.dir).evals
-    assert.ok(e && w)
-    assert.equal(w.answers, undefined, 'no answers without questions')
-    assert.deepEqual(
-      [e.outcome, e.passRate, e.cells.map((c) => [c.key, c.outcome, c.pass, c.fail])],
-      [w.outcome, w.passRate, w.cells.map((c) => [c.key, c.outcome, c.pass, c.fail])],
-    )
-    assert.equal(e.passRate, 8 / 12, "bad's failures count in the pass rate")
-    const [answer] = e.answers ?? []
-    assert.ok(answer)
-    assert.equal(answer.model, 'fake')
-    assert.equal(answer.error, undefined)
-    // Within: 2 harnesses with passing attempts × 2 runs; across: 2 arms × 2 runs, one vs two.
-    assert.equal(answer.votes.length, 16)
-    assert.ok(!answer.votes.some((v) => [v.a, v.b, v.harness].includes('bad')), 'bad is in no pair')
-    assert.equal(answer.votes.filter((v) => v.swapped).length, 8)
-    assert.deepEqual(
-      answer.votes
-        .filter((v) => v.cut === 'across')
-        .map((v) => [v.arm, v.run, v.a, v.b, v.winner, v.swapped]),
-      ['base', 'skilled'].flatMap((arm) =>
-        [1, 2].flatMap((run) => [
-          [arm, run, 'one', 'two', 'two', false],
-          [arm, run, 'one', 'two', 'two', true],
-        ]),
-      ),
-    )
-    assert.deepEqual(
-      answer.rates.filter((x) => x.cut === 'across'),
-      [
-        { cut: 'across', name: 'one', wins: 0, n: 8 },
-        { cut: 'across', name: 'two', wins: 8, n: 8 },
-      ],
-    )
-    assert.match(
-      r.stdout,
-      /^ {7}question {2}"Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · across: one 0\/8 \(0%\), two 8\/8 \(100%\) · 16 votes, 4 ties, 2\/8 pairs split by order, all to the side shown first · fake$/m,
-    )
-    const run = readRun(asked.dir)
-    assert.match(
-      run.read('summary.md'),
-      /^- Question: "Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · across: one 0\/8 \(0%\), two 8\/8 \(100%\) · 16 votes, 4 ties, 2\/8 pairs split by order, all to the side shown first · fake · \[what the model saw\]\(evals-q-eval-ts-asks-[0-9a-f]+\/questions\/1\.json\)$/m,
-    )
-    // One call per vote, in the same order; a vote's A is its a unless it's the swapped repeat.
-    const input = JSON.parse(run.read(answer.input?.path ?? 'missing'))
-    assert.deepEqual(
-      input.calls.map((c: QuestionCall) => [c.cut, c.a, c.b, c.swapped, c.labels.A]),
-      answer.votes.map((v) => [v.cut, v.a, v.b, v.swapped, v.swapped ? v.b : v.a]),
-    )
-    assert.ok(
-      input.calls.every((c: { prompt: string }) =>
-        c.prompt.startsWith('Question: Which is cleaner?'),
-      ),
-    )
-    const agent = await runCli(asked.dir, ['run', '--ui', 'agent'])
-    assert.equal(agent.code, 1, agent.stdout + agent.stderr)
-    assert.match(
-      agent.stdout,
-      /^question evals\/q\.eval\.ts › asks: "Which is cleaner\?" within: .* · 16 votes, 4 ties, 2\/8 pairs split by order, all to the side shown first · fake$/m,
-    )
-    // Recorded, the input goes with the eval's other files, and is unset where those aren't kept.
-    const kept = await runCli(asked.dir, ['record', 'latest', '--artifacts', 'all'])
-    assert.equal(kept.code, 0, kept.stdout + kept.stderr)
-    const all = readRun(asked.dir, { history: 'evals/.history' })
-    const [keptAnswer] = all.evals[0]?.answers ?? []
-    assert.deepEqual(JSON.parse(all.read(keptAnswer?.input?.path ?? 'missing')), input)
-    const bare = await runCli(asked.dir, ['record', run.run.runId, '--artifacts', 'none'])
-    assert.equal(bare.code, 0, bare.stdout + bare.stderr)
-    const none = readRun(asked.dir, { history: 'evals/.history', back: 1 })
-    assert.equal(none.run.runId, run.run.runId)
-    assert.equal(none.evals[0]?.answers?.[0]?.input, undefined)
-  })
-
-  test('a question with across: environment records only environment pairs', async () => {
-    const p = await project('questions-across-environment', {
-      'reeval.config.ts': threeHarnesses(extra),
-      ...asks(`[{ question: 'Which is cleaner?', across: 'environment' }]`),
-    })
-    const dry = await runCli(p.dir, ['run', '--dry-run'])
-    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
-    assert.match(
-      dry.stdout,
-      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · shows task, diff · environment · 6 pairs · fake$/m,
-    )
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 1, r.stdout + r.stderr)
-    const [answer] = readRun(p.dir).evals[0]?.answers ?? []
-    assert.ok(answer)
-    assert.equal(answer.votes.length, 8)
-    assert.ok(answer.votes.every((v) => v.cut === 'within'))
-    assert.ok(!answer.rates.some((x) => x.cut === 'across'))
-    assert.match(
-      r.stdout,
-      /^ {7}question {2}"Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · 8 votes, 4 ties, 2\/4 pairs split by order, all to the side shown first · fake$/m,
-    )
-  })
-
-  test('compare.across sets the default factor for questions that omit it', async () => {
-    const p = await project('questions-compare-across', {
-      'reeval.config.ts': threeHarnesses(extra),
-      'evals/envs.ts': asks(`['Which is cleaner?']`)['evals/envs.ts'],
-      'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
-import { base, skilled } from './envs.ts'
-evaluate('asks', { compare: { baseline: base, variants: [skilled], across: 'environment', questions: ['Which is cleaner?'] } }, async (c) => {
-  await c.send('go')
-  await expect(c).toHaveFile('ok.txt')
-})
-`,
-    })
-    const dry = await runCli(p.dir, ['run', '--dry-run'])
-    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
-    assert.match(
-      dry.stdout,
-      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · shows task, diff · environment · 6 pairs · fake$/m,
-    )
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 1, r.stdout + r.stderr)
-    const [answer] = readRun(p.dir).evals[0]?.answers ?? []
-    assert.ok(answer)
-    assert.equal(answer.votes.length, 8)
-    assert.ok(answer.votes.every((v) => v.cut === 'within'))
-  })
-
-  test('a question across overrides compare.across', async () => {
-    const p = await project('questions-across-override', {
-      'reeval.config.ts': threeHarnesses(extra),
-      'evals/envs.ts': asks(`['Which is cleaner?']`)['evals/envs.ts'],
-      'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
-import { base, skilled } from './envs.ts'
-evaluate('asks', { compare: { baseline: base, variants: [skilled], across: 'harness', questions: [{ question: 'Which is cleaner?', across: 'environment' }] } }, async (c) => {
-  await c.send('go')
-  await expect(c).toHaveFile('ok.txt')
-})
-`,
-    })
-    const dry = await runCli(p.dir, ['run', '--dry-run'])
-    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
-    assert.match(
-      dry.stdout,
-      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · shows task, diff · environment · 6 pairs · fake$/m,
-    )
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 1, r.stdout + r.stderr)
-    const [answer] = readRun(p.dir).evals[0]?.answers ?? []
-    assert.ok(answer)
-    assert.ok(answer.votes.every((v) => v.cut === 'within'))
-    assert.ok(!answer.rates.some((x) => x.cut === 'across'))
-  })
-
-  test('a model error is kept on its answer and warned about; the outcome and exit code stand', async () => {
-    const p = await project('questions-model-error', {
-      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
-import { fakeHarness } from 'reeval/harness'
-import { fakeAnalysis, fakeJudge } from 'reeval/judge'
-import { fakeSandbox } from 'reeval/sandbox'
-export default defineConfig({
-  harness: ${OK},
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
-  judge: { model: fakeJudge({ score: 0.9 }) },
-  analysis: { model: fakeAnalysis({ vote: { error: 'the model is over quota' } }) },
-})
-`,
-      ...asks(`['Which is cleaner?']`),
-    })
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(
-      r.stdout,
-      /compare question "Which is cleaner\?" on evals\/q\.eval\.ts › asks failed: the model is over quota\. Outcomes are unchanged\./,
-    )
-    assert.match(
-      r.stdout,
-      /question {2}"Which is cleaner\?" 0 votes, 0 ties · fake · failed: the model is over quota$/m,
-    )
-    const run = readRun(p.dir)
-    const [e] = run.evals
-    assert.equal(e?.outcome, 'pass')
-    const { input, ...answer } = e?.answers?.[0] ?? {}
-    assert.deepEqual(answer, {
-      question: 'Which is cleaner?',
-      model: 'fake',
-      stateOptions: DEFAULT_QUESTION_STATE,
-      votes: [],
-      rates: [],
-      error: 'the model is over quota',
-    })
-    // The calls in flight when the first failed are saved too, each with its error.
-    const { calls } = JSON.parse(run.read(input?.path ?? 'missing'))
-    assert.ok(calls.length >= 1, JSON.stringify(calls))
-    for (const call of calls) assert.equal(call.error, 'the model is over quota')
   })
 })
 
@@ -1129,7 +603,12 @@ group('rated', { gate: { passRate: 0.6 } }, () => {
       ['inherits 0.6', { passRate: 0.6 }, 0.8, 'pass', 'pass'],
       ['back to all', 'all', 0.8, 'fail', 'fail'],
     ])
-    assert.match(r.stdout, /gate passRate 0\.8/, 'the summary names a non-default gate')
+    assert.match(
+      r.stdout,
+      /^fail {13}default\n {2}5 tries {10}4 of 5\n {2}error {12}the third attempt fails$/m,
+    )
+    assert.match(r.stdout, /^pass {13}at 0\.8\n {2}5 tries {10}4 of 5$/m)
+    assert.match(r.stdout, /^3 fail · 2 pass$/m)
 
     const quiet = await runCli(p.dir, ['run', 'at 0.8'])
     assert.equal(quiet.code, 0, quiet.stdout + quiet.stderr)
@@ -1206,7 +685,7 @@ evaluate('judged', async (c) => {
     assert.equal(missing.code, 2, missing.stdout + missing.stderr)
     assert.match(
       missing.stderr,
-      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN\./,
+      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY \(for direct\(\)\) for the judge model, "google\/gemini-3\.8-flash"\./,
     )
     const malformed = await runCli(p.dir, ['run', '--profile', 'real'], {
       env: { ...noKeys, GOOGLE_GENERATIVE_AI_API_KEY: 'AIza\nrest' },
@@ -1216,6 +695,65 @@ evaluate('judged', async (c) => {
       malformed.stderr,
       /Credentials with whitespace or a line break in them: GOOGLE_GENERATIVE_AI_API_KEY \(character 5\)/,
     )
+  })
+
+  const judgeKeyCases: Array<[string, string, RegExp]> = [
+    [
+      'anthropic/claude-sonnet-5',
+      'ANTHROPIC_API_KEY',
+      /Missing credentials: ANTHROPIC_API_KEY \(for direct\(\)\) for the judge model, "anthropic\/claude-sonnet-5"\. Set them in the environment or \.env\.local\.$/m,
+    ],
+    [
+      'openai/gpt-6-luna',
+      'OPENAI_API_KEY',
+      /Missing credentials: OPENAI_API_KEY \(for direct\(\)\) for the judge model, "openai\/gpt-6-luna"\./,
+    ],
+    [
+      'mistral/mistral-large',
+      'AI_GATEWAY_API_KEY',
+      /the judge model "mistral\/mistral-large": no gateway in the list can serve it \(direct: reeval calls only anthropic\/\*, google\/\*, openai\/\*, typesafe-ai\/\* models on their own keys\)\. Add vercel\(\) to gateway\./,
+    ],
+  ]
+  test('a judge model without its key exits 2 naming the keys that work, before any attempt', async () => {
+    const noKeys = {
+      ANTHROPIC_API_KEY: '',
+      OPENAI_API_KEY: '',
+      AI_GATEWAY_API_KEY: '',
+      VERCEL_OIDC_TOKEN: '',
+    }
+    for (const [model, key, message] of judgeKeyCases) {
+      const p = await project('judge-key', {
+        'reeval.config.ts': fakeConfig({
+          extra: `profiles: { real: { judge: { model: '${model}' } } },`,
+        }),
+        'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('judged', async (c) => {
+  await c.send('x')
+  expect(await c.judge('Did it?')).toPass()
+})
+`,
+      })
+      const missing = await runCli(p.dir, ['run', '--profile', 'real'], { env: noKeys })
+      assert.equal(missing.code, 2, missing.stdout + missing.stderr)
+      assert.match(missing.stderr, message)
+      if (key === 'AI_GATEWAY_API_KEY') continue
+      const unused = await runCli(p.dir, ['run', '--profile', 'real'], {
+        env: { ...noKeys, AI_GATEWAY_API_KEY: 'vck_test' },
+      })
+      assert.equal(unused.code, 2, 'no gateway by default: the Gateway key never stands in')
+      assert.match(
+        unused.stderr,
+        /Set them in the environment or \.env\.local\. AI_GATEWAY_API_KEY is set, but no gateway in the config uses it: add vercel\(\) to gateway to call the model through Vercel AI Gateway\./,
+      )
+      const malformed = await runCli(p.dir, ['run', '--profile', 'real'], {
+        env: { ...noKeys, [key]: 'sk-test\nrest' },
+      })
+      assert.equal(malformed.code, 2, malformed.stdout + malformed.stderr)
+      assert.match(
+        malformed.stderr,
+        new RegExp(`Credentials with whitespace or a line break in them: ${key} \\(character 8\\)`),
+      )
+    }
   })
 
   test('a profile name typo exits 2 and lists the profiles', async () => {
@@ -1317,6 +855,13 @@ describe('common mistakes', { concurrency: 4 }, () => {
       'a compare baseline that is not an environment',
       `evaluate('e', { compare: { baseline: 'a' as never, variants: [a] } }, async () => {})`,
       /compare\.baseline in evaluate\("e"\) must be an environment from defineEnvironment \(got "a"\)\. .* Leave it out to use the eval's environment as the control\./,
+    ],
+    [
+      'compare arms whose refs come from unset variables',
+      `const base = defineEnvironment('base', ({ git }) => ({ workspace: git('..', { ref: process.env.REEVAL_TEST_UNSET_BASE }) }))
+const head = base.extendEnvironment('head', ({ git }) => ({ workspace: git('..', { ref: process.env.REEVAL_TEST_UNSET_HEAD }) }))
+evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})`,
+      /compare in evaluate\("e"\) runs head and base on the same tree: past what they share, each sets only workspace, and both are git\("\.\."\) with no ref \(the repository HEAD\)\. A ref read from an unset variable is undefined, so check the variables the arms take their refs from, and give each arm its own ref\./,
     ],
     [
       'a variant that is the environment a compare without a baseline runs as its control',
@@ -1471,7 +1016,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'a sandbox that is not docker() or fakeSandbox() on evaluate',
       `evaluate('e', { sandbox: { kind: 'vm' } as never }, async () => {})`,
-      /sandbox in evaluate\("e"\) must come from docker\(\) or fakeSandbox\(\)/,
+      /sandbox in evaluate\("e"\) must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
     ],
     [
       'an old option name',
@@ -1631,7 +1176,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'a fake agent layout reeval does not know',
       `evaluate('e', { harness: fakeHarness({ layout: 'cline' as never }) }, async () => {})`,
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex' \(got "cline"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex', 'fx', 'grok-build' \(got "cline"\)/,
     ],
     [
       'a fake agent script that is not one list per turn',
@@ -1676,7 +1221,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'egress as a list of hosts',
       `evaluate('e', { egress: ['api.example.com'] as never }, async () => {})`,
-      /egress in evaluate\("e"\) is 'allow-all' \(the default\), 'deny-all', or \{ allow: \['api\.example\.com', '\*\.example\.org'\] \} \(got \["api\.example\.com"\]\)\. For a list of hosts, use \{ allow: \["api\.example\.com"\] \}\./,
+      /egress in evaluate\("e"\) is 'proxy' \(the default\), 'allow-all', 'deny-all', or \{ allow: \['api\.example\.com', '\*\.example\.org'\] \} \(got \["api\.example\.com"\]\)\. For a list of hosts, use \{ allow: \["api\.example\.com"\] \}\./,
     ],
     [
       'an egress deny list',
@@ -1742,6 +1287,31 @@ describe('common mistakes', { concurrency: 4 }, () => {
       'a token in the workspace URL',
       `defineEnvironment('app', ({ git }) => ({ workspace: git('https://x-access-token:ghp_abc123@github.com/acme/app') }))`,
       /git\("https:\/\/\*\*\*:\*\*\*@github\.com\/acme\/app"\): the URL has a password or token in it\. reeval fetches the repository on the host with your own git credentials/,
+    ],
+    [
+      'a plugin as a path',
+      `defineEnvironment('review', { plugins: ['./plugins/review' as never] })`,
+      /plugins in defineEnvironment\("review"\) must come from the plugin helper, e\.g\. plugins: \[plugin\.local\('\.\/plugins\/review'\)\] \(got "\.\/plugins\/review"\)/,
+    ],
+    [
+      'the singular plugin key',
+      `defineEnvironment('review', ({ plugin }) => ({ plugin: [plugin.local('.')] }) as never)`,
+      /Unknown field "plugin" in defineEnvironment\("review"\)\. Did you mean "plugins"\?/,
+    ],
+    [
+      'a plugin only as a string',
+      `defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('.', { only: 'skills' as never })] }))`,
+      /plugin\.local\("\."\): only lists the parts to place, from 'skills', 'agents', 'commands', 'hooks', 'mcp', 'rules'/,
+    ],
+    [
+      'a marketplace plugin without its entry name',
+      `defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.marketplace('github:acme/agent-plugins')] }))`,
+      /plugin\.marketplace\(\) needs 'name@source': the plugin's entry and the marketplace's git repository or npm:<package>, e\.g\. plugin\.marketplace\('lint@github:acme\/agent-plugins'\) \(got "github:acme\/agent-plugins"\)/,
+    ],
+    [
+      'a plugin without a manifest',
+      `evaluate('e', { environment: defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('..')] })) }, async () => {})`,
+      /evaluate\("e"\) on fake: plugin\.local\('\.'\) has no \.claude-plugin\/plugin\.json/,
     ],
     [
       'capture as a string',
@@ -1822,6 +1392,22 @@ ${body}
       assert.match(r.stderr, message)
     })
   }
+
+  test('compare arms on one workspace that differ in something else plan', async () => {
+    const p = await project('same-workspace-arms', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const base = defineEnvironment('base', ({ git }) => ({ workspace: git('..') }))
+const skilled = base.extendEnvironment('skilled', ({ git }) => ({ workspace: git('..'), files: { 'SKILL.md': 'x' } }))
+const ruled = defineEnvironment('ruled', ({ git }) => ({ workspace: git('..'), rules: 'Be brief.' }))
+const bare = defineEnvironment('bare', ({ git }) => ({ workspace: git('..') }))
+evaluate('extends', { compare: { baseline: base, variants: [skilled] } }, async () => {})
+evaluate('apart', { compare: { baseline: ruled, variants: [bare] } }, async () => {})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+  })
 
   const configCases: Array<[string, string, RegExp]> = [
     [
@@ -1905,9 +1491,19 @@ ${body}
       /debug\.traceBufferMb in reeval\.config\.ts must be a number of megabytes above 0 \(got "8MB"\)/,
     ],
     [
-      'analysis.agent as text',
-      `analysis: { agent: 'yes' as never },`,
-      /analysis\.agent in reeval\.config\.ts must be true or false \(got "yes"\)/,
+      'analysis.agent, which insights replaced',
+      `analysis: { agent: true } as never,`,
+      /Unknown option "agent" in analysis in reeval\.config\.ts\. Use model, insights, maxTokens, instructions/,
+    ],
+    [
+      'analysis.insights as text',
+      `analysis: { insights: 'yes' as never },`,
+      /analysis\.insights in reeval\.config\.ts must be true or false \(got "yes"\)/,
+    ],
+    [
+      'a token budget of zero',
+      `analysis: { maxTokens: 0 },`,
+      /analysis\.maxTokens in reeval\.config\.ts must be a whole number of tokens of at least 1, e\.g\. 250000 \(got 0\)/,
     ],
     [
       'a debug folder option',
@@ -1922,12 +1518,12 @@ ${body}
     [
       'a sandbox that is not docker() or fakeSandbox() on defineConfig',
       `sandbox: { kind: 'vm' } as never,`,
-      /sandbox in reeval\.config\.ts must come from docker\(\) or fakeSandbox\(\)/,
+      /sandbox in reeval\.config\.ts must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
     ],
     [
       'a sandbox that is not docker() or fakeSandbox() on profile defaults',
       `profiles: { pr: { defaults: { sandbox: { kind: 'vm' } as never } } },`,
-      /sandbox in profiles\.pr\.defaults in reeval\.config\.ts must come from docker\(\) or fakeSandbox\(\)/,
+      /sandbox in profiles\.pr\.defaults in reeval\.config\.ts must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
     ],
   ]
   for (const [what, extra, message] of configCases) {
@@ -2265,10 +1861,12 @@ evaluate('greets', { compare: { baseline: plain, variants: [withSkill] } }, asyn
 })
 `,
     })
-    const r = await runCli(p.dir, ['run'], { env: { REEVAL_TEST_HOST_TOKEN: 's3cret-value-123' } })
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'], {
+      env: { REEVAL_TEST_HOST_TOKEN: 's3cret-value-123' },
+    })
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /^\[greets#1 with-skill\] ✓ evals\/e\.eval\.ts › greets/m)
-    assert.match(r.stdout, /with-skill\/fake +variant +1\/1 +pass@1 100% +lift \+100 pts/)
+    assert.match(r.stdout, /^\[greets#1 with-skill\] ▶ evals\/e\.eval\.ts › greets/m)
+    assert.match(r.stdout, /^ {2}with-skill +1 of 1 {2}can't tell yet$/m)
     const { run, evals, dir } = readRun(p.dir)
     const envs = Object.fromEntries(run.environments.map((e) => [e.name, e]))
     assert.deepEqual(Object.keys(envs).sort(), ['plain', 'with-skill'])
@@ -2564,32 +2162,32 @@ evaluate('fake', { environment: defineEnvironment('host', { sandbox: fakeSandbox
     const out = r.stdout
     assert.match(out, /^images {2}4 sandbox images \(nothing built: --dry-run\)$/m)
     // Each step's standing depends on what this machine has built, so only its shape is checked.
-    const st = '[✓+~✗] '
+    const st = '[✓+~✗?] '
     assert.match(
       out,
       new RegExp(
-        `^docker\\+[0-9a-f]+ \\+ install · 2 evals\\n {2}${st}base +reeval-sandbox:cursor-[\\d.]+ +\\((ready|to build|stale): .+\\)\\n {2}${st}install 2 commands +reeval-install:<base id \\+ commands> +\\(`,
+        `^docker\\+[0-9a-f]+ · cursor \\+ install · 2 evals\\n {2}${st}base +reeval-sandbox:cursor-[\\d.]+ +\\((ready|to build|stale|unchecked): .+\\)\\n {2}${st}install 2 commands +reeval-install:<base id \\+ commands> +\\(`,
         'm',
       ),
     )
     assert.match(
       out,
       new RegExp(
-        `^docker:tools · 1 eval\\n {2}${st}dockerfile docker/tools/Dockerfile +reeval-dockerfile:tools-<context \\+ reeval image id> +\\(.+\\)\\n {2}${st}harness +reeval-dockerfile:tools-<context \\+ reeval image id> +\\(`,
+        `^docker:tools · cursor · 1 eval\\n {2}${st}dockerfile docker/tools/Dockerfile +reeval-dockerfile:tools-<context \\+ reeval image id> +\\(.+\\)\\n {2}${st}harness +reeval-dockerfile:tools-<context \\+ reeval image id> +\\(`,
         'm',
       ),
     )
     assert.match(
       out,
       new RegExp(
-        `^docker:py\\.Dockerfile · 1 eval\\n {2}${st}dockerfile evals/py\\.Dockerfile +reeval-dockerfile:py-dockerfile-[0-9a-f]{16} .*\\n {2}${st}harness +reeval-sandbox:cursor-[\\d.]+-reeval-dockerfile-py-dockerfile-`,
+        `^docker:py\\.Dockerfile · cursor · 1 eval\\n {2}${st}dockerfile evals/py\\.Dockerfile +reeval-dockerfile:py-dockerfile-[0-9a-f]{16} .*\\n {2}${st}harness +reeval-sandbox:cursor-[\\d.]+-reeval-dockerfile-py-dockerfile-`,
         'm',
       ),
     )
     assert.match(
       out,
       new RegExp(
-        `^docker:python:3\\.12-slim · 1 eval\\n {2}${st}from python:3\\.12-slim +reeval-sandbox:cursor-[\\d.]+-python-3-12-slim-[0-9a-f]{8}`,
+        `^docker:python:3\\.12-slim · cursor · 1 eval\\n {2}${st}from python:3\\.12-slim +reeval-sandbox:cursor-[\\d.]+-python-3-12-slim-[0-9a-f]{8}`,
         'm',
       ),
     )
@@ -2621,9 +2219,9 @@ evaluate('plain', async () => {})
 evaluate('tools', { tags: ['tools'], environment: defineEnvironment('tools', { sandbox: docker({ dockerfile: '../docker/tools/Dockerfile' }) }) }, async () => {})
 `,
     })
-    const cursor = /^ {2}[✓+~✗] base +reeval-sandbox:cursor-[\d.]+ /m
-    const claude = /^ {2}[✓+~✗] base +reeval-sandbox:claude-code-[\w.-]+ /m
-    const tools = /^docker:tools · 1 eval$/m
+    const cursor = /^ {2}[✓+~✗?] base +reeval-sandbox:cursor-[\d.]+ /m
+    const claude = /^ {2}[✓+~✗?] base +reeval-sandbox:claude-code-[\w.-]+ /m
+    const tools = /^docker:tools · [\w-]+ · 1 eval$/m
     const dry = async (args: string[], env?: Record<string, string>) => {
       const r = await runCli(p.dir, ['image', 'build', '--dry-run', ...args], env ? { env } : {})
       assert.equal(r.code, 0, `${args.join(' ')}\n${r.stdout}${r.stderr}`)

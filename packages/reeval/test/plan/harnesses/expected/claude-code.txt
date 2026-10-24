@@ -6,15 +6,15 @@ evals/h.eval.ts › both harnesses on a dockerfile  cursor:composer-2.5/tools/do
                                                   claude-code:claude-sonnet-5/tools/docker:tools              control  gated  ×1
 evals/h.eval.ts › claude on a toolchain base      claude-code:claude-sonnet-5/python/docker:python:3.12-slim  control  gated  ×1
 excluded: —
-image docker · 1 evals
-  base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)
+image docker · cursor · 1 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 2 evals
-  base  reeval-sandbox:claude-code-1.0.158-patch.6c1cff12  (reeval's image: built when missing or when its base changed)
-image docker:tools · 1 evals
+  base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (reeval's image: built when missing or when its base changed)
+image docker:tools · cursor · 1 evals
   dockerfile docker/tools/Dockerfile  reeval-dockerfile:tools-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
-  harness                             reeval-dockerfile:tools-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.5)
+  harness                             reeval-dockerfile:tools-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.6)
 image docker:tools · claude-code · 1 evals
   dockerfile docker/tools/Dockerfile  reeval-dockerfile:tools-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
-  harness                             reeval-dockerfile:tools-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:claude-code-1.0.158-patch.6c1cff12)
+  harness                             reeval-dockerfile:tools-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:claude-code-1.0.160-patch.b17cde50)
 image docker:python:3.12-slim · claude-code · 1 evals
-  from python:3.12-slim  reeval-sandbox:claude-code-1.0.158-patch.6c1cff12-python-3-12-slim-9f93541e  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+  from python:3.12-slim  reeval-sandbox:claude-code-1.0.160-patch.b17cde50-python-3-12-slim-375f4a61  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

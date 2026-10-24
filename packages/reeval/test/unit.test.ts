@@ -11,9 +11,10 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { test } from 'node:test'
+import { describe, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
+import { shellQuote } from '@reeval/sandbox-docker/process'
 import { createChecks } from '../src/attempt/checks.ts'
 import { traceEnvironment } from '../src/attempt/debug.ts'
 import type { Attempt, AttemptSpec } from '../src/attempt/state.ts'
@@ -34,7 +35,7 @@ import {
   UsageError,
 } from '../src/config.ts'
 import type { AttemptDebug } from '../src/debug/attempt.ts'
-import { diffSinceSnapshot, snapshot } from '../src/diff.ts'
+import { acceptIntoSnapshot, diffSinceSnapshot, snapshot } from '../src/diff.ts'
 import type { ResolvedEnvironment } from '../src/environment/resolve.ts'
 import { excludeMatcher, parseSkillMd, resolveEnvironment } from '../src/environment/resolve.ts'
 import {
@@ -48,6 +49,7 @@ import {
   parseGitRepo,
 } from '../src/environment.ts'
 import { isTimeout, TimeoutError } from '../src/errors.ts'
+import { vercel } from '../src/gateway.ts'
 import {
   AGENTS,
   type AgentKind,
@@ -60,7 +62,7 @@ import { createFakeHarness } from '../src/harness/fake.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
-import { compare, formatCompare, stackChanges } from '../src/history/views.ts'
+import { compare, stackChanges } from '../src/history/views.ts'
 import { newRunId, RUN_ID } from '../src/ids.ts'
 import {
   badJudgeArtifacts,
@@ -79,6 +81,7 @@ import { redactSecrets } from '../src/redact.ts'
 import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
 import { fakeSandbox } from '../src/sandbox.ts'
 import { clip } from '../src/text.ts'
+import type { GatewayDescriptor } from '../src/types.ts'
 import { project } from './helpers.ts'
 
 test("the -v broker line names each brokered endpoint's path matcher", () => {
@@ -107,6 +110,7 @@ test("the -v broker line names each brokered endpoint's path matcher", () => {
         files: [],
         skills: [],
         workspaceSkills: [],
+        plugins: [],
         mcp: {},
       } as unknown as ResolvedEnvironment,
     )
@@ -217,6 +221,55 @@ test('c.writeFile refuses absolute paths and paths that leave the workspace', as
   }
 })
 
+test("the snapshot keeps one commit and no placed file's earlier content", async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  try {
+    await box.writeFile('src/sum.js', 'healthy\n')
+    await box.writeFile('keep.txt', 'kept\n')
+    await snapshot(box)
+    await box.writeFile('src/sum.js', '')
+    await acceptIntoSnapshot(box, 'src/sum.js')
+    await box.writeFile('src/sum.js', 'bug\n')
+    await acceptIntoSnapshot(box, 'src/sum.js')
+    const git = `git --git-dir=${shellQuote(join(box.stateDir, 'workspace.git'))}`
+    assert.equal((await box.exec(`${git} rev-list --all --count`)).stdout.trim(), '1')
+    const objects = await box.exec(`${git} cat-file --batch-all-objects --batch`)
+    assert.equal(objects.exitCode, 0)
+    assert.match(objects.stdout, /bug\n/)
+    assert.doesNotMatch(objects.stdout, /healthy/)
+    assert.ok(
+      !existsSync(join(box.workdir, '..', '.reeval-git-work')),
+      'nothing beside the workspace',
+    )
+    await box.writeFile('src/sum.js', 'fixed\n')
+    const diff = await diffSinceSnapshot(box)
+    assert.deepEqual(diff.files, [{ path: 'src/sum.js', status: 'modified' }])
+    assert.match(diff.patch, /^-bug\n\+fixed\n/m)
+  } finally {
+    await box.destroy()
+  }
+  assert.ok(!existsSync(box.stateDir), 'destroy removes the state directory')
+})
+
+test('the snapshot ignores a config the workspace user could plant in its HOME', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  try {
+    // A privileged git's HOME can be the agent's on a custom `from` image, so a `~/.gitconfig`
+    // filter would run reeval's git as root. Prove the snapshot's git never reads it.
+    const ran = join(box.stateDir, 'filter-ran')
+    await box.writeFile('~/.gitconfig', `[filter "evil"]\n\tclean = touch ${ran}\n`)
+    await box.writeFile('.gitattributes', 'secret.txt filter=evil\n')
+    await box.writeFile('secret.txt', 'content\n')
+    await snapshot(box)
+    await box.writeFile('secret.txt', 'changed\n')
+    await acceptIntoSnapshot(box, 'secret.txt')
+    await diffSinceSnapshot(box)
+    assert.ok(!existsSync(ran), 'the planted clean filter never ran')
+  } finally {
+    await box.destroy()
+  }
+})
+
 test('an aborted fake sandbox command stops, with everything it started', async () => {
   const box = await createFakeSandbox({ kind: 'fake' })
   try {
@@ -290,6 +343,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     const session = await harness.start(box, AbortSignal.timeout(60_000), {
       skills: [],
       workspaceSkills: [],
+      plugins: [],
       mcp: { stamp: { transport: 'stdio', command: 'sh', args, env: {} } },
     })
     const turn = await session.send('stamp', AbortSignal.timeout(60_000))
@@ -345,6 +399,10 @@ test('an auth failure names the credential; other errors get no hint', () => {
       'codex',
       'unexpected status 401 Unauthorized: Incorrect API key provided: sk-not-a*****-key. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, auth error: 401, auth error code: invalid_api_key',
     ],
+    [
+      'grok-build',
+      'ACP session initialization failed: ACP authentication method "xai.api_key" is not advertised by the agent. Advertised methods: grok.com.',
+    ],
   ]
   for (const [kind, message] of refused) {
     const { credential } = AGENTS[kind]
@@ -363,6 +421,17 @@ test('an auth failure names the credential; other errors get no hint', () => {
     ),
     'The API rejected AWS_BEARER_TOKEN_BEDROCK: set a valid key in the environment or .env.local',
   )
+  // fx's words, for a configured provider (OpenAI) and for AI Gateway.
+  for (const [model, message, credential] of [
+    ['gpt-4.1-mini', 'configured provider authentication failed · HTTP 401', 'OPENAI_API_KEY'],
+    ['google/m', 'AI_GATEWAY_API_KEY authentication failed · HTTP 401', 'AI_GATEWAY_API_KEY'],
+  ] as const) {
+    assert.equal(
+      authHint(agentFor({ kind: 'fx', model }), message),
+      `The API rejected ${credential}: set a valid key in the environment or .env.local`,
+      message,
+    )
+  }
   // The twins: a rate limit, a server error, a missing model and a refused host aren't the key.
   for (const message of [
     'HTTP 429: Resource has been exhausted (e.g. check quota).',
@@ -370,6 +439,7 @@ test('an auth failure names the credential; other errors get no hint', () => {
     'models/gemini-9 is not found for API version v1beta (404)',
     'CONNECT blocked.example.net:443 → 403 · blocked',
     'The Antigravity CLI exited with code 1 before reporting a result',
+    'ACP authentication method "grok.com" is not advertised by the agent',
   ]) {
     assert.equal(authHint(AGENTS.antigravity, message), undefined, message)
   }
@@ -391,7 +461,7 @@ test('parseDuration', () => {
 
 test('resolveConfig defaults', () => {
   const c = resolveConfig({}, '/p')
-  assert.deepEqual(c.include, ['evals/**/*.eval.ts'])
+  assert.deepEqual(c.include, ['evals/**/*.eval.ts', 'evals/**/*.eval.py'])
   assert.deepEqual(c.harness, [{ kind: 'cursor', model: 'composer-2.5' }])
   assert.deepEqual(c.sandbox, { kind: 'docker' })
   assert.equal(c.environment, undefined, 'no environment by default')
@@ -469,12 +539,13 @@ test('judge model strings need a provider, and credentials follow the provider',
   assert.match(checkModelString('gemini-3.8-flash') ?? '', /google\/gemini-3\.8-flash/)
   assert.equal(checkModelString('typesafe-ai/jev'), undefined)
   const gateway = ['AI_GATEWAY_API_KEY', 'VERCEL_OIDC_TOKEN']
-  assert.deepEqual(judgeCredentials('google/gemini-3.8-flash'), [
-    'GOOGLE_GENERATIVE_AI_API_KEY',
-    ...gateway,
-  ])
-  assert.deepEqual(judgeCredentials('typesafe-ai/jev-1.14.0'), ['TYPESAFE_AI_API_KEY', ...gateway])
-  assert.deepEqual(judgeCredentials('openai/gpt-x'), gateway)
+  assert.deepEqual(judgeCredentials('google/gemini-3.8-flash'), ['GOOGLE_GENERATIVE_AI_API_KEY'])
+  assert.deepEqual(judgeCredentials('typesafe-ai/jev-1.14.0'), ['TYPESAFE_AI_API_KEY'])
+  assert.deepEqual(judgeCredentials('anthropic/claude-x'), ['ANTHROPIC_API_KEY'])
+  assert.deepEqual(judgeCredentials('openai/gpt-x'), ['OPENAI_API_KEY'])
+  assert.deepEqual(judgeCredentials('mistral/large'), [], 'direct() has no route for mistral/*')
+  assert.deepEqual(judgeCredentials('mistral/large', 'vercel'), gateway)
+  assert.deepEqual(judgeCredentials('anthropic/claude-x', 'vercel'), gateway)
   assert.deepEqual(judgeCredentials({ kind: 'fake-judge', score: 1 }), [])
   assert.throws(
     () => resolveConfig({ judge: { model: 'gemini-3.8-flash' } }, '/p'),
@@ -485,12 +556,23 @@ test('judge model strings need a provider, and credentials follow the provider',
 
 test('missingCredentials names the judge key for the configured provider', () => {
   const config = resolveConfig({ judge: { model: 'typesafe-ai/jev-1.14.0' } }, '/p')
-  assert.deepEqual(missingCredentials(config, { CURSOR_API_KEY: 'k' }), [
-    'TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN',
-  ])
-  assert.deepEqual(missingCredentials(config, { CURSOR_API_KEY: 'k', AI_GATEWAY_API_KEY: 'g' }), [])
+  const jev = 'TYPESAFE_AI_API_KEY (for direct()) for the judge model, "typesafe-ai/jev-1.14.0"'
+  assert.deepEqual(missingCredentials(config, { CURSOR_API_KEY: 'k' }), [jev])
+  assert.deepEqual(
+    missingCredentials(config, { CURSOR_API_KEY: 'k', AI_GATEWAY_API_KEY: 'g' }),
+    [jev],
+    'without vercel() in gateway, a Gateway key never stands in',
+  )
   assert.deepEqual(
     missingCredentials(config, { CURSOR_API_KEY: 'k', TYPESAFE_AI_API_KEY: 't' }),
+    [],
+  )
+  const onVercel = resolveConfig(
+    { judge: { model: 'typesafe-ai/jev-1.14.0' }, gateway: [vercel()] },
+    '/p',
+  )
+  assert.deepEqual(
+    missingCredentials(onVercel, { CURSOR_API_KEY: 'k', AI_GATEWAY_API_KEY: 'g' }),
     [],
   )
   assert.deepEqual(
@@ -513,8 +595,10 @@ test("the credential checks ask for the key of the judge the run uses, the profi
     '/p',
   )
   const env = { CURSOR_API_KEY: 'k' }
-  const google = 'GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN'
-  const typesafe = 'TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN'
+  const google =
+    'GOOGLE_GENERATIVE_AI_API_KEY (for direct()) for the judge model, "google/gemini-2.5-flash"'
+  const typesafe =
+    'TYPESAFE_AI_API_KEY (for direct()) for the judge model, "typesafe-ai/jev-1.14.0"'
   const profile = (name: string) => selectProfile(config, name, {})
   assert.deepEqual(missingCredentials(config, env), [google])
   assert.deepEqual(
@@ -550,27 +634,137 @@ test("the credential checks ask for the key of the judge the run uses, the profi
   ])
 })
 
-test('judge strings use the provider package when its key is set, else the AI Gateway', () => {
+test('judge strings use the provider package on direct, and the AI Gateway only on vercel', () => {
   const jev = 'typesafe-ai/jev-1.14.0'
   assert.deepEqual(judgeRoute(jev, { TYPESAFE_AI_API_KEY: 't', AI_GATEWAY_API_KEY: 'g' }), {
     kind: 'direct',
     provider: 'typesafe-ai',
     pkg: '@ai-sdk/typesafe-ai',
   })
-  assert.deepEqual(judgeRoute(jev, { AI_GATEWAY_API_KEY: 'g' }), { kind: 'gateway' })
+  assert.deepEqual(judgeRoute(jev, { AI_GATEWAY_API_KEY: 'g' }, 'judge model', 'vercel'), {
+    kind: 'gateway',
+  })
   assert.equal(
     judgeRoute('google/gemini-3.8-flash', { GOOGLE_GENERATIVE_AI_API_KEY: 'k' }).kind,
     'direct',
   )
-  assert.deepEqual(judgeRoute('openai/gpt-x', { VERCEL_OIDC_TOKEN: 'o' }), { kind: 'gateway' })
+  assert.deepEqual(
+    judgeRoute('mistral/large', { VERCEL_OIDC_TOKEN: 'o' }, 'judge model', 'vercel'),
+    { kind: 'gateway' },
+  )
   assert.throws(
     () => judgeRoute(jev, {}),
-    /No credentials for judge model "typesafe-ai\/jev-1\.14\.0"\. Set TYPESAFE_AI_API_KEY to call @ai-sdk\/typesafe-ai directly, or AI_GATEWAY_API_KEY \(or VERCEL_OIDC_TOKEN\) to go through the Vercel AI Gateway, in the environment or \.env\.local\./,
+    /^Error: No credentials for judge model "typesafe-ai\/jev-1\.14\.0" \(provider "typesafe-ai"\)\. Set TYPESAFE_AI_API_KEY \(for direct\(\)\), in the environment or \.env\.local\.$/,
   )
   assert.throws(
-    () => judgeRoute('openai/gpt-x', {}),
-    /Set AI_GATEWAY_API_KEY \(or VERCEL_OIDC_TOKEN\)/,
+    () => judgeRoute(jev, { AI_GATEWAY_API_KEY: 'g' }),
+    /^Error: No credentials for judge model "typesafe-ai\/jev-1\.14\.0" \(provider "typesafe-ai"\)\. Set TYPESAFE_AI_API_KEY \(for direct\(\)\), in the environment or \.env\.local\. AI_GATEWAY_API_KEY is set, but no gateway in the config uses it: add vercel\(\) to gateway to call the model through Vercel AI Gateway\.$/,
+    'a Gateway key that would have worked says how to use it',
   )
+  assert.throws(
+    () => judgeRoute(jev, {}, 'judge model', 'vercel'),
+    /Set AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(for vercel\(\)\), in the environment or \.env\.local\.$/,
+  )
+})
+
+describe('each provider prefix with each combination of keys', () => {
+  const gateway = { kind: 'gateway' }
+  const direct = (provider: string, pkg: string) => ({ kind: 'direct', provider, pkg })
+  const providers: Array<[string, string, string]> = [
+    ['anthropic/claude-sonnet-5', 'anthropic', 'ANTHROPIC_API_KEY'],
+    ['openai/gpt-6-luna', 'openai', 'OPENAI_API_KEY'],
+    ['google/gemini-3.8-flash', 'google', 'GOOGLE_GENERATIVE_AI_API_KEY'],
+    ['typesafe-ai/jev-1.14.0', 'typesafe-ai', 'TYPESAFE_AI_API_KEY'],
+  ]
+  const messageOf = (run: () => unknown) => {
+    try {
+      run()
+    } catch (error) {
+      return (error as Error).message
+    }
+    return undefined
+  }
+  for (const [model, provider, key] of providers) {
+    test(model, () => {
+      const pkg = `@ai-sdk/${provider}`
+      assert.deepEqual(judgeRoute(model, { [key]: 'k' }), direct(provider, pkg), 'direct key')
+      assert.deepEqual(
+        judgeRoute(model, { [key]: 'k', AI_GATEWAY_API_KEY: 'g' }),
+        direct(provider, pkg),
+        'direct ignores the Gateway key',
+      )
+      for (const env of [{ AI_GATEWAY_API_KEY: 'g' }, { VERCEL_OIDC_TOKEN: 'o' }]) {
+        assert.throws(() => judgeRoute(model, env), /add vercel\(\) to gateway/)
+        assert.deepEqual(judgeRoute(model, env, 'judge model', 'vercel'), gateway)
+      }
+      assert.deepEqual(
+        judgeRoute(model, { [key]: 'k', AI_GATEWAY_API_KEY: 'g' }, 'judge model', 'vercel'),
+        gateway,
+        "vercel ignores the provider's own key",
+      )
+      const none = messageOf(() => judgeRoute(model, {}))
+      assert.equal(
+        none,
+        `No credentials for judge model "${model}" (provider "${provider}"). Set ${key} (for direct()), in the environment or .env.local.`,
+      )
+      assert.throws(
+        () => judgeRoute(model, { [key]: 'sk-ant\nrest' }),
+        new RegExp(
+          `^Error: ${key} for judge model "${model.replaceAll('.', '\\.')}" has whitespace or a line break in it at character 7\\.`,
+        ),
+      )
+      assert.throws(
+        () => judgeRoute(model, { AI_GATEWAY_API_KEY: 'g g' }, 'judge model', 'vercel'),
+        /AI_GATEWAY_API_KEY for judge model .* at character 2/,
+      )
+    })
+  }
+  test('analysis.model names the keys for its prefix, briefly for the closing line', async () => {
+    const { analysisKeyProblem } = await import('../src/analysis/model.ts')
+    const config = (model: string, gateways?: GatewayDescriptor[]) =>
+      resolveConfig({ analysis: { model }, ...(gateways ? { gateway: gateways } : {}) }, '/p')
+    const anthropic = config('anthropic/claude-sonnet-5')
+    assert.equal(analysisKeyProblem(anthropic, { ANTHROPIC_API_KEY: 'a' }), null)
+    assert.equal(
+      analysisKeyProblem(anthropic, {}),
+      'set ANTHROPIC_API_KEY (for direct()) for analysis.model, "anthropic/claude-sonnet-5", in .env.local, or analysis: { insights: false }',
+    )
+    assert.equal(
+      analysisKeyProblem(anthropic, { AI_GATEWAY_API_KEY: 'g' }),
+      'set ANTHROPIC_API_KEY (for direct()) for analysis.model, "anthropic/claude-sonnet-5", in .env.local, or analysis: { insights: false }. AI_GATEWAY_API_KEY is set, but no gateway in the config uses it: add vercel() to gateway to call the model through Vercel AI Gateway.',
+    )
+    assert.equal(
+      analysisKeyProblem(config('anthropic/claude-sonnet-5', [vercel()]), {
+        AI_GATEWAY_API_KEY: 'g',
+      }),
+      null,
+    )
+    assert.equal(
+      analysisKeyProblem(config('openai/gpt-6-luna'), {}, true),
+      'set OPENAI_API_KEY, or analysis: { insights: false }',
+    )
+    assert.equal(
+      analysisKeyProblem(config('mistral/large'), { AI_GATEWAY_API_KEY: 'g' }),
+      'analysis.model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway. Or analysis: { insights: false }.',
+    )
+    assert.match(
+      analysisKeyProblem(anthropic, { ANTHROPIC_API_KEY: 'a\nb' }) ?? '',
+      /^ANTHROPIC_API_KEY for analysis model "anthropic\/claude-sonnet-5" has whitespace or a line break in it at character 2\./,
+    )
+  })
+
+  test('any other prefix needs vercel()', () => {
+    for (const env of [{}, { AI_GATEWAY_API_KEY: 'g' }]) {
+      assert.throws(
+        () => judgeRoute('mistral/large', env),
+        /needs vercel\(\) in the config's gateway list/,
+      )
+    }
+    assert.deepEqual(
+      judgeRoute('mistral/large', { AI_GATEWAY_API_KEY: 'g' }, 'judge model', 'vercel'),
+      gateway,
+    )
+  })
 })
 
 test('huge single outputs keep their head and tail, with a marker and hash', () => {
@@ -1061,10 +1255,6 @@ test('compare classifies an eval on the cells both runs have, and lists the rest
   assert.deepEqual(compare(base, head), [
     { id: 'e', status: 'same', base: 'pass', head: 'pass', cells: { added: [], removed } },
   ])
-  assert.match(
-    formatCompare(base, head, compare(base, head), false),
-    /✓ → ✓ {2}same {22}e · cells removed: cursor\/-, cursor\/reeval-good, agy\/-, agy\/reeval-weak$/m,
-  )
   // The shared cell still decides: a flip in it is a regression, and a change in it is drift.
   const failed = run('fail', [cell('agy/reeval-good', 'fail')])
   assert.deepEqual(
@@ -1395,11 +1585,25 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
   assert.equal(skipped.skip, 'no harness left: profile pr allows a')
 })
 
+test('a check a side never ran has no verdict, and not-run attempts are not failures', async () => {
+  const { checkVerdict } = await import('../src/view/contrasts.ts')
+  const t = (pass: number, fail: number, notRun = 0, error = 0) => ({ pass, fail, error, notRun })
+  assert.equal(checkVerdict(t(0, 2), t(0, 0, 2)), undefined, 'failed against never ran')
+  assert.equal(checkVerdict(t(2, 0), t(0, 0, 2)), undefined, 'passed against never ran')
+  assert.equal(checkVerdict(t(2, 0, 1), t(2, 0)), 'both-pass', 'a not-run attempt is no fail')
+  assert.equal(checkVerdict(t(0, 1, 1), t(2, 0)), 'discriminates')
+  assert.equal(checkVerdict(t(1, 1), t(0, 0, 2)), undefined)
+  assert.equal(checkVerdict(t(2, 0), t(0, 2)), 'discriminates')
+  assert.equal(checkVerdict(t(2, 0), t(0, 0, 0, 2)), undefined, 'ran but never answered')
+})
+
 test('effort under 10s reads in tenths, so a ratio matches its times', async () => {
   const { formatSeconds } = await import('../src/view/effort.ts')
-  assert.deepEqual([0, 40, 200, 400, 1500, 9949, 9950, 46_000, 90_000].map(formatSeconds), [
-    '0s',
-    '0s',
+  assert.deepEqual([0, 40, 49, 50, 200, 400, 1500, 9949, 9950, 46_000, 90_000].map(formatSeconds), [
+    '<0.1s',
+    '<0.1s',
+    '<0.1s',
+    '0.1s',
     '0.2s',
     '0.4s',
     '1.5s',

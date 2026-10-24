@@ -354,7 +354,7 @@ const replay = (harness: string, file: string) => {
 
 describe('replay captures through normaliseStream', () => {
   test('there are skill and mcp captures for each harness', () => {
-    assert.deepEqual(harnesses, ['antigravity', 'codex', 'cursor', 'goose', 'opencode', 'pi'])
+    assert.deepEqual(harnesses, ['antigravity', 'codex', 'cursor', 'fx', 'goose', 'opencode', 'pi'])
   })
 
   for (const harness of harnesses) {

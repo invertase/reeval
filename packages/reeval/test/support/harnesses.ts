@@ -4,6 +4,23 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { type BakedHarness, imageFor } from '@reeval/sandbox-docker'
+import type { PluginPart } from '../../src/types.ts'
+
+/** Every plugin part, for a harness that loads them all. */
+export const EVERY_PART: readonly PluginPart[] = [
+  'skills',
+  'agents',
+  'commands',
+  'hooks',
+  'mcp',
+  'rules',
+]
+
+/** What a harness that reads Claude Code's plugin format loads: every part but rules. */
+const CLAUDE_FORMAT: readonly PluginPart[] = ['skills', 'agents', 'commands', 'hooks', 'mcp']
+
+/** Where reeval copies the probe plugin's skill, which `context` lists. */
+const PLACED_PLUGIN_SKILL = /^~\/\.reeval\/plugins\/probe\/skills\/plugin-probe\/SKILL\.md$/
 
 export type HarnessRow = {
   /** The name in test titles, `REEVAL_CONTRACT_HARNESSES` and the capture directory. */
@@ -18,11 +35,26 @@ export type HarnessRow = {
     | 'goose'
     | 'pi'
     | 'codex'
+    | 'grok-build'
+    | 'fx'
+    | 'fx-gateway'
+    | 'claude-code-gateway'
+    | 'codex-gateway'
+    | 'opencode-gateway'
+    | 'goose-gateway'
+    | 'grok-build-gateway'
   /**
    * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
-   * providers than Google's.
+   * providers than Google's, and the rows on AI Gateway.
    */
-  harness?: 'opencode'
+  harness?: 'opencode' | 'fx' | 'claude-code' | 'codex' | 'goose' | 'pi' | 'grok-build'
+  /** `REEVAL_CONTRACT_GATEWAY`: the config's `gateway` list is this gateway alone. */
+  gateway?: 'vercel'
+  /**
+   * Why the row is skipped unless `REEVAL_CONTRACT_HARNESSES` names it, such as a key CI doesn't
+   * have yet.
+   */
+  gated?: string
   /** The cheapest model that does the job; null for the fake agent. */
   model: string | null
   /**
@@ -34,6 +66,23 @@ export type HarnessRow = {
   image: BakedHarness
   /** Where the placed contract skill shows up in the attempt's `context`. */
   skillContext: RegExp
+  /**
+   * What reeval places of a plugin on this harness: the parts its catalog entry loads
+   * (`pluginParts`), which the probe plugin's `only` is narrowed to, and where the probe plugin's
+   * skill shows up in `context`. The hook and subagent evals run only where `parts` has `hooks`
+   * and `agents`. Unset for a row that leaves plugins to another row of its harness (to save
+   * budget): its plugin evals are left out, and the plugin checks skip it, saying so.
+   */
+  plugin?: {
+    parts: readonly PluginPart[]
+    skillContext: RegExp
+    /**
+     * What the harness places itself, which `context` lists too: its own copy of the placed
+     * plugin, what lists it, and the skills its CLI bundles. The hermetic check counts them as
+     * declared.
+     */
+    own?: RegExp
+  }
   /** What a restricted policy allows automatically for it. */
   autoHosts: string[]
   /** A host it reaches on every turn; null for the fake agent, which reaches none. */
@@ -53,9 +102,15 @@ export type HarnessRow = {
   servedModelGap?: string
   /**
    * What `servedModels` (the models its API requests named, seen by the gateway) must include;
-   * null when its requests don't name one, so the record says it's unknown.
+   * null when its requests don't name one, so the record says it's unknown; `'none named'` when the
+   * gateway reads its responses but they name no model, so the record has `[]`.
    */
-  wireModel: RegExp | null
+  wireModel: RegExp | null | 'none named'
+  /**
+   * What `askedModels` (the models its calls asked the gateway for, in the agent's own words) must
+   * include; unset when the harness records none.
+   */
+  askedModel?: RegExp
 }
 
 export const harnesses: HarnessRow[] = [
@@ -65,6 +120,9 @@ export const harnesses: HarnessRow[] = [
     key: null,
     image: 'cursor',
     skillContext: /^~\/\.agents\/skills\/contract-probe\/SKILL\.md$/,
+    // Plugin evals run it without a layout, so it takes every part and places plugin skills with
+    // its own.
+    plugin: { parts: EVERY_PART, skillContext: /^~\/\.agents\/skills\/plugin-probe\/SKILL\.md$/ },
     autoHosts: ['api2.cursor.sh', '*.cursor.sh'],
     apiHost: null,
     tokens: false,
@@ -77,6 +135,10 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'CURSOR_API_KEY', from: ['CURSOR_API_KEY'] },
     image: 'cursor',
     skillContext: /^~\/(.+\/)?\.agents\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: {
+      parts: EVERY_PART,
+      skillContext: /^~\/(.+\/)?\.agents\/skills\/plugin-probe\/SKILL\.md$/,
+    },
     autoHosts: ['api2.cursor.sh', '*.cursor.sh'],
     apiHost: 'api2.cursor.sh',
     tokens: true,
@@ -90,6 +152,11 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'GEMINI_API_KEY', from: ['GEMINI_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY'] },
     image: 'antigravity',
     skillContext: /^~\/\.gemini\/config\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: {
+      parts: EVERY_PART,
+      skillContext: /^~\/\.gemini\/config\/plugins\/probe\/skills\/plugin-probe\/SKILL\.md$/,
+      own: /^~\/\.gemini\/config\/plugins\/probe\//,
+    },
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
     tokens: true,
@@ -102,6 +169,7 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'ANTHROPIC_API_KEY', from: ['ANTHROPIC_API_KEY'] },
     image: 'claude-code',
     skillContext: /^~\/\.claude\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: { parts: CLAUDE_FORMAT, skillContext: PLACED_PLUGIN_SKILL },
     autoHosts: ['api.anthropic.com', '*.anthropic.com'],
     apiHost: 'api.anthropic.com',
     tokens: true,
@@ -117,6 +185,10 @@ export const harnesses: HarnessRow[] = [
     },
     image: 'opencode',
     skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: {
+      parts: ['skills', 'agents', 'commands', 'mcp'],
+      skillContext: /^~\/\.config\/opencode\/skills\/plugin-probe\/SKILL\.md$/,
+    },
     autoHosts: ['generativelanguage.googleapis.com', 'mcp.exa.ai'],
     apiHost: 'generativelanguage.googleapis.com',
     tokens: true,
@@ -129,15 +201,15 @@ export const harnesses: HarnessRow[] = [
     // response.
     id: 'opencode-anthropic',
     harness: 'opencode',
-    model: 'anthropic/claude-haiku-4-5',
+    model: 'anthropic/claude-sonnet-5-5',
     key: { name: 'ANTHROPIC_API_KEY', from: ['ANTHROPIC_API_KEY'] },
     image: 'opencode',
     skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['api.anthropic.com', 'mcp.exa.ai'],
     apiHost: 'api.anthropic.com',
     tokens: true,
-    servedModel: /^claude-haiku-4-5/,
-    wireModel: /^claude-haiku-4-5/,
+    servedModel: /^claude-sonnet-5-5/,
+    wireModel: /^claude-sonnet-5-5/,
   },
   {
     // And OpenAI's: a Bearer key, the Responses API over HTTP (not OpenCode's WebSocket), and
@@ -164,6 +236,11 @@ export const harnesses: HarnessRow[] = [
     image: 'goose',
     skillContext:
       /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: {
+      parts: ['skills', 'mcp'],
+      skillContext:
+        /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/plugin-probe\/SKILL\.md$/,
+    },
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
     tokens: false,
@@ -182,6 +259,10 @@ export const harnesses: HarnessRow[] = [
     },
     image: 'pi',
     skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: {
+      parts: ['skills', 'commands', 'mcp'],
+      skillContext: /^~\/\.pi\/agent\/skills\/plugin-probe\/SKILL\.md$/,
+    },
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
     tokens: true,
@@ -194,6 +275,13 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'OPENAI_API_KEY', from: ['OPENAI_API_KEY'] },
     image: 'codex',
     skillContext: /^~\/\.agents\/skills\/contract-probe\/SKILL\.md$/,
+    // `codex plugin add` copies the plugin into Codex's cache, from its home marketplace; Codex
+    // writes its bundled skills to ~/.codex/skills/.system as it starts.
+    plugin: {
+      parts: ['skills', 'mcp'],
+      skillContext: PLACED_PLUGIN_SKILL,
+      own: /^~\/\.(codex\/plugins\/cache\/reeval\/probe\/|agents\/plugins\/marketplace\.json$|codex\/skills\/\.system\/)/,
+    },
     autoHosts: ['api.openai.com'],
     apiHost: 'api.openai.com',
     tokens: true,
@@ -202,6 +290,145 @@ export const harnesses: HarnessRow[] = [
     // catalog doesn't list gets no effort (`effort=none`) and no apply_patch tool.
     servedModel: /^gpt-5\.6-luna\[effort=medium\]$/,
     wireModel: /^gpt-5\.6-luna\[effort=medium\]$/,
+  },
+  {
+    // fx on OpenAI's Chat Completions API, as an fx configured provider: a Bearer key, through
+    // the relay that takes fx (which ignores HTTPS_PROXY) through the egress gateway. fx sends
+    // no `reasoning_effort`, and OpenAI refuses function tools without it from gpt-5.6 on.
+    id: 'fx',
+    model: 'gpt-5.5',
+    key: { name: 'OPENAI_API_KEY', from: ['OPENAI_API_KEY'] },
+    image: 'fx',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: {
+      parts: ['skills', 'mcp'],
+      skillContext:
+        /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/plugin-probe\/SKILL\.md$/,
+    },
+    autoHosts: ['api.openai.com'],
+    apiHost: 'api.openai.com',
+    tokens: true,
+    // fx names no model over ACP; the gateway reads the dated snapshot the API answers with.
+    servedModel: /^gpt-5\.5-\d{4}-\d{2}-\d{2}$/,
+    wireModel: /^gpt-5\.5-\d{4}-\d{2}-\d{2}$/,
+  },
+  {
+    // And on Vercel AI Gateway through `gateway: [vercel()]`: fx's own provider, with a gateway
+    // model id.
+    id: 'fx-gateway',
+    harness: 'fx',
+    gateway: 'vercel',
+    model: 'google/gemini-3.8-flash',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'fx',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    // Gemini's stream through fx's provider names no model, so nothing proves what served it; the
+    // record keeps the model each call asked for apart, in `askedModels`.
+    servedModel: null,
+    wireModel: 'none named',
+    askedModel: /^google\/gemini-3\.8-flash$/,
+  },
+  {
+    // Claude Code on Vercel AI Gateway through `gateway: [vercel()]`: its base URL on Vercel, and
+    // AI_GATEWAY_API_KEY brokered on Vercel's copies of Anthropic's paths.
+    id: 'claude-code-gateway',
+    harness: 'claude-code',
+    gateway: 'vercel',
+    model: 'claude-haiku-4-5',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'claude-code',
+    skillContext: /^~\/\.claude\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /claude-haiku-4-5/,
+    wireModel: null,
+  },
+  {
+    // Codex on Vercel AI Gateway: a Responses API provider on Vercel, the model as openai/<id>.
+    id: 'codex-gateway',
+    harness: 'codex',
+    gateway: 'vercel',
+    model: 'gpt-5.6-luna',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'codex',
+    skillContext: /^~\/\.agents\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /gpt-5\.6-luna/,
+    wireModel: /gpt-5\.6-luna/,
+  },
+  {
+    // OpenCode on Vercel AI Gateway: its own vercel provider, the model as vercel/<id>.
+    id: 'opencode-gateway',
+    harness: 'opencode',
+    gateway: 'vercel',
+    model: 'google/gemini-3.8-flash',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'opencode',
+    skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh', 'mcp.exa.ai'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /gemini-3\.8-flash/,
+    wireModel: /gemini-3\.8-flash/,
+  },
+  {
+    // Goose on Vercel AI Gateway: its vercel_ai_gateway provider (OpenAI-compatible, a Bearer
+    // key), the Gemini id as google/<id>, and the served model from Vercel's response.
+    id: 'goose-gateway',
+    harness: 'goose',
+    gateway: 'vercel',
+    model: 'gemini-3.8-flash',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'goose',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: false,
+    tokensWhy:
+      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    servedModel: /gemini-3\.8-flash/,
+    wireModel: /gemini-3\.8-flash/,
+  },
+  {
+    id: 'grok-build',
+    model: 'grok-4.6',
+    key: { name: 'XAI_API_KEY', from: ['XAI_API_KEY'] },
+    image: 'grok-build',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: { parts: CLAUDE_FORMAT, skillContext: PLACED_PLUGIN_SKILL },
+    autoHosts: ['api.x.ai'],
+    apiHost: 'api.x.ai',
+    tokens: true,
+    // Its ACP server names no model; the turn records the one xAI's Responses API answered with.
+    servedModel: /^grok-4\.6/,
+    wireModel: /^grok-4\.6/,
+  },
+  {
+    // Grok Build on Vercel AI Gateway: the model as a [model."xai/<id>"] table on Vercel's Chat
+    // Completions API, keyed by env_key, so nothing reaches xAI's API.
+    id: 'grok-build-gateway',
+    harness: 'grok-build',
+    gateway: 'vercel',
+    model: 'grok-4.6',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'grok-build',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /grok-4\.6/,
+    wireModel: /grok-4\.6/,
   },
 ]
 
@@ -237,6 +464,7 @@ const imageBuilt = (ref: string) => {
 export function skipRow(row: HarnessRow): string | false {
   const only = process.env.REEVAL_CONTRACT_HARNESSES?.split(',')
   if (only && !only.includes(row.id)) return `REEVAL_CONTRACT_HARNESSES=${only.join(',')}`
+  if (row.gated && !only) return row.gated
   if (row.key) {
     if (process.env.REEVAL_TEST_REAL !== '1') return 'set REEVAL_TEST_REAL=1 to run real agents'
     if (!keyOf(row)) return false
@@ -253,6 +481,8 @@ export function rowEnv(row: HarnessRow): NodeJS.ProcessEnv {
   return {
     ...(row.id === 'fake' ? {} : { REEVAL_CONTRACT_HARNESS: harnessOf(row) }),
     ...(row.model ? { REEVAL_CONTRACT_MODEL: row.model } : {}),
+    ...(row.gateway ? { REEVAL_CONTRACT_GATEWAY: row.gateway } : {}),
+    ...(row.plugin ? { REEVAL_CONTRACT_PLUGIN_PARTS: row.plugin.parts.join(',') } : {}),
     ...(row.key && key ? { [row.key.name]: key } : {}),
     ...(process.env.REEVAL_RAW_TRANSCRIPT
       ? { REEVAL_RAW_TRANSCRIPT: process.env.REEVAL_RAW_TRANSCRIPT }
@@ -311,7 +541,7 @@ export function reserveAttempts(row: HarnessRow, attempts: number, what: string)
     : 0
   if (spent + attempts > budget) {
     throw new Error(
-      `${what} on ${row.id} would start ${attempts} real attempts, over the job's budget of ${budget} (${spent} reserved): raise REEVAL_REAL_ATTEMPT_BUDGET in real.yml if the suite grew on purpose`,
+      `${what} on ${row.id} would start ${attempts} real attempts, over the job's budget of ${budget} (${spent} reserved): raise the job's REEVAL_REAL_ATTEMPT_BUDGET (contract.yml, or real.yml's smoke job) if the suite grew on purpose`,
     )
   }
   appendFileSync(ledger, `${attempts} ${what} ${row.id}\n`)

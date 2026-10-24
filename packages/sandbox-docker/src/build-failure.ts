@@ -1,8 +1,10 @@
-// Why an image build failed, from `docker build --progress plain` output or a bootstrap error:
-// the failing step, its own last lines, a named cause, and whether retrying could help.
+// Why an image build failed, from `docker build --progress plain` output (BuildKit's, or buildah's
+// under Podman) or a bootstrap error: the failing step, its own last lines, a named cause, and
+// whether retrying could help.
+import { type Engine, engineSpec } from './engine.ts'
 
 /** Which part of making a sandbox image failed. */
-export type ImageStage = 'image' | 'from' | 'dockerfile' | 'harness' | 'install'
+export type ImageStage = 'image' | 'from' | 'dockerfile' | 'harness' | 'install' | 'plugin'
 
 /** A cause reeval recognises and names in the headline. */
 export type FailureCause = 'enospc' | 'oom'
@@ -34,7 +36,10 @@ export const OUTPUT_LINES = 8
 const stripAnsi = (text: string) => text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
 
 export type ParsedBuild = {
-  /** BuildKit's error, without its `ERROR: failed to build: failed to solve:` prefix. */
+  /**
+   * BuildKit's error, without its `ERROR: failed to build: failed to solve:` prefix, or buildah's,
+   * without its `Error: building at STEP "…":` one.
+   */
   error: string | null
   /** The failing step's own output, last lines first cut. */
   output: string[]
@@ -44,6 +49,12 @@ export type ParsedBuild = {
 /** The failing step and its output from `--progress plain` build output. */
 export function parseBuildOutput(text: string): ParsedBuild {
   const lines = stripAnsi(text).split(/\r?\n/)
+  if (
+    !lines.some((l) => /^(?:#\d+ )?ERROR: /.test(l)) &&
+    lines.some((l) => l.startsWith('Error: '))
+  ) {
+    return parseBuildahOutput(lines)
+  }
   let step: string | null = null
   let error: string | null = null
   for (const line of lines) {
@@ -63,23 +74,46 @@ export function parseBuildOutput(text: string): ParsedBuild {
   return { error, output: output.slice(-OUTPUT_LINES), exitCode: code ? Number(code) : null }
 }
 
+/**
+ * buildah's output (`podman build`): `STEP n/m: …` headers, each step's output as is, then
+ * `Error: building at STEP "…": …`. Its own warnings are `time="…" level=…` lines.
+ */
+function parseBuildahOutput(lines: string[]): ParsedBuild {
+  let error: string | null = null
+  let output: string[] = []
+  for (const line of lines) {
+    if (/^STEP \d+\/\d+: /.test(line)) output = []
+    else if (line.startsWith('Error: ')) error = line.slice('Error: '.length)
+    else if (!error && line.trim() && !/^time="[^"]*" level=|^--> /.test(line)) output.push(line)
+  }
+  error =
+    (error ?? '')
+      .replace(/^building at STEP "(?:[^"\\]|\\.)*": /, '')
+      .replace(/ &imagebuilder\.Step\{.*$/, '')
+      .trim() || null
+  const code = /exit status (\d+)$/.exec(error ?? '')?.[1]
+  return { error, output: output.slice(-OUTPUT_LINES), exitCode: code ? Number(code) : null }
+}
+
 /** ENOSPC or a SIGKILL (137, usually the out-of-memory killer), from anything the build printed. */
 export function failureCause(text: string, exitCode: number | null): FailureCause | null {
   if (/no space left on device|ENOSPC/i.test(text)) return 'enospc'
-  if (exitCode === 137 || /exit(?:ed| code:?) 137\b|signal: killed|OOMKilled/i.test(text)) {
+  if (exitCode === 137 || /exit(?:ed| code:?| status) 137\b|signal: killed|OOMKilled/i.test(text)) {
     return 'oom'
   }
   return null
 }
 
-export const causeLine = (cause: FailureCause) =>
-  cause === 'enospc'
-    ? 'out of disk space (ENOSPC): free space for Docker (docker system df, reeval clean --images) and rerun'
-    : 'killed (exit 137): usually out of memory; give Docker more memory or lower the concurrency'
+export const causeLine = (cause: FailureCause, engine?: Engine) => {
+  const { name, bin } = engineSpec(engine)
+  return cause === 'enospc'
+    ? `out of disk space (ENOSPC): free space for ${name} (${bin} system df, reeval clean --images) and rerun`
+    : `killed (exit 137): usually out of memory; give ${name} more memory or lower the concurrency`
+}
 
 // What a user's step did wrong fails the same way however often it runs.
 const DETERMINISTIC =
-  /did not complete successfully|dockerfile parse error|unknown instruction|should not be blank|pull access denied|repository does not exist|manifest unknown|not found: manifest|: not found\b|unauthorized|denied:|reeval needs a Debian or Ubuntu based image/i
+  /did not complete successfully|while running runtime: exit status|did not resolve to an alias|requested access to the resource is denied|dockerfile parse error|unknown instruction|should not be blank|pull access denied|repository does not exist|manifest unknown|not found: manifest|: not found\b|unauthorized|denied:|reeval needs a Debian or Ubuntu based image/i
 const TRANSIENT =
   /EAI_AGAIN|ECONNRESET|ETIMEDOUT|ECONNREFUSED|i\/o timeout|TLS handshake timeout|no such host|temporary failure in name resolution|connection reset by peer|dial tcp|net\/http: request canceled|unexpected EOF|\b(?:500|502|503|504) |429 Too Many Requests|toomanyrequests|Service Unavailable|Bad Gateway|Gateway Timeout|ENOTFOUND/i
 
@@ -119,9 +153,10 @@ export function failureMessage(parts: {
   cause: FailureCause | null
   output: string[]
   log?: string | null
+  engine?: Engine
 }): string {
   const lines = [parts.headline]
-  if (parts.cause) lines.push(causeLine(parts.cause))
+  if (parts.cause) lines.push(causeLine(parts.cause, parts.engine))
   if (parts.output.length) lines.push(...parts.output.map((l) => `  | ${l}`))
   if (parts.log) lines.push(`(full log: ${parts.log})`)
   return lines.join('\n')

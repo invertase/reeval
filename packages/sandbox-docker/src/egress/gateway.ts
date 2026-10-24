@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import net from 'node:net'
 import { Duplex } from 'node:stream'
 import { docker } from '../docker-cli.ts'
+import { type Engine, engineEnv, engineSpec } from '../engine.ts'
 import { traceDocker } from '../trace.ts'
 import { createCertificateAuthority } from './cert.ts'
 import { createMux, forwarderScript, link } from './mux.ts'
@@ -44,7 +45,7 @@ export type Gateway = {
   close(): void
 }
 
-const installCa = (containerId: string, cert: string, signal?: AbortSignal) =>
+const installCa = (containerId: string, cert: string, signal?: AbortSignal, engine?: Engine) =>
   docker(
     [
       'exec',
@@ -55,7 +56,7 @@ const installCa = (containerId: string, cert: string, signal?: AbortSignal) =>
       '-c',
       `umask 022 && mkdir -p "$(dirname ${CA_PATH})" && cat > ${CA_PATH} && { command -v update-ca-certificates >/dev/null && update-ca-certificates >/dev/null 2>&1 && grep -q "$(sed -n 2p ${CA_PATH})" ${CA_BUNDLE} && echo ${BUNDLED}; true; }`,
     ],
-    { input: cert, signal },
+    { input: cert, signal, engine },
   )
 
 /**
@@ -66,9 +67,10 @@ export async function startGateway(
   containerId: string,
   options: GatewayOptions,
   signal?: AbortSignal,
+  engine?: Engine,
 ): Promise<Gateway> {
   const ca = createCertificateAuthority()
-  const installed = await installCa(containerId, ca.cert, signal)
+  const installed = await installCa(containerId, ca.cert, signal, engine)
   if (installed.exitCode !== 0) {
     throw new Error(`couldn't install the gateway CA: ${installed.stderr.trim()}`)
   }
@@ -85,14 +87,20 @@ export async function startGateway(
   ]
   const startedAt = Date.now()
   // Own process group, like every docker call: reeval handles Ctrl-C and tears the gateway down.
-  const child = spawn('docker', args, { stdio: 'pipe', detached: true })
-  child.once('close', (code) => traceDocker(args, startedAt, { exitCode: code, stderr }))
+  const { bin } = engineSpec(engine)
+  const child = spawn(bin, args, {
+    stdio: 'pipe',
+    detached: true,
+    env: { ...process.env, ...engineEnv(engine) },
+  })
+  child.once('close', (code) => traceDocker(args, startedAt, { exitCode: code, stderr }, bin))
   let stderr = ''
   child.stderr.on('data', (d) => {
     stderr += d
   })
   child.stdin.on('error', () => {})
   let closed = false
+  let started = false
   const mux = createMux({
     Duplex,
     parity: 0,
@@ -103,7 +111,18 @@ export async function startGateway(
       if (port === PROXY_PORT) proxy.handle(stream)
       else stream.destroy()
     },
-    onReady: () => ready.resolve(),
+    onReady: () => {
+      started = true
+      ready.resolve()
+    },
+    // The forwarder runs as root, so only a root sandbox could forge its output: a frame that
+    // breaks the protocol stops the gateway rather than the worker. Before READY it's a forwarder
+    // that never started (a shell's "node: not found"), which its exit or the timeout reports.
+    onError: (message) => {
+      if (!started) return
+      stop(`the forwarder's output broke the protocol: ${message}`)
+      child.kill('SIGKILL')
+    },
   })
   const ready = {} as { promise: Promise<void>; resolve(): void; reject(error: unknown): void }
   ready.promise = new Promise<void>((resolve, reject) => Object.assign(ready, { resolve, reject }))
@@ -112,18 +131,20 @@ export async function startGateway(
   const listeners = new Map<number, Promise<net.Server>>()
   const tunnels = new Set<net.Socket>()
   let stopped: string | undefined
-  child.once('close', (code) => {
+  /** Stops on its own: nothing reaches the container any more, so connections are refused. */
+  const stop = (reason: string) => {
     const asked = closed
     closed = true
     mux.destroy()
-    const reason = `the forwarder exited (${code}): ${stderr.trim().slice(-500)}`.replace(/: $/, '')
     ready.reject(new Error(reason))
     if (asked) return
-    // Nothing reaches the container any more: refuse connections instead of letting them hang.
     stopped = reason
     for (const socket of tunnels) socket.destroy()
     for (const l of listeners.values()) void l.then((s) => s.close())
-  })
+  }
+  child.once('close', (code) =>
+    stop(`the forwarder exited (${code}): ${stderr.trim().slice(-500)}`.replace(/: $/, '')),
+  )
   const timer = setTimeout(
     () => ready.reject(new Error(`the forwarder didn't start within ${READY_TIMEOUT_MS / 1000}s`)),
     READY_TIMEOUT_MS,

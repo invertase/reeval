@@ -1,0 +1,126 @@
+---
+title: Insights and remarks
+description: What an insight sentence is, how reeval checks it against the run's facts, the headline, the remarks reeval raises on the evals themselves, and what insights cost.
+---
+
+An insight is a sentence a language model writes about one eval, under that eval's result block. It explains the facts the block already shows. It never changes a verdict, a count or the exit code.
+
+```ts title="reeval.config.ts"
+export default defineConfig({
+  analysis: { model: 'google/gemini-3.8-flash' },
+  // …
+})
+```
+
+`reeval init` writes this line. With `analysis.model` set and its key in the environment, `reeval run` asks the model about each eval once its attempts finish and the exit code is fixed.
+
+## An insight explains a block
+
+A real run of a project of greeting evals on the fake harness, with `google/gemini-3.8-flash` as the analysis model:
+
+```text
+pass             house greeting › greets in the house style
+  The agent passed 1 of 1 tries with with-house-greeting, but we can't tell yet.
+  arm                  pass
+  plain                0 of 1
+    Plain failed because house greeting returned "house greeting: expected command to succeed, exit code 1".
+  with-house-greeting  1 of 1  can't tell yet
+  check                plain   with-house-greeting
+  house greeting       0 of 1  1 of 1
+    expected command to succeed, exit code 1
+  +2 more passed
+  Plain failed 1 of 1 tries on house greeting.
+…
+```
+
+The first sentence answers what the eval asks, read from its name. Each [layout](/concepts/output#the-layout-follows-what-the-eval-varies) opens a few more slots: a sentence under a failing case, harness or arm, and up to three findings under a change. The rows are the same with or without a model; insights only fill slots.
+
+## Every sentence cites a fact
+
+The model sees each fact under a short id and cites the ones a sentence rests on. reeval checks every sentence before it keeps it, and drops one that fails:
+
+| Check | Drops a sentence that |
+|---|---|
+| Citations | Cites nothing, or a fact the eval wasn't shown |
+| Numbers and quotes | Has an `N of M`, number or quote its cited facts don't hold |
+| Effect words | Says `helped`, `made it worse` or a plain word for one that isn't the cited effect |
+| Plain words | Uses statistics jargon such as `interval` or `lift` |
+| Length and slots | Runs over 25 words, or fills a slot the layout keeps closed |
+
+`-v` prints a line under the blocks with how many sentences the checks removed and the tokens spent, and each removed sentence with its reason:
+
+```text
+insights by fake (insights-v5) · 0 sentences removed · 1,831 in, 30 out
+```
+
+A sentence that's dropped leaves its slot empty; the facts still print. [The insight checks](/reference/cli/analyze#insights) has every rule.
+
+## The headline
+
+```text
+All 16 results passed across all 11 evals, successfully following house greetings, creating greet modules, and recommending Genkit.
+2s · results .reeval/runs/20261021T182849Z_a343e84_cursor-agent_p283/summary.md
+16 pass
+```
+
+One more call writes a headline over the whole run, checked like the rest. It prints above the time line, and the tally, counted from the facts, is always last. Without `analysis.model`, the tally is followed by `Set analysis.model in reeval.config.ts for answers to what each eval asks.`
+
+## Remarks
+
+```text
+1 pass
+
+Remarks:
+  house greeting › greets in the house style: With-house-greeting passed 1 of 1 try and plain 0 of 1: too few tries to tell whether the difference holds.
+    fix  evals/skill.eval.ts:28  set runs: 4 or more, so each side counts at least 4 tries
+```
+
+A remark is something reeval noticed about an eval itself, with the source line to change. Most come from fixed thresholds over the record and the history, so they print without `analysis.model`. With it, each eval's insights call may also raise a model remark by the eval rubric (`skills/eval-rubric`), kept only when it quotes its cited line of the eval exactly:
+
+| Kind | Severity | Raised when |
+|---|---|---|
+| `flaky-check` | concern | A check both passed and failed across recent comparable runs with nothing changed |
+| `slow-mcp-start` | concern | A stdio MCP server took 2s or more to answer `initialize` |
+| `proxy-only-egress` | concern | An attempt under egress `'proxy'` failed with a connection error, and nothing reached the egress gateway |
+| `no-baseline` | concern | With a model: the eval is about a change, such as a skill, and has no `compare` |
+| `name-contradicts` | concern | Model: the name asks one thing and the checks look at another |
+| `judge-too-loose` | concern | Model: a judge question passed a reply that doesn't do what the eval asks |
+| `judge-leaks-answer` | concern | Model: a judge question gives the answer away |
+| `prompt-names-tool` | concern | Model: a choose eval's prompt names the tool it asks about |
+| `too-few-tries` | suggestion | A variant and its baseline differ by half or more, with under 4 tries a side |
+| `check-never-fails` | suggestion | A check passed every try over the last 5 recorded runs on the default branch |
+| `name-no-intent` | suggestion | Model: the name is a topic, a ticket id or "test 3" |
+| `compound-judge` | suggestion | Model: one judge question asks two things, and failed |
+
+Only concerns print, at most three, with `+N more (-v)` for the rest; `-v` adds the suggestions, as in this capture. Remarks never change the exit code.
+
+A remark prints until a run shows it for that version of the eval, and again after you edit the eval (`slow-mcp-start` and `proxy-only-egress` print in every run that has them); one the cap or a run without `-v` left out still counts as unseen. [Remarks](/reference/cli/run#remarks) has each threshold.
+
+## What insights cost
+
+```text
+insights skipped for 4 evals: analysis.maxTokens (12k) reached — raise it in reeval.config.ts, or reeval analyze 20261021T182958Z_a343e84_cursor-agent_bfvz --insights to finish
+```
+
+Each eval costs a call for its sentences, plus one to read what it asks unless that's cached from an earlier run, and the run one more for the headline. The knobs:
+
+| Knob | What it does |
+|---|---|
+| `analysis.model` | The model; unset, there are no insights |
+| `analysis.maxTokens` | Caps one run's insight tokens, default `250000`. Failing evals go first, then changes that made something worse, then compares; a pass with failed tries goes before a clean one |
+| `--no-insights` | Skips them for one run |
+| `analysis.insights: false` | Skips them for every run |
+| `reeval analyze <run> --insights` | Writes them for a run without, or finishes one the budget, a failure or Ctrl-C stopped |
+
+Ctrl-C while insights run skips the rest and keeps the run's exit code. Insights, remarks and the headline go into the run's `insights.json`, which `reeval show`, `summary.md` and `reeval record` carry with the run.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Explaining a run" icon="message" href="/guide/analyze">
+    Insights during a run, and `reeval analyze` for a whole run.
+  </Card>
+  <Card title="Output modes" icon="terminal" href="/concepts/output">
+    The result blocks the insights fill.
+  </Card>
+</CardGroup>

@@ -123,7 +123,8 @@ const normalise = (p: string) =>
 
 const GLOB = /[*?[{]/
 
-function globRegex(glob: string): RegExp {
+/** `*`, `**` and `?` as wildcards; every other character, `[` included, literally. */
+function wildcards(glob: string): string {
   let re = ''
   for (let i = 0; i < glob.length; i++) {
     const ch = glob[i] as string
@@ -133,20 +134,29 @@ function globRegex(glob: string): RegExp {
         i++
       } else re += '[^/]*'
     } else if (ch === '?') re += '[^/]'
-    else if (ch === '{') {
-      const end = glob.indexOf('}', i)
-      if (end < 0) re += '\\{'
-      else {
-        re += `(?:${glob
-          .slice(i + 1, end)
-          .split(',')
-          .map((x) => x.replace(/[.+^$()|\\]/g, '\\$&'))
-          .join('|')})`
-        i = end
-      }
-    } else re += ch.replace(/[.+^$()|[\]\\]/g, '\\$&')
+    else re += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   }
-  return new RegExp(`^${re}$`)
+  return re
+}
+
+/** A glob as a regex, with `{a,b}` alternatives. Words come from transcripts, so it never throws. */
+function globRegex(glob: string): RegExp {
+  let re = ''
+  let from = 0
+  for (let i = 0; i < glob.length; i++) {
+    if (glob[i] !== '{') continue
+    const end = glob.indexOf('}', i)
+    if (end < 0) break
+    re += wildcards(glob.slice(from, i))
+    re += `(?:${glob
+      .slice(i + 1, end)
+      .split(',')
+      .map(wildcards)
+      .join('|')})`
+    from = end + 1
+    i = end
+  }
+  return new RegExp(`^${re}${wildcards(glob.slice(from))}$`)
 }
 
 /** The declared files one word names: the file itself, one of a glob's matches, or a directory's. */

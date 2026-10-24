@@ -1,6 +1,8 @@
 // reeval's matchers, once: the Chai adapter `expect` extends with and the attempt protocol's
 // `expect` call (attempt/match.ts) both run these, so a matcher's outcome and message are the same
 // however it was called. engine/expect.ts's `Matchers` interface is held to this table.
+
+import { isDeepStrictEqual } from 'node:util'
 import {
   calledMcp,
   calledSkill,
@@ -42,7 +44,66 @@ type HasFiles = { readFile(path: string): Promise<string | null> }
 const hasFiles = (value: unknown): value is HasFiles =>
   isObjectLike(value) && typeof value.readFile === 'function'
 
+const show = (value: unknown): string => {
+  if (typeof value === 'string') return `'${value}'`
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    return String(value)
+  }
+}
+
 export const MATCHERS = {
+  toBe: matcher((actual, [expected]: [unknown]) => {
+    const pass = Object.is(actual, expected)
+    return {
+      pass,
+      message: () =>
+        pass
+          ? `expected ${show(actual)} not to be ${show(expected)} // Object.is equality`
+          : `expected ${show(actual)} to be ${show(expected)} // Object.is equality`,
+    }
+  }),
+
+  toEqual: matcher((actual, [expected]: [unknown]) => {
+    const pass = isDeepStrictEqual(actual, expected)
+    return {
+      pass,
+      message: () =>
+        pass
+          ? `expected ${show(actual)} not to deeply equal ${show(expected)}`
+          : `expected ${show(actual)} to deeply equal ${show(expected)}`,
+    }
+  }),
+
+  toBeNull: matcher((actual, _: []) => ({
+    pass: actual === null,
+    message: () =>
+      actual === null
+        ? `expected ${show(actual)} not to be null`
+        : `expected ${show(actual)} to be null`,
+  })),
+
+  toBeTruthy: matcher((actual, _: []) => ({
+    pass: !!actual,
+    message: () =>
+      actual ? `expected ${show(actual)} to be falsy` : `expected ${show(actual)} to be truthy`,
+  })),
+
+  toContain: matcher((actual, [needle]: [unknown]) => {
+    const pass =
+      typeof actual === 'string' && typeof needle === 'string'
+        ? actual.includes(needle)
+        : Array.isArray(actual) && actual.includes(needle)
+    return {
+      pass,
+      message: () =>
+        pass
+          ? `expected ${show(actual)} not to contain ${show(needle)}`
+          : `expected ${show(actual)} to contain ${show(needle)}`,
+    }
+  }),
+
   toHaveFile: matcher(
     async (actual, [path, pattern]: [path: string, pattern?: RegExp | string]) => {
       if (!hasFiles(actual)) throw new TypeError('toHaveFile() expects a turn from c.send(), or c')
@@ -118,6 +179,15 @@ export const MATCHERS = {
 
 export type MatcherName = keyof typeof MATCHERS
 
+/** Vitest/Jest already ship these; the protocol table still runs them for Python and other SDKs. */
+const GENERIC_MATCHERS = new Set<MatcherName>([
+  'toBe',
+  'toEqual',
+  'toBeNull',
+  'toBeTruthy',
+  'toContain',
+])
+
 /** A matcher's arguments after the subject, as `expect(…).<name>(...args)` takes them. */
 export type MatcherArgs<K extends MatcherName> = Parameters<(typeof MATCHERS)[K]>[1]
 
@@ -147,3 +217,10 @@ export const matchers = Object.fromEntries(
     },
   ]),
 ) as { [K in MatcherName]: ChaiMatcher<K> }
+
+/** Chai `expect.extend` in eval workers: reeval-specific matchers only (not Jest's toEqual, …). */
+export const evalMatchers = Object.fromEntries(
+  (Object.keys(matchers) as MatcherName[])
+    .filter((name) => !GENERIC_MATCHERS.has(name))
+    .map((name) => [name, matchers[name]]),
+) as typeof matchers

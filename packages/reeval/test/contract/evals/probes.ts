@@ -1,5 +1,5 @@
-import { defineEnvironment, type HarnessOption, type Turn } from 'reeval'
-import { BLOCKED_HOST, COMMAND, PLANTED, RULES_WORD, reach } from './constants.ts'
+import { defineEnvironment, type HarnessOption, type PluginPart, type Turn } from 'reeval'
+import { BLOCKED_HOST, COMMAND, PLANTED, PLUGIN_AGENT, RULES_WORD, reach } from './constants.ts'
 
 // What every harness in the contract gets, and the signals the checks read. The prompts are one
 // short turn each and name the exact action; the checks read what the model can't fake: a file a
@@ -26,6 +26,20 @@ export const planted = scanned.extendEnvironment('planted', {
   files: { '~/.contract-planted': `${PLANTED}\n` },
 })
 export const closed = defineEnvironment('closed', { egress: 'deny-all' })
+/**
+ * The probe plugin alone, under deny-all: whatever else the agent loads or contacts is a leak. Its
+ * `only` is the parts the row's harness loads (`REEVAL_CONTRACT_PLUGIN_PARTS`); unset, it keeps
+ * every part.
+ */
+export const plugged = defineEnvironment('plugged', ({ plugin }) => {
+  const parts = process.env.REEVAL_CONTRACT_PLUGIN_PARTS
+  return {
+    egress: 'deny-all',
+    plugins: [
+      plugin.local('../plugins/probe', parts ? { only: parts.split(',') as PluginPart[] } : {}),
+    ],
+  }
+})
 
 export const prompts = {
   skill:
@@ -35,6 +49,13 @@ export const prompts = {
   editAndRun: `In notes.txt, change the word draft to final with your file editing tool. Then run this exact shell command once: ${COMMAND}. Then stop.`,
   key: 'Reply with the single word OK. Do not run any tools.',
   egress: `Run this exact shell command once, then stop: ${reach(BLOCKED_HOST)}`,
+  pluginSkill:
+    'Use your plugin-probe skill, from the probe plugin: do exactly what it says, then stop. Keep your reply short.',
+  pluginMcp:
+    "Call the house_stamp tool of the probe plugin's stamp MCP server once, then reply with what it returned.",
+  pluginHook: 'Reply with the single word OK. Do not run any tools.',
+  pluginRules: "What is the probe plugin's codeword? Follow your rules for it, then stop.",
+  pluginAgent: `Run the ${PLUGIN_AGENT} subagent, from the probe plugin, once with your subagent tool, giving it the task "Say PONG." Then reply with what it said. Do not answer for it. If you have no subagent by that name, reply NONE and stop: don't look for it.`,
 }
 
 /**
@@ -62,6 +83,37 @@ export const withFakeMcp: HarnessOption = (inherited) =>
       : h,
   )
 
+/**
+ * For the plugin evals: the fake agent without a layout, which takes every plugin part and
+ * places plugin skills with its own, does each plugin probe's action from the files reeval
+ * placed: it reads the skill, calls the plugin's MCP server, runs the hook's command from the
+ * placed hooks.json, reads the subagent and follows the rule. Real harnesses are left as they are.
+ */
+export const withFakePlugin: HarnessOption = (inherited) =>
+  inherited.map((h) =>
+    h.kind === 'fake' && h.script
+      ? {
+          kind: 'fake',
+          script: [
+            [
+              {
+                exec: `grep -o 'PLUGIN-[A-Z0-9-]*' ~/.agents/skills/plugin-probe/SKILL.md > plugin-proof.txt`,
+              },
+              { mcp: 'probe:stamp/house_stamp' },
+              {
+                exec: `sh -c "$(node -p 'require(process.env.HOME + "/.reeval/plugins/probe/hooks/hooks.json").hooks.SessionStart[0].hooks[0].command')"`,
+              },
+              { exec: `cat ~/.reeval/plugins/probe/agents/${PLUGIN_AGENT}.md` },
+              {
+                exec: `grep -o 'MARIGOLD-[0-9]*' ~/.reeval/plugins/probe/rules/probe.md > plugin-codeword.txt`,
+              },
+              { reply: 'OK' },
+            ],
+          ],
+        }
+      : h,
+  )
+
 /** The trimmed file, or null when it's missing. */
 export const trimmed = async (read: (path: string) => Promise<string | null>, path: string) =>
   (await read(path))?.trim() ?? null
@@ -72,6 +124,38 @@ const text = (value: unknown) => (typeof value === 'string' ? value : JSON.strin
 export const toolsMentioning = (turn: Turn | undefined, needle: string) =>
   (turn?.transcript ?? []).flatMap((e) =>
     e.type === 'tool' && (text(e.input).includes(needle) || text(e.output).includes(needle))
+      ? [`${e.tool}: ${text(e.input).slice(0, 200)} → ${text(e.output).slice(0, 200)}`]
+      : [],
+  )
+
+const isAgent = (value: unknown, agent: string) =>
+  typeof value === 'string' && (value === agent || value.endsWith(`:${agent}`))
+
+/**
+ * Whether `input`, at any depth, has a field naming an agent whose value is `agent` or
+ * `<plugin>:<agent>`, or an object whose `name` is (Cursor's `subagentType: { kind, name }`).
+ */
+const namesAgent = (input: unknown, agent: string): boolean =>
+  typeof input === 'object' && input !== null
+    ? Object.entries(input).some(
+        ([key, value]) =>
+          (/agent/i.test(key) &&
+            (isAgent(value, agent) ||
+              (typeof value === 'object' &&
+                value !== null &&
+                isAgent((value as { name?: unknown }).name, agent)))) ||
+          namesAgent(value, agent),
+      )
+    : false
+
+/**
+ * Successful tool calls that delegated to the subagent `agent`: a field naming an agent
+ * (`subagent_type`, …) holds its name. Not a search for the name, nor a call the agent refused
+ * for a subagent it doesn't have, as `toolsMentioning` would count.
+ */
+export const delegatedTo = (turn: Turn | undefined, agent: string) =>
+  (turn?.transcript ?? []).flatMap((e) =>
+    e.type === 'tool' && e.ok && namesAgent(e.input, agent)
       ? [`${e.tool}: ${text(e.input).slice(0, 200)} → ${text(e.output).slice(0, 200)}`]
       : [],
   )

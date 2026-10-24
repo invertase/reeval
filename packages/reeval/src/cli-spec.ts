@@ -28,6 +28,7 @@ export const FLAGS = {
   limit: { type: 'string' },
   'fail-on-regression': { type: 'boolean' },
   runs: { type: 'string' },
+  run: { type: 'string' },
   profile: { type: 'string' },
   'dry-run': { type: 'boolean' },
   force: { type: 'boolean' },
@@ -54,8 +55,11 @@ export const FLAGS = {
   save: { type: 'boolean' },
   context: { type: 'boolean' },
   'no-cache': { type: 'boolean' },
+  insights: { type: 'boolean' },
+  'no-insights': { type: 'boolean' },
   yes: { type: 'boolean', short: 'y' },
   harness: { type: 'string' },
+  bare: { type: 'boolean' },
   online: { type: 'boolean' },
   issue: { type: 'boolean' },
   last: { type: 'boolean' },
@@ -102,20 +106,24 @@ const RUN_FLAGS: FlagName[] = [
   'verbose',
   'trace',
   'resume',
+  'no-insights',
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
   init: {
-    flags: ['harness', 'yes', 'force', 'dry-run'],
+    flags: ['harness', 'yes', 'bare', 'force', 'dry-run'],
     positionals: 1,
     help: `
-  reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, a passing
-                                eval, .gitignore entries and a package.json script; asks which agent
-    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex or none
-                                (fake agent only); the config's harness, with a fake profile for no
-                                keys
+  reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, an
+                                environment, an eval that runs in it, .gitignore entries and a
+                                package.json script; asks which agent, then checks Docker
+    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex, fx or
+                                grok-build: the config's harness
     -y, --yes                   Don't ask: take the defaults (--harness cursor)
-    --force                     Overwrite reeval.config.ts and the eval when they differ
+    --bare                      Only reeval.config.ts, .gitignore and package.json: no environment
+                                or eval
+    --force                     Replace a reeval.config.ts init didn't write; no other file is ever
+                                overwritten
     --dry-run                   Print what it would create or change, and write nothing`,
   },
   doctor: {
@@ -123,9 +131,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     positionals: 0,
     help: `
   reeval doctor                 Check Node and npm, the config, Docker and its memory, the sandbox
-                                images, each harness's and the judge's key, egress, .gitignore and
-                                keys in .env files git sees; exit 1 on a problem, each with its
-                                fix. Never prints a key
+                                images, the keys of each harness, the judge and analysis.model,
+                                egress, .gitignore and keys in .env files git sees; exit 1 on a
+                                problem, each with its fix. Never prints a key
     --online                    Also try each key with one tiny authenticated request
     --json                      The checks as JSON`,
   },
@@ -134,10 +142,13 @@ export const COMMANDS: Record<string, CommandSpec> = {
     positionals: Number.POSITIVE_INFINITY,
     help: `
   reeval run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
+                                (parts of one kind OR; a name and a cell key are one kind)
     --profile <name>            Size the run with a profile from reeval.config.ts (also REEVAL_PROFILE;
                                 default: defaultProfile.ci in CI, else defaultProfile.local)
-    --dry-run                   Print the plan (evals, cells, attempts, estimate) and exit 0;
+    --dry-run                   Print the plan (evals, cells, attempts, time and cost) and exit 0;
                                 with --json, as one JSON document (every cell, and what's excluded)
+    --json                      Print the run's results (suiteResult from reeval/view) as one JSON
+                                document on stdout when it ends; progress goes to stderr
     --force                     Run even when the plan is over budget.attempts
     --runs <n>                  Attempts per cell, overriding the config, groups and evals
     --concurrency <n>           Attempts running at once across evals and cells (default 8, at
@@ -150,7 +161,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 block when it ends); default grouped in CI, else stream
     --log-prefix <prefix>       task or none: the [eval#n harness] prefix on detail lines
                                 (default task, none inside GitHub Actions groups)
-    --output-logs <level>       full, errors-only or none: whose detail lines print (default full)
+    --output-logs <level>       full, errors-only or none: whose detail lines print (default
+                                errors-only, failing attempts only; full with -v)
     -v, --verbose               Print each attempt's phase trace as it happens: plan, image,
                                 container, environment, brokering, turns and tool calls, checks,
                                 judge calls, gateway requests and teardown
@@ -160,7 +172,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --resume [ref]              Continue a stopped, interrupted or budget-stopped run: same run id,
                                 skip completed attempts, restart in-flight ones. Without a ref, the
                                 newest resumable (Stopped staging, or an interrupted/budget scratch),
-                                not assembled latest. Ref is a run id or unique prefix`,
+                                not assembled latest. Ref is a run id or unique prefix
+    --no-insights               Skip insights for this run: no analysis.model calls, the blocks
+                                print their facts only (also analysis.insights: false)`,
   },
   clean: {
     flags: ['keep', 'images'],
@@ -188,14 +202,15 @@ export const COMMANDS: Record<string, CommandSpec> = {
     flags: ['json', 'md'],
     positionals: 1,
     help: `
-  reeval show [run]             One run: table, --md (summary.md) or --json (the record)`,
+  reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)`,
   },
   compare: {
-    flags: ['md', 'json', 'fail-on-regression'],
+    flags: ['md', 'json', 'fail-on-regression', 'verbose'],
     positionals: 2,
     help: `
   reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
-                                --md --json --fail-on-regression`,
+                                --md --json --fail-on-regression
+    -v, --verbose               Also each cell's lift and effort, base → head, and the stack changes`,
   },
   checkout: {
     flags: [],
@@ -205,17 +220,31 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 (default dir: .reeval/checkouts/<run>)`,
   },
   query: {
-    flags: ['json', 'schema', 'rebuild'],
+    flags: ['json', 'schema', 'rebuild', 'run'],
     positionals: Number.POSITIVE_INFINITY,
     help: `
   reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
                                 rebuilt from the records); views: lift, effort, factor_effects,
                                 skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
-                                verdict_flips, check_discrimination. No argument lists them
+                                verdict_flips, check_discrimination, check_rates, check_streaks. No
+                                argument lists them
+    --run <id|last>             Bind the run id (or the last run's) to :run in the SQL; with a view
+                                or table name, only that run's rows
     --json                      Rows as JSON; --schema every table and column; --rebuild from scratch`,
   },
   analyze: {
-    flags: ['vs', 'eval', 'json', 'md', 'save', 'context', 'dry-run', 'no-cache'],
+    flags: [
+      'vs',
+      'eval',
+      'json',
+      'md',
+      'save',
+      'context',
+      'dry-run',
+      'no-cache',
+      'insights',
+      'verbose',
+    ],
     positionals: 1,
     help: `
   reeval analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
@@ -226,15 +255,21 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --save                      Also write it into the run's history folder: <run>/analysis/
     --context                   Print the digest and rules for your own coding agent (no key, no call)
     --dry-run                   Print the digest's size and the cache key, without calling the model
-    --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again`,
+    --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
+    --insights                  Write a run's insights instead: what each eval asks and its answer,
+                                citing the facts, into <run>/insights.json, as reeval run does at its
+                                end, or finish the evals one left unfinished; reeval show prints them.
+                                Takes --json and -v
+    -v, --verbose               With --insights, print each sentence the checks removed and why`,
   },
   mcp: {
     flags: ['http', 'port', 'host', 'token'],
     positionals: 0,
     help: `
   reeval mcp                    Serve the run history to other agents over MCP (stdio): read-only
-                                tools for reeval query's views and SQL, history, show, compare,
-                                transcripts and saved analyses, and runs as resources
+                                tools for why a run failed, reeval query's views and SQL,
+                                history, show, compare, transcripts and saved analyses, and runs
+                                as resources
     --http                      Stateless Streamable HTTP on 127.0.0.1 instead, at /mcp;
                                 --port <n> (default 4986), --host <addr>
     --token <value>             With --http, require it as a bearer token (also REEVAL_MCP_TOKEN)`,
@@ -302,24 +337,44 @@ export const COMMANDS: Record<string, CommandSpec> = {
 /** Flags every command takes; without `--config`, `reeval` finds the nearest config. */
 export const GLOBAL: FlagName[] = ['config', 'help', 'version']
 
-/** `reeval --help`: every command's help lines, in the order of `COMMANDS`. */
-export function helpText(version: string): string {
-  const commands = Object.values(COMMANDS).flatMap((spec) => [
-    spec.help,
-    ...Object.values(spec.sub ?? {}).map((sub) => sub.help),
-  ])
-  return `reeval ${version} — eval runner for coding agents
-
-Usage:${commands.join('')}
-  reeval --version
-  reeval --help
-
-Runs are latest, latest~N, a run id (or unique prefix), or a git SHA prefix.
-Options: --config <path> (default: the nearest reeval.config.ts, or .mts, .cts, .js, .mjs, .cjs,
+const HELP_FOOTER = `Options: --config <path> (default: the nearest reeval.config.ts, or .mts, .cts, .js, .mjs, .cjs,
 or reeval.yaml, in the current directory or above)
 Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted (Ctrl-C),
 143 terminated (SIGTERM)
 `
+
+const helpLines = (spec: CommandSpec) => [
+  spec.help,
+  ...Object.values(spec.sub ?? {}).map((sub) => sub.help),
+]
+
+/** `reeval --help`: every command's help lines, in the order of `COMMANDS`. */
+export function helpText(version: string): string {
+  return `reeval ${version} — eval runner for coding agents
+
+Usage:${Object.values(COMMANDS).flatMap(helpLines).join('')}
+  reeval --version
+  reeval --help
+
+Runs are latest, latest~N, a run id (or unique prefix), or a git SHA prefix.
+${HELP_FOOTER}`
+}
+
+/**
+ * `reeval <command> [sub] --help`: that command's help lines (and its subcommands' when no
+ * subcommand is named), or the whole of `reeval --help` for a command it doesn't know.
+ */
+export function commandHelpText(version: string, path: string[]): string {
+  const [name = '', subName = ''] = path
+  const spec = COMMANDS[name]
+  if (!spec) return helpText(version)
+  const sub = spec.sub?.[subName]
+  const lines = sub ? [sub.help] : helpLines(spec)
+  return `reeval ${version} — eval runner for coding agents
+
+Usage:${lines.join('')}
+
+${HELP_FOOTER}`
 }
 
 /** Splits a command line on whitespace, honouring single and double quotes. */
@@ -500,7 +555,7 @@ function checkOne(
   if (command === 'query' && tables && positionals.length === 1) {
     const text = positionals[0] as string
     if (/^[A-Za-z_]\w*$/.test(text) && !tables.includes(text)) {
-      return `reeval query ${text}: no view or table named ${text} (views: ${tables.join(', ')})`
+      return `reeval query ${text}: no view or table named ${text} (views and tables: ${tables.join(', ')})`
     }
   }
   return null

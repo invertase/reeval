@@ -1,0 +1,38 @@
+{
+  "name": "@reeval/harness-fx",
+  "version": "0.1.1",
+  "private": true,
+  "description": "An AI SDK harness adapter for fx on Vercel AI Gateway or OpenAI's API, over its ACP server (fx acp)",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "ai",
+    "harness",
+    "fx",
+    "acp",
+    "vercel",
+    "ai-gateway"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/harness": "1.0.156",
+    "@ai-sdk/harness-acp": "1.0.95",
+    "@ai-sdk/provider": "4.0.30",
+    "@ai-sdk/provider-utils": "5.0.63",
+    "zod": "4.6.7"
+  }
+}

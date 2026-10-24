@@ -1,10 +1,11 @@
 // The feature × tier matrix: the inventory (test/features/inventory.ts) against what covers each
 // feature. Pure, so matrix.test.ts can prove the check fails on a made-up inventory.
+import type { EvalOptionSpec } from '../features/eval-options.ts'
 import { AREAS, type InventoryFeature } from '../features/inventory.ts'
 
-export const TIERS = ['unit', 'plan', 'fake', 'docker', 'real'] as const
+export const TIERS = ['unit', 'plan', 'fake', 'docker', 'podman', 'real'] as const
 export type Tier = (typeof TIERS)[number]
-const FIXTURE_TIERS: readonly string[] = ['fake', 'docker', 'real']
+const FIXTURE_TIERS: readonly string[] = ['fake', 'docker', 'podman', 'real']
 
 export type Sources = {
   /** The rows of features.test.ts, and whether each directory has a canary. */
@@ -15,6 +16,12 @@ export type Sources = {
   testSource: (path: string) => string | null
   /** contract.test.ts's behaviours, and whether each has a canary. */
   contract: { name: string; canary: boolean }[]
+  /** Top-level eval/group keys from src/options.ts EVAL_OPTION_KEYS. */
+  evalOptionKeys: readonly string[]
+  /** Maps each key to the inventory feature that covers it. */
+  evalOptionSpecs: EvalOptionSpec[]
+  /** Lowercased refusal case names and golden messages from test/refusals/. */
+  refusalText: string
 }
 
 /** The real-agent suites besides the contract, by the name an inventory `real` entry uses. */
@@ -36,6 +43,57 @@ const testTitles = (source: string) =>
       /\b(?:test|it|describe|suite)(?:\.\w+)*\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g,
     ),
   ].map((m) => m[2] ?? '')
+
+const refusalMentions = (text: string, key: string) => {
+  const lower = text.toLowerCase()
+  if (key.includes('.')) return lower.includes(key.toLowerCase())
+  return lower.includes(`${key} in `)
+}
+
+/** Every EVAL_OPTION_KEYS entry and plan/refusal coverage for cascade options. */
+export function checkEvalOptionCoverage(
+  inventory: InventoryFeature[],
+  sources: Pick<Sources, 'evalOptionKeys' | 'evalOptionSpecs' | 'refusalText'>,
+): string[] {
+  const problems: string[] = []
+  const byId = new Map(inventory.map((f) => [f.id, f]))
+  const specKeys = new Set(sources.evalOptionSpecs.map((s) => s.key))
+  for (const key of sources.evalOptionKeys) {
+    if (!specKeys.has(key)) {
+      problems.push(
+        `eval option "${key}" has no entry in test/features/eval-options.ts: add one naming its inventory feature; when reeval run --dry-run output changes, set plan: true and add a case under test/plan/`,
+      )
+    }
+  }
+  const seen = new Set<string>()
+  for (const spec of sources.evalOptionSpecs) {
+    if (seen.has(spec.key))
+      problems.push(`eval option "${spec.key}" is listed twice in eval-options.ts`)
+    seen.add(spec.key)
+    if (!spec.key.includes('.') && !sources.evalOptionKeys.includes(spec.key)) {
+      problems.push(
+        `eval-options.ts lists "${spec.key}", which isn't in src/options.ts EVAL_OPTION_KEYS`,
+      )
+    }
+    const feature = byId.get(spec.featureId)
+    const at = `eval option "${spec.key}"`
+    if (!feature) {
+      problems.push(`${at}: inventory feature ${spec.featureId} doesn't exist`)
+      continue
+    }
+    if (spec.plan && !(feature.plan?.length ?? 0)) {
+      problems.push(
+        `${at}: changes reeval run --dry-run output, so inventory ${spec.featureId} needs a plan case under test/plan/, not a feature fixture (see test/features/README.md#which-tier)`,
+      )
+    }
+    if (spec.refusals && !refusalMentions(sources.refusalText, spec.key)) {
+      problems.push(
+        `${at}: add refusal rows in test/refusals/ for inventory ${spec.featureId} (REEVAL_UPDATE_SNAPSHOTS=1 pnpm --filter reeval test test/refusals.test.ts)`,
+      )
+    }
+  }
+  return problems
+}
 
 export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Matrix {
   const problems: string[] = []
@@ -119,6 +177,7 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
   for (const c of sources.planCases)
     if (!claimed('plan', c))
       problems.push(`plan case ${c} covers no feature: add it to an entry in inventory.ts`)
+  problems.push(...checkEvalOptionCoverage(inventory, sources))
   return { rows, problems }
 }
 
@@ -141,7 +200,7 @@ export function renderMarkdown({ rows }: Matrix): string {
     '',
     '- **unit**: plain `node:test` cases, including runner-level tests through the CLI',
     '- **plan**: `reeval run --dry-run --json` snapshots in `plan.test.ts`',
-    '- **fake**, **docker**: feature fixtures in `features.test.ts` on the fake sandbox and in Docker',
+    '- **fake**, **docker**, **podman**: feature fixtures in `features.test.ts` on the fake sandbox, in Docker and in rootless Podman',
     '- **real**: real-tier fixtures in `features.test.ts` (real Cursor), and the harness contract (`contract.test.ts`) and CLI end to end (`e2e-real.test.ts`) on every real harness',
     '- `● n`: n fixtures or contract behaviours, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n cases or tests · `—`: nothing',
     '',

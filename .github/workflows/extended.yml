@@ -5,13 +5,18 @@
 #
 # The Docker tier runs on Linux only: GitHub's Windows runners have Windows containers only, while
 # reeval's sandboxes are Linux containers (on Windows, Docker Desktop on WSL 2), and its macOS runners
-# have no Docker. Windows starts processes slowly, so its unit files run in six shards. macOS
+# have no Docker. Windows starts processes slowly, so its unit files run in six shards, split by
+# each file's running time (scripts/test-shard.mjs) rather than Node's round-robin. macOS
 # splits the same way so unit, tiers and packed overlap.
 name: extended
 
 on:
   workflow_call:
     inputs:
+      ref:
+        description: The commit to check out (release.yml's republish passes the release tag); empty is the event's own
+        type: string
+        default: ''
       floor:
         description: Run the Node 22.13 unit floor (off ordinary main pushes)
         type: boolean
@@ -32,10 +37,20 @@ jobs:
         shard: ['1/4', '2/4', '3/4', '4/4']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
         with: { node-version: '22.13' }
       - run: pnpm build
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
+          # over a minute on Windows.
+          cache-dependency-glob: |
+            packages/reeval-python/uv.lock
+            packages/reeval/test/features/python-sdk/hello/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
       - name: reeval (every test file but the fixture, Docker, studio, pack and real-agent ones)
         working-directory: packages/reeval
         run: |
@@ -46,7 +61,7 @@ jobs:
       - name: sandbox-docker (without containers) and the harness packages
         if: matrix.shard == '1/4'
         run: |
-          for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex; do
+          for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex harness-fx harness-grok-build; do
             echo "::group::@reeval/$p"
             pnpm --filter "@reeval/$p" test
             echo "::endgroup::"
@@ -70,9 +85,19 @@ jobs:
       - run: powershell -Command "Set-MpPreference -DisableRealtimeMonitoring \$true"
         continue-on-error: true
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
+          # over a minute on Windows.
+          cache-dependency-glob: |
+            packages/reeval-python/uv.lock
+            packages/reeval/test/features/python-sdk/hello/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
       - if: matrix.part == 'tiers'
         run: echo "::notice title=No Docker tier on Windows::GitHub's Windows runners run Windows containers only, and reeval's sandboxes are Linux containers. The docker jobs run the Docker tier on Linux."
       - run: scripts/ci-os.sh ${{ matrix.part }}
@@ -87,9 +112,19 @@ jobs:
         part: [unit, tiers, packed]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
+          # over a minute on Windows.
+          cache-dependency-glob: |
+            packages/reeval-python/uv.lock
+            packages/reeval/test/features/python-sdk/hello/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
       - if: matrix.part == 'tiers'
         run: echo "::notice title=No Docker tier on macOS::GitHub's macOS runners have no Docker. The docker jobs run the Docker tier on Linux."
       - run: scripts/ci-os.sh ${{ matrix.part }}

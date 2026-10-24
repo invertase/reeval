@@ -3,17 +3,20 @@
 // record's cells, check tallies and attempts, so it costs no record field. Gating stays a
 // variant against its control.
 import type { CellRecord, CheckTally, CheckVerdict, EvalEntry, Lift } from '../history/types.ts'
-import { liftInterval, round3 } from '../stats.ts'
+import { containsZero, liftInterval, round3 } from '../stats.ts'
 import { cellSamples, contrastEffort, type EffortContrast } from './effort.ts'
 
-/** Where every counted attempt that answered a check passed it (`all`), none did, or some. */
+/**
+ * Where every counted attempt that answered a check passed it (`all`), none did, or some. An
+ * attempt that never reached the check didn't answer it, so a side that never ran it has none.
+ */
 const sideOf = (t: CheckTally): 'all' | 'none' | 'some' | undefined => {
-  const answered = t.pass + t.fail + t.notRun
+  const answered = t.pass + t.fail
   if (answered === 0) return undefined
   return t.pass === answered ? 'all' : t.pass === 0 ? 'none' : 'some'
 }
 
-/** Whether one check tells two cells apart; undefined when either side never answered it. */
+/** Whether one check tells two cells apart; undefined when either side never ran it. */
 export function checkVerdict(a: CheckTally, b: CheckTally): CheckVerdict | undefined {
   const x = sideOf(a)
   const y = sideOf(b)
@@ -84,7 +87,7 @@ function pairLift(a: CellRecord, b: CellRecord): Lift | null {
     variant,
     points: round3(points),
     interval: { lo: round3(low), hi: round3(high), level: 0.95, method: 'newcombe-wilson' },
-    withinNoise: low < 0 && high > 0,
+    withinNoise: containsZero(low, high),
   }
 }
 

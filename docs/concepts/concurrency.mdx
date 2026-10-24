@@ -71,7 +71,7 @@ Among the attempts that could start, reeval picks in this order:
 | 2 | The eval with the fewest runs started | Every eval gets a first result early |
 | 3 | Lower run number, then file, declaration order and cell | Ties break predictably |
 
-At `--concurrency 1` that's `a control#1, a skill#1, b control#1, b skill#1, a control#2 …`. Results and the summary stay in declaration order, whatever finished first.
+At `--concurrency 1` that's `a control#1, a skill#1, b control#1, b skill#1, a control#2 …`. The result blocks stay in declaration order, whatever finished first.
 
 ## Waiting doesn't count
 
@@ -99,7 +99,7 @@ A real benchmark: 16 Cursor `composer-2.5` attempts (a 2-environment matrix × `
 Per-attempt agent time was 12 to 28 s at every level, so there was no sign of rate limiting. At 8, one slow attempt set the wall time.
 
 <Info>
-  This benchmark ran on an earlier reeval, when `examples/hello/reeval.bench.config.ts` crossed every eval with two environments. Today's bench config has two runs per cell and only the skill eval compares.
+  This benchmark ran on an earlier reeval, with a bench config that crossed every eval with two environments.
 </Info>
 
 ## Choose a value

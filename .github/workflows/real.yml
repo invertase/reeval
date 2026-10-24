@@ -6,9 +6,10 @@
 #                        and the CLI end to end, on the pinned agent versions
 #   contract (latest)    the version-drift leg: the same but the e2e, on the newest agy, @cursor/sdk,
 #                        OpenCode, Goose and pi, and the newest OpenCode's providers re-probed
-#   real agents (Cursor) examples/hello's smoke profile, then its compare questions on a real
+#   real agents (Cursor) test/real-agents' smoke profile, then its compare questions on a real
 #                        model (test/questions-real.test.ts)
-# PRs get the pinned contract only. Budgets: each reeval run's budget.attempts, a ledger per job
+# PRs get the pinned contract only. A dispatch's `harnesses` input (e.g.
+# claude-code-gateway,codex-gateway) runs only those rows' pinned contract and e2e, nothing else. Budgets: each reeval run's budget.attempts, a ledger per job
 # (contract.yml) and the timeouts below.
 name: real
 
@@ -21,6 +22,12 @@ on:
         description: Also run the contract on the newest agent CLI and SDK (the drift leg)
         type: boolean
         default: true
+      harnesses:
+        description: >-
+          Only these contract rows, comma-separated (e.g. claude-code-gateway,codex-gateway), on the
+          pinned versions; skips the drift leg, the real-tier fixtures and the Cursor smoke
+        type: string
+        default: ''
   pull_request:
     types: [labeled, synchronize, reopened]
 
@@ -50,18 +57,27 @@ jobs:
           HAS_GEMINI: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY != '' }}
           HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
           HAS_OPENAI: ${{ secrets.OPENAI_API_KEY != '' }}
+          HAS_XAI: ${{ secrets.XAI_API_KEY != '' }}
+          HAS_GATEWAY: ${{ secrets.AI_GATEWAY_API_KEY != '' }}
+          HARNESSES: ${{ inputs.harnesses }}
         run: |
-          [ "$HAS_CURSOR" = true ] || echo "::error::No CURSOR_API_KEY repository secret: the Cursor rows and the example smoke fail"
-          [ "$HAS_GEMINI" = true ] || echo "::error::No GOOGLE_GENERATIVE_AI_API_KEY repository secret: the Antigravity, OpenCode, Goose and pi rows and the example smoke fail"
+          [ "$HAS_CURSOR" = true ] || echo "::error::No CURSOR_API_KEY repository secret: the Cursor rows and the real-agents smoke fail"
+          [ "$HAS_GEMINI" = true ] || echo "::error::No GOOGLE_GENERATIVE_AI_API_KEY repository secret: the Antigravity, OpenCode, Goose and pi rows and the real-agents smoke fail"
           [ "$HAS_ANTHROPIC" = true ] || echo "::error::No ANTHROPIC_API_KEY repository secret: the Claude Code rows fail"
-          [ "$HAS_OPENAI" = true ] || echo "::error::No OPENAI_API_KEY repository secret: the Codex rows fail"
+          [ "$HAS_OPENAI" = true ] || echo "::error::No OPENAI_API_KEY repository secret: the Codex and fx rows fail"
+          [ "$HAS_XAI" = true ] || echo "::error::No XAI_API_KEY repository secret: the Grok Build rows fail"
+          case "$HARNESSES" in
+            *gateway*) [ "$HAS_GATEWAY" = true ] || echo "::error::No AI_GATEWAY_API_KEY repository secret: the *-gateway rows fail" ;;
+          esac
           true
 
   pinned:
     name: contract (pinned)
     needs: gate
     uses: ./.github/workflows/contract.yml
-    with: { versions: pinned }
+    with:
+      versions: pinned
+      harnesses: ${{ inputs.harnesses || '' }}
     secrets: inherit
 
   latest:
@@ -70,7 +86,8 @@ jobs:
     # After the pinned leg, pass or fail, so the two never spend at once.
     if: >-
       !cancelled() && needs.gate.result == 'success' &&
-      (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.latest))
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_dispatch' && inputs.latest && inputs.harnesses == ''))
     uses: ./.github/workflows/contract.yml
     with: { versions: latest }
     secrets: inherit
@@ -79,7 +96,8 @@ jobs:
     name: real agents (Cursor)
     needs: [gate, latest]
     if: >-
-      !cancelled() && needs.gate.result == 'success' && github.event_name != 'pull_request'
+      !cancelled() && needs.gate.result == 'success' && github.event_name != 'pull_request' &&
+      (github.event_name != 'workflow_dispatch' || inputs.harnesses == '')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
@@ -96,18 +114,24 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
       - uses: ./.github/actions/sandbox-images
-      # The real-tier fixtures ran in the contract legs; this is examples/hello's smoke profile.
+      # The real-tier fixtures ran in the contract legs; this is test/real-agents' smoke profile.
       # Without either key, reeval run exits 2 naming it.
-      - name: examples/hello smoke
-        working-directory: examples/hello
-        run: node ../../packages/reeval/dist/cli.js run --profile smoke
-      # examples/hello's questions profile: its compare question answered by a real model. Checks
+      - name: real-agents smoke
+        working-directory: packages/reeval/test/real-agents
+        run: node ../../dist/cli.js run --profile smoke
+      # test/real-agents' questions profile: its compare question answered by a real model. Checks
       # the record's structure only (both orders of every pair, rates, no position bias), no retries.
       - name: compare questions (real model)
         if: ${{ !cancelled() }}
         working-directory: packages/reeval
         env: { REEVAL_TEST_REAL: '1' }
         run: node --test --test-timeout=1800000 --experimental-strip-types --no-warnings test/questions-real.test.ts
+      # One well-named eval on the fake harness, classified by a real analysis model.
+      - name: insights (real model)
+        if: ${{ !cancelled() }}
+        working-directory: packages/reeval
+        env: { REEVAL_TEST_REAL: '1' }
+        run: node --test --experimental-strip-types --no-warnings --test-name-pattern='real model' test/insights.test.ts
       - if: always()
         run: |
           [ -f "$REEVAL_REAL_LEDGER" ] && { echo '### Real attempts reserved'; echo; echo '```'; cat "$REEVAL_REAL_LEDGER"; echo '```'; } >> "$GITHUB_STEP_SUMMARY" || true
@@ -115,7 +139,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reeval-runs-${{ github.run_id }}
-          path: examples/hello/.reeval/runs
+          path: packages/reeval/test/real-agents/.reeval/runs
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14

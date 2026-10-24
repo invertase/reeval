@@ -1,6 +1,6 @@
 ---
 title: cursor()
-description: The Cursor harness, its options and id, the key it needs, how reeval brokers that key, and the tokens it reports.
+description: The Cursor harness, its options and id, the key it needs, how reeval brokers that key, the tokens it reports and where plugins go.
 ---
 
 `cursor({ model })` runs Cursor's agent in the Docker sandbox, through the Cursor TypeScript SDK. `model` is required.
@@ -10,11 +10,11 @@ import { defineConfig } from '{{ pkg }}'
 import { cursor } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: cursor({ model: 'composer-2.5', params: { fast: 'true' } }),
+  harness: cursor({ model: 'composer-2.5' }),
 })
 ```
 
-With no `harness` in the config, reeval uses `cursor({ model: 'composer-2.5' })`.
+With no `harness` in the config, reeval uses that harness.
 
 ## Options
 
@@ -23,7 +23,7 @@ With no `harness` in the config, reeval uses `cursor({ model: 'composer-2.5' })`
 </Property>
 
 <Property name="params" type="Record<string, string>" optional>
-  Model parameters, by id, such as `{ fast: 'true' }`. They can change the price. A parameter you don't set takes the default variant in Cursor's model catalogue, which reeval sends explicitly: `composer-2.5` runs as `composer-2.5[fast=true]`, the Fast variant, unless you pass `{ fast: 'false' }`. Cursor can change that default, so pin every parameter for reproducible evals. Fast is not reasoning effort.
+  Model parameters, by id, such as `{ fast: 'true' }`. They can change the price. `fast` defaults to `'false'` on every model that takes it, so `composer-2.5` runs as `composer-2.5[fast=false]` at the standard price, even though Cursor's catalogue marks Fast as its default variant. Pass `{ fast: 'true' }` to run Fast, at several times the price. Any other parameter you don't set takes the default variant in Cursor's model catalogue, which reeval sends explicitly. Cursor can change that default, so pin every parameter for reproducible evals. Fast is not reasoning effort.
 </Property>
 
 <Property name="effort" type="string" optional>
@@ -32,6 +32,10 @@ With no `harness` in the config, reeval uses `cursor({ model: 'composer-2.5' })`
 
 <Property name="id" type="string" optional>
   The harness's id in cell keys, filters and the record. Default `cursor:<model>`, such as `cursor:composer-2.5`, or `cursor:<model>[effort=<value>]` when `effort` is set. Letters, digits and `.`, `_`, `:`, `@`, `+`, `-`, `[`, `]`, `=`.
+</Property>
+
+<Property name="gateway" type="'direct' | Gateway" optional>
+  The gateway this harness's model calls go through, by name or helper, such as `direct()`. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness. See [Gateways](/reference/gateway#pinning-a-harness).
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>
@@ -48,9 +52,9 @@ With no `harness` in the config, reeval uses `cursor({ model: 'composer-2.5' })`
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `CURSOR_API_KEY` (a user or service-account API key) |
-| Adapter | `@reeval/harness-cursor-sdk` 0.1.5, bundled with reeval |
+| Adapter | `@reeval/harness-cursor-sdk` 0.1.6, bundled with reeval |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:cursor-0.1.5` |
+| Image | `reeval-sandbox:cursor-0.1.6` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.agents/skills` |
 | Skills (`placement: 'workspace'`) | `.cursor/skills` in the workspace |
@@ -91,12 +95,10 @@ A request carrying the placeholder anywhere else gets a 403, and the attempt pri
 
 ## Tokens and transcripts
 
-Each turn records its token `usage` and the model that served it, with its parameters (`composer-2.5[fast=true]`). The stack's `resolvedModels`, `summary.md`'s Harnesses row, `-v`'s turn line and the studio show the same resolved variant. The run's summary totals the tokens:
+Each turn records its token `usage` and the model that served it, with its parameters (`composer-2.5[fast=false]`). The stack's `resolvedModels`, `summary.md`'s Harnesses row, `-v`'s turn line and the studio show the same resolved variant. The line under the result blocks totals the tokens. From a run of the greeting evals:
 
 ```text
-   Evals  1 passed (1)
-Duration  8s
-  Tokens  31k in (15k cached) · 111 out
+23s · 137k in (63k cached) · 819 out · results .reeval/runs/…/summary.md
 ```
 
 See [Transcripts](/reference/transcript#tokens-and-the-served-model).
@@ -112,6 +114,36 @@ When it can't (the store is unreadable, or the turn ended before the result), th
 | Rules | `AGENTS.md` in the workspace |
 | Skills | `~/.agents/skills`, or `.cursor/skills` in the workspace with `placement: 'workspace'`. The SDK loads both, as the Cursor CLI does |
 | MCP servers | Passed to the agent on every turn |
+| Plugins | Every part, unpacked into the workspace's `.cursor/` and Cursor's own skill and MCP config (below) |
+
+## Plugins
+
+```text
+env       plugin house → ~/.reeval/plugins/house/ (7 files; skills, agents, commands, hooks, rules)
+env       plugin part → .cursor/agents/reviewer.md (unpacked for the agent)
+env       plugin part → .cursor/commands/ship.md (unpacked for the agent)
+env       plugin part → .cursor/rules/house-codeword.mdc (unpacked for the agent)
+env       plugin part → .cursor/hooks.json (unpacked for the agent)
+```
+
+reeval copies each plugin to `~/.reeval/plugins/<name>/`, then unpacks it where the SDK reads project settings, before the workspace snapshot, so the diff leaves those files out and `context` lists them. Cursor's own plugin loading (`settingSources: 'plugins'`) is never used: it would load the account's plugins too.
+
+| Part | Where it goes |
+|---|---|
+| `skills/` | `~/.agents/skills`, with the environment's own skills |
+| `agents/<name>.md` | `.cursor/agents/<name>.md` |
+| `commands/<name>.md` | `.cursor/commands/<name>.md` |
+| `rules/<name>.md` | `.cursor/rules/<plugin>-<name>.mdc`, with `alwaysApply: true` when it has no frontmatter |
+| `hooks/hooks.json` | Merged into `.cursor/hooks.json`, after the workspace's own hooks |
+| `.mcp.json` | Cursor's MCP config, as `<plugin>:<server>` |
+
+Items are flat, not namespaced, so two with the same name clash, and `${CLAUDE_PLUGIN_ROOT}` in a hook command or part is filled in with the plugin's copy. Hooks get Cursor's event names (`PreToolUse` as `preToolUse`, `UserPromptSubmit` as `beforeSubmitPrompt`) and tool matchers (`Bash` as `Shell`, `mcp__docs__search` as `MCP:search`); a group matching only tools Cursor lacks (`Glob`) is dropped. A built plugin's parts are unpacked from its build's output. The plan refuses a hook event Cursor doesn't run, and a hook that isn't a `command` (such as a `prompt` hook):
+
+```text
+reeval: evals/review.eval.ts: evaluate("reviews the diff") on cursor:composer-2.5: Cursor can't run the review plugin's Notification hooks (hooks/hooks.json): it runs SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse, SubagentStop, PreCompact, Stop hooks; use only: ['skills', 'mcp'], or leave the plugin out of this cell
+```
+
+A workspace file a plugin part would replace fails the attempt as an infra error, naming it.
 
 ## Errors
 

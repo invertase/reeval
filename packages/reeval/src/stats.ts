@@ -40,6 +40,9 @@ export function liftInterval(
   }
 }
 
+/** A 95% interval is within noise when it contains 0; touching 0 does not exclude it. */
+export const containsZero = (low: number, high: number) => low <= 0 && high >= 0
+
 /** Rounded to three places, as the record stores rates and points. */
 export const round3 = (x: number) => Math.round(x * 1000) / 1000
 
@@ -69,9 +72,15 @@ const choose = (n: number, k: number) => {
 /**
  * Two-sided Mann–Whitney (Wilcoxon rank-sum) p-value for `xs` against `ys`: exact, by every split
  * of the pooled values, with mid-ranks for ties; the normal approximation with a tie correction
- * above `EXACT_LIMIT` splits. Null when either side is empty.
+ * above `EXACT_LIMIT` splits. `sign` is the sign of `xs`'s rank sum minus its expectation: below 0,
+ * `xs` ranks lower. `floor` is the smallest p any split of these pooled values could give, so ties
+ * count: `[2, 2, 2, 3]` against `[2, 2, 3, 3]` can never go below 10/70. Null when either side is
+ * empty.
  */
-export function mannWhitney(xs: readonly number[], ys: readonly number[]): number | null {
+export function mannWhitney(
+  xs: readonly number[],
+  ys: readonly number[],
+): { p: number; sign: number; floor: number } | null {
   const n1 = xs.length
   const n2 = ys.length
   if (n1 === 0 || n2 === 0) return null
@@ -85,31 +94,51 @@ export function mannWhitney(xs: readonly number[], ys: readonly number[]): numbe
   }
   const n = n1 + n2
   const expected = (n1 * (n + 1)) / 2
-  const observed = Math.abs(ranks.slice(0, n1).reduce((a, b) => a + b, 0) - expected)
+  const deviation = ranks.slice(0, n1).reduce((a, b) => a + b, 0) - expected
+  const sign = Math.sign(deviation)
+  const observed = Math.abs(deviation)
   if (choose(n, n1) > EXACT_LIMIT) {
     const counts = new Map<number, number>()
     for (const { v } of pooled) counts.set(v, (counts.get(v) ?? 0) + 1)
     const ties = [...counts.values()].reduce((a, t) => a + t ** 3 - t, 0)
     const variance = ((n1 * n2) / 12) * (n + 1 - ties / (n * (n - 1)))
-    if (variance <= 0) return 1
-    const z = Math.max(0, observed - 0.5) / Math.sqrt(variance)
-    return Math.min(1, 2 * (1 - normalCdf(z)))
+    if (variance <= 0) return { p: 1, sign, floor: 1 }
+    const pOf = (d: number) =>
+      Math.min(1, 2 * (1 - normalCdf(Math.max(0, d - 0.5) / Math.sqrt(variance))))
+    // The most extreme rank sum gives `xs` the lowest n1 ranks or the highest.
+    const sorted = pooled.map(({ i }) => ranks[i] as number)
+    const sum = (rs: number[]) => rs.reduce((a, b) => a + b, 0)
+    const widest = Math.max(
+      Math.abs(sum(sorted.slice(0, n1)) - expected),
+      Math.abs(sum(sorted.slice(n - n1)) - expected),
+    )
+    return { p: pOf(observed), sign, floor: pOf(widest) }
   }
   let extreme = 0
+  let widest = 0
+  let atWidest = 0
   let total = 0
   const pick = (start: number, left: number, sum: number) => {
     if (left === 0) {
       total++
-      if (Math.abs(sum - expected) >= observed - 1e-9) extreme++
+      const d = Math.abs(sum - expected)
+      if (d >= observed - 1e-9) extreme++
+      if (d > widest + 1e-9) {
+        widest = d
+        atWidest = 1
+      } else if (d >= widest - 1e-9) atWidest++
       return
     }
     for (let i = start; i <= n - left; i++) pick(i + 1, left - 1, sum + (ranks[i] as number))
   }
   pick(0, n1, 0)
-  return extreme / total
+  return { p: extreme / total, sign, floor: atWidest / total }
 }
 
-/** The smallest two-sided p an exact rank test can reach with these group sizes. */
+/**
+ * The smallest two-sided p an exact rank test can reach with these group sizes and no ties: for
+ * planning `runs` before there's data. On data, `mannWhitney`'s `floor` counts the ties.
+ */
 export const minimumP = (n1: number, n2: number) =>
   n1 === 0 || n2 === 0 ? 1 : Math.min(1, 2 / choose(n1 + n2, n1))
 
@@ -118,6 +147,15 @@ export const minimumP = (n1: number, n2: number) =>
  * the exact sign test's smallest two-sided p is 2 · 0.5⁶ = 0.031, the first below 0.05.
  */
 export const PAIRED_MIN = 6
+
+/**
+ * Counted attempts a side before a pass-rate lift can be called: below it, every view says
+ * `insufficient` (`can't tell yet`, `unclear`), whatever the interval. A product floor that keeps
+ * `reeval run`, `reeval query`, the judge-key lift and `reeval analyze` agreeing, not one that
+ * makes the stated 95% exact: at 4 a side, a 4/4 against 0/4 split happens by chance about 7% of
+ * the time when nothing changed.
+ */
+export const EFFECT_MIN_COUNTED = 4
 
 /** Binary pairs over cases: both pass, only the variant, only the control, neither. */
 export type PairCounts = { both: number; variantOnly: number; controlOnly: number; neither: number }
@@ -154,9 +192,15 @@ export function mcnemar(variantOnly: number, controlOnly: number): number {
   const n = variantOnly + controlOnly
   if (n === 0) return 1
   const low = Math.min(variantOnly, controlOnly)
-  let tail = 0
-  for (let i = 0; i <= low; i++) tail += choose(n, i) / 2 ** n
-  return Math.min(1, 2 * tail)
+  // In log space: 2 ** n overflows from n = 1024, and 2 ** -n underflows to 0 above n = 1074.
+  let logTerm = -n * Math.LN2
+  let logTail = logTerm
+  for (let i = 0; i < low; i++) {
+    logTerm += Math.log((n - i) / (i + 1))
+    const top = Math.max(logTail, logTerm)
+    logTail = top + Math.log1p(Math.exp(Math.min(logTail, logTerm) - top))
+  }
+  return Math.min(1, 2 * Math.exp(logTail))
 }
 
 /** Two-sided 95% Student t quantiles for 1 to 30 degrees of freedom. */
@@ -191,9 +235,12 @@ export function meanInterval(values: readonly number[]): Interval & { mean: numb
 /**
  * Two-sided Wilcoxon signed-rank p for paired differences: zeros dropped, mid-ranks for ties,
  * exact over every sign assignment up to 20 non-zero differences, else the normal approximation.
- * Null when every difference is zero.
+ * `sign` is the sign of the positive differences' rank sum minus its expectation: below 0, the
+ * negative differences outrank the positive ones. Null when every difference is zero. Ties are
+ * exact equality, so form each difference of two rates with one division (`(a·d − c·b) / (b·d)`),
+ * never as `a/b − c/d`.
  */
-export function signedRank(differences: readonly number[]): number | null {
+export function signedRank(differences: readonly number[]): { p: number; sign: number } | null {
   const d = differences.filter((x) => x !== 0)
   const n = d.length
   if (n === 0) return null
@@ -207,15 +254,16 @@ export function signedRank(differences: readonly number[]): number | null {
   }
   const total = (n * (n + 1)) / 2
   const plus = d.reduce((s, v, i) => (v > 0 ? s + (ranks[i] as number) : s), 0)
+  const sign = Math.sign(plus - total / 2)
   const observed = Math.abs(plus - total / 2)
   if (n > 20) {
     const counts = new Map<number, number>()
     for (const { a } of sorted) counts.set(a, (counts.get(a) ?? 0) + 1)
     const ties = [...counts.values()].reduce((s, t) => s + t ** 3 - t, 0)
     const variance = (n * (n + 1) * (2 * n + 1)) / 24 - ties / 48
-    if (variance <= 0) return 1
+    if (variance <= 0) return { p: 1, sign }
     const z = Math.max(0, observed - 0.5) / Math.sqrt(variance)
-    return Math.min(1, 2 * (1 - normalCdf(z)))
+    return { p: Math.min(1, 2 * (1 - normalCdf(z))), sign }
   }
   let extreme = 0
   for (let mask = 0; mask < 2 ** n; mask++) {
@@ -223,7 +271,7 @@ export function signedRank(differences: readonly number[]): number | null {
     for (let i = 0; i < n; i++) if (mask & (1 << i)) sum += ranks[i] as number
     if (Math.abs(sum - total / 2) >= observed - 1e-9) extreme++
   }
-  return extreme / 2 ** n
+  return { p: extreme / 2 ** n, sign }
 }
 
 function normalCdf(z: number): number {

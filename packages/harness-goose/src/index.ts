@@ -1,8 +1,11 @@
-// `@reeval/harness-goose`: Goose on a Gemini API key, as an AI SDK harness over ACP.
+// `@reeval/harness-goose`: Goose on a Gemini API key or Vercel AI Gateway, as an AI SDK harness
+// over ACP.
 export {
+  AI_GATEWAY_PROVIDER,
   createGoose,
   GEMINI_API_KEY_HEADER,
   GEMINI_API_URL,
+  GEMINI_PROVIDER,
   GOOSE_CLI_SHA256,
   GOOSE_CLI_VERSION,
   GOOSE_CREDENTIAL_ENV,
@@ -13,6 +16,7 @@ export {
   GOOSE_QUIET_ENV,
   GOOSE_WORKSPACE_SKILLS_DIR,
   type GooseHarnessSettings,
+  type GooseProvider,
   gooseConfig,
   gooseEnv,
 } from './goose-harness.ts'

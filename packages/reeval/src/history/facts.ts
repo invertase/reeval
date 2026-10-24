@@ -4,7 +4,8 @@
 // interval, `within_noise` and an exact rank test, so the analysis step is told, not asked.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { isRuntimeState } from '../attempt/context.ts'
-import { liftInterval, median, round3, wilson } from '../stats.ts'
+import { containsZero, EFFECT_MIN_COUNTED, liftInterval, median, round3, wilson } from '../stats.ts'
+import { totalTokens } from '../usage.ts'
 import { checkVerdict, contrastPairs } from '../view/contrasts.ts'
 import {
   contrastEffort,
@@ -19,11 +20,6 @@ import type { CheckTally } from './types.ts'
 
 /** Counted attempts, pooled over comparable runs, before a cell with mixed outcomes is `flaky`. */
 export const FLAKY_MIN_ATTEMPTS = 6
-/**
- * Counted attempts a side before pass-rate lift can exclude 0. Below this the verdict is
- * `insufficient` (not measured). See the table in `docs/concepts/lift.mdx`.
- */
-export const LIFT_MIN_COUNTED = 2
 /** A failing verdict this close to its threshold points at the judge, not the agent. */
 export const JUDGE_MARGIN = 0.1
 
@@ -69,6 +65,11 @@ CREATE TABLE drift_m (
   run_id TEXT, prev_run_id TEXT, eval_key TEXT, cell_key TEXT, changed TEXT,
   changed_paths TEXT, noise INTEGER, real_changed TEXT
 );
+CREATE TABLE check_streaks_m (
+  eval_key TEXT, cell_key TEXT, label TEXT, fingerprint TEXT, branch TEXT, runs INTEGER,
+  fails INTEGER, streak_runs INTEGER, streak_tries INTEGER, streak_since TEXT, last_run TEXT,
+  ended_by TEXT
+);
 `
 
 const FAMILY_COLUMNS = [
@@ -91,7 +92,14 @@ const FAMILY_COLUMNS = [
   'tokens_verdict',
 ] as const
 
-export const DERIVED = ['effort_m', 'contrasts_m', 'factor_effects_m', 'flaky_m', 'drift_m']
+export const DERIVED = [
+  'effort_m',
+  'contrasts_m',
+  'factor_effects_m',
+  'flaky_m',
+  'drift_m',
+  'check_streaks_m',
+]
 
 type Cell = {
   run_id: string
@@ -164,7 +172,7 @@ type Row = Record<string, SQLInputValue>
 
 function passCols(v: Side, c: Side): Row {
   const lift = liftInterval({ pass: v.pass, n: v.counted }, { pass: c.pass, n: c.counted })
-  const noise = lift.low <= 0 && lift.high >= 0
+  const noise = containsZero(lift.low, lift.high)
   return {
     variant_pass: v.pass,
     variant_counted: v.counted,
@@ -175,7 +183,7 @@ function passCols(v: Side, c: Side): Row {
     hi: round3(lift.high),
     within_noise: noise ? 1 : 0,
     pass_verdict:
-      Math.min(v.counted, c.counted) < LIFT_MIN_COUNTED
+      Math.min(v.counted, c.counted) < EFFECT_MIN_COUNTED
         ? 'insufficient'
         : noise
           ? 'noise'
@@ -309,6 +317,14 @@ export function deriveFacts(db: DatabaseSync): void {
       ),
     ).map((r) => `${r.run_id}\0${r.attempt_key}`),
   )
+  const diffs = new Map(
+    // An empty diff leaves the agent's answer as its only work, which this doesn't compare.
+    rowsOf<{ run_id: string; attempt_key: string; sha256: string | null }>(
+      db.prepare(
+        `SELECT run_id, attempt_key, sha256 FROM artifacts WHERE kind = 'diff' AND bytes > 0`,
+      ),
+    ).flatMap((r) => (r.sha256 ? [[`${r.run_id}\0${r.attempt_key}`, r.sha256] as const] : [])),
+  )
   const samples = new Map<string, EffortSample[]>()
   const byCell = new Map<string, Attempt[]>()
   for (const a of attempts) {
@@ -318,11 +334,13 @@ export function deriveFacts(db: DatabaseSync): void {
     const tokens =
       a.input_tokens === null
         ? undefined
-        : a.input_tokens +
-          (a.output_tokens ?? 0) +
-          (a.cache_read_tokens ?? 0) +
-          (a.cache_write_tokens ?? 0) +
-          (a.reasoning_tokens ?? 0)
+        : totalTokens({
+            input: a.input_tokens,
+            output: a.output_tokens ?? 0,
+            cacheRead: a.cache_read_tokens ?? 0,
+            cacheWrite: a.cache_write_tokens ?? 0,
+            reasoning: a.reasoning_tokens,
+          })
     samples.set(id, [
       ...(samples.get(id) ?? []),
       {
@@ -765,12 +783,29 @@ export function deriveFacts(db: DatabaseSync): void {
       (byCell.get(cellId(c.run_id, c.eval_key, c.key)) ?? []).filter((a) => a.outcome === 'fail'),
     )
     const w = wilson(pass, pass + fail)
+    const passedDiffs = new Set(
+      list.flatMap((c) =>
+        (byCell.get(cellId(c.run_id, c.eval_key, c.key)) ?? []).flatMap((a) => {
+          const sha = a.outcome === 'pass' && diffs.get(`${a.run_id}\0${a.key}`)
+          return sha ? [sha] : []
+        }),
+      ),
+    )
+    // The same change both passed and failed its checks: the checks, not the agent, vary.
+    const sameWork =
+      failing.length > 0 &&
+      failing.every(
+        (a) =>
+          a.error_kind === 'assertion' && passedDiffs.has(diffs.get(`${a.run_id}\0${a.key}`) ?? ''),
+      )
     const cause =
       infra > 0 || failing.some((a) => a.error_kind === 'infra')
         ? 'infra'
         : failing.some((a) => nearThreshold.has(`${a.run_id}\0${a.key}`))
           ? 'judge'
-          : 'agent'
+          : sameWork
+            ? 'check'
+            : 'agent'
     const starts = list.map((c) => c.started_at).sort()
     flakyRows.push({
       eval_key: first.eval_key,
@@ -793,4 +828,78 @@ export function deriveFacts(db: DatabaseSync): void {
   }
   flakyRows.sort((a, b) => String(a.first_seen).localeCompare(String(b.first_seen)))
   insertAll(db, 'flaky_m', flakyRows)
+
+  insertAll(db, 'check_streaks_m', checkStreaks(db))
+}
+
+type StreakCheck = {
+  run_id: string
+  eval_key: string
+  cell_key: string
+  label: string
+  comparable: string
+  branch: string | null
+  role: string
+  pass: number
+  fail: number
+  error: number
+  verdict: string | null
+}
+
+/**
+ * check_streaks: each check per cell, comparable fingerprint and branch, over recorded runs only:
+ * how many of its newest runs in a row it passed without a fail or an error (on a variant, only
+ * runs where its control passed it too, `both-pass`), the tries those runs counted, and the run
+ * that ended it. A run that never reached the check neither extends nor ends the streak.
+ */
+function checkStreaks(db: DatabaseSync): Row[] {
+  const checks = rowsOf<StreakCheck>(
+    db.prepare(
+      `SELECT k.run_id, k.eval_key, k.cell_key, k.label, c.comparable, r.branch, c.role, k.pass,
+        k.fail, k.error, k.verdict
+       FROM cell_checks k JOIN runs r USING (run_id)
+       JOIN cells c ON c.run_id = k.run_id AND c.eval_key = k.eval_key AND c.key = k.cell_key
+       WHERE r.recorded = 1 ORDER BY k.run_id`,
+    ),
+  )
+  const series = new Map<string, StreakCheck[]>()
+  for (const k of checks) {
+    const id = [k.eval_key, k.cell_key, k.label, k.comparable, k.branch ?? ''].join('\0')
+    series.set(id, [...(series.get(id) ?? []), k])
+  }
+  const rows: Row[] = []
+  for (const list of series.values()) {
+    const first = list[0] as StreakCheck
+    let streakRuns = 0
+    let streakTries = 0
+    let since: string | null = null
+    let endedBy: string | null = null
+    for (const k of [...list].reverse()) {
+      if (k.pass + k.fail + k.error === 0) continue
+      const clean =
+        k.fail === 0 && k.error === 0 && (k.role !== 'variant' || k.verdict === 'both-pass')
+      if (!clean) {
+        endedBy = k.run_id
+        break
+      }
+      streakRuns++
+      streakTries += k.pass
+      since = k.run_id
+    }
+    rows.push({
+      eval_key: first.eval_key,
+      cell_key: first.cell_key,
+      label: first.label,
+      fingerprint: first.comparable,
+      branch: first.branch,
+      runs: list.length,
+      fails: list.reduce((n, k) => n + k.fail, 0),
+      streak_runs: streakRuns,
+      streak_tries: streakTries,
+      streak_since: since,
+      last_run: list.at(-1)?.run_id ?? null,
+      ended_by: endedBy,
+    })
+  }
+  return rows
 }

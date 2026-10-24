@@ -3,9 +3,9 @@ evals/t.eval.ts › from the config        fake/-/docker:nightly   control  gate
 evals/t.eval.ts › a literal environment  fake/own/docker:images  control  gated  ×1
 evals/t.eval.ts › a literal sandbox      fake/-/docker:images    control  gated  ×1
 excluded: —
-image docker:nightly · 1 evals
+image docker:nightly · cursor · 1 evals
   dockerfile nightly/Dockerfile  reeval-dockerfile:nightly-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
-  harness                        reeval-dockerfile:nightly-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.5)
-image docker:images · 2 evals
+  harness                        reeval-dockerfile:nightly-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.6)
+image docker:images · cursor · 2 evals
   dockerfile evals/images/Dockerfile  reeval-dockerfile:images-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
-  harness                             reeval-dockerfile:images-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.5)
+  harness                             reeval-dockerfile:images-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.6)

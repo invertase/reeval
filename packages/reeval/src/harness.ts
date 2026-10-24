@@ -1,5 +1,5 @@
 // `reeval/harness`: agent harness descriptors. The implementations load lazily in workers.
-import { resolveOpenCodeProvider } from '@reeval/harness-opencode/providers'
+import { splitModel } from '@reeval/harness-opencode/providers'
 import { harnessProblem } from './contract/harness.ts'
 import { UsageError } from './errors.ts'
 import type {
@@ -8,15 +8,29 @@ import type {
   CodexHarnessDescriptor,
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,
+  FxHarnessDescriptor,
+  GatewayDescriptor,
+  GatewayName,
   GooseHarnessDescriptor,
+  GrokBuildHarnessDescriptor,
   HarnessDescriptor,
   OpenCodeHarnessDescriptor,
   PiHarnessDescriptor,
 } from './types.ts'
 
+/** A factory's options: the descriptor's, with `gateway` pinned by name or by its helper. */
+type Options<D extends HarnessDescriptor, Omitted extends string = never> = Omit<
+  D,
+  'kind' | 'gateway' | Omitted
+> & { gateway?: GatewayName | GatewayDescriptor }
+
 /** `options` as a descriptor of `kind`, checked; throws its factory's sentence for the first problem. */
 function make<D extends HarnessDescriptor>(kind: D['kind'], options: unknown): D {
   const descriptor = { kind, ...(options as object) } as D
+  const pin: unknown = descriptor.gateway
+  if (typeof pin === 'object' && pin !== null && 'kind' in pin) {
+    descriptor.gateway = (pin as GatewayDescriptor).kind
+  }
   const problem = harnessProblem(descriptor)
   if (problem) throw new UsageError(problem)
   return descriptor
@@ -29,7 +43,7 @@ function make<D extends HarnessDescriptor>(kind: D['kind'], options: unknown): D
  * `id` names the cell; it defaults to `cursor:<model>`, or `cursor:<model>[effort=<value>]`
  * when `effort` is set.
  */
-export const cursor = (options: Omit<CursorHarnessDescriptor, 'kind'>): CursorHarnessDescriptor =>
+export const cursor = (options: Options<CursorHarnessDescriptor>): CursorHarnessDescriptor =>
   make('cursor', options)
 
 /**
@@ -39,7 +53,7 @@ export const cursor = (options: Omit<CursorHarnessDescriptor, 'kind'>): CursorHa
  * `effort` is set.
  */
 export const claudeCode = (
-  options: Omit<ClaudeCodeHarnessDescriptor, 'kind' | 'effort'> & { effort?: string },
+  options: Options<ClaudeCodeHarnessDescriptor, 'effort'> & { effort?: string },
 ): ClaudeCodeHarnessDescriptor => make('claude-code', options)
 
 /**
@@ -49,18 +63,19 @@ export const claudeCode = (
  * when `effort` is set.
  */
 export const antigravity = (
-  options: Omit<AntigravityHarnessDescriptor, 'kind'>,
+  options: Options<AntigravityHarnessDescriptor>,
 ): AntigravityHarnessDescriptor => make('antigravity', options)
 
 /**
  * OpenCode, on the model's provider: `model` is OpenCode's `<provider>/<model>`, such as
  * `google/gemini-3.8-flash` or `anthropic/claude-haiku-4-5`, and only that provider's key is
- * needed and brokered. A provider whose key reeval can't broker is refused, saying why. `effort`
- * is that provider's thinking option. `id` names the cell; it defaults to `opencode:<model>`,
+ * needed and brokered. On `direct()`, a provider whose key reeval can't broker is refused, saying
+ * why; on `vercel()` any `<provider>/<model>` Vercel serves runs. `effort` is that provider's
+ * thinking option, and isn't taken on `vercel()`. `id` names the cell; it defaults to `opencode:<model>`,
  * the part after the last `/`, or `opencode:<model>[effort=<value>]` when `effort` is set.
  */
 export const opencode = (
-  options: Omit<OpenCodeHarnessDescriptor, 'kind'>,
+  options: Options<OpenCodeHarnessDescriptor>,
 ): OpenCodeHarnessDescriptor => {
   const why = opencodeModelError(options?.model)
   if (why) throw new UsageError(`opencode(): ${why}`)
@@ -72,24 +87,30 @@ export function opencodeModelError(model: unknown): string | undefined {
   if (typeof model !== 'string' || !model) {
     return `needs a model, <provider>/<model>, e.g. opencode({ model: 'google/gemini-3.8-flash' }) (got ${JSON.stringify(model)})`
   }
-  const resolved = resolveOpenCodeProvider(model, process.env)
-  return 'error' in resolved ? resolved.error : undefined
+  if (model.startsWith('vercel/')) {
+    return `a vercel/… id would bypass the config's gateway list: write the model as '${model.slice('vercel/'.length)}' and add vercel() to gateway (got ${JSON.stringify(model)})`
+  }
+  // The provider table gates direct() only: on Vercel AI Gateway any <provider>/<model> runs.
+  return splitModel(model)
+    ? undefined
+    : `an OpenCode model id names its provider, <provider>/<model>, such as 'google/gemini-3.8-flash' or 'anthropic/claude-haiku-4-5' (got ${JSON.stringify(model)})`
 }
 
 /**
  * Goose, with a Gemini API key: `model` is a Gemini model id, which it runs on its `google`
- * provider. `effort` is `GOOSE_THINKING_EFFORT`. `id` names the cell; it defaults to
+ * provider, or on `vercel()` as `google/<model>` with Vercel's key. `effort` is
+ * `GOOSE_THINKING_EFFORT`, and isn't taken on `vercel()`. `id` names the cell; it defaults to
  * `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set.
  */
-export const goose = (options: Omit<GooseHarnessDescriptor, 'kind'>): GooseHarnessDescriptor =>
+export const goose = (options: Options<GooseHarnessDescriptor>): GooseHarnessDescriptor =>
   make('goose', options)
 
 /**
  * pi, with a Gemini API key: `model` is a Gemini model id, which it runs on its `google` provider.
- * `effort` is pi's `--thinking` flag. `id` names the cell; it defaults to `pi:<model>`, or
+ * It doesn't run on `vercel()`. `effort` is pi's `--thinking` flag. `id` names the cell; it defaults to `pi:<model>`, or
  * `pi:<model>[effort=<value>]` when `effort` is set.
  */
-export const pi = (options: Omit<PiHarnessDescriptor, 'kind'>): PiHarnessDescriptor =>
+export const pi = (options: Options<PiHarnessDescriptor>): PiHarnessDescriptor =>
   make('pi', options)
 
 /**
@@ -98,13 +119,32 @@ export const pi = (options: Omit<PiHarnessDescriptor, 'kind'>): PiHarnessDescrip
  * names the cell; it defaults to `codex:<model>`, or `codex:<model>[effort=<value>]` when
  * `effort` is set.
  */
-export const codex = (options: Omit<CodexHarnessDescriptor, 'kind'>): CodexHarnessDescriptor =>
+export const codex = (options: Options<CodexHarnessDescriptor>): CodexHarnessDescriptor =>
   make('codex', options)
 
+/**
+ * fx, on Vercel AI Gateway or OpenAI's API: `model` is a gateway id, e.g.
+ * `anthropic/claude-sonnet-5`, which needs `vercel()` in the config's gateway list, or a bare
+ * OpenAI id, e.g. `gpt-5.5`, run with `OPENAI_API_KEY` on `direct()` or as `openai/<id>` on
+ * `vercel()`. `id` names the cell; it defaults to `fx:<model>`.
+ */
+export const fx = (options: Options<FxHarnessDescriptor>): FxHarnessDescriptor =>
+  make('fx', options)
+
+/**
+ * xAI's Grok Build, with an xAI API key: `model` is an xAI model id, e.g. `grok-4.6`, required
+ * since the CLI's default changes under you; on `vercel()` it runs as `xai/<model>` with Vercel's
+ * key. `effort` is Grok's `default_reasoning_effort`, and isn't taken on `vercel()`. `id`
+ * names the cell; it defaults to `grok-build:<model>`, or `grok-build:<model>[effort=<value>]`
+ * when `effort` is set.
+ */
+export const grokBuild = (
+  options: Options<GrokBuildHarnessDescriptor>,
+): GrokBuildHarnessDescriptor => make('grok-build', options)
+
 /** A fake agent that writes canned files and replies with canned text. For tests and dry runs. */
-export const fakeHarness = (
-  options: Omit<FakeHarnessDescriptor, 'kind'> = {},
-): FakeHarnessDescriptor => make('fake', options)
+export const fakeHarness = (options: Options<FakeHarnessDescriptor> = {}): FakeHarnessDescriptor =>
+  make('fake', options)
 
 export type {
   AgentHarnessDescriptor,
@@ -114,7 +154,9 @@ export type {
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,
   FakeScriptStep,
+  FxHarnessDescriptor,
   GooseHarnessDescriptor,
+  GrokBuildHarnessDescriptor,
   HarnessDescriptor,
   OpenCodeHarnessDescriptor,
   PiHarnessDescriptor,

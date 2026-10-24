@@ -14,7 +14,8 @@ import { tempDir } from './helpers.ts'
 // the worker installed through a global.
 Object.assign(globalThis, { __es: { registerTest, registerGroup, getRunContext } })
 
-function fakeChannel() {
+/** A channel whose main process closes it once `done` arrives, as forkWorker's does. */
+function fakeChannel({ closeAfterDone = true } = {}) {
   const sent: FromWorker[] = []
   let deliver: (m: ToWorker) => void = () => {}
   let disconnect = () => {}
@@ -24,9 +25,9 @@ function fakeChannel() {
     exited = resolve
   })
   const channel: Channel = {
-    send: (message, done) => {
+    send: (message) => {
       sent.push(message)
-      done?.()
+      if (message.t === 'done' && closeAfterDone) setTimeout(() => disconnect(), 1)
     },
     onMessage: (listener) => {
       deliver = listener
@@ -155,6 +156,19 @@ registerTest('slow', { mode: 'run', timeout: 20 }, async (h) => {
       c.sent.find((m) => m.t === 'meta'),
       { t: 'meta', index: 0, meta: { late: true } },
     )
+  })
+
+  test('after done, waits for the main process to close the channel before it exits', async () => {
+    const c = fakeChannel({ closeAfterDone: false })
+    startWorker(c.channel)
+    const { file, run } = evalFile(`registerTest('a', { mode: 'run' }, async () => {})`)
+    c.send({ t: 'init', run, file, select: null })
+    await until(() => c.sent.some((m) => m.t === 'done'))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    assert.deepEqual(c.exits, [])
+    c.disconnect()
+    await c.exit
+    assert.deepEqual(c.exits, [0])
   })
 
   test("a file that doesn't load reports why, then exits", async () => {

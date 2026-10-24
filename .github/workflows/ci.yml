@@ -25,6 +25,11 @@ on:
     - cron: '41 2 * * *'
   workflow_dispatch:
   workflow_call:
+    inputs:
+      ref:
+        description: The commit to check out (release.yml's republish passes the release tag); empty is the event's own
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -47,7 +52,7 @@ jobs:
   # Which jobs this run needs. Off PRs and the queue, and with the ci:full label, all of them
   # (`full`: also extended.yml and npm 10.9). Coverage is nightly, dispatch and release only.
   # Otherwise from the files changed against the base (the merge group's base in the queue).
-  # Docs-only changes (docs/, docs.json, root-level *.md, .agents/, issue templates) need only
+  # Docs-only changes (docs/, docs.json, root-level *.md, skills/, .agents/, issue templates) need only
   # `checks`, which always runs. Any other change needs `unit` unless it's only in
   # packages/studio-web. On the light tier, the rest follow their own paths, and a change to CI,
   # the lockfile or the workspace needs every job; on the full tier, every code change needs every
@@ -67,12 +72,14 @@ jobs:
       studio: ${{ steps.scope.outputs.studio }}
       pack: ${{ steps.scope.outputs.pack }}
       engine: ${{ steps.scope.outputs.engine }}
+      launchers: ${{ steps.scope.outputs.launchers }}
     steps:
       # A PR's merge commit has the base it would merge into as its first parent; a merge group's
       # base is further back.
       - if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
           fetch-depth: ${{ github.event_name == 'merge_group' && 0 || 2 }}
       - id: scope
@@ -80,13 +87,13 @@ jobs:
           ALL: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
           BASE: ${{ github.event.merge_group.base_sha || 'HEAD^1' }}
         run: |
-          unit=$ALL features=$ALL docker=$ALL studio=$ALL pack=$ALL engine=$ALL
-          every() { unit=true features=true docker=true studio=true pack=true engine=true; }
+          unit=$ALL features=$ALL docker=$ALL studio=$ALL pack=$ALL engine=$ALL launchers=$ALL
+          every() { unit=true features=true docker=true studio=true pack=true engine=true launchers=true; }
           if [ "$ALL" != true ]; then
             echo "Tier: $PR_TIER"
             while IFS= read -r f; do
               case $f in
-                docs/* | docs.json | .agents/* | .github/ISSUE_TEMPLATE/*) continue ;;
+                docs/* | docs.json | skills/* | .agents/* | .github/ISSUE_TEMPLATE/*) continue ;;
                 */*) ;;
                 *.md | LICENSE) continue ;;
               esac
@@ -110,6 +117,14 @@ jobs:
                 packages/reeval/tsdown.config.mjs | \
                 scripts/coverage.mjs)
                   engine=true ;;
+              esac
+              case $f in
+                packages/reeval-python/* | \
+                packages/reeval/src/language-runner/* | \
+                packages/reeval/test/python-sdk.test.ts | \
+                packages/reeval/test/language-runner.test.ts)
+                  unit=true
+                  features=true ;;
               esac
               case $f in
                 packages/reeval/src/engine/* | \
@@ -158,6 +173,14 @@ jobs:
                 scripts/third-party*)
                   pack=true ;;
               esac
+              case $f in
+                packages/reeval-python/src/reeval_python/cli.py | \
+                packages/reeval-python/pyproject.toml | \
+                packages/reeval/test/conformance/launcher/* | \
+                packages/sandbox-docker/src/egress/cert.ts | \
+                scripts/ctrl-c.py)
+                  launchers=true ;;
+              esac
             done < <(git diff --name-only "$BASE" HEAD)
           fi
           {
@@ -167,6 +190,7 @@ jobs:
             echo "studio=$studio"
             echo "pack=$pack"
             echo "engine=$engine"
+            echo "launchers=$launchers"
           } | tee -a "$GITHUB_OUTPUT"
 
   # Lint, the build, typecheck, the schema check and the docs checks: each under a minute, so one job.
@@ -176,14 +200,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       # biome ci: lint and format check, without writing, with GitHub annotations.
       - run: pnpm exec biome ci .
       # Unused files, exports, types and dependencies across the workspace (knip.json).
       - if: ${{ !cancelled() }}
         run: pnpm knip
-      # reeval and examples/hello resolve their workspace dependencies' types from dist/, and
+      # reeval and the examples resolve their workspace dependencies' types from dist/, and
       # the docs' generated blocks come from dist/cli.js (help, query schema).
       - run: pnpm build
       - if: ${{ !cancelled() }}
@@ -191,12 +217,36 @@ jobs:
       - name: persisted shapes (schema/ snapshots)
         if: ${{ !cancelled() }}
         run: pnpm --filter reeval schema:check
+      - name: SDK wire types (generated from schema/)
+        if: ${{ !cancelled() }}
+        run: pnpm --filter reeval sdk-types:check
       # Stale generated blocks, reference coverage, sidebar links and the package name.
       - if: ${{ !cancelled() }}
         run: pnpm docs:check
       # docs.page's own check: internal links, assets and frontmatter targets.
       - if: ${{ !cancelled() }}
         run: npx -y @docs.page/cli@2.1.0 check --external-links warn
+      - if: ${{ !cancelled() }}
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
+          # over a minute on Windows.
+          cache-dependency-glob: |
+            packages/reeval-python/uv.lock
+            packages/reeval/test/features/python-sdk/hello/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - name: reeval-python (uv sync, ruff, pyright, pytest)
+        if: ${{ !cancelled() }}
+        working-directory: packages/reeval-python
+        run: |
+          uv sync --locked --dev
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pyright
+          # Every Python the classifiers name, each in its own environment.
+          for v in 3.11 3.12 3.13 3.14; do
+            UV_PROJECT_ENVIRONMENT=".venv-$v" uv run --locked --python "$v" pytest -q
+          done
 
   # The unit and plan files on the newest Node that engines.node allows, in four shards (a 2-vCPU
   # runner runs one test file at a time). The engines floor, Node 22.13, runs in extended.yml.
@@ -212,9 +262,19 @@ jobs:
         shard: ['1/4', '2/4', '3/4', '4/4']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
+          # over a minute on Windows.
+          cache-dependency-glob: |
+            packages/reeval-python/uv.lock
+            packages/reeval/test/features/python-sdk/hello/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - name: reeval (every test file but the fixture, Docker, studio, pack and real-agent ones)
@@ -229,7 +289,7 @@ jobs:
       - name: sandbox-docker (without containers) and the harness packages
         if: matrix.shard == '1/4'
         run: |
-          for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex; do
+          for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex harness-fx harness-grok-build; do
             echo "::group::@reeval/$p"
             pnpm --filter "@reeval/$p" test
             echo "::endgroup::"
@@ -246,9 +306,19 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
+          # over a minute on Windows.
+          cache-dependency-glob: |
+            packages/reeval-python/uv.lock
+            packages/reeval/test/features/python-sdk/hello/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - working-directory: packages/reeval
@@ -272,13 +342,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # The fixtures' Docker tier: the harness/* fixtures, then the rest.
+          # The fixtures' Docker tier, split by fixture directory: $FIXTURES' directories, then the rest.
           - package: 'reeval'
             part: fixtures 1/2
-            run: node --test --experimental-strip-types --no-warnings --test-name-pattern='harness/' test/features.test.ts
+            run: node --test --experimental-strip-types --no-warnings --test-name-pattern="$FIXTURES" test/features.test.ts
           - package: 'reeval'
             part: fixtures 2/2
-            run: node --test --experimental-strip-types --no-warnings --test-skip-pattern='harness/' test/features.test.ts
+            run: node --test --experimental-strip-types --no-warnings --test-skip-pattern="$FIXTURES" test/features.test.ts
           # test/docker.test.ts: the image builds from a from, a dockerfile or a moving tag, then the rest.
           - package: 'reeval'
             part: sandbox 1/2
@@ -300,11 +370,25 @@ jobs:
       REEVAL_TEST_REQUIRE_DOCKER: '1'
       # docker.test.ts's slowest tests, each building images: about half the file's time.
       IMAGE_BUILDS: 'a from tag that moves upstream|dockerfile: FROM|dockerfile \+ claudeCode|from: a toolchain image'
+      # About half the fixtures' Docker time, from each fixture's median on main. Rebalance from
+      # the `✔ <dir> [docker] (…ms)` lines in both legs' logs when one leg finishes well after the other.
+      FIXTURES: '(^| )(harness|mcp|secrets|egress|compare|assert|judge)/'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
+          # over a minute on Windows.
+          cache-dependency-glob: |
+            packages/reeval-python/uv.lock
+            packages/reeval/test/features/python-sdk/hello/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
+        if: matrix.package == 'reeval'
       - uses: ./.github/actions/sandbox-images
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
@@ -315,6 +399,48 @@ jobs:
         with:
           name: docker-${{ strategy.job-index }}
 
+  # podman(): sandbox-docker's container tests and the fixtures' Podman tier, on the rootless
+  # Podman GitHub's Ubuntu image ships. systemd delegates only memory and pids to a user's cgroup,
+  # so a drop-in adds cpu (podman({ cpus })) before the user manager restarts. Fails without Podman.
+  podman:
+    name: podman (rootless)
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      REEVAL_TEST_ENGINE: podman
+      REEVAL_TEST_REQUIRE_PODMAN: '1'
+      REEVAL_FIXTURE_TIERS: podman
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: rootless Podman with the cpu, memory and pids controllers
+        run: |
+          sudo mkdir -p /etc/systemd/system/user@.service.d
+          printf '[Service]\nDelegate=cpu cpuset io memory pids\n' |
+            sudo tee /etc/systemd/system/user@.service.d/delegate.conf
+          sudo systemctl daemon-reload
+          sudo loginctl enable-linger "$(id -u)"
+          sudo systemctl restart "user@$(id -u).service"
+          podman system migrate
+          podman info --format '{{.Version.Version}} rootless={{.Host.Security.Rootless}} {{.Host.CgroupManager}} {{.Host.CgroupControllers}} {{.Host.NetworkBackend}}'
+      - run: pnpm build
+      - name: reeval's image, in Podman's store
+        run: |
+          node --input-type=module -e "
+            import { buildImage } from './packages/sandbox-docker/dist/index.js'
+            await buildImage(console.log, { harness: 'cursor', engine: 'podman' })"
+      - name: sandbox-docker on Podman
+        working-directory: packages/sandbox-docker
+        run: pnpm test
+      - name: the fixtures' Podman tier
+        working-directory: packages/reeval
+        run: node --test --experimental-strip-types --no-warnings --test-name-pattern='\[podman\]' test/features.test.ts
+
   studio:
     name: studio
     needs: changes
@@ -323,7 +449,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
       - if: needs.changes.outputs.coverage == 'true'
@@ -346,10 +474,52 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
       - run: node scripts/coverage.mjs engine
+
+  # Every SDK's `reeval` launcher against the shared cases in test/conformance/launcher/ (its
+  # README), on each OS: download, checksums, cache, offline, overrides, exit codes and Ctrl-C.
+  launchers:
+    name: launcher conformance (${{ matrix.sdk }}, ${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.launchers == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run: { shell: bash }
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [python]
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    steps:
+      # Recorded runs' paths pass Windows' 260-character limit, which git keeps by default.
+      - if: runner.os == 'Windows'
+        run: git config --system core.longpaths true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+      # Builds the suite's stand-in binary.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache: false
+      - if: matrix.sdk == 'python'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          cache-dependency-glob: packages/reeval-python/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - working-directory: packages/reeval
+        run: node --experimental-strip-types --no-warnings test/conformance/launcher/run.ts ${{ matrix.sdk }}
 
   # Installs the tarball with npm 11 (the release job's) and, off PRs, with Node 22's npm 10.9. npm
   # before 11.6 crashed ("reading 'edgesOut'", npm/cli#8261) on vitest's peer set, which reeval no
@@ -366,7 +536,9 @@ jobs:
         npm: ${{ fromJSON(needs.changes.outputs.full == 'true' && '["11", "10.9"]' || '["11"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
         with: { node-version: "${{ matrix.npm == '10.9' && '22' || '' }}" }
       - run: npm install --global npm@${{ matrix.npm }} && npm --version
@@ -406,6 +578,7 @@ jobs:
     uses: ./.github/workflows/extended.yml
     with:
       floor: ${{ github.event_name != 'push' || github.workflow != 'ci' }}
+      ref: ${{ inputs.ref }}
 
   coverage:
     name: coverage
@@ -416,7 +589,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       # c8 maps the coverage through dist/ and its source maps, at the paths the test jobs ran.
       - run: pnpm build
@@ -442,7 +617,7 @@ jobs:
   # skipping it (a skipped required check counts as passed).
   ci:
     name: ci
-    needs: [changes, checks, unit, features, docker, studio, engine-coverage, pack, extended]
+    needs: [changes, checks, unit, features, docker, podman, studio, engine-coverage, launchers, pack, extended]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

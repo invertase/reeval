@@ -1,0 +1,110 @@
+---
+title: podman()
+description: The Docker sandbox on rootless Podman, how it's confined the same way, and the errors it raises.
+---
+
+`podman()` runs each attempt in its own local Podman container. It takes the same options as [`docker()`](/reference/sandbox/docker) and runs the same sandbox, image and egress gateway; only the CLI that starts the containers changes.
+
+```ts title="evals/python.eval.ts"
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
+import { podman } from '{{ pkg }}/sandbox'
+
+const python = defineEnvironment('python', {
+  sandbox: podman({ from: 'python:3.12-slim', memory: '2g' }),
+  egress: 'deny-all',
+})
+
+evaluate('writes fizzbuzz in python', { environment: python }, async (c) => {
+  await c.send('Write fizzbuzz.py and unittest tests for it.')
+  await expect(c.exec('python -m unittest')).toSucceed()
+})
+```
+
+It needs Podman 4 or later. reeval is tested on rootless Podman on Linux; rootful Podman works the same way.
+
+## Options
+
+Every [`docker()` option](/reference/sandbox/docker#options) means the same here: `from`, `dockerfile`, `image`, `install`, `memory`, `swap`, `cpus`, `pids`, `root`, `capabilities` and `maxConcurrent`. Errors name the function you called:
+
+```text
+podman({ memory }) takes a size such as '4g' or '512m', or bytes (got "4GB")
+```
+
+<Property name="id" type="string" optional>
+  The sandbox's id in cell keys and filters. Default `podman`; `podman:<last path segment of the image>` with `image` or `from`, as `docker()` does with `docker:`. So `docker()` and `podman()` cells of one eval have different keys.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most Podman sandboxes at once across the run. It's counted apart from `docker()`'s.
+</Property>
+
+As data, in a declaration tree or `reeval.yaml`, a Podman sandbox is a Docker one with `engine: podman`:
+
+```yaml title="reeval.yaml"
+sandbox: { kind: docker, engine: podman, from: 'python:3.12-slim' }
+```
+
+## Confinement
+
+```bash
+podman run --network bridge --security-opt seccomp=<Docker's profile> …
+```
+
+Every `podman()` container starts with those two flags, on top of the flags `docker()` passes (the `reeval` user, no capabilities, `no-new-privileges`, the limits).
+
+| | Without them, rootless Podman | With them, as in Docker |
+|---|---|---|
+| Network | slirp4netns or pasta: a network mode the container can't be detached from | Podman's `podman` bridge network, which a restricted [egress policy](/reference/egress) detaches the container from, leaving only `lo` |
+| Seccomp | Podman's profile, which lets an unprivileged process `unshare` a user and network namespace | Docker's default profile ([moby/profiles](https://github.com/moby/profiles), shipped in the package), which refuses it |
+
+A restricted policy fails closed: if a container ends up on no network but a network mode, the attempt fails with an infra error rather than run with a route out.
+
+## Images
+
+`reeval image build` builds Podman's images when the config's evals use `podman()`. Podman keeps its own image store, so a `podman()` sandbox never uses an image built for Docker, and the tags are the same (`reeval-sandbox:<harness>-<version>`, which Podman lists under `localhost/`). With `from`, reeval pins the base's digest with `skopeo inspect`, or `podman manifest inspect` without skopeo.
+
+```text
+images  1 sandbox image: 1 ready
+  ✓ podman  ready
+```
+
+`reeval image clean` removes stale images from both Docker and Podman.
+
+## Preflight and doctor
+
+```text
+✓ podman     running · 4 CPUs, 15.6 GB memory (default concurrency 4)
+✓ image      reeval-sandbox:cursor-0.1.6 (cursor, in Podman)
+```
+
+`reeval doctor` checks Podman whenever the config uses `podman()`, and checks Docker too if it also uses `docker()`. `reeval run` makes the same checks before any attempt starts, and exits 2 when one fails.
+
+## Errors
+
+| What you see | Why | Fix |
+|---|---|---|
+| ``Podman isn't answering: `podman info` failed`` | Podman isn't installed, or (macOS, Windows) its machine isn't running | Install Podman 4 or later; on macOS or Windows, `podman machine init`, then `podman machine start` |
+| `Podman 3.4.4 is too old for reeval's sandboxes` | Rootless bridge networking needs Podman 4 | Upgrade Podman |
+| `rootless Podman can't limit a sandbox's cpu: your user's cgroup doesn't have the cpu controller` | systemd before 252 delegates only `memory` and `pids` to a user | A drop-in for `user@.service` with `Delegate=cpu cpuset io memory pids`, then log in again |
+| `the container's network is pasta, which Podman can't detach it from, so a restricted policy would still have a route out` | The container isn't on the bridge network | Check `podman network ls` lists `podman` and `podman info` shows `netavark` |
+| `out of memory: 1 process killed at the 128m limit (+128m swap); raise podman({ memory })` | A process went past `memory` and `swap` | Raise `podman({ memory })` |
+
+## macOS and Windows
+
+```bash
+podman machine init --memory 4096
+# or, for a machine you already have (stopped):
+podman machine set --memory 4096
+podman machine start
+reeval doctor
+```
+
+On macOS and Windows, Podman runs containers in a Linux VM, `podman machine`, whose memory and CPUs bound every sandbox's. reeval is tested on macOS with Podman 6.1 on the `applehv` provider; Windows hasn't been tested yet. An attempt may use up to 4 GB, so give the machine at least that: `reeval doctor` warns on the 2 GiB default.
+
+reeval talks to the machine through its API socket (Windows: its named pipe), which `podman machine inspect` names, rather than over SSH, where a burst of commands drops some (`ssh: handshake failed`). It leaves the connection alone when `CONTAINER_HOST` or `CONTAINER_CONNECTION` is set, or the default connection isn't the machine's.
+
+## Related
+
+- [docker()](/reference/sandbox/docker)
+- [Sandboxes and toolchains](/guide/sandboxes#run-on-podman)
+- [Egress](/reference/egress)

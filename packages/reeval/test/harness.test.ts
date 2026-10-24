@@ -11,6 +11,7 @@ import { HarnessAgent } from '@ai-sdk/harness/agent'
 import {
   ANTIGRAVITY_BUILTIN_TOOLS,
   ANTIGRAVITY_HOME_SKILLS_DIR,
+  ANTIGRAVITY_HOOK_EVENTS,
   ANTIGRAVITY_WORKSPACE_RULES_FILE,
   ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
   AntigravityStreamTranslator,
@@ -32,15 +33,22 @@ import {
   cursorSdkEndpoints,
   toUsage as cursorUsage,
 } from '@reeval/harness-cursor-sdk'
+import { FX_HOME_SKILLS_DIR, FX_WORKSPACE_SKILLS_DIR } from '@reeval/harness-fx'
 import {
   GOOSE_ENDPOINTS,
   GOOSE_HOME_SKILLS_DIR,
   GOOSE_WORKSPACE_SKILLS_DIR,
 } from '@reeval/harness-goose'
 import {
+  GROK_ENDPOINTS,
+  GROK_HOME_SKILLS_DIR,
+  GROK_WORKSPACE_SKILLS_DIR,
+} from '@reeval/harness-grok-build'
+import {
   OPENCODE_HOME_SKILLS_DIR,
   OPENCODE_WORKSPACE_SKILLS_DIR,
   openCodeEndpoints,
+  openCodeTurnUsage,
 } from '@reeval/harness-opencode'
 import { PI_ENDPOINTS, PI_HOME_SKILLS_DIR, PI_WORKSPACE_SKILLS_DIR } from '@reeval/harness-pi'
 import { applyTransformations, hostAllowed, onEndpoint } from '@reeval/sandbox-docker'
@@ -49,19 +57,24 @@ import { malformedCredentials, missingCredentials, resolveConfig } from '../src/
 import { plannedEgress } from '../src/egress.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment } from '../src/environment.ts'
-import { observed, tokenUsage } from '../src/harness/agent.ts'
+import { resolveGateway } from '../src/gateway/resolve.ts'
+import { interactiveTools, observed, tokenUsage } from '../src/harness/agent.ts'
 import {
   AGENTS,
   type AgentKind,
+  acpMcpServers,
   agentAuth,
   agentFor,
   antigravityMcpServers,
   brokeringFor,
   claudeMcpServers,
+  claudePluginFiles,
+  cursorHookMatcher,
   cursorMcpServers,
   gooseMcpServers,
   LAYOUTS,
   layoutOf,
+  opencodeFrontmatter,
   opencodeVars,
   type ServedModel,
 } from '../src/harness/agents.ts'
@@ -74,13 +87,16 @@ import {
   codex,
   cursor,
   fakeHarness,
+  fx,
   goose,
+  grokBuild,
   opencode,
   pi,
 } from '../src/harness.ts'
 import { harnessId } from '../src/options.ts'
 import { imageHarness } from '../src/sandbox/prepare.ts'
 import type { AgentHarnessDescriptor, TranscriptEvent } from '../src/types.ts'
+import { promptTokens, sumUsage, totalTokens } from '../src/usage.ts'
 import { formatUsage } from '../src/view/model.ts'
 
 describe('the Claude Code harness', () => {
@@ -152,6 +168,8 @@ describe('the Claude Code harness', () => {
       rulesFile: 'CLAUDE.md',
       workspaceSkillDir: '.claude/skills',
       harnessSkillDir: '.claude/skills',
+      pluginPlacement: 'namespaced',
+      pluginFiles: claudePluginFiles,
     })
     assert.equal(layoutOf(cursor({ model: 'composer-2.5' })).rulesFile, 'AGENTS.md')
     assert.equal(workspaceSkillDir(cursor({ model: 'composer-2.5' })), '.cursor/skills')
@@ -172,6 +190,8 @@ describe('the Claude Code harness', () => {
       goose({ model: 'm' }),
       pi({ model: 'm' }),
       codex({ model: 'm' }),
+      grokBuild({ model: 'm' }),
+      fx({ model: 'm' }),
     ]) {
       const fake = fakeHarness({ layout: real.kind })
       assert.deepEqual(layoutOf(fake), layoutOf(real), real.kind)
@@ -179,7 +199,7 @@ describe('the Claude Code harness', () => {
     }
     assert.throws(
       () => fakeHarness({ layout: 'cline' as never }),
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex' \(got "cline"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex', 'fx', 'grok-build' \(got "cline"\)/,
     )
   })
 
@@ -284,6 +304,8 @@ describe('the Antigravity harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: '.agents/skills',
       harnessSkillDir: '.gemini/config/skills',
+      pluginPlacement: 'namespaced',
+      pluginHookEvents: ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
     })
     assert.equal(imageHarness(h), 'antigravity')
   })
@@ -312,12 +334,14 @@ describe('the Antigravity harness', () => {
       rulesFile: ANTIGRAVITY_WORKSPACE_RULES_FILE,
       workspaceSkillDir: ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: ANTIGRAVITY_HOME_SKILLS_DIR,
+      pluginPlacement: 'namespaced',
+      pluginHookEvents: Object.keys(ANTIGRAVITY_HOOK_EVENTS),
     })
   })
 })
 
 describe('the OpenCode harness', () => {
-  test('is plain data with its own cell id, and needs a model on a provider it can broker', () => {
+  test('is plain data with its own cell id, and needs a <provider>/<model>', () => {
     const h = opencode({ model: 'google/gemini-3.8-flash' })
     assert.deepEqual(h, { kind: 'opencode', model: 'google/gemini-3.8-flash' })
     assert.equal(harnessId(h), 'opencode:gemini-3.8-flash')
@@ -336,19 +360,18 @@ describe('the OpenCode harness', () => {
       () => opencode({ model: 'gemini-3.8-flash' }),
       /^UsageError: opencode\(\): an OpenCode model id names its provider, <provider>\/<model>/,
     )
-    assert.throws(
-      () => opencode({ model: 'google-vertex/gemini-3.8-flash' }),
-      /^UsageError: opencode\(\): reeval can't run OpenCode on Vertex \(google-vertex\): it takes a service account/,
-    )
-    assert.throws(() => opencode({ model: 'nope/m' }), /OpenCode has no provider "nope"/)
   })
 
-  test("the config refuses a hand-made descriptor on a provider it can't broker", () => {
+  test("direct() refuses a provider it can't broker; vercel() takes any <provider>/<model>", () => {
+    const onDirect = (model: string) =>
+      resolveGateway([{ kind: 'direct' }], opencode({ model }), 'evaluate("e")')
     assert.throws(
-      () =>
-        resolveConfig({ harness: [{ kind: 'opencode', model: 'google-vertex/x' }] } as never, '/p'),
-      /^UsageError: opencode\(\) in reeval\.config\.ts: reeval can't run OpenCode on Vertex/,
+      () => onDirect('google-vertex/gemini-3.8-flash'),
+      /\(direct: reeval can't run OpenCode on Vertex \(google-vertex\): it takes a service account/,
     )
+    assert.throws(() => onDirect('nope/m'), /\(direct: OpenCode has no provider "nope"/)
+    const vertex = opencode({ model: 'google-vertex/x' })
+    assert.equal(resolveGateway([{ kind: 'vercel' }], vertex, 'evaluate("e")').name, 'vercel')
   })
 
   test("needs only the model's provider's key", () => {
@@ -416,8 +439,8 @@ describe('the OpenCode harness', () => {
       )
       process.env.AWS_REGION = 'evil.example.com'
       assert.throws(
-        () => opencode({ model: bedrock.model }),
-        /^UsageError: opencode\(\): AWS_REGION is "evil\.example\.com"/,
+        () => resolveGateway([{ kind: 'direct' }], bedrock, 'evaluate("e")'),
+        /\(direct: AWS_REGION is "evil\.example\.com"/,
       )
       assert.throws(
         () => brokeringFor(bedrock),
@@ -444,6 +467,12 @@ describe('the OpenCode harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: OPENCODE_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: OPENCODE_HOME_SKILLS_DIR,
+      pluginPlacement: 'flat',
+      pluginUnpack: {
+        agents: '.opencode/agents',
+        commands: '.opencode/commands',
+        frontmatter: opencodeFrontmatter,
+      },
     })
     assert.equal(imageHarness(h), 'opencode')
     assert.deepEqual(brokeringFor(h)?.endpoints, openCodeEndpoints('google/m'))
@@ -546,6 +575,7 @@ describe('the Goose harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: GOOSE_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/${GOOSE_HOME_SKILLS_DIR}`,
+      pluginPlacement: 'flat',
     })
     assert.equal(imageHarness(h), 'goose')
     assert.deepEqual(AGENTS.goose.endpoints, GOOSE_ENDPOINTS)
@@ -575,6 +605,121 @@ describe('the Goose harness', () => {
   })
 })
 
+describe('the fx harness', () => {
+  test('is plain data with its own cell id, and needs a model', () => {
+    const h = fx({ model: 'gpt-4.1-mini' })
+    assert.deepEqual(h, { kind: 'fx', model: 'gpt-4.1-mini' })
+    assert.deepEqual(JSON.parse(JSON.stringify(h)), h)
+    assert.equal(harnessId(h), 'fx:gpt-4.1-mini')
+    assert.equal(harnessId(fx({ model: 'anthropic/claude-sonnet-5' })), 'fx:claude-sonnet-5')
+    for (const model of [undefined, '']) {
+      assert.throws(
+        () => fx({ model } as never),
+        /fx\(\) needs a model: a Vercel AI Gateway id, e\.g\. fx\(\{ model: 'anthropic\/claude-sonnet-5' \}\), or a bare OpenAI id/,
+        String(model),
+      )
+    }
+  })
+
+  test('needs AI_GATEWAY_API_KEY for a gateway id, and OPENAI_API_KEY for a bare OpenAI id', () => {
+    const gateway = resolveConfig({ harness: [fx({ model: 'anthropic/claude-sonnet-5' })] }, '/p')
+    assert.deepEqual(missingCredentials(gateway, { OPENAI_API_KEY: 'x' }), ['AI_GATEWAY_API_KEY'])
+    assert.deepEqual(missingCredentials(gateway, { AI_GATEWAY_API_KEY: 'x' }), [])
+    const openai = resolveConfig({ harness: [fx({ model: 'gpt-4.1-mini' })] }, '/p')
+    assert.deepEqual(missingCredentials(openai, { AI_GATEWAY_API_KEY: 'x' }), ['OPENAI_API_KEY'])
+    assert.deepEqual(missingCredentials(openai, { OPENAI_API_KEY: 'x' }), [])
+  })
+
+  test('reads rules from AGENTS.md, repo skills from .fx/skills, home skills in its own home', () => {
+    const h = fx({ model: 'm' })
+    assert.deepEqual(layoutOf(h), {
+      rulesFile: 'AGENTS.md',
+      workspaceSkillDir: FX_WORKSPACE_SKILLS_DIR,
+      harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/${FX_HOME_SKILLS_DIR}`,
+      pluginPlacement: 'flat',
+    })
+    assert.equal(imageHarness(h), 'fx')
+  })
+
+  test("gets MCP servers in ACP's shape, a bare stdio command through env's PATH lookup", () => {
+    assert.deepEqual(
+      acpMcpServers({
+        files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/r' } },
+        local: { transport: 'stdio', command: '/usr/bin/node', args: ['s.mjs'], env: {} },
+        docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
+      }),
+      {
+        files: {
+          command: '/usr/bin/env',
+          args: ['npx', 'mcp-files'],
+          env: [{ name: 'ROOT', value: '/r' }],
+        },
+        local: { command: '/usr/bin/node', args: ['s.mjs'], env: [] },
+        docs: {
+          type: 'http',
+          url: 'https://docs.example/mcp',
+          headers: [{ name: 'A', value: 'b' }],
+        },
+      },
+    )
+  })
+})
+
+describe('the Grok Build harness', () => {
+  test('is plain data with its own cell id, and needs an xAI model id', () => {
+    const h = grokBuild({ model: 'grok-4.6' })
+    assert.deepEqual(h, { kind: 'grok-build', model: 'grok-4.6' })
+    assert.equal(harnessId(h), 'grok-build:grok-4.6')
+    assert.equal(
+      harnessId(grokBuild({ model: 'grok-4.6', effort: 'high' })),
+      'grok-build:grok-4.6[effort=high]',
+    )
+    for (const model of [undefined, '', 'xai/grok-4.6']) {
+      assert.throws(
+        () => grokBuild({ model } as never),
+        /grokBuild\(\) needs an xAI model id, without a provider, since it runs on an xAI API key, e\.g\. grokBuild\(\{ model: 'grok-4\.6' \}\)/,
+        String(model),
+      )
+    }
+  })
+
+  test('is accepted by the config and needs XAI_API_KEY', () => {
+    const config = resolveConfig({ harness: [grokBuild({ model: 'm' })] }, '/p')
+    assert.deepEqual(missingCredentials(config, {}), ['XAI_API_KEY'])
+    assert.deepEqual(missingCredentials(config, { XAI_API_KEY: 'x' }), [])
+  })
+
+  test('Grok reads rules from AGENTS.md, repo skills from .grok/skills, home skills in its own home', () => {
+    const h = grokBuild({ model: 'm' })
+    assert.deepEqual(layoutOf(h), {
+      rulesFile: 'AGENTS.md',
+      workspaceSkillDir: GROK_WORKSPACE_SKILLS_DIR,
+      harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/${GROK_HOME_SKILLS_DIR}`,
+      pluginPlacement: 'namespaced',
+    })
+    assert.equal(imageHarness(h), 'grok-build')
+    assert.deepEqual(AGENTS['grok-build'].endpoints, GROK_ENDPOINTS)
+  })
+
+  test("gets MCP servers in ACP's McpServer shape, as fx does", () => {
+    assert.equal(AGENTS['grok-build'].mcpServers, acpMcpServers)
+  })
+
+  test("the served model is what each model call's response names, on api.x.ai only", () => {
+    const brokering = brokeringFor(grokBuild({ model: 'grok-4.6' }))
+    assert.equal(brokering?.credential, 'XAI_API_KEY')
+    assert.deepEqual(
+      brokering?.modelResponses?.map((e) => ('exact' in e.path ? e.path.exact : '')),
+      ['/v1/chat/completions', '/v1/responses'],
+    )
+    const served = brokering?.servedModel
+    const call = { method: 'POST', host: 'api.x.ai', path: '/v1/chat/completions' }
+    assert.equal(served?.({ ...call, responseModel: 'grok-4.6-0709' }), 'grok-4.6-0709')
+    assert.equal(served?.({ ...call, host: 'api.example', responseModel: 'x' }), undefined)
+    assert.equal(served?.(call), undefined)
+  })
+})
+
 describe('mcp.sse', () => {
   test('resolves to an SSE server and reaches every harness in its SSE shape, or is refused by name', async () => {
     const env = defineEnvironment('events', ({ mcp }) => ({
@@ -597,6 +742,20 @@ describe('mcp.sse', () => {
       pi: /^InfraError: pi has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
       codex:
         /^InfraError: Codex has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
+      'grok-build': {
+        events: {
+          type: 'sse',
+          url: 'http://events.example/sse',
+          headers: [{ name: 'A', value: 'b' }],
+        },
+      },
+      fx: {
+        events: {
+          type: 'sse',
+          url: 'http://events.example/sse',
+          headers: [{ name: 'A', value: 'b' }],
+        },
+      },
     }
     for (const [kind, shape] of Object.entries(expected) as [AgentKind, unknown][]) {
       const toHarness = () => AGENTS[kind].mcpServers(mcp as never)
@@ -624,6 +783,8 @@ describe('the pi harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: PI_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: PI_HOME_SKILLS_DIR,
+      pluginPlacement: 'flat',
+      pluginUnpack: { commands: '.pi/prompts' },
     })
     assert.equal(imageHarness(h), 'pi')
     assert.deepEqual(AGENTS.pi.endpoints, PI_ENDPOINTS)
@@ -707,6 +868,7 @@ describe('the Codex harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: CODEX_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: CODEX_HOME_SKILLS_DIR,
+      pluginPlacement: 'namespaced',
     })
     assert.equal(imageHarness(h), 'codex')
     const config = resolveConfig({ harness: [h] }, '/p')
@@ -862,7 +1024,26 @@ describe('the Cursor harness', () => {
       rulesFile: CURSOR_SDK_WORKSPACE_RULES_FILE,
       workspaceSkillDir: CURSOR_SDK_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: CURSOR_SDK_HOME_SKILLS_DIR,
+      pluginPlacement: 'flat',
+      pluginUnpack: LAYOUTS.cursor.pluginUnpack,
+      pluginHookEvents: [
+        'SessionStart',
+        'SessionEnd',
+        'UserPromptSubmit',
+        'PreToolUse',
+        'PostToolUse',
+        'SubagentStop',
+        'PreCompact',
+        'Stop',
+      ],
     })
+    const unpack = LAYOUTS.cursor.pluginUnpack
+    assert.deepEqual(
+      [unpack?.rules, unpack?.agents, unpack?.commands, unpack?.hooks?.file],
+      ['.cursor/rules', '.cursor/agents', '.cursor/commands', '.cursor/hooks.json'],
+    )
+    assert.equal(unpack?.hooks?.matcher, cursorHookMatcher)
+    assert.deepEqual(Object.keys(unpack?.hooks?.events ?? {}), LAYOUTS.cursor.pluginHookEvents)
     assert.equal(imageHarness(h), 'cursor')
     assert.deepEqual(AGENTS.cursor.endpoints, cursorSdkEndpoints())
   })
@@ -978,6 +1159,7 @@ const HOST_CREDENTIALS = [
   'GOOGLE_API_KEY',
   'GOOGLE_GEMINI_BASE_URL',
   'GOOGLE_GENERATIVE_AI_API_KEY',
+  'XAI_API_KEY',
 ]
 
 /**
@@ -988,7 +1170,12 @@ async function adapterRules(kind: AgentKind, env: Record<string, string>, model 
   return withHostEnv(env, async () => {
     const descriptor = { kind, model } as AgentHarnessDescriptor
     const agent = agentFor(descriptor)
-    const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
+    const adapter = await agent.adapter({
+      auth: agentAuth(agent),
+      descriptor,
+      model: descriptor.model,
+      plugins: [],
+    })
     const { session, rules } = recordingSession()
     await assert.rejects(
       adapter.doStart({ sessionId: 's', sandboxSession: session }),
@@ -1159,6 +1346,8 @@ describe('credential brokering per agent', () => {
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
         descriptor: antigravity({ model: 'm' }),
+        model: 'm',
+        plugins: [],
       })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
@@ -1267,7 +1456,12 @@ describe('credential brokering per agent', () => {
     await withHostEnv({ GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, async () => {
       const descriptor = opencode({ model: 'google/m' })
       const agent = agentFor(descriptor)
-      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
+      const adapter = await agent.adapter({
+        auth: agentAuth(agent),
+        descriptor,
+        model: descriptor.model,
+        plugins: [],
+      })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
       let ran = false
@@ -1307,6 +1501,8 @@ describe('credential brokering per agent', () => {
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
         descriptor: goose({ model: 'm' }),
+        model: 'm',
+        plugins: [],
       })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
@@ -1323,6 +1519,120 @@ describe('credential brokering per agent', () => {
           },
         }),
         /can't broker GOOGLE_API_KEY/,
+      )
+      assert.equal(ran, false)
+    })
+  })
+
+  test("fx's adapter brokers only its provider's key, as a Bearer token, to that provider", async () => {
+    const openai = await adapterRules(
+      'fx',
+      { ...everything, OPENAI_API_KEY: 'sk-real' },
+      'gpt-4.1-mini',
+    )
+    assert.equal(openai.length, 1)
+    assert.equal(openai[0]?.match.host, 'api.openai.com', 'never the AI Gateway')
+    assert.deepEqual(openai[0]?.transform.headers, { Authorization: 'Bearer sk-real' })
+    assert.equal(brokeringFor(fx({ model: 'gpt-4.1-mini' }))?.credential, 'OPENAI_API_KEY')
+    const gateway = await adapterRules(
+      'fx',
+      { ...everything, OPENAI_API_KEY: 'sk-real', AI_GATEWAY_API_KEY: 'vck-real' },
+      'anthropic/claude-sonnet-5',
+    )
+    assert.equal(gateway.length, 1)
+    assert.equal(gateway[0]?.match.host, 'ai-gateway.vercel.sh')
+    assert.deepEqual(gateway[0]?.transform.headers, { Authorization: 'Bearer vck-real' })
+    assert.equal(
+      brokeringFor(fx({ model: 'anthropic/claude-sonnet-5' }))?.credential,
+      'AI_GATEWAY_API_KEY',
+    )
+  })
+
+  test("fx fails closed on a sandbox that can't broker: the key never goes in", async () => {
+    await withHostEnv({ OPENAI_API_KEY: 'sk-real' }, async () => {
+      const descriptor = fx({ model: 'gpt-4.1-mini' })
+      const agent = agentFor(descriptor)
+      const adapter = await agent.adapter({
+        auth: agentAuth(agent),
+        descriptor,
+        model: descriptor.model,
+        plugins: [],
+      })
+      const { session } = recordingSession()
+      const { addRequestTransformations: _, ...plain } = session
+      let ran = false
+      await assert.rejects(
+        adapter.doStart({
+          sessionId: 's',
+          sandboxSession: {
+            ...plain,
+            run: async () => {
+              ran = true
+              throw new Error('ran')
+            },
+          },
+        }),
+        /can't broker OPENAI_API_KEY/,
+      )
+      assert.equal(ran, false)
+    })
+  })
+
+  test("Grok Build's adapter brokers only the xAI key, on Authorization, to the xAI API's endpoints", async () => {
+    const rules = await adapterRules('grok-build', { ...everything, XAI_API_KEY: 'xai-real' })
+    assert.equal(rules.length, 1)
+    const placeholder = String(rules[0]?.match.headers?.[0]?.value?.exact ?? 'missing')
+    assert.match(placeholder, /^Bearer aisdkhc_/)
+    assert.deepEqual(rules[0]?.transform.headers, { Authorization: 'Bearer xai-real' })
+    const endpoints = brokeringFor(grokBuild({ model: 'm' }))?.endpoints
+    const send = (method: string, host: string, path: string) =>
+      applyTransformations(
+        rules,
+        { host, method, path, headers: { authorization: placeholder } },
+        endpoints,
+      )
+    for (const [method, path] of [
+      ['GET', '/v1/models'],
+      ['GET', '/v1/api-key'],
+      ['POST', '/v1/chat/completions'],
+      ['POST', '/v1/responses'],
+    ] as const) {
+      assert.equal(send(method, 'api.x.ai', path).headers.authorization, 'Bearer xai-real', path)
+    }
+    for (const [method, host, path] of [
+      ['POST', 'api.x.ai', '/v1/models'],
+      ['GET', 'api.x.ai', '/v1/files'],
+      ['POST', 'evil.example', '/v1/chat/completions'],
+    ] as const) {
+      const r = send(method, host, path)
+      assert.notEqual(r.headers.authorization, 'Bearer xai-real', `${method} ${host}${path}`)
+    }
+  })
+
+  test("Grok Build fails closed on a sandbox that can't broker: the key never goes in", async () => {
+    await withHostEnv({ XAI_API_KEY: 'xai-real' }, async () => {
+      const agent = AGENTS['grok-build']
+      const adapter = await agent.adapter({
+        auth: agentAuth(agent),
+        descriptor: grokBuild({ model: 'm' }),
+        model: 'm',
+        plugins: [],
+      })
+      const { session } = recordingSession()
+      const { addRequestTransformations: _, ...plain } = session
+      let ran = false
+      await assert.rejects(
+        adapter.doStart({
+          sessionId: 's',
+          sandboxSession: {
+            ...plain,
+            run: async () => {
+              ran = true
+              throw new Error('ran')
+            },
+          },
+        }),
+        /can't broker XAI_API_KEY/,
       )
       assert.equal(ran, false)
     })
@@ -1617,6 +1927,42 @@ describe('Antigravity transcripts', () => {
   })
 })
 
+describe('Cursor tool wall time when completed_at_ms is early', () => {
+  test('durationMs follows the stream until the tool result, and marks long shells stalled', () => {
+    const startedAt = Date.parse('2026-10-18T12:00:00.000Z')
+    const events = normaliseStream(
+      [
+        { ms: 100, part: { type: 'tool-call', toolCallId: 'b', toolName: 'bash', input: {} } },
+        {
+          ms: 2_810_000,
+          part: { type: 'tool-result', toolCallId: 'b', output: 'ok' },
+        },
+        {
+          ms: 150,
+          part: {
+            type: 'raw',
+            rawValue: {
+              type: 'event',
+              event: {
+                type: 'tool_call',
+                call_id: 'b',
+                status: 'completed',
+                started_at_ms: startedAt + 100,
+                completed_at_ms: startedAt + 200,
+              },
+            },
+          },
+        },
+      ],
+      startedAt,
+    )
+    const bash = events.find((e) => e.type === 'tool' && e.tool === 'bash')
+    assert.ok(bash && bash.type === 'tool')
+    assert.equal(bash.durationMs, 2_809_900)
+    assert.equal(bash.stalled, true)
+  })
+})
+
 describe('a failed tool call keeps its error', () => {
   const failed = (error: unknown) =>
     normaliseStream(
@@ -1824,6 +2170,74 @@ async function turnThrough(
   }
 }
 
+describe('tools that wait on a person are off', () => {
+  test("only Claude Code offers one, and it's askUserQuestions", async () => {
+    const descriptors: AgentHarnessDescriptor[] = [
+      cursor({ model: 'composer-2.5' }),
+      claudeCode({ model: 'claude-sonnet-5' }),
+      antigravity({ model: 'gemini-3.8-flash' }),
+      opencode({ model: 'google/gemini-3.8-flash' }),
+      goose({ model: 'gemini-3.8-flash' }),
+      pi({ model: 'gemini-3.8-flash' }),
+      codex({ model: 'gpt-5.5' }),
+      fx({ model: 'gpt-4.1' }),
+      grokBuild({ model: 'grok-build' }),
+    ]
+    assert.deepEqual(
+      new Set(descriptors.map((d) => d.kind)),
+      new Set(Object.keys(AGENTS)),
+      'every agent is checked',
+    )
+    const keys = Object.fromEntries(Object.values(AGENTS).map((a) => [a.credential, 'k']))
+    await withHostEnv(keys, async () => {
+      for (const descriptor of descriptors) {
+        const agent = agentFor(descriptor)
+        const adapter = await agent.adapter({
+          auth: agentAuth(agent),
+          descriptor,
+          model: descriptor.model,
+          plugins: [],
+        })
+        assert.deepEqual(
+          interactiveTools(adapter as HarnessV1),
+          descriptor.kind === 'claude-code' ? ['askUserQuestions'] : [],
+          descriptor.kind,
+        )
+      }
+    })
+  })
+
+  test('HarnessAgent hands the adapter a deny filter for them when the session starts', async () => {
+    let filtering: unknown
+    const adapter = {
+      specificationVersion: 'harness-v1',
+      harnessId: 'scripted',
+      supportsBuiltinToolFiltering: true,
+      builtinTools: { askUserQuestions: {}, read: {} },
+      doStart: async (options: { sessionId: string; builtinToolFiltering?: unknown }) => {
+        filtering = options.builtinToolFiltering
+        return { sessionId: options.sessionId, isResume: false, doDestroy: async () => {} }
+      },
+    } as unknown as HarnessV1
+    const off = interactiveTools(adapter)
+    assert.deepEqual(off, ['askUserQuestions'])
+    const agent = new HarnessAgent({
+      harness: adapter,
+      model: 'm',
+      permissionMode: 'allow-all',
+      inactiveTools: off as never,
+    })
+    const sandboxSession = {
+      description: 'none',
+      defaultWorkingDirectory: '/reeval',
+      run: async () => ({ exitCode: 0, stdout: '/root', stderr: '' }),
+      restricted: () => sandboxSession,
+    }
+    await agent.createSession({ sandboxSession: sandboxSession as never })
+    assert.deepEqual(filtering, { mode: 'deny', toolNames: ['askUserQuestions'] })
+  })
+})
+
 describe("agy's retried model calls, through HarnessAgent and the normaliser", () => {
   /** A captured agy 1.2.11 turn through today's translator, with `edit` made to its NDJSON first. */
   const agyParts = (name: string, edit = (ndjson: string) => ndjson) => {
@@ -1986,9 +2400,38 @@ describe('token usage and the served model, from any harness', () => {
     assert.equal(served, 'gemini-3.8-flash-low')
   })
 
-  test('Cursor: uncached input, cache reads and writes as the SDK splits them', async () => {
+  test("Antigravity: a three-turn attempt counts each turn's own calls once", async () => {
+    // A real agy 1.4.4 conversation, one process per turn, each resuming the first. The Gemini
+    // API's usageMetadata for its eight model calls sums to 66021 uncached prompt tokens,
+    // 254217 cached and 413 output: what agy's last result reports as its running total.
+    const turns = await Promise.all(
+      [1, 2, 3].map(async (n) => {
+        const t = new AntigravityStreamTranslator({
+          turn: n,
+          conversationId: n === 1 ? undefined : '950c7d99-14bd-4d1b-844f-43bbb7c6fc18',
+        })
+        const ndjson = readFileSync(
+          new URL(
+            `../../harness-antigravity/test/fixtures/three-turns-${n}.ndjson`,
+            import.meta.url,
+          ),
+          'utf8',
+        )
+        return (await turnThrough(ndjson.split('\n').flatMap((l) => t.push(l)))).usage
+      }),
+    )
+    assert.deepEqual(sumUsage(turns), {
+      input: 66021,
+      output: 413,
+      cacheRead: 254217,
+      cacheWrite: 0,
+      reasoning: 0,
+    })
+  })
+
+  test('Cursor: the SDK input holds the cache reads, so uncached input is what is left', async () => {
     const sdk = cursorUsage({
-      inputTokens: 15564,
+      inputTokens: 15564 + 10464,
       outputTokens: 117,
       cacheReadTokens: 10464,
       cacheWriteTokens: 12,
@@ -2005,8 +2448,34 @@ describe('token usage and the served model, from any harness', () => {
     assert.equal(served, 'composer-2.5[fast=false]')
   })
 
+  test("Cursor: a turn's tokens are what Cursor's usage export billed for it", async () => {
+    // Three composer-2.5[fast=false] attempts on @cursor/sdk 1.0.40: each row of Cursor's usage
+    // export (uncached input, cache read, output, total) next to the SDK's usage for that run.
+    // The SDK's totalTokens counts the cache reads twice, so it isn't the billed total.
+    const rows = [
+      { noCache: 45192, cacheRead: 900877, output: 8350, billed: 954419, sdkInput: 946069 },
+      { noCache: 73902, cacheRead: 747700, output: 7584, billed: 829186, sdkInput: 821602 },
+      { noCache: 5250, cacheRead: 151095, output: 5057, billed: 161402, sdkInput: 156345 },
+    ]
+    for (const row of rows) {
+      const sdk = cursorUsage({
+        inputTokens: row.sdkInput,
+        outputTokens: row.output,
+        cacheReadTokens: row.cacheRead,
+        cacheWriteTokens: 0,
+        totalTokens: row.sdkInput + row.output + row.cacheRead,
+      })
+      const { usage } = await turnThrough(finishWith(sdk))
+      assert.ok(usage)
+      assert.equal(usage.input, row.noCache)
+      assert.equal(usage.cacheRead, row.cacheRead)
+      assert.equal(usage.output, row.output)
+      assert.equal(promptTokens(usage) + usage.output, row.billed)
+    }
+  })
+
   test('Claude Code: the API usage its bridge maps, cache creation as cache writes', async () => {
-    // harness-claude-code 1.0.158's bridge (`mapUsage`) on a real Messages API usage block:
+    // harness-claude-code 1.0.160's bridge (`mapUsage`) on a real Messages API usage block:
     // input_tokens 6, cache_creation_input_tokens 4210, cache_read_input_tokens 15022, output 311.
     const claude = {
       inputTokens: { total: 19238, noCache: 6, cacheRead: 15022, cacheWrite: 4210 },
@@ -2023,19 +2492,24 @@ describe('token usage and the served model, from any harness', () => {
     assert.equal(formatUsage(usage), '19k in (15k cached) · 311 out')
   })
 
-  test('OpenCode: ACP PromptResponse.usage as harness-acp maps it', async () => {
-    const acp = {
-      inputTokens: { total: 33942, cacheRead: 0, cacheWrite: 0 },
-      outputTokens: { total: 117, reasoning: 21 },
-    }
+  test('OpenCode: ACP PromptResponse.usage with its thoughts added to the output', async () => {
+    // test/replay/opencode/skill: inputTokens 4864, outputTokens 1, thoughtTokens 31,
+    // totalTokens 4896, as harness-acp maps it and openCodeTurnUsage adds the thoughts.
+    const acp = openCodeTurnUsage({
+      inputTokens: { total: 4864, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: 1, reasoning: 31 },
+      raw: { totalTokens: 4896, inputTokens: 4864, outputTokens: 1, thoughtTokens: 31 },
+    })
     const { usage } = await turnThrough(finishWith(acp))
     assert.deepEqual(usage, {
-      input: 33942,
-      output: 117,
+      input: 4864,
+      output: 32,
       cacheRead: 0,
       cacheWrite: 0,
-      reasoning: 21,
+      reasoning: 31,
     })
+    assert.ok(usage)
+    assert.equal(totalTokens(usage), 4896, "OpenCode's own total, reasoning counted once")
   })
 
   test('a harness that reports neither records null for both', async () => {

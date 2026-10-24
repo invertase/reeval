@@ -8,6 +8,8 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileS
 import { delimiter, dirname, join, relative, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
+import { loadConfig } from '../src/config.ts'
+import { configShape } from '../src/report/collect.ts'
 import { readInvocations } from '../src/report/invocations.ts'
 import {
   FIELDS,
@@ -84,6 +86,19 @@ evaluate('agent eval', async (c) => { await c.send('go') })
 }
 
 describe('reeval report: redaction', () => {
+  test("the config's shape counts a profile's defaults.sandbox among its sandboxes", async () => {
+    const p = await project('report-profile-sandbox', {
+      'reeval.config.ts': fakeConfig({
+        extra: 'profiles: { real: { defaults: { sandbox: docker() } } },',
+      }).replace(
+        "import { fakeSandbox } from 'reeval/sandbox'",
+        "import { docker, fakeSandbox } from 'reeval/sandbox'",
+      ),
+    })
+    const config = await loadConfig(join(p.dir, 'reeval.config.ts'))
+    assert.deepEqual(configShape(config).sandboxes, ['fake', 'docker'])
+  })
+
   test("Windows' 8.3 short home, as TEMP spells it, is masked too", () => {
     const long = (p: string) => p.replace('RUNNER~1', 'runneradmin')
     const temp = 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp'

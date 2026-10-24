@@ -3,6 +3,7 @@ import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { parseDocument } from 'yaml'
 import { configDataProblem } from './contract/config.ts'
+import { GATEWAY_NAMES, gatewayDescriptorSchema } from './contract/gateway.ts'
 import { judgeProblem } from './contract/judge.ts'
 import { closest, oneOf } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
@@ -17,6 +18,8 @@ import {
   sandboxPaths,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
+import { gatewayScope, modelGatewayOrNone } from './gateway/models.ts'
+import { DEFAULT_GATEWAYS, gatewayHelper } from './gateway/resolve.ts'
 import {
   AGENTS,
   credentialOf,
@@ -26,15 +29,26 @@ import {
 } from './harness/agents.ts'
 import { fromCwd } from './ids.ts'
 import { reevalJiti } from './jiti.ts'
-import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
+import {
+  checkModelString,
+  DEFAULT_THRESHOLD,
+  judgeCredentials,
+  modelKeyOptions,
+} from './judge/index.ts'
+import { defaultIncludeGlobs } from './language-runner/adapter.ts'
 import { isObjectLike } from './object.ts'
 import { checkHarnesses, checkOptions, profileJudge } from './options.ts'
+import { badCharacterAt } from './redact.ts'
 import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
 import type {
   Budget,
   ConfigHelpers,
   EnvVars,
+  FakeAnalysisModel,
+  FakeJudgeModel,
+  GatewayDescriptor,
+  GatewayName,
   HarnessDescriptor,
   Profile,
   ProfileData,
@@ -48,6 +62,7 @@ export { UsageError }
 
 const CONFIG_KEYS = [
   'include',
+  'gateway',
   'harness',
   'sandbox',
   'environment',
@@ -69,7 +84,7 @@ const CONFIG_KEYS = [
   'debug',
   'analysis',
 ]
-const PROFILE_KEYS = ['defaults', 'limit', 'judge', 'budget', 'record', 'tags']
+const PROFILE_KEYS = ['defaults', 'limit', 'judge', 'budget', 'record', 'tags', 'gateway']
 const DEFAULTS_KEYS = [
   'harness',
   'sandbox',
@@ -432,7 +447,69 @@ function checkProfile(name: string, profile: unknown, file: string): Profile {
   }
   if (p.judge !== undefined) resolveJudge(p.judge, file, `${where}.judge`)
   checkBudget(p.budget, `${where}.budget`, file)
+  if (p.gateway !== undefined)
+    return { ...p, gateway: checkGateways(p.gateway, `${where}.gateway`, file) }
   return p
+}
+
+const GATEWAY_EXAMPLE = 'gateway: [direct()]'
+const isGatewayName = (v: unknown): v is GatewayName =>
+  typeof v === 'string' && (GATEWAY_NAMES as readonly string[]).includes(v)
+
+/**
+ * A `gateway` list as descriptors: each entry is a helper's descriptor, or as data its name or a
+ * one-key map from its name to its settings. Refuses an empty list, an unknown entry and a
+ * gateway listed twice.
+ */
+export function checkGateways(value: unknown, where: string, file: string): GatewayDescriptor[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new UsageError(
+      `${where} in ${file} must be a list of gateways in the order you prefer them, e.g. ${GATEWAY_EXAMPLE} (got ${JSON.stringify(value)})`,
+    )
+  }
+  const names = GATEWAY_NAMES.map((n) => `'${n}'`).join(' or ')
+  const out: GatewayDescriptor[] = []
+  value.forEach((entry: unknown, i) => {
+    const at = `${where}[${i}] in ${file}`
+    const unknownName = (name: string) => {
+      const near = closest(name, [...GATEWAY_NAMES])
+      return new UsageError(
+        `${at} is ${JSON.stringify(name)}, which isn't a gateway reeval knows: ${names}.${near ? ` Did you mean '${near}'?` : ''}`,
+      )
+    }
+    let descriptor: unknown = entry
+    if (typeof entry === 'string') {
+      if (!isGatewayName(entry)) throw unknownName(entry)
+      descriptor = { kind: entry }
+    } else if (isRecord(entry) && typeof entry.kind === 'string' && !isGatewayName(entry.kind)) {
+      throw unknownName(entry.kind)
+    } else if (isRecord(entry) && !('kind' in entry)) {
+      const keys = Object.keys(entry)
+      const [name] = keys
+      if (keys.length !== 1 || !isGatewayName(name)) {
+        throw new UsageError(
+          `${at} must be a gateway's name or a map from one name to its settings, e.g. { direct: {} } (got ${JSON.stringify(entry)})`,
+        )
+      }
+      descriptor = { kind: name, ...(isRecord(entry[name]) ? entry[name] : {}) }
+    }
+    const parsed = gatewayDescriptorSchema.safeParse(descriptor)
+    if (!parsed.success) {
+      const kind = isRecord(descriptor) ? descriptor.kind : undefined
+      throw new UsageError(
+        isGatewayName(kind)
+          ? `${at} isn't a valid ${gatewayHelper(kind)}: ${parsed.error.issues[0]?.message ?? 'unknown settings'} (got ${JSON.stringify(entry)})`
+          : `${at} must be a gateway, e.g. direct() from 'reeval/gateway' (got ${describeValue(entry)})`,
+      )
+    }
+    if (out.some((g) => g.kind === parsed.data.kind)) {
+      throw new UsageError(
+        `${at} lists ${parsed.data.kind} a second time. Each gateway is listed once, where you prefer it.`,
+      )
+    }
+    out.push(parsed.data)
+  })
+  return out
 }
 
 /** `--profile`, then `REEVAL_PROFILE`, then `defaultProfile.ci` in CI (or `.local`), then none. */
@@ -468,6 +545,7 @@ export function selectProfile(
     tags: profile.tags ?? [],
     budget: { ...config.budget, ...profile.budget },
     ...(profile.record ? { record: profile.record } : {}),
+    ...(profile.gateway ? { gateway: profile.gateway } : {}),
   }
 }
 
@@ -487,7 +565,7 @@ export function resolveConfig(
     )
   }
   checkOptions(user, file, CONFIG_KEYS)
-  const include = user.include ?? ['evals/**/*.eval.ts']
+  const include = user.include ?? defaultIncludeGlobs()
   if (!Array.isArray(include) || include.some((p) => typeof p !== 'string')) {
     throw new UsageError(
       `include in ${file} must be a list of glob patterns, e.g. include: ['evals/**/*.eval.ts'] (got ${JSON.stringify(include)})`,
@@ -561,10 +639,18 @@ export function resolveConfig(
     secrets: checkSecrets(user.secrets, file),
     debug: checkDebug(user.debug, file),
     analysis: checkAnalysis(user.analysis, file),
+    gateway:
+      user.gateway === undefined ? DEFAULT_GATEWAYS : checkGateways(user.gateway, 'gateway', file),
+    gatewaySet: user.gateway !== undefined,
   }
 }
 
-export const ANALYSIS_DEFAULTS = { maxInputTokens: 20_000, maxOutputTokens: 8_000 } as const
+export const ANALYSIS_DEFAULTS = {
+  maxInputTokens: 20_000,
+  maxOutputTokens: 8_000,
+  insights: true,
+  maxTokens: 250_000,
+} as const
 
 function checkAnalysis(
   analysis: ReevalConfig['analysis'],
@@ -578,13 +664,14 @@ function checkAnalysis(
   }
   unknownKey(
     analysis,
-    ['model', 'agent', 'instructions', 'maxInputTokens', 'maxOutputTokens'],
+    ['model', 'insights', 'maxTokens', 'instructions', 'maxInputTokens', 'maxOutputTokens'],
     'analysis',
     file,
   )
   const {
     model,
-    agent,
+    insights = ANALYSIS_DEFAULTS.insights,
+    maxTokens = ANALYSIS_DEFAULTS.maxTokens,
     instructions,
     maxInputTokens = ANALYSIS_DEFAULTS.maxInputTokens,
     maxOutputTokens = ANALYSIS_DEFAULTS.maxOutputTokens,
@@ -597,9 +684,14 @@ function checkAnalysis(
       `analysis.model in ${file} must be a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${JSON.stringify(model)})`,
     )
   }
-  if (agent !== undefined && typeof agent !== 'boolean') {
+  if (typeof insights !== 'boolean') {
     throw new UsageError(
-      `analysis.agent in ${file} must be true or false (got ${JSON.stringify(agent)})`,
+      `analysis.insights in ${file} must be true or false (got ${JSON.stringify(insights)})`,
+    )
+  }
+  if (!(Number.isInteger(maxTokens) && maxTokens >= 1)) {
+    throw new UsageError(
+      `analysis.maxTokens in ${file} must be a whole number of tokens of at least 1, e.g. 250000 (got ${JSON.stringify(maxTokens)})`,
     )
   }
   if (instructions !== undefined && typeof instructions !== 'string') {
@@ -617,7 +709,13 @@ function checkAnalysis(
       `analysis.maxOutputTokens in ${file} must be a whole number of at least 500 (got ${maxOutputTokens})`,
     )
   }
-  return { ...analysis, maxInputTokens, maxOutputTokens }
+  return {
+    ...analysis,
+    insights,
+    maxTokens,
+    maxInputTokens,
+    maxOutputTokens,
+  }
 }
 
 /** Runs whose local debug data `.reeval/debug` keeps, and the trace buffer per attempt. */
@@ -720,23 +818,38 @@ export function secretSources(env: EnvVars): Array<[string, string]> {
   )
 }
 
-/** The provider model `analysis.agent` calls during a run, if it's on: `analysis.model`, else the judge's. */
-function agentModel(config: ResolvedConfig): string | null {
-  if (!config.analysis.agent) return null
-  const model = config.analysis.model ?? config.judge.model
-  // An evaluation model can't analyse: the plan stops on that before it asks for keys.
-  return typeof model === 'string' && !model.startsWith('typesafe-ai/') ? model : null
-}
+/** The model that answers what each eval asks: `analysis.model` only, never the judge's. */
+export const analysisModelOf = (config: ResolvedConfig): string | FakeAnalysisModel | undefined =>
+  config.analysis.model
+
+/** Whether `analysis.model` is set, so a model can answer what each eval asks. */
+export const hasAnalysisModel = (config: ResolvedConfig) => analysisModelOf(config) !== undefined
 
 /** The run's judge model: the profile's when it sets one, else the config's. */
-function runJudgeModel(config: ResolvedConfig, profile: ResolvedProfile | null | undefined) {
+export function runJudgeModel(config: ResolvedConfig, profile: ResolvedProfile | null | undefined) {
   return profile ? (profileJudge(profile).model ?? config.judge.model) : config.judge.model
+}
+
+/** The gateway a model the run calls itself goes through, as the plan resolves it. */
+function runModelGateway(
+  config: ResolvedConfig,
+  profile: ResolvedProfile | null | undefined,
+  model: string | FakeJudgeModel,
+  judge = false,
+) {
+  const pin = judge
+    ? profile
+      ? (profileJudge(profile).gateway ?? config.judge.gateway)
+      : config.judge.gateway
+    : undefined
+  return modelGatewayOrNone(model, pin, gatewayScope(config, profile))
 }
 
 /**
  * Names the environment variables the run's providers need but don't have: the harnesses it
  * plans (default: the config's), the run's judge, the models that answer compare questions,
- * the analysis model with `analysis.agent`, and required config and profile secrets.
+ * and required config and profile secrets. Insights' model isn't among them: without its key a run
+ * prints no insights, and never stops for it.
  */
 export function missingCredentials(
   config: ResolvedConfig,
@@ -752,17 +865,21 @@ export function missingCredentials(
   const keys = new Set((options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? []))
   for (const key of keys) if (!env[key]) missing.push(key)
   const judge = runJudgeModel(config, options.profile)
-  const agent = agentModel(config)
   const models = [
-    ...(judge !== undefined ? [judge] : []),
-    ...(options.questionModels ?? []),
-    ...(agent ? [agent] : []),
+    ...(judge !== undefined ? [{ model: judge, what: 'the judge model', judge: true }] : []),
+    ...(options.questionModels ?? []).map((model) => ({
+      model,
+      what: 'compare questions',
+      judge: false,
+    })),
   ]
-  for (const model of models) {
-    const modelKeys = judgeCredentials(model)
-    const alternatives = modelKeys.join(' or ')
-    if (modelKeys.length && !modelKeys.some((k) => env[k]) && !missing.includes(alternatives)) {
-      missing.push(alternatives)
+  const named = new Set<string>()
+  for (const { model, what, judge: isJudge } of models) {
+    if (typeof model !== 'string' || named.has(model)) continue
+    named.add(model)
+    const gateway = runModelGateway(config, options.profile, model, isJudge)
+    if (!judgeCredentials(model, gateway).some((k) => env[k])) {
+      missing.push(`${modelKeyOptions(model, gateway)} for ${what}, "${model}"`)
     }
   }
   const vars = { ...config.env, ...options.profile?.defaults.env }
@@ -771,10 +888,6 @@ export function missingCredentials(
   }
   return missing
 }
-
-/** Where a value has its first whitespace or control character, from 1; 0 when it has none. */
-export const badCharacterAt = (value: string) =>
-  [...value].findIndex((c) => /[\s\p{Cc}]/u.test(c)) + 1
 
 /**
  * Keys the run sends in request headers (the agents' credentials, the run's judge's and the
@@ -794,10 +907,12 @@ export function malformedCredentials(
 ): string[] {
   const names = (options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? [])
   const judge = runJudgeModel(config, options.profile)
-  if (judge !== undefined) names.push(...judgeCredentials(judge))
-  for (const model of options.questionModels ?? []) names.push(...judgeCredentials(model))
-  const analyst = agentModel(config)
-  if (analyst) names.push(...judgeCredentials(analyst))
+  if (judge !== undefined) {
+    names.push(...judgeCredentials(judge, runModelGateway(config, options.profile, judge, true)))
+  }
+  for (const model of options.questionModels ?? []) {
+    names.push(...judgeCredentials(model, runModelGateway(config, options.profile, model)))
+  }
   return [...new Set(names)].flatMap((name) => {
     const at = badCharacterAt(env[name] ?? '')
     return at ? [`${name} (character ${at})`] : []

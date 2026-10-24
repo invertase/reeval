@@ -1,51 +1,145 @@
 import assert from 'node:assert/strict'
-import { cpSync, readFileSync } from 'node:fs'
+import { cpSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, symlink } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
 import { test } from 'node:test'
 import { pkgRoot, readRun, runCli, tempDir } from './helpers.ts'
 
-const example = join(pkgRoot, '../../examples/hello')
+const examples = join(pkgRoot, '../../examples')
 
-test('examples/hello copied out of the repo runs on the fake harness', async () => {
-  const dir = tempDir('hello-copy')
+/** A copy of `examples/<name>` outside the repo, with `reeval` linked to this package. */
+async function copyOut(name: string): Promise<string> {
+  const from = join(examples, name)
+  const dir = tempDir(`${name}-copy`)
   // Another drive, on Windows, is outside too: relative() is then absolute.
   const fromRepo = relative(join(pkgRoot, '../..'), dir)
   assert.ok(fromRepo.startsWith('..') || isAbsolute(fromRepo), 'the copy is outside the repo')
-  cpSync(example, dir, {
+  cpSync(from, dir, {
     recursive: true,
-    filter: (src) => !/[/\\](node_modules|\.reeval)([/\\]|$)/.test(src.slice(example.length)),
+    filter: (src) => !/[/\\](node_modules|\.reeval)([/\\]|$)/.test(src.slice(from.length)),
   })
+  // The README's way out: the example takes its own copy of the shared profiles.
+  cpSync(join(examples, 'profiles.ts'), join(dir, 'profiles.ts'))
+  const config = join(dir, 'reeval.config.ts')
+  writeFileSync(config, readFileSync(config, 'utf8').replace("'../profiles.ts'", "'./profiles.ts'"))
   await mkdir(join(dir, 'node_modules'))
   await symlink(pkgRoot, join(dir, 'node_modules/reeval'), 'dir')
+  // examples/tsconfig.json is for the editor and `pnpm typecheck`; a copy runs without one.
+  assert.equal(existsSync(join(dir, 'tsconfig.json')), false, `${name} has no tsconfig.json`)
+  return dir
+}
 
-  const tsconfig = JSON.parse(readFileSync(join(dir, 'tsconfig.json'), 'utf8'))
-  assert.equal(tsconfig.extends, undefined, 'tsconfig.json extends nothing outside the example')
+type Cell = { key: string; harness: string; sandbox: string }
 
-  const plan = await runCli(dir, [
-    'run',
-    '--config',
-    'reeval.fake.config.ts',
-    '--dry-run',
-    '--json',
-  ])
-  assert.equal(plan.code, 0, plan.stdout + plan.stderr)
-  const files = new Set(JSON.parse(plan.stdout).evals.map((e: { file: string }) => e.file))
-  assert.deepEqual([...files].sort(), [
-    'evals/greetings.eval.ts',
-    'evals/hello.eval.ts',
-    'evals/preferences.eval.ts',
-    'evals/skill.eval.ts',
-  ])
+/** The harness each of `examples/profiles.ts`' profiles plans every cell on, in Docker. */
+const SHARED: Record<string, string> = {
+  'claude-code': 'claude-code:claude-sonnet-5',
+  cursor: 'cursor:composer-2.5',
+  codex: 'codex:gpt-5.6-luna',
+  opencode: 'opencode:gemini-3.8-flash',
+  goose: 'goose:gemini-3.8-flash',
+  pi: 'pi:gemini-3.8-flash',
+  antigravity: 'antigravity:gemini-3.8-flash-medium',
+  fx: 'fx:claude-sonnet-5',
+  'grok-build': 'grok-build:grok-4.6',
+}
 
-  const run = await runCli(dir, ['run', '--config', 'reeval.fake.config.ts'], {
-    timeoutMs: 180_000,
+/**
+ * Each `with-*` example: the harness and sandbox every cell plans under each of its own profiles
+ * (no profile is the fake trio; every example also has the shared ones), and each cell's
+ * attempts' outcomes once it has run on the fake harness.
+ */
+const WITH: Record<
+  string,
+  {
+    profiles: Record<string, { harness: string; sandbox: string }>
+    outcomes: Record<string, string[]>
+  }
+> = {
+  'with-checks': {
+    profiles: {},
+    outcomes: { 'fake/math/fake': ['pass'] },
+  },
+  'with-skill-lift': {
+    profiles: {},
+    outcomes: {
+      'fake/math/fake': ['fail', 'fail', 'fail', 'fail'],
+      'fake/changelog/fake': ['pass', 'pass', 'pass', 'pass'],
+    },
+  },
+}
+
+test('every shared profile is in the table', async () => {
+  const { profiles } = await import(join(examples, 'profiles.ts'))
+  assert.deepEqual(Object.keys(profiles).sort(), Object.keys(SHARED).sort())
+})
+
+test('every with-* example is in the table', () => {
+  const dirs = readdirSync(examples).filter((d) => d.startsWith('with-'))
+  assert.deepEqual(dirs.sort(), Object.keys(WITH).sort())
+})
+
+for (const [name, { profiles, outcomes }] of Object.entries(WITH)) {
+  test(`examples/${name} copied out of the repo plans and runs key-free`, async () => {
+    const dir = await copyOut(name)
+    const shared = Object.entries(SHARED).map(([p, harness]) => [p, { harness, sandbox: 'docker' }])
+    const planned = {
+      '': { harness: 'fake', sandbox: 'fake' },
+      ...Object.fromEntries(shared),
+      ...profiles,
+    }
+    for (const [profile, want] of Object.entries(planned)) {
+      const args = ['run', '--dry-run', '--json', ...(profile ? ['--profile', profile] : [])]
+      const plan = await runCli(dir, args)
+      assert.equal(plan.code, 0, `${args.join(' ')}\n${plan.stdout}${plan.stderr}`)
+      const evals: { file: string; cells: Cell[] }[] = JSON.parse(plan.stdout).evals
+      assert.deepEqual([...new Set(evals.map((e) => e.file))], [`${name}.eval.ts`])
+      for (const cell of evals.flatMap((e) => e.cells)) {
+        assert.deepEqual({ harness: cell.harness, sandbox: cell.sandbox }, want, args.join(' '))
+      }
+    }
+
+    const run = await runCli(dir, ['run'], { timeoutMs: 180_000 })
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    const ran: Record<string, string[]> = {}
+    for (const a of readRun(dir).evals.flatMap((e) => e.attempts)) {
+      ran[a.cell] = [...(ran[a.cell] ?? []), a.outcome].sort()
+    }
+    assert.deepEqual(ran, outcomes)
   })
-  assert.equal(run.code, 0, run.stdout + run.stderr)
-  const { evals } = readRun(dir)
-  assert.ok(evals.length >= 3, `ran ${evals.length} evals`)
-  assert.ok(
-    evals.every((e) => e.outcome === 'pass'),
-    evals.map((e) => `${e.id}: ${e.outcome}`).join('\n'),
-  )
+}
+
+test('test/real-agents plans the nightly smoke and questions profiles', async () => {
+  const dir = join(pkgRoot, 'test/real-agents')
+  const plans = {
+    smoke: ['run', '--dry-run', '--json', '--profile', 'smoke'],
+    questions: [
+      'run',
+      '--dry-run',
+      '--json',
+      '--config',
+      'reeval.analysis.config.ts',
+      '--profile',
+      'questions',
+    ],
+  }
+  const cells: Record<string, string[]> = {}
+  for (const [profile, args] of Object.entries(plans)) {
+    const plan = await runCli(dir, args)
+    assert.equal(plan.code, 0, `${args.join(' ')}\n${plan.stdout}${plan.stderr}`)
+    const evals: { file: string; cells: Cell[] }[] = JSON.parse(plan.stdout).evals
+    cells[profile] = evals.flatMap((e) => e.cells.map((c) => `${e.file} ${c.harness}`)).sort()
+  }
+  assert.deepEqual(cells, {
+    smoke: [
+      'evals/brokering.eval.ts cursor:composer-2.5',
+      'evals/gemini.eval.ts cursor:composer-2.5',
+    ],
+    questions: [
+      'evals/questions.eval.ts cursor:composer-2.5',
+      'evals/questions.eval.ts cursor:composer-2.5',
+      'evals/questions.eval.ts pi:gemini-3.8-flash',
+      'evals/questions.eval.ts pi:gemini-3.8-flash',
+    ],
+  })
 })

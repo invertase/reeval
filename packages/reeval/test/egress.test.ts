@@ -8,6 +8,8 @@ import {
   DEFAULT_EGRESS_ALLOW,
   egressLabel,
   egressNeeds,
+  gatewayPolicy,
+  isDirect,
   plannedEgress,
   SANDBOX_EGRESS,
   unenforceable,
@@ -31,7 +33,7 @@ describe('the egress cascade', () => {
     assert.equal(at(undefined, 'deny-all', 'allow-all'), 'allow-all', 'the last layer wins')
     assert.equal(at(undefined, 'deny-all', undefined), 'deny-all', 'a layer without one keeps it')
     assert.deepEqual(at({ allow: ['e.example.com'] }, 'deny-all'), { allow: ['e.example.com'] })
-    assert.equal(plannedEgress({}, fake, {}, []).policy, 'allow-all', 'the default')
+    assert.equal(plannedEgress({}, fake, {}, []).policy, 'proxy', 'the default')
   })
 
   test('cascade puts the config and profile under the environment, groups and the eval over it', () => {
@@ -103,7 +105,7 @@ describe('automatic hosts', () => {
     ])
   })
 
-  test('secrets from the options env count, and allow-all adds nothing', () => {
+  test('secrets from the options env count, and proxy and allow-all add nothing', () => {
     const env = defineEnvironment('e', ({ secret }) => ({
       env: { K: secret({ hosts: ['k.example.com'] }) },
     }))
@@ -113,10 +115,41 @@ describe('automatic hosts', () => {
       'k.example.com',
     ])
     assert.deepEqual(plannedEgress({}, { kind: 'cursor' }, options, env.layers), {
+      policy: 'proxy',
+      auto: [],
+    })
+    assert.deepEqual(plannedEgress({ own: 'allow-all' }, { kind: 'cursor' }, options, []), {
       policy: 'allow-all',
       auto: [],
     })
+    assert.equal(allowedHosts({ policy: 'proxy', auto: [] }), null)
     assert.equal(allowedHosts({ policy: 'allow-all', auto: [] }), null)
+  })
+
+  test("the gateway's policy: listed IP addresses are its allowed ranges too", () => {
+    const auto = ['api2.cursor.sh']
+    assert.deepEqual(gatewayPolicy({ policy: { allow: ['10.1.2.3', 'db.internal'] }, auto }), {
+      mode: 'custom',
+      allowedHosts: ['10.1.2.3', 'db.internal', 'api2.cursor.sh'],
+      allowedCIDRs: ['10.1.2.3/32'],
+    })
+    // Twin: without an address there are no ranges, and the other policies map as they are.
+    assert.deepEqual(gatewayPolicy({ policy: { allow: ['db.internal'] }, auto }), {
+      mode: 'custom',
+      allowedHosts: ['db.internal', 'api2.cursor.sh'],
+    })
+    assert.deepEqual(gatewayPolicy({ policy: 'deny-all', auto: [] }), { mode: 'deny-all' })
+    assert.deepEqual(gatewayPolicy({ policy: 'allow-all', auto: [] }), { mode: 'allow-all' })
+    assert.deepEqual(gatewayPolicy({ policy: 'proxy', auto: [] }), { mode: 'allow-all' })
+  })
+
+  test('only allow-all lets traffic around the gateway, and only it is labelled', () => {
+    assert.equal(isDirect('allow-all'), true)
+    for (const policy of ['proxy', 'deny-all', { allow: ['a.example.com'] }] as const) {
+      assert.equal(isDirect(policy), false, JSON.stringify(policy))
+    }
+    assert.equal(egressLabel({ policy: 'proxy', auto: [] }), '')
+    assert.equal(egressLabel({ policy: 'allow-all', auto: [] }), 'allow-all')
   })
 
   test('DEFAULT_EGRESS_ALLOW is the registries and GitHub, and frozen', () => {
@@ -140,6 +173,7 @@ describe('what a sandbox can enforce', () => {
 
   test('a policy needs nothing, egress off, or an allowlist once any host is allowed', () => {
     assert.equal(egressNeeds({ policy: 'allow-all', auto: [] }), 'none')
+    assert.equal(egressNeeds({ policy: 'proxy', auto: [] }), 'none')
     assert.equal(egressNeeds({ policy: 'deny-all', auto: [] }), 'all-or-nothing')
     assert.equal(egressNeeds({ policy: { allow: [] }, auto: [] }), 'all-or-nothing')
     assert.equal(egressNeeds({ policy: 'deny-all', auto: ['api2.cursor.sh'] }), 'allowlist')
@@ -155,8 +189,9 @@ describe('what a sandbox can enforce', () => {
       assert.match(unenforceable(p, { kind: 'fake' }, 'e') ?? '', /the fake sandbox enforces no/)
       assert.equal(unenforceable(p, { kind: 'docker' }, 'e'), undefined)
     }
-    // Twin: allow-all needs nothing, so the fake sandbox takes it.
+    // Twin: proxy and allow-all need nothing, so the fake sandbox takes them.
     assert.equal(unenforceable({ policy: 'allow-all', auto: [] }, { kind: 'fake' }, 'e'), undefined)
+    assert.equal(unenforceable({ policy: 'proxy', auto: [] }, { kind: 'fake' }, 'e'), undefined)
   })
 })
 
@@ -173,16 +208,17 @@ describe('the environment digest', () => {
       )
     ).record
 
-  test('covers a restricted policy, not the order of its hosts; allow-all leaves it as it was', async () => {
+  test('covers every policy but the default, proxy, and not the order of its hosts', async () => {
     const none = await digest()
-    assert.equal((await digest('allow-all')).digest, none.digest)
+    assert.equal((await digest('proxy')).digest, none.digest)
+    assert.notEqual((await digest('allow-all')).digest, none.digest)
     assert.notEqual((await digest('deny-all')).digest, none.digest)
     const ab = await digest({ allow: ['a.example.com', 'b.example.com'] })
     const ba = await digest({ allow: ['b.example.com', 'a.example.com'] })
     assert.equal(ab.digest, ba.digest)
     assert.notEqual(ab.digest, (await digest({ allow: ['a.example.com'] })).digest)
     assert.deepEqual(ab.egress, { allow: ['a.example.com', 'b.example.com'] })
-    assert.equal(none.egress, 'allow-all')
+    assert.equal(none.egress, 'proxy')
   })
 
   test("an extend child's policy is an override", async () => {

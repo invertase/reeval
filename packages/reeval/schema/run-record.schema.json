@@ -171,7 +171,22 @@
             "fileEdits": {
               "type": "number"
             },
+            "maxToolMs": {
+              "description": "Longest tool `durationMs` in the transcript; null when none reported a duration.",
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
             "reasoningMs": {
+              "type": "number"
+            },
+            "stalledTools": {
+              "description": "Transcript tool events with `stalled: true` (long shell or edit).",
               "type": "number"
             },
             "tools": {
@@ -199,7 +214,22 @@
               ]
             }
           },
-          "required": ["fileEdits", "reasoningMs", "tools", "webFetches", "webSearches"]
+          "required": [
+            "fileEdits",
+            "maxToolMs",
+            "reasoningMs",
+            "stalledTools",
+            "tools",
+            "webFetches",
+            "webSearches"
+          ]
+        },
+        "askedModels": {
+          "description": "The models the harness's successful API calls asked for, when nothing named the one that served them (fx on Vercel AI Gateway with a Gemini model): the agent's word, not the gateway's, so never part of `servedModels`. Absent when there's none.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "assertions": {
           "description": "Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none.",
@@ -434,7 +464,7 @@
           "$ref": "#/$defs/PhaseTimings"
         },
         "turns": {
-          "description": "`text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`.",
+          "description": "`text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`).",
           "type": "array",
           "items": {
             "type": "object",
@@ -452,6 +482,13 @@
                     "type": "string"
                   }
                 ]
+              },
+              "mcpStartup": {
+                "description": "Each stdio MCP server start during the turn; see `McpStartup`.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/McpStartup"
+                }
               },
               "model": {
                 "description": "The model the harness says served the turn; null when it reports none.",
@@ -548,7 +585,7 @@
       ]
     },
     "CellCheck": {
-      "description": "One check over a cell's counted attempts. `verdict` (variant cells): `discriminates` when it passes on every counted attempt of one side and none of the other; `both-pass` or `both-fail` when it does the same on both sides, so it can't tell them apart; `mixed` otherwise.",
+      "description": "One check over a cell's counted attempts. `verdict` (variant cells), over the attempts that reached the check: `discriminates` when it passes on every one of one side and none of the other; `both-pass` or `both-fail` when it does the same on both sides, so it can't tell them apart; `mixed` otherwise. No verdict when a side never reached it: not run is not a fail.",
       "type": "object",
       "properties": {
         "control": {
@@ -615,6 +652,7 @@
           ]
         },
         "environment": {
+          "description": "The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix).",
           "type": "string"
         },
         "environmentDigest": {
@@ -641,6 +679,10 @@
         "gate": {
           "description": "How the attempts decide the cell's outcome; `'none'` when it doesn't fail the eval.",
           "$ref": "#/$defs/CellGate"
+        },
+        "gateway": {
+          "description": "The gateway in the config's `gateway` list its harness resolved to (`direct` is each provider's own key); unset when no config, profile or pin named one.",
+          "type": "string"
         },
         "harness": {
           "type": "string"
@@ -886,10 +928,10 @@
       "required": ["inputTokens", "outputTokens", "source", "usage"]
     },
     "EgressPolicy": {
-      "description": "Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
+      "description": "Where the sandbox may connect: any host over HTTP(S) through the egress gateway (`'proxy'`, the default), anywhere including raw TCP and UDP around the gateway (`'allow-all'`), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
       "anyOf": [
         {
-          "enum": ["allow-all", "deny-all"]
+          "enum": ["allow-all", "deny-all", "proxy"]
         },
         {
           "type": "object",
@@ -906,7 +948,7 @@
       ]
     },
     "EgressRecord": {
-      "description": "An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked` so a real block stands out.",
+      "description": "An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked` so a real block stands out.",
       "type": "object",
       "properties": {
         "allowed": {
@@ -988,6 +1030,10 @@
             "required": ["connections", "host", "port", "reason"]
           }
         },
+        "partial": {
+          "description": "True when traffic could leave around the gateway (`allow-all` in a container that kept its network): `contacted` lists only what went through the gateway, and anything that ignored the proxy (raw TCP and UDP, SSH, database drivers) went out unrecorded. Unset otherwise.",
+          "const": false
+        },
         "policy": {
           "$ref": "#/$defs/EgressPolicy"
         },
@@ -1013,7 +1059,7 @@
           "type": "string"
         },
         "egress": {
-          "description": "The policy the attempt ran under, from the options and the environment; in the digest unless `allow-all`.",
+          "description": "The policy the attempt ran under, from the options and the environment; in the digest unless `proxy`.",
           "$ref": "#/$defs/EgressPolicy"
         },
         "files": {
@@ -1032,6 +1078,7 @@
           }
         },
         "mcp": {
+          "description": "Every MCP server, a plugin's as `<plugin>:<server>`.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1057,6 +1104,13 @@
               "type": "string"
             }
           ]
+        },
+        "plugins": {
+          "description": "The plugins placed, each with what it placed; in the digest. Unset when there are none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PluginRecord"
+          }
         },
         "secrets": {
           "type": "array",
@@ -1097,6 +1151,10 @@
               },
               "placement": {
                 "$ref": "#/$defs/SkillPlacement"
+              },
+              "plugin": {
+                "description": "The plugin the skill came with; unset for a skill from `skills`.",
+                "type": "string"
               },
               "sha256": {
                 "type": "string"
@@ -1375,7 +1433,7 @@
           ]
         },
         "verdict": {
-          "description": "`insufficient` below 6 non-zero differences, where the exact test can't reach 0.05.",
+          "description": "`insufficient` below 6 non-zero differences, where the exact test can't reach 0.05. `fewer` and `more` are the test's direction (which side's differences rank higher), not the median's.",
           "enum": ["fewer", "insufficient", "more", "noise"]
         }
       },
@@ -1615,6 +1673,10 @@
             }
           ]
         },
+        "gateway": {
+          "description": "The gateway its model calls went through; unset on `direct`, each provider's own key.",
+          "type": "string"
+        },
         "harness": {
           "description": "Over the harness descriptor, less concurrency caps.",
           "type": "string"
@@ -1757,6 +1819,10 @@
             "$ref": "#/$defs/JudgeArtifactRef"
           }
         },
+        "gateway": {
+          "description": "The gateway from the config's `gateway` list the call went through; unset without one.",
+          "type": "string"
+        },
         "key": {
           "description": "`<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a verdict can be followed across runs (and an edited question starts a new series).",
           "type": "string"
@@ -1870,6 +1936,28 @@
       },
       "required": ["control", "interval", "points", "variant", "vs", "withinNoise"]
     },
+    "McpStartup": {
+      "description": "One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start order), timed by reeval's MCP timer, which every stdio server runs through. An agent CLI that runs a process per turn (Antigravity, pi, Codex) starts its servers on every turn; one that keeps a session starts them once, on the first. A server that doesn't answer within 60s fails the attempt as an infra error naming it; one whose client closes it first doesn't. `mcpStartup` is absent when the environment has no stdio MCP server, or the sandbox has no `node` to run the timer.",
+      "type": "object",
+      "properties": {
+        "ms": {
+          "description": "Milliseconds from spawning the server to its answer to the client's `initialize`; null when it never answered (it exited first, timed out, or its client closed it first).",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "server": {
+          "description": "The server's name in the environment's `mcp`.",
+          "type": "string"
+        }
+      },
+      "required": ["ms", "server"]
+    },
     "Outcome": {
       "enum": ["fail", "infra_error", "pass", "skipped"]
     },
@@ -1957,6 +2045,117 @@
         }
       },
       "required": ["agentMs", "checksMs", "diffMs", "judgeMs", "setupMs"]
+    },
+    "PluginRecord": {
+      "description": "A plugin as an attempt placed it.",
+      "type": "object",
+      "properties": {
+        "build": {
+          "description": "The tag of the image layer its build ran in (`reeval-plugin:…`); null without a build.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "commit": {
+          "description": "The commit a git source resolved to (the marketplace's, for an entry inside it); null for a local or npm one.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "marketplace": {
+          "description": "The marketplace it was listed in, with its `marketplace.json` name, its source as written (`github:acme/agent-plugins#v3`, `npm:@acme/plugins@2.0.0`) and the commit a git one resolved to (null for npm); null when the plugin was named directly.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "commit": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": ["commit", "name", "source"]
+            }
+          ]
+        },
+        "name": {
+          "description": "The manifest's `name`.",
+          "type": "string"
+        },
+        "parts": {
+          "description": "What it placed: skill, agent, command and MCP server names, hook events, and whether it had rules.",
+          "type": "object",
+          "properties": {
+            "agents": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "commands": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "hooks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "mcp": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rules": {
+              "type": "boolean"
+            },
+            "skills": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["agents", "commands", "hooks", "mcp", "rules", "skills"]
+        },
+        "sha256": {
+          "description": "The hash of the files placed.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`; for a marketplace entry, the entry's own source.",
+          "type": "string"
+        }
+      },
+      "required": ["build", "commit", "marketplace", "name", "parts", "sha256", "source"]
     },
     "PrepareFailureRecord": {
       "description": "The sandbox an attempt needed that couldn't be prepared before the run, on each attempt that needed it: its provider's stage (Docker's `image`, `from`, `dockerfile`, `harness` or `install`, or `workspace` for a git workspace, whose `ref` is `repo#ref:path`), what was being made, the class (`config`, `transient` after the retries, or `resource`), a named cause (`enospc`, `oom`), the build log, and the levels that set it.",
@@ -2255,6 +2454,7 @@
           ]
         },
         "config": {
+          "description": "The run's settings. `sandbox` is the id of each sandbox the planned attempts ran on, after the profile's defaults, joined with `, `.",
           "type": "object",
           "properties": {
             "concurrency": {
@@ -2344,6 +2544,13 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/EnvironmentRecord"
+          }
+        },
+        "errors": {
+          "description": "Errors outside any attempt, redacted: an eval file that didn't load, a rejection or throw no attempt awaited, a worker that died. Any one fails the run. Unset when there were none.",
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         },
         "evals": {
@@ -2680,7 +2887,7 @@
                 }
               },
               "resolvedModels": {
-                "description": "The models the harness reported serving, across every turn in the run, with the variant it resolved (`composer-2.5[fast=true]` for `composer-2.5` with no `params`); empty when it reports none.",
+                "description": "The models the harness reported serving, across every turn in the run, with the variant it resolved (`composer-2.5[fast=false]` for `composer-2.5` with no `params`); empty when it reports none.",
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -2707,7 +2914,7 @@
                 ]
               },
               "base": {
-                "description": "The harness image `install` was baked onto: `ref` itself without `install`.",
+                "description": "The harness image `install` and plugin builds were baked onto: `ref` itself without either.",
                 "type": "string"
               },
               "dockerfile": {

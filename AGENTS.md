@@ -4,8 +4,42 @@ This is for coding agents (and people) who work on reeval itself. **The user doc
 reference for using reeval:** [`docs/`](./docs), published with [docs.page](https://use.docs.page)
 (preview locally with `npx @docs.page/cli preview`). Their Reference tab covers every option,
 helper, harness, CLI command and flag, exit code, `reeval query` view, the record format and the
-environment variables. Agents writing evals with reeval can load the reeval skill in
-[`.agents/skills/reeval/SKILL.md`](./.agents/skills/reeval/SKILL.md). The [README](./README.md) has the pitch.
+environment variables. Agents writing evals with reeval, including the dogfood evals in `evals/`,
+load the reeval skill in [`skills/reeval/SKILL.md`](./skills/reeval/SKILL.md). Agents adding
+another eval language runtime (Dart, Go, …) should load
+[`.agents/skills/add-a-language/SKILL.md`](./.agents/skills/add-a-language/SKILL.md). The
+[README](./README.md) has the pitch.
+
+## Before you finish
+
+A change is done when these pass, run from the repo root in this order:
+
+```bash
+pnpm format                          # Biome rewrites the formatting; pnpm lint fails on any it would change
+pnpm lint
+pnpm typecheck                       # after touching src/contract/, the only check of each _SameAsSchema
+pnpm build                           # the tests run dist/, not src/
+cd packages/reeval && node --test --experimental-strip-types --no-warnings test/<area>.test.ts && cd -
+pnpm docs:gen && pnpm docs:check     # after any user-visible change
+```
+
+- **The tests** are the files for what you changed. A plan change runs `pnpm test:plan`, a fixture
+ `pnpm test:features` and a new refusal `test/refusals.test.ts` (in `packages/reeval`); `pnpm test`
+ runs them all — but only in this block, not while you are still editing (see below).
+- **A new feature or option** takes the tier the [feature contract](./packages/reeval/test/features/README.md#which-tier)'s
+ table gives it (a plan case or a fixture), an `inventory.ts` entry and `pnpm features:matrix --write`.
+- **A user-visible change** updates its page in `docs/reference/` (see [Docs](#docs)).
+- **After touching `src/contract/`** run `pnpm --filter reeval typecheck` and
+ `pnpm --filter reeval schema:check`: each module's `_SameAsSchema` holds its hand-written type to
+ the Zod schema, and only the compiler sees it.
+
+## While you work
+
+Do **not** run broad `node --test test/features.test.ts`, `pnpm test:features` or full `pnpm test`
+during an agent turn. On Cursor, the shell tool can ignore the timeout the agent asks for; one hung
+test run has stalled dogfood attempts for 25–47 minutes. Use targeted
+`node --test test/<file>.test.ts` (or `pnpm test:plan` on one case) to check your change, and leave
+the full suite to the [Before you finish](#before-you-finish) block or CI.
 
 reeval is an open-source eval runner for coding agents. You write an eval, then a real agent does
 the task in a local Docker container. reeval checks the result with deterministic assertions and an
@@ -22,7 +56,7 @@ import from `reeval` and its subpaths `/harness`, `/sandbox`, `/judge` and `/vie
 `reeval`, with `re` as a short alias for typing; docs, help, scripts and examples always say
 `reeval` (`npx re` would fetch an unrelated npm package). Eval files are `*.eval.ts`, the
 config is `reeval.config.ts` and local state is `.reeval/`. Inside this monorepo,
-`examples/hello` depends on it as `"reeval": "workspace:*"`.
+every project in `examples/` depends on it as `"reeval": "workspace:*"`.
 
 ## Project rules
 
@@ -65,12 +99,15 @@ config is `reeval.config.ts` and local state is `.reeval/`. Inside this monorepo
 |---|---|
 | `packages/reeval` | The published `reeval` package and its `reeval` CLI |
 | `packages/reeval/src/engine` | reeval's engine: file discovery (`files.ts`), the collector (`collector.ts`), the jiti loader and tsconfig check (`loader.ts`), the fork pool (`pool.ts`), the orchestrator (`node.ts`), the worker (`worker.ts`, `run.ts`, and `worker-entry.ts`, which `reeval __worker` runs), the IPC messages (`protocol.ts`, JSON, specified in `PROTOCOL.md`), `expect` (`expect.ts`), error printing (`errors.ts`) and the budget marker (`budget.ts`). The only code that imports `@vitest/*` |
+| `packages/reeval/src/language-runner` | Polyglot eval loading: `LanguageAdapter` registry (`adapter.ts`), `loadEvalModule()` (`load.ts`), the runner transport over the runner's stdin and stdout (`transport.ts`, `protocol.ts`), remote collect/run (`remote.ts`) and attempt hosting (`attempt-host.ts`). TypeScript stays in-process; other languages use `runnerCommand` + attempt protocol v2 |
+| `packages/reeval-python` | Public PyPI package **reeval-python** (`reeval_python` import): src layout, uv lockfile, ruff and pyright; runner via `uv run` / `.venv` / `python3 -m reeval_python`; declare conformance in pytest |
+| `.agents/skills/add-a-language` | Repo skill for contributors adding the next language runtime: adapter checklist, transport v2, conformance and tier verification ([`SKILL.md`](./.agents/skills/add-a-language/SKILL.md)) |
 | `packages/reeval/src/evaluate.ts` | `evaluate` and `group`: they record the file's declaration tree (`declaration.ts`, JSON when its options are data) and register one test per attempt; `declareTree` declares a tree. `plan-eval.ts`'s pure `planEval` turns one declared eval into its tests: the options cascade, the matrix, the refusals and each attempt's gate, as data |
 | `packages/reeval/src/contract` | The plain-data contract another language's declaration tree carries: one Zod schema per shape (`docker.ts`, `harness.ts`, `compare.ts`, `plain.ts` for the gate, egress, secrets, skills, MCP servers, files and workspaces, `environment.ts`, `judge.ts` for the judge options and their `state`, `declaration.ts` for the tree `declareTree` takes), each validating the data, describing it and giving its JSON Schema. `attempt.ts` is the attempt protocol: the calls an eval's body makes on its attempt and reeval's replies, as a runner in another language would exchange them (in-process today), with their JSON Schema in `schema/protocol/`. `CONTRACT_SCHEMAS` (`index.ts`) names the `$def` each owns in `schema/plan/`; `shared.ts` has the duration schema and `refusal`, which turns a Zod issue into reeval's own sentence. Each module's `_SameAsSchema` holds the hand-written type to its schema, `pnpm schema:check` holds properties and descriptions to the TSDoc, and `test/refusals/` is the golden table of every refusal |
 | `packages/reeval/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, look up the image preflight prepared), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`, `debug.ts` (the plan and environment in the debug trace); `index.ts` runs them in order and tears down. `match.ts` is the attempt protocol's `expect` call, which runs the same `MATCHERS` rows (`src/matchers.ts`) the TypeScript `expect` does. `assertions.ts` turns the matcher calls either one made into the attempt's assertion records (labels, ` #n`, messages) and its `expect.soft` failure; the engine only hands it raw calls |
 | `packages/reeval/src/sandbox` | reeval's sandbox adapters (Docker and a fake), the provider prepare contract (`provider.ts`), preflight's generic layer (`preflight.ts`: check, prepare in parallel, retry, cache, scope or stop) and Docker's image preparation |
 | `packages/reeval/src/egress.ts` | Egress policies at plan time: the cascade, the automatic hosts, and what each sandbox can enforce |
-| `packages/reeval/src/harness` | The Cursor (`@reeval/harness-cursor-sdk`), Claude Code (`@ai-sdk/harness-claude-code`), Antigravity (`@reeval/harness-antigravity`), OpenCode (`@reeval/harness-opencode`), Goose (`@reeval/harness-goose`), pi (`@reeval/harness-pi`) and Codex (`@reeval/harness-codex`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, the responses that name the served model, rules file, skill directories, MCP shape), and a fake harness |
+| `packages/reeval/src/harness` | The Cursor (`@reeval/harness-cursor-sdk`), Claude Code (`@ai-sdk/harness-claude-code`), Antigravity (`@reeval/harness-antigravity`), OpenCode (`@reeval/harness-opencode`), Goose (`@reeval/harness-goose`), pi (`@reeval/harness-pi`), Codex (`@reeval/harness-codex`), fx (`@reeval/harness-fx`) and Grok Build (`@reeval/harness-grok-build`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, the responses that name the served model, rules file, skill directories, MCP shape), and a fake harness |
 | `packages/reeval/src/ui` | Terminal output: the event model and the plain and agent renderers |
 | `packages/reeval/src/debug` | Local debug data: each attempt's trace on the worker (`attempt.ts`: debug.log, requests, the capped trace buffer, reached through async context), docker commands into it (`docker.ts`), and `.reeval/debug`'s layout, retention and `reeval clean` (`files.ts`) |
 | `packages/reeval/src/view` | `reeval/view`: browser-safe run headers, the studio's file layout and view-models, effort (`effort.ts`) and the analysis document (`analysis.ts`) |
@@ -80,16 +117,22 @@ config is `reeval.config.ts` and local state is `.reeval/`. Inside this monorepo
 | `packages/reeval/src/cli-spec.ts` | Every command, flag and help line as data: `cli-parse.ts` builds `reeval`'s [commander](https://github.com/tj/commander.js) parser from it, `reeval --help` (and so the docs' CLI help) is its help lines, and `reeval analyze` checks verify commands against it. A new flag or command goes here, then `test/cli.test.ts` parses it and `REEVAL_UPDATE_SNAPSHOTS=1` refreshes the help golden file |
 | `packages/reeval/schema` | JSON Schema snapshots of every shape reeval persists and reads back, generated from the types by `scripts/schema/` and checked in CI (`pnpm schema:check`); `schema/plan/` has the plan and protocol shapes (the declaration tree, `WireTest` and the engine's messages), which only have to match the code, and `schema/protocol/` the attempt protocol's, generated from `src/contract/attempt.ts` |
 | `packages/reeval/src/studio` | `reeval studio` (Hono server, watcher, SSE, runs in progress from `.reeval/staging` in `live.ts`) and `reeval studio build` |
-| `packages/reeval/test` | The test suite, including `features/` (feature fixtures), `plan/` (plan snapshots), `contract/` (the harness contract every real harness passes), `e2e/` (the CLI end to end on real agents), `replay/` (captured real streams and each CLI's known stream format) and `conformance/` (declaration and attempt-protocol goldens for SDKs in other languages) |
-| `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `reeval` |
+| `packages/reeval/test` | The test suite, including `features/` (feature fixtures), `plan/` (plan snapshots), `contract/` (the harness contract every real harness passes), `e2e/` (the CLI end to end on real agents), `replay/` (captured real streams and each CLI's known stream format) and `conformance/` (declaration and attempt-protocol goldens for SDKs in other languages, and `launcher/`: the cases every SDK's `reeval` launcher passes against a fake release server) |
+| `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `reeval`, whose build inlines its files as the module `src/studio/app-files.ts` |
 | `packages/harness-antigravity` | `@reeval/harness-antigravity`: an AI SDK harness adapter for Google's Antigravity CLI (`agy`), shaped like the `@ai-sdk/harness-*` packages so it can go upstream. The CLI has no ACP mode, so each turn is one `agy -p … --output-format stream-json` process and the adapter translates its events. It imports nothing from `reeval`; private, and bundled into `reeval` like `sandbox-docker` |
 | `packages/harness-cursor-sdk` | `@reeval/harness-cursor-sdk`: an AI SDK harness adapter for Cursor's agent over the [Cursor TypeScript SDK](https://cursor.com/docs/sdk/typescript)'s local runtime, shaped like the `@ai-sdk/harness-*` packages. One `node runner.mjs` in the sandbox serves a session's turns (the agent loop is local, inference is Cursor's), keeping the agent loaded between them; a new runner resumes it by agent id. Its `SDKMessage` NDJSON becomes stream parts with per-turn token usage and the resolved model. Private, and bundled into `reeval` like `harness-antigravity` |
 | `packages/harness-opencode` | `@reeval/harness-opencode`: OpenCode 2 (`@opencode/cli`, from a pinned lockfile without its musl builds) on any provider whose key it sends in a header on known hosts, as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `opencode acp` in the sandbox (`@ai-sdk/harness-opencode` targets OpenCode 1 and can't broker a Google key). The model's provider (`anthropic/…`) picks the one key used and brokered; `opencode-provider-table.ts` (generated by `scripts/probe-providers.ts`, which runs the pinned CLI through a local MITM proxy, and `scripts/provider-table.ts`) lists each provider's variable, headers and endpoints, and why the others are refused. Its settings go in `OPENCODE_CONFIG_CONTENT`: no updates or sharing, session titles on the run's model, the provider's model calls over HTTP (not a WebSocket, so the gateway reads the served model), `websearch` on Exa's keyless hosted MCP server (`mcp.exa.ai`, an automatic egress host), `question` and the browser tools off, and the MCP servers in `mcp.servers` with `codemode: false` (over ACP they'd be Code Mode only). `harness-acp` runs `opencode acp` through a gate (`opencode-gate.ts`) that holds the first prompt until those servers have connected. It rebuilds each tool's output from the ACP `content`, names the tool calls `harness-acp` can't from OpenCode's first `tool_call` update, and passes on the turn's usage (`PromptResponse.usage`; OpenCode #52467 reports the whole turn). Private, and bundled into `reeval` like `harness-antigravity` |
 | `packages/harness-goose` | `@reeval/harness-goose`: Goose on a Gemini API key as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `goose acp` in the sandbox. Its bootstrap downloads the pinned release and checks its sha256, and gives Goose a private home. MCP servers go in Goose's `config.yaml` as enabled extensions (servers from ACP `session/new` start disabled). It names the tool calls `harness-acp` can't from Goose's `_meta.goose.toolCall`, and drops the turn's usage, which Goose's ACP server reports for its last model call only. Private, and bundled into `reeval` like `harness-antigravity` |
 | `packages/harness-pi` | `@reeval/harness-pi`: pi on a Gemini API key as an AI SDK harness, in the sandbox (`@ai-sdk/harness-pi` runs pi's loop in reeval's process on the host). Each turn is one `pi --mode json -p --offline --approve --no-extensions --session-id <id>` process, installed from a pinned lockfile in `assets/`; its NDJSON becomes stream parts with each model call's tokens. MCP servers go in `~/.pi/agent/mcp.json` with `"exposure": "direct"` (pi's default reaches them only from its `codemode` tool) and the turn adds `-e builtin:mcp`, the one extension it loads; `env` and header values are escaped, since pi expands `$NAME` and runs a leading `!` as a command. No SSE. Private, and bundled into `reeval` like `harness-antigravity`, with its `assets/` beside `dist/` |
 | `packages/harness-codex` | `@reeval/harness-codex`: OpenAI's Codex CLI on an OpenAI API key as an AI SDK harness, in the sandbox (`@ai-sdk/harness-codex` carries none of Codex's native events and drops reasoning tokens). Each turn is one `codex exec --json` process (later turns `resume` the thread), the pinned native build downloaded from npm and checked against its sha512. Its `config.toml` gives Codex an HTTP-only provider for the OpenAI API and turns off analytics and the plugin sync, so a turn contacts only `api.openai.com`; its NDJSON becomes stream parts with each turn's tokens, reasoning included. Codex reports no served model, so the gateway reads it, and the effort, from each Responses API response (`modelResponses` in the catalog). Private, and bundled into `reeval` like `harness-antigravity` |
-| `packages/sandbox-docker` | `@reeval/sandbox-docker`: the Docker sandbox as an AI SDK harness sandbox provider, the image build and base Dockerfile, and the egress gateway (credential brokering and network policy). It imports nothing from `reeval`. It's private: the build bundles it into `reeval` and ships `docker/` beside `dist/` there, so the published package needs no second package |
-| `examples/hello` | The example evals (including a skill `compare`, `api.eval.ts`, an `api-conventions` skill compare without a baseline on a pinned Next.js API starter across Cursor, Claude Code and Codex, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr`, `smoke` and `nightly` profiles), `reeval.claude.config.ts`, `reeval.antigravity.config.ts`, `reeval.opencode.config.ts`, `reeval.goose.config.ts`, `reeval.pi.config.ts` and `reeval.codex.config.ts` (the coding evals under Claude Code, Antigravity, OpenCode, Goose, pi and Codex), a fake one, `reeval.analysis.config.ts` (the main config with `analysis.agent` on, for the nightly analyst check), and `reeval.bench.config.ts`, a concurrency benchmark (`reeval run --config reeval.bench.config.ts --concurrency N`). Its `tsconfig.json` extends nothing, so the example runs when copied out of the repo (with `reeval` pointed at the published package); `test/example.test.ts` copies it to a temp directory and runs the fake config |
+| `packages/sandbox-docker` | `@reeval/sandbox-docker`: the Docker sandbox as an AI SDK harness sandbox provider, the image build and base Dockerfile, the egress gateway (credential brokering and network policy), and the MCP start-up timer (`bin/mcp-timer.cjs`), which reeval writes beside the workspace (`/reeval/bin/` in Docker) and runs every stdio MCP server through, so each turn records `mcpStartup`. It imports nothing from `reeval`. It's private: the build bundles it into `reeval` and ships `docker/` beside `dist/` there, so the published package needs no second package |
+| `packages/harness-fx` | `@reeval/harness-fx`: Vercel's fx on AI Gateway (`AI_GATEWAY_API_KEY`, for a gateway id) or OpenAI's Chat Completions API (`OPENAI_API_KEY`, for a bare non-reasoning id, as an fx configured provider) as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `fx acp` in the sandbox (`@ai-sdk/harness-fx` runs fx's loop on the host through `libfx`). Its bootstrap downloads the pinned release and checks its sha256, and gives fx a private home, with session titles off (fx writes them on its own model). fx ignores `HTTPS_PROXY`, so `fx-acp` starts a Node relay on `127.0.0.1:47823` that fx is pointed at and that forwards through the egress gateway (fx's own web tools and HTTP/SSE MCP servers don't use it). It rebuilds each command's output from the streamed `in_progress` updates (the `completed` one is a clipped summary), renames MCP calls from `mcp_<server>_<tool>`, names each `skill` call's skill, and puts back the turn's reasoning tokens (fx sends `reasoningTokens`, not ACP's `thoughtTokens`). No `effort`. Private, and bundled into `reeval` like `harness-antigravity` |
+| `packages/harness-grok-build` | `@reeval/harness-grok-build`: xAI's Grok Build CLI on an xAI API key as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `grok agent stdio` in the sandbox. Its bootstrap downloads the pinned native build from npm (`@xai-official/grok-linux-*`), checks its sha512 and unpacks it into Grok's private home, whose `.grok/config.toml` puts the session and its title on the run's model and turns off telemetry, updates and the summary, recap and title-refresh calls, so a turn contacts only `api.x.ai`. The key is brokered in `Authorization` on the model list, the key check and the model calls; xAI refusing the key makes Grok drop its `xai.api_key` auth method, which reeval reports as a refused key. MCP servers go over ACP's `session/new`, and Grok reaches them through `use_tool`, which the translator names `mcp__<server>__<tool>`. It also maps each tool result's `rawOutput` to its text and passes on the turn's usage from the prompt response's `_meta.usage`. Private, and bundled into `reeval` like `harness-antigravity` |
+| `skills/reeval` | The reeval skill, for consumers: how a coding agent writes, runs and debugs evals with reeval (`SKILL.md` and the `references/` it opens on demand). Maintainers writing the dogfood evals in `evals/` read it too. Not in the npm package yet |
+| `.agents/skills` | Skills for maintainers working on reeval itself; the consumer skill lives in `skills/` |
+| `packages/reeval/test/real-agents` | The project the nightly real-agent checks run (`real.yml`, `pnpm smoke:real` through `scripts/real-smoke.sh`, `test/questions-real.test.ts`): judge-free `smoke` evals on Cursor (`--profile smoke`), the brokering and Gemini checks, and the `questions` compare on Cursor and pi with an analysis model (`--config reeval.analysis.config.ts --profile questions`) |
+| `packages/studio-web/scripts/demo` | The greeting evals `seed-demo.mjs` copies and records on the fake harness for the studio's dev server and browser test |
+| `examples/with-*` | One small project per idea (`with-checks`, `with-skill-lift`): `with-<name>.eval.ts`, a `reeval.config.ts` with `include: ['*.eval.ts']` that runs key-free on the fake harness and spreads the shared `examples/profiles.ts` into `profiles` (one per real harness, each in Docker: `--profile claude-code`, `cursor`, `codex`, …), a README (shows, needs, run, what to look at) and only the files the eval needs, as real files (`project/` the agent starts from, `fake-agent/` the fake agent copies into the workspace). No `tsconfig.json` of their own: `examples/tsconfig.json` covers them for the editor and `pnpm typecheck`, so each runs copied out of the repo with `reeval` pointed at the published package. `test/example.test.ts` lists each in its `WITH` table and the shared profiles in `SHARED`, dry-runs it under every one and runs it on the fake harness, each copied out of the repo with its own `profiles.ts`, as its README says |
 
 ## Development
 
@@ -103,20 +146,29 @@ pnpm coverage    # the same tests with code coverage from every process they sta
 pnpm typecheck
 pnpm lint        # Biome; `pnpm format` applies fixes
 pnpm knip        # unused files, exports, types and dependencies (knip.json); CI runs it
-pnpm example     # reeval run in examples/hello (pnpm --filter hello-example reeval run)
+pnpm images      # build every harness's sandbox image (or name some: pnpm images claude-code codex)
 node scripts/bun-compile.mjs # optional, local: bun build --compile still makes a standalone reeval
 ```
 
 reeval runs on Node only. `scripts/bun-compile.mjs` (it needs `bun` on your PATH, and `pnpm build`)
 compiles `dist/` into `packages/reeval/reeval` with reeval's own files embedded (`--asset`:
-`package.json`, `docker/`, `assets/`, the studio app, the Claude Code bridge, jiti's Babel build
+`package.json`, `docker/`, `bin/`, `assets/`, the Claude Code bridge, jiti's Babel build
 and a `versions.json` of the bundled dependencies). It copies the binary into an empty directory
-and checks it plans and runs a copy of `examples/hello` with no `node_modules` as Node does,
+and checks it plans and runs a copy of `examples/with-skill-lift` with no `node_modules` as Node does,
 answers `reeval query` and `reeval studio build`, and, with Docker, runs an egress fixture. Compiled,
 `src/root.ts` finds those files at the root of Bun's virtual filesystem, and `ownDir` copies a
-directory that must be real (Docker's build context, the studio app, jiti's Babel) to
+directory that must be real (Docker's build context, jiti's Babel) to
 `~/.cache/reeval/<dir>-<content hash>` (`XDG_CACHE_HOME`, or the platform's cache directory).
-Run it after changing how reeval finds its files, starts processes or loads TypeScript; CI doesn't.
+Run it after changing how reeval finds its files, starts processes or loads TypeScript.
+`--target bun-<os>-<arch>` (with `--outfile`) cross-compiles another platform's binary without
+checking it. `binary.yml` (manual dispatch, `workflow_call`, and PRs that touch the compile path)
+cross-compiles every target on one Linux runner with Bun pinned (plus the `-baseline` x64 builds,
+which the install scripts pick on a CPU without AVX2), smoke-tests each on its own OS
+with `scripts/binary-smoke.mjs` (nothing installed; Docker on linux-x64, Alpine for musl), installs
+it from those files with `scripts/install.sh` or `scripts/install.ps1` (Windows PowerShell and
+pwsh), which check the binary starts before installing it, and uploads `reeval-<version>-<os>-<arch>` plus `SHA256SUMS` as one artifact. `release.yml`
+calls it for each npm release and uploads that artifact to the GitHub release, which is where the
+install scripts download from (docs: `docs/guide/binary.mdx`).
 
 **The build.** [tsdown](https://tsdown.dev) bundles `reeval`
 (`packages/reeval/tsdown.config.mjs`) into chunks directly in `dist/`, with its `.d.ts`. The
@@ -124,15 +176,15 @@ Run it after changing how reeval finds its files, starts processes or loads Type
 `devDependencies`, from its `src/`, so a new one needs only that entry. The published code may
 import only the package's `dependencies`, so an inlined package's runtime dependencies must be
 among them; the build fails otherwise. A module's code lands in some chunk, so find reeval's own
-files (`dist/studio-app`, `dist/bridge`, `docker/`, `package.json`) from `src/root.ts`, not from
+files (`dist/bridge`, `docker/`, `package.json`) from `src/root.ts`, not from
 the module's `import.meta.url`. `src/root.ts` is reeval's one resource locator (`ownFile`,
 `ownFileURL`, `ownDir`, `ownRequire`, `ownVersion`, the package's name, version and build id): the build rewrites an
 inlined package's `new URL('<path>', import.meta.url)` to its `ownFileURL` and fails on any other
 `import.meta.url`. `dist/cli.js` (`src/bin.ts`) is the only entry besides the exports: `reeval
 __worker` is how the engine starts a worker for each eval file, so a compiled `reeval` can start its
 own.
-An inlined package's other `files` (`sandbox-docker`'s `docker/` build context, `harness-pi`'s
-`assets/` lockfile) ship at the
+An inlined package's other `files` (`sandbox-docker`'s `docker/` build context and `bin/` MCP
+timer, `harness-pi`'s `assets/` lockfile) ship at the
 root of `reeval`, beside `dist/` as in their own package, so a `../docker` from one of
 its modules resolves in both; list each in `reeval`'s `files` and `.gitignore`.
 The published package's README is the repo-root README, copied here at build so the tarball
@@ -152,7 +204,7 @@ from its repository under `scripts/third-party-licenses/`. A file copied from sh
 with a `Modified from shadcn/ui` line, which is how the notices find it
 (`studio-web/src/components/ui/LICENSE` has shadcn/ui's licence).
 
-**Patched upstream adapters.** `@ai-sdk/harness-claude-code` 1.0.158 carries a pnpm patch
+**Patched upstream adapters.** `@ai-sdk/harness-claude-code` 1.0.160 carries a pnpm patch
 (`patches/`, `patchedDependencies` in `pnpm-workspace.yaml`): its bridge loses the served model.
 A patch reaches only this workspace, so `reeval` lists the adapter in `devDependencies`
 and tsdown inlines it with its bridge files (`dist/bridge/`), which its bootstrap writes into the
@@ -177,8 +229,10 @@ REEVAL_UPDATE_SNAPSHOTS=1 pnpm test:plan    # accept plan changes, then review t
 
 **The harness contract** (`test/contract.test.ts`, [its README](./packages/reeval/test/contract/README.md))
 runs one reeval project on each real harness (the rows in `test/support/harnesses.ts`: Cursor,
-Antigravity, Claude Code, OpenCode, Goose, pi and Codex) and checks the same behaviours on each: a placed skill is used, rules are
-read, a stdio MCP server is called, a file edit and a command are in the transcript, tokens and the
+Antigravity, Claude Code, OpenCode, Goose, pi, Codex, fx and Grok Build) and checks the same behaviours on each: a placed skill is used, rules are
+read, a stdio MCP server is called, a file edit and a command are in the transcript, every tool the
+CLI calls is in its adapter's catalog and the file edits, reads and commands land as those kinds
+(not as unknown tools under a renamed native name), tokens and the
 served model are recorded, the real key is nowhere in the container, `deny-all` with the automatic
 hosts works and a blocked host is refused and recorded, the native stream format is known, and
 nothing is left behind. Each behaviour is an eval, a canary that must fail and a check of the
@@ -186,7 +240,8 @@ record. `test/e2e-real.test.ts` records two runs of one tiny eval per harness an
 compare` says "same", every `reeval query` view answers, `-v` and `.reeval/debug` have the trace, and `reeval
 studio build` builds the history. Both need `REEVAL_TEST_REAL=1` (which `pnpm test:contract` sets) and
 each harness's key; asked for, a row without its key fails (it never skips), naming the variable,
-so narrow a local run with `REEVAL_CONTRACT_HARNESSES`. Their
+so narrow a local run with `REEVAL_CONTRACT_HARNESSES`. The `*-gateway` rows (the harnesses on Vercel AI Gateway, with
+`AI_GATEWAY_API_KEY`) are out of `contract.yml`'s default list, so they run when it's dispatched with them. Their
 `fake` rows run key-free in the Docker tier. `test/replay.test.ts` replays streams captured from
 real runs (`REEVAL_UPDATE_CAPTURES=1` on a contract run refreshes them, `REEVAL_UPDATE_FORMATS=1` accepts a
 new native format). No real-agent test retries: checks read files, exit codes, the record and
@@ -195,7 +250,7 @@ transcript events, never the model's wording.
 The real tier is skipped (with a reason) unless `REEVAL_TEST_REAL=1`, which `pnpm test:real` sets. It
 runs the fixtures that list `real` on Cursor in Docker, one at a time, on `composer-2.5` unless
 `REEVAL_REAL_MODEL` names another. From the repo root, `pnpm smoke:real` is the nightly real-agent
-smoke: the real tier, then `examples/hello`'s `smoke` profile (the judge-free evals tagged
+smoke: the real tier, then `test/real-agents`' `smoke` profile (the judge-free evals tagged
 `smoke`). It needs `CURSOR_API_KEY` and `GOOGLE_GENERATIVE_AI_API_KEY`, and fails naming whichever
 isn't set. Without `REEVAL_TEST_REAL=1`, the real tests skip as before.
 
@@ -214,16 +269,22 @@ made-up key to check brokering end to end. With a Gemini API key in `GEMINI_API_
 `GOOGLE_GENERATIVE_AI_API_KEY`, one more runs the real Antigravity CLI (it edits the workspace,
 answers from its rules and a home skill, and a script it runs sees only the placeholder); without
 either it skips and says why, unless `REEVAL_TEST_REAL=1`, when it fails naming both. The Docker tests skip unless Docker is running and the sandbox images have
-been built (Cursor's, and each other harness's for its own: `reeval image build` in a project whose
-config uses it, such as `examples/hello` with `--config reeval.claude.config.ts`,
-`reeval.antigravity.config.ts`, `reeval.opencode.config.ts`, `reeval.goose.config.ts`, `reeval.pi.config.ts` or
-`reeval.codex.config.ts`);
+been built (Cursor's, and each other harness's for its own: `pnpm images`, or
+`pnpm images <harness>` for one);
 `REEVAL_TEST_REQUIRE_DOCKER=1` (which `pnpm test:docker` sets) makes them fail instead.
 
 For the studio: `node packages/studio-web/scripts/seed-demo.mjs /tmp/reeval-demo` builds a demo project
 with recorded runs, and `REEVAL_STUDIO_PROJECT=/tmp/reeval-demo pnpm --filter studio-web dev` serves the
 app with hot reload on port 4985 against it. The browser test needs Chrome or Chromium and skips
 without one.
+
+**Result layouts.** `pnpm --filter reeval output:preview [run.json | corpus-name | golden | all] [-v]`
+prints the result blocks `reeval run` ends with (`src/ui/layout.ts`) for a recorded run, a corpus
+entry's runs, one golden (`results`, `measure-a-change`, …), or every corpus run and golden,
+straight from `src/` with no build. The goldens in
+`test/fixtures/output/` render the `with-layouts` corpus entry (recorded from
+`scripts/output/project`); `test/output.test.ts` holds them, and `REEVAL_UPDATE_SNAPSHOTS=1` rewrites
+them.
 
 **Coverage.** `pnpm coverage` builds, runs every package's tests with `NODE_V8_COVERAGE` set, and
 merges what each process wrote with c8, mapped back to `src/` through the build's source maps.
@@ -250,7 +311,7 @@ release and `ci:full`. PRs and the queue get a deliberately light tier while PRs
 
 | Event | Runs |
 |---|---|
-| PR, merge queue (light tier) | Always `lint, typecheck and docs`; on any code change, `unit and plan (1/4 … 4/4)`; each heavier job only when its paths change (`ci.yml`'s `changes` job, against the base, or the merge group's base): `features (fake)` for the engine, attempt, capture, sandbox, harness and ui code and the fixtures; `docker (…)` for sandbox-docker, the harness packages and reeval's sandbox, harness, attempt and capture code and the Docker tests; `studio` for studio-web and reeval's studio and view code; `packed install` for package manifests, the bundle config and what ships beside `dist/`; `engine coverage` for the engine and its tests. Docs-only changes (`docs/`, `docs.json`, root-level `*.md`, `.agents/`) skip the unit shards, studio-web-only ones too. A change to `.github/`, the lockfile, the workspace, `patches/` or a `tsconfig` runs every Linux job. No coverage |
+| PR, merge queue (light tier) | Always `lint, typecheck and docs`; on any code change, `unit and plan (1/4 … 4/4)`; each heavier job only when its paths change (`ci.yml`'s `changes` job, against the base, or the merge group's base): `features (fake)` for the engine, attempt, capture, sandbox, harness and ui code and the fixtures; `docker (…)` for sandbox-docker, the harness packages and reeval's sandbox, harness, attempt and capture code and the Docker tests; `studio` for studio-web and reeval's studio and view code; `packed install` for package manifests, the bundle config and what ships beside `dist/`; `engine coverage` for the engine and its tests; `launcher conformance` (Linux, macOS and Windows) for an SDK's `reeval` launcher and `test/conformance/launcher/`. Docs-only changes (`docs/`, `docs.json`, root-level `*.md`, `skills/`, `.agents/`) skip the unit shards, studio-web-only ones too. A change to `.github/`, the lockfile, the workspace, `patches/` or a `tsconfig` runs every Linux job. No coverage |
 | PR, merge queue (full tier) | Every Linux job on any code change |
 | PR labelled `ci:full` | Everything, unscoped, including the Node 22.13 floor, Windows and macOS (`ci-full.yml` runs it once when the label is added; later pushes' own runs are full) |
 | `main` | Every Linux job, Windows, macOS and npm 10.9. No Node 22.13 floor (newest Node already ran on the PR) and no coverage report. Each SHA has its own concurrency group, so a burst of merges does not cancel pending runs |
@@ -267,13 +328,14 @@ skipped, which passes. So the required set holds on either tier; rename or add j
 
 | Workflow | Jobs |
 |---|---|
-| `ci.yml` | `changes` (the scope), `lint, typecheck and docs` (`biome ci`, the build, typecheck, the schema check and both docs checks), `unit and plan (1/4 … 4/4)` (the newest Node that `engines` allows, in four `--test-shard`s, since a 2-vCPU runner runs one test file at a time; the first also runs the other packages' tests, where sandbox-docker's container tests skip), `features (fake)`, `docker (…)` with `REEVAL_TEST_REQUIRE_DOCKER=1` (reeval's Docker tier in five legs, split by `--test-name-pattern` and `--test-skip-pattern` on one regex so no test falls between them, and sandbox-docker's suite), `studio` (with the browser test), `engine coverage` (100% of the engine's files), `packed install (npm 11)` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `(npm 10.9)`, `extended` (calls `extended.yml`), `coverage` (below) and `ci` (the gate) |
+| `ci.yml` | `changes` (the scope), `lint, typecheck and docs` (`biome ci`, the build, typecheck, the schema check and both docs checks), `unit and plan (1/4 … 4/4)` (the newest Node that `engines` allows, in four `--test-shard`s, since a 2-vCPU runner runs one test file at a time; the first also runs the other packages' tests, where sandbox-docker's container tests skip), `features (fake)`, `docker (…)` with `REEVAL_TEST_REQUIRE_DOCKER=1` (reeval's Docker tier in five legs, split by `--test-name-pattern` and `--test-skip-pattern` on one regex so no test falls between them, and sandbox-docker's suite), `studio` (with the browser test), `engine coverage` (100% of the engine's files), `launcher conformance (<sdk>, <os>)` (each SDK's `reeval` launcher against `test/conformance/launcher/` on Linux, macOS and Windows), `packed install (npm 11)` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `(npm 10.9)`, `extended` (calls `extended.yml`), `coverage` (below) and `ci` (the gate) |
 | `extended.yml` | Called by `ci.yml` on `main`, nightly, on demand, on release and for `ci:full`: `windows (unit 1/6 … 6/6, tiers, packed)`, `macos (unit, tiers, packed)` in parallel, and `unit and plan (node 22.13, 1/4 … 4/4)` except on ordinary `main` pushes |
 | `ci-full.yml` | On a PR labelled `ci:full`: `ci.yml`, unscoped, as `full / …` |
+| `cache-cleanup.yml` | After each `ci` run on `main`: deletes stale and non-`main` entries from the caches CI writes |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR; in the merge queue, every commit the merge group adds to `main` (the squash commits, whose subjects are the PR titles) |
-| `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose, pi and Codex into the images (Claude Code stays pinned), then, whatever the contract did, checks whether the newest Claude Code adapter still needs reeval's patch (`scripts/drift/claude-code-patch.mjs`) and re-runs the OpenCode provider probe against the newest `@opencode/cli` (`scripts/drift/opencode-providers.mjs`), both key-free; any change to a CLI's output format, the stored conversation, behaviour or the OpenCode provider table fails it, the last with a diff; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
+| `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY` secret, or `AI_GATEWAY_API_KEY` when a dispatch names `*-gateway` rows, fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose, pi, Codex, fx and Grok Build into the images (Claude Code stays pinned), then, whatever the contract did, checks whether the newest Claude Code adapter still needs reeval's patch (`scripts/drift/claude-code-patch.mjs`) and re-runs the OpenCode provider probe against the newest `@opencode/cli` (`scripts/drift/opencode-providers.mjs`), both key-free; any change to a CLI's output format, the stored conversation, behaviour or the OpenCode provider table fails it, the last with a diff; not on PRs) and `real agents (Cursor)` (`test/real-agents`' smoke profile; not on PRs). One run at a time, one leg after another. A manual dispatch with `-f harnesses=<row>,<row>` (e.g. `claude-code-gateway,codex-gateway`, rows outside the default list included) runs only those rows' pinned contract and e2e, and skips the drift leg, the real-tier fixtures and the smoke |
 | `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`REEVAL_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |
-| `release.yml` | release-please on `main`; on a release, `ci.yml` on the release commit, then publishing to npm |
+| `release.yml` | release-please on `main`; on a release, `ci.yml` and `binary.yml` on the release commit (the tag, on a republish), then publishing to npm, `binary.yml`'s binaries uploaded to the GitHub release, and then its reeval-python sdist and wheels published to PyPI |
 
 - **Windows and macOS** (in `extended.yml`, so not on PRs without `ci:full`) run `scripts/ci-os.sh`: the unit and plan files (in six shards on
   Windows; one job on macOS), `tiers` (typecheck, schema check, lint, the fake-tier fixtures, the studio and
@@ -289,7 +351,11 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   before cloning: recorded runs' paths pass 260 characters.
 - Each test job runs `pnpm build` first, since the tests run `dist/`. The Docker jobs cache
   every harness's sandbox image (`.github/actions/sandbox-images`) keyed on the adapter
-  versions and the build context.
+  versions and the build context, as a registry's storage that they pull from on the runner.
+- **Caches are written from `main` only** (the pnpm store, uv and the sandbox images); PRs and
+  the merge queue restore main's. `cache-cleanup.yml` runs after each `ci` run on `main` and
+  deletes every entry but main's latest in each of those families, so the repo stays under its
+  10 GB cache.
 - **Coverage** (nightly, `workflow_dispatch` and release; off PRs, the queue and ordinary `main`
   pushes): the `unit` (newest Node), `features`, `docker` and `studio` jobs run their tests with
   `NODE_V8_COVERAGE` and upload it; the `coverage` job merges it, uploads the HTML report
@@ -302,13 +368,36 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   on the PR tier, over every file the merge group adds to `main`; each queue entry has its own concurrency group (its
   `gh-readonly-queue/…` ref), so entries never cancel each other or PR runs. The queue's merge
   method must be squash. `real.yml` and `contract.yml` don't run in the queue.
-- **Releases:** release-please keeps a `chore(main): release X.Y.Z` PR open with the new version
-  (in `packages/reeval/package.json`, the root `package.json` and
+- **Releases:** `reeval` and `reeval-python` release in lockstep, one version for both, since
+  an SDK downloads the reeval binary of its own version. release-please keeps one
+  `chore(main): release X.Y.Z` PR open with the new version (in `packages/reeval/package.json`,
+  the root `package.json`, `packages/reeval-python/pyproject.toml` and `uv.lock`, and
   `.release-please-manifest.json`) and `CHANGELOG.md`. Merging it tags `vX.Y.Z` and creates the
-  GitHub release. `release.yml` then runs all of `ci.yml` on that commit and, if it passes,
+  GitHub release. (release-please's `linked-versions` plugin can't do this: it skips a component
+  with `include-component-in-tag: false`, as the root package's is so its tags stay `vX.Y.Z`.)
+  `release.yml` then runs all of `ci.yml` on that commit and, if it passes,
   publishes the tarball that its `packed install` job packed (with the `@reeval/*` packages bundled in),
-  in the `npm` environment with npm trusted publishing (OIDC, no token). If a flake fails it,
-  re-run the failed jobs. Provenance is automatic once the repository is public. Don't publish
+  in the `npm` environment with npm trusted publishing (OIDC, no token). It uploads the binaries
+  `binary.yml` builds, with their `SHA256SUMS`, to the release, and then publishes the
+  reeval-python sdist and pure wheel the same `binary.yml` run built to PyPI, in the `pypi`
+  environment. Both record those binaries' hashes (`reeval_python/binaries.json`, which
+  `scripts/python-wheels.py manifest` writes into the package before `uv build`, baseline builds
+  included). Before publishing, `python-wheels.py check` holds them to the release's version and
+  `python-wheels.py verify` to the `SHA256SUMS` on the release, so PyPI gets reeval-python only
+  when the release's binaries are the ones it records, whether or not this run uploaded them.
+  reeval-python downloads its binary from the release on first run, checks it against those
+  hashes, checks it starts and caches it. Its
+  platform wheels, each carrying a binary, are built (`python-wheels.py platform`) and smoke-tested
+  but not published, since they'd add about 250 MB a release to PyPI. A prerelease is `X.Y.Z-alpha.N`, `-beta.N` or `-rc.N`, which is
+  reeval-python `X.Y.ZaN`, `bN` or `rcN`. A manual dispatch republishes the manifest's version
+  from its tag (`ci.yml` and `binary.yml` take the tag's commit as `ref`, with `binary.yml`'s
+  scripts from the run's own ref), whatever `main` has since;
+  `-f dry_run=true` builds and smoke-tests the binaries and lists what it would upload to the
+  current release, publishing nothing. The binaries are always built from the release's tagged commit, and a
+  release that has its `SHA256SUMS` keeps its binaries unless the dispatch sets `-f replace_binaries=true`
+  (one whose `SHA256SUMS` is the build's has nothing to upload).
+  If a flake fails it, re-run the failed jobs: an upload cut short keeps the binaries that match
+  the run's sums and adds the rest. Provenance is automatic once the repository is public. Don't publish
   by hand, and don't edit versions or `CHANGELOG.md`.
 - **Dependabot** (`.github/dependabot.yml`) opens weekly version updates, titled `build(deps): …`,
   `build(deps-dev): …` or `ci: …` so `commits.yml` passes them. It covers every workspace
@@ -319,7 +408,7 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   must be moved by hand, and it pins `@ai-sdk/harness` and `@ai-sdk/provider-utils` exactly
   (which pin `ai` and `@ai-sdk/provider`), so bumping any of them without it installs two copies.
   Bump the family by hand, together with the adapter and its patch. It also skips the harness
-  CLIs, which are pinned in each harness's source (Antigravity's and Goose's sha256, Codex's
+  CLIs, which are pinned in each harness's source (Antigravity's, Goose's and fx's sha256, Codex's and Grok Build's
   sha512, Cursor's SDK version, OpenCode's inline lockfile) or in `packages/*/assets/` (pi's
   lockfile). The drift leg in `real.yml` tracks those instead. Node majors (`@types/node` and the
   base image's `node`) are ignored too: they stay on the `engines` floor's line, Node 22.
@@ -329,7 +418,7 @@ skipped, which passes. So the required set holds on either tier; rename or add j
 Every shape reeval writes to disk and reads back later, maybe from an older or newer reeval, is listed in
 `packages/reeval/scripts/schema/shapes.ts` and snapshotted as a JSON Schema generated from its
 TypeScript type in `packages/reeval/schema/`: the run record (`RunRecord`), transcript lines
-(`TranscriptLine`), analysis documents (`AnalysisDoc`), `analysis.agent`'s notes (`AnalysisNote`,
+(`TranscriptLine`), analysis documents (`AnalysisDoc`), analysis notes (`AnalysisNote`,
 `.reeval/analysis/<run>/notes/`), `.reeval/debug` request lines
 (`DebugRequest`) and a running `reeval run`'s progress file, `.reeval/staging/<run>/live.json`
 (`LiveProgress`, read by `reeval studio`; never part of a record). Every reader goes through `src/view/record.ts` (`readableRecord`,
@@ -368,12 +457,18 @@ Follow [the feature contract](./packages/reeval/test/features/README.md). It say
 a change needs (plan case, fixture with a canary, runner test or error-message row), the shape of
 a fixture, how to run and debug the tiers, and what "done" means.
 
+**Options, cascades and refusals** (not attempt behaviour): plan cases live under
+`packages/reeval/test/plan/`, refusal rows under `packages/reeval/test/refusals/`, and cascade
+behaviour in `options.test.ts` — not under `test/features/`. Register each eval option in
+`test/features/eval-options.ts`; `matrix.test.ts` fails when `--dry-run` coverage or refusals are
+missing.
+
 **Every user-visible change updates the docs in the same PR.** A new or changed option, helper,
 harness, CLI command or flag, exit code, `reeval query` view, record field or environment variable
 updates its page in the docs' Reference tab (`docs/reference/`), and a change to how people use
 reeval also updates the Guide or a Recipe. Then run `pnpm build && pnpm docs:gen` and `pnpm docs:check`
 (below). If the change affects how agents should write evals, update the reeval skill in
-`.agents/skills/reeval/SKILL.md` (or the reference under `references/` that covers it) too.
+`skills/reeval/SKILL.md` (or the reference under `references/` that covers it) too.
 
 ### Docs
 
@@ -417,63 +512,38 @@ Images live in `docs/assets/` (at most 1600 px wide).
 
 ## Running the examples
 
-After `pnpm install` and `pnpm build`:
-
-### Without credentials or Docker
-
-`reeval.fake.config.ts` swaps in a fake agent that writes canned files into a temp directory, and a
-fake judge with a fixed score:
+After `pnpm install` and `pnpm build`, each `examples/with-*` runs on the fake harness with no
+credentials or Docker:
 
 ```bash
-cd examples/hello
-pnpm reeval run --config reeval.fake.config.ts                       # includes the skill compare and its lift
-pnpm reeval run --config reeval.fake.config.ts --dry-run --profile nightly   # the plan, without running
+cd examples/with-skill-lift
+pnpm eval                          # reeval run on the fake harness
+pnpm reeval run --dry-run          # the plan, without running
 ```
 
 ### With a real agent
 
-1. Build the sandbox images once. This bakes each planned harness's CLI into reeval's image for it,
-   `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.5`, `claude-code-1.0.158-patch.6c1cff12`,
-   `antigravity-0.1.8`, `opencode-0.2.8`, `goose-0.1.3`, `pi-0.2.7`, `codex-0.1.7`), so
-   the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
-   `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.
+1. Build the sandbox images once. This bakes each harness's CLI into reeval's image for it,
+   `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.6`, `claude-code-1.0.160-patch.b17cde50`,
+   `antigravity-0.1.12`, `opencode-0.2.10`, `goose-0.1.5`, `pi-0.2.8`, `codex-0.1.8`, `fx-0.1.1`, `grok-build-0.1.4`), so
+   the tag pins the CLI build. Rebuild after bumping a harness adapter. A project's other images
+   (`from`, `dockerfile` and `install`) build with `reeval image build` there (`--dry-run` lists them).
 
    ```bash
-   cd examples/hello
-   pnpm reeval image build
-   pnpm reeval image build --config reeval.claude.config.ts   # Claude Code's image
-   pnpm reeval image build --config reeval.antigravity.config.ts   # Antigravity's image
-   pnpm reeval image build --config reeval.opencode.config.ts   # OpenCode's image
-   pnpm reeval image build --config reeval.goose.config.ts   # Goose's image
-   pnpm reeval image build --config reeval.pi.config.ts   # pi's image
-   pnpm reeval image build --config reeval.codex.config.ts   # Codex's image
+   pnpm images                        # every harness's image
+   pnpm images claude-code codex      # only these
    ```
 
-2. Put your credentials in `examples/hello/.env.local`. It is gitignored.
+2. Put your credentials in the example's `.env.local` (gitignored), such as
+   `examples/with-skill-lift/.env.local`: the key in `examples/profiles.ts` beside the profile you run, such as `ANTHROPIC_API_KEY` for `claude-code`.
+   The nightly real-agent project, `packages/reeval/test/real-agents`, takes its keys from its own
+   `.env.local`: `CURSOR_API_KEY` and `GOOGLE_GENERATIVE_AI_API_KEY` (its Gemini checks and
+   analysis model).
+
+3. Run the example on Claude Code (or any other profile in `examples/profiles.ts`):
 
    ```bash
-   CURSOR_API_KEY=...
-   ANTHROPIC_API_KEY=...              # for reeval.claude.config.ts
-   GEMINI_API_KEY=...                 # for reeval.antigravity.config.ts (a Gemini API key)
-   GOOGLE_GENERATIVE_AI_API_KEY=...   # the example's judge (google/*), reeval.opencode.config.ts, reeval.goose.config.ts, reeval.pi.config.ts and the Genkit evals' sandbox
-   OPENAI_API_KEY=...                 # for reeval.codex.config.ts (an OpenAI API key)
-   # TYPESAFE_AI_API_KEY=...          # for typesafe-ai/* judges such as Jev (or AI_GATEWAY_API_KEY)
-   ```
-
-3. Run the evals:
-
-   ```bash
-   pnpm reeval run --dry-run        # the plan: evals, cells, attempts and a time estimate
-   pnpm reeval run                  # or: pnpm reeval run greet   (filter by path, eval name or cell)
-   pnpm reeval run skill --runs 2   # the skill compare: control and variant, twice each, with lift
-   pnpm reeval run --profile pr     # sized like a PR run: one run per cell, no variants
-   pnpm reeval run --profile smoke  # the nightly smoke: two judge-free evals, once, on composer-2.5
-   pnpm reeval run --config reeval.claude.config.ts   # the coding evals under Claude Code
-   pnpm reeval run --config reeval.antigravity.config.ts   # the coding evals under Antigravity
-   pnpm reeval run --config reeval.opencode.config.ts   # the coding evals under OpenCode
-   pnpm reeval run --config reeval.goose.config.ts   # the coding evals under Goose
-   pnpm reeval run --config reeval.pi.config.ts   # the coding evals under pi
-   pnpm reeval run --config reeval.codex.config.ts   # the coding evals under Codex
+   pnpm reeval run --profile claude-code
    ```
 
 The harness keys stay on the host (see [Secrets and egress](./docs/guide/secrets-and-egress.mdx)). reeval masks secret-looking values in

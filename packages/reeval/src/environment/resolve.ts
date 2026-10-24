@@ -1,13 +1,14 @@
-// Worker side of environments: layers an attempt's environments, reads skills and files on the
-// host, resolves secrets, and computes the digest that goes into fingerprints. Nothing here
+// Worker side of environments: layers an attempt's environments, reads skills, plugins and files
+// on the host, resolves secrets, and computes the digest that goes into fingerprints. Nothing here
 // touches the sandbox.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, sep } from 'node:path'
-import { placeholder, type Substitution } from '@reeval/sandbox-docker'
+import { hostAllowed, placeholder, type Substitution } from '@reeval/sandbox-docker'
 import { run } from '@reeval/sandbox-docker/process'
 import { parse as parseYaml } from 'yaml'
-import { badCharacterAt, parseDuration } from '../config.ts'
+import { parseDuration } from '../config.ts'
+import { DEFAULT_EGRESS } from '../egress.ts'
 import {
   type AppliedEnvironment,
   DEFAULT_SKILL_EXCLUDE,
@@ -19,22 +20,45 @@ import {
   stepCommand,
   workspaceLabel,
 } from '../environment.ts'
+import { layoutOf, refusedPlugins } from '../harness/agents.ts'
 import { sha256 } from '../ids.ts'
-import { registerSecret } from '../redact.ts'
+import { badCharacterAt, registerSecret } from '../redact.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type {
   EgressPolicy,
   EnvironmentRecord,
   EnvVars,
   GitWorkspace,
+  HarnessDescriptor,
   HostFile,
   McpServer,
+  PluginPart,
+  PluginRecord,
+  PluginSource,
   Secret,
   SecretTemplate,
   SkillPlacement,
   SkillSource,
 } from '../types.ts'
 import type { PreparedWorkspace } from '../workspace.ts'
+import {
+  fetchesAtStart,
+  leavesSource,
+  localMarketplace,
+  marketplaceLabel,
+  type PluginContents,
+  type PluginFile,
+  PluginProblem,
+  pluginCall,
+  pluginFiles,
+  pluginParts,
+  pluginServerName,
+  pluginSourceLabel,
+  readMarketplace,
+  readPlugin,
+  samePluginTwice,
+  skillCall,
+} from './plugins.ts'
 
 /** The harness-neutral skill shape the harness adapters take. */
 export type HarnessSkill = {
@@ -76,6 +100,31 @@ export type ResolvedEnvironment = {
   substitutions: BrokeredSecret[]
   /** The tarball of the git tree the workspace starts as, copied in before `files`. */
   workspace?: { tar: string; label: string; commit: string; init?: boolean }
+  /** The plugins to copy into the sandbox, each under `PLUGIN_DIR/<name>/`. */
+  plugins: ResolvedPlugin[]
+}
+
+/**
+ * A plugin to place: its files by path relative to its root (the parts `only` keeps), and the keys
+ * of its MCP servers in `mcp`, whose `${CLAUDE_PLUGIN_ROOT}` the session fills in.
+ */
+export type ResolvedPlugin = {
+  name: string
+  files: PluginFile[]
+  parts: PluginPart[]
+  servers: string[]
+  /** The plugin as the environment declares it. */
+  declared: PluginSource
+  /** The commit a git plugin was read at. */
+  commit: string | null
+  /** A built plugin: its directory in the attempt's image and the layer's tag, copied from there instead of `files`. */
+  built?: { dir: string; tag: string }
+}
+
+/** What else resolving an environment needs: the harness (for its plugin refusals) and the hosts egress allows (null under `proxy` and `allow-all`). */
+export type ResolveOptions = {
+  harness?: HarnessDescriptor
+  allowed?: readonly string[] | null
 }
 
 /** A brokered secret, and whether the gateway swaps it in for the agent or only for checks. */
@@ -286,6 +335,9 @@ async function git(args: string[], cwd: string, what: string) {
 /** One clone per source and ref per worker process; the commit is recorded. */
 const clones = new Map<string, Promise<{ dir: string; commit: string }>>()
 
+/** A clone checks out the committed bytes, whatever the host's line-ending settings. */
+const AS_COMMITTED = ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf']
+
 function cloneSkills(root: string, url: string, ref: string | undefined) {
   const key = `${url}#${ref ?? ''}`
   let clone = clones.get(key)
@@ -302,8 +354,16 @@ function cloneSkills(root: string, url: string, ref: string | undefined) {
       await mkdir(dir, { recursive: true })
       const what = `Cloning ${url}${ref ? ` at ${ref}` : ''}`
       await git(['init', '-q'], dir, what)
-      await git(['fetch', '-q', '--depth', '1', url, ref ?? 'HEAD'], dir, what)
-      await git(['-c', 'advice.detachedHead=false', 'checkout', '-q', 'FETCH_HEAD'], dir, what)
+      await git(
+        [...AS_COMMITTED, 'fetch', '-q', '--depth', '1', '--end-of-options', url, ref ?? 'HEAD'],
+        dir,
+        what,
+      )
+      await git(
+        [...AS_COMMITTED, '-c', 'advice.detachedHead=false', 'checkout', '-q', 'FETCH_HEAD'],
+        dir,
+        what,
+      )
       return { dir, commit: await git(['rev-parse', 'HEAD'], dir, what) }
     })()
     clones.set(key, clone)
@@ -357,9 +417,13 @@ async function resolveSkills(root: string, s: SkillSource): Promise<Found> {
     case 'git': {
       const { url } = parseGitRepo(s.repo)
       const { dir, commit } = await cloneSkills(root, url, s.ref)
-      const label = `${s.repo}${s.ref ? `#${s.ref}` : ''}${s.path ? `:${s.path}` : ''}`
+      // Without a path, a repository of skills under skills/ works as it does for skill.registry.
+      const path =
+        s.path ??
+        (!existsSync(join(dir, 'SKILL.md')) && existsSync(join(dir, 'skills')) ? 'skills' : '')
+      const label = `${s.repo}${s.ref ? `#${s.ref}` : ''}${path ? `:${path}` : ''}`
       return {
-        skills: loadSkills(s.path ? join(dir, s.path) : dir, label, s.only, s.exclude),
+        skills: loadSkills(join(dir, path), label, s.only, s.exclude),
         source: label,
         commit,
       }
@@ -396,6 +460,118 @@ async function resolveSkills(root: string, s: SkillSource): Promise<Found> {
   }
 }
 
+type FoundPlugin = {
+  contents: PluginContents
+  declared: PluginSource
+  source: string
+  commit: string | null
+  marketplace: PluginRecord['marketplace']
+}
+
+/** A plugin's whole source on the host, and what the record says about where it came from. */
+type SourceDir = {
+  /** The repository at its commit, the unpacked package, or the local directory. */
+  context: string
+  /** The plugin's directory in `context`, `.` for its root. */
+  path: string
+  commit: string | null
+  /** The record's `source`. */
+  source: string
+  /** The record's `marketplace`. */
+  marketplace: PluginRecord['marketplace']
+}
+
+/** A marketplace entry's source: the marketplace itself for a `./` entry, else the entry's own. */
+async function entrySourceDir(
+  root: string,
+  p: Extract<PluginSource, { source: 'marketplace' }>,
+): Promise<SourceDir> {
+  const m = p.marketplace
+  const label = marketplaceLabel(m, root)
+  const fetched =
+    m.source === 'git'
+      ? await cloneSkills(root, parseGitRepo(m.repo).url, m.ref)
+      : { dir: await unpackNpm(root, m.spec), commit: null }
+  const { marketplace: name, entry } = readMarketplace(
+    fetched.dir,
+    pluginCall(p, root),
+    label,
+    p.name,
+    localMarketplace(m),
+  )
+  const marketplace = { name, source: label, commit: fetched.commit }
+  switch (entry.source) {
+    case 'path':
+      return {
+        context: fetched.dir,
+        path: entry.path || '.',
+        commit: fetched.commit,
+        source: entry.path ? `${label}:${entry.path}` : label,
+        marketplace,
+      }
+    case 'git': {
+      const clone = await cloneSkills(root, entry.url, entry.ref)
+      if (entry.path && leavesSource(clone.dir, entry.path)) {
+        throw new PluginProblem(
+          `the ${name} marketplace's entry "${p.name}" has path ${entry.path}, which leaves ${entry.repo} through a symlink`,
+        )
+      }
+      return {
+        context: clone.dir,
+        path: entry.path ?? '.',
+        commit: clone.commit,
+        source: `${entry.repo}${entry.ref ? `#${entry.ref}` : ''}${entry.path ? `:${entry.path}` : ''}`,
+        marketplace,
+      }
+    }
+    case 'npm':
+      return {
+        context: await unpackNpm(root, entry.spec),
+        path: '.',
+        commit: null,
+        source: `npm:${entry.spec}`,
+        marketplace,
+      }
+  }
+}
+
+/**
+ * A plugin's whole source on the host, fetched once per process: the repository at its commit,
+ * the unpacked package, or the local directory, with the plugin's `path` in it (`.` for the root).
+ * A marketplace entry's is its marketplace's for a `./` entry, else the entry's own source.
+ */
+export async function pluginSourceDir(root: string, p: PluginSource): Promise<SourceDir> {
+  const labelled = { source: pluginSourceLabel(p, root), marketplace: null }
+  switch (p.source) {
+    case 'local':
+      return { context: p.path, path: '.', commit: null, ...labelled }
+    case 'git': {
+      const clone = await cloneSkills(root, parseGitRepo(p.repo).url, p.ref)
+      return { context: clone.dir, path: p.path ?? '.', commit: clone.commit, ...labelled }
+    }
+    case 'npm':
+      return {
+        context: await unpackNpm(root, p.spec),
+        path: p.path ?? '.',
+        commit: null,
+        ...labelled,
+      }
+    case 'marketplace':
+      return entrySourceDir(root, p)
+  }
+}
+
+async function resolvePlugin(root: string, p: PluginSource, where: string): Promise<FoundPlugin> {
+  try {
+    const { context, path, commit, source, marketplace } = await pluginSourceDir(root, p)
+    const contents = readPlugin(join(context, path), pluginCall(p, root), p.only)
+    return { contents, declared: p, source, commit, marketplace }
+  } catch (error) {
+    if (error instanceof PluginProblem) throw new InfraError(`${where}: ${error.message}`)
+    throw error
+  }
+}
+
 const skillHash = (s: HarnessSkill) => sha256(JSON.stringify(s))
 
 const readHostFile = (f: HostFile, where: string): Uint8Array => {
@@ -417,8 +593,9 @@ export async function resolveEnvironment(
   root: string,
   where: string,
   rulesFile: string,
-  egress: EgressPolicy = 'allow-all',
+  egress: EgressPolicy = DEFAULT_EGRESS,
   prepared: (w: GitWorkspace) => PreparedWorkspace | undefined = () => undefined,
+  options: ResolveOptions = {},
 ): Promise<ResolvedEnvironment> {
   const envWhere = `environment ${environment.name} (${where})`
   const overrides = new Set<string>()
@@ -427,8 +604,15 @@ export async function resolveEnvironment(
   const mcp = new Map<string, McpServer>()
   const skills = new Map<
     string,
-    LoadedSkill & { placement: SkillPlacement; source: string; commit: string | null }
+    LoadedSkill & {
+      placement: SkillPlacement
+      source: string
+      commit: string | null
+      call: string
+      plugin?: string
+    }
   >()
+  const plugins = new Map<string, FoundPlugin>()
   let rules: string | HostFile | undefined
   const setup: ResolvedStep[] = []
   const seen = { env: new Set<string>(), files: new Set<string>(), mcp: new Set<string>() }
@@ -436,7 +620,8 @@ export async function resolveEnvironment(
   let egressSet = false
   let workspace: GitWorkspace | undefined
   let sandboxSet = false
-  for (const { spec } of environment.layers) {
+  for (const layer of environment.layers) {
+    const { spec } = layer
     if (spec.sandbox !== undefined) {
       if (sandboxSet) overrides.add('sandbox')
       sandboxSet = true
@@ -489,9 +674,86 @@ export async function resolveEnvironment(
           placement: source.placement,
           source: found.source,
           commit: found.commit,
+          call: skillCall(source, root),
         })
       }
     }
+    const layerPlugins = new Map<string, string>()
+    for (const source of spec.plugins ?? []) {
+      const found = await resolvePlugin(root, source, envWhere)
+      const { name, call } = found.contents
+      const first = layerPlugins.get(name)
+      if (first) {
+        throw new InfraError(`${envWhere}: ${samePluginTwice(layer.name, name, first, call)}`)
+      }
+      if (plugins.has(name)) overrides.add(`plugins.${name}`)
+      layerPlugins.set(name, call)
+      plugins.delete(name)
+      plugins.set(name, found)
+    }
+  }
+
+  const pluginList = [...plugins.values()]
+  const harness = options.harness ?? { kind: 'fake' }
+  const refused = refusedPlugins(
+    harness,
+    pluginList.map((p) => p.contents),
+    {
+      skills: [...skills.values()]
+        .filter((s) => s.placement === 'harness')
+        .map((s) => ({ name: s.skill.name, call: s.call })),
+      mcp: [...mcp.keys()],
+    },
+  )
+  if (refused) throw new InfraError(`${envWhere}: ${refused}`)
+  const allowed = options.allowed ?? null
+  const fetches = fetchesAtStart(
+    pluginList.map((p) => p.contents),
+    allowed,
+  )
+  if (fetches.refusal) throw new InfraError(`${envWhere}: ${fetches.refusal}`)
+  const pluginSkills: Array<
+    LoadedSkill & { plugin: string; source: string; commit: string | null }
+  > = []
+  const resolvedPlugins: ResolvedPlugin[] = []
+  const pluginRecords: PluginRecord[] = []
+  for (const { contents: p, declared, source, commit, marketplace } of pluginList) {
+    const loaded = p.skills.length
+      ? loadSkills(
+          join(p.dir, 'skills'),
+          source,
+          p.skills.map((s) => s.name),
+        )
+      : []
+    for (const l of loaded) pluginSkills.push({ ...l, plugin: p.name, source, commit })
+    const servers: string[] = []
+    for (const [name, server] of Object.entries(p.mcp)) {
+      if (allowed && server.transport !== 'stdio') {
+        const host = new URL(server.url).hostname
+        if (!hostAllowed(allowed, host)) {
+          throw new InfraError(
+            `${envWhere}: the ${p.name} plugin's MCP server "${name}" is at ${host}, which egress doesn't allow: add it to egress.allow`,
+          )
+        }
+      }
+      const key = pluginServerName(p.name, name)
+      mcp.set(key, server)
+      servers.push(key)
+    }
+    const files = pluginFiles(p)
+    resolvedPlugins.push({ name: p.name, files, parts: p.kept, servers, declared, commit })
+    pluginRecords.push({
+      name: p.name,
+      source,
+      marketplace,
+      commit,
+      sha256: sha256(JSON.stringify(files.map((f) => [f.path, sha256(f.content)]))),
+      build: null,
+      parts: pluginParts(
+        p,
+        loaded.map((l) => l.skill.name),
+      ),
+    })
   }
 
   const secrets: Secrets = { names: [], checks: [], unset: [], brokered: [] }
@@ -548,14 +810,25 @@ export async function resolveEnvironment(
         ? Buffer.from(readHostFile(rules, envWhere)).toString('utf8')
         : rules
   const skillList = [...skills.values()]
-  const skillRecords = skillList.map(({ skill, placement, source, commit, excluded }) => ({
-    name: skill.name,
-    source,
-    commit,
-    sha256: skillHash(skill),
-    placement,
-    excluded,
-  }))
+  const skillRecords = [
+    ...skillList.map(({ skill, placement, source, commit, excluded }) => ({
+      name: skill.name,
+      source,
+      commit,
+      sha256: skillHash(skill),
+      placement,
+      excluded,
+    })),
+    ...pluginSkills.map(({ skill, source, commit, excluded, plugin }) => ({
+      name: skill.name,
+      source,
+      commit,
+      sha256: skillHash(skill),
+      placement: 'harness' as const,
+      excluded,
+      plugin,
+    })),
+  ]
   const fileRecords = fileList.map((f) => ({ path: f.path, sha256: sha256(f.content) }))
   const executable = fileList.flatMap((f) => (f.executable ? [f.path] : []))
   // Hashed apart from the files, so one environment has one digest whichever file its rules go to.
@@ -610,9 +883,18 @@ export async function resolveEnvironment(
       checks: [...secrets.checks].sort(),
       unset: [...secrets.unset].sort(),
       brokered,
-      ...(egress === 'allow-all'
+      ...(egress === DEFAULT_EGRESS
         ? {}
         : { egress: typeof egress === 'string' ? egress : [...egress.allow].sort() }),
+      ...(pluginRecords.length
+        ? {
+            plugins: pluginRecords.map((p, i) => {
+              const r = resolvedPlugins[i]
+              const build = r?.declared.build
+              return [p.name, p.sha256, r?.parts, ...(build === undefined ? [] : [build])]
+            }),
+          }
+        : {}),
       ...(workspaceRecord
         ? {
             workspace: workspaceRecord.init ? [workspaceRecord.tree, 'init'] : workspaceRecord.tree,
@@ -629,6 +911,7 @@ export async function resolveEnvironment(
       setup: setup.map(stepCommand),
       skills: skillRecords,
       mcp: Object.keys(resolvedMcp).sort(),
+      ...(pluginRecords.length ? { plugins: pluginRecords } : {}),
       files: rulesRecord ? [...fileRecords, rulesRecord] : fileRecords,
       vars: varNames,
       secrets: secretNames,
@@ -638,13 +921,17 @@ export async function resolveEnvironment(
       ...(workspaceRecord ? { workspace: workspaceRecord } : {}),
     },
     setup,
-    skills: skillList.filter((s) => s.placement === 'harness').map((s) => s.skill),
+    skills: [
+      ...skillList.filter((s) => s.placement === 'harness').map((s) => s.skill),
+      ...(layoutOf(harness).pluginPlacement === 'flat' ? pluginSkills.map((s) => s.skill) : []),
+    ],
     workspaceSkills: skillList.filter((s) => s.placement === 'workspace').map((s) => s.skill),
     mcp: resolvedMcp,
     files: fileList,
     vars,
     checkVars,
     substitutions: secrets.brokered,
+    plugins: resolvedPlugins,
     ...(workspace && tree
       ? {
           workspace: {

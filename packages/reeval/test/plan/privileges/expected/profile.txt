@@ -11,5 +11,5 @@ evals/p.eval.ts › installs deps                    fake/deps/docker    control
 evals/p.eval.ts › stays unprivileged               fake/plain/docker   control  gated  ×1
 evals/p.eval.ts › on the fake sandbox              fake/host/fake      control  gated  ×1
 excluded: —
-image docker · 6 evals
-  base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)
+image docker · cursor · 6 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

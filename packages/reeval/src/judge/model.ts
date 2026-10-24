@@ -1,22 +1,29 @@
-import { google } from '@ai-sdk/google'
 import { experimental_decide as decide } from 'ai'
 import { debugTrace } from '../debug/attempt.ts'
-import type { JudgeModel, JudgeOptions } from '../types.ts'
+import type { GatewayName, JudgeModel, JudgeOptions } from '../types.ts'
 import { type JudgeState, judgeRoute } from './index.ts'
 
 type DecisionModel = Parameters<typeof decide>[0]['model']
 
-/** See `judgeRoute`: a known provider's own package when its key is set, else the AI Gateway. */
+/** See `judgeRoute`: the provider's own package on direct, the AI Gateway on vercel. */
 async function resolveModel(
   model: Exclude<JudgeModel, { kind: 'fake-judge' }>,
+  gateway: GatewayName | undefined,
 ): Promise<DecisionModel> {
   if (typeof model !== 'string') return model as DecisionModel
-  const route = judgeRoute(model)
+  const route = judgeRoute(model, process.env, 'judge model', gateway)
   if (route.kind === 'gateway') return model
   const id = model.slice(route.provider.length + 1)
-  if (route.provider === 'google') return google.decisionModel(id)
-  const { typeSafeAi } = await import('@ai-sdk/typesafe-ai')
-  return typeSafeAi.decisionModel(id)
+  switch (route.provider) {
+    case 'anthropic':
+      return (await import('@ai-sdk/anthropic')).anthropic.decisionModel(id)
+    case 'google':
+      return (await import('@ai-sdk/google')).google.decisionModel(id)
+    case 'openai':
+      return (await import('@ai-sdk/openai')).openai.decisionModel(id)
+    default:
+      return (await import('@ai-sdk/typesafe-ai')).typeSafeAi.decisionModel(id)
+  }
 }
 
 export async function scoreWithModel(
@@ -25,9 +32,10 @@ export async function scoreWithModel(
   state: JudgeState,
   providerOptions: JudgeOptions['providerOptions'],
   signal: AbortSignal,
+  gateway?: GatewayName,
 ): Promise<{ score: number; resolvedModel: string | undefined }> {
   const result = await decide({
-    model: await resolveModel(model),
+    model: await resolveModel(model, gateway),
     state,
     questions: { answer: { type: 'boolean', instructions: question } },
     providerOptions,

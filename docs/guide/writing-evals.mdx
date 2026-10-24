@@ -28,6 +28,8 @@ group('greet module', () => {
 
 It has three parts: a prompt, deterministic checks, and a question for the judge.
 
+`examples/with-checks` in the reeval repository is checks on their own: the agent adds `multiply` to a small package, and the checks read its files and run its tests. It runs on a fake agent with no keys or Docker: `pnpm eval` there.
+
 ## Name evals with groups
 
 ```ts title="evals/hello.eval.ts"
@@ -42,6 +44,13 @@ group('greet module', () => {
 <Warning>
   Renaming an eval or its group gives it a new id, so its history starts again.
 </Warning>
+
+Name the eval after the question it answers. The run's insights read the name first to tell what the eval checks, then explain the result in those terms.
+
+| | Name |
+|---|---|
+| Good | `recommends Genkit for a production AI feature` |
+| Bad | `genkit test 2` |
 
 ## Send a prompt
 
@@ -92,14 +101,16 @@ await expect(turn).toHaveFile('nope.js')  // right
 ```
 
 ```text
-Summary
- evals/guide-unawaited.eval.ts
-   ✗ unawaited     45ms  1 turn
 …
- ✗ evals/guide-unawaited.eval.ts › unawaited
-   Error: expected file nope.js to exist
+[unawaited#1 fake]  Error: expected file nope.js to exist
+[unawaited#1 fake]
+[unawaited#1 fake]  expect(…).toHaveFile() wasn't awaited. Its check is async: write `await expect(…).toHaveFile()`.
 
-   expect(…).toHaveFile() wasn't awaited. Its check is async: write `await expect(…).toHaveFile()`.
+fail             unawaited
+  toHaveFile nope.js  failed
+    expected file nope.js to exist
+…
+1 fail
 ```
 
 <Warning>
@@ -165,11 +176,11 @@ Prefer checks: they're exact, free and never change their mind. Use the judge fo
 ## Make the eval trustworthy
 
 ```bash
-npx reeval run --config reeval.oracle.config.ts  # the oracle: must pass
-npx reeval run --config reeval.canary.config.ts  # the canary: must fail
+npx reeval run --profile oracle  # the oracle: must pass
+npx reeval run --profile canary  # the canary: must fail
 ```
 
-**Prove it can pass and fail** before you spend tokens: a fake agent that does the task right (an oracle) must pass, and one that cheats (a canary) must fail. See [Oracle and canary](/recipes/fake-harness#oracle-and-canary).
+**Prove it can pass and fail** before you spend tokens: a fake agent that does the task right (an oracle) must pass, and one that cheats (a canary) must fail. Each is a profile that swaps only the harness, so the eval keeps its real `docker()` sandbox; `fakeSandbox()` is for trying reeval without Docker, not for this. See [Oracle and canary](/recipes/fake-harness#oracle-and-canary).
 
 ```ts title="evals/hygiene.eval.ts"
 const greetTest = [/* a test that expects greet('Ada') to be 'Hello, Ada!' */]
@@ -250,16 +261,16 @@ evaluate.todo('greets a list of names')
 ```
 
 ```text
-Summary
- evals/guide.eval.ts
-   greet module
-     ✓ writes a module            57ms  1 turn
-     ✓ passes its own tests      121ms  1 turn
-     ↓ greets in French        skipped
-     ↓ greets a list of names  todo
+pass             greet module › writes a module
+pass             greet module › passes its own tests
+skipped          greet module › greets in French
+todo             greet module › greets a list of names
+
+724ms · results .reeval/runs/20261020T214211Z_…/summary.md
+2 pass · 2 skipped
 ```
 
-`.skip` keeps an eval without running it, and `.todo(name)` notes one to write, shown as todo in the plan, the summary, the record and the studio. `.only` runs only the marked evals in a file while you work on them; it's an error when `CI` is set, so it can't slip into a pipeline. `group` has all three too.
+`.skip` keeps an eval without running it, and `.todo(name)` notes one to write, shown as todo in the plan, the result blocks, the record and the studio. `.only` runs only the marked evals in a file while you work on them; it's an error when `CI` is set, so it can't slip into a pipeline. `group` has all three too.
 
 ## Next
 

@@ -28,6 +28,8 @@ export type OutputFlags = {
   logOrder?: string
   logPrefix?: string
   outputLogs?: string
+  /** `-v` or `-vv`: their phase trace prints as detail lines, so they default to `full`. */
+  verbose?: boolean
 }
 
 const set = (env: NodeJS.ProcessEnv, name: string) => {
@@ -108,7 +110,9 @@ export function resolveOutput(input: {
     'errors-only',
     'none',
   ] as const)
-  const outputLogs: OutputLogs = logs && logs !== 'auto' ? logs : 'full'
+  // A passing attempt's detail would sit above the summary that matters, so only failures show it.
+  const outputLogs: OutputLogs =
+    logs && logs !== 'auto' ? logs : flags.verbose ? 'full' : 'errors-only'
 
   // GitHub Actions renders ANSI colour even though stdout isn't a TTY.
   const color = env.NO_COLOR

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { type CostPart, costLine, type Range } from '../../src/cost.ts'
 import type { PlanDocument } from '../../src/plan.ts'
 import { runCli } from '../helpers.ts'
 import { fixture, testDir } from './fixture.ts'
@@ -11,6 +12,8 @@ export type PlanCase = {
   name: string
   args: string[]
   env?: NodeJS.ProcessEnv
+  /** Render the cost estimate and each cell's part of it too. */
+  cost?: boolean
   /** Seed the copied project before `reeval run --dry-run --json`, e.g. leftover staging. */
   prepare?: (dir: string) => void | Promise<void>
 }
@@ -51,7 +54,7 @@ const table = (rows: string[][]) => {
  * The plan as a text matrix for review diffs: one line per cell, without the host-dependent
  * estimate and concurrency.
  */
-export function renderPlan(plan: PlanDocument): string {
+export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {}): string {
   const { totals, budget } = plan
   const head = [
     plan.profile ? `profile ${plan.profile.name} (${plan.profile.reason})` : 'no profile',
@@ -65,6 +68,10 @@ export function renderPlan(plan: PlanDocument): string {
   ].filter(Boolean)
   if (caps.length) head.push(`budget ${caps.join(', ')} ${budget.fits ? '✓' : '✗'}`)
   if (plan.resume) head.push(`resume ${plan.resume.completed} skipped`)
+  if (plan.insights) {
+    const { model, maxTokens } = plan.insights
+    head.push(`insights ${model} maxTokens ${maxTokens}`)
+  }
   const rows: string[][] = []
   for (const e of plan.evals) {
     const tags = e.tags.length ? ` [${e.tags.join(', ')}]` : ''
@@ -94,7 +101,8 @@ export function renderPlan(plan: PlanDocument): string {
             ? `workspace ${c.workspace.repo}${c.workspace.ref ? `#${c.workspace.ref}` : ''}${c.workspace.path ? `:${c.workspace.path}` : ''}`
             : '',
           c.files ? `files ${c.files.join(', ')}` : '',
-          c.egress.policy === 'allow-all'
+          c.plugins ? `plugins ${c.plugins.join('; ')}` : '',
+          c.egress.policy === 'proxy'
             ? ''
             : `egress ${JSON.stringify(c.egress.policy)}${c.egress.auto.length ? ` + ${c.egress.auto.join(', ')}` : ''}`,
         ]
@@ -127,8 +135,46 @@ export function renderPlan(plan: PlanDocument): string {
     ...table(rows),
     `excluded: ${excluded.length ? excluded.join(', ') : '—'}`,
     ...images,
+    ...(options.cost ? costLines(plan) : []),
     '',
   ].join('\n')
+}
+
+const range = (r: Range | null) => (r ? `${r.low}–${r.high}` : '—')
+const part = (p: CostPart) => `${range(p.tokens)} tokens $${range(p.usd)}`
+
+/** The plain cost line, then each cell's model, basis and ranges. */
+function costLines(plan: PlanDocument): string[] {
+  const { cost } = plan
+  if (!cost) return ['cost  (none in the JSON plan)']
+  const { prices: p } = cost
+  const modelsDev =
+    'why' in p
+      ? ''
+      : 'why' in p.modelsDev
+        ? 'models.dev: —'
+        : `models.dev${p.modelsDev.stale ? ' (stale)' : ''}`
+  const prices =
+    'why' in p
+      ? `no prices: ${p.why}`
+      : `prices ${[p.file, modelsDev].filter(Boolean).join(' over ')}`
+  const unpriced = cost.unpriced.map((u) => `${u.model} ${range(u.tokens)}`).join(', ')
+  return [
+    costLine(cost) ?? 'cost  (no line)',
+    `${prices} · unpriced ${unpriced || '—'} · past ${cost.pastRuns} runs, ${cost.pastAttempts} attempts`,
+    ...table(
+      cost.cells.map((c) => [
+        `  ${c.eval}`,
+        c.cell,
+        c.model ?? 'fake',
+        `judge ${c.judgeModel ?? '—'}`,
+        `${c.basis}${c.basis === 'history' ? ` ×${c.samples}` : ''}`,
+        `×${c.attempts}`,
+        `agent ${part(c.agent)}`,
+        `judge ${part(c.judge)}`,
+      ]),
+    ),
+  ]
 }
 
 /** Compares with the snapshot at `test/<path>`; `REEVAL_UPDATE_SNAPSHOTS=1` writes it instead. */

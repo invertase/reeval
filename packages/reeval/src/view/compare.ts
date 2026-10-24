@@ -17,6 +17,11 @@ export type CompareRow = {
   cells?: { added: string[]; removed: string[] }
   /** Cells in both runs, with each side's lift (variants) and effort. */
   perCell?: CompareCell[]
+  /**
+   * The sides whose `fail` is only attempts the run's interrupt cancelled, which `reeval show`
+   * reads as `cancelled`. Such an eval is never `regressed` or `fixed`: it's `drift`.
+   */
+  cancelled?: Array<'base' | 'head'>
 }
 
 export type CompareCell = {
@@ -156,6 +161,7 @@ const PART_LABELS: Record<Exclude<keyof FingerprintParts, 'sources'>, string> = 
   agentCli: 'agent CLI',
   judge: 'judge',
   context: 'agent context',
+  gateway: 'gateway',
 }
 
 /** Why two runs of an eval aren't comparable: the source files and fingerprint parts that differ. */
@@ -187,6 +193,38 @@ function outcomeOf(cells: ReadonlyArray<Pick<HistoryCell, 'gate' | 'outcome'>>):
   return outcomes.every((o) => o === 'skipped') ? 'skipped' : 'pass'
 }
 
+type Cells = ComparableEval['cells']
+
+/**
+ * Whether a failing eval failed only on attempts the run's interrupt cancelled: every failed
+ * attempt in a gated cell was cut short, so the agent didn't fail it (`reeval show`'s `cancelled`).
+ */
+const cancelledOn = (outcome: Outcome | null, cells: Cells) => {
+  const gated = cells.filter((c) => c.gate !== 'none')
+  return (
+    outcome === 'fail' &&
+    gated.some((c) => c.fail > 0) &&
+    gated.every((c) => c.fail === (c.cancelled ?? 0))
+  )
+}
+
+function cancelledSides(
+  outcomes: Pick<CompareRow, 'base' | 'head'>,
+  cells: { base?: Cells; head?: Cells },
+): Pick<CompareRow, 'cancelled'> {
+  const sides = (['base', 'head'] as const).filter((s) => cancelledOn(outcomes[s], cells[s] ?? []))
+  return sides.length ? { cancelled: sides } : {}
+}
+
+/** An eval only head has. */
+export const addedRow = (h: ComparableEval): CompareRow => ({
+  id: h.id,
+  base: null,
+  head: h.outcome,
+  status: 'added',
+  ...cancelledSides({ base: null, head: h.outcome }, { head: h.cells }),
+})
+
 /**
  * When two runs of an eval differ only in which cells ran (a filtered run, a harness added), its
  * outcome on the cells both have, and the cells only one has. Null when no cell is shared or a
@@ -199,13 +237,15 @@ function sharedScope(b: ComparableEval, h: ComparableEval) {
     return null
   }
   const keys = new Set(h.cells.map((c) => c.key))
+  const baseCells = shared.map((c) => before.get(c.key) ?? c)
   return {
-    base: outcomeOf(shared.map((c) => before.get(c.key) ?? c)),
+    base: outcomeOf(baseCells),
     head: outcomeOf(shared),
     cells: {
       added: h.cells.filter((c) => !before.has(c.key)).map((c) => c.key),
       removed: b.cells.filter((c) => !keys.has(c.key)).map((c) => c.key),
     },
+    over: { base: baseCells, head: shared },
   }
 }
 
@@ -230,18 +270,33 @@ export function compare(base: Comparable, head: Comparable): CompareRow[] {
   return ids.map((id) => {
     const b = base.evals.find((e) => e.id === id)
     const h = head.evals.find((e) => e.id === id)
-    if (!b) return { id, base: null, head: h?.outcome ?? null, status: 'added' }
-    if (!h) return { id, base: b.outcome, head: null, status: 'removed' }
+    if (!b) return addedRow(h as ComparableEval)
+    if (!h) {
+      return {
+        id,
+        base: b.outcome,
+        head: null,
+        status: 'removed',
+        ...cancelledSides({ base: b.outcome, head: null }, { base: b.cells }),
+      }
+    }
     const scoped = b.fingerprint === h.fingerprint ? null : sharedScope(b, h)
-    const row: Omit<CompareRow, 'status'> = scoped
-      ? { id, ...scoped }
-      : { id, base: b.outcome, head: h.outcome }
+    const outcomes = scoped
+      ? { base: scoped.base, head: scoped.head }
+      : { base: b.outcome, head: h.outcome }
+    const row: Omit<CompareRow, 'status'> = {
+      id,
+      ...outcomes,
+      ...(scoped ? { cells: scoped.cells } : {}),
+      ...cancelledSides(outcomes, scoped?.over ?? { base: b.cells, head: h.cells }),
+    }
     const perCell = compareCells(b, h)
     if (perCell.length) row.perCell = perCell
     if (row.base === 'infra_error' || row.head === 'infra_error') return { ...row, status: 'infra' }
     if (b.fingerprint !== h.fingerprint && !scoped) {
       return { ...row, status: 'drift', changes: whyChanged(b, h) }
     }
+    if (row.cancelled) return { ...row, status: 'drift' }
     if (graderChanged && row.base !== row.head) return { ...row, status: 'drift' }
     if (row.base === 'pass' && row.head === 'fail') return { ...row, status: 'regressed' }
     if (row.base === 'fail' && row.head === 'pass') return { ...row, status: 'fixed' }

@@ -1,0 +1,28 @@
+version = 1
+revision = 5
+requires-python = ">=3.11"
+
+[[package]]
+name = "reeval-fixture-python-attempt-isolation"
+version = "0.0.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "reeval-python" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "reeval-python", directory = "../../../../../reeval-python" }]
+
+[[package]]
+name = "reeval-python"
+version = "0.10.0"
+source = { directory = "../../../../../reeval-python" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pyright", specifier = ">=1.1" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "ruff", specifier = ">=0.9" },
+]

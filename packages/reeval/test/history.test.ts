@@ -11,7 +11,16 @@ import { renderSummary } from '../src/history/summary.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { harnessLabel, languageLabel, runtimeLabel } from '../src/view/model.ts'
 import { readableRecord } from '../src/view/record.ts'
-import { baseEnv, fakeConfig, project, readRun, recordedRuns, runCli, tempDir } from './helpers.ts'
+import {
+  baseEnv,
+  fakeConfig,
+  noSignals,
+  project,
+  readRun,
+  recordedRuns,
+  runCli,
+  tempDir,
+} from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
 
 const GIT_ENV = {
@@ -81,7 +90,7 @@ describe('recording runs into evals/.history', () => {
     assert.deepEqual(
       evals[0]?.trial.egress,
       {
-        policy: 'allow-all',
+        policy: 'proxy',
         allowed: null,
         recorded: false,
         contacted: [],
@@ -345,7 +354,13 @@ describe('recording runs into evals/.history', () => {
       ['same'],
     )
     const md = await runCli(p.dir, ['compare', '--md'])
-    assert.match(md.stdout, /commit not in HEAD's history/)
+    assert.match(
+      md.stdout,
+      new RegExp(
+        `^base ${before} ran on a commit that isn't in HEAD's history \\(rebased or dropped\\?\\)$`,
+        'm',
+      ),
+    )
   })
 
   test('recording refuses files that look like secrets, or that changed after the run', async () => {
@@ -479,6 +494,28 @@ describe('recording runs into evals/.history', () => {
     )
   })
 
+  test("a profile's defaults.sandbox is the sandbox the run header and the record name", async () => {
+    const p = await project('record-profile-sandbox', {
+      'evals/agent.eval.ts': agent(),
+      'reeval.config.ts': fakeConfig({
+        harness: harness(),
+        extra: 'profiles: { fake: { defaults: { sandbox } } },',
+      })
+        .replace(
+          "import { fakeSandbox } from 'reeval/sandbox'",
+          "import { docker, fakeSandbox } from 'reeval/sandbox'",
+        )
+        .replace('  sandbox,\n', '  sandbox: docker(),\n'),
+    })
+    const r = await runCli(p.dir, ['run', '--profile', 'fake', '--ui', 'plain'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, / · harness fake · sandbox fake · /)
+    const { run } = readRun(p.dir)
+    assert.equal(run.evals[0]?.cells[0]?.sandbox, 'fake', 'the cell ran on the fake sandbox')
+    assert.equal(run.config.sandbox, 'fake')
+    assert.equal(run.profile?.defaults.sandbox, 'fake')
+  })
+
   test("the config's judge.state is in the record and the fingerprint; its defaults change neither", async () => {
     const run = async (name: string, judge: string) => {
       const p = await project(name, {
@@ -503,6 +540,30 @@ describe('recording runs into evals/.history', () => {
     assert.equal(defaults.stack.judge.state, undefined)
     assert.notEqual(part(narrowed), part(plain), 'a narrower judge is a new measurement')
     assert.deepEqual(narrowed.stack.judge.state?.diff, ['src/'])
+  })
+
+  test("the cell's gateway is in the record, and direct leaves the fingerprint as it was", async () => {
+    const run = async (name: string, gateway?: string) => {
+      const p = await project(name, {
+        'evals/agent.eval.ts': agent(),
+        'reeval.config.ts': `import { direct, vercel } from 'reeval/gateway'
+${fakeConfig({ harness: harness(), ...(gateway ? { extra: `gateway: ${gateway},` } : {}) })}`,
+      })
+      const r = await runCli(p.dir)
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      return readRun(p.dir).run.evals[0]?.cells[0]
+    }
+    const unset = await run('gateway-unset')
+    const direct = await run('gateway-direct', '[direct()]')
+    assert.equal(unset?.gateway, undefined)
+    assert.equal(direct?.gateway, 'direct')
+    assert.equal(direct?.fingerprintParts.gateway, undefined)
+    assert.equal(direct?.fingerprint, unset?.fingerprint, 'direct() is how reeval always ran')
+    const vercel = await run('gateway-vercel', '[vercel(), direct()]')
+    assert.equal(vercel?.gateway, 'vercel')
+    assert.equal(vercel?.fingerprintParts.gateway, 'vercel')
+    assert.equal(vercel?.fingerprintParts.harness, unset?.fingerprintParts.harness)
+    assert.notEqual(vercel?.fingerprint, unset?.fingerprint, 'another route is another measurement')
   })
 
   test('a project reached through another spelling of its path records like any other', async () => {
@@ -541,7 +602,7 @@ describe('recording runs into evals/.history', () => {
     symlinkSync(p.dir, link, 'junction')
     const r = await runCli(p.dir, ['run', '--record', '--config', join(link, 'reeval.config.ts')])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /^ Results {2}\.reeval\/runs\/\S+\/summary\.md$/m)
+    assert.match(r.stdout, / · results \.reeval\/runs\/\S+\/summary\.md$/m)
     assert.match(r.stdout, /^recorded evals\/\.history\/\S+\.json/m)
     assert.doesNotMatch(r.stdout + r.stderr, /\.\.\//)
   })
@@ -679,10 +740,7 @@ evaluate('agent', async (c) => {
     const [row] = (await compareJson(p.dir)).rows
     assert.deepEqual([row?.status, row?.changes], ['drift', ['evals/helpers.ts changed']])
     const text = await runCli(p.dir, ['compare'])
-    assert.match(
-      text.stdout,
-      /changed \(not comparable\) +evals\/agent\.eval\.ts › agent: evals\/helpers\.ts changed/,
-    )
+    assert.match(text.stdout, /^can't compare {4}agent\n {2}changed {10}evals\/helpers\.ts\n/m)
 
     await writeFile(join(p.dir, 'evals/helpers.ts'), "export const prompt = 'write hello.txt'\n")
     await writeFile(
@@ -712,15 +770,22 @@ evaluate('flips', async (c) => {
     assert.equal((await runCli(p.dir)).code, 0)
     const first = await compareCode()
     assert.equal(first.code, 0, first.out)
-    assert.match(first.out, /No earlier recorded run to compare \S+ with: every eval is new\./)
-    assert.match(first.out, /✓ {2}new {2}evals\/a\.eval\.ts › flips/)
+    assert.match(
+      first.out,
+      /^No earlier recorded run to compare \S+ with, so every eval is new\.$/m,
+    )
+    assert.match(first.out, /^pass {13}flips$/m)
+    assert.match(first.out, /^1 new eval \(1 pass\)$/m)
     assert.equal((await compareCode('--fail-on-regression')).code, 0)
     assert.equal(JSON.parse((await compareCode('--json')).out).base, null)
     assert.equal((await runCli(p.dir, ['run'], broken)).code, 1)
     const newFailing = await compareCode('--fail-on-regression')
     assert.equal(newFailing.code, 1, newFailing.out)
-    assert.match(newFailing.out, /every eval is new, and 1 fails\./)
-    assert.match((await compareCode('--md')).out, /^### reeval: \S+\n\nNo earlier recorded run/)
+    assert.match(newFailing.out, /^1 new eval \(1 fail\)$/m)
+    assert.match(
+      (await compareCode('--md')).out,
+      /^### reeval compare: \S+\n\n```text\nNo earlier recorded run/,
+    )
 
     // With a recorded base: pass → fail regresses.
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
@@ -733,7 +798,7 @@ evaluate('flips', async (c) => {
     assert.equal((await runCli(p.dir)).code, 1)
     const added = await compareCode('--fail-on-regression')
     assert.equal(added.code, 1, added.out)
-    assert.match(added.out, /· → ✗ {2}new +evals\/b\.eval\.ts › broken/)
+    assert.match(added.out, /^new {14}broken\n {2}head {13}\S+ {2}fail$/m)
     await writeFile(join(p.dir, 'evals/b.eval.ts'), agent('fresh'))
     assert.equal((await runCli(p.dir)).code, 0)
     const twin = await compareCode('--fail-on-regression')
@@ -757,15 +822,88 @@ evaluate('edited', async (c) => {
     await writeFile(join(p.dir, 'evals/a.eval.ts'), edited('write hello.txt!'))
     assert.equal((await runCli(p.dir, ['run'], { env: { REEVAL_TEST_BREAK: '1' } })).code, 1)
     const failing = await compareCode('--fail-on-regression')
-    assert.match(failing.out, /✓ → ✗ {2}changed \(not comparable\) +evals\/a\.eval\.ts › edited/)
+    assert.match(
+      failing.out,
+      /^can't compare {4}edited\n {2}changed {10}evals\/a\.eval\.ts\n {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}fail$/m,
+    )
     assert.equal(failing.code, 1, failing.out)
     assert.equal((await compareCode()).code, 0, 'without the flag, compare exits 0')
 
     // Canary: the same edit, passing, isn't a failure.
     assert.equal((await runCli(p.dir)).code, 0)
     const passing = await compareCode('--fail-on-regression')
-    assert.match(passing.out, /✓ → ✓ {2}changed \(not comparable\)/)
+    assert.match(passing.out, /^can't compare {4}edited\n(.*\n){2} {2}head {13}\S+ {2}pass$/m)
     assert.equal(passing.code, 0, passing.out)
+  })
+
+  test('reeval compare reads an eval an interrupt cancelled as cancelled, never regressed', {
+    skip: noSignals,
+  }, async () => {
+    const p = await gitProject('compare-cancelled', {})
+    const started = join(p.dir, 'slow.started')
+    mkdirSync(join(p.dir, 'evals'))
+    await writeFile(
+      join(p.dir, 'evals/a.eval.ts'),
+      `import { writeFileSync } from 'node:fs'
+import { evaluate, expect } from 'reeval'
+evaluate('flips', async (c) => {
+  await c.send('write hello.txt')
+  expect(process.env.REEVAL_TEST_BREAK ?? 'ok', 'returns ok').toBe('ok')
+})
+evaluate('slow', async (c) => {
+  if (process.env.REEVAL_TEST_SLOW) {
+    writeFileSync(${JSON.stringify(started)}, '')
+    await new Promise((_, reject) => c.signal.addEventListener('abort', () => reject(c.signal.reason)))
+  }
+  expect(1, 'finished').toBe(1)
+})
+`,
+    )
+    sh(p.dir, 'add', '-A')
+    sh(p.dir, 'commit', '-q', '-m', 'evals')
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const compareCode = async (...args: string[]) => {
+      const r = await runCli(p.dir, ['compare', ...args])
+      return { code: r.code, out: r.stdout + r.stderr }
+    }
+    // One attempt at a time, so `flips` has finished by the time `slow` starts waiting.
+    const interrupted = async (env: Record<string, string>) => {
+      await rm(started, { force: true })
+      let pid = 0
+      const run = runCli(p.dir, ['run', '--concurrency', '1'], {
+        env: { REEVAL_TEST_SLOW: '1', ...env },
+        onOutput: (_, id) => {
+          pid = id
+          return true
+        },
+      })
+      while (!existsSync(started)) await new Promise((resolve) => setTimeout(resolve, 50))
+      process.kill(pid, 'SIGINT')
+      const r = await run
+      assert.equal(r.code, 130, r.stdout + r.stderr)
+    }
+
+    await interrupted({})
+    const cancelled = await compareCode('--fail-on-regression')
+    assert.match(
+      cancelled.out,
+      /^can't compare {4}slow\n {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}cancelled$/m,
+    )
+    assert.doesNotMatch(cancelled.out, /regressed/)
+    assert.match(cancelled.out, /^1 can't compare · 1 same$/m)
+    assert.equal(cancelled.code, 0, cancelled.out)
+    const row = JSON.parse((await compareCode('--json')).out).rows.find((r: { id: string }) =>
+      r.id.endsWith('slow'),
+    )
+    assert.deepEqual([row.status, row.head, row.cancelled], ['drift', 'fail', ['head']])
+
+    // Canary: a real pass → fail in the same interrupted head still regresses and fails the check.
+    await interrupted({ REEVAL_TEST_BREAK: '1' })
+    const regressed = await compareCode('--fail-on-regression')
+    assert.match(regressed.out, /^regressed {8}flips\n(.*\n){2} {2}returns ok {7}pass → fail$/m)
+    assert.match(regressed.out, /^can't compare {4}slow$/m)
+    assert.match(regressed.out, /^1 regressed · 1 can't compare$/m)
+    assert.equal(regressed.code, 1, regressed.out)
   })
 
   test("a turn's text is cut at 8 KB in the record; transcript.jsonl keeps it whole", async () => {
@@ -926,7 +1064,7 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
     // Twin: the parent's config, found from its own tree or named with --config, runs its eval.
     const parent = await runCli(join(p.dir, 'evals'))
     assert.equal(parent.code, 1, parent.stdout + parent.stderr)
-    assert.match(parent.stdout, /✗ evals\/parent\.eval\.ts › parent/)
+    assert.match(parent.stdout, /^fail {13}parent$/m)
     const named = await runCli(lib, ['run', '--config', '../../../../reeval.config.ts'])
     assert.equal(named.code, 1, named.stdout + named.stderr)
     assert.deepEqual(
@@ -958,7 +1096,7 @@ describe('records from before a field existed', () => {
   test('plan.sandboxWarnings: a record without it reads as none, and summary.md renders', () => {
     const r = raw()
     assert.deepEqual(readableRecord(r).plan.sandboxWarnings, [])
-    assert.doesNotMatch(renderSummary(readableRecord(raw())), /running as root/)
+    assert.doesNotMatch(renderSummary(readableRecord(raw()), { hint: true }), /running as root/)
   })
 
   test('stack.harnesses[].effort: a record without it reads as unset, and Fast is not served effort', () => {
@@ -994,7 +1132,10 @@ describe('records from before a field existed', () => {
     assert.equal('runtime' in r.stack || 'language' in r.stack, false)
     assert.equal(runtimeLabel(r.stack), `node ${r.stack.node}`)
     assert.equal(languageLabel(r.stack), null)
-    assert.match(renderSummary(r), new RegExp(`\\| reeval \\| \\S+ · node ${r.stack.node} · \\w+/`))
+    assert.match(
+      renderSummary(r, { hint: true }),
+      new RegExp(`\\| reeval \\| \\S+ · node ${r.stack.node} · \\w+/`),
+    )
   })
 
   test('the runtime and language labels', () => {
@@ -1017,7 +1158,7 @@ describe('records from before a field existed', () => {
       r.evals.map((e) => e.todo),
       [false, false],
     )
-    assert.match(renderSummary(r), /\| ✓ \| evals\/greet\.es\.ts › writes greet\.js \|/)
+    assert.match(renderSummary(r, { hint: true }), /^pass {13}writes greet\.js$/m)
   })
 
   test('a newer record keeps what it has', () => {
@@ -1049,7 +1190,7 @@ describe('records from before a field existed', () => {
     assert.match(await ok(['query', 'eval_trend']), /writes greet\.js/)
     assert.match(
       await ok(['compare', oldRun, runs[1] as string]),
-      /✓ → ✓ .* evals\/greet\.es\.ts › writes greet\.js/,
+      /^(\d+ (regressed|fixed|can't compare|infra error|new|removed|same)( · )?)+$/m,
     )
     await ok(['studio', 'build', '--out', join(p.dir, 'site')])
   })

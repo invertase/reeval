@@ -98,7 +98,7 @@ evals/skill.eval.ts › house greeting › greets in the house style  1         
 
 ## Read the plan as JSON
 
-`--dry-run --json` prints every cell with its role and gate. From `examples/hello` under the fake config:
+`--dry-run --json` prints every cell with its role and gate. From a project of greeting evals on the fake harness:
 
 ```bash
 reeval run --dry-run --json --config reeval.fake.config.ts skill
@@ -151,7 +151,7 @@ The control's `gate` is `"none"`: under the default `compare.gate: 'variants'`, 
 
 ## A real suite
 
-`examples/hello` with its real config: 18 evals, one with a variant, so 19 cells.
+A project of 18 evals, one with a variant, so 19 cells.
 
 ```text
 plan  18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4)
@@ -164,7 +164,7 @@ evals/skill.eval.ts › house greeting › greets in the house style    1       
 evals/sqlite.eval.ts › queries a seeded SQLite database             1          —         1     1
 ```
 
-With `--profile nightly` (`defaults: { runs: 3 }`) the same suite is 57 attempts. The estimate is the median of each eval's recent attempts on that harness, else 3 minutes each.
+With `--profile nightly` (`defaults: { runs: 3 }`) the same suite is 57 attempts. The estimate is the median of each eval's recent attempts on that harness, else 3 minutes each (for `fakeHarness`, 1 second in `fakeSandbox()` and 30 seconds in a container).
 
 <Info>
   An eval has one sandbox. Comparing toolchains needs different checks, so that's a separate eval, not another axis.

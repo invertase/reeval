@@ -2,5 +2,5 @@ no profile · 1 evals · 2 cells · 2 attempts
 evals/inherit.eval.ts › named compare uses the root sandbox  fake/plain/docker:node:24-bookworm      control            ungated  ×1
                                                              fake/with-mode/docker:node:24-bookworm  variant with-mode  gated    ×1
 excluded: —
-image docker:node:24-bookworm · 1 evals
-  from node:24-bookworm  reeval-sandbox:cursor-0.1.5-node-24-bookworm-cf9a0fc2  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+image docker:node:24-bookworm · cursor · 1 evals
+  from node:24-bookworm  reeval-sandbox:cursor-0.1.6-node-24-bookworm-2002b7c9  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

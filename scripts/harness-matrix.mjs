@@ -7,13 +7,14 @@ import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..')
 const src = join(root, 'packages/reeval/src')
-const { AGENTS, agentFor, gooseMcpServers, refusedMcp } = await import(
+const { AGENTS, LAYOUTS, agentFor, gooseMcpServers, refusedMcp } = await import(
   join(src, 'harness/agents.ts')
 )
 const { OPENCODE_PROVIDERS, REFUSED_OPENCODE_PROVIDERS } = await import(
   join(root, 'packages/harness-opencode/src/opencode-providers.ts')
 )
 const { InfraError } = await import(join(src, 'sandbox/types.ts'))
+const { PLUGIN_PARTS } = await import(join(src, 'environment/plugins.ts'))
 const { harnesses } = await import(join(root, 'packages/reeval/test/support/harnesses.ts'))
 
 const TRANSPORTS = ['stdio', 'http', 'sse']
@@ -46,6 +47,8 @@ async function webEvents(kind, agent, model) {
   const adapter = await agent.adapter({
     auth: { [agent.credential]: 'probe' },
     descriptor: { kind, model },
+    model,
+    plugins: [],
   })
   const tools = Object.keys(adapter.builtinTools ?? {})
   return {
@@ -54,13 +57,52 @@ async function webEvents(kind, agent, model) {
   }
 }
 
+/** What the agent names a plugin's server, `<plugin>:<server>` unless it renames it (pi). */
+function pluginServerName(h) {
+  const servers = h.agent.mcpServers({ 'plugin:server': PROBE.stdio })
+  const name = Array.isArray(servers) ? servers[0]?.name : Object.keys(servers ?? {})[0]
+  return (typeof name === 'string' ? name : 'plugin:server')
+    .replace('plugin', '<plugin>')
+    .replace('server', '<server>')
+}
+
 const list = (items) =>
   items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
 
 const code = (s) => `\`${s}\``
 
+const PART_NAMES = { skills: 'skills', mcp: 'MCP servers', hooks: 'hooks', agents: 'subagents' }
+
 /** Each note is said only while its fact holds. */
 const NOTES = [
+  (h) =>
+    h.agent.pluginParts.length &&
+    LAYOUTS[h.kind]?.pluginPlacement === 'namespaced' &&
+    h.kind !== 'antigravity' &&
+    `It loads ${
+      h.agent.pluginParts.includes('agents')
+        ? `each plugin whole from where reeval copies it, namespaced (${code('review:reviewer')})`
+        : `each plugin's ${list(h.agent.pluginParts.map((p) => PART_NAMES[p] ?? p))} from where reeval copies it, namespaced`
+    }, and starts the plugin's MCP servers itself, so a plugin server that reads a host variable is refused: declare it in ${code('mcp')} instead.`,
+  (h) =>
+    h.agent.pluginParts.length &&
+    LAYOUTS[h.kind]?.pluginPlacement === 'flat' &&
+    `A plugin's skills sit beside the eval's and its MCP servers go in as ${code(pluginServerName(h))}, so a skill or server whose name another already has is refused at plan time.`,
+  (h) =>
+    h.agent.pluginParts.length &&
+    h.kind === 'antigravity' &&
+    `Each plugin is installed with ${code('agy plugin install')} from where reeval copies it as the session starts; the CLI starts the plugin's MCP servers itself, so a plugin server that reads a host variable is refused: declare it in ${code('mcp')} instead.`,
+  (h) => {
+    const unpack = LAYOUTS[h.kind]?.pluginUnpack
+    if (!h.agent.pluginParts.length || !unpack) return false
+    const parts = [
+      ['rules', 'rules'],
+      ['agents', 'subagents'],
+      ['commands', 'commands'],
+      ['hooks', 'hooks'],
+    ].flatMap(([part, what]) => (unpack[part] ? [what] : []))
+    return `Plugin ${list(parts)} are unpacked into the workspace before the snapshot, flat, so two with one name clash; its own plugin loading is never used.`
+  },
   (h) =>
     h.agent.forModel &&
     h.kind === 'opencode' &&
@@ -108,15 +150,31 @@ const NOTES = [
     h.kind === 'opencode' &&
     `MCP servers go in its config with Code Mode off, not over ACP, where OpenCode offers them only through its ${code('execute')} tool; the first prompt waits until they've connected.`,
   (h) =>
+    h.agent.forModel &&
+    h.kind === 'fx' &&
+    `Its key is the model's provider's: ${code('AI_GATEWAY_API_KEY')} for a Vercel AI Gateway id (${code('anthropic/claude-sonnet-5')}), ${code('OPENAI_API_KEY')} for a bare OpenAI id (${code('gpt-5.5')}), which must accept function tools without ${code('reasoning_effort')} (fx sends none).`,
+  (h) =>
+    h.kind === 'fx' &&
+    `fx ignores ${code('HTTPS_PROXY')}, so its model calls reach the egress gateway through a relay inside the sandbox; its own web search and fetch, HTTP and SSE MCP servers don't use the relay, so a restricted egress policy blocks them and the record lists none of their requests.`,
+  (h) =>
     h.agent.modelResponses &&
+    h.kind === 'fx' &&
+    `Served model from each API response, which the gateway reads: fx doesn't report one over ACP.`,
+  (h) =>
+    h.agent.modelResponses &&
+    h.kind === 'codex' &&
     `Served model and reasoning effort from each API response, which the gateway reads (e.g. ${code('gpt-5.6-luna[effort=medium]')}): its CLI doesn't report them.`,
+  (h) =>
+    h.agent.modelResponses &&
+    h.kind === 'grok-build' &&
+    `Served model from each API response, which the gateway reads: its CLI doesn't report it.`,
   (h) =>
     h.kind === 'codex' &&
     h.web.search &&
     `Its web searches and the pages it opens run on OpenAI's side, so a restricted egress policy doesn't limit them; each is in the transcript.`,
   (h) =>
     h.agent.expectedBlocked &&
-    `Its CLI always tries ${list(h.agent.expectedBlocked.hosts.map(code))}; a restricted egress policy refuses them and records them under the record's ${code('egress.expectedBlocked')}.`,
+    `${h.agent.expectedBlocked.withPlugins ? 'In a session with plugins it' : 'It'} tries ${list(h.agent.expectedBlocked.hosts.map(code))} (${h.agent.expectedBlocked.why}); a restricted egress policy refuses ${h.agent.expectedBlocked.hosts.length > 1 ? 'them' : 'it'} and records ${h.agent.expectedBlocked.hosts.length > 1 ? 'them' : 'it'} under the record's ${code('egress.expectedBlocked')}.`,
 ]
 
 /** The facts for each real harness, in the catalog's order, and whatever doesn't add up. */
@@ -155,6 +213,11 @@ export async function harnessFacts() {
     if ((row.mcp !== false) !== mcp.stdio.ok) {
       problems.push(`${kind}: the contract row's mcp and the catalog disagree on stdio MCP servers`)
     }
+    if (String(row.plugin?.parts ?? []) !== String(agent.pluginParts)) {
+      problems.push(
+        `${kind}: the contract row's plugin.parts (${row.plugin?.parts ?? 'unset'}) and the catalog's pluginParts (${agent.pluginParts}) disagree`,
+      )
+    }
     const web = await webEvents(kind, agentFor({ kind, model: row.model }), row.model)
     const h = { kind, agent, row, page, mcp, web }
     h.notes = NOTES.map((note) => note(h)).filter(Boolean)
@@ -164,7 +227,11 @@ export async function harnessFacts() {
     if (row.id !== 'fake' && !AGENTS[row.harness ?? row.id])
       problems.push(`contract row ${row.id} isn't in AGENTS`)
     if (row.harness) {
-      const credential = agentFor({ kind: row.harness, model: row.model }).credential
+      const credential = agentFor({
+        kind: row.harness,
+        model: row.model,
+        ...(row.gateway ? { gateway: row.gateway } : {}),
+      }).credential
       if (row.key?.name !== credential)
         problems.push(
           `${row.id}: the contract row's key is ${row.key?.name}, the catalog's ${credential}`,
@@ -175,6 +242,14 @@ export async function harnessFacts() {
 }
 
 const yes = (ok) => (ok ? '✓' : '✗')
+
+/** The plugin parts the agent loads: ✓ for every part, ✗ for none, else the shorter of the parts it loads and the parts it leaves out. */
+const pluginCell = (parts) => {
+  if (!parts.length) return '✗'
+  const missing = PLUGIN_PARTS.filter((p) => !parts.includes(p))
+  if (!missing.length) return '✓'
+  return missing.length > parts.length ? parts.join(', ') : `all but ${missing.join(', ')}`
+}
 
 /**
  * The matrix and its notes. `href` turns a docs page (`reference/harness/pi`) into a link for
@@ -191,6 +266,7 @@ export function renderMatrix(facts, { href, text = (s) => s }) {
     'MCP stdio',
     'MCP http',
     'MCP sse',
+    'Plugins',
     'Tokens',
     'Served model',
     'Web search events',
@@ -205,6 +281,7 @@ export function renderMatrix(facts, { href, text = (s) => s }) {
     yes(!!h.agent.workspaceSkillDir),
     yes(!!h.agent.harnessSkillDir),
     ...TRANSPORTS.map((t) => yes(h.mcp[t].ok)),
+    pluginCell(h.agent.pluginParts),
     yes(h.row.tokens),
     h.row.servedModel && !h.row.servedModelGap ? '✓' : h.row.wireModel ? 'partial' : '✗',
     yes(h.web.search),

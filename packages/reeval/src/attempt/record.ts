@@ -1,10 +1,11 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { debugLog } from '../debug/attempt.ts'
-import { allowedHosts } from '../egress.ts'
+import { allowedHosts, isDirect } from '../egress.ts'
 import { isTimeout } from '../errors.ts'
 import { expectedBlockedFor } from '../harness/agents.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
+import { sandboxProvider } from '../options.ts'
 import { redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { PrepareError } from '../sandbox/provider.ts'
@@ -56,7 +57,7 @@ export async function recordOom(
   if (oom) debugLog('teardown', `oom_kill ${oom.kills} at ${at}`)
   if (!oom?.kills) return undefined
   const processes = oom.kills === 1 ? '1 process' : `${oom.kills} processes`
-  const message = `out of memory: ${processes} killed at ${at}; raise docker({ memory })`
+  const message = `out of memory: ${processes} killed at ${at}; raise ${sandboxProvider(a.spec.sandbox)}({ memory })`
   a.record.error = { kind: 'infra', message, resource: { cause: 'oom', kills: oom.kills } }
   a.record.outcome = 'infra_error'
   return new InfraError(message)
@@ -64,11 +65,12 @@ export async function recordOom(
 
 /**
  * The attempt's egress policy and, when its sandbox records it, what it contacted and was refused.
- * Refused hosts the harness always tries are `expectedBlocked`, summarised in one `-v` line.
+ * Refused hosts the harness always tries (in a session like this one) are `expectedBlocked`,
+ * summarised in one `-v` line.
  */
 export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
   const traffic = sandbox?.traffic?.()
-  const expected = expectedBlockedFor(a.spec.harness)
+  const expected = expectedBlockedFor(a.spec.harness, (a.env?.plugins.length ?? 0) > 0)
   const refused = traffic?.blocked ?? []
   const isExpected = (h: { host: string }) => !!expected?.hosts.includes(h.host)
   const expectedBlocked = refused.filter(isExpected)
@@ -76,6 +78,7 @@ export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
     policy: a.spec.egress.policy,
     allowed: allowedHosts(a.spec.egress),
     recorded: !!traffic,
+    ...(traffic && isDirect(a.spec.egress.policy) ? { partial: true as const } : {}),
     contacted: traffic?.contacted ?? [],
     blocked: refused.filter((h) => !isExpected(h)),
     expectedBlocked,
@@ -85,6 +88,8 @@ export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
     debugLog('gateway', `expected blocks, not logged per request: ${hosts} · ${expected.why}`)
   }
   a.record.servedModels = sandbox?.servedModels?.() ?? null
+  const asked = sandbox?.askedModels?.() ?? []
+  if (asked.length) a.record.askedModels = asked
 }
 
 /** Writes the attempt's record, redacted, and returns what the runner reports. */

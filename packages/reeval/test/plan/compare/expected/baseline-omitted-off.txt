@@ -1,10 +1,10 @@
 profile off (--profile) · 3 evals · 6 cells · 6 attempts
-evals/omitted.eval.ts › no environment                    a/baseline/docker  control  ungated  ×1  compare off (profile off)
-                                                          b/baseline/docker  control  ungated  ×1
-evals/omitted.eval.ts › inherits › the group environment  a/base/docker      control  ungated  ×1  compare off (profile off)
-                                                          b/base/docker      control  ungated  ×1
-evals/omitted.eval.ts › its own environment               a/base/docker      control  ungated  ×1  compare off (profile off)
-                                                          b/base/docker      control  ungated  ×1
+evals/omitted.eval.ts › no environment                    a/baseline/docker  control  gated  ×1  compare off (profile off)
+                                                          b/baseline/docker  control  gated  ×1
+evals/omitted.eval.ts › inherits › the group environment  a/base/docker      control  gated  ×1  compare off (profile off)
+                                                          b/base/docker      control  gated  ×1
+evals/omitted.eval.ts › its own environment               a/base/docker      control  gated  ×1  compare off (profile off)
+                                                          b/base/docker      control  gated  ×1
 excluded: —
-image docker · 3 evals
-  base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)
+image docker · cursor · 3 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

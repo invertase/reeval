@@ -148,7 +148,10 @@ const tools = defineEnvironment('tools', ({ secret }) => ({
   setup: [{ run: 'sleep 6 && printf %s "$CHECK_ONLY" > /tmp/check-only', timeout: '30s' }],
 }))
 evaluate('layered', { environment: tools.extend('layered', { sandbox: docker({ install: ${JSON.stringify(install)} }) }), timeout: '5s' }, async (c) => {
-  await c.send('x')
+  const turn = await c.send('x')
+  const agentEnv = turn.transcript.flatMap((e) => (e.type === 'tool' && e.tool === 'shell' ? [e.output] : [])).join('')
+  expect(agentEnv.split('\\n')).toContain('DB_URL')
+  expect(agentEnv.split('\\n')).not.toContain('CHECK_ONLY')
   expect((await c.exec('cat /opt/reeval-layer')).stdout).toBe('layer\\n')
   expect((await c.exec('cat /opt/reeval-cwd')).stdout).toBe('/\\n')
   expect((await c.exec('cat /opt/reeval-workspace')).stdout).toBe('0\\n')
@@ -157,13 +160,11 @@ evaluate('layered', { environment: tools.extend('layered', { sandbox: docker({ i
   expect((await c.exec('cat ~/.config/reeval/hint.txt')).stdout).toBe('from home')
   await c.exec('cat /opt/reeval-built')
   expect((await c.exec('cat /tmp/check-only')).stdout).toBe('postgres://u:pw-long-enough@db')
-  const pid1 = (await c.exec("tr '\\\\0' '\\\\n' < /proc/1/environ")).stdout
-  expect(pid1).toContain('DB_URL=')
-  expect(pid1).not.toContain('CHECK_ONLY')
 })
 `
       const p = await project('docker-env', {
-        'reeval.config.ts': config('{}'),
+        // The agent's own environment: the container's, without the checks' variables.
+        'reeval.config.ts': config(`{ script: [[{ exec: 'env | cut -d= -f1' }]] }`),
         'evals/d.eval.ts': eval_,
       })
       const env = { REEVAL_TEST_DB_URL: 'postgres://u:pw-long-enough@db' }
@@ -239,7 +240,11 @@ evaluate('stays unprivileged', async (c) => {
         )
       }
 
-      const r = await runCli(p.dir, ['run', '--ui', 'plain', 'evals/root.eval.ts'], slow)
+      const r = await runCli(
+        p.dir,
+        ['run', '--ui', 'plain', '--output-logs', 'full', 'evals/root.eval.ts'],
+        slow,
+      )
       assert.equal(r.code, 0, r.stdout + r.stderr)
       const rooted = readRun(p.dir)
       warned(r.stdout, rooted.run, rooted.read('summary.md'))
@@ -621,14 +626,14 @@ evaluate('nope', { environment: defineEnvironment('nope', { sandbox: docker({ fr
 
       const r = await runCli(p.dir, ['image', 'build'], slow)
       assert.equal(r.code, 3, r.stdout + r.stderr)
-      assert.match(r.stdout, /^✓ docker: reeval-sandbox:cursor-[\d.]+ [0-9a-f]{12}$/m)
+      assert.match(r.stdout, /^✓ docker · cursor: reeval-sandbox:cursor-[\d.]+ [0-9a-f]{12}$/m)
       assert.match(
         r.stdout,
-        /^✗ docker:bad\.Dockerfile \(1 eval\): Building evals\/bad\.Dockerfile failed: a RUN step exited 42$/m,
+        /^✗ docker:bad\.Dockerfile · cursor \(1 eval\): Building evals\/bad\.Dockerfile failed: a RUN step exited 42$/m,
       )
       assert.match(
         r.stdout,
-        /^✗ docker:nonexistent-reeval-image-\d+:1 \(1 eval\): Building the toolchain layer FROM nonexistent-reeval-image-\d+:1 failed/m,
+        /^✗ docker:nonexistent-reeval-image-\d+:1 · cursor \(1 eval\): Building the toolchain layer FROM nonexistent-reeval-image-\d+:1 failed/m,
       )
       assert.match(r.stdout, /^2 of 3 images failed to build$/m)
       // Canary: without the broken images there's nothing to fail.
@@ -684,7 +689,7 @@ evaluate('base', { environment: defineEnvironment('base', { sandbox: docker({ fr
       const dry = await runCli(p.dir, ['run', '--dry-run'])
       assert.match(
         dry.stdout,
-        /^ {2}~ \S+ +stale: from .+ moved upstream \([0-9a-f]{12} → [0-9a-f]{12}\): reeval image build rebuilds it$/m,
+        /^ {2}~ \S+ · \S+ +stale: from .+ moved upstream \([0-9a-f]{12} → [0-9a-f]{12}\): reeval image build rebuilds it$/m,
       )
       const kept = await runCli(p.dir, ['run'], slow)
       assert.equal(kept.code, 0, 'reeval run keeps the build it has')
@@ -809,7 +814,7 @@ evaluate('deb', { environment: defineEnvironment('deb', { sandbox: docker({ dock
       assert.match(planned.stdout, /^images {2}1 sandbox image/m)
       const build = await runCli(p.dir, ['image', 'build', 'deb'], { timeoutMs: 600_000 })
       assert.equal(build.code, 0, build.stdout + build.stderr)
-      const debRef = /^✓ docker:deb\.Dockerfile: (\S+)/m.exec(build.stdout)?.[1] ?? ''
+      const debRef = /^✓ docker:deb\.Dockerfile · cursor: (\S+)/m.exec(build.stdout)?.[1] ?? ''
       assert.match(debRef, /^reeval-sandbox:cursor-[\d.]+-reeval-dockerfile-deb-dockerfile-/)
       refs.add(debRef)
 
@@ -1017,7 +1022,7 @@ evaluate('slow', { runs: 2 }, async (c) => { await c.send('wait') })
 `,
       })
       let started = 0
-      const r = await runCli(p.dir, ['run', '--concurrency', '2'], {
+      const r = await runCli(p.dir, ['run', '--concurrency', '2', '--output-logs', 'full'], {
         ...slow,
         onOutput: (stdout, pid) => {
           started = stdout.match(/\] {2}\+\d+:\d\d turn 1 started$/gm)?.length ?? 0
@@ -1136,6 +1141,35 @@ evaluate('hi', { environment: keys }, async (c) => { await c.exec('true') })
         }).trim()
       assert.throws(() => grep(value), 'the value is nowhere in the run')
       assert.notEqual(grep('GEMINI_API_KEY'), '', 'twin: the search finds the name')
+    },
+  )
+
+  test(
+    "egress 'proxy' on an image without the gateway fails closed; allow-all starts without it",
+    docker,
+    async () => {
+      execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
+      const p = await project('docker-proxy-no-gateway', {
+        'reeval.config.ts': config('{}'),
+        'evals/d.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
+const bare = defineEnvironment('bare', { sandbox: docker({ image: 'busybox:1.37', root: true }) })
+evaluate('proxied', { environment: bare }, async (c) => { await c.exec('true') })
+evaluate('direct', { environment: bare, egress: 'allow-all' }, async (c) => { await c.exec('true') })
+`,
+      })
+      const r = await runCli(p.dir, ['run'], { env: {} })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      const { run, evals } = readRun(p.dir)
+      const proxied = evals.find((e) => e.name === 'proxied')
+      assert.equal(proxied?.error?.kind, 'infra')
+      assert.match(
+        proxied?.error?.message ?? '',
+        /^Can't enforce egress proxy: the egress gateway, the sandbox's only way out, could not start \(the forwarder exited .*\)\. The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker\(\{ from: 'busybox:1\.37' \}\)/,
+      )
+      // busybox has no git, so the attempt fails later on, past the gateway.
+      assert.match(evals.find((e) => e.name === 'direct')?.error?.message ?? '', /snapshot/)
+      assert.equal(liveContainers(run.runId), '')
     },
   )
 
@@ -1389,7 +1423,10 @@ evaluate('hi', async (c) => { await c.send('Reply with the word hi.') })
         GOOGLE_GENERATIVE_AI_API_KEY: 'AIzaSy-not_a_real_key_0000000000000000',
         REEVAL_DEBUG: '1',
       }
-      const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 240_000 })
+      const r = await runCli(p.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
+        env,
+        timeoutMs: 240_000,
+      })
       const out = r.stdout + r.stderr
       assert.match(
         out,
@@ -1431,7 +1468,10 @@ evaluate('hi', async (c) => { await c.send('Reply with the word hi.') })
 `,
         })
         const env = { GOOGLE_GENERATIVE_AI_API_KEY: 'AIzaSy-not_a_real_key_0000000000000000' }
-        const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 240_000 })
+        const r = await runCli(p.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
+          env,
+          timeoutMs: 240_000,
+        })
         const out = r.stdout + r.stderr
         assert.match(
           out,
@@ -1465,7 +1505,10 @@ evaluate('hi', async (c) => {
 `,
       })
       const env = { OPENAI_API_KEY: 'sk-not_a_real_key_0000000000000000', REEVAL_DEBUG: '1' }
-      const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 300_000 })
+      const r = await runCli(p.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
+        env,
+        timeoutMs: 300_000,
+      })
       const out = r.stdout + r.stderr
       assert.match(
         out,
@@ -1474,6 +1517,57 @@ evaluate('hi', async (c) => {
       assert.doesNotMatch(out, /refused/)
       assert.doesNotMatch(out, /chatgpt\.com|github\.com/, 'no analytics or plugin sync')
       assert.match(out, /turn 1 error: The API rejected OPENAI_API_KEY: set a valid key/)
+      const { run, evals } = readRun(p.dir)
+      const trial = evals[0]?.trial
+      assert.equal(trial?.turns[0]?.status, 'error', JSON.stringify(trial?.turns[0]))
+      assert.equal(trial?.outcome, 'pass', 'the sandbox saw only the placeholder')
+      assert.equal(liveContainers(run.runId), '')
+    },
+  )
+
+  test(
+    'grokBuild: the key is brokered on the xAI API only, and xAI refusing it names the host variable',
+    harnessImage('grok-build'),
+    async () => {
+      const p = await project('docker-grok-build-refused-key', {
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { grokBuild } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
+export default defineConfig({ harness: grokBuild({ model: 'grok-4.6' }), timeout: '3m' })
+`,
+        'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('hi', async (c) => {
+  await c.send('Reply with the word hi.')
+  const found = await c.exec('grep -rl not_a_real_key "$HOME" /reeval /tmp 2>/dev/null; true')
+  expect(found.stdout).toBe('')
+  const environ = await c.exec('cat /proc/[0-9]*/environ | tr "\\\\0" "\\\\n"')
+  expect(environ.stdout).not.toContain('not_a_real_key')
+  const config = await c.exec(
+    'cat ~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/config.toml',
+  )
+  expect(config.stdout).toContain('session_summary = "grok-4.6"')
+  expect(config.stdout).toContain('telemetry = false')
+})
+`,
+      })
+      // A made-up key: Grok lists the models and checks the key as it starts, and xAI refuses it.
+      const env = { XAI_API_KEY: 'xai-not_a_real_key_0000000000000000', REEVAL_DEBUG: '1' }
+      const r = await runCli(p.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
+        env,
+        timeoutMs: 300_000,
+      })
+      const out = r.stdout + r.stderr
+      for (const path of ['/v1/models', '/v1/api-key']) {
+        assert.match(
+          out,
+          new RegExp(
+            `reeval:egress GET https://api\\.x\\.ai${path} HTTP/[\\d.]+ \\(set authorization\\)`,
+          ),
+          path,
+        )
+      }
+      assert.doesNotMatch(out, /refused/)
+      assert.match(out, /turn 1 error: The API rejected XAI_API_KEY: set a valid key/)
       const { run, evals } = readRun(p.dir)
       const trial = evals[0]?.trial
       assert.equal(trial?.turns[0]?.status, 'error', JSON.stringify(trial?.turns[0]))
@@ -1535,7 +1629,10 @@ evaluate('hi', async (c) => {
         'evals/d.eval.ts': eval_,
       })
       const started = Date.now()
-      const a = await runCli(brokered.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 240_000 })
+      const a = await runCli(brokered.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
+        env,
+        timeoutMs: 240_000,
+      })
       const out = a.stdout + a.stderr
       assert.equal(a.code, 0, out)
       assert.ok(Date.now() - started < 200_000, 'a refused key ends the turn; nothing hangs')

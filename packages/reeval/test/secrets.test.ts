@@ -356,9 +356,10 @@ describe('unbrokered secrets', () => {
         }),
       },
     }))
-    assert.deepEqual(brokeredIn({}, { environment: applied(https) } as PlannedAttempt), [
-      'mcp.remote.headers.auth → mcp.example.com',
-    ])
+    const on = (kind: 'fake' | 'docker') =>
+      ({ sandbox: { kind }, environment: applied(https) }) as PlannedAttempt
+    assert.deepEqual(brokeredIn({}, on('docker')), ['mcp.remote.headers.auth → mcp.example.com'])
+    assert.deepEqual(brokeredIn({}, on('fake')), [])
     assert.deepEqual(unbrokeredSecrets({}, env.layers), [
       { label: 'mcp.local.headers.auth', from: 'ACME_USER' },
       { label: 'mcp.local.headers.auth', from: 'ACME_PASS' },
@@ -403,6 +404,18 @@ describe('redacting encoded forms', () => {
     const hex = Buffer.from(value).toString('hex')
     assert.equal(redactSecrets(hex, {}), hex)
   })
+})
+
+test("masks every direct model provider's key by its value, whatever its shape", () => {
+  const env = {
+    ANTHROPIC_API_KEY: 'anthr0pic-test-value-4f9a',
+    OPENAI_API_KEY: 'open4i-test-value-7c2e',
+    GOOGLE_GENERATIVE_AI_API_KEY: 'g00gle-test-value-1b3d',
+    TYPESAFE_AI_API_KEY: 'typ3safe-test-value-8e5f',
+  }
+  for (const [name, value] of Object.entries(env)) {
+    assert.equal(redactSecrets(`${name}=${value}`, env), `${name}=[REDACTED]`)
+  }
 })
 
 describe('redacting fragments of a secret', () => {

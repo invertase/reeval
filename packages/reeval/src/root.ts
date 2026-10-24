@@ -26,12 +26,12 @@ const HERE = import.meta.url
  * Its own files are embedded in it, in a package's layout, at the root of Bun's virtual
  * filesystem, beside the bundled code.
  */
-export const COMPILED = /^file:\/\/\/(?:\$bunfs|[A-Za-z]:\/~BUN)\//.test(HERE)
+export const COMPILED = /^(?:\/\$bunfs|[A-Za-z]:[\\/]~BUN)[\\/]/.test(fileURLToPath(HERE))
 
 export const PACKAGE_DIR = fileURLToPath(new URL(COMPILED ? './' : '../', HERE))
 export const DIST_DIR = join(PACKAGE_DIR, 'dist')
 
-/** One of reeval's own files, by its path in the package (`docker`, `dist/studio-app`, …). */
+/** One of reeval's own files, by its path in the package (`docker`, `dist/bridge`, …). */
 export const ownFile = (path: string): string => join(PACKAGE_DIR, path)
 
 /**
@@ -49,8 +49,8 @@ const extracted = new Map<string, string>()
 
 /**
  * One of reeval's own directories, as a real one on disk. Compiled, it's copied out of the
- * executable once, to a cache directory named for its contents: `docker build` and copying the
- * studio app need real files.
+ * executable once, to a cache directory named for its contents: `docker build` and jiti's
+ * `require()` need real files.
  */
 export function ownDir(path: string): string {
   const from = ownFile(path)

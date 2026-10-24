@@ -1,0 +1,7 @@
+no profile · 3 evals · 3 cells · 3 attempts
+evals/parts.eval.ts › every part                        fake/review/docker:node:22-bookworm    control  gated  ×1  plugins review (skills, agents, commands, hooks, mcp, rules)
+evals/parts.eval.ts › only skills and mcp               fake/narrowed/docker:node:22-bookworm  control  gated  ×1  plugins review (skills, mcp)
+evals/parts.eval.ts › child replaces the review plugin  fake/lite/docker:node:22-bookworm      control  gated  ×1  plugins review (skills)
+excluded: —
+image docker:node:22-bookworm · cursor · 3 evals
+  from node:22-bookworm  reeval-sandbox:cursor-0.1.6-node-22-bookworm-5df68861  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

@@ -2,7 +2,7 @@ import { basename, join, resolve } from 'node:path'
 import { UsageError } from '../errors.ts'
 import { fromCwd } from '../ids.ts'
 import type { ResolvedConfig } from '../types.ts'
-import { APP_DIR, buildStudio, openBrowser, startStudio } from './index.ts'
+import { buildStudio, embeddedApp, openBrowser, startStudio } from './index.ts'
 
 export type StudioFlags = {
   port?: string
@@ -28,7 +28,7 @@ export async function studioCommand({ config, flags, version, build }: Args): Pr
     const artifacts = !flags['no-artifacts']
     const result = await buildStudio({
       source: { root: config.root, historyDir: config.history.dir, scratch: !!flags.scratch },
-      appDir: APP_DIR,
+      app: await embeddedApp(),
       out,
       artifacts,
       reeval: version,
@@ -59,6 +59,7 @@ export async function studioCommand({ config, flags, version, build }: Args): Pr
     token,
     reeval: version,
     project,
+    app: await embeddedApp(),
   })
   console.log(`reeval studio · ${project} · ${rel(config.history.dir)}/`)
   console.log(`  ${studio.url}`)

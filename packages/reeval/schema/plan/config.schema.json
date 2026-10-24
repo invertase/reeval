@@ -8,8 +8,8 @@
       "description": "`AnalysisConfig` as data: the model by name, or a fake analysis.",
       "type": "object",
       "properties": {
-        "agent": {
-          "description": "`reeval run` writes a note on each eval and harness once its attempts finish, with the analysis model (default false: one call per eval and harness, every run).",
+        "insights": {
+          "description": "`reeval run` classifies each eval and explains its result with `model` once the attempts finish (default true when `model` is set; `--no-insights` turns it off for one run).",
           "type": "boolean"
         },
         "instructions": {
@@ -28,8 +28,14 @@
           "minimum": 500,
           "maximum": 9007199254740991
         },
+        "maxTokens": {
+          "description": "Tokens (in and out) that one run's insights may use, over every classification, insight and headline call (default 250000). Past it, the evals left print without insights; the run's outcome and exit code never change.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
         "model": {
-          "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one.",
+          "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and compare questions fall back to the judge's when it's a language model.",
           "anyOf": [
             {
               "type": "string"
@@ -50,6 +56,10 @@
           "description": "Reasoning effort passed as `agy --effort`, e.g. `low`, `medium`, `high` or `max`. The slug's `-low`/`-medium`/`-high` suffix is the same knob baked into `model`.",
           "type": "string",
           "pattern": "\\S"
+        },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "$ref": "#/$defs/GatewayName"
         },
         "id": {
           "description": "Cell id; defaults to `antigravity:<model>`, or `antigravity:<model>[effort=<value>]` when `effort` is set.",
@@ -156,6 +166,10 @@
           "type": "string",
           "enum": ["low", "medium", "high", "xhigh", "max"]
         },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "$ref": "#/$defs/GatewayName"
+        },
         "id": {
           "description": "Cell id; defaults to `claude-code:<model>`, or `claude-code:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
@@ -191,6 +205,10 @@
           "type": "string",
           "pattern": "\\S"
         },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "$ref": "#/$defs/GatewayName"
+        },
         "id": {
           "description": "Cell id; defaults to `codex:<model>`, or `codex:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
@@ -221,6 +239,17 @@
       "description": "`ConfigJudgeOptions` as data: the model by name, or a fake judge with a fixed score.",
       "type": "object",
       "properties": {
+        "gateway": {
+          "description": "The gateway the judge's calls go through, by name or by its helper. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GatewayName"
+            },
+            {
+              "$ref": "#/$defs/GatewayDescriptor"
+            }
+          ]
+        },
         "maxConcurrent": {
           "description": "The most judge calls to this model's provider at once, across the run.",
           "type": "integer",
@@ -276,6 +305,10 @@
           "type": "string",
           "pattern": "\\S"
         },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "$ref": "#/$defs/GatewayName"
+        },
         "id": {
           "description": "Cell id; defaults to `cursor:<model>`, or `cursor:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
@@ -295,7 +328,7 @@
           "minLength": 1
         },
         "params": {
-          "description": "Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the default variant in Cursor's model catalog (`fast=true` for `composer-2.5`), sent explicitly; pass the ones that change cost.",
+          "description": "Model parameters, e.g. `{ fast: 'true' }`. Unset ones take the default variant in Cursor's model catalog, sent explicitly, except `fast`, which is `false` wherever the model takes it.",
           "type": "object",
           "propertyNames": {
             "type": "string"
@@ -312,8 +345,20 @@
       "required": ["kind", "model"],
       "additionalProperties": false
     },
+    "DirectGatewayDescriptor": {
+      "description": "Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "direct"
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
+    },
     "DockerSandboxDescriptor": {
-      "description": "A local Docker container, made by `docker()`.",
+      "description": "A local Docker container, made by `docker()`, or a Podman one, made by `podman()`.",
       "type": "object",
       "properties": {
         "capabilities": {
@@ -334,13 +379,18 @@
           "type": "string",
           "pattern": "\\S"
         },
+        "engine": {
+          "description": "The container CLI the sandbox runs on: `podman` for `podman()`, Docker when unset.",
+          "type": "string",
+          "enum": ["docker", "podman"]
+        },
         "from": {
           "description": "A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top, cached.",
           "type": "string",
-          "pattern": "\\S"
+          "pattern": "^\\S+$"
         },
         "id": {
-          "description": "Cell id; defaults to `docker`, or `docker:<image>` for other images, plus an install hash.",
+          "description": "Cell id; defaults to `docker` (`podman`), or `docker:<image>` for other images, plus an install hash.",
           "type": "string",
           "pattern": "\\S"
         },
@@ -421,8 +471,12 @@
       ]
     },
     "EgressPolicy": {
-      "description": "Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
+      "description": "Where the sandbox may connect: any host over HTTP(S) through the egress gateway (`'proxy'`, the default), anywhere including raw TCP and UDP around the gateway (`'allow-all'`), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
       "anyOf": [
+        {
+          "type": "string",
+          "const": "proxy"
+        },
         {
           "type": "string",
           "const": "allow-all"
@@ -528,6 +582,13 @@
             "$ref": "#/$defs/McpServer"
           }
         },
+        "plugins": {
+          "description": "Plugins in Claude Code's layout, made by the `plugin` helper; a child's replaces its parent's plugin of the same name.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PluginSource"
+          }
+        },
         "rules": {
           "description": "Project rules, written where the harness's agent reads them: `AGENTS.md`, or `CLAUDE.md` for Claude Code.",
           "anyOf": [
@@ -592,24 +653,6 @@
         "kind": {
           "type": "string",
           "const": "fake-analysis"
-        },
-        "note": {
-          "description": "`analysis.agent`'s note on each eval and harness, or an error to throw.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "properties": {
-                "error": {
-                  "type": "string"
-                }
-              },
-              "required": ["error"],
-              "additionalProperties": false
-            }
-          ]
         },
         "output": {
           "description": "The model's structured answer."
@@ -682,6 +725,10 @@
           "description": "Chance (0–1) that an attempt writes no files and says so, for flaky pass rates.",
           "type": "number"
         },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "$ref": "#/$defs/GatewayName"
+        },
         "id": {
           "description": "Cell id; defaults to `fake`.",
           "type": "string",
@@ -696,9 +743,19 @@
           "const": "fake"
         },
         "layout": {
-          "description": "Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`, `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`, `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.",
+          "description": "Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`, `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`, `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`, fx's private home for `fx`, Grok's private home for `grok-build`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.",
           "type": "string",
-          "enum": ["cursor", "claude-code", "antigravity", "opencode", "goose", "pi", "codex"]
+          "enum": [
+            "cursor",
+            "claude-code",
+            "antigravity",
+            "opencode",
+            "goose",
+            "pi",
+            "codex",
+            "fx",
+            "grok-build"
+          ]
         },
         "maxConcurrent": {
           "description": "The most attempts on this harness kind at once, across the run.",
@@ -894,6 +951,40 @@
       "description": "A blinded label's pick: the attempt shown first (`A`), second (`B`), or neither.",
       "enum": ["A", "B", "tie"]
     },
+    "FxHarnessDescriptor": {
+      "description": "fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or OpenAI's API by the model id, and reports each turn's tokens.",
+      "type": "object",
+      "properties": {
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "$ref": "#/$defs/GatewayName"
+        },
+        "id": {
+          "description": "Cell id; defaults to `fx:<model>`.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "kind": {
+          "type": "string",
+          "const": "fx"
+        },
+        "maxConcurrent": {
+          "description": "The most fx attempts at once, across the run, e.g. for the key's rate limits.",
+          "type": "number"
+        },
+        "model": {
+          "description": "A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "startTimeout": {
+          "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
+          "$ref": "#/$defs/Duration"
+        }
+      },
+      "required": ["kind", "model"],
+      "additionalProperties": false
+    },
     "GatePolicy": {
       "description": "How a cell's attempts decide its outcome: `'all'` (the default) passes only when every attempt passes (pass^k); `{ passRate }` passes when its pass@1 (passes over passes and fails) is at least that share.",
       "anyOf": [
@@ -914,6 +1005,57 @@
           "additionalProperties": false
         }
       ]
+    },
+    "GatewayDescriptor": {
+      "description": "One entry of the config's `gateway` list.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DirectGatewayDescriptor"
+        },
+        {
+          "$ref": "#/$defs/VercelGatewayDescriptor"
+        }
+      ]
+    },
+    "GatewayEntryData": {
+      "description": "A `gateway` entry as data (`reeval.yaml`): its name, a one-key map from its name to its settings, or the descriptor itself.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GatewayName"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "direct": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          "required": ["direct"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "vercel": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          "required": ["vercel"],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/GatewayDescriptor"
+        }
+      ]
+    },
+    "GatewayName": {
+      "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway.",
+      "type": "string",
+      "enum": ["direct", "vercel"]
     },
     "GitWorkspace": {
       "description": "A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url` is what reeval fetches: the clone URL, or an absolute path for a local repository.",
@@ -962,6 +1104,10 @@
           "type": "string",
           "pattern": "\\S"
         },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "$ref": "#/$defs/GatewayName"
+        },
         "id": {
           "description": "Cell id; defaults to `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
@@ -977,6 +1123,45 @@
         },
         "model": {
           "description": "A Gemini model id, run on Goose's `google` provider, e.g. `gemini-3.8-flash`.",
+          "type": "string",
+          "pattern": "^[\\w.-]+$"
+        },
+        "startTimeout": {
+          "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
+          "$ref": "#/$defs/Duration"
+        }
+      },
+      "required": ["kind", "model"],
+      "additionalProperties": false
+    },
+    "GrokBuildHarnessDescriptor": {
+      "description": "xAI's Grok Build through `@reeval/harness-grok-build` (`grok agent stdio`), made by `grokBuild()`. It runs xAI models on an xAI API key and reports each turn's tokens.",
+      "type": "object",
+      "properties": {
+        "effort": {
+          "description": "Reasoning effort as Grok's `default_reasoning_effort`, e.g. `low`, `medium` or `high`, for a model that takes one.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "$ref": "#/$defs/GatewayName"
+        },
+        "id": {
+          "description": "Cell id; defaults to `grok-build:<model>`, or `grok-build:<model>[effort=<value>]` when `effort` is set.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "kind": {
+          "type": "string",
+          "const": "grok-build"
+        },
+        "maxConcurrent": {
+          "description": "The most Grok Build attempts at once, across the run, e.g. for the key's rate limits.",
+          "type": "number"
+        },
+        "model": {
+          "description": "An xAI model id Grok Build runs on the xAI API, e.g. `grok-4.6`.",
           "type": "string",
           "pattern": "^[\\w.-]+$"
         },
@@ -1014,6 +1199,12 @@
         },
         {
           "$ref": "#/$defs/CodexHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/FxHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/GrokBuildHarnessDescriptor"
         }
       ]
     },
@@ -1263,6 +1454,10 @@
           "type": "string",
           "pattern": "\\S"
         },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "$ref": "#/$defs/GatewayName"
+        },
         "id": {
           "description": "Cell id; defaults to `opencode:<model>`, or `opencode:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
@@ -1298,6 +1493,10 @@
           "type": "string",
           "pattern": "\\S"
         },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "$ref": "#/$defs/GatewayName"
+        },
         "id": {
           "description": "Cell id; defaults to `pi:<model>`, or `pi:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
@@ -1324,6 +1523,385 @@
       "required": ["kind", "model"],
       "additionalProperties": false
     },
+    "PluginMarketplace": {
+      "description": "A Claude Code marketplace: the source that holds its `.claude-plugin/marketplace.json`.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ref": {
+              "description": "A branch, tag or commit SHA; unset is the remote's `HEAD`.",
+              "type": "string"
+            },
+            "repo": {
+              "description": "As written: a URL or `github:owner/repo`.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "source": {
+              "type": "string",
+              "const": "git"
+            }
+          },
+          "required": ["repo", "source"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "const": "npm"
+            },
+            "spec": {
+              "description": "An npm package spec.",
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["source", "spec"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PluginPart": {
+      "description": "A part of a plugin, as Claude Code's layout bundles it: `skills/<name>/SKILL.md`, `agents/<name>.md`, `commands/<name>.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest's `mcpServers`) or `rules/`.",
+      "type": "string",
+      "enum": ["skills", "agents", "commands", "hooks", "mcp", "rules"]
+    },
+    "PluginSource": {
+      "description": "A plugin to place for the agent, in Claude Code's layout, made by the `plugin` helper.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "build": {
+              "description": "Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.",
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "description": "Where they run, relative to the source's root; default the plugin's directory.",
+                      "type": "string",
+                      "pattern": "^(?:\\.|(?!\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[^\\\\]+)$"
+                    },
+                    "run": {
+                      "description": "The command, or the commands in order.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["run"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "plugin"
+            },
+            "only": {
+              "description": "The parts to place; default every part the plugin has.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PluginPart"
+              }
+            },
+            "path": {
+              "description": "A host directory with a `.claude-plugin/plugin.json`.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "source": {
+              "type": "string",
+              "const": "local"
+            }
+          },
+          "required": ["kind", "path", "source"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "build": {
+              "description": "Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.",
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "description": "Where they run, relative to the source's root; default the plugin's directory.",
+                      "type": "string",
+                      "pattern": "^(?:\\.|(?!\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[^\\\\]+)$"
+                    },
+                    "run": {
+                      "description": "The command, or the commands in order.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["run"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "plugin"
+            },
+            "only": {
+              "description": "The parts to place; default every part the plugin has.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PluginPart"
+              }
+            },
+            "path": {
+              "description": "The plugin's directory in the repository; default its root.",
+              "type": "string"
+            },
+            "ref": {
+              "description": "A branch, tag or commit SHA; unset is the remote's `HEAD`.",
+              "type": "string"
+            },
+            "repo": {
+              "description": "As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "source": {
+              "type": "string",
+              "const": "git"
+            }
+          },
+          "required": ["kind", "repo", "source"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "build": {
+              "description": "Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.",
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "description": "Where they run, relative to the source's root; default the plugin's directory.",
+                      "type": "string",
+                      "pattern": "^(?:\\.|(?!\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[^\\\\]+)$"
+                    },
+                    "run": {
+                      "description": "The command, or the commands in order.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["run"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "plugin"
+            },
+            "only": {
+              "description": "The parts to place; default every part the plugin has.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PluginPart"
+              }
+            },
+            "path": {
+              "description": "The plugin's directory in the package; default its root.",
+              "type": "string"
+            },
+            "source": {
+              "type": "string",
+              "const": "npm"
+            },
+            "spec": {
+              "description": "A pinned npm package spec.",
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["kind", "source", "spec"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "build": {
+              "description": "Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.",
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "description": "Where they run, relative to the source's root; default the plugin's directory.",
+                      "type": "string",
+                      "pattern": "^(?:\\.|(?!\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[^\\\\]+)$"
+                    },
+                    "run": {
+                      "description": "The command, or the commands in order.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["run"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "plugin"
+            },
+            "marketplace": {
+              "description": "Where the marketplace is: a git repository (at `ref`) or an npm package.",
+              "$ref": "#/$defs/PluginMarketplace"
+            },
+            "name": {
+              "description": "The plugin's entry in the marketplace's `.claude-plugin/marketplace.json`.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "only": {
+              "description": "The parts to place; default every part the plugin has.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PluginPart"
+              }
+            },
+            "source": {
+              "type": "string",
+              "const": "marketplace"
+            }
+          },
+          "required": ["kind", "marketplace", "name", "source"],
+          "additionalProperties": false
+        }
+      ]
+    },
     "ProfileData": {
       "description": "`Profile` as data: its defaults and judge as data.",
       "type": "object",
@@ -1335,6 +1913,14 @@
         "defaults": {
           "description": "What evals get when they don't say otherwise: under groups and evals.",
           "$ref": "#/$defs/ProfileDefaultsData"
+        },
+        "gateway": {
+          "description": "Replaces the config's `gateway` list for this profile's runs.",
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GatewayEntryData"
+          }
         },
         "judge": {
           "description": "Judge settings for this profile, the same as `defaults.judge`, which wins field by field.",
@@ -1568,7 +2154,7 @@
       "type": "object",
       "properties": {
         "analysis": {
-          "description": "`reeval analyze`, compare questions without a model, and `agent`'s notes during a run.",
+          "description": "Insights during `reeval run`, `reeval analyze`, and compare questions without a model.",
           "$ref": "#/$defs/AnalysisConfigData"
         },
         "budget": {
@@ -1615,7 +2201,7 @@
           "additionalProperties": false
         },
         "egress": {
-          "description": "Where the sandbox may connect; default `'allow-all'`.",
+          "description": "Where the sandbox may connect; default `'proxy'`.",
           "$ref": "#/$defs/EgressPolicy"
         },
         "env": {
@@ -1629,6 +2215,14 @@
         "gate": {
           "description": "How each cell's attempts decide its outcome; default `'all'`.",
           "$ref": "#/$defs/GatePolicy"
+        },
+        "gateway": {
+          "description": "The gateways model calls may go through, in the order you prefer them: each harness takes the first that can serve it. Default `[direct]`, each provider's own key.",
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GatewayEntryData"
+          }
         },
         "harness": {
           "description": "The agents every eval runs on, unless a group or eval replaces them; default Cursor.",
@@ -2009,6 +2603,18 @@
       "description": "`header` values, the `query` string, or the request `body`.",
       "type": "string",
       "enum": ["header", "query", "body"]
+    },
+    "VercelGatewayDescriptor": {
+      "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "vercel"
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
     }
   }
 }

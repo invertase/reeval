@@ -2,7 +2,8 @@
 // inlined from their TypeScript sources, so the published package imports only its own
 // `dependencies`. What ships next to the code: each of those packages' other `files` (such as
 // sandbox-docker's `docker/` build context), at the package root beside `dist/`, where their
-// `../<dir>` from a module names the same place, and the prebuilt studio app (`dist/studio-app`).
+// `../<dir>` from a module names the same place. The prebuilt studio app is inlined, as the
+// contents of src/studio/app-files.ts.
 // Those lookups go through src/root.ts, reeval's one resource locator: the build rewrites each
 // `new URL('<path>', import.meta.url)` in an inlined package to root.ts's `ownFileURL`, and fails
 // on any other import.meta.url, so a compiled reeval (scripts/bun-compile.mjs) finds them too. THIRD_PARTY_NOTICES.md, at the root, lists the third-party code all of
@@ -11,13 +12,15 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join, posix, relative, sep } from 'node:path'
+import { dirname, extname, join, posix, relative, sep } from 'node:path'
 import { defineConfig } from 'tsdown'
 import {
   bundledLicenses,
@@ -120,12 +123,42 @@ const studioApp = join(studioWeb, 'dist')
 const studioLicenses = join(studioApp, 'third-party.json')
 let bundled = []
 
+const appFiles = join(here, 'src/studio/app-files.ts')
+/** A module id as a comparable path: Windows ids can differ in separators and drive-letter case. */
+const samePath = (a, b) =>
+  process.platform === 'win32'
+    ? a.replaceAll('\\', '/').toLowerCase() === b.replaceAll('\\', '/').toLowerCase()
+    : a === b
+const TEXT = new Set(['.html', '.js', '.css', '.svg', '.json', '.txt'])
+
+let inlinedApp = false
+
+/** src/studio/app-files.ts with studio-web's built files in it, text as strings. */
+function studioAppModule() {
+  if (!existsSync(join(studioApp, 'index.html')) || !existsSync(studioLicenses))
+    throw new Error(
+      "studio-web isn't built, so reeval would ship without its studio app: run pnpm build from the repo root",
+    )
+  const files = {}
+  for (const file of readdirSync(studioApp, { recursive: true, encoding: 'utf8' }).sort()) {
+    const path = join(studioApp, file)
+    if (path === studioLicenses || !statSync(path).isFile()) continue
+    const body = readFileSync(path)
+    files[file.split(sep).join(posix.sep)] = TEXT.has(extname(file))
+      ? { utf8: body.toString('utf8') }
+      : { base64: body.toString('base64') }
+  }
+  inlinedApp = true
+  return `export const APP_FILES = ${JSON.stringify(files)}\n`
+}
+
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
     harness: 'src/harness.ts',
     sandbox: 'src/sandbox.ts',
     judge: 'src/judge.ts',
+    gateway: 'src/gateway.ts',
     'view/index': 'src/view/index.ts',
     testing: 'src/testing.ts',
     // `reeval`, and `reeval __worker`, which the engine starts for each eval file (src/engine/pool.ts).
@@ -148,6 +181,14 @@ export default defineConfig({
       resolveId: {
         order: 'pre',
         handler: (id) => sources.get(id),
+      },
+      load: {
+        order: 'pre',
+        handler(id) {
+          if (!samePath(id, appFiles)) return null
+          this.addWatchFile(join(studioApp, 'index.html'))
+          return { code: studioAppModule(), map: null }
+        },
       },
       transform: {
         order: 'pre',
@@ -175,6 +216,10 @@ export default defineConfig({
   ],
   hooks: {
     'build:done': ({ chunks }) => {
+      if (!inlinedApp) {
+        rmSync(dist, { recursive: true, force: true })
+        throw new Error(`The build never loaded ${appFiles}, so the studio app isn't in it`)
+      }
       for (const chunk of chunks) {
         const file = relative(dist, join(chunk.outDir, chunk.fileName))
         const code = chunk.type === 'chunk' ? chunk.code : String(chunk.source)
@@ -211,19 +256,16 @@ export default defineConfig({
         rmSync(join(here, asset), { recursive: true, force: true })
         cpSync(from, join(here, asset), { recursive: true })
       }
-      if (existsSync(join(studioApp, 'index.html'))) {
-        cpSync(studioApp, join(dist, 'studio-app'), {
-          recursive: true,
-          filter: (file) => file !== studioLicenses,
-        })
-        thirdParty.push(...JSON.parse(readFileSync(studioLicenses, 'utf8')))
-      } else
-        console.warn(
-          "studio-web isn't built; reeval studio will have no app. Run pnpm build from the repo root.",
-        )
+      thirdParty.push(...JSON.parse(readFileSync(studioLicenses, 'utf8')))
       // The published package's README is the repo-root README, copied so the
       // tarball has the same file. It is handwritten; `pnpm docs:gen` does not write it.
       cpSync(join(here, '../..', 'README.md'), join(here, 'README.md'))
+      // The eval rubric is a consumer skill in the repo's skills/, and the insight model's
+      // rubric (src/insights/rubric.ts), so it ships beside dist/.
+      rmSync(join(here, 'skills'), { recursive: true, force: true })
+      cpSync(join(here, '../..', 'skills/eval-rubric'), join(here, 'skills/eval-rubric'), {
+        recursive: true,
+      })
       const shadcn = markedFiles(join(studioWeb, 'src'), 'shadcn/ui', join(here, '../..'))
       writeFileSync(
         join(here, 'THIRD_PARTY_NOTICES.md'),
@@ -234,6 +276,21 @@ export default defineConfig({
             licenseText: readFileSync(join(studioWeb, 'src/components/ui/LICENSE'), 'utf8'),
             source: 'https://github.com/shadcn-ui/ui',
             files: shadcn,
+            into: 'the studio app',
+            modified: true,
+          },
+          {
+            title: 'moby/profiles (Docker default seccomp profile)',
+            license: 'Apache-2.0',
+            licenseText: readFileSync(
+              join(here, '../../scripts/third-party-licenses/moby-profiles'),
+              'utf8',
+            ),
+            source:
+              'https://github.com/moby/profiles/blob/6fe7deb1b9fb7c0397a4593480d7d22b9ee8caef/seccomp/default.json',
+            files: ['packages/sandbox-docker/src/seccomp-profile.ts'],
+            into: "reeval's bundle (`dist/`), as data",
+            modified: false,
           },
         ]),
       )

@@ -1,0 +1,5 @@
+{
+  "eval": "plan/plugins/evals/remote.eval.ts",
+  "plan": "plan/plugins/expected/remote.txt",
+  "args": ["evals/remote.eval.ts"]
+}

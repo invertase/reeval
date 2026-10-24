@@ -103,18 +103,18 @@ A real `error` event, from a Claude Code attempt on an account without credit:
 
 ## Tokens and the served model
 
-Token usage isn't in `transcript.jsonl`. Where the harness reports it (`cursor()`, `claudeCode()`, `antigravity()`, `opencode()`, `pi()` and `codex()` do; `goose()` doesn't), each turn in the run record, and each `Turn` from `c.send()`, has `usage` and `model`. These fields are from a real Cursor turn in the record:
+Token usage isn't in `transcript.jsonl`. Where the harness reports it (`cursor()`, `claudeCode()`, `antigravity()`, `opencode()`, `pi()`, `codex()`, `fx()` and `grokBuild()` do; `goose()` doesn't), each turn in the run record, and each `Turn` from `c.send()`, has `usage` and `model`. These fields are from a real Cursor turn in the record:
 
 ```text
-{"status": "completed", "durationMs": 6918, "usage": {"input": 32307, "output": 600, "cacheRead": 31328, "cacheWrite": 0, "reasoning": null}, "model": "composer-2.5[fast=true]"}
+{"status": "completed", "durationMs": 9390, "usage": {"input": 24432, "output": 371, "cacheRead": 19574, "cacheWrite": 0, "reasoning": null}, "model": "composer-2.5[fast=false]"}
 ```
 
 <Property name="usage" type="{ input, output, cacheRead, cacheWrite, reasoning } | null">
-  Tokens the turn used. `input` is uncached input; `reasoning` is `null` when the harness doesn't split it out. `null` when the harness reports no usage.
+  Tokens the turn used. `input` is uncached input; `output` includes `reasoning`, its share of thinking, which is `null` when the harness doesn't split it out. `null` when the harness reports no usage.
 </Property>
 
 <Property name="model" type="string | null">
-  The model the harness says served the turn. Cursor's includes its parameters, such as `composer-2.5[fast=true]`. It can differ from the model you asked for.
+  The model the harness says served the turn. Cursor's includes its parameters, such as `composer-2.5[fast=false]`. It can differ from the model you asked for.
 </Property>
 
 Each attempt sums its turns' `usage`, and the run's `cost` has the total; reeval prices no models, so there's no USD.

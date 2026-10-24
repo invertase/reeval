@@ -1,5 +1,145 @@
 # Changelog
 
+## [0.13.0](https://github.com/invertase/reeval/compare/v0.12.0...v0.13.0) (2026-10-23)
+
+
+### Features
+
+* **judge:** call Anthropic and OpenAI models directly ([#481](https://github.com/invertase/reeval/issues/481)) ([06529de](https://github.com/invertase/reeval/commit/06529de9b4c9ca2a8ca4858e54ba112640ab4d9c))
+* **skills:** add setup skill ([#464](https://github.com/invertase/reeval/issues/464)) ([a8398c9](https://github.com/invertase/reeval/commit/a8398c968e9e772135be611f84526be7682ee628))
+* **workspace:** add a PR-lift recipe and flag compare arms that run one tree ([#485](https://github.com/invertase/reeval/issues/485)) ([10c1f05](https://github.com/invertase/reeval/commit/10c1f05d62bb08a9fe941afa5bbd121bde89ac98))
+
+
+### Bug Fixes
+
+* **harness:** count Antigravity tokens per turn, not agy's running total ([#495](https://github.com/invertase/reeval/issues/495)) ([3f02ff0](https://github.com/invertase/reeval/commit/3f02ff0d54780df8171c9548f2866750676ec8c7))
+* **harness:** count Codex tokens per turn, not the thread's running total ([#496](https://github.com/invertase/reeval/issues/496)) ([b032421](https://github.com/invertase/reeval/commit/b0324217f01a8cff39a2e5fb80ec57b2e4dda75d))
+* **harness:** count Cursor cache reads once in token usage ([#487](https://github.com/invertase/reeval/issues/487)) ([f087172](https://github.com/invertase/reeval/commit/f087172d3132144484d48c0dcdf6393755bfedc3))
+* **harness:** map the tools and subagent calls the nightly contract caught ([#469](https://github.com/invertase/reeval/issues/469)) ([246a78d](https://github.com/invertase/reeval/commit/246a78d8e71d8b12b99ec7d3d16775fe43ece981))
+* **judge:** stop sending temperature to Anthropic models ([#475](https://github.com/invertase/reeval/issues/475)) ([7f1dcba](https://github.com/invertase/reeval/commit/7f1dcbacae4e95a3e08bd5f8e566b2d3c34e2c1f))
+* **run:** name the planned sandbox in the run header and record ([#484](https://github.com/invertase/reeval/issues/484)) ([0468d63](https://github.com/invertase/reeval/commit/0468d632565eaa3cfcada05fbd2dc33f2182a881))
+* **sandbox:** forward absolute-form https requests through the egress gateway ([#479](https://github.com/invertase/reeval/issues/479)) ([17ad0de](https://github.com/invertase/reeval/commit/17ad0de3147e2952f9eb7f2e133d8ba3b3bd9d97))
+* **sandbox:** refuse private addresses under allow-all and harden the gateway ([#490](https://github.com/invertase/reeval/issues/490)) ([93ac6a3](https://github.com/invertase/reeval/commit/93ac6a3b79d160751412775d39fd27508ba8b63c))
+* **sandbox:** run privileged execs without --privileged ([#489](https://github.com/invertase/reeval/issues/489)) ([08240ac](https://github.com/invertase/reeval/commit/08240ac02d05fd2423fd0879581ba5de8868e870))
+* **sandbox:** stop empty file writes hanging docker exec, and fail stuck fixtures fast ([#493](https://github.com/invertase/reeval/issues/493)) ([8682621](https://github.com/invertase/reeval/commit/86826216d69771f20a1a7edb80090e6ab10cd2fd))
+* **stats:** use one minimum of 4 attempts across views ([#477](https://github.com/invertase/reeval/issues/477)) ([b55cff9](https://github.com/invertase/reeval/commit/b55cff9a0253eff5e754ebb77f2f6ce92aacaa2e))
+
+## [0.12.0](https://github.com/invertase/reeval/compare/v0.11.0...v0.12.0) (2026-10-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **insights:** classify and explain each eval at the end of reeval run ([#451](https://github.com/invertase/reeval/issues/451))
+* **cli:** scaffold an environment, add --bare and a docker check to init ([#444](https://github.com/invertase/reeval/issues/444))
+* **compare:** print reeval compare as the catch-regressions layout ([#425](https://github.com/invertase/reeval/issues/425))
+
+### Features
+
+* **cli:** scaffold an environment, add --bare and a docker check to init ([#444](https://github.com/invertase/reeval/issues/444)) ([3f97710](https://github.com/invertase/reeval/commit/3f97710cf255120745c8000bd8349fe5113af7bc))
+* **compare:** print reeval compare as the catch-regressions layout ([#425](https://github.com/invertase/reeval/issues/425)) ([185eb94](https://github.com/invertase/reeval/commit/185eb943c5d65d2475ca9394a4ac5bf2e4454b91))
+* **environment:** plugin builds ([#437](https://github.com/invertase/reeval/issues/437)) ([7f9e255](https://github.com/invertase/reeval/commit/7f9e255e152f47d944b9af1ecced7597a3aa2bcd))
+* **environment:** plugins input ([#435](https://github.com/invertase/reeval/issues/435)) ([9186e05](https://github.com/invertase/reeval/commit/9186e051f2a3603411186e72db5148c8dd66a8a8))
+* **harness:** plugins on Claude Code and Grok Build ([#439](https://github.com/invertase/reeval/issues/439)) ([687e5a8](https://github.com/invertase/reeval/commit/687e5a8897a1ecdd61e7c5930185e91c563a24a6))
+* **init:** set analysis.model in the generated config, warn in doctor when it's unset, and document insights and remarks ([#459](https://github.com/invertase/reeval/issues/459)) ([f4e5d1f](https://github.com/invertase/reeval/commit/f4e5d1f8e6a366e3ee9e537596c55353c27123e9))
+* **insights:** classify and explain each eval at the end of reeval run ([#451](https://github.com/invertase/reeval/issues/451)) ([5c21e46](https://github.com/invertase/reeval/commit/5c21e462a968dae7c8af4d41e382ac7e882d3d46))
+* **insights:** write a recorded run's insights with reeval analyze --insights, and print them in reeval show ([#426](https://github.com/invertase/reeval/issues/426)) ([cfcd501](https://github.com/invertase/reeval/commit/cfcd501824f75e6cd6e0bcd2f4047dd09c73323b))
+* **mcp:** time server start-up ([#434](https://github.com/invertase/reeval/issues/434)) ([1361bae](https://github.com/invertase/reeval/commit/1361baec822c17e2dbe2e7cbf8ae4e94e05772cb))
+* **plugins:** plugin.marketplace, and plugins on Codex, Goose, Antigravity, Cursor, OpenCode, pi and fx ([#455](https://github.com/invertase/reeval/issues/455)) ([f0d9a9a](https://github.com/invertase/reeval/commit/f0d9a9a6f4b2558d3bada21950ebb536205a5354))
+* **remarks:** end reeval run with deterministic remarks on the evals themselves ([#450](https://github.com/invertase/reeval/issues/450)) ([7aa8b27](https://github.com/invertase/reeval/commit/7aa8b2783ebb101b3c3b41b6a7277720319178b5))
+* **remarks:** raise model remarks behind kind and quote gates, with the eval rubric, a flaky insight tier and a one-line skip ([#460](https://github.com/invertase/reeval/issues/460)) ([bd4ea8a](https://github.com/invertase/reeval/commit/bd4ea8a7ffbda4db4def98fd081e0aa71db7420c))
+* **test:** enforce plan-case tier for eval options in CI ([#376](https://github.com/invertase/reeval/issues/376)) ([d0dade0](https://github.com/invertase/reeval/commit/d0dade00ebc0d69031a44cf9d6de9545a7bc0aa2))
+
+
+### Bug Fixes
+
+* **claude-code:** turn off AskUserQuestion so the next turn can start ([#466](https://github.com/invertase/reeval/issues/466)) ([25247be](https://github.com/invertase/reeval/commit/25247be68170ff5e02d4f90e7104623251a153c5))
+* **cursor:** default fast to false so unpinned Cursor runs are standard-priced ([#467](https://github.com/invertase/reeval/issues/467)) ([0f3be6a](https://github.com/invertase/reeval/commit/0f3be6ac5cea190b2262f73ae44ee5889047fe89))
+* **history:** serialize concurrent history.db syncs with begin immediate ([#452](https://github.com/invertase/reeval/issues/452)) ([74ae40b](https://github.com/invertase/reeval/commit/74ae40bae2f32393ad2cf648c51784f6afb37f6b))
+* **insights:** refuse a headline that says all of a single result ([#465](https://github.com/invertase/reeval/issues/465)) ([f87d643](https://github.com/invertase/reeval/commit/f87d643e878b4feedc69f77657fe518707962d02))
+* **release:** open a release PR per package so a reeval-only release tags ([#432](https://github.com/invertase/reeval/issues/432)) ([3464ff6](https://github.com/invertase/reeval/commit/3464ff6d53e094200e5d18383f62a83c557dbc1d))
+* **remarks:** count a remark as seen only in a run that printed it, and find the default branch in ci ([#457](https://github.com/invertase/reeval/issues/457)) ([04d117c](https://github.com/invertase/reeval/commit/04d117c8e2ea8a69553dff8a821d8b1ede870567))
+* **results:** fence summary.md blocks past any backticks they carry ([#454](https://github.com/invertase/reeval/issues/454)) ([99fa22b](https://github.com/invertase/reeval/commit/99fa22b7e4a32dec3c72bb8598c988faff15508d))
+* **sandbox:** keep the diff's snapshot unreadable and free of pre-seed content ([#438](https://github.com/invertase/reeval/issues/438)) ([96129ee](https://github.com/invertase/reeval/commit/96129eeb76274aa79af9ac548a5369e99cb53053))
+* **sandbox:** run every exec with umask 022 ([#456](https://github.com/invertase/reeval/issues/456)) ([cebf376](https://github.com/invertase/reeval/commit/cebf376eaecfe4b07f9d8a0d54561507a873376a))
+* **stats:** mcnemar overflow, family rank ties, effort test direction and tied floor ([#463](https://github.com/invertase/reeval/issues/463)) ([7838776](https://github.com/invertase/reeval/commit/78387769dd56684f15139b44eabe199adf75b9a8))
+* **view:** make SuiteResult agree with the exit code and list every check ([#430](https://github.com/invertase/reeval/issues/430)) ([243ad7b](https://github.com/invertase/reeval/commit/243ad7bfd7f17f34fe4631f404afd5548f33f007))
+
+## [0.11.0](https://github.com/invertase/reeval/compare/v0.10.0...v0.11.0) (2026-10-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **ui:** print result layouts by what each eval varies ([#424](https://github.com/invertase/reeval/issues/424))
+
+### Features
+
+* **query:** --run &lt;id|last&gt;, tables in the unknown-name error, documented join keys ([#418](https://github.com/invertase/reeval/issues/418)) ([2e20c1b](https://github.com/invertase/reeval/commit/2e20c1bd964c01e192435d8ee4cc11b7927208d8))
+* **query:** add a check_rates view ([#420](https://github.com/invertase/reeval/issues/420)) ([30d0e34](https://github.com/invertase/reeval/commit/30d0e34c4f469672122ae92d896d7f12d6c4e17c))
+* **ui:** print result layouts by what each eval varies ([#424](https://github.com/invertase/reeval/issues/424)) ([02e3770](https://github.com/invertase/reeval/commit/02e3770d27ceef733924bfdc772c9d48d4cce8f5))
+* **view:** add suiteResult facts view-model and reeval run --json ([#416](https://github.com/invertase/reeval/issues/416)) ([eb77e9f](https://github.com/invertase/reeval/commit/eb77e9fdd25518a84879cab09b32a10c35a12e62))
+
+
+### Bug Fixes
+
+* not-run checks, sub-50 ms durations and the --output-logs default ([#421](https://github.com/invertase/reeval/issues/421)) ([5e1c589](https://github.com/invertase/reeval/commit/5e1c5897662ffd8987bd7d132280b3143f946d79))
+* **plan:** estimate sandbox setup for a fake harness on a real sandbox ([#412](https://github.com/invertase/reeval/issues/412)) ([e37d900](https://github.com/invertase/reeval/commit/e37d9008aa4cb98b7a8c8b3dc9363a5bd16415da))
+* **profiles:** gate the lone control when limit turns compare off ([#413](https://github.com/invertase/reeval/issues/413)) ([aed5fb9](https://github.com/invertase/reeval/commit/aed5fb91fbab2f904bc0c5d3b4fcc1be8079a4ba))
+* **query:** accept SQL that starts with a -- comment ([#414](https://github.com/invertase/reeval/issues/414)) ([5acb488](https://github.com/invertase/reeval/commit/5acb488342e4d43d831bd24b1590d7bc8520d8f4))
+* **release:** PyPI publish tag and npm republish skip ([#423](https://github.com/invertase/reeval/issues/423)) ([627534e](https://github.com/invertase/reeval/commit/627534eb2c956cba880f2a85dc9f9d222347e6b7))
+* **release:** use release ref for PyPI publish action ([#422](https://github.com/invertase/reeval/issues/422)) ([62847d6](https://github.com/invertase/reeval/commit/62847d6f649036885ff9ce25656c82a5e35afa6a))
+* **test:** forward-slash path deps for python fixtures on Windows ([#411](https://github.com/invertase/reeval/issues/411)) ([15f0e8c](https://github.com/invertase/reeval/commit/15f0e8cddfe39f8fa7a5910a8b72fbb06b99a90d))
+
+## [0.10.0](https://github.com/invertase/reeval/compare/v0.9.0...v0.10.0) (2026-10-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sdk:** start the sandbox on first use and remove c.sandbox() ([#344](https://github.com/invertase/reeval/issues/344))
+* **judge:** choose what the judge is given with state ([#334](https://github.com/invertase/reeval/issues/334))
+* drop leftover es names ([#332](https://github.com/invertase/reeval/issues/332))
+
+### Features
+
+* actionable insight for skill studies (analysis, effort, contrasts, compare pairs) ([#336](https://github.com/invertase/reeval/issues/336)) ([31b1743](https://github.com/invertase/reeval/commit/31b1743b906d8e35bf8ab8c3e49a87f00984d37f))
+* **compare:** let questions choose what each side shows ([#363](https://github.com/invertase/reeval/issues/363)) ([01a9a68](https://github.com/invertase/reeval/commit/01a9a6840fe5efb6c7ce1f6741d751278ce15866))
+* **compare:** save what each question's model saw ([#367](https://github.com/invertase/reeval/issues/367)) ([79f5710](https://github.com/invertase/reeval/commit/79f5710fd2bde10fcf4af18d3b3b74279be72d8f))
+* **compare:** set the question model from the question option ([#366](https://github.com/invertase/reeval/issues/366)) ([1ca53dd](https://github.com/invertase/reeval/commit/1ca53dd9afa771bf4fb04b6f1b58f37f42a1cd70))
+* **config:** add reeval.yaml and a config contract ([#342](https://github.com/invertase/reeval/issues/342)) ([462948d](https://github.com/invertase/reeval/commit/462948dcd4f7733858ad05e58f8d0d8add2f6194))
+* **config:** one relative path rule for typescript and reeval.yaml ([#350](https://github.com/invertase/reeval/issues/350)) ([981a309](https://github.com/invertase/reeval/commit/981a309909f43bc31230f1176b9bcef1d33e2dc2))
+* **config:** resolve reeval.yaml paths against its directory ([#345](https://github.com/invertase/reeval/issues/345)) ([ac97e17](https://github.com/invertase/reeval/commit/ac97e179020cf0af5493c0e234a262557f01de0b))
+* **contract:** add background processes, capture and expect.poll to the attempt protocol ([#343](https://github.com/invertase/reeval/issues/343)) ([bfbda40](https://github.com/invertase/reeval/commit/bfbda4052c3c76515aa7d20648d56e79d346c083))
+* **contract:** add c.judge to the attempt protocol ([#340](https://github.com/invertase/reeval/issues/340)) ([6888159](https://github.com/invertase/reeval/commit/6888159ff458baad77c2c72f9305e7ed1fd88b45))
+* **contract:** add the attempt lifecycle messages to the protocol ([#341](https://github.com/invertase/reeval/issues/341)) ([5b74b94](https://github.com/invertase/reeval/commit/5b74b942f4465e1999269228707ff19ce7623ccd))
+* **contract:** the declaration tree and attempt protocol as zod contracts ([#337](https://github.com/invertase/reeval/issues/337)) ([49661d5](https://github.com/invertase/reeval/commit/49661d578a3d09df765e4f2ef5fce030828d47a8))
+* **contract:** validate the SDK-facing plain data against zod contracts ([#335](https://github.com/invertase/reeval/issues/335)) ([7b64f17](https://github.com/invertase/reeval/commit/7b64f17a1a9a2102faa752d026ef8d2b74c9ea73))
+* **harness:** add an fx harness on AI Gateway or OpenAI over fx acp ([#372](https://github.com/invertase/reeval/issues/372)) ([2ed7226](https://github.com/invertase/reeval/commit/2ed722615fbf7e1019649b60642b186df26edd68))
+* **harness:** add grokBuild() for xAI's Grok Build on an xAI API key ([#373](https://github.com/invertase/reeval/issues/373)) ([310e471](https://github.com/invertase/reeval/commit/310e471bd56133ee08d8775e40d2110bee909485))
+* **harness:** surface stalled Cursor shell tools; docs for contributing agents ([#377](https://github.com/invertase/reeval/issues/377)) ([ff18bc9](https://github.com/invertase/reeval/commit/ff18bc91946cece342438883bfb87cb42ac57d7c))
+* **judge:** check the judge options against a zod contract ([#339](https://github.com/invertase/reeval/issues/339)) ([6e82595](https://github.com/invertase/reeval/commit/6e82595c23e30c4d718c73e58a53924f20c2588b))
+* **judge:** choose what the judge is given with state ([#334](https://github.com/invertase/reeval/issues/334)) ([16b9a97](https://github.com/invertase/reeval/commit/16b9a97e76353390091f3d0063c164683c4b51c5))
+* **language-runner:** LanguageAdapter with Python eval SDK ([#380](https://github.com/invertase/reeval/issues/380)) ([a15d9cb](https://github.com/invertase/reeval/commit/a15d9cb917843532c3a127f2f8c024eba59fa966))
+* **mcp:** add a failures tool and point debugging agents at it ([#371](https://github.com/invertase/reeval/issues/371)) ([349f940](https://github.com/invertase/reeval/commit/349f940962c972af0e1953e40b9877ed7d5e0473))
+* **sandbox:** add podman() sandbox support ([#381](https://github.com/invertase/reeval/issues/381)) ([6e3d349](https://github.com/invertase/reeval/commit/6e3d3495ffa86165aba140e18d133bdd66e95372))
+* **sdk:** start the sandbox on first use and remove c.sandbox() ([#344](https://github.com/invertase/reeval/issues/344)) ([7005df7](https://github.com/invertase/reeval/commit/7005df7f8b5dc61fb1c810a0bf1d1c95284db336))
+
+
+### Bug Fixes
+
+* **capture:** wait for the network to go quiet on a journey's idle beat ([#322](https://github.com/invertase/reeval/issues/322)) ([bfd4756](https://github.com/invertase/reeval/commit/bfd4756281ca8768268795eaeffcb14b3c615097))
+* clearer error messages ([#355](https://github.com/invertase/reeval/issues/355)) ([acc63a7](https://github.com/invertase/reeval/commit/acc63a72c1de333c2b63f8ddf5ba3916690f02bf))
+* **exec:** group background commands before redirecting ([#362](https://github.com/invertase/reeval/issues/362)) ([ec4720a](https://github.com/invertase/reeval/commit/ec4720a84112a24e1017db9cd1d98a81d2ac1ef8))
+* **exec:** stop compound background commands on windows ([#365](https://github.com/invertase/reeval/issues/365)) ([d296c33](https://github.com/invertase/reeval/commit/d296c3333240dbe272456df8c23bad6cfe975a06))
+* friction-log fixes for image inspect, doctor images, eval marks, fake brokering and skill.git ([#383](https://github.com/invertase/reeval/issues/383)) ([70e96fe](https://github.com/invertase/reeval/commit/70e96fe31cbbb1ecd073cecba12e7cabd690dfbe))
+* **history:** read glob words with an unbalanced [ literally in tool-call classes ([#375](https://github.com/invertase/reeval/issues/375)) ([21726d1](https://github.com/invertase/reeval/commit/21726d1984fc7f95590d2db9e7f976a5eeb7a807))
+* papercuts from the Genkit friction log, and move the reeval skill to skills/ ([#382](https://github.com/invertase/reeval/issues/382)) ([a77755e](https://github.com/invertase/reeval/commit/a77755e237bcbae8afc743e1059dcd61987d4e23))
+* **plan:** resolve relative paths in declaration trees ([#360](https://github.com/invertase/reeval/issues/360)) ([6117fb9](https://github.com/invertase/reeval/commit/6117fb9eaa2782995aee04cc724f4725f16bd615))
+* **test:** normalise windows paths in refusal goldens ([#357](https://github.com/invertase/reeval/issues/357)) ([434e3af](https://github.com/invertase/reeval/commit/434e3af5f7d12604cffb28c2d80fa4a1e37f0a98))
+
+
+### Code Refactoring
+
+* drop leftover es names ([#332](https://github.com/invertase/reeval/issues/332)) ([0999c19](https://github.com/invertase/reeval/commit/0999c190e380e2f8046b5b285b3c99753a513f04))
+
 ## [0.9.0](https://github.com/invertase/reeval/compare/v0.8.0...v0.9.0) (2026-10-16)
 
 

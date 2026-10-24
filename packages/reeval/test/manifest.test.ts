@@ -8,9 +8,12 @@ import { baseEnv, pkgRoot, spawnTool, tempDir } from './helpers.ts'
 const repoRoot = join(pkgRoot, '../..')
 const workspacePackages = new Set(
   ['packages', 'examples'].flatMap((group) =>
-    readdirSync(join(repoRoot, group)).map(
-      (dir) => JSON.parse(readFileSync(join(repoRoot, group, dir, 'package.json'), 'utf8')).name,
-    ),
+    readdirSync(join(repoRoot, group), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map(
+        (entry) =>
+          JSON.parse(readFileSync(join(repoRoot, group, entry.name, 'package.json'), 'utf8')).name,
+      ),
   ),
 )
 

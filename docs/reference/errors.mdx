@@ -81,6 +81,7 @@ See [reeval doctor](/reference/cli/doctor) for every check.
 | `compare.baseline in evaluate("e") must be an environment from defineEnvironment (got "a"). …` | Set `baseline` to an environment, or leave it out to make the eval's environment the control. Variants are not layered on it. |
 | `compare in evaluate("g › e") lists a, which is the control: compare has no baseline, so the eval's environment is. …` | Drop that variant: without a `baseline`, the cascaded `environment` is already the control. |
 | `compare in evaluate("e") lists a variant named baseline, the name of the empty control …` | Rename the variant, or set `compare.baseline`. |
+| `compare in evaluate("e") runs head and base on the same tree: past what they share, each sets only workspace, and both are git("..") with no ref (the repository HEAD). …` | The two arms can only run the same code. A `ref` read from an unset variable is `undefined`: set the variable, or give each arm its own ref. See [Lift of a pull request](/recipes/pr-lift). |
 | `Unknown compare option "strategy" in evaluate("e")` | Drop `strategy`. Share setup with `extendEnvironment` before `compare`. |
 | `environment and compare.baseline can't both be set in evaluate("e")` | Drop `environment`, or drop `baseline` to make `environment` the control. A parent `environment` can stay beside a child's `baseline`, and isn't applied. |
 | `compare: false can't be set in evaluate("e")` | Omit `compare`, or pass `{ baseline, variants }`. A profile uses `limit.compare: false`. |
@@ -126,7 +127,6 @@ See [Profiles and budgets](/reference/profiles).
 | `cursor: session did not become ready within 90s (tried twice)` | The harness's session start (its bootstrap) hung twice. The attempt is an infra error, its sandbox is destroyed and the other attempts carry on. Raise the harness's `startTimeout` if it's legitimately slow. |
 | `The worker running evals/a.eval.ts exited unexpectedly (signal SIGKILL)` | The process running that file died: killed, or out of memory. Its unfinished attempts fail and the run exits 1. |
 | `The reeval at <path> runs eval files with engine protocol N, but this reeval speaks M` | The project resolves another version of reeval than the `reeval` you ran. Run the project's own: `npx reeval`. |
-| `reeval run --json only prints the plan: add --dry-run. A run writes its record to .reeval/runs; read it with reeval show --json.` | Add `--dry-run`, or use `reeval show --json` after the run. |
 | `--runs must be a whole number of at least 1 (got 0)` | Pass a positive whole number. |
 | `--json doesn't take a value: pass --json on its own.` | Drop the `=…` after a yes/no flag. A flag that needs a value and has none gets `--runs needs a value (--runs <n>)`. |
 | `No run matches "abc". Pass latest, latest~N, a run id or a git SHA; reeval history lists them.` | `reeval show`, `compare` and the other history commands take one of those. |
@@ -144,13 +144,13 @@ See [Profiles and budgets](/reference/profiles).
 
 | Message | Fix |
 |---|---|
-| `Missing credentials: CURSOR_API_KEY, TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN. Set them in the environment or .env.local.` | Set the harness key and a judge key, in the shell or `.env.local`. |
+| `Missing credentials: CURSOR_API_KEY; TYPESAFE_AI_API_KEY (for direct()) for the judge model, "typesafe-ai/jev-1.14.0". Set them in the environment or .env.local.` | Set the harness key and the judge's provider key, in the shell or `.env.local`. With `AI_GATEWAY_API_KEY` set, the message adds `AI_GATEWAY_API_KEY is set, but no gateway in the config uses it: add vercel() to gateway …`: add [`vercel()` to `gateway`](/reference/gateway) to use it. |
 | `Credentials with whitespace or a line break in them: CURSOR_API_KEY (character 4). A key copied from a wrapped terminal line picks these up; set it again as one line.` | Set the key again as one line. |
 | `Secret NAME for <where> isn't set. Set it in the environment or .env.local.` | Set the host variable, or mark the secret `optional: true`. |
 | `warning: SENTRY_DSN is in the sandbox as its real value. …` | Add `hosts` to broker it, or accept the warning. `secrets: { unbrokered: 'error' }` makes it an error. |
 | `warning: the egress gateway refused POST https://…: it carries CURSOR_API_KEY's placeholder and isn't one of the endpoints reeval brokers it for` | The harness CLI called an endpoint reeval doesn't broker. Check for a CLI update and report it. |
 | `The API rejected CURSOR_API_KEY: set a valid key in the environment or .env.local. …` | The harness's API refused its key (an HTTP 401, or Google's "API key not valid"). The named variable is the one to fix; the provider's own message follows. |
-| `No credentials for judge model "…". …` | Set the provider's key or `AI_GATEWAY_API_KEY`. See [Judges](/reference/judges). |
+| `No credentials for judge model "…" (provider "…"). Set …` | Set the provider's own key (`ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY` or `TYPESAFE_AI_API_KEY`), or add `vercel()` to `gateway` and set `AI_GATEWAY_API_KEY`. See [Judges](/reference/judges#providers-and-keys). |
 | `compare.questions "Which is cleaner?" (evals/q.eval.ts › asks) needs a language model to answer it. …` | Set `analysis.model`, give the question its own `model`, or set `question: { model }` on its group or eval. A judge that's an evaluation model can't answer it; `--dry-run` still plans. |
 
 ## Docker and images
@@ -158,6 +158,7 @@ See [Profiles and budgets](/reference/profiles).
 | Message | Fix |
 |---|---|
 | `Docker is not running. Start Docker and try again.` | Start Docker. On Windows, Docker Desktop on the WSL 2 backend. |
+| `Docker isn't installed: there's no docker command on the PATH. …` | Install Docker (Docker Engine or Docker Desktop), then `reeval image build`. |
 | `Docker is running Windows containers, but reeval's sandboxes are Linux containers. …` | Switch Docker Desktop to Linux containers. |
 | `Docker image … not found. docker({ image }) is used as is, so pull or build it first …` | Pull or build your image, or use `from` or `dockerfile` so reeval builds it. |
 | `… The sandbox <id> is set by reeval.config.ts for every eval, so nothing ran.` | The config's sandbox failed to prepare (exit 3); fix the failure above it. |
@@ -169,6 +170,7 @@ See [Profiles and budgets](/reference/profiles).
 | `killed (exit 137): usually out of memory; …` | Give Docker more memory, or lower `--concurrency`. |
 | `Baking the <harness> CLI onto <base> failed: …` | Usually the network; reeval already retried it twice. |
 | `Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start (…). …` | The image has no Node for the egress gateway. Use `docker({ from })` or `docker({ dockerfile })`. |
+| `Can't enforce egress proxy: the egress gateway, the sandbox's only way out, could not start (…). …` | The same, for any policy but `'allow-all'`: the container has no network without the gateway. Use `docker({ from })` or `docker({ dockerfile })`. |
 | `The Cursor harness needs the Docker sandbox: set sandbox: docker() for this eval, or use fakeHarness() with fakeSandbox()` | Real harnesses run only in `docker()`. |
 
 See [docker()](/reference/sandbox/docker).
@@ -181,20 +183,71 @@ Before any attempt, reeval fetches each `workspace: git(…)` repository on the 
 ✗ workspace https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts failed to prepare (set by environment react-ts; only its attempts fail)
   Workspace git("https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts"): the repository has no ref "v99.0.0" (a branch, tag or commit SHA).
 …
-   ! adds a reset button     17ms  0 turns
-   ✓ writes a README          5ms  0 turns
+infra error      adds a reset button
+  infra error      Workspace git("https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts"): the repository has no ref "v99.0.0" (a branch, tag or commit…
+
+pass             writes a README
+…
+1 pass · 1 infra error
 ```
 
 Each such attempt's `error.prepare` has `stage: "workspace"` and the workspace as its `ref`.
 
 | Message | Fix |
 |---|---|
-| `Workspace git("https://github.com/vitejs/vite#v99.0.0:…"): the repository has no ref "v99.0.0" (a branch, tag or commit SHA).` | Check the ref. A commit needs its full 40-character SHA; an abbreviated one gets that hint. |
+| `Workspace git("https://github.com/vitejs/vite#v99.0.0:…"): the repository has no ref "v99.0.0" (a branch, tag or commit SHA).` | Check the ref. A commit needs its full 40-character SHA; an abbreviated one gets that hint. A local repository that's a shallow clone gets `… is a shallow clone, so it may not have that ref: fetch it (git fetch origin …) or clone the full history (fetch-depth: 0 in actions/checkout).` |
+| `warning: compare in evals/pr.eval.ts › lift: head and base start from the same tree (4ea35bfc6bef): git("..#v2") and git("..#e55bf01…") resolve to it, so the lift can't show a change to the workspace. …` | Two arms' different refs or paths resolved to one tree, so the run measures no change to the code. Check the refs the arms read; the run still goes ahead. |
 | `Workspace git("…#v6.0.0:packages/create-vite/template-react-tsx") at v6.0.0 (commit 814120f) has no directory "packages/create-vite/template-react-tsx"; packages/create-vite/ has: …, template-lit-ts/, …` | Pick one of the listed directories. A file gets `is a file, not a directory`. |
 | `Workspace git("https://github.com/acme/no-such-repo#v1"): couldn't fetch it (remote: Repository not found.). Check the URL; a private repository also needs this machine's git credentials.` | Check the URL, or give this machine access to the repository. |
 | `Workspace git("…"): isn't readable with this machine's git credentials, or doesn't exist (could not read Username for 'https://github.com': terminal prompts disabled). …` | reeval never prompts. Give `git()` a `token`, or run `gh auth setup-git`, configure a credential helper or load an SSH key on the host; the sandbox never gets them. With a `token`, this means the token was refused. |
 | `Workspace git("…"): its token variable GITHUB_TOKEN isn't set. Set it in the environment or .env.local.` | Set the variable `token` names. |
 | `Workspace git("https://gitlab.invalid/acme/app#v1"): couldn't be fetched (unable to access 'https://gitlab.invalid/acme/app/': Could not resolve host: gitlab.invalid)` | The network, after two retries (its `class` is `transient`). A pinned SHA fetched before reruns from the cache offline. |
+
+## Plugins
+
+The plan reads every local plugin and checks each cell's harness can take it, so a plugin reeval can't place exits 2 before any attempt starts, naming the eval and the harness:
+
+```text
+reeval: evals/review.eval.ts: evaluate("reviews the diff") on goose:gemini-3.8-flash: Goose can't load the review plugin's agents (agents/) and commands (commands/) and hooks (hooks/hooks.json) and rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell
+```
+
+| Message after the prefix | Fix |
+|---|---|
+| `Claude Code can't load the review plugin's rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell` | The harness doesn't load that part. Leave it out with `only`. |
+| `Codex can't load the review plugin's apps: they need a ChatGPT login` | The plugin bundles ChatGPT apps (`apps` in its manifest, or an `.app.json`), which Codex can't run on an API key. Leave the plugin out of Codex's cells. |
+| `Codex reads the review plugin's .codex-plugin/plugin.json in place of its .claude-plugin/plugin.json, so reeval can't hold it to the parts it places: remove .codex-plugin/plugin.json from the plugin, or leave the plugin out of this cell` | Codex reads its own manifest (or a root `plugin.json` with an Agent Plugins `$schema`) first, and reeval reads only `.claude-plugin/plugin.json`. Remove the other manifest, or keep the plugin off Codex's cells. |
+| `Claude Code loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: ['skills'] and declare the server in mcp, where reeval fills it in` | Claude Code, Antigravity, Grok Build and Codex start a plugin's servers themselves. Leave `mcp` out of `only` and declare the server in the environment's `mcp`. |
+| `Grok Build names the review plugin's MCP server "docs" by its own name, as it does mcp.docs, and keeps only one: rename one, or leave mcp out of the plugin with only` | Grok Build and Codex don't namespace a plugin's MCP servers. Rename one server, or leave `mcp` out of the plugin's `only`. |
+| `Goose keys the review_docs and review:docs MCP servers both as review_docs, and keeps only one: rename one` | Goose keys an MCP server by its name lower-cased, without spaces, and with other punctuation as `_`, so a plugin's `review:docs` and `mcp.review_docs` are one server to it. Rename one. |
+| `Cursor can't run the review plugin's Notification hooks (hooks/hooks.json): it runs SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse, SubagentStop, PreCompact, Stop hooks; use only: ['skills', 'mcp'], or leave the plugin out of this cell` | The harness has no such event. Leave `hooks` out with `only`, or drop the event from the plugin. |
+| `the audit plugin's subagent "reviewer" and the review plugin's would both be placed at .cursor/agents/reviewer.md: rename one, or narrow one with only` | Cursor takes plugin subagents and commands flat. Rename one, or leave `agents` (or `commands`) out of one plugin's `only`. |
+| `pi names the review:docs MCP server review_docs, as it does the review_docs server, and keeps only one: rename one` | pi names a plugin's servers `<plugin>_<server>`. Rename the environment's server, or leave `mcp` out of the plugin's `only`. |
+| `Antigravity reads the review plugin's plugin.json in place of its .claude-plugin/plugin.json, so reeval can't hold it to the parts it places: remove plugin.json from the plugin, or leave the plugin out of this cell` | agy installs a plugin with its own manifest (a root `plugin.json`, `.antigravity-plugin/`, `.gemini-plugin/` or `gemini-extension.json`) as a native one. Remove that manifest, or keep the plugin off Antigravity cells. |
+| `the review plugin's rule "style.mdc" and the review plugin's rule "style.md" would both be placed at .cursor/rules/review-style.mdc: rename one, or narrow one with only` | Cursor unpacks each rule as `<plugin>-<name>.mdc`. Rename one rule file. |
+| `Cursor can't run the review plugin's prompt hooks (hooks/hooks.json): it runs only command hooks; use only: ['skills', 'mcp'], or leave the plugin out of this cell` | Cursor and Antigravity run only `command` hooks. Leave `hooks` out with `only`, or make the hook a command. |
+| `plugin.local('plugins/bare') has no .claude-plugin/plugin.json` | Point at the plugin's root, the directory with `.claude-plugin/plugin.json`. |
+| `the review plugin has no hooks, so only: ['hooks'] matches nothing (it has skills, mcp)` | Name parts the plugin has in `only`. |
+| `plugin "review" has a build, which runs in a Docker image layer: use docker()` | Builds run on Docker only. Run the eval on `docker()`, or leave `build` out on `fakeSandbox()`. |
+| `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start: add a build that installs it, or allow the host in egress` | Give the plugin a `build` that installs the server, or add the registry to `egress`. Under `proxy` and `allow-all` this is a note in the plan instead. |
+| `the review plugin's manifest sets "skills", which reeval doesn't read: keep each part in its default place (skills/, agents/, commands/, hooks/hooks.json)` | Move the part to its default directory. |
+| `environment review lists two plugins named "review", plugin.local('plugins/a') and plugin.local('plugins/b'): rename one, or leave one out` | One environment lists each plugin name once. A child environment's plugin replaces its parent's of the same name. |
+| `the review plugin's MCP server "docs" would join mcp as review:docs, which mcp already names: rename mcp["review:docs"]` | Rename the environment's own server. |
+| `the review plugin's MCP server "docs": "${HOME}" in .mcp.json names a variable; reeval fills in only ${CLAUDE_PLUGIN_ROOT} in a command and its args, …` | Pass the host variable through the server's `env` as a whole value, such as `"TOKEN": "${TOKEN}"`. |
+
+A `plugin.git`, `plugin.npm` or `plugin.marketplace` plugin is fetched when an attempt starts, so the same problems with it fail its attempts as infra errors (exit 3), prefixed by `environment <name> (<eval>)`. An http plugin MCP server whose host a restricted egress policy doesn't allow fails the same way, as do a Cursor workspace file a plugin part would replace (`The workspace already has .cursor/agents/reviewer.md, which a plugin would replace: …`), a plugin Antigravity's CLI refuses to install (`agy plugin install <dir> exited 1: …`) and a marketplace that can't give the entry:
+
+| Message after the prefix | Fix |
+|---|---|
+| `plugin.marketplace('lint@github:acme/tools'): github:acme/tools has no .claude-plugin/marketplace.json, so it isn't a Claude Code marketplace; name a plugin's own repository or package with plugin.git or plugin.npm` | Name a Claude Code marketplace, or the plugin's repository with `plugin.git`. |
+| `plugin.marketplace('lnt@github:acme/tools'): the acme-tools marketplace (github:acme/tools) has no plugin "lnt" (did you mean "lint"?); it lists lint, format, review` | Name an entry the marketplace lists. |
+| `the acme-tools marketplace's entry "lint" has source {"source":"hg","url":"…"}, which reeval doesn't fetch: it takes a ./path in the marketplace, or a github, url, git-subdir or npm source` | Name the plugin's own source with `plugin.git` or `plugin.npm`. |
+| `the acme-tools marketplace's entry "lint" sets "commands", which reeval doesn't read: keep each part in the plugin's own directory` | Use a plugin whose parts are in their default places. |
+| `the acme-tools marketplace's entry "lint" has ref "--upload-pack=…", which isn't a branch or tag` | The marketplace's entry is malformed: name the plugin's own source with `plugin.git`. `sha` must be a full 40-character commit SHA. |
+| `the acme-tools marketplace's entry "lint" has a password or token in its url, which reeval would record: …` | Name the repository with `plugin.git` and fetch it with your own git credentials. |
+| `the acme marketplace (https://git.example.com/acme/plugins.git) names its review plugin at file:///srv/review, a path on this machine: a remote marketplace may only name remote repositories or paths inside itself` | A remote marketplace can't reach this machine's files. Name the plugin with `plugin.git` or `plugin.local`, or use a local copy of the marketplace. |
+| `the acme-tools marketplace's entry "lint" names npm package "git+ssh://…", which isn't a registry package name: reeval packs only registry packages from a marketplace` | Name the plugin's own source with `plugin.git` or `plugin.npm`. |
+
+A plugin `build` runs in preflight, like an `install` layer: a failing command fails the attempts that use it with `Building the build of plugin.local('plugins/review') failed: build 1/2 exited 1: npm ci` (exit 3), and a `plugin.git` ref that moves between preflight and the attempt fails it with `The review plugin's ref moved during the run: …. Pin ref to a commit or tag.`
 
 ## During an attempt
 
@@ -208,6 +261,7 @@ Each such attempt's `error.prepare` has `stage: "workspace"` and the workspace a
 | `expected command to succeed, exit code 1` | The command failed; the message has the tail of stderr and stdout. |
 | `expect(…).toSucceed() wasn't awaited. …` | Write `await expect(…)`. The eval fails even when the check passes. |
 | `judge score 0.40 is below 0.8 for "…" (…)` | The judge said no. Read its input in the attempt's `judge-input.json`. |
+| `Network is unreachable`, `connection refused` or `could not resolve host` in a check or the transcript, with nothing in the record's `egress.contacted` or `blocked` | Under the default, `'proxy'`, only HTTP(S) through the egress gateway leaves the sandbox, so raw TCP, UDP, SSH and database drivers get no connection. Set `egress: 'allow-all'` on the eval, or point the client at `HTTPS_PROXY`. The run's `proxy-only-egress` remark names the eval. See [Egress](/reference/egress#connections-that-never-reach-the-gateway). |
 | `Eval timed out after 900s` | Raise `timeout`, or make the task smaller. |
 | `out of memory: 1 process killed at the 4g limit (+4g swap); raise docker({ memory })` | A process in the sandbox hit its memory limit, so the attempt is an infra error, whatever its checks said. Raise `docker({ memory })`, or give Docker more memory. |
 | `setup step 1/2 "npm ci" in environment base exited 1 after …` | Fix the setup step; its output is in the attempt's `setup.log`. An infra error. |

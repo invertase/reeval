@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
-import { extname, join, resolve, sep } from 'node:path'
+import { extname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { type Context, Hono } from 'hono'
 import { getCookie, setCookie } from 'hono/cookie'
@@ -22,6 +22,7 @@ import type { StudioInfo } from '../view/model.ts'
 import { indexFiles } from '../view/model.ts'
 import { artifactType, parseDataPath, RUN_ID } from '../view/paths.ts'
 import { readableDebugRequest } from '../view/record.ts'
+import type { StudioAppFiles } from './app.ts'
 import { listLive, liveTranscript } from './live.ts'
 import { listHeaders, resolveFile, type StudioSource } from './source.ts'
 
@@ -30,7 +31,7 @@ export const COOKIE = 'reeval_studio_token'
 export type StudioServerOptions = {
   source: StudioSource
   /** The prebuilt web app (index.html and assets/). */
-  appDir: string
+  app: StudioAppFiles
   reeval: string
   project: string
   /** null turns the token check off (`--no-token`). */
@@ -269,29 +270,26 @@ export function createStudioApp(options: StudioServerOptions) {
       })
     }
     if (path.startsWith('data/') || path.startsWith('api/')) return c.text('Not found', 404)
-    return serveApp(c, options.appDir, path)
+    return serveApp(c, options.app, path)
   })
 
   return app
 }
 
-const APP_FILE = /^(?:assets\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
-
-async function serveApp(c: Context, dir: string, path: string): Promise<Response> {
-  const appDir = resolve(dir)
+function serveApp(c: Context, app: StudioAppFiles, path: string): Response {
   const name = path === '' ? 'index.html' : path
-  if (!APP_FILE.test(name) || name.includes('..')) return c.text('Not found', 404)
-  const file = join(appDir, ...name.split('/'))
-  if (!file.startsWith(appDir + sep)) return c.text('Not found', 404)
-  try {
-    if (!(await stat(file)).isFile()) return c.text('Not found', 404)
-  } catch {
-    return c.text('Not found', 404)
-  }
-  const hashed = name.startsWith('assets/')
-  return sendFile(c, file, {
-    'Content-Type': APP_TYPES[extname(file)] ?? 'application/octet-stream',
-    'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
+  const file = app.get(name)
+  if (!file) return c.text('Not found', 404)
+  const headers = {
+    'Content-Type': APP_TYPES[extname(name)] ?? 'application/octet-stream',
+    'Cache-Control': name.startsWith('assets/')
+      ? 'public, max-age=31536000, immutable'
+      : 'no-cache',
     ...(name === 'index.html' ? { 'Content-Security-Policy': APP_CSP } : {}),
-  })
+    ETag: file.etag,
+  }
+  if (c.req.header('if-none-match') === file.etag) return c.body(null, 304, { ETag: file.etag })
+  const common = { ...headers, 'Content-Length': String(file.body.length) }
+  if (c.req.method === 'HEAD') return c.body(null, 200, common)
+  return c.body(new Uint8Array(file.body), 200, common)
 }

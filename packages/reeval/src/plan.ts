@@ -1,9 +1,13 @@
 // The run's plan: what it will start, how long that should take, and whether it fits the budget.
 import { acrossOf, type PairAttempt, pairsOf, plannedSides } from './compare/pairs.ts'
 import { questionShows, resolveQuestionState } from './compare/state.ts'
+import { type CostedAttempt, type PlanCost, planCost } from './cost.ts'
 import type { ExcludedEval, PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
+import { fallbackHint } from './gateway/resolve.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
+import type { RunRecord } from './history/types.ts'
+import type { Prices } from './prices.ts'
 import { clip, formatDuration } from './text.ts'
 import type {
   Budget,
@@ -16,16 +20,23 @@ import type {
   PairFactor,
   PlannedEgress,
   PlannedQuestion,
+  ResolvedConfig,
+  ResolvedGateway,
   ResolvedProfile,
   SandboxDescriptor,
   SandboxWarning,
 } from './types.ts'
 import { EFFORT_ALPHA, EFFORT_MIN_RUNS } from './view/effort.ts'
 
-/** With no history for a harness, an attempt is assumed to take this long (the fake agent: 1s). */
+/**
+ * With no history for a harness, an attempt is assumed to take this long. The fake agent takes
+ * no time, so its attempt is the sandbox's: 1s in the fake sandbox, and in a container the start,
+ * the workspace, `setup` steps such as an install, and the checks.
+ */
 const DEFAULT_ATTEMPT_MS = 3 * 60_000
 const DEFAULT_FAKE_MS = 1000
-/** The most recent runs whose durations feed the estimate. */
+const DEFAULT_SANDBOX_SETUP_MS = 30_000
+/** The most recent runs whose durations and tokens feed the estimates. */
 const HISTORY_RUNS = 30
 
 export type PlanRow = {
@@ -45,6 +56,8 @@ export type RunPlan = {
   attempts: number
   /** Serial: every attempt one after another. */
   estimateMs: number
+  /** Agent and judge tokens, and their cost when there are prices; only for `--dry-run`. */
+  cost?: PlanCost
   concurrency: number
   budget: Budget
   warnings: string[]
@@ -59,6 +72,8 @@ export type RunPlan = {
   harnesses: string[]
   /** The model that answers a compare question naming none; null when there's no language model. */
   questionModel: string | null
+  /** The insights `reeval run` asks for after its attempts; null when it asks for none. */
+  insights: PlanInsights | null
   /** The run this plan belongs to, minted or resumed before collect. */
   runId?: string
   /** Set when this plan continues a stopped, interrupted or budget-stopped run. */
@@ -74,8 +89,7 @@ const median = (values: number[]) => {
 }
 
 /** Attempt durations from the latest recorded and scratch runs, by eval and harness. */
-export async function historyDurations(root: string, historyDir: string) {
-  const records = await recentRecords([historyDir, scratchDir(root)], HISTORY_RUNS)
+function historyDurations(records: RunRecord[]) {
   const byEval = new Map<string, number[]>()
   const byHarness = new Map<string, number[]>()
   const push = (map: Map<string, number[]>, key: string, ms: number) =>
@@ -91,12 +105,13 @@ export async function historyDurations(root: string, historyDir: string) {
       }
     }
   }
-  return (id: string, harness: string, kind: string) => {
+  return (id: string, harness: string, kind: string, sandbox: string) => {
     const own = byEval.get(`${id}\0${harness}`)
     if (own?.length) return median(own)
     const any = byHarness.get(harness)
     if (any?.length) return median(any)
-    return kind === 'fake' ? DEFAULT_FAKE_MS : DEFAULT_ATTEMPT_MS
+    if (kind !== 'fake') return DEFAULT_ATTEMPT_MS
+    return sandbox === 'fake' ? DEFAULT_FAKE_MS : DEFAULT_SANDBOX_SETUP_MS
   }
 }
 
@@ -108,9 +123,16 @@ export async function buildPlan(options: {
   root: string
   historyDir: string
   questionModel?: string | null
+  insights?: PlanInsights | null
+  /** The run's judge model, `fake` for a fake judge; null or unset when there's none. */
+  judgeModel?: string | null
+  /** Prices for the cost estimate, which only `--dry-run` shows; unset leaves it out. */
+  prices?: Prices
 }): Promise<RunPlan> {
   const { planned } = options
-  const estimate = await historyDurations(options.root, options.historyDir)
+  const records = await recentRecords([options.historyDir, scratchDir(options.root)], HISTORY_RUNS)
+  const estimate = historyDurations(records)
+  const costed: CostedAttempt[] = []
   const rows = new Map<string, PlanRow>()
   const cells = new Set<string>()
   const warnings = new Set<string>()
@@ -142,7 +164,8 @@ export async function buildPlan(options: {
     }
     attempts++
     cells.add(`${id}\0${attempt.cell.key}`)
-    estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind)
+    estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind, attempt.sandbox.kind)
+    costed.push({ id, cell: attempt.cell, harness: attempt.harness })
     sandboxes.set(JSON.stringify(attempt.sandbox), attempt.sandbox)
     descriptors.set(JSON.stringify(attempt.harness), attempt.harness)
     harnesses.add(attempt.cell.harness)
@@ -181,6 +204,9 @@ export async function buildPlan(options: {
     cells: cells.size,
     attempts,
     estimateMs,
+    ...(options.prices
+      ? { cost: planCost(costed, records, options.judgeModel ?? null, options.prices) }
+      : {}),
     concurrency: options.concurrency,
     budget: options.budget,
     warnings: [...warnings],
@@ -190,11 +216,30 @@ export async function buildPlan(options: {
     hints: [
       ...gateHint([...rows.values()].filter((r) => counted.get(r.id)?.gated)),
       ...effortHint([...rows.values()]),
+      ...gatewayHints(planned),
     ],
     sandboxes: [...sandboxes.values()],
     harnessDescriptors: [...descriptors.values()],
     harnesses: [...harnesses],
     questionModel: options.questionModel ?? null,
+    insights: options.insights ?? null,
+  }
+}
+
+/** `analysis.model` and `analysis.maxTokens`, as the run uses them. */
+export type PlanInsights = { model: string; maxTokens: number }
+
+/** The plan's insights: null without `analysis.model`, with `analysis.insights: false` or `--no-insights`. */
+export async function planInsights(
+  config: ResolvedConfig,
+  flag: boolean,
+): Promise<PlanInsights | null> {
+  const { wantsInsights } = await import('./insights/run.ts')
+  if (!wantsInsights(config, flag)) return null
+  const { questionModelLabel } = await import('./analysis/model.ts')
+  return {
+    model: questionModelLabel(config) ?? 'fake',
+    maxTokens: config.analysis.maxTokens,
   }
 }
 
@@ -274,6 +319,16 @@ function effortHint(rows: PlanRow[]): string[] {
   return [
     `${plural(few.length, 'compare')} ${few.length === 1 ? 'runs' : 'run'} ${runs} times per cell; effort can't reach p < ${EFFORT_ALPHA} below ${EFFORT_MIN_RUNS} vs ${EFFORT_MIN_RUNS} (runs: ${EFFORT_MIN_RUNS})`,
   ]
+}
+
+/** One line per harness whose cells fell past the first entries of the `gateway` list. */
+function gatewayHints(planned: PlannedItem[]): string[] {
+  const hints = new Set<string>()
+  for (const { attempt } of planned) {
+    if (attempt.skip || attempt.plan.skip || !attempt.gateway?.skipped.length) continue
+    hints.add(fallbackHint(attempt.cell.harness, attempt.gateway))
+  }
+  return [...hints]
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -372,6 +427,8 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
 }
 
 export type PlanCell = Cell & {
+  /** The gateway its harness resolved to; unset when no config, profile or pin names one. */
+  gateway?: ResolvedGateway
   gate: CellGate
   minLift?: number
   runs: number
@@ -382,6 +439,8 @@ export type PlanCell = Cell & {
   workspace?: { repo: string; ref: string | null; path: string | null }
   /** The paths its environment's `files` write (`directory()`'s included), sorted. */
   files?: string[]
+  /** Its environment's plugins: a local one's name and parts, else its source. */
+  plugins?: string[]
 }
 
 export type PlanEval = {
@@ -420,10 +479,14 @@ export type PlanDocument = {
   budget: { attempts: number | null; duration: Duration | null; fits: boolean }
   concurrency: number
   estimateMs: number
+  /** What the run should cost: token and USD ranges, how they were reached, and each cell's part. */
+  cost?: PlanCost
   warnings: string[]
   /** Sandboxes that run as root or with capabilities added back, one per level that set them. */
   sandboxWarnings: SandboxWarning[]
   hints: string[]
+  /** The insights the run asks for after its attempts; null when none. */
+  insights: PlanInsights | null
   evals: PlanEval[]
   excluded: ExcludedEval[]
   images: PlanImage[]
@@ -465,6 +528,7 @@ export function planDocument(
     else {
       e.cells.push({
         ...attempt.cell,
+        ...(attempt.gateway ? { gateway: attempt.gateway } : {}),
         gate: attempt.gate,
         ...(attempt.minLift !== undefined ? { minLift: attempt.minLift } : {}),
         runs: 1,
@@ -478,6 +542,7 @@ export function planDocument(
           },
         }),
         ...(attempt.files && { files: attempt.files }),
+        ...(attempt.plugins && { plugins: attempt.plugins }),
       })
     }
   }
@@ -499,9 +564,11 @@ export function planDocument(
     },
     concurrency: plan.concurrency,
     estimateMs: plan.estimateMs,
+    ...(plan.cost ? { cost: plan.cost } : {}),
     warnings: plan.warnings,
     sandboxWarnings: plan.sandboxWarnings,
     hints: plan.hints,
+    insights: plan.insights,
     evals: [...evals.values()],
     excluded,
     images,

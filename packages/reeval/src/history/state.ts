@@ -5,7 +5,9 @@ import { join, relative, resolve, sep } from 'node:path'
 import { VERSION as ANTIGRAVITY_VERSION } from '@reeval/harness-antigravity'
 import { VERSION as CODEX_VERSION } from '@reeval/harness-codex'
 import { VERSION as CURSOR_SDK_VERSION } from '@reeval/harness-cursor-sdk'
+import { VERSION as FX_VERSION } from '@reeval/harness-fx'
 import { VERSION as GOOSE_VERSION } from '@reeval/harness-goose'
+import { VERSION as GROK_BUILD_VERSION } from '@reeval/harness-grok-build'
 import { VERSION as OPENCODE_VERSION } from '@reeval/harness-opencode'
 import { VERSION as PI_VERSION } from '@reeval/harness-pi'
 import { adapterVersion } from '@reeval/sandbox-docker'
@@ -80,7 +82,14 @@ export async function worktreePatch(root: string, ignore: string[]): Promise<Buf
 }
 
 // The engine's version comes from `engine/`, the only module that may name it.
-const PACKAGES = ['ai', '@ai-sdk/harness', '@ai-sdk/google', '@ai-sdk/typesafe-ai']
+const PACKAGES = [
+  'ai',
+  '@ai-sdk/harness',
+  '@ai-sdk/anthropic',
+  '@ai-sdk/google',
+  '@ai-sdk/openai',
+  '@ai-sdk/typesafe-ai',
+]
 
 export function packageVersions(engine: Record<string, string>): Record<string, string> {
   // Bundled into dist, so the published package can't resolve their package.json.
@@ -93,6 +102,8 @@ export function packageVersions(engine: Record<string, string>): Record<string, 
     '@reeval/harness-cursor-sdk': CURSOR_SDK_VERSION,
     '@ai-sdk/harness-claude-code': adapterVersion('claude-code'),
     '@reeval/harness-codex': CODEX_VERSION,
+    '@reeval/harness-fx': FX_VERSION,
+    '@reeval/harness-grok-build': GROK_BUILD_VERSION,
   }
   for (const name of PACKAGES) {
     try {

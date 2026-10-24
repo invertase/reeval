@@ -3,13 +3,40 @@ import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 
 type Usage = Extract<HarnessV1StreamPart, { type: 'finish' }>['totalUsage']
 
-/** A turn's counts, as `turn.completed` reports them: `input_tokens` includes the cached ones. */
+/**
+ * Codex's counts: `input_tokens` includes the cached and cache-write ones, `output_tokens` the
+ * reasoning ones. `turn.completed` reports the thread's running total, every earlier turn's
+ * model calls included.
+ */
 export type CodexUsage = {
   input_tokens?: number
   cached_input_tokens?: number
   cache_write_input_tokens?: number
   output_tokens?: number
   reasoning_output_tokens?: number
+}
+
+const USAGE_KEYS = [
+  'input_tokens',
+  'cached_input_tokens',
+  'cache_write_input_tokens',
+  'output_tokens',
+  'reasoning_output_tokens',
+] as const
+
+/**
+ * One turn's counts: the thread's running total less the one before the turn. A count that went
+ * down (a thread whose total restarted) is the turn's own.
+ */
+function turnUsage(total: CodexUsage, before: CodexUsage | undefined): CodexUsage {
+  const turn: CodexUsage = {}
+  for (const key of USAGE_KEYS) {
+    const now = total[key]
+    if (now === undefined) continue
+    const then = before?.[key] ?? 0
+    turn[key] = now >= then ? now - then : now
+  }
+  return turn
 }
 
 export type CodexItem = {
@@ -68,7 +95,8 @@ const CHANGE_TOOLS: Record<string, string> = { add: 'write', update: 'edit', del
 
 /**
  * Turns one `codex exec --json` process's NDJSON into harness stream parts. Codex reports a turn,
- * not its model calls: `turn.completed` is one `finish-step` with the turn's tokens and the
+ * not its model calls: `turn.completed` is one `finish-step` with the turn's tokens (its running
+ * total less `threadUsage`, the total the previous turn ended on) and the
  * `finish`. A top-level `error` before it is a call Codex retries ("Reconnecting... n/5"), so it's
  * a failed step, not the turn's end, unless `turn.failed` follows it: Codex announces the failure
  * that ends the turn with an `error` too, and that call wasn't retried.
@@ -84,9 +112,15 @@ export class CodexStreamTranslator {
   private readonly calls = new Set<string>()
   /** The last top-level `error`, a retry unless the next event is `turn.failed`. */
   private pendingError: string | undefined
+  /** The thread's running total before this turn, from the previous `turn.completed`. */
+  private readonly before: CodexUsage | undefined
+  /** The thread's running total once `turn.completed` reports it. */
+  threadUsage: CodexUsage | undefined
 
-  constructor(options: { workDir: string }) {
+  constructor(options: { workDir: string; threadUsage?: CodexUsage | undefined }) {
     this.workDir = options.workDir
+    this.before = options.threadUsage
+    this.threadUsage = options.threadUsage
   }
 
   /** Parts for one stdout line. Lines that aren't JSON events are passed through as raw. */
@@ -144,16 +178,19 @@ export class CodexStreamTranslator {
         this.start(parts)
         this.pendingError = e.message ?? 'error'
         return
-      case 'turn.completed':
+      case 'turn.completed': {
         this.start(parts)
         this.closeBlocks(parts)
+        const usage = e.usage ? turnUsage(e.usage, this.before) : undefined
+        if (e.usage) this.threadUsage = e.usage
         parts.push({
           type: 'finish-step',
           finishReason: { unified: 'stop', raw: 'stop' },
-          usage: toUsage(e.usage),
+          usage: toUsage(usage),
         })
-        this.finish(parts, 'stop', e.usage)
+        this.finish(parts, 'stop', usage)
         return
+      }
       case 'turn.failed':
         this.start(parts)
         this.closeBlocks(parts)

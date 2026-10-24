@@ -4,7 +4,7 @@
 /** Bumped when the system prompt or output schema changes: an older analysis is superseded. */
 export const ANALYSIS_PROMPT_VERSION = 'analysis-v10'
 /** Bumped when the digest's shape or selection rules change. */
-export const DIGEST_VERSION = 10
+export const DIGEST_VERSION = 11
 
 export type Confidence = 'high' | 'medium' | 'low'
 
@@ -102,15 +102,15 @@ export type AnalysisDoc = {
   /** Each cited fact or evidence id, summarised in one line. */
   cited: Record<string, string>
   /**
-   * Why `analysis.agent`'s run summary failed; its `analysis` is then empty. `reeval analyze` treats
-   * a cached one as a miss and calls the model again.
+   * Why the analysis failed; its `analysis` is then empty. `reeval analyze` treats a cached one as
+   * a miss and calls the model again.
    */
   error?: string
 }
 
 /**
- * `analysis.agent`'s note on one eval and harness of a run, written once that harness's attempts
- * finish: `.reeval/analysis/<runId>/notes/<eval slug>__<harness slug>.json`.
+ * A note on one eval and harness of a run, which the studio shows:
+ * `.reeval/analysis/<runId>/notes/<eval slug>__<harness slug>.json`.
  */
 export type AnalysisNote = {
   kind: 'reeval-analysis-note'
@@ -136,7 +136,7 @@ export type AnalysisEntry = { file: string; source: 'saved' | 'cached'; doc: Ana
 export type AnalysisIndex = {
   runId: string
   entries: AnalysisEntry[]
-  /** `analysis.agent`'s notes on the run, by eval and harness; absent when there are none. */
+  /** The run's notes (`.reeval/analysis/<run>/notes/`), by eval and harness; absent when there are none. */
   notes?: AnalysisNote[]
 }
 

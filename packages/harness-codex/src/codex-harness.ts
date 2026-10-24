@@ -28,7 +28,7 @@ import {
 import type { Experimental_SandboxSession as SandboxSession } from '@ai-sdk/provider-utils'
 import { z } from 'zod'
 import { CODEX_BIN_DIR, CODEX_BOOTSTRAP_DIR, getCodexBootstrap } from './codex-bootstrap.ts'
-import { CodexStreamTranslator } from './codex-stream.ts'
+import { CodexStreamTranslator, type CodexUsage } from './codex-stream.ts'
 import { CODEX_BUILTIN_TOOLS, type CodexBuiltinTools } from './codex-tools.ts'
 
 export const CODEX_HARNESS_ID = 'codex'
@@ -46,6 +46,27 @@ export const CODEX_WORKSPACE_SKILLS_DIR = '.agents/skills'
 /** The provider the adapter gives Codex, so its requests are HTTP and it reads no login. */
 export const CODEX_PROVIDER_ID = 'openai-http'
 
+/** A Responses API Codex calls: its name, base URL, and the variable its key is in. */
+export type CodexProvider = {
+  readonly name: string
+  readonly baseUrl: string
+  readonly credentialEnv: string
+}
+
+/** OpenAI's API with an OpenAI API key: the default. */
+export const OPENAI_PROVIDER: CodexProvider = {
+  name: 'OpenAI',
+  baseUrl: OPENAI_API_URL,
+  credentialEnv: CODEX_CREDENTIAL_ENV,
+}
+
+/** Vercel AI Gateway's Responses API, whose model ids name their provider (`openai/…`). */
+export const AI_GATEWAY_PROVIDER: CodexProvider = {
+  name: 'Vercel AI Gateway',
+  baseUrl: 'https://ai-gateway.vercel.sh/v1',
+  credentialEnv: 'AI_GATEWAY_API_KEY',
+}
+
 /**
  * The one request Codex sends the key on, `POST /v1/responses`, on its own provider (with
  * WebSockets off, so it's always HTTP). A gateway that enforces it refuses the key anywhere else.
@@ -57,18 +78,41 @@ export const CODEX_ENDPOINTS = [
 /**
  * Codex's defaults but for what it sends besides model requests: its analytics (to
  * `ab.chatgpt.com`), and the plugin sync (the curated list from
- * `github.com`, the remote catalogue from `chatgpt.com`), which an eval doesn't use.
+ * `github.com`, the remote catalogue from `chatgpt.com`), which an eval doesn't use. A session
+ * given plugins turns plugins on, and with them the sync, which nothing else stops.
  */
 export const CODEX_QUIET_CONFIG = {
   analytics: { enabled: false },
   features: { plugins: false },
 } as const
 
+/**
+ * Codex's home marketplace, under the sandbox home, which lists the session's plugins. Each entry's
+ * path is relative to the home directory.
+ */
+export const CODEX_MARKETPLACE_FILE = '.agents/plugins/marketplace.json'
+/** The name of that marketplace, so a plugin is installed as `<plugin>@reeval`. */
+export const CODEX_PLUGIN_MARKETPLACE = 'reeval'
+
+/** A plugin directory in the sandbox (absolute, under its home), and the plugin's name. */
+export type CodexPlugin = { readonly name: string; readonly dir: string }
+
 export type CodexHarnessSettings = {
-  /** `{ OPENAI_API_KEY }`, the only key used. The host environment is never read. */
+  /**
+   * The provider's key under its `credentialEnv` (`{ OPENAI_API_KEY }` by default), the only key
+   * used. The host environment is never read.
+   */
   readonly auth: HarnessV1AuthenticationEnvironment
+  /** The Responses API Codex calls; default OpenAI's. */
+  readonly provider?: CodexProvider
   /** MCP servers in Codex's `[mcp_servers]` shape, keyed by name. */
   readonly mcpServers?: Record<string, Record<string, unknown>>
+  /**
+   * Plugins, in Claude Code's or Codex's plugin layout, which Codex reads either of: listed in its
+   * home marketplace and installed with `codex plugin add` as the session starts, so Codex caches
+   * a copy of each under `~/.codex/plugins/cache/` and loads its skills and MCP servers.
+   */
+  readonly plugins?: readonly CodexPlugin[]
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
   readonly requireCredentialBrokering?: boolean
   /**
@@ -78,7 +122,20 @@ export type CodexHarnessSettings = {
   readonly effort?: string
 }
 
-const lifecycleData = z.object({ threadId: z.string().optional() })
+const count = z.number().optional()
+const lifecycleData = z.object({
+  threadId: z.string().optional(),
+  /** The thread's running total after its last completed turn, which the next turn's is less. */
+  usage: z
+    .object({
+      input_tokens: count,
+      cached_input_tokens: count,
+      cache_write_input_tokens: count,
+      output_tokens: count,
+      reasoning_output_tokens: count,
+    })
+    .optional(),
+})
 
 const unsupported = (what: string) =>
   new HarnessCapabilityUnsupportedError({
@@ -115,22 +172,27 @@ function toml(value: TomlValue): string {
 }
 
 /**
- * Codex's `config.toml`: the quiet settings, reeval's provider as the model provider, and the MCP
- * servers. Each top-level key is one line, tables inline, so nothing depends on section order.
+ * Codex's `config.toml`: the quiet settings (plugins on when the session has some), reeval's
+ * provider as the model provider, and the MCP servers. Each top-level key is one line, tables
+ * inline, so nothing depends on section order and `codex plugin add` can append its tables.
  */
 export function buildCodexConfig(options: {
   mcpServers?: Record<string, Record<string, unknown>>
   effort?: string
+  plugins?: boolean
+  provider?: CodexProvider
 }): string {
+  const provider = options.provider ?? OPENAI_PROVIDER
   const config: Record<string, TomlValue> = {
     ...CODEX_QUIET_CONFIG,
+    ...(options.plugins ? { features: { ...CODEX_QUIET_CONFIG.features, plugins: true } } : {}),
     ...(options.effort ? { model_reasoning_effort: options.effort } : {}),
     model_provider: CODEX_PROVIDER_ID,
     model_providers: {
       [CODEX_PROVIDER_ID]: {
-        name: 'OpenAI',
-        base_url: OPENAI_API_URL,
-        env_key: CODEX_CREDENTIAL_ENV,
+        name: provider.name,
+        base_url: provider.baseUrl,
+        env_key: provider.credentialEnv,
         wire_api: 'responses',
         supports_websockets: false,
       },
@@ -142,6 +204,30 @@ export function buildCodexConfig(options: {
   return `${Object.entries(config)
     .map(([k, v]) => `${JSON.stringify(k)} = ${toml(v)}`)
     .join('\n')}\n`
+}
+
+/** The home marketplace listing the plugins, each by its path relative to `home`. */
+export function buildCodexMarketplace(plugins: readonly CodexPlugin[], home: string): string {
+  const entries = plugins.map((p) => {
+    const path = posix.relative(home, p.dir)
+    if (!path || path.startsWith('..') || posix.isAbsolute(path)) {
+      throw new Error(
+        `Codex lists plugins in its home marketplace, so the ${p.name} plugin must be under ${home} (it's at ${p.dir})`,
+      )
+    }
+    return { name: p.name, source: { source: 'local', path: `./${path}` } }
+  })
+  return `${JSON.stringify({ name: CODEX_PLUGIN_MARKETPLACE, plugins: entries }, null, 2)}\n`
+}
+
+/** `codex plugin add <plugin>@reeval` for each plugin, offline from the home marketplace. */
+export function buildCodexPluginAdd(binDir: string, plugins: readonly CodexPlugin[]): string {
+  return plugins
+    .map(
+      (p) =>
+        `PATH=${shellQuote(binDir)}:"$PATH" codex plugin add ${shellQuote(`${p.name}@${CODEX_PLUGIN_MARKETPLACE}`)} < /dev/null`,
+    )
+    .join(' && ')
 }
 
 const lines = (stream: ReadableStream<Uint8Array>) =>
@@ -189,12 +275,13 @@ export function buildCodexCommand(options: {
  * reeval runs.
  */
 export function createCodex(settings: CodexHarnessSettings): HarnessV1<CodexBuiltinTools> {
+  const provider = settings.provider ?? OPENAI_PROVIDER
   const key = isHarnessAuthenticationEnvironment(settings.auth)
-    ? settings.auth[CODEX_CREDENTIAL_ENV]
+    ? settings.auth[provider.credentialEnv]
     : undefined
   if (!key) {
     throw new Error(
-      `Codex auth must be an environment object with ${CODEX_CREDENTIAL_ENV} (an OpenAI API key)`,
+      `Codex auth must be an environment object with ${provider.credentialEnv} (a ${provider.name} key)`,
     )
   }
   return {
@@ -203,12 +290,13 @@ export function createCodex(settings: CodexHarnessSettings): HarnessV1<CodexBuil
     builtinTools: CODEX_BUILTIN_TOOLS,
     lifecycleStateSchema: lifecycleData,
     getBootstrap: getCodexBootstrap,
-    doStart: (options) => startSession(settings, key, options),
+    doStart: (options) => startSession(settings, provider, key, options),
   }
 }
 
 async function startSession(
   settings: CodexHarnessSettings,
+  provider: CodexProvider,
   key: string,
   options: HarnessV1StartOptions,
 ): Promise<HarnessV1Session> {
@@ -218,14 +306,14 @@ async function startSession(
     sandboxKey = generateSandboxCredentialPlaceholder()
     await sandbox.addRequestTransformations([
       createCredentialRequestTransformation({
-        matchUrl: OPENAI_API_URL,
+        matchUrl: provider.baseUrl,
         matchHeaders: { Authorization: `Bearer ${sandboxKey}` },
         transformHeaders: { ...options.headers, Authorization: `Bearer ${key}` },
       }),
     ])
   } else if (settings.requireCredentialBrokering) {
     throw new Error(
-      `The sandbox can't broker ${CODEX_CREDENTIAL_ENV} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
+      `The sandbox can't broker ${provider.credentialEnv} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
     )
   }
 
@@ -236,17 +324,34 @@ async function startSession(
     stateDirectory: stateDir,
     sessionId: options.sessionId,
   })
+  const plugins = settings.plugins ?? []
   await sandbox.writeTextFile({
     path: posix.join(home, CODEX_HOME_DIR, 'config.toml'),
     content: buildCodexConfig({
       ...(settings.mcpServers ? { mcpServers: settings.mcpServers } : {}),
       ...(settings.effort ? { effort: settings.effort } : {}),
+      ...(plugins.length ? { plugins: true } : {}),
+      provider,
     }),
     abortSignal,
   })
+  if (plugins.length) {
+    await sandbox.writeTextFile({
+      path: posix.join(home, CODEX_MARKETPLACE_FILE),
+      content: buildCodexMarketplace(plugins, home),
+      abortSignal,
+    })
+    const added = await sandbox.run({ command: buildCodexPluginAdd(binDir, plugins), abortSignal })
+    if (added.exitCode !== 0) {
+      throw new Error(
+        `codex plugin add failed (exit ${added.exitCode}): ${(added.stderr || added.stdout).trim().slice(-2000)}`,
+      )
+    }
+  }
   const resumed = lifecycleData.safeParse(options.resumeFrom?.data)
   let threadId = resumed.success ? resumed.data.threadId : undefined
-  const env = { [CODEX_CREDENTIAL_ENV]: sandboxKey }
+  let threadUsage: CodexUsage | undefined = resumed.success ? resumed.data.usage : undefined
+  const env = { [provider.credentialEnv]: sandboxKey }
   let turns = 0
   let running: { kill(): PromiseLike<void> } | undefined
   let ended = false
@@ -255,7 +360,10 @@ async function startSession(
     type: 'resume-session',
     harnessId: CODEX_HARNESS_ID,
     specificationVersion: 'harness-v1',
-    data: threadId ? { threadId } : {},
+    data: {
+      ...(threadId ? { threadId } : {}),
+      ...(threadId && threadUsage ? { usage: threadUsage } : {}),
+    },
   })
   const stop = async () => {
     ended = true
@@ -297,7 +405,7 @@ async function startSession(
         model: turn.model,
         threadId,
       })
-      const translator = new CodexStreamTranslator({ workDir: sessionWorkDir })
+      const translator = new CodexStreamTranslator({ workDir: sessionWorkDir, threadUsage })
       const emit = (parts: HarnessV1StreamPart[]) => {
         for (const part of parts) turn.emit(part)
       }
@@ -315,6 +423,7 @@ async function startSession(
         try {
           for await (const line of lines(proc.stdout)) emit(translator.push(line))
           threadId = translator.threadId ?? threadId
+          threadUsage = translator.threadUsage
           const { exitCode } = await proc.wait()
           emit(
             translator.end({

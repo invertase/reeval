@@ -28,7 +28,17 @@ type Format = {
    * a cancelled turn shows them, whatever the CLI's version.
    */
   optional?: readonly string[]
+  /**
+   * The native name of the tool a tool event calls, for a CLI whose events name it. Which tools a
+   * run calls is the model's doing, so the names aren't signatures: each must be one the adapter
+   * maps instead (support/tool-catalog.ts).
+   */
+  tool?: (event: Record<string, unknown>) => string | undefined
 }
+
+const rec = (v: unknown): Record<string, unknown> =>
+  typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {}
+const name = (v: unknown) => (typeof v === 'string' && v ? v : undefined)
 
 // ACP's ToolCallStatus, ToolKind and StopReason: every value @ai-sdk/harness-acp's bridge handles.
 const ACP_STATUS = ['pending', 'in_progress', 'completed', 'failed']
@@ -133,7 +143,7 @@ const ANTIGRAVITY_OPTIONAL = [
   'step_update/tool .step_update.tool_info.error.type',
 ]
 
-// codex exec's (0.163.0) `--json` JSONL, as codex-rs/exec/src/exec_events.rs types it: every
+// codex exec's (0.164.0) `--json` JSONL, as codex-rs/exec/src/exec_events.rs types it: every
 // event, item type, key and status it defines is the format, whichever a run shows. A command the
 // model ran that exited non-zero is `failed`; a turn that ends on a refused key is `error` events
 // (Codex retrying) and `turn.failed`; reasoning, to-do list, web search and sub-agent items come
@@ -208,6 +218,12 @@ const FORMATS: Record<string, Format> = {
     lists: ['tools'],
     defined: ANTIGRAVITY_DEFINED,
     optional: ANTIGRAVITY_OPTIONAL,
+    tool: (e) => {
+      const step = rec(e.step_update)
+      return step.step_type === 'tool'
+        ? (name(rec(step.tool_info).name) ?? name(step.tool_name))
+        : undefined
+    },
   },
   // The Cursor SDK harness's runner lines: `init`, `event` (the SDK's own messages), `result`.
   cursor: {
@@ -221,6 +237,10 @@ const FORMATS: Record<string, Format> = {
     lists: [],
     defined: CURSOR_DEFINED,
     optional: CURSOR_OPTIONAL,
+    tool: (e) => {
+      const event = rec(e.event)
+      return e.type === 'event' && event.type === 'tool_call' ? name(event.name) : undefined
+    },
   },
   // OpenCode's ACP `session/update`s, by `sessionUpdate`, and its `session/prompt` response.
   opencode: {
@@ -246,6 +266,57 @@ const FORMATS: Record<string, Format> = {
   },
   // Goose's ACP `session/update`s, by `sessionUpdate`, and its `session/prompt` response.
   goose: {
+    kind: (e) =>
+      typeof e.sessionUpdate === 'string'
+        ? e.sessionUpdate
+        : typeof e.stopReason === 'string'
+          ? 'prompt-response'
+          : undefined,
+    opaque: [
+      'rawInput',
+      'rawOutput',
+      'content',
+      'locations',
+      'availableCommands',
+      'configOptions',
+      '_meta',
+    ],
+    values: ['status', 'kind', 'stopReason'],
+    lists: [],
+    defined: ACP_DEFINED,
+    // `_meta.goose.toolCall` names it; an extension's tool (an MCP server's) is `<extension>__<tool>`.
+    tool: (e) => {
+      if (e.sessionUpdate !== 'tool_call') return undefined
+      const call = rec(rec(rec(e._meta).goose).toolCall)
+      const tool = name(call.toolName)
+      const ext = name(call.extensionName)
+      return tool && ext && tool.startsWith(`${ext}__`) ? `mcp__${tool}` : tool
+    },
+  },
+  // fx's ACP `session/update`s, by `sessionUpdate`, and its `session/prompt` response. A shell
+  // call's last update also has `command_result`, fx's own field.
+  fx: {
+    kind: (e) =>
+      typeof e.sessionUpdate === 'string'
+        ? e.sessionUpdate
+        : typeof e.stopReason === 'string'
+          ? 'prompt-response'
+          : undefined,
+    opaque: [
+      'rawInput',
+      'rawOutput',
+      'content',
+      'locations',
+      'availableCommands',
+      'configOptions',
+      '_meta',
+    ],
+    values: ['status', 'kind', 'stopReason'],
+    lists: [],
+    defined: ACP_DEFINED,
+  },
+  // Grok Build's ACP `session/update`s, by `sessionUpdate`, and its `session/prompt` response.
+  'grok-build': {
     kind: (e) =>
       typeof e.sessionUpdate === 'string'
         ? e.sessionUpdate
@@ -295,6 +366,7 @@ const FORMATS: Record<string, Format> = {
     lists: [],
     defined: PI_DEFINED,
     optional: PI_OPTIONAL,
+    tool: (e) => (e.type === 'tool_execution_start' ? name(e.toolName) : undefined),
   },
   // codex exec's `--json` events, by `type` (and an item event's `item.type`).
   codex: {
@@ -372,6 +444,15 @@ export function signatures(harness: string, events: Record<string, unknown>[]): 
     walk(e, kind, '')
   }
   return [...out].sort()
+}
+
+/** The native tool names in the events, for a CLI whose events name them; null for one whose don't. */
+export function nativeToolNames(
+  harness: string,
+  events: Record<string, unknown>[],
+): string[] | null {
+  const tool = FORMATS[harness]?.tool
+  return tool ? events.flatMap((e) => tool(e) ?? []) : null
 }
 
 const formatsFile = (harness: string) => join(testDir, 'replay', 'formats', `${harness}.json`)

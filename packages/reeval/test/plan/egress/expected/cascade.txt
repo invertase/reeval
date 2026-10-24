@@ -3,7 +3,7 @@ evals/auto.eval.ts › secret and MCP hosts are allowed                       fa
 evals/auto.eval.ts › hosts the policy lists are not repeated                fake/listed/docker    control         gated    ×1  brokered: API_KEY → api.example.com, uploads.example.com · egress {"allow":["api.example.com"]} + uploads.example.com
 evals/cascade.eval.ts › the config policy                                   fake/-/docker         control         gated    ×1  egress {"allow":["config.example.com"]}
 evals/cascade.eval.ts › an environment replaces it                          fake/closed/docker    control         gated    ×1  egress "deny-all"
-evals/cascade.eval.ts › an extend child replaces its parent                 fake/reopened/docker  control         gated    ×1
+evals/cascade.eval.ts › an extend child replaces its parent                 fake/reopened/docker  control         gated    ×1  egress "allow-all"
 evals/cascade.eval.ts › the default list spreads                            fake/installs/docker  control         gated    ×1  egress {"allow":["registry.npmjs.org","registry.yarnpkg.com","github.com","*.github.com","*.githubusercontent.com","pypi.org","files.pythonhosted.org","api.example.com"]}
 evals/cascade.eval.ts › the eval replaces the environment                   fake/closed/docker    control         gated    ×1  egress {"allow":["eval.example.com"]}
 evals/cascade.eval.ts › a group › replaces the environment too              fake/closed/docker    control         gated    ×1  egress {"allow":["group.example.com"]}
@@ -11,7 +11,7 @@ evals/cascade.eval.ts › a variant runs under its own policy                 fa
                                                                             fake/closed/docker    variant closed  gated    ×1  egress "deny-all"
 evals/cascade.eval.ts › a fake agent with a layout gets that agent's hosts  fake/closed/docker    control         gated    ×1  egress "deny-all" + api.anthropic.com, *.anthropic.com
 excluded: —
-image docker · 9 evals
-  base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)
+image docker · cursor · 9 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 1 evals
-  base  reeval-sandbox:claude-code-1.0.158-patch.6c1cff12  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (reeval's image: built when missing or when its base changed)

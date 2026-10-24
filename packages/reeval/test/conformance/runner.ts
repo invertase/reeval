@@ -6,6 +6,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import type { AttemptContext, BackgroundHandle } from 'reeval'
 import { expect } from 'reeval'
+import { recordCheck } from 'reeval/testing'
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
 type Message = { [key: string]: Json }
@@ -14,7 +15,7 @@ type Subject =
   | { turn: number }
   | { attempt: true }
   | { value: Json }
-  | { exec: string }
+  | { exec: string; result?: Json }
   | {
       readFile: string
     }
@@ -26,6 +27,9 @@ export type ScriptRun = {
   file: string
   body: string
 }
+
+/** What a check's default label names its subject by, as `c.exec`'s promise names its command. */
+const NAMED_BY = Symbol.for('reeval.subject')
 
 const isPattern = (arg: Json): arg is { regexp: string; flags?: string } =>
   typeof arg === 'object' && arg !== null && !Array.isArray(arg) && 'regexp' in arg
@@ -64,6 +68,10 @@ export async function runScript(c: AttemptContext, run: ScriptRun): Promise<void
   function reader(subject: Subject): () => unknown {
     if ('turn' in subject) return () => turnAt(subject.turn)
     if ('attempt' in subject) return () => c
+    if ('exec' in subject && subject.result) {
+      const { result, exec } = subject
+      return () => Object.defineProperty(Promise.resolve(result), NAMED_BY, { value: exec })
+    }
     if ('exec' in subject) return () => c.exec(subject.exec)
     if ('readFile' in subject) return () => c.readFile(subject.readFile)
     return () => subject.value
@@ -125,6 +133,11 @@ export async function runScript(c: AttemptContext, run: ScriptRun): Promise<void
       }
       case 'expect':
         return expectCall(call)
+      case 'record': {
+        const { op, ...check } = call
+        assertions++
+        return { assertion: recordCheck(check as Parameters<typeof recordCheck>[0]) }
+      }
       case 'judge': {
         const { on, ...options } = (call.options ?? {}) as { on?: Subject; [key: string]: Json }
         const graded = on === undefined ? {} : { on: reader(on)() as Json }

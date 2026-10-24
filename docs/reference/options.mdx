@@ -32,6 +32,7 @@ group(
 | Key | `reeval.config.ts` | Profile `defaults` | Group or eval | Profile `limit` |
 |---|---|---|---|---|
 | [`include`](#include) | ✓ |  |  |  |
+| [`gateway`](#gateway) | ✓ |  |  |  |
 | [`harness`](#harness) | ✓ | ✓ | ✓ | ✓ |
 | [`sandbox`](#sandbox) | ✓ | ✓ | ✓ |  |
 | [`environment`](#environment) | ✓ | ✓ | ✓ |  |
@@ -98,8 +99,8 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
   Variables for the sandbox. **Merges by variable name**. Secrets come from a `defineConfig` or `defineEnvironment` callback's `secret` helper; a literal string under a secret-looking name is refused.
 </Property>
 
-<Property name="egress" type="'allow-all' | 'deny-all' | { allow: string[] }">
-  Where the sandbox may connect. **Replaces**. An environment's `egress` sits between the profile `defaults` and the groups. Default `'allow-all'`. See [Egress](/reference/egress).
+<Property name="egress" type="'proxy' | 'allow-all' | 'deny-all' | { allow: string[] }">
+  Where the sandbox may connect. **Replaces**. An environment's `egress` sits between the profile `defaults` and the groups. Default `'proxy'`. See [Egress](/reference/egress).
 </Property>
 
 <Property name="judge" type="{ model?, threshold?, maxConcurrent?, providerOptions? }">

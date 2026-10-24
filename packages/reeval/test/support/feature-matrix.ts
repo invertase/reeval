@@ -4,9 +4,11 @@
 //   (no flag)   print the matrix as Markdown
 //   --write     write test/features/COVERAGE.md
 //   --json      print { problems, markdown, current } for matrix.test.ts
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { EVAL_OPTION_KEYS } from '../../src/options.ts'
 import { behaviours } from '../contract.test.ts'
+import { EVAL_OPTION_SPECS } from '../features/eval-options.ts'
 import { inventory } from '../features/inventory.ts'
 import { features } from '../features.test.ts'
 import { cases } from '../plan.test.ts'
@@ -15,6 +17,14 @@ import { buildMatrix, renderMarkdown } from './matrix.ts'
 
 const packages = join(testDir, '../..')
 const coverageFile = join(testDir, 'features/COVERAGE.md')
+const refusalsDir = join(testDir, 'refusals')
+
+const refusalText = [
+  readFileSync(join(refusalsDir, 'cases.ts'), 'utf8'),
+  ...readdirSync(refusalsDir)
+    .filter((name) => name.endsWith('.json'))
+    .map((name) => readFileSync(join(refusalsDir, name), 'utf8')),
+].join('\n')
 
 const matrix = buildMatrix(inventory, {
   fixtures: features.map((f) => ({
@@ -28,6 +38,9 @@ const matrix = buildMatrix(inventory, {
     const file = join(packages, path)
     return existsSync(file) ? readFileSync(file, 'utf8') : null
   },
+  evalOptionKeys: EVAL_OPTION_KEYS,
+  evalOptionSpecs: EVAL_OPTION_SPECS,
+  refusalText,
 })
 const markdown = renderMarkdown(matrix)
 

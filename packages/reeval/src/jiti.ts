@@ -43,6 +43,7 @@ async function ownModules(): Promise<Record<string, unknown>> {
     '/harness': import('./harness.ts'),
     '/sandbox': import('./sandbox.ts'),
     '/judge': import('./judge.ts'),
+    '/gateway': import('./gateway.ts'),
     '/view': import('./view/index.ts'),
   }
   const modules: Record<string, unknown> = {}

@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import fsp, { cp, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import fsp, { cp, mkdtemp, readFile, symlink } from 'node:fs/promises'
 import { syncBuiltinESMExports } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { before, describe, mock, test } from 'node:test'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
+import { appFiles } from '../src/studio/app.ts'
 import { COOKIE, createStudioApp } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
+import type { AnalysisNote } from '../src/view/analysis.ts'
 import {
   activityLabel,
   analysisDataPath,
@@ -26,7 +28,6 @@ import {
   evalTree,
   failedJudgeLabels,
   judgeLabel,
-  LIFT_MIN_COUNTED,
   manifestPath,
   parseDataPath,
   parseTranscript,
@@ -206,6 +207,12 @@ evaluate('writes ok', { compare }, async (c) => {
       runOutcome({ status: 'complete', evals: [...pass, { outcome: 'infra_error' }] }),
       'infra_error',
     )
+    const errors = ['stray rejection']
+    assert.equal(
+      runOutcome({ status: 'complete', evals: [...pass, { outcome: 'infra_error' }], errors }),
+      'fail',
+    )
+    assert.equal(runOutcome({ status: 'interrupted', evals: pass, errors }), 'skipped')
   })
 
   test('a run lead names pass, fail, infra and failed judges', () => {
@@ -420,7 +427,7 @@ describe('view-models over a real history', () => {
       ]),
       [
         [null, [['Did it write…', 2, 2, null]]],
-        [null, [['Did it write…', 2, 2, 0]]],
+        [null, [['Did it write…', 2, 2, null]]],
       ],
     )
   })
@@ -477,7 +484,6 @@ describe('view-models over a real history', () => {
     const first = entry.attempts.find((a) => a.id === 'fake/plain/fake#1')
     const skillOne = entry.attempts.find((a) => a.id === 'fake/skill/fake#1')
     assert.ok(first && skillOne)
-    assert.equal(LIFT_MIN_COUNTED, 2)
     assert.equal(judgeLabel('login?'), 'login')
     assert.equal(judgeLabel('Does this change implement email sign-in?'), 'Does this change…')
     assert.equal(collapsedJudgeLabel(first.judgements), 'fail 0.20/0.80 · fail 0.10/0.80')
@@ -485,18 +491,32 @@ describe('view-models over a real history', () => {
       collapsedJudgeLabel([...first.judgements, j('extra', 'fail', 0.05, '2:extra')]),
       'fail 0.05/0.80 · 3 judges',
     )
-    assert.deepEqual(
-      cellJudgeRates(entry, 'fake/skill/fake').map((r) => [
+    const keyLifts = (e: RunRecord['evals'][number]) =>
+      cellJudgeRates(e, 'fake/skill/fake').map((r) => [
         r.label,
         r.pass,
         r.counted,
         r.lift && Math.round(r.lift.points * 100),
-      ]),
-      [
-        ['login', 2, 2, 50],
-        ['checkout', 0, 2, 0],
+      ])
+    // 2 against 2 is below EFFECT_MIN_COUNTED, so no key's lift is measured.
+    assert.deepEqual(keyLifts(entry), [
+      ['login', 2, 2, null],
+      ['checkout', 0, 2, null],
+    ])
+    const four = {
+      ...entry,
+      attempts: [
+        ...entry.attempts,
+        attempt('fake/plain/fake', 3, 'fail', 'fail', null),
+        attempt('fake/plain/fake', 4, 'fail', 'fail', null),
+        attempt('fake/skill/fake', 3, 'pass', 'pass', null),
+        attempt('fake/skill/fake', 4, 'pass', 'pass', null),
       ],
-    )
+    }
+    assert.deepEqual(keyLifts(four), [
+      ['login', 4, 4, 75],
+      ['checkout', 0, 4, 0],
+    ])
     const thin = {
       ...entry,
       attempts: [first, skillOne],
@@ -514,14 +534,22 @@ describe('view-models over a real history', () => {
     })
     assert.deepEqual(cellUsage(entry, 'fake/skill/fake'), tokens)
     const rows = cellRows({
-      ...entry,
-      attempts: entry.attempts.map((a) => ({
+      ...four,
+      attempts: four.attempts.map((a) => ({
         ...a,
-        activity: { tools: 1, fileEdits: 0, webSearches: null, webFetches: null, reasoningMs: 0 },
+        activity: {
+          tools: 1,
+          fileEdits: 0,
+          webSearches: null,
+          webFetches: null,
+          reasoningMs: 0,
+          stalledTools: 0,
+          maxToolMs: null,
+        },
         timings: { setupMs: 0, agentMs: 100, diffMs: 0, checksMs: 0, judgeMs: 0 },
       })),
     })
-    assert.equal(rows[1]?.judgeRates[0]?.lift?.points, 0.5)
+    assert.equal(rows[1]?.judgeRates[0]?.lift?.points, 0.75)
     assert.equal(rows[0]?.usage?.input, 100)
   })
 
@@ -720,13 +748,11 @@ describe('view-models over a real history', () => {
 const HOST = '127.0.0.1:4984'
 const TOKEN = 'test-token-0123456789'
 
-async function fakeApp() {
-  const app = join(dir, 'app')
-  await mkdir(join(app, 'assets'), { recursive: true })
-  await writeFile(join(app, 'index.html'), '<!doctype html><title>studio</title>')
-  await writeFile(join(app, 'assets', 'app.js'), 'console.log(1)')
-  return app
-}
+const fakeApp = () =>
+  appFiles({
+    'index.html': '<!doctype html><title>studio</title>',
+    'assets/app.js': 'console.log(1)',
+  })
 
 describe('studio server', () => {
   let app: ReturnType<typeof createStudioApp>
@@ -739,7 +765,7 @@ describe('studio server', () => {
   before(async () => {
     app = createStudioApp({
       source,
-      appDir: await fakeApp(),
+      app: fakeApp(),
       reeval: 'test',
       project: 'studio',
       token: TOKEN,
@@ -783,7 +809,15 @@ describe('studio server', () => {
     const index = await get('/')
     assert.equal(index.status, 200)
     assert.match(index.headers.get('content-security-policy') ?? '', /script-src 'self'/)
-    assert.equal((await get('/assets/app.js')).status, 200)
+    assert.equal(await index.text(), '<!doctype html><title>studio</title>')
+    assert.equal(index.headers.get('cache-control'), 'no-cache')
+    const script = await get('/assets/app.js')
+    assert.equal(script.status, 200)
+    assert.equal(script.headers.get('content-type'), 'text/javascript; charset=utf-8')
+    assert.match(script.headers.get('cache-control') ?? '', /immutable/)
+    const scriptTag = script.headers.get('etag') as string
+    assert.equal((await get('/assets/app.js', { 'if-none-match': scriptTag })).status, 304)
+    assert.equal((await get('/assets/missing.js')).status, 404)
     const info = await (await get('/studio.json')).json()
     assert.equal(info.mode, 'live')
     assert.equal(info.features.scratch, true)
@@ -873,7 +907,7 @@ describe('studio server', () => {
   test("without the scratch source, unrecorded runs aren't served", async () => {
     const recordedOnly = createStudioApp({
       source: { ...source, scratch: false },
-      appDir: await fakeApp(),
+      app: fakeApp(),
       reeval: 'test',
       project: 'studio',
       token: null,
@@ -918,7 +952,7 @@ describe('a record landing while the studio lists runs', () => {
       )
       const app = createStudioApp({
         source: fresh,
-        appDir: await fakeApp(),
+        app: fakeApp(),
         reeval: 'test',
         project: 'studio',
         token: TOKEN,
@@ -947,7 +981,7 @@ describe('a record landing while the studio lists runs', () => {
 
 describe('reeval studio build', () => {
   test('writes a static site with the same paths the server answers', async () => {
-    assert.ok(existsSync(join(pkgRoot, 'dist/studio-app/index.html')), 'run pnpm build first')
+    assert.ok(existsSync(join(pkgRoot, 'dist/cli.js')), 'run pnpm build first')
     const out = join(dir, 'site')
     const r = await runCli(dir, ['studio', 'build', '--out', out, '--scratch'])
     assert.equal(r.code, 0, r.stderr)
@@ -970,7 +1004,7 @@ describe('reeval studio build', () => {
 
     const app = createStudioApp({
       source: { ...source, historyDir: source.historyDir },
-      appDir: join(pkgRoot, 'dist/studio-app'),
+      app: new Map(),
       reeval: 'test',
       project: 'studio',
       token: null,
@@ -1002,10 +1036,10 @@ describe('reeval studio build', () => {
     }
   })
 
-  test("analysis.agent's notes are in the build as the server serves them; a cached summary only live", async () => {
+  test("a run's notes are in the build as the server serves them; a cached summary only live", async () => {
     const p = await project('studio-notes', {
       'reeval.config.ts': fakeConfig({
-        extra: `analysis: { agent: true, model: fakeAnalysis({ note: 'A note.', output: { tldr: 'A summary.', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'x' } } }) },`,
+        extra: `analysis: { insights: false, model: fakeAnalysis({ output: { tldr: 'A summary.', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'x' } } }) },`,
       }).replace(
         "import { fakeJudge } from 'reeval/judge'",
         "import { fakeAnalysis, fakeJudge } from 'reeval/judge'",
@@ -1020,6 +1054,24 @@ evaluate('writes', async (c) => {
     const run = await runCli(p.dir)
     assert.equal(run.code, 0, run.stdout + run.stderr)
     const [runId] = readdirSync(join(p.dir, '.reeval/runs')).filter((n) => !n.endsWith('.json'))
+    const notes = join(p.dir, '.reeval/analysis', runId as string, 'notes')
+    mkdirSync(notes, { recursive: true })
+    const note: AnalysisNote = {
+      kind: 'reeval-analysis-note',
+      schemaVersion: 1,
+      runId: runId as string,
+      evalId: 'evals/a.eval.ts › writes',
+      harness: 'fake',
+      model: 'fake',
+      resolvedModel: null,
+      createdAt: '2026-10-21T00:00:00.000Z',
+      attempts: ['fake#1'],
+      text: 'A note.',
+      usage: { inputTokens: null, outputTokens: null },
+    }
+    writeFileSync(join(notes, 'writes__fake.json'), JSON.stringify(note))
+    const analyzed = await runCli(p.dir, ['analyze', 'latest', '--vs', 'none'])
+    assert.equal(analyzed.code, 0, analyzed.stdout + analyzed.stderr)
     const out = join(p.dir, 'site')
     assert.equal((await runCli(p.dir, ['studio', 'build', '--out', out, '--scratch'])).code, 0)
     const built = JSON.parse(readFileSync(join(out, analysisDataPath(runId as string)), 'utf8'))
@@ -1029,7 +1081,7 @@ evaluate('writes', async (c) => {
     )
     const app = createStudioApp({
       source: { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true },
-      appDir: join(pkgRoot, 'dist/studio-app'),
+      app: new Map(),
       reeval: 'test',
       project: 'studio',
       token: null,

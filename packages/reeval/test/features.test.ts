@@ -1,11 +1,13 @@
 // Tiers F, D and C: one directory per feature under test/features/, each with one check
 // (evals/lands.eval.ts) and a canary that must fail (evals/canary.eval.ts). The same fixture runs on
-// the fake sandbox, in Docker when Docker and reeval's image are there, and on real Cursor with
+// the fake sandbox, in Docker when Docker and reeval's image are there, in rootless Podman when
+// Podman and its copy of the image are there, and on real Cursor with
 // REEVAL_TEST_REAL=1 and CURSOR_API_KEY. The oracle here checks the record from outside; see
 // test/features/README.md for adding one.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { createSocket } from 'node:dgram'
 import {
   chmodSync,
   cpSync,
@@ -19,17 +21,21 @@ import {
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@reeval/harness-antigravity'
 import { CODEX_CLI_VERSION } from '@reeval/harness-codex'
+import { FX_CLI_VERSION } from '@reeval/harness-fx'
 import { GOOSE_CLI_VERSION } from '@reeval/harness-goose'
+import { GROK_CLI_VERSION } from '@reeval/harness-grok-build'
 import { OPENCODE_CLI_VERSION } from '@reeval/harness-opencode'
 import { PI_CLI_VERSION } from '@reeval/harness-pi'
 import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@reeval/sandbox-docker'
 import { pngSize, stubPng } from '../src/capture/stub.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { NO_MODEL_HINT } from '../src/ui/layout.ts'
+import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
@@ -40,11 +46,15 @@ import {
   keyOf,
   reserveAttempts,
 } from './support/harnesses.ts'
-import { type EvalExpectation, expectRun } from './support/oracle.ts'
+import { type EvalExpectation, expectRun, type RunExpectation } from './support/oracle.ts'
+import { syncPythonFixtureProject } from './support/python-fixture.ts'
 import { SEEDED_RUN_ID, writeStoppedStaging } from './support/resume.ts'
 
-/** `real` is Docker with real Cursor (REEVAL_FIXTURE_HARNESS=cursor), one fixture at a time. */
-type Tier = 'fake' | 'docker' | 'real'
+/**
+ * `podman` is `podman()` where `docker` is `docker()`; `real` is Docker with real Cursor
+ * (REEVAL_FIXTURE_HARNESS=cursor), one fixture at a time.
+ */
+type Tier = 'fake' | 'docker' | 'podman' | 'real'
 
 type Feature = {
   /** Under `test/features/`. */
@@ -52,7 +62,7 @@ type Feature = {
   tiers: Tier[]
   /** The environment the evals run in: attempt ids are `fake/<env>/<sandbox>#1`. */
   env: string
-  /** Cell sandbox id, when it isn't the tier default (`fake` or `docker`). */
+  /** Cell sandbox id, when it isn't the tier default (`fake`, `docker` or `podman`). */
   sandbox?: string
   /**
    * Cell environments in plan order, when an eval runs more than one (a compare).
@@ -82,14 +92,21 @@ type Feature = {
   prepare?: (dir: string) => void
   /** Needs POSIX file modes on the host, so the fake tier skips on Windows. */
   posixModes?: true
+  /**
+   * Every eval and attempt, when the defaults can't name them: several harnesses or a family's
+   * cases. Fake tier only, where the ids are fixed.
+   */
+  evals?: RunExpectation['evals']
   /** A host-side cross-check of the record, independent of the in-sandbox check. */
   record?: (view: {
     run: RunRecord
     project: string
     runDir: string
     tier: Tier
+    /** What `reeval run` printed. */
+    stdout: string
   }) => void | Promise<void>
-  /** reeval's image the Docker tier needs, when it isn't Cursor's (a fake agent with `layout`). */
+  /** reeval's image the Docker and Podman tiers need, when it isn't Cursor's (a fake agent with `layout`). */
   image?: BakedHarness
   /**
    * The harness the real tier runs it on, with that contract row's model and key, when it isn't
@@ -103,6 +120,15 @@ type Feature = {
   timeoutMs?: Partial<Record<Tier, number>>
   /** Extra `reeval run` arguments, e.g. `--resume`. */
   args?: string[]
+}
+
+/** The result block `reeval run` printed for one eval, from its verdict line to the blank line. */
+function blockOf(stdout: string, name: string): string {
+  const lines = stdout.split('\n')
+  const start = lines.findIndex((l) => new RegExp(`^\\S.* {2,}${name}$`).test(l))
+  assert.ok(start >= 0, `no block for ${name}\n${stdout}`)
+  const end = lines.indexOf('', start)
+  return lines.slice(start, end < 0 ? undefined : end).join('\n')
 }
 
 const TOKEN = 'reeval-fixture-token-7c1d9a0b52e4'
@@ -129,6 +155,25 @@ const listener = createServer((_, res) => {
   egressTarget.requests++
   res.end('reeval-egress-ok')
 })
+
+/**
+ * A DNS server beside the listener that answers every A query with {@link DNS_ANSWER}, so a
+ * fixture can tell whether a name resolves for the sandbox without depending on the machine's own
+ * resolver (rootless Podman reaches its upstream through slirp4netns, which sometimes gets no
+ * answer for a whole lookup). `REEVAL_EGRESS_DNS` is its address and port,
+ * `REEVAL_EGRESS_DNS_ANSWER` the address it answers with.
+ */
+const DNS_ANSWER = [192, 0, 2, 1]
+const dnsResponder = createSocket('udp4').on('message', (query, from) => {
+  if (query.length < 12) return
+  let end = 12
+  while (end < query.length && query[end] !== 0) end += (query[end] ?? 0) + 1
+  const question = query.subarray(12, end + 5)
+  const header = Buffer.from([0, 0, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0])
+  query.copy(header, 0, 0, 2)
+  const answer = Buffer.from([0xc0, 12, 0, 1, 0, 1, 0, 0, 0, 0, 0, 4, ...DNS_ANSWER])
+  dnsResponder.send(Buffer.concat([header, question, answer]), from.port, from.address)
+})
 before(async () => {
   const addresses = Object.entries(networkInterfaces()).flatMap(([name, list]) =>
     (list ?? []).filter((a) => a.family === 'IPv4' && !a.internal).map((a) => ({ name, ...a })),
@@ -138,8 +183,12 @@ before(async () => {
     (addresses.find((a) => !bridge.test(a.name)) ?? addresses[0])?.address ?? '127.0.0.1'
   await new Promise<void>((resolve) => listener.listen(0, '0.0.0.0', resolve))
   egressTarget.port = (listener.address() as AddressInfo).port
+  await new Promise<void>((resolve) => dnsResponder.bind(0, '0.0.0.0', resolve))
 })
-after(() => listener.close())
+after(() => {
+  listener.close()
+  dnsResponder.close()
+})
 
 /** The token `workspace/token` fetches with, and the git HTTP server that insists on it. */
 const GIT_TOKEN = 'reeval-fixture-git-token-5e0b77c2d9a1'
@@ -235,12 +284,15 @@ function publish(dir: string) {
 const egressEnv = () => ({
   REEVAL_EGRESS_HOST: egressTarget.host,
   REEVAL_EGRESS_TARGET: `${egressTarget.host}:${egressTarget.port}`,
+  REEVAL_EGRESS_DNS: `${egressTarget.host}:${dnsResponder.address().port}`,
+  REEVAL_EGRESS_DNS_ANSWER: DNS_ANSWER.join('.'),
 })
 
 /** The `lands` eval's first attempt. */
 const landed = (run: RunRecord) => run.evals.find((e) => e.name === 'lands')?.attempts[0]
 
 const skills = (run: RunRecord) => run.environments.flatMap((e) => e.skills)
+const plugins = (run: RunRecord) => run.environments.flatMap((e) => e.plugins ?? [])
 const envFiles = (run: RunRecord) => run.environments.flatMap((e) => e.files.map((f) => f.path))
 
 const git = (cwd: string, ...args: string[]) =>
@@ -483,6 +535,24 @@ export const features: Feature[] = [
       assert.equal(workspaceOf(run)?.commit, git(join(project, 'repo'), 'rev-parse', 'v1')),
   },
   {
+    dir: 'skills/git-skills-dir',
+    tiers: ['fake', 'docker'],
+    env: 'skills-dir',
+    canary: /to contain 'Hello there, <name>\.'/,
+    prepare(dir) {
+      const repo = join(dir, 'repo')
+      cpSync(join(dir, 'skill-repo'), repo, { recursive: true })
+      execFileSync('git', ['init', '-q', '-b', 'main', repo])
+      git(repo, 'add', '-A')
+      git(repo, 'commit', '-q', '-m', 'skills')
+    },
+    record: ({ run }) => {
+      const [skill] = skills(run)
+      assert.equal(skill?.name, 'house-greeting')
+      assert.match(skill?.source ?? '', /repo:skills$/, 'the source names the skills/ it used')
+    },
+  },
+  {
     dir: 'skills/registry-version',
     tiers: ['fake', 'docker'],
     env: 'registry-v1',
@@ -559,6 +629,164 @@ export const features: Feature[] = [
       ),
   },
   {
+    dir: 'plugins/local-lands',
+    tiers: ['fake', 'docker'],
+    env: 'review',
+    canary: /expected '' to contain 'Review the working tree\.'/,
+    record: ({ run }) => {
+      const [p] = plugins(run)
+      assert.deepEqual(
+        { name: p?.name, source: p?.source, commit: p?.commit, build: p?.build },
+        { name: 'review', source: 'local:plugin', commit: null, build: null },
+      )
+      assert.deepEqual(p?.parts, {
+        skills: ['review-lint'],
+        agents: ['reviewer'],
+        commands: [],
+        hooks: [],
+        mcp: ['docs'],
+        rules: false,
+      })
+      assert.match(p?.sha256 ?? '', /^[0-9a-f]{64}$/)
+      assert.deepEqual(
+        run.environments.map((e) => e.mcp),
+        [['review:docs']],
+      )
+    },
+  },
+  {
+    dir: 'plugins/only-skills',
+    tiers: ['fake', 'docker'],
+    env: 'review',
+    canary: /expected '' to contain 'Review the diff for the house style\.'/,
+    record: ({ run }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.placement, s.plugin]),
+        [['review-lint', 'harness', 'review']],
+      )
+      assert.deepEqual(plugins(run)[0]?.parts.agents, [])
+      assert.deepEqual(
+        run.environments.map((e) => e.mcp),
+        [[]],
+      )
+    },
+  },
+  {
+    dir: 'plugins/build-layer',
+    tiers: ['docker'],
+    env: 'built',
+    canary: /expected '' to contain 'built on linux as uid 0'/,
+    record: ({ run }) => {
+      const [p] = plugins(run)
+      assert.equal(p?.name, 'built')
+      assert.match(p?.build ?? '', /^reeval-plugin:[0-9a-f]{12}-[0-9a-f]{16}$/)
+      assert.ok(run.stack.images.some((i) => i.ref === p?.build))
+    },
+  },
+  {
+    dir: 'plugins/marketplace-build',
+    tiers: ['docker'],
+    env: 'built',
+    canary: /expected '' to contain 'built from the acme-tools marketplace'/,
+    prepare(dir) {
+      const repo = join(dir, 'repo')
+      cpSync(join(dir, 'market-repo'), repo, { recursive: true })
+      execFileSync('git', ['init', '-q', '-b', 'main', repo])
+      git(repo, 'add', '-A')
+      git(repo, 'commit', '-q', '-m', 'v1')
+      git(repo, 'tag', 'v1')
+    },
+    record: ({ run, project }) => {
+      const commit = git(join(project, 'repo'), 'rev-parse', 'v1')
+      const [p] = plugins(run)
+      assert.equal(p?.name, 'built')
+      assert.equal(p?.commit, commit)
+      assert.deepEqual(p?.marketplace && { ...p.marketplace, source: undefined }, {
+        name: 'acme-tools',
+        source: undefined,
+        commit,
+      })
+      assert.match(p?.build ?? '', /^reeval-plugin:[0-9a-f]{12}-[0-9a-f]{16}$/)
+      assert.ok(run.stack.images.some((i) => i.ref === p?.build))
+    },
+  },
+  {
+    dir: 'plugins/git-ref',
+    tiers: ['fake', 'docker'],
+    env: 'review-v1',
+    canary: /expected '' to contain 'Review the diff for the house style\.'/,
+    prepare(dir) {
+      const repo = join(dir, 'repo')
+      const commit = (version: string) => {
+        rmSync(join(repo, 'plugins'), { recursive: true, force: true })
+        cpSync(join(dir, 'plugin-repo', version), repo, { recursive: true })
+        git(repo, 'add', '-A')
+        git(repo, 'commit', '-q', '-m', version)
+      }
+      execFileSync('git', ['init', '-q', '-b', 'main', repo])
+      commit('v1')
+      git(repo, 'tag', 'v1')
+      commit('v2')
+    },
+    record: ({ run, project }) => {
+      const [p] = plugins(run)
+      assert.equal(p?.commit, git(join(project, 'repo'), 'rev-parse', 'v1'))
+      assert.match(p?.source ?? '', /#v1:plugins\/review$/)
+      assert.deepEqual(p?.parts.commands, ['review'])
+    },
+  },
+  {
+    dir: 'plugins/marketplace-entry',
+    tiers: ['fake', 'docker'],
+    env: 'review-entry',
+    canary: /expected '' to contain 'Lint the tree for the house style\.'/,
+    prepare(dir) {
+      const repo = join(dir, 'repo')
+      cpSync(join(dir, 'market-repo'), repo, { recursive: true })
+      execFileSync('git', ['init', '-q', '-b', 'main', repo])
+      git(repo, 'add', '-A')
+      git(repo, 'commit', '-q', '-m', 'v1')
+      git(repo, 'tag', 'v1')
+    },
+    record: ({ run, project }) => {
+      const commit = git(join(project, 'repo'), 'rev-parse', 'v1')
+      assert.deepEqual(
+        plugins(run).map((p) => ({
+          name: p.name,
+          commit: p.commit,
+          marketplace: p.marketplace && { ...p.marketplace, source: typeof p.marketplace.source },
+        })),
+        [{ name: 'review', commit, marketplace: { name: 'acme-tools', source: 'string', commit } }],
+      )
+      const [p] = plugins(run)
+      assert.match(p?.marketplace?.source ?? '', /^file:\/\/.*\/repo#v1$/)
+      assert.match(p?.source ?? '', /^file:\/\/.*\/repo#v1:plugins\/review$/)
+      assert.deepEqual(p?.parts.agents, ['reviewer'])
+    },
+  },
+  {
+    dir: 'plugins/npm-package',
+    tiers: ['fake', 'docker'],
+    env: 'review-1.2.3',
+    canary: /expected '' to contain 'SessionStart'/,
+    prepare: (dir) => publish(join(dir, 'packages')),
+    hostEnv: (dir) => ({
+      npm_config_registry: npmRegistry.url,
+      npm_config_cache: join(dir, '.npm-cache'),
+    }),
+    record: ({ run }) => {
+      assert.deepEqual(
+        plugins(run).map((p) => [p.name, p.source, p.parts.mcp, p.parts.hooks]),
+        [['review', 'npm:@acme/review-plugin@1.2.3', ['docs'], []]],
+      )
+      assert.ok(
+        npmRegistry.fetched.includes('@acme/review-plugin@1.2.3'),
+        'fetched from the registry',
+      )
+      assert.ok(!npmRegistry.fetched.includes('@acme/review-plugin@1.2.4'), 'never the latest')
+    },
+  },
+  {
     dir: 'skills/only-missing',
     tiers: ['fake', 'docker'],
     env: 'typo',
@@ -606,6 +834,38 @@ export const features: Feature[] = [
       ),
   },
   {
+    dir: 'mcp/startup-timed',
+    tiers: ['fake', 'docker'],
+    env: 'stamp',
+    canaryEnv: 'crashing',
+    canary: /expected null not to be null/,
+    record: ({ run }) => {
+      const startup = (name: string) =>
+        run.evals.find((e) => e.name === name)?.attempts[0]?.turns.map((t) => t.mcpStartup)
+      const [[lands] = []] = startup('lands') ?? []
+      assert.equal(lands?.server, 'stamp')
+      assert.equal(typeof lands?.ms, 'number', JSON.stringify(lands))
+      assert.deepEqual(startup('canary'), [[{ server: 'stamp', ms: null }]])
+    },
+  },
+  {
+    dir: 'mcp/never-answers',
+    tiers: ['docker'],
+    env: 'silent',
+    canaryEnv: 'quick',
+    lands: {
+      outcome: 'infra_error',
+      error: { kind: 'infra', message: /^MCP server stamp didn't answer initialize within 60s$/ },
+    },
+    canary: /expected 'completed' to be 'error'/,
+    record: ({ run }) => {
+      const [turn] = landed(run)?.turns ?? []
+      assert.deepEqual(turn?.mcpStartup, [{ server: 'stamp', ms: null }])
+      assert.equal(turn?.status, 'error')
+      assert.equal(turn?.error, "MCP server stamp didn't answer initialize within 60s")
+    },
+  },
+  {
     dir: 'secrets/checks-hidden-from-agent',
     tiers: ['fake', 'docker'],
     env: 'tokens',
@@ -623,7 +883,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'secrets/brokered-agent-sees-placeholder',
-    tiers: ['fake', 'docker'],
+    tiers: ['fake', 'docker', 'podman'],
     env: 'keys',
     hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
     canary: /expected 'reeval_secret_[0-9A-Za-z]+…' to be '\[REDACTED\]'/,
@@ -693,7 +953,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'egress/allowed-host-reachable',
-    tiers: ['docker'],
+    tiers: ['docker', 'podman'],
     env: 'listed',
     canaryEnv: 'closed',
     hostEnv: egressEnv,
@@ -713,7 +973,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'egress/blocked-host-recorded',
-    tiers: ['docker'],
+    tiers: ['docker', 'podman'],
     env: 'listed',
     canary:
       /expected 'blocked by the reeval egress policy: …' not to contain 'blocked by the reeval egress policy'/,
@@ -758,7 +1018,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'egress/deny-all',
-    tiers: ['docker'],
+    tiers: ['docker', 'podman'],
     env: 'closed',
     canaryEnv: 'open',
     hostEnv: egressEnv,
@@ -776,6 +1036,46 @@ export const features: Feature[] = [
           reason: 'the policy denies all egress',
         },
       ])
+    },
+  },
+  {
+    dir: 'egress/proxy-no-direct-route',
+    tiers: ['docker', 'podman'],
+    env: 'proxied',
+    canaryEnv: 'open',
+    hostEnv: egressEnv,
+    canary: /expected 'reeval-egress-ok exit=0' to match/,
+    record: ({ run }) =>
+      assert.deepEqual(landed(run)?.egress, {
+        policy: 'proxy',
+        allowed: null,
+        recorded: true,
+        contacted: [],
+        blocked: [],
+        expectedBlocked: [],
+      }),
+  },
+  {
+    dir: 'egress/allow-all-direct',
+    tiers: ['docker', 'podman'],
+    env: 'open',
+    canaryEnv: 'proxied',
+    hostEnv: egressEnv,
+    canary: /expected '.*Network is unreachable[\s\S]*' to be 'reeval-egress-ok exit=0'/,
+    record: ({ run }) => {
+      // The connection reached the listener, but around the gateway: nothing records it.
+      assert.deepEqual(landed(run)?.egress, {
+        policy: 'allow-all',
+        allowed: null,
+        recorded: true,
+        partial: true,
+        contacted: [],
+        blocked: [],
+        expectedBlocked: [],
+      })
+      const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]?.egress
+      assert.equal(canary?.policy, 'proxy')
+      assert.equal(canary?.partial, undefined)
     },
   },
   {
@@ -829,10 +1129,39 @@ export const features: Feature[] = [
   },
   {
     dir: 'sandbox/unprivileged',
-    tiers: ['docker'],
+    tiers: ['docker', 'podman'],
     env: 'plain',
     canaryEnv: 'rooted',
-    canary: /expected '0 00000000000000cb \/ 0' to be '10001 0000000000000000 \/ 10001'/,
+    canary: /expected '0 00000000000000cf \/ 0' to be '10001 0000000000000000 \/ 10001'/,
+  },
+  {
+    // Docker and Podman only: every exec goes through engine/umask-0000, which starts it at
+    // umask 0000 as Docker 29.6+ does under Docker-in-Docker and rootless; CI's engines don't.
+    dir: 'sandbox/exec-umask',
+    tiers: ['docker', 'podman'],
+    env: 'placed',
+    canaryEnv: 'unmasked',
+    canary: /expected \[ '777 out', '666 out\/log' \] to deeply equal \[\]/,
+    prepare: (dir) => {
+      mkdirSync(join(dir, 'bin'))
+      for (const engine of ['docker', 'podman']) {
+        cpSync(join(dir, 'engine/umask-0000'), join(dir, 'bin', engine))
+        chmodSync(join(dir, 'bin', engine), 0o755)
+      }
+    },
+    hostEnv: (dir) => ({ PATH: `${join(dir, 'bin')}${delimiter}${process.env.PATH}` }),
+  },
+  {
+    dir: 'sandbox/podman-bridge',
+    tiers: ['podman'],
+    env: 'bridged',
+    canary: /expected \[\] to have a length of 1 but got \+0/,
+  },
+  {
+    dir: 'sandbox/no-unshare',
+    tiers: ['docker', 'podman'],
+    env: 'plain',
+    canary: /expected 'unshare: unshare failed: Operation no…' to be 'exit=0'/,
   },
   {
     dir: 'sandbox/read-before-send',
@@ -860,7 +1189,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'sandbox/write-file',
-    tiers: ['fake', 'docker'],
+    tiers: ['fake', 'docker', 'podman'],
     env: 'greeting',
     canary: /to deeply equal \[ 'greet\.js', 'notes\.md' \]/,
   },
@@ -869,6 +1198,27 @@ export const features: Feature[] = [
     tiers: ['fake', 'docker'],
     env: 'greeting',
     canary: /expected \[ 'modified', 'modified' \] to deeply equal \[ 'added', 'modified' \]/,
+  },
+  {
+    dir: 'sandbox/snapshot-no-history',
+    tiers: ['fake', 'docker'],
+    env: 'seeded',
+    canary: /expected 'pre-seed content in: nowhere' not to be 'pre-seed content in: nowhere'/,
+  },
+  {
+    dir: 'sandbox/snapshot-unreadable',
+    tiers: ['docker', 'podman'],
+    env: 'plain',
+    canaryEnv: 'rooted',
+    canary: /expected 'read' to be 'refused'/,
+  },
+  {
+    dir: 'sandbox/diff-private-file',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    posixModes: true,
+    canary:
+      /expected \[ 'added \.token', 'added private\/key' \] to deeply equal \[ 'added \.token' \]/,
   },
   {
     dir: 'sandbox/login-shell-path',
@@ -892,7 +1242,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'sandbox/limits',
-    tiers: ['docker'],
+    tiers: ['docker', 'podman'],
     env: 'plain',
     canaryEnv: 'unlimited',
     canary:
@@ -907,14 +1257,14 @@ export const features: Feature[] = [
   },
   {
     dir: 'sandbox/oom-is-infra',
-    tiers: ['docker'],
+    tiers: ['docker', 'podman'],
     env: 'small',
     lands: {
       outcome: 'infra_error',
       error: {
         kind: 'infra',
         message:
-          /^out of memory: \d+ process(es)? killed at the 128m limit \(\+128m swap\); raise docker\(\{ memory \}\)$/,
+          /^out of memory: \d+ process(es)? killed at the 128m limit \(\+128m swap\); raise (docker|podman)\(\{ memory \}\)$/,
       },
     },
     canary: /expected command to succeed, exit code 137/,
@@ -1012,7 +1362,6 @@ export const features: Feature[] = [
           error: 0,
           notRun: 0,
           control: { pass: 0, fail: 0, error: 0, notRun: 1 },
-          verdict: 'discriminates',
         },
       ])
     },
@@ -1315,7 +1664,7 @@ export const features: Feature[] = [
     record: ({ run }) => {
       const attempt = landed(run)
       assert.ok(
-        attempt?.servedModels?.some((m) => /^claude-haiku-4-5/.test(m)),
+        attempt?.servedModels?.some((m) => /^claude-sonnet-5-5/.test(m)),
         JSON.stringify(attempt?.servedModels),
       )
       assert.ok(
@@ -1342,6 +1691,215 @@ export const features: Feature[] = [
       const seen = landed(run)?.context ?? []
       assert.ok(
         seen.some((c) => c.path === '~/.claude/skills/house-greeting/SKILL.md'),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
+    dir: 'harness/claude-code-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'claude-code',
+    env: 'house',
+    canary: /expected 'Loaded plugins: house \(skills, mcp\)' to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      for (const path of [
+        '~/.claude/settings.json',
+        '~/.reeval/plugins/.claude-plugin/marketplace.json',
+        '~/.reeval/plugins/house/skills/house-style/SKILL.md',
+      ]) {
+        assert.ok(seen.includes(path), `${path} in ${JSON.stringify(seen)}`)
+      }
+    },
+  },
+  {
+    dir: 'harness/grok-build-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'grok-build',
+    env: 'house',
+    canary: /expected 'Loaded plugins: house \(skills, mcp\)' to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes('~/.reeval/plugins/house/skills/house-style/SKILL.md'),
+        JSON.stringify(seen),
+      )
+      assert.ok(!seen.some((p) => p.includes('/.grok/skills/house-style/')), JSON.stringify(seen))
+    },
+  },
+  {
+    dir: 'harness/antigravity-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'antigravity',
+    env: 'house',
+    canary: /expected 'Loaded plugins: house \(skills, mcp, r…' to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes('~/.reeval/plugins/house/skills/house-style/SKILL.md'),
+        JSON.stringify(seen),
+      )
+      assert.ok(!seen.some((p) => p.includes('/.gemini/config/skills/')), JSON.stringify(seen))
+      // What the fake agent's own agy plugin install wrote, which the attempt's context lists.
+      assert.ok(
+        seen.includes('~/.gemini/config/plugins/house/mcp_config.json'),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
+    dir: 'harness/cursor-plugin',
+    tiers: ['fake', 'docker', 'real'],
+    env: 'house',
+    canary: /expected null to be 'SAFFRON-73'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      // Unpacked before the snapshot: the diff has only what the agent wrote.
+      assert.deepEqual(
+        landed(run)?.changedFiles.map((f) => f.path),
+        ['codeword.txt'],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      for (const path of [
+        '.cursor/rules/house-codeword.mdc',
+        '.cursor/agents/reviewer.md',
+        '.cursor/commands/ship.md',
+        '.cursor/hooks.json',
+      ]) {
+        assert.ok(seen.includes(path), `${path} in ${JSON.stringify(seen)}`)
+      }
+      assert.ok(
+        seen.some((p) => /^~\/(.+\/)?\.agents\/skills\/house-style\/SKILL\.md$/.test(p)),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
+    dir: 'harness/opencode-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'opencode',
+    env: 'house',
+    canary: /expected null to be 'HERON-62'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      assert.deepEqual(
+        landed(run)?.changedFiles.map((f) => f.path),
+        ['review.txt'],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      for (const path of [
+        '~/.config/opencode/skills/house-style/SKILL.md',
+        '.opencode/agents/reviewer.md',
+        '.opencode/commands/ship.md',
+      ]) {
+        assert.ok(seen.includes(path), `${path} in ${JSON.stringify(seen)}`)
+      }
+    },
+  },
+  {
+    dir: 'harness/pi-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'pi',
+    env: 'house',
+    canary: /expected null to be 'KESTREL-19'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      assert.deepEqual(
+        landed(run)?.changedFiles.map((f) => f.path),
+        ['release.txt'],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      for (const path of ['~/.pi/agent/skills/house-style/SKILL.md', '.pi/prompts/ship.md']) {
+        assert.ok(seen.includes(path), `${path} in ${JSON.stringify(seen)}`)
+      }
+    },
+  },
+  {
+    dir: 'harness/fx-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'fx',
+    env: 'house',
+    canary: /expected null to be 'PLOVER-27'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes(
+          '~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills/house-style/SKILL.md',
+        ),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
+    dir: 'harness/cursor-plugin-build',
+    tiers: ['docker'],
+    env: 'built',
+    canary: /expected '---\\nname: reviewer\\ndescription: Rev…' to contain 'BUILT-41'/,
+  },
+  {
+    dir: 'harness/opencode-plugin-build',
+    tiers: ['docker'],
+    image: 'opencode',
+    env: 'built',
+    canary: /expected '---\\ndescription: Reviews a change\. T…' to contain 'BUILT-58'/,
+  },
+  {
+    dir: 'harness/codex-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'codex',
+    env: 'house',
+    canary: /expected 'Loaded plugins: house \(skills, mcp\)' to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes('~/.reeval/plugins/house/skills/house-style/SKILL.md'),
+        JSON.stringify(seen),
+      )
+      assert.ok(!seen.includes('~/.agents/skills/house-style/SKILL.md'), JSON.stringify(seen))
+    },
+  },
+  {
+    dir: 'harness/goose-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'goose',
+    env: 'house',
+    canary: /expected 'Loaded skills: house-style; plugins: …' not to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes(
+          '~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills/house-style/SKILL.md',
+        ),
         JSON.stringify(seen),
       )
     },
@@ -1419,6 +1977,60 @@ export const features: Feature[] = [
     dir: 'harness/goose-home-skills',
     tiers: ['fake', 'docker'],
     image: 'goose',
+    env: 'greeting',
+    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
+    record: ({ run }) =>
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.placement]),
+        [['house-greeting', 'harness']],
+      ),
+  },
+  {
+    dir: 'harness/fx-rules',
+    tiers: ['fake', 'docker'],
+    image: 'fx',
+    env: 'house-rules',
+    canary: /expected null to be 'Always write tests\.'/,
+    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
+  },
+  {
+    dir: 'harness/fx-workspace-skills',
+    tiers: ['fake', 'docker'],
+    image: 'fx',
+    env: 'greeting',
+    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
+  },
+  {
+    dir: 'harness/fx-home-skills',
+    tiers: ['fake', 'docker'],
+    image: 'fx',
+    env: 'greeting',
+    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
+    record: ({ run }) =>
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.placement]),
+        [['house-greeting', 'harness']],
+      ),
+  },
+  {
+    dir: 'harness/grok-build-rules',
+    tiers: ['fake', 'docker'],
+    image: 'grok-build',
+    env: 'house-rules',
+    canary: /expected null to be 'Always write tests\.'/,
+    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
+  },
+  {
+    dir: 'harness/grok-build-workspace-skills',
+    tiers: ['fake', 'docker'],
+    image: 'grok-build',
+    env: 'greeting',
+    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
+  },
+  {
+    dir: 'harness/grok-build-home-skills',
+    tiers: ['fake', 'docker'],
+    image: 'grok-build',
     env: 'greeting',
     canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
     record: ({ run }) =>
@@ -1536,6 +2148,33 @@ export const features: Feature[] = [
       assert.match(
         image?.agentCli ?? '',
         new RegExp(`${GOOSE_CLI_VERSION.replaceAll('.', '\\.')}$`),
+      )
+    },
+  },
+  {
+    dir: 'harness/fx-dockerfile',
+    tiers: ['docker'],
+    image: 'fx',
+    env: 'plain',
+    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
+    record: ({ run }) => {
+      const [image] = run.stack.images
+      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.match(image?.agentCli ?? '', new RegExp(`${FX_CLI_VERSION.replaceAll('.', '\\.')}$`))
+    },
+  },
+  {
+    dir: 'harness/grok-build-dockerfile',
+    tiers: ['docker'],
+    image: 'grok-build',
+    env: 'plain',
+    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
+    record: ({ run }) => {
+      const [image] = run.stack.images
+      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.match(
+        image?.agentCli ?? '',
+        new RegExp(`^grok ${GROK_CLI_VERSION.replaceAll('.', '\\.')}\\b`),
       )
     },
   },
@@ -2068,6 +2707,284 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'output/none',
+    tiers: ['fake'],
+    env: '-',
+    canary: /second try: expected 1 to be 2/,
+    record: ({ stdout }) => {
+      assert.equal(blockOf(stdout, 'lands'), 'pass             lands')
+      assert.equal(
+        blockOf(stdout, 'canary'),
+        'fail             canary\n  second try       failed\n    expected 1 to be 2 // Object.is equality',
+      )
+      assert.match(stdout, /\n1 fail · 1 pass\n/)
+      assert.ok(stdout.endsWith(`\n${NO_MODEL_HINT}\n`), stdout)
+    },
+  },
+  {
+    dir: 'output/change',
+    tiers: ['fake'],
+    env: 'marked',
+    cells: ['plain', 'marked'],
+    lands: { outcome: 'pass', error: { kind: 'assertion', message: /has the marker/ } },
+    landsPass: ['marked'],
+    canary: /has the marker: expected (file )?marker\.txt/,
+    record: ({ stdout }) => {
+      assert.match(
+        blockOf(stdout, 'lands'),
+        /^pass {13}lands\n {2}arm {14}pass\n {2}plain {12}0 of 1\n {2}marked {11}1 of 1 {2}can't tell yet\n {2}check {12}plain {3}marked\n {2}has the marker {3}0 of 1 {2}1 of 1\n/,
+      )
+      assert.match(blockOf(stdout, 'canary'), /^ {2}marked {11}0 of 1 {2}can't tell yet$/m)
+      assert.doesNotMatch(stdout, /%|pass@1/)
+    },
+  },
+  {
+    dir: 'output/harness',
+    tiers: ['fake'],
+    env: '-',
+    canary: /writes out\.txt: expected file out\.txt to exist/,
+    evals: {
+      lands: { outcome: 'pass', attempts: ['writer/-/fake#1', 'copier/-/fake#1'] },
+      canary: {
+        outcome: 'fail',
+        attempts: ['writer/-/fake#1', 'idler/-/fake#1'],
+        error: { kind: 'assertion', message: /writes out\.txt: expected file out\.txt to exist/ },
+        clean: ['writer/-/fake#1'],
+      },
+    },
+    record: ({ stdout }) => {
+      assert.equal(
+        blockOf(stdout, 'lands'),
+        'pass             lands\n  harness          pass\n  writer           1 of 1\n  copier           1 of 1',
+      )
+      assert.match(
+        blockOf(stdout, 'canary'),
+        /\n {2}writer {12}1 of 1\n {2}idler {13}0 of 1\n {4}writes out\.txt {2}failed\n {6}expected file out\.txt to exist$/,
+      )
+    },
+  },
+  {
+    dir: 'output/both',
+    tiers: ['fake'],
+    env: 'marked',
+    canary: /has the marker: expected (file )?marker\.txt/,
+    evals: {
+      lands: {
+        outcome: 'pass',
+        attempts: [
+          'writer/plain/fake#1',
+          'writer/marked/fake#1',
+          'copier/plain/fake#1',
+          'copier/marked/fake#1',
+        ],
+        error: { kind: 'assertion', message: /has the marker: expected file marker\.txt to exist/ },
+        clean: ['writer/marked/fake#1', 'copier/marked/fake#1'],
+      },
+      canary: {
+        outcome: 'fail',
+        attempts: [
+          'writer/plain/fake#1',
+          'writer/marked/fake#1',
+          'copier/plain/fake#1',
+          'copier/marked/fake#1',
+        ],
+        error: { kind: 'assertion', message: /has the marker: expected (file )?marker\.txt/ },
+      },
+    },
+    record: ({ stdout }) => {
+      const arms = (harness: string) =>
+        `  ${harness}\n    arm             pass\n    plain           0 of 1\n    marked          1 of 1  can't tell yet\n`
+      const lands = blockOf(stdout, 'lands')
+      assert.ok(lands.startsWith(`pass             lands\n${arms('writer')}`), lands)
+      assert.ok(lands.includes(`\n${arms('copier')}`), lands)
+      assert.equal(lands.match(/^ {4}check {11}plain {3}marked$/gm)?.length, 2, lands)
+    },
+  },
+  {
+    dir: 'output/family',
+    tiers: ['fake'],
+    env: '-',
+    canary: /is red: expected 'green' to be 'red'/,
+    evals: {
+      'lands red': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      'lands blue': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      'canary red': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      'canary green': {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: { kind: 'assertion', message: /is red: expected 'green' to be 'red'/ },
+      },
+    },
+    record: ({ stdout }) => {
+      assert.match(
+        stdout,
+        /\n {17}lands %s\n {2}pass {2}red {8}1 of 1\n {2}pass {2}blue {7}1 of 1\n\n/,
+      )
+      assert.match(
+        stdout,
+        /\n {17}canary %s\n {2}pass {2}red {8}1 of 1\n {2}fail {2}green {6}0 of 1\n {4}is red {9}failed\n {6}expected 'green' to be 'red'/,
+      )
+      assert.match(stdout, /\n1 fail · 3 pass\n/)
+    },
+  },
+  {
+    dir: 'output/not-run',
+    tiers: ['fake'],
+    env: 'marked',
+    cells: ['plain', 'marked'],
+    lands: { outcome: 'pass', error: { kind: 'assertion', message: /has the marker/ } },
+    landsPass: ['marked'],
+    canary: /reached: expected 'control' to be 'variant'/,
+    canaryPass: ['marked'],
+    record: ({ stdout }) => {
+      const lands = blockOf(stdout, 'lands')
+      assert.match(lands, /^ {2}reached {10}not run {2}1 of 1$/m)
+      assert.doesNotMatch(lands, /reached +0 of/)
+      assert.match(blockOf(stdout, 'canary'), /^ {2}reached {10}0 of 1 {2}1 of 1$/m)
+    },
+  },
+  {
+    dir: 'output/infra-error',
+    tiers: ['fake'],
+    env: 'missing',
+    canaryEnv: '-',
+    lands: {
+      outcome: 'infra_error',
+      error: { kind: 'infra', message: /^setup step 1\/1 "touch ran" in environment missing/ },
+    },
+    canary: /second try: expected 1 to be 2/,
+    record: ({ stdout }) => {
+      assert.match(
+        blockOf(stdout, 'lands'),
+        /^infra error {6}lands\n {2}infra error {6}setup step 1\/1 "touch ran"/,
+      )
+      assert.match(stdout, /\n1 fail · 1 infra error\n/)
+    },
+  },
+  {
+    dir: 'output/run-error',
+    tiers: ['fake'],
+    env: '-',
+    canary: /second try: expected 1 to be 2/,
+    args: ['--json'],
+    record: ({ run, runDir, stdout }) => {
+      const message = 'stray rejection outside the evals'
+      assert.deepEqual(run.errors, [message])
+      const suite = JSON.parse(stdout) as SuiteResult
+      assert.equal(suite.outcome, 'fail', 'the outcome the exit code is read from')
+      assert.deepEqual(suite.errors, [message])
+      assert.equal(suite.tally.errors, 1)
+      const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
+      assert.match(summary, new RegExp(`^error: ${message}$`, 'm'))
+      assert.match(summary, /^1 run error · 1 fail · 1 pass$/m)
+    },
+  },
+  {
+    dir: 'output/zero-counted',
+    tiers: ['fake'],
+    env: 'broken',
+    cells: ['plain', 'broken'],
+    lands: {
+      outcome: 'infra_error',
+      error: { kind: 'infra', message: /^setup step 1\/1 "touch ran" in environment broken/ },
+    },
+    landsPass: ['plain'],
+    canaryCells: ['plain', 'working'],
+    canary: /is a variant: expected 'control' to be 'variant'/,
+    canaryPass: ['working'],
+    args: ['--json'],
+    record: ({ runDir, stdout }) => {
+      const suite = JSON.parse(stdout) as SuiteResult
+      const checks = (name: string, environment: string) =>
+        suite.files
+          .flatMap((f) => f.evals)
+          .find((e) => e.name === name)
+          ?.cells?.find((c) => c.environment === environment)
+          ?.checks.map((k) => [k.label, k.outcome.status])
+      assert.deepEqual(checks('lands', 'broken'), [
+        ['runs true', 'not run'],
+        ['is the control', 'not run'],
+      ])
+      // The canary: a variant whose attempt counted reads its checks' counts.
+      assert.deepEqual(checks('canary', 'working'), [
+        ['runs true', 'ran'],
+        ['is a variant', 'ran'],
+      ])
+      const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
+      assert.match(
+        blockOf(summary, 'lands'),
+        /\n {2}check {12}plain {3}broken\n {2}runs true {8}1 of 1 {2}not run\n {2}is the control {3}1 of 1 {2}not run$/,
+      )
+      assert.doesNotMatch(blockOf(summary, 'canary'), /not run/)
+    },
+  },
+  {
+    dir: 'python-sdk/hello',
+    tiers: ['fake', 'docker', 'real'],
+    env: '-',
+    canary: /expected.*to succeed/i,
+    prepare: (dir) => syncPythonFixtureProject(dir),
+    record: ({ run, stdout }) => {
+      const [lands] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
+      assert.deepEqual(
+        lands?.assertions?.map(({ label, labelled }) => [label, labelled]),
+        [
+          ['assert c.exec("test -f greet.py").ok', false],
+          ['assert node_check.ok', false],
+          ['assert verdict.passed', false],
+        ],
+        'each plain assert in a Python body is a check, passing ones too',
+      )
+      const [canary] = run.evals.find((e) => e.name === 'canary')?.attempts ?? []
+      assert.deepEqual(
+        canary?.assertions?.map(({ label, status }) => [label, status]),
+        [['toSucceed test -f missing-greet.py', 'fail']],
+        "a Python body's expect lands in its record",
+      )
+      assert.deepEqual(
+        canary?.checks.map((c) => c.command),
+        ['test -f missing-greet.py'],
+        'the command expect checks runs once',
+      )
+      assert.match(
+        stdout,
+        /canary#1[^\n]*stdout \| looking for missing-greet\.py/,
+        "a Python body's print is its attempt's output",
+      )
+    },
+  },
+  {
+    dir: 'python-sdk/attempt-isolation',
+    tiers: ['fake'],
+    env: '-',
+    args: ['--concurrency', '1'],
+    canary: /expected.*to succeed/i,
+    evals: {
+      lands: { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      canary: {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: { kind: 'assertion', message: /expected.*to succeed/i },
+      },
+      'times out': {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: { kind: 'timeout', message: /timed out/ },
+      },
+    },
+    prepare: (dir) => syncPythonFixtureProject(dir),
+    record: ({ run }) => {
+      const [lands] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
+      assert.deepEqual(
+        lands?.checks.map((c) => c.command),
+        ['test ! -f zombie.txt'],
+        "a timed-out body's late call doesn't run in the next attempt on its cell",
+      )
+      const [timedOut] = run.evals.find((e) => e.name === 'times out')?.attempts ?? []
+      assert.deepEqual(timedOut?.checks, [], 'nor in its own, which reeval already ended')
+    },
+  },
+  {
     dir: 'run/resume',
     tiers: ['fake'],
     env: 'resume',
@@ -2097,9 +3014,11 @@ function filesNamed(dir: string, name: string): string[] {
     .filter(Boolean)
 }
 
-const imageBuilt = (ref: string) => {
+/** The container CLI a tier runs on. */
+const cliOf = (tier: Tier) => (tier === 'podman' ? 'podman' : 'docker')
+const imageBuilt = (ref: string, cli = 'docker') => {
   try {
-    execFileSync('docker', ['image', 'inspect', ref], { stdio: 'ignore' })
+    execFileSync(cli, ['image', 'inspect', ref], { stdio: 'ignore' })
     return true
   } catch {
     return false
@@ -2107,6 +3026,8 @@ const imageBuilt = (ref: string) => {
 }
 const dockerReady = imageBuilt(DEFAULT_IMAGE)
 const requireDocker = process.env.REEVAL_TEST_REQUIRE_DOCKER === '1'
+const podmanReady = imageBuilt(DEFAULT_IMAGE, 'podman')
+const requirePodman = process.env.REEVAL_TEST_REQUIRE_PODMAN === '1'
 /** Real Cursor, for the attempt ledger (support/harnesses.ts). */
 const cursorRow = harnesses.find((h) => h.id === 'cursor') as (typeof harnesses)[number]
 /** The contract row a fixture's real tier runs on: Cursor, or its `realHarness`. */
@@ -2121,11 +3042,11 @@ const realModel = process.env.REEVAL_REAL_MODEL ?? 'composer-2.5'
 const only = process.env.REEVAL_FIXTURE_TIERS?.split(',')
 
 /** Containers are removed by a detached `docker rm`, which may finish after the CLI exits. */
-async function containersGone(runId: string, deadlineMs = 20_000): Promise<void> {
+async function containersGone(runId: string, cli: string, deadlineMs = 20_000): Promise<void> {
   const until = Date.now() + deadlineMs
   let left = ''
   do {
-    left = execFileSync('docker', ['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {
+    left = execFileSync(cli, ['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {
       encoding: 'utf8',
     }).trim()
     if (!left) return
@@ -2133,6 +3054,43 @@ async function containersGone(runId: string, deadlineMs = 20_000): Promise<void>
   } while (Date.now() < until)
   assert.equal(left, '', `containers of run ${runId} still exist after ${deadlineMs / 1000}s`)
 }
+
+/**
+ * Force-removes the containers of every run the fixture's project started, finished or not: the
+ * sweep after a stopped run, in case its SIGTERM teardown was cut short by the SIGKILL.
+ */
+function removeProjectContainers(project: string, cli: string): void {
+  const runIds = ['staging', 'runs'].flatMap((d) => {
+    const dir = join(project, '.reeval', d)
+    return existsSync(dir) ? readdirSync(dir).map((f) => f.replace(/\.json$/, '')) : []
+  })
+  for (const runId of new Set(runIds)) {
+    const ids = execFileSync(cli, ['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {
+      encoding: 'utf8',
+    })
+      .split(/\s+/)
+      .filter(Boolean)
+    if (ids.length) execFileSync(cli, ['rm', '-f', ...ids], { stdio: 'ignore' })
+  }
+}
+
+/** The end of each attempt's debug.log, which says where a stopped run was stuck. */
+function attemptTrails(project: string): string {
+  const root = join(project, '.reeval', 'debug')
+  if (!existsSync(root)) return ''
+  return readdirSync(root, { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith('debug.log'))
+    .sort()
+    .map((f) => {
+      const lines = readFileSync(join(root, f), 'utf8').trimEnd().split('\n')
+      return `\n--- .reeval/debug/${f}, last ${Math.min(lines.length, 20)} lines:\n${lines.slice(-20).join('\n')}`
+    })
+    .join('')
+}
+
+/** A fixture's run is stopped this long before its test's timeout: the grace, and a margin. */
+const FIXTURE_STOP_MS = { fake: 10_000, docker: 30_000, podman: 30_000, real: 30_000 } as const
+const FIXTURE_GRACE_MS = { fake: 5_000, docker: 20_000, podman: 20_000, real: 20_000 } as const
 
 function skipTier(tier: Tier, image?: BakedHarness, posixModes?: true): string | false {
   if (only && !only.includes(tier)) return `REEVAL_FIXTURE_TIERS=${only.join(',')}`
@@ -2143,6 +3101,10 @@ function skipTier(tier: Tier, image?: BakedHarness, posixModes?: true): string |
   if (tier === 'docker' && !requireDocker) {
     if (!dockerReady) return `needs Docker and ${DEFAULT_IMAGE}`
     if (image && !imageBuilt(imageFor(image))) return `needs ${imageFor(image)}`
+  }
+  if (tier === 'podman' && !requirePodman) {
+    if (!podmanReady) return `needs Podman and ${DEFAULT_IMAGE} (reeval image build with podman())`
+    if (image && !imageBuilt(imageFor(image), 'podman')) return `needs ${imageFor(image)} in Podman`
   }
   return false
 }
@@ -2155,11 +3117,12 @@ function fixtureTests(tiers: Tier[]) {
   for (const f of features) {
     for (const tier of f.tiers.filter((t) => tiers.includes(t))) {
       const timeout =
-        f.timeoutMs?.[tier] ?? { fake: FAKE_TIMEOUT_MS, docker: 240_000, real: 600_000 }[tier]
+        f.timeoutMs?.[tier] ??
+        { fake: FAKE_TIMEOUT_MS, docker: 240_000, podman: 240_000, real: 600_000 }[tier]
       test(`${f.dir} [${tier}]`, {
         skip: skipTier(tier, f.image, f.posixModes),
         timeout,
-      }, async () => {
+      }, async (t) => {
         const row = realRowOf(f)
         if (tier === 'real') {
           reserveAttempts(row, 2, `fixture ${f.dir}`)
@@ -2173,7 +3136,7 @@ function fixtureTests(tiers: Tier[]) {
           {
             env: {
               ...(typeof f.hostEnv === 'function' ? f.hostEnv(p.dir) : f.hostEnv),
-              REEVAL_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',
+              REEVAL_FIXTURE_SANDBOX: tier === 'real' ? 'docker' : tier,
               ...(tier === 'real'
                 ? {
                     REEVAL_FIXTURE_HARNESS: harnessOf(row),
@@ -2182,17 +3145,26 @@ function fixtureTests(tiers: Tier[]) {
                   }
                 : {}),
             },
-            timeoutMs: timeout - 10_000,
+            timeoutMs: timeout - FIXTURE_STOP_MS[tier],
+            // Stopped inside the test's timeout, so the failure has the run's output and the run
+            // has cancelled, and removed its containers, before the next test starts.
+            deadlineMs: timeout - FIXTURE_STOP_MS[tier],
+            graceMs: FIXTURE_GRACE_MS[tier],
+            signal: t.signal,
           },
-        )
-        const sandbox = f.sandbox ?? (tier === 'fake' ? 'fake' : 'docker')
+        ).catch((error: Error) => {
+          if (tier !== 'fake') removeProjectContainers(p.dir, cliOf(tier))
+          error.message += attemptTrails(p.dir)
+          throw error
+        })
+        const sandbox = f.sandbox ?? (tier === 'real' ? 'docker' : tier)
         const harness =
           tier === 'real' ? `${harnessOf(row)}:${realModelOf(row).split('/').at(-1)}` : 'fake'
         const ids = (names: string[]) => names.map((env) => `${harness}/${env}/${sandbox}#1`)
         const { run, dir: runDir } = readRun(p.dir)
         expectRun(r, run, {
           code: 1,
-          evals: {
+          evals: f.evals ?? {
             lands: {
               outcome: 'pass',
               ...f.lands,
@@ -2207,15 +3179,15 @@ function fixtureTests(tiers: Tier[]) {
             },
           },
         })
-        await f.record?.({ run, project: p.dir, runDir, tier })
+        await f.record?.({ run, project: p.dir, runDir, tier, stdout: r.stdout })
         assert.deepEqual(liveSandboxes(p), [], 'every sandbox is removed')
-        if (tier !== 'fake') await containersGone(run.runId)
+        if (tier !== 'fake') await containersGone(run.runId, cliOf(tier))
       })
     }
   }
 }
 
-describe('feature fixtures', { concurrency: 4 }, () => fixtureTests(['fake', 'docker']))
+describe('feature fixtures', { concurrency: 4 }, () => fixtureTests(['fake', 'docker', 'podman']))
 // Real attempts run one at a time, each within its own timeout.
 describe('feature fixtures on real Cursor', { concurrency: 1 }, () => fixtureTests(['real']))
 
@@ -2231,8 +3203,9 @@ test('every feature fixture is in the table, with one check and a canary', () =>
     .sort()
   assert.deepEqual(dirs, features.map((f) => f.dir).sort())
   for (const dir of dirs) {
-    const evals = readdirSync(join(root, dir, 'evals')).filter((f) => f.endsWith('.eval.ts'))
-    assert.deepEqual(evals.sort(), ['canary.eval.ts', 'lands.eval.ts'], dir)
+    const evals = readdirSync(join(root, dir, 'evals')).filter((f) => /\.eval\.(ts|py)$/.test(f))
+    const ext = evals.some((f) => f.endsWith('.eval.py')) ? '.eval.py' : '.eval.ts'
+    assert.deepEqual(evals.sort(), [`canary${ext}`, `lands${ext}`].sort(), dir)
     assert.ok(existsSync(join(root, dir, 'reeval.config.ts')), dir)
   }
 })

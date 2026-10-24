@@ -12,21 +12,34 @@ import {
   attemptStartProblem,
 } from '../../src/contract/attempt.ts'
 import { declarationProblem } from '../../src/contract/declaration.ts'
+import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
+import { resolveModelGateway } from '../../src/gateway/models.ts'
+import { resolveGateway } from '../../src/gateway/resolve.ts'
+import { vercelCredentialProblem } from '../../src/gateway/vercel.ts'
 import {
   antigravity,
   claudeCode,
   codex,
   cursor,
   fakeHarness,
+  fx,
   goose,
+  grokBuild,
   opencode,
   pi,
 } from '../../src/harness.ts'
 import { checkHarnesses, checkOptions } from '../../src/options.ts'
-import { docker } from '../../src/sandbox.ts'
-import type { EnvironmentHelpers } from '../../src/types.ts'
+import { docker, fakeSandbox, podman } from '../../src/sandbox.ts'
+import type {
+  EnvironmentHelpers,
+  GatewayDescriptor,
+  GatewayName,
+  HarnessDescriptor,
+  PluginSource,
+  SandboxDescriptor,
+} from '../../src/types.ts'
 
 export type Case = [name: string, run: () => unknown]
 
@@ -45,17 +58,52 @@ const yamlIn = (text: string) => () =>
 const env = (spec: unknown) => () => defineEnvironment('e', spec as never)
 const helpers = (use: (h: EnvironmentHelpers) => unknown) => () =>
   defineEnvironment('e', (h) => ({ files: { 'a.txt': 'a' }, ...(use(h) as object) }))
+/** What the plan says of a plugin's build in a sandbox. */
+const build = (p: PluginSource, sandbox: SandboxDescriptor, name?: string) => () => {
+  const refusal = buildRefusal(p, sandbox, name)
+  if (refusal) throw new UsageError(refusal)
+}
 const any =
   // biome-ignore lint/suspicious/noExplicitAny: refusals are about values the types refuse
     (f: (...args: any[]) => unknown, ...args: unknown[]) =>
     () =>
       f(...args)
 
+/** Which gateway a harness resolves to in a list, with reeval's own gateways. */
+const route = (gateways: GatewayDescriptor[], harness: HarnessDescriptor) => () =>
+  resolveGateway(gateways, harness, WHERE)
+/** Which gateway a model reeval calls itself (the judge's) resolves to in a list. */
+const model = (name: string, pin: GatewayName | undefined, gateways: GatewayDescriptor[]) => () =>
+  resolveModelGateway(name, pin, { gateways }, 'the judge model')
+const VERCEL: GatewayDescriptor = { kind: 'vercel' }
+const DIRECT: GatewayDescriptor = { kind: 'direct' }
+/** What the plan says of Vercel's credentials, at noon on 1 January 2026. */
+const oidc = (env: NodeJS.ProcessEnv) => () => {
+  const problem = vercelCredentialProblem(env, new Date('2026-01-01T12:00:00Z'))
+  if (problem) throw new UsageError(problem)
+}
+const jwt = (expiresMs: number) =>
+  `e30.${Buffer.from(JSON.stringify({ exp: expiresMs / 1000 })).toString('base64url')}.sig`
+
 /** A directory with one file and an empty subdirectory, for `directory()`, and a Dockerfile. */
 export const DIR = mkdtempSync(join(tmpdir(), 'reeval-refusals-'))
 writeFileSync(join(DIR, 'a.txt'), 'a')
 writeFileSync(join(DIR, 'Dockerfile'), 'FROM debian:bookworm-slim\n')
 mkdirSync(join(DIR, 'empty'))
+
+/** A marketplace whose review entry is a `file:` URL on this machine. */
+const hostEntry = () => {
+  const dir = join(DIR, 'host-market')
+  mkdirSync(join(dir, '.claude-plugin'), { recursive: true })
+  writeFileSync(
+    join(dir, '.claude-plugin', 'marketplace.json'),
+    JSON.stringify({
+      name: 'acme',
+      plugins: [{ name: 'review', source: { source: 'url', url: 'file:///srv/review' } }],
+    }),
+  )
+  return dir
+}
 
 /** What `declareTree` checks before it declares anything. */
 const tree = (children: unknown) => () => {
@@ -167,12 +215,22 @@ export const CASES: Record<string, Case[]> = {
     ['an empty id', any(docker, { id: '' })],
     ['an image that is not a string', any(docker, { image: 3 })],
     ['an empty from', any(docker, { from: ' ' })],
+    ['a from with a line break', any(docker, { from: 'node:24\nRUN id' })],
+    ['a from with a space', any(docker, { from: 'node:24 AS tools' })],
     ['secrets on the sandbox', any(docker, { env: {} })],
     ['environment on the sandbox', any(docker, { environment: {} })],
     ['an unknown key and a bad value', any(docker, { cpus: 0, mem: '1g' })],
     ['two bad values', any(docker, { pids: 0, root: 'yes' })],
     ['a good one', any(docker, { from: 'node:24', memory: '4g', swap: 0, install: ['ls'] })],
+    ['podman: a memory size podman does not take', any(podman, { memory: '4GB' })],
+    ['podman: an unknown key', any(podman, { colour: 'blue' })],
+    ['podman: a good one', any(podman, { from: 'node:24', memory: '4g', install: ['ls'] })],
     ['data: not docker() or fakeSandbox()', options({ sandbox: { kind: 'vm' } })],
+    [
+      'data: podman with a bad memory',
+      options({ sandbox: { kind: 'docker', engine: 'podman', memory: '4GB' } }),
+    ],
+    ['data: an unknown engine', options({ sandbox: { kind: 'docker', engine: 'lxc' } })],
     ['data: maxConcurrent 0', options({ sandbox: { kind: 'docker', maxConcurrent: 0 } })],
     ['data: a typo', options({ sandbox: { kind: 'docker', memswap: '8g' } })],
     ['data: a bad memory', options({ sandbox: { kind: 'docker', memory: '4GB' } })],
@@ -203,6 +261,7 @@ export const CASES: Record<string, Case[]> = {
     ['opencode without a model', any(opencode, {})],
     ['opencode without a provider', any(opencode, { model: 'gemini-3.8-flash' })],
     ['opencode with an unknown provider', any(opencode, { model: 'nope/model' })],
+    ['opencode with a vercel/ id', any(opencode, { model: 'vercel/anthropic/claude-haiku-4.5' })],
     ['opencode good', any(opencode, { model: 'google/gemini-3.8-flash' })],
     ['goose with a provider', any(goose, { model: 'google/gemini-3.8-flash' })],
     ['goose without a model', any(goose, {})],
@@ -210,6 +269,14 @@ export const CASES: Record<string, Case[]> = {
     ['pi effort empty', any(pi, { model: 'gemini-3.8-flash', effort: '' })],
     ['codex with a provider', any(codex, { model: 'openai/gpt-5.6-luna' })],
     ['codex without a model', any(codex, {})],
+    ['grokBuild with a provider', any(grokBuild, { model: 'xai/grok-4.6' })],
+    ['grokBuild without a model', any(grokBuild, {})],
+    ['grokBuild effort empty', any(grokBuild, { model: 'grok-4.6', effort: '' })],
+    ['grokBuild good', any(grokBuild, { model: 'grok-4.6', effort: 'high' })],
+    ['fx without a model', any(fx, {})],
+    ['fx with an empty model', any(fx, { model: '' })],
+    ['fx with a typo', any(fx, { model: 'gpt-4.1', efort: 'high' })],
+    ['fx good', any(fx, { model: 'anthropic/claude-sonnet-5' })],
     ['fakeHarness script not a list', any(fakeHarness, { script: 'x' })],
     ['fakeHarness script a flat list', any(fakeHarness, { script: [{ exec: 'ls' }] })],
     ['fakeHarness script step unknown', any(fakeHarness, { script: [[{ run: 'ls' }]] })],
@@ -248,6 +315,8 @@ export const CASES: Record<string, Case[]> = {
       harnesses({ kind: 'claude-code', model: 'm', effort: 'huge' }),
     ],
     ['data: goose with a provider', harnesses({ kind: 'goose', model: 'google/g' })],
+    ['data: grok-build with a provider', harnesses({ kind: 'grok-build', model: 'xai/g' })],
+    ['data: fx without a model', harnesses({ kind: 'fx' })],
     ['data: fake with a bad layout', harnesses({ kind: 'fake', layout: 'vim' })],
     ['data: fake with a bad script', harnesses({ kind: 'fake', script: [{ exec: 'ls' }] })],
     ['data: good', harnesses({ kind: 'cursor', model: 'm' }, { kind: 'fake', id: 'f' })],
@@ -556,6 +625,175 @@ export const CASES: Record<string, Case[]> = {
       'data: skill with an unknown source',
       env({ skills: [{ kind: 'skill', source: 'ftp', placement: 'harness' }] }),
     ],
+    [
+      'plugin only an unknown part',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.local('.', { only: ['apps' as never] })],
+      })),
+    ],
+    [
+      'plugin only empty',
+      helpers(({ plugin }) => ({ plugins: [plugin.local('.', { only: [] })] })),
+    ],
+    [
+      'plugin option with a typo',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.git('github:o/r', { refs: 'v1' } as never)],
+      })),
+    ],
+    [
+      'plugin build not a command',
+      helpers(({ plugin }) => ({ plugins: [plugin.npm('pkg@1', { build: 3 as never })] })),
+    ],
+    ['plugin.git without a repo', helpers(({ plugin }) => ({ plugins: [plugin.git('')] }))],
+    [
+      'plugin.git with credentials',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.git('https://user:token@github.com/o/r')],
+      })),
+    ],
+    ['plugin.npm without a spec', helpers(({ plugin }) => ({ plugins: [plugin.npm('')] }))],
+    [
+      'plugin.marketplace without a name',
+      helpers(({ plugin }) => ({ plugins: [plugin.marketplace('github:acme/agent-plugins')] })),
+    ],
+    [
+      'plugin.marketplace name not kebab-case',
+      helpers(({ plugin }) => ({ plugins: [plugin.marketplace('Lint@github:acme/tools')] })),
+    ],
+    [
+      'plugin.marketplace ref on npm',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@npm:@acme/plugins@2.0.0', { ref: 'v1' })],
+      })),
+    ],
+    [
+      'plugin.marketplace tree URL',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@https://github.com/acme/tools/tree/v1/market')],
+      })),
+    ],
+    [
+      'plugin.marketplace option with a typo',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@github:acme/tools', { path: 'x' } as never)],
+      })),
+    ],
+    [
+      'plugin.marketplace with credentials',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@https://user:token@github.com/acme/tools')],
+      })),
+    ],
+    [
+      'plugin.marketplace good',
+      helpers(({ plugin }) => ({
+        plugins: [
+          plugin.marketplace('lint@github:acme/tools', { ref: 'v3', only: ['skills'] }),
+          plugin.marketplace('format@npm:@acme/plugins@2.0.0'),
+        ],
+      })),
+    ],
+    [
+      'marketplace entry on this machine, from a remote marketplace',
+      () =>
+        readMarketplace(hostEntry(), 'call', 'https://git.example.com/acme/plugins.git', 'review'),
+    ],
+    [
+      'marketplace entry on this machine, from a local marketplace',
+      () => readMarketplace(hostEntry(), 'call', 'market', 'review', true),
+    ],
+    ['plugins not from the helper', env({ plugins: ['./plugins/review'] })],
+    ['plugins not a list', env({ plugins: 'x' })],
+    [
+      'plugin good',
+      helpers(({ plugin }) => ({
+        plugins: [
+          plugin.local('.', { only: ['skills'] }),
+          plugin.git('github:o/r', { ref: 'v1', path: 'plugins/review' }),
+          plugin.npm('pkg@1', { only: ['mcp'], build: ['npm ci', 'npm run build'] }),
+        ],
+      })),
+    ],
+    [
+      'data: plugin with a typo',
+      env({ plugins: [{ kind: 'plugin', source: 'local', path: '/p', onyl: ['skills'] }] }),
+    ],
+    [
+      'data: plugin with an unknown source',
+      env({ plugins: [{ kind: 'plugin', source: 'zip', name: 'x' }] }),
+    ],
+    [
+      'data: plugin marketplace without its source',
+      env({ plugins: [{ kind: 'plugin', source: 'marketplace', name: 'x' }] }),
+    ],
+    [
+      'data: plugin marketplace with a typo',
+      env({
+        plugins: [
+          {
+            kind: 'plugin',
+            source: 'marketplace',
+            name: 'x',
+            marketplace: { source: 'git', repo: 'github:o/r', rev: 'v1' },
+          },
+        ],
+      }),
+    ],
+    [
+      'data: plugin build empty',
+      env({ plugins: [{ kind: 'plugin', source: 'npm', spec: 'pkg@1', build: [] }] }),
+    ],
+    [
+      'plugin build from the source root',
+      helpers(({ plugin }) => ({
+        plugins: [
+          plugin.git('github:o/r', { path: 'plugins/review', build: { run: 'pnpm i', cwd: '.' } }),
+        ],
+      })),
+    ],
+    [
+      'plugin build cwd outside the source',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.git('github:o/r', { build: { run: 'make', cwd: '../x' } })],
+      })),
+    ],
+    [
+      'plugin build with an unknown key',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.npm('pkg@1', { build: { run: 'make', dir: '.' } as never })],
+      })),
+    ],
+    [
+      'plugin build without run',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.npm('pkg@1', { build: { cwd: '.' } as never })],
+      })),
+    ],
+    [
+      'data: plugin build cwd absolute',
+      env({
+        plugins: [
+          { kind: 'plugin', source: 'npm', spec: 'pkg@1', build: { run: 'make', cwd: '/src' } },
+        ],
+      }),
+    ],
+    [
+      'plugin build on the fake sandbox',
+      build(
+        { kind: 'plugin', source: 'npm', spec: 'pkg@1', build: 'make' },
+        fakeSandbox(),
+        'review',
+      ),
+    ],
+    [
+      'plugin build on the fake sandbox, before its manifest is read',
+      build({ kind: 'plugin', source: 'git', repo: 'github:o/r', build: 'make' }, fakeSandbox()),
+    ],
+    [
+      'plugin build on docker',
+      build({ kind: 'plugin', source: 'npm', spec: 'pkg@1', build: 'make' }, docker(), 'review'),
+    ],
     ['mcp.stdio without a command', helpers(({ mcp }) => ({ mcp: { s: mcp.stdio('') } }))],
     ['mcp not from the helper', env({ mcp: { s: { command: 'npx' } } })],
     [
@@ -798,6 +1036,8 @@ export const CASES: Record<string, Case[]> = {
       'yaml: analysis fake with a typo',
       yaml('analysis:\n  model: { kind: fake-analysis, votes: tie }\n'),
     ],
+    ['yaml: analysis agent', yaml('analysis:\n  agent: true\n')],
+    ['yaml: analysis maxTokens 0', yaml('analysis:\n  maxTokens: 0\n')],
     [
       'yaml: capture viewport not whole',
       yaml('capture:\n  viewport: { width: 10.5, height: 10 }\n'),
@@ -833,7 +1073,9 @@ defaultProfile: { ci: pr }
 secrets: { unbrokered: error }
 debug: { keep: 5, traceBufferMb: 2 }
 analysis:
-  model: { kind: fake-analysis, note: fine, vote: { winner: A, reason: shorter } }
+  model: { kind: fake-analysis, vote: { winner: A, reason: shorter } }
+  insights: true
+  maxTokens: 100000
   maxInputTokens: 4000
 profiles:
   pr:
@@ -921,6 +1163,90 @@ environment:
       }),
     ],
     ['ts: a relative fake dir as data', configIn({ sandbox: { kind: 'fake', dir: './tmp' } })],
+  ],
+  gateway: [
+    ['ts: an empty list', config({ gateway: [] })],
+    ['ts: not a list', config({ gateway: { kind: 'direct' } })],
+    ['ts: an unknown kind', config({ gateway: [{ kind: 'vercell' }] })],
+    ['ts: a near miss', config({ gateway: [{ kind: 'dirct' }] })],
+    ['ts: a duplicate', config({ gateway: [{ kind: 'direct' }, { kind: 'direct' }] })],
+    ['ts: direct with a typo', config({ gateway: [{ kind: 'direct', apiKey: 'x' }] })],
+    ['ts: a profile with an empty list', config({ profiles: { pr: { gateway: [] } } })],
+    ['ts: good', config({ gateway: [{ kind: 'direct' }] })],
+    ['yaml: an unknown name', yaml('gateway: [vercell]\n')],
+    ['yaml: a map with two keys', yaml('gateway: [{ direct: {}, vercel: {} }]\n')],
+    ['yaml: direct with options', yaml('gateway: [{ direct: { apiKey: x } }]\n')],
+    ['yaml: a number', yaml('gateway: [3]\n')],
+    ['yaml: good', yaml('gateway: [direct]\n')],
+    ['harness: a pin not a name', any(fakeHarness, { gateway: 'vercell' })],
+    ['harness: a pin a number', any(cursor, { model: 'm', gateway: 3 })],
+    ['harness: a helper pin', any(fakeHarness, { gateway: { kind: 'direct' } })],
+    ['ts: vercel with a typo', config({ gateway: [{ kind: 'vercel', apikey: 'x' }] })],
+    ['ts: vercel then direct', config({ gateway: [{ kind: 'vercel' }, { kind: 'direct' }] })],
+    ['yaml: vercel with options', yaml('gateway: [{ vercel: { apikey: x } }]\n')],
+    ['yaml: vercel then direct', yaml('gateway: [vercel, direct]\n')],
+    ['route: cursor on vercel alone', route([VERCEL], cursor({ model: 'composer-2.5' }))],
+    ['route: antigravity on vercel alone', route([VERCEL], antigravity({ model: 'm' }))],
+    ['route: grok build on vercel', route([VERCEL], grokBuild({ model: 'm' }))],
+    ['route: opencode on vercel', route([VERCEL], opencode({ model: 'anthropic/m' }))],
+    ['route: an fx gateway id on direct alone', route([DIRECT], fx({ model: 'google/m' }))],
+    [
+      'route: an fx gateway id falls through to vercel',
+      route([DIRECT, VERCEL], fx({ model: 'google/m' })),
+    ],
+    [
+      'route: cursor pinned to vercel',
+      route([VERCEL, DIRECT], cursor({ model: 'composer-2.5', gateway: 'vercel' })),
+    ],
+    ['route: a pin not in the list', route([DIRECT], codex({ model: 'm', gateway: 'vercel' }))],
+    ['route: codex on vercel', route([VERCEL, DIRECT], codex({ model: 'm' }))],
+    ['route: claude code on vercel', route([VERCEL], claudeCode({ model: 'm' }))],
+    ['route: pi on vercel alone', route([VERCEL], pi({ model: 'gemini-3.8-flash' }))],
+    [
+      'route: pi falls through to direct',
+      route([VERCEL, DIRECT], pi({ model: 'gemini-3.8-flash' })),
+    ],
+    [
+      'route: opencode with effort on vercel alone',
+      route([VERCEL], opencode({ model: 'anthropic/m', effort: 'high' })),
+    ],
+    [
+      'route: goose with effort on vercel alone',
+      route([VERCEL], goose({ model: 'm', effort: 'high' })),
+    ],
+    [
+      'route: grok build with effort on vercel alone',
+      route([VERCEL], grokBuild({ model: 'm', effort: 'high' })),
+    ],
+    [
+      'route: claude code with effort on vercel',
+      route([VERCEL], claudeCode({ model: 'm', effort: 'high' })),
+    ],
+    [
+      'route: opencode with an unknown provider on direct alone',
+      route([DIRECT], opencode({ model: 'nope/m' })),
+    ],
+    [
+      'route: opencode with an unknown provider on vercel',
+      route([VERCEL], opencode({ model: 'nope/m' })),
+    ],
+    ['oidc: expired', oidc({ VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T00:00:00Z')) })],
+    ['oidc: live', oidc({ VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T13:00:00Z')) })],
+    [
+      'oidc: expired but a key is set',
+      oidc({ AI_GATEWAY_API_KEY: 'k', VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T00:00:00Z')) }),
+    ],
+    ['oidc: not a JWT', oidc({ VERCEL_OIDC_TOKEN: 'opaque' })],
+    ['judge: a pin not a name', config({ judge: { model: 'anthropic/m', gateway: 'vercell' } })],
+    [
+      'judge: a helper pin',
+      config({ judge: { model: 'anthropic/m', gateway: { kind: 'vercel' } }, gateway: [VERCEL] }),
+    ],
+    ['judge: an eval pin not a name', options({ judge: { gateway: 3 } })],
+    ['model: mistral on direct alone', model('mistral/large', undefined, [DIRECT])],
+    ['model: mistral on vercel then direct', model('mistral/large', undefined, [VERCEL, DIRECT])],
+    ['model: pinned to vercel, not listed', model('anthropic/m', 'vercel', [DIRECT])],
+    ['model: mistral pinned to direct', model('mistral/large', 'direct', [VERCEL, DIRECT])],
   ],
   declaration: [
     ['not a list', tree({ type: 'eval' })],
@@ -1013,6 +1339,49 @@ environment:
   protocol: [
     ['an empty id', request({ op: 'send', prompt: 'hi' }, '')],
     ['an unknown op', request({ op: 'teleport', to: 'mars' })],
+    [
+      'record with a status that is neither pass nor fail',
+      request({ op: 'record', matcher: 'assert', status: 'skipped' }),
+    ],
+    [
+      'record with a matcher that is not a name',
+      request({ op: 'record', matcher: 'my check', status: 'pass' }),
+    ],
+    [
+      'a polled exec with the result it already has',
+      request({
+        op: 'expect',
+        subject: { exec: 'test -f a', result: { exitCode: 1, stdout: '', stderr: '' } },
+        matcher: 'toSucceed',
+        args: [],
+        not: false,
+        soft: false,
+        poll: { timeout: 1000 },
+      }),
+    ],
+    [
+      'a polled call with a pattern the runner answers',
+      request({
+        op: 'expect',
+        subject: { attempt: true },
+        matcher: 'toHaveFile',
+        args: ['ready.txt', { matchedBy: "re.compile('ok')", answers: {} }],
+        not: false,
+        soft: false,
+        poll: { timeout: 1000 },
+      }),
+    ],
+    [
+      'an exec result with a fractional exit code',
+      request({
+        op: 'expect',
+        subject: { exec: 'true', result: { exitCode: 0.5, stdout: '', stderr: '' } },
+        matcher: 'toSucceed',
+        args: [],
+        not: false,
+        soft: false,
+      }),
+    ],
     ['judge without a question', request({ op: 'judge' })],
     ['judge with an empty question', request({ op: 'judge', question: ' ' })],
     [

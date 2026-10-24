@@ -3,7 +3,7 @@ title: Sandbox providers
 description: The contract a sandbox provider meets before any attempt starts, and what reeval does with its failures.
 ---
 
-A sandbox provider is what makes and starts a sandbox: Docker today, with the fake sandbox as a second. Before any attempt starts, reeval asks each provider in the plan to check it can work, then to prepare every distinct sandbox the attempts need. The provider classes each failure; reeval does the rest the same way for every provider.
+A sandbox provider is what makes and starts a sandbox: Docker today (and Podman, through the same provider), with the fake sandbox as a second. Before any attempt starts, reeval asks each provider in the plan to check it can work, then to prepare every distinct sandbox the attempts need. The provider classes each failure; reeval does the rest the same way for every provider.
 
 ```ts
 interface SandboxProvider {

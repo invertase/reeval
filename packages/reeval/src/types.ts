@@ -1,4 +1,5 @@
 import type { ArtifactLevel, FileRef, JudgeRetry, RecordMode } from './history/types.ts'
+import type { ModelHeadlineInput, ModelInsightInput } from './insights/input.ts'
 
 export type Duration = number | `${number}${'ms' | 's' | 'm' | 'h'}`
 
@@ -17,12 +18,17 @@ export type FileEditEvent = {
 
 /**
  * Normalised agent events. Each tool call is one event, merged with its result; `durationMs`
- * is null when the harness never reported the end.
+ * is wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null
+ * when the harness never reported the end. Long shell or edit calls set `stalled: true`.
  */
 export type TranscriptEvent = EventTime &
   (
     | { type: 'text' | 'reasoning'; text: string; durationMs: number | null }
-    | (FileEditEvent & { durationMs: number | null })
+    | (FileEditEvent & {
+        durationMs: number | null
+        /** True when a shell-like tool or edit ran at least two minutes. */
+        stalled?: boolean
+      })
     | {
         type: 'web-search'
         toolCallId: string
@@ -32,8 +38,18 @@ export type TranscriptEvent = EventTime &
         /** Whether the search succeeded. Absent means it did. */
         ok?: boolean
         durationMs: number | null
+        /** True when a shell-like tool or edit ran at least two minutes. */
+        stalled?: boolean
       }
-    | { type: 'web-fetch'; toolCallId: string; url: string; ok: boolean; durationMs: number | null }
+    | {
+        type: 'web-fetch'
+        toolCallId: string
+        url: string
+        ok: boolean
+        durationMs: number | null
+        /** True when a shell-like tool or edit ran at least two minutes. */
+        stalled?: boolean
+      }
     | {
         type: 'tool'
         toolCallId: string
@@ -42,6 +58,8 @@ export type TranscriptEvent = EventTime &
         output: unknown
         ok: boolean
         durationMs: number | null
+        /** True when a shell-like tool or edit ran at least two minutes. */
+        stalled?: boolean
       }
     | { type: 'error'; message: string }
     /** A step that failed while the turn went on: a model call the harness retried. */
@@ -271,6 +289,11 @@ export type JudgeOptions = {
    * attempt's state. Merged key by key down the cascade.
    */
   state?: JudgeStateOptions
+  /**
+   * The gateway the judge's calls go through, by name or by its helper. It skips the config's
+   * `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.
+   */
+  gateway?: GatewayName | GatewayDescriptor
 }
 
 /**
@@ -343,6 +366,8 @@ export type Verdict = {
   model: string
   /** The model id the provider says served the call, when it reports one. */
   resolvedModel?: string
+  /** The gateway from the config's `gateway` list the call went through; unset without one. */
+  gateway?: GatewayName
   /** Captures this call sent the judge as file parts, when any. */
   artifacts?: JudgeArtifactRef[]
 }
@@ -403,6 +428,11 @@ export type EvalFn = (c: AttemptContext) => Promise<void>
 /** A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`. */
 export type FakeHarnessDescriptor = {
   kind: 'fake'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** Cell id; defaults to `fake`. */
   id?: string
   /** Files the fake agent writes into the sandbox on every turn. */
@@ -451,10 +481,20 @@ export type FakeHarnessDescriptor = {
    * Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and
    * `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`,
    * `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`,
-   * `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`). Defaults to the
-   * fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.
+   * `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`, fx's private home for
+   * `fx`, Grok's private home for `grok-build`). Defaults to the fake's own (`AGENTS.md`,
+   * `.agents/skills`) in Cursor's image.
    */
-  layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex'
+  layout?:
+    | 'cursor'
+    | 'claude-code'
+    | 'antigravity'
+    | 'opencode'
+    | 'goose'
+    | 'pi'
+    | 'codex'
+    | 'fx'
+    | 'grok-build'
 }
 /**
  * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
@@ -475,11 +515,16 @@ export type FakeScriptStep =
  */
 export type CursorHarnessDescriptor = {
   kind: 'cursor'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** A model id `Cursor.models.list()` returns for the key, e.g. `composer-2.5`. */
   model: string
   /**
-   * Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the default variant in Cursor's
-   * model catalog (`fast=true` for `composer-2.5`), sent explicitly; pass the ones that change cost.
+   * Model parameters, e.g. `{ fast: 'true' }`. Unset ones take the default variant in Cursor's
+   * model catalog, sent explicitly, except `fast`, which is `false` wherever the model takes it.
    */
   params?: Record<string, string>
   /**
@@ -503,6 +548,11 @@ export type ClaudeCodeEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 /** Claude Code through `@ai-sdk/harness-claude-code`, made by `claudeCode()`. */
 export type ClaudeCodeHarnessDescriptor = {
   kind: 'claude-code'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** A model id or alias the `claude` CLI accepts, e.g. `claude-sonnet-5` or `sonnet`. */
   model: string
   /**
@@ -523,6 +573,11 @@ export type ClaudeCodeHarnessDescriptor = {
 /** The Antigravity CLI through `@reeval/harness-antigravity`, made by `antigravity()`. */
 export type AntigravityHarnessDescriptor = {
   kind: 'antigravity'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** A model slug `agy models` lists for a Gemini API key, e.g. `gemini-3.8-flash-medium`. */
   model: string
   /**
@@ -547,6 +602,11 @@ export type AntigravityHarnessDescriptor = {
  */
 export type OpenCodeHarnessDescriptor = {
   kind: 'opencode'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /**
    * OpenCode's model id, `<provider>/<model>`, e.g. `google/gemini-3.8-flash` or
    * `anthropic/claude-haiku-4-5`; the provider picks the key.
@@ -573,6 +633,11 @@ export type OpenCodeHarnessDescriptor = {
  */
 export type GooseHarnessDescriptor = {
   kind: 'goose'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** A Gemini model id, run on Goose's `google` provider, e.g. `gemini-3.8-flash`. */
   model: string
   /**
@@ -596,6 +661,11 @@ export type GooseHarnessDescriptor = {
  */
 export type PiHarnessDescriptor = {
   kind: 'pi'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** A Gemini model id, run on pi's `google` provider, e.g. `gemini-3.8-flash`. */
   model: string
   /**
@@ -619,6 +689,11 @@ export type PiHarnessDescriptor = {
  */
 export type CodexHarnessDescriptor = {
   kind: 'codex'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** An OpenAI model id Codex runs on the Responses API, e.g. `gpt-5.6-luna`. */
   model: string
   /**
@@ -636,6 +711,93 @@ export type CodexHarnessDescriptor = {
    */
   startTimeout?: Duration
 }
+/**
+ * fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or
+ * OpenAI's API by the model id, and reports each turn's tokens.
+ */
+export type FxHarnessDescriptor = {
+  kind: 'fx'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
+  /**
+   * A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with
+   * `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on
+   * OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.
+   */
+  model: string
+  /** Cell id; defaults to `fx:<model>`. */
+  id?: string
+  /** The most fx attempts at once, across the run, e.g. for the key's rate limits. */
+  maxConcurrent?: number
+  /**
+   * How long the harness's session may take to become ready (its bootstrap and first session)
+   * before the attempt is an infra error, after one retry; default 90s.
+   */
+  startTimeout?: Duration
+}
+/**
+ * xAI's Grok Build through `@reeval/harness-grok-build` (`grok agent stdio`), made by
+ * `grokBuild()`. It runs xAI models on an xAI API key and reports each turn's tokens.
+ */
+export type GrokBuildHarnessDescriptor = {
+  kind: 'grok-build'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
+  /** An xAI model id Grok Build runs on the xAI API, e.g. `grok-4.6`. */
+  model: string
+  /**
+   * Reasoning effort as Grok's `default_reasoning_effort`, e.g. `low`, `medium` or `high`, for a
+   * model that takes one.
+   */
+  effort?: string
+  /** Cell id; defaults to `grok-build:<model>`, or `grok-build:<model>[effort=<value>]` when `effort` is set. */
+  id?: string
+  /** The most Grok Build attempts at once, across the run, e.g. for the key's rate limits. */
+  maxConcurrent?: number
+  /**
+   * How long the harness's session may take to become ready (its bootstrap and first session)
+   * before the attempt is an infra error, after one retry; default 90s.
+   */
+  startTimeout?: Duration
+}
+/**
+ * A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`;
+ * `vercel` is Vercel AI Gateway.
+ */
+export type GatewayName = 'direct' | 'vercel'
+
+/** Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`. */
+export type DirectGatewayDescriptor = {
+  kind: 'direct'
+}
+
+/**
+ * Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
+ * `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.
+ */
+export type VercelGatewayDescriptor = {
+  kind: 'vercel'
+}
+
+/** One entry of the config's `gateway` list. */
+export type GatewayDescriptor = DirectGatewayDescriptor | VercelGatewayDescriptor
+
+/**
+ * A `gateway` entry as data (`reeval.yaml`): its name, a one-key map from its name to its
+ * settings, or the descriptor itself.
+ */
+export type GatewayEntryData =
+  | GatewayName
+  | { direct: Omit<DirectGatewayDescriptor, 'kind'> }
+  | { vercel: Omit<VercelGatewayDescriptor, 'kind'> }
+  | GatewayDescriptor
+
 /** A real coding agent, driven through its AI SDK harness adapter. */
 export type AgentHarnessDescriptor =
   | CursorHarnessDescriptor
@@ -645,6 +807,8 @@ export type AgentHarnessDescriptor =
   | GooseHarnessDescriptor
   | PiHarnessDescriptor
   | CodexHarnessDescriptor
+  | FxHarnessDescriptor
+  | GrokBuildHarnessDescriptor
 /** The agent an attempt runs: a real harness, or the fake one. */
 export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 
@@ -658,10 +822,15 @@ export type FakeSandboxDescriptor = {
   /** The most attempts on this sandbox kind at once, across the run. */
   maxConcurrent?: number
 }
-/** A local Docker container, made by `docker()`. */
+/** A local Docker container, made by `docker()`, or a Podman one, made by `podman()`. */
 export type DockerSandboxDescriptor = {
   kind: 'docker'
-  /** Cell id; defaults to `docker`, or `docker:<image>` for other images, plus an install hash. */
+  /** The container CLI the sandbox runs on: `podman` for `podman()`, Docker when unset. */
+  engine?: 'docker' | 'podman'
+  /**
+   * Cell id; defaults to `docker` (`podman`), or `docker:<image>` for other images, plus an
+   * install hash.
+   */
   id?: string
   /** An image that already has the harness baked in, used as is. */
   image?: string
@@ -861,12 +1030,13 @@ export type SetupStep =
     }
 
 /**
- * Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or
- * only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the
- * harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any
- * other request gets a refusal, and the attempt goes on.
+ * Where the sandbox may connect: any host over HTTP(S) through the egress gateway (`'proxy'`, the
+ * default), anywhere including raw TCP and UDP around the gateway (`'allow-all'`), nowhere
+ * (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a
+ * restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are
+ * allowed too; any other request gets a refusal, and the attempt goes on.
  */
-export type EgressPolicy = 'allow-all' | 'deny-all' | { allow: readonly string[] }
+export type EgressPolicy = 'proxy' | 'allow-all' | 'deny-all' | { allow: readonly string[] }
 
 /**
  * A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url`
@@ -916,6 +1086,109 @@ export type EnvironmentSpec = {
   skills?: SkillSource[]
   /** MCP servers the agent gets, by name. */
   mcp?: Record<string, McpServer>
+  /**
+   * Plugins in Claude Code's layout, made by the `plugin` helper; a child's replaces its
+   * parent's plugin of the same name.
+   */
+  plugins?: PluginSource[]
+}
+
+/**
+ * A part of a plugin, as Claude Code's layout bundles it: `skills/<name>/SKILL.md`,
+ * `agents/<name>.md`, `commands/<name>.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest's `mcpServers`) or `rules/`.
+ */
+export type PluginPart = 'skills' | 'agents' | 'commands' | 'hooks' | 'mcp' | 'rules'
+
+/** A plugin to place for the agent, in Claude Code's layout, made by the `plugin` helper. */
+export type PluginSource = {
+  kind: 'plugin'
+  /** The parts to place; default every part the plugin has. */
+  only?: PluginPart[]
+  /** Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise. */
+  build?: PluginBuild
+} & (
+  | {
+      source: 'local'
+      /** A host directory with a `.claude-plugin/plugin.json`. */
+      path: string
+    }
+  | {
+      source: 'git'
+      /** As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL. */
+      repo: string
+      /** A branch, tag or commit SHA; unset is the remote's `HEAD`. */
+      ref?: string
+      /** The plugin's directory in the repository; default its root. */
+      path?: string
+    }
+  | {
+      source: 'npm'
+      /** A pinned npm package spec. */
+      spec: string
+      /** The plugin's directory in the package; default its root. */
+      path?: string
+    }
+  | {
+      source: 'marketplace'
+      /** The plugin's entry in the marketplace's `.claude-plugin/marketplace.json`. */
+      name: string
+      /** Where the marketplace is: a git repository (at `ref`) or an npm package. */
+      marketplace: PluginMarketplace
+    }
+)
+
+/** A Claude Code marketplace: the source that holds its `.claude-plugin/marketplace.json`. */
+export type PluginMarketplace =
+  | {
+      source: 'git'
+      /** As written: a URL or `github:owner/repo`. */
+      repo: string
+      /** A branch, tag or commit SHA; unset is the remote's `HEAD`. */
+      ref?: string
+    }
+  | {
+      source: 'npm'
+      /** An npm package spec. */
+      spec: string
+    }
+
+/**
+ * Shell commands that build a plugin in a Docker image layer, on the cell's harness image, as root
+ * and with no secrets: one, a list, or `{ run, cwd }`. They run from the plugin's directory, or from
+ * `cwd`, relative to the source's root (`'.'` for the repository's or package's root).
+ */
+export type PluginBuild =
+  | string
+  | string[]
+  | {
+      /** The command, or the commands in order. */
+      run: string | string[]
+      /** Where they run, relative to the source's root; default the plugin's directory. */
+      cwd?: string
+    }
+
+type PluginOptions = {
+  /** The parts to place, e.g. `['skills', 'mcp']`; default every part the plugin has. */
+  only?: readonly PluginPart[]
+  /**
+   * Commands that build the plugin in a Docker image layer, e.g. `'npm ci && npm run build'`, or
+   * `{ run, cwd: '.' }` to run them from the source's root. Only the plugin's directory is placed.
+   */
+  build?: string | readonly string[] | { run: string | readonly string[]; cwd?: string }
+}
+
+export type PluginHelper = {
+  /** A directory with a `.claude-plugin/plugin.json`, relative to the calling file. */
+  local(path: string | URL, options?: PluginOptions): PluginSource
+  /** `https://…`, `git@…`, `github:owner/repo` or a GitHub `/tree/<ref>/<path>` URL. */
+  git(repo: string, options?: PluginOptions & { ref?: string; path?: string }): PluginSource
+  /** A pinned npm package spec; the plugin is at `path` inside it (default its root). */
+  npm(spec: string, options?: PluginOptions & { path?: string }): PluginSource
+  /**
+   * `'name@source'`: the entry `name` in a Claude Code marketplace, at a git repository (a URL or
+   * `github:owner/repo`, at `ref`) or an npm package (`npm:<spec>`).
+   */
+  marketplace(entry: string, options?: PluginOptions & { ref?: string }): PluginSource
 }
 
 /** One environment in an `extend` chain. */
@@ -952,6 +1225,7 @@ export type EnvironmentHelpers = {
   secret: SecretHelper
   skill: SkillHelper
   mcp: McpHelper
+  plugin: PluginHelper
   /** A host file, relative to the file that calls it (or an absolute path or `URL`). */
   file: (path: string | URL) => HostFile
   /**
@@ -1409,15 +1683,8 @@ export type Profile = {
   record?: RecordMode
   /** Tag filters for this profile, like `--tag` (`'!slow'` excludes). */
   tags?: string[]
-}
-
-/** What a fake note is written from: the eval, the harness, and what its tools returned. */
-export type FakeNoteInput = {
-  eval: string
-  harness: string
-  attempts: Array<{ id: string; outcome: string }>
-  /** Each failed attempt the fake opened beside a passing one, and the step where they diverged. */
-  compared: Array<{ failed: string; passed: string; divergedAt: number | null }>
+  /** Replaces the config's `gateway` list for this profile's runs. */
+  gateway?: GatewayDescriptor[]
 }
 
 /** A canned analysis for tests; see `fakeAnalysis()` in `reeval/judge`. */
@@ -1425,13 +1692,57 @@ export type FakeAnalysisModel = {
   kind: 'fake-analysis'
   /** The model's structured answer, or a function of the digest it was given. */
   output?: unknown | ((digest: unknown) => unknown)
-  /** `analysis.agent`'s note on each eval and harness: text, a function of its tools' results, or an error to throw. */
-  note?: string | ((input: FakeNoteInput) => string) | { error: string }
   /**
    * How it answers compare questions: a fixed pick, a function of the blinded pair, or
    * `{ error }` to fail every call. A pick may be `{ winner, reason? }`. Default `'tie'`.
    */
   vote?: FakePick | ((pair: BlindPair) => FakePick) | { error: string }
+  /**
+   * What insights get back, in `reeval run` and `reeval analyze --insights`: fixed insights, a
+   * function of each call's input (`input.call` is `classify` or `insights`, once each per eval,
+   * or `headline` once; it may return a promise), or `{ error }` to fail every call. It counts a
+   * token per 4 characters of each call's input and answer, so `analysis.maxTokens` applies.
+   */
+  insights?:
+    | FakeInsights
+    | ((input: FakeInsightsInput) => FakeInsights | Promise<FakeInsights>)
+    | { error: string }
+}
+
+/** What a fake insights function is given: one eval's scoped facts, or the run's evals for the headline. */
+export type FakeInsightsInput = ModelInsightInput | ModelHeadlineInput
+
+/**
+ * A fake insight answer. Each call takes its part: `intent` the classification, `answer`,
+ * `findings`, `rows`, `namedTools` and `remarks` the eval's, `headline` the run's. Whatever's
+ * left out is empty, and the intent defaults to `job: 'other'`.
+ */
+export type FakeInsights = {
+  intent?: {
+    job: 'choose' | 'finish' | 'other'
+    question?: string
+    subject?: { tool?: string; change?: string }
+    name?: 'states-intent' | 'no-intent' | 'contradicts'
+    /** `low` falls back to `job: 'other'`, as a real classification does. */
+    confidence?: 'high' | 'medium' | 'low'
+  }
+  answer?: { text: string; cites: string[] } | null
+  findings?: Array<{ text: string; cites: string[] }>
+  rows?: Array<{ row: string; text: string; cites: string[] }>
+  namedTools?: Array<{ attempt: string; tools: string[] }>
+  /**
+   * The eval's remarks, as the model's JSON would have them: `source.at` and `fix.at` are
+   * `L<n>` lines of the eval's source, `evidence` fact ids (`F1`) or attempt lines (`A1#L3`).
+   * They go through the same gates as a model's, so one missing a part is dropped.
+   */
+  remarks?: Array<{
+    kind: string
+    text: string
+    source?: { at: string; quote: string } | null
+    evidence?: string[]
+    fix?: { at: string; edit: string } | null
+  }>
+  headline?: { text: string; cites: string[] } | null
 }
 
 /** A blinded label's pick: the attempt shown first (`A`), second (`B`), or neither. */
@@ -1470,15 +1781,24 @@ export type BlindSide = BlindTurn & {
   >
 }
 
-/** `reeval analyze`: a language model (not an evaluation model) and what matters in this project. */
+/** Insights and `reeval analyze`: a language model (not an evaluation model) and what matters in this project. */
 export type AnalysisConfig = {
-  /** `'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one. */
+  /**
+   * `'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze`
+   * and compare questions fall back to the judge's when it's a language model.
+   */
   model?: string | FakeAnalysisModel
   /**
-   * `reeval run` writes a note on each eval and harness once its attempts finish, with the analysis
-   * model (default false: one call per eval and harness, every run).
+   * `reeval run` classifies each eval and explains its result with `model` once the attempts
+   * finish (default true when `model` is set; `--no-insights` turns it off for one run).
    */
-  agent?: boolean
+  insights?: boolean
+  /**
+   * Tokens (in and out) that one run's insights may use, over every classification, insight and
+   * headline call (default 250000). Past it, the evals left print without insights; the run's
+   * outcome and exit code never change.
+   */
+  maxTokens?: number
   /** Added to the prompt, e.g. "Fewer tool calls count as a win. The skill under test is reeval-good." */
   instructions?: string
   /** The digest's cap; evidence is dropped, lowest priority first, to fit (default 20000). */
@@ -1505,7 +1825,7 @@ export type ReevalConfig = {
   gate?: GatePolicy
   /** Variables and secrets for the sandbox, merged by name down the cascade. */
   env?: EnvVars
-  /** Where the sandbox may connect; default `'allow-all'`. */
+  /** Where the sandbox may connect; default `'proxy'`. */
   egress?: EgressPolicy
   /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: ConfigJudgeOptions
@@ -1537,8 +1857,13 @@ export type ReevalConfig = {
    * trace each attempt buffers for trace.ndjson (default 8; the oldest entries go first).
    */
   debug?: { keep?: number; traceBufferMb?: number }
-  /** `reeval analyze`, compare questions without a model, and `agent`'s notes during a run. */
+  /** Insights during `reeval run`, `reeval analyze`, and compare questions without a model. */
   analysis?: AnalysisConfig
+  /**
+   * The gateways model calls may go through, in the order you prefer them: each harness takes
+   * the first that can serve it. Default `[direct()]`, each provider's own key.
+   */
+  gateway?: GatewayDescriptor[]
 }
 
 /** `fakeJudge()` as data: the score every call gets. */
@@ -1559,15 +1884,16 @@ export type FakeAnalysisData = {
   kind: 'fake-analysis'
   /** The model's structured answer. */
   output?: unknown
-  /** `analysis.agent`'s note on each eval and harness, or an error to throw. */
-  note?: string | { error: string }
   /** How it answers compare questions: a fixed pick, or `{ error }` to fail every call. */
   vote?: FakePick | { error: string }
 }
 
 /** `AnalysisConfig` as data: the model by name, or a fake analysis. */
 export type AnalysisConfigData = Omit<AnalysisConfig, 'model'> & {
-  /** `'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one. */
+  /**
+   * `'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze`
+   * and compare questions fall back to the judge's when it's a language model.
+   */
   model?: string | FakeAnalysisData
 }
 
@@ -1580,11 +1906,13 @@ export type ProfileDefaultsData = Omit<ProfileDefaults, 'environment' | 'judge'>
 }
 
 /** `Profile` as data: its defaults and judge as data. */
-export type ProfileData = Omit<Profile, 'defaults' | 'judge'> & {
+export type ProfileData = Omit<Profile, 'defaults' | 'judge' | 'gateway'> & {
   /** What evals get when they don't say otherwise: under groups and evals. */
   defaults?: ProfileDefaultsData
   /** Judge settings for this profile, the same as `defaults.judge`, which wins field by field. */
   judge?: ConfigJudgeData
+  /** Replaces the config's `gateway` list for this profile's runs. */
+  gateway?: GatewayEntryData[]
 }
 
 /**
@@ -1594,7 +1922,7 @@ export type ProfileData = Omit<Profile, 'defaults' | 'judge'> & {
  */
 export type ReevalConfigData = Omit<
   ReevalConfig,
-  'environment' | 'judge' | 'profiles' | 'analysis'
+  'environment' | 'judge' | 'profiles' | 'analysis' | 'gateway'
 > & {
   /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
   environment?: EnvironmentData
@@ -1602,8 +1930,13 @@ export type ReevalConfigData = Omit<
   judge?: ConfigJudgeData
   /** Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. */
   profiles?: Record<string, ProfileData>
-  /** `reeval analyze`, compare questions without a model, and `agent`'s notes during a run. */
+  /** Insights during `reeval run`, `reeval analyze`, and compare questions without a model. */
   analysis?: AnalysisConfigData
+  /**
+   * The gateways model calls may go through, in the order you prefer them: each harness takes
+   * the first that can serve it. Default `[direct]`, each provider's own key.
+   */
+  gateway?: GatewayEntryData[]
 }
 
 /** What a `defineConfig` callback gets: the environment helpers plus the run's context. */
@@ -1629,6 +1962,8 @@ export type ResolvedProfile = {
   tags: string[]
   budget: Budget
   record?: RecordMode
+  /** The profile's own `gateway` list, which replaces the config's. */
+  gateway?: GatewayDescriptor[]
 }
 
 export type ResolvedConfig = {
@@ -1664,7 +1999,16 @@ export type ResolvedConfig = {
   defaultProfile: { ci?: string; local?: string }
   secrets: { unbrokered: 'warn' | 'error' }
   debug: { keep: number; traceBufferBytes: number }
-  analysis: AnalysisConfig & { maxInputTokens: number; maxOutputTokens: number }
+  analysis: AnalysisConfig & {
+    maxInputTokens: number
+    maxOutputTokens: number
+    insights: boolean
+    maxTokens: number
+  }
+  /** The `gateway` list, in preference order; `[direct()]` when the config sets none. */
+  gateway: GatewayDescriptor[]
+  /** Whether the config sets `gateway`, so the plan shows where each cell resolved. */
+  gatewaySet: boolean
 }
 
 export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped'
@@ -1714,7 +2058,29 @@ export type TurnRecord = Pick<
   | 'usage'
   | 'model'
   | 'unreported'
-> & { raw?: unknown[] }
+> & {
+  raw?: unknown[]
+  /** Each stdio MCP server start during the turn; see the run record's `turns[].mcpStartup`. */
+  mcpStartup?: McpStartup[]
+}
+
+/**
+ * One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start order), timed by
+ * reeval's MCP timer, which every stdio server runs through. An agent CLI that runs a process per
+ * turn (Antigravity, pi, Codex) starts its servers on every turn; one that keeps a session starts
+ * them once, on the first. A server that doesn't answer within 60s fails the attempt as an infra
+ * error naming it; one whose client closes it first doesn't. `mcpStartup` is absent when the
+ * environment has no stdio MCP server, or the sandbox has no `node` to run the timer.
+ */
+export type McpStartup = {
+  /** The server's name in the environment's `mcp`. */
+  server: string
+  /**
+   * Milliseconds from spawning the server to its answer to the client's `initialize`; null when it
+   * never answered (it exited first, timed out, or its client closed it first).
+   */
+  ms: number | null
+}
 
 /** Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` reading changes. */
 export type PhaseTimings = {
@@ -1736,11 +2102,41 @@ export type CellRole = 'control' | 'variant'
 export type Cell = {
   key: string
   harness: string
+  /** The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix). */
   environment: string
   sandbox: string
   role: CellRole
   /** The variant's name, for variant cells. */
   variant?: string
+}
+
+/** A plugin as an attempt placed it. */
+export type PluginRecord = {
+  /** The manifest's `name`. */
+  name: string
+  /** Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`; for a marketplace entry, the entry's own source. */
+  source: string
+  /**
+   * The marketplace it was listed in, with its `marketplace.json` name, its source as written
+   * (`github:acme/agent-plugins#v3`, `npm:@acme/plugins@2.0.0`) and the commit a git one resolved
+   * to (null for npm); null when the plugin was named directly.
+   */
+  marketplace: { name: string; source: string; commit: string | null } | null
+  /** The commit a git source resolved to (the marketplace's, for an entry inside it); null for a local or npm one. */
+  commit: string | null
+  /** The hash of the files placed. */
+  sha256: string
+  /** The tag of the image layer its build ran in (`reeval-plugin:…`); null without a build. */
+  build: string | null
+  /** What it placed: skill, agent, command and MCP server names, hook events, and whether it had rules. */
+  parts: {
+    skills: string[]
+    agents: string[]
+    commands: string[]
+    hooks: string[]
+    mcp: string[]
+    rules: boolean
+  }
 }
 
 /** An environment as it was applied, without secret values. */
@@ -1761,8 +2157,13 @@ export type EnvironmentRecord = {
     placement: SkillPlacement
     /** Paths left out of the sandbox by `exclude` (directories end in `/`); `.git` isn't listed. */
     excluded: string[]
+    /** The plugin the skill came with; unset for a skill from `skills`. */
+    plugin?: string
   }>
+  /** Every MCP server, a plugin's as `<plugin>:<server>`. */
   mcp: string[]
+  /** The plugins placed, each with what it placed; in the digest. Unset when there are none. */
+  plugins?: PluginRecord[]
   files: Array<{ path: string; sha256: string }>
   vars: string[]
   secrets: string[]
@@ -1770,7 +2171,7 @@ export type EnvironmentRecord = {
   brokered: string[]
   /** Optional secrets whose host variable was unset, so they weren't injected. */
   unset: string[]
-  /** The policy the attempt ran under, from the options and the environment; in the digest unless `allow-all`. */
+  /** The policy the attempt ran under, from the options and the environment; in the digest unless `proxy`. */
   egress: EgressPolicy
   /**
    * The git repository the workspace started as: the repo as written (a local one relative to the
@@ -1790,15 +2191,22 @@ export type EnvironmentRecord = {
 
 /**
  * An attempt's network traffic. `allowed` is every host a restricted policy let through, its own
- * and the automatic ones; null under `allow-all`. `recorded` is false when the sandbox can't see
- * the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the
- * sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness
- * always tries (its CLI's telemetry, say), kept out of `blocked` so a real block stands out.
+ * and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox
+ * can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between
+ * the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the
+ * harness always tries (its CLI's telemetry, say), kept out of `blocked` so a real block stands
+ * out.
  */
 export type EgressRecord = {
   policy: EgressPolicy
   allowed: string[] | null
   recorded: boolean
+  /**
+   * True when traffic could leave around the gateway (`allow-all` in a container that kept its
+   * network): `contacted` lists only what went through the gateway, and anything that ignored the
+   * proxy (raw TCP and UDP, SSH, database drivers) went out unrecorded. Unset otherwise.
+   */
+  partial?: true
   contacted: Array<{
     host: string
     port: number
@@ -1816,7 +2224,7 @@ export type AttemptImage = {
   /** Content-addressed image id (`sha256:…`). */
   id: string
   agentCli: string | null
-  /** The harness image `install` was baked onto: `ref` itself without `install`. */
+  /** The harness image `install` and plugin builds were baked onto: `ref` itself without either. */
   base: string
   /** The `docker({ install })` commands, in order. */
   install: string[]
@@ -1902,6 +2310,8 @@ export type EvalRecord = {
   egress?: EgressRecord
   /** See `AttemptRecord.servedModels`. */
   servedModels?: string[] | null
+  /** See `AttemptRecord.askedModels`. */
+  askedModels?: string[]
   /**
    * PNGs from `c.capture()`. Bytes live in a sidecar next to this JSON
    * (`<stem>.artifacts/<name>.png`) so redact never touches them.
@@ -2011,8 +2421,8 @@ export type AttemptMeta = {
   label: string
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
-  /** The levels that set its sandbox and harness: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`. */
-  setBy: { sandbox: string; harness: string }
+  /** The levels that set its sandbox and harness: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`; with `pluginBuilds`, the environment its plugin builds come from (`environment review in evals/review.eval.ts`). */
+  setBy: { sandbox: string; harness: string; pluginBuilds?: string }
   /** How its cell's attempts decide the cell's outcome; `'none'` when they don't fail the run. */
   gate: CellGate
   /** Set on variant attempts whose compare has a `minLift`. */
@@ -2029,11 +2439,23 @@ export type AttemptMeta = {
   workspace?: GitWorkspace
   /** The paths its environment's `files` write, layered and sorted; unset when there are none. */
   files?: string[]
+  /** Its environment's plugins, layered: a local one's name and parts, else its source. */
+  plugins?: string[]
+  /** Its environment's plugins with a `build`, layered, which preflight builds into its image. */
+  pluginBuilds?: PluginSource[]
   plan: EvalPlan
   /** Why this attempt does not run, e.g. it already completed in a resumed run. */
   skip?: string
   /** Set when the eval is a case of a pooled `evaluate.each`. */
   family?: FamilyMeta
+  /** The gateway its harness resolved to; unset when no config, profile or pin names one. */
+  gateway?: ResolvedGateway
+}
+
+/** Where a cell's harness resolved in the `gateway` list, and the entries before it that couldn't serve it. */
+export type ResolvedGateway = {
+  name: GatewayName
+  skipped: Array<{ gateway: GatewayName; why: string }>
 }
 
 /** A case's place in its pooled `evaluate.each`. */

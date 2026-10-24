@@ -9,20 +9,28 @@ export {
   getCodexBootstrap,
 } from './codex-bootstrap.ts'
 export {
+  AI_GATEWAY_PROVIDER,
   buildCodexCommand,
   buildCodexConfig,
+  buildCodexMarketplace,
+  buildCodexPluginAdd,
   CODEX_CREDENTIAL_ENV,
   CODEX_ENDPOINTS,
   CODEX_HARNESS_ID,
   CODEX_HOME_DIR,
   CODEX_HOME_SKILLS_DIR,
   CODEX_INSTRUCTIONS_FILE,
+  CODEX_MARKETPLACE_FILE,
+  CODEX_PLUGIN_MARKETPLACE,
   CODEX_PROVIDER_ID,
   CODEX_QUIET_CONFIG,
   CODEX_WORKSPACE_SKILLS_DIR,
   type CodexHarnessSettings,
+  type CodexPlugin,
+  type CodexProvider,
   createCodex,
   OPENAI_API_URL,
+  OPENAI_PROVIDER,
 } from './codex-harness.ts'
 export { type CodexEvent, CodexStreamTranslator, type CodexUsage, toUsage } from './codex-stream.ts'
 export { CODEX_BUILTIN_TOOLS, type CodexBuiltinTools } from './codex-tools.ts'

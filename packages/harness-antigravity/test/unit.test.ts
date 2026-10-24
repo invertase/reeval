@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { HARNESS_V1_BUILTIN_TOOL_NAMES } from '@ai-sdk/harness'
 import {
@@ -7,7 +10,9 @@ import {
   ANTIGRAVITY_CLI_SHA256,
   ANTIGRAVITY_CLI_VERSION,
   antigravityEndpoints,
+  antigravityHooks,
   antigravityInstallScript,
+  antigravityPluginInstall,
   buildAntigravityCommand,
   createAntigravityRequestTransformations,
   getAntigravityBootstrap,
@@ -111,9 +116,9 @@ describe('tools', () => {
     )
     assert.deepEqual(common, {
       bash: 'run_command',
-      read: 'view_file',
-      write: 'write_to_file',
-      edit: 'replace_file_content',
+      read: 'read_file',
+      write: 'write_file',
+      edit: 'edit_file',
       grep: 'grep_search',
       glob: 'find_by_name',
       webSearch: 'search_web',
@@ -130,6 +135,22 @@ describe('tools', () => {
       input: { TargetFile: '/w/a.ts', file_path: '/w/a.ts' },
       dynamic: false,
     })
+    for (const [declared, reported, toolName] of [
+      ['view_file', 'read_file', 'read'],
+      ['write_to_file', 'write_file', 'write'],
+      ['replace_file_content', 'edit_file', 'edit'],
+    ]) {
+      const old = declared === 'view_file' ? { AbsolutePath: '/w/a' } : { TargetFile: '/w/a' }
+      for (const [name, params] of [
+        [declared, old],
+        [reported, { Path: '/w/a' }],
+      ] as const) {
+        const call = projectToolCall(name, params)
+        assert.equal(call.toolName, toolName, name)
+        assert.equal(call.input.file_path, '/w/a', name)
+        assert.equal(call.dynamic, false, name)
+      }
+    }
     assert.deepEqual(projectToolCall('grep_search', { Query: 'beta', SearchPath: '/w' }).input, {
       Query: 'beta',
       SearchPath: '/w',
@@ -155,6 +176,46 @@ describe('tools', () => {
       dynamic: false,
     })
     assert.equal(projectToolCall('manage_task', {}).dynamic, true)
+  })
+
+  test('an invoke_subagent tool step names each agent as a subagent step does (CLI 1.4.2)', () => {
+    const p = {
+      Subagents: [
+        { Model: 'inherit', Prompt: 'Say PONG.', Role: 'Probe', TypeName: 'probe-agent' },
+      ],
+    }
+    assert.deepEqual(projectToolCall('invoke_subagent', p), {
+      toolName: 'invoke_subagent',
+      nativeName: 'invoke_subagent',
+      input: { ...p, subagents: [{ agent: 'probe-agent', role: 'Probe', prompt: 'Say PONG.' }] },
+      dynamic: false,
+    })
+    const translated = { subagents: [{ agent: 'probe-agent' }] }
+    assert.deepEqual(projectToolCall('invoke_subagent', translated).input, translated)
+  })
+
+  test('an invoke_subagent tool step naming one agent names it as a subagent step does (CLI 1.4.3)', () => {
+    const p = { Role: 'Probe Subagent', TypeName: 'probe-agent' }
+    assert.deepEqual(projectToolCall('invoke_subagent', p).input, {
+      ...p,
+      subagents: [{ agent: 'probe-agent', role: 'Probe Subagent', prompt: undefined }],
+    })
+  })
+
+  test('manage_subagents is in the catalog (CLI 1.4.4)', () => {
+    assert.deepEqual(projectToolCall('manage_subagents', { Action: 'list' }), {
+      toolName: 'manage_subagents',
+      nativeName: 'manage_subagents',
+      input: { Action: 'list' },
+      dynamic: false,
+    })
+  })
+
+  test('the tools it waits on a subagent with are in the catalog (CLI 1.4.3)', () => {
+    const p = { DurationSeconds: 2, Prompt: 'Check if subagent has finished or replied.' }
+    assert.equal(projectToolCall('schedule', p).dynamic, false)
+    assert.equal(projectToolCall('wait', {}).dynamic, false)
+    assert.equal(projectToolCall('wait_5_seconds', {}).dynamic, false)
   })
 
   test('an MCP call is named mcp__<server>__<tool>, like the other harnesses (CLI 1.2.11)', () => {
@@ -232,6 +293,104 @@ describe('bootstrap', () => {
         files: ['.harness-bootstrap/antigravity/install.sh'],
         commands: [{ command: 'sh install.sh' }],
       },
+    )
+  })
+})
+
+describe('plugins', () => {
+  const root = '/home/reeval/.gemini/config/plugins/house'
+
+  test('hooks: a flat event takes its handlers, a tool event its groups, with the root filled in', () => {
+    const claude = {
+      hooks: {
+        SessionStart: [
+          { hooks: [{ type: 'command', command: `${'$'}{CLAUDE_PLUGIN_ROOT}/a.sh`, timeout: 5 }] },
+          { hooks: [{ command: 'b' }] },
+        ],
+        PreToolUse: [
+          { matcher: 'run_command', hooks: [{ type: 'command', command: 'check' }] },
+          { hooks: [{ type: 'command', command: 'every' }] },
+        ],
+      },
+    }
+    assert.deepEqual(antigravityHooks('house', claude, root), {
+      house: {
+        SessionStart: [
+          { type: 'command', command: `${root}/a.sh`, timeout: 5 },
+          { type: 'command', command: 'b' },
+        ],
+        PreToolUse: [
+          { matcher: 'run_command', hooks: [{ type: 'command', command: 'check' }] },
+          { matcher: '*', hooks: [{ type: 'command', command: 'every' }] },
+        ],
+      },
+    })
+  })
+
+  test("hooks: an event or hook type agy doesn't have is refused", () => {
+    assert.throws(
+      () => antigravityHooks('house', { hooks: { Notification: [] } }, root),
+      /The house plugin has Notification hooks, which the Antigravity CLI has no event for/,
+    )
+    assert.throws(
+      () =>
+        antigravityHooks(
+          'house',
+          { hooks: { Stop: [{ hooks: [{ type: 'prompt', prompt: 'x' }] }] } },
+          root,
+        ),
+      /runs only command hooks/,
+    )
+    assert.throws(() => antigravityHooks('house', {}, root), /has no hooks object/)
+  })
+
+  test('install: agy plugin install, then names on skills and always-on triggers on rules', {
+    skip: process.platform !== 'linux' && 'the script runs in the Linux sandbox (GNU sed)',
+  }, () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'agy-plugin-'))
+    const installed = join(tmp, 'home', 'house')
+    const files: Record<string, string> = {
+      'src/skills/plugin-cmd-ship/SKILL.md': 'Ship it.\n',
+      'src/skills/named/SKILL.md': '---\nname: named\ndescription: d\n---\nBody.\n',
+      'src/skills/fronted/SKILL.md': '---\ndescription: d\n---\nBody.\n',
+      'src/rules/plain.md': 'Be kind.\n',
+      'src/rules/always.mdc': '---\nalwaysApply: true\n---\nAlways.\n',
+      'src/rules/scoped.mdc': '---\nglobs: "*.ts"\n---\nTyped.\n',
+      'src/rules/set.md': '---\ntrigger: manual\n---\nManual.\n',
+    }
+    for (const [path, content] of Object.entries(files)) {
+      mkdirSync(dirname(join(tmp, path)), { recursive: true })
+      writeFileSync(join(tmp, path), content)
+    }
+    // A stand-in for agy: `plugin install <dir>` copies the plugin where agy would.
+    const agy = join(tmp, 'agy')
+    writeFileSync(agy, `#!/bin/sh\nmkdir -p "${dirname(installed)}" && cp -r "$3" "${installed}"\n`)
+    chmodSync(agy, 0o755)
+    execFileSync('sh', ['-c', antigravityPluginInstall(agy, join(tmp, 'src'), installed)])
+    const read = (path: string) => readFileSync(join(installed, path), 'utf8')
+    assert.equal(
+      read('skills/plugin-cmd-ship/SKILL.md'),
+      '---\nname: plugin-cmd-ship\n---\nShip it.\n',
+    )
+    assert.equal(read('skills/named/SKILL.md'), files['src/skills/named/SKILL.md'])
+    assert.equal(
+      read('skills/fronted/SKILL.md'),
+      '---\nname: fronted\ndescription: d\n---\nBody.\n',
+    )
+    assert.equal(read('rules/plain.md'), '---\ntrigger: always_on\n---\n\nBe kind.\n')
+    assert.equal(
+      read('rules/always.mdc'),
+      '---\ntrigger: always_on\nalwaysApply: true\n---\nAlways.\n',
+    )
+    assert.equal(read('rules/scoped.mdc'), files['src/rules/scoped.mdc'])
+    assert.equal(read('rules/set.md'), files['src/rules/set.md'])
+  })
+
+  test('install: a plugin agy refuses stops the script', () => {
+    assert.throws(() =>
+      execFileSync('sh', ['-c', antigravityPluginInstall('false', '/nowhere', '/nowhere/x')], {
+        stdio: 'ignore',
+      }),
     )
   })
 })

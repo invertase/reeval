@@ -12,9 +12,14 @@
 #   pi: the newest @earendil-works/pi-coding-agent from npm, in its bootstrap directory.
 #   Codex: the newest @openai/codex native Linux build from npm, checked against npm's sha512 as
 #     the pinned one is, linked into its bootstrap's bin/.
+#   fx: the newest vercel-labs/fx release's `fx`, checked against the sha256 file it publishes,
+#     in its private home (the relay and launcher beside it stay).
+#   Grok Build: the newest @xai-official/grok native Linux build from npm, checked against npm's
+#     sha512 as the pinned one is, unpacked into its private home.
 # REEVAL_DRIFT_ANTIGRAVITY_VERSION, REEVAL_DRIFT_CURSOR_SDK_VERSION, REEVAL_DRIFT_OPENCODE_VERSION,
-# REEVAL_DRIFT_GOOSE_VERSION (a tag, e.g. v1.51.0), REEVAL_DRIFT_PI_VERSION and REEVAL_DRIFT_CODEX_VERSION name
-# a version instead of the newest, e.g. to bisect a drift failure.
+# REEVAL_DRIFT_GOOSE_VERSION (a tag, e.g. v1.51.0), REEVAL_DRIFT_PI_VERSION, REEVAL_DRIFT_CODEX_VERSION,
+# REEVAL_DRIFT_FX_VERSION (a tag, e.g. v0.0.14) and REEVAL_DRIFT_GROK_VERSION name a version instead
+# of the newest, e.g. to bisect a drift failure.
 # Prints what it swapped, and appends a table to $GITHUB_STEP_SUMMARY when it's set.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -104,6 +109,45 @@ rm -rf package && tar -xzf codex.tgz && rm codex.tgz
 ln -sf \"\$PWD/package/vendor/\$triple/bin/codex\" bin/codex
 ln -sf \"\$PWD/package/vendor/\$triple/codex-path/rg\" bin/rg
 expect \"$latest\" \"\$(bin/codex --version)\""
+      ;;
+    fx)
+      tag=${REEVAL_DRIFT_FX_VERSION:-}
+      [ -n "$tag" ] || tag=$(curl -fsSL --retry 3 ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} \
+        https://api.github.com/repos/vercel-labs/fx/releases/latest |
+        node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).tag_name))')
+      latest=${tag#v}
+      bin=$bootstrap/fx/implementation/home/.local/bin
+      swap="set -eu
+case \"\$(uname -m)\" in x86_64|amd64) arch=x86_64 ;; aarch64|arm64) arch=aarch64 ;; esac
+cd /tmp
+url=https://github.com/vercel-labs/fx/releases/download/$tag/fx-linux-\$arch.tar.gz
+curl -fsSL --retry 3 -o fx-linux-\$arch.tar.gz \$url
+curl -fsSL --retry 3 -o fx.sha256 \$url.sha256
+echo \"\$(cut -d' ' -f1 fx.sha256)  fx-linux-\$arch.tar.gz\" | sha256sum -c -
+tar -xzf fx-linux-\$arch.tar.gz -C $bin fx
+rm fx-linux-\$arch.tar.gz fx.sha256
+expect \"$latest\" \"\$($bin/fx --version)\""
+      ;;
+    grok-build)
+      # Its label is `grok <version> (<build>)`.
+      version=$(echo "$pinned" | cut -d' ' -f2)
+      latest=${REEVAL_DRIFT_GROK_VERSION:-$(npm view @xai-official/grok version)}
+      new_label="grok $latest"
+      x64=$(npm view "@xai-official/grok-linux-x64@$latest" dist.integrity)
+      arm64=$(npm view "@xai-official/grok-linux-arm64@$latest" dist.integrity)
+      bin=$bootstrap/grok-build/implementation/home/.local/bin
+      swap="set -eu
+case \"\$(uname -m)\" in
+  x86_64|amd64) arch=x64 sri=$x64 ;;
+  aarch64|arm64) arch=arm64 sri=$arm64 ;;
+esac
+cd /tmp
+curl -fsSL --retry 3 -o grok.tgz https://registry.npmjs.org/@xai-official/grok-linux-\$arch/-/grok-linux-\$arch-$latest.tgz
+node -e 'const h = \"sha512-\" + require(\"crypto\").createHash(\"sha512\").update(require(\"fs\").readFileSync(\"grok.tgz\")).digest(\"base64\"); if (h !== process.argv[1]) process.exit(1)' \"\$sri\"
+rm -rf package && tar -xzf grok.tgz package/bin/grok.br && rm grok.tgz
+node -e 'const fs = require(\"fs\"); fs.writeFileSync(process.argv[1], require(\"zlib\").brotliDecompressSync(fs.readFileSync(\"package/bin/grok.br\")), { mode: 0o755 })' $bin/grok
+rm -rf package
+expect \"$latest\" \"\$($bin/grok --version)\""
       ;;
     *)
       rows+=("| $harness | $pinned | — | not swapped: runs on the pinned CLI |")

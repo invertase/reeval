@@ -1,6 +1,6 @@
 {
   "name": "@reeval/harness-pi",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "private": true,
   "description": "An AI SDK harness adapter for pi on a Gemini API key, running pi --mode json in the sandbox",
   "license": "Apache-2.0",
@@ -28,9 +28,9 @@
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
   },
   "dependencies": {
-    "@ai-sdk/harness": "1.0.154",
-    "@ai-sdk/provider": "4.0.29",
-    "@ai-sdk/provider-utils": "5.0.62",
+    "@ai-sdk/harness": "1.0.156",
+    "@ai-sdk/provider": "4.0.30",
+    "@ai-sdk/provider-utils": "5.0.63",
     "zod": "4.6.7"
   }
 }

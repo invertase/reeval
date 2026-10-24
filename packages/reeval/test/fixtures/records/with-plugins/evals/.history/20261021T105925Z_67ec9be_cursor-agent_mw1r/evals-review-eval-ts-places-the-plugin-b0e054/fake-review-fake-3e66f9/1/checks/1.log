@@ -1,0 +1,5 @@
+$ cat ~/.reeval/plugins/review/agents/reviewer.md
+exit 0
+--- stdout
+Review the diff.
+--- stderr

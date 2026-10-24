@@ -2,13 +2,15 @@ import http, { type IncomingHttpHeaders, type OutgoingHttpHeaders } from 'node:h
 import http2 from 'node:http2'
 import https from 'node:https'
 import net from 'node:net'
-import { type Duplex, type Readable, Transform } from 'node:stream'
+import { Duplex, type Readable, Transform } from 'node:stream'
 import tls from 'node:tls'
+import zlib from 'node:zlib'
 import { type CertificateAuthority, issueServerCertificate } from './cert.ts'
 import { link } from './mux.ts'
 import { createPolicyCheck, hostAllowed, type Lookup, type NetworkPolicy } from './policy.ts'
 import {
   applyTransformations,
+  credentialValues,
   decrypts,
   type EndpointMatch,
   onEndpoint,
@@ -28,6 +30,7 @@ import {
   unsubstituted,
 } from './substitution.ts'
 import { type DerivedTokens, tokeniseResponse } from './tokens.ts'
+import { webSocketScrubber } from './websocket.ts'
 
 export type EgressProxyOptions = {
   ca: CertificateAuthority
@@ -65,8 +68,9 @@ export type EgressProxyOptions = {
    */
   derivedTokens?: readonly DerivedTokens[]
   /**
-   * Requests whose response names the model that served them in its body (a `"model"` field, and
-   * a `"reasoning"` object's `"effort"`, as OpenAI's Responses API does): the gateway asks for it
+   * Requests whose response names the model that served them in its body (a `"model"` field, or
+   * the `"modelId"` of an AI SDK stream's `response-metadata` part, and a `"reasoning"` object's
+   * `"effort"`, as OpenAI's Responses API does): the gateway asks for it
    * uncompressed and records them as the request's `responseModel` and `responseEffort`.
    */
   modelResponses?: readonly EndpointMatch[]
@@ -191,6 +195,12 @@ function parseAuthority(authority: string, defaultPort: number): { host: string;
   return { host: (m?.[1] ?? authority).toLowerCase(), port: Number(m?.[2] ?? defaultPort) }
 }
 
+/** `host` or `host:port` for a Host header or URL, IPv6 in brackets. */
+const authorityOf = (host: string, port: number) => {
+  const name = net.isIPv6(host) ? `[${host}]` : host
+  return port === 443 ? name : `${name}:${port}`
+}
+
 const pathOnly = (path: string) => path.split('?')[0]
 
 function reply(socket: Duplex, status: number, reason: string) {
@@ -208,6 +218,21 @@ const counter = (count: (n: number) => void) =>
       done(null, chunk)
     },
   })
+
+/** The response encodings the gateway can decode to scrub a body. */
+const DECODERS: Record<string, () => Transform> = {
+  gzip: () => zlib.createGunzip(),
+  'x-gzip': () => zlib.createGunzip(),
+  deflate: () => zlib.createInflate(),
+  br: () => zlib.createBrotliDecompress(),
+}
+
+/** Text a credential could be echoed into, or no type at all. */
+const isText = (type: string) =>
+  !type.trim() ||
+  /^\s*(text\/|application\/(json|xml|javascript|x-www-form-urlencoded|x-ndjson|[\w.-]+\+(json|xml))\b)/i.test(
+    type,
+  )
 
 const plainHeaders = (headers: IncomingHttpHeaders | OutgoingHttpHeaders): Headers =>
   Object.fromEntries(
@@ -432,8 +457,10 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     })
   })
 
-  // Absolute-URL requests: plain HTTP through the proxy. Never given credentials or substitutions,
-  // so a placeholder sent over plain HTTP goes out as the placeholder.
+  // Absolute-URL requests. An `https://` one is sent upstream over TLS by the gateway, as a
+  // decrypted CONNECT request is, with the same policy, credentials and substitutions. A plain
+  // `http://` one is never given credentials or substitutions, so a placeholder sent over plain
+  // HTTP goes out as the placeholder.
   front.on('request', (req: http.IncomingMessage, res: http.ServerResponse) => {
     let url: URL
     try {
@@ -441,28 +468,38 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     } catch {
       return res.writeHead(400).end('reeval egress gateway: expected an absolute URL\n')
     }
-    if (url.protocol !== 'http:')
-      return res.writeHead(400).end('reeval egress gateway: http only\n')
-    const { host, port } = parseAuthority(url.host, 80)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:')
+      return res
+        .writeHead(400)
+        .end(`reeval egress gateway: expected an http:// or https:// URL, not ${url.protocol}\n`)
+    const secure = url.protocol === 'https:'
+    const { host, port } = parseAuthority(url.host, secure ? 443 : 80)
+    const shown = secure ? `https://${host}` : `http://${host}:${port}`
     const done = requestEvent(res, {
       method: req.method ?? 'GET',
-      url: `http://${host}:${port}${url.pathname}`,
+      url: `${shown}${url.pathname}`,
       host,
       port,
-      via: 'http',
+      via: secure ? 'decrypted' : 'http',
       requestHeaders: plainHeaders(req.headers),
     })
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
-        log(`reeval:egress ${req.method} http://${host}:${port} denied (${verdict.reason})`)
+        log(`reeval:egress ${req.method} ${shown} denied (${verdict.reason})`)
         block(req.socket, host, port, verdict.reason)
         done.refuse(verdict.reason)
         return res
           .writeHead(verdict.status)
           .end(`blocked by the reeval egress policy: ${verdict.reason}\n`)
       }
-      log(`reeval:egress ${req.method} http://${host}:${port}${url.pathname}`)
       contact(req.socket, host, port)
+      if (secure) {
+        // The request line's authority wins over Host (RFC 9112 §3.2.2): clients send the proxy's.
+        const headers = { ...req.headers, host: url.host }
+        const target = { host, port, address: verdict.address }
+        return void onDecrypted(target, req, res, url.pathname + url.search, headers, done)
+      }
+      log(`reeval:egress ${req.method} http://${host}:${port}${url.pathname}`)
       const upstream = http.request({
         host: verdict.address,
         port,
@@ -470,7 +507,12 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         path: url.pathname + url.search,
         headers: { ...endToEnd(req.headers), host: url.host },
       })
-      forwardHttp1(req.pipe(counter(done.sent)), res, upstream, [], undefined, done)
+      forwardHttp1(req.pipe(counter(done.sent)), res, upstream, {
+        own: [],
+        creds: [],
+        url: `${shown}${url.pathname}`,
+        t: done,
+      })
     })
   })
   front.on('upgrade', (_req: http.IncomingMessage, socket: Duplex) => {
@@ -518,6 +560,19 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     /** Whether its response names the model that served it. */
     readsModel?: boolean
   } {
+    // An absolute-form target names its own host, which the upstream honours over Host.
+    if (!path.startsWith('/') && !(method === 'OPTIONS' && path === '*')) {
+      const reason = `reeval egress gateway: expected a path in the request line on a connection to ${target.host}, not an absolute URL.`
+      log(`reeval:egress ${method} https://${target.host} refused (absolute-form target)`)
+      return {
+        headers: {},
+        path,
+        own: [],
+        names: [],
+        credentials: [],
+        refused: { status: 400, reason },
+      }
+    }
     const named = String(headers[':authority'] ?? headers.host ?? '')
     const asked = parseAuthority(named, target.port).host
     if (named && asked !== target.host) {
@@ -577,7 +632,12 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       headers: {},
     })
     // Uncompressed responses, so the scrubber, the tokeniser and the model reader see them.
-    if (scrubbedInBodies(own).length || exchange || readsModel) {
+    if (
+      scrubbedInBodies(own).length ||
+      credentialValues(rules, target.host).length ||
+      exchange ||
+      readsModel
+    ) {
       delete substituted.headers['accept-encoding']
     }
     const notes = [
@@ -616,24 +676,97 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     return counted.pipe(bodySubstituter(own))
   }
 
-  /** The response body as sent to the sandbox: real values put back as placeholders. */
   const scrubs = options.scrubResponses !== false
-  function responseBody(
-    up: Readable,
+
+  /**
+   * The harness credentials the rules set on `host`, shaped as substitutions that are never
+   * swapped in, only scrubbed from responses.
+   */
+  const credentialScrubs = (host: string): Substitution[] =>
+    credentialValues(rules, host).map(([value, shown]) => ({
+      name: 'credential',
+      placeholder: shown,
+      value,
+      hosts: [host],
+      in: [],
+    }))
+
+  /**
+   * How a response's body is scrubbed: the values to put back as placeholders, and the encoding
+   * to decode first. The harness's credentials are scrubbed from text and from any response that
+   * isn't a success, never from a binary stream such as gRPC, where holding back a byte that
+   * might start one could stall a bidirectional call. `refuse` when the body can't be read.
+   */
+  type ScrubPlan = { body: Substitution[]; decode?: string; refuse?: string }
+  function scrubPlan(
+    status: number,
+    headers: IncomingHttpHeaders,
     own: Substitution[],
-    t?: RequestTracker,
-    readsModel = false,
-  ): Readable | Transform {
-    if (readsModel && t) readModel(up, t)
-    const body = scrubbedInBodies(own).length && scrubs ? up.pipe(scrubber(own)) : up
-    return t ? body.pipe(counter(t.received)) : body
+    creds: Substitution[],
+  ): ScrubPlan {
+    if (!scrubs || status === 204 || status === 304) return { body: [] }
+    const type = String(headers['content-type'] ?? '')
+    const body = [...scrubbedInBodies(own), ...(status >= 300 || isText(type) ? creds : [])]
+    const encoding = String(headers['content-encoding'] ?? 'identity').toLowerCase()
+    if (!body.length || encoding === 'identity') return { body }
+    if (encoding in DECODERS) return { body, decode: encoding }
+    return { body, refuse: `the response is ${encoding}-encoded, so it can't be scrubbed` }
   }
 
-  const responseHeaders = (headers: IncomingHttpHeaders, own: Substitution[]) => {
+  /**
+   * The response body as sent to the sandbox: decoded if the plan says so, with real values put
+   * back as placeholders. An error anywhere upstream of it (a corrupt encoding) errors it.
+   */
+  function responseBody(
+    up: Readable,
+    plan: ScrubPlan,
+    t?: RequestTracker,
+    readsModel = false,
+  ): Readable {
+    if (readsModel && t) readModel(up, t)
+    const into = (from: Readable, to: Transform) => {
+      from.once('error', (error) => to.destroy(error))
+      return from.pipe(to)
+    }
+    let body = up
+    const decoder = plan.decode ? DECODERS[plan.decode] : undefined
+    if (decoder) body = into(body, decoder())
+    if (plan.body.length) body = into(body, scrubber(plan.body))
+    return t ? into(body, counter(t.received)) : body
+  }
+
+  /** Header (and trailer) values with every real value put back as its placeholder. */
+  const scrubbedHeaders = (headers: IncomingHttpHeaders, all: Substitution[]) => {
     const out = endToEnd(headers)
-    if (!own.length || !scrubs) return out
-    if (scrubbedInBodies(own).length) delete out['content-length']
-    return scrubHeaders(own, out as Record<string, string>) as OutgoingHttpHeaders
+    if (!all.length || !scrubs) return out
+    return scrubHeaders(all, out as Record<string, string>) as OutgoingHttpHeaders
+  }
+
+  const responseHeaders = (
+    headers: IncomingHttpHeaders,
+    own: Substitution[],
+    creds: Substitution[],
+    plan: ScrubPlan,
+  ) => {
+    const out = scrubbedHeaders(headers, [...own, ...creds])
+    if (plan.body.length) delete out['content-length']
+    if (plan.decode) delete out['content-encoding']
+    return out
+  }
+
+  /** Answers a response the gateway won't pass on with a 502 saying why. */
+  function refuseResponse(
+    res: Response,
+    up: Readable,
+    url: string,
+    why: string,
+    t?: RequestTracker,
+  ) {
+    log(`reeval:egress ${url} response refused (${why})`)
+    up.resume()
+    t?.set({ status: 502, reason: why })
+    if (res.headersSent) return res.destroy()
+    res.writeHead(502, { 'content-type': 'text/plain' }).end(`reeval egress gateway: ${why}\n`)
   }
 
   /**
@@ -643,7 +776,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const MODEL_WINDOW = 512 * 1024
 
   /**
-   * Records the first `"model"` value in the response body, and the `"effort"` of the
+   * Records the first `"model"` or `"modelId"` value in the response body, and the `"effort"` of the
    * `"reasoning"` object after it, reading alongside its flow. Inside a JSON string the quotes are
    * escaped, so text that merely mentions them doesn't match.
    */
@@ -651,7 +784,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     let seen = ''
     const onData = (chunk: Buffer) => {
       seen += chunk.toString('utf8')
-      const model = /"model"\s*:\s*"([^"\\]{1,200})"/.exec(seen)
+      const model = /"model(?:Id)?"\s*:\s*"([^"\\]{1,200})"/.exec(seen)
       const effort = model
         ? /"reasoning"\s*:\s*\{[^{}]*?"effort"\s*:\s*"(\w{1,40})"/.exec(seen.slice(model.index))
         : null
@@ -677,6 +810,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     up: Readable,
     res: Response,
     own: Substitution[],
+    creds: Substitution[],
     t?: RequestTracker,
   ) {
     const chunks: Buffer[] = []
@@ -690,17 +824,23 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
 `)
       } else res.destroy()
     }
-    const scrubbed = responseBody(up, own, t)
+    const plan = scrubPlan(status, headers, own, creds)
+    if (plan.refuse) {
+      up.resume()
+      return refuse(plan.refuse)
+    }
+    const scrubbed = responseBody(up, plan, t)
     scrubbed.on('data', (chunk: Buffer) => {
       size += chunk.length
       if (size <= EXCHANGE_LIMIT) chunks.push(chunk)
     })
-    up.once('error', (error) => refuse(error.message))
+    scrubbed.once('error', (error) => refuse(error.message))
     scrubbed.once('end', () => {
       const body = Buffer.concat(chunks)
-      const out = responseHeaders(headers, own)
+      const out = responseHeaders(headers, own, creds, plan)
       t?.set({ responseHeaders: plainHeaders(out) })
       if (status < 200 || status >= 300) return res.writeHead(status, out).end(body)
+      // Fails closed even when decoded: the tokeniser reads only what the upstream sent as is.
       const encoding = String(headers['content-encoding'] ?? 'identity')
       if (encoding !== 'identity') return refuse(`the response is ${encoding}-encoded`)
       if (size > EXCHANGE_LIMIT) return refuse(`the response is over ${EXCHANGE_LIMIT} bytes`)
@@ -724,22 +864,27 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     target: Target,
     req: http.IncomingMessage | http2.Http2ServerRequest,
     res: Response,
+    asked = req.url ?? '/',
+    sent: IncomingHttpHeaders = req.headers,
+    tracker?: RequestTracker,
   ) {
     const method = req.method ?? 'GET'
-    const url = `https://${target.host}${pathOnly(req.url ?? '/')}`
-    const t = requestEvent(res, {
-      method,
-      url,
-      host: target.host,
-      port: target.port,
-      via: 'decrypted',
-      requestHeaders: plainHeaders(req.headers),
-    })
+    const url = `https://${target.host}${pathOnly(asked)}`
+    const t =
+      tracker ??
+      requestEvent(res, {
+        method,
+        url,
+        host: target.host,
+        port: target.port,
+        via: 'decrypted',
+        requestHeaders: plainHeaders(req.headers),
+      })
     const { headers, path, own, names, credentials, refused, exchange, readsModel } = transformed(
       target,
       method,
-      req.url ?? '/',
-      req.headers,
+      asked,
+      sent,
       req.httpVersion,
     )
     t.set({ substituted: names, credentials })
@@ -753,7 +898,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     delete headers.upgrade
     delete headers.connection
     const body = requestBody(req as Readable, headers, own, t)
-    const authority = target.port === 443 ? target.host : `${target.host}:${target.port}`
+    const authority = authorityOf(target.host, target.port)
     const session = req.httpVersionMajor === 2 ? await upstreamSession(target) : null
     if (!session) {
       const upstream = https.request({
@@ -766,7 +911,14 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         agent,
         ca,
       })
-      return forwardHttp1(body, res, upstream, own, exchange && { exchange, url }, t, readsModel)
+      return forwardHttp1(body, res, upstream, {
+        own,
+        creds: credentialScrubs(target.host),
+        url,
+        ...(exchange ? { exchange } : {}),
+        ...(t ? { t } : {}),
+        readsModel: !!readsModel,
+      })
     }
     const stream = session.request({
       ...headers,
@@ -780,43 +932,73 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       else res.destroy()
     }
     stream.once('error', fail)
+    const creds = credentialScrubs(target.host)
     stream.once('response', (h) => {
-      if (exchange) return tokenised(exchange, url, Number(h[':status']), h, stream, res, own, t)
-      const out = responseHeaders(h, own)
-      t.set({ responseHeaders: plainHeaders(out) })
-      res.writeHead(Number(h[':status']), out)
+      const status = Number(h[':status'])
+      if (exchange) return tokenised(exchange, url, status, h, stream, res, own, creds, t)
+      if (!respond(status, h, stream, res, own, creds, url, t, readsModel)) return
       stream.once('trailers', (trailers) =>
-        res.addTrailers(responseHeaders(trailers, own) as Record<string, string>),
+        res.addTrailers(scrubbedHeaders(trailers, [...own, ...creds]) as Record<string, string>),
       )
-      responseBody(stream, own, t, readsModel).pipe(res)
     })
     body.pipe(stream)
     req.once('aborted', () => stream.close(http2.constants.NGHTTP2_CANCEL))
+  }
+
+  /**
+   * Sends an upstream response on to the sandbox, scrubbed. False when it was refused instead,
+   * already answered with a 502.
+   */
+  function respond(
+    status: number,
+    headers: IncomingHttpHeaders,
+    up: Readable,
+    res: Response,
+    own: Substitution[],
+    creds: Substitution[],
+    url: string,
+    t?: RequestTracker,
+    readsModel = false,
+  ): boolean {
+    const plan = scrubPlan(status, headers, own, creds)
+    if (plan.refuse) {
+      refuseResponse(res, up, url, plan.refuse, t)
+      return false
+    }
+    const out = responseHeaders(headers, own, creds, plan)
+    t?.set({ responseHeaders: plainHeaders(out) })
+    res.writeHead(status, out)
+    responseBody(up, plan, t, readsModel)
+      .once('error', () => res.destroy())
+      .pipe(res)
+    return true
   }
 
   function forwardHttp1(
     req: Readable,
     res: Response,
     upstream: http.ClientRequest,
-    own: Substitution[] = [],
-    tokenise?: { exchange: DerivedTokens; url: string },
-    t?: RequestTracker,
-    readsModel = false,
+    to: {
+      own: Substitution[]
+      creds: Substitution[]
+      url: string
+      exchange?: DerivedTokens
+      t?: RequestTracker
+      readsModel?: boolean
+    },
   ) {
+    const { own, creds, url, exchange, t } = to
     upstream.once('response', (up) => {
-      if (tokenise) {
-        const { exchange, url } = tokenise
-        return tokenised(exchange, url, up.statusCode ?? 502, up.headers, up, res, own, t)
-      }
-      const out = responseHeaders(up.headers, own)
-      t?.set({ responseHeaders: plainHeaders(out) })
-      res.writeHead(up.statusCode ?? 502, out)
+      const status = up.statusCode ?? 502
+      if (exchange) return tokenised(exchange, url, status, up.headers, up, res, own, creds, t)
+      if (!respond(status, up.headers, up, res, own, creds, url, t, to.readsModel)) return
       up.once('end', () => {
         if (Object.keys(up.trailers).length) {
-          res.addTrailers(responseHeaders(up.trailers, own) as Record<string, string>)
+          res.addTrailers(
+            scrubbedHeaders(up.trailers, [...own, ...creds]) as Record<string, string>,
+          )
         }
       })
-      responseBody(up, own, t, readsModel).pipe(res)
     })
     upstream.once('error', (error) => {
       t?.set({ status: 502, reason: error.message })
@@ -836,7 +1018,10 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       req.headers,
       req.httpVersion,
     )
-    const scrubbed = (value: string) => (scrubs ? scrubValue(own, value) : value)
+    const all = scrubs ? [...own, ...credentialScrubs(target.host)] : []
+    const scrubbed = (value: string) => scrubValue(all, value)
+    // Uncompressed frames, so the scrubber can read them.
+    if (all.length) delete headers['sec-websocket-extensions']
     const upgraded = (fields: Partial<EgressRequestEvent>) =>
       emit({
         type: 'request',
@@ -868,16 +1053,24 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       ca,
     })
     upstream.once('upgrade', (up, upSocket: Duplex, upHead: Buffer) => {
-      const out = scrubs ? scrubHeaders(own, up.headers) : up.headers
+      const out = scrubHeaders(all, up.headers)
       upgraded({ status: up.statusCode, responseHeaders: plainHeaders(out) })
       const lines = [`HTTP/1.1 ${up.statusCode} ${up.statusMessage}`]
       for (let i = 0; i < up.rawHeaders.length; i += 2) {
         lines.push(`${up.rawHeaders[i]}: ${scrubbed(up.rawHeaders[i + 1] ?? '')}`)
       }
       socket.write(`${lines.join('\r\n')}\r\n\r\n`)
-      if (upHead.length) socket.write(upHead)
       if (head.length) upSocket.write(head)
-      link(socket, track(upSocket))
+      track(upSocket)
+      if (!all.length) {
+        if (upHead.length) socket.write(upHead)
+        return link(socket, upSocket)
+      }
+      const frames = webSocketScrubber(all)
+      if (upHead.length) frames.write(upHead)
+      upSocket.pipe(frames)
+      upSocket.once('error', (error) => frames.destroy(error))
+      link(socket, Duplex.from({ readable: frames, writable: upSocket }))
     })
     upstream.once('response', (up) => {
       reply(socket, up.statusCode ?? 502, `upstream refused the upgrade (${up.statusCode})`)
@@ -906,7 +1099,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
           socket.destroy()
           return resolve(null)
         }
-        const session = http2.connect(`https://${key}`, { createConnection: () => socket })
+        const session = http2.connect(`https://${authorityOf(target.host, target.port)}`, {
+          createConnection: () => socket,
+        })
         session.on('error', () => {})
         session.once('close', () => sessions.get(key) === session && sessions.delete(key))
         session.once('goaway', () => sessions.get(key) === session && sessions.delete(key))

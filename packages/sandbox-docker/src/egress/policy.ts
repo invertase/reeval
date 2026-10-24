@@ -36,6 +36,10 @@ export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {
   pi: ['generativelanguage.googleapis.com'],
   // The Responses API only, with analytics and the plugin sync off.
   codex: ['api.openai.com'],
+  // AI Gateway, for a gateway model id; a bare OpenAI id gets OpenAI's API instead.
+  fx: ['ai-gateway.vercel.sh'],
+  // The xAI API only, with telemetry, feedback, remote config and the auto-updater off.
+  'grok-build': ['api.x.ai'],
 }
 
 /** The package registries and GitHub, for a restricted policy that still installs. */
@@ -104,13 +108,45 @@ const normalise = (host: string) =>
  * mustn't resolve into them, or anyone who can add a DNS record under the pattern's domain
  * reaches the worker's LAN.
  */
-const PRIVATE = blockList([
+const PRIVATE_RANGES = [
   '10.0.0.0/8',
   '100.64.0.0/10',
   '172.16.0.0/12',
   '192.168.0.0/16',
   'fc00::/7',
+]
+const PRIVATE = blockList(PRIVATE_RANGES)
+
+/**
+ * Reachable only with an `allowedCIDRs` entry that covers them, so never under allow-all: the
+ * gateway connects from the worker, so these would reach its LAN, the Docker host's bridge, cloud
+ * metadata on a unique-local or CGNAT address (AWS's `fd00:ec2::254`, Alibaba's
+ * `100.100.100.200`), multicast and broadcast. NAT64 addresses are checked by their embedded
+ * IPv4 address as well.
+ */
+const RESERVED = blockList([
+  ...PRIVATE_RANGES,
+  '224.0.0.0/4',
+  '255.255.255.255/32',
+  'ff00::/8',
+  '64:ff9b::/96',
 ])
+
+const NAT64 = blockList(['64:ff9b::/96'])
+
+/** The IPv4 address in the last 32 bits of an IPv6 address, as `a.b.c.d`. */
+function embeddedIPv4(address: string): string {
+  const tail = address.slice(address.lastIndexOf(':') + 1)
+  if (isIP(tail) === 4) return tail
+  const groups = address.split(':')
+  const low = Number.parseInt(groups.at(-1) || '0', 16)
+  const high = groups.length > 1 ? Number.parseInt(groups.at(-2) || '0', 16) : 0
+  return [high >> 8, high & 255, low >> 8, low & 255].join('.')
+}
+
+/** The address, and for a NAT64 address the IPv4 address it reaches too. */
+const reaches = (address: string) =>
+  isIP(address) === 6 && inList(NAT64, address) ? [address, embeddedIPv4(address)] : [address]
 
 /** How `host` matches: listed as it is, only by a `*.` pattern (never an IP address), or not. */
 function hostMatch(patterns: readonly string[], host: string): 'exact' | 'wildcard' | undefined {
@@ -147,9 +183,10 @@ export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions 
     if (policy.mode === 'deny-all') {
       return { allowed: false, status: 403, reason: 'the policy denies all egress' }
     }
-    // Refused before any DNS lookup, so an unlisted host is never resolved on the agent's behalf.
+    // Refused before any DNS lookup, so an unlisted name is never resolved on the agent's behalf:
+    // the lookup alone would carry data out. Allowed CIDRs match IP addresses only.
     const listed = hostMatch(custom?.allowedHosts ?? [], host)
-    if (custom && !listed && !custom.allowedCIDRs?.length) {
+    if (custom && !listed && !(custom.allowedCIDRs?.length && isIP(host))) {
       return { allowed: false, status: 403, reason: `${host} isn't in the allowlist` }
     }
     let addresses: string[]
@@ -164,11 +201,23 @@ export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions 
     }
     const first = addresses[0]
     if (!first) return { allowed: false, status: 502, reason: `${host} has no addresses` }
-    if (addresses.some((a) => inList(always, a))) {
+    const reached = addresses.flatMap(reaches)
+    if (reached.some((a) => inList(always, a))) {
       return { allowed: false, status: 403, reason: `${host} is a loopback or link-local address` }
     }
+    const reserved = reached.find((a) => inList(RESERVED, a) && !inList(allowedCidrs, a))
+    if (reserved) {
+      const which = reserved === host ? host : `${host} (${reserved})`
+      return {
+        allowed: false,
+        status: 403,
+        reason: custom
+          ? `${which} is a private or reserved address; list the address itself in the allowlist to reach it`
+          : `${which} is a private or reserved address, which allow-all doesn't reach; list the address in an allowlist to reach it`,
+      }
+    }
     if (!custom) return { allowed: true, address: first }
-    if (addresses.some((a) => inList(deniedCidrs, a))) {
+    if (reached.some((a) => inList(deniedCidrs, a))) {
       return { allowed: false, status: 403, reason: `${host} is in a denied range` }
     }
     if (listed === 'wildcard' && addresses.some((a) => inList(PRIVATE, a))) {

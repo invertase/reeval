@@ -6,18 +6,22 @@ import {
   DEFAULT_LIMITS,
   docker,
   type EgressEvent,
+  EgressUnavailableError,
+  ENGINES,
+  type Engine,
+  engineSpec,
   imageInfo,
   LABEL,
-  type NetworkPolicy,
   SANDBOX_HOME,
   SANDBOX_ROOT,
+  SANDBOX_STATE,
   type Substitution,
   WORKSPACE_DIR,
 } from '@reeval/sandbox-docker'
 import { type AttemptDebug, attemptDebug } from '../debug/attempt.ts'
 import '../debug/docker.ts'
-import { allowedHosts, egressLabel } from '../egress.ts'
-import type { DockerSandboxDescriptor, PlannedEgress } from '../types.ts'
+import { egressLabel, gatewayPolicy, isDirect } from '../egress.ts'
+import type { DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import { InfraError, type Sandbox } from './types.ts'
 
@@ -25,23 +29,23 @@ import { InfraError, type Sandbox } from './types.ts'
  * Removes every container still labelled with the run: a worker killed by the signal that
  * cancelled the run (SIGTERM to the process group) never destroys its sandboxes.
  */
-export async function removeRunContainers(runId: string): Promise<void> {
-  const r = await docker(['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`]).catch(() => null)
-  const ids = r?.exitCode === 0 ? r.stdout.toString('utf8').split(/\s+/).filter(Boolean) : []
-  if (ids.length) await docker(['rm', '-f', ...ids]).catch(() => {})
+export async function removeRunContainers(
+  runId: string,
+  engines: readonly Engine[] = ['docker'],
+): Promise<void> {
+  for (const engine of engines) {
+    const r = await docker(['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {
+      engine,
+    }).catch(() => null)
+    const ids = r?.exitCode === 0 ? r.stdout.toString('utf8').split(/\s+/).filter(Boolean) : []
+    if (ids.length) await docker([...ENGINES[engine].rmForce, ...ids], { engine }).catch(() => {})
+  }
 }
 
 /** A Docker sandbox also exposes its harness session, so the harness drives the same container. */
 export type DockerSandbox = Sandbox & { readonly network: HarnessV1NetworkSandboxSession }
 
 export const isDockerSandbox = (s: Sandbox): s is DockerSandbox => 'network' in s
-
-/** `deny-all` when a restricted policy allows no host at all, else an allowlist. */
-function networkPolicy(egress: PlannedEgress): NetworkPolicy {
-  const hosts = allowedHosts(egress)
-  if (hosts === null) return { mode: 'allow-all' }
-  return hosts.length ? { mode: 'custom', allowedHosts: hosts } : { mode: 'deny-all' }
-}
 
 /**
  * The gateway's events as debug lines: one per request, with DNS decisions and headers traced.
@@ -84,34 +88,52 @@ export async function createDockerSandbox(
   options: SandboxOptions,
 ): Promise<DockerSandbox> {
   const image = options.image ?? descriptor.image ?? DEFAULT_IMAGE
-  if (!(await imageInfo(image))) {
-    throw new InfraError(`Docker image ${image} not found. Build it with: reeval image build`)
+  const engine = descriptor.engine ?? 'docker'
+  const spec = engineSpec(engine)
+  if (!(await imageInfo(image, engine))) {
+    throw new InfraError(`${spec.name} image ${image} not found. Build it with: reeval image build`)
   }
   const { brokering, substitutions = [] } = options
   const brokered = [
     ...new Set([...(brokering ? [brokering.credential] : []), ...substitutions.map((s) => s.name)]),
   ]
   const debug = attemptDebug()
-  const policy = networkPolicy(options.egress)
+  const policy = gatewayPolicy(options.egress)
   const served: string[] = []
+  const asked: string[] = []
+  const brokeredStatuses: number[] = []
   const servedModel = brokering?.servedModel
+  const askedModel = brokering?.askedModel
   const logEvent = gatewayEvents(debug, brokering?.credential, options.expectedBlocked ?? [])
   const onEvent = (event: EgressEvent) => {
     logEvent?.(event)
-    if (!servedModel || event.type === 'dns' || event.credentials.length === 0) return
-    const model = servedModel({
+    if (event.type === 'dns' || event.credentials.length === 0) return
+    if (event.status !== undefined) brokeredStatuses.push(event.status)
+    // A refused or failed call was served by nothing, whatever it names.
+    if (event.status !== undefined && (event.status < 200 || event.status > 299)) return
+    const request = {
       method: event.method,
       host: event.host,
       path: URL.canParse(event.url) ? new URL(event.url).pathname : event.url,
+      ...(event.status !== undefined ? { status: event.status } : {}),
       ...(event.responseModel ? { responseModel: event.responseModel } : {}),
       ...(event.responseEffort ? { responseEffort: event.responseEffort } : {}),
-    })
+      ...(event.requestHeaders ? { headers: event.requestHeaders } : {}),
+    }
+    const model = servedModel?.(request)
     if (model) served.push(model)
+    const wanted = askedModel?.(request)
+    if (wanted) asked.push(wanted)
   }
   const started = performance.now()
   const { root, capabilities, memory, swap, cpus, pids } = descriptor
+  const needsNode = (reason: string) =>
+    brokered.length > 0
+      ? `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with ${spec.fn}({ from: '${image}' }) or ${spec.fn}({ dockerfile }), and reeval adds it.`
+      : `Can't enforce egress ${egressLabel(options.egress) || 'proxy'}: the egress gateway, the sandbox's only way out, could not start (${reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with ${spec.fn}({ from: '${image}' }) or ${spec.fn}({ dockerfile }), and reeval adds it.`
   const network = await createDockerSession({
     image,
+    engine,
     env: options.env,
     ...(root !== undefined && { root }),
     ...(capabilities && { capabilities }),
@@ -124,9 +146,10 @@ export async function createDockerSandbox(
     labels: { [LABEL.run]: options.runId },
     lifetimeMs: options.timeoutMs,
     abortSignal: options.signal,
-    // Always, so every attempt's egress is recorded; a restricted policy can't start without it.
+    // Always, so every attempt's egress is recorded; a detached container can't start without it.
     egress: {
       policy,
+      direct: isDirect(options.egress.policy),
       log: process.env.REEVAL_DEBUG ? (line) => console.error(line) : undefined,
       onEvent,
       onUnsubstituted: ({ name, where, in: places, method, url }) =>
@@ -143,6 +166,8 @@ export async function createDockerSandbox(
           ),
       }),
     },
+  }).catch((error: unknown) => {
+    throw error instanceof EgressUnavailableError ? new InfraError(needsNode(error.reason)) : error
   })
   debug?.log(
     'container',
@@ -150,7 +175,7 @@ export async function createDockerSandbox(
   )
   debug?.log(
     'container',
-    `network policy ${egressLabel(options.egress) || 'allow-all'}${policy.mode === 'allow-all' ? ' · keeps its Docker network' : ' · detached from every Docker network, the gateway is its only way out'}`,
+    `network policy ${egressLabel(options.egress) || 'proxy'}${isDirect(options.egress.policy) ? ` · keeps its ${spec.name} network, so traffic that ignores the proxy goes out directly, unrecorded` : ` · detached from every ${spec.name} network, the gateway is its only way out`}`,
   )
   debug?.log(
     'container',
@@ -161,19 +186,24 @@ export async function createDockerSandbox(
   // Brokered values never enter the container: with no gateway to swap them in, the attempt can't start.
   if (network.egress?.active === false && brokered.length > 0) {
     await Promise.resolve(network.destroy()).catch(() => {})
-    throw new InfraError(
-      `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${network.egress.reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker({ from: '${image}' }) or docker({ dockerfile }), and reeval adds it.`,
-    )
+    throw new InfraError(needsNode(network.egress.reason))
   }
   const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)
   await network.run({ command: `mkdir -p ${workdir}` })
   const home = (await network.run({ command: 'printf %s "$HOME"' })).stdout || SANDBOX_HOME
   const resolve = (path: string) =>
     path.startsWith('~/') ? posix.join(home, path.slice(2)) : posix.resolve(workdir, path)
+  // A root container's agent is root too, and could swap the binaries a privileged exec runs.
+  const execOwn: Sandbox['execOwn'] = async (command, opts) =>
+    root
+      ? network.run({ command, workingDirectory: SANDBOX_STATE, abortSignal: opts?.signal })
+      : network.runPrivileged({ command, abortSignal: opts?.signal })
 
   return {
     workdir,
     home,
+    stateDir: SANDBOX_STATE,
+    execOwn,
     network,
     exec: async (command, opts) =>
       network.run({
@@ -188,6 +218,8 @@ export async function createDockerSandbox(
       servedModels: () => [...new Set(served)],
       servedRequests: () => [...served],
     }),
+    ...(askedModel && { askedModels: () => [...new Set(asked)] }),
+    ...(brokering && { brokeredStatuses: () => [...brokeredStatuses] }),
     ...(network.setSubstitutions && {
       setSubstitutions: (subs: readonly Substitution[]) =>
         network.setSubstitutions?.(subs) ?? Promise.resolve(),

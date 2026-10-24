@@ -9,7 +9,32 @@ type Pending = { ms: number; part: StampedPart['part'] }
 /** `at` places a call recovered after the turn where it happened, not where it was reported. */
 type Timing = { start?: number; end?: number; at?: number }
 
+/** Shell-like tools at or above this duration get `stalled: true` on their transcript event. */
+export const STALL_TOOL_MS = 120_000
+
+const SHELL_TOOLS = new Set([
+  'bash',
+  'shell',
+  'Shell',
+  'run_terminal_cmd',
+  'execute_command',
+  'terminal',
+])
+
 const str = (value: unknown) => (typeof value === 'string' ? value : '')
+
+/** Wall time until the result part arrived; Cursor can report `completed_at_ms` before the shell returns. */
+function toolDurationMs(start: number, call: Pending, endMs: number, t?: Timing): number {
+  const wall = endMs - start
+  if (t?.end === undefined) return endMs - call.ms
+  return Math.max(t.end - start, wall)
+}
+
+function stallFlags(tool: string, durationMs: number | null): { stalled?: boolean } {
+  if (durationMs === null || durationMs < STALL_TOOL_MS) return {}
+  if (SHELL_TOOLS.has(tool) || tool === 'edit') return { stalled: true }
+  return {}
+}
 const record = (value: unknown): Record<string, unknown> => (isObjectLike(value) ? value : {})
 
 /** The harness's synthetic "fileChange" twin of every edit, which always says "modify". */
@@ -229,6 +254,15 @@ function toolName(part: StampedPart['part']): string {
   return str(part.toolName)
 }
 
+/** The tool's input: a Cursor MCP call's own `args`, without the wrapper naming its server and tool. */
+function toolInput(part: StampedPart['part']): unknown {
+  const input = record(part.input)
+  if (typeof input.providerIdentifier === 'string' && typeof input.toolName === 'string') {
+    return input.args ?? {}
+  }
+  return part.input
+}
+
 /**
  * Turns an AI SDK harness stream into reeval transcript events: text and reasoning blocks joined,
  * each tool call merged with its result, edits normalised to `file-edit`, web tools given their
@@ -266,17 +300,17 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
     let call = reported
     const t = timing.get(id)
     const start = t?.start ?? call.ms
-    const durationMs = t?.end !== undefined ? t.end - start : end.ms - call.ms
+    const durationMs = toolDurationMs(start, call, end.ms, t)
     call = t?.at === undefined ? call : { ...call, ms: t.at }
     const input = record(call.part.input)
     const name = toolName(call.part)
     const raw = failed ? errorText(end.part.error) : end.part.output
     // Antigravity runs commands in a PTY, so their output has CRLF line endings.
     const output = name === 'bash' && typeof raw === 'string' ? raw.replace(/\r\n/g, '\n') : raw
-    const base = { ...stamp(call.ms), durationMs }
+    const base = { ...stamp(call.ms), durationMs, ...stallFlags(name, durationMs) }
     if ((name === 'edit' || name === 'write' || name === 'delete') && !failed) {
       for (const edit of fileEdits(id, output, name === 'delete', input)) {
-        out.push({ at: call.ms, event: { ...base, ...edit } })
+        out.push({ at: call.ms, event: { ...base, ...edit, ...stallFlags(name, durationMs) } })
       }
       return
     }
@@ -319,7 +353,7 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
         type: 'tool',
         toolCallId: id,
         tool: name,
-        input: call.part.input,
+        input: toolInput(call.part),
         output,
         ok: !failed,
       },
@@ -387,11 +421,20 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
         break
     }
   }
+  const streamEndMs = parts.at(-1)?.ms
   // Calls still open when the turn ended (aborted, or the harness never reported a result).
   for (const [id, call] of pending) {
     const name = toolName(call.part)
     const input = record(call.part.input)
-    const base = { ...stamp(call.ms), durationMs: null }
+    const t = timing.get(id)
+    const start = t?.start ?? call.ms
+    const durationMs =
+      streamEndMs === undefined ? null : toolDurationMs(start, call, streamEndMs, t)
+    const base = {
+      ...stamp(call.ms),
+      durationMs,
+      ...stallFlags(name, durationMs),
+    }
     if (name === 'webSearch') {
       out.push({
         at: call.ms,
@@ -426,7 +469,7 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
         type: 'tool',
         toolCallId: id,
         tool: name,
-        input: call.part.input,
+        input: toolInput(call.part),
         output: null,
         ok: false,
       },

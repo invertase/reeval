@@ -1,0 +1,48 @@
+# Keeps the repo's Actions cache (10 GB, least-recently-used eviction) to what main uses. Only main
+# writes the pnpm store, uv and sandbox-image caches, so after each ci run on main this deletes, for
+# each of those families, every entry but main's most recently used one, plus anything another ref
+# left in them. A family is a key without its trailing content hash. LEGACY prefixes are keys no
+# workflow writes, deleted outright.
+name: cache cleanup
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+concurrency:
+  group: cache-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: cache cleanup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          OWNED: '^(reeval-sandbox-registry|pnpm-store|setup-uv)-'
+          LEGACY: '^(reeval-sandbox-images|node-cache)-'
+        run: |
+          gh api --paginate "repos/$REPO/actions/caches?per_page=100" --jq '.actions_caches[]' |
+            jq -s -r --arg owned "$OWNED" --arg legacy "$LEGACY" '
+              map(select(.key | test($legacy)))
+              + (map(select(.key | test($owned)) | . + { family: (.key | sub("-[0-9a-f]{40,}$"; "")) })
+                 | map(select(.ref != "refs/heads/main"))
+                   + (map(select(.ref == "refs/heads/main"))
+                      | group_by(.family)
+                      | map(sort_by(.last_accessed_at) | .[:-1])
+                      | add // []))
+              | .[] | "\(.id)\t\(.size_in_bytes / 1e6 | floor) MB\t\(.ref)\t\(.key)"' |
+            while IFS=$'\t' read -r id size ref key; do
+              echo "Deleting $key ($size, $ref)"
+              gh api -X DELETE "repos/$REPO/actions/caches/$id" --silent || echo "::warning::Could not delete cache $id"
+            done
+          gh api "repos/$REPO/actions/cache/usage" --jq '"Now \(.active_caches_count) entries, \(.active_caches_size_in_bytes / 1e9 * 100 | floor / 100) GB"'

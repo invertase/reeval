@@ -4,6 +4,29 @@
   "title": "AttemptRequest",
   "$ref": "#/$defs/AttemptRequest",
   "$defs": {
+    "AnsweredPattern": {
+      "description": "A pattern the runner matches in its own language. reeval runs the matcher with it, and when the matcher tests a string not in `answers` replies with those strings (`untested`) instead of a record; the runner matches them and makes the call again with them in `answers`.",
+      "type": "object",
+      "properties": {
+        "answers": {
+          "description": "Whether it matches each string the runner has been asked about.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        },
+        "matchedBy": {
+          "description": "The pattern as the runner's language writes it, e.g. `re.compile('npm t')`.",
+          "type": "string",
+          "pattern": "\\S"
+        }
+      },
+      "required": ["answers", "matchedBy"],
+      "additionalProperties": false
+    },
     "AttemptCall": {
       "description": "One call an eval's body makes on its attempt. The sandbox and the agent session start on the first call that needs them; there's no call to start them.",
       "oneOf": [
@@ -228,6 +251,43 @@
           "additionalProperties": false
         },
         {
+          "description": "A check the eval's own language made, such as Python's `assert`: recorded as a matcher call is, so it's named, counted and compared the same. Replies with its record.",
+          "type": "object",
+          "properties": {
+            "label": {
+              "description": "The check's own name, the same whether it passes or fails.",
+              "type": "string"
+            },
+            "matcher": {
+              "description": "What made the check in the eval's language, e.g. `assert`.",
+              "type": "string",
+              "pattern": "^[a-z][A-Za-z]*$"
+            },
+            "message": {
+              "description": "Why it failed.",
+              "type": "string"
+            },
+            "op": {
+              "type": "string",
+              "const": "record"
+            },
+            "soft": {
+              "description": "A failure fails the attempt at its end, as `expect.soft`. Default false.",
+              "type": "boolean"
+            },
+            "status": {
+              "type": "string",
+              "enum": ["pass", "fail"]
+            },
+            "subject": {
+              "description": "What it checked, as the eval wrote it (`result.ok`): names the check when it has no label.",
+              "type": "string"
+            }
+          },
+          "required": ["matcher", "op", "status"],
+          "additionalProperties": false
+        },
+        {
           "description": "`c.judge(question, options)`. Replies with its verdict, or a judge failure when the provider failed.",
           "type": "object",
           "properties": {
@@ -412,6 +472,24 @@
         }
       ]
     },
+    "ExecResult": {
+      "type": "object",
+      "properties": {
+        "exitCode": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "stdout": {
+          "type": "string"
+        }
+      },
+      "required": ["exitCode", "stderr", "stdout"],
+      "additionalProperties": false
+    },
     "FakeJudgeData": {
       "description": "`fakeJudge()` as data: the score every call gets.",
       "type": "object",
@@ -486,6 +564,45 @@
                   }
                 ]
               }
+            }
+          ]
+        },
+        "gateway": {
+          "description": "The gateway the judge's calls go through, by name or by its helper. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.",
+          "anyOf": [
+            {
+              "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway.",
+              "type": "string",
+              "enum": ["direct", "vercel"]
+            },
+            {
+              "description": "One entry of the config's `gateway` list.",
+              "oneOf": [
+                {
+                  "description": "Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.",
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "direct"
+                    }
+                  },
+                  "required": ["kind"],
+                  "additionalProperties": false
+                },
+                {
+                  "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.",
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "vercel"
+                    }
+                  },
+                  "required": ["kind"],
+                  "additionalProperties": false
+                }
+              ]
             }
           ]
         },
@@ -641,10 +758,13 @@
       "additionalProperties": false
     },
     "MatcherArg": {
-      "description": "One argument to a matcher: a JSON value, or a regular expression as `{ regexp, flags? }`.",
+      "description": "One argument to a matcher: a JSON value, a regular expression as `{ regexp, flags? }`, or a pattern in the runner's own language as `{ matchedBy, answers }`.",
       "anyOf": [
         {
           "$ref": "#/$defs/Pattern"
+        },
+        {
+          "$ref": "#/$defs/AnsweredPattern"
         },
         {
           "$ref": "#/$defs/JSONValue"
@@ -697,6 +817,10 @@
               "description": "A command reeval runs, for its `ExecResult`; again on each try when polled.",
               "type": "string",
               "pattern": "\\S"
+            },
+            "result": {
+              "description": "The command's `ExecResult` when the runner already ran it: reeval checks that instead of running it again, and the check is still named by the command.",
+              "$ref": "#/$defs/ExecResult"
             }
           },
           "required": ["exec"],

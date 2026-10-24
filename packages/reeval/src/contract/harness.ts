@@ -10,11 +10,14 @@ import type {
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,
   FakeScriptStep,
+  FxHarnessDescriptor,
   GooseHarnessDescriptor,
+  GrokBuildHarnessDescriptor,
   HarnessDescriptor,
   OpenCodeHarnessDescriptor,
   PiHarnessDescriptor,
 } from '../types.ts'
+import { GATEWAY_NAMES, gatewayNameSchema } from './gateway.ts'
 import {
   type Assert,
   closest,
@@ -38,12 +41,19 @@ const id = (kind: string) =>
     )
 const maxConcurrent = (description: string) => z.number().optional().describe(description)
 const startTimeout = () => durationSchema.optional().describe(START_TIMEOUT)
+const gateway = () =>
+  gatewayNameSchema
+    .optional()
+    .describe(
+      "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+    )
 /** A model id with no provider prefix. */
 const BARE_MODEL = /^[\w.-]+$/
 
 export const cursorHarnessSchema = z
   .strictObject({
     kind: z.literal('cursor'),
+    gateway: gateway(),
     model: z
       .string()
       .min(1)
@@ -52,7 +62,7 @@ export const cursorHarnessSchema = z
       .record(z.string(), z.string())
       .optional()
       .describe(
-        "Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the default variant in Cursor's model catalog (`fast=true` for `composer-2.5`), sent explicitly; pass the ones that change cost.",
+        "Model parameters, e.g. `{ fast: 'true' }`. Unset ones take the default variant in Cursor's model catalog, sent explicitly, except `fast`, which is `false` wherever the model takes it.",
       ),
     effort: effort(
       'Reasoning effort, mapped onto the catalog param `Cursor.models.list()` names for this model (`reasoning_effort`, `effort`, …). Not Fast: that stays `params.fast`.',
@@ -76,6 +86,7 @@ export const claudeCodeEffortSchema = z
 export const claudeCodeHarnessSchema = z
   .strictObject({
     kind: z.literal('claude-code'),
+    gateway: gateway(),
     model: z
       .string()
       .min(1)
@@ -98,6 +109,7 @@ export const claudeCodeHarnessSchema = z
 export const antigravityHarnessSchema = z
   .strictObject({
     kind: z.literal('antigravity'),
+    gateway: gateway(),
     model: z
       .string()
       .min(1)
@@ -118,6 +130,7 @@ export const antigravityHarnessSchema = z
 export const opencodeHarnessSchema = z
   .strictObject({
     kind: z.literal('opencode'),
+    gateway: gateway(),
     model: z
       .string()
       .min(1)
@@ -140,6 +153,7 @@ export const opencodeHarnessSchema = z
 export const gooseHarnessSchema = z
   .strictObject({
     kind: z.literal('goose'),
+    gateway: gateway(),
     model: z
       .string()
       .regex(BARE_MODEL)
@@ -157,9 +171,30 @@ export const gooseHarnessSchema = z
     'Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs Google models on a Gemini API key, and reports no usage (its ACP server counts one call).',
   )
 
+export const fxHarnessSchema = z
+  .strictObject({
+    kind: z.literal('fx'),
+    gateway: gateway(),
+    model: z
+      .string()
+      .min(1)
+      .describe(
+        "A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.",
+      ),
+    id: nonEmpty().optional().describe('Cell id; defaults to `fx:<model>`.'),
+    maxConcurrent: maxConcurrent(
+      "The most fx attempts at once, across the run, e.g. for the key's rate limits.",
+    ),
+    startTimeout: startTimeout(),
+  })
+  .describe(
+    "fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or OpenAI's API by the model id, and reports each turn's tokens.",
+  )
+
 export const piHarnessSchema = z
   .strictObject({
     kind: z.literal('pi'),
+    gateway: gateway(),
     model: z
       .string()
       .regex(BARE_MODEL)
@@ -180,6 +215,7 @@ export const piHarnessSchema = z
 export const codexHarnessSchema = z
   .strictObject({
     kind: z.literal('codex'),
+    gateway: gateway(),
     model: z
       .string()
       .regex(BARE_MODEL)
@@ -195,6 +231,27 @@ export const codexHarnessSchema = z
   })
   .describe(
     "OpenAI's Codex CLI through `@reeval/harness-codex` (`codex exec --json`), made by `codex()`. It runs OpenAI models on an OpenAI API key and reports each turn's tokens, reasoning included.",
+  )
+
+export const grokBuildHarnessSchema = z
+  .strictObject({
+    kind: z.literal('grok-build'),
+    gateway: gateway(),
+    model: z
+      .string()
+      .regex(BARE_MODEL)
+      .describe('An xAI model id Grok Build runs on the xAI API, e.g. `grok-4.6`.'),
+    effort: effort(
+      "Reasoning effort as Grok's `default_reasoning_effort`, e.g. `low`, `medium` or `high`, for a model that takes one.",
+    ),
+    id: id('grok-build'),
+    maxConcurrent: maxConcurrent(
+      "The most Grok Build attempts at once, across the run, e.g. for the key's rate limits.",
+    ),
+    startTimeout: startTimeout(),
+  })
+  .describe(
+    "xAI's Grok Build through `@reeval/harness-grok-build` (`grok agent stdio`), made by `grokBuild()`. It runs xAI models on an xAI API key and reports each turn's tokens.",
   )
 
 export const fakeScriptStepSchema = z
@@ -217,11 +274,14 @@ export const FAKE_LAYOUTS = [
   'goose',
   'pi',
   'codex',
+  'fx',
+  'grok-build',
 ] as const
 
 export const fakeHarnessSchema = z
   .strictObject({
     kind: z.literal('fake'),
+    gateway: gateway(),
     id: nonEmpty().optional().describe('Cell id; defaults to `fake`.'),
     files: z
       .record(z.string(), z.string())
@@ -292,7 +352,7 @@ export const fakeHarnessSchema = z
       .enum(FAKE_LAYOUTS)
       .optional()
       .describe(
-        "Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`, `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`, `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.",
+        "Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`, `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`, `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`, fx's private home for `fx`, Grok's private home for `grok-build`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.",
       ),
   })
   .describe('A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`.')
@@ -306,6 +366,8 @@ const SCHEMAS = {
   goose: gooseHarnessSchema,
   pi: piHarnessSchema,
   codex: codexHarnessSchema,
+  fx: fxHarnessSchema,
+  'grok-build': grokBuildHarnessSchema,
 } as const
 
 export const harnessDescriptorSchema = z
@@ -318,6 +380,8 @@ export const harnessDescriptorSchema = z
     gooseHarnessSchema,
     piHarnessSchema,
     codexHarnessSchema,
+    fxHarnessSchema,
+    grokBuildHarnessSchema,
   ])
   .describe('The agent an attempt runs: a real harness, or the fake one.')
 
@@ -336,6 +400,10 @@ export type _SameAsSchema = [
   Assert<Same<keyof z.infer<typeof piHarnessSchema>, keyof PiHarnessDescriptor>>,
   Assert<Same<z.infer<typeof codexHarnessSchema>, CodexHarnessDescriptor>>,
   Assert<Same<keyof z.infer<typeof codexHarnessSchema>, keyof CodexHarnessDescriptor>>,
+  Assert<Same<z.infer<typeof fxHarnessSchema>, FxHarnessDescriptor>>,
+  Assert<Same<keyof z.infer<typeof fxHarnessSchema>, keyof FxHarnessDescriptor>>,
+  Assert<Same<z.infer<typeof grokBuildHarnessSchema>, GrokBuildHarnessDescriptor>>,
+  Assert<Same<keyof z.infer<typeof grokBuildHarnessSchema>, keyof GrokBuildHarnessDescriptor>>,
   Assert<Same<z.infer<typeof fakeHarnessSchema>, FakeHarnessDescriptor>>,
   Assert<Same<keyof z.infer<typeof fakeHarnessSchema>, keyof FakeHarnessDescriptor>>,
   Assert<Same<z.infer<typeof fakeScriptStepSchema>, FakeScriptStep>>,
@@ -352,6 +420,8 @@ export const FACTORY: Record<HarnessDescriptor['kind'], string> = {
   goose: 'goose',
   pi: 'pi',
   codex: 'codex',
+  fx: 'fx',
+  'grok-build': 'grokBuild',
 }
 
 const MODEL: Partial<Record<HarnessDescriptor['kind'], (v: unknown) => string>> = {
@@ -367,6 +437,10 @@ const MODEL: Partial<Record<HarnessDescriptor['kind'], (v: unknown) => string>> 
     `pi() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. pi({ model: 'gemini-3.8-flash' }) (got ${got(v)})`,
   codex: (v) =>
     `codex() needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e.g. codex({ model: 'gpt-5.6-luna' }) (got ${got(v)})`,
+  fx: (v) =>
+    `fx() needs a model: a Vercel AI Gateway id, e.g. fx({ model: 'anthropic/claude-sonnet-5' }), or a bare OpenAI id, e.g. fx({ model: 'gpt-5.5' }) (got ${got(v)})`,
+  'grok-build': (v) =>
+    `grokBuild() needs an xAI model id, without a provider, since it runs on an xAI API key, e.g. grokBuild({ model: 'grok-4.6' }) (got ${got(v)})`,
 }
 
 const SCRIPT_EXAMPLE = "script: [[{ exec: 'cat notes.txt' }, { reply: 'done' }]]"
@@ -406,6 +480,9 @@ function explain(kind: HarnessDescriptor['kind']) {
       return `fakeHarness({ layout }) is one of ${FAKE_LAYOUTS.map((l) => `'${l}'`).join(', ')} (got ${got(v)})`
     }
     if (key === 'id') return `${factory}({ id }) must be a non-empty string (got ${got(v)})`
+    if (key === 'gateway') {
+      return `${factory}({ gateway }) names a gateway in the config's gateway list: ${GATEWAY_NAMES.map((g) => `'${g}'`).join(' or ')} (got ${got(v)})`
+    }
     return genericProblem(factory, issue, value)
   }
 }

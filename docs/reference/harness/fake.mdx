@@ -36,8 +36,12 @@ npx reeval run --config reeval.fake.config.ts
   The harness's id in cell keys. Default `fake`. Give two fakes different ids to run both.
 </Property>
 
+<Property name="gateway" type="'direct' | Gateway" optional>
+  The gateway this harness's model calls go through, by name or helper, such as `direct()`. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness. See [Gateways](/reference/gateway#pinning-a-harness).
+</Property>
+
 <Property name="files" type="Record<string, string>" optional>
-  Files the agent writes on every turn, keyed by workspace path, after its `script`. Each shows as a `file-edit` event.
+  Files the agent writes on every turn, keyed by workspace path (or `~/` for the home directory), after its `script`. Each shows as a `file-edit` event.
 </Property>
 
 <Property name="text" type="string" optional>
@@ -61,7 +65,7 @@ npx reeval run --config reeval.fake.config.ts
 </Property>
 
 <Property name="servedModel" type="string" optional>
-  The model the agent reports serving each turn, as a real harness reports its resolved variant (`composer-2.5[fast=true]`). It lands in each turn's `model` and the stack's `resolvedModels`. Unset, the agent reports none. A suffix such as `[effort=medium]` is the served reasoning effort.
+  The model the agent reports serving each turn, as a real harness reports its resolved variant (`composer-2.5[fast=false]`). It lands in each turn's `model` and the stack's `resolvedModels`. Unset, the agent reports none. A suffix such as `[effort=medium]` is the served reasoning effort.
 </Property>
 
 <Property name="effort" type="string" optional>
@@ -84,7 +88,7 @@ npx reeval run --config reeval.fake.config.ts
   Throws an infra error with this message before the first turn, to simulate a harness that doesn't start.
 </Property>
 
-<Property name="layout" type="'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex'" optional>
+<Property name="layout" type="'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex' | 'fx' | 'grok-build'" optional>
   Behave like that agent without its key: its Docker image, rules file, skill directories and egress hosts. Without it, the fake reads `AGENTS.md` and `~/.agents/skills` and uses Cursor's image.
 </Property>
 
@@ -107,12 +111,14 @@ Each step is an object with exactly one key:
 | Step | What it does | Reported as |
 |---|---|---|
 | `{ exec: 'npm test' }` | Runs the command in the sandbox, with the sandbox's variables (not the checks' secrets) | A `tool` event named `shell`, with stdout as its output |
-| `{ write: { 'a.js': '…' } }` | Writes the files | `file-edit` events |
+| `{ write: { 'a.js': '…' } }` | Writes the files, creating their directories: a workspace path, or `~/` for the home directory | `file-edit` events |
 | `{ reply: 'Done.' }` | Sets the turn's final message, instead of `text` | The final `text` event |
 | `{ mcp: 'docs/search' }` | Starts the environment's stdio MCP server `docs` in the sandbox and calls its `search` tool with no arguments | A `tool` event named `mcp__docs__search` |
 | `{ error: 'Credit balance is too low' }` | Ends the turn there with `status: 'error'`, as a provider error would; later steps and `files` are skipped | An `error` event |
 
 An `mcp` step needs a stdio server of that name in the environment; anything else is an infra error for the attempt.
+
+Steps run in the attempt's sandbox. On `docker()` that's the container, where your host's files and tools (a host path to `tsx`, say) don't exist: `write` a script first, then `exec` it. See [Oracle and canary](/recipes/fake-harness#oracle-and-canary).
 
 ## What a turn looks like
 
@@ -142,7 +148,7 @@ Either way, the agent reports the skills in its `Loaded skills` line and switche
 |---|---|
 | `script` not a list of lists | `fakeHarness({ script }) takes one list of steps per turn, e.g. script: [[{ exec: 'cat notes.txt' }, { reply: 'done' }]] (got …)` |
 | A bad step | `fakeHarness({ script }) steps are { exec: string }, { write: { path: content } }, { reply: string }, { mcp: '<server>/<tool>' } or { error: string } (got …)` |
-| A bad layout | `fakeHarness({ layout }) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex' (got …)` |
+| A bad layout | `fakeHarness({ layout }) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex', 'fx', 'grok-build' (got …)` |
 | An unknown MCP server | `The fake agent's script calls MCP server "docs", which the environment doesn't have (it has none)` |
 | A remote MCP server | `The fake agent calls stdio MCP servers only; "docs" is http` |
 

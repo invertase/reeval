@@ -1,4 +1,5 @@
 [
+  "agent_message_chunk ._meta",
   "agent_message_chunk .content",
   "agent_message_chunk .messageId",
   "agent_message_chunk .sessionUpdate",

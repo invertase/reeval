@@ -39,6 +39,10 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
   The most judge calls at once to this model's provider, across the run. A whole number of at least 1.
 </Property>
 
+<Property name="gateway" type="GatewayName | GatewayDescriptor" optional>
+  The gateway the judge's calls go through: a gateway's name (`'vercel'`) or its helper (`vercel()`). It skips the config's `gateway` fallback, and must name a gateway in the list that can serve the model. Without a pin or a list, the judge goes `direct()`, on its provider's own key. See [Gateways](/reference/gateway#the-judge-analysis-and-captures).
+</Property>
+
 <Property name="state" type="JudgeStateOptions" optional>
   What the judge is given beside your question: the judge's state, not the workspace's or the attempt's. An object keyed by the state's fields, described in [What the judge is given](#what-the-judge-is-given). It merges key by key, so a call's `state: { transcript: 'tools' }` keeps the config's `diff` patterns. A key's value replaces the outer one whole; lists aren't concatenated.
 </Property>
@@ -119,20 +123,32 @@ A call that fails (a provider error after its retries, or a missing key) doesn't
 
 ## Providers and keys
 
-reeval calls a provider's own package when its key is set, and the Vercel AI Gateway otherwise:
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { vercel } from '{{ pkg }}/gateway'
 
-| Provider prefix | Direct key | Package |
+export default defineConfig({
+  judge: { model: 'typesafe-ai/jev-1.14.0' }, // TYPESAFE_AI_API_KEY
+  // gateway: [vercel()], // to take AI_GATEWAY_API_KEY instead
+})
+```
+
+reeval uses no gateway by default. Without a [`gateway` list](/reference/gateway#the-judge-analysis-and-captures), a judge calls its provider's own package with its provider's key, and `AI_GATEWAY_API_KEY` is never read. With a list, the judge takes the first gateway that serves its model, or the one it pins, and only that gateway's key.
+
+| Provider prefix | `direct()` key (the default) | Package |
 |---|---|---|
-| `typesafe-ai/` | `TYPESAFE_AI_API_KEY` | `@ai-sdk/typesafe-ai` |
+| `anthropic/` | `ANTHROPIC_API_KEY` | `@ai-sdk/anthropic` |
 | `google/` | `GOOGLE_GENERATIVE_AI_API_KEY` | `@ai-sdk/google` |
-| Any other | None | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
+| `openai/` | `OPENAI_API_KEY` | `@ai-sdk/openai` |
+| `typesafe-ai/` | `TYPESAFE_AI_API_KEY` | `@ai-sdk/typesafe-ai` |
+| Any other | None: needs `vercel()` in `gateway` | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
 
-[reeval analyze](/reference/cli/analyze) routes its `analysis.model` the same way: a direct key when the provider has one, the AI Gateway otherwise. It needs a language model, though, so an evaluation model such as `typesafe-ai/jev-1.14.0` can judge but can't write an analysis.
+`analysis.model`, insights and compare questions route the same way. They need a language model, though, so an evaluation model such as `typesafe-ai/jev-1.14.0` can judge but can't write an analysis.
 
-The run checks the judge's key before it starts, with the harness's. When the run's profile sets a judge `model`, that judge's key is the one checked, and a `fakeJudge()` needs none:
+The run checks the judge's key before it starts, with the harness's. When the run's profile sets a judge `model`, that judge's key is the one checked, and a `fakeJudge()` needs none. The message names the model and the key its gateway takes; when `AI_GATEWAY_API_KEY` is set but no gateway uses it, it says how to:
 
 ```text
-reeval: Missing credentials: CURSOR_API_KEY, TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN. Set them in the environment or .env.local.
+reeval: Missing credentials: CURSOR_API_KEY; ANTHROPIC_API_KEY (for direct()) for the judge model, "anthropic/claude-sonnet-5". Set them in the environment or .env.local. AI_GATEWAY_API_KEY is set, but no gateway in the config uses it: add vercel() to gateway to call the model through Vercel AI Gateway.
 ```
 
 ## Retries
@@ -171,20 +187,6 @@ The same idea for `reeval analyze`: it answers with `output`, or `output(digest)
 
 ```ts
 analysis: {
-  agent: true,
-  model: fakeAnalysis({
-    note: ({ harness, attempts }) =>
-      `${attempts.length} attempts on ${harness}`,
-  }),
-}
-```
-
-With `analysis.agent`, each note calls the real tools as a model would: it lists the attempts and compares up to three failed-vs-passing pairs. Then it answers with `note`, a string or a function of `{ eval, harness, attempts, compared }`. `note: { error: '…' }` throws instead, to test a failed note.
-
-Its summary of the run reads up to three dropped evidence items and three failing attempts with the tools, then answers with `output`; an `output` function gets the digest with the evidence it read, and one that throws tests a failed summary.
-
-```ts
-analysis: {
   model: fakeAnalysis({
     vote: (pair) => (pair.a.diff?.includes('Ahoy') ? 'A' : 'tie'),
   }),
@@ -193,7 +195,22 @@ analysis: {
 
 `vote` answers [compare questions](/guide/questions): `'A'` (the attempt shown first), `'B'` or `'tie'` for every pair, `{ winner, reason? }` to record a reason, or a function of the blinded pair (`{ question, prompt, a, b }`). `a` and `b` are the two sides in the order shown, each holding only the parts its question's [`state`](/reference/options#question) turned on: `task?`, `output?`, `transcript?`, `turns?`, `files?`, `diff?`, `checks?` and `artifacts?` (`{ label, mediaType, bytes }`, or `{ label, missing: true }`). `prompt` is the text the model reads, with a task both sides share. `{ error: '…' }` fails every call, to test an answer's `error`.
 
-Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake, and `analysis.agent`'s summary fails.
+```ts
+analysis: {
+  model: fakeAnalysis({
+    insights: (input) =>
+      input.call === 'classify'
+        ? { intent: { job: 'finish', question: 'Does it build?' } }
+        : input.call === 'insights'
+          ? { answer: { text: 'Yes: every try passed.', cites: [input.facts[0].id] } }
+          : { headline: null },
+  }),
+}
+```
+
+`insights` answers the run's [insights](/reference/cli/analyze#insights), at the end of `reeval run` and for `reeval analyze --insights`: fixed insights, or a function (or an async one) of each call's input. `input.call` is `classify` (the eval's name, prompts, judge questions, check labels and facts; answer `intent`), `insights` (the same, with `intent`, `slots`, the rows that take a sentence, and `source`, the eval's declaration as `L<n>` lines; answer `answer`, `findings`, `rows`, `namedTools` and `remarks`), or `headline`, once a run (answer `headline`). Each fact, attempt and eval carries the short `id` the model cites (`F1`, `A1`, `A1#L12` for a transcript line), and `slots.rows` lists fact ids. Every sentence goes through the validator, and every remark through the [remark gates](/reference/cli/run#model-remarks) (`source.at` and `fix.at` are `L<n>` lines, `evidence` fact or attempt ids), so a fake sentence that cites nothing is dropped as a model's would be; `{ error: '…' }` fails every call.
+
+Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake; without `insights`, insight calls fail, and `reeval run` prints `insights failed` with its facts.
 
 ## Errors
 
@@ -215,7 +232,10 @@ Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses 
 | An unknown capture name | `c.judge() artifacts names a capture this attempt doesn't have: "form"` |
 | A score function in the config | `judge.model in reeval.config.ts must be fakeJudge({ score }) with a number. Pass a score function per group, eval or call instead.` |
 | The provider refuses the input | The provider's message, then `The judge's input was ~29k tokens (estimated): diff 28k, of which …`, as a failed call |
-| No key at call time | `No credentials for judge model "google/gemini-3.8-flash". Set GOOGLE_GENERATIVE_AI_API_KEY to call @ai-sdk/google directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway, in the environment or .env.local.` |
+| No key at call time | `No credentials for judge model "google/gemini-3.8-flash" (provider "google"). Set GOOGLE_GENERATIVE_AI_API_KEY (for direct()), in the environment or .env.local.` |
+| A Gateway key set, but no `vercel()` in `gateway` | `… Set TYPESAFE_AI_API_KEY (for direct()), in the environment or .env.local. AI_GATEWAY_API_KEY is set, but no gateway in the config uses it: add vercel() to gateway to call the model through Vercel AI Gateway.` |
+| A prefix without a direct route, and no `vercel()` | `evals/a.eval.ts › e: the judge model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway.`, at plan time |
+| A key with whitespace or a line break | `ANTHROPIC_API_KEY for judge model "anthropic/claude-sonnet-5" has whitespace or a line break in it at character 7. …` |
 
 ## Related
 

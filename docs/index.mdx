@@ -20,16 +20,22 @@ group(
 )
 ```
 
-A real agent does the task in a fresh Docker sandbox, once without the skill and once with it. reeval checks the result and reports the difference as lift:
+An agent does the task in a fresh sandbox, here four times without the skill and four times with it (`--runs 4`). reeval checks each try and reports what the skill changed:
 
 ```text
-✓ greets in the house style      2/4 · pass@1 100% gated  4 attempts
-    cursor:composer-2.5/plain/docker               control    0/2  pass@1   0%   not gated
-    cursor:composer-2.5/with-house-greeting/docker  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
-      effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
+pass             house greeting › greets in the house style
+  arm                  pass
+  plain                0 of 4
+  with-house-greeting  4 of 4  helped
+  check                plain   with-house-greeting
+  house greeting       0 of 4  4 of 4
+    expected command to succeed, exit code 1
+  +2 more passed
+…
+1 pass
 ```
 
-With the skill the agent also needed fewer tool calls and half the time: reeval reports that effort next to the lift.
+Without the skill the agent never wrote the house greeting; with it, it did every time, so reeval calls the skill's effect `helped`. When the tries differ in tool calls or time, an effort table follows.
 
 ## How it works
 
@@ -46,7 +52,7 @@ flowchart LR
 
 | Step | What reeval does |
 |---|---|
-| Agent | Runs Cursor, Claude Code, Antigravity, OpenCode, Goose, pi or Codex on your prompt, in its own sandbox |
+| Agent | Runs Cursor, Claude Code, Antigravity, OpenCode, Goose, pi, Codex, fx or Grok Build on your prompt, in its own sandbox |
 | Checks | Runs your commands in the sandbox and asks an LLM judge yes/no questions |
 | Compare | Runs the same eval with and without a skill, MCP server or docs, and reports lift and effort |
 | History | Saves every run as a file you commit, diff and browse |
@@ -61,7 +67,7 @@ The studio shows each run's cells, pass rates and lift, and each attempt's trans
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
-    A passing eval in two minutes, with no keys or Docker.
+    Scaffold a project and run your first eval on a real agent.
   </Card>
   <Card title="Compare and lift" icon="chart-line" href="/guide/compare">
     Prove a skill, MCP server or doc makes agents better.

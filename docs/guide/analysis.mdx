@@ -62,11 +62,11 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 evals/skill.eval.ts › house greeting › greets in the house…  antigravity:gemini-3.8-flash-medium/with-house-greeting/doc…  2  3.5           24.5                  0.1429       0.3333   insufficient
 ```
 
-`effort` is the summary's effort line as data: median tool calls, agent time and tokens for each cell, and for a variant, its control's. `tools_p` and `tokens_p` are exact rank tests. With two attempts a side they can never drop below 0.05, so those verdicts are `insufficient`, however large the gap.
+`effort` is the result block's effort table as data: median tool calls, agent time and tokens for each cell, and for a variant, its control's. `tools_p` and `tokens_p` are exact rank tests. With two attempts a side they can never drop below 0.05, so those verdicts are `insufficient`, however large the gap.
 
 `tokens_verdict` is null when either side has no usage sample: omitted, not insufficient. It's per cell, so a Goose cell, which reports no tokens, doesn't blank it on Cursor cells in the same study.
 
-`separated`, `time_separated` and `tokens_separated` are 1 when the variant's and control's ranges don't overlap on tool calls, agent time or tokens. At three attempts a side or more, that's a direction the summary prints as `no overlap`, though the test is still `insufficient`.
+`separated`, `time_separated` and `tokens_separated` are 1 when the variant's and control's ranges don't overlap on tool calls, agent time or tokens. At three attempts a side or more, that's a direction, though the test is still `insufficient`.
 
 ## Pool runs to separate the factors
 
@@ -79,13 +79,13 @@ npx reeval query "SELECT factor, level, tier, runs, points, lo, pass_verdict,
 ```text
 history.db: 9 runs
 factor       level                tier        runs  points  lo     pass_verdict  tools_p  effort_verdict
-environment  with-house-greeting  controlled  1     1       0.07   effect        0.3333   insufficient
-environment  with-house-greeting  controlled  1     1       0.07   effect        0.3333   insufficient
-environment  with-house-greeting  controlled  1     1       0.07   effect        0.3333   insufficient
+environment  with-house-greeting  controlled  1     1       0.07   insufficient  0.3333   insufficient
+environment  with-house-greeting  controlled  1     1       0.07   insufficient  0.3333   insufficient
+environment  with-house-greeting  controlled  1     1       0.07   insufficient  0.3333   insufficient
 environment  with-house-greeting  pooled      2     1       0.307  effect        0.0286   fewer
 ```
 
-`factor_effects` asks what one factor (the environment, the harness or the model) changes, and says how good the evidence is. `controlled` compares two cells in one run, and `pooled` combines the same comparison over comparable runs. Pooling Cursor's two compares gives four attempts a side, enough to call the skill's saving `fewer` tool calls.
+`factor_effects` asks what one factor (the environment, the harness or the model) changes, and says how good the evidence is. `controlled` compares two cells in one run, and `pooled` combines the same comparison over comparable runs. One run's two attempts a side are too few for either verdict, so each `controlled` row is `insufficient`. Pooling Cursor's two compares gives four attempts a side, enough to call the pass rate an `effect` and the skill's saving `fewer` tool calls.
 
 ## Check that the agent read the skill
 
@@ -152,7 +152,7 @@ control  composer-2.5[fast=true]  4  92569  1458
 variant  composer-2.5[fast=true]  4  33045  494
 ```
 
-The `attempts` table has each attempt's tokens and the model that served it. With the skill, Cursor used about a third of the tokens. `served_model` shows the parameters too: with no `params` set, `composer-2.5` ran as `fast=true`.
+The `attempts` table has each attempt's tokens and the model that served it. With the skill, Cursor used about a third of the tokens. `served_model` shows the parameters too: this run's `composer-2.5` ran as `fast=true`.
 
 A cell's key repeats across evals in a run, so join `cells` on `eval_key` as well. `reeval query effort` also ranks those totals when both sides of a compare reported usage.
 

@@ -70,6 +70,8 @@ with these exceptions:
 |---|---|
 | Claude Code | May call `ToolSearch` with `select:mcp__stamp__house_stamp` first, a different tool |
 | OpenCode, Goose | `acp_tool_<id>` if the first ACP update or Goose's `_meta` is missing |
+| fx | May call `mcp_select_tool` with `{ name: 'stamp.house_stamp' }` first, a different tool |
+| Grok Build | May call `search_tool` first to find the MCP tool, a different tool; `acp_tool_<id>` if Grok's `_meta` is missing |
 | pi | `-` in a tool name becomes `_` (write `latest_version`); a hyphenated server is remapped when unambiguous |
 
 Goose, OpenCode, pi and Codex refuse `mcp.sse` at plan time; stdio MCP plans
@@ -279,10 +281,17 @@ evaluate('looks up the latest Node.js LTS', async (c) => {
 })
 ```
 
+With `--output-logs full`, the pass prints its detail lines:
+
 ```text
-[looks#1 cursor] ✓ evals/web.eval.ts › looks up the latest Node.js LTS  16s
-[looks#1 cursor]  +0:00 sandbox ready 1s
-[looks#1 cursor]  +0:01 turn 1 done 14s · 1 tool call, 0 file edits
+[looks#1 cursor] ▶ evals/web.eval.ts › looks up the latest Node.js LTS
+[looks#1 cursor]  +0:00 sandbox starting
+[looks#1 cursor]  +0:01 sandbox ready 2s
+[looks#1 cursor]  +0:01 turn 1 started
+[looks#1 cursor]  +0:10 turn 1 done 9s · 1 tool call, 0 file edits
+[looks#1 cursor]  +0:11 cleaning up
+
+pass             looks up the latest Node.js LTS
 ```
 
 The search it matched, from the attempt's `transcript.jsonl`:
@@ -318,8 +327,9 @@ await expect(c.exec(greetAda), 'house greeting').toSucceed()
 | `expect(c.exec(cmd)).toSucceed()` | `toSucceed <the command>` |
 | `expect(await c.judge(q)).toPass()` | `toPass <the question>` |
 | The same label twice in one attempt | `toHaveFile greet.js #2` |
+| `expect.soft(c, 'keeps the flow')` on two checks | `keeps the flow`, then `keeps the flow #2` |
 
-A label without one is the matcher and its first argument (or what it checks), cut at 60 characters. A matcher that can't answer (`HarnessCapabilityError`, or a wrong kind of `actual`) is `error`, not `fail`. A hard failure ends the attempt, so the checks after it aren't recorded on it; in a compare they count as not run.
+A label without one is the matcher and its first argument (or what it checks), cut at 60 characters. Labels are unique within an attempt: the second check with a label, given or made, is recorded as `<label> #2`, the third `#3`, and that's how the result blocks, `reeval compare` and `reeval query check_discrimination` name them. Give each check its own label to keep the names stable. A matcher that can't answer (`HarnessCapabilityError`, or a wrong kind of `actual`) is `error`, not `fail`. A hard failure ends the attempt, so the checks after it aren't recorded on it; in a compare they count as not run.
 
 `expect.poll(…)` records one entry with its final outcome. `expect.assertions(n)`, `expect.hasAssertions()`, `expect.assert` and Chai property chains such as `.to.be.true` aren't recorded. A compare tallies each label per side: see [which checks made the difference](/guide/compare#which-checks-made-the-difference).
 

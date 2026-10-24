@@ -28,7 +28,8 @@
   },
   "files": [
     "dist",
-    "docker"
+    "docker",
+    "bin"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -36,14 +37,16 @@
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
   },
   "dependencies": {
-    "@ai-sdk/harness": "1.0.154",
-    "@ai-sdk/harness-claude-code": "1.0.158",
-    "@reeval/harness-antigravity": "workspace:0.1.8",
-    "@reeval/harness-codex": "workspace:0.1.7",
-    "@reeval/harness-cursor-sdk": "workspace:0.1.5",
-    "@reeval/harness-goose": "workspace:0.1.3",
-    "@reeval/harness-opencode": "workspace:0.2.8",
-    "@reeval/harness-pi": "workspace:0.2.7",
+    "@ai-sdk/harness": "1.0.156",
+    "@ai-sdk/harness-claude-code": "1.0.160",
+    "@reeval/harness-antigravity": "workspace:0.1.12",
+    "@reeval/harness-codex": "workspace:0.1.8",
+    "@reeval/harness-cursor-sdk": "workspace:0.1.6",
+    "@reeval/harness-fx": "workspace:0.1.1",
+    "@reeval/harness-goose": "workspace:0.1.5",
+    "@reeval/harness-grok-build": "workspace:0.1.4",
+    "@reeval/harness-opencode": "workspace:0.2.10",
+    "@reeval/harness-pi": "workspace:0.2.8",
     "ws": "8.22.0",
     "zod": "4.6.7"
   }

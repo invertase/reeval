@@ -5,7 +5,9 @@ import {
   codex,
   cursor,
   fakeHarness,
+  fx,
   goose,
+  grokBuild,
   opencode,
   pi,
 } from 'reeval/harness'
@@ -17,7 +19,7 @@ const model = process.env.REEVAL_CONTRACT_MODEL ?? ''
 const harness = () => {
   switch (process.env.REEVAL_CONTRACT_HARNESS) {
     case 'cursor':
-      // fast=false: the cheaper variant; an unset parameter takes the catalog's default (fast=true).
+      // fast=false: the standard-priced variant, pinned though it is the default.
       return cursor({ model, params: { fast: 'false' } })
     case 'antigravity':
       return antigravity({ model })
@@ -31,6 +33,10 @@ const harness = () => {
       return pi({ model })
     case 'codex':
       return codex({ model })
+    case 'grok-build':
+      return grokBuild({ model })
+    case 'fx':
+      return fx({ model })
     default:
       return fakeHarness({ script: [[{ write: { 'hello.txt': 'hello from reeval\n' } }]] })
   }

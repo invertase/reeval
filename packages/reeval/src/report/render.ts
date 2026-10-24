@@ -1,6 +1,7 @@
 // `reeval report`'s bundle as text: the terminal summary, report.md, and the shorter issue body.
 import type { DoctorReport } from '../doctor.ts'
 import { isObjectLike } from '../object.ts'
+import { fenced } from '../text.ts'
 import type { ReportBundle } from './types.ts'
 
 const isDoctor = (value: unknown): value is DoctorReport =>
@@ -110,7 +111,7 @@ export function summaryLines(b: ReportBundle, attached: number): string[] {
   return rows.flatMap(([k, v]) => (v ? [`${k.padEnd(width)}  ${v}`] : []))
 }
 
-const fence = (lang: string, lines: string[]) => ['', `\`\`\`${lang}`, ...lines, '```']
+const fence = (lang: string, lines: string[]) => ['', ...fenced(lines, lang)]
 
 function stackLines(b: ReportBundle, max = Number.POSITIVE_INFINITY): string[] {
   const error = b.invocation?.error

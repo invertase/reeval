@@ -76,7 +76,6 @@ const { version, probeFile, catalog } = process.env.REEVAL_DRIFT_PROBE
 const latest = buildTable(
   JSON.parse(readFileSync(probeFile, 'utf8')),
   JSON.parse(readFileSync(catalog, 'utf8')),
-  version,
 )
 
 const code = (s) => `\`${s}\``

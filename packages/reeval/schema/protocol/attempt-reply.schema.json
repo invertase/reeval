@@ -265,6 +265,29 @@
             {
               "type": "object",
               "properties": {
+                "assertion": {
+                  "$ref": "#/$defs/AssertionRecord"
+                },
+                "id": {
+                  "description": "Pairs a reply with its request.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "op": {
+                  "type": "string",
+                  "const": "record"
+                }
+              },
+              "required": ["assertion", "id", "ok", "op"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
                 "id": {
                   "description": "Pairs a reply with its request.",
                   "type": "string",
@@ -297,6 +320,39 @@
         {
           "type": "object",
           "properties": {
+            "id": {
+              "description": "Pairs a reply with its request.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "op": {
+              "type": "string",
+              "const": "expect"
+            },
+            "untested": {
+              "description": "The strings the matcher tested that a `{ matchedBy, answers }` argument has no answer for, by its `matchedBy`. Nothing was recorded: answer them and make the call again.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "required": ["id", "ok", "op", "untested"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
             "error": {
               "$ref": "#/$defs/AttemptError"
             },
@@ -317,6 +373,7 @@
                 "readFile",
                 "writeFile",
                 "expect",
+                "record",
                 "judge",
                 "serve",
                 "kill",
@@ -417,7 +474,9 @@
       "type": "object",
       "properties": {
         "exitCode": {
-          "type": "number"
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
         },
         "stderr": {
           "type": "string"
@@ -482,6 +541,11 @@
         "error": {
           "type": "string"
         },
+        "gateway": {
+          "description": "The gateway from the config's `gateway` list the call went through; unset without one.",
+          "type": "string",
+          "enum": ["direct", "vercel"]
+        },
         "model": {
           "type": "string"
         },
@@ -526,7 +590,7 @@
       "additionalProperties": false
     },
     "TranscriptEvent": {
-      "description": "Normalised agent events. Each tool call is one event, merged with its result; `durationMs` is null when the harness never reported the end.",
+      "description": "Normalised agent events. Each tool call is one event, merged with its result; `durationMs` is wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null when the harness never reported the end. Long shell or edit calls set `stalled: true`.",
       "oneOf": [
         {
           "type": "object",
@@ -574,6 +638,10 @@
             "removed": {
               "type": ["number", "null"]
             },
+            "stalled": {
+              "description": "True when a shell-like tool or edit ran at least two minutes.",
+              "type": "boolean"
+            },
             "toolCallId": {
               "type": "string"
             },
@@ -618,6 +686,10 @@
               "description": "How many sources the harness says it used; Cursor sends no URLs or titles.",
               "type": ["number", "null"]
             },
+            "stalled": {
+              "description": "True when a shell-like tool or edit ran at least two minutes.",
+              "type": "boolean"
+            },
             "toolCallId": {
               "type": "string"
             },
@@ -642,6 +714,10 @@
               "type": ["number", "null"]
             },
             "ok": {
+              "type": "boolean"
+            },
+            "stalled": {
+              "description": "True when a shell-like tool or edit ran at least two minutes.",
               "type": "boolean"
             },
             "toolCallId": {
@@ -675,6 +751,10 @@
               "type": "boolean"
             },
             "output": {},
+            "stalled": {
+              "description": "True when a shell-like tool or edit ran at least two minutes.",
+              "type": "boolean"
+            },
             "tool": {
               "type": "string"
             },
@@ -824,6 +904,11 @@
           "items": {
             "$ref": "#/$defs/JudgeArtifactRef"
           }
+        },
+        "gateway": {
+          "description": "The gateway from the config's `gateway` list the call went through; unset without one.",
+          "type": "string",
+          "enum": ["direct", "vercel"]
         },
         "model": {
           "type": "string"

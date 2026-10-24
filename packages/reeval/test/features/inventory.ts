@@ -10,7 +10,7 @@ export type InventoryFeature = {
   area: Area
   /** The feature as the docs name it. */
   name: string
-  /** Directories under test/features/. Their tiers (fake, docker, real) come from features.test.ts. */
+  /** Directories under test/features/. Their tiers (fake, docker, podman, real) come from features.test.ts. */
   fixtures?: string[]
   /** Plan cases in plan.test.ts, as `dir/name`. */
   plan?: string[]
@@ -43,6 +43,7 @@ export type Area = (typeof AREAS)[number]
 const unit = (name: string) => `reeval/test/unit.test.ts › ${name}`
 const declaration = (name: string) => `reeval/test/declaration.test.ts › ${name}`
 const options = (name: string) => `reeval/test/options.test.ts › ${name}`
+const questions = (name: string) => `reeval/test/compare-questions.test.ts › ${name}`
 const engine = (name: string) => `reeval/test/engine.test.ts › ${name}`
 const secrets = (name: string) => `reeval/test/secrets.test.ts › ${name}`
 const harness = (name: string) => `reeval/test/harness.test.ts › ${name}`
@@ -57,6 +58,8 @@ const checks = (name: string) => `reeval/test/checks.test.ts › ${name}`
 const engineExpect = (name: string) => `reeval/test/engine-expect.test.ts › ${name}`
 const judgeState = (name: string) => `reeval/test/judge-state.test.ts › ${name}`
 const history = (name: string) => `reeval/test/history.test.ts › ${name}`
+const plugin = (name: string) => `reeval/test/plugins.test.ts › ${name}`
+const planTest = (name: string) => `reeval/test/plan.test.ts › ${name}`
 const sandboxDocker = (file: string, name: string) =>
   `sandbox-docker/test/${file}.test.ts › ${name}`
 const cursorAdapter = (file: string, name: string) =>
@@ -64,8 +67,13 @@ const cursorAdapter = (file: string, name: string) =>
 const opencodeAdapter = (file: string, name: string) =>
   `harness-opencode/test/${file}.test.ts › ${name}`
 const gooseAdapter = (file: string, name: string) => `harness-goose/test/${file}.test.ts › ${name}`
+const grokAdapter = (file: string, name: string) =>
+  `harness-grok-build/test/${file}.test.ts › ${name}`
 const piAdapter = (file: string, name: string) => `harness-pi/test/${file}.test.ts › ${name}`
+const antigravityAdapter = (file: string, name: string) =>
+  `harness-antigravity/test/${file}.test.ts › ${name}`
 const codexAdapter = (file: string, name: string) => `harness-codex/test/${file}.test.ts › ${name}`
+const fxAdapter = (file: string, name: string) => `harness-fx/test/${file}.test.ts › ${name}`
 
 export const inventory: InventoryFeature[] = [
   // Config and selection
@@ -184,24 +192,23 @@ export const inventory: InventoryFeature[] = [
       'compare/questions-across',
     ],
     tests: [
-      options('--dry-run names the questions with no language model'),
-      options('an evaluation model as the judge or the analysis model exits 2'),
-      options("a question's own model needs its key"),
-      options('with a language model the run plans its questions'),
-      options('votes are recorded after the attempts'),
-      options('a question with across: environment records only environment pairs'),
-      options('compare.across sets the default factor'),
-      options('a question across overrides compare.across'),
-      options('a vote reason is recorded, shown and left out of pass or fail'),
-      options('a model error is kept on its answer'),
+      questions('--dry-run names the questions with no language model'),
+      questions('an evaluation model as the judge or the analysis model exits 2'),
+      questions("a question's own model needs its key"),
+      questions('with a language model the run plans its questions'),
+      questions('votes are recorded after the attempts'),
+      questions('a question with across: environment records only environment pairs'),
+      questions('compare.across sets the default factor'),
+      questions('a question across overrides compare.across'),
+      questions('a vote reason is recorded, shown and left out of pass or fail'),
+      questions('a model error is kept on its answer'),
       'reeval/test/results.test.ts › a vote reason is stored, capped and sampled',
       options('common mistakes'),
       'reeval/test/results.test.ts › compare question pairs',
       'reeval/test/results.test.ts › compare questions over real-harness runs (real-e2e-pairs)',
-      'reeval/test/ui.test.ts › compare answers in the summary',
       studio("compare answers: each question's win rates per cut"),
     ],
-    real: ['questions › examples/hello --profile questions'],
+    real: ['questions › test/real-agents --profile questions'],
   },
   {
     id: 'compare.questions.state',
@@ -218,7 +225,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/results.test.ts › state chooses what each side shows; output and files stay out by default',
       'reeval/test/results.test.ts › canary: state off drops a part the default shows',
       "reeval/test/results.test.ts › artifacts send each side's own capture of that name, labelled by position",
-      options("question.model cascades to every question without its own; an entry's model wins"),
+      questions("question.model cascades to every question without its own; an entry's model wins"),
       options('common mistakes'),
     ],
   },
@@ -254,11 +261,18 @@ export const inventory: InventoryFeature[] = [
     id: 'profiles',
     area: 'Config and selection',
     name: 'Profiles: `defaults`, `limit`, `pin`, selection and typos',
-    plan: ['profiles/local-none', 'profiles/pr-in-ci', 'profiles/nightly'],
+    plan: [
+      'profiles/local-none',
+      'profiles/pr-in-ci',
+      'profiles/nightly',
+      'oracle/oracle',
+      'oracle/canary',
+    ],
     tests: [
       unit('selectProfile: --profile, then REEVAL_PROFILE'),
       unit('cascade: profile defaults sit under evals'),
       options('a profile name typo exits 2'),
+      history("a profile's defaults.sandbox is the sandbox the run header and the record name"),
     ],
   },
   {
@@ -295,10 +309,67 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'gateway',
+    area: 'Config and selection',
+    name: '`gateway`: the ordered gateway list, fallback to the first that can serve a harness, a harness `gateway` pin, a profile override, the plan notes and refusals, and the cell and fingerprint in the record',
+    plan: [
+      'gateway/default',
+      'gateway/listed',
+      'gateway/profile-list',
+      'gateway/profile-pin',
+      'gateway/yaml',
+    ],
+    tests: [
+      "reeval/test/plan.test.ts › each cell's gateway is in the JSON plan when the config lists one",
+      'reeval/test/plan.test.ts › a gateway reeval does not know exits 2 at plan time',
+      'reeval/test/gateway.test.ts › each harness takes the first gateway that can serve it',
+      'reeval/test/gateway.test.ts › a pin skips the fallback, and must be listed and able to serve',
+      'reeval/test/gateway.test.ts › only a gateway other than direct joins the fingerprint',
+      history("the cell's gateway is in the record, and direct leaves the fingerprint as it was"),
+    ],
+  },
+  {
+    id: 'gateway.vercel',
+    area: 'Config and selection',
+    name: "`vercel()`: Claude Code, Codex, Goose, OpenCode, fx and Grok Build on Vercel AI Gateway with one brokered key, fallback past it for the harnesses it cannot serve (pi among them) and for `effort` it does not carry yet, fx's asked model kept apart from the served one, a brokered 401 hinted as a refused key, an expired `VERCEL_OIDC_TOKEN` refused at plan time, and the judge, analysis and captures routed by the list or a judge pin",
+    plan: ['gateway/vercel', 'gateway/vercel-pin', 'gateway/vercel-yaml'],
+    tests: [
+      'reeval/test/plan.test.ts › a judge model no listed gateway serves exits 2 at plan time',
+      'reeval/test/gateway.test.ts › a fake harness calls no model, so any gateway serves it',
+      'reeval/test/gateway.test.ts › on a list, a model takes the first gateway that serves it, and only its keys',
+      'reeval/test/gateway.test.ts › a model nothing in the list serves exits 2, naming the gateway that would',
+      "reeval/test/gateway.test.ts › the egress gateway swaps Vercel's key in only on Vercel's model paths",
+      'reeval/test/gateway.test.ts › Claude Code takes the key as AI_GATEWAY_API_KEY and is brokered only on Vercel',
+      "reeval/test/gateway.test.ts › Codex reads the served model from Vercel's responses and names OpenAI's models",
+      'reeval/test/gateway.test.ts › Goose takes Gemini ids as Google models on Vercel, and reads the served model',
+      'reeval/test/gateway.test.ts › Goose on Vercel gets its key and provider; pi stays on Gemini',
+      "reeval/test/gateway.test.ts › fx's served model is only the response's; the model its call asked for is kept apart",
+      "reeval/test/gateway.test.ts › OpenCode's provider table gates direct() only",
+      'reeval/test/gateway.test.ts › effort with a harness whose effort path on Vercel is unchecked is refused there',
+      "reeval/test/gateway.test.ts › a brokered 401 gets the refused-key hint, whatever the CLI's message",
+      "reeval/test/gateway.test.ts › OpenCode on Vercel: an Anthropic model's effort is Anthropic's thinking option",
+      'reeval/test/gateway.test.ts › OpenCode takes its own vercel provider, with the model as vercel/<id>',
+      'reeval/test/gateway.test.ts › fx takes its own AI Gateway provider, and a bare id is OpenAI on Vercel',
+      "reeval/test/gateway.test.ts › a gateway id isn't fx on direct: it falls through to Vercel, or names it",
+      "reeval/test/gateway.test.ts › Grok Build runs the model on Vercel's Chat Completions API, as xai/<id>",
+      "harness-grok-build/test/unit.test.ts › on Vercel AI Gateway, the model is a [model.<id>] table on Vercel's key",
+      'harness-goose/test/unit.test.ts › the image bakes one bootstrap for every provider and model',
+      "harness-goose/test/unit.test.ts › on Vercel AI Gateway, Goose runs its vercel_ai_gateway provider on Vercel's key",
+      "reeval/test/gateway.test.ts › an expired project token is refused before the run; a live one, or a key, isn't",
+      'reeval/test/doctor.test.ts › gateway: where each harness resolves, its keys, and an expired Vercel token',
+    ],
+  },
+  {
     id: 'profiles.max-variants',
     area: 'Config and selection',
     name: '`limit.compare.maxVariants`',
     plan: ['compare/max-variants'],
+  },
+  {
+    id: 'profiles.compare-off',
+    area: 'Config and selection',
+    name: '`limit.compare: false`, or `maxVariants` leaving none: the lone control gates like an eval without compare',
+    plan: ['compare/off-study', 'compare/zero-variants', 'compare/baseline-omitted-off'],
   },
   {
     id: 'plan.json',
@@ -307,7 +378,27 @@ export const inventory: InventoryFeature[] = [
     plan: ['matrix/default'],
     tests: [
       'reeval/test/plan.test.ts › is one document with the host-dependent fields',
-      'reeval/test/plan.test.ts › --json without --dry-run exits 2',
+      'reeval/test/plan.test.ts › --json without --dry-run runs, and prints the suite result instead of the plan',
+    ],
+  },
+  {
+    id: 'plan.cost',
+    area: 'Config and selection',
+    name: "`reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part",
+    plan: [
+      'cost/no-history',
+      'cost/history',
+      'cost/unpriced',
+      'cost/file-offline',
+      'cost/tokens-only',
+    ],
+    tests: [
+      'reeval/test/cost.test.ts › says what the range is based on, and where the prices came from',
+      'reeval/test/cost.test.ts › with models it has no price for, says what the dollars cover and what they leave out',
+      'reeval/test/cost.test.ts › a REEVAL_PRICES file lies over models.dev, and stands alone when it is unreachable',
+      'reeval/test/cost.test.ts › a failed fetch is not tried again for an hour',
+      'reeval/test/cost.test.ts › offline, an older cache is used and marked stale; with none, there are no prices',
+      'reeval/test/cost.test.ts › is null for a model without an exact price, rather than a near one',
     ],
   },
   {
@@ -385,7 +476,9 @@ export const inventory: InventoryFeature[] = [
       'harness/opencode-home-skills',
       'harness/goose-home-skills',
       'harness/pi-home-skills',
+      'harness/grok-build-home-skills',
       'harness/codex-home-skills',
+      'harness/fx-home-skills',
     ],
     real: ['contract › skill placed where the agent reads it, and used'],
   },
@@ -401,15 +494,17 @@ export const inventory: InventoryFeature[] = [
       'harness/antigravity-workspace-skills',
       'harness/opencode-workspace-skills',
       'harness/goose-workspace-skills',
+      'harness/grok-build-workspace-skills',
       'harness/pi-workspace-skills',
       'harness/codex-workspace-skills',
+      'harness/fx-workspace-skills',
     ],
   },
   {
     id: 'skill.git',
     area: 'Environments',
-    name: '`skill.git`: ref, `path`, `only` and the recorded commit',
-    fixtures: ['skills/git-ref'],
+    name: '`skill.git`: ref, `path` (else `skills/` when the root has no SKILL.md), `only` and the recorded commit',
+    fixtures: ['skills/git-ref', 'skills/git-skills-dir'],
     tests: [unit('git refs and repo shorthands'), options('skills come from a git URL at a ref')],
   },
   {
@@ -428,6 +523,8 @@ export const inventory: InventoryFeature[] = [
       workspace('a missing subdirectory names what is there'),
       workspace('a pinned SHA reruns offline from the cache, with the same commit and tree'),
       workspace("the agent's diff starts from the repository, and a variant's workspace overrides"),
+      workspace('a commit a shallow local clone lacks says to fetch it or clone the full history'),
+      workspace('compare arms on different refs of the same tree get a warning'),
       options('common mistakes'),
     ],
   },
@@ -473,6 +570,180 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['skills/npm-package', 'skills/npm-local-path'],
   },
   {
+    id: 'environment.plugins',
+    area: 'Environments',
+    name: '`plugins`: `plugin.local`, `plugin.git` and `plugin.npm` in Claude Code’s layout, `only`, layering, the refusals per harness and the record',
+    fixtures: [
+      'plugins/local-lands',
+      'plugins/only-skills',
+      'plugins/git-ref',
+      'plugins/npm-package',
+    ],
+    plan: ['plugins/parts', 'plugins/remote', 'plugins/fetches-at-start'],
+    tests: [
+      plugin('a plugin is read in Claude Code’s layout'),
+      plugin(
+        'every real harness loads some plugin parts, so a plugin it can’t read yet isn’t refused whole',
+      ),
+      plugin('a child’s plugin replaces a same-named parent plugin'),
+      planTest('a plugin the plan reads and refuses exits 2'),
+    ],
+  },
+  {
+    id: 'plugin.marketplace',
+    area: 'Environments',
+    name: '`plugin.marketplace`: an entry in a Claude Code marketplace on git or npm, its own source resolved, and the marketplace in the record',
+    fixtures: ['plugins/marketplace-entry', 'plugins/marketplace-build'],
+    plan: ['plugins/marketplace', 'images/plugin-builds'],
+    tests: [
+      plugin('a marketplace entry’s source is a ./path, a git repository or an npm package'),
+      plugin('a marketplace reeval can’t read'),
+      plugin('resolving a marketplace entry places that plugin alone'),
+    ],
+  },
+  {
+    id: 'harness.plugins.namespaced',
+    area: 'Environments',
+    name: 'Plugins on Claude Code (a directory marketplace in `~/.claude/settings.json`) and Grok Build (`--plugin-dir`): every part but rules, their MCP servers left to the agent, a host secret refused',
+    fixtures: ['harness/claude-code-plugin', 'harness/grok-build-plugin'],
+    plan: ['plugins/claude-code-and-grok-build'],
+    tests: [
+      plugin('Claude Code and Grok Build load every part but rules'),
+      plugin('Claude Code enables the placed plugins from a directory marketplace'),
+      plugin('Claude Code’s plugin settings merge into a ~/.claude/settings.json'),
+      plugin('Grok Build refuses a plugin MCP server named like another'),
+      planTest(
+        "Grok Build and Codex refuse a plugin MCP server named like one in mcp; Claude Code's namespaced name plans",
+      ),
+      planTest("Claude Code and Grok Build refuse a plugin's rules"),
+      grokAdapter('unit', 'grok-acp starts grok agent --no-leader stdio'),
+    ],
+    real: [
+      'contract › plugin skill used',
+      'contract › plugin MCP server called',
+      'contract › plugin hook ran',
+      'contract › plugin subagent available',
+      'contract › plugin part it can’t load refused',
+      'contract › plugin hermetic: nothing undeclared loaded or contacted',
+    ],
+  },
+  {
+    id: 'harness.plugins.antigravity-cursor',
+    area: 'Environments',
+    name: 'Plugins on Antigravity (`agy plugin install` as the session starts, hooks translated, rules always on) and Cursor (rules, subagents, commands and hooks unpacked into the workspace’s `.cursor/` before the snapshot, MCP servers in its own config): every part, the hook events each runs, clashes refused',
+    fixtures: [
+      'harness/antigravity-plugin',
+      'harness/cursor-plugin',
+      'harness/cursor-plugin-build',
+    ],
+    plan: ['plugins/antigravity-and-cursor'],
+    tests: [
+      plugin('Cursor and Antigravity load every part'),
+      plugin(
+        'Antigravity refuses a plugin with a manifest agy reads in place of the Claude Code one',
+      ),
+      plugin('on Cursor, two plugins’ subagents or commands unpacked to one file clash'),
+      plugin(
+        'on Cursor, two rules unpacked to one file clash, and a hook that isn’t a command is refused',
+      ),
+      plugin('unpackPlugins writes a flat agent’s rules, subagents, commands and hooks'),
+      plugin('cursorHookMatcher maps Claude Code tool names on the tool events only'),
+      planTest('Cursor refuses a plugin item that clashes where it unpacks or places it'),
+      antigravityAdapter('harness', 'plugins are installed with agy plugin install'),
+      antigravityAdapter('harness', 'a plugin agy refuses to install fails the session start'),
+      antigravityAdapter('unit', 'hooks: a flat event takes its handlers'),
+      antigravityAdapter('unit', 'install: agy plugin install, then names on skills'),
+    ],
+    real: [
+      'contract › plugin skill used',
+      'contract › plugin MCP server called',
+      'contract › plugin hook ran',
+      'contract › plugin subagent available',
+      'contract › plugin rules read',
+      'contract › plugin hermetic: nothing undeclared loaded or contacted',
+    ],
+  },
+  {
+    id: 'harness.plugins.opencode-pi-fx',
+    area: 'Environments',
+    name: 'Plugins on OpenCode (skills, MCP servers, and subagents and commands unpacked into the workspace’s `.opencode/` with only the frontmatter it takes), pi (skills, MCP servers as `<plugin>_<server>`, commands as prompt templates in `.pi/prompts/`) and fx (skills and MCP servers): the parts each has no place for refused',
+    fixtures: [
+      'harness/opencode-plugin',
+      'harness/opencode-plugin-build',
+      'harness/pi-plugin',
+      'harness/fx-plugin',
+    ],
+    plan: ['plugins/opencode-pi-and-fx'],
+    tests: [
+      plugin('OpenCode, pi and fx load the parts they have a place for, and refuse the rest'),
+      plugin(
+        'unpackPlugins gives OpenCode subagents and commands only the frontmatter it takes; pi takes commands as they are',
+      ),
+      plugin('pi names a plugin MCP server <plugin>_<server>, and refuses one named like another'),
+      plugin(
+        'the frontmatter OpenCode takes survives a byte-order mark, an empty block and a non-string description',
+      ),
+      planTest(
+        'OpenCode, pi and fx refuse the plugin parts they have no place for, and pi a plugin server named like one in mcp',
+      ),
+    ],
+    real: [
+      'contract › plugin skill used',
+      'contract › plugin MCP server called',
+      'contract › plugin subagent available',
+      'contract › plugin part it can’t load refused',
+      'contract › plugin hermetic: nothing undeclared loaded or contacted',
+    ],
+  },
+  {
+    id: 'harness.plugins.codex-goose',
+    area: 'Environments',
+    name: 'Plugins on Codex (a home marketplace and `codex plugin add`, plugins on only for that session) and Goose (skills with its own, MCP servers as extensions): skills and MCP, a plugin with ChatGPT apps refused on Codex',
+    fixtures: ['harness/codex-plugin', 'harness/goose-plugin'],
+    plan: ['plugins/codex-and-goose'],
+    tests: [
+      plugin(
+        'Codex and Goose load skills and MCP; Codex refuses hooks, apps and a plugin server’s host secret',
+      ),
+      plugin(
+        'Codex refuses a plugin with a manifest it reads first; a root plugin.json counts only with its schema, though Antigravity reads any',
+      ),
+      plugin("Codex's plugin sync hosts are expected blocks only in a session with plugins"),
+      planTest("Codex refuses a plugin's hooks and its apps; Goose a plugin's hooks"),
+      planTest(
+        "Goose refuses a plugin MCP server it keys like one in mcp; Claude Code's namespaced name plans",
+      ),
+      codexAdapter(
+        'unit',
+        'plugins are listed in the home marketplace by their path from home, then added from it',
+      ),
+      codexAdapter(
+        'unit',
+        'a session with plugins writes the marketplace and adds each before its first turn',
+      ),
+    ],
+    real: [
+      'contract › plugin skill used',
+      'contract › plugin MCP server called',
+      'contract › plugin part it can’t load refused',
+      'contract › plugin hermetic: nothing undeclared loaded or contacted',
+    ],
+  },
+  {
+    id: 'environment.plugins.build',
+    area: 'Environments',
+    name: 'Plugin `build`: a cached image layer per built plugin, listed by `--dry-run` and `reeval image build`, refused on the fake sandbox',
+    fixtures: ['plugins/build-layer'],
+    plan: ['images/plugin-builds'],
+    tests: [
+      plugin('a build is commands and where they run, the same for each way of writing it'),
+      plugin(
+        'a built plugin keeps only the parts only names: the rest of its directory is removed',
+      ),
+      planTest('a plugin the plan reads and refuses exits 2'),
+    ],
+  },
+  {
     id: 'skill.exclude',
     area: 'Environments',
     name: 'Skill `exclude`: the defaults and a custom list',
@@ -507,6 +778,18 @@ export const inventory: InventoryFeature[] = [
     real: ['contract › stdio MCP server started and called'],
   },
   {
+    id: 'mcp.startup',
+    area: 'Environments',
+    name: "Each stdio MCP server's start-up time per turn (`turns[].mcpStartup`), and an infra error naming a server that doesn't answer `initialize` within 60s",
+    fixtures: ['mcp/startup-timed', 'mcp/never-answers'],
+    tests: [
+      sandboxDocker('mcp-timer', 'reads newline-delimited JSON-RPC across chunks'),
+      sandboxDocker('mcp-timer', 'reads Content-Length framed messages'),
+      sandboxDocker('mcp-timer', 'passes stdio through untouched and logs the initialize answer'),
+    ],
+    real: ['contract › stdio MCP server started and called'],
+  },
+  {
     id: 'mcp.http',
     area: 'Environments',
     name: '`mcp.http`',
@@ -534,16 +817,18 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'rules',
     area: 'Environments',
-    name: '`rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose, pi and Codex, `CLAUDE.md` for Claude Code',
+    name: '`rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose, pi, Codex, fx and Grok Build, `CLAUDE.md` for Claude Code',
     fixtures: [
       'env/rules',
       'harness/cursor-rules',
       'harness/claude-code-rules',
       'harness/antigravity-rules',
       'harness/opencode-rules',
+      'harness/grok-build-rules',
       'harness/goose-rules',
       'harness/pi-rules',
       'harness/codex-rules',
+      'harness/fx-rules',
       'harness/cursor-rules-reach-agent',
     ],
     tests: [harness('rules win over a file at the same path')],
@@ -702,6 +987,27 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['sandbox/write-file', 'sandbox/write-file-edit'],
     tests: [unit('c.writeFile refuses absolute paths and paths that leave the workspace')],
   },
+  {
+    id: 'sandbox.snapshot-private',
+    area: 'Sandbox',
+    name: "The diff's snapshot: no pre-seed content the agent can reach, unreadable in Docker",
+    fixtures: [
+      'sandbox/snapshot-no-history',
+      'sandbox/snapshot-unreadable',
+      'sandbox/diff-private-file',
+    ],
+    tests: [
+      unit("the snapshot keeps one commit and no placed file's earlier content"),
+      sandboxDocker(
+        'confinement',
+        "runPrivileged reads what the sandbox user keeps to itself, and runs none of that user's binaries",
+      ),
+      sandboxDocker(
+        'confinement',
+        'runPrivileged is root with only the privileged capabilities, under seccomp and AppArmor',
+      ),
+    ],
+  },
 
   // Sandbox
   {
@@ -745,6 +1051,8 @@ export const inventory: InventoryFeature[] = [
       'harness/goose-dockerfile',
       'harness/pi-dockerfile',
       'harness/codex-dockerfile',
+      'harness/fx-dockerfile',
+      'harness/grok-build-dockerfile',
     ],
     plan: ['images/install-from-dockerfile'],
     tests: [
@@ -757,7 +1065,7 @@ export const inventory: InventoryFeature[] = [
     id: 'docker.confinement',
     area: 'Sandbox',
     name: 'Docker confinement: the `reeval` user, no capabilities, `no-new-privileges`, and `docker({ root, capabilities })`',
-    fixtures: ['sandbox/unprivileged'],
+    fixtures: ['sandbox/unprivileged', 'sandbox/no-unshare', 'sandbox/exec-umask'],
     tests: [
       sandboxDocker(
         'confinement',
@@ -766,6 +1074,10 @@ export const inventory: InventoryFeature[] = [
       sandboxDocker(
         'confinement',
         'no capabilities, and no-new-privileges; root: true adds back only what apt-get needs',
+      ),
+      sandboxDocker(
+        'confinement',
+        "the sandbox user can't use the privileged capabilities, even through a setuid binary",
       ),
       sandboxDocker('confinement', 'install layers put ~ in the sandbox user’s home, owned by it'),
       sandboxDocker(
@@ -781,6 +1093,21 @@ export const inventory: InventoryFeature[] = [
         'the forwarder, its port and the gateway CA are out of the sandbox user’s reach',
       ),
       sandboxDocker('confinement', 'a root: true sandbox is still detached from every network'),
+    ],
+  },
+  {
+    id: 'podman.sandbox',
+    area: 'Sandbox',
+    name: "`podman({ … })`: `docker()`'s sandbox on rootless Podman, on the bridge network with Docker's seccomp profile",
+    fixtures: ['sandbox/podman-bridge', 'sandbox/no-unshare'],
+    plan: ['environments/podman'],
+    tests: [
+      sandboxDocker(
+        'unit',
+        "podman runs every container on the bridge with Docker's seccomp profile",
+      ),
+      sandboxDocker('build-failure', 'reading a failed podman build (buildah)'),
+      'reeval/test/doctor.test.ts › podman: down, too old, missing cgroup controllers',
     ],
   },
   {
@@ -926,10 +1253,24 @@ export const inventory: InventoryFeature[] = [
     plan: ['egress/cascade', 'egress/profile-defaults'],
     tests: [
       sandboxDocker('docker', 'allowlist: a listed host gets 200'),
-      sandboxDocker('docker', 'no direct route: custom and deny-all'),
+      sandboxDocker('docker', 'no direct route: allow-all without direct, custom and deny-all'),
+      sandboxDocker('docker', 'absolute-form https (GET https://… without CONNECT)'),
+      sandboxDocker('proxy', 'absolute-form https requests through the proxy'),
       sandboxDocker('unit', 'deny list: every always-denied form'),
     ],
     real: ['contract › deny-all plus auto hosts works, a blocked host refused and recorded'],
+  },
+  {
+    id: 'egress.proxy',
+    area: 'Sandbox',
+    name: "`egress: 'proxy'` (the default) detaches the container, so only HTTP(S) through the gateway leaves it; `'allow-all'` keeps its network, records `partial` and warns on a CI runner or cloud VM",
+    fixtures: ['egress/proxy-no-direct-route', 'egress/allow-all-direct'],
+    plan: ['egress/default-proxy', 'egress/allow-all-on-ci'],
+    tests: [
+      sandboxDocker('docker', 'without node the gateway falls back (direct allow-all)'),
+      'reeval/test/doctor.test.ts › egress: allow-all on a cloud VM or CI runner warns; proxy there, or allow-all elsewhere, does not',
+      'reeval/test/remarks.test.ts › proxy-only-egress: a connection error under proxy that reached no gateway, not under allow-all or a refusal',
+    ],
   },
   {
     id: 'brokering.harness-key',
@@ -954,6 +1295,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/docker-antigravity.test.ts › Antigravity attempts broker the key on its model endpoint only',
       docker('Goose gets the key on the model list it fetches each turn'),
       docker('Gemini refusing the key fails the turn and names the host variable'),
+      docker('grokBuild: the key is brokered on the xAI API only'),
     ],
   },
   {
@@ -1058,9 +1400,9 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['harness/opencode-provider-key'],
     plan: ['opencode/opencode', 'opencode/bedrock-region'],
     tests: [
-      "reeval/test/plan.test.ts › OpenCode on a provider reeval can't broker exits 2 at plan time",
-      harness('is plain data with its own cell id, and needs a model on a provider it can broker'),
-      harness("the config refuses a hand-made descriptor on a provider it can't broker"),
+      "reeval/test/plan.test.ts › OpenCode on a provider direct() can't broker exits 2 at plan time",
+      harness('is plain data with its own cell id, and needs a <provider>/<model>'),
+      harness("direct() refuses a provider it can't broker; vercel() takes any <provider>/<model>"),
       harness("needs only the model's provider's key"),
       harness("each provider's hosts are its automatic egress hosts, with Exa's for web search"),
       harness("elsewhere the gateway reads the served model from each model call's response"),
@@ -1171,6 +1513,34 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'harness.fx',
+    area: 'Harnesses',
+    name: '`fx()`: fx over ACP on a brokered AI Gateway or OpenAI key, through a relay to the egress gateway, with per-turn tokens and its tool names',
+    fixtures: [
+      'harness/fx-rules',
+      'harness/fx-workspace-skills',
+      'harness/fx-home-skills',
+      'harness/fx-dockerfile',
+    ],
+    plan: ['fx/fx'],
+    tests: [
+      harness(
+        'reads rules from AGENTS.md, repo skills from .fx/skills, home skills in its own home',
+      ),
+      harness("fx's adapter brokers only its provider's key, as a Bearer token, to that provider"),
+      harness("gets MCP servers in ACP's shape, a bare stdio command through env's PATH lookup"),
+      fxAdapter('unit', 'a gateway id runs on AI Gateway, a bare id on OpenAI'),
+      fxAdapter(
+        'unit',
+        "MCP calls are renamed from fx's mcp_<server>_<tool>, longest server first",
+      ),
+      fxAdapter(
+        'unit',
+        "a command's result is its streamed output and exit code, not fx's clipped summary",
+      ),
+    ],
+  },
+  {
     id: 'harness.cursor',
     area: 'Harnesses',
     name: '`cursor()`: Cursor through its TypeScript SDK, one runner per session',
@@ -1195,6 +1565,7 @@ export const inventory: InventoryFeature[] = [
       piAdapter('unit', 'effort is --thinking'),
       codexAdapter('unit', 'effort is model_reasoning_effort in the config'),
       gooseAdapter('unit', 'effort is GOOSE_THINKING_EFFORT'),
+      grokAdapter('unit', "effort is the config's default_reasoning_effort"),
       opencodeAdapter('unit', "effort is that provider's thinking option"),
     ],
   },
@@ -1205,7 +1576,7 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['harness/cursor-reports-usage'],
     tests: [
       harness('token usage and the served model, from any harness'),
-      harness('OpenCode: ACP PromptResponse.usage as harness-acp maps it'),
+      harness('OpenCode: ACP PromptResponse.usage with its thoughts added to the output'),
     ],
     real: [
       'contract › tokens recorded where the harness reports them',
@@ -1283,6 +1654,21 @@ export const inventory: InventoryFeature[] = [
     real: ['contract › native stream format unchanged'],
   },
   {
+    id: 'harness.tool-catalog',
+    area: 'Harnesses',
+    name: "Every tool a CLI calls is in its adapter's catalog, and file edits, reads and commands land as those kinds",
+    tests: [
+      "reeval/test/replay.test.ts › canary: the tool calls aren't in the catalog",
+      "reeval/test/replay.test.ts › canary: the CLI's tool names aren't ones the adapter maps",
+      'reeval/test/replay.test.ts › canary: the edit and the skill read and write are not normalised',
+      'reeval/test/replay.test.ts › canary: a command that arrives as an unknown tool is not a command',
+    ],
+    real: [
+      "contract › every tool call in the adapter's catalog",
+      'contract › file edits, reads and commands normalised',
+    ],
+  },
+  {
     id: 'record.served-model',
     area: 'Harnesses',
     name: "The models a harness's API requests named on the wire (`servedModels`)",
@@ -1309,6 +1695,25 @@ export const inventory: InventoryFeature[] = [
         'c.judge with an empty question or a threshold outside 0…1 fails without asking the judge',
       ),
       unit('judge calls retry transient provider errors'),
+    ],
+  },
+  {
+    id: 'judge.providers',
+    area: 'Judges and matchers',
+    plan: ['insights/anthropic-no-key', 'insights/anthropic-key'],
+    name: "Model routing for reeval's own calls (judge, analysis, insights, compare questions): `anthropic/*`, `google/*`, `openai/*` and `typesafe-ai/*` call their provider directly when its key is set, which wins over the AI Gateway; any other prefix goes through the Gateway; a missing or malformed key names the model, its prefix and every key that works, at plan time, in `reeval doctor` and at call time",
+    tests: [
+      unit('each provider prefix with each combination of keys'),
+      engine(
+        "anthropic/* and openai/* judges call the provider directly with its key, over the Gateway's",
+      ),
+      unit('judge strings use the provider package on direct, and the AI Gateway only on vercel'),
+      questions("a question's own model needs its key, and a malformed one exits 2"),
+      options(
+        'a judge model without its key exits 2 naming the keys that work, before any attempt',
+      ),
+      secrets("masks every direct model provider's key by its value, whatever its shape"),
+      "reeval/test/doctor.test.ts › analysis: an anthropic/* or openai/* model takes its own key, never the Gateway's",
     ],
   },
   {
@@ -1468,6 +1873,36 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'harness.grok-build',
+    area: 'Harnesses',
+    name: "`grokBuild()`: xAI's Grok Build over ACP on a brokered xAI key, its image, rules, skills, MCP servers, tool names and the turn's tokens",
+    fixtures: [
+      'harness/grok-build-rules',
+      'harness/grok-build-workspace-skills',
+      'harness/grok-build-home-skills',
+      'harness/grok-build-dockerfile',
+    ],
+    plan: ['grok-build/grok-build'],
+    tests: [
+      harness(
+        'Grok reads rules from AGENTS.md, repo skills from .grok/skills, home skills in its own home',
+      ),
+      harness(
+        "Grok Build's adapter brokers only the xAI key, on Authorization, to the xAI API's endpoints",
+      ),
+      docker('grokBuild: the key is brokered on the xAI API only'),
+      grokAdapter(
+        'stream',
+        "a use_tool call of an MCP server's tool is mcp__<server>__<tool>, with its input",
+      ),
+      grokAdapter('stream', "the finish part's usage is the turn's sum from the prompt response"),
+      grokAdapter(
+        'unit',
+        "config.toml puts every call on the run's model and turns off the extra calls",
+      ),
+    ],
+  },
+  {
     id: 'history.commands',
     area: 'Records and studio',
     name: '`reeval history`, `reeval show` and `reeval compare`, with `--json` and `--md`',
@@ -1475,6 +1910,8 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/history.test.ts › reeval run writes scratch; reeval record promotes it',
       'reeval/test/history.test.ts › an imported helper is part of the fingerprint',
       unit('compare classifies an eval on the cells both runs have, and lists the rest'),
+      'reeval/test/output.test.ts › a check not run on one side is not run',
+      'reeval/test/output.test.ts › a check not run on both sides is no change',
       'reeval/test/history.test.ts › a history file that is not a readable record is named on stderr',
       docker('two runs with the same agent context are comparable'),
     ],
@@ -1487,6 +1924,15 @@ export const inventory: InventoryFeature[] = [
     tests: [
       'reeval/test/history.test.ts › reeval compare --fail-on-regression fails on a regression and on a failing new eval',
       'reeval/test/history.test.ts › reeval compare --fail-on-regression fails on a failing eval that changed (not comparable)',
+    ],
+  },
+  {
+    id: 'compare.cancelled',
+    area: 'Records and studio',
+    name: "An eval Ctrl-C cancelled reads `can't compare` with that side `cancelled` in `reeval compare`, never `regressed`, and doesn't fail `--fail-on-regression`",
+    tests: [
+      'reeval/test/history.test.ts › reeval compare reads an eval an interrupt cancelled as cancelled, never regressed',
+      'reeval/test/output.test.ts › a side the interrupt cancelled reads cancelled, not fail',
     ],
   },
   {
@@ -1510,6 +1956,23 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'mcp.debugging',
+    area: 'Records and studio',
+    name: "`reeval mcp` for debugging a failed run: `failures` (each failed attempt's checks, judge scores, error, check logs and transcript tail, and whether its cell failed before) and `history` listing scratch runs, with a note, when nothing is recorded",
+    tests: [
+      'reeval/test/mcp.test.ts › failures says why each attempt failed, and whether its cell failed before',
+      'reeval/test/mcp.test.ts › history falls back to scratch runs with a note',
+    ],
+  },
+  {
+    id: 'summary.study-mark',
+    area: 'Records and studio',
+    name: "An eval whose cells are all `gate: 'none'` is marked ○ and `not gated` in the run summary when its attempts miss, never ✓ beside 0/n",
+    tests: [
+      engine('an eval with not-gated cells labels its pass@1 gated; an all-gated one does not'),
+    ],
+  },
+  {
     id: 'query.facts',
     area: 'Records and studio',
     name: '`reeval query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context`',
@@ -1528,20 +1991,23 @@ export const inventory: InventoryFeature[] = [
       analysis('drift: only Cursor runtime state changed, so it is noise'),
       analysis('a real context file (a skill) that changed is drift, not noise'),
       analysis('mixed outcomes over enough comparable attempts are flaky'),
+      analysis('the same change passing and failing its check is caused by the check'),
       'reeval/test/query.test.ts › drift names the changed part',
     ],
   },
   {
     id: 'effort',
     area: 'Records and studio',
-    name: 'Effort (tool calls, agent time, and tokens when both sides reported usage) next to lift in the `reeval run` summary, `summary.md`, `reeval compare` and the studio',
+    name: 'Effort (tool calls, agent time, and tokens when both sides reported usage): the effort table in `reeval run` and `summary.md` from four counted tries a side, beside lift in `reeval compare -v` and the studio',
     tests: [
       analysis('the rank test is exact'),
       analysis('tokens join the rank test when both sides reported usage'),
       analysis('a side with no usage omits the token metric, not insufficient'),
       analysis('tokens still verdict among cells that reported usage when another cell did not'),
       analysis('attempts without usage drop out of the token sample only'),
-      analysis('reeval run, summary.md and reeval compare show each variant cell'),
+      analysis(
+        'reeval run and summary.md print the arms without an effort table below four tries a side',
+      ),
       analysis('reeval query effort verdicts tokens when usage is present'),
       analysis('the prompt and rules say missing usage omits tokens'),
       unit('effort under 10s reads in tenths, so a ratio matches its times'),
@@ -1562,10 +2028,10 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'contrasts',
     area: 'Records and studio',
-    name: 'Contrasts: each pair of arms on one harness (lift, checks, effort) in the run summary, `reeval show`, `summary.md`, `reeval query contrasts` and the digest',
+    name: 'Contrasts: every arm side by side (checks, effort) in the run output, `reeval show` and `summary.md`; each pair of arms on one harness in `reeval query contrasts` and the digest',
     tests: [
       analysis(
-        'show, summary.md, the run summary, reeval query contrasts and the digest set every pair side by side',
+        'show, summary.md and the run set every arm side by side, and reeval query contrasts and the digest every pair',
       ),
       analysis('canary: with one variant there is no variant-against-variant row'),
     ],
@@ -1577,7 +2043,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       "reeval/test/results.test.ts › head to head: a pair whose two orders disagree is a split, not a win each (Ben's UX votes)",
       'reeval/test/results.test.ts › canary: two arms get no head-to-head line, and orders that agree split nothing',
-      options('three arms: head to head per pair, and pairs the order decided are splits'),
+      questions('three arms: head to head per pair, and pairs the order decided are splits'),
     ],
   },
   {
@@ -1606,12 +2072,97 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'query.check-rates',
+    area: 'Records and studio',
+    name: 'Each labelled check\u2019s pass rate per cell, control and variant alike (`check_rates`)',
+    tests: [
+      query(
+        'check_rates gives each labelled check’s pass rate per cell, on both arms of a compare',
+      ),
+    ],
+  },
+  {
+    id: 'query.check-streaks',
+    area: 'Records and studio',
+    name: 'Each check\u2019s streak of clean recorded runs per cell, setup and branch (`check_streaks`)',
+    tests: [
+      query('check_streaks counts each check’s clean recorded runs on a branch, newest first'),
+    ],
+  },
+  {
+    id: 'remarks',
+    area: 'CLI and runner',
+    name: 'Deterministic remarks at the end of `reeval run` and in `reeval show`, with no model: concerns only (at most 3), suggestions with `-v`, each once per eval version except `slow-mcp-start`, kept in `insights.json` `remarks` with `origin: deterministic`',
+    tests: [
+      'reeval/test/remarks.test.ts › a suggestion prints under -v once per eval version, and an edit re-arms it',
+      'reeval/test/remarks.test.ts › a well-written eval prints no Remarks heading',
+      'reeval/test/remarks.test.ts › check-never-fails needs 5 recorded runs on the default branch, and goes to insights.json',
+      'reeval/test/insights.test.ts › replaces remarks-only insights.json and keeps its remarks',
+    ],
+  },
+  {
+    id: 'remarks.too-few-tries',
+    area: 'CLI and runner',
+    name: 'Remark `too-few-tries`: a variant and its baseline differ by half their tries or more with fewer than 4 tries a side',
+    tests: [
+      'reeval/test/remarks.test.ts › too-few-tries: a gap of half the tries with fewer than 4 a side, not under it',
+    ],
+  },
+  {
+    id: 'remarks.check-never-fails',
+    area: 'CLI and runner',
+    name: 'Remark `check-never-fails`: a check passed every try in the last 5 recorded default-branch runs and 20 tries',
+    tests: [
+      'reeval/test/remarks.test.ts › check-never-fails: 5 clean recorded runs and 20 tries, not 4 runs or 19 tries',
+      'reeval/test/remarks.test.ts › check-never-fails needs 5 recorded runs on the default branch',
+    ],
+  },
+  {
+    id: 'remarks.flaky-check',
+    area: 'CLI and runner',
+    name: 'Remark `flaky-check`: a flaky cell\u2019s check both passed and failed in 2 of its newest 5 comparable runs, over 6 tries or more',
+    tests: [
+      'reeval/test/remarks.test.ts › flaky-check: flaky, 2 mixed runs and 6 tries, not 1 mixed run, 5 tries or infra',
+      'reeval/test/remarks.test.ts › flaky-check prints once the cell has 2 mixed runs and 6 tries behind it',
+    ],
+  },
+  {
+    id: 'remarks.slow-mcp-start',
+    area: 'CLI and runner',
+    name: 'Remark `slow-mcp-start`: a stdio MCP server took 2s or more to answer `initialize`, or never did, counted over the turns that recorded it; prints in every run',
+    tests: [
+      'reeval/test/remarks.test.ts › slow-mcp-start: 2000 ms or no answer on a recorded turn, not 1999 ms',
+      'reeval/test/remarks.test.ts › slow-mcp-start prints in every run, at 2000 ms, and for a server that never answers',
+    ],
+  },
+  {
+    id: 'remarks.model',
+    area: 'CLI and runner',
+    name: 'Model remarks from the per-eval insights call, by the eval rubric (`skills/eval-rubric`): kinds `name-contradicts`, `name-no-intent`, `judge-too-loose`, `judge-leaks-answer`, `prompt-names-tool` and `compound-judge`, each kept only with a verbatim quote on its cited line of the file as the run saw it; printed once, with its fix when it has one; the exit code never changes',
+    tests: [
+      'reeval/test/remarks.test.ts › each kind passes its gates, prints once with its fix, and never changes the exit code',
+      'reeval/test/remarks.test.ts › without -v, concerns print up to the cap and suggestions wait',
+      'reeval/test/remarks.test.ts › canary: an unknown kind and a quote not on its line are dropped',
+      'reeval/test/remarks.test.ts › canary: a remark whose quoted file changed since the run is dropped',
+      'reeval/test/remarks.test.ts › an edit elsewhere in the file prints no model remark again',
+      'reeval/test/remarks.test.ts › has one section per remark kind, and none for anything else',
+      'reeval/test/remarks.test.ts › ships beside dist as the repository has it, and its hash is in the prompt version',
+    ],
+  },
+  {
+    id: 'remarks.no-baseline',
+    area: 'CLI and runner',
+    name: "Remark `no-baseline`: the classification names a change (`subject.change`) the eval doesn't compare; never under a profile's `limit.compare: false`",
+    tests: [
+      'reeval/test/remarks.test.ts › raised when the classification names a change and nothing compares it',
+      'reeval/test/remarks.test.ts › canary: a compare, a profile with limit.compare: false, or no change raises none',
+    ],
+  },
+  {
     id: 'summary.judge-keys',
     area: 'Records and studio',
-    name: 'Standing per-key judge pass rate on the run summary and studio eval page, with lift per key when both sides have enough counted attempts',
+    name: 'Standing per-key judge pass rate on the studio eval page, with lift per key when both sides have enough counted attempts',
     tests: [
-      'reeval/test/ui.test.ts › cell rows show per-key rates',
-      'reeval/test/ui.test.ts › cell rows distinguish judges that share a clipped prefix',
       studio('per-key judge rates, collapsed scores and cell usage'),
       studio('colliding judge prefixes take the distinctive tail'),
     ],
@@ -1619,21 +2170,14 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'summary.judge-score',
     area: 'Records and studio',
-    name: 'Collapsed attempt lines show each judge as fail 0.78/0.80 (or the minimum plus a count)',
-    tests: [
-      'reeval/test/ui.test.ts › two judges print as fail',
-      studio('per-key judge rates, collapsed scores and cell usage'),
-    ],
+    name: 'Studio attempt rows show each judge as fail 0.78/0.80 (or the minimum plus a count)',
+    tests: [studio('per-key judge rates, collapsed scores and cell usage')],
   },
   {
     id: 'summary.usage',
     area: 'Records and studio',
-    name: 'Token usage on each attempt line and a per-cell sum of counted attempts, in the summary and studio',
-    tests: [
-      'reeval/test/ui.test.ts › a collapsed attempt line shows verdict',
-      'reeval/test/ui.test.ts › null usage is omitted',
-      studio('per-key judge rates, collapsed scores and cell usage'),
-    ],
+    name: 'Token usage on each attempt and a per-cell sum of counted attempts, in the studio',
+    tests: [studio('per-key judge rates, collapsed scores and cell usage')],
   },
   {
     id: 'analyze',
@@ -1652,7 +2196,8 @@ export const inventory: InventoryFeature[] = [
       analysis('a changed eval is not comparable, not an effect'),
       analysis('a changed eval has no mixed 6/10 vs 8/9 result line'),
       analysis('--vs none analyses this run only'),
-      analysis('two counted attempts can still be an effect'),
+      analysis('every view gives the same verdict'),
+      analysis('every view reads one minimum of counted attempts'),
       analysis('claims with invented citations or quotes are dropped'),
       analysis('a rejected verify is dropped'),
       analysis('an anomaly that quotes a judge score the record does not have is dropped'),
@@ -1673,35 +2218,79 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
-    id: 'analysis.agent',
+    id: 'analyze.insights',
     area: 'Records and studio',
-    name: '`analysis.agent`: `reeval run` writes a note on each eval and harness, from tools over its attempts, into `.reeval/analysis/<run>/notes/`',
+    name: "`reeval analyze --insights`: each eval's intent, answer and row sentences, citing the facts and checked by the validator, written create-only to `<run>/insights.json`; `reeval show` prints them, and leaves out ones written for other facts",
     tests: [
-      analysis('on made-up staged records, missing and cut-short ones too'),
-      analysis('real harness transcripts and diffs read the same from a staged record'),
-      analysis('on real traces, a failed canary pairs with its passing eval'),
-      analysis('the analyst replays each real harness'),
-      analysis('a fake run writes one note per eval and harness'),
-      analysis('a note that errors is written with its error and a warning'),
-      analysis('without agent, a run makes no analysis call'),
-      analysis('agent without a language model exits 2 at plan time'),
-      options('common mistakes'),
+      'reeval/test/insights.test.ts › canary: an uncited answer is dropped',
+      'reeval/test/insights.test.ts › canary: a sentence citing a fact it was never shown is dropped',
+      'reeval/test/insights.test.ts › canary: a cite to an id the model was never shown is dropped',
+      'reeval/test/insights.test.ts › the model cites short ids, and insights.json keeps the fact paths',
+      'reeval/test/insights.test.ts › canary: ids never reach the text',
+      'reeval/test/insights.test.ts › canary: a headline calling the tally a count of evals is dropped',
+      'reeval/test/insights.test.ts › canary: a finding that repeats a row sentence is dropped',
+      'reeval/test/insights.test.ts › canary: with only a judge model, --insights refuses and writes nothing',
+      'reeval/test/insights.test.ts › canary: a bare "helped" against an unclear effect is dropped',
+      'reeval/test/insights.test.ts › canary: an effect word after the hedged clause ends is a claim, and dropped',
+      'reeval/test/insights.test.ts › -v prints each sentence the checks removed and why',
+      'reeval/test/insights.test.ts › canary: a banned word is asked for once more, then dropped',
+      'reeval/test/insights.test.ts › canary: a sentence on a row the layout keeps closed',
+      'reeval/test/insights.test.ts › canary: a named tool the final message never names is dropped',
+      'reeval/test/insights.test.ts › canary: job choose on a finish-shaped eval prints the choose layout',
+      'reeval/test/insights.test.ts › insights written for other facts are left out, with a note',
+      'reeval/test/insights.test.ts › writes a recorded run insights.json once',
+      'reeval/test/insights.test.ts › canary: a count must be the cited fact own count',
+      'reeval/test/insights.test.ts › canary: a small number no cited fact holds is dropped',
+      'reeval/test/insights.test.ts › canary: an effect said in other words must be the cited effect',
+      'reeval/test/insights.test.ts › canary: a hedged clause ends at a comma, a dash or a conjunction',
+      'reeval/test/insights.test.ts › canary: a quote in single, curly or backtick quotes',
+      'reeval/test/insights.test.ts › canary: a reply that is not the schema JSON is asked for once more',
+      'reeval/test/insights.test.ts › canary: a fourth finding is dropped',
+      'reeval/test/insights.test.ts › canary: a count beside a named tool is that tool count',
+      "reeval/test/insights.test.ts › a named tool's own count is kept",
+      'reeval/test/insights.test.ts › canary: a cancelled eval opens no findings or moved row',
+      'reeval/test/insights.test.ts › canary: a cancelled case opens no row',
+      "reeval/test/insights.test.ts › canary: a cancelled attempt's final message",
+      'reeval/test/insights.test.ts › a hand-edited sentence prints on one line',
+      'reeval/test/output.test.ts › insights add only their sentences',
     ],
-    real: ['questions › examples/hello --profile questions'],
   },
   {
-    id: 'analysis.agent.summary',
+    id: 'run.insights',
     area: 'Records and studio',
-    name: "`analysis.agent`'s run summary: once the run is written, the `reeval analyze` document for it, read with tools and cached under the same key; the studio's Analysis tab shows it, the notes, and a failed call's error",
+    plan: ['insights/insights', 'insights/no-insights'],
+    name: "`reeval run`'s insights: once the exit code is fixed, `analysis.model` classifies and explains each eval into `.reeval/runs/<run>/insights.json` (copied by `reeval record`); `analysis.maxTokens` spends on failures, regressions and compares first and prints the evals it skipped; each eval's input trimmed to its cap and each call's output cap, timeout and one retry, an eval that still fails printing its facts alone; Ctrl-C keeping what finished, and `reeval analyze --insights` finishing what it, a failure or the budget left; the progress line; `--no-insights` and `analysis.insights: false`; classifications cached in `.reeval/analysis/classify/` and read back from the last recorded run",
     tests: [
-      analysis('on a real Cursor history, the tools read back dropped evidence'),
-      analysis('on each real harness'),
-      analysis('a fake run caches one run-scoped summary'),
-      analysis('a summary that fails is cached with its error and a warning'),
-      studio("analysis.agent's notes are in the build as the server serves them"),
-      "studio-web/test/e2e.test.ts › reeval studio shows analysis.agent's notes and summary",
+      'reeval/test/insights.test.ts › a failure, then made worse, then a compare',
+      'reeval/test/insights.test.ts › a budget that fits exactly N evals starts N',
+      'reeval/test/insights.test.ts › a budget under the first estimate starts no eval',
+      'reeval/test/insights.test.ts › within a tier the output order stands',
+      'reeval/test/insights.test.ts › each eval gets its insight, printed under its block',
+      'reeval/test/insights.test.ts › a small analysis.maxTokens skips the lowest-priority evals',
+      'reeval/test/insights.test.ts › canary: insights never change the exit code',
+      'reeval/test/insights.test.ts › analysis.insights: false makes no call',
+      'reeval/test/insights.test.ts › a reply past the output cap is cut off and asked for once more',
+      'reeval/test/insights.test.ts › canary: a reply just under the output cap is kept',
+      'reeval/test/insights.test.ts › Ctrl-C during insights keeps those written',
+      'reeval/test/insights.test.ts › canary: with no Ctrl-C, every eval waits its turn',
+      'reeval/test/insights.test.ts › reeval analyze --insights finishes a stopped document',
+      'reeval/test/insights.test.ts › a hung call is given up after its timeout',
+      'reeval/test/insights.test.ts › canary: a slow call inside its timeout is kept',
+      'reeval/test/insights.test.ts › over it, the trim is the same every time',
+      'reeval/test/insights.test.ts › canary: a passing check the layout opens a row on stays',
+      'reeval/test/insights.test.ts › the model is told the input was trimmed',
+      'reeval/test/ui.test.ts › live: the status line counts the evals settled',
+      'reeval/test/ui.test.ts › plain: only the heartbeat says so',
+      'reeval/test/insights.test.ts › a classification is cached by its key, and read back',
+      options('common mistakes'),
     ],
-    real: ['questions › examples/hello --profile questions'],
+    real: ['questions › test/real-agents --profile questions'],
+  },
+  {
+    id: 'analysis.notes',
+    area: 'Records and studio',
+    name: "A run's notes in `.reeval/analysis/<run>/notes/`: the studio's Analysis tab shows them with the cached `reeval analyze` document",
+    tests: [studio("a run's notes are in the build as the server serves them")],
   },
   {
     id: 'ui.capture',
@@ -1803,7 +2392,7 @@ export const inventory: InventoryFeature[] = [
       'studio-web/test/e2e.test.ts › every run in the record corpus renders',
       "studio-web/test/e2e.test.ts › a compare answer over real harnesses' diffs (real-e2e-pairs)",
     ],
-    real: ['questions › examples/hello --profile questions'],
+    real: ['questions › test/real-agents --profile questions'],
   },
 
   // CLI and runner
@@ -1875,7 +2464,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       'reeval/test/ui.test.ts › grouped: start lines stream',
       'reeval/test/ui.test.ts › GitHub Actions: passing attempts collapse into groups',
-      engine('agent mode prints failures only'),
+      engine('agent mode prints the plan and the result blocks only'),
       engine("a turn's error message shows in the summary, agent output and summary.md without -v"),
     ],
   },
@@ -1884,6 +2473,55 @@ export const inventory: InventoryFeature[] = [
     area: 'CLI and runner',
     name: '`--log-order`, `--log-prefix` and `--output-logs` through `reeval run`',
     tests: [engine('--log-order, --log-prefix and --output-logs shape what reeval run prints')],
+  },
+  {
+    id: 'output.layouts',
+    area: 'CLI and runner',
+    name: 'Result layouts by what an eval varies: results, measure a change, compare harnesses, both, and a family',
+    fixtures: ['output/none', 'output/change', 'output/harness', 'output/both', 'output/family'],
+    tests: [
+      'reeval/test/output.test.ts › layout() picks the shape from what the eval varies',
+      'reeval/test/output.test.ts › statistics only with -v',
+    ],
+  },
+  {
+    id: 'output.not-run',
+    area: 'CLI and runner',
+    name: 'A check that never ran reads `not run`, never `0 of N`, including every check of a cell with no counted attempt',
+    fixtures: ['output/not-run', 'output/zero-counted'],
+    tests: [
+      "reeval/test/output.test.ts › a check that didn't run reads not run, never 0 of N",
+      "reeval/test/suite.test.ts › a family's first case with no counted attempt lists the checks its other cases ran",
+    ],
+  },
+  {
+    id: 'output.tally',
+    area: 'CLI and runner',
+    name: 'The tally (`5 fail · 2 pass`, infra errors, cancelled attempts and skips apart) and the no-model hint',
+    fixtures: ['output/infra-error'],
+    tests: [
+      'reeval/test/output.test.ts › the tally puts fail first',
+      'reeval/test/suite.test.ts › an eval whose only failed attempts were cancelled is cancelled, not a fail',
+    ],
+  },
+  {
+    id: 'output.run-errors',
+    area: 'CLI and runner',
+    name: 'An error outside any attempt: printed first, `N run error` in the tally, `errors` in the record, and `outcome: fail` with exit 1',
+    fixtures: ['output/run-error'],
+    tests: [
+      engine("an error outside any attempt makes --json's outcome fail, as the exit code does"),
+      engine("an uncaught exception or unhandled rejection in an eval's worker fails the run"),
+    ],
+  },
+  {
+    id: 'output.family-cases',
+    area: 'CLI and runner',
+    name: "A family's block reads every case: its columns, pooled arms and summed compare questions",
+    tests: [
+      "reeval/test/suite.test.ts › a family's pooled arm and columns come from any case, not only the first",
+      "reeval/test/suite.test.ts › a family's questions are every case's, summed over the cases that answered them",
+    ],
   },
   {
     id: 'verbose',
@@ -1993,5 +2631,13 @@ export const inventory: InventoryFeature[] = [
     area: 'CLI and runner',
     name: 'The packed package installs into a clean project and runs',
     tests: ['reeval/test/pack.test.ts › the packed package installs into a clean project'],
+  },
+  {
+    id: 'sdk.python',
+    area: 'CLI and runner',
+    name: 'Python eval authoring SDK (conformance goldens and fake run)',
+    fixtures: ['python-sdk/hello', 'python-sdk/attempt-isolation'],
+    plan: ['python/hello'],
+    tests: ['reeval/test/python-sdk.test.ts › Python SDK tests and conformance goldens'],
   },
 ]

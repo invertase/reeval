@@ -31,6 +31,6 @@ export {
   resolveOpenCodeProvider,
   splitModel,
 } from './opencode-providers.ts'
-export { OpenCodeStreamTranslator } from './opencode-stream.ts'
+export { OpenCodeStreamTranslator, openCodeTurnUsage } from './opencode-stream.ts'
 export { OPENCODE_BUILTIN_TOOLS, type OpenCodeBuiltinTools } from './opencode-tools.ts'
 export { VERSION } from './version.ts'

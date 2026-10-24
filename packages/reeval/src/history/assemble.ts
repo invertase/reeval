@@ -3,19 +3,19 @@ import { join } from 'node:path'
 import type { AskedCall, AskedQuestion } from '../compare/questions.ts'
 import { resolveQuestionState } from '../compare/state.ts'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
-import { environmentSandbox, NO_ENVIRONMENT } from '../environment.ts'
+import { NO_ENVIRONMENT, profileSandbox } from '../environment.ts'
 import { isTimeout } from '../errors.ts'
 import { harnessEffort, resolvedEffortOf, servedEffortOf } from '../harness/effort.ts'
 import { attemptId, attemptKey, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
 import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
 import { mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
-import { harnessId, profileJudge, sandboxId } from '../options.ts'
+import { harnessId, plannedSandboxes, profileJudge, sandboxId } from '../options.ts'
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactSecrets } from '../redact.ts'
 import { isCompletedAttempt, previousAttempt } from '../resume.ts'
-import { liftInterval, round3 } from '../stats.ts'
+import { containsZero, liftInterval, round3 } from '../stats.ts'
 import type {
   Cell,
   CellGate,
@@ -28,6 +28,7 @@ import type {
   QuestionCall,
   QuestionInput,
   QuestionScreenshot,
+  ResolvedGateway,
   ResolvedJudgeStateOptions,
   RunContext,
   TranscriptEvent,
@@ -166,10 +167,16 @@ const passRateOf = (outcomes: Outcome[]) => {
   return counted ? pass / counted : null
 }
 
-/** Without the operational limits (`maxConcurrent`, `startTimeout`), which don't change results. */
-const withoutCaps = <T extends { maxConcurrent?: number; startTimeout?: unknown }>({
+/**
+ * The harness as the measurement sees it: without the operational limits (`maxConcurrent`,
+ * `startTimeout`), which don't change results, and without the route, which `gateway` holds.
+ */
+const withoutCaps = <
+  T extends { maxConcurrent?: number; startTimeout?: unknown; gateway?: unknown },
+>({
   maxConcurrent: _,
   startTimeout: __,
+  gateway: ___,
   ...rest
 }: T) => rest
 
@@ -177,6 +184,12 @@ const harnessModel = (h: HarnessDescriptor) => (h.kind === 'fake' ? null : (h.mo
 
 /** A cell fingerprint: the hash of its parts, so each part can be compared on its own. */
 export const fingerprintOf = (parts: FingerprintParts) => sha256(JSON.stringify(parts))
+
+/** The gateway's part of a fingerprint: none on `direct`, so a cell without a gateway keeps its fingerprint. */
+export const gatewayPart = (
+  gateway: ResolvedGateway | undefined,
+): Pick<FingerprintParts, 'gateway'> =>
+  gateway && gateway.name !== 'direct' ? { gateway: gateway.name } : {}
 
 /** `<index>:<question hash>`, which follows one verdict across runs. */
 export const judgementKey = (index: number, question: string) =>
@@ -292,12 +305,18 @@ function activity(record: EvalRecord): AttemptRecord['activity'] {
     (n, e) => n + (e.type === 'reasoning' ? (e.durationMs ?? 0) : 0),
     0,
   )
+  const toolDurations = events.flatMap((e) =>
+    'durationMs' in e && typeof e.durationMs === 'number' ? [e.durationMs] : [],
+  )
+  const stalledTools = events.filter((e) => 'stalled' in e && e.stalled).length
   return {
     tools: count('tool'),
     fileEdits: count('file-edit'),
     webSearches: web('web-search'),
     webFetches: web('web-fetch'),
     reasoningMs,
+    stalledTools,
+    maxToolMs: toolDurations.length ? Math.max(...toolDurations) : null,
   }
 }
 
@@ -438,11 +457,13 @@ function cellOf(
   cell: Cell,
   gate: CellGate,
   harness: HarnessDescriptor | undefined,
+  gateway?: ResolvedGateway,
 ): CellRecord {
   let found = entry.cells.find((c) => c.key === cell.key)
   if (!found) {
     found = {
       ...cell,
+      ...(gateway ? { gateway: gateway.name } : {}),
       fingerprint: '',
       fingerprintParts: EMPTY_PARTS,
       environmentDigest: null,
@@ -518,7 +539,13 @@ async function addPreviousAttempt(
   }
   seen.add(null, cell, stub)
   const entry = seen.entry(stub, resolved)
-  const cellRecord = cellOf(entry, cell, e.attempt?.gate ?? 'all', e.attempt?.harness)
+  const cellRecord = cellOf(
+    entry,
+    cell,
+    e.attempt?.gate ?? 'all',
+    e.attempt?.harness,
+    e.attempt?.gateway,
+  )
   const files: AttemptFiles = {}
   for (const [name, ref] of Object.entries(kept.files) as Array<
     [keyof AttemptFiles, AttemptFiles[keyof AttemptFiles]]
@@ -563,6 +590,7 @@ async function addPreviousAttempt(
       agentCli: null,
       judge,
       context: sha256(JSON.stringify(kept.context)),
+      ...gatewayPart(e.attempt?.gateway),
     }
     cellRecord.fingerprintParts = parts
     cellRecord.fingerprint = fingerprintOf(parts)
@@ -595,7 +623,13 @@ async function addAttempt(
   const context = record?.context ?? []
   seen.add(record, cell, e)
   const entry = seen.entry(e, sources)
-  const cellRecord = cellOf(entry, cell, e.attempt?.gate ?? 'all', e.attempt?.harness)
+  const cellRecord = cellOf(
+    entry,
+    cell,
+    e.attempt?.gate ?? 'all',
+    e.attempt?.harness,
+    e.attempt?.gateway,
+  )
   if (e.attempt?.minLift !== undefined) minLifts.set(cellRecord, e.attempt.minLift)
   if (record?.environment?.overrides.length && cellRecord.overrides.length === 0) {
     cellRecord.overrides = [...record.environment.overrides]
@@ -614,6 +648,7 @@ async function addAttempt(
       agentCli: record?.image?.agentCli ?? null,
       judge,
       context: sha256(JSON.stringify(context)),
+      ...gatewayPart(e.attempt?.gateway),
     }
     cellRecord.fingerprintParts = parts
     cellRecord.fingerprint = fingerprintOf(parts)
@@ -630,6 +665,7 @@ async function addAttempt(
     context,
     egress: record?.egress ?? null,
     servedModels: record?.servedModels ?? null,
+    ...(record?.askedModels?.length ? { askedModels: record.askedModels } : {}),
     effort: e.attempt ? (harnessEffort(e.attempt.harness) ?? null) : null,
     servedEffort:
       servedEffortOf([
@@ -717,6 +753,7 @@ async function attemptEvidence(
       model: t.model ?? null,
       unreported: t.unreported ?? [],
       error: turnError(t.transcript),
+      ...(t.mcpStartup ? { mcpStartup: t.mcpStartup } : {}),
       text:
         t.text.length > TURN_TEXT_LIMIT
           ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [reeval: truncated ${t.text.length} characters; the whole message is the turn's last text event in transcript.jsonl]`
@@ -727,7 +764,15 @@ async function attemptEvidence(
     timings: record?.timings ?? { setupMs: 0, agentMs: 0, diffMs: 0, checksMs: 0, judgeMs: 0 },
     activity: record
       ? activity(record)
-      : { tools: 0, fileEdits: 0, webSearches: 0, webFetches: 0, reasoningMs: 0 },
+      : {
+          tools: 0,
+          fileEdits: 0,
+          webSearches: 0,
+          webFetches: 0,
+          reasoningMs: 0,
+          stalledTools: 0,
+          maxToolMs: null,
+        },
     judgements,
     ...(record?.startRetries?.length ? { startRetries: record.startRetries } : {}),
     ...(record?.assertions?.length ? { assertions: record.assertions } : {}),
@@ -759,7 +804,7 @@ function liftOf(control: CellRecord, variant: CellRecord, pooled: boolean): Lift
     variant: v,
     points: round3(points),
     interval: { lo: round3(low), hi: round3(high), level: 0.95, method: 'newcombe-wilson' },
-    withinNoise: low < 0 && high > 0,
+    withinNoise: containsZero(low, high),
     ...(minLift !== undefined ? { minLift } : {}),
   }
 }
@@ -1032,8 +1077,8 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
               harness: ids(profile.defaults.harness),
               environment: profile.defaults.environment?.name,
               sandbox:
-                profile.defaults.environment &&
-                sandboxId(environmentSandbox(profile.defaults.environment, config.sandbox)),
+                (profile.defaults.environment || profile.defaults.sandbox) &&
+                sandboxId(profileSandbox(config, profile.defaults)),
               runs: profile.defaults.runs,
               timeout: profile.defaults.timeout,
               env: profile.defaults.env && Object.keys(profile.defaults.env).sort(),
@@ -1051,7 +1096,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     },
     budget: Object.keys(input.plan.budget).length ? input.plan.budget : null,
     config: {
-      sandbox: sandboxId(config.sandbox),
+      sandbox: plannedSandboxes(input.plan.sandboxes, profileSandbox(config, profile?.defaults)),
       environment: config.environment?.name ?? null,
       runs: config.runs,
       judgeModel,
@@ -1074,6 +1119,9 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     },
     evals,
     ...(families.length ? { families } : {}),
+    ...(engine.unhandledErrors.length
+      ? { errors: engine.unhandledErrors.map((e) => redactSecrets(e)) }
+      : {}),
   }
   return { record, artifacts: out.files }
 }

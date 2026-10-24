@@ -13,5 +13,13 @@ export const MCP_LOG = '/tmp/reeval-mcp-stamp.log'
 export const BLOCKED_HOST = 'example.com'
 export const reach = (host: string) =>
   `curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://${host}/ > blocked.txt`
+/** Only the probe plugin's skill knows it. */
+export const PLUGIN_PROOF = 'PLUGIN-4M9X-HERON'
+/** The probe plugin's `SessionStart` hook writes this file, outside the workspace. */
+export const PLUGIN_HOOK_MARKER = '/tmp/reeval-plugin-hook.txt'
+/** Only the probe plugin's rule knows it. */
+export const PLUGIN_RULES_WORD = 'MARIGOLD-58'
+/** The probe plugin's subagent. */
+export const PLUGIN_AGENT = 'probe-agent'
 /** Planted in the canary's environment and home, so the key scanner has something to find. */
 export const PLANTED = 'contract-planted-9d2e5f01a7c3b846'

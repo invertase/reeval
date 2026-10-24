@@ -23,7 +23,7 @@ export default defineConfig({
 })
 ```
 
-This is `examples/hello`'s config. `pr` runs every cell once, drops compare variants and keeps only Cursor. `nightly` runs each eval three times, unless the eval says otherwise.
+This config has two profiles. `pr` runs every cell once, drops compare variants and keeps only Cursor. `nightly` runs each eval three times, unless the eval says otherwise.
 
 ## Choose a profile
 
@@ -46,6 +46,8 @@ npx reeval image build --profile nightly   # the images nightly's plan needs
 | `limit.runs` | Over every eval | Caps runs per cell |
 | `limit.compare` | Over every eval | `false` runs the control only; `{ maxVariants: n }` keeps the first n |
 | `limit.harness` | Over every eval | Keeps only these harness ids; an eval left with none is skipped |
+
+With `compare: false` (or `maxVariants: 0`), the lone control gates like an eval without `compare`, on the eval's `gate`, whatever `compare.gate` says.
 
 An eval that sets `runs: 5` still runs five times under `nightly`, because defaults sit under it. Under `pr` it runs once, because a limit sits over it, and `--runs` on the command line beats both.
 
@@ -84,7 +86,9 @@ evals/skill.eval.ts › house greeting › greets in the house style    1       
 evals/sqlite.eval.ts › queries a seeded SQLite database             1          —         1     1
 ```
 
-`--dry-run` prints the plan and exits 0, without Docker or keys. Each row shows the harnesses, variants, runs and attempts, and notes what the profile changed. The estimate is the median of each eval's recent attempts, or 3 minutes for one with no history.
+`--dry-run` prints the plan and exits 0, without Docker or keys. Each row shows the harnesses, variants, runs and attempts, and notes what the profile changed.
+
+The estimate is the median of each eval's recent attempts, or 3 minutes for one with no history. With no history, `fakeHarness` is 1 second an attempt in `fakeSandbox()` and 30 seconds in a container, for the sandbox's setup.
 
 ```bash
 npx reeval run --dry-run --profile nightly
@@ -99,6 +103,18 @@ hint: 18 evals run more than once with the default gate, so every attempt must p
 ```
 
 `--dry-run --json` prints the same plan as one JSON document, with every cell.
+
+## Check what it costs
+
+```text
+plan  profile pr (--profile) · 26 evals · 27 cells · 27 attempts · ~5m 37s serial (~1m 24s at concurrency 4) · budget 20 attempts ✗
+…
+cost  estimated $1–15 at prices.json over models.dev list prices, judge included · no history, rough
+```
+
+The plan ends with a cost range, agent and judge together. Cells that ran before are estimated from their past tokens, the rest from a typical coding attempt, so the range is wide until there's history.
+
+Prices come from models.dev when the plan prints, with your own file in `REEVAL_PRICES` over them (Cursor's models need one). A model with no price shows as tokens, and the dollars say what they cover. It's an estimate, not your bill: see [the cost estimate](/reference/cli/run#the-cost-estimate).
 
 ## Cap a run with a budget
 
@@ -122,7 +138,7 @@ There's no cost or token budget. `budget: { usd: 5 }` stops the run before it st
 reeval: budget.usd isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.
 ```
 
-`cursor()`, `claudeCode()`, `antigravity()`, `pi()` and `codex()` report tokens (`opencode()` and `goose()` can't), and the summary prints the total, but reeval has no model prices to turn them into a cost.
+`cursor()`, `claudeCode()`, `antigravity()`, `pi()`, `codex()`, `fx()` and `grokBuild()` report tokens (`opencode()` and `goose()` can't), and the run's last lines print the total, but reeval has no model prices to turn them into a cost.
 
 ## Write the config as YAML
 

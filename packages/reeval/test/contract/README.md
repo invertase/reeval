@@ -11,12 +11,21 @@ what it should. The rows are in [`../support/harnesses.ts`](../support/harnesses
 | rules read | `codeword.txt` holds a word only the rules have | no turn: no word | — |
 | stdio MCP server started and called | the server logged `tools/call`; the transcript names `mcp__stamp__house_stamp` | no turn: no call | the environment lists the server ; on a harness with no MCP client, the MCP evals (tagged `mcp`) are left out of its run, and `--dry-run` of them exits 2 naming the eval, harness and server, while a `--dry-run` of an eval without MCP plans |
 | file edited and command run, both in the transcript | `notes.txt` changed; the transcript has its edit and a tool whose output is `contract-42` | no turn: unchanged | `changedFiles` has `notes.txt` |
+| every tool call in the adapter's catalog | — | replay's: agy 1.4.3's captures as the adapter before it reported them (`read_file`, `edit_file`, `write_file` as unknown tools) | every attempt's transcript names only tools in the adapter's `builtinTools` (or `mcp__<server>__<tool>`), and on a CLI whose native events name the tool (Antigravity, Cursor, pi, Goose) every native name is one the adapter maps; the failure names the harness and each unknown tool |
+| file edits, reads and commands normalised | — | replay's: the same captures, and a command renamed to an unknown tool | in the edit-and-run, skill and egress attempts, the edit of `notes.txt` and `skill-proof.txt` is a `file-edit` event (or a command naming the file), the skill's read a `readonly` or `bash` tool, the `contract-42` command and the `curl` a `bash` tool, by the catalog's `toolUseKind`; the failure names the harness and the tools that carried it instead |
 | tokens recorded where the harness reports them | — | — | every turn has usage (or none, for a harness that reports none) |
 | real key never in the container | after a turn, a scan of every process's environment and command line and every file under the writable roots finds no form of the key | the same scan finds a value planted in the environment and a home file | the key isn't in the run directory |
 | deny-all plus auto hosts works | under `egress: 'deny-all'` the turn completes, and a `curl` to example.com gets a 403 at CONNECT | no turn: the same `curl` isn't a 200 | `egress`: the harness's automatic hosts allowed, its API contacted, example.com:443 refused and recorded |
 | served model recorded | — | — | every attempt's `servedModels` names the model (null for a harness whose requests don't say) |
 | nothing silently unreported | — | — | every turn's `unreported` is empty: no harness fell back to flagging events it couldn't report (the Cursor SDK's web calls, when recovering them fails or finds a stored shape it doesn't know) |
 | native stream format unchanged | — | — | every native event in the raw transcripts matches `../replay/formats/<harness>.json`, plus, on an ACP harness, every status, tool kind and stop reason ACP defines (a failed tool call is the model's doing, not a format change), on pi every stop reason its one-shot loop ends a call with and a failed call's `errorMessage`, on Cursor every status, run status and tool status the SDK defines and the runner's `error` and `unreported` lines, on Antigravity agy's `error_message` steps and failed tool and turn (a provider's 4xx or 5xx, or a cancelled turn, is not a format change), and on Codex every event, item type, key and status `codex exec`'s `exec_events.rs` defines (a command that exits non-zero, a refused key's retries and failed turn, a reasoning or web item) |
+| plugin skill used | `plugin-proof.txt` holds a code only the probe plugin's skill has | no turn: no proof | the attempt's `context` lists the skill at the row's `plugin.skillContext`, and the environment's plugin record lists the skill |
+| plugin MCP server called | the plugin's `stamp.mjs` logged `tools/call`; a tool named `mcp__…stamp__house_stamp` is in the transcript | no turn: no call | the plugin record lists `stamp`, and the environment's `mcp` has `probe:stamp` |
+| plugin hook ran | the `SessionStart` hook wrote `/tmp/reeval-plugin-hook.txt` | an environment without the plugin: no marker | — |
+| plugin subagent available | a successful tool call names `probe-agent` (or `probe:probe-agent`) in a field naming an agent, such as `subagent_type`: a search for the name, or a delegation the agent refuses, doesn't count | the same turn in an environment without the plugin: no such call (Claude Code's is refused, Grok Build spawns a general-purpose subagent) | — |
+| plugin rules read | `plugin-codeword.txt` holds the codeword only the probe plugin's rule has | an environment without the plugin: no codeword | — |
+| plugin part it can't load refused | — | — | `--dry-run` with the probe's every part (its `rules/` included) exits 2 naming the part and the parts the row loads; a row that loads every part skips |
+| plugin hermetic | — | — | the plugin skill attempt's `context` has no other skill and no plugin outside `~/.reeval/plugins/` (or the row's `plugin.copy`), the plugin skill and MCP attempts' transcripts call no other MCP server and name no other plugin's files, under `deny-all` nothing was blocked, and every host contacted is one of the row's automatic hosts |
 | clean teardown | — | — | the run is `complete` and no container with its label is left |
 
 The key scanner ([`scan.mjs`](./scan.mjs)) is given only the sha256, length and a rolling hash of
@@ -32,9 +41,41 @@ anything.
    its image, where its skills show up in `context`, its automatic egress hosts, the host it
    reaches every turn, whether it reports tokens and what its served model looks like.
 2. A case in [`reeval.config.ts`](./reeval.config.ts) (and `../e2e/reeval.config.ts`).
-3. A format in [`../support/stream-formats.ts`](../support/stream-formats.ts), then a real run with
+3. A format in [`../support/stream-formats.ts`](../support/stream-formats.ts) (with `tool` when its
+   events name the tool they call), then a real run with
    `REEVAL_UPDATE_FORMATS=1 REEVAL_UPDATE_CAPTURES=1` to learn its format and capture its replays.
 4. Its secret in `contract.yml`, and its latest version in `scripts/drift/latest-images.sh`.
+5. Once the harness loads plugins, its row's `plugin` field (below).
+
+## Plugins
+
+The plugin behaviours run the probe plugin in [`plugins/probe/`](./plugins/probe): a skill with a
+code, a subagent (`probe-agent`), a slash command, the `stamp.mjs` MCP server, a `SessionStart`
+hook that writes a marker, and a `rules/` file with a codeword that only Cursor and Antigravity load. A row takes part when it
+has a `plugin` field; without one, the plugin evals (tagged `plugin`) are left out of its run and
+each plugin behaviour skips, saying so.
+
+```ts
+plugin: {
+  parts: ['skills', 'agents', 'commands', 'hooks', 'mcp'], // the catalog's pluginParts
+  skillContext: /^~\/\.reeval\/plugins\/probe\/skills\/plugin-probe\/SKILL\.md$/,
+},
+```
+
+- `parts` is exactly the harness's `pluginParts` in `src/harness/agents.ts`
+  (`scripts/harness-matrix.mjs` fails `pnpm docs:gen` when they differ). The run narrows the probe
+  to them with `only` (`REEVAL_CONTRACT_PLUGIN_PARTS`), and the part-refused check plans the
+  probe whole and expects the refusal of the parts left out. Without `hooks` the hook evals
+  (tagged `plugin-hooks`) are left out; without `agents`, the subagent evals (`plugin-agents`);
+  without `rules`, the rules evals (`plugin-rules`).
+- `skillContext` matches where the attempt's `context` shows the plugin's `SKILL.md`: under
+  `~/.reeval/plugins/probe/` for a harness that loads the plugin whole (namespaced), or the
+  harness's own skill directory for one that places plugin skills with its own (flat), or the
+  agent's own copy for one that installs the plugin itself (Antigravity's `agy plugin install`).
+- `copy`, for such an agent, is where its copy lives (`~/.gemini/config/plugins/probe/`): the
+  hermetic check allows the plugin items under it.
+- The row then runs 22 attempts instead of 12 (fewer if it leaves hooks, agents or rules out): raise
+  `REEVAL_REAL_ATTEMPT_BUDGET` in `contract.yml` by the difference.
 
 ## Running it
 
@@ -48,8 +89,8 @@ pnpm test:replay            # the captured streams, key-free
 
 Without `REEVAL_TEST_REAL=1` the real rows skip. With it, a row without its key fails before it starts
 anything, naming the variable it needs: narrow the run with `REEVAL_CONTRACT_HARNESSES=cursor`, which
-picks rows. Each real row is 12 attempts, 6 of them with one short agent turn, at `--concurrency
-2`; reeval.config.ts's `budget.attempts` is the hard cap, and in CI a ledger caps the whole job
+picks rows. Each real row is 12 attempts, 6 of them with one short agent turn, or up to 22 with a
+`plugin` field, at `--concurrency 2`; reeval.config.ts's `budget.attempts` is the hard cap, and in CI a ledger caps the whole job
 (`REEVAL_REAL_ATTEMPT_BUDGET`). `REEVAL_UPDATE_CAPTURES=1` refreshes `../replay/<harness>/` from the run,
 and `REEVAL_UPDATE_FORMATS=1` accepts the formats it saw.
 
@@ -68,6 +109,7 @@ fake or phrase differently:
 | key | a hash scan of the container, after a real turn | a grep for the key would need the key in the container |
 | egress | the CONNECT status the `curl` wrote, and the gateway's record | the agent's account of what happened |
 | tokens, served model | the record's numbers and ids, by shape (> 0, a pattern) | exact counts change every run |
+| tool catalog, normalised kinds | each tool's name against the adapter's catalog, and its `toolUseKind` | a tool call that merely mentions the file passes a renamed edit tool the adapter doesn't know; a CLI can rename a tool without changing one event's shape, so the stream format can't see it |
 | stream format | the event kinds and keys, plus every value the protocol defines (ACP's statuses, tool kinds, stop reasons; pi's stop reasons and a failed call's `errorMessage` and `thinkingLevel`; OpenCode's `session_info_update` while it retries a call; the Cursor SDK's statuses and the runner's failure lines; agy's `error_message` steps; Codex's item types and statuses) | which values a run shows is the model's or the provider's doing: a stray write outside the workspace makes a tool call `failed`, a Gemini 503 makes pi's call `error` and OpenCode retry |
 | e2e | exit codes, JSON from `reeval compare`/`reeval query`, files on disk | the CLI's text output changes with the run |
 
