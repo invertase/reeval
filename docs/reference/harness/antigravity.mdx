@@ -46,9 +46,9 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `GEMINI_API_KEY` (a Gemini API key) |
-| Adapter | `@reeval/harness-antigravity` 0.1.11, bundled with reeval |
+| Adapter | `@reeval/harness-antigravity` 0.1.12, bundled with reeval |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:antigravity-0.1.11` |
+| Image | `reeval-sandbox:antigravity-0.1.12` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.gemini/config/skills` |
 | Skills (`placement: 'workspace'`) | `.agents/skills` in the workspace |
@@ -59,7 +59,7 @@ Build its image once with `reeval image build` in a project whose config uses `a
 
 ## The key
 
-The harness uses a Gemini API key only, never the CLI's Google sign-in, which Google's terms don't allow automating. reeval passes `GEMINI_API_KEY` to the adapter explicitly, and it never enters the container. The gateway swaps it in on one kind of request (what CLI 1.4.5 sends it on: its model, and a lite one for titles):
+The harness uses a Gemini API key only, never the CLI's Google sign-in, which Google's terms don't allow automating. reeval passes `GEMINI_API_KEY` to the adapter explicitly, and it never enters the container. The gateway swaps it in on one kind of request (what CLI 1.4.7 sends it on: its model, and a lite one for titles):
 
 | Host | Endpoint |
 |---|---|
@@ -110,7 +110,7 @@ The CLI runs `SessionStart`, `PreToolUse`, `PostToolUse` and `Stop` hooks, so th
 | `play.googleapis.com` | Telemetry |
 | `antigravity-unleash.goog` | Feature flags |
 
-CLI 1.4.5 opens both in every session. No setting stops them, and neither gets the key.
+CLI 1.4.7 opens both in every session. No setting stops them, and neither gets the key.
 
 Under a restricted egress policy the gateway refuses them and records them under the record's `egress.expectedBlocked`, not `blocked`. `-v` prints one `gateway` line for them at teardown, `expected blocks, not logged per request:` with each `host:port` and its connection count, instead of one line per request.
 
