@@ -178,6 +178,10 @@ jobs:
               case $f in
                 packages/reeval-python/src/reeval_python/cli.py | \
                 packages/reeval-python/pyproject.toml | \
+                packages/reeval-dart/bin/reeval.dart | \
+                packages/reeval-dart/lib/src/launcher.dart | \
+                packages/reeval-dart/lib/src/binaries.g.dart | \
+                packages/reeval-dart/pubspec.yaml | \
                 packages/reeval/test/conformance/launcher/* | \
                 packages/sandbox-docker/src/egress/cert.ts | \
                 scripts/ctrl-c.py)
@@ -503,7 +507,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sdk: [python]
+        sdk: [python, dart]
         os: [ubuntu-24.04, macos-latest, windows-latest]
     steps:
       # Recorded runs' paths pass Windows' 260-character limit, which git keeps by default.
@@ -527,6 +531,9 @@ jobs:
         with:
           cache-dependency-glob: packages/reeval-python/uv.lock
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - if: matrix.sdk == 'dart'
+        uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+        with: { sdk: stable }
       - working-directory: packages/reeval
         run: node --experimental-strip-types --no-warnings test/conformance/launcher/run.ts ${{ matrix.sdk }}
 

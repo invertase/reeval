@@ -12,7 +12,8 @@ node --experimental-strip-types test/conformance/launcher/run.ts python
 
 It needs Go on the `PATH` (it builds `fake-reeval/`, the stand-in binary, so the launcher execs a
 real executable on every platform), and on Windows `python` and `pwsh` (for Ctrl-C and to read the
-CPU's AVX2 support). CI runs it in `ci.yml`'s `launchers` job on Linux, macOS and Windows.
+CPU's AVX2 support), plus each runner's toolchain (`uv` for Python, `dart` for Dart). CI runs it
+in `ci.yml`'s `launchers` job on Linux, macOS and Windows.
 
 ```text
 cases.json        the cases: each step's release, environment, arguments and what must happen

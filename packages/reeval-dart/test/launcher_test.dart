@@ -17,7 +17,9 @@ void main() {
   late String asset;
   late Map<String, String> env;
 
-  const script = '#!/bin/sh\necho "fake reeval \$*"\nexit 7\n';
+  const script =
+      '#!/bin/sh\n[ "\$*" = --version ] && exit 0\n'
+      'echo "fake reeval \$*"\nexit 7\n';
 
   void publish({String? sum}) {
     File(p.join(release, asset)).writeAsStringSync(script);
@@ -40,7 +42,7 @@ void main() {
     cache = p.join(temp.path, 'cache');
     Directory(release).createSync();
     final base = {'PATH': Platform.environment['PATH'] ?? ''};
-    asset = 'reeval-$packageVersion-${target(base)}';
+    asset = 'reeval-$packageVersion-${target()}';
     env = {
       ...base,
       'HOME': temp.path,
@@ -58,7 +60,8 @@ void main() {
       publish();
       final result = await launcher(['run', '--dry-run']);
       expect(result.stdout, 'fake reeval run --dry-run\n');
-      expect(result.stderr, 'reeval: downloading $asset\n');
+      expect(result.stderr, contains('records no binary hashes'));
+      expect(result.stderr, endsWith('reeval: downloading $asset\n'));
       expect(result.exitCode, 7);
       final cached = File(
         p.join(cache, 'reeval', 'bin', packageVersion, asset),
@@ -73,8 +76,8 @@ void main() {
     await launcher([]);
     File(p.join(release, asset)).deleteSync();
     env['REEVAL_OFFLINE'] = '1';
-    final result = await launcher(['--version']);
-    expect(result.stdout, 'fake reeval --version\n');
+    final result = await launcher(['status']);
+    expect(result.stdout, 'fake reeval status\n');
     expect(result.stderr, isEmpty);
   });
 
@@ -128,7 +131,7 @@ void main() {
 
   test('REEVAL_VERSION picks another release', () async {
     env['REEVAL_VERSION'] = 'v9.9.9';
-    asset = 'reeval-9.9.9-${target(env)}';
+    asset = 'reeval-9.9.9-${target()}';
     publish();
     final result = await launcher([]);
     expect(result.exitCode, 7);
@@ -151,71 +154,138 @@ void main() {
     late String hash;
     late String platform;
 
+    ReleasedBinaries record(Map<String, String> sums, {int? size}) => (
+      version: packageVersion,
+      binaries: {
+        for (final MapEntry(:key, :value) in sums.entries)
+          key: (sha256: value, size: size ?? script.length),
+      },
+    );
+
     setUp(() {
-      platform = target(env);
-      File(p.join(release, asset)).writeAsStringSync(script);
+      platform = target();
       hash = sha256.convert(script.codeUnits).toString();
+      publish();
     });
+
+    Matcher refused(String message) => throwsA(
+      isA<LaunchError>()
+          .having((e) => e.code, 'code', 3)
+          .having((e) => e.message, 'message', contains(message)),
+    );
 
     test('is checked against the hashes published in the package', () async {
       final binary = await locateBinary(
         env,
-        hashes: (version: packageVersion, sha256: {platform: hash}),
+        released: record({platform: hash}),
       );
       expect(File(binary).readAsStringSync(), script);
     });
 
-    test('refuses a hash other than the published one, with exit 3', () {
-      File(p.join(release, 'SHA256SUMS')).writeAsStringSync('$hash  $asset\n');
+    test('refuses an asset other than the published one, with exit 3', () {
+      publish(sum: '0' * 64);
       expect(
-        locateBinary(
-          env,
-          hashes: (version: packageVersion, sha256: {platform: '0' * 64}),
+        locateBinary(env, released: record({platform: '0' * 64})),
+        refused(
+          'package:reeval $packageVersion was published with ${'0' * 64}',
         ),
-        throwsA(
-          isA<LaunchError>()
-              .having((e) => e.code, 'code', 3)
-              .having(
-                (e) => e.message,
-                'message',
-                contains(
-                  'package:reeval $packageVersion was published with '
-                  '${'0' * 64}',
-                ),
-              ),
-        ),
+      );
+    });
+
+    test('refuses a SHA256SUMS that disagrees with the package', () {
+      expect(
+        locateBinary(env, released: record({platform: '0' * 64})),
+        refused('SHA256SUMS lists $asset as $hash'),
       );
     });
 
     test('refuses a target the package was published without', () {
       expect(
-        locateBinary(
-          env,
-          hashes: (version: packageVersion, sha256: {'other': hash}),
-        ),
-        throwsA(
-          isA<LaunchError>()
-              .having((e) => e.code, 'code', 3)
-              .having((e) => e.message, 'message', contains(platform)),
-        ),
+        locateBinary(env, released: record({'other': hash})),
+        refused(platform),
       );
+    });
+
+    test('downloads a cached file of another size again', () async {
+      final cached = File(p.join(cache, 'reeval', 'bin', packageVersion, asset))
+        ..createSync(recursive: true)
+        ..writeAsStringSync('#!/bin/sh\n');
+      await locateBinary(env, released: record({platform: hash}));
+      expect(cached.readAsStringSync(), script);
     });
 
     test('uses SHA256SUMS for a version the package has no hashes for', () {
       expect(
         locateBinary(
           env,
-          hashes: (version: '0.0.1', sha256: {platform: '0' * 64}),
-        ),
-        throwsA(
-          isA<LaunchError>().having(
-            (e) => e.message,
-            'message',
-            contains('SHA256SUMS'),
+          released: (
+            version: '0.0.1',
+            binaries: {platform: (sha256: '0' * 64, size: 1)},
           ),
         ),
+        completes,
       );
     });
+  });
+
+  test('a cached file that is no program is removed, with exit 3', () async {
+    final cached = File(p.join(cache, 'reeval', 'bin', packageVersion, asset))
+      ..createSync(recursive: true)
+      ..writeAsBytesSync([0, 1, 2, 3]);
+    final result = await launcher([]);
+    expect(result.exitCode, 3);
+    expect(result.stderr, contains(cached.path));
+    expect(cached.existsSync(), isFalse);
+  });
+
+  test("a download that doesn't start isn't kept", () async {
+    const broken = '#!/bin/sh\necho "Illegal instruction" >&2\nexit 132\n';
+    File(p.join(release, asset)).writeAsStringSync(broken);
+    final hash = sha256.convert(broken.codeUnits).toString();
+    File(p.join(release, 'SHA256SUMS')).writeAsStringSync('$hash  $asset\n');
+    final result = await launcher([]);
+    expect(result.exitCode, 3);
+    expect(result.stderr, contains("doesn't start on this machine (exit 132"));
+    expect(
+      Directory(p.join(cache, 'reeval', 'bin')).listSync(recursive: true),
+      everyElement(isA<Directory>()),
+    );
+  });
+
+  test('picks the baseline build on an x64 CPU without AVX2', () {
+    String pick(
+      String os,
+      String arch, {
+      bool musl = false,
+      bool avx2 = true,
+    }) => pickTarget(os, arch, musl: musl, avx2: avx2);
+    expect(pick('linux', 'x64'), 'linux-x64');
+    expect(pick('linux', 'x64', avx2: false), 'linux-x64-baseline');
+    expect(
+      pick('linux', 'x64', musl: true, avx2: false),
+      'linux-x64-musl-baseline',
+    );
+    expect(pick('linux', 'arm64', avx2: false), 'linux-arm64');
+    expect(pick('macos', 'x64', avx2: false), 'darwin-x64');
+    expect(pick('windows', 'x64', avx2: false), 'windows-x64-baseline');
+    expect(pick('windows', 'arm64'), 'windows-x64');
+    expect(
+      () => pick('linux', 'riscv64'),
+      throwsA(isA<LaunchError>().having((e) => e.code, 'code', 2)),
+    );
+  });
+
+  test('trusts SSL_CERT_FILE, and refuses one it cannot read', () {
+    env['REEVAL_DOWNLOAD'] = 'https://127.0.0.1:1/r';
+    env['SSL_CERT_FILE'] = p.join(temp.path, 'missing.pem');
+    expect(
+      locateBinary(env),
+      throwsA(
+        isA<LaunchError>()
+            .having((e) => e.code, 'code', 2)
+            .having((e) => e.message, 'message', contains('SSL_CERT_FILE')),
+      ),
+    );
   });
 
   test('follows redirects, but never from HTTPS to HTTP', () async {

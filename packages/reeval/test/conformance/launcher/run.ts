@@ -3,7 +3,7 @@
 //
 //   node --experimental-strip-types test/conformance/launcher/run.ts <runner>
 //
-// <runner> is a module in runners/ (python, …). It needs Go, to build the fake binary.
+// <runner> is a module in runners/ (python, dart, …). It needs Go, to build the fake binary.
 import { execFileSync, spawn } from 'node:child_process'
 import {
   chmodSync,

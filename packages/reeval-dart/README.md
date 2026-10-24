@@ -9,8 +9,9 @@ dart run reeval run
 ```
 
 `package:reeval` brings its own `reeval` command: it downloads the reeval binary of the same
-version from the GitHub release, checks it against the sha256 published in the package, caches it
-and runs it. `dart pub upgrade reeval` moves both.
+version from the GitHub release (the `-baseline` build on an x64 CPU without AVX2, as the install
+scripts pick), checks it against the sha256 published in the package and the release's
+`SHA256SUMS`, checks it starts, caches it and runs it. `dart pub upgrade reeval` moves both.
 
 ## An eval
 
@@ -55,7 +56,8 @@ run against the `package:reeval` in your lockfile, which must be the binary's ve
 | `REEVAL_DART` | The `dart` to start the runner with (the launcher sets it to the one running it) |
 | `REEVAL_BINARY` | Run this reeval binary instead of downloading one |
 | `REEVAL_VERSION` | Download this version instead of the package's |
-| `REEVAL_DOWNLOAD` | A mirror of the release directory (`https://…` or `file://…`) |
+| `REEVAL_DOWNLOAD` | A mirror of the release directory (`https://…` or `file://…`; `http://` warns) |
+| `SSL_CERT_FILE` | The CA certificates (PEM) to trust for downloads instead of the system's |
 | `REEVAL_OFFLINE` | `1`: never download; a binary that isn't cached exits 2, naming its path |
 
 Binaries are cached in `$XDG_CACHE_HOME/reeval/bin/<version>/` (or `~/.cache/reeval`,
