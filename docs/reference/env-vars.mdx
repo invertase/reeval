@@ -47,9 +47,9 @@ A credential with whitespace or a line break in it (a key copied from a wrapped 
 | `REEVAL_BACKGROUND` | | Not read from your shell: in `docker()`, a random id reeval sets in a `c.exec(cmd, { background: true })` or `c.serve` command's environment, so that `kill()` also stops every process it started |
 | `REEVAL_BASE` | | Not read from your shell: the build argument reeval passes to a `docker({ dockerfile })` build, naming reeval's image for the cell's harness. Start a Dockerfile `ARG REEVAL_BASE` / `FROM ${REEVAL_BASE}` |
 | `REEVAL_PYTHON` | | Overrides the Python interpreter for the runner (skips `uv run` and `.venv`). Unless it's set, reeval-python's `reeval` command sets it to the project's Python: `$VIRTUAL_ENV`'s, else the nearest `.venv` from the working directory up, else the Python the command runs on |
-| `REEVAL_BINARY` | | reeval-python's `reeval` command: the reeval binary to run, instead of the wheel's own or a downloaded one |
-| `REEVAL_OFFLINE` | | reeval-python's `reeval` command: `1` never downloads the binary; it must be in the wheel or in `<cache>/reeval/bin/<version>/` |
-| `REEVAL_VERSION` | | The install scripts: the version to install. reeval-python's `reeval` command: run this version rather than the wheel's own (a version equal to the wheel's changes nothing); it's downloaded and checked against `SHA256SUMS` only |
+| `REEVAL_BINARY` | | reeval-python's `reeval` command: the reeval binary to run, instead of the one it downloads |
+| `REEVAL_OFFLINE` | | reeval-python's `reeval` command: `1` never downloads the binary; it must already be in `<cache>/reeval/bin/<version>/` |
+| `REEVAL_VERSION` | | The install scripts: the version to install. reeval-python's `reeval` command: run this version rather than reeval-python's own (its own version changes nothing); it's downloaded and checked against `SHA256SUMS` only |
 | `REEVAL_DOWNLOAD` | | The install scripts and reeval-python's `reeval` command: a URL or `file://` directory holding the binaries and `SHA256SUMS`, instead of the version's GitHub release. An `http:` URL works with a warning; a redirect from `https` to `http` is refused |
 | `REEVAL_PYTHON_SDK` | | Path to the `reeval-python` package on the host; prepends its `src/` to `PYTHONPATH` when the eval project does not list the dependency |
 | `REEVAL_PROJECT_ROOT` | | Not read from your shell: project root the worker passes to a remote language runner |

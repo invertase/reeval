@@ -88,7 +88,7 @@ include: ['evals/**/*.eval.py']
 harness: { kind: cursor, model: composer-2.5 }
 ```
 
-A Python project needs no install script. `reeval-python` has a `reeval` command that runs the binary made for its version, so `uv.lock` pins both. uv, pip, poetry and pdm pick the platform wheel of reeval-python that carries the binary for your machine. On any other platform the pure wheel's command downloads the binary once, checks it against the sha256 that reeval-python was released with and caches it in `<cache>/reeval/bin/<version>/`. A Python project configures reeval with [`reeval.yml`](/reference/config#reevalyaml).
+A Python project needs no install script. `reeval-python` has a `reeval` command that runs the binary made for its version, so `uv.lock` pins both. The first time it runs, it downloads that binary from the GitHub release, checks it against the sha256 that reeval-python was released with and caches it in `<cache>/reeval/bin/<version>/`; later runs start from the cache, offline too. A Python project configures reeval with [`reeval.yml`](/reference/config#reevalyaml).
 
 <Info>
 The cache keeps every version it downloads (about 85 MB each) until you delete `<cache>/reeval/bin/<version>/`. Windows on ARM runs the x64 binary.
@@ -97,8 +97,8 @@ The cache keeps every version it downloads (about 85 MB each) until you delete `
 | Variable | What it does |
 |---|---|
 | `REEVAL_BINARY` | A reeval binary to run instead |
-| `REEVAL_OFFLINE` | `1` never downloads: the binary must be in the wheel or the cache |
-| `REEVAL_VERSION` | Another version than the wheel's, downloaded and checked against `SHA256SUMS` only |
+| `REEVAL_OFFLINE` | `1` never downloads: the binary must already be in the cache |
+| `REEVAL_VERSION` | Another version than reeval-python's, downloaded and checked against `SHA256SUMS` only |
 | `REEVAL_DOWNLOAD` | A mirror of the releases, as for the install scripts |
 
 The binary runs each `*.eval.py` with the `reeval_python` module from your project's Python. The `reeval` command picks the active virtual environment's, else the nearest `.venv` above the working directory, else its own; so a `reeval` from `uv tool install` or `pipx` still runs your project's dependencies. Run without it, the binary uses `uv run` (with a `pyproject.toml` and uv on your `PATH`), `.venv`'s Python, or `python3` (`python` on Windows). `REEVAL_PYTHON` names another interpreter.

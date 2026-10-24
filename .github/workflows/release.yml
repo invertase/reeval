@@ -3,8 +3,9 @@
 # from Conventional Commits on main; merging it tags vX.Y.Z. Then ci.yml runs on that commit; npm
 # publishes the tarball its packed install job packed, with trusted publishing (OIDC, environment
 # `npm`). binary.yml builds the standalone binaries, which go up to the release with their
-# SHA256SUMS, and reeval-python's sdist and wheels, which record those binaries' hashes; once the
-# binaries are up, PyPI gets those, with OIDC, environment `pypi`. A republish builds the tag.
+# SHA256SUMS, and reeval-python's sdist and pure wheel, which record those binaries' hashes; once
+# the binaries are up, PyPI gets those two, with OIDC, environment `pypi`, and reeval-python
+# downloads its binary from the release on first run. A republish builds the tag.
 # Publishing jobs must stay on this push-to-main trigger only (not tag push or `release` events) so
 # GitHub environments that allow deployment from branch `main` still approve the job.
 name: release
@@ -273,8 +274,9 @@ jobs:
         with:
           name: reeval-python-dist
           path: ${{ runner.temp }}/reeval-python-dist
-      # Every file must be this release's version (1.0.0-beta.1 is reeval-python 1.0.0b1), and every
-      # wheel must record these binaries: a mismatch would ship an SDK that downloads another reeval.
+      # Exactly the sdist and the pure wheel, at this release's version (1.0.0-beta.1 is
+      # reeval-python 1.0.0b1), each recording these binaries: a mismatch would ship an SDK that
+      # downloads another reeval. No platform wheels: they'd add about 250 MB a release to PyPI.
       - name: Check the version
         env:
           DIST: ${{ runner.temp }}/reeval-python-dist

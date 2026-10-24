@@ -1,10 +1,11 @@
 """The `reeval` command: runs the reeval binary made for this reeval-python, with its arguments.
 
-A platform wheel carries the binary in `reeval_python/bin/`. The pure wheel downloads it: the
-binary for version V and target T is `reeval-V-T` (`.exe` on Windows) in the GitHub release `vV`,
-and is cached at `<cache>/reeval/bin/V/`. A released wheel records each target's sha256 and size
-in `reeval_python/binaries.json`, which the download must match; the release's SHA256SUMS must
-agree too. Every language SDK's launcher downloads the same way.
+It downloads the binary: for version V and target T it is `reeval-V-T` (`.exe` on Windows) in the
+GitHub release `vV`, cached at `<cache>/reeval/bin/V/`. The released sdist and wheel record each
+target's sha256 and size in `reeval_python/binaries.json`, which the download must match; the
+release's SHA256SUMS must agree too. Every language SDK's launcher downloads the same way. A
+platform wheel (built by scripts/python-wheels.py, not published) carries the binary in
+`reeval_python/bin/` instead.
 """
 
 from __future__ import annotations

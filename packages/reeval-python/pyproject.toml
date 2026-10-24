@@ -61,5 +61,9 @@ reportUnknownLambdaType = false
 requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
+# binary.yml writes the release's binary hashes here before `uv build`; it isn't checked in.
+[tool.hatch.build]
+artifacts = ["src/reeval_python/binaries.json"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/reeval_python"]

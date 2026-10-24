@@ -1,7 +1,8 @@
 // Smoke-tests a compiled reeval running Python evals on the machine it was built for, with only
 // the binary and uv: no Node project, no reeval-python on the machine. binary.yml runs it on each OS.
 //
-//   node scripts/binary-python-smoke.mjs <binary> --wheel <reeval_python-*.whl> [--python 3.11,3.14]
+//   node scripts/binary-python-smoke.mjs <binary> --wheel <reeval_python-*-any.whl> [--python 3.11,3.14]
+//     [--sdist <reeval_python-*.tar.gz>]
 //     [--release <dir with the binaries and SHA256SUMS; default the binary's directory>]
 //     [--platform-wheel <reeval_python-*-<platform>.whl, which carries the binary>]
 //
@@ -13,9 +14,11 @@
 // reeval-python too old for the binary (0.10.0, from PyPI) and a project without reeval-python
 // both stop with how to install it rather than hang. It also runs `uv run reeval`, the SDK's
 // launcher, which downloads the binary from --release, checks it against the hashes the wheel
-// records and caches it. Given --platform-wheel, which carries the binary, it runs that offline,
-// installed by uv and by pip, checks pip picks it from the wheels directory, and presses Ctrl-C on
-// a run through it (scripts/ctrl-c.py): reeval must stop the run, save it and exit 130.
+// records and caches it; installs the wheel and the --sdist (what PyPI has) with pip and checks
+// they download the same way; and presses Ctrl-C on a run through the pip-installed launcher
+// (scripts/ctrl-c.py): reeval must stop the run, save it and exit 130. Given --platform-wheel,
+// which carries the binary (built in CI, not published), it runs that offline, installed by uv and
+// by pip, and checks pip picks it from the wheels' directories.
 import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
@@ -37,6 +40,7 @@ const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
     wheel: { type: 'string' },
+    sdist: { type: 'string' },
     release: { type: 'string' },
     'platform-wheel': { type: 'string' },
     python: { type: 'string', default: '3.11,3.12,3.13,3.14' },
@@ -260,10 +264,8 @@ function pipVenv(name, ...install) {
   return { ok: pip.status === 0, python, reeval: join(at, bin, `reeval${exe}`) }
 }
 const pipPure = pipVenv('pip-pure', wheel)
-const pure = sh(pipPure.reeval, ['--version'], alone, {
-  REEVAL_DOWNLOAD: download,
-  XDG_CACHE_HOME: join(alone, 'pip-cache'),
-})
+const pureEnv = { REEVAL_DOWNLOAD: download, XDG_CACHE_HOME: join(alone, 'pip-cache') }
+const pure = sh(pipPure.reeval, ['--version'], alone, pureEnv)
 check(
   `pip install ${basename(wheel)}: reeval downloads ${name} for reeval-python's own version`,
   pipPure.ok &&
@@ -273,7 +275,51 @@ check(
     !pure.out.includes('SHA256SUMS only'),
 )
 
-// The platform wheel carries the binary, so nothing is downloaded, even with an empty cache.
+// The sdist, built into a wheel on install (hatchling from the index), records the same hashes.
+if (values.sdist) {
+  const sdist = resolve(values.sdist)
+  const at = join(alone, 'pip-sdist')
+  sh('uv', ['venv', '--python', last, at], alone)
+  const built = sh('uv', ['pip', 'install', '-q', '--python', at, sdist], alone)
+  const fromSdist = sh(join(at, bin, `reeval${exe}`), ['--version'], alone, {
+    REEVAL_DOWNLOAD: download,
+    XDG_CACHE_HOME: join(alone, 'sdist-cache'),
+  })
+  check(
+    `pip install ${basename(sdist)}: reeval downloads ${name} and checks it against the recorded hash`,
+    built.status === 0 &&
+      fromSdist.status === 0 &&
+      fromSdist.stdout.trim() === version &&
+      fromSdist.out.includes(`downloading ${name}`) &&
+      !fromSdist.out.includes('SHA256SUMS only'),
+  )
+}
+
+// Ctrl-C through the launcher reaches reeval, which cancels the attempts and saves the run.
+const stop = project('ctrl-c', '', wheel, 60_000)
+const ctrlC = fileURLToPath(new URL('./ctrl-c.py', import.meta.url))
+const stopped = sh(
+  pipPure.python,
+  [ctrlC, join('.reeval', 'staging', '*', 'live.json'), pipPure.reeval, 'run'],
+  stop,
+  { ...pureEnv, SMOKE_PYTHON: last },
+)
+// `results <run dir>/summary.md`, with the record at `<run dir>.json`.
+const summary = stopped.out.match(/results (\S+)summary\.md/)?.[1]
+let status
+try {
+  const record = `${resolve(stop, summary).replace(/[\\/]$/, '')}.json`
+  status = JSON.parse(readFileSync(record, 'utf8')).status
+} catch {}
+check(
+  'Ctrl-C on reeval run through the launcher: reeval saves the run as interrupted and exits 130',
+  stopped.status === 130 &&
+    stopped.out.includes('Interrupted: attempts') &&
+    status === 'interrupted',
+)
+
+// The platform wheel carries the binary, so nothing is downloaded, even with an empty cache. CI
+// builds them so they can be turned on; releases publish only the sdist and the pure wheel.
 if (values['platform-wheel']) {
   const own = resolve(values['platform-wheel']).replaceAll('\\', '/')
   const ownEnv = { XDG_CACHE_HOME: join(alone, 'empty-cache'), REEVAL_OFFLINE: '1' }
@@ -303,6 +349,8 @@ if (values['platform-wheel']) {
     'pip-find-links',
     '--find-links',
     dirname(wheel),
+    '--find-links',
+    dirname(own),
     `reeval-python==${wheelVersion}`,
   )
   const picked = sh(
@@ -311,31 +359,8 @@ if (values['platform-wheel']) {
     alone,
   )
   check(
-    `pip install --find-links ${basename(dirname(wheel))}: pip picks the platform wheel`,
+    `pip install --find-links ${basename(dirname(wheel))} ${basename(dirname(own))}: pip picks the platform wheel`,
     links.ok && picked.stdout.trim() === 'True',
-  )
-
-  // Ctrl-C through the launcher reaches reeval, which cancels the attempts and saves the run.
-  const stop = project('ctrl-c', '', wheel, 60_000)
-  const ctrlC = fileURLToPath(new URL('./ctrl-c.py', import.meta.url))
-  const stopped = sh(
-    pip.python,
-    [ctrlC, join('.reeval', 'staging', '*', 'live.json'), pip.reeval, 'run'],
-    stop,
-    { ...ownEnv, SMOKE_PYTHON: last },
-  )
-  // `results <run dir>/summary.md`, with the record at `<run dir>.json`.
-  const summary = stopped.out.match(/results (\S+)summary\.md/)?.[1]
-  let status
-  try {
-    const record = `${resolve(stop, summary).replace(/[\\/]$/, '')}.json`
-    status = JSON.parse(readFileSync(record, 'utf8')).status
-  } catch {}
-  check(
-    'Ctrl-C on reeval run through the launcher: reeval saves the run as interrupted and exits 130',
-    stopped.status === 130 &&
-      stopped.out.includes('Interrupted: attempts') &&
-      status === 'interrupted',
   )
 }
 

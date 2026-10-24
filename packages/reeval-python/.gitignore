@@ -5,3 +5,4 @@ __pycache__/
 dist/
 .venv/
 .venv-*/
+src/reeval_python/binaries.json

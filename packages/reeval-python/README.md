@@ -22,6 +22,10 @@ uv add reeval-python
 # or: pip install reeval-python
 ```
 
+Then `uv run reeval run`. reeval-python's `reeval` command runs the reeval binary of its own
+version: the first run downloads it from the GitHub release, checks it against the sha256 this
+release recorded, and caches it in `<cache>/reeval/bin/<version>/`.
+
 Monorepo development:
 
 ```bash
