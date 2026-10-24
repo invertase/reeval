@@ -929,7 +929,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     // The requests Goose sends the key on, with session naming off.
     endpoints: GOOSE_ENDPOINTS,
-    // Goose 1.55.0 refreshes its model catalogue from models.dev/api.json in every session, and
+    // Goose 1.56.0 refreshes its model catalogue from models.dev/api.json in every session, and
     // falls back to the one it bundles when that's refused.
     expectedBlocked: {
       hosts: ['models.dev'],

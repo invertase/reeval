@@ -1,6 +1,6 @@
 {
   "name": "@reeval/harness-goose",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "An AI SDK harness adapter for Goose on a Gemini API key, over its ACP server (goose acp)",
   "license": "Apache-2.0",
