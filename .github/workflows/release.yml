@@ -2,8 +2,10 @@
 # binary of its own version, so both carry one version. release-please keeps one release PR open
 # from Conventional Commits on main; merging it tags vX.Y.Z. Then ci.yml runs on that commit; npm
 # publishes the tarball its packed install job packed, with trusted publishing (OIDC, environment
-# `npm`), and PyPI the sdist and wheel its lint job built, with OIDC, environment `pypi`. The
-# release also gets the standalone binaries and their SHA256SUMS (binary.yml) as assets.
+# `npm`). binary.yml builds the standalone binaries, which go up to the release with their
+# SHA256SUMS, and reeval-python's sdist and pure wheel, which record those binaries' hashes; once
+# the binaries are up, PyPI gets those two, with OIDC, environment `pypi`, and reeval-python
+# downloads its binary from the release on first run. A republish builds the tag.
 # Publishing jobs must stay on this push-to-main trigger only (not tag push or `release` events) so
 # GitHub environments that allow deployment from branch `main` still approve the job.
 name: release
@@ -14,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       republish:
-        description: Run full CI on main and publish npm/PyPI from the manifest (tags must already exist)
+        description: Run full CI on the release tag the manifest names, and publish npm/PyPI from it (the tag must exist)
         type: boolean
         default: true
       dry_run:
@@ -105,6 +107,8 @@ jobs:
       contents: read
       actions: read
     uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.republish-gate.outputs.sha || github.sha }}
 
   # Built from the release's tagged commit, whichever ref the run was dispatched on. A push run's
   # commit is the release's (release-please checks it), and the SHA can't resolve to a branch.
@@ -138,7 +142,9 @@ jobs:
           path: out
       # SHA256SUMS goes up after the binaries, so it never lists binaries the release doesn't have.
       # A release with SHA256SUMS keeps its binaries unless replace_binaries is set: a rebuild isn't
-      # byte-identical, so replacing them changes their published checksums. Without SHA256SUMS
+      # byte-identical, so replacing them changes their published checksums (and breaks the
+      # reeval-python on PyPI, which records them). One whose SHA256SUMS is this build's has
+      # nothing to upload. Without SHA256SUMS
       # (an upload cut short), the binaries it has must match this build's sums, as a re-run of the
       # failed job's do, and the rest are added.
       - name: Upload to the release
@@ -167,6 +173,11 @@ jobs:
               if has "$f"; then echo "$TAG: replace $f"; else echo "$TAG: add $f"; fi
             done
           elif has SHA256SUMS; then
+            gh release download "$TAG" --pattern SHA256SUMS --dir "$RUNNER_TEMP/release"
+            if cmp -s SHA256SUMS "$RUNNER_TEMP/release/SHA256SUMS"; then
+              echo "::notice::$TAG already has this build's binaries; nothing to upload."
+              exit 0
+            fi
             level=error
             [ "$DRY_RUN" = true ] && level=notice
             echo "::$level::$TAG already has its binaries; dispatch with replace_binaries=true to replace them."
@@ -242,11 +253,16 @@ jobs:
           fi
           npm publish --access public "$tgz"
 
+  # Once the upload has finished, and only if the binaries on the release are the ones the dist
+  # records: a republish whose upload left the release's binaries alone still publishes when they
+  # match, and never publishes a reeval-python that would refuse the release's binaries.
   publish-pypi:
     name: publish to PyPI
-    needs: [release-please, republish-gate, test]
+    needs: [release-please, republish-gate, test, binaries, upload-binaries]
     if: |
-      always() && needs.test.result == 'success' && !inputs.dry_run && github.repository == 'invertase/reeval' &&
+      always() && needs.test.result == 'success' && needs.binaries.outputs.python == 'true' &&
+      (needs.upload-binaries.result == 'success' || needs.upload-binaries.result == 'failure') &&
+      !inputs.dry_run && github.repository == 'invertase/reeval' &&
       (
         (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.release_created == 'true') ||
         (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.release_created == 'true')
@@ -255,25 +271,33 @@ jobs:
     timeout-minutes: 10
     environment: pypi
     permissions:
+      contents: read
       id-token: write
     steps:
+      # This run's script, which a republished tag may predate.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/python-wheels.py
+          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: reeval-python-dist
           path: ${{ runner.temp }}/reeval-python-dist
-      # The release PR sets reeval-python's version with reeval's; a mismatch would ship an SDK
-      # that downloads another reeval.
-      - name: Check the version
+      # Every file must be this release's version (1.0.0-beta.1 is reeval-python 1.0.0b1), and every
+      # binary it records must be the one the release's SHA256SUMS lists: a mismatch would ship an
+      # SDK that refuses every download.
+      - name: Check the version and the release's binaries
         env:
           DIST: ${{ runner.temp }}/reeval-python-dist
           WANT: ${{ needs.release-please.outputs.version || needs.republish-gate.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          wheel=$(ls "$DIST"/reeval_python-*.whl)
-          if [ "$(basename "$wheel")" != "reeval_python-${WANT}-py3-none-any.whl" ]; then
-            echo "::error::Built $(basename "$wheel"), but this release is reeval ${WANT}."
-            exit 1
-          fi
+          python3 scripts/python-wheels.py check "$DIST" "$WANT"
+          gh release download "v$WANT" --pattern SHA256SUMS --dir "$RUNNER_TEMP/release"
+          python3 scripts/python-wheels.py verify "$DIST" "$RUNNER_TEMP/release/SHA256SUMS"
       # v1.14.3 (aef6c9b): commit SHAs are not published to ghcr.io; the release tag is.
       - uses: pypa/gh-action-pypi-publish@v1.14.3
         with:

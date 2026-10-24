@@ -75,6 +75,43 @@ reeval image build  # the agent's sandbox image
 reeval run
 ```
 
+## Python evals
+
+```bash
+uv init --bare             # a pyproject.toml
+uv add --dev reeval-python # the Python SDK, with its own `reeval` command
+uv run reeval run          # runs evals/**/*.eval.py
+```
+
+```yaml title="reeval.yml"
+include: ['evals/**/*.eval.py']
+harness: { kind: cursor, model: composer-2.5 }
+```
+
+A Python project needs no install script. `reeval-python` has a `reeval` command that runs the binary made for its version, so `uv.lock` pins both. The first time it runs, it downloads that binary from the GitHub release (the baseline build on an x64 CPU without AVX2, as the install scripts pick), checks it against the sha256 that reeval-python was released with, checks it starts and caches it in `<cache>/reeval/bin/<version>/`; later runs start from the cache, offline too. A Python project configures reeval with [`reeval.yml`](/reference/config#reevalyaml).
+
+<Info>
+The cache keeps every version it downloads (about 85 MB each) until you delete `<cache>/reeval/bin/<version>/`. Windows on ARM runs the x64 binary.
+</Info>
+
+| Variable | What it does |
+|---|---|
+| `REEVAL_BINARY` | A reeval binary to run instead |
+| `REEVAL_OFFLINE` | `1` never downloads: the binary must already be in the cache |
+| `REEVAL_VERSION` | Another version than reeval-python's, downloaded and checked against `SHA256SUMS` only |
+| `REEVAL_DOWNLOAD` | A mirror of the releases, as for the install scripts |
+
+The binary runs each `*.eval.py` with the `reeval_python` module from your project's Python. The `reeval` command picks the active virtual environment's, else the nearest `.venv` above the working directory, else its own; so a `reeval` from `uv tool install` or `pipx` still runs your project's dependencies. Run without it, the binary uses `uv run` (with a `pyproject.toml` and uv on your `PATH`), `.venv`'s Python, or `python3` (`python` on Windows). `REEVAL_PYTHON` names another interpreter.
+
+```text
+reeval: evals/greet.eval.py: The language runner (uv run --project … python -m
+reeval_python) stopped before it said hello: it exited (code 1):
+…/.venv/bin/python: No module named reeval_python
+reeval runs *.eval.py with the reeval_python module from the project's Python: …
+```
+
+A project without reeval-python, or with one that speaks another runner protocol, stops with exit 2 and says so, as above.
+
 ## Next
 
 <CardGroup cols={2}>

@@ -11,6 +11,7 @@ import {
   REEVAL_PYTHON_MODULE,
   resolvePythonRunnerCommand,
 } from '../src/language-runner/python-runner.ts'
+import { collectLanguageFile } from '../src/language-runner/remote.ts'
 import {
   errorFrom,
   type RunnerCommand,
@@ -156,6 +157,24 @@ test('a runner on another protocol, or one that stops before hello, says why', a
     startLanguageRunner(fakeRunner(`console.error('no SDK here'); process.exit(4)`), tmpdir()),
     /stopped before it said hello: it exited \(code 4\):\nno SDK here\nAn SDK that speaks an older runner protocol/,
   )
+})
+
+test('a Python runner that does not start says how to install the SDK', async () => {
+  const prev = process.env.REEVAL_PYTHON
+  process.env.REEVAL_PYTHON = join(tmpdir(), 'no-such-python')
+  const root = mkdtempSync(join(tmpdir(), 'reeval-py-'))
+  try {
+    const error = await collectLanguageFile(join(root, 'evals/a.eval.py'), root).then(
+      () => undefined,
+      (e: unknown) => e,
+    )
+    assert.ok(error instanceof UsageError)
+    assert.match(error.message, /no-such-python -m reeval_python\) stopped before it said hello/)
+    assert.match(error.message, /`uv add reeval-python`/)
+  } finally {
+    if (prev === undefined) delete process.env.REEVAL_PYTHON
+    else process.env.REEVAL_PYTHON = prev
+  }
 })
 
 test('projectUsesUv is true when pyproject.toml or uv.lock exists', () => {

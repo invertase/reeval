@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { relative } from 'node:path'
 import type { AttemptDone } from '../contract/attempt.ts'
 import { attemptRecordings } from '../engine/runtime.ts'
+import { UsageError } from '../errors.ts'
 import { declareTree } from '../evaluate.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { BackgroundHandle, EvalFn } from '../types.ts'
@@ -15,6 +16,7 @@ import {
   isRunnerAttemptRequest,
   isSessionFrom,
   type LanguageRunner,
+  RunnerLoadError,
   startLanguageRunner,
 } from './transport.ts'
 
@@ -34,7 +36,10 @@ export async function collectLanguageFile(file: string, root: string): Promise<v
   let runner = runners.get(root)
   if (!runner) {
     const command = adapter.runnerCommand(root)
-    runner = await startLanguageRunner(command, root, runnerEnv(root, adapter))
+    runner = await startLanguageRunner(command, root, runnerEnv(root, adapter)).catch((error) => {
+      if (!(error instanceof RunnerLoadError)) throw error
+      throw new UsageError(`${error.message}\n${adapter.setupHint}`)
+    })
     runners.set(root, runner)
   }
   const liveRunner = runner
