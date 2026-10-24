@@ -365,11 +365,17 @@ async function runCommand(
     return EXIT.ok
   }
 
-  const stopped = cutShort || engineRun.cancelled
+  let stopped = cutShort || engineRun.cancelled
   // A cancelled run keeps the per-attempt answers that came back before it stopped, and asks
   // no pairwise question.
   if (stopped) questions?.cancel()
-  const answers = stopped ? questions?.answered() : await questions?.settle()
+  let answers = stopped ? await questions?.answered() : await questions?.settle()
+  // A signal once the engine has returned aborts the questions' calls (the signal handler
+  // cancels them), so a run with questions stops there too.
+  if (!stopped && interrupted && questions) {
+    stopped = true
+    answers = await questions?.answered()
+  }
   const { lockfiles } = await import('./history/state.ts')
   const { writeScratchRun } = await import('./results.ts')
   const run = await writeScratchRun(
@@ -412,8 +418,8 @@ async function runCommand(
   let insights: RunInsights | null = run.insights
   let insightLines: string[] = []
   const { runInsights, wantsInsights } = await import('./insights/run.ts')
-  // A signal after the last attempt (while questions settle or the record is written)
-  // finds nothing left to cancel; it still means stop, so insights don't start.
+  // A signal while the record is written finds nothing left to cancel; it still means stop,
+  // so insights don't start.
   const wanted = !stopped && wantsInsights(ctx.config, !flags['no-insights'])
   if (wanted && interrupted) {
     insightLines = [
@@ -895,6 +901,14 @@ async function executeRun(
             at: Date.now(),
             level: 'warn',
             text: `question "${clip(answer.question, 80)}" on ${attempt} failed: ${answer.error}. Outcomes are unchanged; later failures of it on ${id} aren't shown.`,
+          })
+        },
+        onUnshown: (id, error) => {
+          renderer.onEvent({
+            type: 'notice',
+            at: Date.now(),
+            level: 'warn',
+            text: `${error} on ${id}, so each attempt's answer is that error. Outcomes are unchanged.`,
           })
         },
       })

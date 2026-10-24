@@ -46,7 +46,7 @@ import {
   voteOf,
   voteReason,
 } from './pairs.ts'
-import { DEFAULT_QUESTION_STATE, resolveQuestionState } from './state.ts'
+import { DEFAULT_QUESTION_STATE, resolveQuestionState, STOPPED_FIRST } from './state.ts'
 
 /** What each side of a question shows: the resolved `state`, and the captures it asks for. */
 export type QuestionShows = {
@@ -801,6 +801,8 @@ export type QuestionRunnerOptions = {
   onAnswer?: (evalId: string, answer: CompareAnswer) => void
   /** Told about each per-attempt answer as it lands, with the attempt's id. */
   onAttemptAnswer?: (evalId: string, attempt: string, answer: AttemptAnswer) => void
+  /** Told once per per-attempt question that names a check or capture none of its attempts has. */
+  onUnshown?: (evalId: string, error: string) => void
 }
 
 /** What `settle` hands the record: each eval's pairwise answers, and each attempt's own, by key. */
@@ -808,6 +810,22 @@ export type SettledQuestions = {
   evals: Map<string, AskedQuestion[]>
   attempts: Map<string, AskedAttemptAnswer[]>
 }
+
+type RunnerQuestion = EvalQuestions['questions'][number]
+
+/** A per-attempt question's answer when no model answered it. */
+const unanswered = (q: RunnerQuestion, error: string): AskedAttemptAnswer => ({
+  n: q.n,
+  answer: {
+    question: q.question,
+    model: isFake(q.model) ? 'fake' : q.model,
+    stateOptions: resolveQuestionState(q.state, false),
+    ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
+    ...(q.choices ? { choices: q.choices } : {}),
+    text: '',
+    error,
+  },
+})
 
 /**
  * Asks each attempt its eval's per-attempt questions as soon as it ends, and an eval's pairwise
@@ -822,6 +840,8 @@ export function questionRunner(options: QuestionRunnerOptions) {
   // Each attempt's answers once all came back, before any cancel: what a stopped run keeps.
   const done = new Map<string, AskedAttemptAnswer[]>()
   const shown = new Map<string, PairAttempt>()
+  // The questions each attempt was being asked: one a cancel cuts short records them unanswered.
+  const asking = new Map<string, RunnerQuestion[]>()
   const controller = new AbortController()
   const live = () => !controller.signal.aborted
   const limit = limiter(options.concurrency ?? 4)
@@ -847,6 +867,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
       )
       if (!attempt) return []
       shown.set(result.key, attempt)
+      asking.set(result.key, questions)
       return Promise.all(
         questions.map(async (q): Promise<AskedAttemptAnswer> => {
           const got = await limit(() =>
@@ -869,17 +890,9 @@ export function questionRunner(options: QuestionRunnerOptions) {
       )
     })().catch((error: unknown) =>
       questions.map((q): AskedAttemptAnswer => {
-        const answer: AttemptAnswer = {
-          question: q.question,
-          model: isFake(q.model) ? 'fake' : q.model,
-          stateOptions: resolveQuestionState(q.state, false),
-          ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
-          ...(q.choices ? { choices: q.choices } : {}),
-          text: '',
-          error: errorText(error),
-        }
-        if (live()) options.onAttemptAnswer?.(id, result.key, answer)
-        return { n: q.n, answer }
+        const asked = unanswered(q, errorText(error))
+        if (live()) options.onAttemptAnswer?.(id, result.key, asked.answer)
+        return asked
       }),
     )
     perAttempt.set(result.key, asked)
@@ -899,6 +912,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
       }
       const missing = sides.length && missingEverywhere(q.question, shows, sides, 'attempt')
       if (!missing) continue
+      options.onUnshown?.(e.row.id, missing)
       for (const r of results) {
         const got = done.get(r.key)
         if (!got) continue
@@ -946,7 +960,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
             signal: controller.signal,
             calls,
           })
-          options.onAnswer?.(id, answer)
+          if (live()) options.onAnswer?.(id, answer)
           return { n: q.n, answer, calls }
         }),
       )
@@ -961,7 +975,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
           rates: [],
           error: errorText(error),
         }
-        options.onAnswer?.(id, answer)
+        if (live()) options.onAnswer?.(id, answer)
         return { n: q.n, answer, calls: [] }
       }),
     )
@@ -982,9 +996,22 @@ export function questionRunner(options: QuestionRunnerOptions) {
     cancel(): void {
       controller.abort()
     },
-    /** What a cancelled run keeps: each attempt whose answers all came back before the cancel. */
-    answered(): SettledQuestions {
-      return { evals: new Map(), attempts: new Map(done) }
+    /**
+     * What a cancelled run keeps: each attempt whose answers all came back before the cancel,
+     * and, for an attempt the cancel cut short, each question as an error, so the record shows
+     * it went unanswered. Waits for the aborted calls to unwind.
+     */
+    async answered(): Promise<SettledQuestions> {
+      await Promise.all(perAttempt.values())
+      const attempts = new Map(done)
+      for (const [key, questions] of asking) {
+        if (!attempts.has(key))
+          attempts.set(
+            key,
+            questions.map((q) => unanswered(q, STOPPED_FIRST)),
+          )
+      }
+      return { evals: new Map(), attempts }
     },
     async settle(): Promise<SettledQuestions> {
       for (const id of byId.keys()) if (ended.has(id)) start(id)

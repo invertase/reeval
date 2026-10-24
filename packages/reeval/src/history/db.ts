@@ -228,10 +228,12 @@ CREATE VIEW effort AS SELECT * FROM effort_m;
 -- tell them apart. A variant against its control is here too; gating stays variant vs control.
 CREATE VIEW contrasts AS SELECT * FROM contrasts_m;
 
--- Each answer to a question asked of each attempt on its own, with the attempt's outcome: tally
--- the choices with GROUP BY question, choice.
+-- Each answer to a question asked of each attempt on its own, with the attempt's outcome and
+-- cell: tally the choices with GROUP BY question, choice, or split them by harness or arm.
 CREATE VIEW attempt_answers AS
-  SELECT q.*, r.started_at, r.branch FROM attempt_answers_m q JOIN runs r USING (run_id);
+  SELECT q.*, c.harness, c.environment, c.role, r.started_at, r.branch
+  FROM attempt_answers_m q JOIN runs r USING (run_id)
+  JOIN cells c ON c.run_id = q.run_id AND c.eval_key = q.eval_key AND c.key = q.cell_key;
 
 -- Each pairwise question's pairs of sides, head to head: wins when both orders agree, and splits
 -- when the order decided. The pooled win rate counts a split as a win for each side.

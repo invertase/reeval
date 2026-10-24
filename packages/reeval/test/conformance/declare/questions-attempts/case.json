@@ -1,0 +1,5 @@
+{
+  "eval": "plan/compare/evals/questions-attempts.eval.ts",
+  "plan": "plan/compare/expected/questions-attempts.txt",
+  "args": ["evals/questions-attempts.eval.ts"]
+}

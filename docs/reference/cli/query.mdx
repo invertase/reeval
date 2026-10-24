@@ -60,7 +60,7 @@ npx reeval query failing_attempts --run last
 
 | Name | Columns |
 |---|---|
-| `attempt_answers` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `outcome`, `question`, `choice`, `text`, `error`, `model`, `resolved_model`, `input_path`, `started_at`, `branch` |
+| `attempt_answers` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `outcome`, `question`, `choice`, `text`, `error`, `model`, `resolved_model`, `input_path`, `harness`, `environment`, `role`, `started_at`, `branch` |
 | `check_discrimination` | `run_id`, `eval_key`, `harness`, `variant`, `cell_key`, `label`, `variant_pass`, `variant_fail`, `variant_not_run`, `control_pass`, `control_fail`, `control_not_run`, `verdict` |
 | `check_rates` | `run_id`, `eval_key`, `cell_key`, `harness`, `environment`, `role`, `label`, `pass`, `fail`, `error`, `not_run`, `rate` |
 | `check_streaks` | `eval_key`, `cell_key`, `label`, `fingerprint`, `branch`, `runs`, `fails`, `streak_runs`, `streak_tries`, `streak_since`, `last_run`, `ended_by` |

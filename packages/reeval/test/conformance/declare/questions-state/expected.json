@@ -1,0 +1,203 @@
+{
+  "children": [
+    {
+      "type": "eval",
+      "name": "transcript across harnesses",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "baseline": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "questions": [
+          {
+            "question": "Which agent verified its work?",
+            "across": "harness",
+            "state": {
+              "transcript": "tools"
+            }
+          }
+        ]
+      },
+      "body": "b1"
+    },
+    {
+      "type": "eval",
+      "name": "transcript within a harness",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "baseline": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "questions": [
+          {
+            "question": "Which arm verified its work?",
+            "across": "environment",
+            "state": {
+              "transcript": "tools"
+            }
+          }
+        ]
+      },
+      "body": "b2"
+    },
+    {
+      "type": "eval",
+      "name": "screenshots",
+      "mode": "run",
+      "options": {
+        "question": {
+          "state": {
+            "diff": false
+          }
+        },
+        "compare": {
+          "baseline": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "questions": [
+          {
+            "question": "Which page looks better?",
+            "across": "environment",
+            "artifacts": ["landing"]
+          }
+        ]
+      },
+      "body": "b3"
+    },
+    {
+      "type": "eval",
+      "name": "each attempt by default",
+      "mode": "run",
+      "options": {
+        "questions": ["What did the agent check before it finished?"]
+      },
+      "body": "b4"
+    },
+    {
+      "type": "eval",
+      "name": "each attempt without the transcript",
+      "mode": "run",
+      "options": {
+        "questions": [
+          {
+            "question": "What did the agent say it did?",
+            "state": {
+              "transcript": false
+            }
+          }
+        ]
+      },
+      "body": "b5"
+    }
+  ]
+}

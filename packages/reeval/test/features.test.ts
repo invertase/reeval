@@ -1462,7 +1462,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'compare/question-attempt',
-    tiers: ['fake'],
+    tiers: ['fake', 'docker'],
     env: 'asked',
     canary: /expected 'hi\\n' to be 'bye\\n'/,
     record: ({ run, runDir }) => {
@@ -1491,6 +1491,9 @@ export const features: Feature[] = [
       const input = JSON.parse(readFileSync(join(runDir, answer.input?.path ?? ''), 'utf8'))
       assert.equal(input.question, 'Did it write out.txt?')
       assert.match(input.prompt, /write out\.txt/)
+      const failed = run.evals.find((e) => e.name === 'canary')?.attempts[0]
+      assert.equal(failed?.outcome, 'fail')
+      assert.equal(failed?.answers?.[0]?.choice, 'yes', 'a failed attempt is asked too')
     },
   },
   {

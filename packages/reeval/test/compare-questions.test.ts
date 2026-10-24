@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { DEFAULT_ATTEMPT_QUESTION_STATE, DEFAULT_QUESTION_STATE } from '../src/compare/state.ts'
 import type { QuestionCall } from '../src/types.ts'
-import { fakeConfig, project, readRun, runCli } from './helpers.ts'
+import { fakeConfig, noSignals, project, readRun, runCli } from './helpers.ts'
 
 describe('questions', () => {
   const asks = (question: string) => ({
@@ -486,6 +488,20 @@ export default defineConfig({
       { choice: 'no', outcome: 'fail', n: 4 },
       { choice: 'yes', outcome: 'pass', n: 8 },
     ])
+    const split = await runCli(p.dir, [
+      'query',
+      'SELECT harness, role, choice, COUNT(*) AS n FROM attempt_answers GROUP BY harness, role, choice ORDER BY harness, role',
+      '--json',
+    ])
+    assert.equal(split.code, 0, split.stderr)
+    assert.deepEqual(JSON.parse(split.stdout), [
+      { harness: 'bad', role: 'control', choice: 'no', n: 2 },
+      { harness: 'bad', role: 'variant', choice: 'no', n: 2 },
+      { harness: 'one', role: 'control', choice: 'yes', n: 2 },
+      { harness: 'one', role: 'variant', choice: 'yes', n: 2 },
+      { harness: 'two', role: 'control', choice: 'yes', n: 2 },
+      { harness: 'two', role: 'variant', choice: 'yes', n: 2 },
+    ])
     const out = await runCli(p.dir, ['analyze', '--context', '--vs', 'none'])
     assert.equal(out.code, 0, out.stderr)
     const json = /```json\n([\s\S]*?)\n```/.exec(out.stdout)?.[1]
@@ -509,7 +525,7 @@ export default defineConfig({
     assert.match(r.stdout, /question "What did it write\?" on .* failed: the model is over quota/)
     assert.match(
       r.stdout,
-      /^ {2}question {2}What did it write\?\n {4}the model call failed on 12 of 12: the model is over quota$/m,
+      /^ {2}question {2}What did it write\?\n {4}12 of 12 not answered: the model is over quota$/m,
     )
     for (const a of readRun(p.dir).evals[0]?.attempts ?? []) {
       assert.equal(a.answers?.[0]?.error, 'the model is over quota')
@@ -524,6 +540,118 @@ export default defineConfig({
     const t = await runCli(text.dir)
     assert.equal(t.code, 1, t.stdout + t.stderr)
     assert.match(t.stdout, /^ {2}question {2}What did it write\?\n {4}\S+ +saw (ok|no)\.txt$/m)
+  })
+
+  test("an attempt that passed or failed is asked; an infra error's isn't", async () => {
+    const p = await project('questions-attempts-infra', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis } from 'reeval/judge'
+export default defineConfig({
+  harness: fakeHarness({ files: { 'ok.txt': 'yes' } }),
+  analysis: { model: fakeAnalysis({ answer: 'asked' }) },
+})
+`,
+      'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+const questions = ['What did it do?']
+evaluate('passes', { questions }, async (c) => {
+  await c.send('go')
+})
+evaluate('fails', { questions }, async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('missing.txt')
+})
+evaluate('broken agent', { questions, harness: fakeHarness({ failWith: 'agent CLI failed to start' }) }, async (c) => {
+  await c.send('go')
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.deepEqual(
+      readRun(p.dir).run.evals.map((e) => [e.name, e.outcome, e.attempts[0]?.answers?.[0]?.text]),
+      [
+        ['passes', 'pass', 'asked'],
+        ['fails', 'fail', 'asked'],
+        ['broken agent', 'infra_error', undefined],
+      ],
+    )
+  })
+
+  test('a per-attempt question naming a command no attempt ran is warned about once', async () => {
+    const p = await project('questions-attempts-unshown', {
+      'reeval.config.ts': threeHarnesses(perAttempt(`'asked'`)),
+      ...asks(`[{ question: 'What did it run?', state: { checks: ['npm tset'] } }]`),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const error =
+      'question "What did it run?" state.checks names a command no attempt ran: "npm tset"'
+    const notices = r.stdout.split('\n').filter((l) => l.includes('names a command no attempt ran'))
+    assert.deepEqual(notices, [
+      `${error} on evals/q.eval.ts › asks, so each attempt's answer is that error. Outcomes are unchanged.`,
+      `    12 of 12 not answered: ${error}`,
+    ])
+    for (const a of readRun(p.dir).run.evals[0]?.attempts ?? []) {
+      assert.equal(a.answers?.[0]?.error, error)
+    }
+  })
+
+  test('Ctrl-C while questions are answered stops the run and records each unanswered one', {
+    skip: noSignals,
+  }, async () => {
+    // A model that never replies, so the signal lands while every call is in flight. Two
+    // per-attempt calls and then the pairwise one: the third means both attempts have ended.
+    let asked = 0
+    const server = createServer(() => {
+      asked++
+    })
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
+    const { port } = server.address() as AddressInfo
+    try {
+      const p = await project('questions-sigint', {
+        'reeval.config.ts': fakeConfig({ harness: `{ files: { 'ok.txt': 'yes' } }` }),
+        ...asks(
+          `[{ question: 'Which is cleaner?', across: 'environment', model: 'openai/gpt-5.6-luna' }, { question: 'What did it write?', model: 'openai/gpt-5.6-luna' }]`,
+        ),
+      })
+      let poll: ReturnType<typeof setInterval> | undefined
+      const r = await runCli(p.dir, ['run'], {
+        env: {
+          ...noKeys,
+          OPENAI_API_KEY: 'sk-test',
+          OPENAI_BASE_URL: `http://127.0.0.1:${port}/v1`,
+        },
+        onOutput: (_, pid) => {
+          poll = setInterval(() => {
+            if (asked < 3) return
+            clearInterval(poll)
+            process.kill(-pid, 'SIGINT')
+          }, 50)
+          return true
+        },
+      })
+      clearInterval(poll)
+      assert.equal(r.code, 130, r.stdout + r.stderr)
+      const run = readRun(p.dir)
+      assert.equal(run.run.status, 'interrupted')
+      const [e] = run.evals
+      assert.equal(e?.answers, undefined, 'an aborted pairwise call is not a failed answer')
+      assert.equal(e?.attempts.length, 2)
+      for (const a of e?.attempts ?? []) {
+        assert.equal(a.outcome, 'pass')
+        assert.deepEqual(
+          a.answers?.map((x) => [x.question, x.error]),
+          [['What did it write?', 'the run stopped before it was answered']],
+        )
+      }
+      assert.doesNotMatch(r.stdout, /aborted/)
+      assert.match(r.stdout, /^ {4}2 of 2 not answered: the run stopped before it was answered$/m)
+    } finally {
+      server.closeAllConnections()
+      server.close()
+    }
   })
 
   test('a model error is kept on its answer and warned about; the outcome and exit code stand', async () => {

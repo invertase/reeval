@@ -5,6 +5,9 @@ import type {
   ResolvedQuestionStateOptions,
 } from '../types.ts'
 
+/** The error a per-attempt answer carries when the run stopped before a model answered it. */
+export const STOPPED_FIRST = 'the run stopped before it was answered'
+
 /**
  * What each side of a pairwise question shows with no `state`: the task and the diff, every
  * turn's prompt. The final message stays out, since a better-written account of the work would

@@ -112,7 +112,8 @@ evaluate('greets in the house style', {
   the tally (`yes 8 · no 4`), else the first few answers. It shows the task,
   final message, diff and transcript by default. Answers land on
   `evals[].attempts[].answers` and in `reeval query attempt_answers` (with the
-  attempt's outcome, so you can split answers by harness, arm or pass/fail).
+  attempt's outcome, `harness`, `environment` and `role`, so you can split
+  answers by harness, arm or pass/fail).
   Ask these where a control is expected to fail: every attempt is asked.
 - **`across`: pairwise.** `'environment'` pairs two environments on one harness;
   `'harness'` two harnesses on one environment; a list asks both pair kinds.

@@ -577,9 +577,7 @@ function attemptQuestionLines(c: Colors, q: AttemptQuestionResult, indent: numbe
   const failed =
     q.error === null
       ? []
-      : [
-          `${pad}  ${c.yellow(`the model call failed on ${q.failed} of ${q.asked}: ${clip(q.error, 200)}`)}`,
-        ]
+      : [`${pad}  ${c.yellow(`${q.failed} of ${q.asked} not answered: ${clip(q.error, 200)}`)}`]
   if (q.choices) {
     const tally = q.choices.map((t) => `${t.choice} ${t.n}`).join(' · ')
     return [head, `${pad}  ${tally}`, ...failed]

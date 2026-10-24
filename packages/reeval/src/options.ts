@@ -613,7 +613,7 @@ export function cascade(
   base: Resolved,
   levels: Level[],
   where: string,
-  options: { profile?: ResolvedProfile | null; runs?: number } = {},
+  options: { profile?: ResolvedProfile | null; runs?: number; skipped?: boolean } = {},
 ): ResolvedEval {
   const out: Resolved = {
     ...base,
@@ -656,7 +656,8 @@ export function cascade(
     profile?.defaults.harness !== undefined && !levels.some((l) => l.options.harness)
   const authored = variesBy(out)
   if (harnessFromProfile) authored.harness ||= base.harness.length > 1
-  for (const q of out.questions) {
+  // A skipped eval asks nothing, so a pairwise question it inherits needs no factor to vary.
+  for (const q of options.skipped ? [] : out.questions) {
     for (const factor of pairFactors(q.across)) {
       if (authored[factor]) continue
       throw new UsageError(

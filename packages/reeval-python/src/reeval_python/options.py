@@ -45,6 +45,8 @@ class EvalOptions(TypedDict, total=False):
     judge: JudgeDefaults
     pin: Sequence[str]
     question: Mapping[str, Any]
+    questions: Sequence[str | Mapping[str, Any]]
+    """Asked of each attempt, or between attempts with `across`; `[]` clears the group's."""
     runs: int
     sandbox: DockerSandbox | Mapping[str, Any]
     tags: Sequence[str]

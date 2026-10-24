@@ -24,3 +24,12 @@ group(
     evaluate('asks none', { questions: [] }, async () => {})
   },
 )
+// A skipped eval asks nothing, so the pairwise question it inherits needs nothing to vary.
+group(
+  "pairs its evals' compares",
+  { questions: [{ question: 'Which is shorter?', across: 'environment' }] },
+  () => {
+    evaluate('compares', { compare: { baseline: base, variants: [skilled] } }, async () => {})
+    evaluate.skip('skipped without a compare', async () => {})
+  },
+)
