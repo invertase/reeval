@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import re
+import threading
 from typing import Any
 
 import pytest
 
 from reeval_python.context import PATTERN_ROUNDS, AttemptContext
 from reeval_python.errors import ReevalAssertionError
+from reeval_python.wire import Patterns
 
 
 class Host:
@@ -115,26 +117,32 @@ def test_a_subject_that_changes_on_every_read_stops_after_a_few_rounds() -> None
     assert len(host.calls) == 1 + PATTERN_ROUNDS
 
 
-def test_patterns_are_answered_off_the_event_loop() -> None:
-    ticks: list[float] = []
+def test_patterns_are_answered_off_the_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    loop_ran = threading.Event()
+    loops: list[asyncio.AbstractEventLoop] = []
+    waited: list[bool] = []
+    answer = Patterns.answer
+
+    # Answering asks the loop to set loop_ran and waits for it: off the loop it's set straight
+    # away; on the loop it can't be until the answer returns, however fast the host.
+    def answer_once_the_loop_runs(self: Patterns, untested: dict[str, list[str]]) -> None:
+        loops[0].call_soon_threadsafe(loop_ran.set)
+        waited.append(loop_ran.wait(timeout=10))
+        answer(self, untested)
+
+    monkeypatch.setattr(Patterns, "answer", answer_once_the_loop_runs)
 
     async def main() -> None:
-        async def tick() -> None:
-            while True:
-                ticks.append(1)
-                await asyncio.sleep(0.005)
-
-        ticker = asyncio.create_task(tick())
-        await asyncio.sleep(0)
-        # Each string backtracks for about 15 ms; `re` keeps the GIL for one search, so the loop
-        # runs between them.
-        strings = [f"{'a' * 18}!{i}" for i in range(40)]
-        c = AttemptContext("a", Host(strings).send)
-        slow = re.compile(r"(a+)+$")
+        loops.append(asyncio.get_running_loop())
+        c = AttemptContext("a", Host(["ab", "cd"]).send)
         await c.run_expect(
-            subject={"turn": 0}, matcher="toHaveRun", args=[slow], label=None, not_=True, soft=True
+            subject={"turn": 0},
+            matcher="toHaveRun",
+            args=[re.compile("a")],
+            label=None,
+            not_=True,
+            soft=True,
         )
-        ticker.cancel()
 
     asyncio.run(main())
-    assert len(ticks) > 10, "the event loop kept running while the patterns were matched"
+    assert waited == [True], "the event loop stopped while the patterns were matched"
