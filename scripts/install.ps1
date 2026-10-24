@@ -70,6 +70,8 @@
   $base = if ($env:REEVAL_DOWNLOAD) { $env:REEVAL_DOWNLOAD } else { "https://github.com/$repo/releases/download/v$version" }
   $name = "reeval-$version-$target.exe"
   $dir = if ($env:REEVAL_INSTALL_DIR) { $env:REEVAL_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'reeval\bin' }
+  # A full, normalised path, so PATH gets no relative entry and no second spelling of one it has.
+  $dir = [IO.Path]::GetFullPath($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($dir)) -replace '(?<!:)[\\/]+$'
 
   $tmp = Join-Path ([IO.Path]::GetTempPath()) ([IO.Path]::GetRandomFileName())
   New-Item -ItemType Directory -Path $tmp | Out-Null
