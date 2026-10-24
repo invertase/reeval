@@ -2029,6 +2029,13 @@
             },
             "ms": {
               "type": "number"
+            },
+            "tries": {
+              "type": "number"
+            },
+            "try": {
+              "description": "With `retries`: the try it ended on, of `tries` it could make.",
+              "type": "number"
             }
           },
           "required": ["at", "command", "exitCode", "kind", "ms"]

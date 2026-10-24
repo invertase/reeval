@@ -24,8 +24,8 @@ Each attempt gets a fresh `c`, a fresh sandbox and a fresh agent session. They s
   Sends the next turn of the agent session and waits for it to finish. Later calls continue the same session, so the agent keeps its context. It resolves even when the turn ends in `error`; check `turn.status` when that matters.
 </Property>
 
-<Property name="exec" type="(command: string, options?: { background?: boolean }) => Promise<ExecResult | BackgroundHandle>">
-  Runs a shell command in the sandbox's workspace. Without `background` it resolves with `{ exitCode, stdout, stderr }` and doesn't throw on a non-zero exit: use `toSucceed()`. `c.exec(cmd, { background: true })` starts the command without waiting for exit and returns `{ kill() }`; teardown kills it if the eval didn't. The whole command runs in its own shell, so `&&`, `;` and its redirects behave as in the foreground. It sees secrets sent `to: 'checks'`, which the agent never does. Before any turn it checks what the environment set up.
+<Property name="exec" type="(command: string, options?: { background?: boolean, retries?: number, interval?: number }) => Promise<ExecResult | BackgroundHandle>">
+  Runs a shell command in the sandbox's workspace. Without `background` it resolves with `{ exitCode, stdout, stderr }` and doesn't throw on a non-zero exit: use `toSucceed()`. With `retries`, a non-zero exit runs the command again, up to that many extra times, `interval` milliseconds apart (default 1000), and it resolves with the last try: see [Retrying a command](#retrying-a-command). `c.exec(cmd, { background: true })` starts the command without waiting for exit and returns `{ kill() }`; teardown kills it if the eval didn't. The whole command runs in its own shell, so `&&`, `;` and its redirects behave as in the foreground. It sees secrets sent `to: 'checks'`, which the agent never does. Before any turn it checks what the environment set up.
 </Property>
 
 <Property name="serve" type="(command: string, port?: number) => Promise<ServeHandle>">
@@ -47,6 +47,30 @@ Each attempt gets a fresh `c`, a fresh sandbox and a fresh agent session. They s
 <Property name="judge" type="(question: string, options?: JudgeCallOptions) => Promise<Verdict>">
   Asks the judge a yes/no question about the latest turn: by default its task, final message, changed files and diff. `options` takes `model`, `threshold`, `providerOptions`, `maxConcurrent` and `state` (what the judge is given, such as `{ transcript: 'tools' }`) for this call, `on` (a `Turn` or any JSON value to grade instead), and `artifacts` (capture handles or names, sent as file parts). Without a turn it throws `c.judge() has no turn to grade: call c.send() first`. See [Judges](/reference/judges).
 </Property>
+
+## Retrying a command
+
+```ts title="evals/flow.eval.ts"
+await expect(
+  c.exec('npx tsx --test hidden/flow.test.ts', { retries: 2, interval: 2000 }),
+  'flow works',
+).toSucceed()
+```
+
+A check that calls a model or a network service can fail on a transient that isn't the agent's fault. `retries` runs the command again on any non-zero exit; reeval doesn't read its output to decide. The check passes if any try exits 0, and a last failed try is a failed check, as without `retries`.
+
+The record keeps each try on the check (`checks[].tries`), and its log has each try's exit and output. The output, `summary.md`, `reeval show` and the studio say how it ended:
+
+```text
+fail             fails
+  always fails     failed
+    expected command to succeed, exit code 3
+    failed all 3 tries
+pass             lands
+  flaky passes     passed on try 2 of 3
+```
+
+`retries` is a whole number from 0, and `interval` is 0 or more milliseconds. Neither goes with `background: true`, whose exit reeval doesn't wait for.
 
 ## Properties
 
@@ -115,7 +139,7 @@ A fake run printing `c.attempt` shows:
   Workspace changes since the eval started, as of the end of this turn. `status` is `added`, `modified` or `deleted`. Files, rules and setup from the environment aren't part of it, and nor is a file `c.writeFile` placed until something changes it.
 </Property>
 
-<Property name="exec" type="(command: string) => Promise<ExecResult>">
+<Property name="exec" type="(command: string, options?: { retries?: number, interval?: number }) => Promise<ExecResult>">
   The same as `c.exec`.
 </Property>
 

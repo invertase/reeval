@@ -4,7 +4,7 @@ import type { HarnessResult, HarnessSession } from '../harness/types.ts'
 import { redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration } from '../text.ts'
-import type { Diff, ExecResult, Turn, TurnData, TurnRecord } from '../types.ts'
+import type { Diff, ExecResult, ExecRetry, Turn, TurnData, TurnRecord } from '../types.ts'
 import {
   type McpStartupLog,
   mcpStartupOf,
@@ -89,7 +89,7 @@ function watchMcpStartup(log: McpStartupLog) {
 }
 
 type Checks = {
-  exec: (command: string) => Promise<ExecResult>
+  exec: (command: string, options?: ExecRetry) => Promise<ExecResult>
   readFile: (path: string) => Promise<string | null>
 }
 

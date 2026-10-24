@@ -7,6 +7,7 @@ import base64
 import inspect
 from collections.abc import Awaitable, Callable, Coroutine
 from contextvars import ContextVar
+from datetime import timedelta
 from typing import Any, Literal, NoReturn, Unpack, cast, overload
 
 from reeval_python._wire import (
@@ -22,7 +23,7 @@ from reeval_python.errors import ReevalAssertionError, ReevalCallError
 from reeval_python.expect import bind_expect, tracked
 from reeval_python.options import JudgeOptions
 from reeval_python.types import BackgroundHandle, ExecResult, Turn, Verdict
-from reeval_python.wire import Patterns, json_value, options_to_wire, wire_args
+from reeval_python.wire import Patterns, json_value, options_to_wire, seconds, wire_args
 
 _UNSET: Any = object()
 
@@ -100,6 +101,14 @@ def _not_describing(what: str) -> None:
         raise TypeError(f"expect.poll's function can only read a file or run a command, not {what}")
 
 
+def _no_poll_retries(retries: int | None, interval: timedelta | float | None) -> None:
+    if retries is not None or interval is not None:
+        raise TypeError(
+            "expect.poll runs its command again on each try already: drop c.exec's retries and "
+            "interval, or check the command once, without expect.poll"
+        )
+
+
 PATTERN_ROUNDS = 5
 
 
@@ -128,29 +137,57 @@ class AttemptContext:
         return turn
 
     @overload
-    def exec(self, command: str) -> Coroutine[Any, Any, ExecResult]: ...
+    def exec(
+        self, command: str, *, retries: int | None = None, interval: timedelta | float | None = None
+    ) -> Coroutine[Any, Any, ExecResult]: ...
     @overload
     def exec(
         self, command: str, *, background: Literal[True]
     ) -> Coroutine[Any, Any, BackgroundHandle]: ...
     @overload
     def exec(
-        self, command: str, *, background: bool
+        self,
+        command: str,
+        *,
+        background: bool,
+        retries: int | None = None,
+        interval: timedelta | float | None = None,
     ) -> Coroutine[Any, Any, ExecResult | BackgroundHandle]: ...
 
     def exec(
-        self, command: str, *, background: bool = False
+        self,
+        command: str,
+        *,
+        background: bool = False,
+        retries: int | None = None,
+        interval: timedelta | float | None = None,
     ) -> Coroutine[Any, Any, ExecResult | BackgroundHandle]:
-        """Run a command in the sandbox; with `background=True`, leave it running."""
+        """Run a command in the sandbox; with `background=True`, leave it running. With
+        `retries`, a non-zero exit runs it again, up to that many extra times, `interval`
+        apart (seconds or a timedelta, default 1 second), and it returns the last try."""
         if _describing.get() is not None and not background:
+            _no_poll_retries(retries, interval)
             return cast(Any, Described({"exec": command}))
         _not_describing("c.exec(…, background=True)")
-        return tracked(self._exec(command, background), "c.exec()")
+        return tracked(self._exec(command, background, retries, interval), "c.exec()")
 
-    async def _exec(self, command: str, background: bool) -> ExecResult | BackgroundHandle:
+    async def _exec(
+        self,
+        command: str,
+        background: bool,
+        retries: int | None,
+        interval: timedelta | float | None,
+    ) -> ExecResult | BackgroundHandle:
         call: AttemptCallExec = {"op": "exec", "command": command}
         if background:
             call["background"] = True
+        if retries is not None:
+            call["retries"] = retries
+        if interval is not None:
+            ms = seconds(interval, "c.exec(interval=…)") * 1000
+            if ms < 0:
+                raise ValueError(f"c.exec(interval=…) takes 0 or more seconds (got {interval!r})")
+            call["interval"] = int(ms) if ms == int(ms) else ms
         result = cast(dict[str, Any], (await self._call(call))["result"])
         return (
             BackgroundHandle._from_wire(result)  # pyright: ignore[reportPrivateUsage]
@@ -290,19 +327,38 @@ class SyncAttemptContext:
         return self._run(self._ctx._send_turn(prompt))  # pyright: ignore[reportPrivateUsage]
 
     @overload
-    def exec(self, command: str) -> ExecResult: ...
+    def exec(
+        self, command: str, *, retries: int | None = None, interval: timedelta | float | None = None
+    ) -> ExecResult: ...
     @overload
     def exec(self, command: str, *, background: Literal[True]) -> BackgroundHandle: ...
     @overload
-    def exec(self, command: str, *, background: bool) -> ExecResult | BackgroundHandle: ...
+    def exec(
+        self,
+        command: str,
+        *,
+        background: bool,
+        retries: int | None = None,
+        interval: timedelta | float | None = None,
+    ) -> ExecResult | BackgroundHandle: ...
 
-    def exec(self, command: str, *, background: bool = False) -> ExecResult | BackgroundHandle:
+    def exec(
+        self,
+        command: str,
+        *,
+        background: bool = False,
+        retries: int | None = None,
+        interval: timedelta | float | None = None,
+    ) -> ExecResult | BackgroundHandle:
         """Run a command in the sandbox and wait for it; with `background=True`, leave it
-        running."""
+        running. With `retries`, a non-zero exit runs it again, up to that many extra times,
+        `interval` apart (seconds or a timedelta, default 1 second), and it returns the last
+        try."""
         if _describing.get() is not None and not background:
+            _no_poll_retries(retries, interval)
             return cast(Any, Described({"exec": command}))
         _not_describing("c.exec(…, background=True)")
-        return self._run(self._ctx._exec(command, background))  # pyright: ignore[reportPrivateUsage]
+        return self._run(self._ctx._exec(command, background, retries, interval))  # pyright: ignore[reportPrivateUsage]
 
     def read_file(self, path: str) -> str | None:
         """A file's contents in the sandbox, or `None` when there's no such file."""

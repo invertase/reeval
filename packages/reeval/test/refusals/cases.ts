@@ -10,6 +10,7 @@ import {
   attemptDoneProblem,
   attemptRequestProblem,
   attemptStartProblem,
+  execOptionsProblem,
 } from '../../src/contract/attempt.ts'
 import { declarationProblem } from '../../src/contract/declaration.ts'
 import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
@@ -126,6 +127,10 @@ const request =
     const problem = attemptRequestProblem({ id, call })
     if (problem) throw new UsageError(problem)
   }
+const execOptions = (options: unknown) => () => {
+  const problem = execOptionsProblem(options)
+  if (problem) throw new UsageError(problem)
+}
 const lifecycle = (problemOf: (value: unknown) => string | undefined, value: unknown) => () => {
   const problem = problemOf(value)
   if (problem) throw new UsageError(problem)
@@ -1445,6 +1450,30 @@ environment:
     ['send without a prompt', request({ op: 'send' })],
     ['exec with a typo', request({ op: 'exec', cmd: 'ls' })],
     ['exec with an empty command', request({ op: 'exec', command: '' })],
+    ['exec with negative retries', request({ op: 'exec', command: 'npm test', retries: -1 })],
+    ['exec with fractional retries', request({ op: 'exec', command: 'npm test', retries: 1.5 })],
+    ['exec with retries as a string', request({ op: 'exec', command: 'npm test', retries: '2' })],
+    ['exec with a negative interval', request({ op: 'exec', command: 'npm test', interval: -5 })],
+    [
+      'exec with retries in the background',
+      request({ op: 'exec', command: 'npm start', background: true, retries: 2 }),
+    ],
+    [
+      'exec with an interval in the background',
+      request({ op: 'exec', command: 'npm start', background: true, interval: 100 }),
+    ],
+    [
+      'good: exec with retries and an interval',
+      request({ op: 'exec', command: 'npm test', retries: 2, interval: 0 }),
+    ],
+    ['c.exec with negative retries', execOptions({ retries: -1 })],
+    ['c.exec with fractional retries', execOptions({ retries: 0.5 })],
+    ['c.exec with infinite retries', execOptions({ retries: Number.POSITIVE_INFINITY })],
+    ['c.exec with an interval as a duration string', execOptions({ interval: '1s' })],
+    ['c.exec with a retry typo', execOptions({ retry: 2 })],
+    ['c.exec with retries in the background', execOptions({ background: true, retries: 1 })],
+    ['good: c.exec with retries', execOptions({ retries: 3, interval: 250 })],
+    ['good: c.exec in the background', execOptions({ background: true })],
     ['readFile with a number', request({ op: 'readFile', path: 3 })],
     [
       'writeFile with a bad encoding',

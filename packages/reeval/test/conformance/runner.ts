@@ -115,7 +115,10 @@ export async function runScript(c: AttemptContext, run: ScriptRun): Promise<void
           handles.set(id, handle)
           return { result: { handle: id } }
         }
-        const { exitCode, stdout, stderr } = await c.exec(call.command as string)
+        const { exitCode, stdout, stderr } = await c.exec(call.command as string, {
+          ...(call.retries === undefined ? {} : { retries: call.retries as number }),
+          ...(call.interval === undefined ? {} : { interval: call.interval as number }),
+        })
         return { result: { exitCode, stdout, stderr } }
       }
       case 'kill':

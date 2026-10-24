@@ -1794,6 +1794,13 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'assert.exec-retries',
+    area: 'Judges and matchers',
+    name: "`c.exec(command, { retries, interval })`: a non-zero exit runs the command again, each try in the check's record and log, and `passed on try 2 of 3` in the output, `summary.md`, `reeval show` and the studio",
+    fixtures: ['assert/exec-retries'],
+    tests: ['reeval/test/ui.test.ts › a check with retries says which try it ended on'],
+  },
+  {
     id: 'assert.named-checks',
     area: 'Judges and matchers',
     name: "Named check results: `expect(value, 'label')`, every `expect` and `expect.soft` recorded per attempt, tallied per cell, and checks that don't discriminate in a compare",

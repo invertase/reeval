@@ -84,6 +84,21 @@ def sync_poll_or(c):
     expect.poll(lambda: c.read_file("a") or c.read_file("b")).to_be("x")
 
 
+@evaluate("sync exec retries")
+def sync_exec_retries(c):
+    c.exec("npm test", retries=2, interval=0.25)
+
+
+@evaluate("exec negative interval")
+async def exec_negative_interval(c):
+    await c.exec("npm test", retries=1, interval=-1)
+
+
+@evaluate("sync poll exec retries")
+def sync_poll_exec_retries(c):
+    expect.poll(lambda: c.exec("test -f ready.txt", retries=2)).to_succeed()
+
+
 @evaluate("aio expect in sync body")
 def aio_in_sync(c):
     aio.expect(1).to_be(1)
@@ -144,6 +159,27 @@ def test_sync_poll_sends_the_read_or_command_and_seconds_as_ms(host: Host) -> No
     host.done("k2")
     [run] = host.calls("k2")
     assert (run["subject"], run["poll"]) == ({"exec": "test -f ready.txt"}, {"interval": 50})
+
+
+def test_exec_sends_retries_and_its_interval_in_seconds_as_ms(host: Host) -> None:
+    host.start("sync exec retries")
+    host.done()
+    [run] = host.calls()
+    assert run == {"op": "exec", "command": "npm test", "retries": 2, "interval": 250}
+
+
+def test_exec_refuses_a_negative_interval_before_running(host: Host) -> None:
+    host.start("exec negative interval")
+    message = host.done()["error"]["message"]
+    assert "c.exec(interval=…) takes 0 or more seconds (got -1)" in message, message
+    assert host.calls() == []
+
+
+def test_poll_refuses_exec_retries(host: Host) -> None:
+    host.start("sync poll exec retries")
+    message = host.done()["error"]["message"]
+    assert "expect.poll runs its command again on each try already" in message, message
+    assert host.calls() == []
 
 
 def test_sync_poll_attribute_says_what_to_do(host: Host) -> None:

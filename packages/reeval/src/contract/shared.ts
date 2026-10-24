@@ -53,7 +53,8 @@ export type Assert<T extends true> = T
 
 export type Issue = z.core.$ZodIssue
 
-export const got = (value: unknown): string => JSON.stringify(value)
+export const got = (value: unknown): string =>
+  typeof value === 'number' && !Number.isFinite(value) ? String(value) : JSON.stringify(value)
 
 /** The part of `value` an issue's path points at. */
 export function valueAt(value: unknown, path: readonly PropertyKey[]): unknown {

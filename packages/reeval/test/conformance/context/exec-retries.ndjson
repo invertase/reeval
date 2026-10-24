@@ -1,0 +1,8 @@
+{"case":"exec-retries","about":"a command run again on a non-zero exit: its first try fails, its retry passes; then one with no retries left fails","options":{}}
+{"reeval":{"type":"start","attempt":{"id":"fake/-/fake#1","cell":{"key":"fake/-/fake","harness":"fake","environment":"-","sandbox":"fake","role":"control"},"n":1},"file":"evals/exec-retries.eval.ts","body":"b1"}}
+{"runner":{"id":"1","call":{"op":"exec","command":"test -f .tried || { touch .tried; exit 1; }","retries":2,"interval":0}}}
+{"reeval":{"id":"1","ok":true,"op":"exec","result":{"exitCode":0,"stdout":"","stderr":""}}}
+{"runner":{"id":"2","call":{"op":"exec","command":"exit 4","retries":1,"interval":0}}}
+{"reeval":{"id":"2","ok":true,"op":"exec","result":{"exitCode":4,"stdout":"","stderr":""}}}
+{"runner":{"type":"done"}}
+{"record":{"outcome":"pass","error":null,"assertions":[],"judgements":[],"checks":[{"command":"test -f .tried || { touch .tried; exit 1; }","exitCode":0,"retries":2,"tries":[{"exitCode":1},{"exitCode":0}]},{"command":"exit 4","exitCode":4,"retries":1,"tries":[{"exitCode":4},{"exitCode":4}]}]}}

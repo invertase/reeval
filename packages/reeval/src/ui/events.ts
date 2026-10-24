@@ -44,7 +44,15 @@ export type ProgressUpdate =
       error?: string
     }
   | { kind: 'check-start'; command: string }
-  | { kind: 'check-end'; command: string; exitCode: number; ms: number }
+  | {
+      kind: 'check-end'
+      command: string
+      exitCode: number
+      ms: number
+      /** With `retries`: the try it ended on, of `tries` it could make. */
+      try?: number
+      tries?: number
+    }
   | { kind: 'judge-start'; question: string }
   | {
       kind: 'judge-end'

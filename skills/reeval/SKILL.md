@@ -178,8 +178,11 @@ group('hello', () => {
   first to tell what it checks.
 - `await c.send(prompt)` runs one agent turn and returns a `Turn` (`text`, `status`, `diff`,
   `transcript`). Call it again for multi-turn; `c.judge(q, { on: firstTurn })` grades an earlier one.
-- `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`. `await c.readFile(path)` the text
-  or `null` (`~/` for home). `await c.writeFile(path, text)` places a file after a turn (a hidden
+- `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`. A check that can fail on a
+  transient (a hidden test that calls a model or a network service) gets
+  `c.exec(cmd, { retries: 2 })`: any non-zero exit runs it again, and the record and output say
+  `passed on try 2 of 3`. Don't roll a retry loop into the test itself.
+  `await c.readFile(path)` the text or `null` (`~/` for home). `await c.writeFile(path, text)` places a file after a turn (a hidden
   test the agent never saw). Web apps: `c.serve` and `c.capture` in
   [references/capture.md](references/capture.md).
 - `await c.judge(question, { threshold?, model?, on?, state?, artifacts? })`: by

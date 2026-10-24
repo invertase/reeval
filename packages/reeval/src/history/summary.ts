@@ -3,7 +3,7 @@ import type { Outcome } from '../types.ts'
 import { colors } from '../ui/colors.ts'
 import { render, tallyLine } from '../ui/layout.ts'
 import type { RunInsights } from '../view/insights.ts'
-import { checkLabels, commandLine, labelledJudgements } from '../view/judgements.ts'
+import { checkLabels, checkTries, commandLine, labelledJudgements } from '../view/judgements.ts'
 import {
   evalMarkOutcome,
   harnessLabel,
@@ -212,8 +212,9 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
   const labels = checkLabels(a)
   a.checks.forEach((c, i) => {
     const label = labels[i]
+    const tries = checkTries(c)
     lines.push(
-      `- Check${label ? ` ${cell(label)}` : ''} exit ${c.exitCode}: \`${cell(commandLine(c.command))}\`${c.log ? ` ([log](${c.log.path}))` : ''}`,
+      `- Check${label ? ` ${cell(label)}` : ''} exit ${c.exitCode}${tries ? ` (${tries})` : ''}: \`${cell(commandLine(c.command))}\`${c.log ? ` ([log](${c.log.path}))` : ''}`,
     )
   })
   if (a.changedFiles.length) {

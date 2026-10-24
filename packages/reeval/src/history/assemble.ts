@@ -16,11 +16,13 @@ import type { SandboxVersions } from '../preflight.ts'
 import { redactSecrets } from '../redact.ts'
 import { isCompletedAttempt, previousAttempt } from '../resume.ts'
 import { containsZero, liftInterval, round3 } from '../stats.ts'
+import { formatDuration } from '../text.ts'
 import type {
   Cell,
   CellGate,
   EnvironmentRecord,
   EvalRecord,
+  ExecResult,
   FamilyMeta,
   FileChange,
   HarnessDescriptor,
@@ -36,6 +38,7 @@ import type {
 } from '../types.ts'
 import { promptTokens, sumUsage } from '../usage.ts'
 import { checkVerdict } from '../view/contrasts.ts'
+import { checkTries } from '../view/judgements.ts'
 import { familiesOf } from './families.ts'
 import { type Source, traceSources } from './sources.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
@@ -325,8 +328,19 @@ const block = (label: string, text: string) => {
   return `--- ${label}\n${body}${body.endsWith('\n') || !body ? '' : '\n'}`
 }
 
-const checkLog = (c: EvalRecord['checks'][number]) =>
-  `$ ${c.command}\nexit ${c.exitCode}\n${block('stdout', c.stdout)}${block('stderr', c.stderr)}`
+const output = (r: ExecResult) => `${block('stdout', r.stdout)}${block('stderr', r.stderr)}`
+
+/** The command, its exit and output; with `retries`, each try's exit and output in turn. */
+function checkLog(c: EvalRecord['checks'][number]): string {
+  const head = `$ ${c.command}\nexit ${c.exitCode}`
+  if (!c.retries || !c.tries?.length) return `${head}\n${output(c)}`
+  const of = c.retries + 1
+  const tries = c.tries.map(
+    (t, i) =>
+      `\ntry ${i + 1} of ${of}: exit ${t.exitCode} after ${formatDuration(t.durationMs)}\n${output(t)}`,
+  )
+  return `${head}, ${checkTries(c) ?? `passed on try 1 of ${of}`}\n${tries.join('')}`
+}
 
 /** Dependency and binary noise dropped, and each remaining file's diff capped. */
 function historyPatch(patch: string): string {
@@ -781,6 +795,12 @@ async function attemptEvidence(
       exitCode: c.exitCode,
       durationMs: c.durationMs,
       log: out.add(`${dir}/checks/${i + 1}.log`, checkLog(c)),
+      ...(c.retries && c.tries
+        ? {
+            retries: c.retries,
+            tries: c.tries.map((t) => ({ exitCode: t.exitCode, durationMs: t.durationMs })),
+          }
+        : {}),
     })),
     changedFiles: changedFiles(record?.diff?.files ?? []),
     files,

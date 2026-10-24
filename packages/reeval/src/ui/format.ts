@@ -1,6 +1,7 @@
 import { clip, formatDuration } from '../text.ts'
 import type { AttemptMeta } from '../types.ts'
 import { type DebugLine, debugTime } from '../view/debug.ts'
+import { triesNote } from '../view/judgements.ts'
 import type { Colors } from './colors.ts'
 import { stripAnsi } from './colors.ts'
 import type { EvalResult, Progress, ReevalEvent } from './events.ts'
@@ -70,7 +71,8 @@ export function progressLine(c: Colors, p: Progress): string {
       return c.dim(`$ ${oneLine(p.command)}`)
     case 'check-end': {
       const exit = p.exitCode === 0 ? c.dim('exit 0') : c.red(`exit ${p.exitCode}`)
-      return `$ ${oneLine(p.command)}  ${exit} ${c.dim(formatDuration(p.ms))}`
+      const tries = p.try && p.tries ? triesNote(p.exitCode, p.try, p.tries) : null
+      return `$ ${oneLine(p.command)}  ${exit} ${c.dim([formatDuration(p.ms), tries].filter(Boolean).join(' · '))}`
     }
     case 'judge-start':
       return c.dim(`judging: ${oneLine(p.question, 120)}`)

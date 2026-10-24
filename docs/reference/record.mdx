@@ -731,7 +731,9 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   Harness session starts that didn't become ready within `startTimeout` and were started again (at most one).
 </Property>
 
-<Property name="checks" type="Array<{command: string; exitCode: number; durationMs: number; log?: FileRef}>"></Property>
+<Property name="checks" type="Array<{command: string; exitCode: number; durationMs: number; log?: FileRef; retries?: number; tries?: ExecTry[]}>">
+  Each foreground `c.exec`: its last try's exit code, and `durationMs` over all its tries. With `retries`, `tries` has each try's `{ exitCode, durationMs }` and the log each try's output.
+</Property>
 
 <Property name="assertions" type="AssertionRecord[]" optional>
   Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none.

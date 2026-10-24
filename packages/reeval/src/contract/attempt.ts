@@ -14,6 +14,7 @@ import type {
   CellRole,
   Diff,
   ExecResult,
+  ExecRetry,
   FileChange,
   JudgeArtifactRef,
   JudgeFailure,
@@ -175,6 +176,49 @@ export const execResultSchema = z.strictObject({
   stderr: z.string(),
 })
 
+export const execRetrySchema = z
+  .strictObject({
+    retries: z
+      .number()
+      .int('must be a whole number, from 0')
+      .min(0, 'must be a whole number, from 0')
+      .optional()
+      .describe('Extra tries after a non-zero exit, a whole number from 0. Default 0.'),
+    interval: z
+      .number()
+      .min(0, 'must be 0 or more milliseconds')
+      .optional()
+      .describe('Milliseconds to wait before each extra try. Default 1000.'),
+  })
+  .describe(
+    'How `c.exec` reruns a command that exits non-zero, for a check that can fail on a transient.',
+  )
+
+/** A background command has no exit for `retries` to wait on. */
+const noBackgroundRetry = (
+  options: { background?: boolean; retries?: number; interval?: number },
+  ctx: z.RefinementCtx,
+) => {
+  if (!options.background) return
+  for (const key of ['retries', 'interval'] as const) {
+    if (options[key] === undefined) continue
+    ctx.addIssue({
+      code: 'custom',
+      path: [key],
+      message:
+        "can't be used with background: true, whose exit reeval doesn't wait for: drop one of them",
+    })
+  }
+}
+
+export const execOptionsSchema = z
+  .strictObject({ background: z.boolean().optional(), ...execRetrySchema.shape })
+  .superRefine(noBackgroundRetry)
+
+/** What's wrong with `c.exec()`'s options, or undefined. */
+export const execOptionsProblem = (value: unknown): string | undefined =>
+  dataProblem(execOptionsSchema, value, 'c.exec()', () => Object.keys(execOptionsSchema.shape))
+
 export const assertionRecordSchema = z
   .strictObject({
     label: z
@@ -282,6 +326,7 @@ export type _SameAsSchema = [
   Assert<Same<z.infer<typeof transcriptEventSchema>, TranscriptEvent>>,
   Assert<Same<z.infer<typeof turnDataSchema>, TurnData>>,
   Assert<Same<z.infer<typeof execResultSchema>, ExecResult>>,
+  Assert<Same<z.infer<typeof execRetrySchema>, ExecRetry>>,
   Assert<Same<z.infer<typeof assertionRecordSchema>, AssertionRecord>>,
 ]
 
@@ -442,9 +487,11 @@ export const attemptCallSchema = z
           .boolean()
           .optional()
           .describe('Leave it running and reply with its handle, not its output.'),
+        ...execRetrySchema.shape,
       })
+      .superRefine(noBackgroundRetry)
       .describe(
-        '`c.exec(command, { background? })`: a command in the sandbox. Replies with its exit code and output, or with a handle when it runs in the background.',
+        '`c.exec(command, { background?, retries?, interval? })`: a command in the sandbox. Replies with its exit code and output (the last try, with `retries`), or with a handle when it runs in the background.',
       ),
     z
       .strictObject({
@@ -811,6 +858,7 @@ export const ATTEMPT_SCHEMAS: Record<string, z.ZodType> = {
   Diff: diffSchema,
   FileChange: fileChangeSchema,
   ExecResult: execResultSchema,
+  ExecRetry: execRetrySchema,
   AssertionRecord: assertionRecordSchema,
   JudgeCallData: judgeCallDataSchema,
   JudgeStateOptions: judgeStateSchema,
@@ -842,6 +890,7 @@ export const ATTEMPT_TYPES = [
   'Diff',
   'FileChange',
   'ExecResult',
+  'ExecRetry',
   'AssertionRecord',
   'JudgeStateOptions',
   'FakeJudgeData',

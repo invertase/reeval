@@ -47,7 +47,7 @@
           "additionalProperties": false
         },
         {
-          "description": "`c.exec(command, { background? })`: a command in the sandbox. Replies with its exit code and output, or with a handle when it runs in the background.",
+          "description": "`c.exec(command, { background?, retries?, interval? })`: a command in the sandbox. Replies with its exit code and output (the last try, with `retries`), or with a handle when it runs in the background.",
           "type": "object",
           "properties": {
             "background": {
@@ -59,9 +59,20 @@
               "type": "string",
               "pattern": "\\S"
             },
+            "interval": {
+              "description": "Milliseconds to wait before each extra try. Default 1000.",
+              "type": "number",
+              "minimum": 0
+            },
             "op": {
               "type": "string",
               "const": "exec"
+            },
+            "retries": {
+              "description": "Extra tries after a non-zero exit, a whole number from 0. Default 0.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
             }
           },
           "required": ["command", "op"],
