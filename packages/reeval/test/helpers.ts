@@ -173,11 +173,14 @@ export function runCli(
   const timeoutMs = opts.timeoutMs ?? 60_000
   const startedAt = Date.now()
   return new Promise((resolve, reject) => {
-    // Detached, so the tests can signal its whole process group as a terminal would.
+    // Detached, so the tests can signal its whole process group as a terminal would. Not on
+    // Windows, which stops it with killTree and where detached gives each CLI its own console:
+    // dozens at once can leave one alive long after it has printed everything.
     const child = spawn(process.execPath, [cli, ...args], {
       cwd,
       env: { ...baseEnv, ...opts.env },
-      detached: true,
+      detached: process.platform !== 'win32',
+      windowsHide: true,
     })
     let stdout = ''
     let stderr = ''
