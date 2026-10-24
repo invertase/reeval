@@ -193,7 +193,7 @@ jobs:
           ref: ${{ inputs.ref }}
           sparse-checkout: |
             scripts
-            examples/hello
+            examples/with-skill-lift
             packages/reeval/test/features/egress/blocked-host-recorded
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -127,7 +127,7 @@ Add `CURSOR_API_KEY` and `GOOGLE_AI_KEY` under **Settings › Secrets and variab
 
 ## What the run prints
 
-Under GitHub Actions, `reeval run` keeps a failing attempt's detail open under an `::error` and appends its own `summary.md` to the job summary; with `--output-logs full` it also wraps each passing attempt in a collapsible group titled with its start line. This is a real Cursor run of `examples/hello` with `GITHUB_ACTIONS=true CI=1` and `--output-logs full`:
+Under GitHub Actions, `reeval run` keeps a failing attempt's detail open under an `::error` and appends its own `summary.md` to the job summary; with `--output-logs full` it also wraps each passing attempt in a collapsible group titled with its start line. This is a real Cursor run of a project of greeting evals with `GITHUB_ACTIONS=true CI=1` and `--output-logs full`:
 
 ```text
 plan  run 20261020T213231Z_… · profile pr (auto: CI is set) · 2 evals · 2 cells · 2 attempts · ~26s serial (~13s at concurrency 4) · budget 20 attempts ✓

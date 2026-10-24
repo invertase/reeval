@@ -46,7 +46,13 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
-  examples/hello:
+  examples/with-checks:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-skill-lift:
     dependencies:
       reeval:
         specifier: workspace:*

@@ -29,7 +29,7 @@ export const fxs = fx({ model: 'anthropic/claude-sonnet-5' })
 export const grok = grokBuild({ model: 'grok-4.6' })
 ```
 
-`examples/hello` defines its harnesses once, so the config, evals and profiles share them.
+Define your harnesses once, in their own module, so the config, evals and profiles share them.
 
 ## Give each harness its key
 

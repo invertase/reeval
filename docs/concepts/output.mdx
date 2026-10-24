@@ -32,7 +32,7 @@ If your agent isn't detected, set `REEVAL_UI=agent` (or `AI_AGENT=<name>`).
 
 ## Every run starts with a plan line
 
-The plan line comes first in every mode, then the run header. From `reeval run hello` in `examples/hello`:
+The plan line comes first in every mode, then the run header. From a run of the greeting evals:
 
 ```text
 plan  run 20261020T212103Z_a3fbded_cursor-agent_zjv6 · 2 evals · 2 cells · 2 attempts · ~6m 00s serial (~3m 00s at concurrency 4)
@@ -134,7 +134,7 @@ An eval the model reads as choosing a tool gets its own layout: the tool it asks
 
 ## Grouped or stream
 
-By default (`--output-logs errors-only`) only a failing attempt prints its log: its start line (`▶`) and detail lines, as one block once it fails. A passing attempt prints nothing above the result blocks. From `CI=1 reeval run --config reeval.fake.config.ts` in `examples/hello`:
+By default (`--output-logs errors-only`) only a failing attempt prints its log: its start line (`▶`) and detail lines, as one block once it fails. A passing attempt prints nothing above the result blocks. From `CI=1 reeval run` on a project of greeting evals with the fake harness:
 
 ```text
 [ada#1 control] ▶ evals/greetings.eval.ts › greets Ada in the house style

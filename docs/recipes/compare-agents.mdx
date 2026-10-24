@@ -31,7 +31,7 @@ export default defineConfig({
 })
 ```
 
-The evals are `examples/hello`'s `hello.eval.ts` and `skill.eval.ts`, unchanged. The second is the house-greeting skill compare from [Prove a skill helps](/recipes/skill-lift), so each agent gets a control and a variant.
+The evals are a greeting eval and a house-greeting skill compare. The second is like the compare from [Prove a skill helps](/recipes/skill-lift), so each agent gets a control and a variant.
 
 Every harness needs a `model`. Cursor's `fast` parameter defaults to `'false'`, the standard price, so the record shows the served model `composer-2.5[fast=false]`. Each harness has an id, a key and an image of its own:
 
@@ -172,7 +172,7 @@ There's no Claude Code run on this page: the Anthropic account behind these capt
 | Two settings of one model | `cursor({ model: 'composer-2.5', params: { fast: 'true' }, id: 'cursor:composer-2.5-fast' })` next to the standard one, at several times the price. Give same-kind harnesses distinct ids |
 | Add an agent to one group | `{ harness: (inherited) => [...inherited, claude] }` extends the list instead of replacing it |
 | Keep PRs cheap | A `pr` profile with `limit: { harness: ['cursor:composer-2.5'] }` runs one agent on PRs and all of them nightly (see [Nightly matrix and Pages](/recipes/nightly-pages)) |
-| Ask which agent did better | A `question` on the compare judges the agents' diffs against each other after the run, per arm and run, as `examples/hello`'s `questions.eval.ts` does on Cursor and pi (`--profile questions`). Its win rates annotate; see [Compare questions](/guide/questions) |
+| Ask which agent did better | A `question` on the compare judges the agents' diffs against each other after the run, per arm and run, as reeval's nightly `questions` check does on Cursor and pi. Its win rates annotate; see [Compare questions](/guide/questions) |
 | Rate limits | `antigravity({ model, maxConcurrent: 2 })` caps that agent's attempts at once |
 | A bigger suite | The [dogfood case study](/recipes/case-study-dogfood) ran two skills on three harder evals |
 

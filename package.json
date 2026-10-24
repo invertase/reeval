@@ -19,13 +19,13 @@
   },
   "scripts": {
     "build": "pnpm -r --filter './packages/*' build",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r typecheck && tsc -p examples",
     "test": "pnpm build && pnpm -r --filter './packages/*' test",
     "coverage": "pnpm build && node scripts/coverage.mjs run",
     "lint": "biome check .",
     "format": "biome check --write .",
     "knip": "knip --no-progress",
-    "example": "pnpm --filter hello-example reeval run",
+    "images": "node scripts/sandbox-images.mjs",
     "smoke:real": "bash scripts/real-smoke.sh",
     "docs:gen": "node --experimental-strip-types --no-warnings scripts/docs.mjs",
     "docs:check": "node --experimental-strip-types --no-warnings scripts/docs.mjs --check"

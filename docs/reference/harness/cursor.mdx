@@ -95,7 +95,7 @@ A request carrying the placeholder anywhere else gets a 403, and the attempt pri
 
 ## Tokens and transcripts
 
-Each turn records its token `usage` and the model that served it, with its parameters (`composer-2.5[fast=false]`). The stack's `resolvedModels`, `summary.md`'s Harnesses row, `-v`'s turn line and the studio show the same resolved variant. The line under the result blocks totals the tokens. From `reeval run hello` in `examples/hello`:
+Each turn records its token `usage` and the model that served it, with its parameters (`composer-2.5[fast=false]`). The stack's `resolvedModels`, `summary.md`'s Harnesses row, `-v`'s turn line and the studio show the same resolved variant. The line under the result blocks totals the tokens. From a run of the greeting evals:
 
 ```text
 23s · 137k in (63k cached) · 819 out · results .reeval/runs/…/summary.md

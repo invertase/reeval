@@ -1,5 +1,5 @@
 // Builds a throwaway reeval project with real run history for studio development, screenshots and
-// tests: a copy of examples/hello with a few commits and recorded fake runs (passing, failing, CI,
+// tests: a copy of scripts/demo with a few commits and recorded fake runs (passing, failing, CI,
 // multi-cell with a compared skill environment, and its answered and failed compare questions),
 // plus one unrecorded scratch run.
 //
@@ -139,7 +139,7 @@ const good = {
 
 await rm(dir, { recursive: true, force: true })
 await mkdir(dir, { recursive: true })
-await cp(join(repo, 'examples/hello'), dir, {
+await cp(join(repo, 'packages/studio-web/scripts/demo'), dir, {
   recursive: true,
   // `.env*` holds the developer's real keys; the demo commits everything it copies.
   filter: (src) => !/[\\/](node_modules|\.reeval|\.history|\.env[^\\/]*)([\\/]|$)/.test(src),

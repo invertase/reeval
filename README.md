@@ -139,6 +139,8 @@ The [recipes](docs/recipes/index.mdx) are complete evals for common jobs:
 - [Check a recommendation](docs/recipes/recommendation.mdx): ask which library to use, and let a judge decide whether the agent picks the right one.
 - [PR gate in GitHub Actions](docs/recipes/github-pr-gate.mdx): run on every pull request and fail the check on a regression.
 
+The [`examples/`](examples) directory has runnable projects, one idea each, that run on a fake agent with no keys or Docker: [`with-checks`](examples/with-checks) (deterministic checks) and [`with-skill-lift`](examples/with-skill-lift) (does a skill help?).
+
 ## Documentation
 
 The manual in [`docs/`](docs/index.mdx) covers harnesses, sandboxes, environments, secrets and egress, checks and judges, profiles, history, and every CLI command and flag.

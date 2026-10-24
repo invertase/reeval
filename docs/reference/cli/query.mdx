@@ -105,7 +105,7 @@ Several views repeat a cell's key across evals in a run, so join `attempts` and 
 
 ## Per-cell rates
 
-`lift` pools each attempt's pass, every check at once. `check_rates` gives one labelled check's rate per cell, here from `examples/hello` on the fake config:
+`lift` pools each attempt's pass, every check at once. `check_rates` gives one labelled check's rate per cell, here from a project of greeting evals on the fake harness:
 
 ```bash
 npx reeval query "SELECT cell_key, role, label, pass, fail, rate
