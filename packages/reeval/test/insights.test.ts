@@ -1698,13 +1698,12 @@ evaluate('writes ok.txt', async (c) => {
     )
   })
 
-  test('Ctrl-C after the last attempt, while compare questions settle, starts no insights and keeps the exit code', {
+  test('Ctrl-C once live.json reads finishing, after the questions settle, starts no insights and keeps the exit code', {
     skip: noSignals,
   }, async () => {
     const p = await project('run-insights-sigint-settle', {
       'reeval.config.ts': runConfig({
         vote: `() => {
-        appendFileSync(new URL('./votes.log', import.meta.url), 'vote\\n')
         const until = Date.now() + 300
         while (Date.now() < until) {}
         return 'tie'
@@ -1734,10 +1733,10 @@ evaluate('asks', { runs: 4, compare: { baseline: base, variants: [skilled] }, qu
     const r = await runCli(p.dir, ['run'], {
       onOutput: (_stdout, pid) => {
         poll = setInterval(() => {
-          if (!existsSync(join(p.dir, 'votes.log')) || !finishing()) return
+          if (!finishing()) return
           clearInterval(poll)
           process.kill(-pid, 'SIGINT')
-        }, 20)
+        }, 5)
         return true
       },
     })
@@ -1745,7 +1744,16 @@ evaluate('asks', { runs: 4, compare: { baseline: base, variants: [skilled] }, qu
     assert.equal(r.code, 0, `the run's own exit code, not 130\n${r.stdout}${r.stderr}`)
     assert.deepEqual(calls(p.dir), [], 'no insight call starts')
     assert.doesNotMatch(r.stdout + r.stderr, /insights: 1 eval/)
-    const { run } = readRun(p.dir)
+    assert.doesNotMatch(r.stdout + r.stderr, /Cancelling/, 'a finishing run has nothing to cancel')
+    const { run, evals } = readRun(p.dir)
+    assert.deepEqual(
+      evals[0]?.answers?.map((a) => [a.question, a.error]),
+      [
+        ['Which is cleaner?', undefined],
+        ['Which is shorter?', undefined],
+      ],
+      'both questions were answered before finishing',
+    )
     assert.match(
       r.stdout,
       new RegExp(
