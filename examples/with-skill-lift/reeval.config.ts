@@ -3,20 +3,20 @@ import { defineConfig } from 'reeval'
 import { cursor, fakeHarness } from 'reeval/harness'
 import { docker, fakeSandbox } from 'reeval/sandbox'
 
-const solution = (path: string) =>
-  readFileSync(new URL(`./solution/${path}`, import.meta.url), 'utf8')
+const fakeAgent = (path: string) =>
+  readFileSync(new URL(`./fake-agent/${path}`, import.meta.url), 'utf8')
 
 export default defineConfig({
   include: ['*.eval.ts'],
-  // A scripted agent that writes ./solution's files, and the changelog entry only when it has
+  // A scripted agent that copies ./fake-agent's files into the workspace, and the changelog entry only when it has
   // the skill, so the compare shows a lift without keys or Docker.
   harness: fakeHarness({
-    files: { 'src/math.js': solution('src/math.js') },
+    files: { 'src/math.js': fakeAgent('src/math.js') },
     text: 'I added multiply(a, b) to src/math.js.',
     withSkill: {
       files: {
-        'src/math.js': solution('src/math.js'),
-        'CHANGELOG.md': solution('CHANGELOG.md'),
+        'src/math.js': fakeAgent('src/math.js'),
+        'CHANGELOG.md': fakeAgent('CHANGELOG.md'),
       },
       text: 'I added multiply(a, b) to src/math.js and recorded it in CHANGELOG.md.',
     },

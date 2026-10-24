@@ -70,7 +70,7 @@
     },
     "examples/with-*": {
       "entry": ["*.eval.ts", "reeval*.config.ts"],
-      "ignore": ["project/**", "solution/**"]
+      "ignore": ["project/**", "fake-agent/**"]
     }
   },
   "ignoreFiles": ["scripts/third-party.d.mts"]
