@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "reeval": { "command": "npx", "args": ["reeval", "mcp"] }
+  }
+}

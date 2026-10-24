@@ -46,13 +46,481 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
+  examples/with-analysis:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-background-process:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-brokered-secret:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-budget:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-bug-fix:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-capture:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-capture-compare:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-capture-journey:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
   examples/with-checks:
     dependencies:
       reeval:
         specifier: workspace:*
         version: link:../../packages/reeval
 
+  examples/with-code-review:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-compare-control:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-compare-harness:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-compare-questions:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-concurrency:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-dependency-upgrade:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-docker-install:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-dockerfile:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-docs-adherence:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-each:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-effort:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-egress-allow-all:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-egress-allowlist:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-egress-deny-all:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-env:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-existing-codebase:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-extend-environment:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-fake-harness:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-fake-judge:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-family-lift:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-feedback-loop:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-fixture:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-framework-migration:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-git-workspace:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-github-pr-gate:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-groups:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-guarded-files:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-harness-edits:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-hidden-tests:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-history:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-jev:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-judge:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-judge-on-output:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-judge-providers:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-judge-state:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-library-skill-lift:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-many-harnesses:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-mcp:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-min-lift:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-multi-turn:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-oracle-canary:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-pass-rate:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-plugin:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-podman:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-profiles:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-python-image:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-query:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-reasoning-effort:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-recommendation:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-reeval-mcp:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-refactor:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-resource-limits:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-rules:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-rules-ab:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-sdk-usage:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-secret-for-checks:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-security-fix:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-setup:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-skill:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
   examples/with-skill-lift:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-skill-reads:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-skill-sources:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-soft-checks:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-strict-secrets:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-studio:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-tags:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-test-writing:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-transcript-matchers:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-two-variants:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-vercel-gateway:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-web-matchers:
     dependencies:
       reeval:
         specifier: workspace:*

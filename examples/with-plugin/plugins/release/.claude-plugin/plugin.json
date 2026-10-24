@@ -1,0 +1,5 @@
+{
+  "name": "release",
+  "description": "How this project cuts a release: a skill, and an MCP server that knows the next version",
+  "version": "1.0.0"
+}

@@ -1,0 +1,59 @@
+name: evals
+
+on:
+  pull_request:
+    paths: ['*.eval.ts', 'project/**', 'reeval.config.ts', 'profiles.ts', 'package-lock.json']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  evals:
+    # Forks get no secrets, so their PRs can't run real agents.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      # Eval code runs on the host with the keys, so the job keeps no git token.
+      - uses: actions/checkout@v7
+        with:
+          # reeval compare walks the commit's ancestors to find the base run.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx reeval image build
+
+      - name: Run evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set +e
+          npx reeval run
+          code=$?
+          # 1 is a failing eval: the compare decides. 2 and 3 are errors.
+          if [ "$code" -gt 1 ]; then exit "$code"; fi
+
+      - name: Compare with the base branch
+        run: |
+          set +e
+          npx reeval compare --md --fail-on-regression > compare.md
+          code=$?
+          cat compare.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+
+      - name: Upload runs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: reeval-runs-${{ github.run_id }}
+          path: .reeval/runs
+          include-hidden-files: true
+          retention-days: 14

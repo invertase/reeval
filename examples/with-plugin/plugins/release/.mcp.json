@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "releases": { "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/releases.mjs"] }
+  }
+}

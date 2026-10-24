@@ -1,0 +1,11 @@
+{
+  "name": "math",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "lodash.clamp": "^4.0.3"
+  }
+}
