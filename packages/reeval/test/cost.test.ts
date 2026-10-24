@@ -552,7 +552,14 @@ describe('loadPrices', () => {
     })
   })
 
-  test('the fetch goes through the environment proxy under NODE_USE_ENV_PROXY=1', async (t) => {
+  const [major, minor] = process.versions.node.split('.').map(Number)
+  const envProxy =
+    major >= 24 || (major === 22 && minor >= 21)
+      ? false
+      : `Node ${process.versions.node} has no NODE_USE_ENV_PROXY (22.21 or 24 and later)`
+  test('the fetch goes through the environment proxy under NODE_USE_ENV_PROXY=1', {
+    skip: envProxy,
+  }, async (t) => {
     const seen: string[] = []
     const proxy = createServer((req, res) => {
       seen.push(req.url ?? '')
