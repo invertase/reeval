@@ -497,6 +497,9 @@ jobs:
         sdk: [python]
         os: [ubuntu-24.04, macos-latest, windows-latest]
     steps:
+      # Recorded runs' paths pass Windows' 260-character limit, which git keeps by default.
+      - if: runner.os == 'Windows'
+        run: git config --system core.longpaths true
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref }}
