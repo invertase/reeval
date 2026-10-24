@@ -485,6 +485,10 @@
         "outcome": {
           "$ref": "#/$defs/Outcome"
         },
+        "reportedCostUsd": {
+          "description": "What a gateway said the harness's own API calls cost, in US dollars, summed (OpenRouter's `usage.cost`); absent when it names none.",
+          "type": "number"
+        },
         "seq": {
           "description": "Start order across the run, from 1; null for attempts that never started.",
           "anyOf": [
@@ -621,6 +625,13 @@
               "unreported",
               "usage"
             ]
+          }
+        },
+        "upstreams": {
+          "description": "The upstream providers a gateway said served the harness's own API calls (OpenRouter's `provider`), each with how many it served, in the order first seen; more than one means the gateway spread or failed the calls over between them. Absent when the gateway names none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UpstreamCount"
           }
         },
         "usage": {
@@ -1910,6 +1921,10 @@
             "$ref": "#/$defs/JudgeArtifactRef"
           }
         },
+        "costUsd": {
+          "description": "What the gateway says the call cost, in US dollars (OpenRouter's `usage.cost`); unset when it names none.",
+          "type": "number"
+        },
         "gateway": {
           "description": "The gateway from the config's `gateway` list the call went through; unset without one.",
           "type": "string"
@@ -1940,6 +1955,10 @@
         },
         "threshold": {
           "type": "number"
+        },
+        "upstream": {
+          "description": "The upstream provider the gateway says served the call (OpenRouter's); unset when it names none.",
+          "type": "string"
         },
         "verdict": {
           "enum": ["fail", "pass"]
@@ -3214,6 +3233,19 @@
     },
     "TurnStatus": {
       "enum": ["aborted", "completed", "error"]
+    },
+    "UpstreamCount": {
+      "description": "An upstream provider behind a gateway, and how many of the attempt's calls it served.",
+      "type": "object",
+      "properties": {
+        "calls": {
+          "type": "number"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": ["calls", "provider"]
     },
     "WebEventType": {
       "description": "The transcript events a harness may be unable to report.",

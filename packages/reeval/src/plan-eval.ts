@@ -23,6 +23,7 @@ import {
 import { filesOf, workspaceOf } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { resolveModelGateway } from './gateway/models.ts'
+import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { resolveGateway } from './gateway/resolve.ts'
 import { vercelCredentialProblem } from './gateway/vercel.ts'
 import { refusedMcp, refusedPlugins } from './harness/agents.ts'
@@ -150,7 +151,8 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
           gatewayNotes.push(`gateway: ${hid} → ${route.name}`)
         }
         if (route.name === 'direct') return harness
-        const problem = harness.kind === 'fake' ? undefined : vercelCredentialProblem()
+        const problem =
+          harness.kind === 'fake' || route.name !== 'vercel' ? undefined : vercelCredentialProblem()
         if (problem) throw new UsageError(`${where} on ${hid}: ${problem}`)
         return { ...harness, gateway: route.name }
       })
@@ -193,6 +195,12 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
   }
   const harnessBy = resolved.sources?.harness ?? ctx.config.file
   const plan = evalPlan(resolvedEval, plannedAttempts, { configFile: ctx.config.file, file: path })
+  // OpenRouter's fallbacks reach only reeval's own calls; the plan says so where they're on.
+  if (gatewayNotes.length && openRouterFallbacks(gateways)) {
+    gatewayNotes.push(
+      "gateway: openrouter() fallbacks on: reeval's own calls may fail over to another upstream provider; the harnesses' calls take OpenRouter's own routing",
+    )
+  }
   plan.notes.push(...gatewayNotes, ...pluginNotes)
   const setByOf = (planned: PlannedAttempt) => ({
     sandbox: sandboxSetBy(planned, resolved, ctx.config.file),

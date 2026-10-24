@@ -18,7 +18,7 @@ Harness = str | FakeHarness | Mapping[str, Any]
 class JudgeDefaults(TypedDict, total=False):
     """Defaults for `c.judge()`, merged field by field down the cascade."""
 
-    gateway: Literal["direct", "vercel"] | Mapping[str, Any]
+    gateway: Literal["direct", "vercel", "openrouter"] | Mapping[str, Any]
     max_concurrent: int
     model: str | FakeJudge
     provider_options: Mapping[str, Mapping[str, Any]]

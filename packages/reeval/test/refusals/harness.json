@@ -18,6 +18,7 @@
   "opencode without a provider": "UsageError: opencode(): an OpenCode model id names its provider, <provider>/<model>, such as 'google/gemini-3.8-flash' or 'anthropic/claude-haiku-4-5' (got \"gemini-3.8-flash\")",
   "opencode with an unknown provider": null,
   "opencode with a vercel/ id": "UsageError: opencode(): a vercel/… id would bypass the config's gateway list: write the model as 'anthropic/claude-haiku-4.5' and add vercel() to gateway (got \"vercel/anthropic/claude-haiku-4.5\")",
+  "opencode with an openrouter/ id": "UsageError: opencode(): an openrouter/… id would bypass the config's gateway list: write the model as 'anthropic/claude-haiku-4.5' and add openrouter() to gateway (got \"openrouter/anthropic/claude-haiku-4.5\")",
   "opencode good": null,
   "goose with a provider": "UsageError: goose() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. goose({ model: 'gemini-3.8-flash' }) (got \"google/gemini-3.8-flash\")",
   "goose without a model": "UsageError: goose() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. goose({ model: 'gemini-3.8-flash' }) (got undefined)",

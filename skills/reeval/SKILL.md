@@ -113,9 +113,10 @@ export default defineConfig({
   and `'openai/gpt-6-luna'` (`OPENAI_API_KEY`; OpenAI's Decisions API takes only its decision
   model, so not `openai/gpt-5.5`), each on its provider's own key. reeval uses no gateway by
   default: `AI_GATEWAY_API_KEY` is read only with `gateway: [vercel()]` in the config (or a judge
-  `gateway: 'vercel'` pin, listed there). As a judge, `vercel()` serves decision models only
-  (Jev, `openai/gpt-6-luna-decisions`), never a language model: pin a language-model judge to
-  `gateway: 'direct'`. Always a provider prefix.
+  `gateway: 'vercel'` pin, listed there), `OPENROUTER_API_KEY` only with `openrouter()`. As a
+  judge, `vercel()` serves decision models only (Jev, `openai/gpt-6-luna-decisions`), and
+  `openrouter()` only those on its Decisions API (`typesafe/jev-1.14`), never a language model:
+  pin a language-model judge to `gateway: 'direct'`. Always a provider prefix.
 - Imports: `reeval` (`defineConfig`, `defineEnvironment`, `group`, `evaluate`,
   `expect`, `DEFAULT_EGRESS_ALLOW`, `DEFAULT_SKILL_EXCLUDE`, types), `/harness`, `/sandbox`
   (`docker`, `fakeSandbox`), `/judge` (`fakeJudge`, `RECOMMENDED_JUDGE_MODEL`,

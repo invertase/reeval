@@ -36,6 +36,7 @@ import {
   gatewayDescriptorSchema,
   gatewayEntryDataSchema,
   gatewayNameSchema,
+  openrouterGatewaySchema,
   vercelGatewaySchema,
 } from './gateway.ts'
 import {
@@ -104,6 +105,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   GatewayDescriptor: gatewayDescriptorSchema,
   DirectGatewayDescriptor: directGatewaySchema,
   VercelGatewayDescriptor: vercelGatewaySchema,
+  OpenRouterGatewayDescriptor: openrouterGatewaySchema,
   GatewayEntryData: gatewayEntryDataSchema,
   JudgeStateOptions: judgeStateSchema,
   Question: questionSchema,

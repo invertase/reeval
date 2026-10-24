@@ -18,6 +18,8 @@ import {
   pluginServerName,
 } from '../environment/plugins.ts'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
+import { OPENROUTER_KEY } from '../gateway/openrouter.ts'
+import { isRoutingGateway, ROUTING_GATEWAYS } from '../gateway/routes.ts'
 import {
   FX_VERCEL_CALL,
   FX_VERCEL_ENDPOINTS,
@@ -25,7 +27,6 @@ import {
   servedOnVercel,
   VERCEL_HOST,
   VERCEL_KEY,
-  VERCEL_ROUTES,
 } from '../gateway/vercel.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type {
@@ -85,6 +86,8 @@ export type Agent = Layout & {
   credential: string
   /** The variable the adapter takes the credential as, when not its own name (a gateway's key). */
   authAs?: string
+  /** Variables the adapter takes beside the credential, such as the base URL a gateway sets. */
+  authEnv?: Readonly<Record<string, string>>
   /** The model id the agent asks for, from the harness's own; unset when they're the same. */
   modelId?: (model: string) => string
   /**
@@ -134,6 +137,11 @@ export type Agent = Layout & {
   /** Requests whose response body names the model that served them, for `servedModel`. */
   modelResponses?: readonly EndpointMatch[]
   /**
+   * The upstream provider a gateway's response says served a call (OpenRouter's), and what it
+   * charged; unset where the response names none.
+   */
+  upstream?: Upstream
+  /**
    * Hosts a restricted egress policy allows for it, in place of its image's (`HARNESS_HOSTS`);
    * set by `forModel` for an agent whose hosts depend on the model's provider.
    */
@@ -171,7 +179,7 @@ export type Agent = Layout & {
 /** The part of an agent's catalog entry its model's provider decides. */
 export type ModelSpecific = Pick<
   Agent,
-  'credential' | 'endpoints' | 'servedModel' | 'askedModel'
+  'credential' | 'endpoints' | 'servedModel' | 'askedModel' | 'upstream'
 > & {
   modelResponses?: readonly EndpointMatch[]
   hosts: readonly string[]
@@ -198,7 +206,10 @@ export function cursorUnreported(harnessMetadata: unknown): WebEventType[] {
  * The model a successful brokered request names, from its method, host and path; undefined when
  * it names none.
  */
-export type ServedModel = (request: {
+export type ServedModel = (request: BrokeredRequest) => string | undefined
+
+/** A successful brokered request, as the egress gateway saw it. */
+export type BrokeredRequest = {
   method: string
   host: string
   path: string
@@ -207,9 +218,21 @@ export type ServedModel = (request: {
   responseModel?: string
   /** The reasoning effort the response body said it ran at, on a `modelResponses` endpoint. */
   responseEffort?: string
+  /** The upstream provider the response body said served it, on a `modelResponses` endpoint. */
+  responseProvider?: string
+  /** The last `"cost"` the response body named, on a `modelResponses` endpoint. */
+  responseCost?: number
   /** The request's headers, as the agent sent them. */
   headers?: Readonly<Record<string, string | readonly string[] | undefined>>
-}) => string | undefined
+}
+
+/**
+ * The upstream provider a gateway says served a brokered request, with what it charged in US
+ * dollars when it says; undefined when it names none.
+ */
+export type Upstream = (
+  request: BrokeredRequest,
+) => { provider: string; costUsd?: number } | undefined
 
 /** A Gemini API key's only request: `POST /v1beta/models/<model>:streamGenerateContent`. */
 const GEMINI_ENDPOINTS = [
@@ -941,8 +964,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
       (await import('@reeval/harness-goose')).createGoose({
         ...(auth[VERCEL_KEY]
           ? { auth, provider: (await import('@reeval/harness-goose')).AI_GATEWAY_PROVIDER }
-          : // Goose reads the key as GOOGLE_API_KEY; reeval's host variable is the one the others use.
-            { auth: { GOOGLE_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' } }),
+          : auth[OPENROUTER_KEY]
+            ? { auth, provider: (await import('@reeval/harness-goose')).OPENROUTER_PROVIDER }
+            : // Goose reads the key as GOOGLE_API_KEY; reeval's host variable is the one the others use.
+              { auth: { GOOGLE_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' } }),
         model,
         ...(descriptor.kind === 'goose' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
@@ -1002,7 +1027,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
         auth,
         ...(auth[VERCEL_KEY]
           ? { provider: (await import('@reeval/harness-codex')).AI_GATEWAY_PROVIDER }
-          : {}),
+          : auth[OPENROUTER_KEY]
+            ? { provider: (await import('@reeval/harness-codex')).OPENROUTER_PROVIDER }
+            : {}),
         ...(descriptor.kind === 'codex' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
@@ -1049,7 +1076,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
         auth,
         ...(auth[VERCEL_KEY]
           ? { provider: (await import('@reeval/harness-grok-build')).AI_GATEWAY_PROVIDER }
-          : {}),
+          : auth[OPENROUTER_KEY]
+            ? { provider: (await import('@reeval/harness-grok-build')).OPENROUTER_PROVIDER }
+            : {}),
         model,
         ...(plugins.length
           ? {
@@ -1293,10 +1322,11 @@ export function refusedPlugins(
 /** A real agent's catalog entry, with what its model's provider decides. */
 export function agentFor(h: AgentHarnessDescriptor): Agent {
   const agent = AGENTS[h.kind]
-  if (h.gateway === 'vercel') {
-    const route = VERCEL_ROUTES[h.kind]
-    if (!route) throw new InfraError(`reeval doesn't run ${agent.name} on Vercel AI Gateway`)
-    // The route stands in for forModel: it decides the credential, endpoints and hosts on Vercel.
+  if (isRoutingGateway(h.gateway)) {
+    const gateway = ROUTING_GATEWAYS[h.gateway]
+    const route = gateway.routes[h.kind]
+    if (!route) throw new InfraError(`reeval doesn't run ${agent.name} on ${gateway.name}`)
+    // The route stands in for forModel: it decides the credential, endpoints and hosts there.
     return { ...agent, ...route(process.env) }
   }
   return agent.forModel ? { ...agent, ...agent.forModel(h.model) } : agent
@@ -1368,7 +1398,7 @@ export function agentAuth(agent: Agent, env: NodeJS.ProcessEnv = process.env) {
       `${agent.credential} isn't set, so the ${agent.name} harness can't authenticate. Set it in the environment or .env.local.`,
     )
   }
-  return { [agent.authAs ?? agent.credential]: value }
+  return { ...agent.authEnv, [agent.authAs ?? agent.credential]: value }
 }
 
 /**
@@ -1382,12 +1412,13 @@ export type Brokering = {
   servedModel?: ServedModel
   askedModel?: ServedModel
   modelResponses?: readonly EndpointMatch[]
+  upstream?: Upstream
 }
 
 export function brokeringFor(h: HarnessDescriptor): Brokering | undefined {
   const agent = agentOf(h)
   if (!agent) return undefined
-  const { credential, endpoints, tokens, servedModel, askedModel, modelResponses } = agent
+  const { credential, endpoints, tokens, servedModel, askedModel, modelResponses, upstream } = agent
   return {
     credential,
     endpoints,
@@ -1395,5 +1426,6 @@ export function brokeringFor(h: HarnessDescriptor): Brokering | undefined {
     ...(servedModel ? { servedModel } : {}),
     ...(askedModel ? { askedModel } : {}),
     ...(modelResponses ? { modelResponses } : {}),
+    ...(upstream ? { upstream } : {}),
   }
 }

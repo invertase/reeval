@@ -10,6 +10,7 @@ import type {
   FamilyLift,
   FamilyRecord,
   RunRecord,
+  UpstreamCount,
 } from '../history/types.ts'
 import { EFFECT_MIN_COUNTED, liftInterval, round3 } from '../stats.ts'
 import type { ErrorKind, Outcome } from '../types.ts'
@@ -216,6 +217,20 @@ export type CellResult = {
   /** Web searches and fetches per counted attempt; null where the harness can't report them. */
   searches: Array<number | null>
   fetches: Array<number | null>
+  /**
+   * The upstream providers a gateway (OpenRouter) said served the cell's agent calls, with how
+   * many, summed over its attempts in first-seen order; absent when it named none.
+   */
+  upstreams?: UpstreamCount[]
+  /** The same for the cell's judge calls; absent when the gateway named none. */
+  judgeUpstreams?: UpstreamCount[]
+}
+
+/** Summed per provider, in first-seen order. */
+function tallyUpstreams(counts: Iterable<UpstreamCount>): UpstreamCount[] {
+  const by = new Map<string, number>()
+  for (const { provider, calls } of counts) by.set(provider, (by.get(provider) ?? 0) + calls)
+  return [...by].map(([provider, calls]) => ({ provider, calls }))
 }
 
 /** A cell's attempts the run's interrupt cancelled: recorded as fails, but not the agent's. */
@@ -575,6 +590,13 @@ function cellsOf(
     const path = `${parent}/${cellSegment(cell)}`
     const baseline = baselineOf(e, cell)
     const attempts = e.attempts.filter((a) => a.cell === cell.key && counted(a))
+    const ran = e.attempts.filter((a) => a.cell === cell.key)
+    const upstreams = tallyUpstreams(ran.flatMap((a) => a.upstreams ?? []))
+    const judgeUpstreams = tallyUpstreams(
+      ran.flatMap((a) =>
+        a.judgements.flatMap((j) => (j.upstream ? [{ provider: j.upstream, calls: 1 }] : [])),
+      ),
+    )
     const lift = cell.lift
     const interval = lift ? { low: lift.interval.lo, high: lift.interval.hi } : null
     return {
@@ -605,6 +627,8 @@ function cellsOf(
       errors: errorsOf(e, cell),
       searches: attempts.map((a) => a.activity.webSearches),
       fetches: attempts.map((a) => a.activity.webFetches),
+      ...(upstreams.length ? { upstreams } : {}),
+      ...(judgeUpstreams.length ? { judgeUpstreams } : {}),
     }
   })
 }

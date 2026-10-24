@@ -185,10 +185,13 @@
               "$ref": "#/$defs/DirectGatewayDescriptor"
             },
             {
+              "$ref": "#/$defs/OpenRouterGatewayDescriptor"
+            },
+            {
               "$ref": "#/$defs/VercelGatewayDescriptor"
             },
             {
-              "enum": ["direct", "vercel"]
+              "enum": ["direct", "openrouter", "vercel"]
             }
           ]
         },
@@ -1814,9 +1817,9 @@
       "additionalProperties": false
     },
     "GatewayName": {
-      "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway.",
+      "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter.",
       "type": "string",
-      "enum": ["direct", "vercel"]
+      "enum": ["direct", "vercel", "openrouter"]
     },
     "GitWorkspace": {
       "description": "A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url` is what reeval fetches: the clone URL, or an absolute path for a local repository.",
@@ -2228,6 +2231,22 @@
         }
       },
       "required": ["kind", "model"],
+      "additionalProperties": false
+    },
+    "OpenRouterGatewayDescriptor": {
+      "description": "OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode and Grok Build.",
+      "type": "object",
+      "properties": {
+        "fallbacks": {
+          "description": "Let OpenRouter fail over to another upstream provider when the one it picked can't serve a call. Off by default, so reeval's own calls (the judge, analysis, compare questions and captures) send `allow_fallbacks: false`. The harnesses' calls take OpenRouter's own routing either way.",
+          "type": "boolean"
+        },
+        "kind": {
+          "type": "string",
+          "const": "openrouter"
+        }
+      },
+      "required": ["kind"],
       "additionalProperties": false
     },
     "PairFactor": {
@@ -3129,7 +3148,7 @@
       "enum": ["header", "query", "body"]
     },
     "VercelGatewayDescriptor": {
-      "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.",
+      "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode, fx and Grok Build.",
       "type": "object",
       "properties": {
         "kind": {

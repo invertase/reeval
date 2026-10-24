@@ -9,7 +9,8 @@
 #   real agents (Cursor) test/real-agents' smoke profile, then its compare questions on a real
 #                        model (test/questions-real.test.ts)
 # PRs get the pinned contract only. A dispatch's `harnesses` input (e.g.
-# claude-code-gateway,codex-gateway) runs only those rows' pinned contract and e2e, nothing else. Budgets: each reeval run's budget.attempts, a ledger per job
+# claude-code-gateway,codex-gateway) runs only those rows' pinned contract and e2e, nothing else;
+# naming an *-openrouter row also runs reeval's own calls on OpenRouter (the judge and analysis). Budgets: each reeval run's budget.attempts, a ledger per job
 # (contract.yml) and the timeouts below.
 name: real
 
@@ -59,6 +60,7 @@ jobs:
           HAS_OPENAI: ${{ secrets.OPENAI_API_KEY != '' }}
           HAS_XAI: ${{ secrets.XAI_API_KEY != '' }}
           HAS_GATEWAY: ${{ secrets.AI_GATEWAY_API_KEY != '' }}
+          HAS_OPENROUTER: ${{ secrets.OPENROUTER_API_KEY != '' }}
           HARNESSES: ${{ inputs.harnesses }}
         run: |
           [ "$HAS_CURSOR" = true ] || echo "::error::No CURSOR_API_KEY repository secret: the Cursor rows and the real-agents smoke fail"
@@ -68,6 +70,9 @@ jobs:
           [ "$HAS_XAI" = true ] || echo "::error::No XAI_API_KEY repository secret: the Grok Build rows fail"
           case "$HARNESSES" in
             *gateway*) [ "$HAS_GATEWAY" = true ] || echo "::error::No AI_GATEWAY_API_KEY repository secret: the *-gateway rows fail" ;;
+          esac
+          case "$HARNESSES" in
+            *openrouter*) [ "$HAS_OPENROUTER" = true ] || echo "::error::No OPENROUTER_API_KEY repository secret: the *-openrouter rows and reeval's own OpenRouter calls fail" ;;
           esac
           true
 

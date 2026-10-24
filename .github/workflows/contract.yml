@@ -22,9 +22,10 @@ on:
         required: true
       harnesses:
         description: >-
-          Only these rows, comma-separated, in the contract and e2e suites (the *-gateway rows,
-          which the default list leaves out, included); the Cursor checks after them are skipped.
-          Empty: the default list
+          Only these rows, comma-separated, in the contract and e2e suites (the *-gateway and
+          *-openrouter rows, which the default list leaves out, included); the Cursor checks after
+          them are skipped. Naming an *-openrouter row also runs reeval's own calls on OpenRouter
+          (test/openrouter-real.test.ts). Empty: the default list
         type: string
         default: ''
 
@@ -58,6 +59,9 @@ jobs:
       XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
       # The *-gateway rows, when REEVAL_CONTRACT_HARNESSES names them.
       AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+      # The *-openrouter rows and reeval's own OpenRouter calls, when REEVAL_CONTRACT_HARNESSES
+      # names one.
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     steps:
       # Eval code runs on the host with the keys, so the job keeps no git token.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -91,6 +95,15 @@ jobs:
           files=test/contract.test.ts
           [ "${{ inputs.versions }}" = pinned ] && files="$files test/e2e-real.test.ts"
           node --test --test-concurrency=1 --test-timeout=3600000 --experimental-strip-types --no-warnings $files
+      # One real attempt on the fake harness: the Jev judge and the analysis model through
+      # openrouter(), recording the served model, the upstream provider and the cost.
+      - name: reeval's own calls on OpenRouter
+        if: ${{ !cancelled() && contains(inputs.harnesses, 'openrouter') }}
+        working-directory: packages/reeval
+        env:
+          REEVAL_TEST_KEEP: '1'
+          TMPDIR: ${{ runner.temp }}/reeval-tests
+        run: node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/openrouter-real.test.ts
       - name: the stored conversation @cursor/sdk declares
         if: inputs.harnesses == ''
         working-directory: packages/reeval

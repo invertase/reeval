@@ -1,15 +1,21 @@
-// The gateway resolver and Vercel's routes as data: fallback, pins, the plan's hint, the models
-// reeval calls itself, what a harness on Vercel authenticates with and is brokered on, and its
-// credential's expiry.
+// The gateway resolver and Vercel's and OpenRouter's routes as data: fallback, pins, the plan's
+// hint, the models reeval calls itself, what a harness on each authenticates with and is brokered
+// on, the upstream OpenRouter names, and Vercel's credential's expiry.
 import assert from 'node:assert/strict'
 import { afterEach, describe, test } from 'node:test'
 import { openCodeConfig } from '@reeval/harness-opencode'
 import { onEndpoint } from '@reeval/sandbox-docker'
 import { type GatewayScope, resolveModelGateway } from '../src/gateway/models.ts'
+import {
+  anthropicOnOpenRouter,
+  OPENROUTER_GATEWAY,
+  upstreamOnOpenRouter,
+} from '../src/gateway/openrouter.ts'
+import { openRouterBilling, openRouterFallbacks } from '../src/gateway/openrouter-models.ts'
 import { fallbackHint, resolveGateway } from '../src/gateway/resolve.ts'
 import {
   jwtExpiry,
-  VERCEL_ROUTES,
+  VERCEL_GATEWAY,
   vercelCredential,
   vercelCredentialProblem,
 } from '../src/gateway/vercel.ts'
@@ -21,7 +27,7 @@ import {
   brokeringFor,
   expectedBlockedFor,
 } from '../src/harness/agents.ts'
-import { grokBuild } from '../src/harness.ts'
+import { grokBuild, opencode } from '../src/harness.ts'
 import { gatewayPart } from '../src/history/assemble.ts'
 import { judgeCredentials, judgeRoute } from '../src/judge/index.ts'
 import type { AgentHarnessDescriptor, GatewayName, HarnessDescriptor } from '../src/types.ts'
@@ -497,7 +503,10 @@ describe('Vercel AI Gateway routes', () => {
       { AI_GATEWAY_API_KEY: 'oidc' },
       'the adapter takes it as the key',
     )
-    assert.deepEqual(VERCEL_ROUTES['claude-code']?.(process.env).authAs, 'AI_GATEWAY_API_KEY')
+    assert.deepEqual(
+      VERCEL_GATEWAY.routes['claude-code']?.(process.env).authAs,
+      'AI_GATEWAY_API_KEY',
+    )
   })
 
   test("an expired project token is refused before the run; a live one, or a key, isn't", () => {
@@ -524,5 +533,187 @@ describe('Vercel AI Gateway routes', () => {
       ),
       undefined,
     )
+  })
+})
+
+describe('OpenRouter routes', () => {
+  const saved = { ...process.env }
+  afterEach(() => {
+    process.env = { ...saved }
+  })
+  const onOpenRouter = (h: HarnessDescriptor) =>
+    agentFor({ ...h, gateway: 'openrouter' } as AgentHarnessDescriptor)
+  const call = (path: string, extra: object = {}) =>
+    ({ method: 'POST', host: 'openrouter.ai', path, status: 200, ...extra }) as never
+
+  test('it serves Claude Code, Codex, Goose, OpenCode and Grok Build, and says why not the rest', () => {
+    const served = ['claude-code', 'codex', 'goose', 'opencode', 'grok-build']
+    assert.deepEqual(Object.keys(OPENROUTER_GATEWAY.routes).sort(), [...served].sort())
+    for (const [kind, why] of [
+      ['cursor', /Cursor's agent only calls Cursor's own API/],
+      ['antigravity', /OpenRouter has no Gemini API/],
+      ['fx', /fx reaches models only on Vercel AI Gateway or OpenAI's API/],
+      ['pi', /pi reaches a Gemini model on OpenRouter only through Chat Completions/],
+    ] as const) {
+      const h = { kind, model: kind === 'fx' ? 'gpt-4.1' : 'm' } as HarnessDescriptor
+      assert.throws(() => resolve(list('openrouter'), h), why, kind)
+      assert.equal(resolve(list('openrouter', 'direct'), h).name, 'direct', `${kind} falls through`)
+    }
+  })
+
+  test("Claude Code calls OpenRouter's Messages API on a Bearer token, with dotted Anthropic ids", () => {
+    process.env.OPENROUTER_API_KEY = 'sk-or-test'
+    const agent = onOpenRouter(claude)
+    assert.equal(agent.credential, 'OPENROUTER_API_KEY')
+    assert.deepEqual(agentAuth(agent), {
+      ANTHROPIC_AUTH_TOKEN: 'sk-or-test',
+      ANTHROPIC_BASE_URL: 'https://openrouter.ai/api',
+    })
+    assert.deepEqual(agent.hosts, ['openrouter.ai'])
+    assert.deepEqual(
+      agent.endpoints.map((e) => [e.host, e.method, e.path]),
+      [
+        ['openrouter.ai', ['POST'], { exact: '/api/v1/messages' }],
+        ['openrouter.ai', ['POST'], { exact: '/api/v1/messages/count_tokens' }],
+      ],
+    )
+    assert.equal(agent.modelId?.('claude-haiku-4-5'), 'anthropic/claude-haiku-4.5')
+    assert.equal(anthropicOnOpenRouter('claude-sonnet-4-5'), 'anthropic/claude-sonnet-4.5')
+    assert.equal(anthropicOnOpenRouter('claude-opus-4'), 'anthropic/claude-opus-4')
+    assert.equal(anthropicOnOpenRouter('anthropic/claude-x'), 'anthropic/claude-x')
+  })
+
+  test("Codex, Goose and Grok Build name their provider in the id, on OpenRouter's API paths", () => {
+    for (const [h, path, id] of [
+      [codex, '/api/v1/responses', 'openai/gpt-5.4-mini'],
+      [
+        { kind: 'goose', model: 'gemini-3-flash' },
+        '/api/v1/chat/completions',
+        'google/gemini-3-flash',
+      ],
+      [{ kind: 'grok-build', model: 'grok-4.6' }, '/api/v1/chat/completions', 'x-ai/grok-4.6'],
+    ] as const) {
+      const agent = onOpenRouter(h as HarnessDescriptor)
+      assert.equal(agent.credential, 'OPENROUTER_API_KEY', h.kind)
+      assert.ok(
+        agent.endpoints.every((e) => e.host === 'openrouter.ai'),
+        h.kind,
+      )
+      assert.ok(
+        agent.modelResponses?.some((e) => 'exact' in e.path && e.path.exact === path),
+        h.kind,
+      )
+      assert.equal(agent.modelId?.(h.model), id, h.kind)
+      assert.equal(agent.modelId?.('anthropic/claude-x'), 'anthropic/claude-x', h.kind)
+    }
+  })
+
+  test('OpenCode takes its own openrouter provider, with the model as openrouter/<id>', () => {
+    const agent = onOpenRouter({ kind: 'opencode', model: 'google/gemini-3-flash' } as never)
+    assert.equal(agent.credential, 'OPENROUTER_API_KEY')
+    assert.deepEqual(agent.hosts, ['openrouter.ai', 'mcp.exa.ai'])
+    assert.equal(agent.modelId?.('google/gemini-3-flash'), 'openrouter/google/gemini-3-flash')
+    assert.throws(
+      () => opencode({ model: 'openrouter/google/gemini-3-flash' }),
+      /an openrouter\/… id would bypass the config's gateway list: write the model as 'google\/gemini-3-flash' and add openrouter\(\) to gateway/,
+    )
+  })
+
+  test("the adapters pick OpenRouter's provider from the key they're given", async () => {
+    process.env.OPENROUTER_API_KEY = 'sk-or-test'
+    for (const [kind, model] of [
+      ['goose', 'google/gemini-3-flash'],
+      ['codex', 'openai/gpt-5.4-mini'],
+      ['grok-build', 'x-ai/grok-4.6'],
+    ] as const) {
+      const descriptor = { kind, model, gateway: 'openrouter' } as never
+      const agent = agentFor(descriptor)
+      const adapter = (await agent.adapter({
+        auth: agentAuth(agent),
+        descriptor,
+        model,
+        plugins: [],
+      })) as { harnessId: string }
+      assert.equal(adapter.harnessId, kind)
+    }
+  })
+
+  test("every call records the served model and OpenRouter's upstream provider and cost", () => {
+    const agent = onOpenRouter(codex)
+    const response = call('/api/v1/responses', {
+      responseModel: 'openai/gpt-5.4-mini',
+      responseEffort: 'low',
+      responseProvider: 'OpenAI',
+      responseCost: 0.0004,
+    })
+    assert.equal(agent.servedModel?.(response), 'openai/gpt-5.4-mini[effort=low]')
+    assert.deepEqual(agent.upstream?.(response), { provider: 'OpenAI', costUsd: 0.0004 })
+    assert.equal(
+      upstreamOnOpenRouter({ ...(response as object), host: 'api.openai.com' } as never),
+      undefined,
+    )
+    assert.equal(upstreamOnOpenRouter(call('/api/v1/responses')), undefined, 'no provider named')
+    const brokering = brokeringFor({ ...codex, gateway: 'openrouter' } as HarnessDescriptor)
+    assert.equal(brokering?.upstream, upstreamOnOpenRouter)
+    assert.equal(brokeringFor(codex)?.upstream, undefined, 'off OpenRouter, nothing names one')
+  })
+
+  test('effort is refused on OpenRouter for every harness but Codex', () => {
+    for (const h of [
+      { ...claude, effort: 'high' },
+      { kind: 'goose', model: 'gemini-3-flash', effort: 'high' },
+      { kind: 'grok-build', model: 'grok-4.6', effort: 'high' },
+      { kind: 'opencode', model: 'anthropic/claude-haiku-4-5', effort: 'high' },
+    ] as HarnessDescriptor[]) {
+      assert.throws(
+        () => resolve(list('openrouter'), h),
+        /doesn't send .*'s effort \("high"\) through OpenRouter yet/,
+      )
+    }
+    assert.equal(
+      resolve(list('openrouter'), { ...codex, effort: 'high' } as never).name,
+      'openrouter',
+    )
+  })
+
+  test("reeval's own models take OpenRouter's key, its package, and fallbacks off by default", () => {
+    assert.equal(
+      resolveModelGateway(
+        'mistral/large',
+        undefined,
+        { gateways: list('openrouter') },
+        'judge model',
+      ),
+      'openrouter',
+    )
+    assert.deepEqual(judgeCredentials('anthropic/claude-x', 'openrouter'), ['OPENROUTER_API_KEY'])
+    assert.deepEqual(
+      judgeRoute('typesafe/jev-1.14', { OPENROUTER_API_KEY: 'k' }, 'judge model', 'openrouter'),
+      { kind: 'openrouter' },
+    )
+    assert.throws(
+      () =>
+        judgeRoute('typesafe/jev-1.14', { ANTHROPIC_API_KEY: 'a' }, 'judge model', 'openrouter'),
+      /Set OPENROUTER_API_KEY \(for openrouter\(\)\)/,
+    )
+    assert.throws(
+      () => judgeRoute('anthropic/claude-x', { OPENROUTER_API_KEY: 'k' }),
+      /OPENROUTER_API_KEY is set, but no gateway in the config uses it: add openrouter\(\) to gateway/,
+    )
+    assert.equal(openRouterFallbacks([{ kind: 'openrouter' }]), false)
+    assert.equal(openRouterFallbacks([{ kind: 'openrouter', fallbacks: false }]), false)
+    assert.equal(
+      openRouterFallbacks([{ kind: 'direct' }, { kind: 'openrouter', fallbacks: true }]),
+      true,
+    )
+  })
+
+  test("a host call's upstream and cost come from OpenRouter's provider metadata", () => {
+    assert.deepEqual(
+      openRouterBilling({ openrouter: { provider: 'Typesafe', usage: { cost: 0.00012 } } }),
+      { upstream: 'Typesafe', costUsd: 0.00012 },
+    )
+    assert.deepEqual(openRouterBilling({ openrouter: { provider: '' } }), {})
+    assert.deepEqual(openRouterBilling(undefined), {})
   })
 })

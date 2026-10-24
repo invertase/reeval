@@ -41,6 +41,13 @@ export interface Sandbox {
    * one that served them: each model asked for so far, in first-seen order.
    */
   askedModels?(): string[]
+  /**
+   * When a gateway names the upstream provider behind each call (OpenRouter): each provider that
+   * served the harness's brokered requests so far, with how many, in first-seen order.
+   */
+  upstreams?(): Array<{ provider: string; calls: number }>
+  /** The same gateway's cost for those requests so far, in US dollars; undefined when it named none. */
+  reportedCostUsd?(): number | undefined
   /** With credential brokering: the HTTP status of each brokered request so far, in order. */
   brokeredStatuses?(): number[]
   /**

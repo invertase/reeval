@@ -15,6 +15,7 @@ import {
   buildCodexPluginAdd,
   CODEX_CREDENTIAL_ENV,
   createCodex,
+  OPENROUTER_PROVIDER,
 } from '../src/codex-harness.ts'
 import { VERSION } from '../src/version.ts'
 
@@ -292,4 +293,31 @@ test('on Vercel AI Gateway, Codex calls its Responses API with the gateway key, 
   assert.equal(rules[0]?.transform.headers.Authorization, 'Bearer vck-real')
   assert.doesNotMatch(writes[0]?.content ?? '', /vck-real/)
   assert.match(writes[0]?.content ?? '', /ai-gateway\.vercel\.sh/)
+})
+
+test('on OpenRouter, Codex calls its Responses API with the OpenRouter key, brokered there only', async () => {
+  const config = buildCodexConfig({ provider: OPENROUTER_PROVIDER })
+  assert.match(config, /"base_url" = "https:\/\/openrouter\.ai\/api\/v1"/)
+  assert.match(config, /"env_key" = "OPENROUTER_API_KEY"/)
+  assert.match(config, /"http_headers" = \{ "X-OpenRouter-Metadata" = "enabled" \}/)
+  assert.doesNotMatch(buildCodexConfig({}), /http_headers/)
+  const rules: Array<{
+    match: Record<string, unknown>
+    transform: { headers: Record<string, string> }
+  }> = []
+  const harness = createCodex({
+    auth: { OPENROUTER_API_KEY: 'sk-or-real' },
+    provider: OPENROUTER_PROVIDER,
+  })
+  await harness.doStart({
+    sessionId: 's1',
+    sessionWorkDir: '/reeval/workspace',
+    sandboxSession: {
+      addRequestTransformations: async (r: typeof rules) => void rules.push(...r),
+      run: async () => ({ exitCode: 0, stdout: '/home/reeval', stderr: '' }),
+      writeTextFile: async () => {},
+    },
+  } as never)
+  assert.equal(rules[0]?.match.host, 'openrouter.ai')
+  assert.equal(rules[0]?.transform.headers.Authorization, 'Bearer sk-or-real')
 })

@@ -46,10 +46,10 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `GOOGLE_GENERATIVE_AI_API_KEY` (a Gemini API key; Goose sees it as `GOOGLE_API_KEY`) |
-| Adapter | `@reeval/harness-goose` 0.1.5 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| Adapter | `@reeval/harness-goose` 0.1.6 (over `@ai-sdk/harness-acp`), bundled with reeval |
 | CLI | Goose 1.56.0, from its GitHub release, checked against its sha256 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:goose-0.1.5` |
+| Image | `reeval-sandbox:goose-0.1.6` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `.config/goose/skills` in Goose's own home (below) |
 | Skills (`placement: 'workspace'`) | `.goose/skills` in the workspace |
@@ -71,6 +71,8 @@ reeval passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gi
 The adapter refuses to run in a sandbox that can't broker the key.
 
 On a [`gateway` list](/reference/gateway#vercel-ai-gateway) that resolves the harness to `vercel()`, the key is `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`), and Goose runs its own `vercel_ai_gateway` provider with the model as `google/<model>`. The gateway brokers it as a Bearer token on `ai-gateway.vercel.sh` only, on `POST /v1/chat/completions`, `POST /v1/responses` and `GET /v1/models`, and reads the served model from each response. `effort` isn't taken there yet, so a cell with it falls through to the next gateway.
+
+On [`openrouter()`](/reference/gateway#openrouter), the key is `OPENROUTER_API_KEY`, and Goose runs its own `openrouter` provider with the model as `google/<model>`. The gateway brokers it as a Bearer token on `openrouter.ai` only, on `POST /api/v1/chat/completions` and `GET /api/v1/models`, and reads the served model, the upstream provider and the cost from each response. `effort` isn't taken there yet.
 
 ## Tokens
 

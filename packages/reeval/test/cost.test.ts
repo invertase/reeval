@@ -285,7 +285,13 @@ describe('loadPrices', () => {
     vercel: {
       models: { 'anthropic/claude-sonnet-4.5': { cost: { input: 3, output: 15 } } },
     },
-    openrouter: { models: { other: { cost: { input: 1, output: 1 } } } },
+    openrouter: {
+      models: {
+        'anthropic/claude-sonnet-4.5': { cost: { input: 9, output: 9 } },
+        'x-ai/grok-4.6': { cost: { input: 2, output: 6 } },
+      },
+    },
+    mistral: { models: { other: { cost: { input: 1, output: 1 } } } },
     openai: { models: { 'no-cost': {}, 'bad-cost': { cost: { input: '1', output: 2 } } } },
   }
 
@@ -481,13 +487,14 @@ describe('loadPrices', () => {
     await Promise.all(s.closed)
   })
 
-  test("a fetch keeps the direct providers' and the gateway's priced models and caches them", async (t) => {
+  test("a fetch keeps the direct providers' and the gateways' priced models, Vercel's first, and caches them", async (t) => {
     const s = await server('answer')
     t.after(s.stop)
     const { env } = cache()
     const expected = {
       'gemini-3.8-flash': FLASH,
       'anthropic/claude-sonnet-4.5': [3, 3, 3, 15],
+      'x-ai/grok-4.6': [2, 2, 2, 6],
     }
     assert.deepEqual((await loadPrices(env, now, s.source)).table, expected)
     await s.stop()
@@ -500,10 +507,7 @@ describe('loadPrices', () => {
     seed(dir, '2026-10-01T00:00:00Z')
     for (const [body, why] of [
       ['[1,2]', 'answered without prices'],
-      [
-        '{"openrouter":{"models":{"a":{"cost":{"input":1,"output":1}}}}}',
-        'answered without prices',
-      ],
+      ['{"mistral":{"models":{"a":{"cost":{"input":1,"output":1}}}}}', 'answered without prices'],
       ['{"openai":', 'answered with invalid JSON'],
     ]) {
       const s = await server('answer', gzipSync(body))
@@ -539,6 +543,7 @@ describe('loadPrices', () => {
     assert.deepEqual((await loadPrices(env, now, s.source)).table, {
       'gemini-3.8-flash': FLASH,
       'anthropic/claude-sonnet-4.5': [3, 3, 3, 15],
+      'x-ai/grok-4.6': [2, 2, 2, 6],
     })
   })
 
@@ -598,6 +603,7 @@ console.log(JSON.stringify(p.table))`
     assert.deepEqual(JSON.parse(out), {
       'gemini-3.8-flash': FLASH,
       'anthropic/claude-sonnet-4.5': [3, 3, 3, 15],
+      'x-ai/grok-4.6': [2, 2, 2, 6],
     })
   })
 })

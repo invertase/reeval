@@ -715,6 +715,8 @@ async function addAttempt(
     egress: record?.egress ?? null,
     servedModels: record?.servedModels ?? null,
     ...(record?.askedModels?.length ? { askedModels: record.askedModels } : {}),
+    ...(record?.upstreams?.length ? { upstreams: record.upstreams } : {}),
+    ...(record?.reportedCostUsd !== undefined ? { reportedCostUsd: record.reportedCostUsd } : {}),
     effort: e.attempt ? (harnessEffort(e.attempt.harness) ?? null) : null,
     servedEffort:
       servedEffortOf([

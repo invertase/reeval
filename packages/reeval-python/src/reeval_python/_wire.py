@@ -500,7 +500,7 @@ class CodexHarnessDescriptor(TypedDict):
 class ConfigJudgeOptions(TypedDict):
     # The gateway the judge's calls go through, by name or by its helper. It skips the config's
     # `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.
-    gateway: NotRequired[DirectGatewayDescriptor | VercelGatewayDescriptor | Literal["direct", "vercel"]]
+    gateway: NotRequired[DirectGatewayDescriptor | OpenRouterGatewayDescriptor | VercelGatewayDescriptor | Literal["direct", "openrouter", "vercel"]]
     # The most judge calls to this model's provider at once, across the run.
     maxConcurrent: NotRequired[float]
     # `'provider/model'`, or a fake judge.
@@ -1047,8 +1047,8 @@ class FxHarnessDescriptor(TypedDict):
 
 
 # A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`;
-# `vercel` is Vercel AI Gateway.
-GatewayName: TypeAlias = "Literal[\"direct\", \"vercel\"]"
+# `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter.
+GatewayName: TypeAlias = "Literal[\"direct\", \"vercel\", \"openrouter\"]"
 
 
 # A git repository (or one directory of it) the workspace starts as, from the `git` helper.
@@ -1155,9 +1155,20 @@ class JudgeCallDataGatewayDirect(TypedDict):
 
 
 # Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
-# `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.
+# `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode, fx and Grok Build.
 class JudgeCallDataGatewayVercel(TypedDict):
     kind: Literal["vercel"]
+
+
+# OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves
+# Claude Code, Codex, Goose, OpenCode and Grok Build.
+class JudgeCallDataGatewayOpenrouter(TypedDict):
+    # Let OpenRouter fail over to another upstream provider when the one it picked can't serve a
+    # call. Off by default, so reeval's own calls (the judge, analysis, compare questions and
+    # captures) send `allow_fallbacks: false`. The harnesses' calls take OpenRouter's own
+    # routing either way.
+    fallbacks: NotRequired[bool]
+    kind: Literal["openrouter"]
 
 
 class JudgeCallDataOnTurn(TypedDict):
@@ -1179,7 +1190,7 @@ class JudgeCallData(TypedDict):
     artifacts: NotRequired[Literal[True] | list[str | Capture]]
     # The gateway the judge's calls go through, by name or by its helper. It skips the config's
     # `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.
-    gateway: NotRequired[Literal["direct", "vercel"] | JudgeCallDataGatewayDirect | JudgeCallDataGatewayVercel]
+    gateway: NotRequired[Literal["direct", "vercel", "openrouter"] | JudgeCallDataGatewayDirect | JudgeCallDataGatewayVercel | JudgeCallDataGatewayOpenrouter]
     # The most judge calls to this model's provider at once, across the run.
     maxConcurrent: NotRequired[int]
     # `'provider/model'`, or a fake judge with a numeric score.
@@ -1203,7 +1214,7 @@ class JudgeFailure(TypedDict):
     artifacts: NotRequired[list[JudgeArtifactRef]]
     error: str
     # The gateway from the config's `gateway` list the call went through; unset without one.
-    gateway: NotRequired[Literal["direct", "vercel"]]
+    gateway: NotRequired[Literal["direct", "vercel", "openrouter"]]
     model: str
     question: str
     score: None
@@ -1324,6 +1335,17 @@ class OpenCodeHarnessDescriptor(TypedDict):
     # How long the harness's session may take to become ready (its bootstrap and first session)
     # before the attempt is an infra error, after one retry; default 90s.
     startTimeout: NotRequired[Duration]
+
+
+# OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves
+# Claude Code, Codex, Goose, OpenCode and Grok Build.
+class OpenRouterGatewayDescriptor(TypedDict):
+    # Let OpenRouter fail over to another upstream provider when the one it picked can't serve a
+    # call. Off by default, so reeval's own calls (the judge, analysis, compare questions and
+    # captures) send `allow_fallbacks: false`. The harnesses' calls take OpenRouter's own
+    # routing either way.
+    fallbacks: NotRequired[bool]
+    kind: Literal["openrouter"]
 
 
 # A matrix factor a pairwise question varies; the others are held.
@@ -1778,7 +1800,7 @@ TurnStatus: TypeAlias = "Literal[\"completed\", \"aborted\", \"error\"]"
 
 
 # Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
-# `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.
+# `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode, fx and Grok Build.
 class VercelGatewayDescriptor(TypedDict):
     kind: Literal["vercel"]
 
@@ -1786,8 +1808,11 @@ class VercelGatewayDescriptor(TypedDict):
 class Verdict(TypedDict):
     # Captures this call sent the judge as file parts, when any.
     artifacts: NotRequired[list[JudgeArtifactRef]]
+    # What the gateway says the call cost, in US dollars (OpenRouter's `usage.cost`); unset when
+    # it names none.
+    costUsd: NotRequired[float]
     # The gateway from the config's `gateway` list the call went through; unset without one.
-    gateway: NotRequired[Literal["direct", "vercel"]]
+    gateway: NotRequired[Literal["direct", "vercel", "openrouter"]]
     model: str
     question: str
     # The model id the provider says served the call, when it reports one.
@@ -1795,6 +1820,9 @@ class Verdict(TypedDict):
     # The judge's probability that the answer is yes, from 0 to 1.
     score: float
     threshold: float
+    # The upstream provider the gateway says served the call (OpenRouter's); unset when it names
+    # none.
+    upstream: NotRequired[str]
     verdict: Literal["pass", "fail"]
 
 
@@ -1816,6 +1844,7 @@ CAMEL_KEYS: frozenset[str] = frozenset(
         "atMs",
         "cacheRead",
         "cacheWrite",
+        "costUsd",
         "delayMs",
         "durationMs",
         "exitCode",

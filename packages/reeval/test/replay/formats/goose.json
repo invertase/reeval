@@ -3,6 +3,7 @@
   "agent_message_chunk .content",
   "agent_message_chunk .messageId",
   "agent_message_chunk .sessionUpdate",
+  "agent_thought_chunk ._meta",
   "agent_thought_chunk .content",
   "agent_thought_chunk .content.text",
   "agent_thought_chunk .content.type",

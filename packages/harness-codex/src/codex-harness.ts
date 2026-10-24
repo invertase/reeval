@@ -46,11 +46,15 @@ export const CODEX_WORKSPACE_SKILLS_DIR = '.agents/skills'
 /** The provider the adapter gives Codex, so its requests are HTTP and it reads no login. */
 export const CODEX_PROVIDER_ID = 'openai-http'
 
-/** A Responses API Codex calls: its name, base URL, and the variable its key is in. */
+/**
+ * A Responses API Codex calls: its name, base URL, the variable its key is in, and any headers it
+ * sends on every request.
+ */
 export type CodexProvider = {
   readonly name: string
   readonly baseUrl: string
   readonly credentialEnv: string
+  readonly headers?: Readonly<Record<string, string>>
 }
 
 /** OpenAI's API with an OpenAI API key: the default. */
@@ -65,6 +69,18 @@ export const AI_GATEWAY_PROVIDER: CodexProvider = {
   name: 'Vercel AI Gateway',
   baseUrl: 'https://ai-gateway.vercel.sh/v1',
   credentialEnv: 'AI_GATEWAY_API_KEY',
+}
+
+/**
+ * OpenRouter's Responses API, whose model ids name their provider (`openai/…`). Its responses name
+ * the upstream provider that served them only with `X-OpenRouter-Metadata` on, in
+ * `openrouter_metadata`.
+ */
+export const OPENROUTER_PROVIDER: CodexProvider = {
+  name: 'OpenRouter',
+  baseUrl: 'https://openrouter.ai/api/v1',
+  credentialEnv: 'OPENROUTER_API_KEY',
+  headers: { 'X-OpenRouter-Metadata': 'enabled' },
 }
 
 /**
@@ -195,6 +211,7 @@ export function buildCodexConfig(options: {
         env_key: provider.credentialEnv,
         wire_api: 'responses',
         supports_websockets: false,
+        ...(provider.headers ? { http_headers: provider.headers } : {}),
       },
     },
     ...(options.mcpServers && Object.keys(options.mcpServers).length
@@ -281,7 +298,7 @@ export function createCodex(settings: CodexHarnessSettings): HarnessV1<CodexBuil
     : undefined
   if (!key) {
     throw new Error(
-      `Codex auth must be an environment object with ${provider.credentialEnv} (a ${provider.name} key)`,
+      `Codex auth must be an environment object with ${provider.credentialEnv} (${/^[AEIOU]/.test(provider.name) ? 'an' : 'a'} ${provider.name} key)`,
     )
   }
   return {

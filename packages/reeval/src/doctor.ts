@@ -542,6 +542,11 @@ const PROBES: Record<string, (key: string) => { url: string; headers: Record<str
     url: 'https://api.openai.com/v1/models',
     headers: { authorization: `Bearer ${key}` },
   }),
+  // The key's own status: free, and it never runs a model.
+  OPENROUTER_API_KEY: (key) => ({
+    url: 'https://openrouter.ai/api/v1/key',
+    headers: { authorization: `Bearer ${key}` },
+  }),
 }
 
 /** Whether the API accepts the key, from one request; the key only goes in its headers. */
@@ -592,7 +597,7 @@ async function keyCheck(
       id,
       status: required ? 'fail' : 'warn',
       summary: `${model ? modelKeyOptions(model, gateway) : names.join(' or ')} for ${who}: not set`,
-      fix: `add ${names[0]}=... to ${envFile}${unused ? `, or add vercel() to gateway to use the ${unused} that's set` : ''}`,
+      fix: `add ${names[0]}=... to ${envFile}${unused ? `, or add ${unused.gateway}() to gateway to use the ${unused.key} that's set` : ''}`,
     }
   }
   const value = deps.env[name] as string

@@ -14,6 +14,7 @@ import {
   GROK_PLUGIN_DIRS_ENV,
   type GrokProvider,
   grokConfig,
+  OPENROUTER_PROVIDER,
 } from '../src/grok-build-harness.ts'
 import { GROK_BUILD_BUILTIN_TOOLS } from '../src/grok-build-tools.ts'
 import { VERSION } from '../src/version.ts'
@@ -146,6 +147,24 @@ test("on Vercel AI Gateway, the model is a [model.<id>] table on Vercel's key", 
     await bootstrap(AI_GATEWAY_PROVIDER),
     await bootstrap(),
     'the image bakes one bootstrap for both',
+  )
+})
+
+test("on OpenRouter, the model is a [model.<id>] table on OpenRouter's key", async () => {
+  assert.throws(
+    () =>
+      createGrokBuild({ auth: { XAI_API_KEY: 'k' }, model: 'm', provider: OPENROUTER_PROVIDER }),
+    /with OPENROUTER_API_KEY \(an OpenRouter key\)/,
+  )
+  assert.match(
+    grokConfig({ model: 'x-ai/grok-4.6', provider: OPENROUTER_PROVIDER }).content,
+    /\nbase_url = "https:\/\/openrouter\.ai\/api\/v1"\nenv_key = "OPENROUTER_API_KEY"\n/,
+  )
+  const bootstrap = (auth: Record<string, string>, provider?: GrokProvider) =>
+    createGrokBuild({ auth, model: 'm', ...(provider ? { provider } : {}) }).getBootstrap?.({})
+  assert.deepEqual(
+    await bootstrap({ OPENROUTER_API_KEY: 'k' }, OPENROUTER_PROVIDER),
+    await bootstrap({ [GROK_CREDENTIAL_ENV]: 'k' }),
   )
 })
 

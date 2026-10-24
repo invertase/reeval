@@ -283,7 +283,7 @@ jobs:
           shopt -s extglob
           node --test --test-timeout=600000 --experimental-strip-types --no-warnings \
             --test-shard=${{ matrix.shard }} \
-            test/!(features|docker|docker-antigravity|studio|pack|contract|e2e-real|questions-real).test.ts
+            test/!(features|docker|docker-antigravity|studio|pack|contract|e2e-real|questions-real|openrouter-real).test.ts
       # The other packages' own tests take seconds, so the first shard runs them. sandbox-docker's
       # real-container tests skip here: there's no sandbox image. The docker job runs them.
       - name: sandbox-docker (without containers) and the harness packages

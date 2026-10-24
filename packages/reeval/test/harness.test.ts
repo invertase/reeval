@@ -346,8 +346,8 @@ describe('the OpenCode harness', () => {
     assert.deepEqual(h, { kind: 'opencode', model: 'google/gemini-3.8-flash' })
     assert.equal(harnessId(h), 'opencode:gemini-3.8-flash')
     assert.equal(
-      harnessId(opencode({ model: 'openrouter/anthropic/claude-haiku-4.5' })),
-      'opencode:claude-haiku-4.5',
+      harnessId(opencode({ model: 'amazon-bedrock/global.anthropic.claude-haiku-4-5' })),
+      'opencode:global.anthropic.claude-haiku-4-5',
     )
     for (const model of [undefined, '']) {
       assert.throws(
@@ -356,6 +356,10 @@ describe('the OpenCode harness', () => {
         String(model),
       )
     }
+    assert.throws(
+      () => opencode({ model: 'openrouter/openai/gpt-5.4' }),
+      /^UsageError: opencode\(\): an openrouter\/… id would bypass the config's gateway list: write the model as 'openai\/gpt-5\.4' and add openrouter\(\) to gateway/,
+    )
     assert.throws(
       () => opencode({ model: 'gemini-3.8-flash' }),
       /^UsageError: opencode\(\): an OpenCode model id names its provider, <provider>\/<model>/,
@@ -380,7 +384,7 @@ describe('the OpenCode harness', () => {
         harness: [
           opencode({ model: 'google/m' }),
           opencode({ model: 'anthropic/claude-haiku-4-5' }),
-          opencode({ model: 'openrouter/openai/gpt-5.4', id: 'or' }),
+          opencode({ model: 'cerebras/gpt-oss-120b', id: 'cb' }),
         ],
       },
       '/p',
@@ -388,7 +392,7 @@ describe('the OpenCode harness', () => {
     assert.deepEqual(missingCredentials(config, { GEMINI_API_KEY: 'x' }), [
       'GOOGLE_GENERATIVE_AI_API_KEY',
       'ANTHROPIC_API_KEY',
-      'OPENROUTER_API_KEY',
+      'CEREBRAS_API_KEY',
     ])
     assert.deepEqual(
       missingCredentials(
@@ -458,7 +462,7 @@ describe('the OpenCode harness', () => {
     assert.deepEqual(hosts('google/m'), ['generativelanguage.googleapis.com', 'mcp.exa.ai'])
     assert.deepEqual(hosts('anthropic/claude-haiku-4-5'), ['api.anthropic.com', 'mcp.exa.ai'])
     assert.deepEqual(hosts('openai/gpt-5.4-mini'), ['api.openai.com', 'mcp.exa.ai'])
-    assert.deepEqual(hosts('openrouter/x/y'), ['openrouter.ai', 'mcp.exa.ai'])
+    assert.deepEqual(hosts('cerebras/m'), ['api.cerebras.ai', 'mcp.exa.ai'])
   })
 
   test('OpenCode reads rules from AGENTS.md, repo skills from .opencode/skills', () => {

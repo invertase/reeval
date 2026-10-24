@@ -237,14 +237,12 @@ export function judgeCaller(
     const provider = name.split('/')[0]
     try {
       const { config, profile } = getRunContext()
-      const gateway = resolveModelGateway(
-        model,
-        judgeOptions.gateway,
-        gatewayScope(config, profile),
-        'judge model',
-      )
+      const scope = gatewayScope(config, profile)
+      const gateway = resolveModelGateway(model, judgeOptions.gateway, scope, 'judge model')
       const { gateway: _pin, ...unpinned } = judgeOptions
-      const routed = gateway ? { ...unpinned, gateway } : unpinned
+      // The list's entry, so the judge gets its settings (OpenRouter's fallbacks).
+      const entry = gateway && scope.gateways.find((g) => g.kind === gateway)
+      const routed = gateway ? { ...unpinned, gateway: entry || gateway } : unpinned
       const { verdict, retries } = await a.timed('judgeMs', () =>
         withLease(
           maxConcurrent ? { [`judge:${provider}`]: maxConcurrent } : {},

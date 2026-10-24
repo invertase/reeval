@@ -21,8 +21,9 @@ export type InventoryFeature = {
   tests?: string[]
   /**
    * Checks in the real-agent suites: `contract › <behaviour>` (a behaviour in contract.test.ts,
-   * on every real harness), `e2e › <the test's title, or a part of it>` (e2e-real.test.ts) or
-   * `questions › <title>` (questions-real.test.ts, a real model answering compare questions).
+   * on every real harness), `e2e › <the test's title, or a part of it>` (e2e-real.test.ts),
+   * `questions › <title>` (questions-real.test.ts, a real model answering compare questions) or
+   * `openrouter › <title>` (openrouter-real.test.ts, reeval's own calls on real OpenRouter).
    */
   real?: string[]
   /** Why nothing covers it yet. Only for features with no fixture, plan case or test. */
@@ -370,6 +371,32 @@ export const inventory: InventoryFeature[] = [
       "harness-goose/test/unit.test.ts › on Vercel AI Gateway, Goose runs its vercel_ai_gateway provider on Vercel's key",
       "reeval/test/gateway.test.ts › an expired project token is refused before the run; a live one, or a key, isn't",
       'reeval/test/doctor.test.ts › gateway: where each harness resolves, its keys, and an expired Vercel token',
+    ],
+  },
+  {
+    id: 'gateway.openrouter',
+    area: 'Config and selection',
+    name: "`openrouter()`: Claude Code, Codex, Goose, OpenCode and Grok Build on OpenRouter with one brokered key, fallback past it for Cursor, Antigravity, fx and pi and for `effort` it does not carry yet (Codex's excepted), the upstream provider and cost OpenRouter reports for every call in the record and the output, `fallbacks` for reeval's own calls (off by default), and the judge, analysis and captures through `@openrouter/ai-sdk-provider`",
+    plan: ['gateway/openrouter', 'gateway/openrouter-fallbacks', 'gateway/openrouter-yaml'],
+    tests: [
+      'reeval/test/gateway.test.ts › it serves Claude Code, Codex, Goose, OpenCode and Grok Build, and says why not the rest',
+      "reeval/test/gateway.test.ts › Claude Code calls OpenRouter's Messages API on a Bearer token, with dotted Anthropic ids",
+      "reeval/test/gateway.test.ts › Codex, Goose and Grok Build name their provider in the id, on OpenRouter's API paths",
+      'reeval/test/gateway.test.ts › OpenCode takes its own openrouter provider, with the model as openrouter/<id>',
+      "reeval/test/gateway.test.ts › the adapters pick OpenRouter's provider from the key they're given",
+      "reeval/test/gateway.test.ts › every call records the served model and OpenRouter's upstream provider and cost",
+      'reeval/test/gateway.test.ts › effort is refused on OpenRouter for every harness but Codex',
+      "reeval/test/gateway.test.ts › reeval's own models take OpenRouter's key, its package, and fallbacks off by default",
+      "reeval/test/gateway.test.ts › a host call's upstream and cost come from OpenRouter's provider metadata",
+      'reeval/test/output.test.ts › the upstream providers a gateway named print under the eval; none when it named none',
+      "sandbox-docker/test/proxy.test.ts › a gateway's upstream provider and the call's last cost",
+      "harness-goose/test/unit.test.ts › on OpenRouter, Goose runs its openrouter provider on OpenRouter's key",
+      "harness-grok-build/test/unit.test.ts › on OpenRouter, the model is a [model.<id>] table on OpenRouter's key",
+      'harness-codex/test/unit.test.ts › on OpenRouter, Codex calls its Responses API with the OpenRouter key, brokered there only',
+    ],
+    real: [
+      'contract › upstream provider and cost recorded',
+      'openrouter › openrouter(): the Jev judge and the analysis model record what OpenRouter served and charged',
     ],
   },
   {
