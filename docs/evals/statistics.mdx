@@ -5,7 +5,7 @@ description: "Understand when reeval can tell whether a change helped."
 
 The thresholds on this page are fixed; you can't configure them.
 
-For more information about the run model, see [Core concepts](/core-concepts#compare). For more information about configuring a comparison, see [Compare setups](/evals/compare).
+For more information about the run model, see [Core concepts](/core-concepts#comparison). For more information about configuring a comparison, see [Compare setups](/evals/compare).
 
 ## Pass rates and the Wilson interval
 
@@ -41,11 +41,11 @@ Effort compares tool calls, agent time, and tokens by median and quartiles. An e
 
 Counts that cannot reach a p below 0.05 are `insufficient`, and counts that can, but do not, are `noise`. With no ties, four against four can reach 2/70, and three against three can reach 2/20. Ties raise that floor. reeval omits the token comparison when either side has no token samples.
 
-## Compare questions as pairwise judging
+## Comparison questions as pairwise judging
 
-A compare question is blinded pairwise judging of which unlabelled attempt did better, in both orders.
+A comparison question is blinded pairwise judging of which unlabelled attempt did better, in both orders.
 
-For more information about adding a compare question, see [Ask which did better](/evals/compare#ask-which-did-better).
+For more information about adding a comparison question, see [Ask which did better](/evals/compare#ask-which-did-better).
 
 The same side in both orders, or a tie and a named side, is a win. No named side is a tie. Opposite sides are a split.
 

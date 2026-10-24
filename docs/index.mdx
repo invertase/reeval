@@ -7,9 +7,9 @@ reeval is an evaluation runner for SDKs, CLIs, MCP servers, and docs. It evaluat
 
 ## What reeval does
 
-An evaluation gives a harness a task in a sandbox, then checks what the agent did. A compare runs the same evaluation on a control and on a variant with one change. reeval reports whether the change `helped`, `made it worse`, or `can't tell yet`. For more information about each term, see [Core concepts](/core-concepts).
+An evaluation gives a harness a task in a sandbox, then checks what the agent did. A comparison runs the same evaluation on a control and on a variant with one change. reeval reports whether the change `helped`, `made it worse`, or `can't tell yet`. For more information about each term, see [Core concepts](/core-concepts).
 
-This example measures the Vercel AI SDK's own skill. The control is a project with the `ai` package installed. The variant adds the `ai-sdk` skill from the `vercel/ai` repository. The skill tells agents to build on `ToolLoopAgent` instead of a hand-written tool loop. The evaluation declares the control, the variant, and the compare in one file:
+This example measures the Vercel AI SDK's own skill. The control is a project with the `ai` package installed. The variant adds the `ai-sdk` skill from the `vercel/ai` repository. The skill tells agents to build on `ToolLoopAgent` instead of a hand-written tool loop. The evaluation declares the control, the variant, and the comparison in one file:
 
 ```ts title="evals/agent.eval.ts"
 import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
@@ -57,7 +57,7 @@ This table lists what reeval supports, and each area links to its section:
 | Area | What reeval supports |
 |---|---|
 | [Evaluations](/evals/evaluate) | TypeScript files beside the tool they test, with checks on files, commands, and tool calls, and a judge for what checks can't read |
-| [Compare](/evals/compare) | A control and one or more variants, with an effect for each variant |
+| [Comparisons](/evals/compare) | A control and one or more variants, with an effect for each variant |
 | [Environments](/environments) | Skills, MCP servers, rules, files, setup commands, and secrets for the harness |
 | [Harnesses](/harnesses) | Coding agents, each on the model and effort you set |
 | [Sandboxes](/sandboxes) | A fresh container for each attempt, with API keys kept on the host |
@@ -68,4 +68,4 @@ Each kind of tool reeval evaluates has a recipe: [Test an SDK](/recipes/sdk), [T
 
 ## Next steps
 
-To install reeval and run a first compare, see [Quick start](/quickstart).
+To install reeval and run a first comparison, see [Quick start](/quickstart).

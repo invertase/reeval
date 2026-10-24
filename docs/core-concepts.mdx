@@ -49,7 +49,7 @@ A transcript is every message and tool call of an attempt, in order, saved in th
 
 A check is an `expect` assertion on what an attempt produced, such as a file, a command's result, a tool call, or a [judge](/evals/judges)'s verdict. An attempt passes when all of its [checks](/evals/checks) pass.
 
-## Compare
+## Comparison
 
 A [comparison](/evals/compare) runs one evaluation, through the `compare` option, on a control without your change and on one or more variants with it, then compares their pass rates. Each variant reads `helped` or `made it worse` when the difference is [clear of chance](/evals/statistics), and `can't tell yet` below four counted attempts a side or when the result is too close to call.
 
