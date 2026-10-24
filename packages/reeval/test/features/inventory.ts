@@ -1556,7 +1556,7 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['harness/cursor-reports-usage'],
     tests: [
       harness('token usage and the served model, from any harness'),
-      harness('OpenCode: ACP PromptResponse.usage as harness-acp maps it'),
+      harness('OpenCode: ACP PromptResponse.usage with its thoughts added to the output'),
     ],
     real: [
       'contract › tokens recorded where the harness reports them',

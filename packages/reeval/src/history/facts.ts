@@ -5,6 +5,7 @@
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { isRuntimeState } from '../attempt/context.ts'
 import { containsZero, EFFECT_MIN_COUNTED, liftInterval, median, round3, wilson } from '../stats.ts'
+import { totalTokens } from '../usage.ts'
 import { checkVerdict, contrastPairs } from '../view/contrasts.ts'
 import {
   contrastEffort,
@@ -333,11 +334,13 @@ export function deriveFacts(db: DatabaseSync): void {
     const tokens =
       a.input_tokens === null
         ? undefined
-        : a.input_tokens +
-          (a.output_tokens ?? 0) +
-          (a.cache_read_tokens ?? 0) +
-          (a.cache_write_tokens ?? 0) +
-          (a.reasoning_tokens ?? 0)
+        : totalTokens({
+            input: a.input_tokens,
+            output: a.output_tokens ?? 0,
+            cacheRead: a.cache_read_tokens ?? 0,
+            cacheWrite: a.cache_write_tokens ?? 0,
+            reasoning: a.reasoning_tokens,
+          })
     samples.set(id, [
       ...(samples.get(id) ?? []),
       {

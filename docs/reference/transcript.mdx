@@ -110,7 +110,7 @@ Token usage isn't in `transcript.jsonl`. Where the harness reports it (`cursor()
 ```
 
 <Property name="usage" type="{ input, output, cacheRead, cacheWrite, reasoning } | null">
-  Tokens the turn used. `input` is uncached input; `reasoning` is `null` when the harness doesn't split it out. `null` when the harness reports no usage.
+  Tokens the turn used. `input` is uncached input; `output` includes `reasoning`, its share of thinking, which is `null` when the harness doesn't split it out. `null` when the harness reports no usage.
 </Property>
 
 <Property name="model" type="string | null">

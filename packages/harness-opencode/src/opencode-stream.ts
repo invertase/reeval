@@ -31,6 +31,27 @@ function contentText(content: unknown): string | undefined {
   return texts.length ? texts.join('\n') : undefined
 }
 
+const count = (value: unknown) => (typeof value === 'number' ? value : undefined)
+
+/**
+ * The turn's usage with `outputTokens.total` counting reasoning. OpenCode's `PromptResponse.usage`
+ * reports `thoughtTokens` beside `outputTokens`, not in it (its `totalTokens` is input, output and
+ * thoughts), and `harness-acp` passes both on as they are.
+ */
+export function openCodeTurnUsage(usage: unknown): unknown {
+  const input = count(record(record(usage).inputTokens).total)
+  const outputTokens = record(record(usage).outputTokens)
+  const output = count(outputTokens.total)
+  const reasoning = count(outputTokens.reasoning)
+  const total = count(record(record(usage).raw).totalTokens)
+  if (input === undefined || output === undefined || reasoning === undefined) return usage
+  if (total === undefined || total <= input + output) return usage
+  return {
+    ...record(usage),
+    outputTokens: { ...outputTokens, total: output + reasoning, text: output },
+  }
+}
+
 /** A web search's results, from the `## [title](url)` heading OpenCode gives each. */
 const searchResults = (text: string) =>
   [...text.matchAll(/^## \[(.*)\]\((\S+)\)$/gm)].map(([, title, url]) => ({ title, url }))
@@ -47,9 +68,9 @@ const searchResults = (text: string) =>
  *   `patch` (an `edit`), or `<server>_<tool>` for an MCP tool, named `mcp__<server>__<tool>`.
  *   `harness-acp` can pass `tool_call.name` through instead (`patch`, `<server>_<tool>`); that
  *   is remapped the same way.
- * - The `finish` part's usage is left as `@ai-sdk/harness-acp` mapped it from
- *   `PromptResponse.usage` (the whole turn). `usage_update.used` is the last step's
- *   context size, so it is not used here.
+ * - The `finish` part's usage is `PromptResponse.usage` (the whole turn) as `@ai-sdk/harness-acp`
+ *   mapped it, with the reasoning added to the output ({@link openCodeTurnUsage}).
+ *   `usage_update.used` is the last step's context size, so it is not used here.
  */
 export class OpenCodeStreamTranslator {
   private readonly titles = new Map<string, string>()
@@ -66,6 +87,7 @@ export class OpenCodeStreamTranslator {
       this.observe(record(part.rawValue))
       return [part]
     }
+    if (part.type === 'finish') return [{ ...part, totalUsage: openCodeTurnUsage(part.totalUsage) }]
     if (part.type !== 'tool-call' && part.type !== 'tool-result') return [part]
     const id = typeof part.toolCallId === 'string' ? part.toolCallId : ''
     let out = part
