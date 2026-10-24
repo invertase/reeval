@@ -544,11 +544,13 @@ export default defineConfig({
 
   test("an attempt that passed or failed is asked; an infra error's isn't", async () => {
     const p = await project('questions-attempts-infra', {
-      'reeval.config.ts': `import { defineConfig } from 'reeval'
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
   harness: fakeHarness({ files: { 'ok.txt': 'yes' } }),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   analysis: { model: fakeAnalysis({ answer: 'asked' }) },
 })
 `,
