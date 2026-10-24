@@ -24,7 +24,7 @@ import type {
   ResultOutcome,
   SuiteResult,
 } from '../view/suite.ts'
-import { cancelledOf, countedOf } from '../view/suite.ts'
+import { cancelledOf, countedOf, isNotGatedResult, isStudy } from '../view/suite.ts'
 import { type Colors, colors, type Paint } from './colors.ts'
 import { remarkLines } from './remarks.ts'
 
@@ -177,13 +177,9 @@ const paintOutcome = (c: Colors, o: ResultOutcome): Paint =>
         ? c.yellow
         : c.dim
 
-/** A study (every cell `gate: 'none'`) passes whatever it saw, so it never reads `pass`. */
 function verdict(c: Colors, e: Pick<EvalResult, 'outcome' | 'todo' | 'cells'>): Text {
   if (e.todo) return t('todo', c.dim)
-  const cells = e.cells ?? []
-  if (e.outcome === 'pass' && cells.length && cells.every((x) => !x.gated)) {
-    return t('not gated', c.dim)
-  }
+  if (e.outcome === 'pass' && isStudy(e.cells ?? [])) return t('not gated', c.dim)
   return t(VERDICT[e.outcome], paintOutcome(c, e.outcome))
 }
 
@@ -651,7 +647,9 @@ function familyBlock(
   const pooledOutcome: ResultOutcome = pooled.some((p) => p.outcome === 'fail') ? 'fail' : 'pass'
   const caseWord = (k: CaseResult) =>
     verdict(c, { outcome: k.outcome, todo: false, cells: k.cells })
-  const pooledWord = t(VERDICT[pooledOutcome], paintOutcome(c, pooledOutcome))
+  const pooledWord = isNotGatedResult(e)
+    ? t('not gated', c.dim)
+    : t(VERDICT[pooledOutcome], paintOutcome(c, pooledOutcome))
   const words = [...cases.map(caseWord), ...(pooled.length ? [pooledWord] : [])]
   const wordWidth = Math.max(...words.map((w) => w.text.length))
   const lead = (word: Text, name: string): Text => ({
@@ -769,14 +767,15 @@ export function evalBlock(
 }
 
 /**
- * `5 fail · 2 pass · 1 cancelled`: errors outside any eval and fails first, every case counting
- * one, zeros left out.
+ * `5 fail · 2 pass · 1 not gated · 1 cancelled`: errors outside any eval and fails first, every
+ * case counting one, zeros left out.
  */
 export function tallyLine(c: Colors, tally: SuiteResult['tally']): string {
   const parts = [
     tally.errors ? c.red(plural(tally.errors, 'run error')) : '',
     tally.fail ? c.red(`${tally.fail} fail`) : '',
     tally.pass ? c.green(`${tally.pass} pass`) : '',
+    tally.notGated ? c.dim(`${tally.notGated} not gated`) : '',
     tally.infraError ? c.yellow(plural(tally.infraError, 'infra error')) : '',
     tally.cancelled ? c.yellow(`${tally.cancelled} cancelled`) : '',
     tally.skipped ? c.dim(`${tally.skipped} skipped`) : '',

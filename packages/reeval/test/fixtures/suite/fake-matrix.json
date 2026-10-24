@@ -7,6 +7,7 @@
     "tally": {
       "errors": 0,
       "pass": 0,
+      "notGated": 0,
       "fail": 2,
       "infraError": 2,
       "cancelled": 0,
@@ -584,6 +585,7 @@
     "tally": {
       "errors": 0,
       "pass": 1,
+      "notGated": 0,
       "fail": 0,
       "infraError": 0,
       "cancelled": 0,

@@ -2763,6 +2763,34 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'output/study',
+    tiers: ['fake'],
+    env: 'marked',
+    cells: ['plain', 'marked'],
+    lands: { outcome: 'pass', error: { kind: 'assertion', message: /has the marker/ } },
+    landsPass: [],
+    canary: /has the marker: expected (file )?marker\.txt/,
+    args: ['--json'],
+    async record({ project, runDir, stdout }) {
+      const suite = JSON.parse(stdout) as SuiteResult
+      assert.deepEqual(
+        { pass: suite.tally.pass, notGated: suite.tally.notGated, fail: suite.tally.fail },
+        { pass: 0, notGated: 1, fail: 1 },
+      )
+      const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
+      assert.match(summary, /^1 fail · 1 not gated · started /m)
+      assert.match(summary, /^not gated {8}lands$/m)
+      assert.match(summary, /^### ○ evals\/lands\.eval\.ts › lands · not gated$/m)
+      assert.doesNotMatch(summary, /\bpass · |· 1 pass\b/)
+      const recorded = await runCli(project, ['record'])
+      assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
+      const compared = await runCli(project, ['compare'])
+      assert.match(compared.stdout, /^2 new evals \(1 fail · 1 not gated\)$/m)
+      const history = await runCli(project, ['history'])
+      assert.match(history.stdout, /^ {2}○ +– {2}evals\/lands\.eval\.ts › lands$/m)
+    },
+  },
+  {
     dir: 'output/change',
     tiers: ['fake'],
     env: 'marked',

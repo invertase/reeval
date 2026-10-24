@@ -71,7 +71,7 @@ npx reeval history
   ··✓·✓··    2/2  evals/jq.eval.ts › summarises a JSON file with jq
 …
 
-✓ pass  ✗ fail  ! infra error  ↓ skipped  · not run  ¦ eval or stack changed
+✓ pass  ✗ fail  ! infra error  ↓ skipped  ○ not gated  · not run  ¦ eval or stack changed
 ```
 
 One column per recorded run, oldest first. A `¦` marks where an eval's code or stack changed, so a new failure after it may not be a regression. `--all` adds unrecorded scratch runs, and `--json` prints the data.

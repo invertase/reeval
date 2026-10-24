@@ -31,10 +31,10 @@ The filter is a case-insensitive substring of the eval id. Runs go oldest to new
   ✓✓    2/2  evals/hello.eval.ts › greet module › creates a tested greet module
   ✓✓    2/2  evals/hello.eval.ts › greet module › adds a default name in a follow-up turn
 …
-✓ pass  ✗ fail  ! infra error  ↓ skipped  · not run  ¦ eval or stack changed
+✓ pass  ✗ fail  ! infra error  ↓ skipped  ○ not gated  · not run  ¦ eval or stack changed
 ```
 
-`¦` marks a run where the eval's fingerprint changed from the last run that had the same cell, so a filtered run and the full run after it don't count as a change.
+`¦` marks a run where the eval's fingerprint changed from the last run that had the same cell, so a filtered run and the full run after it don't count as a change. `○` marks a study's run (every cell `gate: 'none'`), which the pass rate leaves out; `--json` gives its outcome as `not_gated`.
 
 ## reeval show
 

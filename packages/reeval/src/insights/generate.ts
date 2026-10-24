@@ -20,7 +20,7 @@ import { formatDuration } from '../text.ts'
 import type { FakeInsights } from '../types.ts'
 import { slotsOf } from '../ui/layout.ts'
 import type { EvalInsight, Job, Remark, RunInsights, Sentence } from '../view/insights.ts'
-import { type EvalResult, type SuiteResult, suiteResult } from '../view/suite.ts'
+import { type EvalResult, isNotGatedResult, type SuiteResult, suiteResult } from '../view/suite.ts'
 import { admit, ledger, reserve, settle } from './budget.ts'
 import type { Classified, ClassifyCache } from './classify.ts'
 import { factsHash } from './hash.ts'
@@ -527,7 +527,8 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
     evals: all.map((e) => ({
       path: e.path,
       name: e.template ?? e.name,
-      verdict: e.outcome === 'infra_error' ? 'infra error' : e.outcome,
+      verdict:
+        e.outcome === 'infra_error' ? 'infra error' : isNotGatedResult(e) ? 'not gated' : e.outcome,
       answer: insightOf(e.path)?.answer?.text ?? null,
     })),
   }

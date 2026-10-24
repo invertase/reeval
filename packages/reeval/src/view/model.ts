@@ -546,6 +546,12 @@ export const COMPARE_ORDER: CompareStatus[] = [
 export const hasUngatedCells = (cells: readonly Pick<HistoryCell, 'gate'>[]) =>
   cells.some((c) => c.gate === 'none')
 
+/** A study's pass: every cell `gate: 'none'`, so nothing it saw passed or failed it. */
+export const isNotGatedPass = (e: {
+  outcome: Outcome
+  cells: readonly Pick<HistoryCell, 'gate'>[]
+}) => e.outcome === 'pass' && e.cells.length > 0 && e.cells.every((c) => c.gate === 'none')
+
 /**
  * An expected miss: a failed attempt in an ungated cell (a control, by default). It's reported
  * apart from failures, since it fails neither its eval nor the run.

@@ -7,13 +7,14 @@ import type { HistoryCell, RunRecord } from '../history/types.ts'
 import { fenced } from '../text.ts'
 import type { CompareCell, CompareRow, CompareStatus, StackChange } from '../view/compare.ts'
 import { effortChangeLabel } from '../view/effort.ts'
-import type {
-  CaseResult,
-  CellResult,
-  CheckResult,
-  EvalResult,
-  ResultOutcome,
-  SuiteResult,
+import {
+  type CaseResult,
+  type CellResult,
+  type CheckResult,
+  type EvalResult,
+  isStudy,
+  type ResultOutcome,
+  type SuiteResult,
 } from '../view/suite.ts'
 import { type Colors, colors, type Paint } from './colors.ts'
 import {
@@ -75,15 +76,19 @@ const TALLY: CompareStatus[] = ['regressed', 'fixed', 'drift', 'infra', 'added',
 const paintStatus = (c: Colors, s: CompareStatus): Paint =>
   s === 'regressed' ? c.red : s === 'fixed' ? c.green : s === 'same' ? c.dim : c.yellow
 
-const OUTCOME: Record<ResultOutcome, string> = {
+/** A side's outcome as its row reads it: a study's pass is `not_gated`. */
+type Shown = ResultOutcome | 'not_gated'
+
+const OUTCOME: Record<Shown, string> = {
   pass: 'pass',
+  not_gated: 'not gated',
   fail: 'fail',
   infra_error: 'infra error',
   cancelled: 'cancelled',
   skipped: 'skipped',
 }
 
-const paintOutcome = (c: Colors, o: ResultOutcome): Paint =>
+const paintOutcome = (c: Colors, o: Shown): Paint =>
   o === 'pass'
     ? c.green
     : o === 'fail'
@@ -95,6 +100,12 @@ const paintOutcome = (c: Colors, o: ResultOutcome): Paint =>
 /** One side's outcome as `reeval show` reads it: a fail the interrupt caused is `cancelled`. */
 const sideOutcome = (row: CompareRow, side: 'base' | 'head'): ResultOutcome | null =>
   row.cancelled?.includes(side) ? 'cancelled' : row[side]
+
+/** One side's outcome as its eval's row in `reeval run` reads it: a study's pass is `not gated`. */
+const shownOutcome = (row: CompareRow, side: 'base' | 'head', unit?: Unit): Shown | null => {
+  const o = sideOutcome(row, side)
+  return o === 'pass' && isStudy(unit?.result.cells ?? []) ? 'not_gated' : o
+}
 
 /** An eval, or one case of a family, as compare rows name it: by its eval id. */
 type Unit = { file: string; result: EvalResult }
@@ -275,12 +286,7 @@ function flips(
   })
 }
 
-const idRow = (
-  c: Colors,
-  side: 'base' | 'head',
-  id: string,
-  outcome?: ResultOutcome | null,
-): Item => ({
+const idRow = (c: Colors, side: 'base' | 'head', id: string, outcome?: Shown | null): Item => ({
   indent: 2,
   cells: [side, id, ...(outcome ? [t(OUTCOME[outcome], paintOutcome(c, outcome))] : [])],
 })
@@ -374,8 +380,8 @@ function block(
       top,
       ...(changed ? table([{ indent: 2, cells: ['changed', changed] }]) : []),
       ...table([
-        idRow(c, 'base', baseId, sideOutcome(row, 'base')),
-        idRow(c, 'head', headId, sideOutcome(row, 'head')),
+        idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(row.id))),
+        idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(row.id))),
       ]),
       ...table([...cellRows(row), ...stats]),
       ...resultBody(c, head),
@@ -386,7 +392,7 @@ function block(
     return {
       lines: [
         top,
-        ...table([idRow(c, 'head', headId, sideOutcome(row, 'head'))]),
+        ...table([idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(row.id)))]),
         ...resultBody(c, head),
       ],
       ids: true,
@@ -394,7 +400,10 @@ function block(
   }
   if (row.status === 'removed') {
     return {
-      lines: [top, ...table([idRow(c, 'base', baseId, sideOutcome(row, 'base'))])],
+      lines: [
+        top,
+        ...table([idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(row.id)))]),
+      ],
       ids: true,
     }
   }
@@ -438,8 +447,11 @@ function stackNotes(c: Colors, changes: StackChange[]): string[] {
 function noBaseline(c: Colors, input: CompareInput, opts: CompareOptions): string[] {
   const { suite, runId } = input.head
   const blocks = renderBlocks(suite, { color: opts.color, verbose: opts.verbose, hint: false })
-  const counts = (['fail', 'infra_error', 'cancelled', 'pass', 'skipped'] as const).flatMap((o) => {
-    const n = input.rows.filter((r) => sideOutcome(r, 'head') === o).length
+  const units = unitsOf(suite)
+  const shown = input.rows.map((r) => shownOutcome(r, 'head', units.get(r.id)))
+  const order = ['fail', 'infra_error', 'cancelled', 'pass', 'not_gated', 'skipped'] as const
+  const counts = order.flatMap((o) => {
+    const n = shown.filter((x) => x === o).length
     return n ? [paintOutcome(c, o)(`${n} ${OUTCOME[o]}`)] : []
   })
   return [

@@ -140,7 +140,7 @@ npx reeval run --config reeval.fake.config.ts --json > results.json
   "outcome": "pass",
   "errors": [],
   "tally": {
-    "errors": 0, "pass": 16, "fail": 0,
+    "errors": 0, "pass": 16, "notGated": 0, "fail": 0,
     "infraError": 0, "cancelled": 0, "skipped": 0
   },
   "files": [
@@ -193,7 +193,7 @@ npx reeval run --config reeval.fake.config.ts --json > results.json
 |---|---|
 | `outcome` | The run's outcome, which the exit code is read from: `skipped` when interrupted, else `fail` on any error outside an attempt |
 | `errors` | Errors outside any attempt: an eval file's stray rejection or throw, a worker that died. Each fails the run |
-| `tally` | Outcomes per block: each `evaluate.each` case and each other eval is one, and a family whose pooled `minLift` failed is one more fail. `cancelled` counts the blocks whose only failed tries the interrupt cancelled, and `errors` the run's `errors` |
+| `tally` | Outcomes per block: each `evaluate.each` case and each other eval is one, and a family whose pooled `minLift` failed is one more fail. `notGated` counts the studies (every cell `gate: 'none'`), which `pass` leaves out, `cancelled` the blocks whose only failed tries the interrupt cancelled, and `errors` the run's `errors` |
 | `files[].evals[]` | An eval, or a pooled `evaluate.each` (`family: true`) with its `cases`, `pooled` variants and `questions` summed over the cases |
 | `across` | What the cells compare: `none`, `change` (variants), `harness` or `both` |
 | `cells[]` | Each cell: counts (`infraError` and `skipped` apart from `failed`), `baseline`, `gated`, `fingerprint`, `context` (skill sources and files) |
@@ -275,7 +275,7 @@ An error outside any attempt, such as an eval file's stray rejection, prints fir
 
 With `analysis.model` set, the blocks also carry the run's [insights](/reference/cli/analyze#during-a-run): written once the attempts finish and the exit code is fixed, within `analysis.maxTokens` and [fixed caps per eval and call](/reference/cli/analyze#the-caps). Ctrl-C while they run skips the rest and keeps the run's exit code. `--no-insights` prints the facts only.
 
-The tally counts each eval, and each case of a family, once: `1 run error · 3 fail · 1 pass · 1 infra error · 2 cancelled · 2 skipped`, run errors and fails first, zeros left out. A family whose pooled `minLift` gate fails counts one more fail. Counts read `N of M`, with infra errors and cancelled and skipped tries named apart (`0 of 1 · 2 skipped`); `-v` adds each arm's difference and 95% interval. Judge scores per attempt, per-key judge rates and token usage per cell are in the studio and `reeval query`.
+The tally counts each eval, and each case of a family, once: `1 run error · 3 fail · 1 pass · 1 not gated · 1 infra error · 2 cancelled · 2 skipped`, run errors and fails first, zeros left out. A family whose pooled `minLift` gate fails counts one more fail. A study counts as `not gated`, never `pass`, whatever its attempts did; its arm rows have the real counts. Counts read `N of M`, with infra errors and cancelled and skipped tries named apart (`0 of 1 · 2 skipped`); `-v` adds each arm's difference and 95% interval. Judge scores per attempt, per-key judge rates and token usage per cell are in the studio and `reeval query`.
 
 ## Remarks
 

@@ -221,6 +221,7 @@ describe('every layout', () => {
     const tally = (t: Partial<SuiteTally>): SuiteTally => ({
       errors: 0,
       pass: 0,
+      notGated: 0,
       fail: 0,
       infraError: 0,
       cancelled: 0,
@@ -237,6 +238,7 @@ describe('every layout', () => {
       '1 fail · 2 pass · 3 cancelled',
     )
     assert.equal(tallyLine(c, tally({ errors: 1, pass: 2 })), '1 run error · 2 pass')
+    assert.equal(tallyLine(c, tally({ pass: 1, notGated: 4 })), '1 pass · 4 not gated')
     assert.equal(tallyLine(c, tally({})), 'no evals ran')
   })
 

@@ -12,7 +12,7 @@ import { type CompareRow, compare, stackChanges } from '../../src/view/compare.t
 import { runHeader } from '../../src/view/header.ts'
 import type { RunInsights } from '../../src/view/insights.ts'
 import { readableInsights, readableRecord } from '../../src/view/record.ts'
-import { type EvalResult, type SuiteResult, suiteResult } from '../../src/view/suite.ts'
+import { type EvalResult, isStudy, type SuiteResult, suiteResult } from '../../src/view/suite.ts'
 import { CORPUS_DIR, corpusEntries } from '../schema/corpus.ts'
 
 export type Golden = {
@@ -94,9 +94,11 @@ export const GOLDENS: Golden[] = [
 export const OUTPUT_DIR = join(CORPUS_DIR, '..', 'output')
 
 function tallyOf(evals: EvalResult[], errors: number): SuiteResult['tally'] {
-  const tally = { errors, pass: 0, fail: 0, infraError: 0, cancelled: 0, skipped: 0 }
-  for (const o of evals.flatMap((e) => (e.cases ? e.cases.map((k) => k.outcome) : [e.outcome]))) {
+  const tally = { errors, pass: 0, notGated: 0, fail: 0, infraError: 0, cancelled: 0, skipped: 0 }
+  const units = evals.flatMap((e) => e.cases ?? [e])
+  for (const { outcome: o, cells } of units) {
     if (o === 'infra_error') tally.infraError++
+    else if (o === 'pass' && isStudy(cells ?? [])) tally.notGated++
     else tally[o]++
   }
   tally.fail += evals.filter((e) => e.pooled?.some((p) => p.outcome === 'fail')).length
