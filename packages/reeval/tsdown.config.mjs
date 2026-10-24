@@ -124,24 +124,31 @@ const studioLicenses = join(studioApp, 'third-party.json')
 let bundled = []
 
 const appFiles = join(here, 'src/studio/app-files.ts')
+/** A module id as a comparable path: Windows ids can differ in separators and drive-letter case. */
+const samePath = (a, b) =>
+  process.platform === 'win32'
+    ? a.replaceAll('\\', '/').toLowerCase() === b.replaceAll('\\', '/').toLowerCase()
+    : a === b
 const TEXT = new Set(['.html', '.js', '.css', '.svg', '.json', '.txt'])
+
+let inlinedApp = false
 
 /** src/studio/app-files.ts with studio-web's built files in it, text as strings. */
 function studioAppModule() {
-  const files = {}
-  if (existsSync(join(studioApp, 'index.html'))) {
-    for (const file of readdirSync(studioApp, { recursive: true, encoding: 'utf8' }).sort()) {
-      const path = join(studioApp, file)
-      if (path === studioLicenses || !statSync(path).isFile()) continue
-      const body = readFileSync(path)
-      files[file.split(sep).join(posix.sep)] = TEXT.has(extname(file))
-        ? { utf8: body.toString('utf8') }
-        : { base64: body.toString('base64') }
-    }
-  } else
-    console.warn(
-      "studio-web isn't built; reeval studio will have no app. Run pnpm build from the repo root.",
+  if (!existsSync(join(studioApp, 'index.html')) || !existsSync(studioLicenses))
+    throw new Error(
+      "studio-web isn't built, so reeval would ship without its studio app: run pnpm build from the repo root",
     )
+  const files = {}
+  for (const file of readdirSync(studioApp, { recursive: true, encoding: 'utf8' }).sort()) {
+    const path = join(studioApp, file)
+    if (path === studioLicenses || !statSync(path).isFile()) continue
+    const body = readFileSync(path)
+    files[file.split(sep).join(posix.sep)] = TEXT.has(extname(file))
+      ? { utf8: body.toString('utf8') }
+      : { base64: body.toString('base64') }
+  }
+  inlinedApp = true
   return `export const APP_FILES = ${JSON.stringify(files)}\n`
 }
 
@@ -177,7 +184,11 @@ export default defineConfig({
       },
       load: {
         order: 'pre',
-        handler: (id) => (id === appFiles ? { code: studioAppModule(), map: null } : null),
+        handler(id) {
+          if (!samePath(id, appFiles)) return null
+          this.addWatchFile(join(studioApp, 'index.html'))
+          return { code: studioAppModule(), map: null }
+        },
       },
       transform: {
         order: 'pre',
@@ -205,6 +216,10 @@ export default defineConfig({
   ],
   hooks: {
     'build:done': ({ chunks }) => {
+      if (!inlinedApp) {
+        rmSync(dist, { recursive: true, force: true })
+        throw new Error(`The build never loaded ${appFiles}, so the studio app isn't in it`)
+      }
       for (const chunk of chunks) {
         const file = relative(dist, join(chunk.outDir, chunk.fileName))
         const code = chunk.type === 'chunk' ? chunk.code : String(chunk.source)
@@ -241,8 +256,7 @@ export default defineConfig({
         rmSync(join(here, asset), { recursive: true, force: true })
         cpSync(from, join(here, asset), { recursive: true })
       }
-      if (existsSync(studioLicenses))
-        thirdParty.push(...JSON.parse(readFileSync(studioLicenses, 'utf8')))
+      thirdParty.push(...JSON.parse(readFileSync(studioLicenses, 'utf8')))
       // The published package's README is the repo-root README, copied so the
       // tarball has the same file. It is handwritten; `pnpm docs:gen` does not write it.
       cpSync(join(here, '../..', 'README.md'), join(here, 'README.md'))

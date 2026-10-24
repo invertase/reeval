@@ -5,6 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, posix, sep } from 'node:path'
 import { test } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import { VERSION } from '@reeval/harness-antigravity'
 import { VERSION as CURSOR_VERSION } from '@reeval/harness-cursor-sdk'
 import { baseEnv, fakeConfig, pkgRoot, readRun, spawnTool, tempDir } from './helpers.ts'
@@ -275,6 +276,15 @@ test('the packed package installs into a clean project and runs reeval', {
   )
   const code = shipped.filter((f) => /\.(js|d\.ts)$/.test(f))
   const source = (file: string) => readFileSync(join(dist, file), 'utf8')
+  const appChunk = shipped.find((f) => /^app-files-[\w-]+\.js$/.test(f))
+  assert.ok(appChunk, 'the studio app ships in its own chunk')
+  const { APP_FILES } = await import(pathToFileURL(join(dist, appChunk)).href)
+  const appPaths = Object.keys(APP_FILES)
+  assert.ok(appPaths.includes('index.html'), appPaths.join(', '))
+  assert.ok(
+    appPaths.some((f) => /^assets\/.+\.js$/.test(f)),
+    appPaths.join(', '),
+  )
   for (const file of code)
     assert.doesNotMatch(source(file), /(?:\bfrom|\bimport)\s*\(?\s*['"]@reeval\//, file)
   const dispatched = [...source('cli.js').matchAll(/\bimport\("\.\/([^"]+)"\)/g)].map(
