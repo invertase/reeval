@@ -266,7 +266,7 @@ importers:
         specifier: workspace:0.1.12
         version: link:../harness-antigravity
       '@reeval/harness-codex':
-        specifier: workspace:0.1.7
+        specifier: workspace:0.1.8
         version: link:../harness-codex
       '@reeval/harness-cursor-sdk':
         specifier: workspace:0.1.6
@@ -313,7 +313,7 @@ importers:
         specifier: workspace:0.1.12
         version: link:../harness-antigravity
       '@reeval/harness-codex':
-        specifier: workspace:0.1.7
+        specifier: workspace:0.1.8
         version: link:../harness-codex
       '@reeval/harness-cursor-sdk':
         specifier: workspace:0.1.6

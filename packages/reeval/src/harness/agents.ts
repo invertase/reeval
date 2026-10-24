@@ -976,7 +976,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // What Codex's plugin format has besides apps; it installs a plugin whole, from a marketplace.
     pluginParts: ['skills', 'mcp'],
     pluginApps: 'they need a ChatGPT login',
-    // Codex 0.163.0 reads a root plugin.json (with an Agent Plugins $schema), then
+    // Codex 0.164.0 reads a root plugin.json (with an Agent Plugins $schema), then
     // .codex-plugin/plugin.json, then .claude-plugin/plugin.json.
     pluginManifestsFirst: ['plugin.json', '.codex-plugin/plugin.json'],
     pluginRootManifestNeedsSchema: true,
