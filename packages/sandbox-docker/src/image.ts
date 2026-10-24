@@ -24,7 +24,7 @@ export const HARNESS_PACKAGES: Record<
   pi: { name: '@reeval/harness-pi', version: '0.2.8' },
   codex: { name: '@reeval/harness-codex', version: '0.1.8' },
   fx: { name: '@reeval/harness-fx', version: '0.1.1' },
-  'grok-build': { name: '@reeval/harness-grok-build', version: '0.1.3' },
+  'grok-build': { name: '@reeval/harness-grok-build', version: '0.1.4' },
 }
 
 /** A harness whose CLI an image can bake. */

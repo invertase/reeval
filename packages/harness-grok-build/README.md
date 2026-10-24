@@ -21,7 +21,7 @@ const agent = new HarnessAgent({
 
 ## How it works
 
-- **Bootstrap.** Downloads `@xai-official/grok-linux-<arch>` 1.0.67 (x64 or arm64) from npm,
+- **Bootstrap.** Downloads `@xai-official/grok-linux-<arch>` 1.0.70 (x64 or arm64) from npm,
   checks its sha512, and unpacks its brotli-compressed binary to `grok` in a private home under
   the bootstrap directory, as the npm package's postinstall does.
 - **Config.** `grokConfig` writes `~/.grok/config.toml` in that home: the run's model as the

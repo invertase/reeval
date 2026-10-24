@@ -9,12 +9,12 @@ import { GROK_BUILD_BUILTIN_TOOLS, type GrokBuildBuiltinTools } from './grok-bui
 
 export const GROK_BUILD_HARNESS_ID = 'grok-build'
 /** The Grok Build release the bootstrap installs, checked against npm's published sha512s. */
-export const GROK_CLI_VERSION = '1.0.67'
+export const GROK_CLI_VERSION = '1.0.70'
 /** The `dist.integrity` of `@xai-official/grok-linux-<arch>@<version>`, its native build. */
 export const GROK_CLI_INTEGRITY = {
-  x64: 'sha512-Xok/gZPhFS7y8LnKfOHNIBRSPe87g3+oYuFq5qdco4SaGjVJylq7GCp25wWEfWAsHyT4xyeeIDhaTqDqCaci0A==',
+  x64: 'sha512-rElshycz/6SgPSkiFGtKHA4vSVOI8qQ6d0jFeu4I92hXCMfvxgMiOvNSzuBhm2P8Jd+4rNGAty2zW0VwmgHSeA==',
   arm64:
-    'sha512-TFh6pUVx6eDQ9XCDwjyjq6usYW8b67rcO/A7N2XYMfHC05puuqgh5k3IASplvI+PPd1yCnnDhTZ9hhcIYH4Bbg==',
+    'sha512-rH0TfWOT/Ca/sBMtAJJ+GJ9UyZlr/TkTqIHq8FL7o+ZTzJMBWvCv40JC4T/XuwEZ3WMmxOHGiPap7H9B4SbDSw==',
 } as const
 /** The credential the adapter uses by default: an xAI API key. */
 export const GROK_CREDENTIAL_ENV = 'XAI_API_KEY'
