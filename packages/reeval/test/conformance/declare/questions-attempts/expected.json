@@ -1,0 +1,100 @@
+{
+  "children": [
+    {
+      "type": "eval",
+      "name": "asked of each attempt",
+      "mode": "run",
+      "options": {
+        "questions": ["How did the agent find the failing test?"]
+      },
+      "body": "b1"
+    },
+    {
+      "type": "eval",
+      "name": "with choices",
+      "mode": "run",
+      "options": {
+        "runs": 2,
+        "gate": {
+          "passRate": 0.5
+        },
+        "questions": [
+          {
+            "question": "Did the agent run the tests first?",
+            "choices": ["yes", "no"]
+          }
+        ]
+      },
+      "body": "b2"
+    },
+    {
+      "type": "eval",
+      "name": "beside a compare",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "baseline": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "questions": [
+          "What did the agent read first?",
+          {
+            "question": "Which is cleaner?",
+            "across": "environment"
+          }
+        ]
+      },
+      "body": "b3"
+    },
+    {
+      "type": "eval",
+      "name": "across harnesses without a compare",
+      "mode": "run",
+      "options": {
+        "questions": [
+          {
+            "question": "Which agent explained its change better?",
+            "across": "harness"
+          }
+        ]
+      },
+      "body": "b4"
+    }
+  ]
+}

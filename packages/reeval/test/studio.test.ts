@@ -16,6 +16,7 @@ import {
   analysisDataPath,
   answerRows,
   artifactPath,
+  attemptAnswerRows,
   buildIndex,
   cellJudgeRates,
   cellRows,
@@ -90,7 +91,7 @@ import { fakeSandbox } from 'reeval/sandbox'
 const sandbox = fakeSandbox()
 const plain = defineEnvironment('plain', { sandbox })
 const other = defineEnvironment('other', { sandbox })
-group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other], questions: ['Which wrote hello.txt?'] }, runs: 2 } : {}, () => {
+group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other] }, questions: [{ question: 'Which wrote hello.txt?', across: 'environment' }], runs: 2 } : {}, () => {
   evaluate('writes hello', async (c) => {
     await c.send('write hello.txt')
     await expect(c.exec('test -f hello.txt')).toSucceed()
@@ -652,6 +653,60 @@ describe('view-models over a real history', () => {
     const unkept = structuredClone(matrix.evals[0] as RunRecord['evals'][number])
     for (const a of unkept.answers ?? []) delete a.input
     assert.equal(answerRows(unkept)[0]?.input, null, 'a record that kept no files links nothing')
+  })
+
+  test('attempt answers: one row per question, choices tallied over the answers that came back', () => {
+    const asked = (choice: string | undefined, error?: string) =>
+      ({
+        question: 'Did it pass?',
+        model: 'fake',
+        stateOptions: {},
+        choices: ['yes', 'no'],
+        ...(choice ? { choice } : {}),
+        text: error ? '' : 'it wrote ok.txt',
+        ...(error ? { error } : {}),
+        input: { path: 'e/c/1/questions/1.json', sha256: '', bytes: 0 },
+      }) as NonNullable<RunRecord['evals'][number]['attempts'][number]['answers']>[number]
+    const attempt = (id: string, outcome: 'pass' | 'fail', answers = [asked('yes')]) =>
+      ({ id, outcome, answers }) as RunRecord['evals'][number]['attempts'][number]
+    const rows = attemptAnswerRows({
+      attempts: [
+        attempt('a#1', 'pass'),
+        attempt('a#2', 'fail', [asked('no'), { ...asked(undefined), question: 'Why?' }]),
+        attempt('a#3', 'pass', [asked(undefined, 'over quota')]),
+        { id: 'a#4', outcome: 'infra' } as RunRecord['evals'][number]['attempts'][number],
+      ],
+    })
+    assert.deepEqual(
+      rows.map((r) => [
+        r.question,
+        r.choices,
+        r.answers.map((a) => [a.attempt, a.choice, a.error]),
+      ]),
+      [
+        [
+          'Did it pass?',
+          [
+            { choice: 'yes', n: 1 },
+            { choice: 'no', n: 1 },
+          ],
+          [
+            ['a#1', 'yes', null],
+            ['a#2', 'no', null],
+            ['a#3', null, 'over quota'],
+          ],
+        ],
+        [
+          'Why?',
+          [
+            { choice: 'yes', n: 0 },
+            { choice: 'no', n: 0 },
+          ],
+          [['a#2', null, null]],
+        ],
+      ],
+    )
+    assert.equal(rows[0]?.answers[0]?.input, 'e/c/1/questions/1.json')
   })
 
   test("compare answers over real harnesses' diffs (real-e2e-pairs), a failed one and one with no pairs", async () => {

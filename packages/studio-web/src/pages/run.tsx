@@ -18,9 +18,11 @@ import { useMemo, useState } from 'react'
 import {
   type AnswerRate,
   type AnswerRow,
+  type AttemptAnswerRow,
   activityLabel,
   answerRows,
   artifactPath,
+  attemptAnswerRows,
   type CellRow,
   caseLabel,
   cellRows,
@@ -534,6 +536,58 @@ function Questions({ rows, runId }: { rows: AnswerRow[]; runId: string }) {
   )
 }
 
+/** Questions asked of each attempt on its own: the choices' tally, then each attempt's answer. */
+function AttemptQuestions({ rows, runId }: { rows: AttemptAnswerRow[]; runId: string }) {
+  const { data: studio } = useStudio()
+  const files = studio?.features.artifacts !== false
+  return (
+    <section className="space-y-2" data-attempt-questions>
+      <h3 className="text-sm font-medium">Asked of each attempt</h3>
+      <div className="divide-y overflow-hidden rounded-lg border">
+        {rows.map((q) => (
+          <div key={q.question} className="space-y-2.5 px-3.5 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+              <p className="min-w-0 text-sm">{q.question}</p>
+              <span className="font-mono text-[11px] text-muted-foreground">{q.model}</span>
+            </div>
+            {q.choices ? (
+              <p className="font-mono text-xs" data-attempt-choices>
+                {q.choices.map((c) => `${c.choice} ${c.n}`).join(' · ')}
+              </p>
+            ) : null}
+            <ul className="space-y-1.5 text-xs">
+              {q.answers.map((a) => (
+                <li key={a.attempt} className="flex flex-wrap gap-x-2" data-attempt-answer>
+                  <span className="font-mono text-muted-foreground">{a.attempt}</span>
+                  {a.error !== null ? (
+                    <span className="font-mono break-words text-infra">failed: {a.error}</span>
+                  ) : (
+                    <span className="min-w-0 break-words">
+                      {a.choice !== null ? <strong className="mr-1">{a.choice}</strong> : null}
+                      {a.text}
+                    </span>
+                  )}
+                  {files && a.input !== null ? (
+                    <a
+                      href={artifactPath(runId, a.input)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                      data-question-input
+                    >
+                      What the model saw
+                    </a>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 const VERDICT_LABEL = {
   discriminates: 'discriminates',
   mixed: 'mixed',
@@ -606,6 +660,7 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
   const rows = cellRows(entry)
   const matrix = isMatrix(entry)
   const answers = answerRows(entry)
+  const attemptAnswers = attemptAnswerRows(entry)
   const standingRates = !matrix && rows[0]?.judgeRates.length ? rows[0].judgeRates : []
   return (
     <div className="space-y-5">
@@ -658,6 +713,10 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
       <ChecksTable entry={entry} />
 
       {answers.length ? <Questions rows={answers} runId={record.runId} /> : null}
+
+      {attemptAnswers.length ? (
+        <AttemptQuestions rows={attemptAnswers} runId={record.runId} />
+      ) : null}
 
       <section className="space-y-2">
         <h3 className="text-sm font-medium">{plural(entry.attempts.length, 'attempt')}</h3>

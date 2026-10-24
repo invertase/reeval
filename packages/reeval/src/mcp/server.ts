@@ -30,6 +30,8 @@ const VIEW_ROWS: Record<string, string> = {
     'variant cell per pooled evaluate.each per run: its control, paired cases, both sides’ mean pass@1 over them, lift points and the 95% interval (lo, hi), verdict and effort ratios',
   effort:
     'cell per run: attempts, median tool calls, agent seconds and tokens; for a variant, the ratios to its control, p-values and verdicts (tokens omitted when either side has no usage sample)',
+  attempt_answers:
+    'answer to a question asked of one attempt on its own (no across): the attempt, its outcome, the choice picked, the text, and the error when the call failed',
   factor_effects:
     'factor contrast (environment, harness, model) by evidence tier, with pass@1 and effort verdicts',
   skill_reads:

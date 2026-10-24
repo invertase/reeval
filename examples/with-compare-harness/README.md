@@ -2,8 +2,8 @@
 
 **Shows:** a compare on one agent while another runs only the control. The eval runs on Claude
 Code and Codex, and `compare.harness` runs the `jsdoc` skill's variant on Claude Code alone. A
-compare question with `across: 'harness'` pairs Claude Code's attempts with Codex's in the same
-environment, so you read the two agents side by side.
+question with `across: 'harness'`, in `questions` beside `compare`, pairs Claude Code's attempts
+with Codex's in the same environment, so you read the two agents side by side.
 
 **Needs:** `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in `.env.local`, Docker, and
 `pnpm reeval image build` once (it builds both agents' images). In this repo, run
@@ -44,6 +44,5 @@ with-compare-harness.eval.ts › documents the new function  2          1       
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`reeval.config.ts`](./reeval.config.ts) | The question's model, and the profiles from `../profiles.ts` |
 
-The `compare` option on the [Options](../../docs/reference/options.mdx) reference page covers
-`harness` and `across`, and the [Compare questions](../../docs/guide/questions.mdx) guide covers
-pairing.
+The [Options](../../docs/reference/options.mdx) reference page covers `compare.harness` and
+`questions`' `across`, and the [Questions](../../docs/guide/questions.mdx) guide covers pairing.

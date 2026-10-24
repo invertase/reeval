@@ -382,106 +382,15 @@ export const CASES: Record<string, Case[]> = {
       'a baseline that is not an environment',
       options({ compare: { baseline: 'one', variants: [e2] } }),
     ],
-    ['question instead of questions', options({ compare: { variants: [e2], question: 'Which?' } })],
-    ['cut instead of across', options({ compare: { variants: [e2], cut: 'harness' } })],
+    ['questions on compare', options({ compare: { variants: [e2], questions: ['Which?'] } })],
+    ['question on compare', options({ compare: { variants: [e2], question: 'Which?' } })],
+    ['across on compare', options({ compare: { variants: [e2], across: 'harness' } })],
+    ['cut on compare', options({ compare: { variants: [e2], cut: 'harness' } })],
     ['an unknown key', options({ compare: { variants: [e2], arms: [] } })],
     ['gate unknown', options({ compare: { variants: [e2], gate: 'some' } })],
     ['minLift above 1', options({ compare: { variants: [e2], minLift: 2 } })],
     ['minLift a string', options({ compare: { variants: [e2], minLift: '0.1' } })],
     ['harness not a list', options({ compare: { variants: [e2], harness: 'cursor' } })],
-    ['questions not a list', options({ compare: { variants: [e2], questions: 'Which?' } })],
-    ['questions empty', options({ compare: { variants: [e2], questions: [] } })],
-    ['a question that is empty', options({ compare: { variants: [e2], questions: [' '] } })],
-    ['a question that is a number', options({ compare: { variants: [e2], questions: [3] } })],
-    [
-      'a question with an unknown key',
-      options({ compare: { variants: [e2], questions: [{ question: 'Q', by: 'm' }] } }),
-    ],
-    [
-      'a question with cuts',
-      options({ compare: { variants: [e2], questions: [{ question: 'Q', cuts: 'x' }] } }),
-    ],
-    [
-      'a question without its text',
-      options({ compare: { variants: [e2], questions: [{ model: 'google/g' }] } }),
-    ],
-    [
-      'a question model without a provider',
-      options({ compare: { variants: [e2], questions: [{ question: 'Q', model: 'g' }] } }),
-    ],
-    [
-      'a question model that is an evaluation model',
-      options({
-        compare: {
-          variants: [e2],
-          questions: [{ question: 'Q', model: 'typesafe-ai/jev-1.14.0' }],
-        },
-      }),
-    ],
-    [
-      'a question across unknown',
-      options({ compare: { variants: [e2], questions: [{ question: 'Q', across: 'cell' }] } }),
-    ],
-    [
-      'a question twice',
-      options({ compare: { variants: [e2], questions: ['Q', { question: 'Q' }] } }),
-    ],
-    [
-      'a question state with contents',
-      options({
-        compare: { variants: [e2], questions: [{ question: 'Q', state: { contents: ['a'] } }] },
-      }),
-    ],
-    [
-      'a question state with an unknown key',
-      options({
-        compare: { variants: [e2], questions: [{ question: 'Q', state: { dif: true } }] },
-      }),
-    ],
-    [
-      'a question state with a bad turns',
-      options({
-        compare: { variants: [e2], questions: [{ question: 'Q', state: { turns: 'first' } }] },
-      }),
-    ],
-    [
-      'question artifacts an empty list',
-      options({ compare: { variants: [e2], questions: [{ question: 'Q', artifacts: [] }] } }),
-    ],
-    [
-      'question artifacts false',
-      options({ compare: { variants: [e2], questions: [{ question: 'Q', artifacts: false }] } }),
-    ],
-    ['the question option a string', options({ question: 'diff' })],
-    ['good: the question option with a model', options({ question: { model: 'google/g' } })],
-    ['the question option with a model without a provider', options({ question: { model: 'g' } })],
-    [
-      'the question option with an evaluation model',
-      options({ question: { model: 'typesafe-ai/jev-1.14.0' } }),
-    ],
-    ['the question option with a model object', options({ question: { model: { kind: 'x' } } })],
-    ['the question option with across', options({ question: { across: 'harness' } })],
-    ['the question option with an unknown key', options({ question: { stat: {} } })],
-    [
-      'the question option with an unknown state key',
-      options({ question: { state: { transcripts: true } } }),
-    ],
-    [
-      'good: question state and artifacts',
-      options({
-        question: { state: { checks: ['npm test'] } },
-        compare: {
-          variants: [e2],
-          questions: [
-            { question: 'Q', state: { diff: false, output: true }, artifacts: ['home'] },
-            { question: 'R', artifacts: true },
-          ],
-        },
-      }),
-    ],
-    ['across unknown', options({ compare: { variants: [e2], across: 'cell' } })],
-    ['across an empty list', options({ compare: { variants: [e2], across: [] } })],
-    ['across twice', options({ compare: { variants: [e2], across: ['harness', 'harness'] } })],
     ['compare false', options({ compare: false })],
     [
       'harness with a bad descriptor',
@@ -501,8 +410,6 @@ export const CASES: Record<string, Case[]> = {
           gate: 'all',
           minLift: 0.1,
           harness: ['fake'],
-          questions: ['Q', { question: 'R', model: 'google/g', across: 'harness' }],
-          across: ['environment'],
         },
       }),
     ],
@@ -510,6 +417,88 @@ export const CASES: Record<string, Case[]> = {
       'data: a variant with a bad spec',
       options({ compare: { variants: [envData({ setpu: [] })] } }),
     ],
+  ],
+  questions: [
+    ['not a list', options({ questions: 'Which?' })],
+    ['a question that is empty', options({ questions: [' '] })],
+    ['a question that is a number', options({ questions: [3] })],
+    ['a question with an unknown key', options({ questions: [{ question: 'Q', by: 'm' }] })],
+    ['a question with cuts', options({ questions: [{ question: 'Q', cuts: 'x' }] })],
+    ['a question without its text', options({ questions: [{ model: 'google/g' }] })],
+    [
+      'a question model without a provider',
+      options({ questions: [{ question: 'Q', model: 'g' }] }),
+    ],
+    [
+      'a question model that is an evaluation model',
+      options({ questions: [{ question: 'Q', model: 'typesafe-ai/jev-1.14.0' }] }),
+    ],
+    ['across unknown', options({ questions: [{ question: 'Q', across: 'cell' }] })],
+    ['across an empty list', options({ questions: [{ question: 'Q', across: [] }] })],
+    ['across twice', options({ questions: [{ question: 'Q', across: ['harness', 'harness'] }] })],
+    ['choices a string', options({ questions: [{ question: 'Q', choices: 'yes' }] })],
+    ['choices of one', options({ questions: [{ question: 'Q', choices: ['yes'] }] })],
+    ['choices twice', options({ questions: [{ question: 'Q', choices: ['yes', 'yes'] }] })],
+    [
+      'choices with an empty answer',
+      options({ questions: [{ question: 'Q', choices: ['yes', ''] }] }),
+    ],
+    [
+      'choices with across',
+      options({ questions: [{ question: 'Q', across: 'environment', choices: ['a', 'b'] }] }),
+    ],
+    ['a question twice', options({ questions: ['Q', { question: 'Q' }] })],
+    [
+      'a question state with contents',
+      options({ questions: [{ question: 'Q', state: { contents: ['a'] } }] }),
+    ],
+    [
+      'a question state with an unknown key',
+      options({ questions: [{ question: 'Q', state: { dif: true } }] }),
+    ],
+    [
+      'a question state with a bad turns',
+      options({ questions: [{ question: 'Q', state: { turns: 'first' } }] }),
+    ],
+    ['artifacts an empty list', options({ questions: [{ question: 'Q', artifacts: [] }] })],
+    ['artifacts false', options({ questions: [{ question: 'Q', artifacts: false }] })],
+    ['the question option a string', options({ question: 'diff' })],
+    ['good: the question option with a model', options({ question: { model: 'google/g' } })],
+    ['the question option with a model without a provider', options({ question: { model: 'g' } })],
+    [
+      'the question option with an evaluation model',
+      options({ question: { model: 'typesafe-ai/jev-1.14.0' } }),
+    ],
+    ['the question option with a model object', options({ question: { model: { kind: 'x' } } })],
+    ['the question option with across', options({ question: { across: 'harness' } })],
+    ['the question option with choices', options({ question: { choices: ['a', 'b'] } })],
+    ['the question option with an unknown key', options({ question: { stat: {} } })],
+    [
+      'the question option with an unknown state key',
+      options({ question: { state: { transcripts: true } } }),
+    ],
+    [
+      'good: question state and artifacts',
+      options({
+        question: { state: { checks: ['npm test'] } },
+        questions: [
+          { question: 'Q', state: { diff: false, output: true }, artifacts: ['home'] },
+          { question: 'R', artifacts: true, across: 'environment' },
+        ],
+      }),
+    ],
+    [
+      'good',
+      options({
+        compare: { variants: [e2] },
+        questions: [
+          'Q',
+          { question: 'R', model: 'google/g', across: ['environment', 'harness'] },
+          { question: 'S', choices: ['yes', 'no'] },
+        ],
+      }),
+    ],
+    ['config: questions', config({ questions: ['Q'] })],
   ],
   plain: [
     ['gate a number', options({ gate: 0.8 })],
@@ -983,6 +972,7 @@ export const CASES: Record<string, Case[]> = {
     ['yaml: a typo in debug', yaml('debug:\n  keepRuns: 3\n')],
     ['yaml: defaultProfile null', yaml('defaultProfile:\n')],
     ['yaml: compare', yaml('compare:\n  variants: []\n')],
+    ['yaml: questions', yaml('questions:\n  - Q\n')],
     ['yaml: a literal secret', yaml('env:\n  API_KEY: abc\n')],
     [
       'yaml: a secret as data',

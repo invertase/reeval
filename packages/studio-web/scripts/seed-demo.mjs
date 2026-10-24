@@ -1,6 +1,6 @@
 // Builds a throwaway reeval project with real run history for studio development, screenshots and
 // tests: a copy of scripts/demo with a few commits and recorded fake runs (passing, failing, CI,
-// multi-cell with a compared skill environment, and its answered and failed compare questions),
+// multi-cell with a compared skill environment, and its answered and failed questions),
 // plus one unrecorded scratch run.
 //
 //   node packages/studio-web/scripts/seed-demo.mjs [dir]    (default: $TMPDIR/reeval-studio-demo)
@@ -81,14 +81,12 @@ evaluate(
   'reviews a greet module',
   {
     harness: (inherited) => inherited.map((h) => (h.kind === 'fake' ? { ...h, flakeRate: 0 } : h)),
-    compare: {
-      baseline: plain,
-      variants: [withHouseGreeting],
-      questions: [
-        'Which greet.js reads more like our house style?',
-        'Which greet.js handles a missing name?',
-      ],
-    },
+    compare: { baseline: plain, variants: [withHouseGreeting] },
+    questions: [
+      { question: 'Which greet.js reads more like our house style?', across: ['environment', 'harness'] },
+      { question: 'Which greet.js handles a missing name?', across: ['environment', 'harness'] },
+      { question: 'Does greet.js default a missing name?', choices: ['yes', 'no'] },
+    ],
   },
   async (c) => {
     await c.send('Create greet.js exporting greet(name).')
@@ -112,8 +110,9 @@ export default defineConfig({
   harness: [${harnesses.join(', ')}],
   sandbox: fakeSandbox(),
   judge: { model: fakeJudge({ score: ${judge} }), state: { transcript: 'tools' } },
-  // Answers the compare questions: the attempt whose diff says Ahoy wins, then the one that
-  // defaults the name. review.eval.ts's second question fails at the model.
+  // Answers the pairwise questions: the attempt whose diff says Ahoy wins, then the one that
+  // defaults the name. review.eval.ts's second question fails at the model. The per-attempt
+  // question answers yes when the diff defaults the name.
   analysis: {
     insights: false,
     model: fakeAnalysis({
@@ -122,6 +121,10 @@ export default defineConfig({
         const score = (diff) => (diff.includes('Ahoy') ? 2 : 0) + (diff.includes("name = 'world'") ? 1 : 0)
         const [a, b] = [score(p.a.diff ?? ''), score(p.b.diff ?? '')]
         return a === b ? 'tie' : a > b ? 'A' : 'B'
+      },
+      answer: (q) => {
+        const yes = (q.attempt.diff ?? '').includes("name = 'world'")
+        return { choice: yes ? 'yes' : 'no', text: yes ? 'greet defaults name to world' : 'no default' }
       },
     }),
   },

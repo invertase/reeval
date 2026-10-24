@@ -722,7 +722,7 @@
           }
         },
         "questions": {
-          "description": "The compare's questions, answered after the run; unset without any, or when a profile dropped them.",
+          "description": "The eval's questions, answered after its attempts; unset without any, or when a profile dropped them all.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/PlannedQuestion"
@@ -1509,6 +1509,11 @@
       "required": ["kind", "model"],
       "additionalProperties": false
     },
+    "PairFactor": {
+      "description": "A matrix factor a pairwise question varies; the others are held.",
+      "type": "string",
+      "enum": ["environment", "harness"]
+    },
     "PiHarnessDescriptor": {
       "description": "pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs Google models on a Gemini API key and reports each model call's tokens. It takes stdio and HTTP MCP servers, not SSE ones.",
       "type": "object",
@@ -1565,11 +1570,22 @@
       "required": ["auto", "policy"]
     },
     "PlannedQuestion": {
-      "description": "A compare question as planned: its text, the model it names itself, if any, the one factor it varies when it doesn't ask both pair kinds, and what each side shows, cascaded, when set.",
+      "description": "A question as planned: its text, the model it names itself, if any, the factors it varies when it's pairwise, its choices, and what it's shown of each attempt, cascaded, when set.",
       "type": "object",
       "properties": {
         "across": {
-          "enum": ["environment", "harness"]
+          "description": "Set on a pairwise question; unset, it's asked of each attempt.",
+          "anyOf": [
+            {
+              "enum": ["environment", "harness"]
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PairFactor"
+              }
+            }
+          ]
         },
         "artifacts": {
           "anyOf": [
@@ -1584,8 +1600,18 @@
             }
           ]
         },
+        "choices": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "model": {
           "type": "string"
+        },
+        "n": {
+          "description": "Its place in the eval's `questions`, from 1, kept when a profile drops one before it.",
+          "type": "number"
         },
         "question": {
           "type": "string"
@@ -1594,7 +1620,7 @@
           "$ref": "#/$defs/QuestionStateOptions"
         }
       },
-      "required": ["question"]
+      "required": ["n", "question"]
     },
     "PluginMarketplace": {
       "description": "A Claude Code marketplace: the source that holds its `.claude-plugin/marketplace.json`.",
@@ -2199,7 +2225,7 @@
       ]
     },
     "QuestionStateOptions": {
-      "description": "What each side of a compare question shows: the keys of `judge.state` but `contents` (the attempts' workspaces are gone when questions are asked). An unset key keeps its default, which is what a question shows with no `state` at all: the task and the diff.",
+      "description": "What a question is shown of each attempt: the keys of `judge.state` but `contents` (the attempts' workspaces are gone when questions are asked). An unset key keeps its default: a pairwise question shows the task and the diff; one asked of each attempt also shows the final message and the transcript.",
       "type": "object",
       "properties": {
         "checks": {
@@ -2238,7 +2264,7 @@
           "type": "boolean"
         },
         "output": {
-          "description": "The final message: the agent's own account of its work. Default false.",
+          "description": "The final message: the agent's own account of its work. Default false in a pair, true per attempt.",
           "type": "boolean"
         },
         "task": {
@@ -2246,7 +2272,7 @@
           "type": "boolean"
         },
         "transcript": {
-          "description": "The transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses isn't blind. Default false.",
+          "description": "The transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses isn't blind. Default false in a pair, true per attempt.",
           "anyOf": [
             {
               "type": "boolean"

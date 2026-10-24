@@ -6,7 +6,7 @@
 - Gates and lift
 - Effort and contrasts
 - Labelled checks that discriminate
-- `compare.questions`
+- `questions`
 
 ## What `compare` runs
 
@@ -81,57 +81,77 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   (`expect.soft(await c.judge(q), 'Social OAuth').toPass()`): the label replaces the clipped
   question in judge rates, `reeval show`, `summary.md` and the digest.
 
-## `compare.questions`
+## `questions`
 
 ```ts
-compare: {
-  baseline: plain,
-  variants: [houseStyle],
+evaluate('greets in the house style', {
+  compare: { baseline: plain, variants: [houseStyle] },
   questions: [
-    'Which greet.js reads more like our house style?',
-    { question: 'Which sign-in page matches the mock?', artifacts: ['sign-in'] },
+    // asked of each attempt as it ends: free text, or a pick from choices
+    'How did the agent pick its greeting?',
+    { question: 'Does greet.js handle a missing name?', choices: ['yes', 'no'] },
+    // pairwise: which side did better, after the run
+    { question: 'Which greet.js reads more like our house style?', across: 'environment' },
+    {
+      question: 'Which sign-in page matches the mock?',
+      across: 'environment',
+      artifacts: ['sign-in'],
+    },
   ],
-},
+}, async (c) => { … })
 ```
 
-- `compare.questions` (always a list of strings and `{ question, model?, across?, state?, artifacts? }`)
-  asks which side did better, pair by pair, after the run. `across` is the matrix
-  factor you vary when pairing: `'environment'` holds the harness; `'harness'`
-  holds the environment. `compare.across: 'environment'` sets that for every
-  question that does not name its own `across`. Omit it, or pass both, to ask
-  both pair kinds. `--dry-run` shows the pair count. Questions annotate the
-  compare and never gate: pass, fail and the exit code stay the checks'.
-  `reeval analyze` puts each answer in the digest (rates by pair kind, votes,
-  ties, a failed call, a sample of reasons) as annotation, not a results line.
-  The result block prints each side's wins under the question (`with-house-greeting  won 4 of 4`).
-  Each pair is voted in both orders; one whose orders disagree is a split (the
-  position decided). With three arms or more, read `reeval query question_pairs`
-  (head to head, with splits), not the pooled wins, which count a split as a win
-  for each side.
-  A vote may carry a short `reason` (capped); do not gate on its wording. Their
-  model is the entry's `model`, else the cascaded `question.model`, else
-  `analysis.model`, else the run's judge (a profile's included) when
-  it's a language model (not `typesafe-ai/*`); with none, `reeval run` exits 2
-  at plan time while `--dry-run` still lists them. A profile that leaves only
-  the baseline drops them (`questions off (profile …)`). Keep deterministic
-  checks for pass or fail, and ask questions only about quality between sides.
-- Each side of a question shows its task and diff by default. An entry's `state`
-  takes the judge's keys but `contents` (`{ diff: ['src/**'] }`,
+- `questions` sits beside `compare`, on an eval or a group (never the config or a
+  profile), and works without a `compare` too. It's always a list of strings and
+  `{ question, across?, choices?, model?, state?, artifacts? }`. An eval's list
+  replaces its group's. `compare.questions` and `compare.across` are refused
+  with the move to make.
+- **No `across`: asked of each attempt** as it ends with a pass or a fail (infra
+  errors and skipped attempts aren't asked), while the run goes on. `choices`
+  (two or more) makes the model pick one, with a reason; the result block prints
+  the tally (`yes 8 · no 4`), else the first few answers. It shows the task,
+  final message, diff and transcript by default. Answers land on
+  `evals[].attempts[].answers` and in `reeval query attempt_answers` (with the
+  attempt's outcome, `harness`, `environment` and `role`, so you can split
+  answers by harness, arm or pass/fail).
+  Ask these where a control is expected to fail: every attempt is asked.
+- **`across`: pairwise.** `'environment'` pairs two environments on one harness;
+  `'harness'` two harnesses on one environment; a list asks both pair kinds.
+  The factor must vary in the eval (else exit 2); a profile that narrows it away
+  drops the question (`1 pairwise question off (profile …)`). `choices` with
+  `across` exits 2. `--dry-run` shows the pair count. The result block prints
+  each side's wins (`with-house-greeting  won 4 of 4`). Each pair is voted in
+  both orders; one whose orders disagree is a split (the position decided). With
+  three arms or more, read `reeval query question_pairs` (head to head, with
+  splits), not the pooled wins, which count a split as a win for each side. A
+  vote may carry a short `reason` (capped); do not gate on its wording.
+- Questions annotate and never gate: pass, fail and the exit code stay the
+  checks'. `reeval analyze` puts each answer in the digest as annotation, not a
+  results line. Their model is the entry's `model`, else the cascaded
+  `question.model`, else `analysis.model`, else the run's judge (a profile's
+  included) when it's a language model (not `typesafe-ai/*`); with none, `reeval run` exits 2 at plan
+  time while `--dry-run` still lists them. Keep deterministic checks for pass or
+  fail.
+- A pair's sides show their task and diff by default. An entry's `state` takes
+  the judge's keys but `contents` (`{ diff: ['src/**'] }`,
   `{ transcript: 'tools', checks: ['npm test'] }`); keep `output` off for pairwise
   questions, since the more confident summary wins on wording. For UI evals,
-  `artifacts: ['sign-in']` (or `true`) sends each side's own capture of that name
-  as an image. The `question` option (`{ model?, state?, artifacts? }`, config →
-  profile → group → eval → entry, `state` key by key) sets defaults; `judge.state` never reaches
-  questions. A question showing `transcript` across harnesses warns (tool names
-  unblind them): ask it with `across: 'environment'`.
-- Questions are answered on the host once all of an eval's attempts end, from
-  their diffs. Attempts that failed their checks (a judge failure doesn't count)
-  are left out of the pairs: a question on a compare whose baseline is expected
-  to fail gets no pairs, so ask it where both sides can pass. Each pair goes to
-  the model twice, order swapped, labelled A and B; the record's
+  `artifacts: ['sign-in']` (or `true`) sends each attempt's own capture of that
+  name as an image. The `question` option (`{ model?, state?, artifacts? }`,
+  config → profile → group → eval → entry, `state` key by key) sets defaults;
+  `judge.state` never reaches questions. A pairwise question showing
+  `transcript` across harnesses warns (tool names unblind them): ask it with
+  `across: 'environment'`.
+- Pairwise questions are answered on the host once all of an eval's attempts
+  end. Attempts that failed their checks (a judge failure doesn't count) are
+  left out of the pairs: a pairwise question on a compare whose baseline is
+  expected to fail gets no pairs, so ask it of each attempt instead. Each pair
+  goes to the model twice, order swapped, labelled A and B; the record's
   `evals[].answers` has every vote and each side's `wins`/`n` over decided
   votes, per pair kind. A model error is stored on the answer as `error` and
-  warned about; it never changes an outcome. To see why a question picked a
-  side, open its `input` (`<eval-slug>/questions/<n>.json`): each pair and
-  order's masked prompt, which side was A, and refs to the screenshots sent. Test
-  with `fakeAnalysis({ vote: 'A' | 'B' | 'tie' | (pair) => … | { error } })`.
+  warned about; it never changes an outcome. To see what a question was shown,
+  open its `input`: `<eval-slug>/questions/<n>.json` for a pairwise one (each
+  pair and order's masked prompt, which side was A, screenshot refs), or
+  `questions/<n>.json` in the attempt's directory. Test with
+  `fakeAnalysis({ vote: 'A' | 'B' | 'tie' | (pair) => … | { error } })` and
+  `fakeAnalysis({ answer: 'text' | { choice, text } | (q) => … | { error } })`.

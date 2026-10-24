@@ -10,12 +10,15 @@ const divideTest = readFileSync(new URL('./hidden/divide.test.js', import.meta.u
 evaluate(
   'rejects division by zero',
   {
-    compare: {
-      baseline: math,
-      variants: [withErrors],
-      // Asked of every pair of attempts that passed their checks; it never gates.
-      questions: ['Which divide() says more clearly what went wrong when b is 0?'],
-    },
+    compare: { baseline: math, variants: [withErrors] },
+    // across makes it pairwise: asked of every pair of arms whose attempts passed their
+    // checks. It never gates.
+    questions: [
+      {
+        question: 'Which divide() says more clearly what went wrong when b is 0?',
+        across: 'environment',
+      },
+    ],
   },
   async (c) => {
     await c.send('Add a divide(a, b) function to src/math.js. It must throw when b is 0.')

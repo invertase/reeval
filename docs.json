@@ -46,7 +46,7 @@
         { "title": "Evals and checks", "href": "/guide/writing-evals" },
         { "title": "Multi-turn evals", "href": "/guide/multi-turn" },
         { "title": "Compare and lift", "href": "/guide/compare" },
-        { "title": "Compare questions", "href": "/guide/questions" },
+        { "title": "Questions", "href": "/guide/questions" },
         { "title": "Environments and skills", "href": "/guide/environments" }
       ]
     },

@@ -191,20 +191,20 @@ const ran = await c.judge('Did the agent run the tests before finishing?', {
 
 A provider error on a judge call says how big the input was and names its biggest files. See [Provider errors](/reference/judges#provider-errors).
 
-## Compare questions see less
+## Questions see what they're about
 
-| Key | `c.judge` | Compare question, per side |
-|---|---|---|
-| `task` | `true` | `true`, once when both sides share it |
-| `output` | `true` | `false` |
-| `files` | `true` | `false` |
-| `diff` | `true` | `true` |
-| `transcript` | `false` | `false` |
-| `turns` | `'last'` | `'all'` |
-| `checks` | `false` | `false` |
-| `artifacts` | none | none |
+| Key | `c.judge` | Question, per attempt | Question, per side of a pair |
+|---|---|---|---|
+| `task` | `true` | `true` | `true`, once when both sides share it |
+| `output` | `true` | `true` | `false` |
+| `files` | `true` | `false` | `false` |
+| `diff` | `true` | `true` | `true` |
+| `transcript` | `false` | `true` | `false` |
+| `turns` | `'last'` | `'all'` | `'all'` |
+| `checks` | `false` | `false` | `false` |
+| `artifacts` | none | none | none |
 
-A compare question takes the same keys under the [`question`](/reference/options#question) option, with its own defaults. Side by side, the final message is each agent's claim about its work, so the more confident summary would win on wording; the changed files repeat the two diffs. `judge.state` never reaches a question, so a judge default can't change a pair.
+A [question](/guide/questions) takes the same keys under the [`question`](/reference/options#question) option, with its own defaults. Asked of one attempt, it sees the whole conversation and the work, since a question about one attempt is usually about how it went. Side by side, the final message is each agent's claim about its work, so the more confident summary would win on wording; the changed files repeat the two diffs. `judge.state` never reaches a question.
 
 ## Write questions the judge can grade
 

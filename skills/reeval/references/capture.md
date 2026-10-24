@@ -34,5 +34,5 @@ evaluate('builds the sign-in page', async (c) => {
   handles or names, sent as file parts. Ask about facts in the picture, not whether it "looks
   great". Jev (`typesafe-ai/jev-1.14.0`) takes PNG captures; a provider that cannot take files
   fails that call.
-- On a compare question, `artifacts: ['sign-in']` (or `true`) sends each side's own capture of
-  that name as an image (see [compare.md](compare.md)).
+- On a question, `artifacts: ['sign-in']` (or `true`) sends each attempt's own capture of that
+  name as an image (see [compare.md](compare.md)).

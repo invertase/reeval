@@ -25,6 +25,8 @@ config API like any other project.
 | `before-judge-state` | The corpus project's fake-harness runs from before `stack.judge.state` (the config's default of what the judge is given) |
 | `before-question-state` | The corpus project's fake-harness runs from before `evals[].answers[].stateOptions`, `answers[].artifacts` and `votes[].artifacts` (what each side of a compare question shows) |
 | `before-question-input` | The corpus project's fake-harness runs from before `evals[].answers[].input` (what each compare question's model saw, per pair and order) |
+| `before-attempt-answers` | The corpus project's fake-harness runs from before `evals[].attempts[].answers` (per-attempt questions, answered once for each attempt), when questions were set on `compare` |
+| `with-attempt-answers` | The corpus project's fake-harness runs with `questions` at the eval root: pairwise ones (with `across`) on the eval, and `evals[].attempts[].answers` from ones asked of each attempt, with `choices` and in words |
 | `with-plugins` | The fake harness with one local plugin placed: `environments[].plugins` (with `marketplace: null`), a plugin skill's `skills[].plugin`, from before `plugin.marketplace` |
 | `before-run-errors` | The corpus project's fake-harness runs from before `errors` (an error outside any attempt, which fails the run) |
 | `before-proxy-egress` | The corpus project's fake-harness runs from before egress `'proxy'` (the default policy) and `evals[].attempts[].egress.partial` (traffic that went around the gateway under `allow-all`), when `allow-all` was the default |

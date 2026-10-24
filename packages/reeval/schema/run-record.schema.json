@@ -112,6 +112,65 @@
       },
       "required": ["label", "labelled", "matcher", "soft", "status"]
     },
+    "AttemptAnswer": {
+      "description": "A question asked of one attempt on its own, and the model's answer. Never gates.",
+      "type": "object",
+      "properties": {
+        "artifacts": {
+          "description": "The captures it sent, as asked: `true` for all, or their names.",
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "choice": {
+          "description": "One of `choices`; unset on a free-text question and when the call failed.",
+          "type": "string"
+        },
+        "choices": {
+          "description": "The answers it picked from; unset on a free-text question.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "error": {
+          "description": "Why there's no answer: the model call failed. Outcomes never change.",
+          "type": "string"
+        },
+        "input": {
+          "description": "`questions/<n>.json` under the attempt's directory: what the model was sent.",
+          "$ref": "#/$defs/FileRef"
+        },
+        "model": {
+          "description": "`'provider/model'`, or `fake` for `fakeAnalysis()`.",
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "resolvedModel": {
+          "description": "The model id the provider says served the call, when it reports one.",
+          "type": "string"
+        },
+        "stateOptions": {
+          "description": "What the attempt showed, every key resolved.",
+          "$ref": "#/$defs/ResolvedQuestionStateOptions"
+        },
+        "text": {
+          "description": "The model's answer, or its reason for `choice`; capped, and empty when the call failed.",
+          "type": "string"
+        }
+      },
+      "required": ["model", "question", "stateOptions", "text"]
+    },
     "AttemptError": {
       "description": "Why an attempt failed; `prepare` when its sandbox couldn't be prepared, `resource` when it ran out of one.",
       "type": "object",
@@ -223,6 +282,13 @@
             "webFetches",
             "webSearches"
           ]
+        },
+        "answers": {
+          "description": "The eval's questions asked of this attempt on its own (those without `across`), in question order; unset without any. They annotate: `outcome` never depends on them. Asked once the attempt ends, when it ran to a pass or a fail. Each answer's `input` is `questions/<n>.json` in the attempt's directory, `<n>` the question's place in the eval's `questions`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AttemptAnswer"
+          }
         },
         "askedModels": {
           "description": "The models the harness's successful API calls asked for, when nothing named the one that served them (fx on Vercel AI Gateway with a Gemini model): the agent's word, not the gateway's, so never part of `servedModels`. Absent when there's none.",
@@ -810,7 +876,7 @@
       "required": ["error", "fail", "notRun", "pass"]
     },
     "CompareAnswer": {
-      "description": "A compare question's answer: every vote, and each side's wins over decided votes per cut.",
+      "description": "A pairwise question's answer: every vote, and each side's wins over decided votes per cut.",
       "type": "object",
       "properties": {
         "artifacts": {
@@ -1269,7 +1335,7 @@
       "type": "object",
       "properties": {
         "answers": {
-          "description": "The compare's questions, answered after its attempts by pairwise votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, a sample of reasons). Each answer's `input` is `<eval-slug>/questions/<n>.json`: every call its model was sent, per pair and order, secrets masked and screenshots as refs; unset where the eval's files weren't kept.",
+          "description": "The eval's pairwise questions (those with `across`), answered after its attempts by votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, a sample of reasons). Each answer's `input` is `<eval-slug>/questions/<n>.json`: every call its model was sent, per pair and order, secrets masked and screenshots as refs; unset where the eval's files weren't kept.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/CompareAnswer"

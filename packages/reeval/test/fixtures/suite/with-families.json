@@ -1044,12 +1044,14 @@
             "pooled": null,
             "questions": [
               {
+                "kind": "pairs",
                 "question": "Which greeting reads more like our house style?",
                 "votes": 0,
                 "rates": [],
                 "error": null
               },
               {
+                "kind": "pairs",
                 "question": "Which greeting handles a missing name?",
                 "votes": 0,
                 "rates": [],
@@ -1205,6 +1207,7 @@
             "pooled": null,
             "questions": [
               {
+                "kind": "pairs",
                 "question": "Which greeting reads more like our house style?",
                 "votes": 2,
                 "rates": [
@@ -1224,6 +1227,7 @@
                 "error": null
               },
               {
+                "kind": "pairs",
                 "question": "Which greeting handles a missing name?",
                 "votes": 0,
                 "rates": [],

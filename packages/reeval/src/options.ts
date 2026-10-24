@@ -2,12 +2,18 @@
 
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
+import { pairFactors } from './compare/pairs.ts'
 import { mergeQuestion, showsNothing, withQuestionDefaults } from './compare/state.ts'
-import { compareProblem, isEvaluationModel, questionOptionsProblem } from './contract/compare.ts'
+import { compareProblem } from './contract/compare.ts'
 import { sandboxProblem } from './contract/docker.ts'
 import { harnessProblem } from './contract/harness.ts'
 import { judgeProblem } from './contract/judge.ts'
 import { gateProblem } from './contract/plain.ts'
+import {
+  isEvaluationModel,
+  questionOptionsProblem,
+  questionsProblem,
+} from './contract/questions.ts'
 import { closest } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
 import { egressLabel, plannedEgress } from './egress.ts'
@@ -40,7 +46,6 @@ import type {
   Cell,
   CellGate,
   CompareGate,
-  CompareOptions,
   ConfigJudgeOptions,
   Duration,
   EgressPolicy,
@@ -57,6 +62,7 @@ import type {
   PinnableKey,
   PlannedEgress,
   PlannedQuestion,
+  Question,
   QuestionOptions,
   ResolvedProfile,
   SandboxDescriptor,
@@ -76,6 +82,7 @@ export const EVAL_OPTION_KEYS = [
   'judge',
   'capture',
   'question',
+  'questions',
   'timeout',
   'tags',
   'pin',
@@ -291,6 +298,8 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   if (o.capture !== undefined) checkCapture(o.capture, where)
   const questionIssue = o.question !== undefined && questionOptionsProblem(o.question, where)
   if (questionIssue) throw new UsageError(questionIssue)
+  const questionsIssue = o.questions !== undefined && questionsProblem(o.questions, where)
+  if (questionsIssue) throw new UsageError(questionsIssue)
 }
 
 const CAPTURE_KEYS = ['viewport', 'timeout', 'browser', 'model']
@@ -483,38 +492,35 @@ export type NormalizedCompare = {
   harness?: string[]
   /** How many variants the eval asked for, before a profile's limit. */
   of: number
-  /** Asked after the run; empty without any, or once a limit leaves one arm. */
-  questions: PlannedQuestion[]
 }
 
-/** A question's own `across`, else the one `compare.across` names when it names exactly one. */
-const plannedAcross = (
-  own: PairFactor | undefined,
-  compare: PairFactor | PairFactor[] | undefined,
-): PairFactor | undefined => {
-  if (own) return own
-  const list = compare === undefined ? undefined : Array.isArray(compare) ? compare : [compare]
-  return list?.length === 1 ? list[0] : undefined
-}
+const plannedQuestions = (value: Question[]): PlannedQuestion[] =>
+  value.map((q, i) =>
+    typeof q === 'string'
+      ? { n: i + 1, question: q }
+      : {
+          n: i + 1,
+          question: q.question,
+          ...(q.model !== undefined ? { model: q.model } : {}),
+          ...(q.across !== undefined ? { across: q.across } : {}),
+          ...(q.choices ? { choices: q.choices } : {}),
+          ...(q.state ? { state: q.state } : {}),
+          ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
+        },
+  )
 
-const plannedQuestions = (
-  value: CompareOptions['questions'],
-  compareAcross?: PairFactor | PairFactor[],
-): PlannedQuestion[] =>
-  (value ?? []).map((q) => {
-    if (typeof q === 'string') {
-      const across = plannedAcross(undefined, compareAcross)
-      return across ? { question: q, across } : { question: q }
-    }
-    const across = plannedAcross(q.across, compareAcross)
-    return {
-      question: q.question,
-      ...(q.model !== undefined ? { model: q.model } : {}),
-      ...(across ? { across } : {}),
-      ...(q.state ? { state: q.state } : {}),
-      ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
-    }
-  })
+/** Whether the eval's matrix varies each factor a pairwise question can vary. */
+const variesBy = (r: Resolved): Record<PairFactor, boolean> => ({
+  environment: (r.compare?.variants.length ?? 0) > 0,
+  harness: r.harness.length > 1,
+})
+
+const FACTOR_FIX: Record<PairFactor, (r: Resolved, where: string) => string> = {
+  environment: (_, where) =>
+    `varies the environment (across: 'environment'), but ${where} runs one environment, so it has no pairs to ask. Add compare: { variants: [...] }`,
+  harness: (r, where) =>
+    `varies the harness (across: 'harness'), but ${where} runs one harness (${r.harness.map(harnessId).join(', ')}), so it has no pairs to ask. Run it on two or more, harness: [a, b]`,
+}
 
 export type Resolved = {
   harness: HarnessDescriptor[]
@@ -529,8 +535,10 @@ export type Resolved = {
   egress: { inherited?: EgressPolicy; own?: EgressPolicy }
   judge: JudgeOptions
   capture: CaptureOptions
-  /** Defaults for every compare question; applied to the compare's own once the cascade ends. */
+  /** Defaults for every question; applied to the questions once the cascade ends. */
   question: QuestionOptions
+  /** Asked after the attempts; empty without any, or once a profile's limit leaves nothing to pair. */
+  questions: PlannedQuestion[]
   timeout: Duration | undefined
   tags: string[]
   pin: PinnableKey[]
@@ -552,7 +560,6 @@ function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | un
       ? { harness: value.harness.map((h) => (typeof h === 'string' ? h : harnessId(h))) }
       : {}),
     of: value.variants.length,
-    questions: plannedQuestions(value.questions, value.across),
   }
 }
 
@@ -581,6 +588,7 @@ function applyLevel(
     if (viewport !== undefined) out.capture.viewport = viewport
   }
   out.question = mergeQuestion(out.question, options.question)
+  if (options.questions !== undefined) out.questions = plannedQuestions(options.questions)
   for (const tag of options.tags ?? []) if (!out.tags.includes(tag)) out.tags.push(tag)
   for (const key of options.pin ?? []) if (!out.pin.includes(key)) out.pin.push(key)
 }
@@ -605,7 +613,7 @@ export function cascade(
   base: Resolved,
   levels: Level[],
   where: string,
-  options: { profile?: ResolvedProfile | null; runs?: number } = {},
+  options: { profile?: ResolvedProfile | null; runs?: number; skipped?: boolean } = {},
 ): ResolvedEval {
   const out: Resolved = {
     ...base,
@@ -614,6 +622,7 @@ export function cascade(
     judge: { ...base.judge },
     capture: { ...base.capture },
     question: { ...base.question },
+    questions: [...base.questions],
     tags: [...base.tags],
     pin: [...base.pin],
   }
@@ -631,17 +640,31 @@ export function cascade(
   if (out.compare?.from && out.environment) {
     out.compare = { ...out.compare, baseline: out.environment, from: 'environment' }
   }
-  if (out.compare?.questions.length) {
-    const questions = out.compare.questions.map((q) => withQuestionDefaults(q, out.question))
-    const blank = questions.find(showsNothing)
+  if (out.questions.length) {
+    out.questions = out.questions.map((q) => withQuestionDefaults(q, out.question))
+    const blank = out.questions.find(showsNothing)
     if (blank) {
       throw new UsageError(
-        `compare.questions "${blank.question}" in ${where} shows the model nothing: every state key is off and it sends no artifacts. Turn on a state key, such as state: { diff: true }, or send artifacts.`,
+        `questions "${blank.question}" in ${where} shows the model nothing: every state key is off and it sends no artifacts. Turn on a state key, such as state: { diff: true }, or send artifacts.`,
       )
     }
-    out.compare = { ...out.compare, questions }
   }
   checkUnique(out.harness, where)
+  // A harness list only a profile's defaults set may narrow the config's, which drops a question
+  // below rather than refusing it; neither list varying the harness is the eval's mistake.
+  const harnessFromProfile =
+    profile?.defaults.harness !== undefined && !levels.some((l) => l.options.harness)
+  const authored = variesBy(out)
+  if (harnessFromProfile) authored.harness ||= base.harness.length > 1
+  // A skipped eval asks nothing, so a pairwise question it inherits needs no factor to vary.
+  for (const q of options.skipped ? [] : out.questions) {
+    for (const factor of pairFactors(q.across)) {
+      if (authored[factor]) continue
+      throw new UsageError(
+        `questions "${q.question}" in ${where} ${FACTOR_FIX[factor](out, where)}, or leave out across to ask each attempt on its own.`,
+      )
+    }
+  }
   if (profile?.defaults.harness !== undefined && levels.some((l) => l.options.harness)) {
     notes.push('harness set by the eval')
   }
@@ -716,16 +739,31 @@ export function cascade(
           variants: out.compare.variants.slice(0, limit.compare.maxVariants),
         }
       }
-      // A question compares arms, so with the baseline alone there is nothing to ask it of.
-      if (out.compare.variants.length === 0 && out.compare.questions.length) {
-        notes.push(`questions off (${tag})`)
-        out.compare = { ...out.compare, questions: [] }
-      }
     }
     const pins = out.pin.filter((k) =>
       k === 'compare' ? limit.compare !== undefined && out.compare : limit[k] !== undefined,
     )
     if (pins.length) notes.push(`pinned: ${pins.join(', ')}`)
+  }
+  if (profile) {
+    // A pairwise question needs two attempts that differ in a factor it varies, which the
+    // profile's defaults or limit may have narrowed away.
+    // One that varies several keeps those still varied, so the plan names the pairs it asks.
+    const varies = variesBy(out)
+    let narrowed = 0
+    const kept = out.questions.flatMap((q) => {
+      if (q.across === undefined) return [q]
+      const factors = pairFactors(q.across).filter((f) => varies[f])
+      if (!factors.length) return []
+      if (factors.length === pairFactors(q.across).length) return [q]
+      narrowed++
+      return [{ ...q, across: factors }]
+    })
+    const plural = (n: number) => `${n} pairwise ${n === 1 ? 'question' : 'questions'}`
+    const off = out.questions.length - kept.length
+    if (off) notes.push(`${plural(off)} off (profile ${profile.name})`)
+    if (narrowed) notes.push(`${plural(narrowed)} narrowed (profile ${profile.name})`)
+    out.questions = kept
   }
   if (options.runs !== undefined) out.runs = options.runs
   return { resolved: out, notes, ...(skip ? { skip } : {}) }
@@ -1038,9 +1076,7 @@ export function evalPlan(
           },
         }
       : {}),
-    ...(!skip && resolved.compare?.questions.length
-      ? { questions: resolved.compare.questions }
-      : {}),
+    ...(!skip && resolved.questions.length ? { questions: resolved.questions } : {}),
     runs: resolved.runs,
     ...(resolved.gate !== undefined ? { gate: resolved.gate } : {}),
     attempts: skip ? 0 : attempts.length,
@@ -1066,15 +1102,14 @@ export function evalPlan(
   }
 }
 
-/** A question that shows each side's transcript, asked of two harnesses: tool names unblind it. */
+/** A pairwise question that shows each side's transcript, asked of two harnesses: tool names unblind it. */
 function questionWarnings(resolved: Resolved): string[] {
-  const { compare } = resolved
-  if (!compare || resolved.harness.length < 2) return []
-  return compare.questions
-    .filter((q) => q.across !== 'environment' && q.state?.transcript)
+  if (resolved.harness.length < 2) return []
+  return resolved.questions
+    .filter((q) => pairFactors(q.across).includes('harness') && q.state?.transcript)
     .map(
       (q) =>
-        `compare question "${q.question}" shows state.transcript, which names each harness's tools, so its harness pairs aren't blind. Ask it with across: 'environment', or leave the transcript out.`,
+        `question "${q.question}" shows state.transcript, which names each harness's tools, so its harness pairs aren't blind. Ask it with across: 'environment', or leave the transcript out.`,
     )
 }
 

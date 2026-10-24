@@ -1,5 +1,5 @@
 // The run's plan: what it will start, how long that should take, and whether it fits the budget.
-import { acrossOf, type PairAttempt, pairsOf, plannedSides } from './compare/pairs.ts'
+import { acrossOf, type PairAttempt, pairFactors, pairsOf, plannedSides } from './compare/pairs.ts'
 import { questionShows, resolveQuestionState } from './compare/state.ts'
 import { type CostedAttempt, type PlanCost, planCost } from './cost.ts'
 import type { ExcludedEval, PlannedItem } from './engine/node.ts'
@@ -70,7 +70,7 @@ export type RunPlan = {
   harnessDescriptors: HarnessDescriptor[]
   /** The harness ids the planned attempts run on, for the run header. */
   harnesses: string[]
-  /** The model that answers a compare question naming none; null when there's no language model. */
+  /** The model that answers a question naming none; null when there's no language model. */
   questionModel: string | null
   /** The insights `reeval run` asks for after its attempts; null when it asks for none. */
   insights: PlanInsights | null
@@ -247,36 +247,56 @@ export type PlanQuestion = {
   question: string
   /** Its own model, else the plan's question model; null when there's no language model. */
   model: string | null
-  /** The factor it varies; unset when both pair kinds run (the default). */
-  across?: PairFactor
-  /** Pairs it will ask, assuming every attempt passes its checks. */
-  pairs: number
+  /** The factors its pairs vary; unset when it's asked of each attempt on its own. */
+  across?: PairFactor[]
+  /** A pairwise question's pairs, assuming every attempt passes its checks. */
+  pairs?: number
+  /** A per-attempt question's attempts, assuming every attempt runs to a pass or a fail. */
+  attempts?: number
+  /** The answers a per-attempt question picks from; unset for a free-text answer. */
+  choices?: string[]
   /** The parts each side shows: its `state` keys that are on, then `artifacts` when it sends captures. */
   shows: string[]
 }
 
-/** `environment · 2 pairs` when it varies one factor; `4 pairs` when it asks both. */
-export const questionPairLabel = (q: Pick<PlanQuestion, 'across' | 'pairs'>): string => {
-  const n = `${q.pairs} ${q.pairs === 1 ? 'pair' : 'pairs'}`
-  return q.across ? `${q.across} · ${n}` : n
+const count = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`
+
+/**
+ * `environment · 2 pairs` for a pairwise question, `each attempt · 4 attempts · yes / no` for
+ * one asked of each attempt on its own.
+ */
+export const questionPairLabel = (
+  q: Pick<PlanQuestion, 'across' | 'pairs' | 'attempts' | 'choices'>,
+): string => {
+  if (q.across) return `${q.across.join(', ')} · ${count(q.pairs ?? 0, 'pair')}`
+  const choices = q.choices ? ` · ${q.choices.join(' / ')}` : ''
+  return `each attempt · ${count(q.attempts ?? 0, 'attempt')}${choices}`
 }
 
-/** An eval's compare questions, each with the model that will answer it and its pair count. */
+/** An eval's questions, each with the model that will answer it and how many times it's asked. */
 export const planQuestions = (
   questions: PlannedQuestion[] | undefined,
   sides: PairAttempt[],
   questionModel: string | null,
   skip?: string,
 ): PlanQuestion[] =>
-  (skip ? [] : (questions ?? [])).map((q) => ({
-    question: q.question,
-    model: q.model ?? questionModel,
-    ...(q.across ? { across: q.across } : {}),
-    pairs: pairsOf(sides, acrossOf(q.across)).length,
-    shows: questionShows(resolveQuestionState(q.state), q.artifacts),
-  }))
+  (skip ? [] : (questions ?? [])).map((q) => {
+    const pairwise = q.across !== undefined
+    return {
+      question: q.question,
+      model: q.model ?? questionModel,
+      ...(q.across !== undefined
+        ? { across: pairFactors(q.across), pairs: pairsOf(sides, acrossOf(q.across)).length }
+        : { attempts: sides.length }),
+      ...(q.choices ? { choices: q.choices } : {}),
+      shows: questionShows(resolveQuestionState(q.state, pairwise), q.artifacts),
+    }
+  })
 
-/** `  question 1/2  Which is cleaner? · after the run · 4 pairs · google/gemini-3.8-flash` */
+/**
+ * `  question 1/2  Which is cleaner? · after the run · … · environment · 4 pairs · …`, or
+ * `· after each attempt · … · each attempt · 4 attempts · …` for one asked of each attempt.
+ */
 function questionLines(members: PlanRow[], questionModel: string | null): string[] {
   const [first] = members
   if (!first) return []
@@ -285,11 +305,13 @@ function questionLines(members: PlanRow[], questionModel: string | null): string
   )
   const questions = (asked[0] ?? []).map((q, i) => ({
     ...q,
-    pairs: asked.reduce((sum, list) => sum + (list[i]?.pairs ?? 0), 0),
+    ...(q.across
+      ? { pairs: asked.reduce((sum, list) => sum + (list[i]?.pairs ?? 0), 0) }
+      : { attempts: asked.reduce((sum, list) => sum + (list[i]?.attempts ?? 0), 0) }),
   }))
   return questions.map(
     (q, i) =>
-      `  question ${i + 1}/${questions.length}  ${clip(q.question, 80)} · after the run · shows ${q.shows.join(', ')} · ${questionPairLabel(q)} · ${q.model ?? 'needs a language model: set analysis.model'}`,
+      `  question ${i + 1}/${questions.length}  ${clip(q.question, 80)} · ${q.across ? 'after the run' : 'after each attempt'} · shows ${q.shows.join(', ')} · ${questionPairLabel(q)} · ${q.model ?? 'needs a language model: set analysis.model'}`,
   )
 }
 
@@ -453,7 +475,7 @@ export type PlanEval = {
   skip: string | null
   notes: string[]
   cells: PlanCell[]
-  /** The compare's questions, answered after the run; unset without any. */
+  /** Its questions: pairwise ones answered after the run, the rest after each attempt; unset without any. */
   questions?: PlanQuestion[]
   /** Set on each case of a pooled `evaluate.each`. */
   family?: FamilyMeta

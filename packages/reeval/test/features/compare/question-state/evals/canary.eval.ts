@@ -5,16 +5,14 @@ import { baseline, variant } from './env.ts'
 evaluate(
   'canary',
   {
-    compare: {
-      baseline,
-      variants: [variant],
-      questions: [
-        {
-          question: 'Which reply is clearer?',
-          state: { diff: false, output: true, turns: 'last', checks: ['cat out.txt'] },
-        },
-      ],
-    },
+    compare: { baseline, variants: [variant] },
+    questions: [
+      {
+        question: 'Which reply is clearer?',
+        across: 'environment',
+        state: { diff: false, output: true, turns: 'last', checks: ['cat out.txt'] },
+      },
+    ],
   },
   async (c) => {
     await c.send('first turn')

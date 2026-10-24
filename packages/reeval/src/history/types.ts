@@ -1,5 +1,6 @@
 import type {
   AssertionRecord,
+  AttemptAnswer,
   AttemptError,
   AttemptImage,
   Cell,
@@ -235,6 +236,13 @@ export type AttemptRecord = {
   /** Files under a dependency directory (node_modules/, .venv/, …) collapse to one entry with `count`. */
   changedFiles: Array<FileChange & { count?: number }>
   files: AttemptFiles
+  /**
+   * The eval's questions asked of this attempt on its own (those without `across`), in question
+   * order; unset without any. They annotate: `outcome` never depends on them. Asked once the
+   * attempt ends, when it ran to a pass or a fail. Each answer's `input` is `questions/<n>.json`
+   * in the attempt's directory, `<n>` the question's place in the eval's `questions`.
+   */
+  answers?: AttemptAnswer[]
 }
 
 export type EvalEntry = {
@@ -267,8 +275,8 @@ export type EvalEntry = {
   cells: CellRecord[]
   attempts: AttemptRecord[]
   /**
-   * The compare's questions, answered after its attempts by pairwise votes, one per question;
-   * unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote
+   * The eval's pairwise questions (those with `across`), answered after its attempts by votes,
+   * one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote
    * may include a short `reason` (capped). `reeval analyze` includes each answer in the digest
    * (rates by cut, votes, ties, a failed call, a sample of reasons). Each answer's `input` is
    * `<eval-slug>/questions/<n>.json`: every call its model was sent, per pair and order, secrets

@@ -24,6 +24,7 @@ export const EVAL_OPTION_SPECS: EvalOptionSpec[] = [
   { key: 'egress', featureId: 'egress', plan: true, refusals: true },
   { key: 'judge', featureId: 'judge', refusals: true },
   { key: 'capture', featureId: 'ui.capture', plan: true },
+  { key: 'questions', featureId: 'compare.questions', plan: true, refusals: true },
   { key: 'question', featureId: 'compare.questions.state', plan: true, refusals: true },
   { key: 'question.model', featureId: 'compare.questions.state', plan: true, refusals: true },
   { key: 'timeout', featureId: 'cancel' },

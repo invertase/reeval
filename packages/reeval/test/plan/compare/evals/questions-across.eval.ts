@@ -4,40 +4,29 @@ import { base, skilled } from './envs.ts'
 evaluate(
   'environment only',
   {
-    compare: {
-      baseline: base,
-      variants: [skilled],
-      questions: [{ question: 'Which handles state more cleanly?', across: 'environment' }],
-    },
+    compare: { baseline: base, variants: [skilled] },
+    questions: [{ question: 'Which handles state more cleanly?', across: 'environment' }],
   },
   async () => {},
 )
 evaluate(
-  'harness from compare.across',
+  'harness only',
   {
-    compare: {
-      baseline: base,
-      variants: [skilled],
-      across: 'harness',
-      questions: ['Which agent is clearer?'],
-    },
+    compare: { baseline: base, variants: [skilled] },
+    questions: [{ question: 'Which agent is clearer?', across: 'harness' }],
   },
   async () => {},
 )
 evaluate(
-  'question across overrides compare.across',
+  'both factors',
   {
-    compare: {
-      baseline: base,
-      variants: [skilled],
-      across: ['harness'],
-      questions: [
-        {
-          question: 'Which follows the house style more closely?',
-          across: 'environment',
-        },
-      ],
-    },
+    compare: { baseline: base, variants: [skilled] },
+    questions: [
+      {
+        question: 'Which follows the house style more closely?',
+        across: ['environment', 'harness'],
+      },
+    ],
   },
   async () => {},
 )

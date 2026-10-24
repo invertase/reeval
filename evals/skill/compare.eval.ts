@@ -6,7 +6,7 @@ const task =
   PREAMBLE +
   'evals/landing.eval.ts builds a landing page and screenshots it as `home`. Turn it into a ' +
   'skill comparison: the control has no skill, the variant gets the design skill in ' +
-  'skills/design, 2 runs per cell. Add a compare question asking which landing page follows ' +
+  "skills/design, 2 runs per cell. Add a question asking which arm's landing page follows " +
   "the design guidelines more closely, and let the question see each side's `home` " +
   'screenshot. Keep the existing checks. `npx reeval run --dry-run` must plan it and it must ' +
   "typecheck with `npx tsc -p .`; you don't need to run it."
@@ -26,6 +26,7 @@ group(
       expect.soft(roles, 'a control and a variant').toEqual(['control', 'variant'])
       const question = plan?.evals[0]?.questions?.[0]
       expect.soft(question?.question ?? '', 'asks a compare question').toMatch(/design/i)
+      expect.soft(question?.across ?? [], 'pairs the two arms').toContain('environment')
       const source = (await c.readFile('evals/landing.eval.ts')) ?? ''
       expect.soft(question?.shows ?? [], 'the question sees screenshots').toContain('artifacts')
       expect.soft(source, 'the home screenshot').toMatch(/artifacts:\s*(\[\s*['"`]home['"`]|true)/)

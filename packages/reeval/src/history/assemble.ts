@@ -1,6 +1,12 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { AskedCall, AskedQuestion } from '../compare/questions.ts'
+import type {
+  AskedAttemptAnswer,
+  AskedCall,
+  AskedQuestion,
+  AskedScreenshot,
+  SettledQuestions,
+} from '../compare/questions.ts'
 import { resolveQuestionState } from '../compare/state.ts'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
 import { NO_ENVIRONMENT, profileSandbox } from '../environment.ts'
@@ -18,6 +24,8 @@ import { isCompletedAttempt, previousAttempt } from '../resume.ts'
 import { containsZero, liftInterval, round3 } from '../stats.ts'
 import { formatDuration } from '../text.ts'
 import type {
+  AttemptAnswer,
+  AttemptQuestionInput,
   Cell,
   CellGate,
   EnvironmentRecord,
@@ -117,8 +125,8 @@ export type AssembleInput = {
   worktreePatch: Buffer | null
   lockfiles: RunRecord['dependencies']['lockfiles']
   runner: RunnerInfo
-  /** Each eval's compare questions, answered after its attempts, by eval id. */
-  answers?: Map<string, AskedQuestion[]>
+  /** Each eval's pairwise answers by eval id, and each attempt's own answers by its key. */
+  answers?: SettledQuestions
 }
 
 export type AssembledRun = {
@@ -220,31 +228,53 @@ class Artifacts {
   }
 }
 
+/** A screenshot with its attempt's id resolved to the capture's path in the record. */
+function screenshotRef(s: AskedScreenshot, byId: Map<string, AttemptRecord>): QuestionScreenshot {
+  if ('missing' in s) return s
+  const { attempt, ...shot } = s
+  const ref = byId.get(attempt)?.files.artifacts?.find((a) => a.name === s.name)
+  return ref ? { ...shot, path: ref.path } : shot
+}
+
 /** The answer, with what its model was sent saved as `questions/<n>.json` beside the eval's attempts. */
-function withInput(e: EvalEntry, { answer, calls }: AskedQuestion, n: number, out: Artifacts) {
+function withInput(e: EvalEntry, { n, answer, calls }: AskedQuestion, out: Artifacts) {
   if (!calls.length) return answer
   const byId = new Map(e.attempts.map((a) => [a.id, a]))
   const call = ({ screenshots, ...rest }: AskedCall): QuestionCall => ({
     ...rest,
-    ...(screenshots
-      ? {
-          screenshots: screenshots.map((s): QuestionScreenshot => {
-            if ('missing' in s) return s
-            const { attempt, ...shot } = s
-            const ref = byId.get(attempt)?.files.artifacts?.find((a) => a.name === s.name)
-            return ref ? { ...shot, path: ref.path } : shot
-          }),
-        }
-      : {}),
+    ...(screenshots ? { screenshots: screenshots.map((s) => screenshotRef(s, byId)) } : {}),
   })
   const doc: QuestionInput = {
     question: answer.question,
     model: answer.model,
-    stateOptions: answer.stateOptions ?? resolveQuestionState(undefined),
+    stateOptions: answer.stateOptions ?? resolveQuestionState(undefined, true),
     ...(answer.artifacts !== undefined ? { artifacts: answer.artifacts } : {}),
     calls: calls.map(call),
   }
   return { ...answer, input: out.json(`${e.slug}/questions/${n}.json`, doc) }
+}
+
+/** An attempt's own answer, with what its model was sent saved as `questions/<n>.json` in its directory. */
+function withAttemptInput(
+  e: EvalEntry,
+  a: AttemptRecord,
+  { n, answer, call }: AskedAttemptAnswer,
+  out: Artifacts,
+): AttemptAnswer {
+  if (!call) return answer
+  const { screenshots, ...rest } = call
+  const byId = new Map([[a.id, a]])
+  const doc: AttemptQuestionInput = {
+    question: answer.question,
+    model: answer.model,
+    stateOptions: answer.stateOptions,
+    ...(answer.artifacts !== undefined ? { artifacts: answer.artifacts } : {}),
+    ...(answer.choices ? { choices: answer.choices } : {}),
+    ...rest,
+    ...(screenshots ? { screenshots: screenshots.map((s) => screenshotRef(s, byId)) } : {}),
+  }
+  const dir = `${e.slug}/${evalSlug(a.cell)}/${a.n}`
+  return { ...answer, input: out.json(`${dir}/questions/${n}.json`, doc) }
 }
 
 const endOf = (startedAt: string, durationMs: number) =>
@@ -589,11 +619,16 @@ async function addPreviousAttempt(
       log: c.log ? await copyRef(c.log, previousArtifacts, out) : c.log,
     })
   }
+  const answers = []
+  for (const q of kept.answers ?? []) {
+    answers.push(q.input ? { ...q, input: await copyRef(q.input, previousArtifacts, out) } : q)
+  }
   entry.attempts.push({
     ...kept,
     seq: null,
     files,
     checks,
+    ...(answers.length ? { answers } : {}),
   })
   if (!cellRecord.fingerprint && kept.outcome !== 'skipped') {
     const parts: FingerprintParts = {
@@ -1061,8 +1096,12 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const families = familiesOf(evals, (cell) => minLifts.get(cell))
   sequence(evals)
   for (const e of evals) {
-    const asked = input.answers?.get(e.id)
-    if (asked?.length) e.answers = asked.map((q, i) => withInput(e, q, i + 1, out))
+    const asked = input.answers?.evals.get(e.id)
+    if (asked?.length) e.answers = asked.map((q) => withInput(e, q, out))
+    for (const a of e.attempts) {
+      const own = input.answers?.attempts.get(a.key)
+      if (own?.length) a.answers = own.map((q) => withAttemptInput(e, a, q, out))
+    }
   }
 
   const attempts = evals.flatMap((e) => e.attempts)

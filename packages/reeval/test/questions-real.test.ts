@@ -1,6 +1,6 @@
-// Compare questions and the analyst on a real model, nightly (real.yml's `real agents (Cursor)` job,
+// Questions and the analyst on a real model, nightly (real.yml's `real agents (Cursor)` job,
 // never on PRs): test/real-agents' `questions` profile, under reeval.analysis.config.ts, runs 4 real
-// attempts on Cursor and pi; google/gemini-3.8-flash answers its question and writes the run's
+// attempts on Cursor and pi; google/gemini-3.8-flash answers its questions and writes the run's
 // insights. Checks structure only, never the model's wording,
 // and never retries. Skipped unless REEVAL_TEST_REAL=1.
 import assert from 'node:assert/strict'
@@ -86,6 +86,16 @@ test('test/real-agents --profile questions: every pair is voted in both orders; 
     )
   }
   assert.deepEqual(answer.rates, ratesOf(answer.votes), 'rates are wins over decided votes')
+
+  // The per-attempt question: one answer from its choices on every attempt that passed or failed.
+  for (const a of e.attempts.filter((x) => x.outcome === 'pass' || x.outcome === 'fail')) {
+    const [asked] = a.answers ?? []
+    assert.ok(asked, `${a.id} has an answer`)
+    assert.ok(fits(doc, { $ref: '#/$defs/AttemptAnswer' }, asked), 'it fits AttemptAnswer')
+    assert.equal(asked.error, undefined, `the model call failed on ${a.id}: ${asked.error}`)
+    assert.ok(['yes', 'no'].includes(asked.choice ?? ''), `${a.id} picked ${asked.choice}`)
+    assert.ok(asked.text.length > 0, `${a.id}'s answer has a reason`)
+  }
 
   // Position bias: in a pair both of whose votes decided, the first slot winning twice means a
   // different winner each time. It fails only when every such pair went the same slot's way.

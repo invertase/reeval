@@ -2,12 +2,6 @@
 // each a Zod schema that validates it, describes it and gives its JSON Schema.
 import type { z } from 'zod'
 import {
-  compareQuestionSchema,
-  pairFactorSchema,
-  questionOptionsSchema,
-  questionStateSchema,
-} from './compare.ts'
-import {
   analysisConfigDataSchema,
   budgetSchema,
   captureOptionsSchema,
@@ -76,6 +70,12 @@ import {
   skillSourceSchema,
   substituteInSchema,
 } from './plain.ts'
+import {
+  pairFactorSchema,
+  questionOptionsSchema,
+  questionSchema,
+  questionStateSchema,
+} from './questions.ts'
 import { durationSchema, jsonValueSchema } from './shared.ts'
 
 /**
@@ -106,7 +106,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   VercelGatewayDescriptor: vercelGatewaySchema,
   GatewayEntryData: gatewayEntryDataSchema,
   JudgeStateOptions: judgeStateSchema,
-  CompareQuestion: compareQuestionSchema,
+  Question: questionSchema,
   QuestionStateOptions: questionStateSchema,
   QuestionOptions: questionOptionsSchema,
   PairFactor: pairFactorSchema,

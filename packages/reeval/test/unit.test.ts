@@ -1479,6 +1479,8 @@ const base: Resolved = {
   egress: {},
   judge: {},
   capture: {},
+  question: {},
+  questions: [],
   timeout: undefined,
   tags: [],
   pin: [],

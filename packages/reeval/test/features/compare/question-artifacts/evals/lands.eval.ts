@@ -5,11 +5,10 @@ import { baseline, variant } from './env.ts'
 evaluate(
   'lands',
   {
-    compare: {
-      baseline,
-      variants: [variant],
-      questions: [{ question: 'Which page looks better?', artifacts: ['landing'] }],
-    },
+    compare: { baseline, variants: [variant] },
+    questions: [
+      { question: 'Which page looks better?', across: 'environment', artifacts: ['landing'] },
+    ],
   },
   async (c) => {
     await c.send('write the page')

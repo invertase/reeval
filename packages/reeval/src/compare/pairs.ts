@@ -1,4 +1,4 @@
-// Pairs for compare questions, as pure data: which attempts are judged against which, the order
+// Pairs for pairwise questions, as pure data: which attempts are judged against which, the order
 // each is shown in, and how the blinded picks map back to names and win rates. A run's staging
 // records and recorded runs both feed it.
 import { clip } from '../text.ts'
@@ -16,7 +16,7 @@ import type {
 /** One turn of a side: its prompt, final message and transcript, when the record has them. */
 export type PairTurn = { prompt: string; text?: string; transcript?: readonly TranscriptEvent[] }
 
-/** One attempt, as a compare question sees it. */
+/** One attempt, as a question sees it. */
 export type PairAttempt = {
   /** The harness id, e.g. `cursor:composer-2.5`. */
   harness: string
@@ -72,14 +72,17 @@ const distinct = (values: string[]) => [...new Set(values)]
 /** Both pair kinds, in the order `pairsOf` builds them. */
 export const ALL_CUTS: CompareCut[] = ['within', 'across']
 
+/** A question's `across` as a list: empty when it's asked of each attempt on its own. */
+export const pairFactors = (across?: PairFactor | readonly PairFactor[]): PairFactor[] =>
+  across === undefined ? [] : typeof across === 'string' ? [across] : [...across]
+
 /**
- * The pair kinds a question asks: `environment` varies the environment and holds the harness
- * (`within`); `harness` varies the harness and holds the environment (`across`). Unset, both.
+ * The pair kinds a pairwise question asks: `environment` varies the environment and holds the
+ * harness (`within`); `harness` varies the harness and holds the environment (`across`).
  */
-export const acrossOf = (across?: PairFactor): CompareCut[] => {
-  if (across === 'environment') return ['within']
-  if (across === 'harness') return ['across']
-  return ALL_CUTS
+export const acrossOf = (across: PairFactor | readonly PairFactor[]): CompareCut[] => {
+  const factors = pairFactors(across)
+  return ALL_CUTS.filter((cut) => factors.includes(cut === 'within' ? 'environment' : 'harness'))
 }
 
 /**

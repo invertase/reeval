@@ -1717,7 +1717,7 @@ export const skilled = defineEnvironment('skilled', { sandbox: fakeSandbox() })
 `,
       'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-evaluate('asks', { runs: 4, compare: { baseline: base, variants: [skilled], questions: ['Which is cleaner?', 'Which is shorter?'] } }, async (c) => {
+evaluate('asks', { runs: 4, compare: { baseline: base, variants: [skilled] }, questions: [{ question: 'Which is cleaner?', across: 'environment' }, { question: 'Which is shorter?', across: 'environment' }] }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })

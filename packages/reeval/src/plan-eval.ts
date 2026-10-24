@@ -104,6 +104,7 @@ function configLevel(config: ResolvedConfig): Resolved {
     judge: config.judge,
     capture: config.capture,
     question: config.question,
+    questions: [],
     timeout: undefined,
     tags: [],
     pin: [],
@@ -127,6 +128,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
   const resolvedEval = cascade(configLevel(ctx.config), levels, where, {
     profile: ctx.profile,
     runs: ctx.runs,
+    skipped: mode === 'skip' || mode === 'todo',
   })
   const { resolved } = resolvedEval
   if (!matchesTags(resolved.tags, ctx.tags)) return null

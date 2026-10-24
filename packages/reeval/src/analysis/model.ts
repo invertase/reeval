@@ -58,8 +58,8 @@ export function analysisModelName(config: ResolvedConfig): string | FakeAnalysis
 }
 
 /**
- * The plan's name for the model a compare question without its own is answered by; null when
- * none. `judge` is the run's judge model.
+ * The plan's name for the model a question without its own is answered by; null when none.
+ * `judge` is the run's judge model.
  */
 export function questionModelLabel(
   config: ResolvedConfig,
@@ -71,26 +71,27 @@ export function questionModelLabel(
 }
 
 /**
- * The model that answers a compare question: its own, else the fallback, with `judge` the run's
- * judge model. Throws a UsageError (exit 2) when that's missing or an evaluation model.
+ * The model that answers a question: its own, else the fallback, with `judge` the run's judge
+ * model. Throws a UsageError (exit 2) when that's missing or an evaluation model.
  */
 export function questionModel(
   config: ResolvedConfig,
-  question: { question: string; model?: string },
+  question: { question: string; model?: string; across?: unknown },
   where: string,
   judge: JudgeModel | undefined = config.judge.model,
 ): string | FakeAnalysisModel {
   if (question.model !== undefined) return question.model
+  const task = question.across !== undefined ? 'pick between two attempts' : 'answer in words'
   const model = fallbackModel(config, judge)
   const fix = `give the question its own, { question: '…', model: 'google/gemini-3.8-flash' }, or set question: { model } on its group or eval`
   if (model === undefined) {
     throw new UsageError(
-      `compare.questions "${question.question}" (${where}) needs a language model to answer it. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(judge, 'pick between two attempts')}, or ${fix}.`,
+      `questions "${question.question}" (${where}) needs a language model to answer it. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(judge, task)}, or ${fix}.`,
     )
   }
   if (typeof model === 'string' && isEvaluationModel(model)) {
     throw new UsageError(
-      `compare.questions "${question.question}" (${where}) would be answered by analysis.model in ${config.file}, "${model}", an evaluation model: it scores yes/no questions and can't pick between two attempts. Use a language model, e.g. 'google/gemini-3.8-flash', or ${fix}.`,
+      `questions "${question.question}" (${where}) would be answered by analysis.model in ${config.file}, "${model}", an evaluation model: it scores yes/no questions and can't ${task}. Use a language model, e.g. 'google/gemini-3.8-flash', or ${fix}.`,
     )
   }
   return model

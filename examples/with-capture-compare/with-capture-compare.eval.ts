@@ -8,17 +8,15 @@ const withBrand = site.extendEnvironment('brand', ({ skill }) => ({
 evaluate(
   'adds a sign-up button',
   {
-    compare: {
-      baseline: site,
-      variants: [withBrand],
-      // Each side's own `home` capture goes beside its diff; asked of pairs that passed.
-      questions: [
-        {
-          question: 'Which Sign up button is blue with white text and rounded corners?',
-          artifacts: ['home'],
-        },
-      ],
-    },
+    compare: { baseline: site, variants: [withBrand] },
+    // Each side's own `home` capture goes beside its diff; asked of pairs that passed.
+    questions: [
+      {
+        question: 'Which Sign up button is blue with white text and rounded corners?',
+        across: 'environment',
+        artifacts: ['home'],
+      },
+    ],
   },
   async (c) => {
     await c.send('Add a "Sign up" button under the intro paragraph in index.html.')

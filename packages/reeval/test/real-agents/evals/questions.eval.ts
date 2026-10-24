@@ -2,7 +2,7 @@ import { evaluate, expect } from 'reeval'
 import { plain, withHouseGreeting } from './environments.ts'
 import { composer, pim } from './harnesses.ts'
 
-// A compare question over two agents and two arms. Any greeting that names the person passes, so
+// A pairwise question over two agents and two arms, and one asked of each attempt. Any greeting that names the person passes, so
 // every attempt can be in a pair: within each harness the question compares the arms, and across
 // harnesses it compares Cursor and pi on the same arm. The model sees only the diffs (not the
 // skill), so the question asks about what they show. Its win rates annotate; the check gates.
@@ -20,11 +20,14 @@ evaluate(
     tags: ['questions'],
     harness: [composer, pim],
     runs: 1,
-    compare: {
-      baseline: plain,
-      variants: [withHouseGreeting],
-      questions: ['Which greet.js handles a missing or empty name better?'],
-    },
+    compare: { baseline: plain, variants: [withHouseGreeting] },
+    questions: [
+      {
+        question: 'Which greet.js handles a missing or empty name better?',
+        across: ['environment', 'harness'],
+      },
+      { question: 'Does greet.js handle a missing name?', choices: ['yes', 'no'] },
+    ],
   },
   async (c) => {
     await c.send(

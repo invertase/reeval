@@ -365,9 +365,17 @@ async function runCommand(
     return EXIT.ok
   }
 
-  const stopped = cutShort || engineRun.cancelled
-  // Asked of attempts that have all finished; a cancelled run answers nothing.
-  const answers = questions && !stopped ? await questions.settle() : undefined
+  let stopped = cutShort || engineRun.cancelled
+  // A cancelled run keeps the per-attempt answers that came back before it stopped, and asks
+  // no pairwise question.
+  if (stopped) questions?.cancel()
+  let answers = stopped ? await questions?.answered() : await questions?.settle()
+  // A signal once the engine has returned aborts the questions' calls (the signal handler
+  // cancels them), so a run with questions stops there too.
+  if (!stopped && interrupted && questions) {
+    stopped = true
+    answers = await questions?.answered()
+  }
   const { lockfiles } = await import('./history/state.ts')
   const { writeScratchRun } = await import('./results.ts')
   const run = await writeScratchRun(
@@ -391,7 +399,7 @@ async function runCommand(
       previous: ctx.previous,
       previousArtifacts: ctx.previousArtifacts,
       runner: runnerInfo(),
-      ...(answers?.size ? { answers } : {}),
+      ...(answers && (answers.evals.size || answers.attempts.size) ? { answers } : {}),
     },
     // Until the record lands, the studio shows the run as live.
     () => live?.stop(),
@@ -410,8 +418,8 @@ async function runCommand(
   let insights: RunInsights | null = run.insights
   let insightLines: string[] = []
   const { runInsights, wantsInsights } = await import('./insights/run.ts')
-  // A signal after the last attempt (while compare questions settle or the record is written)
-  // finds nothing left to cancel; it still means stop, so insights don't start.
+  // A signal while the record is written finds nothing left to cancel; it still means stop,
+  // so insights don't start.
   const wanted = !stopped && wantsInsights(ctx.config, !flags['no-insights'])
   if (wanted && interrupted) {
     insightLines = [
@@ -829,12 +837,14 @@ async function executeRun(
       if (row.plan.skip || !models) continue
       const questions = (row.plan.questions ?? []).map((q) => {
         const model = models.questionModel(config, q, row.id, judge)
-        const gateway = resolveModelGateway(model, undefined, scope, 'the compare question model')
+        const gateway = resolveModelGateway(model, undefined, scope, 'the question model')
         return {
+          n: q.n,
           question: q.question,
           model,
           ...(gateway ? { gateway } : {}),
-          ...(q.across ? { across: q.across } : {}),
+          ...(q.across !== undefined ? { across: q.across } : {}),
+          ...(q.choices ? { choices: q.choices } : {}),
           ...(q.state ? { state: q.state } : {}),
           ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
         }
@@ -867,6 +877,7 @@ async function executeRun(
     }
     if (asked.length) {
       const { questionRunner } = await import('./compare/questions.ts')
+      const warned = new Set<string>()
       questions = questionRunner({
         evals: asked,
         stagingDir,
@@ -878,7 +889,26 @@ async function executeRun(
             type: 'notice',
             at: Date.now(),
             level: 'warn',
-            text: `compare question "${clip(answer.question, 80)}" on ${id} failed: ${answer.error}. Outcomes are unchanged.`,
+            text: `question "${clip(answer.question, 80)}" on ${id} failed: ${answer.error}. Outcomes are unchanged.`,
+          })
+        },
+        onAttemptAnswer: (id, attempt, answer) => {
+          const once = `${id}\0${answer.question}`
+          if (answer.error === undefined || warned.has(once)) return
+          warned.add(once)
+          renderer.onEvent({
+            type: 'notice',
+            at: Date.now(),
+            level: 'warn',
+            text: `question "${clip(answer.question, 80)}" on ${attempt} failed: ${answer.error}. Outcomes are unchanged; later failures of it on ${id} aren't shown.`,
+          })
+        },
+        onUnshown: (id, error) => {
+          renderer.onEvent({
+            type: 'notice',
+            at: Date.now(),
+            level: 'warn',
+            text: `${error} on ${id}, so each attempt's answer is that error. Outcomes are unchanged.`,
           })
         },
       })

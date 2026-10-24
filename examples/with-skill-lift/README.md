@@ -50,4 +50,4 @@ Only the variant gates, so the control's misses don't fail the run. After a run,
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
 The [Prove a skill helps](../../docs/recipes/skill-lift.mdx) recipe goes further: `minLift`,
-effort and compare questions.
+effort and questions.

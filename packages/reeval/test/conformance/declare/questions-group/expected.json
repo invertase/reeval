@@ -1,0 +1,214 @@
+{
+  "children": [
+    {
+      "type": "group",
+      "name": "asked by the group",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "baseline": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "questions": [
+          {
+            "question": "Which handles state more cleanly?",
+            "across": "environment"
+          }
+        ]
+      },
+      "children": [
+        {
+          "type": "eval",
+          "name": "inherits the question",
+          "mode": "run",
+          "options": {},
+          "body": "b1"
+        },
+        {
+          "type": "eval",
+          "name": "also inherits it",
+          "mode": "run",
+          "options": {
+            "runs": 2,
+            "gate": {
+              "passRate": 0.5
+            }
+          },
+          "body": "b2"
+        },
+        {
+          "type": "eval",
+          "name": "replaces the compare",
+          "mode": "run",
+          "options": {
+            "compare": {
+              "baseline": {
+                "kind": "environment",
+                "name": "base",
+                "layers": [
+                  {
+                    "name": "base",
+                    "spec": {
+                      "env": {
+                        "MODE": "base"
+                      }
+                    }
+                  }
+                ]
+              },
+              "variants": [
+                {
+                  "kind": "environment",
+                  "name": "terse",
+                  "layers": [
+                    {
+                      "name": "base",
+                      "spec": {
+                        "env": {
+                          "MODE": "base"
+                        }
+                      }
+                    },
+                    {
+                      "name": "terse",
+                      "spec": {
+                        "env": {
+                          "MODE": "terse"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body": "b3"
+        },
+        {
+          "type": "eval",
+          "name": "replaces the questions",
+          "mode": "run",
+          "options": {
+            "questions": ["What did the agent change?"]
+          },
+          "body": "b4"
+        },
+        {
+          "type": "eval",
+          "name": "asks none",
+          "mode": "run",
+          "options": {
+            "questions": []
+          },
+          "body": "b5"
+        }
+      ]
+    },
+    {
+      "type": "group",
+      "name": "pairs its evals' compares",
+      "mode": "run",
+      "options": {
+        "questions": [
+          {
+            "question": "Which is shorter?",
+            "across": "environment"
+          }
+        ]
+      },
+      "children": [
+        {
+          "type": "eval",
+          "name": "compares",
+          "mode": "run",
+          "options": {
+            "compare": {
+              "baseline": {
+                "kind": "environment",
+                "name": "base",
+                "layers": [
+                  {
+                    "name": "base",
+                    "spec": {
+                      "env": {
+                        "MODE": "base"
+                      }
+                    }
+                  }
+                ]
+              },
+              "variants": [
+                {
+                  "kind": "environment",
+                  "name": "skilled",
+                  "layers": [
+                    {
+                      "name": "base",
+                      "spec": {
+                        "env": {
+                          "MODE": "base"
+                        }
+                      }
+                    },
+                    {
+                      "name": "skilled",
+                      "spec": {
+                        "env": {
+                          "MODE": "skilled"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "body": "b6"
+        },
+        {
+          "type": "eval",
+          "name": "skipped without a compare",
+          "mode": "skip",
+          "options": {},
+          "body": "b7"
+        }
+      ]
+    }
+  ]
+}

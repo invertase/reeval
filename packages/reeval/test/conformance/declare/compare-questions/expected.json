@@ -43,9 +43,14 @@
                 }
               ]
             }
-          ],
-          "questions": ["Which handles state more cleanly?"]
-        }
+          ]
+        },
+        "questions": [
+          {
+            "question": "Which handles state more cleanly?",
+            "across": "environment"
+          }
+        ]
       },
       "body": "b1"
     },
@@ -114,15 +119,19 @@
                 }
               ]
             }
-          ],
-          "questions": [
-            "Which handles state more cleanly?",
-            {
-              "question": "Which follows the house style more closely?",
-              "model": "google/gemini-3.8-flash"
-            }
           ]
-        }
+        },
+        "questions": [
+          {
+            "question": "Which handles state more cleanly?",
+            "across": ["environment", "harness"]
+          },
+          {
+            "question": "Which follows the house style more closely?",
+            "model": "google/gemini-3.8-flash",
+            "across": "environment"
+          }
+        ]
       },
       "body": "b2"
     },
@@ -169,9 +178,14 @@
                 }
               ]
             }
-          ],
-          "questions": ["Which is shorter?"]
+          ]
         },
+        "questions": [
+          {
+            "question": "Which is shorter?",
+            "across": "environment"
+          }
+        ],
         "pin": ["compare"]
       },
       "body": "b3"

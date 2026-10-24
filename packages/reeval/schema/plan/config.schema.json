@@ -35,7 +35,7 @@
           "maximum": 9007199254740991
         },
         "model": {
-          "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and compare questions fall back to the judge's when it's a language model.",
+          "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and questions fall back to the judge's when it's a language model.",
           "anyOf": [
             {
               "type": "string"
@@ -650,6 +650,36 @@
       "description": "`fakeAnalysis()` as data: canned answers, without the functions of the digest or pair.",
       "type": "object",
       "properties": {
+        "answer": {
+          "description": "How it answers questions asked of each attempt: a fixed answer, or `{ error }` to fail every call.",
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "choice": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": ["error"],
+              "additionalProperties": false
+            }
+          ]
+        },
         "kind": {
           "type": "string",
           "const": "fake-analysis"
@@ -658,7 +688,7 @@
           "description": "The model's structured answer."
         },
         "vote": {
-          "description": "How it answers compare questions: a fixed pick, or `{ error }` to fail every call.",
+          "description": "How it answers pairwise questions: a fixed pick, or `{ error }` to fail every call.",
           "anyOf": [
             {
               "type": "string",
@@ -1989,7 +2019,7 @@
           "$ref": "#/$defs/ConfigJudgeData"
         },
         "question": {
-          "description": "Defaults for every compare question, merged over the config's.",
+          "description": "Defaults for every question, merged over the config's.",
           "$ref": "#/$defs/QuestionOptions"
         },
         "runs": {
@@ -2051,11 +2081,11 @@
       "additionalProperties": false
     },
     "QuestionOptions": {
-      "description": "Defaults for every compare question: `model` and `artifacts` replaced, `state` merged key by key.",
+      "description": "Defaults for every question: `model` and `artifacts` replaced, `state` merged key by key.",
       "type": "object",
       "properties": {
         "artifacts": {
-          "description": "Each side's own captures, by name; `true` sends all of them. Default none.",
+          "description": "Each attempt's own captures, by name; `true` sends all of them. Default none.",
           "anyOf": [
             {
               "type": "boolean",
@@ -2076,14 +2106,14 @@
           "type": "string"
         },
         "state": {
-          "description": "What each side shows.",
+          "description": "What it's shown of each attempt.",
           "$ref": "#/$defs/QuestionStateOptions"
         }
       },
       "additionalProperties": false
     },
     "QuestionStateOptions": {
-      "description": "What each side of a compare question shows: the keys of `judge.state` but `contents` (the attempts' workspaces are gone when questions are asked). An unset key keeps its default, which is what a question shows with no `state` at all: the task and the diff.",
+      "description": "What a question is shown of each attempt: the keys of `judge.state` but `contents` (the attempts' workspaces are gone when questions are asked). An unset key keeps its default: a pairwise question shows the task and the diff; one asked of each attempt also shows the final message and the transcript.",
       "type": "object",
       "properties": {
         "checks": {
@@ -2122,7 +2152,7 @@
           "type": "boolean"
         },
         "output": {
-          "description": "The final message: the agent's own account of its work. Default false.",
+          "description": "The final message: the agent's own account of its work. Default false in a pair, true per attempt.",
           "type": "boolean"
         },
         "task": {
@@ -2130,7 +2160,7 @@
           "type": "boolean"
         },
         "transcript": {
-          "description": "The transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses isn't blind. Default false.",
+          "description": "The transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses isn't blind. Default false in a pair, true per attempt.",
           "anyOf": [
             {
               "type": "boolean"
@@ -2154,7 +2184,7 @@
       "type": "object",
       "properties": {
         "analysis": {
-          "description": "Insights during `reeval run`, `reeval analyze`, and compare questions without a model.",
+          "description": "Insights during `reeval run`, `reeval analyze`, and questions without a model.",
           "$ref": "#/$defs/AnalysisConfigData"
         },
         "budget": {
@@ -2265,7 +2295,7 @@
           }
         },
         "question": {
-          "description": "Defaults for every compare question: the model that answers it and what each side shows. Merged down the cascade.",
+          "description": "Defaults for every question: the model that answers it and what it's shown of each attempt. Merged down the cascade.",
           "$ref": "#/$defs/QuestionOptions"
         },
         "record": {

@@ -496,27 +496,6 @@ class CodexHarnessDescriptor(TypedDict):
     startTimeout: NotRequired[Duration]
 
 
-class CompareQuestionQuestion(TypedDict):
-    # The factor it varies when pairing.
-    across: NotRequired[PairFactor]
-    # Each side's own captures, by name; `true` sends all of them. Replaces
-    # `question.artifacts`.
-    artifacts: NotRequired[Literal[True] | list[str]]
-    # `'provider/model'` that answers it, over the cascaded `question.model`.
-    model: NotRequired[str]
-    question: str
-    # What each side shows, over the cascaded `question.state`, key by key.
-    state: NotRequired[QuestionStateOptions]
-
-
-# A question for pairwise judgement: its text, or the text and the `'provider/model'` that
-# answers it. Without a model, the cascaded `question.model` answers, else `analysis.model`,
-# else the judge's when it's a language model. `across` is the factor it varies when pairing;
-# without it (and without a one-factor `compare.across`) both pair kinds run. `state` and
-# `artifacts` choose what each side shows.
-CompareQuestion: TypeAlias = "str | CompareQuestionQuestion"
-
-
 # The config file is plain data sent to workers, so its judge model can't be an object.
 class ConfigJudgeOptions(TypedDict):
     # The gateway the judge's calls go through, by name or by its helper. It skips the config's
@@ -722,19 +701,12 @@ class EnvironmentSpec(TypedDict):
 
 # Environments to run side by side against `environment`, the control.
 class EvalOptionsDataCompareCompare(TypedDict):
-    # The factor every question varies when pairing, when a question does not name its own
-    # `across`. `'environment'` holds the harness; `'harness'` holds the environment. A list of
-    # both, or omitted, asks both pair kinds.
-    across: NotRequired[Literal["environment", "harness"] | list[PairFactor]]
     # Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only).
     gate: NotRequired[Literal["all", "none", "variants"]]
     # Harnesses (ids or descriptors) to compare on; the others run the control only.
     harness: NotRequired[list[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | str]]
     # Lift in points from -1 to 1; a variant cell below it fails.
     minLift: NotRequired[float]
-    # Asked of pairs of attempts after the run, always a list. They annotate the compare with
-    # win rates and never change pass, fail or the exit code.
-    questions: NotRequired[list[CompareQuestion]]
     # Other environments, each planned and run as itself.
     variants: list[EnvironmentData]
 
@@ -776,9 +748,13 @@ class EvalOptionsDataCompare(TypedDict):
     judge: NotRequired[ConfigJudgeOptions]
     # Keys a profile's `limit` may not narrow for this group or eval.
     pin: NotRequired[list[PinnableKey]]
-    # Defaults for every compare question: `model`, and `state` merged key by key, down the
-    # cascade.
+    # Defaults for every question: `model`, and `state` merged key by key, down the cascade.
     question: NotRequired[QuestionOptions]
+    # What a language model is asked about the attempts, always a list; they never change pass,
+    # fail or the exit code. A question with `across` picks between pairs of attempts once they
+    # all end; one without is asked of each attempt as it ends. Replaces the inherited list, so
+    # `[]` asks none.
+    questions: NotRequired[list[Question]]
     # Attempts per cell.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
@@ -792,10 +768,6 @@ class EvalOptionsDataCompare(TypedDict):
 
 # Environments to run side by side; `baseline` is the control.
 class EvalOptionsDataCompare2Compare(TypedDict):
-    # The factor every question varies when pairing, when a question does not name its own
-    # `across`. `'environment'` holds the harness; `'harness'` holds the environment. A list of
-    # both, or omitted, asks both pair kinds.
-    across: NotRequired[Literal["environment", "harness"] | list[PairFactor]]
     # The control. Not layered under the variants. Without it, the control is the environment
     # the eval would otherwise run in (the cascaded `environment`), else an empty one named
     # `baseline`.
@@ -806,9 +778,6 @@ class EvalOptionsDataCompare2Compare(TypedDict):
     harness: NotRequired[list[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | str]]
     # Lift in points from -1 to 1; a variant cell below it fails.
     minLift: NotRequired[float]
-    # Asked of pairs of attempts after the run, always a list. They annotate the compare with
-    # win rates and never change pass, fail or the exit code.
-    questions: NotRequired[list[CompareQuestion]]
     # Other environments, each planned and run as itself.
     variants: list[EnvironmentData]
 
@@ -848,9 +817,13 @@ class EvalOptionsDataCompare2(TypedDict):
     judge: NotRequired[ConfigJudgeOptions]
     # Keys a profile's `limit` may not narrow for this group or eval.
     pin: NotRequired[list[PinnableKey]]
-    # Defaults for every compare question: `model`, and `state` merged key by key, down the
-    # cascade.
+    # Defaults for every question: `model`, and `state` merged key by key, down the cascade.
     question: NotRequired[QuestionOptions]
+    # What a language model is asked about the attempts, always a list; they never change pass,
+    # fail or the exit code. A question with `across` picks between pairs of attempts once they
+    # all end; one without is asked of each attempt as it ends. Replaces the inherited list, so
+    # `[]` asks none.
+    questions: NotRequired[list[Question]]
     # Attempts per cell.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
@@ -897,9 +870,13 @@ class EvalOptionsData3(TypedDict):
     judge: NotRequired[ConfigJudgeOptions]
     # Keys a profile's `limit` may not narrow for this group or eval.
     pin: NotRequired[list[PinnableKey]]
-    # Defaults for every compare question: `model`, and `state` merged key by key, down the
-    # cascade.
+    # Defaults for every question: `model`, and `state` merged key by key, down the cascade.
     question: NotRequired[QuestionOptions]
+    # What a language model is asked about the attempts, always a list; they never change pass,
+    # fail or the exit code. A question with `across` picks between pairs of attempts once they
+    # all end; one without is asked of each attempt as it ends. Replaces the inherited list, so
+    # `[]` asks none.
+    questions: NotRequired[list[Question]]
     # Attempts per cell.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
@@ -1349,7 +1326,7 @@ class OpenCodeHarnessDescriptor(TypedDict):
     startTimeout: NotRequired[Duration]
 
 
-# A matrix factor a compare question varies when pairing; the others are held.
+# A matrix factor a pairwise question varies; the others are held.
 PairFactor: TypeAlias = "Literal[\"environment\", \"harness\"]"
 
 
@@ -1500,20 +1477,44 @@ class PluginSourcePlugin4(TypedDict):
 PluginSource: TypeAlias = "PluginSourcePlugin | PluginSourcePlugin2 | PluginSourcePlugin3 | PluginSourcePlugin4"
 
 
-# Defaults for every compare question: `model` and `artifacts` replaced, `state` merged key by
-# key.
-class QuestionOptions(TypedDict):
-    # Each side's own captures, by name; `true` sends all of them. Default none.
+class QuestionQuestion(TypedDict):
+    # The factor it varies when pairing, or both: `'environment'` holds the harness, `'harness'`
+    # holds the environment. Unset, it's asked of each attempt on its own.
+    across: NotRequired[PairFactor | list[PairFactor]]
+    # Each attempt's own captures, by name; `true` sends all of them. Replaces
+    # `question.artifacts`.
     artifacts: NotRequired[Literal[True] | list[str]]
-    # `'provider/model'` that answers every question below it without its own `model`.
+    # The answers a question asked of each attempt picks from, with a short reason.
+    choices: NotRequired[list[str]]
+    # `'provider/model'` that answers it, over the cascaded `question.model`.
     model: NotRequired[str]
-    # What each side shows.
+    question: str
+    # What it's shown of each attempt, over the cascaded `question.state`, key by key.
     state: NotRequired[QuestionStateOptions]
 
 
-# What each side of a compare question shows: the keys of `judge.state` but `contents` (the
-# attempts' workspaces are gone when questions are asked). An unset key keeps its default, which
-# is what a question shows with no `state` at all: the task and the diff.
+# A question a language model answers after the attempts: its text, or the text and its options.
+# With `across`, it picks between two attempts that differ only in that factor, in both orders;
+# without it, it's asked of each attempt on its own. Without a model, the cascaded
+# `question.model` answers, else `analysis.model`, else the judge's when it's a language model.
+# `state` and `artifacts` choose what it's shown of each attempt.
+Question: TypeAlias = "str | QuestionQuestion"
+
+
+# Defaults for every question: `model` and `artifacts` replaced, `state` merged key by key.
+class QuestionOptions(TypedDict):
+    # Each attempt's own captures, by name; `true` sends all of them. Default none.
+    artifacts: NotRequired[Literal[True] | list[str]]
+    # `'provider/model'` that answers every question below it without its own `model`.
+    model: NotRequired[str]
+    # What it's shown of each attempt.
+    state: NotRequired[QuestionStateOptions]
+
+
+# What a question is shown of each attempt: the keys of `judge.state` but `contents` (the
+# attempts' workspaces are gone when questions are asked). An unset key keeps its default: a
+# pairwise question shows the task and the diff; one asked of each attempt also shows the final
+# message and the transcript.
 class QuestionStateOptions(TypedDict):
     # `c.exec` results; a list shows only those commands, as passed to `c.exec`. Default false.
     checks: NotRequired[bool | list[str]]
@@ -1522,13 +1523,15 @@ class QuestionStateOptions(TypedDict):
     diff: NotRequired[bool | list[str]]
     # `status path` lines for the changed files, under `diff`'s patterns. Default false.
     files: NotRequired[bool]
-    # The final message: the agent's own account of its work. Default false.
+    # The final message: the agent's own account of its work. Default false in a pair, true per
+    # attempt.
     output: NotRequired[bool]
     # The prompts the attempt was sent, once for both sides when they match. Default true.
     task: NotRequired[bool]
     # The transcript as text lines: `true` is messages and tool calls with tool output clipped,
     # `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each
-    # harness's tools, so a pair of two harnesses isn't blind. Default false.
+    # harness's tools, so a pair of two harnesses isn't blind. Default false in a pair, true per
+    # attempt.
     transcript: NotRequired[bool | Literal["tools", "full"]]
     # `'all'`: every turn under `turns`, each with its task, output and (with `transcript`)
     # transcript; `'last'`: the last turn only. Default `'all'`.
