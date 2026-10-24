@@ -85,8 +85,12 @@
       Fail "$name doesn't match SHA256SUMS (got $actual, expected $expected)"
     }
 
+    # Only its stdout is read, and not under 'Stop': Windows PowerShell turns a native command's
+    # stderr into errors, which 'Stop' throws, failing a binary that started.
+    $ErrorActionPreference = 'Continue'
     $global:LASTEXITCODE = $null
-    $installed = try { & (Join-Path $tmp $name) --version 2>&1 } catch { $_ }
+    $installed = try { & (Join-Path $tmp $name) --version 2>$null } catch { $_ }
+    $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) {
       $code = if ($null -eq $LASTEXITCODE) { "it couldn't run" } else { "exit $LASTEXITCODE" }
       Fail "$name doesn't start on this machine ($code), so nothing was installed: $installed"

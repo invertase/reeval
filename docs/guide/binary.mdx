@@ -15,7 +15,7 @@ reeval install: reeval 0.13.0 at /home/you/.local/bin/reeval
 
 The script picks the binary for your OS and CPU from the newest release that has binaries, checks it against the release's `SHA256SUMS`, checks it starts and installs it as `reeval`. It's the same reeval as the npm package, compiled with the Bun runtime inside, so it needs no Node. You still need `git`, and [Docker](https://docs.docker.com/get-docker/) for real runs.
 
-On an x64 CPU without AVX2, the scripts pick the `-baseline` build, which runs on any x64 CPU.
+On Linux and Windows, an x64 CPU without AVX2 gets the `-baseline` build, which runs on any x64 CPU. There is no macOS baseline build, so an Intel Mac needs AVX2 (Haswell, from 2013, or later).
 
 ## Windows
 
