@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { defineConfig } from 'reeval'
-import { cursor, fakeHarness } from 'reeval/harness'
+import { claudeCode, fakeHarness } from 'reeval/harness'
 import { docker, fakeSandbox } from 'reeval/sandbox'
 
 const fakeAgent = (path: string) =>
@@ -18,8 +18,10 @@ export default defineConfig({
   }),
   sandbox: fakeSandbox(),
   profiles: {
-    // The same eval on a real agent in Docker: needs CURSOR_API_KEY and
-    // `reeval image build --profile cursor` once.
-    cursor: { defaults: { harness: cursor({ model: 'composer-2.5' }), sandbox: docker() } },
+    // The same eval on a real agent in Docker: needs ANTHROPIC_API_KEY and
+    // `reeval image build --profile claude-code` once.
+    'claude-code': {
+      defaults: { harness: claudeCode({ model: 'claude-sonnet-5' }), sandbox: docker() },
+    },
   },
 })

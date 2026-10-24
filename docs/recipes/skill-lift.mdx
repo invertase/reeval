@@ -80,7 +80,7 @@ export default defineConfig({
 | `gate: { passRate: 0.6 }` | A cell passes at 2 of 3, so one flaky attempt doesn't fail CI |
 | `pin` | Keeps a `pr` profile's `limit` from turning `compare` off or cutting `runs` |
 
-`examples/with-skill-lift` in the reeval repository is a compare like this at four runs a side, the fewest that can say `helped`. Its skill says every change adds a line to `CHANGELOG.md`, and its config runs a fake agent that writes one only when it has the skill, so `pnpm eval` there shows a lift with no keys or Docker, and `--profile cursor` runs it on Cursor.
+`examples/with-skill-lift` in the reeval repository is a compare like this at four runs a side, the fewest that can say `helped`. Its skill says every change adds a line to `CHANGELOG.md`, and its config runs a fake agent that writes one only when it has the skill, so `pnpm eval` there shows a lift with no keys or Docker, and `--profile claude-code` runs it on Claude Code.
 
 ## Run it
 

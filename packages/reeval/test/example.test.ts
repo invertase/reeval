@@ -39,11 +39,11 @@ const WITH: Record<
   }
 > = {
   'with-checks': {
-    profiles: { cursor: { harness: 'cursor:composer-2.5', sandbox: 'docker' } },
+    profiles: { 'claude-code': { harness: 'claude-code:claude-sonnet-5', sandbox: 'docker' } },
     outcomes: { 'fake/math/fake': ['pass'] },
   },
   'with-skill-lift': {
-    profiles: { cursor: { harness: 'cursor:composer-2.5', sandbox: 'docker' } },
+    profiles: { 'claude-code': { harness: 'claude-code:claude-sonnet-5', sandbox: 'docker' } },
     outcomes: {
       'fake/math/fake': ['fail', 'fail', 'fail', 'fail'],
       'fake/changelog/fake': ['pass', 'pass', 'pass', 'pass'],

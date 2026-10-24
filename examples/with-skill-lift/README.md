@@ -5,8 +5,8 @@
 each, and reports the difference as lift.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
-first. The real agent needs `CURSOR_API_KEY` in `.env.local`, Docker, and
-`pnpm reeval image build --profile cursor` once.
+first. The real agent needs `ANTHROPIC_API_KEY` in `.env.local`, Docker, and
+`pnpm reeval image build --profile claude-code` once.
 
 **Run:**
 
@@ -17,8 +17,8 @@ pnpm eval
 **Real or fake agent:** `pnpm eval` runs a fake agent, with no keys or Docker. It copies the
 [`fake-agent/`](./fake-agent) fixture into the workspace to mimic what an agent would produce, so the
 checks have something to check; here it writes the changelog entry only when it's given the skill.
-`pnpm eval --profile cursor` runs the same compare on a real agent, Cursor, and needs
-`CURSOR_API_KEY`.
+`pnpm eval --profile claude-code` runs the same compare on a real agent, Claude Code, and needs
+`ANTHROPIC_API_KEY`.
 
 **What to look at:** the result block's arms and the check that tells them apart:
 
@@ -43,7 +43,7 @@ Only the variant gates, so the control's misses don't fail the run. After a run,
 | [`skills/changelog/SKILL.md`](./skills/changelog/SKILL.md) | The skill under test |
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
-| [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the `cursor` profile |
+| [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the `claude-code` profile |
 
 The [Prove a skill helps](../../docs/recipes/skill-lift.mdx) recipe goes further: `minLift`,
 effort and compare questions.

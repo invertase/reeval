@@ -132,7 +132,7 @@ every project in `examples/` depends on it as `"reeval": "workspace:*"`.
 | `.agents/skills` | Skills for maintainers working on reeval itself; the consumer skill lives in `skills/` |
 | `packages/reeval/test/real-agents` | The project the nightly real-agent checks run (`real.yml`, `pnpm smoke:real` through `scripts/real-smoke.sh`, `test/questions-real.test.ts`): judge-free `smoke` evals on Cursor (`--profile smoke`), the brokering and Gemini checks, and the `questions` compare on Cursor and pi with an analysis model (`--config reeval.analysis.config.ts --profile questions`) |
 | `packages/studio-web/scripts/demo` | The greeting evals `seed-demo.mjs` copies and records on the fake harness for the studio's dev server and browser test |
-| `examples/with-*` | One small project per idea (`with-checks`, `with-skill-lift`): `with-<name>.eval.ts`, a `reeval.config.ts` with `include: ['*.eval.ts']` that runs key-free on the fake harness (plus a `cursor` profile for the real agent), a README (shows, needs, run, what to look at) and only the files the eval needs, as real files (`project/` the agent starts from, `fake-agent/` the fake agent copies into the workspace). No `tsconfig.json` of their own: `examples/tsconfig.json` covers them for the editor and `pnpm typecheck`, so each runs copied out of the repo with `reeval` pointed at the published package. `test/example.test.ts` lists each in its `WITH` table, dry-runs it under every profile there and runs it on the fake harness, each copied out of the repo |
+| `examples/with-*` | One small project per idea (`with-checks`, `with-skill-lift`): `with-<name>.eval.ts`, a `reeval.config.ts` with `include: ['*.eval.ts']` that runs key-free on the fake harness (plus a `claude-code` profile for the real agent), a README (shows, needs, run, what to look at) and only the files the eval needs, as real files (`project/` the agent starts from, `fake-agent/` the fake agent copies into the workspace). No `tsconfig.json` of their own: `examples/tsconfig.json` covers them for the editor and `pnpm typecheck`, so each runs copied out of the repo with `reeval` pointed at the published package. `test/example.test.ts` lists each in its `WITH` table, dry-runs it under every profile there and runs it on the fake harness, each copied out of the repo |
 
 ## Development
 
@@ -521,15 +521,15 @@ pnpm reeval run --dry-run          # the plan, without running
    ```
 
 2. Put your credentials in the example's `.env.local` (gitignored), such as
-   `examples/with-skill-lift/.env.local`: `CURSOR_API_KEY` for the examples' `cursor` profile.
+   `examples/with-skill-lift/.env.local`: `ANTHROPIC_API_KEY` for the examples' `claude-code` profile.
    The nightly real-agent project, `packages/reeval/test/real-agents`, takes its keys from its own
    `.env.local`: `CURSOR_API_KEY` and `GOOGLE_GENERATIVE_AI_API_KEY` (its Gemini checks and
    analysis model).
 
-3. Run the example on Cursor:
+3. Run the example on Claude Code:
 
    ```bash
-   pnpm reeval run --profile cursor
+   pnpm reeval run --profile claude-code
    ```
 
 The harness keys stay on the host (see [Secrets and egress](./docs/guide/secrets-and-egress.mdx)). reeval masks secret-looking values in
