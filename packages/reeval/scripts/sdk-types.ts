@@ -5,7 +5,6 @@
 //   node scripts/sdk-types.ts           writes them
 //   node scripts/sdk-types.ts --check   fails when they're stale
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export type Schema = {
@@ -22,17 +21,18 @@ export type Schema = {
   description?: string
 }
 
-const pkg = fileURLToPath(new URL('..', import.meta.url))
+const byCodePoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+
+// URLs, not node:path, so the sources named in the generated file are POSIX paths on every host.
+const pkg = new URL('..', import.meta.url)
 const SOURCES = [
-  ...readdirSync(join(pkg, 'schema/protocol'))
+  ...readdirSync(new URL('schema/protocol/', pkg))
     .filter((f) => f.endsWith('.schema.json'))
-    .sort()
-    .map((f) => join('schema/protocol', f)),
+    .sort(byCodePoint)
+    .map((f) => `schema/protocol/${f}`),
   'schema/plan/declaration.schema.json',
 ]
-export const PYTHON_OUT = join(pkg, '../reeval-python/src/reeval_python/_wire.py')
-
-const byCodePoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+export const PYTHON_OUT = fileURLToPath(new URL('../reeval-python/src/reeval_python/_wire.py', pkg))
 
 /** A schema as its meaning: unions in one order, and no keywords that don't change the type. */
 function canonical(value: unknown): unknown {
@@ -56,7 +56,7 @@ function canonical(value: unknown): unknown {
 /** Every `$def` of the sources, by name; one name with two shapes is an error. */
 export function definitions(
   files: Record<string, Schema>[] = SOURCES.map(
-    (source) => JSON.parse(readFileSync(join(pkg, source), 'utf8')).$defs,
+    (source) => JSON.parse(readFileSync(new URL(source, pkg), 'utf8')).$defs,
   ),
 ): Map<string, Schema> {
   const defs = new Map<string, Schema>()

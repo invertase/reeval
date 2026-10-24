@@ -7,6 +7,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import { definitions, PYTHON_OUT, python, type Schema } from '../scripts/sdk-types.ts'
 
 const generate = (defs: Record<string, Schema>) => python(definitions([defs]))
@@ -134,6 +135,39 @@ test('the checked-in _wire.py is the generator output, and imports', (t) => {
   writeFileSync(join(dir, 'wire.py'), out)
   const imported = spawnSync('python3', ['-c', 'import wire'], { cwd: dir, encoding: 'utf8' })
   assert.equal(imported.status, 0, imported.stderr)
+})
+
+test("the output is the same with Windows' path module", () => {
+  const generator = new URL('../scripts/sdk-types.ts', import.meta.url).href
+  const dir = mkdtempSync(join(tmpdir(), 'reeval-sdk-types-win32-'))
+  writeFileSync(
+    join(dir, 'hooks.mjs'),
+    `export async function resolve(specifier, context, next) {
+  if (context.parentURL === ${JSON.stringify(generator)} && /^(node:)?path$/.test(specifier)) {
+    return { url: 'node:path/win32', shortCircuit: true }
+  }
+  return next(specifier, context)
+}\n`,
+  )
+  writeFileSync(
+    join(dir, 'register.mjs'),
+    `import { register } from 'node:module'\nregister(${JSON.stringify(pathToFileURL(join(dir, 'hooks.mjs')).href)})\n`,
+  )
+  const r = spawnSync(
+    process.execPath,
+    [
+      '--experimental-strip-types',
+      '--no-warnings',
+      '--import',
+      pathToFileURL(join(dir, 'register.mjs')).href,
+      '--input-type=module',
+      '-e',
+      `const { python } = await import(${JSON.stringify(generator)}); process.stdout.write(python())`,
+    ],
+    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+  )
+  assert.equal(r.status, 0, r.stderr)
+  assert.equal(r.stdout, python())
 })
 
 test("the key tables name reeval's camelCase keys and the fields that are records", () => {
