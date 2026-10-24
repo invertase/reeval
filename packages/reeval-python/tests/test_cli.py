@@ -31,7 +31,7 @@ def release(tmp_path: Path, version: str = "9.9.9") -> tuple[Path, str]:
     out = tmp_path / "release"
     out.mkdir(exist_ok=True)
     name = asset(version, target())
-    (out / name).write_text(FAKE)
+    (out / name).write_bytes(FAKE.encode())
     digest = hashlib.sha256(FAKE.encode()).hexdigest()
     (out / "SHA256SUMS").write_text(f"{digest} *{name}\n")
     return out, name
@@ -141,7 +141,7 @@ def test_a_cached_binary_that_changed_is_downloaded_again(
     assert cached.read_text() == FAKE
     # The same size as the binary checked, but not it, a clock tick later.
     time.sleep(0.05)
-    cached.write_text(FAKE.replace("fake", "evil"))
+    cached.write_bytes(FAKE.replace("fake", "evil").encode())
     assert cli.resolve() == cached
     assert cached.read_text() == FAKE
     cached.write_bytes(b"")
@@ -165,7 +165,7 @@ def test_a_cached_binary_is_trusted_by_its_marker_until_it_changes(
     assert cli.resolve() == cached
     # With no hash recorded for it, a binary changed since its marker can't be checked again.
     time.sleep(0.05)
-    cached.write_text(FAKE.replace("fake", "evil"))
+    cached.write_bytes(FAKE.replace("fake", "evil").encode())
     with pytest.raises(cli.ShimError, match="isn't in the cache"):
         cli.resolve()
 
@@ -287,7 +287,7 @@ def test_a_redirect_from_https_to_http_is_refused(server: str) -> None:
 @posix
 def test_reeval_binary_runs_that_binary(tmp_path: Path) -> None:
     binary = tmp_path / "my-reeval"
-    binary.write_text(FAKE)
+    binary.write_bytes(FAKE.encode())
     binary.chmod(0o755)
     result = reeval(tmp_path, "history", REEVAL_BINARY=str(binary), REEVAL_PYTHON="/my/python")
     assert result.returncode == 0, result.stderr
@@ -321,7 +321,7 @@ def test_a_platform_wheel_runs_its_own_binary_unless_another_version_is_asked_fo
 ) -> None:
     own = clean / "bin" / "reeval"
     own.parent.mkdir()
-    own.write_text(FAKE)
+    own.write_bytes(FAKE.encode())
     own.chmod(0o755)
     monkeypatch.setattr(cli, "bundled", lambda: own)
     monkeypatch.setattr(cli, "own_version", lambda: "1.2.3")
@@ -341,7 +341,7 @@ def test_a_bundled_binary_installed_without_its_exec_bit_gets_it(
 ) -> None:
     own = clean / "bin" / "reeval"
     own.parent.mkdir()
-    own.write_text(FAKE)
+    own.write_bytes(FAKE.encode())
     own.chmod(0o644)
     monkeypatch.setattr(cli, "bundled", lambda: own)
     assert cli.resolve() == own
@@ -524,7 +524,7 @@ def test_the_evals_run_on_the_projects_python(clean: Path, monkeypatch: pytest.M
 @posix
 def test_a_tool_install_runs_the_evals_on_the_projects_venv(tmp_path: Path) -> None:
     binary = tmp_path / "my-reeval"
-    binary.write_text(FAKE)
+    binary.write_bytes(FAKE.encode())
     binary.chmod(0o755)
     project = venv(tmp_path / ".venv")
     result = reeval(tmp_path, "run", REEVAL_BINARY=str(binary))
