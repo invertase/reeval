@@ -27,6 +27,7 @@ on:
       - scripts/install.sh
       - scripts/install-test.sh
       - scripts/install.ps1
+      - scripts/install-test.ps1
       - packages/reeval/src/root.ts
       - packages/reeval/src/bin.ts
       - packages/reeval/src/jiti.ts
@@ -182,16 +183,10 @@ jobs:
         if: ${{ matrix.ext }}
         shell: pwsh
         env:
-          REEVAL_VERSION: ${{ needs.compile.outputs.version }}
+          VERSION: ${{ needs.compile.outputs.version }}
         run: |
-          $server = Start-Process python -ArgumentList '-m', 'http.server', '8765', '--bind', '127.0.0.1', '--directory', "$PWD\out" -PassThru -WindowStyle Hidden
-          Start-Sleep -Seconds 3
-          $env:REEVAL_DOWNLOAD = 'http://127.0.0.1:8765'
           foreach ($shell in 'powershell', 'pwsh') {
-            $env:REEVAL_INSTALL_DIR = "$env:RUNNER_TEMP\$shell\bin"
-            & $shell -NoProfile -ExecutionPolicy Bypass -File current/scripts/install.ps1
-            if ($LASTEXITCODE -ne 0) { throw "install.ps1 failed under $shell" }
-            $installed = & "$env:REEVAL_INSTALL_DIR\reeval.exe" --version
-            if ($installed -ne $env:REEVAL_VERSION) { throw "$shell installed $installed" }
+            Write-Host "== $shell"
+            & $shell -NoProfile -ExecutionPolicy Bypass -File current/scripts/install-test.ps1 -Release out -Version $env:VERSION
+            if ($LASTEXITCODE -ne 0) { throw "install-test.ps1 failed under $shell" }
           }
-          Stop-Process $server
