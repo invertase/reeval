@@ -178,6 +178,8 @@ jobs:
               case $f in
                 packages/reeval-python/src/reeval_python/cli.py | \
                 packages/reeval-python/pyproject.toml | \
+                sdks/go/cmd/reeval/* | \
+                sdks/go/go.mod | \
                 packages/reeval/test/conformance/launcher/* | \
                 packages/sandbox-docker/src/egress/cert.ts | \
                 scripts/ctrl-c.py)
@@ -525,7 +527,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sdk: [python]
+        sdk: [python, go]
         os: [ubuntu-24.04, macos-latest, windows-latest]
     steps:
       # Recorded runs' paths pass Windows' 260-character limit, which git keeps by default.
@@ -539,7 +541,7 @@ jobs:
         with:
           node-version-file: package.json
           package-manager-cache: false
-      # Builds the suite's stand-in binary.
+      # Builds the suite's stand-in binary, and the Go launcher.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable

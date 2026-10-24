@@ -7,7 +7,7 @@ each launcher at with `REEVAL_DOWNLOAD`, and a small runner module per language.
 
 ```bash
 cd packages/reeval
-node --experimental-strip-types test/conformance/launcher/run.ts python
+node --experimental-strip-types test/conformance/launcher/run.ts python # or go
 ```
 
 It needs Go on the `PATH` (it builds `fake-reeval/`, the stand-in binary, so the launcher execs a
@@ -86,7 +86,8 @@ function with its detection stubbed out.
 
 ## Adding a language
 
-A runner is a module in `runners/` exporting a `Runner` (`runner.ts`). Only `setup` is required:
+A runner is a module in `runners/` exporting a `Runner` (`runner.ts`). Only `setup` is required;
+`runners/go.ts` and `runners/python.ts` implement every hook:
 
 ```ts
 const runner: Runner = {
