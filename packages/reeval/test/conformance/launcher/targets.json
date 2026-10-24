@@ -1,0 +1,56 @@
+{
+  "about": "Which release target a launcher picks from the facts it detected about the machine. Each runner feeds every row's facts to its launcher's target function with detection stubbed out.",
+  "rows": [
+    {
+      "facts": { "os": "linux", "arch": "x64", "libc": "glibc", "avx2": true },
+      "target": "linux-x64"
+    },
+    {
+      "facts": { "os": "linux", "arch": "x64", "libc": "glibc", "avx2": false },
+      "target": "linux-x64-baseline"
+    },
+    {
+      "facts": { "os": "linux", "arch": "x64", "libc": "musl", "avx2": true },
+      "target": "linux-x64-musl"
+    },
+    {
+      "facts": { "os": "linux", "arch": "x64", "libc": "musl", "avx2": false },
+      "target": "linux-x64-musl-baseline"
+    },
+    {
+      "facts": { "os": "linux", "arch": "arm64", "libc": "glibc", "avx2": false },
+      "target": "linux-arm64"
+    },
+    {
+      "facts": { "os": "linux", "arch": "arm64", "libc": "musl", "avx2": false },
+      "target": "linux-arm64-musl"
+    },
+    {
+      "facts": { "os": "darwin", "arch": "x64", "libc": "none", "avx2": true },
+      "target": "darwin-x64"
+    },
+    {
+      "facts": { "os": "darwin", "arch": "x64", "libc": "none", "avx2": false },
+      "target": "darwin-x64"
+    },
+    {
+      "facts": { "os": "darwin", "arch": "arm64", "libc": "none", "avx2": false },
+      "target": "darwin-arm64"
+    },
+    {
+      "facts": { "os": "windows", "arch": "x64", "libc": "none", "avx2": true },
+      "target": "windows-x64"
+    },
+    {
+      "facts": { "os": "windows", "arch": "x64", "libc": "none", "avx2": false },
+      "target": "windows-x64-baseline"
+    },
+    {
+      "facts": { "os": "windows", "arch": "arm64", "libc": "none", "avx2": true },
+      "target": "windows-x64"
+    },
+    { "facts": { "os": "linux", "arch": "ia32", "libc": "glibc", "avx2": false }, "exit": 2 },
+    { "facts": { "os": "linux", "arch": "riscv64", "libc": "glibc", "avx2": false }, "exit": 2 },
+    { "facts": { "os": "freebsd", "arch": "x64", "libc": "none", "avx2": true }, "exit": 2 }
+  ]
+}

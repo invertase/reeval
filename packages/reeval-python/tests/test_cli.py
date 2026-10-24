@@ -161,14 +161,45 @@ def test_a_cached_binary_is_trusted_by_its_marker_until_it_changes(
     monkeypatch.setenv("REEVAL_DOWNLOAD", out.as_uri())
     cached = cli.resolve()
     assert cli._marker(cached).read_text().startswith(hashlib.sha256(FAKE.encode()).hexdigest())
+    real_sha256 = cli.sha256
     monkeypatch.setattr(cli, "sha256", lambda path: pytest.fail("hashed a marked binary"))
     monkeypatch.setenv("REEVAL_OFFLINE", "1")
     assert cli.resolve() == cached
-    # With no hash recorded for it, a binary changed since its marker can't be checked again.
+    # A binary changed since its marker is held to the marker's hash, and dropped.
+    monkeypatch.setattr(cli, "sha256", real_sha256)
     time.sleep(0.05)
     cached.write_bytes(FAKE.replace("fake", "evil").encode())
     with pytest.raises(cli.ShimError, match="isn't in the cache"):
         cli.resolve()
+    assert not cached.exists()
+
+
+def test_a_binary_put_in_the_cache_by_hand_runs_offline(
+    clean: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("REEVAL_VERSION", "9.9.9")
+    monkeypatch.setenv("REEVAL_OFFLINE", "1")
+    cached = cli.cache_dir() / "bin" / "9.9.9" / asset("9.9.9", target())
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(FAKE.encode())
+    assert cli.resolve() == cached
+    cached.write_bytes(b"")
+    with pytest.raises(cli.ShimError, match="isn't in the cache"):
+        cli.resolve()
+
+
+def test_a_record_without_this_target_is_refused(
+    clean: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out, name = release(clean)
+    monkeypatch.setenv("REEVAL_VERSION", "9.9.9")
+    monkeypatch.setenv("REEVAL_DOWNLOAD", out.as_uri())
+    monkeypatch.setattr(
+        cli, "released", lambda: {"version": "9.9.9", "binaries": {"other-target": {}}}
+    )
+    with pytest.raises(cli.ShimError, match=f"no reeval binary for {target()}") as error:
+        cli.resolve()
+    assert error.value.code == 3
 
 
 @posix
