@@ -191,7 +191,7 @@ jobs:
       # Unused files, exports, types and dependencies across the workspace (knip.json).
       - if: ${{ !cancelled() }}
         run: pnpm knip
-      # reeval and examples/hello resolve their workspace dependencies' types from dist/, and
+      # reeval and the examples resolve their workspace dependencies' types from dist/, and
       # the docs' generated blocks come from dist/cli.js (help, query schema).
       - run: pnpm build
       - if: ${{ !cancelled() }}

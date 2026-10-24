@@ -25,13 +25,30 @@ async function copyOut(name: string): Promise<string> {
   return dir
 }
 
+type Cell = { key: string; harness: string; sandbox: string }
+
 /**
- * Each `with-*` example: the profiles its plan is checked under, besides none, and the arguments
- * that run it on the fake harness (`null` when it can't run key-free).
+ * Each `with-*` example: the harness and sandbox every cell plans under each profile (no profile
+ * is the fake trio), and each cell's attempts' outcomes once it has run on the fake harness.
  */
-const WITH: Record<string, { profiles: string[]; run: string[] | null }> = {
-  'with-checks': { profiles: ['cursor'], run: [] },
-  'with-skill-lift': { profiles: ['cursor'], run: [] },
+const WITH: Record<
+  string,
+  {
+    profiles: Record<string, { harness: string; sandbox: string }>
+    outcomes: Record<string, string[]>
+  }
+> = {
+  'with-checks': {
+    profiles: { cursor: { harness: 'cursor:composer-2.5', sandbox: 'docker' } },
+    outcomes: { 'fake/-/fake': ['pass'] },
+  },
+  'with-skill-lift': {
+    profiles: { cursor: { harness: 'cursor:composer-2.5', sandbox: 'docker' } },
+    outcomes: {
+      'fake/plain/fake': ['fail', 'fail', 'fail', 'fail'],
+      'fake/house-style/fake': ['pass', 'pass', 'pass', 'pass'],
+    },
+  },
 }
 
 test('every with-* example is in the table', () => {
@@ -39,26 +56,28 @@ test('every with-* example is in the table', () => {
   assert.deepEqual(dirs.sort(), Object.keys(WITH).sort())
 })
 
-for (const [name, { profiles, run }] of Object.entries(WITH)) {
-  test(`examples/${name} copied out of the repo plans${run ? ' and runs key-free' : ''}`, async () => {
+for (const [name, { profiles, outcomes }] of Object.entries(WITH)) {
+  test(`examples/${name} copied out of the repo plans and runs key-free`, async () => {
     const dir = await copyOut(name)
-    for (const profile of [undefined, ...profiles]) {
+    const planned = { '': { harness: 'fake', sandbox: 'fake' }, ...profiles }
+    for (const [profile, want] of Object.entries(planned)) {
       const args = ['run', '--dry-run', '--json', ...(profile ? ['--profile', profile] : [])]
       const plan = await runCli(dir, args)
       assert.equal(plan.code, 0, `${args.join(' ')}\n${plan.stdout}${plan.stderr}`)
-      const files = JSON.parse(plan.stdout).evals.map((e: { file: string }) => e.file)
-      assert.deepEqual([...new Set(files)], [`${name}.eval.ts`])
+      const evals: { file: string; cells: Cell[] }[] = JSON.parse(plan.stdout).evals
+      assert.deepEqual([...new Set(evals.map((e) => e.file))], [`${name}.eval.ts`])
+      for (const cell of evals.flatMap((e) => e.cells)) {
+        assert.deepEqual({ harness: cell.harness, sandbox: cell.sandbox }, want, args.join(' '))
+      }
     }
-    if (!run) return
 
-    const result = await runCli(dir, ['run', ...run], { timeoutMs: 180_000 })
-    assert.equal(result.code, 0, result.stdout + result.stderr)
-    const { evals } = readRun(dir)
-    assert.ok(evals.length > 0, 'ran an eval')
-    assert.ok(
-      evals.every((e) => e.outcome === 'pass'),
-      evals.map((e) => `${e.id}: ${e.outcome}`).join('\n'),
-    )
+    const run = await runCli(dir, ['run'], { timeoutMs: 180_000 })
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    const ran: Record<string, string[]> = {}
+    for (const a of readRun(dir).evals.flatMap((e) => e.attempts)) {
+      ran[a.cell] = [...(ran[a.cell] ?? []), a.outcome].sort()
+    }
+    assert.deepEqual(ran, outcomes)
   })
 }
 

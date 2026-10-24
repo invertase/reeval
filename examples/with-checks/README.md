@@ -4,8 +4,8 @@
 test suite and the code's behaviour, with `c.send`, `c.readFile`, `c.exec`, `toHaveFile` and
 `toSucceed`.
 
-**Needs:** nothing. The config runs a scripted fake agent on your machine, with no keys or
-Docker. `--profile cursor` runs the same eval on Cursor in Docker, with `CURSOR_API_KEY` in
+**Needs:** no keys or Docker. The config runs a scripted fake agent on your machine; in this repo,
+run `pnpm install && pnpm build` at the root first. `--profile cursor` runs the same eval on Cursor in Docker, with `CURSOR_API_KEY` in
 `.env.local` and `pnpm reeval image build --profile cursor` once.
 
 **Run:**

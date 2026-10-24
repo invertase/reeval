@@ -7,7 +7,7 @@ const withSkill = plain.extendEnvironment('house-style', ({ skill }) => ({
 
 // The house style can't be guessed, so only an agent that read the skill writes "Ahoy".
 const greetsAda = `node -e "import('./greet.js').then((m) =>
-  process.exit(m.greet('Ada') === 'Ahoy, Ada!' ? 0 : 1))"`
+  process.exit((m.greet ?? m.default)('Ada') === 'Ahoy, Ada!' ? 0 : 1))"`
 
 evaluate(
   'greets in the house style',

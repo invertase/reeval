@@ -2,7 +2,7 @@ import { evaluate, expect } from 'reeval'
 
 // Exits 0 only if greet('Ada') returns "Hello, Ada!".
 const greetsAda = `node -e "import('./greet.js').then((m) =>
-  process.exit(m.greet('Ada') === 'Hello, Ada!' ? 0 : 1))"`
+  process.exit((m.greet ?? m.default)('Ada') === 'Hello, Ada!' ? 0 : 1))"`
 
 evaluate('creates a tested greet module', async (c) => {
   const turn = await c.send(
