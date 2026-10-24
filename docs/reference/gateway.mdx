@@ -68,7 +68,7 @@ One key, `OPENROUTER_API_KEY`, serves every harness and model on `openrouter()`.
 | Harness | How it reaches OpenRouter | Brokered on | Model ids |
 |---|---|---|---|
 | Claude Code | `ANTHROPIC_BASE_URL` at `https://openrouter.ai/api`, the key as `ANTHROPIC_AUTH_TOKEN` (a Bearer token) | `POST /api/v1/messages`, `POST /api/v1/messages/count_tokens` | `anthropic/` prefixed and dotted: `claude-haiku-4-5` runs as `anthropic/claude-haiku-4.5` |
-| Codex | a Responses API provider at OpenRouter in `config.toml` | `POST /api/v1/responses` | `openai/` prefixed |
+| Codex | a Responses API provider at OpenRouter in `config.toml`, sending `X-OpenRouter-Metadata: enabled` so each response names its upstream | `POST /api/v1/responses` | `openai/` prefixed |
 | Goose | its `openrouter` provider, a Bearer key | `POST /api/v1/chat/completions`, `GET /api/v1/models` | `google/` prefixed |
 | OpenCode | its `openrouter` provider, a Bearer key | `POST /api/v1/chat/completions` | `<provider>/<model>` as written, run as `openrouter/<provider>/<model>` |
 | Grok Build | a `[model."x-ai/<id>"]` table on OpenRouter's Chat Completions API, keyed by `env_key` | `POST /api/v1/chat/completions` | `x-ai/` prefixed |

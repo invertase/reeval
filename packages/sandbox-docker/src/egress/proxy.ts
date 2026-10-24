@@ -784,35 +784,53 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
    */
   const MODEL_WINDOW = 512 * 1024
 
-  /** How much of a response's end the gateway keeps to find its last `"cost"`. */
-  const COST_TAIL = 4096
+  /**
+   * How much of a response's end the gateway keeps to find its last `"cost"`, and the routing
+   * metadata a Responses API stream repeats in its last event.
+   */
+  const TAIL = 16 * 1024
+
+  const PROVIDER = /"provider"\s*:\s*"([^"\\]{1,200})"/
+  /**
+   * The provider of the endpoint a gateway's routing metadata marks `"selected": true`
+   * (OpenRouter's `openrouter_metadata.endpoints.available`, which lists the others too).
+   */
+  const selectedProvider = (text: string) => {
+    const endpoint = /\{[^{}]*"selected"\s*:\s*true[^{}]*\}/.exec(text)
+    return endpoint ? PROVIDER.exec(endpoint[0])?.[1] : undefined
+  }
 
   /**
-   * Records the first `"model"` or `"modelId"` value in the response body, the `"effort"` of the
-   * `"reasoning"` object after it and the first `"provider"` string, within {@link MODEL_WINDOW},
-   * and the last `"cost"` number in the whole body, reading alongside its flow. Inside a JSON
-   * string the quotes are escaped, so text that merely mentions them doesn't match.
+   * Records the first `"model"` or `"modelId"` value in the response body and the `"effort"` of the
+   * `"reasoning"` object after it, within {@link MODEL_WINDOW}; the provider of a selected endpoint
+   * there or in the body's {@link TAIL}, else the first `"provider"` string in the window; and the
+   * last `"cost"` number in the whole body, reading alongside its flow. Inside a JSON string the
+   * quotes are escaped, so text that merely mentions them doesn't match.
    */
   function readModel(up: Readable, t: RequestTracker) {
     let seen = ''
     let tail = ''
     let model: RegExpExecArray | null = null
     let effort: RegExpExecArray | null = null
-    let provider: RegExpExecArray | null = null
+    let provider: string | undefined
+    let selected: string | undefined
     const onData = (chunk: Buffer) => {
       const text = chunk.toString('utf8')
-      if (seen.length <= MODEL_WINDOW && !(effort && provider)) {
+      if (seen.length <= MODEL_WINDOW && !(effort && selected)) {
         seen += text
         model ??= /"model(?:Id)?"\s*:\s*"([^"\\]{1,200})"/.exec(seen)
         effort ??= model
           ? /"reasoning"\s*:\s*\{[^{}]*?"effort"\s*:\s*"(\w{1,40})"/.exec(seen.slice(model.index))
           : null
-        provider ??= /"provider"\s*:\s*"([^"\\]{1,200})"/.exec(seen)
+        provider ??= PROVIDER.exec(seen)?.[1]
+        selected ??= selectedProvider(seen)
         if (model) t.set({ responseModel: model[1] })
         if (effort) t.set({ responseEffort: effort[1] })
-        if (provider) t.set({ responseProvider: provider[1] })
       }
-      tail = (tail + text).slice(-COST_TAIL)
+      tail = (tail + text).slice(-TAIL)
+      selected ??= selectedProvider(tail)
+      const served = selected ?? provider
+      if (served) t.set({ responseProvider: served })
       const cost = [...tail.matchAll(/"cost"\s*:\s*(\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)/g)].at(-1)
       if (cost) t.set({ responseCost: Number(cost[1]) })
     }

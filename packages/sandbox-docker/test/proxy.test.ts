@@ -144,6 +144,41 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
         ]
         return out.end(parts.map((p) => `data: ${JSON.stringify(p)}\n\n`).join(''))
       }
+      if (req.url === '/api/v1/responses') {
+        // OpenRouter's Responses stream with X-OpenRouter-Metadata: no top-level provider, a tool
+        // whose schema has a "provider" first, and the routing metadata only in the last event,
+        // listing an endpoint it didn't select before the one it did.
+        out.writeHead(200, { 'content-type': 'text/event-stream' })
+        const event = (e: object) => `data: ${JSON.stringify(e)}\n\n`
+        out.write(
+          event({
+            type: 'response.created',
+            response: {
+              model: 'openai/gpt-5.6-luna',
+              tools: [{ name: 't', parameters: { provider: 'Stray' } }],
+            },
+          }),
+        )
+        out.write(`: ${'padding '.repeat(1024)}\n\n`)
+        const endpoints = [
+          { model: 'openai/gpt-5.6-luna', provider: 'Azure', selected: false },
+          { model: 'openai/gpt-5.6-luna', provider: 'OpenAI', selected: true },
+        ]
+        return setTimeout(
+          () =>
+            out.end(
+              event({
+                type: 'response.completed',
+                response: {
+                  model: 'openai/gpt-5.6-luna',
+                  usage: { cost: 0.0021 },
+                  openrouter_metadata: { endpoints: { available: endpoints, total: 2 } },
+                },
+              }),
+            ),
+          20,
+        )
+      }
       if (req.url === '/chat/completions') {
         // OpenRouter's Chat Completions stream: each chunk names the upstream provider, and the
         // last one the call's cost, after content that mentions both inside a JSON string.
@@ -1653,6 +1688,30 @@ describe('the model a response names, on a modelResponses endpoint', () => {
       assert.equal(e?.type === 'request' && e.responseModel, 'anthropic/claude-haiku-4.5')
       assert.equal(e?.type === 'request' && e.responseProvider, 'Anthropic')
       assert.equal(e?.type === 'request' && e.responseCost, 0.00042)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('the upstream routing metadata selected, over any other "provider" before it', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, {
+      modelResponses: [{ host: HOST, path: { exact: '/api/v1/responses' } }],
+      onEvent: (e) => events.push(e),
+    })
+    try {
+      gw.proxy.addTransformations([brokered])
+      const r = await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path: '/api/v1/responses',
+        headers: { authorization: `Bearer ${PLACEHOLDER}` },
+        body: '{}',
+      })
+      assert.equal(r.status, 200)
+      const e = await requestEvent(events)
+      assert.equal(e?.type === 'request' && e.responseModel, 'openai/gpt-5.6-luna')
+      assert.equal(e?.type === 'request' && e.responseProvider, 'OpenAI')
+      assert.equal(e?.type === 'request' && e.responseCost, 0.0021)
     } finally {
       gw.close()
     }

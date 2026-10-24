@@ -299,6 +299,8 @@ test('on OpenRouter, Codex calls its Responses API with the OpenRouter key, brok
   const config = buildCodexConfig({ provider: OPENROUTER_PROVIDER })
   assert.match(config, /"base_url" = "https:\/\/openrouter\.ai\/api\/v1"/)
   assert.match(config, /"env_key" = "OPENROUTER_API_KEY"/)
+  assert.match(config, /"http_headers" = \{ "X-OpenRouter-Metadata" = "enabled" \}/)
+  assert.doesNotMatch(buildCodexConfig({}), /http_headers/)
   const rules: Array<{
     match: Record<string, unknown>
     transform: { headers: Record<string, string> }
