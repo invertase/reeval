@@ -90,8 +90,11 @@ def json_value(value: Any, where: str) -> Any:
         return value._data  # pyright: ignore[reportPrivateUsage]
     try:
         json.dumps(value, allow_nan=False)
-    except (TypeError, ValueError) as exc:
+    except TypeError as exc:
         raise TypeError(f"{where}: {exc}") from None
+    except ValueError:
+        # Python's own message for this names no value on some versions.
+        raise TypeError(f"{where}: it isn't JSON, which has no NaN or Infinity") from None
     return value
 
 

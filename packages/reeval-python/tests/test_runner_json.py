@@ -88,5 +88,5 @@ def test_a_nan_in_a_declaration_is_a_load_error(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), {"score": [float("-inf")]}])
 def test_json_value_refuses_nan_and_infinity(value: Any) -> None:
-    with pytest.raises(TypeError, match="^where: Out of range float values"):
+    with pytest.raises(TypeError, match="^where: it isn't JSON, which has no NaN or Infinity$"):
         json_value(value, "where")
