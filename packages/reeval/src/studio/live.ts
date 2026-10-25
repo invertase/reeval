@@ -8,6 +8,7 @@ import { join, sep } from 'node:path'
 import { recordFile, scratchDir } from '../history/files.ts'
 import { recordFileName } from '../ids.ts'
 import { redactJsonText } from '../redact.ts'
+import { isCompletedAttempt, loadPrevious, previousAttempt } from '../resume.ts'
 import type { EvalRecord } from '../types.ts'
 import {
   isFinished,
@@ -78,8 +79,24 @@ export async function listLive(
 }
 
 /**
- * A finished attempt's transcript, as `transcript.jsonl` has it, from the record its worker staged;
- * null for an attempt that isn't live and finished, or a file outside the run's staging directory.
+ * The transcript a resume's previous assemble filed for an attempt it kept, or undefined when it
+ * kept none there. The staged record a resume writes for a kept attempt has no turns.
+ */
+async function keptTranscript(base: string, realBase: string, key: string) {
+  const { record } = await loadPrevious(base)
+  const kept = previousAttempt(record, key)
+  const ref = kept && isCompletedAttempt(kept.outcome, kept.error) ? kept.files.transcript : null
+  if (!ref) return undefined
+  const file = join(base, 'previous-artifacts', ...ref.path.split('/'))
+  const real = await realpath(file).catch(() => null)
+  if (!real?.startsWith(realBase + sep)) return undefined
+  return redactJsonText(await readFile(real, 'utf8'))
+}
+
+/**
+ * A finished attempt's transcript, as `transcript.jsonl` has it, from the record its worker staged
+ * (or, for one a resume kept, the transcript filed for it before); null for an attempt that isn't
+ * live and finished, or a file outside the run's staging directory.
  */
 export async function liveTranscript(
   source: StudioSource,
@@ -92,10 +109,10 @@ export async function liveTranscript(
   if (!attempt || !isFinished(attempt.status)) return null
   const base = join(stagingRoot(source.root), runId)
   try {
-    const [realBase, real] = await Promise.all([
-      realpath(base),
-      realpath(join(base, 'evals', recordFileName(key))),
-    ])
+    const realBase = await realpath(base)
+    const kept = await keptTranscript(base, realBase, key)
+    if (kept !== undefined) return kept
+    const real = await realpath(join(base, 'evals', recordFileName(key)))
     if (!real.startsWith(realBase + sep)) return null
     const record = JSON.parse(await readFile(real, 'utf8')) as EvalRecord
     const { transcriptLines } = await import('../history/assemble.ts')

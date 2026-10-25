@@ -18,11 +18,20 @@ import {
 /** How often a live run rewrites its heartbeat; the studio calls it stopped after a few misses. */
 export const HEARTBEAT_MS = 2000
 
+/** An attempt a resume keeps from earlier in the run, as it finished then. */
+export type LiveKept = {
+  outcome: 'pass' | 'fail' | 'infra_error'
+  startedAt: string | null
+  durationMs: number | null
+}
+
 export type LiveProgressOptions = {
   dir: string
   runId: string
   startedAt: Date
   planned: PlannedItem[]
+  /** By attempt key: a resume plans these skipped, but they show as they finished. */
+  kept?: ReadonlyMap<string, LiveKept>
   heartbeatMs?: number
   now?: () => Date
 }
@@ -92,21 +101,25 @@ export function writeLiveProgress(options: LiveProgressOptions): LiveProgressWri
   const now = options.now ?? (() => new Date())
   const file = join(options.dir, LIVE_FILE)
   const tmp = `${file}.${process.pid}.tmp`
+  const kept = options.kept ?? new Map<string, LiveKept>()
   const attempts = new Map<string, LiveAttempt>(
-    options.planned.map((p) => [
-      p.key,
-      {
-        key: p.key,
-        evalId: p.id,
-        name: p.attempt.name,
-        file: p.file,
-        cell: p.attempt.cell.key,
-        n: p.attempt.n,
-        status: p.attempt.skip || p.attempt.plan.skip ? 'skipped' : 'queued',
-        startedAt: null,
-        durationMs: null,
-      },
-    ]),
+    options.planned.map((p) => {
+      const was = kept.get(p.key)
+      return [
+        p.key,
+        {
+          key: p.key,
+          evalId: p.id,
+          name: p.attempt.name,
+          file: p.file,
+          cell: p.attempt.cell.key,
+          n: p.attempt.n,
+          status: was?.outcome ?? (p.attempt.skip || p.attempt.plan.skip ? 'skipped' : 'queued'),
+          startedAt: was?.startedAt ?? null,
+          durationMs: was?.durationMs ?? null,
+        },
+      ]
+    }),
   )
   let phase: LivePhase = 'running'
   let stopped = false
@@ -155,7 +168,7 @@ export function writeLiveProgress(options: LiveProgressOptions): LiveProgressWri
     },
     end(result) {
       const a = attempts.get(result.key)
-      if (!a) return
+      if (!a || (kept.has(result.key) && result.state === 'skipped')) return
       a.status = finished(result)
       a.durationMs = result.durationMs
       write()

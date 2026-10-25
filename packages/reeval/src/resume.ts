@@ -17,7 +17,7 @@ import { scratchDir } from './history/files.ts'
 import type { AttemptRecord, RunRecord } from './history/types.ts'
 import { RefError } from './history/views.ts'
 import { RUN_ID, recordFileName } from './ids.ts'
-import { replace } from './live.ts'
+import { type LiveKept, replace } from './live.ts'
 import type { EvalRecord, Outcome } from './types.ts'
 import { LIVE_FILE, readableLiveProgress } from './view/live.ts'
 
@@ -154,6 +154,33 @@ export function completedKeysFor(
     if (stagingRecordComplete(staging, key) || fromPrevious.has(key)) keys.add(key)
   }
   return keys
+}
+
+/**
+ * How each completed attempt finished, for the progress file: from the previous assemble when it
+ * has the attempt (as the record keeps it), else from its staged record, which has no duration.
+ */
+export function keptAttempts(
+  completed: Iterable<string>,
+  staging: string,
+  previous?: RunRecord | null,
+): Map<string, LiveKept> {
+  const kept = new Map<string, LiveKept>()
+  for (const key of completed) {
+    const was = previousAttempt(previous, key)
+    if (was && was.outcome !== 'skipped' && isCompletedAttempt(was.outcome, was.error)) {
+      kept.set(key, { outcome: was.outcome, startedAt: was.startedAt, durationMs: was.durationMs })
+      continue
+    }
+    const record = readEvalRecord(join(staging, 'evals', recordFileName(key)))
+    if (!record || !isCompletedAttempt(record.outcome, record.error)) continue
+    kept.set(key, {
+      outcome: record.outcome,
+      startedAt: record.startedAt ?? null,
+      durationMs: null,
+    })
+  }
+  return kept
 }
 
 export type ResumeTarget = {
