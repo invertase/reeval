@@ -323,7 +323,7 @@ group('area', () => {
     assert.match(read('summary.md'), /^todo {13}someday$/m)
   })
 
-  test('.env.local wins over .env, the shell wins over both, and evals see them', async () => {
+  test('.env.local wins over .env, the shell wins over both, and evals see them, past a byte-order mark', async () => {
     const p = await project('dotenv', {
       'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
@@ -335,7 +335,7 @@ export default defineConfig({
 })
 `,
       '.env': 'REEVAL_T_BOTH=from-env\nREEVAL_T_ENV=only-env\nREEVAL_T_SHELL=from-env\n',
-      '.env.local': 'REEVAL_T_BOTH=from-local\nREEVAL_T_SHELL=from-local\n',
+      '.env.local': '\uFEFFREEVAL_T_BOTH=from-local\nREEVAL_T_SHELL=from-local\n',
       'evals/sees.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('sees', async () => expect(process.env.REEVAL_T_BOTH).toBe('from-local'))
 `,

@@ -2025,6 +2025,14 @@ test('SKILL.md frontmatter is parsed as YAML', () => {
       .description,
     'Windows.',
   )
+  assert.deepEqual(
+    parseSkillMd('\uFEFF---\nname: bom\ndescription: Saved by Notepad\n---\nBody', 's'),
+    {
+      name: 'bom',
+      description: 'Saved by Notepad',
+      body: 'Body',
+    },
+  )
   assert.deepEqual(parseSkillMd('No frontmatter.', 's'), { body: 'No frontmatter.' })
   assert.deepEqual(parseSkillMd('---\n---\nBody', 's'), {
     name: undefined,

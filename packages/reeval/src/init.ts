@@ -14,6 +14,7 @@ import { type AgentKind, agentFor } from './harness/agents.ts'
 import { RECOMMENDED_ANALYSIS_MODEL } from './judge/index.ts'
 import { harnessId } from './options.ts'
 import { PACKAGE_DIR } from './root.ts'
+import { withoutBom } from './text.ts'
 import type { AgentHarnessDescriptor } from './types.ts'
 
 /** The agents `reeval init` offers, in the order it lists them, with the model it pins. */
@@ -309,7 +310,7 @@ function packageJson(dir: string, pkg: string, version: string): InitAction {
   }
   let manifest: Record<string, unknown>
   try {
-    manifest = JSON.parse(existing)
+    manifest = JSON.parse(withoutBom(existing))
   } catch (error) {
     throw new UsageError(`package.json isn't valid JSON: ${(error as Error).message}`)
   }
