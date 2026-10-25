@@ -629,7 +629,7 @@
               "type": ["number", "null"]
             },
             "kind": {
-              "description": "`write` is a whole-file write whose result doesn't say whether the file existed before (Antigravity's, fx's, Goose's and pi's write tools, for example).",
+              "description": "`write` is a whole-file write whose result doesn't say whether the file existed before (Antigravity's, fx's, Goose's, Grok Build's and pi's write tools, for example).",
               "type": "string",
               "enum": ["create", "modify", "write", "delete"]
             },

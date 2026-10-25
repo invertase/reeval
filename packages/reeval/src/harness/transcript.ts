@@ -233,8 +233,9 @@ function fileEdits(
       },
     ]
   }
-  // A write whose result doesn't say whether it created the file (Antigravity's, fx's, Goose's
-  // and pi's): the content, when the input has it, is every line written.
+  // A whole-file write whose result doesn't say whether the file existed (Antigravity's, fx's,
+  // Goose's, Grok Build's and pi's, for example): the content, when the input has it, is every
+  // line written.
   if (tool === 'write') {
     return [
       {

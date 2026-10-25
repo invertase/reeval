@@ -64,7 +64,7 @@ evals/.history/<runId>/<eval slug>/<cell slug>/<n>/transcript.jsonl
 </Property>
 
 <Property name="file-edit" type="{ toolCallId, path, kind, added, removed }">
-  A file the agent created, modified, wrote or deleted. `kind` is `create`, `modify`, `write` or `delete`. `write` is a whole-file write whose result doesn't say whether the file existed before: Antigravity's, fx's, Goose's and pi's write tools record it, where Claude Code, Codex, Cursor and OpenCode say `create` or `modify`. `added` and `removed` are line counts, or `null` when the harness didn't send the content (deletes, for example); a `write` counts its content's lines as `added` when the harness sends the content, and its `removed` is `null`.
+  A file the agent created, modified, wrote or deleted. `kind` is `create`, `modify`, `write` or `delete`. `write` is a whole-file write whose result doesn't say whether the file existed before. Antigravity's, fx's, Goose's, Grok Build's and pi's write tools record it, for example, where Claude Code, Codex, Cursor and OpenCode say `create` or `modify`. `added` and `removed` are line counts, or `null` when the harness didn't send the content (deletes, for example); a `write` counts its content's lines as `added` when the harness sends the content, and its `removed` is `null`.
 </Property>
 
 <Property name="tool" type="{ toolCallId, tool, input, output, ok }">

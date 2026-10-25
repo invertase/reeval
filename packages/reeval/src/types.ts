@@ -12,7 +12,7 @@ export type FileEditEvent = {
   path: string
   /**
    * `write` is a whole-file write whose result doesn't say whether the file existed before
-   * (Antigravity's, fx's, Goose's and pi's write tools, for example).
+   * (Antigravity's, fx's, Goose's, Grok Build's and pi's write tools, for example).
    */
   kind: 'create' | 'modify' | 'write' | 'delete'
   /** Line counts, or null when the harness didn't send the content (e.g. deletes). */

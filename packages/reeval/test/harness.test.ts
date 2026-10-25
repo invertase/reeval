@@ -43,6 +43,7 @@ import {
   GROK_ENDPOINTS,
   GROK_HOME_SKILLS_DIR,
   GROK_WORKSPACE_SKILLS_DIR,
+  GrokBuildStreamTranslator,
 } from '@reeval/harness-grok-build'
 import {
   OPENCODE_HOME_SKILLS_DIR,
@@ -1765,6 +1766,46 @@ describe('writes that say nothing of the file before', () => {
         ['b.txt', 'write', null, null],
         ['c.txt', 'modify', null, null],
       ],
+    )
+  })
+
+  test("Grok Build's write, named from its x.ai/tool metadata, is a write counting its content", () => {
+    const t = new GrokBuildStreamTranslator()
+    const rawInput = { file_path: '/reeval/workspace/a.txt', content: 'x\n' }
+    const parts = [
+      {
+        type: 'raw',
+        rawValue: {
+          sessionUpdate: 'tool_call',
+          toolCallId: 'w',
+          title: 'write',
+          rawInput,
+          _meta: { 'x.ai/tool': { name: 'write', namespace: 'grok_build' } },
+        },
+      },
+      {
+        type: 'tool-call',
+        toolCallId: 'w',
+        toolName: 'acp_tool_w',
+        input: JSON.stringify(rawInput),
+      },
+      { type: 'tool-result', toolCallId: 'w', toolName: 'acp_tool_w', output: 'File written' },
+    ].map((p) => t.push(p))
+    const call = parts.find((p) => p.type === 'tool-call')
+    assert.equal(call?.toolName, 'write')
+    const events = normaliseStream(
+      parts
+        .filter((p) => p.type !== 'raw')
+        .map((part, i) => ({
+          ms: 10 * (i + 1),
+          part:
+            part.type === 'tool-call' ? { ...part, input: JSON.parse(String(part.input)) } : part,
+        })),
+      0,
+    )
+    assert.deepEqual(
+      events.map((e) => (e.type === 'file-edit' ? [e.path, e.kind, e.added, e.removed] : e.type)),
+      [['/reeval/workspace/a.txt', 'write', 1, null]],
     )
   })
 })

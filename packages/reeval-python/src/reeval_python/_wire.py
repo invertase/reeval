@@ -1704,7 +1704,7 @@ class TranscriptEventFileEdit(TypedDict):
     atMs: float
     durationMs: float | None
     # `write` is a whole-file write whose result doesn't say whether the file existed before
-    # (Antigravity's, fx's, Goose's and pi's write tools, for example).
+    # (Antigravity's, fx's, Goose's, Grok Build's and pi's write tools, for example).
     kind: Literal["create", "modify", "write", "delete"]
     path: str
     removed: float | None
