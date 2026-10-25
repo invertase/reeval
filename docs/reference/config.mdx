@@ -213,7 +213,7 @@ reeval: judge.model.score in reeval.yaml must be at most 1 (got 2)
 </Property>
 
 <Property name="concurrency" type="number">
-  How many attempts run at once. A whole number of at least 1. Default: the smallest of 8, the CPU count, and the memory in GB, measured on the Docker VM (or the host when Docker isn't available). `--concurrency` beats `REEVAL_CONCURRENCY`, which beats this key.
+  How many attempts run at once. A whole number of at least 1. Default: the smallest of 8, the CPU count, and the memory in GB, measured on the Docker VM (or the host when Docker isn't available). A value you set above the CPU count is honoured: each eval file runs in a Node process of its own, up to `concurrency` (or the number of files) at once. `--concurrency` beats `REEVAL_CONCURRENCY`, which beats this key.
 </Property>
 
 <Property name="record" type="'manual' | 'ci' | 'always'">

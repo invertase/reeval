@@ -30,7 +30,7 @@ flowchart LR
 
 ## The default and how to set it
 
-The default is 8, but no more than one per CPU or per GB of memory where the sandboxes run: the Docker VM under Docker Desktop, else the host. So a 4 GB Docker VM gets 4.
+The default is 8, but no more than one per CPU or per GB of memory where the sandboxes run: the Docker VM under Docker Desktop, else the host. So a 4 GB Docker VM gets 4. A value you set above the CPU count is honoured, since attempts mostly wait on a model.
 
 | Precedence | Set with |
 |---|---|

@@ -1,7 +1,6 @@
 // The engine's main process: finds the eval files, collects each in a fresh worker for the plan,
-// then runs each in a fresh worker again, at most one per CPU at once, handing out the
+// then runs each in a fresh worker again, at most `concurrency` at once, handing out the
 // scheduler's leases over IPC and turning what workers report into reeval's events and results.
-import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { UsageError } from '../errors.ts'
@@ -70,8 +69,9 @@ export async function runEngine(
   if (specs.length === 0)
     return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
 
-  // Attempts wait on the network, not the CPU, so a few workers run many attempts each.
-  const workers = Math.max(1, Math.min(concurrency, availableParallelism()))
+  // A file's worker holds its lane until all of its attempts finish, so capping workers below
+  // `concurrency` (at the CPU count, say) would cap the attempts in flight with them.
+  const workers = Math.max(1, Math.min(concurrency, specs.length))
   const entry = workerEntry(root, PACKAGE_NAMES)
   const hide = [...reevalFrames(PACKAGE_DIR), ...reevalFrames(join(entry, '..', '..'))]
   const matchesName = (e: { id: string; attempt?: EngineEval['attempt'] }) =>
