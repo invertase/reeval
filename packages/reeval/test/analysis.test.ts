@@ -19,6 +19,8 @@ import { type Digest as AnalysisDigest, RULES } from '../src/analysis/digest.ts'
 import { analysisSchema, SYSTEM_PROMPT } from '../src/analysis/schema.ts'
 import { capConfidence, validateAnalysis } from '../src/analysis/validate.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
+import { fingerprintOf } from '../src/history/assemble.ts'
+import type { FingerprintParts } from '../src/history/types.ts'
 import { EFFECT_MIN_COUNTED, mannWhitney, minimumP } from '../src/stats.ts'
 import { createStudioApp } from '../src/studio/server.ts'
 import { formatTokens } from '../src/usage.ts'
@@ -296,6 +298,76 @@ describe('canaries: the verdicts flip when the data does', () => {
     })
     const drift = await query(p.dir, 'SELECT noise, real_changed FROM drift')
     assert.ok(drift.length > 0 && drift.every((d) => d.noise === 0 && d.real_changed === 'context'))
+  })
+
+  test('a gateway-only change is drift with an observed fact, as compare names it', async () => {
+    type C = { key: string; fingerprint: string; fingerprintParts: FingerprintParts }
+    const gatewayProject = async (name: string, gateways: Record<string, string>) => {
+      const p = await historyProject(name, 'dogfood')
+      const context = new Map<string, string>()
+      edit(p.dir, (record) => {
+        const run = String(record.runId).includes('041aef3') ? 'head' : 'base'
+        for (const e of record.evals as Array<{ key: string; cells: C[] }>) {
+          for (const c of e.cells) {
+            const id = `${e.key}\0${c.key}`
+            if (run === 'base') context.set(id, c.fingerprintParts.context)
+            else c.fingerprintParts.context = context.get(id) as string
+            c.fingerprintParts.gateway = gateways[run]
+            c.fingerprint = fingerprintOf(c.fingerprintParts)
+          }
+        }
+      })
+      return p
+    }
+    const observed = (rows: Row[]) =>
+      rows.filter((r) => r.tier === 'observed').map((r) => [r.factor, r.note])
+
+    const p = await gatewayProject('canary-gateway', { head: 'vercel' })
+    const drift = await query(
+      p.dir,
+      'SELECT changed, changed_paths, noise, real_changed FROM drift',
+    )
+    assert.equal(drift.length, 9, 'every cell drifted')
+    for (const d of drift) {
+      assert.deepEqual(d, {
+        changed: 'gateway',
+        changed_paths: null,
+        noise: 0,
+        real_changed: 'gateway',
+      })
+    }
+    assert.deepEqual(
+      observed(await query(p.dir, 'factor_effects')),
+      Array(9).fill(['gateway', null]),
+      'one observed gateway fact per cell',
+    )
+    const cells = await query(p.dir, 'SELECT DISTINCT fp_gateway FROM cells ORDER BY fp_gateway')
+    assert.deepEqual(
+      cells.map((c) => c.fp_gateway),
+      [null, 'vercel'],
+    )
+    const runs = (await query(p.dir, 'SELECT run_id FROM runs ORDER BY run_id')).map((r) =>
+      String(r.run_id),
+    )
+    const compared = await runCli(p.dir, ['compare', ...runs, '--json'])
+    assert.equal(compared.code, 0, compared.stderr)
+    const rows = JSON.parse(compared.stdout).rows as Array<{ status: string; changes?: string[] }>
+    assert.ok(
+      rows.length > 0 &&
+        rows.every((r) => r.status === 'drift' && r.changes?.join() === 'gateway changed'),
+      'compare names the same part',
+    )
+
+    const removed = await gatewayProject('canary-gateway-removed', { base: 'vercel' })
+    assert.deepEqual(
+      [...new Set((await query(removed.dir, 'drift')).map((d) => d.real_changed))],
+      ['gateway'],
+      'a gateway dropped back to direct is drift too',
+    )
+
+    const same = await gatewayProject('canary-gateway-same', { base: 'vercel', head: 'vercel' })
+    assert.deepEqual(await query(same.dir, 'drift'), [], 'twin: the same gateway is no drift')
+    assert.deepEqual(observed(await query(same.dir, 'factor_effects')), [])
   })
 
   test('mixed outcomes over enough comparable attempts are flaky, caused by the agent', async () => {

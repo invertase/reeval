@@ -9,7 +9,7 @@ import { pairTallies } from '../compare/pairs.ts'
 import { UsageError } from '../errors.ts'
 import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID, ownRequire } from '../root.ts'
-import { DERIVED, DERIVED_TABLES, deriveFacts } from './facts.ts'
+import { DERIVED, DERIVED_TABLES, deriveFacts, PART_COLUMNS } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
 import { rowsOf } from './rows.ts'
 import { type ClassContext, classifyCall } from './tool-class.ts'
@@ -19,9 +19,10 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 14
+const DB_VERSION = 15
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
+const PART_KEYS = Object.keys(PART_COLUMNS) as Array<keyof typeof PART_COLUMNS>
 
 export const historyDbPath = (root: string) => join(root, '.reeval', 'history.db')
 
@@ -113,10 +114,12 @@ CREATE TABLE cells (
   run_id TEXT NOT NULL, eval_key TEXT NOT NULL, key TEXT NOT NULL, role TEXT, variant TEXT,
   harness TEXT, harness_kind TEXT, model TEXT, reasoning_effort TEXT, environment TEXT,
   environment_digest TEXT, sandbox TEXT, gate TEXT, gate_pass_rate REAL, fingerprint TEXT,
-  fp_sources TEXT, fp_harness TEXT, fp_environment TEXT, fp_image TEXT, fp_agent_cli TEXT,
-  fp_judge TEXT, fp_context TEXT, runs INTEGER, pass INTEGER, fail INTEGER, infra_error INTEGER,
-  skipped INTEGER, pass_at_1 REAL, outcome TEXT, lift_vs TEXT, lift_points REAL, lift_lo REAL,
-  lift_hi REAL, within_noise INTEGER, min_lift REAL, comparable TEXT,
+  ${Object.values(PART_COLUMNS)
+    .map(([, col]) => `${col} TEXT`)
+    .join(', ')},
+  runs INTEGER, pass INTEGER, fail INTEGER, infra_error INTEGER, skipped INTEGER, pass_at_1 REAL,
+  outcome TEXT, lift_vs TEXT, lift_points REAL, lift_lo REAL, lift_hi REAL, within_noise INTEGER,
+  min_lift REAL, comparable TEXT,
   PRIMARY KEY (run_id, eval_key, key)
 );
 CREATE TABLE attempts (
@@ -522,7 +525,9 @@ function insertRun(
     for (const c of e.cells) {
       const p = c.fingerprintParts
       run(
-        `INSERT INTO cells VALUES (${Array(36).fill('?').join(', ')})`,
+        `INSERT INTO cells VALUES (${Array(29 + PART_KEYS.length)
+          .fill('?')
+          .join(', ')})`,
         record.runId,
         e.key,
         c.key,
@@ -538,13 +543,7 @@ function insertRun(
         typeof c.gate === 'string' ? c.gate : 'passRate',
         typeof c.gate === 'string' ? null : c.gate.passRate,
         c.fingerprint,
-        p.sources,
-        p.harness,
-        p.environment,
-        p.image,
-        p.agentCli,
-        p.judge,
-        p.context,
+        ...PART_KEYS.map((k) => p[k] ?? null),
         c.runs,
         c.pass,
         c.fail,

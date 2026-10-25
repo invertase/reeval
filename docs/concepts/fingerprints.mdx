@@ -30,6 +30,7 @@ That's one cell of a real Cursor run. The cell's `fingerprint` is the hash of th
 | `agentCli` | The agent's version baked into the image: a CLI's, or the Cursor SDK's (`@cursor/sdk 1.0.32`) | The agent updates |
 | `judge` | The judge's model, threshold and version | You change the judge or its threshold |
 | `context` | The skills, rules and MCP config the agent could see in its sandbox | Anything new lands where the agent reads it |
+| `gateway` | The gateway the model calls went through; unset on `direct` | You add, change or drop a gateway |
 
 Only local imports are traced; packages are covered by the lockfile hashes the run records. Records from before `cursor()` moved to the Cursor SDK list files its old CLI rewrote every session, such as `~/.cursor/cli-config.json`; reeval treats changes to those as noise, not drift.
 

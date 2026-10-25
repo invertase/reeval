@@ -3,6 +3,7 @@
 // runs. Every tool's answer is checked against the CLI command it mirrors.
 import assert from 'node:assert/strict'
 import { type ChildProcess, spawn } from 'node:child_process'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { request } from 'node:http'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
@@ -10,9 +11,10 @@ import { after, before, describe, test } from 'node:test'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 import { killTree } from '@reeval/sandbox-docker/process'
+import { fingerprintOf } from '../src/history/assemble.ts'
 import { VIEW_NAMES } from '../src/history/db.ts'
 import { firstKeyword, sqlProblem } from '../src/mcp/server.ts'
-import { baseEnv, pkgRoot, project, runCli } from './helpers.ts'
+import { baseEnv, pkgRoot, project, recordedRuns, runCli } from './helpers.ts'
 
 const cli = join(pkgRoot, 'dist/cli.js')
 const MODERN = { pin: '2026-07-28' }
@@ -511,6 +513,31 @@ describe('reeval mcp', () => {
           [ids[0], 0],
         ],
       )
+    } finally {
+      await client.close()
+    }
+  })
+
+  test("failures names a gateway only the last passing run's fingerprint has", async () => {
+    const p = await project('mcp-gateway', { 'reeval.config.ts': config, ...evals })
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    assert.equal((await runCli(p.dir, ['run', '--record'], { env: { BREAK: '1' } })).code, 1)
+    const [passed] = recordedRuns(p.dir)
+    const path = join(p.dir, 'evals/.history', `${passed}.json`)
+    const record = JSON.parse(readFileSync(path, 'utf8'))
+    for (const e of record.evals) {
+      for (const c of e.cells) {
+        c.fingerprintParts.gateway = 'vercel'
+        c.fingerprint = fingerprintOf(c.fingerprintParts)
+      }
+    }
+    writeFileSync(path, JSON.stringify(record))
+    const client = await connect(p.dir, MODERN)
+    try {
+      const f = await json(client, 'failures', { filter: 'writes ok', limit: 1 })
+      const [cell] = f.cells as [Json]
+      assert.equal((cell.lastPass as Json).runId, passed)
+      assert.deepEqual((cell.lastPass as Json).changed, ['harness', 'gateway'])
     } finally {
       await client.close()
     }
