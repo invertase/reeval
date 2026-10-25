@@ -4,7 +4,7 @@ import http from 'node:http'
 import http2 from 'node:http2'
 import https from 'node:https'
 import net from 'node:net'
-import { duplexPair } from 'node:stream'
+import { Duplex, duplexPair } from 'node:stream'
 import { after, before, describe, test } from 'node:test'
 import tls from 'node:tls'
 import { gzipSync } from 'node:zlib'
@@ -1570,6 +1570,8 @@ describe('brokered secrets through the proxy', () => {
 
   describe('plain HTTP inside a CONNECT to a brokered host', () => {
     const PLAIN = 'plain.upstream.test'
+    /** A gateway that drops the connection fails the test instead of hanging the run. */
+    const bounded = { timeout: 10_000 }
     let plain: http.Server
     let port: number
     before(async () => {
@@ -1623,65 +1625,69 @@ describe('brokered secrets through the proxy', () => {
     }
 
     for (const asMux of [false, true]) {
-      test(`goes upstream as it is, unsubstituted, and is traced${asMux ? ' (mux stream)' : ''}`, async () => {
-        const { gw, requests } = await brokered(asMux)
-        try {
-          seen.length = 0
-          const tunnel = await connect(gw, PLAIN, port)
-          assert.ok(tunnel.ok)
-          const body = await new Promise<string>((resolve, reject) => {
-            const req = http.request(
+      test(
+        `goes upstream as it is, unsubstituted, and is traced${asMux ? ' (mux stream)' : ''}`,
+        bounded,
+        async () => {
+          const { gw, requests } = await brokered(asMux)
+          try {
+            seen.length = 0
+            const tunnel = await connect(gw, PLAIN, port)
+            assert.ok(tunnel.ok)
+            const body = await new Promise<string>((resolve, reject) => {
+              const req = http.request(
+                {
+                  host: PLAIN,
+                  port,
+                  path: '/node-fetch?q=1',
+                  headers: { authorization: `Bearer ${HOLDER}` },
+                  createConnection: () => tunnel.socket,
+                },
+                (res) => {
+                  let text = ''
+                  res.on('data', (d) => {
+                    text += d
+                  })
+                  res.on('end', () => resolve(text))
+                },
+              )
+              req.once('error', reject)
+              req.end()
+            })
+            assert.equal(body, `got Bearer ${HOLDER}`)
+            assert.equal(seen[0]?.host, 'plain')
+            assert.equal(seen[0]?.path, '/node-fetch?q=1')
+            assert.equal(seen[0]?.headers.authorization, `Bearer ${HOLDER}`)
+            assert.equal(reachedUpstream().includes(SECRET), false)
+            const [event] = await requests(1)
+            assert.deepEqual(
+              { ...event, ms: 0, requestHeaders: undefined, responseHeaders: undefined },
               {
+                type: 'request',
+                method: 'GET',
+                url: `http://${PLAIN}:${port}/node-fetch`,
                 host: PLAIN,
                 port,
-                path: '/node-fetch?q=1',
-                headers: { authorization: `Bearer ${HOLDER}` },
-                createConnection: () => tunnel.socket,
-              },
-              (res) => {
-                let text = ''
-                res.on('data', (d) => {
-                  text += d
-                })
-                res.on('end', () => resolve(text))
+                via: 'http',
+                allowed: true,
+                status: 200,
+                sent: 0,
+                received: Buffer.byteLength(body),
+                substituted: [],
+                credentials: [],
+                ms: 0,
+                requestHeaders: undefined,
+                responseHeaders: undefined,
               },
             )
-            req.once('error', reject)
-            req.end()
-          })
-          assert.equal(body, `got Bearer ${HOLDER}`)
-          assert.equal(seen[0]?.host, 'plain')
-          assert.equal(seen[0]?.path, '/node-fetch?q=1')
-          assert.equal(seen[0]?.headers.authorization, `Bearer ${HOLDER}`)
-          assert.equal(reachedUpstream().includes(SECRET), false)
-          const [event] = await requests(1)
-          assert.deepEqual(
-            { ...event, ms: 0, requestHeaders: undefined, responseHeaders: undefined },
-            {
-              type: 'request',
-              method: 'GET',
-              url: `http://${PLAIN}:${port}/node-fetch`,
-              host: PLAIN,
-              port,
-              via: 'http',
-              allowed: true,
-              status: 200,
-              sent: 0,
-              received: Buffer.byteLength(body),
-              substituted: [],
-              credentials: [],
-              ms: 0,
-              requestHeaders: undefined,
-              responseHeaders: undefined,
-            },
-          )
-        } finally {
-          gw.close()
-        }
-      })
+          } finally {
+            gw.close()
+          }
+        },
+      )
     }
 
-    test('a websocket upgrade goes upstream as it is and is traced', async () => {
+    test('a websocket upgrade goes upstream as it is and is traced', bounded, async () => {
       const { gw, requests } = await brokered(false)
       try {
         seen.length = 0
@@ -1703,44 +1709,178 @@ describe('brokered secrets through the proxy', () => {
       }
     })
 
-    test("a client that sends nothing is closed after the wait, and it's traced", async () => {
-      const { gw, requests } = await brokered(false, 200)
+    test(
+      "a client that sends nothing is closed after the wait, and it's traced",
+      bounded,
+      async () => {
+        const { gw, requests } = await brokered(false, 200)
+        try {
+          const tunnel = await connect(gw, PLAIN, port)
+          assert.ok(tunnel.ok)
+          await new Promise((resolve) => tunnel.socket.once('close', resolve))
+          const [event] = await requests(1)
+          assert.equal(event?.type === 'request' && event.method, 'CONNECT')
+          assert.equal(
+            event?.type === 'request' && event.reason,
+            'the client sent nothing within 0.2s',
+          )
+        } finally {
+          gw.close()
+        }
+      },
+    )
+
+    for (const [what, request] of [
+      ['a Host', (p: number) => `GET /h HTTP/1.1\r\nhost: elsewhere.test:${p}\r\n`],
+      [
+        'an absolute URL',
+        (p: number) => `GET http://elsewhere.test:${p}/h HTTP/1.1\r\nhost: ${PLAIN}:${p}\r\n`,
+      ],
+      [
+        'a websocket upgrade',
+        (p: number) =>
+          `GET http://elsewhere.test:${p}/ws HTTP/1.1\r\nhost: ${PLAIN}:${p}\r\nupgrade: websocket\r\nconnection: Upgrade\r\nsec-websocket-version: 13\r\nsec-websocket-key: dGhlIHNhbXBsZSBub25jZQ==\r\n`,
+      ],
+    ] as const) {
+      test(`${what} naming another host gets a 421, and it's traced`, bounded, async () => {
+        const { gw, requests } = await brokered(false)
+        try {
+          seen.length = 0
+          const reply = (await raw(gw, `${request(port)}connection: close\r\n\r\n`)).toString()
+          assert.match(reply, /^HTTP\/1\.1 421 /)
+          assert.match(
+            reply,
+            /names elsewhere\.test, but the connection is to plain\.upstream\.test/,
+          )
+          assert.deepEqual(seen, [])
+          const [event] = await requests(1)
+          assert.equal(event?.type === 'request' && event.allowed, false)
+          assert.equal(event?.type === 'request' && event.status, 421)
+          assert.equal(event?.type === 'request' && event.host, PLAIN)
+        } finally {
+          gw.close()
+        }
+      })
+    }
+
+    test("a CONNECT inside the tunnel gets a 400, and it's traced", bounded, async () => {
+      const { gw, requests } = await brokered(false)
+      try {
+        seen.length = 0
+        const reply = (
+          await raw(gw, 'CONNECT elsewhere.test:443 HTTP/1.1\r\nhost: elsewhere.test:443\r\n\r\n')
+        ).toString()
+        assert.match(reply, /^HTTP\/1\.1 400 /)
+        assert.match(reply, /CONNECT elsewhere\.test:443 came inside the tunnel/)
+        assert.deepEqual(seen, [])
+        const [event] = await requests(1)
+        assert.equal(event?.type === 'request' && event.status, 400)
+      } finally {
+        gw.close()
+      }
+    })
+
+    test('a client that hangs up mid-request is not traced as a bad request', bounded, async () => {
+      const { gw, requests } = await brokered(false)
       try {
         const tunnel = await connect(gw, PLAIN, port)
         assert.ok(tunnel.ok)
+        tunnel.socket.end(`GET /half HTTP/1.1\r\nhost: ${PLAIN}\r\n`)
         await new Promise((resolve) => tunnel.socket.once('close', resolve))
+        assert.deepEqual(await requests(1), [])
+      } finally {
+        gw.close()
+      }
+    })
+
+    test('a client that closes before sending anything is traced', bounded, async () => {
+      const { gw, requests } = await brokered(false)
+      try {
+        const tunnel = await connect(gw, PLAIN, port)
+        assert.ok(tunnel.ok)
+        tunnel.socket.end()
         const [event] = await requests(1)
         assert.equal(event?.type === 'request' && event.method, 'CONNECT')
         assert.equal(
           event?.type === 'request' && event.reason,
-          'the client sent nothing within 0.2s',
+          'the client closed the connection without sending anything',
         )
       } finally {
         gw.close()
       }
     })
 
-    test("bytes that are neither TLS nor HTTP get a 400 that says why, and it's traced", async () => {
-      const { gw, requests } = await brokered(false)
+    test('a TLS ClientHello split after its first byte is still decrypted', bounded, async () => {
+      const { gw } = await brokered(false)
       try {
-        seen.length = 0
-        const reply = (
-          await raw(gw, Buffer.from([0x00, 0x01, 0x02, 0x0d, 0x0a, 0x0d, 0x0a]))
-        ).toString()
-        assert.match(reply, /^HTTP\/1\.1 400 /)
-        assert.match(reply, /neither a TLS handshake nor an HTTP\/1\.1 request/)
-        assert.deepEqual(seen, [])
-        const [event] = await requests(1)
-        assert.equal(event?.type === 'request' && event.via, 'http')
-        assert.equal(event?.type === 'request' && event.status, 400)
-        assert.match(
-          String(event?.type === 'request' && event.reason),
-          /neither a TLS handshake nor an HTTP\/1\.1 request/,
-        )
+        const tunnel = await connect(gw, HOST, h1.port)
+        assert.ok(tunnel.ok)
+        const { socket } = tunnel
+        let first = true
+        const split = new Duplex({
+          write(chunk: Buffer, _encoding, done) {
+            if (!first) return socket.write(chunk, done)
+            first = false
+            socket.write(chunk.subarray(0, 1))
+            setTimeout(() => socket.write(chunk.subarray(1), done), 100)
+          },
+          read() {},
+        })
+        socket.on('data', (d) => split.push(d))
+        socket.on('end', () => split.push(null))
+        const body = await new Promise<string>((resolve, reject) => {
+          const req = https.request(
+            {
+              host: HOST,
+              port: h1.port,
+              path: '/echo',
+              headers: { authorization: `Bearer ${HOLDER}` },
+              createConnection: () =>
+                tls.connect({ socket: split, servername: HOST, ca: gw.ca.cert }),
+            },
+            (res) => {
+              let text = ''
+              res.on('data', (d) => {
+                text += d
+              })
+              res.on('end', () => resolve(text))
+            },
+          )
+          req.once('error', reject)
+          req.end()
+        })
+        assert.equal(JSON.parse(body).path, '/echo')
+        assert.equal(seen.at(-1)?.headers.authorization, `Bearer ${SECRET}`)
       } finally {
         gw.close()
       }
     })
+
+    test(
+      "bytes that are neither TLS nor HTTP get a 400 that says why, and it's traced",
+      bounded,
+      async () => {
+        const { gw, requests } = await brokered(false)
+        try {
+          seen.length = 0
+          const reply = (
+            await raw(gw, Buffer.from([0x00, 0x01, 0x02, 0x0d, 0x0a, 0x0d, 0x0a]))
+          ).toString()
+          assert.match(reply, /^HTTP\/1\.1 400 /)
+          assert.match(reply, /neither a TLS handshake nor an HTTP\/1\.1 request/)
+          assert.deepEqual(seen, [])
+          const [event] = await requests(1)
+          assert.equal(event?.type === 'request' && event.via, 'http')
+          assert.equal(event?.type === 'request' && event.status, 400)
+          assert.match(
+            String(event?.type === 'request' && event.reason),
+            /neither a TLS handshake nor an HTTP\/1\.1 request/,
+          )
+        } finally {
+          gw.close()
+        }
+      },
+    )
   })
 
   test('setSubstitutions replaces the set: an empty one decrypts nothing', async () => {

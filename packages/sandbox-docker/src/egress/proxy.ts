@@ -446,8 +446,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
           socket,
           (byte) =>
             byte === TLS_HANDSHAKE ? decrypt(socket, target) : plainInTunnel(socket, target),
-          () => {
-            const reason = `the client sent nothing within ${firstByteTimeout / 1000}s`
+          (reason) => {
             log(`reeval:egress CONNECT ${host}:${port} closed (${reason})`)
             emit({
               ...tunnel,
@@ -567,13 +566,14 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
 
   /**
    * Calls `then` with the connection's first byte once it arrives, left unread for the next
-   * reader, or `idle` once it has waited `firstByteTimeout` and closed the connection.
+   * reader, or `idle` with why there's none: the client closed it first, or it waited
+   * `firstByteTimeout` and closed it.
    */
-  function firstByte(socket: Duplex, then: (byte: number) => void, idle: () => void) {
+  function firstByte(socket: Duplex, then: (byte: number) => void, idle: (why: string) => void) {
     const timer = setTimeout(() => {
       stop()
       socket.destroy()
-      idle()
+      idle(`the client sent nothing within ${firstByteTimeout / 1000}s`)
     }, firstByteTimeout)
     const onReadable = () => {
       const chunk = socket.read() as Buffer | null
@@ -582,13 +582,40 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       socket.unshift(chunk)
       then(chunk[0] as number)
     }
+    const onClose = () => {
+      stop()
+      idle('the client closed the connection without sending anything')
+    }
     const stop = () => {
       clearTimeout(timer)
       socket.off('readable', onReadable)
-      socket.off('close', stop)
+      socket.off('close', onClose)
     }
     socket.on('readable', onReadable)
-    socket.once('close', stop)
+    socket.once('close', onClose)
+  }
+
+  /**
+   * The path a request in a plain tunnel asks for, or why it's refused: its Host or absolute-form
+   * URL names a host other than the CONNECT target, which a server sharing the target's address
+   * could route it to.
+   */
+  function inTunnel(target: Target, req: http.IncomingMessage): { path: string; refused?: string } {
+    const asked = req.url ?? '/'
+    const absolute = asked.startsWith('/') ? undefined : URL.parse(asked)
+    const path = absolute ? absolute.pathname + absolute.search : asked
+    for (const named of [absolute?.host, req.headers.host]) {
+      if (!named) continue
+      const host = parseAuthority(named, target.port).host
+      if (host === target.host) continue
+      const shown = `http://${authorityOf(target.host, target.port)}${pathOnly(path)}`
+      log(`reeval:egress ${req.method} ${shown} refused (Host ${host})`)
+      return {
+        path,
+        refused: `reeval egress gateway: the request names ${host}, but the connection is to ${target.host}; send it on a connection to ${host}.`,
+      }
+    }
+    return { path }
   }
 
   /**
@@ -598,28 +625,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
    */
   function plainInTunnel(socket: Duplex, target: Target) {
     const authority = authorityOf(target.host, target.port)
-    const server = http.createServer((req, res) => {
-      const asked = req.url ?? '/'
-      const absolute = asked.startsWith('/') ? undefined : URL.parse(asked)
-      const path = absolute ? absolute.pathname + absolute.search : asked
-      const done = requestEvent(res, {
-        method: req.method ?? 'GET',
-        url: `http://${authority}${pathOnly(path)}`,
-        host: target.host,
-        port: target.port,
-        via: 'http',
-        requestHeaders: plainHeaders(req.headers),
-      })
-      onPlain(target, req, res, path, req.headers.host ?? authority, done)
-    })
-    server.on('upgrade', (req: http.IncomingMessage, s: Duplex, head: Buffer) =>
-      onPlainUpgrade(target, req, track(s), head),
-    )
-    server.on('clientError', (error: NodeJS.ErrnoException, s: Duplex) => {
-      // Node reports the socket's own errors (a reset) here too; only a parse error is the client's.
-      if (!error.code?.startsWith('HPE_')) return s.destroy()
-      const reason = `reeval egress gateway: the connection to ${authority} carries neither a TLS handshake nor an HTTP/1.1 request. reeval reads every connection to a host with a brokered secret.`
-      log(`reeval:egress CONNECT ${authority} refused (neither TLS nor HTTP/1.1)`)
+    const refuse = (s: Duplex, reason: string) => {
       emit({
         type: 'request',
         method: 'CONNECT',
@@ -637,6 +643,45 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         ms: 0,
       })
       reply(s, 400, reason)
+    }
+    const server = http.createServer((req, res) => {
+      const { path, refused } = inTunnel(target, req)
+      const done = requestEvent(res, {
+        method: req.method ?? 'GET',
+        url: `http://${authority}${pathOnly(path)}`,
+        host: target.host,
+        port: target.port,
+        via: 'http',
+        requestHeaders: plainHeaders(req.headers),
+      })
+      if (refused) {
+        done.refuse(refused)
+        req.resume()
+        return res.writeHead(421, { 'content-type': 'text/plain' }).end(`${refused}\n`)
+      }
+      onPlain(target, req, res, path, req.headers.host ?? authority, done)
+    })
+    server.on('upgrade', (req: http.IncomingMessage, s: Duplex, head: Buffer) =>
+      onPlainUpgrade(target, req, track(s), head),
+    )
+    server.on('connect', (req: http.IncomingMessage, s: Duplex) => {
+      log(`reeval:egress CONNECT ${authority} refused (CONNECT ${req.url} inside it)`)
+      refuse(
+        s,
+        `reeval egress gateway: CONNECT ${req.url} came inside the tunnel to ${authority}; send it to the gateway on a connection of its own.`,
+      )
+    })
+    server.on('clientError', (error: NodeJS.ErrnoException, s: Duplex) => {
+      // Node reports the socket's own errors (a reset) and a client hanging up mid-request here
+      // too; only a parse error is the client's.
+      if (!error.code?.startsWith('HPE_') || error.code === 'HPE_INVALID_EOF_STATE') {
+        return s.destroy()
+      }
+      log(`reeval:egress CONNECT ${authority} refused (neither TLS nor HTTP/1.1)`)
+      refuse(
+        s,
+        `reeval egress gateway: the connection to ${authority} carries neither a TLS handshake nor an HTTP/1.1 request. reeval reads every connection to a host with a brokered secret.`,
+      )
     })
     server.emit('connection', socket)
   }
@@ -646,11 +691,12 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const method = req.method ?? 'GET'
     const startedAt = Date.now()
     const authority = authorityOf(target.host, target.port)
+    const { path, refused } = inTunnel(target, req)
     const upgraded = (fields: Partial<EgressRequestEvent>) =>
       emit({
         type: 'request',
         method,
-        url: `http://${authority}${pathOnly(req.url ?? '/')}`,
+        url: `http://${authority}${pathOnly(path)}`,
         host: target.host,
         port: target.port,
         via: 'http',
@@ -663,12 +709,16 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         ...fields,
         ms: Date.now() - startedAt,
       })
-    log(`reeval:egress ${method} http://${authority}${pathOnly(req.url ?? '/')} (upgrade)`)
+    if (refused) {
+      upgraded({ allowed: false, status: 421, reason: refused })
+      return reply(socket, 421, refused)
+    }
+    log(`reeval:egress ${method} http://${authority}${pathOnly(path)} (upgrade)`)
     const upstream = http.request({
       host: target.address,
       port: target.port,
       method,
-      path: req.url ?? '/',
+      path,
       headers: {
         ...endToEnd(req.headers, ['upgrade', 'connection']),
         host: req.headers.host ?? authority,
