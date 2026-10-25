@@ -63,5 +63,5 @@
   "collected: an empty limit.harness": null,
   "collected: a limit.harness id with no harnesses collected": "UsageError: profiles.pr.limit.harness in reeval.config.ts lists \"a\", which no eval runs on. Harness ids the evals run on: none.",
   "collected: a path filter, one limit.harness id matches": null,
-  "collected: a path filter, no limit.harness id matches": "UsageError: profiles.pr.limit.harness in reeval.config.ts lists \"b\", which no eval runs on. Harness ids the evals run on: a."
+  "collected: a path filter, no limit.harness id matches": "UsageError: profiles.pr.limit.harness in reeval.config.ts lists \"b\", which no eval in the selected files runs on. Harness ids the evals in the selected files run on: a."
 }

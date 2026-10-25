@@ -789,9 +789,11 @@ export function checkLimitHarness(
   const unknown = ids.filter((id) => !collected.harnesses.includes(id))
   if (!unknown.length || (collected.partial && unknown.length < ids.length)) return
   const listed = unknown.map((id) => JSON.stringify(id)).join(', ')
-  const have = [...new Set(collected.harnesses)].sort()
+  const have = [...collected.harnesses].sort()
+  const evals = collected.partial ? 'eval in the selected files' : 'eval'
+  const the = collected.partial ? 'the evals in the selected files' : 'the evals'
   throw new UsageError(
-    `profiles.${profile.name}.limit.harness in ${configFile} lists ${listed}, which no eval runs on. Harness ids the evals run on: ${have.join(', ') || 'none'}.`,
+    `profiles.${profile.name}.limit.harness in ${configFile} lists ${listed}, which no ${evals} runs on. Harness ids ${the} run on: ${have.join(', ') || 'none'}.`,
   )
 }
 

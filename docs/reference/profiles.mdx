@@ -86,7 +86,7 @@ A profile takes `defaults`, `limit`, `judge`, `budget`, `record`, `tags` and `ga
 </Property>
 
 <Property name="harness" type="string[]" optional>
-  Harness ids to keep, matched exactly: `cursor:composer-2.5` keeps the default harness, and a bare `cursor` matches none. The others are dropped from each eval; an eval left with none is skipped. It can't add a harness: use `defaults.harness` for that. An id that no eval in the run's files runs on stops the run before anything starts (exit 2), whatever `--tag` and name filters pick. When a path filter loads only some eval files, reeval refuses only a list none of whose ids match, since the others may name harnesses of files it didn't load.
+  Harness ids to keep, matched exactly: `cursor:composer-2.5` keeps the default harness, and a bare `cursor` matches none. The others are dropped from each eval; an eval left with none is skipped. It can't add a harness: use `defaults.harness` for that. An id that no eval in the run's files runs on stops the run before anything starts (exit 2), whatever `--tag` and name filters pick. When a path filter loads only some eval files, reeval refuses only a list none of whose ids match, since the others may name harnesses of files it didn't load. A pinned eval's own harness counts like any other: the eval keeps it whatever the limit says, but the limit still has to name a harness some eval runs on.
 </Property>
 
 The plan shows what `limit` changed in the notes column. This is the `pr` profile above with `harness: ['fake']`, run in CI against an eval group with `compare` and `runs: 3`, using the fake harness:

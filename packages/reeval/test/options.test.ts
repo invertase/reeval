@@ -870,7 +870,7 @@ evaluate('other', { harness: fakeHarness({ id: 'c:z' }) }, async () => {})
     assert.equal(none.code, 2, none.stdout + none.stderr)
     assert.match(
       none.stderr,
-      /lists "c:z", which no eval runs on\. Harness ids the evals run on: a:x, b:y\./,
+      /lists "c:z", which no eval in the selected files runs on\. Harness ids the evals in the selected files run on: a:x, b:y\./,
     )
   })
 
