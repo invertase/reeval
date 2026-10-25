@@ -18,6 +18,7 @@ import {
   sandboxPaths,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
+import { evalId } from './ids.ts'
 import { isObjectLike } from './object.ts'
 import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
 import { planEval } from './plan-eval.ts'
@@ -158,17 +159,71 @@ type EvaluateFn<F = EvalFn> = {
   (name: string, options: EvalOptions, fn: F): void
 }
 
-/** The evals declared so far, by file and name path, so a second one with the same id is refused. */
-const declared = new Set<string>()
+/**
+ * The evals declared so far, by id, with their name paths and whether each is a family's case,
+ * so a second id is refused.
+ */
+const declared = new Map<string, { path: string[]; inFamily: boolean }>()
 
-function checkUnique(where: string, groups: string[], name: string, hint: string): void {
-  const key = `${collectingFile() ?? ''}\0${[...groups, name].join('\0')}`
-  if (declared.has(key)) {
+/** The pooled families declared so far, by id: their name path, length and the cases seen. */
+const families = new Map<string, { path: string[]; cases: number; seen: Set<number> }>()
+
+/** Two name paths with one id differ only where a name holds the ` › ` the id joins them with. */
+const separatorHint = (path: string[], earlier: string[]) =>
+  path.length === earlier.length
+    ? ''
+    : ` " › " joins the group and eval names in an eval's id, so a name containing it can be a grouped eval's id.`
+
+/** A run's facts name an eval and a family alike by id, so an eval can't take a family's. */
+const namedLikeFamily = (eval_: string[], family: string[]) =>
+  new UsageError(
+    `evaluate("${eval_.join(' › ')}") has the same id as the pooled evaluate.each("${family.join(' › ')}") in this file: a family's id is its name template. Give the eval or the template another name.${separatorHint(eval_, family)}`,
+  )
+
+function checkUnique(
+  where: string,
+  groups: string[],
+  name: string,
+  hint: string,
+  inFamily: boolean,
+): void {
+  const path = [...groups, name]
+  const id = evalId(collectingFile() ?? '', path)
+  const earlier = declared.get(id)
+  if (earlier) {
     throw new UsageError(
-      `${where} is declared twice in this file. Each eval needs its own name, or its attempts are merged into one eval.${hint}`,
+      `${where} is declared twice in this file. Each eval needs its own name, or its attempts are merged into one eval.${hint}${separatorHint(path, earlier.path)}`,
     )
   }
-  declared.add(key)
+  const family = inFamily ? undefined : families.get(id)
+  if (family) throw namedLikeFamily(path, family.path)
+  declared.set(id, { path, inFamily })
+}
+
+/**
+ * A family's cases pool by its id, the groups and the template, so each case may be declared
+ * once and every case must agree on the list's length.
+ */
+function checkFamily(groups: string[], family: DeclaredFamily): void {
+  const path = [...groups, family.name]
+  const id = evalId(collectingFile() ?? '', path)
+  const earlier = families.get(id)
+  if (!earlier) {
+    const plain = declared.get(id)
+    if (plain && !plain.inFamily) throw namedLikeFamily(plain.path, path)
+    families.set(id, { path, cases: family.cases, seen: new Set([family.case]) })
+    return
+  }
+  if (
+    earlier.path.length !== path.length ||
+    earlier.cases !== family.cases ||
+    earlier.seen.has(family.case)
+  ) {
+    throw new UsageError(
+      `evaluate.each("${path.join(' › ')}") is declared twice in this file. Each pooled evaluate.each needs its own name, or their cases are pooled into one family. Give each its own name template, or pass evaluate.each(cases, { pool: false }) to keep the cases apart.${separatorHint(path, earlier.path)}`,
+    )
+  }
+  earlier.seen.add(family.case)
 }
 
 function register(
@@ -180,7 +235,8 @@ function register(
   family?: DeclaredFamily,
 ): void {
   const groups = groupStack.map((g) => g.name)
-  checkUnique(`evaluate("${[...groups, name].join(' › ')}")`, groups, name, hint)
+  if (family) checkFamily(groups, family)
+  checkUnique(`evaluate("${[...groups, name].join(' › ')}")`, groups, name, hint, !!family)
   const body = `b${bodies.size + 1}`
   bodies.set(body, fn)
   declare({ type: 'eval', name, mode, options: data(own), body, ...(family ? { family } : {}) })

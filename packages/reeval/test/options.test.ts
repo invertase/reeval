@@ -1039,6 +1039,26 @@ evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})
       /evaluate\("adds 1"\) is declared twice in this file\. .* For evaluate\.each, put \$key, %s or %# in the name \("adds \$a"\) so each case's name differs\./,
     ],
     [
+      'two pooled evaluate.each with the same name template',
+      `evaluate.each([{ n: 1 }, { n: 2 }])('case $n', async () => {}); evaluate.each([{ n: 3 }, { n: 4 }, { n: 5 }])('case $n', async () => {})`,
+      /evaluate\.each\("case \$n"\) is declared twice in this file\. Each pooled evaluate\.each needs its own name, or their cases are pooled into one family\. Give each its own name template, or pass evaluate\.each\(cases, \{ pool: false \}\) to keep the cases apart\./,
+    ],
+    [
+      'an eval named like a grouped eval',
+      `group('g', () => { evaluate('e', async () => {}) }); evaluate('g › e', async () => {})`,
+      /evaluate\("g › e"\) is declared twice in this file\. Each eval needs its own name, or its attempts are merged into one eval\. " › " joins the group and eval names in an eval's id, so a name containing it can be a grouped eval's id\./,
+    ],
+    [
+      'an evaluate.each named like a grouped one',
+      `group('g', () => { evaluate.each([1, 2])('n %s', async () => {}) }); evaluate.each([3, 4])('g › n %s', async () => {})`,
+      /evaluate\.each\("g › n %s"\) is declared twice in this file\. .* " › " joins the group and eval names/,
+    ],
+    [
+      'an eval named like a pooled template',
+      `evaluate('case $n', async () => {}); evaluate.each([{ n: 1 }, { n: 2 }])('case $n', async () => {})`,
+      /evaluate\("case \$n"\) has the same id as the pooled evaluate\.each\("case \$n"\) in this file: a family's id is its name template\. Give the eval or the template another name\./,
+    ],
+    [
       "pool in an eval's options",
       `evaluate.each([1, 2])('n %s', { pool: false } as never, async () => {})`,
       /Unknown option "pool" in evaluate\("n 1"\)\. pool is an option of evaluate\.each, beside the cases: evaluate\.each\(cases, \{ pool: false \}\)\./,
