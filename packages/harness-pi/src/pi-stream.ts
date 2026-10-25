@@ -35,8 +35,15 @@ export type PiEvent = {
   toolName?: string
   result?: { content?: PiContent[]; details?: unknown }
   isError?: boolean
-  /** On `agent_end`: pi will run the agent again to retry the failed call that ended this run. */
+  /**
+   * On `agent_end`: pi will run the agent again to retry the failed call that ended this run. On
+   * `compaction_end`: pi compacted for the call that ended the run, and runs the agent again.
+   */
   willRetry?: boolean
+  /** On `compaction_start` and `compaction_end`: `overflow`, `threshold` or `manual`. */
+  reason?: string
+  /** On `compaction_end`: why the compaction failed. */
+  errorMessage?: string
 }
 
 /** pi's counts in the AI SDK's shape. `input` is uncached; pi's is too. */
@@ -102,8 +109,11 @@ export function configuredMcpToolName(name: string, servers: readonly string[]):
  * is one model call: its `message_end` is a `finish-step` with that call's usage, and the turn's
  * `finish` has their sum. A call pi reports as failed (`stopReason: 'error'`) waits for the
  * run's `agent_end`: with `willRetry` (pi's auto-retry of a transient failure, which starts a new
- * run in the same process) it's a `finish-step` that ended in `error` and the turn goes on;
- * otherwise it's an error part that fails the turn.
+ * run in the same process) it's a `finish-step` that ended in `error` and the turn goes on.
+ * Without, the turn ends at `agent_settled` (or the process's end) unless pi starts another run
+ * first: after a call that overflowed the context or stopped at `length`, pi compacts
+ * (`compaction_end` with `willRetry`) and runs the agent again, and the failed call is a
+ * `finish-step` that ended in `error`. A failure the turn ends on is an error part.
  */
 export class PiStreamTranslator {
   sessionId: string | undefined
@@ -119,8 +129,13 @@ export class PiStreamTranslator {
   private total: PiUsage | undefined
   /** The run's last call, when it failed and its `agent_end` hasn't said whether pi retries it. */
   private failure: PiMessage | undefined
-  /** The error of the call pi is retrying, until the retry's call ends. */
-  private retrying: string | undefined
+  /**
+   * The run's `agent_end` said pi won't retry, and pi hasn't settled or started another run: its
+   * last call's failure, whether pi is compacting, and why an overflow compaction failed.
+   */
+  private ended: { failure?: PiMessage; compacting?: boolean; compactionError?: string } | undefined
+  /** What pi is recovering from, as the process's death names it, until the next call ends. */
+  private recovering: string | undefined
   /**
    * The call's parts from its first tool call on, until its `message_end`: pi runs a call's tools
    * only when it doesn't fail, so a failed call's tool calls are dropped.
@@ -143,21 +158,29 @@ export class PiStreamTranslator {
     return parts
   }
 
-  /** Closes the turn when the process ends: its `agent_end` finished it, or it died first. */
+  /**
+   * Closes the turn when the process ends: pi settled it, its last `agent_end` ended it, or the
+   * process died first.
+   */
   end(options: { exitCode: number; stderr?: string; aborted?: boolean }): HarnessV1StreamPart[] {
     if (this.finished) return []
     const parts: HarnessV1StreamPart[] = []
+    if (this.ended && !this.ended.compacting) {
+      this.settle(parts)
+      return parts
+    }
     this.start(parts)
     this.close(this.held ?? parts)
     parts.push(...(this.held ?? []))
     this.held = undefined
     if (!options.aborted) {
       const detail = options.stderr?.trim()
-      const call = this.failure
-        ? ` after a failed model call (${reason(this.failure)})`
-        : this.retrying !== undefined
-          ? ` while retrying a failed model call (${this.retrying})`
-          : ''
+      const failure = this.failure ?? this.ended?.failure
+      const call = this.ended
+        ? ` while compacting its context${failure ? ` after a failed model call (${reason(failure)})` : ''}`
+        : failure
+          ? ` after a failed model call (${reason(failure)})`
+          : (this.recovering ?? '')
       parts.push({
         type: 'error',
         error: new Error(
@@ -174,6 +197,10 @@ export class PiStreamTranslator {
       this.sessionId = e.id ?? this.sessionId
       return
     }
+    if (this.ended) {
+      this.afterRun(e, parts)
+      return
+    }
     const m = e.message
     if (e.type === 'message_start' && m?.role === 'assistant') {
       this.start(parts, m.model)
@@ -187,7 +214,7 @@ export class PiStreamTranslator {
       const held = this.held ?? []
       this.held = undefined
       this.close(held)
-      this.retrying = undefined
+      this.recovering = undefined
       if (m.stopReason === 'error') {
         parts.push(...held.filter((p) => p.type !== 'tool-call'))
         this.failure = m
@@ -225,22 +252,62 @@ export class PiStreamTranslator {
       this.failure = undefined
       if (e.willRetry) {
         if (!failure) return
-        this.retrying = reason(failure)
-        if (failure.usage) this.total = add(this.total, failure.usage)
-        parts.push({
-          type: 'finish-step',
-          finishReason: { unified: 'error', raw: 'error' },
-          usage: toUsage(failure.usage),
-        })
+        this.recovering = ` while retrying a failed model call (${reason(failure)})`
+        this.failedStep(failure, parts)
         return
       }
-      if (failure)
-        parts.push({
-          type: 'error',
-          error: new Error(reason(failure)),
-        })
-      this.finish(parts, failure ? 'error' : 'stop')
+      this.ended = failure ? { failure } : {}
     }
+  }
+
+  /** An event between a run's `agent_end` and pi settling or running the agent again. */
+  private afterRun(e: PiEvent, parts: HarnessV1StreamPart[]) {
+    const ended = this.ended
+    if (!ended) return
+    if (e.type === 'compaction_start') {
+      ended.compacting = true
+    } else if (e.type === 'compaction_end') {
+      ended.compacting = false
+      if (e.willRetry) {
+        this.ended = undefined
+        this.recovering = ` while continuing after compacting its context (${
+          ended.failure ? reason(ended.failure) : 'a model call stopped at its output limit'
+        })`
+        if (ended.failure) this.failedStep(ended.failure, parts)
+      } else if (e.reason === 'overflow' && e.errorMessage) {
+        ended.compactionError = e.errorMessage
+      }
+    } else if (e.type === 'agent_start') {
+      this.ended = undefined
+      if (ended.failure) this.failedStep(ended.failure, parts)
+    } else if (e.type === 'agent_settled') {
+      this.settle(parts)
+    }
+  }
+
+  /** A failed call pi goes on from: a step that ended in error, its tokens in the sum. */
+  private failedStep(failure: PiMessage, parts: HarnessV1StreamPart[]) {
+    if (failure.usage) this.total = add(this.total, failure.usage)
+    parts.push({
+      type: 'finish-step',
+      finishReason: { unified: 'error', raw: 'error' },
+      usage: toUsage(failure.usage),
+    })
+  }
+
+  /** Ends the turn on its last run's outcome. */
+  private settle(parts: HarnessV1StreamPart[]) {
+    const failure = this.ended?.failure
+    const compactionError = this.ended?.compactionError
+    this.ended = undefined
+    if (failure)
+      parts.push({
+        type: 'error',
+        error: new Error(
+          compactionError ? `${reason(failure)} (${compactionError})` : reason(failure),
+        ),
+      })
+    this.finish(parts, failure ? 'error' : 'stop')
   }
 
   private update(e: PiEvent, out: HarnessV1StreamPart[]) {

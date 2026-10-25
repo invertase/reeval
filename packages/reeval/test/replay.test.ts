@@ -865,6 +865,53 @@ describe("replay: pi's format holds every stop reason pi defines, and a failed c
     assert.notDeepEqual(unknownIn(renamed), [])
   })
 
+  // Synthetic, not captured: the auto-retry turn with its second call one pi 1.4.0 compacts for and
+  // continues after (harness-pi's test/fixtures): it overflowed the context, or stopped at length.
+  test("a turn pi continued after compacting is not a format change, and keeps the new run's work", () => {
+    for (const name of ['compaction-overflow.ndjson', 'compaction-length.ndjson'])
+      assert.deepEqual(unknownIn(packageCapture('harness-pi', name)), [], name)
+    const plain = normalised('edit-and-run.ndjson')
+    for (const name of ['compaction-overflow.ndjson', 'compaction-length.ndjson']) {
+      const continued = normalised(name)
+      assert.ok(!kinds(continued).includes('error'), `${name}: ${kinds(continued).join(' ')}`)
+      assert.deepEqual(
+        [...tools(continued), ...edits(continued)].map((e) => e.toolCallId),
+        [...tools(plain), ...edits(plain)].map((e) => e.toolCallId),
+        name,
+      )
+      assert.equal(edits(continued).length, 2, name)
+    }
+    assert.equal(
+      kinds(normalised('compaction-overflow.ndjson')).filter((k) => k === 'retry').length,
+      1,
+    )
+  })
+
+  test("twin: a compaction that fails is an error, and its error message isn't a format change", () => {
+    const events = packageCapture('harness-pi', 'compaction-overflow.ndjson')
+    const end = events.findIndex((e) => e.type === 'compaction_end')
+    const failed = [
+      ...events.slice(0, end),
+      {
+        type: 'compaction_end',
+        reason: 'overflow',
+        aborted: false,
+        willRetry: false,
+        errorMessage: 'Context overflow recovery failed: summarization request failed',
+      },
+      { type: 'agent_settled', aborted: false },
+    ]
+    assert.deepEqual(unknownIn(failed), [])
+    const t = new PiStreamTranslator()
+    const parts = [...failed.flatMap((e) => t.push(JSON.stringify(e))), ...t.end({ exitCode: 0 })]
+    const error = parts.find((p) => p.type === 'error') as { error?: Error } | undefined
+    assert.match(String(error?.error?.message), /input token count.*recovery failed/s)
+    const renamed = events.map((e) =>
+      e.type === 'compaction_end' ? { ...e, will_retry: e.willRetry } : e,
+    )
+    assert.notDeepEqual(unknownIn(renamed), [])
+  })
+
   for (const to of ['length', 'aborted', 'error'])
     test(`"stopReason":"${to}" is not a format change`, () => {
       const base = read('pi', 'edit-and-run.raw.jsonl')
