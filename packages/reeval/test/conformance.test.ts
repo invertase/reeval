@@ -2,8 +2,9 @@
 // declare/ case's TypeScript eval file must record its expected.json, and that tree, declared in
 // place of the file, must plan the plan case's existing snapshot. A context/ script's requests go
 // to reeval's attempt host on a real attempt through the reference runner (conformance/runner.ts),
-// and reeval's answers, the attempt's record and what each judge call graded must be the script's. Every message fits the attempt protocol's Zod schemas
-// and its JSON Schema. REEVAL_UPDATE_SNAPSHOTS=1 rewrites the goldens; review the diff.
+// and reeval's answers, the attempt's record and what each judge call graded must be the script's.
+// Every message fits the attempt protocol's Zod schemas and its JSON Schema.
+// REEVAL_UPDATE_SNAPSHOTS=1 rewrites the goldens; review the diff.
 import assert from 'node:assert/strict'
 import { cpSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'

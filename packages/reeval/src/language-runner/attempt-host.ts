@@ -9,13 +9,19 @@ import {
   type JudgeOn,
 } from '../contract/attempt.ts'
 import type { RawAssertion } from '../engine/runtime.ts'
+import { UsageError } from '../errors.ts'
 import type { AttemptContext, BackgroundHandle, JudgeCallOptions, Turn } from '../types.ts'
 
 /** The turn or value a wire `JudgeOn` names, as `c.judge`'s own `on` takes it. */
 function judgeTarget(c: AttemptContext, on: JudgeOn): JudgeCallOptions['on'] {
   if ('value' in on) return on.value
   const turn = c.turns[on.turn]
-  if (!turn) throw new RangeError(`c.judge() on turn ${on.turn}: the attempt has ${c.turns.length}`)
+  if (!turn) {
+    const n = c.turns.length
+    throw new UsageError(
+      `c.judge()'s on is turn ${on.turn}, but the attempt has ${n} turn${n === 1 ? '' : 's'}`,
+    )
+  }
   return turn
 }
 
