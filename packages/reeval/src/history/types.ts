@@ -9,6 +9,7 @@ import type {
   EgressRecord,
   EnvironmentRecord,
   EvalCompareMeta,
+  EvalSource,
   ExecTry,
   FileChange,
   JudgeArtifactRef,
@@ -16,6 +17,7 @@ import type {
   Outcome,
   PhaseTimings,
   ResolvedJudgeStateOptions,
+  Revision,
   SandboxWarning,
   SetupProcess,
   StartRetry,
@@ -287,8 +289,18 @@ export type EvalEntry = {
   name: string
   /** Results are comparable only when fingerprints match. */
   fingerprint: string
-  /** The eval file and every local file it imports, directly or not, by content hash. */
+  /**
+   * The eval file, by content hash: where the eval lives. Records from before `source` also list
+   * the local files it imported, and were fingerprinted over them.
+   */
   sources: Array<{ path: string; sha256: string }>
+  /**
+   * Hashes of what the `sources` fingerprint part covers but `revision`: the eval's body, its
+   * case data and its options with its groups'. Unset on records from before it.
+   */
+  source?: EvalSource
+  /** The eval's `revision`, part of the `sources` fingerprint part; unset when it sets none. */
+  revision?: Revision
   tags: string[]
   /** The baseline environment, when the eval uses `compare`. */
   compare?: EvalCompareMeta
@@ -440,7 +452,7 @@ export type Lift = {
 
 /** Each input of a cell fingerprint, hashed on its own, so a change can be named. */
 export type FingerprintParts = {
-  /** Over `EvalEntry.sources`. */
+  /** Over `EvalEntry.source` and `EvalEntry.revision`; on records from before them, over `EvalEntry.sources`. */
   sources: string
   /** Over the harness descriptor, less concurrency caps. */
   harness: string
@@ -779,6 +791,8 @@ export type HistoryEntry = {
     slug: string
     fingerprint: string
     sources: EvalEntry['sources']
+    source?: EvalEntry['source']
+    revision?: EvalEntry['revision']
     outcome: Outcome
     passRate: number | null
     cells: HistoryCell[]

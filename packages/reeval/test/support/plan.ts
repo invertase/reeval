@@ -74,7 +74,9 @@ export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {})
   }
   const rows: string[][] = []
   for (const e of plan.evals) {
-    const tags = e.tags.length ? ` [${e.tags.join(', ')}]` : ''
+    const tags =
+      (e.tags.length ? ` [${e.tags.join(', ')}]` : '') +
+      (e.revision !== undefined ? ` revision ${JSON.stringify(e.revision)}` : '')
     if (e.skip) {
       rows.push([`${e.id}${tags}`, `skipped: ${e.skip}`])
       continue

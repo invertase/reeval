@@ -14,7 +14,16 @@ declareTree(
       name: 'images',
       mode: 'run',
       options: { sandbox: { kind: 'docker', dockerfile: './images/Dockerfile' } },
-      children: [{ type: 'eval', name: 'from the group', mode: 'run', options: {}, body: 'b1' }],
+      children: [
+        {
+          type: 'eval',
+          name: 'from the group',
+          mode: 'run',
+          options: {},
+          body: 'b1',
+          source: { body: '0'.repeat(64) },
+        },
+      ],
     },
     {
       type: 'eval',
@@ -22,6 +31,7 @@ declareTree(
       mode: 'run',
       options: { environment: env('built', '../docker/Dockerfile') },
       body: 'b2',
+      source: { body: '0'.repeat(64) },
     },
     {
       type: 'eval',
@@ -34,6 +44,7 @@ declareTree(
         },
       },
       body: 'b3',
+      source: { body: '0'.repeat(64) },
     },
   ] as never,
   () => async () => {},

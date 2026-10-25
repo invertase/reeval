@@ -333,7 +333,15 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 </Property>
 
 <Property name="sources" type="Array<{path: string; sha256: string}>">
-  The eval file and every local file it imports, directly or not, by content hash.
+  The eval file, by content hash: where the eval lives. Records from before `source` also list the local files it imported, and were fingerprinted over them.
+</Property>
+
+<Property name="source" type="EvalSource" optional>
+  Hashes of what the `sources` fingerprint part covers but `revision`: the eval's body, its case data and its options with its groups'. Unset on records from before it.
+</Property>
+
+<Property name="revision" type="Revision" optional>
+  The eval's `revision`, part of the `sources` fingerprint part; unset when it sets none.
 </Property>
 
 <Property name="tags" type="string[]"></Property>
@@ -621,7 +629,7 @@ One effort metric over a family's paired cases.
 Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="sources" type="string">
-  Over `EvalEntry.sources`.
+  Over `EvalEntry.source` and `EvalEntry.revision`; on records from before them, over `EvalEntry.sources`.
 </Property>
 
 <Property name="harness" type="string">

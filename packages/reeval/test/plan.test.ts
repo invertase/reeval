@@ -152,6 +152,7 @@ export const cases: PlanCase[] = [
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
+  { dir: 'revision', name: 'cascade', args: [] },
   { dir: 'only-in-skip', name: 'only-in-skipped-group', args: [] },
   { dir: 'filters', name: 'dir-named-like-cell', args: ['right'] },
   { dir: 'filters', name: 'dir-path-only', args: ['evals/right'] },

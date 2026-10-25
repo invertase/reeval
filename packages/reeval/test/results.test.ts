@@ -3,7 +3,6 @@
 // history.test.ts.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { recordFailure } from '../src/attempt/record.ts'
@@ -29,11 +28,12 @@ import {
 } from '../src/compare/questions.ts'
 import { DEFAULT_QUESTION_STATE } from '../src/compare/state.ts'
 import type { EngineEval } from '../src/engine/node.ts'
+import { defineEnvironment } from '../src/environment.ts'
 import { TimeoutError } from '../src/errors.ts'
+import { bodyHash, canonicalJson, caseHash, optionsHash, sourcesPart } from '../src/eval-source.ts'
 import { fingerprintOf, judgementKey, mergeOutcome } from '../src/history/assemble.ts'
 import { familiesOf } from '../src/history/families.ts'
 import { runnerInfo } from '../src/history/provenance.ts'
-import { traceSources } from '../src/history/sources.ts'
 import type { EvalEntry, FamilyLift, FingerprintParts } from '../src/history/types.ts'
 import { patchForJudge } from '../src/judge/patch.ts'
 import { checkGate } from '../src/options.ts'
@@ -51,7 +51,6 @@ import {
 import type { BlindPair, EvalRecord, FakeAnalysisModel, Outcome } from '../src/types.ts'
 import { EFFORT_MIN_RUNS, effortVerdict } from '../src/view/effort.ts'
 import { cellOutcome } from '../src/view/gate.ts'
-import { tempDir } from './helpers.ts'
 import {
   E2E_ARMS,
   e2ePairSides,
@@ -459,36 +458,48 @@ describe('fingerprints and keys', () => {
   })
 })
 
-describe('traced sources', () => {
-  test("an eval's local imports are traced transitively; packages and unrelated files aren't", async () => {
-    const root = tempDir('sources')
-    const write = (path: string, text: string) => {
-      mkdirSync(join(root, path, '..'), { recursive: true })
-      writeFileSync(join(root, path), text)
+describe("an eval's source", () => {
+  const body = 'a'.repeat(64)
+
+  test('canonical JSON sorts keys, drops undefined, and reads a function as its source', () => {
+    assert.equal(canonicalJson({ b: 1, a: [undefined, 2], c: undefined }), '{"a":[null,2],"b":1}')
+    assert.equal(canonicalJson({ f: () => 1 }), '{"f":"() => 1"}')
+    const env = defineEnvironment('skilled', { files: { 'a.txt': 'a' } })
+    assert.equal(canonicalJson({ env }), '{"env":{"environment":"skilled"}}')
+  })
+
+  test('the options hash leaves out tags, revision and gate, and reads harnesses and sandboxes by id', () => {
+    const base = optionsHash([{ runs: 2 }])
+    assert.equal(optionsHash([{ runs: 2, tags: ['slow'], revision: 3, gate: 'all' }]), base)
+    assert.equal(optionsHash([{}, { runs: 2 }]), base, 'an option-less group adds nothing')
+    assert.notEqual(optionsHash([{ runs: 3 }]), base, 'twin: another option changes it')
+    assert.notEqual(optionsHash([{ runs: 2 }, { runs: 2 }]), base, 'a group level is its own')
+    const at = (dir: string) => ({
+      sandbox: { kind: 'docker' as const, dockerfile: join(dir, 'docker', 'Dockerfile') },
+    })
+    assert.equal(optionsHash([at('/one')]), optionsHash([at('/two')]), 'no host paths')
+  })
+
+  test('the sources part covers the source and revision, and 2 is not "2"', () => {
+    const source = { body, options: 'b'.repeat(64) }
+    const none = sourcesPart(source, undefined)
+    assert.notEqual(sourcesPart(source, 2), none)
+    assert.notEqual(sourcesPart(source, 2), sourcesPart(source, '2'))
+    assert.notEqual(sourcesPart({ ...source, case: 'c'.repeat(64) }, undefined), none)
+    assert.equal(sourcesPart({ options: source.options, body }, undefined), none)
+  })
+
+  test('a body hashes its own source text; a bound function is refused', () => {
+    const a = async () => {}
+    const b = async () => {
+      await Promise.resolve()
     }
-    write(
-      'evals/a.eval.ts',
-      `import { evaluate } from 'reeval'\nimport { h } from './helpers.ts'\n`,
+    assert.notEqual(bodyHash(a, 'evaluate("a")'), bodyHash(b, 'evaluate("b")'))
+    assert.equal(caseHash({ n: 1, s: 'x' }), caseHash({ s: 'x', n: 1 }))
+    assert.throws(
+      () => bodyHash(a.bind(null), 'evaluate("bound")'),
+      /evaluate\("bound"\)'s body is a bound or built-in function/,
     )
-    write(
-      'evals/helpers.ts',
-      `export * from '../shared/env.js'\nexport const h = await import('./lazy')\n`,
-    )
-    write('shared/env.ts', `import 'node:fs'\nexport const e = 1\n`)
-    write('evals/lazy.ts', 'export {}\n')
-    write('evals/unrelated.ts', 'export {}\n')
-    write('node_modules/pkg/index.js', 'export {}\n')
-    symlinkSync(join(root, 'node_modules/pkg'), join(root, 'evals/pkg'))
-    write('evals/b.eval.ts', `import './pkg/index.js'\n`)
-    const paths = (await traceSources(root, 'evals/a.eval.ts')).map((s) => s.path)
-    assert.deepEqual(paths, [
-      'evals/a.eval.ts',
-      'evals/helpers.ts',
-      'evals/lazy.ts',
-      'shared/env.ts',
-    ])
-    const own = await traceSources(root, 'evals/b.eval.ts')
-    assert.equal(own.length, 2, 'a symlinked package is traced by its link path, once')
   })
 })
 

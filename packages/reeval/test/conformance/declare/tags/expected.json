@@ -13,7 +13,10 @@
           "name": "big",
           "mode": "run",
           "options": {},
-          "body": "b4"
+          "body": "b4",
+          "source": {
+            "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+          }
         },
         {
           "type": "eval",
@@ -22,7 +25,10 @@
           "options": {
             "tags": ["flaky"]
           },
-          "body": "b5"
+          "body": "b5",
+          "source": {
+            "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+          }
         }
       ]
     },
@@ -31,7 +37,10 @@
       "name": "quick",
       "mode": "run",
       "options": {},
-      "body": "b1"
+      "body": "b1",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
     },
     {
       "type": "eval",
@@ -41,6 +50,10 @@
         "tags": ["slow"]
       },
       "body": "b2",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "case": "2bfd14f43d17fc7cea24e0917a8879b4b2f880b8baeec1b9d90fbaad655e71bd"
+      },
       "family": {
         "name": "case $n",
         "case": 0,
@@ -55,6 +68,10 @@
         "tags": ["slow"]
       },
       "body": "b3",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "case": "363379742f80b51bdb9206579af7754911543079b9399cb3fc315fb199f476e8"
+      },
       "family": {
         "name": "case $n",
         "case": 1,

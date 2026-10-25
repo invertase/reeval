@@ -1,0 +1,28 @@
+[
+  {
+    "question": "Does greet.js export greet?",
+    "model": "fake",
+    "stateOptions": {
+      "task": true,
+      "output": true,
+      "files": true,
+      "diff": true,
+      "contents": [],
+      "transcript": false,
+      "turns": "last",
+      "checks": false
+    },
+    "state": {
+      "task": "Write greet.js exporting greet(name).",
+      "output": "I wrote greet.js.",
+      "files": [
+        "added greet.js",
+        "added package.json"
+      ],
+      "diff": {
+        "$ref": "diff.patch",
+        "sha256": "50adc7359804ce506aeffd648cd876a80478418f8ab8c7f8a80e8702cefc91e2"
+      }
+    }
+  }
+]

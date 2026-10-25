@@ -24,7 +24,7 @@ export type CompareRow = {
   base: Outcome | null
   head: Outcome | null
   /**
-   * For `drift`: what changed, e.g. `evals/helpers.ts changed` or `harness config changed`. On
+   * For `drift`: what changed, e.g. `body changed`, `revision 2 → 3` or `harness config changed`. On
    * any other row, `gate changed` when the cells' gate did.
    */
   changes?: string[]
@@ -174,7 +174,7 @@ export function cellsChanged(
 
 type ComparableEval = Pick<
   HistoryEntry['evals'][number],
-  'id' | 'fingerprint' | 'outcome' | 'sources' | 'cells'
+  'id' | 'fingerprint' | 'outcome' | 'sources' | 'source' | 'revision' | 'cells'
 >
 
 type ComparableFamily = NonNullable<HistoryEntry['families']>[number]
@@ -205,9 +205,33 @@ const PART_LABELS: Record<Exclude<keyof FingerprintParts, 'sources' | 'gate'>, s
   gateway: 'gateway',
 }
 
-/** Why two runs of an eval aren't comparable: the source files and fingerprint parts that differ. */
+const showRevision = (r: ComparableEval['revision']) =>
+  r === undefined ? 'unset' : JSON.stringify(r)
+
+const SOURCE_LABELS = { body: 'body', options: 'options', case: 'case data' } as const
+
+/** What in the eval's own source differs: its body, options, case data and revision. */
+function sourceChanged(base: ComparableEval, head: ComparableEval): string[] {
+  const out: string[] = []
+  if (base.source && head.source) {
+    for (const key of Object.keys(SOURCE_LABELS) as Array<keyof typeof SOURCE_LABELS>) {
+      if (base.source[key] !== head.source[key]) out.push(`${SOURCE_LABELS[key]} changed`)
+    }
+  } else if (base.source || head.source) out.push('fingerprint scheme changed')
+  else out.push(...sourceChanges(base.sources, head.sources))
+  if (base.revision !== head.revision) {
+    out.push(`revision ${showRevision(base.revision)} → ${showRevision(head.revision)}`)
+  }
+  return out
+}
+
+/**
+ * Why two runs of an eval aren't comparable: what in its source differs (`body`, `options`,
+ * `case data`, `revision 2 → 3`; a record from before `source`, its files), then the fingerprint
+ * parts that differ. Each reason but the revision ends in ` changed`.
+ */
 export function whyChanged(base: ComparableEval, head: ComparableEval): string[] {
-  const out = sourceChanges(base.sources, head.sources)
+  const out = sourceChanged(base, head)
   const keys = [...new Set([...base.cells, ...head.cells].map((c) => c.key))]
   const parts = new Set<string>()
   for (const key of keys) {

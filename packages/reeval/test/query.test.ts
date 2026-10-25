@@ -696,6 +696,14 @@ evaluate('judged', async (c) => {
     assert.deepEqual(await query(p.dir, 'drift'), [], 'twin: an unrelated file is no drift')
 
     await writeFile(join(p.dir, 'evals/helpers.ts'), "export const prompt = 'go!'\n")
+    assert.equal((await runCli(p.dir)).code, 0)
+    assert.deepEqual(await query(p.dir, 'drift'), [], 'twin: a helper the evals import is no drift')
+
+    const source = readFileSync(join(p.dir, 'evals/d.eval.ts'), 'utf8')
+    await writeFile(
+      join(p.dir, 'evals/d.eval.ts'),
+      source.replaceAll('send(prompt)', "send(prompt + '?')"),
+    )
     assert.equal((await runCli(p.dir, ['run'], { env: { REEVAL_TEST_SCORE: '0.1' } })).code, 1)
     const drift = await query(p.dir, 'SELECT eval_key, changed FROM drift ORDER BY eval_key')
     assert.deepEqual(drift, [
@@ -706,8 +714,8 @@ evaluate('judged', async (c) => {
     const [flaky] = await query(p.dir, 'flaky_cells')
     assert.deepEqual(
       [flaky?.eval_key, flaky?.cell_key, flaky?.pass, flaky?.counted, flaky?.pass_at_1],
-      ['evals/d.eval.ts › flaky', 'fake/fake/fake', 4, 6, 0.667],
-      'grouped by fingerprint: two runs at the first, one at the second',
+      ['evals/d.eval.ts › flaky', 'fake/fake/fake', 6, 9, 0.667],
+      'grouped by fingerprint: three runs at the first, one at the second',
     )
     const flips = await query(
       p.dir,

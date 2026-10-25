@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import ast
+import dataclasses
+import functools
+import hashlib
 import importlib.util
 import inspect
 import itertools
+import json
 import re
 import sys
+import textwrap
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast, overload
 
 from reeval_python import _wire as w
 from reeval_python.checks import ASSERT_HOOK, check, compile_eval
+from reeval_python.environment import Environment
 from reeval_python.options import EvalOptions
 from reeval_python.wire import options_to_wire
 
@@ -39,6 +46,7 @@ class DeclaredEval:
     mode: Mode
     options: dict[str, Any]
     body: str
+    source: w.DeclaredSource
     family: DeclaredFamily | None = None
 
     def as_json(self) -> w.DeclaredEval:
@@ -48,6 +56,7 @@ class DeclaredEval:
             "mode": self.mode,
             "options": cast(w.EvalOptionsData, self.options),
             "body": self.body,
+            "source": self.source,
         }
         if self.family is not None:
             out["family"] = self.family.as_json()
@@ -221,16 +230,16 @@ def evaluate(
     mode: Mode = "run",
 ) -> Any:
     if callable(arg) and arg2 is None:
-        _register_eval(name, mode, {}, arg, None)
+        _register_eval(name, mode, {}, arg, None, None)
         return arg
     if isinstance(arg, dict) and callable(arg2):
-        _register_eval(name, mode, dict[str, Any](cast(dict[str, Any], arg)), arg2, None)
+        _register_eval(name, mode, dict[str, Any](cast(dict[str, Any], arg)), arg2, None, None)
         return arg2
 
     opts = dict[str, Any](cast(dict[str, Any], arg)) if isinstance(arg, dict) else {}
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
-        _register_eval(name, mode, opts, fn, None)
+        _register_eval(name, mode, opts, fn, None, None)
         return fn
 
     return decorator
@@ -254,6 +263,69 @@ def _case_name(template: str, case: Any, index: int) -> str:
         return str(fields[key]) if key in fields else m.group(0)
 
     return _PLACEHOLDER.sub(fill, template)
+
+
+def body_hash(fn: Callable[..., Any], where: str) -> str:
+    """sha256 of a body's source text, from `def` on: decorators (`@evaluate(…)` among them) are
+    left out, a bound method is its function, and a decorator that keeps `functools.wraps` is
+    looked through. Raises when there's no source to read, rather than fingerprint less."""
+    target: Any = getattr(fn, "__func__", fn)
+    try:
+        target = inspect.unwrap(target)
+    except ValueError:
+        pass
+    if isinstance(target, functools.partial):
+        raise TypeError(
+            f"{where}: the body is a functools.partial, whose source reeval can't read to "
+            "fingerprint the eval. Write a def that calls it, and bump revision when what it "
+            "calls changes"
+        )
+    try:
+        text = textwrap.dedent(inspect.getsource(target))
+    except (OSError, TypeError) as exc:
+        raise TypeError(
+            f"{where}: reeval can't read the body's source to fingerprint the eval ({exc}). "
+            "Declare it with def or async def in the .eval.py file: a body made by exec, typed "
+            "at a REPL or a callable object has none"
+        ) from None
+    try:
+        node = ast.parse(text).body[0]
+    except (SyntaxError, IndexError):
+        node = None
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        text = "".join(text.splitlines(keepends=True)[node.lineno - 1 :])
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _case_default(value: Any) -> Any:
+    if isinstance(value, Environment):
+        return {"environment": value.name}
+    to_wire = getattr(value, "_to_wire", None)
+    if callable(to_wire):
+        return to_wire()
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return dataclasses.asdict(value)
+    raise TypeError(f"{type(value).__name__} isn't JSON data")
+
+
+def case_hash(case: Any, where: str) -> str:
+    """sha256 of a case's data as canonical JSON: keys sorted, no whitespace. A dataclass is its
+    fields and an environment its name; anything else that isn't JSON is refused."""
+    try:
+        text = json.dumps(
+            case,
+            default=_case_default,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+    except (TypeError, ValueError) as exc:
+        raise TypeError(
+            f"{where}: reeval fingerprints each case as JSON data, and this one isn't ({exc}). "
+            "Pass dicts, lists, strings, numbers, booleans, None or dataclasses"
+        ) from None
+    return hashlib.sha256(text.encode()).hexdigest()
 
 
 def is_async(fn: Callable[..., Any]) -> bool:
@@ -350,6 +422,8 @@ def evaluate_each(
             ) from None
         except ValueError:
             pass
+        each = f"evaluate_each({name_template!r})"
+        body = body_hash(fn, each)
         pooled = pool and len(cases) > 1
         if pooled:
             path = (*(frame.name for frame in _group_stack), name_template)
@@ -370,7 +444,11 @@ def evaluate_each(
             if pooled:
                 family = DeclaredFamily(name=name_template, case=index, cases=len(cases))
             name = _case_name(name_template, case, index)
-            _register_eval(name, "run", opts, _with_case(fn, case), family, hint)
+            source: w.DeclaredSource = {
+                "body": body,
+                "case": case_hash(case, f"{each} case {index}"),
+            }
+            _register_eval(name, "run", opts, _with_case(fn, case), source, family, hint)
 
     return _Each(decorator)
 
@@ -385,12 +463,15 @@ def _register_eval(
     mode: Mode,
     options: dict[str, Any],
     fn: Callable[..., Any],
+    source: w.DeclaredSource | None,
     family: DeclaredFamily | None,
     hint: str = "",
 ) -> None:
     path = (*(frame.name for frame in _group_stack), name)
     where = f"evaluate({' › '.join(path)!r})"
     _refuse_generator(fn, where)
+    if source is None:
+        source = {"body": body_hash(fn, where)}
     key = " › ".join(path)
     earlier = _names.get(key)
     if earlier is not None:
@@ -408,6 +489,7 @@ def _register_eval(
             mode=mode,
             options=_wire_options(options),
             body=body,
+            source=source,
             family=family,
         )
     )

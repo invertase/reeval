@@ -5,7 +5,10 @@
       "name": "the config policy",
       "mode": "run",
       "options": {},
-      "body": "b1"
+      "body": "b1",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
     },
     {
       "type": "eval",
@@ -25,7 +28,10 @@
           ]
         }
       },
-      "body": "b2"
+      "body": "b2",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
     },
     {
       "type": "eval",
@@ -51,7 +57,10 @@
           ]
         }
       },
-      "body": "b3"
+      "body": "b3",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
     },
     {
       "type": "eval",
@@ -82,7 +91,10 @@
           ]
         }
       },
-      "body": "b4"
+      "body": "b4",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
     },
     {
       "type": "eval",
@@ -105,7 +117,10 @@
           "allow": ["eval.example.com"]
         }
       },
-      "body": "b5"
+      "body": "b5",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
     },
     {
       "type": "group",
@@ -135,7 +150,10 @@
               ]
             }
           },
-          "body": "b8"
+          "body": "b8",
+          "source": {
+            "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+          }
         }
       ]
     },
@@ -171,7 +189,10 @@
           ]
         }
       },
-      "body": "b6"
+      "body": "b6",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
     },
     {
       "type": "eval",
@@ -195,7 +216,10 @@
           "layout": "claude-code"
         }
       },
-      "body": "b7"
+      "body": "b7",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
     }
   ]
 }

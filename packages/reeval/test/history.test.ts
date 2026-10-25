@@ -843,60 +843,80 @@ ${fakeConfig({ harness: harness(), ...(gateway ? { extra: `gateway: ${gateway},`
 })
 
 describe('what a record says about comparability', () => {
-  const importing = `import { evaluate, expect } from 'reeval'
+  const importing = ({
+    revision = 1,
+    prompt = 'prompt',
+    runs = 1,
+    tags = "'a'",
+    sibling = 'write other.txt',
+  } = {}) => `import { evaluate, expect } from 'reeval'
 import { prompt } from './helpers.ts'
-evaluate('agent', async (c) => {
-  await c.send(prompt)
+const unused = 1
+evaluate('agent', { revision: ${revision}, runs: ${runs}, tags: [${tags}] }, async (c) => {
+  await c.send(${prompt})
   expect(await c.judge('Did it write hello.txt?')).toPass()
+})
+evaluate('sibling', async (c) => {
+  await c.send('${sibling}')
 })
 `
   const compareJson = async (dir: string) => {
     const r = await runCli(dir, ['compare', '--json'])
     assert.equal(r.code, 0, r.stderr)
-    return JSON.parse(r.stdout) as { rows: Array<{ status: string; changes?: string[] }> }
+    return JSON.parse(r.stdout) as {
+      rows: Array<{ id: string; status: string; changes?: string[] }>
+    }
+  }
+  const agentRow = async (dir: string) => {
+    assert.equal((await runCli(dir)).code, 0)
+    const row = (await compareJson(dir)).rows.find((r) => r.id.endsWith('agent'))
+    return [row?.status, row?.changes ?? []]
   }
 
-  test('an imported helper is part of the fingerprint, and reeval compare names what changed', async () => {
-    const p = await gitProject('traced', {
-      'evals/agent.eval.ts': importing,
+  test("an eval's fingerprint covers its body, options and revision, not its file or helpers, and reeval compare names what changed", async () => {
+    const p = await gitProject('eval-source', {
+      'evals/agent.eval.ts': importing(),
       'evals/helpers.ts': "export const prompt = 'write hello.txt'\n",
-      'evals/unrelated.ts': 'export const x = 1\n',
     })
+    const write = (text: string) => writeFile(join(p.dir, 'evals/agent.eval.ts'), text)
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
     const base = readRun(p.dir, { history: HISTORY })
-    const [entry] = base.run.evals
+    const entry = base.run.evals.find((e) => e.name === 'agent')
     assert.deepEqual(
       entry?.sources.map((s) => s.path),
-      ['evals/agent.eval.ts', 'evals/helpers.ts'],
+      ['evals/agent.eval.ts'],
     )
+    assert.equal(entry?.revision, 1)
+    assert.match(entry?.source?.body ?? '', /^[0-9a-f]{64}$/)
     for (const cell of entry?.cells ?? []) {
       assert.equal(cell.fingerprint, fingerprintOf(cell.fingerprintParts))
     }
 
-    // Twin: a file the eval doesn't import changes nothing.
-    await writeFile(join(p.dir, 'evals/unrelated.ts'), 'export const x = 2\n')
-    assert.equal((await runCli(p.dir)).code, 0)
-    assert.equal(readRun(p.dir).run.evals[0]?.fingerprint, entry?.fingerprint)
-    assert.deepEqual(
-      (await compareJson(p.dir)).rows.map((r) => r.status),
-      ['same'],
-    )
-
+    // A helper, the rest of the file, a sibling eval and tags change nothing.
     await writeFile(join(p.dir, 'evals/helpers.ts'), "export const prompt = 'write hello.txt!'\n")
-    assert.equal((await runCli(p.dir)).code, 0)
-    const [row] = (await compareJson(p.dir)).rows
-    assert.deepEqual([row?.status, row?.changes], ['drift', ['evals/helpers.ts changed']])
-    const text = await runCli(p.dir, ['compare'])
-    assert.match(text.stdout, /^can't compare {4}agent\n {2}changed {10}evals\/helpers\.ts\n/m)
+    await write(importing({ tags: "'a', 'b'", sibling: 'write another.txt' }).replace('= 1', '= 2'))
+    assert.deepEqual(await agentRow(p.dir), ['same', []])
+    const sibling = (await compareJson(p.dir)).rows.find((r) => r.id.endsWith('sibling'))
+    assert.deepEqual([sibling?.status, sibling?.changes], ['drift', ['body changed']])
 
-    await writeFile(join(p.dir, 'evals/helpers.ts'), "export const prompt = 'write hello.txt'\n")
+    await write(importing({ revision: 2 }))
+    assert.deepEqual(await agentRow(p.dir), ['drift', ['revision 1 → 2']])
+    const text = await runCli(p.dir, ['compare'])
+    assert.match(text.stdout, /^can't compare {4}agent\n {2}changed {10}revision 1 → 2\n/m)
+
+    await write(importing({ prompt: "prompt + '!'" }))
+    assert.deepEqual(await agentRow(p.dir), ['drift', ['body changed']])
+    await write(importing({ runs: 2 }))
+    const [status, changes] = await agentRow(p.dir)
+    assert.equal(status, 'drift')
+    assert.ok((changes as string[]).includes('options changed'), String(changes))
+
+    await write(importing())
     await writeFile(
       join(p.dir, 'reeval.config.ts'),
       fakeConfig({ harness: harness('Wrote it, differently') }),
     )
-    assert.equal((await runCli(p.dir)).code, 0)
-    const [config] = (await compareJson(p.dir)).rows
-    assert.deepEqual(config?.changes, ['harness config changed'])
+    assert.deepEqual(await agentRow(p.dir), ['drift', ['harness config changed']])
   })
 
   test('reeval compare --fail-on-regression fails on a regression and on a failing new eval; no base is no error', async () => {
@@ -971,7 +991,7 @@ evaluate('edited', async (c) => {
     const failing = await compareCode('--fail-on-regression')
     assert.match(
       failing.out,
-      /^can't compare {4}edited\n {2}changed {10}evals\/a\.eval\.ts\n {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}fail$/m,
+      /^can't compare {4}edited\n {2}changed {10}body\n {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}fail$/m,
     )
     assert.equal(failing.code, 1, failing.out)
     assert.equal((await compareCode()).code, 0, 'without the flag, compare exits 0')
@@ -1061,7 +1081,7 @@ evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
     const drift = await compareCode('--fail-on-regression')
     assert.equal(drift.code, 1, drift.out)
     assert.match(drift.out, /^can't compare {4}writes ok\.txt for %s \(all cases\)$/m)
-    assert.deepEqual((await familyRow())?.changes, ['evals/e.eval.ts changed'])
+    assert.deepEqual((await familyRow())?.changes, ['options changed'])
     assert.equal((await runCli(p.dir)).code, 0)
     assert.equal((await compareCode('--fail-on-regression')).code, 0, 'canary: passing, it is fine')
   })

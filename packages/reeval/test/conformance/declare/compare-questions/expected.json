@@ -52,7 +52,10 @@
           }
         ]
       },
-      "body": "b1"
+      "body": "b1",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
     },
     {
       "type": "eval",
@@ -133,7 +136,10 @@
           }
         ]
       },
-      "body": "b2"
+      "body": "b2",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
     },
     {
       "type": "eval",
@@ -188,7 +194,10 @@
         ],
         "pin": ["compare"]
       },
-      "body": "b3"
+      "body": "b3",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
     }
   ]
 }

@@ -18,6 +18,7 @@ import { useEngine } from '../../src/engine/runtime.ts'
 import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
+import { bodyHash } from '../../src/eval-source.ts'
 import { declareTree } from '../../src/evaluate.ts'
 import { resolveModelGateway } from '../../src/gateway/models.ts'
 import { resolveGateway } from '../../src/gateway/resolve.ts'
@@ -141,7 +142,7 @@ const strict = (o: unknown) => () => {
     'reeval.config.ts',
   )
   planEval(
-    { name: 'e', mode: 'run', groups: [], options: o as never },
+    { name: 'e', mode: 'run', groups: [], options: o as never, source: { body: '0'.repeat(64) } },
     { config, profile: null, tags: [], concurrency: 1, file: undefined, order: 0 },
   )
 }
@@ -198,6 +199,7 @@ const evalNode = (o: object = {}) => ({
   mode: 'run',
   options: {},
   body: 'b1',
+  source: { body: '0'.repeat(64) },
   ...o,
 })
 
@@ -675,6 +677,13 @@ export const CASES: Record<string, Case[]> = {
     ['gate passRate above 1', options({ gate: { passRate: 1.2 } })],
     ['gate with an extra key', options({ gate: { passRate: 0.5, min: 1 } })],
     ['gate good', options({ gate: { passRate: 0.8 } })],
+    ['revision a fraction', options({ revision: 1.5 })],
+    ['revision empty', options({ revision: ' ' })],
+    ['revision a boolean', options({ revision: true })],
+    ['revision a typo', options({ version: 2 })],
+    ['revision a number', options({ revision: 2 })],
+    ['revision a string', options({ revision: '2026-10-25' })],
+    ['a bound body', () => bodyHash((async () => {}).bind(null), 'evaluate("e")')],
     ['egress a list', options({ egress: ['api.example.com'] })],
     ['egress a string', options({ egress: 'none' })],
     ['egress deny key', options({ egress: { deny: ['x.com'] } })],
@@ -1705,6 +1714,15 @@ environment:
     ['an unknown node type', tree([evalNode({ type: 'test' })])],
     ['a node without a type', tree([{ name: 'e' }])],
     ['an eval without a body', tree([{ type: 'eval', name: 'e', mode: 'run', options: {} }])],
+    [
+      'an eval without its source',
+      tree([{ type: 'eval', name: 'e', mode: 'run', options: {}, body: 'b1' }]),
+    ],
+    ['an eval whose body hash is not sha256', tree([evalNode({ source: { body: 'abc' } })])],
+    [
+      'an eval whose source has an unknown key',
+      tree([evalNode({ source: { body: '0'.repeat(64), file: '0'.repeat(64) } })]),
+    ],
     ['an eval with a bad mode', tree([evalNode({ mode: 'focus' })])],
     ['an eval with an unknown key', tree([evalNode({ timeout: '1m' })])],
     ['an eval whose options are a list', tree([evalNode({ options: [] })])],

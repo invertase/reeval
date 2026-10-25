@@ -130,11 +130,17 @@ new              greets in Spanish
 | `regressed` | Both run ids, each check that flipped (`pass → fail`) with its message, and checks that no longer ran (`not run`) |
 | `fixed` | The checks that pass now |
 | `gate changed` | Only the gate changed and it alone explains the flip: both gates, how base would score under head's, and each side's result |
-| `can't compare` | What changed, such as the environment, the eval's file or a helper it imports, and each side's result. An eval Ctrl-C cancelled on one side reads `cancelled` there |
+| `can't compare` | What changed, such as the environment, the eval's `body`, `options` or `case data`, or `revision 2 → 3`, and each side's result. An eval Ctrl-C cancelled on one side reads `cancelled` there |
 | `new`, `removed` | An eval only one run has, with its result |
 | `… (all cases)` | A pooled family's `minLift` gate, after its cases, with each gated variant's pooled lift, base → head. It can regress while every case passes |
 
 A check that didn't run on one side reads `not run`, never `fail`. `-v` adds each cell's lift and effort, base → head.
+
+```ts
+evaluate('greets', { revision: 3 }, async (c) => { … })
+```
+
+reeval reads an eval's own body and options, not the helpers or fixtures it uses ([what's hashed](/concepts/fingerprints#what-sources-covers)). When you change one of those in a way that matters, bump `revision`, so the next compare reads `changed  revision 2 → 3` rather than calling a flip a regression.
 
 <Image src="/assets/studio/compare.png" alt="The studio's compare page, listing evals as regressed, fixed or not comparable between two runs" width={800} />
 

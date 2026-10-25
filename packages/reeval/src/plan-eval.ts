@@ -3,7 +3,7 @@
 // plugins: whoever declared the eval (an eval file's `evaluate`, or a declaration tree) registers
 // what it returns.
 import { type AttemptSpec, setupAllowance } from './attempt/index.ts'
-import type { DeclaredFamily } from './declaration.ts'
+import type { DeclaredFamily, DeclaredSource } from './declaration.ts'
 import { MAX_TIMER_MS, parseDuration } from './duration.ts'
 import { allowedHosts, unenforceable } from './egress.ts'
 import type { Gate, TestMode } from './engine/runtime.ts'
@@ -22,6 +22,7 @@ import {
 } from './environment/plugins.ts'
 import { filesOf, workspaceOf } from './environment.ts'
 import { UsageError } from './errors.ts'
+import { optionsHash } from './eval-source.ts'
 import { resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { resolveGateway } from './gateway/resolve.ts'
@@ -67,6 +68,8 @@ export type EvalDeclaration = {
   mode: TestMode
   groups: { name: string; options: GroupOptions }[]
   options: EvalOptions
+  /** Hashes of its body and case data, from whoever declared it. */
+  source: DeclaredSource
   /** Set on each case of a pooled `evaluate.each`. */
   family?: DeclaredFamily
 }
@@ -111,6 +114,7 @@ function configLevel(config: ResolvedConfig): Resolved {
     questions: [],
     timeout: undefined,
     tags: [],
+    revision: undefined,
     pin: [],
     sources: {},
   }
@@ -151,6 +155,10 @@ function planTests(
   const { name, mode, groups: enclosing } = declaration
   const groups = enclosing.map((g) => g.name)
   const { resolved } = resolvedEval
+  const source = {
+    ...declaration.source,
+    options: optionsHash([...enclosing.map((g) => g.options), declaration.options]),
+  }
   const timeoutMs =
     resolved.timeout === undefined ? ctx.config.timeoutMs : parseDuration(resolved.timeout)
   const gateways = ctx.profile?.gateway ?? ctx.config.gateway
@@ -236,6 +244,8 @@ function planTests(
       name,
       groups,
       tags: resolved.tags,
+      ...(resolved.revision !== undefined ? { revision: resolved.revision } : {}),
+      source,
       cell: first.cell,
       n: 1,
       label: '',
@@ -271,6 +281,8 @@ function planTests(
       name,
       groups,
       tags: resolved.tags,
+      ...(resolved.revision !== undefined ? { revision: resolved.revision } : {}),
+      source,
       cell: planned.cell,
       n: planned.n,
       label: planned.label,

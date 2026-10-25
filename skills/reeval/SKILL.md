@@ -125,6 +125,10 @@ export default defineConfig({
   `environment`, `env`, `judge`, `runs`, `gate`, `timeout`, `tags`, …) and inner levels win;
   `compare` is for groups and evals only. Options are plain objects, never functions. Unknown
   keys are errors with a hint (`repeat` → "Did you mean runs?").
+- An eval's fingerprint reads its own body, options, `evaluate.each` case and `revision`, not
+  helpers, constants outside the body or fixtures. After changing one of those in a way that
+  changes what the eval measures, bump `revision` (`{ revision: 2 }`, on the eval or its group)
+  so `reeval compare` says `can't compare … revision 1 → 2` instead of `regressed`.
 
 ### Without Docker or API keys: the fake trio
 

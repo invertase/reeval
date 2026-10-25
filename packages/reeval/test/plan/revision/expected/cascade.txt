@@ -1,0 +1,9 @@
+no profile · 5 evals · 5 cells · 5 attempts
+evals/revision.eval.ts › versioned › inherits revision 2      fake/-/docker  control  gated  ×1
+evals/revision.eval.ts › versioned › overrides revision "v3"  fake/-/docker  control  gated  ×1
+evals/revision.eval.ts › unversioned                          fake/-/docker  control  gated  ×1
+evals/revision.eval.ts › case 1 revision 1                    fake/-/docker  control  gated  ×1  family case $n case 1/2
+evals/revision.eval.ts › case 2 revision 1                    fake/-/docker  control  gated  ×1  family case $n case 2/2
+excluded: —
+image docker · cursor · 5 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

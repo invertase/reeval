@@ -23,6 +23,7 @@ import type {
   ResolvedConfig,
   ResolvedGateway,
   ResolvedProfile,
+  Revision,
   SandboxDescriptor,
   SandboxWarning,
 } from './types.ts'
@@ -471,6 +472,8 @@ export type PlanEval = {
   groups: string[]
   name: string
   tags: string[]
+  /** Its `revision`; unset when no level sets one. */
+  revision?: Revision
   /** Why the eval doesn't run at all, else null. */
   skip: string | null
   notes: string[]
@@ -536,6 +539,7 @@ export function planDocument(
         groups: attempt.groups,
         name: attempt.name,
         tags: attempt.tags,
+        ...(attempt.revision !== undefined ? { revision: attempt.revision } : {}),
         skip: attempt.plan.skip ?? null,
         notes: attempt.plan.notes,
         cells: [],

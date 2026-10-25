@@ -1,3 +1,4 @@
+import type { DeclaredSource } from './declaration.ts'
 import type { ArtifactLevel, FileRef, JudgeRetry, RecordMode } from './history/types.ts'
 import type { ModelHeadlineInput, ModelInsightInput } from './insights/input.ts'
 
@@ -1659,8 +1660,26 @@ type EvalOptionFields = {
   timeout?: Duration
   /** Labels for `--tag` and profiles to select by; a group's are added to its evals'. */
   tags?: string[]
+  /**
+   * The eval's version, part of its fingerprint: bump it when a change the eval file doesn't show
+   * (a helper, a fixture, data it reads) changes what it measures. A group's applies to the evals
+   * inside it that set none.
+   */
+  revision?: Revision
   /** Keys a profile's `limit` may not narrow for this group or eval. */
   pin?: PinnableKey[]
+}
+
+/** An eval's `revision`: a whole number or a non-empty string, compared exactly. */
+export type Revision = number | string
+
+/**
+ * An eval's own source as hashes: its body and case data as declared, and its options and its
+ * enclosing groups' in canonical form (`tags`, `revision` and `gate` aside).
+ */
+export type EvalSource = DeclaredSource & {
+  /** sha256 of the canonical options. */
+  options: string
 }
 
 /**
@@ -2565,6 +2584,10 @@ export type AttemptMeta = {
   name: string
   groups: string[]
   tags: string[]
+  /** The eval's `revision`, as the cascade resolved it; unset when no level sets one. */
+  revision?: Revision
+  /** Hashes of the eval's own source: what the `sources` fingerprint part covers but `revision`. */
+  source: EvalSource
   cell: Cell
   n: number
   /** The harness, then the role (with `compare`), plus `#n` when it has several runs. */
