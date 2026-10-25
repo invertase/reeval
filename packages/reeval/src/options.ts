@@ -988,7 +988,7 @@ export const secretVarsIn = (env: EnvVars, attempt: PlannedAttempt): string[] =>
 
 const brokerHint = (s: UnbrokeredSecret) =>
   /^mcp\.[^.]+\.headers\./.test(s.label)
-    ? 'give the MCP server an https:// URL (reeval brokers its header secrets to its own host, over HTTPS only)'
+    ? 'give the MCP server an https:// URL (reeval brokers its header secrets over HTTPS only, to its own host unless they set hosts)'
     : `add the hosts it's sent to, e.g. secret.fromEnv('${s.from}', { hosts: ['api.example.com'] })`
 
 export const unbrokeredWarning = (s: UnbrokeredSecret) =>
