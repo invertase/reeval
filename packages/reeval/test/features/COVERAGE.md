@@ -38,7 +38,7 @@
 | `openrouter()`: Claude Code, Codex, Goose, OpenCode and Grok Build on OpenRouter with one brokered key, fallback past it for Cursor, Antigravity, fx and pi and for `effort` it does not carry yet (Codex's excepted), the upstream provider and cost OpenRouter reports for every call in the record and the output, `fallbacks` for reeval's own calls (off by default), and the judge, analysis and captures through `@openrouter/ai-sdk-provider` | ✓ 14 | ✓ 3 | — | — | — | ◐ 2 (2 without a canary) |
 | `limit.compare.maxVariants` | — | ✓ 1 | — | — | — | — |
 | `limit.compare: false`, or `maxVariants` leaving none: the lone control gates like an eval without compare | — | ✓ 3 | — | — | — | — |
-| `limit.harness` leaving none of `compare.harness`: the compare is off and each control gates like an eval without compare | — | ✓ 1 | — | — | — | — |
+| `limit.harness` leaving none of `compare.harness`: the compare is off and each control gates like an eval without compare | — | ✓ 2 | — | — | — | — |
 | `reeval run --dry-run` and `--dry-run --json` | ✓ 2 | ✓ 1 | — | — | — | — |
 | `reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part | ✓ 6 | ✓ 5 | — | — | — | — |
 | `budget.attempts`, `budget.duration` and `--force` | ✓ 2 | ✓ 1 | — | — | — | — |

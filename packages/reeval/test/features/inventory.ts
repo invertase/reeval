@@ -415,7 +415,7 @@ export const inventory: InventoryFeature[] = [
     id: 'profiles.limit-harness-drops-compare',
     area: 'Config and selection',
     name: '`limit.harness` leaving none of `compare.harness`: the compare is off and each control gates like an eval without compare',
-    plan: ['compare/harness-scoped-dropped'],
+    plan: ['compare/harness-scoped-dropped', 'compare/harness-scoped-dropped-pinned'],
   },
   {
     id: 'plan.json',

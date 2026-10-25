@@ -754,7 +754,9 @@ export function cascade(
       }
     }
     const pins = out.pin.filter((k) =>
-      k === 'compare' ? limit.compare !== undefined && out.compare : limit[k] !== undefined,
+      k === 'compare'
+        ? limit.compare !== undefined && out.compare && comparedLeft
+        : limit[k] !== undefined,
     )
     if (pins.length) notes.push(`pinned: ${pins.join(', ')}`)
   }
