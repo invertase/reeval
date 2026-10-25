@@ -978,6 +978,7 @@ export const inventory: InventoryFeature[] = [
       secrets('redacting encoded forms'),
       secrets('redacting fragments of a secret'),
       secrets('redacting a secret split across stream parts'),
+      secrets('redacting credential shapes'),
       secrets("every variable of a header's secret.template is a secret the run masks"),
       debug(
         "a declared secret under a plain name is masked in an eval's logs and failures on screen",
