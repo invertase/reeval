@@ -20,12 +20,34 @@ function frame(first: number, payload: Buffer): Buffer {
   return Buffer.concat([head, payload])
 }
 
+/** A control frame may carry at most this many payload bytes. */
+const MAX_CONTROL = 125
+
+/**
+ * A control frame's payload scrubbed and kept within 125 bytes, since a placeholder can be
+ * longer than its value. A close frame keeps its 2-byte status code and its reason is cut at a
+ * UTF-8 character boundary; a ping or pong payload is cut at 125 bytes.
+ */
+function scrubControl(
+  opcode: number,
+  payload: Buffer,
+  pairs: readonly (readonly [string, string])[],
+) {
+  if (opcode !== 8) return replaceAll(payload, pairs).subarray(0, MAX_CONTROL)
+  if (payload.length < 2) return payload
+  const reason = replaceAll(payload.subarray(2), pairs)
+  let end = Math.min(reason.length, MAX_CONTROL - 2)
+  if (end < reason.length) while (end > 0 && ((reason[end] ?? 0) & 0xc0) === 0x80) end--
+  return Buffer.concat([payload.subarray(0, 2), reason.subarray(0, end)])
+}
+
 /**
  * Server-to-client WebSocket frames with every real value put back as its placeholder. Each data
  * message is gathered whole, so a value split across its frames is still found, and sent on as
- * one frame; control frames pass straight through, even between a message's frames. A
- * compressed frame (the upgrade request goes up without extensions, so a server shouldn't send
- * one), or a message over 16 MiB, errors the stream rather than pass unread.
+ * one frame; each control frame is scrubbed alone (`scrubControl`) and sent on at once, even
+ * between a message's frames. A compressed frame (the upgrade request goes up without
+ * extensions, so a server shouldn't send one), or a message over 16 MiB, errors the stream
+ * rather than pass unread.
  */
 export function webSocketScrubber(subs: readonly Substitution[]): Transform {
   const pairs = subs.map((s) => [s.value, s.placeholder] as const)
@@ -69,7 +91,7 @@ export function webSocketScrubber(subs: readonly Substitution[]): Transform {
           )
         }
         if (opcode >= 8) {
-          out.push(frame(first, payload))
+          out.push(frame(first, scrubControl(opcode, payload, pairs)))
           continue
         }
         if (opcode === 0 ? !message : message) {
