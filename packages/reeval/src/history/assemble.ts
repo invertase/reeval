@@ -19,7 +19,7 @@ import { mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
 import { harnessId, plannedSandboxes, profileJudge, sandboxId } from '../options.ts'
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
-import { redactJsonText, redactSecrets } from '../redact.ts'
+import { redactJsonText, redactSecrets, redactSplitSecrets } from '../redact.ts'
 import { isCompletedAttempt, previousAttempt } from '../resume.ts'
 import { containsZero, liftInterval, round3 } from '../stats.ts'
 import { formatDuration } from '../text.ts'
@@ -324,12 +324,12 @@ export function transcriptLines(record: EvalRecord): string {
 }
 
 /** Every stream part the harness sent, for debugging the normaliser (`REEVAL_RAW_TRANSCRIPT=1`). */
-function rawLines(record: EvalRecord): string | null {
+export function rawLines(record: EvalRecord): string | null {
   if (!record.turns.some((t) => t.raw)) return null
   const lines = record.turns.flatMap((turn, index) =>
     (turn.raw ?? []).map((part) => JSON.stringify({ turn: index, ...(part as object) })),
   )
-  return `${lines.join('\n')}\n`
+  return `${redactSplitSecrets(lines).join('\n')}\n`
 }
 
 function activity(record: EvalRecord): AttemptRecord['activity'] {

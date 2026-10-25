@@ -3,11 +3,16 @@
 // The network-level proof (the upstream gets the value, the container never has it) is in
 // sandbox-docker's proxy and Docker tests.
 import assert from 'node:assert/strict'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { Substitution } from '@reeval/sandbox-docker'
+import { AttemptDebug } from '../src/debug/attempt.ts'
 import { type BrokeredSecret, resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment, unbrokeredSecrets } from '../src/environment.ts'
 import { cursorMcpServers } from '../src/harness/agents.ts'
+import { rawLines } from '../src/history/assemble.ts'
 import { findingLines, findingSummary, scanText } from '../src/history/secret-scan.ts'
 import type { PlannedAttempt } from '../src/options.ts'
 import { brokeredIn, secretVarsIn, unbrokered, unbrokeredWarning } from '../src/options.ts'
@@ -20,12 +25,13 @@ import {
   redactJsonText,
   redactKey,
   redactSecrets,
+  redactSplitSecrets,
   registerSecret,
   type SecretMatch,
 } from '../src/redact.ts'
 import { scrubber } from '../src/report/scrub.ts'
 import { brokerPhases } from '../src/sandbox/phases.ts'
-import type { EnvironmentInput } from '../src/types.ts'
+import type { EnvironmentInput, EvalRecord } from '../src/types.ts'
 
 const VALUE = 'reeval-unit-brokered-4f1c9e2a7b'
 const OTHER = 'reeval-unit-other-9d3a61c0e5'
@@ -547,6 +553,141 @@ describe('redacting fragments of a secret', () => {
     const many = scanText('notes.txt', Array.from({ length: 7 }, () => google).join('\n'))
     assert.equal(findingLines('notes.txt', many).at(-1), 'notes.txt: and 2 more')
     assert.equal(findingSummary(many).endsWith(', and 4 more'), true)
+  })
+})
+
+describe('redacting a secret split across stream parts', () => {
+  const key = 'sk-ant-api03-Zq8vR2mN4xL7pK1wT9yB3cF6hJ0'
+  const env = { ANTHROPIC_API_KEY: key }
+  const pin = 'Tr0ub4dor&3'
+  registerSecret(pin)
+  const reply = `Your key is ${key} and the PIN is ${pin}.`
+  const chunks = (text: string) => text.match(/.{1,4}/g) as string[]
+  /** The AI SDK parts of one streamed text block, one line each, as trace and raw lines hold them. */
+  const textParts = (text: string, id = 't', type = 'text') => [
+    JSON.stringify({ ms: 0, part: { type: `${type}-start`, id } }),
+    ...chunks(text).map((d, i) =>
+      JSON.stringify({ ms: i + 1, part: { type: `${type}-delta`, id, text: d } }),
+    ),
+    JSON.stringify({ ms: 99, part: { type: `${type}-end`, id } }),
+  ]
+  /** What a reader rebuilds from the lines: every string at `pick`, joined. */
+  const rebuilt = (lines: string[], pick: (v: Record<string, never>) => unknown) =>
+    lines
+      .map((l) => pick(JSON.parse(l)))
+      .filter((s) => typeof s === 'string')
+      .join('')
+  const written = (lines: string[]) =>
+    redactJsonText(redactSplitSecrets(lines, env).join('\n'), env).split('\n')
+  const deltaText = (lines: string[]) =>
+    rebuilt(lines, (l) => (l as { part: { text?: string } }).part.text)
+
+  test('canary: masked line by line, 4-character deltas still rebuild the key and the PIN', () => {
+    const lines = redactJsonText(textParts(reply).join('\n'), env).split('\n')
+    assert.equal(deltaText(lines), reply)
+  })
+
+  test('the deltas of a reply rebuild it with the key and the PIN masked once each', () => {
+    const lines = written(textParts(reply))
+    assert.equal(deltaText(lines), 'Your key is [REDACTED] and the PIN is [REDACTED].')
+    assert.equal(lines.length, textParts(reply).length)
+  })
+
+  test("a harness's native chunks are masked too, between other parts and in another shape", () => {
+    // ACP's agent_message_chunk, as a raw part beside the AI SDK delta it became.
+    const lines = chunks(reply).flatMap((d, i) => [
+      JSON.stringify({
+        turn: 0,
+        ms: i,
+        part: {
+          type: 'raw',
+          rawValue: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: d } },
+        },
+      }),
+      JSON.stringify({ turn: 0, ms: i, part: { type: 'text-delta', id: 'm', text: d } }),
+      JSON.stringify({
+        turn: 0,
+        ms: i,
+        part: { type: 'raw', rawValue: { sessionUpdate: 'usage_update', used: i } },
+      }),
+    ])
+    const out = written(lines)
+    const native = rebuilt(
+      out,
+      (l) =>
+        (l as { part: { rawValue?: { content?: { text?: string } } } }).part.rawValue?.content
+          ?.text,
+    )
+    assert.equal(native, 'Your key is [REDACTED] and the PIN is [REDACTED].')
+    assert.equal(deltaText(out), 'Your key is [REDACTED] and the PIN is [REDACTED].')
+  })
+
+  test('interleaved reasoning and text deltas each join by their type', () => {
+    const text = textParts(`The key: ${key}`, 'a', 'text')
+    const reasoning = textParts(`Thinking about ${key} now`, 'b', 'reasoning')
+    const lines = text
+      .flatMap((l, i) => [l, reasoning[i] as string])
+      .concat(reasoning.slice(text.length))
+    const out = written(lines)
+    assert.equal(out.join('\n').includes(key), false)
+    for (const [type, want] of [
+      ['text-delta', 'The key: [REDACTED]'],
+      ['reasoning-delta', 'Thinking about [REDACTED] now'],
+    ]) {
+      const joined = rebuilt(out, (l) => {
+        const p = (l as { part: { type: string; text?: string } }).part
+        return p.type === type ? p.text : undefined
+      })
+      assert.equal(joined, want)
+      assert.equal(joined.includes(key.slice(0, 8)), false)
+    }
+  })
+
+  test('twin: lines with no split secret, and a line that is not JSON, stay byte for byte', () => {
+    const lines = [
+      ...textParts('nothing to see here, only a long enough reply'),
+      '{"a": 1,  "b": "spaced"}',
+      'not json',
+      JSON.stringify({ part: { type: 'text-delta', text: `whole ${key}` } }),
+    ]
+    assert.deepEqual(redactSplitSecrets(lines, env), lines)
+  })
+
+  test('trace.ndjson masks a secret streamed as deltas', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'reeval-split-trace-'))
+    const before = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = key
+    try {
+      const debug = new AttemptDebug({ dir, verbosity: 0, traceLimit: 1024 * 1024 })
+      for (const line of textParts(reply)) debug.trace('harness', 'stream', JSON.parse(line), false)
+      await debug.finish(true)
+      const trace = readFileSync(join(dir, 'trace.ndjson'), 'utf8').trim().split('\n').slice(1)
+      const joined = rebuilt(
+        trace,
+        (l) => (l as { data: { part: { text?: string } } }).data.part.text,
+      )
+      assert.equal(joined, 'Your key is [REDACTED] and the PIN is [REDACTED].')
+    } finally {
+      if (before === undefined) delete process.env.ANTHROPIC_API_KEY
+      else process.env.ANTHROPIC_API_KEY = before
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('transcript.raw.jsonl masks a secret streamed as deltas', () => {
+    const before = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = key
+    try {
+      const raw = textParts(reply).map((l) => JSON.parse(l))
+      const text = rawLines({ turns: [{ raw }] } as unknown as EvalRecord) as string
+      const lines = text.trim().split('\n')
+      assert.equal(lines.length, raw.length)
+      assert.equal(JSON.parse(lines[0] as string).turn, 0)
+      assert.equal(deltaText(lines), 'Your key is [REDACTED] and the PIN is [REDACTED].')
+    } finally {
+      if (before === undefined) delete process.env.ANTHROPIC_API_KEY
+      else process.env.ANTHROPIC_API_KEY = before
+    }
   })
 })
 

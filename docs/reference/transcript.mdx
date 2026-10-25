@@ -135,7 +135,7 @@ A tool output over 128 KB keeps its first 96 KB and last 16 KB, with a marker be
 REEVAL_RAW_TRANSCRIPT=1 npx reeval run greet
 ```
 
-With `REEVAL_RAW_TRANSCRIPT=1`, each attempt also writes `transcript.raw.jsonl`: every stream part the harness adapter sent, unnormalised, one per line with its `turn`. It's for debugging how reeval reads a harness, and it can be large.
+With `REEVAL_RAW_TRANSCRIPT=1`, each attempt also writes `transcript.raw.jsonl`: every stream part the harness adapter sent, unnormalised, one per line with its `turn`. It's for debugging how reeval reads a harness, and it can be large. A secret split across several parts' deltas or native chunks is masked as in `trace.ndjson` (see [Debug data](/reference/debug-data)): the first piece reads `[REDACTED]` and the others are empty.
 
 ## Related
 
