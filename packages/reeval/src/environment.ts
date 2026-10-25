@@ -210,6 +210,19 @@ export function mcpHosts(url: string): string[] | undefined {
 }
 
 /**
+ * Where an MCP server's header secret is brokered to: its own `hosts`, else the server's host.
+ * Never on an `http://` server: the gateway swaps secrets in over HTTPS only, and the header
+ * goes only to the server.
+ */
+export const mcpHeaderHosts = (
+  value: Secret | SecretTemplate,
+  url: string,
+): readonly string[] | undefined => {
+  const own = mcpHosts(url)
+  return own && isSecret(value) ? (value.hosts ?? own) : own
+}
+
+/**
  * A secret an attempt puts in the sandbox: where it's set (`KEY`, `mcp.docs.headers.auth`), the
  * host variable it reads, and the hosts it's brokered to, or none when the sandbox gets its value.
  */
@@ -267,13 +280,12 @@ export function plannedSecrets(env: EnvVars, layers: readonly EnvironmentLayer[]
       fromVars(s.env, `mcp.${server}.env.`)
       continue
     }
-    const own = mcpHosts(s.url)
     for (const [header, value] of Object.entries(s.headers)) {
       const label = `mcp.${server}.headers.${header}`
-      if (isSecret(value)) add(label, value.from ?? header, value.hosts ?? own)
+      if (isSecret(value)) add(label, value.from ?? header, mcpHeaderHosts(value, s.url))
       if (isSecretTemplate(value)) {
         for (const [, name] of value.template.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) {
-          add(label, name as string, own)
+          add(label, name as string, mcpHeaderHosts(value, s.url))
         }
       }
     }
