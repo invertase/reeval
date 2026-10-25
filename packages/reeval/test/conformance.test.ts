@@ -97,7 +97,13 @@ async function treeOf(path: string): Promise<DeclarationTree> {
     concurrency: 4,
     profile: null,
   }
-  useEngine({ registerTest, registerGroup, getRunContext: () => run, collectingFile })
+  useEngine({
+    registerTest,
+    registerGroup,
+    getRunContext: () => run,
+    collectingFile,
+    declareHarnesses: () => {},
+  })
   let before = 0
   while (declaredBody(`b${before + 1}`)) before++
   await collect(file, () => jiti.import(file))

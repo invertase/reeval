@@ -811,6 +811,69 @@ evaluate('judged', async (c) => {
     )
   })
 
+  test('a profile limit.harness id no collected eval runs on exits 2, naming the ids they do', async () => {
+    const p = await project('limit-harness-unknown', {
+      'reeval.config.ts': config(
+        `profiles: {
+    typo: { limit: { harness: ['cursor'] } },
+    one: { limit: { harness: ['a:x', 'cursor'] } },
+    tagged: { limit: { harness: ['b:y'] } },
+    both: { limit: { harness: ['a:x', 'c:z'] } },
+    other: { limit: { harness: ['c:z'] } },
+  },`,
+        "fakeHarness({ id: 'a:x' })",
+      ),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+evaluate('plain', async () => {})
+evaluate('slow', { tags: ['slow'], harness: fakeHarness({ id: 'b:y' }) }, async () => {})
+`,
+      'evals/c.eval.ts': `import { evaluate } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+evaluate('other', { harness: fakeHarness({ id: 'c:z' }) }, async () => {})
+`,
+    })
+    const refused = (ids: string) =>
+      new RegExp(
+        `reeval: profiles\\.\\w+\\.limit\\.harness in reeval\\.config\\.ts lists ${ids}, which no eval runs on\\. Harness ids the evals run on: a:x, b:y, c:z\\.`,
+      )
+    for (const args of [['--dry-run'], []]) {
+      const r = await runCli(p.dir, ['run', '--profile', 'typo', ...args])
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(r.stderr, refused('"cursor"'))
+    }
+    assert.equal(existsSync(join(p.dir, '.reeval', 'runs')), false, 'nothing ran or recorded')
+    const one = await runCli(p.dir, ['run', '--dry-run', '--profile', 'one'])
+    assert.equal(one.code, 2, one.stdout + one.stderr)
+    assert.match(one.stderr, refused('"cursor"'))
+    // An eval the tags leave out still names its harnesses.
+    const tagged = await runCli(p.dir, [
+      'run',
+      '--dry-run',
+      '--profile',
+      'tagged',
+      '--tag',
+      '!slow',
+    ])
+    assert.equal(tagged.code, 0, tagged.stdout + tagged.stderr)
+    // A path filter leaves the other file's harnesses unknown: an id that matches none of the
+    // loaded files' is accepted while another matches, refused when none does.
+    const narrowed = await runCli(p.dir, [
+      'run',
+      '--dry-run',
+      '--profile',
+      'both',
+      'evals/a.eval.ts',
+    ])
+    assert.equal(narrowed.code, 0, narrowed.stdout + narrowed.stderr)
+    const none = await runCli(p.dir, ['run', '--dry-run', '--profile', 'other', 'evals/a.eval.ts'])
+    assert.equal(none.code, 2, none.stdout + none.stderr)
+    assert.match(
+      none.stderr,
+      /lists "c:z", which no eval in the selected files runs on\. Harness ids the evals in the selected files run on: a:x, b:y\./,
+    )
+  })
+
   test('budget.duration stops new attempts; the run is marked budget and exits 1', async () => {
     const p = await project('budget-duration', {
       'reeval.config.ts': config(

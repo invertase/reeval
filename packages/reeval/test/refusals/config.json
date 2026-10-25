@@ -64,5 +64,12 @@
   "ts: a relative dockerfile as data": null,
   "ts: a missing relative dockerfile as data": "UsageError: sandbox.dockerfile in reeval.config.ts: <dir>/nope/Dockerfile doesn't exist. Paths in reeval.config.ts are relative to its directory.",
   "ts: a missing dockerfile as data in a profile": "UsageError: profiles.big.defaults.sandbox.dockerfile in reeval.config.ts: <dir>/big/Dockerfile doesn't exist. Paths in reeval.config.ts are relative to its directory.",
-  "ts: a relative fake dir as data": null
+  "ts: a relative fake dir as data": null,
+  "collected: a limit.harness id no eval runs on": "UsageError: profiles.pr.limit.harness in reeval.config.ts lists \"cursor\", which no eval runs on. Harness ids the evals run on: cursor:composer-2.5, pi:gemini-3.8-flash.",
+  "collected: two limit.harness ids, one no eval runs on": "UsageError: profiles.pr.limit.harness in reeval.config.ts lists \"codex\", which no eval runs on. Harness ids the evals run on: cursor:composer-2.5.",
+  "collected: every limit.harness id matches": null,
+  "collected: an empty limit.harness": null,
+  "collected: a limit.harness id with no harnesses collected": "UsageError: profiles.pr.limit.harness in reeval.config.ts lists \"a\", which no eval runs on. Harness ids the evals run on: none.",
+  "collected: a path filter, one limit.harness id matches": null,
+  "collected: a path filter, no limit.harness id matches": "UsageError: profiles.pr.limit.harness in reeval.config.ts lists \"b\", which no eval in the selected files runs on. Harness ids the evals in the selected files run on: a."
 }

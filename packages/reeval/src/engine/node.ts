@@ -49,7 +49,7 @@ export const engineVersions: Record<string, string> = {
 const onlyInCi = (file: string) =>
   `evaluate.only/group.only in ${file} isn't allowed in CI (CI is set). Remove it, or run with CI=false.`
 
-type Collected = { file: string; rel: string; tests: WireTest[] }
+type Collected = { file: string; rel: string; tests: WireTest[]; harnesses: string[] }
 
 export async function runEngine(
   options: EngineOptions,
@@ -96,15 +96,16 @@ export async function runEngine(
     const rel = relativeFile(root, file)
     const worker = spawn(entry, root)
     let tests: WireTest[] | undefined
+    let harnesses: string[] = []
     let error: SerializedError | undefined
     worker.onMessage((m) => {
-      if (m.t === 'collected') tests = m.tests
+      if (m.t === 'collected') ({ tests, harnesses } = m)
       else if (m.t === 'load-error') error = m.error
     })
     await handshake(worker, entry)
     worker.send({ t: 'init', run, file, select: null })
     const exit = await worker.exited
-    if (tests) collected.push({ file, rel, tests })
+    if (tests) collected.push({ file, rel, tests, harnesses })
     else if (error?.name === 'OnlyInCiError') usage = onlyInCi(rel)
     else if (error?.name === 'UsageError' || error?.name === 'DefinitionError')
       usage = `${rel}: ${error.message}`
@@ -129,7 +130,7 @@ export async function runEngine(
   collected.sort((a, b) => Number(a.file > b.file) - Number(a.file < b.file))
 
   if (options.onPlan) {
-    const plan = collectPlan(collected, matchesName, nameFilters)
+    const plan = collectPlan(collected, matchesName, nameFilters, specs.length < files.length)
     // When no part matched anything, the run's own "no evals matched" says so.
     if (plan.unmatched.length === options.filters.length) plan.unmatched = []
     if (!(await options.onPlan(plan)))
@@ -168,6 +169,7 @@ function collectPlan(
   collected: Collected[],
   matchesName: (e: ReturnType<typeof identify>) => boolean,
   nameFilters: readonly string[],
+  partial: boolean,
 ): CollectedPlan {
   const planned: PlannedItem[] = []
   const excluded = new Map<string, ExcludedEval>()
@@ -187,7 +189,14 @@ function collectPlan(
       }
     }
   }
-  return { planned, excluded: [...excluded.values()], matched, unmatched: [...unmatched] }
+  return {
+    planned,
+    excluded: [...excluded.values()],
+    matched,
+    unmatched: [...unmatched],
+    harnesses: [...new Set(collected.flatMap((c) => c.harnesses))],
+    partial,
+  }
 }
 
 type RunInput = EngineOptions & {
