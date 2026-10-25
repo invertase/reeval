@@ -439,13 +439,20 @@ function cutLeaf(value: string, cuts: Cut[]): string {
 }
 
 /**
+ * The fields that tell one stream from another at the same path: an AI SDK part's block `id`, and
+ * an ACP update's `messageId` and `sessionUpdate` (a thought chunk beside a message chunk).
+ */
+const STREAM_IDS = ['id', 'messageId', 'sessionUpdate'] as const
+
+/**
  * JSON Lines with each secret that only shows once strings on several lines are joined masked: a
  * reply streamed as short deltas, one stream part per line, where no single string holds enough
  * of the secret for `redactJsonText` to catch it. The strings at one path (`part.text`,
- * `rawValue.content.text`) are joined in line order, and also per the `type` beside them, so
- * interleaved text and reasoning still join; a match spanning two or more strings has its first
- * piece read `[REDACTED]` and its other pieces emptied. Lines that aren't JSON, and lines with
- * nothing to mask, are kept byte for byte.
+ * `rawValue.content.text`) are joined in line order, also per the `type` beside them, and also
+ * per the `STREAM_IDS` above them, so interleaved text and reasoning, two text blocks, or thought
+ * and message chunks still join; a match spanning two or more strings has its first piece read
+ * `[REDACTED]` and its other pieces emptied. Lines that aren't JSON, and lines with nothing to
+ * mask, are kept byte for byte.
  */
 export function redactSplitSecrets(
   lines: readonly string[],
@@ -469,16 +476,27 @@ export function redactSplitSecrets(
     else groups.set(key, [leaf])
   }
   type Node = Record<string | number, unknown>
-  const parentOf = (leaf: Leaf): Node => {
+  /** The objects and arrays above `leaf`, from its line's value down to its parent. */
+  const ancestors = (leaf: Leaf): Node[] => {
     let node = (parsed[leaf.line] as { value: unknown }).value as Node
-    for (const k of leaf.path.slice(0, -1)) node = node[k] as Node
-    return node
+    const out: Node[] = []
+    for (const k of leaf.path) {
+      out.push(node)
+      node = node[k] as Node
+    }
+    return out
   }
+  const parentOf = (leaf: Leaf): Node => ancestors(leaf).at(-1) as Node
   for (const leaf of all) {
     const path = JSON.stringify(leaf.path.map((k) => (typeof k === 'number' ? '#' : k)))
     join(`${path}\0`, leaf)
-    const type = leaf.path.length > 0 ? parentOf(leaf).type : undefined
+    const above = ancestors(leaf)
+    const type = above.at(-1)?.type
     if (typeof type === 'string') join(`${path}\0${type}`, leaf)
+    const stream = above.flatMap((node) =>
+      STREAM_IDS.flatMap((k) => (typeof node[k] === 'string' ? [`${k}=${node[k]}`] : [])),
+    )
+    if (stream.length > 0) join(`${path}\0${type}\0${stream.join('\0')}`, leaf)
   }
   const cuts = new Map<Leaf, Cut[]>()
   for (const group of groups.values()) {

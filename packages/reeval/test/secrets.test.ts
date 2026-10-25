@@ -643,6 +643,40 @@ describe('redacting a secret split across stream parts', () => {
     }
   })
 
+  test('two interleaved text blocks each join by their id', () => {
+    const a = textParts(`Block a has ${key} in it`, 'a')
+    const b = textParts('Block b is about something else, and it runs on for a while longer', 'b')
+    const lines = b.flatMap((l, i) => [...(a[i] ? [a[i] as string] : []), l])
+    const out = written(lines)
+    assert.equal(out.join('\n').includes(key.slice(0, 8)), false)
+    const block = (id: string) =>
+      rebuilt(out, (l) => {
+        const p = (l as { part: { id: string; text?: string } }).part
+        return p.id === id ? p.text : undefined
+      })
+    assert.equal(block('a'), 'Block a has [REDACTED] in it')
+    assert.equal(block('b'), 'Block b is about something else, and it runs on for a while longer')
+  })
+
+  test('ACP message chunks join by their update, with thought chunks between them', () => {
+    const acp = (sessionUpdate: string, text: string) =>
+      JSON.stringify({
+        part: { type: 'raw', rawValue: { sessionUpdate, content: { type: 'text', text } } },
+      })
+    const thoughts = chunks('I should answer the question about the key without delay')
+    const lines = chunks(reply).flatMap((d, i) => [
+      acp('agent_message_chunk', d),
+      ...(thoughts[i] ? [acp('agent_thought_chunk', thoughts[i] as string)] : []),
+    ])
+    const out = written(lines)
+    const message = rebuilt(out, (l) => {
+      const v = (l as { part: { rawValue: { sessionUpdate: string; content: { text: string } } } })
+        .part.rawValue
+      return v.sessionUpdate === 'agent_message_chunk' ? v.content.text : undefined
+    })
+    assert.equal(message, 'Your key is [REDACTED] and the PIN is [REDACTED].')
+  })
+
   test('twin: lines with no split secret, and a line that is not JSON, stay byte for byte', () => {
     const lines = [
       ...textParts('nothing to see here, only a long enough reply'),
