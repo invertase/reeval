@@ -1957,7 +1957,7 @@ export type ReevalConfig = {
   profiles?: Record<string, Profile>
   /** The profile when neither `--profile` nor `REEVAL_PROFILE` names one: `ci` when `CI` is set. */
   defaultProfile?: { ci?: string; local?: string }
-  /** `unbrokered: 'error'` refuses Docker secrets without `hosts` instead of warning (default `'warn'`). */
+  /** `unbrokered: 'error'` refuses Docker secrets without `hosts`, and credential-like MCP headers written as plain strings, instead of warning (default `'warn'`). */
   secrets?: { unbrokered?: 'warn' | 'error' }
   /**
    * Local debug data in `.reeval/debug`: how many runs to keep (default 20), and how many MB of raw

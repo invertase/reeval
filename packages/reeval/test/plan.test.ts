@@ -157,7 +157,12 @@ export const cases: PlanCase[] = [
   { dir: 'fx', name: 'fx', args: [] },
   { dir: 'cursor', name: 'cursor', args: [] },
   { dir: 'effort', name: 'effort', args: [] },
-  { dir: 'secrets', name: 'brokered', args: [] },
+  { dir: 'secrets', name: 'brokered', args: ['evals/s.eval.ts'] },
+  {
+    dir: 'secrets',
+    name: 'plain-headers',
+    args: ['--profile', 'headers', 'evals/headers.eval.ts', 'evals/tree.eval.ts'],
+  },
   { dir: 'egress', name: 'cascade', args: ['evals/auto.eval.ts', 'evals/cascade.eval.ts'] },
   {
     dir: 'egress',
