@@ -1,7 +1,8 @@
 // The engine's main process: finds the eval files, collects each in a fresh worker for the plan,
 // then runs each in a fresh worker again, at most `concurrency` at once, handing out the
 // scheduler's leases over IPC and turning what workers report into reeval's events and results.
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { UsageError } from '../errors.ts'
 import { attemptKey, evalId, relativeFile } from '../ids.ts'
@@ -61,28 +62,37 @@ export async function runEngine(
     '**/.reeval/**',
     `${relativeFile(root, config.history.dir)}/**`,
   ])
-  // A part that names an eval file picks files; any other part picks evals by name or cell.
-  // Parts of one kind widen the selection, and the two kinds narrow each other.
+  // A part that names an eval file picks every eval in the files it names. One that is a file or
+  // directory on disk (from the current directory, or absolute) is only a path; any other, such
+  // as `right` beside `evals/right/`, also matches as a name or cell part anywhere, so a
+  // directory called `fake` doesn't hide the `fake` cells of the other files. Any other part
+  // picks evals by name or cell. Parts of one kind widen the selection, and the two kinds
+  // narrow each other.
   const pathFilters = options.filters.filter((f) => filterFiles(files, [f], root).length)
+  const looseFilters = pathFilters.filter((f) => !existsSync(resolve(f)))
   const nameFilters = options.filters.filter((f) => !pathFilters.includes(f))
   const specs = filterFiles(files, pathFilters, root)
   if (specs.length === 0)
     return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
+  const named = new Set(specs.map((file) => relativeFile(root, file)))
 
   // A file's worker holds its lane until all of its attempts finish, so `concurrency` attempts in
   // flight need that many workers.
   const workers = Math.max(1, Math.min(concurrency, specs.length))
   const entry = workerEntry(root, PACKAGE_NAMES)
   const hide = [...reevalFrames(PACKAGE_DIR), ...reevalFrames(join(entry, '..', '..'))]
-  const matchesName = (e: { id: string; attempt?: EngineEval['attempt'] }) =>
-    nameFilters.length === 0 || nameFilters.some((f) => matchesFilter(e, f))
+  const matchesName = (e: { id: string; file: string; attempt?: EngineEval['attempt'] }) =>
+    (named.has(e.file) || looseFilters.some((f) => matchesFilter(e, f))) &&
+    (nameFilters.length === 0 || nameFilters.some((f) => matchesFilter(e, f)))
   const run = options.run
 
-  // Collect: each file in a worker of its own, for the plan.
+  // Collect: each file in a worker of its own, for the plan. Paths on disk collect only the
+  // files they name; a part that may match by name or cell collects every file, and any of
+  // them failing to load fails the run, as it may hold evals the part picks.
   const collected: Collected[] = []
   const failed = new Map<string, string[]>()
   let usage: string | undefined
-  await eachLimited(specs, workers, async (file) => {
+  await eachLimited(looseFilters.length ? files : specs, workers, async (file) => {
     const rel = relativeFile(root, file)
     const worker = spawn(entry, root)
     let tests: WireTest[] | undefined
@@ -126,10 +136,13 @@ export async function runEngine(
       return { evals: [], unhandledErrors: [], cancelled: false, noFiles: false, stopped: true }
   }
 
-  // With a name filter, only the files it picks an eval in run.
-  const picked = nameFilters.length
-    ? collected.filter(({ rel, tests }) => tests.some((t) => matchesName(identify(rel, t))))
-    : collected
+  // A file a path part names runs unless a name part narrows it; any other only if it has an
+  // eval the filters pick.
+  const picked = collected.filter(
+    ({ rel, tests }) =>
+      (named.has(rel) && nameFilters.length === 0) ||
+      tests.some((t) => matchesName(identify(rel, t))),
+  )
   if (picked.length === 0)
     return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
   return runFiles({ ...options, spawn, entry, hide, workers, collected: picked, matchesName })

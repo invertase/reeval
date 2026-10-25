@@ -153,6 +153,8 @@ export const cases: PlanCase[] = [
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
   { dir: 'only-in-skip', name: 'only-in-skipped-group', args: [] },
+  { dir: 'filters', name: 'dir-named-like-cell', args: ['right'] },
+  { dir: 'filters', name: 'dir-path-only', args: ['evals/right'] },
   { dir: 'images', name: 'install-from-dockerfile', args: ['evals/i.eval.ts'], env: NO_DOCKER },
   { dir: 'images', name: 'plugin-builds', args: ['evals/plugins.eval.ts'], env: NO_DOCKER },
   { dir: 'harnesses', name: 'claude-code', args: [] },

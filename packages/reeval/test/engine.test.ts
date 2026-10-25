@@ -128,6 +128,30 @@ export default defineConfig({
     )
   })
 
+  test('a directory named like a cell keeps that cell in the other files', async () => {
+    const p = await project('dir-named-like-cell', {
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  harness: [fakeHarness({ id: 'left' }), fakeHarness({ id: 'right' })],
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+})
+`,
+      'evals/right/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('alpha', async () => {})\n`,
+      'evals/b.eval.ts': `import { evaluate } from 'reeval'\nevaluate('beta', async () => {})\n`,
+    })
+    const r = await runCli(p.dir, ['run', 'right', '--ui', 'plain'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.deepEqual(
+      readRun(p.dir).evals.map((e) => [e.id, e.cells.map((c) => c.key)]),
+      [
+        ['evals/b.eval.ts › beta', ['right/fake/fake']],
+        ['evals/right/a.eval.ts › alpha', ['left/fake/fake', 'right/fake/fake']],
+      ],
+    )
+  })
+
   test('eval files that declare no evals exit 2 instead of writing an empty run', async () => {
     const p = await project('no-evals', {
       'reeval.config.ts': fakeConfig(),
