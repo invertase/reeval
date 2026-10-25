@@ -1416,6 +1416,15 @@ evaluate('greets', { runs: 1 }, async (c) => {
         (c) => c.lift,
       )
       assert.deepEqual({ lift: variant?.lift, verdict: variant?.verdict }, { lift, verdict })
+      const effort = digest.facts.find((f) => f.kind === 'effort')
+      assert.deepEqual(
+        (effort?.cells as Row[] | undefined)?.map((c) => [c.medianToolCalls, c.medianCallsByClass]),
+        [
+          [0, undefined],
+          [0, undefined],
+        ],
+        'no tool calls: no class breakdown',
+      )
       const [row] = await query(
         p.dir,
         "SELECT pass_verdict FROM factor_effects WHERE tier = 'controlled'",

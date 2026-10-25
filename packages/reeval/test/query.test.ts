@@ -510,6 +510,84 @@ evaluate('brackets', { environment: skilled }, async (c) => {
     assert.equal((await query(p.dir, 'effort')).length, 1)
   })
 
+  test('effort’s per-class call medians count an attempt with no tool calls as 0', async () => {
+    const p = await project('query-effort-zero-calls', {
+      'reeval.config.ts': fakeConfig({ harness: "{ script: [[], [{ exec: 'true' }]] }" }),
+      'evals/e.eval.ts': `import { evaluate } from 'reeval'
+const started = { once: 0, turnless: 0 }
+evaluate('once', { runs: 3 }, async (c) => {
+  await c.send('go')
+  if (++started.once === 1) await c.send('again')
+})
+evaluate('never', { runs: 3 }, async (c) => {
+  await c.send('go')
+})
+evaluate('turnless', { runs: 3 }, async (c) => {
+  if (++started.turnless > 1) return
+  await c.send('go')
+  await c.send('again')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const name = (r: Row) => String(r.eval_key).replace('evals/e.eval.ts › ', '')
+    const calls = await query(
+      p.dir,
+      `SELECT a.eval_key, a.turns, COUNT(t.line) AS n FROM attempts a LEFT JOIN tool_calls t
+        ON t.run_id = a.run_id AND t.attempt_key = a.key GROUP BY a.key ORDER BY a.eval_key, n, a.turns`,
+    )
+    assert.deepEqual(
+      calls.map((r) => `${name(r)} ${r.turns} turns ${r.n} calls`),
+      [
+        'never 1 turns 0 calls',
+        'never 1 turns 0 calls',
+        'never 1 turns 0 calls',
+        'once 1 turns 0 calls',
+        'once 1 turns 0 calls',
+        'once 2 turns 1 calls',
+        'turnless 0 turns 0 calls',
+        'turnless 0 turns 0 calls',
+        'turnless 2 turns 1 calls',
+      ],
+    )
+    const effort = await query(
+      p.dir,
+      'SELECT eval_key, n, tools_median, workspace_calls_median, verify_calls_median FROM effort ORDER BY eval_key',
+    )
+    assert.deepEqual(
+      effort.map(
+        (r) =>
+          `${name(r)} n=${r.n} ${r.tools_median} ${r.workspace_calls_median} ${r.verify_calls_median}`,
+      ),
+      ['never n=3 0 0 0', 'once n=3 0 0 0', 'turnless n=3 0 0 0'],
+    )
+  })
+
+  test('effort’s per-class call medians leave out an attempt with calls but no transcript file', async () => {
+    const p = await project('query-effort-missing-transcript', {
+      'reeval.config.ts': fakeConfig({ harness: "{ script: [[{ exec: 'true' }]] }" }),
+      'evals/e.eval.ts': `import { evaluate } from 'reeval'
+evaluate('calls', { runs: 3 }, async (c) => {
+  await c.send('go')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const { run, dir } = readRun(p.dir)
+    const attempts = run.evals[0]?.attempts ?? []
+    assert.deepEqual(
+      attempts.map((a) => a.activity.tools),
+      [1, 1, 1],
+    )
+    for (const a of attempts.slice(1)) {
+      rmSync(join(dir, ...(a.files.transcript?.path ?? '').split('/')))
+    }
+    assert.deepEqual(
+      await query(p.dir, 'SELECT n, tools_median, workspace_calls_median FROM effort'),
+      [{ n: 3, tools_median: 1, workspace_calls_median: 1 }],
+    )
+  })
+
   test('failing attempts join skills by environment digest, not name', async () => {
     const p = await project('query-joins', {
       'reeval.config.ts': fakeConfig(),
