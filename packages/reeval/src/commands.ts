@@ -64,6 +64,7 @@ export async function lines(root: string, args: string[]): Promise<string[] | nu
 }
 
 const LISTED = 20_000
+const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
 /**
  * Commits reachable from HEAD that `shas` asks about; null when git can't tell (no repo, or a
@@ -83,12 +84,23 @@ export async function reachability(
   return reach
 }
 
-/** Adds each of `shas` that's an ancestor of HEAD but past the commits `reach` lists. */
+/**
+ * Adds each of `shas` that's an ancestor of HEAD but past the commits `reach` lists. One commit is
+ * one `merge-base`; several are one walk of HEAD's whole history, since each `merge-base` costs
+ * about a walk.
+ */
 async function settle(root: string, reach: Reachability, shas: Array<string | undefined>) {
   if (!reach || reach.size < LISTED) return
-  for (const sha of new Set(shas)) {
-    if (!sha || !/^[0-9a-f]+$/.test(sha) || reach.has(sha)) continue
-    if ((await git(root, ['merge-base', '--is-ancestor', sha, 'HEAD'])).code === 0) reach.add(sha)
+  const asked = new Set(
+    shas.filter((sha): sha is string => !!sha && FULL_SHA.test(sha) && !reach.has(sha)),
+  )
+  const [only, ...more] = asked
+  if (only && more.length === 0) {
+    if ((await git(root, ['merge-base', '--is-ancestor', only, 'HEAD'])).code === 0) reach.add(only)
+  } else if (only) {
+    for (const sha of (await lines(root, ['rev-list', `--skip=${LISTED}`, 'HEAD'])) ?? []) {
+      if (asked.has(sha)) reach.add(sha)
+    }
   }
 }
 
