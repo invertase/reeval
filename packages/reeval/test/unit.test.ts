@@ -84,6 +84,7 @@ import { clip } from '../src/text.ts'
 import type { GatewayDescriptor, Outcome } from '../src/types.ts'
 import { rowKey } from '../src/view/compare.ts'
 import { gatePart } from '../src/view/gate.ts'
+import { splitPatch } from '../src/view/patch.ts'
 import { project } from './helpers.ts'
 
 test("the -v broker line names each brokered endpoint's path matcher", () => {
@@ -251,6 +252,44 @@ test("the snapshot keeps one commit and no placed file's earlier content", async
     await box.destroy()
   }
   assert.ok(!existsSync(box.stateDir), 'destroy removes the state directory')
+})
+
+test('changed paths come back as written, however git would quote them', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  // Windows filenames can't hold a tab or `"`.
+  const names = [
+    'café.txt',
+    'a b.txt',
+    ...(process.platform === 'win32' ? [] : ['t\tab.txt', 'q"uote\\.txt']),
+  ]
+  try {
+    await box.writeFile('keep.txt', 'kept\n')
+    await snapshot(box)
+    for (const name of names) await box.writeFile(name, 'new\n')
+    await box.writeFile('keep.txt', 'changed\n')
+    const diff = await diffSinceSnapshot(box)
+    const expected = [
+      ...names.map((path) => ({ path, status: 'added' })),
+      { path: 'keep.txt', status: 'modified' },
+    ]
+    const byPath = (a: { path: string }, b: { path: string }) => (a.path < b.path ? -1 : 1)
+    assert.deepEqual([...diff.files].sort(byPath), expected.sort(byPath))
+    assert.deepEqual(
+      splitPatch(diff.patch)
+        .map((f) => [f.path, f.added, f.removed])
+        .sort(),
+      [...names.map((n) => [n, 1, 0]), ['keep.txt', 1, 1]].sort(),
+    )
+    const judged = judgeDiff(diff, { patterns: ['!café.txt', '!t*', '!q*'] })
+    assert.doesNotMatch(
+      judged.patch,
+      /caf|t\tab|uote/,
+      'a pattern drops a quoted path from the diff',
+    )
+    assert.match(judged.patch, /a b\.txt/)
+  } finally {
+    await box.destroy()
+  }
 })
 
 test('the snapshot ignores a config the workspace user could plant in its HOME', async () => {

@@ -1883,11 +1883,12 @@ export const inventory: InventoryFeature[] = [
     id: 'assert.changed',
     area: 'Judges and matchers',
     name: '`toHaveChanged(paths?)`: files in the workspace diff, matched with globs',
-    fixtures: ['assert/changed'],
+    fixtures: ['assert/changed', 'assert/changed-quoted-path'],
     tests: [
       'reeval/test/assert.test.ts › matches the diff with globs, directories, RegExps and lists',
       'reeval/test/assert.test.ts › reads c as of its latest turn, and nothing before one',
       'reeval/test/assert.test.ts › names the files it saw',
+      'reeval/test/unit.test.ts › changed paths come back as written, however git would quote them',
     ],
   },
   {

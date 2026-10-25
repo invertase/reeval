@@ -544,6 +544,33 @@ describe('redacting fragments of a secret', () => {
       scanText('notes.txt', `one\ntwo ${google}\n`).map((f) => [f.file, f.line]),
       [[null, 2]],
     )
+    // A host git with core.quotePath on quotes a non-ASCII name; ` b/` can be inside a name.
+    const awkward = [
+      'diff --git a/README.md b/README.md',
+      '--- a/README.md',
+      '+++ b/README.md',
+      '@@ -1 +1 @@',
+      '+new',
+      'diff --git "a/caf\\303\\251.env" "b/caf\\303\\251.env"',
+      'new file mode 100644',
+      '--- /dev/null',
+      '+++ "b/caf\\303\\251.env"',
+      '@@ -0,0 +1 @@',
+      `+KEY=${google}`,
+      'diff --git a/x b/y.env b/x b/y.env',
+      '--- a/x b/y.env',
+      '+++ b/x b/y.env',
+      '@@ -1 +1 @@',
+      `+KEY=${google}`,
+      '',
+    ].join('\n')
+    assert.deepEqual(
+      scanText('worktree.patch', awkward).map((f) => [f.file, f.line]),
+      [
+        ['café.env', 1],
+        ['x b/y.env', 1],
+      ],
+    )
     const many = scanText('notes.txt', Array.from({ length: 7 }, () => google).join('\n'))
     assert.equal(findingLines('notes.txt', many).at(-1), 'notes.txt: and 2 more')
     assert.equal(findingSummary(many).endsWith(', and 4 more'), true)

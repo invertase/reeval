@@ -798,6 +798,78 @@ describe('view-models over a real history', () => {
       ],
     )
   })
+
+  test("patch lines that start with -- or ++ count, and the file's own header lines don't", () => {
+    const [file] = splitPatch(
+      [
+        'diff --git a/schema.sql b/schema.sql',
+        'index 1111111..2222222 100644',
+        '--- a/schema.sql',
+        '+++ b/schema.sql',
+        '@@ -1,3 +1,3 @@',
+        '--- drop the legacy table',
+        '-DROP TABLE legacy;',
+        '+++ counter',
+        '+SELECT 1;',
+        ' -- unchanged',
+        '@@ -9 +9 @@',
+        '----',
+        '+++i;',
+        '',
+      ].join('\n'),
+    )
+    assert.deepEqual([file?.path, file?.added, file?.removed], ['schema.sql', 3, 3])
+  })
+
+  test('patches name files git quotes, renames and binaries by their real path', () => {
+    const files = splitPatch(
+      [
+        'diff --git "a/t\\tab \\"q\\".txt" "b/t\\tab \\"q\\".txt"',
+        'new file mode 100644',
+        '--- /dev/null',
+        '+++ "b/t\\tab \\"q\\".txt"',
+        '@@ -0,0 +1 @@',
+        '+x',
+        'diff --git "a/caf\\303\\251.txt" "b/caf\\303\\251.txt"',
+        'deleted file mode 100644',
+        '--- "a/caf\\303\\251.txt"',
+        '+++ /dev/null',
+        '@@ -1 +0,0 @@',
+        '-x',
+        'diff --git a/with space.txt b/with space.txt',
+        '--- a/with space.txt\t',
+        '+++ b/with space.txt\t',
+        '@@ -1 +1 @@',
+        '-a',
+        '+b',
+        'diff --git a/old name.txt b/new name.txt',
+        'similarity index 100%',
+        'rename from old name.txt',
+        'rename to new name.txt',
+        'diff --git a/b b/logo b.png b/b b/logo b.png',
+        'new file mode 100644',
+        'index 0000000..1111111',
+        'GIT binary patch',
+        'literal 1',
+        'IcmZo*0000H00000',
+        '',
+        'literal 0',
+        'HcmV?d00001',
+        '',
+        '',
+      ].join('\n'),
+    )
+    assert.deepEqual(
+      files.map((f) => [f.path, f.status]),
+      [
+        ['t\tab "q".txt', 'added'],
+        ['café.txt', 'deleted'],
+        ['with space.txt', 'modified'],
+        ['new name.txt', 'renamed'],
+        ['b b/logo b.png', 'added'],
+      ],
+    )
+  })
 })
 
 const HOST = '127.0.0.1:4984'

@@ -853,6 +853,37 @@ describe('the pi harness', () => {
       [['b.txt', 'modify', 2, 1]],
     )
   })
+
+  test("pi's edit counts lines that start with -- or ++, and not the patch's file headers", () => {
+    const edit = (patch: string) =>
+      normaliseStream(
+        [
+          {
+            ms: 1,
+            part: {
+              type: 'tool-call',
+              toolCallId: 'e',
+              toolName: 'edit',
+              input: { path: 'q.sql' },
+            },
+          },
+          {
+            ms: 2,
+            part: {
+              type: 'tool-result',
+              toolCallId: 'e',
+              output: { output: 'ok', details: { patch } },
+            },
+          },
+        ],
+        0,
+      ).map((e) => (e.type === 'file-edit' ? [e.added, e.removed] : e.type))
+    assert.deepEqual(
+      edit('--- q.sql\n+++ q.sql\n@@ -1,2 +1,2 @@\n--- old\n+++counter;\n select 1;\n'),
+      [[1, 1]],
+    )
+    assert.deepEqual(edit('--- a.md\n+++ a.md\n@@ -1,3 +1,2 @@\n title\n----\n body\n'), [[0, 1]])
+  })
 })
 
 describe('the Codex harness', () => {

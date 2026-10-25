@@ -162,7 +162,7 @@
 | `c.exec(command, { retries, interval })`: a non-zero exit runs the command again, each try in the check's record and log, and `passed on try 2 of 3` in the output, `summary.md`, `reeval show` and the studio | ✓ 1 | — | ● 1 | ● 1 | — | — |
 | Named check results: `expect(value, 'label')`, every `expect` and `expect.soft` recorded per attempt, tallied per cell, and checks that don't discriminate in a compare | ✓ 6 | — | ● 2 | ● 1 | — | — |
 | `expect(c | turn)` transcript matchers: `toHaveCalledSkill`, `toHaveCalledMcp`, `toHaveCalledTool`, `toHaveRun`, `toHaveEdited`, `toHaveSearched`, `toHaveFetched` | ✓ 6 | — | ● 6 | — | — | — |
-| `toHaveChanged(paths?)`: files in the workspace diff, matched with globs | ✓ 3 | — | ● 1 | ● 1 | — | — |
+| `toHaveChanged(paths?)`: files in the workspace diff, matched with globs | ✓ 4 | — | ● 2 | ● 2 | — | — |
 | Vitest's `expect` from `@vitest/expect`: matchers, diffs, `soft`, `poll`, `assertions` | ✓ 4 | — | — | — | — | — |
 
 ## Records and studio
