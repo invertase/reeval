@@ -550,6 +550,79 @@ describe('redacting fragments of a secret', () => {
   })
 })
 
+describe('a second key of the provider whose key is in the environment', () => {
+  const anthropic = `sk-ant-api03-${'Qw3rTy7uIo9p'.repeat(7)}-A7b2C9d4`
+  const cases: Array<[string, string, string]> = [
+    ['ANTHROPIC_API_KEY', anthropic, `sk-ant-api03-${'Zk9xQ2mN7pL4'.repeat(7)}-BBBBBBBB`],
+    [
+      'OPENAI_API_KEY',
+      `sk-proj-${'Hj6kLm2nBv8c'.repeat(8)}`,
+      `sk-proj-${'Rt5yUi3oPa7s'.repeat(8)}`,
+    ],
+    [
+      'GITHUB_TOKEN',
+      `github_pat_11AAQ7ZKI0${'Fg4hJk8lMn2b'.repeat(7)}`,
+      `github_pat_11AAQ7ZKI0${'Xc6vBn9mQw3e'.repeat(7)}`,
+    ],
+  ]
+  for (const [name, own, other] of cases) {
+    const env = { [name]: own }
+
+    test(`${name}: another key is masked whole, as with nothing in the environment`, () => {
+      assert.equal(redactSecrets(`key: ${other}`, {}), 'key: [REDACTED]')
+      assert.equal(redactSecrets(`key: ${other}`, env), 'key: [REDACTED]')
+      assert.equal(redactJsonText(JSON.stringify({ out: other }), env), '{"out":"[REDACTED]"}')
+      assert.deepEqual(JSON.parse(redactJson({ out: `a ${other} b` }, 2, env)), {
+        out: 'a [REDACTED] b',
+      })
+    })
+
+    test(`${name}: the environment's own key and its fragments are still masked`, () => {
+      assert.equal(redactSecrets(`a ${own} b`, env), 'a [REDACTED] b')
+      assert.equal(redactSecrets(`a ${own.slice(14, 40)} b`, env), 'a [REDACTED] b')
+      assert.equal(redactSecrets(`tail ${own.slice(-12)}`, env), 'tail [REDACTED]')
+    })
+
+    test(`${name}: findSecrets covers the other key whole and names the own key's variable`, () => {
+      const text = `own ${own} other ${other} end`
+      const found = findSecrets(text, env)
+      assert.deepEqual(
+        found.map((m) => [text.slice(m.start, m.end), m.known]),
+        [
+          [own, true],
+          [other, false],
+        ],
+      )
+      assert.equal(maskedMatch(text, found[0] as SecretMatch), `the value of ${name}`)
+      assert.equal(countSecrets(`key: ${other}`, env), 1)
+    })
+  }
+
+  test('a value holding a token and more is masked whole, not only its token', () => {
+    const value = `https://reeval:pa55w0rd-9f3a@example.com/?t=ghp_${'Mn4bVc8xZl2k'.repeat(3)}`
+    const env = { GIT_CREDENTIALS: value }
+    assert.equal(redactSecrets(`url ${value} end`, env), 'url [REDACTED] end')
+    const text = `url ${value} end`
+    assert.deepEqual(
+      findSecrets(text, env).map((m) => [text.slice(m.start, m.end), m.rule]),
+      [[value, 'the value of GIT_CREDENTIALS']],
+    )
+  })
+
+  test('a JWT holding an encoded secret is masked whole', () => {
+    const value = 'reeval-jwt-inner-7f3a9c2e'
+    const env = { REEVAL_UNIT_JWT_SECRET: value }
+    const payload = Buffer.from(JSON.stringify({ sub: value, n: 1 })).toString('base64url')
+    const jwt = `eyJhbGciOiJIUzI1NiJ9.${payload}.${'Sg7hKj2lQw9e'.repeat(3)}`
+    assert.equal(redactSecrets(`Bearer ${jwt}`, env), 'Bearer [REDACTED]')
+    const text = `Bearer ${jwt}`
+    assert.deepEqual(
+      findSecrets(text, env).map((m) => [text.slice(m.start, m.end), m.known]),
+      [[jwt, true]],
+    )
+  })
+})
+
 // Last in the file: the short secrets these register would otherwise reach every test above.
 describe('redacting serialised JSON', () => {
   const record = {
@@ -662,6 +735,17 @@ describe('redacting serialised JSON', () => {
     assert.equal(findSecretsInJson('{"field":"field"}', {}).length, 1)
     // Twin: the same text outside a JSON file counts the literals too.
     assert.equal(scanText('run.txt', json).length > 2, true)
+  })
+
+  test('a declared secret inside a token shape leaves no part of the token', () => {
+    registerSecret('proj')
+    const key = `sk-proj-${'Rt5yUi3oPa7s'.repeat(8)}`
+    assert.equal(redactSecrets(`key: ${key}`, {}), 'key: [REDACTED]')
+    const text = `key: ${key}`
+    assert.deepEqual(
+      findSecrets(text, {}).map((m) => [text.slice(m.start, m.end), m.rule]),
+      [[key, 'a declared secret']],
+    )
   })
 
   test("a report's scrubber keeps JSON Lines valid", () => {
