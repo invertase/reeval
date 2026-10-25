@@ -1,4 +1,5 @@
 import { findSecrets, findSecretsInJson, maskedMatch, type SecretMatch } from '../redact.ts'
+import { patchPath } from '../view/patch.ts'
 
 /** Findings shown per file; the rest are counted. */
 const SHOWN = 5
@@ -14,7 +15,6 @@ export type Finding = {
   rule: string
 }
 
-const DIFF_HEADER = /^diff --git a\/(.*) b\/(.*)$/
 const HUNK = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/
 
 /** Where line `lineIndex` of a `git diff` falls: the file it changes, and its line in the new version. */
@@ -23,9 +23,10 @@ function inPatch(lines: string[], lineIndex: number): { file: string | null; lin
   let next: number | null = null
   for (let i = 0; i <= lineIndex; i++) {
     const text = lines[i] as string
-    const header = DIFF_HEADER.exec(text)
-    if (header) {
-      file = header[2] as string
+    if (text.startsWith('diff --git ')) {
+      let end = i + 1
+      while (end < lines.length && !/^(@@|diff --git )/.test(lines[end] as string)) end++
+      file = patchPath(lines.slice(i, end).join('\n'))
       next = null
       continue
     }
