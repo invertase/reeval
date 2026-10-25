@@ -4,6 +4,8 @@
   "unbrokered 'error': a plain MCP header from a declaration tree": "UsageError: mcp.docs.headers.x-session-token in evaluate(\"e\") is a plain string, and secrets.unbrokered is 'error' in reeval.config.ts. To broker it, read it from a host variable with secret.template, e.g. secret.template('Bearer ${VAR}').",
   "unbrokered 'error': a neutral plain MCP header": null,
   "unbrokered 'error': a secret.template MCP header on https://": null,
+  "unbrokered 'error': an http:// MCP server's header secret that sets hosts": "UsageError: mcp.docs.headers.Authorization in evaluate(\"e\") isn't brokered, and secrets.unbrokered is 'error' in reeval.config.ts. To broker it, give the MCP server an https:// URL (reeval brokers its header secrets over HTTPS only, to its own host unless they set hosts).",
+  "unbrokered 'error': an https:// MCP server's header secret that sets hosts": null,
   "yaml: empty": null,
   "yaml: not YAML": "UsageError: reeval.yaml isn't valid YAML: Flow sequence in block collection must be sufficiently indented and end with a ] at line 2, column 1:\n\nharness: [a\n\n^",
   "yaml: a repeated key": "UsageError: reeval.yaml isn't valid YAML: Map keys must be unique at line 2, column 1:\n\nruns: 1\nruns: 2\n^",

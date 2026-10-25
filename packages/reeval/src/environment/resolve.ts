@@ -16,7 +16,7 @@ import {
   isSecret,
   isSecretTemplate,
   maskedHeaderValue,
-  mcpHosts,
+  mcpHeaderHosts,
   parseGitRepo,
   stepCommand,
   workspaceLabel,
@@ -155,13 +155,13 @@ function broker(
   return sub.placeholder
 }
 
-/** The host value, or its placeholder when it's brokered to `secret.hosts` (else `hosts`). */
+/** The host value, or its placeholder when it's brokered to `hosts`. */
 function hostValue(
   name: string,
   secret: Secret,
   where: string,
   secrets: Secrets,
-  hosts: readonly string[] | undefined = secret.hosts,
+  hosts: readonly string[] | undefined,
 ) {
   const from = secret.from ?? name
   const value = process.env[from]
@@ -765,7 +765,7 @@ export async function resolveEnvironment(
       vars[name] = value
       continue
     }
-    const resolved = hostValue(name, value, envWhere, secrets)
+    const resolved = hostValue(name, value, envWhere, secrets, value.hosts)
     if (resolved === undefined) continue
     if (value.to === 'checks') checkVars[name] = resolved
     else vars[name] = resolved
@@ -773,27 +773,26 @@ export async function resolveEnvironment(
   const secretOf = (
     value: string | Secret | SecretTemplate,
     key: string,
-    hosts?: readonly string[],
+    hosts: readonly string[] | undefined,
   ): string | undefined => {
     if (typeof value === 'string') return value
     if (isSecretTemplate(value)) return template(value, envWhere, secrets, hosts)
-    return hostValue(key, value, envWhere, secrets, value.hosts ?? hosts)
+    return hostValue(key, value, envWhere, secrets, hosts)
   }
   const resolvedMcp: Record<string, ResolvedMcpServer> = {}
   for (const [name, s] of mcp) {
     if (s.transport === 'stdio') {
       const e: Record<string, string> = {}
       for (const [k, v] of Object.entries(s.env)) {
-        const r = secretOf(v, k)
+        const r = secretOf(v, k, isSecret(v) ? v.hosts : undefined)
         if (r !== undefined) e[k] = r
       }
       resolvedMcp[name] = { transport: 'stdio', command: s.command, args: s.args, env: e }
     } else {
       const h: Record<string, string> = {}
-      const hosts = mcpHosts(s.url)
       for (const [k, v] of Object.entries(s.headers)) {
         if (typeof v === 'string' && maskedHeaderValue(k, v)) registerSecret(v)
-        const r = secretOf(v, k, hosts)
+        const r = secretOf(v, k, typeof v === 'string' ? undefined : mcpHeaderHosts(v, s.url))
         if (r !== undefined) h[k] = r
       }
       resolvedMcp[name] = { transport: s.transport, url: s.url, headers: h }

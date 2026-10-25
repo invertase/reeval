@@ -191,6 +191,25 @@ describe('resolving brokered secrets', () => {
     assert.deepEqual(r.substitutions, [])
   })
 
+  test('twin: MCP header secrets on plain HTTP stay real values when they set hosts', async () => {
+    const r = await resolve(({ secret, mcp }) => ({
+      mcp: {
+        local: mcp.http('http://mcp.local:3333/mcp', {
+          headers: {
+            'x-api-key': secret.fromEnv('REEVAL_UNIT_BROKERED', { hosts: ['mcp.local'] }),
+            'x-other-key': secret.fromEnv('REEVAL_UNIT_OTHER', { hosts: ['api.example.com'] }),
+          },
+        }),
+      },
+    }))
+    const server = r.mcp.local
+    assert.ok(server && server.transport === 'http')
+    assert.equal(server.headers['x-api-key'], VALUE)
+    assert.equal(server.headers['x-other-key'], OTHER)
+    assert.deepEqual(r.substitutions, [])
+    assert.deepEqual(r.record.brokered, [])
+  })
+
   test('MCP stdio env secrets are brokered only with explicit hosts', async () => {
     const r = await resolve(({ secret, mcp }) => ({
       mcp: {
@@ -315,6 +334,24 @@ describe('unbrokered secrets', () => {
       { label: 'mcp.stdio.env.STDIO_KEY', from: 'STDIO_KEY' },
       { label: 'mcp.local.headers.auth', from: 'LOCAL_TOKEN' },
     ])
+  })
+
+  test("an http:// MCP server's header secret is unbrokered even when it sets hosts", () => {
+    const env = defineEnvironment('e', ({ secret, mcp }) => ({
+      mcp: {
+        local: mcp.http('http://mcp.local/mcp', {
+          headers: { auth: secret.fromEnv('LOCAL_TOKEN', { hosts: ['mcp.local'] }) },
+        }),
+        remote: mcp.http('https://mcp.example.com', {
+          headers: { auth: secret.fromEnv('REMOTE_TOKEN', { hosts: ['auth.example.com'] }) },
+        }),
+      },
+    }))
+    assert.deepEqual(unbrokeredSecrets({}, env.layers), [
+      { label: 'mcp.local.headers.auth', from: 'LOCAL_TOKEN' },
+    ])
+    const attempt = { sandbox: { kind: 'docker' }, environment: applied(env) } as PlannedAttempt
+    assert.deepEqual(brokeredIn({}, attempt), ['mcp.remote.headers.auth → auth.example.com'])
   })
 
   test('a later layer that brokers a variable leaves nothing unbrokered', () => {

@@ -124,6 +124,16 @@ const strict = (o: unknown) => () => {
 const mcpHeaders = (url: string, headers: Record<string, unknown>) =>
   defineEnvironment('e', ({ mcp }) => ({ mcp: { docs: mcp.http(url, { headers } as never) } }))
 
+/** An environment with one MCP server on `url` whose Authorization secret sets `hosts`. */
+const hostsHeader = (url: string) =>
+  defineEnvironment('e', ({ mcp, secret }) => ({
+    mcp: {
+      docs: mcp.http(url, {
+        headers: { Authorization: secret.fromEnv('MCP_TOKEN', { hosts: ['mcp.internal'] }) },
+      }),
+    },
+  }))
+
 /** What `declareTree` checks before it declares anything. */
 const tree = (children: unknown) => () => {
   const problem = declarationProblem(children)
@@ -1030,6 +1040,14 @@ export const CASES: Record<string, Case[]> = {
           },
         })),
       }),
+    ],
+    [
+      "unbrokered 'error': an http:// MCP server's header secret that sets hosts",
+      strict({ sandbox: docker(), environment: hostsHeader('http://mcp.internal/mcp') }),
+    ],
+    [
+      "unbrokered 'error': an https:// MCP server's header secret that sets hosts",
+      strict({ sandbox: docker(), environment: hostsHeader('https://mcp.internal/mcp') }),
     ],
     ['yaml: empty', yaml('')],
     ['yaml: not YAML', yaml('harness: [a\n')],
