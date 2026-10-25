@@ -1137,7 +1137,7 @@
       "type": "object",
       "properties": {
         "brokered": {
-          "description": "Secrets the sandbox only had placeholders for, swapped in by the egress gateway, named as in `secrets`.",
+          "description": "Secrets the sandbox only had placeholders for, swapped in by the egress gateway, named as in `secrets`. A variable it also got as its real value somewhere (an `http://` header, an env secret without `hosts`) isn't listed.",
           "type": "array",
           "items": {
             "type": "string"

@@ -266,6 +266,37 @@ describe('resolving brokered secrets', () => {
     assert.notEqual(await digest('Bearer literal'), a)
   })
 
+  test('a variable the sandbox also gets as its real value is not recorded as brokered', async () => {
+    const tls = 'https://mcp.example.com/v1'
+    const record = async (urls: string[], env = false) =>
+      (
+        await resolve(({ secret, mcp }) => ({
+          ...(env ? { env: { REEVAL_UNIT_OTHER: secret.fromEnv('REEVAL_UNIT_OTHER') } } : {}),
+          mcp: Object.fromEntries(
+            urls.map((url, i) => [
+              `s${i}`,
+              mcp.http(url, {
+                headers: {
+                  authorization:
+                    i % 2
+                      ? secret.fromEnv('REEVAL_UNIT_OTHER')
+                      : // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+                        secret.template('Bearer ${REEVAL_UNIT_OTHER}'),
+                },
+              }),
+            ]),
+          ),
+        }))
+      ).record
+    const mixed = await record([tls, 'http://localhost:3333'])
+    assert.deepEqual([mixed.secrets, mixed.brokered], [['REEVAL_UNIT_OTHER'], []])
+    const withEnv = await record([tls], true)
+    assert.deepEqual([withEnv.secrets, withEnv.brokered], [['REEVAL_UNIT_OTHER'], []])
+    const everywhere = await record([tls, tls])
+    assert.deepEqual(everywhere.brokered, ['REEVAL_UNIT_OTHER'], 'twin: brokered everywhere')
+    assert.notEqual(mixed.digest, everywhere.digest)
+  })
+
   test("the attempt's env lists a plain var a header's host variable shares a name with", async () => {
     const p = await project('secrets-attempt-env', {
       'reeval.config.ts': fakeConfig(),

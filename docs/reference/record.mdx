@@ -935,7 +935,7 @@ An environment as it was applied, without secret values.
 </Property>
 
 <Property name="brokered" type="string[]">
-  Secrets the sandbox only had placeholders for, swapped in by the egress gateway, named as in `secrets`.
+  Secrets the sandbox only had placeholders for, swapped in by the egress gateway, named as in `secrets`. A variable it also got as its real value somewhere (an `http://` header, an env secret without `hosts`) isn't listed.
 </Property>
 
 <Property name="unset" type="string[]">

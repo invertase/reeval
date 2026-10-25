@@ -133,7 +133,14 @@ export type BrokeredSecret = Substitution & { phase: 'agent' | 'checks' }
 const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const DEFAULT_SETUP_TIMEOUT = '5m'
 
-type Secrets = { names: string[]; checks: string[]; unset: string[]; brokered: BrokeredSecret[] }
+type Secrets = {
+  names: string[]
+  checks: string[]
+  unset: string[]
+  brokered: BrokeredSecret[]
+  /** Names some value went into the sandbox as itself, so the record can't call them brokered. */
+  real: string[]
+}
 
 function broker(
   secrets: Secrets,
@@ -181,7 +188,10 @@ function hostValue(
   registerSecret(value)
   if (secret.to === 'checks') secrets.checks.push(as)
   else secrets.names.push(as)
-  if (!hosts) return value
+  if (!hosts) {
+    secrets.real.push(as)
+    return value
+  }
   return broker(secrets, as, value, hosts, secret.in, secret.to === 'checks' ? 'checks' : 'agent')
 }
 
@@ -204,7 +214,10 @@ function template(
       )
     registerSecret(v)
     secrets.names.push(name)
-    if (!hosts) return v
+    if (!hosts) {
+      secrets.real.push(name)
+      return v
+    }
     const p = placeholders.get(name) ?? broker(secrets, name, v, hosts)
     placeholders.set(name, p)
     return p
@@ -764,7 +777,7 @@ export async function resolveEnvironment(
     })
   }
 
-  const secrets: Secrets = { names: [], checks: [], unset: [], brokered: [] }
+  const secrets: Secrets = { names: [], checks: [], unset: [], brokered: [], real: [] }
   const vars: Record<string, string> = {}
   const checkVars: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) {
@@ -849,7 +862,9 @@ export async function resolveEnvironment(
   const brokered = secrets.brokered
     .map((b) => JSON.stringify([b.name, b.hosts, b.in, b.phase]))
     .sort()
-  const brokeredNames = [...new Set(secrets.brokered.map((b) => b.name))].sort()
+  const brokeredNames = [...new Set(secrets.brokered.map((b) => b.name))]
+    .filter((n) => !secrets.real.includes(n))
+    .sort()
   const varNames = Object.keys(vars)
     .filter((n) => !isSecret(env[n]))
     .sort()

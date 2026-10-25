@@ -2279,7 +2279,11 @@ export type EnvironmentRecord = {
    * `secret.template`, a plugin's `${VAR}`) by each host variable it reads.
    */
   secrets: string[]
-  /** Secrets the sandbox only had placeholders for, swapped in by the egress gateway, named as in `secrets`. */
+  /**
+   * Secrets the sandbox only had placeholders for, swapped in by the egress gateway, named as in
+   * `secrets`. A variable it also got as its real value somewhere (an `http://` header, an env
+   * secret without `hosts`) isn't listed.
+   */
   brokered: string[]
   /** Optional secrets whose host variable was unset, so they weren't injected. */
   unset: string[]
