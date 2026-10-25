@@ -34,13 +34,13 @@ For more information about where the option is accepted, see [the `sandbox` opti
 
 ## Set resource limits
 
-In the `reeval.config.ts` file, pass the limits to the factory:
+Pass the limits to the factory, in the `reeval.config.ts` file or on an evaluation:
 
-```ts title="reeval.config.ts"
-  sandbox: docker({ memory: '8g', swap: 0, cpus: 4, pids: 2048 }),
+```ts title="with-resource-limits.eval.ts"
+  sandbox: docker({ memory: '1g', swap: 0, cpus: 1, pids: 256 }),
 ```
 
-Each limit applies to one container. These defaults apply:
+For a runnable project, see [`with-resource-limits`](https://github.com/invertase/reeval/tree/main/examples/with-resource-limits). Each limit applies to one container. These defaults apply:
 
 | Limit | Default | Meaning |
 | :--- | :--- | :--- |

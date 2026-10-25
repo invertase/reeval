@@ -32,24 +32,28 @@ import { claudeCode } from '{{ pkg }}/harness'
 harness: claudeCode({ model: '<model>', effort: 'high' }),
 ```
 
-With `effort` set and `id` unset, reeval appends an effort suffix to the cell ID.
+With `effort` set and `id` unset, reeval appends an effort suffix to the cell ID. For a runnable project with one harness at two efforts, see [`with-reasoning-effort`](https://github.com/invertase/reeval/tree/main/examples/with-reasoning-effort).
 
 For more information about model ids, providers, and effort values, see [Models and providers for each harness](/harnesses/models).
 
 ## Run several harnesses
 
-In the `reeval.config.ts` file, pass two factories so each evaluation runs on every harness:
+In the `reeval.config.ts` file, pass several factories so each evaluation runs on every harness. This excerpt puts three in a profile's `defaults`:
 
-```ts title="reeval.config.ts"
-import { claudeCode, cursor } from '{{ pkg }}/harness'
-// ...
-harness: [
-  cursor({ model: '<model>' }),
-  claudeCode({ model: '<model>', effort: 'high' }),
-],
+```ts title="with-many-harnesses/reeval.config.ts"
+agents: {
+  defaults: {
+    harness: [
+      claudeCode({ model: 'claude-sonnet-5' }),
+      codex({ model: 'gpt-5.6-luna' }),
+      cursor({ model: 'composer-2.5' }),
+    ],
+    sandbox: docker(),
+  },
+},
 ```
 
-reeval runs each harness as its own cell. On a group or an evaluation, a list replaces the harnesses it inherited.
+reeval runs each harness as its own cell. On a group or an evaluation, a list replaces the harnesses it inherited. For a runnable project, see [`with-many-harnesses`](https://github.com/invertase/reeval/tree/main/examples/with-many-harnesses).
 
 For more information about `add`, `only`, and function forms, see [the `harness` option](/reference/options#harness).
 

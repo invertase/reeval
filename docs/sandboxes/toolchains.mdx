@@ -20,6 +20,8 @@ export const python = defineEnvironment('python', {
 
 The image needs `apt-get` and glibc. The `id` names the cell in results. Without it, the cell is `docker:python:3.12-slim`. For an image that already contains the harness, pass `image`, and reeval uses that image unchanged. For more information about every `docker()` option, see [Docker sandbox](/sandboxes/docker).
 
+For a runnable project, see [`with-python-image`](https://github.com/invertase/reeval/tree/main/examples/with-python-image).
+
 ## Build from a Dockerfile
 
 To copy files into the image, write a Dockerfile that starts `FROM ${REEVAL_BASE}`. reeval sets `REEVAL_BASE` to its sandbox image for your harness, builds the Dockerfile from the Dockerfile's own directory, and tags the result by content hash:
@@ -43,6 +45,8 @@ The `dockerfile` path is relative to the file that calls `docker()`. Replace `fr
 
 A Dockerfile that starts from another Debian or Ubuntu image works too. reeval installs the harness on that result, as it does for `from`.
 
+For a runnable project, see [`with-dockerfile`](https://github.com/invertase/reeval/tree/main/examples/with-dockerfile).
+
 ## Add install layers
 
 To add packages to the same image, list shell commands in `install` on that `docker()` call. reeval runs the commands as root, in order, with no secrets and no workspace, and caches the layer by the command list:
@@ -55,6 +59,8 @@ To add packages to the same image, list shell commands in `install` on that `doc
 ```
 
 A command is a string, or an object with `run` and a `timeout`. `install` combines with `from`. It does not combine with `dockerfile`, so put those commands in the Dockerfile as `RUN` lines.
+
+For a runnable project, see [`with-docker-install`](https://github.com/invertase/reeval/tree/main/examples/with-docker-install).
 
 ## Prebuild images
 
