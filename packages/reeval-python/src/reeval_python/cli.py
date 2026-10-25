@@ -40,13 +40,26 @@ class ShimError(Exception):
         self.code = code
 
 
-PRERELEASES = {"a": "alpha", "b": "beta", "rc": "rc"}
+PRERELEASES = {
+    "a": "alpha",
+    "alpha": "alpha",
+    "b": "beta",
+    "beta": "beta",
+    "c": "rc",
+    "pre": "rc",
+    "preview": "rc",
+    "rc": "rc",
+}
 
 
 def semver(version: str) -> str:
-    """reeval's version for a reeval-python version: 1.0.0b1 is 1.0.0-beta.1."""
-    if m := re.fullmatch(r"(\d+\.\d+\.\d+)(a|b|rc)(\d+)", version):
-        return f"{m[1]}-{PRERELEASES[m[2]]}.{m[3]}"
+    """reeval's version for a reeval-python version: 1.0.0b1 is 1.0.0-beta.1.
+
+    Takes any PEP 440 spelling of a prerelease (1.0.0-rc1, 1.0.0RC1 and 1.0.0c1 are 1.0.0rc1).
+    """
+    pattern = r"(\d+\.\d+\.\d+)[-_.]?(alpha|a|beta|b|preview|pre|rc|c)[-_.]?(\d+)"
+    if m := re.fullmatch(pattern, version, re.IGNORECASE):
+        return f"{m[1]}-{PRERELEASES[m[2].lower()]}.{m[3]}"
     return version
 
 

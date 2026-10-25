@@ -626,7 +626,10 @@ def test_a_prerelease_sdk_runs_reevals_prerelease(
     assert f"bin/1.0.0-beta.1/reeval-1.0.0-beta.1-{target()}" in str(error.value).replace("\\", "/")
 
 
-@pytest.mark.parametrize("pinned", ["1.0.0rc1", " v1.0.0rc1 ", "1.0.0-rc.1"])
+@pytest.mark.parametrize(
+    "pinned",
+    ["1.0.0rc1", " v1.0.0rc1 ", "1.0.0-rc.1", "1.0.0-rc1", "1.0.0RC1", "1.0.0c1", "1.0.0rc.1"],
+)
 def test_reeval_version_in_pep_440_spelling_names_reevals_prerelease(
     clean: Path, monkeypatch: pytest.MonkeyPatch, pinned: str
 ) -> None:
