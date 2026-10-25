@@ -624,3 +624,21 @@ def test_a_prerelease_sdk_runs_reevals_prerelease(
     with pytest.raises(cli.ShimError, match=r"reeval 1\.0\.0-beta\.1 isn't in the cache") as error:
         cli.resolve()
     assert f"bin/1.0.0-beta.1/reeval-1.0.0-beta.1-{target()}" in str(error.value).replace("\\", "/")
+
+
+@pytest.mark.parametrize(
+    "pinned",
+    ["1.0.0rc1", " v1.0.0rc1 ", "1.0.0-rc.1", "1.0.0-rc1", "1.0.0RC1", "1.0.0c1", "1.0.0rc.1"],
+)
+def test_reeval_version_in_pep_440_spelling_names_reevals_prerelease(
+    clean: Path, monkeypatch: pytest.MonkeyPatch, pinned: str
+) -> None:
+    monkeypatch.setenv("REEVAL_VERSION", pinned)
+    assert cli.binary_version() == "1.0.0-rc.1"
+    own = clean / "bin" / "reeval"
+    own.parent.mkdir()
+    own.write_bytes(FAKE.encode())
+    own.chmod(0o755)
+    monkeypatch.setattr(cli, "bundled", lambda: own)
+    monkeypatch.setattr(cli, "dist_version", lambda name: "1.0.0rc1")
+    assert cli.resolve() == own

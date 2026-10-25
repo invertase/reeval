@@ -98,7 +98,7 @@ The cache keeps every version it downloads (about 85 MB each) until you delete `
 |---|---|
 | `REEVAL_BINARY` | A reeval binary to run instead |
 | `REEVAL_OFFLINE` | `1` never downloads: the binary must already be in the cache, from an earlier run or put at `<cache>/reeval/bin/<version>/reeval-<version>-<target>` by hand |
-| `REEVAL_VERSION` | Another version than reeval-python's, downloaded and checked against `SHA256SUMS` only |
+| `REEVAL_VERSION` | Another version than reeval-python's (`1.0.0rc1` or `1.0.0-rc.1`), downloaded and checked against `SHA256SUMS` only |
 | `REEVAL_DOWNLOAD` | A mirror of the releases, as for the install scripts |
 
 The binary runs each `*.eval.py` with the `reeval_python` module from your project's Python. The `reeval` command picks the active virtual environment's, else the nearest `.venv` above the working directory, else its own; so a `reeval` from `uv tool install` or `pipx` still runs your project's dependencies. Run without it, the binary uses `uv run` (with a `pyproject.toml` and uv on your `PATH`), `.venv`'s Python, or `python3` (`python` on Windows). `REEVAL_PYTHON` names another interpreter.
