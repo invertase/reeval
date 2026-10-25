@@ -8,9 +8,11 @@ const ignore = dockerignore.default
  * A pattern `@balena/dockerignore` may match differently from BuildKit: escapes, character
  * classes and the regexp characters it doesn't escape, a `**` joined to other characters, and the
  * whitespace Go and JavaScript trim differently. One over 1024 characters is risky too, since
- * JavaScript refuses a regexp that long that Go accepts.
+ * JavaScript refuses a regexp that long that Go accepts, and so is one with more than four `*`
+ * runs, whose JavaScript regexp can backtrack for minutes where Go's runs in linear time.
  */
 const RISKY = /[\\[\]^+(){}|\u0085\uFEFF]|[^/]\*\*|\*\*[^/]/
+const MAX_STARS = 4
 /**
  * Names `@balena/dockerignore` may match differently: `?` matches one UTF-16 unit there and one
  * code point in BuildKit, and `.` doesn't match a line terminator there but does in Go.
@@ -45,7 +47,11 @@ function parseRules(text: string): Rules {
     if (negate) pattern = pattern.slice(1).trim()
     if (!pattern) continue
     const cleaned = clean(pattern)
-    const risky = RISKY.test(pattern) || pattern.length > 1024 || ['.', ''].includes(cleaned)
+    const risky =
+      RISKY.test(pattern) ||
+      pattern.length > 1024 ||
+      (pattern.match(/\*+/g)?.length ?? 0) > MAX_STARS ||
+      ['.', ''].includes(cleaned)
     const reread = cleaned.trim().startsWith('!') || (negate && pattern.startsWith('#'))
     if (reread || (negate && risky)) return { left: () => false, literal: null }
     if (!negate) {

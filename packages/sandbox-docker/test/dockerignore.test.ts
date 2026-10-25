@@ -105,6 +105,12 @@ const CASES: Case[] = [
     hashed: ['d/x', 'y'],
   },
   {
+    name: 'a pattern with many ** is dropped rather than backtracking',
+    ignore: `${'**/'.repeat(10)}x\n`,
+    files: [`${'d/'.repeat(30)}y`, 'x'],
+    hashed: [`${'d/'.repeat(30)}y`, 'x'],
+  },
+  {
     name: 'a pattern too long for a JavaScript regexp is dropped',
     ignore: `a\n${'z'.repeat(40000)}\n`,
     files: ['a', 'y'],
