@@ -797,7 +797,8 @@
       "properties": {
         "delayMs": {
           "description": "Simulated turn length, honours the abort signal.",
-          "type": "number"
+          "type": "number",
+          "maximum": 2147483647
         },
         "effort": {
           "description": "Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what the turn reports (`fake-1[effort=medium]`). Fast is not this.",

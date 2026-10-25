@@ -309,6 +309,7 @@ export const CASES: Record<string, Case[]> = {
     ['fakeHarness effort empty', any(fakeHarness, { effort: '' })],
     ['fakeHarness with a typo', any(fakeHarness, { txt: 'x' })],
     ['fakeHarness text a number', any(fakeHarness, { text: 3 })],
+    ['fakeHarness delayMs over 596h', any(fakeHarness, { delayMs: 2 ** 31 })],
     ['fakeHarness files not strings', any(fakeHarness, { files: { 'a.txt': 1 } })],
     [
       'fakeHarness a tool with an extra key',
