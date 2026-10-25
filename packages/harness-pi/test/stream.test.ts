@@ -55,7 +55,8 @@ test("a failed model call (pi's stopReason 'error', exit 0) is an error part and
 
 // Synthetic: the real edit-and-run capture with a 503 on its second model call, in pi 1.4.0's
 // order (`agent-session.js` and `pi-agent-core`'s `agent-loop.js`): the failed call,
-// `agent_end` with `willRetry: true`, `auto_retry_start`, and a new run (`agent_start`) that
+// `agent_end` with `willRetry: true`, `auto_retry_start`, the `context_edit` (`entry_appended`)
+// that omits the failed call from pi's context, and a new run (`agent_start`) that
 // repeats the call. `auto-retry-exhausted` fails every retry, so its last `agent_end` has
 // `willRetry: false` and `auto_retry_end` follows it.
 test('a model call pi retried is a failed step, and the retry carries the turn on', () => {
