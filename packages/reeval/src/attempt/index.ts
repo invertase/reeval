@@ -15,7 +15,7 @@ import { contextTaker } from './context.ts'
 import { tracePlan } from './debug.ts'
 import { prepareEnvironment } from './environment.ts'
 import { judgeCaller } from './judge.ts'
-import { recordEgress, recordFailure, recordOom, writeRecord } from './record.ts'
+import { attemptError, recordEgress, recordFailure, recordOom, writeRecord } from './record.ts'
 import { startSession } from './session.ts'
 import { type AttemptSpec, createAttempt, evalTimer } from './state.ts'
 import { turnSender } from './turns.ts'
@@ -106,12 +106,15 @@ async function attemptBody(
     const judgeErrors = a.judgeErrors.toSorted((x, y) => x.call - y.call).map((e) => e.message)
     const [only, ...more] = judgeErrors
     if (only) {
-      throw new Error(
-        more.length ? `${more.length + 1} judge calls failed:\n${judgeErrors.join('\n')}` : only,
-      )
+      const message = more.length
+        ? `${more.length + 1} judge calls failed:\n${judgeErrors.join('\n')}`
+        : only
+      a.judgeThrown.add(message)
+      throw new Error(message)
     }
-  } catch (error) {
-    recordFailure(a, error, timedOut())
+  } catch (thrown) {
+    const error = attemptError(a, thrown, assertions())
+    recordFailure(a, error, timedOut(), assertions())
     failure = {
       error: timedOut()
         ? new TimeoutError(`Eval timed out after ${spec.timeoutMs / 1000}s`)

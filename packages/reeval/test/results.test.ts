@@ -360,19 +360,19 @@ describe('mergeOutcome and abort classification', () => {
       ({
         record: { error: null, judgements: [], outcome: 'pass' },
         signal,
-        judgeErrored: false,
+        judgeThrown: new Set(),
       }) as unknown as Attempt
 
     const timeout = new AbortController()
     timeout.abort(new TimeoutError('Eval timed out after 1s'))
     const timedOut = attempt(timeout.signal)
-    recordFailure(timedOut, new Error('ignored'), false)
+    recordFailure(timedOut, new Error('ignored'), false, [])
     assert.deepEqual(timedOut.record.error, { kind: 'timeout', message: 'The eval timed out' })
 
     const cancel = new AbortController()
     cancel.abort(Object.assign(new Error('The run was cancelled'), { name: 'AbortError' }))
     const cancelled = attempt(cancel.signal)
-    recordFailure(cancelled, new Error('ignored'), false)
+    recordFailure(cancelled, new Error('ignored'), false, [])
     assert.deepEqual(cancelled.record.error, {
       kind: 'aborted',
       message: 'The run was cancelled',
@@ -381,7 +381,7 @@ describe('mergeOutcome and abort classification', () => {
     const setup = new AbortController()
     setup.abort(new Error('setup step 1/1 "sleep" timed out after 1s'))
     const other = attempt(setup.signal)
-    recordFailure(other, new Error('setup timed out'), false)
+    recordFailure(other, new Error('setup timed out'), false, [])
     assert.deepEqual(other.record.error, { kind: 'aborted', message: 'The run was cancelled' })
   })
 })

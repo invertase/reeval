@@ -36,6 +36,7 @@ import type {
 } from '../types.ts'
 import {
   acrossOf,
+  checksHeld,
   type Pair,
   type PairAttempt,
   type PairTurn,
@@ -735,9 +736,7 @@ export function stagedAttempt(e: EngineEval, record: EvalRecord | null): PairAtt
   const cell = e.attempt?.cell
   if (!cell) return null
   const outcome = e.state === 'skipped' ? record?.outcome : e.state === 'passed' ? 'pass' : 'fail'
-  const checksPassed =
-    record !== null &&
-    (outcome === 'pass' || (outcome === 'fail' && record.error?.kind === 'judge'))
+  const checksPassed = record !== null && outcome !== undefined && checksHeld(outcome, record.error)
   return {
     harness: cell.harness,
     arm: cell.environment,
@@ -806,8 +805,7 @@ async function keptAttempt(
     arm: cell.environment,
     run: e.attempt?.n ?? kept.n,
     diff: (await text(kept.files.diff)) ?? '',
-    checksPassed:
-      kept.outcome === 'pass' || (kept.outcome === 'fail' && kept.error?.kind === 'judge'),
+    checksPassed: checksHeld(kept.outcome, kept.error),
     control: cell.role === 'control',
     turns: kept.turns.map((t, i) => {
       const said = events.get(i) ?? []
