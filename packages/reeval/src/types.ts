@@ -2409,8 +2409,12 @@ export type EvalRecord = {
   >
   /** Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none. */
   assertions?: AssertionRecord[]
-  /** With `retries` when transient provider errors were retried on the way to the verdict. */
-  judgements: Array<Verdict & { retries?: JudgeRetry[] }>
+  /**
+   * In call order, with `retries` when transient provider errors were retried on the way to the
+   * verdict. `call` is the call's place among the attempt's `c.judge()` calls, failed ones
+   * included, which its judgement key is numbered by.
+   */
+  judgements: Array<Verdict & { retries?: JudgeRetry[]; call?: number }>
   /** Session starts that didn't become ready in time and were started again. */
   startRetries?: StartRetry[]
   timings: PhaseTimings

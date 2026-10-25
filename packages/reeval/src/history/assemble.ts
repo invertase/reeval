@@ -853,9 +853,9 @@ async function attemptEvidence(
     }
     if (artifacts.length) files.artifacts = artifacts
   }
-  const judgements: JudgementRecord[] = (record?.judgements ?? []).map((j, i) => ({
+  const judgements: JudgementRecord[] = (record?.judgements ?? []).map(({ call, ...j }, i) => ({
     ...j,
-    key: judgementKey(i, j.question),
+    key: judgementKey(call ?? i, j.question),
   }))
   return {
     turns: (record?.turns ?? []).map((t) => ({
