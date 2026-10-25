@@ -81,12 +81,22 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
     })),
     ...(record.families?.length
       ? {
-          families: record.families.map(({ id, name, cases, ran, outcome }) => ({
+          families: record.families.map(({ id, name, cases, ran, outcome, lifts }) => ({
             id,
             name,
             cases,
             ran,
             outcome,
+            caseIds: record.evals.filter((e) => e.family?.id === id).map((e) => e.id),
+            lifts: lifts.map((l) => ({
+              variant: l.variant,
+              vs: l.vs,
+              points: l.points,
+              lo: l.interval.lo,
+              hi: l.interval.hi,
+              ...(l.minLift !== undefined ? { minLift: l.minLift } : {}),
+              outcome: l.outcome,
+            })),
           })),
         }
       : {}),

@@ -124,6 +124,8 @@ regressed        greets in the house style
 
 A check head never reached reads `not run`, not a failure. `can't compare` names what changed
 (`changed  environment`, `evals/helpers.ts`): that flip isn't a regression. An eval Ctrl-C
-cancelled is `can't compare` with that side `cancelled`. `--fail-on-regression` exits 1 on a
-regressed eval, or on a new or can't-compare eval that fails, unless head was cancelled. `-v` adds each cell's
+cancelled is `can't compare` with that side `cancelled`. A pooled family with a `minLift` gets
+its own `<template> (all cases)` row for its pooled gate, which can regress while every case passes
+(`kind: "family"` in `--json`). `--fail-on-regression` exits 1 on a regressed eval or family gate,
+or on a new or can't-compare one that fails, unless head was cancelled. `-v` adds each cell's
 lift and effort, base → head.

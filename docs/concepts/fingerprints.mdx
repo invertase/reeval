@@ -60,7 +60,7 @@ The environment's doc changed between the runs, so the flip from pass to fail is
 | `infra error` | Either side had an infra error |
 | `new`, `removed` | The eval is in only one of the runs |
 
-When two runs ran different cells of an eval (one was filtered to a harness, say), reeval compares the cells both ran and lists the rest as `cells added` or `cells removed`. With no cell in common, it can't compare them. `--fail-on-regression` exits 1 on any `regressed`, and on a `new` or `can't compare` eval that fails.
+When two runs ran different cells of an eval (one was filtered to a harness, say), reeval compares the cells both ran and lists the rest as `cells added` or `cells removed`. With no cell in common, it can't compare them. A pooled family with a `minLift` gets a row of its own for its pooled gate, comparable when all its cases are. `--fail-on-regression` exits 1 on any `regressed`, and on a `new` or `can't compare` row that fails.
 
 ## Drift
 

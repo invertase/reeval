@@ -5,7 +5,13 @@
 // SuiteResults and compare rows; statistics print only with `verbose`.
 import type { HistoryCell, RunRecord } from '../history/types.ts'
 import { fenced } from '../text.ts'
-import type { CompareCell, CompareRow, CompareStatus, StackChange } from '../view/compare.ts'
+import type {
+  CompareCell,
+  CompareFamilyLift,
+  CompareRow,
+  CompareStatus,
+  StackChange,
+} from '../view/compare.ts'
 import { effortChangeLabel } from '../view/effort.ts'
 import {
   type CaseResult,
@@ -107,12 +113,13 @@ const shownOutcome = (row: CompareRow, side: 'base' | 'head', unit?: Unit): Show
   return o === 'pass' && isStudy(unit?.result.cells ?? []) ? 'not_gated' : o
 }
 
-/** An eval, or one case of a family, as compare rows name it: by its eval id. */
+/** An eval, one case of a family, or the family itself, as compare rows name it: by its id. */
 type Unit = { file: string; result: EvalResult }
 
 /**
- * Every eval and family case in a run, by eval id, in file-path then source order. A case is
- * given as an eval of its own, its name the family's with the case filled in.
+ * Every eval and family case in a run, by eval id, in file-path then source order, each family
+ * after its cases by its own id. A case is given as an eval of its own, its name the family's with
+ * the case filled in.
  */
 function unitsOf(suite: SuiteResult): Map<string, Unit> {
   const out = new Map<string, Unit>()
@@ -123,6 +130,7 @@ function unitsOf(suite: SuiteResult): Map<string, Unit> {
         continue
       }
       for (const k of e.cases) out.set(k.id, { file: file.path, result: caseAsEval(e, k) })
+      out.set(e.id, { file: file.path, result: e })
     }
   }
   return out
@@ -175,9 +183,10 @@ function ordered(rows: CompareRow[], units: Units): Array<{ row: CompareRow; uni
 }
 
 const nameOf = (row: CompareRow, unit: Unit | undefined) => {
-  if (!unit) return row.id
+  const all = row.kind === 'family' ? ' (all cases)' : ''
+  if (!unit) return `${row.id}${all}`
   const e = unit.result
-  return `${e.group.length ? `${e.group.join(' › ')} › ` : ''}${e.name}`
+  return `${e.group.length ? `${e.group.join(' › ')} › ` : ''}${e.name}${all}`
 }
 
 const headLine = (word: Text, name: string) =>
@@ -321,6 +330,32 @@ const liftShort = (l: HistoryCell['lift'] | undefined) =>
   l ? `${signed(l.points)} (${signed(l.lo)}…${signed(l.hi)})${l.withinNoise ? ' noise' : ''}` : '–'
 const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x) * 100)}`
 
+type PooledSide = NonNullable<CompareFamilyLift['base']>
+
+const pooledShort = (l: PooledSide | null) =>
+  l ? `${signed(l.points)} (${signed(l.lo)}…${signed(l.hi)})` : '–'
+
+/**
+ * A family row's gated variants: each pooled lift, base → head, and the `minLift` a side's low end
+ * fell short of, red when head's did and green when only base's did.
+ */
+function pooledItems(c: Colors, row: CompareRow): Item[] {
+  return (row.lifts ?? []).flatMap((l) => {
+    const minLift = l.head?.minLift ?? l.base?.minLift
+    if (minLift === undefined) return []
+    const sides =
+      row.status === 'added'
+        ? pooledShort(l.head)
+        : row.status === 'removed'
+          ? pooledShort(l.base)
+          : `${pooledShort(l.base)} → ${pooledShort(l.head)}`
+    const failed = row.status === 'removed' ? l.base?.outcome : l.head?.outcome
+    const paint = failed === 'fail' ? c.red : l.base?.outcome === 'fail' && l.head ? c.green : c.dim
+    const short = failed === 'fail' ? `, not by minLift ${Math.round(minLift * 100)}` : ''
+    return [{ indent: 2, cells: [l.key, t(`lift ${sides}${short}`, paint)] }]
+  })
+}
+
 /** `-v`: a cell's lift and effort, base → head. */
 function cellStats(cell: CompareCell): string {
   const lift =
@@ -357,9 +392,11 @@ function block(
   const baseId = input.base?.runId ?? ''
   const headId = input.head.runId
   const stats = opts.verbose ? statsRows(c, row) : []
+  const family = row.kind === 'family'
   if (row.status === 'regressed' || row.status === 'fixed') {
-    const evidence =
-      base && head
+    const evidence = family
+      ? pooledItems(c, row)
+      : base && head
         ? flips(c, base, head, (b, h, indent) =>
             row.status === 'regressed'
               ? regressedItems(c, b, h, indent)
@@ -383,8 +420,8 @@ function block(
         idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(row.id))),
         idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(row.id))),
       ]),
-      ...table([...cellRows(row), ...stats]),
-      ...resultBody(c, head),
+      ...table([...cellRows(row), ...stats, ...(family ? pooledItems(c, row) : [])]),
+      ...(family ? [] : resultBody(c, head)),
     ]
     return { lines, ids: true }
   }
@@ -392,8 +429,11 @@ function block(
     return {
       lines: [
         top,
-        ...table([idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(row.id)))]),
-        ...resultBody(c, head),
+        ...table([
+          idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(row.id))),
+          ...(family ? pooledItems(c, row) : []),
+        ]),
+        ...(family ? [] : resultBody(c, head)),
       ],
       ids: true,
     }
@@ -402,7 +442,10 @@ function block(
     return {
       lines: [
         top,
-        ...table([idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(row.id)))]),
+        ...table([
+          idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(row.id))),
+          ...(family ? pooledItems(c, row) : []),
+        ]),
       ],
       ids: true,
     }
@@ -448,18 +491,28 @@ function noBaseline(c: Colors, input: CompareInput, opts: CompareOptions): strin
   const { suite, runId } = input.head
   const blocks = renderBlocks(suite, { color: opts.color, verbose: opts.verbose, hint: false })
   const units = unitsOf(suite)
-  const shown = input.rows.map((r) => shownOutcome(r, 'head', units.get(r.id)))
   const order = ['fail', 'infra_error', 'cancelled', 'pass', 'not_gated', 'skipped'] as const
-  const counts = order.flatMap((o) => {
-    const n = shown.filter((x) => x === o).length
-    return n ? [paintOutcome(c, o)(`${n} ${OUTCOME[o]}`)] : []
-  })
+  const tally = (rows: CompareRow[], noun: string) => {
+    const shown = rows.map((r) => shownOutcome(r, 'head', units.get(r.id)))
+    const counts = order.flatMap((o) => {
+      const n = shown.filter((x) => x === o).length
+      return n ? [paintOutcome(c, o)(`${n} ${OUTCOME[o]}`)] : []
+    })
+    return `${plural(rows.length, noun)}${counts.length ? ` (${counts.join(c.dim(' · '))})` : ''}`
+  }
+  const families = input.rows.filter((r) => r.kind === 'family')
   return [
     `No earlier recorded run to compare ${runId} with, so every eval is new.`,
     ...(blocks.length ? ['', ...blocks] : []),
     '',
     ...sideNotes(c, input),
-    `${plural(input.rows.length, 'new eval')}${counts.length ? ` (${counts.join(c.dim(' · '))})` : ''}`,
+    [
+      tally(
+        input.rows.filter((r) => r.kind !== 'family'),
+        'new eval',
+      ),
+      ...(families.length ? [tally(families, 'pooled gate')] : []),
+    ].join(c.dim(' · ')),
   ]
 }
 

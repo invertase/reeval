@@ -8,7 +8,7 @@ import type { RunRecord } from '../../src/history/types.ts'
 import { factsHash } from '../../src/insights/hash.ts'
 import type { CompareInput } from '../../src/ui/compare-layout.ts'
 import { render } from '../../src/ui/layout.ts'
-import { type CompareRow, compare, stackChanges } from '../../src/view/compare.ts'
+import { compare, newRows, stackChanges } from '../../src/view/compare.ts'
 import { runHeader } from '../../src/view/header.ts'
 import type { RunInsights } from '../../src/view/insights.ts'
 import { readableInsights, readableRecord } from '../../src/view/record.ts'
@@ -226,11 +226,7 @@ const fromFile = (file: string) =>
 export function compareInput(base: RunRecord | null, head: RunRecord): CompareInput {
   const headEntry = runHeader(head, true)
   const baseEntry = base ? runHeader(base, true) : null
-  const rows = baseEntry
-    ? compare(baseEntry, headEntry)
-    : headEntry.evals.map(
-        (e): CompareRow => ({ id: e.id, base: null, head: e.outcome, status: 'added' }),
-      )
+  const rows = baseEntry ? compare(baseEntry, headEntry) : newRows(headEntry)
   return {
     base: base ? { runId: base.runId, suite: suiteResult(base) } : null,
     head: { runId: head.runId, suite: suiteResult(head) },

@@ -721,6 +721,14 @@ export type HistoryCell = Pick<
   cancelled?: number
 }
 
+/** A family's pooled lift as the history listing keeps it: enough to compare its gate. */
+export type FamilyLiftSummary = Pick<FamilyLift, 'variant' | 'vs' | 'points' | 'outcome'> & {
+  lo: number
+  hi: number
+  /** Unset when the compare has no `minLift`, so the lift can't fail. */
+  minLift?: number
+}
+
 /**
  * One line of the derived history listing: cached locally by the CLI, and the run header in the
  * studio's index shards.
@@ -756,7 +764,13 @@ export type HistoryEntry = {
     cells: HistoryCell[]
   }>
   /** The run's pooled families; unset when none ran. */
-  families?: Array<Pick<FamilyRecord, 'id' | 'name' | 'cases' | 'ran' | 'outcome'>>
+  families?: Array<
+    Pick<FamilyRecord, 'id' | 'name' | 'cases' | 'ran' | 'outcome'> & {
+      /** The eval ids of its cases in this run. */
+      caseIds: string[]
+      lifts: FamilyLiftSummary[]
+    }
+  >
   /** The run's errors outside any attempt; unset when there were none. */
   errors?: string[]
 }

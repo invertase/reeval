@@ -1,4 +1,10 @@
-import type { FingerprintParts, HistoryCell, HistoryEntry, StackSummary } from '../history/types.ts'
+import type {
+  FamilyLiftSummary,
+  FingerprintParts,
+  HistoryCell,
+  HistoryEntry,
+  StackSummary,
+} from '../history/types.ts'
 import type { Outcome } from '../types.ts'
 
 export type CompareStatus = 'regressed' | 'fixed' | 'same' | 'drift' | 'added' | 'removed' | 'infra'
@@ -22,6 +28,21 @@ export type CompareRow = {
    * reads as `cancelled`. Such an eval is never `regressed` or `fixed`: it's `drift`.
    */
   cancelled?: Array<'base' | 'head'>
+  /**
+   * `family`: a pooled `evaluate.each`'s gate, its `id` the family's. `base` and `head` are its
+   * pooled outcome (`fail` when a lift is below its `minLift`); its cases have rows of their own.
+   * For such a row, `cells` are the variants whose pooled lift only one run has.
+   */
+  kind?: 'family'
+  /** On a family row: each variant's pooled lift on each side, null where that run has none. */
+  lifts?: CompareFamilyLift[]
+}
+
+export type CompareFamilyLift = {
+  key: string
+  vs: string
+  base: Omit<FamilyLiftSummary, 'variant' | 'vs'> | null
+  head: Omit<FamilyLiftSummary, 'variant' | 'vs'> | null
 }
 
 export type CompareCell = {
@@ -138,7 +159,9 @@ type ComparableEval = Pick<
   'id' | 'fingerprint' | 'outcome' | 'sources' | 'cells'
 >
 
-type Comparable = Pick<HistoryEntry, 'stack'> & { evals: ComparableEval[] }
+type ComparableFamily = NonNullable<HistoryEntry['families']>[number]
+
+type Comparable = Pick<HistoryEntry, 'stack' | 'families'> & { evals: ComparableEval[] }
 
 /** Which source files were added, removed or changed. */
 export function sourceChanges(
@@ -264,8 +287,124 @@ function compareCells(base: ComparableEval, head: ComparableEval): CompareCell[]
   })
 }
 
+/** A family with a gate: some pooled lift has a `minLift`. One without can't fail, so has no row. */
+const gated = (f: ComparableFamily | undefined) => !!f?.lifts.some((l) => l.minLift !== undefined)
+
+const liftSide = ({ variant: _, vs: __, ...side }: FamilyLiftSummary) => side
+
+/** Each variant's pooled lift on both sides, head's order first. */
+function familyLifts(b: ComparableFamily | null, h: ComparableFamily | null): CompareFamilyLift[] {
+  const out = new Map<string, CompareFamilyLift>()
+  for (const [side, f] of [
+    ['head', h],
+    ['base', b],
+  ] as const) {
+    for (const l of f?.lifts ?? []) {
+      const row = out.get(l.variant) ?? { key: l.variant, vs: l.vs, base: null, head: null }
+      row[side] = liftSide(l)
+      out.set(l.variant, row)
+    }
+  }
+  return [...out.values()]
+}
+
+const liftsOutcome = (lifts: ReadonlyArray<{ outcome: 'pass' | 'fail' }>): Outcome =>
+  lifts.some((l) => l.outcome === 'fail') ? 'fail' : 'pass'
+
+/** A gated family only head has. */
+const addedFamilyRow = (h: ComparableFamily): CompareRow => ({
+  id: h.id,
+  kind: 'family',
+  base: null,
+  head: h.outcome,
+  status: 'added',
+  lifts: familyLifts(null, h),
+})
+
+/** The rows of a run with nothing to compare it with: every eval and gated family is new. */
+export const newRows = (head: Comparable): CompareRow[] => [
+  ...head.evals.map(addedRow),
+  ...(head.families ?? []).filter(gated).map(addedFamilyRow),
+]
+
+/**
+ * A gated family's row. Its pooled outcome is comparable only when both runs ran the same cases
+ * and every case is: a case that changed, was cancelled or hit an infrastructure error makes the
+ * family `drift` or `infra` as it does the case. With different variants, it's over the lifts both
+ * have.
+ */
+function familyRow(
+  id: string,
+  b: ComparableFamily | undefined,
+  h: ComparableFamily | undefined,
+  rows: ReadonlyMap<string, CompareRow>,
+  graderChanged: boolean,
+): CompareRow {
+  if (!b) return addedFamilyRow(h as ComparableFamily)
+  const lifts = familyLifts(b, h ?? null)
+  if (!h) return { id, kind: 'family', base: b.outcome, head: null, status: 'removed', lifts }
+  const shared = lifts.flatMap((l) => (l.base && l.head ? [{ base: l.base, head: l.head }] : []))
+  const scoped = shared.length > 0 && shared.length < lifts.length
+  const row: Omit<CompareRow, 'status'> = {
+    id,
+    kind: 'family',
+    base: scoped ? liftsOutcome(shared.map((l) => l.base)) : b.outcome,
+    head: scoped ? liftsOutcome(shared.map((l) => l.head)) : h.outcome,
+    lifts,
+    ...(scoped
+      ? {
+          cells: {
+            added: lifts.filter((l) => !l.base).map((l) => l.key),
+            removed: lifts.filter((l) => !l.head).map((l) => l.key),
+          },
+        }
+      : {}),
+  }
+  const prefix = id.slice(0, id.lastIndexOf(' › ') + 3)
+  const name = (caseId: string) =>
+    caseId.startsWith(prefix) ? caseId.slice(prefix.length) : caseId
+  const before = new Set(b.caseIds)
+  const after = new Set(h.caseIds)
+  const caseRows = [...new Set([...h.caseIds, ...b.caseIds])].flatMap((c) => rows.get(c) ?? [])
+  const changes = [
+    ...new Set([
+      ...h.caseIds.filter((c) => !before.has(c)).map((c) => `case ${name(c)} added`),
+      ...b.caseIds.filter((c) => !after.has(c)).map((c) => `case ${name(c)} removed`),
+      ...caseRows.flatMap((r) => (r.status === 'drift' ? (r.changes ?? []) : [])),
+    ]),
+  ]
+  const cancelled = (['base', 'head'] as const).filter(
+    (s) => row[s] === 'fail' && caseRows.some((r) => r.cancelled?.includes(s)),
+  )
+  if (cancelled.length) row.cancelled = cancelled
+  if (caseRows.some((r) => r.status === 'infra')) return { ...row, status: 'infra' }
+  if (changes.length) return { ...row, status: 'drift', changes }
+  if (row.cancelled || caseRows.some((r) => r.status === 'drift')) {
+    return { ...row, status: 'drift' }
+  }
+  if (graderChanged && row.base !== row.head) return { ...row, status: 'drift' }
+  if (row.base === 'pass' && row.head === 'fail') return { ...row, status: 'regressed' }
+  if (row.base === 'fail' && row.head === 'pass') return { ...row, status: 'fixed' }
+  return { ...row, status: 'same' }
+}
+
+/** Each eval's row, then each family's that either run gated. */
 export function compare(base: Comparable, head: Comparable): CompareRow[] {
   const graderChanged = stackChanges(base, head).some((c) => c.outsideFingerprint)
+  const rows = evalRows(base, head, graderChanged)
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  const before = new Map((base.families ?? []).map((f) => [f.id, f]))
+  const after = new Map((head.families ?? []).map((f) => [f.id, f]))
+  const families = [...new Set([...after.keys(), ...before.keys()])].filter(
+    (id) => gated(before.get(id)) || gated(after.get(id)),
+  )
+  return [
+    ...rows,
+    ...families.map((id) => familyRow(id, before.get(id), after.get(id), byId, graderChanged)),
+  ]
+}
+
+function evalRows(base: Comparable, head: Comparable, graderChanged: boolean): CompareRow[] {
   const ids = [...new Set([...head.evals.map((e) => e.id), ...base.evals.map((e) => e.id)])]
   return ids.map((id) => {
     const b = base.evals.find((e) => e.id === id)
