@@ -15,7 +15,7 @@ import { contextTaker } from './context.ts'
 import { tracePlan } from './debug.ts'
 import { prepareEnvironment } from './environment.ts'
 import { judgeCaller } from './judge.ts'
-import { recordEgress, recordFailure, recordOom, writeRecord } from './record.ts'
+import { attemptError, recordEgress, recordFailure, recordOom, writeRecord } from './record.ts'
 import { startSession } from './session.ts'
 import { type AttemptSpec, createAttempt, evalTimer } from './state.ts'
 import { turnSender } from './turns.ts'
@@ -111,7 +111,8 @@ async function attemptBody(
       a.judgeThrown.add(message)
       throw new Error(message)
     }
-  } catch (error) {
+  } catch (thrown) {
+    const error = attemptError(a, thrown, assertions())
     recordFailure(a, error, timedOut(), assertions())
     failure = {
       error: timedOut()

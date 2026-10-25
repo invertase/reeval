@@ -1262,21 +1262,56 @@ evaluate('canary', async (c) => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     const run = readRun(p.dir)
     const byName = Object.fromEntries(run.evals.map((e) => [e.name, e]))
-    for (const name of ['unasserted', 'asserted not']) {
+    for (const name of ['unasserted', 'asserted not', 'judge first']) {
       const e = byName[name]
       assert.equal(e?.trial.judgements[0]?.verdict, 'fail', name)
       assert.equal(e?.error?.kind, 'assertion', name)
       assert.match(e?.error?.message ?? '', /^tests pass: expected command to succeed/, name)
     }
-    assert.equal(byName['judge first']?.error?.kind, 'assertion', 'a check failed too')
     assert.equal(byName.canary?.error?.kind, 'judge', 'a failed toPass is the judge’s')
     const summary = run.read('summary.md')
     const attempts = summary.slice(summary.indexOf('## Attempts'))
     assert.equal(
       attempts.match(/tests pass: expected command to succeed/g)?.length,
-      2,
-      'the unasserted and asserted-not check failures are shown',
+      3,
+      'each check failure is shown',
     )
+  })
+
+  test('a failed check fails the attempt as itself beside a failed toPass, in either order', async () => {
+    const p = await project('judge-beside-check', {
+      'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.2 }) }' }),
+      'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('check then judge', async (c) => {
+  await c.send('go')
+  await expect.soft(c.exec('exit 3'), 'tests pass').toSucceed()
+  expect(await c.judge('nice?')).toPass()
+})
+evaluate('judge then erroring check', async (c) => {
+  await c.send('go')
+  expect.soft(await c.judge('nice?')).toPass()
+  await expect.soft(42 as never, 'tests pass').toSucceed()
+})
+evaluate('caught check', async (c) => {
+  await c.send('go')
+  try {
+    await expect(c.exec('exit 3'), 'optional').toSucceed()
+  } catch {}
+  expect(await c.judge('nice?')).toPass()
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const byName = Object.fromEntries(readRun(p.dir).evals.map((e) => [e.name, e]))
+    const check = byName['check then judge']?.error
+    assert.equal(check?.kind, 'assertion')
+    assert.match(check?.message ?? '', /^tests pass: expected command to succeed/)
+    const erroring = byName['judge then erroring check']?.error
+    assert.equal(erroring?.kind, 'assertion', 'a check that errored didn’t hold either')
+    assert.match(erroring?.message ?? '', /toSucceed\(\) expects/)
+    assert.equal(byName['caught check']?.error?.kind, 'judge', 'a caught check fails nothing')
+    assert.match(r.stdout, /Error: tests pass: expected command to succeed/)
   })
 
   test('judge state cascades key by key from the config to the call; build output is dropped', async () => {
