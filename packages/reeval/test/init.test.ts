@@ -381,6 +381,16 @@ describe('reeval init', () => {
     assert.match(kept.stdout, /skip +package\.json +has reeval; kept its eval script \(vitest\)/)
     assert.equal(own.read('package.json'), mine)
 
+    // npm reads a package.json that starts with a byte-order mark, and the mark stays.
+    const marked = await empty('init-package-bom')
+    await writeFile(join(marked.dir, 'package.json'), '\uFEFF{ "name": "mine" }')
+    const bom = await runCli(marked.dir, ['init', '--yes'])
+    assert.equal(bom.code, 0, bom.stderr)
+    assert.equal(
+      marked.read('package.json'),
+      `\uFEFF{ "name": "mine", "scripts": { "eval": "reeval run" }, "devDependencies": { "${pkg}": "^${version}" } }`,
+    )
+
     await writeFile(join(own.dir, 'package.json'), '{ nope')
     const bad = await runCli(own.dir, ['init', '--yes', '--force'])
     assert.equal(bad.code, 2)
