@@ -330,7 +330,7 @@ export const reevalConfigDataSchema = z
       .strictObject({ unbrokered: z.enum(['warn', 'error']).optional() })
       .optional()
       .describe(
-        "`unbrokered: 'error'` refuses Docker secrets without `hosts` instead of warning (default `'warn'`).",
+        "`unbrokered: 'error'` refuses Docker secrets without `hosts`, and credential-like MCP headers written as plain strings, instead of warning (default `'warn'`).",
       ),
     debug: z
       .strictObject({

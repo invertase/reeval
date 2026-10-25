@@ -55,6 +55,7 @@ A secret is read from the host when an attempt starts. Its value is masked in ev
 | Their JSON-, URL- and base64-encoded forms | The same |
 | Any stretch of 8 or more of their characters, such as a key's last 12 | The same, for declared secrets of 12+ characters and token-like variables (16+ characters of letters, digits and `_.~+/=:-`, with at least one letter and one digit, not a path or URL) |
 | Well-known token shapes (`AIza…`, `sk-…`, `ghp_…`, AWS keys, JWTs, private keys) | The same, even when they aren't set on the host |
+| MCP header values written as plain strings under a credential-like name (`Authorization`, `Proxy-Authorization`, `Cookie`, or a name containing `key`, `token` or `secret`) | What an attempt writes: `.reeval/debug`, `-v`, records and transcripts |
 
 A stretch made only of lower-case letters, upper-case letters or digits isn't masked on its own, so words and numbers stay readable, nor is one with quotes, commas, colons, brackets or spaces, so a record's JSON stays whole. Secret-named host variables under 8 characters and declared secrets under 4 aren't masked at all.
 
@@ -269,6 +270,23 @@ A secret in an HTTPS server's headers is brokered to that server's host unless i
 ```text
 brokered: GEMINI_API_KEY → generativelanguage.googleapis.com; mcp.search.headers.Authorization → mcp.acme.dev
 ```
+
+A header written as a plain string goes to the agent's MCP config as written. When its name looks like a credential (`Authorization`, `Proxy-Authorization`, `Cookie`, or a name containing `key`, `token` or `secret`, in any case) or its value has a well-known token shape, the plan warns, and `secrets: { unbrokered: 'error' }` refuses it:
+
+```ts
+mcp: {
+  // warning: mcp.search.headers.Authorization is a plain string, …
+  search: mcp.http('https://mcp.acme.dev', {
+    headers: { Authorization: `Bearer ${process.env.ACME_TOKEN}` },
+  }),
+  // brokered: mcp.docs.headers.Authorization → docs.acme.dev
+  docs: mcp.http('https://docs.acme.dev', {
+    headers: { Authorization: secret.template('Bearer ${ACME_TOKEN}') },
+  }),
+},
+```
+
+A credential-like plain header's value is still masked in what the attempt writes, but the agent gets the real value, and an eval that prints the value itself isn't masked on screen. Read it from a host variable with `secret.template` instead.
 
 ## file
 

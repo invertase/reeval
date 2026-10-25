@@ -389,6 +389,57 @@ evaluate('searches for the tail', async (c) => {
     }
   })
 
+  test('a credential-like MCP header written as a plain string is masked on screen, in the trace and the record', async () => {
+    const AUTH = 'Bearer 5c4b3a29f8e7d6c5b4a3928170f6e5d4'
+    const SOURCE = 'nightly-ci-9z8y7x6w'
+    // The agent prints its MCP config, as a real agent can.
+    const config = `Authorization: ${AUTH}\nX-Request-Source: ${SOURCE}\n`
+    const p = await project('debug-redact-mcp-header', {
+      'reeval.config.ts': fakeConfig({ harness: "{ script: [[{ exec: 'cat mcp-config.txt' }]] }" }),
+      'evals/b.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const env = defineEnvironment('headers', ({ mcp }) => ({
+  sandbox: fakeSandbox(),
+  files: { 'mcp-config.txt': ${JSON.stringify(config)} },
+  mcp: {
+    local: mcp.http('http://localhost:1/mcp', {
+      headers: { Authorization: ${JSON.stringify(AUTH)}, 'X-Request-Source': ${JSON.stringify(SOURCE)} },
+    }),
+  },
+}))
+evaluate('prints its headers', { environment: env }, async (c) => {
+  const turn = await c.send('print them')
+  expect(turn.text).toBe('Done.')
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '-vv', '--trace'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const dir = attemptDir(p.dir, 'prints')
+    const view = readRun(p.dir)
+    const outputs = {
+      screen: r.stdout + r.stderr,
+      'debug.log': read(join(dir, 'debug.log')),
+      'trace.ndjson': read(join(dir, 'trace.ndjson')),
+      'the record and transcript': [
+        JSON.stringify(view.run),
+        ...files(view.dir).map((f) => read(join(view.dir, f))),
+      ].join('\n'),
+    }
+    for (const [where, text] of Object.entries(outputs)) {
+      for (const n of [AUTH.length, 32, 12]) {
+        assert.equal(text.includes(AUTH.slice(-n)), false, `${where} has the header's last ${n}`)
+      }
+    }
+    // The canary: the neutral header beside it is printed as it is, so a value would show.
+    for (const where of ['screen', 'trace.ndjson', 'the record and transcript'] as const) {
+      assert.match(outputs[where], new RegExp(`X-Request-Source: ${SOURCE}`), where)
+      assert.match(outputs[where], /Authorization: \[REDACTED\]/, where)
+    }
+    assert.match(outputs.screen, /mcp\.local\.headers\.Authorization is a plain string/)
+    assert.equal(outputs.screen.includes('X-Request-Source is a plain string'), false)
+  })
+
   test('keeps the newest debug.keep runs, and reeval clean clears them', async () => {
     const p = await project('debug-keep', {
       'reeval.config.ts': fakeConfig({ extra: 'debug: { keep: 2 },' }),

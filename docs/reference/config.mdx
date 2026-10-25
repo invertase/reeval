@@ -237,7 +237,7 @@ reeval: judge.model.score in reeval.yaml must be at most 1 (got 2)
 </Property>
 
 <Property name="secrets" type="{ unbrokered?: 'warn' | 'error' }">
-  What to do about a secret the sandbox gets as a real value (one with no `hosts`). `warn` prints a line in the plan; `error` stops the run. Default `'warn'`. See [Credential brokering](/concepts/credential-brokering).
+  What to do about a secret the sandbox gets as a real value (one with no `hosts`), or an MCP header that looks like a credential but is a plain string. `warn` prints a line in the plan; `error` stops the run. Default `'warn'`. See [Credential brokering](/concepts/credential-brokering).
 </Property>
 
 <Property name="debug" type="{ keep?: number, traceBufferMb?: number }">

@@ -38,6 +38,8 @@ import {
   type Level,
   matchesTags,
   type PlannedAttempt,
+  plainHeaderError,
+  plainHeaders,
   type Resolved,
   sandboxProvider,
   sandboxSetBy,
@@ -173,6 +175,8 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
   if (ctx.config.secrets.unbrokered === 'error') {
     const [first] = unbrokered(resolved.env, plannedAttempts)
     if (first) throw new UsageError(unbrokeredError(first, where, ctx.config.file))
+    const [plain] = plainHeaders(plannedAttempts)
+    if (plain) throw new UsageError(plainHeaderError(plain, where, ctx.config.file))
   }
   const pluginNotes: string[] = []
   const pluginLabels = new Map<PlannedAttempt, string[]>()

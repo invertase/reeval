@@ -6,7 +6,12 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import type { Substitution } from '@reeval/sandbox-docker'
 import { type BrokeredSecret, resolveEnvironment } from '../src/environment/resolve.ts'
-import { applied, defineEnvironment, unbrokeredSecrets } from '../src/environment.ts'
+import {
+  applied,
+  defineEnvironment,
+  plainCredentialHeaders,
+  unbrokeredSecrets,
+} from '../src/environment.ts'
 import { cursorMcpServers } from '../src/harness/agents.ts'
 import { findingLines, findingSummary, scanText } from '../src/history/secret-scan.ts'
 import type { PlannedAttempt } from '../src/options.ts'
@@ -379,6 +384,78 @@ describe('unbrokered secrets', () => {
     assert.deepEqual(unbrokered({}, [attempt('docker'), attempt('docker')]), [
       { label: 'PLAIN', from: 'PLAIN' },
     ])
+  })
+})
+
+describe('MCP headers written as plain strings', () => {
+  const env = defineEnvironment('e', ({ mcp, secret }) => ({
+    mcp: {
+      local: mcp.http('http://localhost:1', {
+        headers: {
+          Authorization: 'Bearer plain-auth-7f3c',
+          'proxy-authorization': 'Basic dXNlcjpwYXNz',
+          Cookie: 'sid=1',
+          'X-Api-Key': 'k',
+          'X-Session-Token': 't',
+          'X-Client-Secret': 's',
+          'X-Trace': 'xoxb-0123456789-abcdefghij',
+          'X-Request-Source': 'reeval',
+          Accept: 'application/json',
+        },
+      }),
+      remote: mcp.http('https://mcp.example.com', {
+        headers: {
+          Authorization: secret(),
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+          'X-Api-Key': secret.template('${REEVAL_UNIT_OTHER}'),
+          'X-Org-Token': 'plain',
+        },
+      }),
+      stdio: mcp.stdio('x', [], { env: { MODE: 'fast' } }),
+    },
+  }))
+
+  test('lists those named like a credential or shaped like a token, not secrets or others', () => {
+    assert.deepEqual(plainCredentialHeaders(env.layers), [
+      { label: 'mcp.local.headers.Authorization', https: false },
+      { label: 'mcp.local.headers.proxy-authorization', https: false },
+      { label: 'mcp.local.headers.Cookie', https: false },
+      { label: 'mcp.local.headers.X-Api-Key', https: false },
+      { label: 'mcp.local.headers.X-Session-Token', https: false },
+      { label: 'mcp.local.headers.X-Client-Secret', https: false },
+      { label: 'mcp.local.headers.X-Trace', https: false },
+      { label: 'mcp.remote.headers.X-Org-Token', https: true },
+    ])
+  })
+
+  test('a later layer that makes the header a secret leaves nothing to warn of', () => {
+    const parent = defineEnvironment('parent', ({ mcp }) => ({
+      mcp: { docs: mcp.http('https://mcp.example.com', { headers: { Authorization: 'x' } }) },
+    }))
+    const child = parent.extendEnvironment('child', ({ mcp, secret }) => ({
+      mcp: {
+        docs: mcp.http('https://mcp.example.com', { headers: { Authorization: secret() } }),
+      },
+    }))
+    assert.equal(plainCredentialHeaders(parent.layers).length, 1)
+    assert.deepEqual(plainCredentialHeaders(child.layers), [])
+  })
+
+  test('resolving the environment masks the credential-like values, and only those', async () => {
+    const value = 'Bearer 3e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b'
+    const neutral = 'nightly-ci-9z8y7x6w'
+    const r = await resolve(({ mcp }) => ({
+      mcp: {
+        local: mcp.http('http://localhost:1', {
+          headers: { Authorization: value, 'X-Request-Source': neutral },
+        }),
+      },
+    }))
+    const server = r.mcp.local
+    assert.equal(server?.transport === 'http' && server.headers.Authorization, value)
+    assert.equal(redactSecrets(`sent ${value}`, {}), 'sent [REDACTED]')
+    assert.equal(redactSecrets(`token ${value.slice(7)}`, {}), 'token [REDACTED]')
+    assert.equal(redactSecrets(`sent ${neutral}`, {}), `sent ${neutral}`)
   })
 })
 

@@ -25,6 +25,10 @@ const TOKEN_PATTERNS: Array<{ rule: string; pattern: RegExp }> = [
   },
 ]
 
+/** Whether a value holds a well-known credential shape. */
+export const hasTokenShape = (value: string) =>
+  TOKEN_PATTERNS.some(({ pattern }) => value.search(pattern) !== -1)
+
 /** Values declared with `secret()`, masked whatever their variable is called. */
 const declared = new Set<string>()
 

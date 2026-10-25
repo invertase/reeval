@@ -32,6 +32,7 @@ import {
   pi,
 } from '../../src/harness.ts'
 import { checkHarnesses, checkOptions } from '../../src/options.ts'
+import { planEval } from '../../src/plan-eval.ts'
 import { docker, fakeSandbox, podman } from '../../src/sandbox.ts'
 import type {
   EnvironmentHelpers,
@@ -106,6 +107,22 @@ const hostEntry = () => {
   )
   return dir
 }
+
+/** What planning an eval with `options` refuses under `secrets: { unbrokered: 'error' }`. */
+const strict = (o: unknown) => () => {
+  const config = resolveConfig(
+    { harness: fakeHarness(), sandbox: fakeSandbox(), secrets: { unbrokered: 'error' } },
+    DIR,
+    'reeval.config.ts',
+  )
+  planEval(
+    { name: 'e', mode: 'run', groups: [], options: o as never },
+    { config, profile: null, tags: [], concurrency: 1, file: undefined, order: 0 },
+  )
+}
+/** An environment with one MCP server on `url` that sends `headers`. */
+const mcpHeaders = (url: string, headers: Record<string, unknown>) =>
+  defineEnvironment('e', ({ mcp }) => ({ mcp: { docs: mcp.http(url, { headers } as never) } }))
 
 /** What `declareTree` checks before it declares anything. */
 const tree = (children: unknown) => () => {
@@ -959,6 +976,61 @@ export const CASES: Record<string, Case[]> = {
     ['data: good', options({ environment: envData({ setup: ['ls'], files: { 'a.txt': 'a' } }) })],
   ],
   config: [
+    [
+      "unbrokered 'error': a plain MCP header named like a credential",
+      strict({
+        environment: mcpHeaders('https://mcp.example.com', { Authorization: 'Bearer abc123' }),
+      }),
+    ],
+    [
+      "unbrokered 'error': a plain MCP header with a token's shape, on http://",
+      strict({
+        environment: mcpHeaders('http://localhost:4000', {
+          'X-Trace': 'ghp_0123456789abcdefghijABCDEFGHIJ0123456789',
+        }),
+      }),
+    ],
+    [
+      "unbrokered 'error': a plain MCP header from a declaration tree",
+      strict({
+        environment: {
+          kind: 'environment',
+          name: 'e',
+          layers: [
+            {
+              name: 'e',
+              spec: {
+                mcp: {
+                  docs: {
+                    kind: 'mcp',
+                    transport: 'http',
+                    url: 'https://mcp.example.com',
+                    headers: { 'x-session-token': 'abc123' },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      }),
+    ],
+    [
+      "unbrokered 'error': a neutral plain MCP header",
+      strict({ environment: mcpHeaders('https://mcp.example.com', { 'X-Request-Source': 'ci' }) }),
+    ],
+    [
+      "unbrokered 'error': a secret.template MCP header on https://",
+      strict({
+        environment: defineEnvironment('e', ({ mcp, secret }) => ({
+          mcp: {
+            docs: mcp.http('https://mcp.example.com', {
+              // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+              headers: { Authorization: secret.template('Bearer ${MCP_TOKEN}') },
+            }),
+          },
+        })),
+      }),
+    ],
     ['yaml: empty', yaml('')],
     ['yaml: not YAML', yaml('harness: [a\n')],
     ['yaml: a repeated key', yaml('runs: 1\nruns: 2\n')],

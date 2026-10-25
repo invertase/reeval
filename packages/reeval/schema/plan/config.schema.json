@@ -2350,7 +2350,7 @@
           "$ref": "#/$defs/SandboxDescriptor"
         },
         "secrets": {
-          "description": "`unbrokered: 'error'` refuses Docker secrets without `hosts` instead of warning (default `'warn'`).",
+          "description": "`unbrokered: 'error'` refuses Docker secrets without `hosts`, and credential-like MCP headers written as plain strings, instead of warning (default `'warn'`).",
           "type": "object",
           "properties": {
             "unbrokered": {
