@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -18,6 +18,7 @@ import {
   startLanguageRunner,
 } from '../src/language-runner/transport.ts'
 import { InfraError } from '../src/sandbox/types.ts'
+import { fakeConfig, project, readRun, runCli } from './helpers.ts'
 
 test('resolvePythonRunnerCommand prefers REEVAL_PYTHON', () => {
   const prev = process.env.REEVAL_PYTHON
@@ -136,6 +137,44 @@ test('a runner whose hello is not JSON says so', async () => {
       tmpdir(),
     ),
     /stopped before it said hello: it sent a message that isn't JSON \(a NaN or Infinity in it, or a line cut short\): \{"t": "hello", "protocol": Infinity\}/,
+  )
+})
+
+const noShebang = process.platform === 'win32' && "Windows can't start a script by its shebang"
+
+test('an attempt that starts after its runner has gone fails at once', {
+  skip: noShebang,
+}, async () => {
+  const runner = `#!${process.execPath}
+const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n')
+send({ t: 'hello', protocol: ${RUNNER_PROTOCOL}, sdk: 'fake', version: '1', runtime: 'node' })
+const evals = ['first', 'second'].map((name, i) =>
+  ({ type: 'eval', name, mode: 'run', options: {}, body: 'b' + i }))
+require('node:readline').createInterface({ input: process.stdin }).on('line', (line) => {
+  const m = JSON.parse(line)
+  if (m.t === 'collect') send({ t: 'declared', file: m.file, tree: { children: evals } })
+  else if (m.type === 'start') process.exit(3)
+})
+`
+  const p = await project('runner-gone', {
+    'reeval.config.ts': fakeConfig(),
+    'evals/x.eval.py': '',
+    'runner.cjs': runner,
+  })
+  chmodSync(join(p.dir, 'runner.cjs'), 0o755)
+  const { code, stdout } = await runCli(p.dir, ['run', '--concurrency', '1'], {
+    env: { REEVAL_PYTHON: join(p.dir, 'runner.cjs') },
+    deadlineMs: 30_000,
+  })
+  assert.equal(code, 3, stdout)
+  const { evals } = readRun(p.dir)
+  assert.deepEqual(
+    evals.map((e) => [e.name, e.error?.kind, e.error?.message]),
+    ['first', 'second'].map((name) => [
+      name,
+      'infra',
+      'The language runner stopped mid-attempt: it exited (code 3)',
+    ]),
   )
 })
 
