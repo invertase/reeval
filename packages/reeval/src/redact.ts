@@ -118,6 +118,11 @@ type Secrets = {
    * characters, so a short declared secret (`error`, `text`) can't rename a record's fields.
    */
   keyForms: string[]
+  /**
+   * The forms holding a token shape and more (`https://user:pass@host/?t=ghp_…`), masked before
+   * token shapes are: masking the token first would leave the rest of the value showing.
+   */
+  wrappers: Set<string>
   /** Text shorter than this can't hold any form, window or token shape. */
   shortest: number
   /** Each form's rule: the value of which variable, or a declared secret. */
@@ -163,8 +168,13 @@ function envSecrets(env: NodeJS.ProcessEnv): Secrets {
     }
   }
   const keyForms = forms.filter((f) => f.length >= MIN_FRAGMENT)
+  const wrappers = new Set(
+    forms.filter((f) =>
+      TOKEN_PATTERNS.some(({ pattern }) => f.match(pattern)?.some((m) => m.length < f.length)),
+    ),
+  )
   const shortest = Math.min(MIN_FRAGMENT, ...forms.map((f) => f.length))
-  const secrets = { forms, keyForms, shortest, formRules, windows, starts }
+  const secrets = { forms, keyForms, wrappers, shortest, formRules, windows, starts }
   cached = { key, secrets }
   return secrets
 }
@@ -200,9 +210,11 @@ function maskFragments(text: string, secrets: Secrets): string {
 }
 
 /**
- * Masks the values of secret-looking environment variables and declared secrets, raw or
- * JSON-, URL- or base64-encoded, any stretch of `MIN_FRAGMENT` or more of their characters, and
- * well-known token shapes, anywhere in `text`.
+ * Masks well-known token shapes, the values of secret-looking environment variables and declared
+ * secrets, raw or JSON-, URL- or base64-encoded, and any stretch of `MIN_FRAGMENT` or more of
+ * their characters, anywhere in `text`. Token shapes go first, after only the values that hold
+ * one: a known value or fragment masked inside another token (a second key sharing the first's
+ * `sk-ant-api03-`) would break its shape and leave the rest of it showing.
  */
 export const redactSecrets = (text: string, env: NodeJS.ProcessEnv = process.env): string =>
   redactWith(text, envSecrets(env))
@@ -210,10 +222,11 @@ export const redactSecrets = (text: string, env: NodeJS.ProcessEnv = process.env
 function redactWith(text: string, secrets: Secrets, forms = secrets.forms): string {
   if (text.length < secrets.shortest) return text
   let out = text
-  for (const secret of forms) out = out.replaceAll(secret, REDACTED)
-  out = maskFragments(out, secrets)
+  for (const secret of forms)
+    if (secrets.wrappers.has(secret)) out = out.replaceAll(secret, REDACTED)
   for (const { pattern } of TOKEN_PATTERNS) out = out.replace(pattern, REDACTED)
-  return out
+  for (const secret of forms) out = out.replaceAll(secret, REDACTED)
+  return maskFragments(out, secrets)
 }
 
 /** A JSON string literal: `[start, end)` with its quotes, and whether it's an object's key. */
@@ -339,24 +352,33 @@ export function findSecrets(text: string, env: NodeJS.ProcessEnv = process.env):
   const secrets = envSecrets(env)
   const found: SecretMatch[] = []
   let rest = text
-  for (const secret of secrets.forms) {
+  const findForm = (secret: string) => {
     let at = rest.indexOf(secret)
-    if (at === -1) continue
+    if (at === -1) return
     const rule = secrets.formRules.get(secret) as string
     while (at !== -1) {
       found.push({ start: at, end: at + secret.length, rule, known: true })
       at = rest.indexOf(secret, at + secret.length)
     }
-    // Same length, so later matches keep their offsets; no window or pattern spans a NUL.
+    // Same length, so later matches keep their offsets. No form, window or token shape spans a
+    // NUL but the private key, which spans `[REDACTED]` in `redactSecrets` too.
     rest = rest.replaceAll(secret, '\0'.repeat(secret.length))
   }
-  for (const [start, end, rule] of fragmentRanges(rest, secrets)) {
-    found.push({ start, end, rule, known: true })
-  }
+  for (const secret of secrets.forms) if (secrets.wrappers.has(secret)) findForm(secret)
   for (const { rule, pattern } of TOKEN_PATTERNS) {
     for (const m of rest.matchAll(pattern)) {
-      found.push({ start: m.index, end: m.index + m[0].length, rule, known: false })
+      const start = m.index
+      const end = start + m[0].length
+      // A token holding a known value is reported as that value, so no part of it is shown.
+      const form = secrets.forms.find((f) => m[0].includes(f))
+      if (form === undefined) found.push({ start, end, rule, known: false })
+      else found.push({ start, end, rule: secrets.formRules.get(form) as string, known: true })
     }
+    rest = rest.replace(pattern, (m) => '\0'.repeat(m.length))
+  }
+  for (const secret of secrets.forms) findForm(secret)
+  for (const [start, end, rule] of fragmentRanges(rest, secrets)) {
+    found.push({ start, end, rule, known: true })
   }
   return found.sort((a, b) => a.start - b.start)
 }
