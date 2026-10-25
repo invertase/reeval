@@ -259,6 +259,32 @@ evaluate('leftover', async () => {})
     assert.equal(readCurrent(p.dir), SEEDED_RUN_ID)
   })
 
+  test('a completed attempt keeps its outcome when the file fails to load for the rest', async () => {
+    const p = await project('resume-load-error', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/pair.eval.ts': `import { existsSync, writeFileSync } from 'node:fs'
+import { evaluate } from 'reeval'
+const marker = new URL('../loaded-once', import.meta.url)
+if (existsSync(marker)) throw new Error('fixture service unavailable')
+writeFileSync(marker, '')
+evaluate('done', async () => {})
+evaluate('leftover', async () => {})
+`,
+    })
+    writeStoppedStaging(p.dir, SEEDED_RUN_ID, [
+      { file: 'evals/pair.eval.ts', name: 'done', cell: 'fake/fake/fake' },
+    ])
+    const r = await runCli(p.dir, ['run', '--resume', SEEDED_RUN_ID, '--ui', 'plain'])
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.deepEqual(
+      readRun(p.dir).run.evals.map((e) => [e.name, e.outcome, e.attempts[0]?.error?.message]),
+      [
+        ['done', 'pass', undefined],
+        ['leftover', 'fail', 'fixture service unavailable'],
+      ],
+    )
+  })
+
   test('--dry-run does not write the pointer or move an interrupted scratch', async () => {
     const p = await project('resume-dry', twoEvals)
     const runId = '20260101T000000Z_nogit_int_dry1'
