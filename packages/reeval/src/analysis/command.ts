@@ -150,7 +150,7 @@ export async function defaultBase(
   entries: HistoryEntry[],
   head: HistoryEntry,
 ): Promise<HistoryEntry | null> {
-  const reach = await reachability(config.root)
+  const reach = await reachability(config.root, [head.git?.sha])
   const from = head.git && (!reach || reach.has(head.git.sha)) ? head.git.sha : 'HEAD'
   const ancestry = await lines(config.root, ['rev-list', '--max-count=5000', from])
   return pickBaseline(
