@@ -84,6 +84,8 @@ const attempt = (name: string, extra: Partial<AttemptMeta> = {}) =>
     ...extra,
   }) as unknown as AttemptMeta
 
+const cell = (key: string) => ({ cell: { key } }) as Partial<AttemptMeta>
+
 function project(files: string[]) {
   const root = tempDir('node')
   for (const f of files) {
@@ -373,6 +375,60 @@ describe('runEngine: running', () => {
       fakeSpawn(passing(two)).spawn,
     )
     assert.equal(none.noFiles, true)
+  })
+
+  test('a part that names a file also matches as a name or cell part in the other files', async () => {
+    const { run } = project(['evals/fake/a.eval.ts', 'evals/b.eval.ts', 'evals/c.eval.ts'])
+    const tests = {
+      'a.eval.ts': [test0(0, 'alpha [left#1]', { attempt: attempt('alpha', cell('left')) })],
+      'b.eval.ts': [
+        test0(0, 'beta [left#1]', { attempt: attempt('beta', cell('left')) }),
+        test0(1, 'beta [fake#1]', { attempt: attempt('beta', cell('fake')) }),
+      ],
+      'c.eval.ts': [test0(0, 'gamma [left#1]', { attempt: attempt('gamma', cell('left')) })],
+    }
+    const { spawn, spawned } = fakeSpawn(passing(tests))
+    const r = await engine({ run, filters: ['fake'] }, spawn)
+    assert.deepEqual(spawned.sort(), [
+      'a.eval.ts:0',
+      'a.eval.ts:collect',
+      'b.eval.ts:1',
+      'b.eval.ts:collect',
+      'c.eval.ts:collect',
+    ])
+    assert.deepEqual(
+      r.evals.map((e) => e.key),
+      ['evals/b.eval.ts › beta # fake#1', 'evals/fake/a.eval.ts › alpha # left#1'],
+    )
+
+    const narrowed = await engine(
+      { run, filters: ['fake', 'beta'] },
+      fakeSpawn(passing(tests)).spawn,
+    )
+    assert.deepEqual(
+      narrowed.evals.map((e) => e.key),
+      ['evals/b.eval.ts › beta # fake#1'],
+      'a name part still narrows what a path part picks',
+    )
+  })
+
+  test('a file no path part names is left out when it fails to load', async () => {
+    const { run } = project(['evals/a.eval.ts', 'evals/b.eval.ts', 'evals/c.eval.ts'])
+    const { spawn } = fakeSpawn((ctl) => {
+      const name = basename(ctl.init.file)
+      if (name === 'b.eval.ts') {
+        ctl.emit({ t: 'load-error', error: { name: 'Error', message: 'boom' } })
+        ctl.exit()
+      } else if (name === 'c.eval.ts') {
+        ctl.emit({ t: 'load-error', error: { name: 'UsageError', message: 'twice' } })
+        ctl.exit()
+      } else passing({ 'a.eval.ts': [test0(0, 'one')] })(ctl)
+    })
+    const r = await engine({ run, filters: ['a.eval'] }, spawn)
+    assert.deepEqual(
+      r.evals.map((e) => [e.id, e.state]),
+      [['evals/a.eval.ts › one', 'passed']],
+    )
   })
 
   test('leases: the first round gathers before any grant, then workers get grants and release', async () => {

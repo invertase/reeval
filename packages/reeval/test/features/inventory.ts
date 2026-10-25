@@ -493,11 +493,16 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'selection.filters',
     area: 'Config and selection',
-    name: 'Filters (path, eval name, cell key; the kinds narrow each other); no match exits 2',
-    plan: ['compare/mixed-filter', 'selection/group-and-eval-filter'],
+    name: 'Filters (path, eval name, cell key; the kinds narrow each other; a part naming a file also matches names and cells); no match exits 2',
+    plan: [
+      'compare/mixed-filter',
+      'selection/group-and-eval-filter',
+      'filters/dir-named-like-cell',
+    ],
     tests: [
       engine('filters match paths, then eval names'),
       engine('a path filter and a cell filter together run only that cell of that file'),
+      engine('a directory named like a cell keeps that cell in the other files'),
       options('a filter that matches nothing exits 2'),
       "reeval/test/plan.test.ts › a cell filter narrows each row's counts in the text plan",
       'reeval/test/plan.test.ts › a filter part that matches no file, eval name or cell exits 2',

@@ -44,7 +44,7 @@
 | `evaluate.only`, `.skip`, `.todo` and `.for`; `group.only` | ✓ 5 | ✓ 1 | — | — | — | — |
 | `group.skip` and `group.todo`, and todo shown in the plan, summary, record and studio | ✓ 2 | ✓ 2 | — | — | — | — |
 | Tags: `--tag`, `!tag` and profile tags | ✓ 1 | ✓ 1 | — | — | — | — |
-| Filters (path, eval name, cell key; the kinds narrow each other); no match exits 2 | ✓ 5 | ✓ 2 | — | — | — | — |
+| Filters (path, eval name, cell key; the kinds narrow each other; a part naming a file also matches names and cells); no match exits 2 | ✓ 6 | ✓ 3 | — | — | — | — |
 
 ## Environments
 

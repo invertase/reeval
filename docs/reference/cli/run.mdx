@@ -62,7 +62,8 @@ npx reeval run with-house-greeting      # cells by key
 npx reeval run skill antigravity        # skill.eval.ts's Antigravity cells
 ```
 
-- A filter part that names an eval file picks files. Every other part picks evals by name or cell key, as a case-sensitive substring of the eval id or the cell key (`cursor:composer-2.5/with-house-greeting/docker`).
+- A filter part that names an eval file picks files: a case-insensitive substring of the file's path, directories included. Every other part picks evals by name or cell key, as a case-sensitive substring of the eval id or the cell key (`cursor:composer-2.5/with-house-greeting/docker`).
+- A part that names a file also matches by name and cell key, so it picks either. With `evals/docker/a.eval.ts`, `reeval run docker` plans all of `a.eval.ts` and every `docker` cell of the other files.
 - Parts of one kind add up (OR). The two kinds narrow each other, and the plan's rows and totals count only the cells that are left.
 - An eval name and a cell key, harness included, are the same kind. `reeval run claude-code:claude-sonnet-5 "greets by name"` plans every Claude Code Sonnet cell plus `greets by name` on every harness. To run one eval on one harness, filter by the eval and set a profile's [`limit.harness`](/reference/profiles#limit).
 - A part that matches nothing exits 2 and names it.

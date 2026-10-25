@@ -62,27 +62,33 @@ export async function runEngine(
     '**/.reeval/**',
     `${relativeFile(root, config.history.dir)}/**`,
   ])
-  // A part that names an eval file picks files; any other part picks evals by name or cell.
-  // Parts of one kind widen the selection, and the two kinds narrow each other.
+  // A part that names an eval file picks every eval in the files it names, and also matches as a
+  // name or cell part anywhere, so a directory called `fake` doesn't hide the `fake` cells of
+  // the other files. Any other part picks evals by name or cell. Parts of one kind widen the
+  // selection, and the two kinds narrow each other.
   const pathFilters = options.filters.filter((f) => filterFiles(files, [f], root).length)
   const nameFilters = options.filters.filter((f) => !pathFilters.includes(f))
   const specs = filterFiles(files, pathFilters, root)
   if (specs.length === 0)
     return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
+  const named = new Set(specs.map((file) => relativeFile(root, file)))
 
   // Attempts wait on the network, not the CPU, so a few workers run many attempts each.
   const workers = Math.max(1, Math.min(concurrency, availableParallelism()))
   const entry = workerEntry(root, PACKAGE_NAMES)
   const hide = [...reevalFrames(PACKAGE_DIR), ...reevalFrames(join(entry, '..', '..'))]
-  const matchesName = (e: { id: string; attempt?: EngineEval['attempt'] }) =>
-    nameFilters.length === 0 || nameFilters.some((f) => matchesFilter(e, f))
+  const matchesName = (e: { id: string; file: string; attempt?: EngineEval['attempt'] }) =>
+    (named.has(e.file) || pathFilters.some((f) => matchesFilter(e, f))) &&
+    (nameFilters.length === 0 || nameFilters.some((f) => matchesFilter(e, f)))
   const run = options.run
 
-  // Collect: each file in a worker of its own, for the plan.
+  // Collect: each file in a worker of its own, for the plan. A file no path part names is
+  // collected only for the evals a path part matches by name or cell, so one that fails to
+  // load is left out rather than failing a run that didn't name it.
   const collected: Collected[] = []
   const failed = new Map<string, string[]>()
   let usage: string | undefined
-  await eachLimited(specs, workers, async (file) => {
+  await eachLimited(files, workers, async (file) => {
     const rel = relativeFile(root, file)
     const worker = spawn(entry, root)
     let tests: WireTest[] | undefined
@@ -95,6 +101,7 @@ export async function runEngine(
     worker.send({ t: 'init', run, file, select: null })
     const exit = await worker.exited
     if (tests) collected.push({ file, rel, tests })
+    else if (!named.has(rel)) return
     else if (error?.name === 'OnlyInCiError') usage = onlyInCi(rel)
     else if (error?.name === 'UsageError' || error?.name === 'DefinitionError')
       usage = `${rel}: ${error.message}`
@@ -126,10 +133,13 @@ export async function runEngine(
       return { evals: [], unhandledErrors: [], cancelled: false, noFiles: false, stopped: true }
   }
 
-  // With a name filter, only the files it picks an eval in run.
-  const picked = nameFilters.length
-    ? collected.filter(({ rel, tests }) => tests.some((t) => matchesName(identify(rel, t))))
-    : collected
+  // A file a path part names runs unless a name part narrows it; any other only if it has an
+  // eval the filters pick.
+  const picked = collected.filter(
+    ({ rel, tests }) =>
+      (named.has(rel) && nameFilters.length === 0) ||
+      tests.some((t) => matchesName(identify(rel, t))),
+  )
   if (picked.length === 0)
     return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
   return runFiles({ ...options, spawn, entry, hide, workers, collected: picked, matchesName })

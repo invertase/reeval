@@ -83,8 +83,8 @@ One the cap or a run without `-v` hid isn't spent: the next `reeval run -v` prin
 
 ## Config discovery, filters and exit codes
 
-Filters: a part naming an eval file picks files; any other part picks evals by name or cell key
-(`reeval run skill antigravity`).
+Filters: a part naming an eval file picks files, and matches by name and cell key too; any other
+part picks evals by name or cell key (`reeval run skill antigravity`).
 
 Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or
 above (paths resolve from its directory), or `--config <path>`. `reeval run` and `reeval image
