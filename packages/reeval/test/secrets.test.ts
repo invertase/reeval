@@ -186,6 +186,74 @@ describe('resolving brokered secrets', () => {
     assert.deepEqual(r.substitutions, [])
   })
 
+  test("a header's secret.template records each host variable it reads, on HTTP and HTTPS", async () => {
+    const headers = (url: string) =>
+      resolve(({ secret, mcp }) => ({
+        mcp: {
+          docs: mcp.http(url, {
+            headers: {
+              // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+              authorization: secret.template('Basic ${REEVAL_UNIT_OTHER}:${REEVAL_UNIT_BROKERED}'),
+            },
+          }),
+        },
+      }))
+    const plain = await headers('http://localhost:3333')
+    assert.deepEqual(plain.record.secrets, ['REEVAL_UNIT_BROKERED', 'REEVAL_UNIT_OTHER'])
+    assert.deepEqual(plain.record.brokered, [])
+    const tls = await headers('https://mcp.example.com/v1')
+    assert.deepEqual(tls.record.secrets, ['REEVAL_UNIT_BROKERED', 'REEVAL_UNIT_OTHER'])
+    assert.deepEqual(tls.record.brokered, ['REEVAL_UNIT_BROKERED', 'REEVAL_UNIT_OTHER'])
+  })
+
+  test('secret.fromEnv and secret.template name a header secret by the host variable alike', async () => {
+    const record = async (url: string, fromEnv: boolean) =>
+      (
+        await resolve(({ secret, mcp }) => ({
+          mcp: {
+            docs: mcp.http(url, {
+              headers: {
+                authorization: fromEnv
+                  ? secret.fromEnv('REEVAL_UNIT_OTHER')
+                  : // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+                    secret.template('${REEVAL_UNIT_OTHER}'),
+              },
+            }),
+          },
+        }))
+      ).record
+    for (const url of ['http://localhost:3333', 'https://mcp.example.com/v1']) {
+      const [a, b] = [await record(url, true), await record(url, false)]
+      assert.deepEqual(a.secrets, ['REEVAL_UNIT_OTHER'])
+      assert.deepEqual([a.secrets, a.brokered], [b.secrets, b.brokered])
+    }
+  })
+
+  test("the digest covers a header's secret.template variables", async () => {
+    const digest = async (authorization: string | { template: string }) =>
+      (
+        await resolve(({ secret, mcp }) => ({
+          mcp: {
+            local: mcp.http('http://localhost:3333', {
+              headers: {
+                authorization:
+                  typeof authorization === 'string'
+                    ? authorization
+                    : secret.template(authorization.template),
+              },
+            }),
+          },
+        }))
+      ).record.digest
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+    const a = await digest({ template: 'Bearer ${REEVAL_UNIT_BROKERED}' })
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+    assert.notEqual(await digest({ template: 'Bearer ${REEVAL_UNIT_OTHER}' }), a)
+    assert.notEqual(await digest('Bearer literal'), a)
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+    assert.equal(await digest({ template: 'Token ${REEVAL_UNIT_BROKERED}' }), a)
+  })
+
   test('MCP stdio env secrets are brokered only with explicit hosts', async () => {
     const r = await resolve(({ secret, mcp }) => ({
       mcp: {
