@@ -6,6 +6,7 @@ import {
   FileMinus,
   FilePen,
   FilePlus,
+  FileText,
   Globe,
   MessageSquare,
   RotateCcw,
@@ -27,6 +28,17 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 type EventLine = Exclude<TranscriptLine, { type: 'prompt' | 'turn-end' }>
+
+/** `write` created the file or replaced it whole: the harness doesn't say which. */
+const FILE_EDIT: Record<
+  Extract<EventLine, { type: 'file-edit' }>['kind'],
+  { Icon: typeof FilePen; verb: string }
+> = {
+  create: { Icon: FilePlus, verb: 'Created' },
+  modify: { Icon: FilePen, verb: 'Edited' },
+  write: { Icon: FileText, verb: 'Wrote' },
+  delete: { Icon: FileMinus, verb: 'Deleted' },
+}
 
 const offset = (ms: number) => (ms < 1000 ? `+${ms}ms` : `+${(ms / 1000).toFixed(1)}s`)
 
@@ -160,13 +172,12 @@ function EventRow({ e, open, toggle }: { e: EventLine; open: boolean; toggle: ()
         </Foldable>
       )
     case 'file-edit': {
-      const Icon = e.kind === 'create' ? FilePlus : e.kind === 'delete' ? FileMinus : FilePen
+      // A newer reeval's kind reads as an edit.
+      const { Icon, verb } = FILE_EDIT[e.kind] ?? FILE_EDIT.modify
       return (
         <div className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm">
           <Icon className="size-4 text-muted-foreground" />
-          <span className="text-muted-foreground">
-            {e.kind === 'create' ? 'Created' : e.kind === 'delete' ? 'Deleted' : 'Edited'}
-          </span>
+          <span className="text-muted-foreground">{verb}</span>
           <span className="min-w-0 truncate font-mono text-xs">{e.path}</span>
           <span className="ml-auto flex shrink-0 gap-2 font-mono text-xs">
             {e.added !== null ? <span className="text-pass">+{e.added}</span> : null}

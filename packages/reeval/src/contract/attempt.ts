@@ -82,7 +82,11 @@ export const transcriptEventSchema = z
       type: z.literal('file-edit'),
       toolCallId: z.string(),
       path: z.string(),
-      kind: z.enum(['create', 'modify', 'delete']),
+      kind: z
+        .enum(['create', 'modify', 'write', 'delete'])
+        .describe(
+          "`write` is a whole-file write whose result doesn't say whether the file existed before (Antigravity's, fx's, Goose's, Grok Build's and pi's write tools, for example).",
+        ),
       added: nullableNumber.describe(
         "Line counts, or null when the harness didn't send the content (e.g. deletes).",
       ),
