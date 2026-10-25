@@ -31,6 +31,7 @@ That's one cell of a real Cursor run. The cell's `fingerprint` is the hash of th
 | `judge` | The judge's model, threshold and version | You change the judge or its threshold |
 | `context` | The skills, rules and MCP config the agent could see in its sandbox | Anything new lands where the agent reads it |
 | `gateway` | The gateway the model calls went through; unset on `direct` | You add, change or drop a gateway |
+| `gate` | The cell's resolved gate, from the eval, the config or a profile's `defaults`; unset on `'all'` | You change `gate` or `compare.gate` |
 
 Only local imports are traced; packages are covered by the lockfile hashes the run records. Records from before `cursor()` moved to the Cursor SDK list files its old CLI rewrote every session, such as `~/.cursor/cli-config.json`; reeval treats changes to those as noise, not drift.
 
@@ -56,9 +57,12 @@ The environment's doc changed between the runs, so the flip from pass to fail is
 | `regressed` | Same fingerprint, passed before, fails now |
 | `fixed` | Same fingerprint, failed before, passes now |
 | `same` | Same fingerprint, same outcome; collapsed to `+N same` |
+| `gate changed` | Only the gate changed, and base's attempts scored under head's gate give head's outcome |
 | `can't compare` | The fingerprint changed; reeval names what, e.g. `evals/helpers.ts` or `agent CLI` |
 | `infra error` | Either side had an infra error |
 | `new`, `removed` | The eval is in only one of the runs |
+
+The gate is the one part that leaves an eval comparable when it changes, since it scores the same attempts rather than changing them. reeval scores base's recorded attempts under head's gate and classifies the eval on that: if base would pass under it and head fails, that's `regressed`, and if the new gate alone explains the flip, it's `gate changed` and `--fail-on-regression` ignores it. `reeval query drift` lists such a change as `gate`, a policy change, not noise.
 
 When two runs ran different cells of an eval (one was filtered to a harness, say), reeval compares the cells both ran and lists the rest as `cells added` or `cells removed`. With no cell in common, it can't compare them. A pooled family with a `minLift` gets a row of its own for its pooled gate, comparable when all its cases are. `--fail-on-regression` exits 1 on any `regressed`, and on a `new` or `can't compare` row that fails.
 

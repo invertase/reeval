@@ -83,6 +83,7 @@ import { fakeSandbox } from '../src/sandbox.ts'
 import { clip } from '../src/text.ts'
 import type { GatewayDescriptor, Outcome } from '../src/types.ts'
 import { rowKey } from '../src/view/compare.ts'
+import { gatePart } from '../src/view/gate.ts'
 import { project } from './helpers.ts'
 
 test("the -v broker line names each brokered endpoint's path matcher", () => {
@@ -1324,6 +1325,109 @@ test('compare classifies an eval on the cells both runs have, and lists the rest
   assert.equal(compare(base, changed)[0]?.status, 'drift')
   const disjoint = run('pass', [cell('other/-', 'pass')])
   assert.equal(compare(base, disjoint)[0]?.status, 'drift', 'no shared cell: not comparable')
+})
+
+test("compare names a gate change and classifies base's attempts under head's gate", () => {
+  type Gate = HistoryEntry['evals'][number]['cells'][number]['gate']
+  const PARTS = { sources: 's', harness: 'h', judge: 'j', context: 'c' }
+  const cell = (
+    gate: Gate,
+    tally: { pass: number; fail: number },
+    opts: { outcome?: Outcome; part?: boolean; harness?: string; cancelled?: number } = {},
+  ) => {
+    const required = gate === 'all' ? 1 : gate === 'none' ? 0 : gate.passRate
+    const parts = {
+      ...PARTS,
+      harness: opts.harness ?? 'h',
+      ...(opts.part === false ? {} : gatePart(gate)),
+    }
+    return {
+      key: 'k',
+      gate,
+      ...tally,
+      infraError: 0,
+      skipped: 0,
+      ...(opts.cancelled ? { cancelled: opts.cancelled } : {}),
+      outcome:
+        opts.outcome ?? (tally.pass / (tally.pass + tally.fail) >= required ? 'pass' : 'fail'),
+      fingerprint: JSON.stringify(parts),
+      fingerprintParts: parts,
+    }
+  }
+  const run = (c: ReturnType<typeof cell>): HistoryEntry => ({
+    ...entry(c.outcome === 'pass' ? 'pass' : 'fail'),
+    evals: [
+      {
+        id: 'e',
+        outcome: c.outcome,
+        sources: [],
+        fingerprint: c.fingerprint,
+        cells: [c],
+      } as unknown as HistoryEntry['evals'][number],
+    ],
+  })
+  const row = (b: ReturnType<typeof cell>, h: ReturnType<typeof cell>) => {
+    const r = compare(run(b), run(h))[0]
+    return r && [r.status, r.base, r.head, r.gate?.rescored ?? null, r.changes ?? null]
+  }
+  const half = { pass: 1, fail: 1 }
+  const loose = { passRate: 0.5 }
+
+  assert.deepEqual(
+    row(cell(loose, half), cell('all', half)),
+    ['gate', 'pass', 'fail', 'fail', ['gate changed']],
+    'tightened: base fails the new gate too',
+  )
+  assert.deepEqual(
+    row(cell('all', half), cell(loose, half)),
+    ['gate', 'fail', 'pass', 'pass', ['gate changed']],
+    'loosened: base passes the new gate too',
+  )
+  assert.deepEqual(
+    row(cell(loose, half), cell({ passRate: 0.3 }, { pass: 0, fail: 2 })),
+    ['regressed', 'pass', 'fail', 'pass', ['gate changed']],
+    'canary: base would still pass, so head failing is a regression',
+  )
+  assert.deepEqual(
+    row(cell(loose, half), cell('all', { pass: 2, fail: 0 })),
+    ['fixed', 'pass', 'pass', 'fail', ['gate changed']],
+    'base would fail the stricter gate head passes: fixed',
+  )
+  assert.deepEqual(
+    row(cell('all', { pass: 2, fail: 0 }, { outcome: 'fail' }), cell(loose, half)),
+    ['fixed', 'fail', 'pass', 'fail', ['gate changed']],
+    "a base that failed its minLift still fails it under head's gate",
+  )
+  assert.deepEqual(
+    row(cell(loose, half, { part: false }), cell(loose, half)),
+    ['same', 'pass', 'pass', null, null],
+    'a record from before the gate was a part compares with one that has it',
+  )
+  assert.deepEqual(
+    row(cell(loose, half, { part: false }), cell('all', half)),
+    ['gate', 'pass', 'fail', 'fail', ['gate changed']],
+    "and its gate is still read from the cell's",
+  )
+  assert.deepEqual(
+    row(cell('all', half), cell({ passRate: 0.3 }, { pass: 0, fail: 2 })),
+    ['regressed', 'fail', 'fail', 'pass', ['gate changed']],
+    'both fail their own gates, but base would pass the looser one head fails',
+  )
+  assert.deepEqual(
+    row(cell(loose, half, { cancelled: 1 }), cell('all', { pass: 2, fail: 0 })),
+    ['same', 'pass', 'pass', 'pass', ['gate changed']],
+    "a fail the interrupt cancelled isn't one under head's gate",
+  )
+  assert.deepEqual(
+    row(cell({ passRate: 1 }, half), cell('all', half)),
+    ['same', 'fail', 'fail', null, null],
+    '`{ passRate: 1 }` is `all`',
+  )
+  assert.deepEqual(
+    row(cell(loose, half), cell('all', half, { harness: 'h2' })),
+    ['drift', 'pass', 'fail', null, ['harness config changed', 'gate changed']],
+    'a gate change beside another part is drift, naming both',
+  )
 })
 
 test("compare has a row for a pooled family's gate, comparable when its cases and variants are", () => {

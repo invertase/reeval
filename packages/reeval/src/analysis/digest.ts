@@ -111,6 +111,7 @@ export const RULES = [
   'Each factor claim has a tier: controlled (two cells in one run that differ in one factor), pooled (the same contrast over comparable runs, and across evals), observed (a change between runs, which is weaker; "confounded" when several parts changed), not_measured (one level only).',
   `A cell with mixed outcomes is flaky only with at least ${FLAKY_MIN_ATTEMPTS} counted attempts over comparable runs; below that it is "insufficient", not flaky.`,
   "Drift marked noise changed only an agent CLI's own runtime state (e.g. ~/.cursor/cli-config.json): not a real change, and those runs stay comparable.",
+  "Drift on the gate is a policy change: the gate scores the same attempts, so the runs stay comparable. A compare row with status gate flipped only because its gate did (gate.rescored, base's attempts under head's gate, matches head): never call it a regression or a fix.",
   'An eval where every cell passes at least 95% is saturated: pass@1 cannot tell cells apart there, effort can.',
   'Judge verdicts carry no recorded reason; an explanation of a failed verdict is your reading of the cited output, and must say so.',
   "A criteria fact lists each check (expect label, judges included) per cell: rows only for labels whose rate differs between cells, or is mixed within one; neverMet labels failed on every counted attempt of every cell, alwaysMet passed on all of them. A neverMet or alwaysMet label is the same in every arm: it can't explain a difference between arms.",
@@ -838,7 +839,11 @@ export async function buildDigestKeepingDropped(
         cells: d.cells,
         changed: d.changed,
         ...(d.changed_paths ? { paths: String(d.changed_paths).split(', ') } : {}),
-        verdict: d.noise ? 'noise: agent runtime state only' : `real change: ${d.real_changed}`,
+        verdict: d.noise
+          ? 'noise: agent runtime state only'
+          : d.real_changed === 'gate'
+            ? 'policy change: the gate scores the same attempts differently'
+            : `real change: ${d.real_changed}`,
       })
     }
     const [baseHeader, headHeader] = [runHeader(base.record, true), runHeader(head.record, true)]
@@ -861,6 +866,7 @@ export async function buildDigestKeepingDropped(
           : { eval: tagOf(scopeEvals.find((e) => e.id === row.id)?.key ?? row.id) }),
         status: row.status,
         ...(row.changes?.length ? { changes: row.changes } : {}),
+        ...(row.gate ? { gate: row.gate } : {}),
         ...(row.cancelled ? { cancelled: row.cancelled } : {}),
       })),
     })

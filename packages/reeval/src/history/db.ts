@@ -19,7 +19,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 15
+const DB_VERSION = 16
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 const PART_KEYS = Object.keys(PART_COLUMNS) as Array<keyof typeof PART_COLUMNS>
@@ -431,10 +431,11 @@ function classifyOrWorkspace(
 
 /**
  * What a cell's results can be pooled on across runs: its fingerprint parts, with the context
- * part replaced by the context files that aren't an agent CLI's own runtime state.
+ * part replaced by the context files that aren't an agent CLI's own runtime state, and without
+ * the gate, which scores the attempts but doesn't change them.
  */
 export function comparableFingerprint(cell: CellRecord, attempts: AttemptRecord[]): string {
-  const { context: _context, ...parts } = cell.fingerprintParts
+  const { context: _context, gate: _gate, ...parts } = cell.fingerprintParts
   const files = new Map<string, string>()
   for (const a of attempts) {
     if (a.cell !== cell.key) continue

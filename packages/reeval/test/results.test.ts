@@ -30,7 +30,7 @@ import {
 import { DEFAULT_QUESTION_STATE } from '../src/compare/state.ts'
 import type { EngineEval } from '../src/engine/node.ts'
 import { TimeoutError } from '../src/errors.ts'
-import { cellOutcome, fingerprintOf, judgementKey, mergeOutcome } from '../src/history/assemble.ts'
+import { fingerprintOf, judgementKey, mergeOutcome } from '../src/history/assemble.ts'
 import { familiesOf } from '../src/history/families.ts'
 import { runnerInfo } from '../src/history/provenance.ts'
 import { traceSources } from '../src/history/sources.ts'
@@ -50,6 +50,7 @@ import {
 } from '../src/stats.ts'
 import type { BlindPair, EvalRecord, FakeAnalysisModel, Outcome } from '../src/types.ts'
 import { EFFORT_MIN_RUNS, effortVerdict } from '../src/view/effort.ts'
+import { cellOutcome } from '../src/view/gate.ts'
 import { tempDir } from './helpers.ts'
 import {
   E2E_ARMS,

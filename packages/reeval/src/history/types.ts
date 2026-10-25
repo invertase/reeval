@@ -441,6 +441,11 @@ export type FingerprintParts = {
   context: string
   /** The gateway its model calls went through; unset on `direct`, each provider's own key. */
   gateway?: string
+  /**
+   * The cell's gate (`none`, `passRate 0.5`); unset on the default `all`. Compare reads a change
+   * in it as a policy change, not a reason the runs can't be compared.
+   */
+  gate?: string
 }
 
 /** One harness and environment of an eval, and how its attempts went. */

@@ -564,6 +564,7 @@ export type CompareViewRow = {
   /** See `CompareRow`: then pass@1 is over the cells both runs have too. */
   cells?: CompareRow['cells']
   changes?: string[]
+  gate?: CompareRow['gate']
   /** Mean judge score per run; null without judgements or without the record. */
   baseScore: number | null
   headScore: number | null
@@ -583,6 +584,7 @@ export const COMPARE_ORDER: CompareStatus[] = [
   'regressed',
   'fixed',
   'drift',
+  'gate',
   'infra',
   'added',
   'removed',
