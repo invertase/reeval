@@ -7,7 +7,7 @@ import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { HistoryError, runDir } from '../history/files.ts'
 import { fromCwd } from '../ids.ts'
-import { countSecrets } from '../redact.ts'
+import { countSecrets, findSecretsInJson } from '../redact.ts'
 import type { AnalysisDoc, AnalysisEntry, AnalysisNote } from '../view/analysis.ts'
 import { NewerSchemaError, readableAnalysis, readableAnalysisNote } from '../view/record.ts'
 
@@ -72,7 +72,7 @@ export async function saveAnalysis(
   markdown: string,
 ): Promise<string[]> {
   const json = `${JSON.stringify(doc, null, 2)}\n`
-  if (countSecrets(json) > 0 || countSecrets(markdown) > 0) {
+  if (findSecretsInJson(json).length > 0 || countSecrets(markdown) > 0) {
     throw new HistoryError(
       'Refusing to save the analysis: it looks like it contains a secret. Check it with reeval analyze --json.',
     )

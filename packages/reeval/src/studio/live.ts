@@ -7,7 +7,7 @@ import { hostname } from 'node:os'
 import { join, sep } from 'node:path'
 import { recordFile, scratchDir } from '../history/files.ts'
 import { recordFileName } from '../ids.ts'
-import { redactSecrets } from '../redact.ts'
+import { redactJsonText } from '../redact.ts'
 import type { EvalRecord } from '../types.ts'
 import {
   isFinished,
@@ -99,7 +99,7 @@ export async function liveTranscript(
     if (!real.startsWith(realBase + sep)) return null
     const record = JSON.parse(await readFile(real, 'utf8')) as EvalRecord
     const { transcriptLines } = await import('../history/assemble.ts')
-    return redactSecrets(transcriptLines(record))
+    return redactJsonText(transcriptLines(record))
   } catch {
     return null
   }

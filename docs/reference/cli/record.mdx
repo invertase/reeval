@@ -39,7 +39,7 @@ recorded evals/.history/20260926T174005Z_b010670_ada-lovelace_xdb9.json + 9 arti
 
 ## The secret scan
 
-Before it writes anything, `reeval record` scans the record and every text artifact for what redaction masks: the value of any `*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*` or `*CREDENTIAL*` variable (including `.env.local` and `.env`), declared `secret()` values, and credential shapes such as Google (`AIza…`), OpenAI and Anthropic (`sk-…`), GitHub, AWS and Slack keys, JWTs and private keys.
+Before it writes anything, `reeval record` scans the record and every text artifact for what redaction masks: the value of any `*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*` or `*CREDENTIAL*` variable (including `.env.local` and `.env`), declared `secret()` values, and credential shapes such as Google (`AIza…`), OpenAI and Anthropic (`sk-…`), GitHub, AWS and Slack keys, JWTs and private keys. In JSON files it scans only the strings, as redaction masks only them.
 
 ```text
 reeval: Refusing to record 20260930T165330Z_97e4f24_test-author_1a2x: 1 file(s) look like they contain a secret:

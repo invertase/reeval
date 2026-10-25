@@ -10,7 +10,7 @@ import { renderSummary } from '../history/summary.ts'
 import type { RunRecord } from '../history/types.ts'
 import { resolveRun } from '../history/views.ts'
 import { statementCount } from '../query.ts'
-import { redactSecrets } from '../redact.ts'
+import { redactJson, redactSecrets } from '../redact.ts'
 import { resolveFile } from '../studio/source.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { sortAnalyses } from '../view/analysis.ts'
@@ -66,13 +66,8 @@ type Json = Record<string, unknown>
 
 /** A tool's answer: the JSON as text and as structured content, masked like everything reeval writes. */
 function result(value: Json) {
-  const text = redactSecrets(JSON.stringify(value, null, 2))
-  let structured: Json
-  try {
-    structured = JSON.parse(text) as Json
-  } catch {
-    structured = { text }
-  }
+  const text = redactJson(value, 2)
+  const structured = JSON.parse(text) as Json
   return { content: [{ type: 'text' as const, text }], structuredContent: structured }
 }
 
@@ -403,7 +398,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
             {
               uri: uri.href,
               mimeType: 'application/json',
-              text: redactSecrets(JSON.stringify(record, null, 2)),
+              text: redactJson(record, 2),
             },
           ],
         }
@@ -429,7 +424,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
             {
               uri: uri.href,
               mimeType: 'application/jsonl',
-              text: redactSecrets(read.lines.map((l) => JSON.stringify(l)).join('\n')),
+              text: read.lines.map((l) => redactJson(l)).join('\n'),
             },
           ],
         }

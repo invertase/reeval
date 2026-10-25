@@ -14,11 +14,16 @@ import { brokeredIn, secretVarsIn, unbrokered, unbrokeredWarning } from '../src/
 import {
   countSecrets,
   findSecrets,
+  findSecretsInJson,
   maskedMatch,
+  redactJson,
+  redactJsonText,
+  redactKey,
   redactSecrets,
   registerSecret,
   type SecretMatch,
 } from '../src/redact.ts'
+import { scrubber } from '../src/report/scrub.ts'
 import { brokerPhases } from '../src/sandbox/phases.ts'
 import type { EnvironmentInput } from '../src/types.ts'
 
@@ -542,5 +547,128 @@ describe('redacting fragments of a secret', () => {
     const many = scanText('notes.txt', Array.from({ length: 7 }, () => google).join('\n'))
     assert.equal(findingLines('notes.txt', many).at(-1), 'notes.txt: and 2 more')
     assert.equal(findingSummary(many).endsWith(', and 4 more'), true)
+  })
+})
+
+// Last in the file: the short secrets these register would otherwise reach every test above.
+describe('redacting serialised JSON', () => {
+  const record = {
+    error: null,
+    ok: true,
+    durationMs: 51234,
+    tokens: { input: 1234, output: 12340 },
+    text: 'PIN 1234, set to null',
+    turns: [{ status: 'completed', exitCode: null }],
+  }
+
+  test('a declared secret of "null" and a short number mask strings, never JSON values', () => {
+    registerSecret('null')
+    registerSecret('1234')
+    const out = redactJson(record, 2, {})
+    assert.deepEqual(JSON.parse(out), {
+      ...record,
+      text: 'PIN [REDACTED], set to [REDACTED]',
+    })
+    assert.equal(
+      redactJsonText(`${JSON.stringify(record, null, 2)}\n`, {}),
+      `${JSON.stringify({ ...record, text: 'PIN [REDACTED], set to [REDACTED]' }, null, 2)}\n`,
+    )
+    // Twin: redacting the serialised text breaks it.
+    assert.throws(() => JSON.parse(redactSecrets(JSON.stringify(record), {})))
+  })
+
+  test('JSON Lines keep every byte outside the strings they mask, and a broken line is masked as text', () => {
+    registerSecret('null')
+    registerSecret('1234')
+    const lines = [
+      '{"n":12345678901234567890,"at":1.50,"pin":"1234"}',
+      '',
+      'not json: 1234 null',
+      '{ "spaced" : null }',
+      '',
+    ].join('\n')
+    assert.equal(
+      redactJsonText(lines, {}),
+      [
+        '{"n":12345678901234567890,"at":1.50,"pin":"[REDACTED]"}',
+        '',
+        'not json: [REDACTED] [REDACTED]',
+        '{ "spaced" : null }',
+        '',
+      ].join('\n'),
+    )
+  })
+
+  test('a private key across lines that are not JSON is masked whole, and a byte-order mark is kept', () => {
+    const pem = '-----BEGIN PRIVATE KEY-----\nMIIEabc\n-----END PRIVATE KEY-----'
+    assert.equal(redactJsonText(`{"a":1}\n${pem}\n{"b":2}`, {}), '{"a":1}\n[REDACTED]\n{"b":2}')
+    registerSecret('null')
+    assert.equal(
+      redactJsonText('\uFEFF{"e":null,"s":"null"}', {}),
+      '\uFEFF{"e":null,"s":"[REDACTED]"}',
+    )
+  })
+
+  test('keys: a short declared secret never renames a field, but is masked in a data key', () => {
+    registerSecret('error')
+    registerSecret('pin7')
+    const key = 'reeval-unit-key-as-a-key-8b2f'
+    registerSecret(key)
+    const out = JSON.parse(
+      redactJson({ error: 'an error', [key]: 1, 'file-pin7.txt': 2, pin7: 3 }, undefined, {}),
+    )
+    assert.deepEqual(out, {
+      error: 'an [REDACTED]',
+      '[REDACTED]': 1,
+      'file-[REDACTED].txt': 2,
+      pin7: 3,
+    })
+    assert.equal(redactKey('error', {}), 'error')
+  })
+
+  test('a secret with characters JSON escapes is masked inside its string', () => {
+    const quoted = 'reeval "quoted"\\secret\n9d1f'
+    registerSecret(quoted)
+    const out = redactJson(
+      { stdout: `got ${quoted} back`, nested: [JSON.stringify(quoted)] },
+      2,
+      {},
+    )
+    assert.deepEqual(JSON.parse(out), { stdout: 'got [REDACTED] back', nested: ['"[REDACTED]"'] })
+  })
+
+  test('the history scan and the analysis check flag only what redaction masks', () => {
+    registerSecret('null')
+    registerSecret('1234')
+    const json = `${JSON.stringify(record, null, 2)}\n`
+    assert.deepEqual(findSecretsInJson(JSON.stringify({ error: null, n: 51234 }), {}), [])
+    assert.deepEqual(
+      scanText('run.json', json).map((f) => [f.line, f.rule]),
+      [
+        [9, 'a declared secret'],
+        [9, 'a declared secret'],
+      ],
+    )
+    assert.deepEqual(
+      scanText('t.jsonl', '{"x":null}\n{"y":"null"}\n').map((f) => f.line),
+      [2],
+    )
+    // The scan flags a key exactly when redaction masks it.
+    registerSecret('abcdef"')
+    assert.equal(redactJsonText('{"abcdef\\"":1}', {}), '{"[REDACTED]":1}')
+    assert.equal(findSecretsInJson('{"abcdef\\"":1}', {}).length, 1)
+    registerSecret('field')
+    assert.equal(redactJsonText('{"field":"field"}', {}), '{"field":"[REDACTED]"}')
+    assert.equal(findSecretsInJson('{"field":"field"}', {}).length, 1)
+    // Twin: the same text outside a JSON file counts the literals too.
+    assert.equal(scanText('run.txt', json).length > 2, true)
+  })
+
+  test("a report's scrubber keeps JSON Lines valid", () => {
+    registerSecret('null')
+    const scrub = scrubber({ env: {}, home: '/home/someone', project: '/home/someone/p' })
+    const line = '{"error":null,"cwd":"/home/someone/p/x","said":"null"}'
+    assert.equal(scrub.json(line), '{"error":null,"cwd":"<project>/x","said":"[REDACTED]"}')
+    assert.deepEqual(scrub.value({ error: 'null' }), { error: '[REDACTED]' })
   })
 })

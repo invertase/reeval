@@ -239,7 +239,7 @@ export async function collectReport(
           bytes += size
           const text = readFileSync(path, 'utf8')
           const kept = file.endsWith('trace.ndjson') ? withoutConfig(text) : text
-          const scrubbed = scrub.text(kept)
+          const scrubbed = file.endsWith('.ndjson') ? scrub.json(kept) : scrub.text(kept)
           attachedMasks.before += masks(kept)
           attachedMasks.after += masks(scrubbed)
           attachments.push({

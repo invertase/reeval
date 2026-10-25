@@ -1,4 +1,4 @@
-import { findSecrets, maskedMatch, type SecretMatch } from '../redact.ts'
+import { findSecrets, findSecretsInJson, maskedMatch, type SecretMatch } from '../redact.ts'
 
 /** Findings shown per file; the rest are counted. */
 const SHOWN = 5
@@ -41,9 +41,14 @@ function inPatch(lines: string[], lineIndex: number): { file: string | null; lin
   return { file, line: null }
 }
 
-/** Every secret-looking stretch of `text`, placed: by file and line inside a patch, else by line. */
+const JSON_FILE = /\.(?:json|jsonl|ndjson)$/
+
+/**
+ * Every secret-looking stretch of `text`, placed: by file and line inside a patch, else by line.
+ * In a JSON file, only what redaction masks: its strings.
+ */
 export function scanText(path: string, text: string): Finding[] {
-  const matches = findSecrets(text)
+  const matches = JSON_FILE.test(path) ? findSecretsInJson(text) : findSecrets(text)
   if (matches.length === 0) return []
   const lines = text.split('\n')
   const starts: number[] = []

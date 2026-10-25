@@ -83,7 +83,7 @@
 | `to: 'checks'` secrets: hidden from the agent | ✓ 1 | — | ● 1 | ● 1 | — | — |
 | Brokered secrets (`hosts`, `in`) and their placeholders | ✓ 2 | ✓ 1 | ● 2 | ● 2 | ● 1 | — |
 | `secrets: { unbrokered }` and the unbrokered warning | ✓ 4 | — | — | — | — | — |
-| Secrets masked in everything reeval writes | ✓ 6 | — | ● 1 | ● 1 | — | — |
+| Secrets masked in everything reeval writes | ✓ 7 | — | ● 2 | ● 2 | — | — |
 | `setup` steps: order, a failing step named, a missing `cwd`, `setup.log` | ✓ 1 | — | ● 2 | ● 2 | — | — |
 | A setup step's own `timeout` | — | — | ● 1 | ● 1 | — | — |
 | `extendEnvironment`, overrides and the environment digest | ✓ 2 | — | ● 2 | ● 2 | — | — |

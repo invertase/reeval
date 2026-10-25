@@ -956,9 +956,10 @@ export const inventory: InventoryFeature[] = [
     id: 'redaction',
     area: 'Environments',
     name: 'Secrets masked in everything reeval writes',
-    fixtures: ['secrets/redaction-coverage'],
+    fixtures: ['secrets/redaction-coverage', 'secrets/short-declared-secrets'],
     tests: [
       unit('redactSecrets masks secret-looking env values'),
+      secrets('redacting serialised JSON'),
       secrets('redacting encoded forms'),
       secrets('redacting fragments of a secret'),
       secrets("every variable of a header's secret.template is a secret the run masks"),
