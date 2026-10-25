@@ -1054,6 +1054,11 @@ evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})
       /Invalid duration 0\. A duration is more than zero: use e\.g\. "90s" or "15m"\./,
     ],
     [
+      'a timeout longer than a timer can be',
+      `evaluate('e', { timeout: '1000h' }, async () => {})`,
+      /Invalid duration "1000h"\. A duration is at most 596h \(2147483647ms\), the longest timer Node can set\./,
+    ],
+    [
       'a zero setup step timeout',
       `defineEnvironment('e', { setup: [{ run: 'ls', timeout: '0s' }] })`,
       /Invalid duration "0s"\. A duration is more than zero/,
