@@ -18,11 +18,9 @@ export {
   buildImage,
   buildInstallLayer,
   buildPluginLayer,
-  contextFiles,
   contextHash,
   DOCKER_CONTEXT,
   dockerfileTag,
-  dockerignoreMatcher,
   harnessImageFor,
   type InstallStep,
   installLayerTag,
@@ -53,6 +51,7 @@ export {
   isRegistryDigest,
   removeContainerDetached,
 } from './docker-cli.ts'
+export { contextFiles, dockerignoreMatcher } from './dockerignore.ts'
 export { CA_PATH, PROXY_PORT } from './egress/gateway.ts'
 export {
   DOCKER_EGRESS,

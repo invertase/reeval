@@ -16,9 +16,7 @@ import { Duplex, PassThrough } from 'node:stream'
 import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
-  contextFiles,
   dockerfileTag,
-  dockerignoreMatcher,
   harnessImageFor,
   installLayerTag,
   installScript,
@@ -37,6 +35,7 @@ import {
   removeContainerDetached,
   retryConnection,
 } from '../src/docker-cli.ts'
+import { contextFiles, dockerignoreMatcher } from '../src/dockerignore.ts'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import { createMux, forwarderScript, link } from '../src/egress/mux.ts'
 import { createPolicyCheck, defaultAllowedHosts, hostAllowed } from '../src/egress/policy.ts'
