@@ -389,27 +389,29 @@ const OPENCODE_REFERENCE = /\{(?:env|file):(?!\})/
 const fieldKey = (key: string) =>
   /^[A-Za-z_$][\w$]*$/.test(key) ? `.${key}` : `[${JSON.stringify(key)}]`
 
-/** The first of a server's values that OpenCode would substitute, as `mcp.<name>.<field>`. */
+/**
+ * The first part of a server OpenCode would substitute, as what the server wouldn't get: its name,
+ * a value as `mcp.<name>.<field>`, or an env or header name. Names are in the same config text as
+ * values, so they're substituted too; a secret's value is never named.
+ */
 function openCodeReference(name: string, s: ResolvedMcpServer): string | undefined {
-  const fields: [string, string][] =
-    s.transport === 'stdio'
+  if (OPENCODE_REFERENCE.test(name)) return 'its name'
+  const server = `mcp${fieldKey(name)}`
+  const [map, kind, values]: [string, string, Record<string, string>] =
+    s.transport === 'stdio' ? ['env', 'env', s.env ?? {}] : ['headers', 'header', s.headers ?? {}]
+  const fields: [string, string][] = [
+    ...(s.transport === 'stdio'
       ? [
-          ['.command', s.command],
-          ...s.args.map((a, i): [string, string] => [`.args[${i}]`, a]),
-          ...Object.entries(s.env ?? {}).map(([k, v]): [string, string] => [
-            `.env${fieldKey(k)}`,
-            v,
-          ]),
+          [`${server}.command`, s.command] as [string, string],
+          ...s.args.map((a, i): [string, string] => [`${server}.args[${i}]`, a]),
         ]
-      : [
-          ['.url', s.url],
-          ...Object.entries(s.headers ?? {}).map(([k, v]): [string, string] => [
-            `.headers${fieldKey(k)}`,
-            v,
-          ]),
-        ]
-  const hit = fields.find(([, value]) => OPENCODE_REFERENCE.test(value))
-  return hit && `mcp${fieldKey(name)}${hit[0]}`
+      : [[`${server}.url`, s.url] as [string, string]]),
+    ...Object.entries(values).flatMap(([k, v]): [string, string][] => [
+      [`the ${kind} name ${k} in ${server}.${map}`, k],
+      [`${server}.${map}${fieldKey(k)}`, v],
+    ]),
+  ]
+  return fields.find(([, text]) => OPENCODE_REFERENCE.test(text))?.[0]
 }
 
 /**
@@ -1150,15 +1152,16 @@ export const isAgentKind = (kind: unknown): kind is AgentKind =>
   typeof kind === 'string' && Object.hasOwn(AGENTS, kind)
 
 /**
- * A server as the plan knows it: its literal values and each `secret.template`'s text. A host
- * secret's value is read when the attempt starts, so the plan leaves it out.
+ * A server as the plan knows it: its names, literal values and each `secret.template`'s text. A
+ * host secret's value is read when the attempt starts, so the plan has it as `''`.
  */
 function plannedMcpServer(s: McpServer): ResolvedMcpServer {
   const literal = (values: Record<string, string | Secret | SecretTemplate>) =>
     Object.fromEntries(
-      Object.entries(values).flatMap(([k, v]): [string, string][] =>
-        typeof v === 'string' ? [[k, v]] : v.kind === 'secret-template' ? [[k, v.template]] : [],
-      ),
+      Object.entries(values).map(([k, v]): [string, string] => [
+        k,
+        typeof v === 'string' ? v : v.kind === 'secret-template' ? v.template : '',
+      ]),
     )
   return s.transport === 'stdio'
     ? { transport: 'stdio', command: s.command, args: s.args, env: literal(s.env) }
@@ -1167,7 +1170,7 @@ function plannedMcpServer(s: McpServer): ResolvedMcpServer {
 
 /**
  * Why a harness's agent can't take the environment's MCP servers (Goose, OpenCode, pi and Codex
- * take no `mcp.sse`; OpenCode would substitute a `{env:…}` or `{file:…}` in a value), in the
+ * take no `mcp.sse`; OpenCode would substitute a `{env:…}` or `{file:…}` in a name or value), in the
  * agent's own words, so the plan refuses them before any attempt starts; undefined when it can.
  */
 export function refusedMcp(

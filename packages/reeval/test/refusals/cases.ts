@@ -406,6 +406,22 @@ export const CASES: Record<string, Case[]> = {
       mcpOn(OPENCODE, ({ mcp }) => ({ mcp: { 'my-docs': mcp.stdio('node', ['{file:a}']) } })),
     ],
     [
+      'opencode mcp: {file:} in a server name',
+      mcpOn(OPENCODE, ({ mcp }) => ({ mcp: { 'a{file:/etc/hostname}': mcp.stdio('node') } })),
+    ],
+    [
+      'opencode mcp: {env:} in the env name of a host secret',
+      mcpOn(OPENCODE, ({ mcp, secret }) => ({
+        mcp: { docs: mcp.stdio('node', [], { env: { '{env:USER}': secret.fromEnv('TOKEN') } }) },
+      })),
+    ],
+    [
+      'opencode mcp: {env:} in a header name',
+      mcpOn(OPENCODE, ({ mcp }) => ({
+        mcp: { docs: mcp.http('https://x.com/mcp', { headers: { 'X-{env:USER}': 'a' } }) },
+      })),
+    ],
+    [
       'opencode mcp: good, with nothing OpenCode substitutes',
       mcpOn(OPENCODE, ({ mcp, secret }) => ({
         mcp: {
