@@ -566,18 +566,82 @@ describe('runEngine: running', () => {
     assert.equal(events.filter((e) => e.type === 'eval-end').length, 2)
   })
 
-  test('a file that fails to load on its second pass, or a worker that fails its handshake, is reported', async () => {
+  test('a file that fails to load on its second pass fails its selected attempts with the load error', async () => {
+    const { run } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
+    const tests = [test0(0, 'one'), test0(1, 'skipped', { mode: 'skip' }), test0(2, 'filtered out')]
+    const events: ReevalEvent[] = []
+    const pass = passing({ 'a.eval.ts': tests, 'b.eval.ts': tests })
+    const { spawn } = fakeSpawn((ctl) => {
+      if (!ctl.init.select || !ctl.init.file.endsWith('a.eval.ts')) return pass(ctl)
+      ctl.emit({ t: 'load-error', error: { message: '\x1b[31mchanged on disk\x1b[39m ' } })
+      ctl.emit({ t: 'done' })
+      ctl.exit()
+    })
+    const r = await engine(
+      { run, filters: ['one', 'skipped'], onEvent: (e) => events.push(e) },
+      spawn,
+    )
+    assert.deepEqual(r.unhandledErrors, ['evals/a.eval.ts: changed on disk'])
+    assert.deepEqual(
+      r.evals.map((e) => [e.id, e.state, e.errors]),
+      [
+        ['evals/a.eval.ts › one', 'failed', ['changed on disk']],
+        ['evals/a.eval.ts › skipped', 'skipped', []],
+        ['evals/b.eval.ts › one', 'passed', []],
+        ['evals/b.eval.ts › skipped', 'skipped', []],
+      ],
+    )
+    const seen = events.filter((e) => e.type === 'collected').map((e) => e.file)
+    assert.deepEqual(seen.sort(), ['evals/a.eval.ts', 'evals/b.eval.ts'])
+  })
+
+  test('a worker that dies before its second pass collects fails the selected attempts', async () => {
     const { run } = project(['evals/a.eval.ts'])
     const { spawn } = fakeSpawn((ctl) => {
-      if (!ctl.init.select) ctl.emit({ t: 'collected', tests: [test0(0, 'a')] })
-      else ctl.emit({ t: 'load-error', error: { message: 'changed on disk' } })
+      if (ctl.init.select) return ctl.exit({ code: null, signal: 'SIGKILL' })
+      ctl.emit({ t: 'collected', tests: [test0(0, 'a')] })
       ctl.emit({ t: 'done' })
       ctl.exit()
     })
     const r = await engine({ run }, spawn)
-    assert.deepEqual(r.unhandledErrors, ['evals/a.eval.ts: changed on disk'])
-    assert.deepEqual(r.evals, [])
+    const why = 'The worker running evals/a.eval.ts exited unexpectedly (signal SIGKILL)'
+    assert.deepEqual(r.unhandledErrors, [why])
+    assert.deepEqual(
+      r.evals.map((e) => [e.id, e.state, e.errors]),
+      [['evals/a.eval.ts › a', 'failed', [why]]],
+    )
+  })
 
+  test("a resume's completed attempts stay skipped when the file fails to load on its second pass", async () => {
+    const { run } = project(['evals/a.eval.ts'])
+    run.completed = ['evals/a.eval.ts › done']
+    const events: ReevalEvent[] = []
+    const { spawn } = fakeSpawn((ctl) => {
+      if (ctl.init.select) ctl.emit({ t: 'load-error', error: { message: 'changed on disk' } })
+      else ctl.emit({ t: 'collected', tests: [test0(0, 'done'), test0(1, 'leftover')] })
+      ctl.emit({ t: 'done' })
+      ctl.exit()
+    })
+    const r = await engine({ run, onEvent: (e) => events.push(e) }, spawn)
+    assert.deepEqual(
+      r.evals.map((e) => [e.id, e.state, e.errors]),
+      [
+        ['evals/a.eval.ts › done', 'skipped', []],
+        ['evals/a.eval.ts › leftover', 'failed', ['changed on disk']],
+      ],
+    )
+    const collected = events.find((e) => e.type === 'collected')
+    assert.deepEqual(
+      collected?.type === 'collected' && collected.evals.map((e) => [e.name, e.skipped]),
+      [
+        ['done', true],
+        ['leftover', false],
+      ],
+    )
+  })
+
+  test('a worker that fails its handshake fails the run', async () => {
+    const { run } = project(['evals/a.eval.ts'])
     let spawns = 0
     const flaky: Spawn = (entry, cwd) => {
       const pass = ++spawns

@@ -198,6 +198,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
   const root = run.config.root
   const emit = input.onEvent ?? (() => {})
   const unhandledErrors: string[] = []
+  const completed = new Set(run.completed)
   const live = new Set<WorkerProcess>()
   const byFile = new Map<string, FileRun>()
   // Every file in the first round asks for its leases before any is granted, so the first
@@ -244,10 +245,36 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
       const worker = input.spawn(entry, root)
       live.add(worker)
       owners.set(id, worker)
-      const state: FileRun = { rel, tests: [], results: new Map() }
+      // Until the worker collects again, the file's tests are the plan's, so a file that fails to
+      // load this time still fails its attempts instead of dropping them. The plan was collected
+      // before a resume knew which attempts were done, so those are skipped, as the worker would.
+      const tests = planned.map(
+        (t): WireTest => (completed.has(identify(rel, t).key) ? { ...t, mode: 'skip' } : t),
+      )
+      const state: FileRun = { rel, tests, results: new Map() }
       byFile.set(file, state)
       let done = false
       let ready = false
+      let reported = false
+      let loadError: string | undefined
+      const report = (tests: WireTest[]) => {
+        reported = true
+        emit({
+          type: 'collected',
+          at: Date.now(),
+          file: rel,
+          evals: tests.map((test) => {
+            const e = identify(rel, test)
+            return {
+              id: e.id,
+              key: e.key,
+              group: e.group,
+              name: e.name,
+              skipped: skipped(test) || !matchesName(e),
+            }
+          }),
+        })
+      }
       const markReady = () => {
         if (ready) return
         ready = true
@@ -266,27 +293,12 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
         switch (m.t) {
           case 'collected': {
             state.tests = m.tests
-            emit({
-              type: 'collected',
-              at: Date.now(),
-              file: rel,
-              evals: m.tests.map((test) => {
-                const e = identify(rel, test)
-                return {
-                  id: e.id,
-                  key: e.key,
-                  group: e.group,
-                  name: e.name,
-                  skipped: skipped(test) || !matchesName(e),
-                }
-              }),
-            })
+            report(m.tests)
             break
           }
           case 'load-error':
-            unhandledErrors.push(
-              `${rel}: ${stripVTControlCharacters(String(m.error.message)).trim()}`,
-            )
+            loadError = stripVTControlCharacters(String(m.error.message)).trim()
+            unhandledErrors.push(`${rel}: ${loadError}`)
             break
           case 'request':
             scheduler.request({
@@ -357,10 +369,15 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
       live.delete(worker)
       scheduler.releaseOwner(id)
       markReady()
-      if (done) return
-      // The worker died mid-file (killed, out of memory): its unfinished attempts fail.
-      const why = `The worker running ${rel} exited unexpectedly (${describeExit(exit)})`
-      unhandledErrors.push(why)
+      if (done && loadError === undefined) return
+      // The file failed to load this time, or its worker died mid-file (killed, out of memory):
+      // its unfinished attempts fail.
+      let why = loadError as string
+      if (!done) {
+        why = `The worker running ${rel} exited unexpectedly (${describeExit(exit)})`
+        unhandledErrors.push(why)
+      }
+      if (!reported) report(state.tests)
       for (const test of state.tests) {
         if (state.results.has(test.index) || skipped(test) || !matchesName(identify(rel, test)))
           continue
