@@ -203,6 +203,41 @@ export default defineConfig({
     )
   })
 
+  test("attempts whose checks failed are left out of the pairs, a verdict the eval didn't assert or not", async () => {
+    for (const judged of [false, true]) {
+      const p = await project('questions-failed-checks', {
+        'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  harness: ${OK},
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+  judge: { model: fakeJudge({ score: 0.2 }) },
+  analysis: { model: fakeAnalysis({ vote: () => 'A' }) },
+})
+`,
+        ...asks(PAIRWISE),
+        'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
+import { base, skilled } from './envs.ts'
+evaluate('asks', { compare: { baseline: base, variants: [skilled] }, questions: ${PAIRWISE} }, async (c) => {
+  await c.send('go')
+  ${judged ? `await c.judge('Is it nice?')` : ''}
+  await expect(c.exec('exit 1'), 'tests pass').toSucceed()
+})
+`,
+      })
+      const r = await runCli(p.dir)
+      assert.equal(r.code, 1, r.stdout + r.stderr)
+      const [e] = readRun(p.dir).evals
+      assert.deepEqual(
+        e?.answers?.map((a) => [a.question, a.votes.length]),
+        [['Which is cleaner?', 0]],
+        `judged: ${judged}`,
+      )
+    }
+  })
+
   test('a vote reason is recorded, shown and left out of pass or fail', async () => {
     const p = await project('questions-vote-reason', {
       'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'

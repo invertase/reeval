@@ -84,7 +84,7 @@ The type definitions are in `packages/reeval/src/history/types.ts`; the environm
 
 `runner` is `{ kind: 'ci', provider, runUrl, attempt, pr: { number, baseRef } | null }` in CI, or `{ kind: 'local', hostHash }` on your machine.
 
-An attempt's `error` is `{ kind, message, prepare?, resource? }`:
+An attempt's `error` is `{ kind, message, prepare?, resource? }`. `kind` is `judge` when a judge failed the attempt and no check did: a `toPass()` or `.not.toPass()` call failed, a `c.judge()` call failed, or no judge model was set. A failed `expect.soft` check beside a failed `toPass()`, in either order, makes it an `assertion` with the check's message, and so does a check failing beside a verdict the eval didn't assert. Pairwise questions leave those attempts out.
 
 | Field | Set when | Shape |
 |---|---|---|

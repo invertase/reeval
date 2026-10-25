@@ -2,6 +2,7 @@ import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { debugLog } from '../debug/attempt.ts'
 import { allowedHosts, isDirect } from '../egress.ts'
+import type { RawAssertion } from '../engine/runtime.ts'
 import { isTimeout } from '../errors.ts'
 import { expectedBlockedFor } from '../harness/agents.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
@@ -11,6 +12,7 @@ import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { PrepareError } from '../sandbox/provider.ts'
 import { capMiddle, clip } from '../text.ts'
 import type { ErrorKind, EvalMeta, EvalRecord, TranscriptEvent } from '../types.ts'
+import { softFailure } from './assertions.ts'
 import { writeCaptureSidecars } from './capture.ts'
 import type { Attempt } from './state.ts'
 
@@ -25,11 +27,45 @@ function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; messa
   return { kind: 'assertion', message }
 }
 
+const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+const judged = (r: RawAssertion) => /(^|\.)toPass$/.test(r.matcher)
+
+/**
+ * Whether `error` is a judge's: one a judge threw, or what a `toPass()` or `.not.toPass()` call
+ * failed with. A failing verdict the eval didn't assert, or asserted with `.not.toPass()`, isn't.
+ * By message too, since another language's runner hands back its own copy of the error.
+ */
+function isJudges(a: Attempt, error: unknown, raw: readonly RawAssertion[]): boolean {
+  const message = messageOf(error)
+  if (a.judgeThrown.has(message)) return true
+  return raw.some(
+    (r) =>
+      r.status !== 'pass' && judged(r) && (r.error === error || messageOf(r.error) === message),
+  )
+}
+
+/**
+ * The error that fails the attempt: a judge's gives way to the first `expect.soft` check that
+ * didn't hold, whichever came first, so the attempt fails as that check. A hard check the eval
+ * caught doesn't fail the attempt, with a judge or without one.
+ */
+export function attemptError(a: Attempt, error: unknown, raw: readonly RawAssertion[]): unknown {
+  if (!isJudges(a, error, raw)) return error
+  const check = raw.find((r) => r.soft && r.status !== 'pass' && !judged(r))
+  return check ? softFailure([check]) : error
+}
+
 /**
  * Why the attempt failed, into the record: the eval's own timeout, a cancel, an infra error, or an
- * assertion, which is the judge's when a judge call failed or gave a failing verdict.
+ * assertion, which is the judge's when `error`, from `attemptError`, is a judge's.
  */
-export function recordFailure(a: Attempt, error: unknown, timedOut: boolean): void {
+export function recordFailure(
+  a: Attempt,
+  error: unknown,
+  timedOut: boolean,
+  raw: readonly RawAssertion[],
+): void {
   const { record } = a
   record.error = timedOut
     ? { kind: 'timeout', message: 'The eval timed out' }
@@ -39,8 +75,9 @@ export function recordFailure(a: Attempt, error: unknown, timedOut: boolean): vo
     const { class: kind, stage, ref, cause, log, setBy } = error.failure
     record.error.prepare = { class: kind, stage, ref, cause, log, setBy: setBy ?? [] }
   }
-  const judgeFailed = a.judgeErrored || record.judgements.some((j) => j.verdict !== 'pass')
-  if (record.error.kind === 'assertion' && judgeFailed) record.error.kind = 'judge'
+  if (record.error.kind === 'assertion' && isJudges(a, error, raw)) {
+    record.error.kind = 'judge'
+  }
   record.outcome = record.error.kind === 'infra' ? 'infra_error' : 'fail'
 }
 
