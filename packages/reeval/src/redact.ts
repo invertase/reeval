@@ -404,6 +404,139 @@ export function findSecretsInJson(
   })
 }
 
+type Leaf = { line: number; path: (string | number)[]; value: string }
+
+/** Every string value of `value` (not its keys), with its path. */
+function leaves(value: unknown, line: number, path: (string | number)[], out: Leaf[]): void {
+  if (typeof value === 'string') out.push({ line, path, value })
+  else if (Array.isArray(value)) {
+    for (const [i, v] of value.entries()) leaves(v, line, [...path, i], out)
+  } else if (value && typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) leaves(v, line, [...path, k], out)
+  }
+}
+
+/** A `[start, end)` stretch of one leaf to mask; `lead` reads `[REDACTED]`, the rest go. */
+type Cut = { start: number; end: number; lead: boolean }
+
+function cutLeaf(value: string, cuts: Cut[]): string {
+  const sorted = [...cuts].sort((a, b) => a.start - b.start)
+  const merged: Cut[] = []
+  for (const c of sorted) {
+    const last = merged.at(-1)
+    if (last && c.start <= last.end) {
+      last.end = Math.max(last.end, c.end)
+      last.lead ||= c.lead
+    } else merged.push({ ...c })
+  }
+  let out = ''
+  let at = 0
+  for (const c of merged) {
+    out += `${value.slice(at, c.start)}${c.lead ? REDACTED : ''}`
+    at = c.end
+  }
+  return out + value.slice(at)
+}
+
+/**
+ * The fields that tell one stream from another at the same path: an AI SDK part's block `id`, and
+ * an ACP update's `messageId` and `sessionUpdate` (a thought chunk beside a message chunk).
+ */
+const STREAM_IDS = ['id', 'messageId', 'sessionUpdate'] as const
+
+/**
+ * JSON Lines with each secret that only shows once strings on several lines are joined masked: a
+ * reply streamed as short deltas, one stream part per line, where no single string holds enough
+ * of the secret for `redactJsonText` to catch it. The strings at one path (`part.text`,
+ * `rawValue.content.text`) are joined in line order, also per the `type` beside them, and also
+ * per the `STREAM_IDS` above them, so interleaved text and reasoning, two text blocks, or thought
+ * and message chunks still join; a match spanning two or more strings has its first piece read
+ * `[REDACTED]` and its other pieces emptied. Lines that aren't JSON, and lines with nothing to
+ * mask, are kept byte for byte.
+ */
+export function redactSplitSecrets(
+  lines: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const parsed = lines.map((line) => {
+    try {
+      return { ok: true as const, value: JSON.parse(line) as unknown }
+    } catch {
+      return { ok: false as const }
+    }
+  })
+  const all: Leaf[] = []
+  parsed.forEach((p, i) => {
+    if (p.ok) leaves(p.value, i, [], all)
+  })
+  const groups = new Map<string, Leaf[]>()
+  const join = (key: string, leaf: Leaf) => {
+    const group = groups.get(key)
+    if (group) group.push(leaf)
+    else groups.set(key, [leaf])
+  }
+  type Node = Record<string | number, unknown>
+  /** The objects and arrays above `leaf`, from its line's value down to its parent. */
+  const ancestors = (leaf: Leaf): Node[] => {
+    let node = (parsed[leaf.line] as { value: unknown }).value as Node
+    const out: Node[] = []
+    for (const k of leaf.path) {
+      out.push(node)
+      node = node[k] as Node
+    }
+    return out
+  }
+  const parentOf = (leaf: Leaf): Node => ancestors(leaf).at(-1) as Node
+  for (const leaf of all) {
+    const path = JSON.stringify(leaf.path.map((k) => (typeof k === 'number' ? '#' : k)))
+    join(`${path}\0`, leaf)
+    const above = ancestors(leaf)
+    const type = above.at(-1)?.type
+    if (typeof type === 'string') join(`${path}\0${type}`, leaf)
+    const stream = above.flatMap((node) =>
+      STREAM_IDS.flatMap((k) => (typeof node[k] === 'string' ? [`${k}=${node[k]}`] : [])),
+    )
+    if (stream.length > 0) join(`${path}\0${type}\0${stream.join('\0')}`, leaf)
+  }
+  const cuts = new Map<Leaf, Cut[]>()
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    const starts: number[] = []
+    let text = ''
+    for (const leaf of group) {
+      starts.push(text.length)
+      text += leaf.value
+    }
+    for (const m of findSecrets(text, env)) {
+      const spanned = group.flatMap((leaf, i) => {
+        const from = starts[i] as number
+        const start = Math.max(m.start, from)
+        const end = Math.min(m.end, from + leaf.value.length)
+        return start < end ? [{ leaf, start: start - from, end: end - from }] : []
+      })
+      if (spanned.length < 2) continue
+      spanned.forEach(({ leaf, start, end }, i) => {
+        const list = cuts.get(leaf)
+        const cut = { start, end, lead: i === 0 }
+        if (list) list.push(cut)
+        else cuts.set(leaf, [cut])
+      })
+    }
+  }
+  if (cuts.size === 0) return [...lines]
+  const out = [...lines]
+  const changed = new Set<number>()
+  for (const [leaf, list] of cuts) {
+    const masked = cutLeaf(leaf.value, list)
+    const last = leaf.path.at(-1)
+    if (last === undefined) parsed[leaf.line] = { ok: true, value: masked }
+    else parentOf(leaf)[last] = masked
+    changed.add(leaf.line)
+  }
+  for (const i of changed) out[i] = JSON.stringify((parsed[i] as { value: unknown }).value)
+  return out
+}
+
 /** How many stretches `redactSecrets` would mask. */
 export const countSecrets = (text: string, env: NodeJS.ProcessEnv = process.env): number =>
   findSecrets(text, env).length

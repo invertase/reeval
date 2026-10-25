@@ -83,7 +83,7 @@
 | `to: 'checks'` secrets: hidden from the agent | ✓ 1 | — | ● 1 | ● 1 | — | — |
 | Brokered secrets (`hosts`, `in`) and their placeholders | ✓ 2 | ✓ 1 | ● 2 | ● 2 | ● 1 | — |
 | `secrets: { unbrokered }` and the unbrokered warning | ✓ 4 | — | — | — | — | — |
-| Secrets masked in everything reeval writes | ✓ 7 | — | ● 2 | ● 2 | — | — |
+| Secrets masked in everything reeval writes | ✓ 8 | — | ● 2 | ● 2 | — | — |
 | `setup` steps: order, a failing step named, a missing `cwd`, `setup.log` | ✓ 1 | — | ● 2 | ● 2 | — | — |
 | A setup step's own `timeout` | — | — | ● 1 | ● 1 | — | — |
 | `extendEnvironment`, overrides and the environment digest | ✓ 2 | — | ● 2 | ● 2 | — | — |
@@ -235,7 +235,7 @@
 | `-v`/`--verbose`: the timestamped per-attempt phase trace (plan, image, container, environment, brokering, turns and tool calls, checks, judge, gateway requests, teardown) | ✓ 8 | — | — | — | — | ◐ 1 (1 without a canary) |
 | `-vv`/`--trace`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times | ✓ 2 | — | — | — | — | — |
 | Local debug data: `.reeval/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder | ✓ 3 | — | — | — | — | ◐ 1 (1 without a canary) |
-| Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included | ✓ 3 | — | — | — | — | — |
+| Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included | ✓ 4 | — | — | — | — | — |
 | `config.debug` (`keep`, `traceBufferMb`) and `reeval clean` | ✓ 2 | — | — | — | — | — |
 | Concurrency caps, order and queue time | ✓ 4 | — | — | — | — | — |
 | `reeval run --resume [<ref>]`: continue a stopped, interrupted or budget-stopped run with the same id | ✓ 11 | ✓ 1 | ● 1 | — | — | — |
