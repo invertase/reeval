@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
+import itertools
 import re
+import sys
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -395,16 +397,27 @@ def get_body(body_id: str) -> Callable[..., Any]:
     return _bodies[body_id]
 
 
+_module_ids = itertools.count(1)
+
+
 def collect_eval_file(path: Path) -> w.DeclarationTree:
     """Import one *.eval.py file and return its declaration tree JSON."""
 
     def loader() -> None:
-        spec = importlib.util.spec_from_file_location("reeval_eval", path)
+        # dataclasses, typing.get_type_hints and pickle find a class's module in sys.modules,
+        # so the file stays registered there, under a name no other file shares.
+        name = f"reeval_eval_{next(_module_ids)}"
+        spec = importlib.util.spec_from_file_location(name, path)
         if spec is None:
             raise ImportError(f"can't load {path}")
         module = importlib.util.module_from_spec(spec)
         module.__dict__[ASSERT_HOOK] = check
         source = importlib.util.decode_source(path.read_bytes())
-        exec(compile_eval(source, str(path)), module.__dict__)  # noqa: S102
+        sys.modules[name] = module
+        try:
+            exec(compile_eval(source, str(path)), module.__dict__)  # noqa: S102
+        except BaseException:
+            sys.modules.pop(name, None)
+            raise
 
     return collect_module_tree_sync(loader)

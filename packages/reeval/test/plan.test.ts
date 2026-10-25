@@ -107,7 +107,13 @@ export const cases: PlanCase[] = [
   {
     dir: 'python',
     name: 'hello',
-    args: [],
+    args: ['hello.eval'],
+    prepare: (dir) => syncPythonFixtureProject(dir),
+  },
+  {
+    dir: 'python',
+    name: 'dataclass-future',
+    args: ['dataclass-future.eval'],
     prepare: (dir) => syncPythonFixtureProject(dir),
   },
   { dir: 'gateway', name: 'default', args: ['--config', 'reeval.default.config.ts'] },
