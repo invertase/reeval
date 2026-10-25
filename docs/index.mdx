@@ -1,22 +1,31 @@
 ---
-title: "How reeval works"
-description: "See how coding agents use a developer tool and whether a change helps."
+title: "reeval"
+description: "Evaluate how coding agents discover and use your developer tools."
 ---
 
-reeval is an evaluation runner for SDKs, CLIs, MCP servers, and docs. It evaluates how coding agents discover and use them, across harnesses and across changes such as adding a skill.
+reeval is an evaluation runner for developer tools that agents use. It evaluates how coding agents discover and use SDKs, CLIs, MCP servers, skills, and docs, across harnesses and across changes.
 
-## What reeval does
+Ask your coding agent to set reeval up with the setup skill:
 
-An evaluation gives a harness a task in a sandbox, then checks what the agent did. A comparison runs the same evaluation on a control and on a variant with one change. reeval reports whether the change `helped`, `made it worse`, or `can't tell yet`. For more information about each term, see [Core concepts](/core-concepts).
+```bash
+npx skills add https://github.com/invertase/reeval --skill setup
+```
 
-This example measures Anthropic's published `brand-guidelines` skill. The control is an unstyled HTML page. The variant adds the skill from the `anthropics/skills` repository at a pinned commit. The evaluation declares the control, the variant, and the comparison in one file:
+To set it up by hand, see [Quick start](/quickstart).
+
+## Measure a change
+
+An evaluation gives one or more harnesses a task in a fresh sandbox, then checks and judges what each agent left behind. This one asks for a page in Anthropic's brand, as a control without Anthropic's `brand-guidelines` skill and a variant with it, on both Claude Code and Codex:
 
 ```ts title="with-library-skill-lift.eval.ts"
+// evals/with-library-skill-lift.eval.ts
 import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
+import { claudeCode, codex } from '{{ pkg }}/harness'
 
 const page = defineEnvironment('page', ({ directory }) => ({
   files: directory('./project'),
 }))
+
 const withSkill = page.extendEnvironment('brand-guidelines', ({ skill }) => ({
   skills: [
     skill.git('github:anthropics/skills', {
@@ -32,28 +41,41 @@ evaluate(
   {
     environment: page,
     compare: { variants: [withSkill] },
+
+    // Claude Code runs by default; Codex runs the same prompt too.
+    harness: [claudeCode({ model: 'claude-sonnet-5' }), codex({ model: 'gpt-5.6-luna' })],
     runs: 4,
     gate: { passRate: 0.75 },
+
+    // Asks each harness which of its own two pages looks more on-brand.
+    questions: [
+      { question: "Which page looks more like Anthropic's brand?", across: 'environment' },
+    ],
   },
   async (c) => {
+    // Send a prompt to a harness in this run
     await c.send(
       "Give index.html Anthropic's look: write styles.css with Anthropic's " +
         'brand colours and fonts, and link it from index.html.',
     )
 
-    await expect
-      .soft(c, 'links styles.css')
-      .toHaveFile('index.html', /href="styles\.css"/)
+    await expect.soft(c, 'links styles.css').toHaveFile('index.html', /href="styles\.css"/)
     await expect.soft(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
+
+    // Check that the css file contains the brand fonts 'Poppins' and 'Lora'
     await expect(c, 'brand fonts').toHaveFile(
       'styles.css',
       /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/,
     )
+
+    // A judge call for what the checks above can't read
+    const verdict = await c.judge("Does styles.css look designed for Anthropic's site?")
+    expect(verdict).toPass()
   },
 )
 ```
 
-The prompt doesn't name the brand's colour or fonts, so `brand orange` and `brand fonts` pass only when the harness knows them. When the variant passes all four attempts and the control passes none, the run prints this block:
+The prompt never names the colour or the fonts, so those checks pass only when the agent knows them. `reeval run` prints the outcome for each side:
 
 ```text
 pass             styles the page in Anthropic's brand
@@ -68,24 +90,53 @@ pass             styles the page in Anthropic's brand
   +1 more passed
 ```
 
-The `arm` column lists the control and the variant. The variant passed both brand checks in 4 of 4 attempts and the control in 0 of 4, so the effect reads `helped`. This block comes from the example's scripted agent, and a real run's counts can differ. For more information about how reeval reaches the effect, see [Statistics](/evals/statistics). For the runnable project, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
+The variant passed in 4 of 4 attempts and the control in none, so the skill `helped`. The judge verdict and the question's answer print alongside this per harness; they're trimmed here for space.
 
-## What reeval supports
+<Info>
+This result comes from the example's scripted agent, so it runs without keys or a container. A real harness's counts can differ. For the project this is based on, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
+</Info>
 
-This table lists what reeval supports, and each area links to its section:
+## What you can find out
 
-| Area | What reeval supports |
+<CardGroup cols={2}>
+  <Card title="Which tools agents choose" href="/recipes/recommendation">
+    Prompt for an outcome without naming a tool. See what agents discover and select.
+  </Card>
+  <Card title="Whether agents finish the task" href="/evals/checks">
+    Run tasks against a pinned codebase in an isolated sandbox and assert on the result.
+  </Card>
+  <Card title="Whether a change helped" href="/evals/compare">
+    Run the same task with and without a change. Compare pass rate, tokens, tool calls, and time.
+  </Card>
+  <Card title="How each harness handles your tool" href="/recipes/agent-comparison">
+    Run the same task across different coding agents and see how each one does.
+  </Card>
+  <Card title="Regressions before release" href="/recipes/ci-gate">
+    Commit baselines to Git. Diff agent behaviour on pull requests and in CI.
+  </Card>
+</CardGroup>
+
+## How it runs
+
+reeval runs on your machine, and each run leaves a record you can commit:
+
+| Part | What reeval does |
 |---|---|
-| [Evaluations](/evals/evaluate) | TypeScript files beside the tool they test, with checks on files, commands, and tool calls, and a judge for what checks can't read |
-| [Comparisons](/evals/compare) | A control and one or more variants, with an effect for each variant |
-| [Environments](/environments) | Skills, MCP servers, rules, files, setup commands, and secrets for the harness |
-| [Harnesses](/harnesses) | Coding agents, each on the model and effort you set |
-| [Sandboxes](/sandboxes) | A fresh container for each attempt, with API keys kept on the host |
-| [Runs](/runs/running) | A plan before any attempt starts, profiles that size a run, and records you commit beside the code |
-| [Results](/results/output) | The outcome, transcript, and analysis of each run, and queries across recorded runs |
+| [Sandbox](/sandboxes) | Starts a fresh container for each attempt |
+| [Secrets](/environments/secrets) | Keeps API keys on the host and adds them only on requests to their provider |
+| [Records](/runs/recording) | Writes each run as JSON beside your code, so a pull request can diff against it |
 
-Each kind of tool reeval evaluates has a recipe: [Test an SDK](/recipes/sdk), [Test a CLI](/recipes/cli), [Measure MCP servers](/recipes/mcp-comparison), and [Measure your docs](/recipes/docs-comparison). For more information about commands and options, see the [CLI reference](/reference/cli) and [Options](/reference/options).
+## Explore the docs
+
+<CardGroup cols={3}>
+  <Card title="Evaluations" href="/evals/evaluate">Tasks, checks, judges, and comparisons.</Card>
+  <Card title="Environments" href="/environments">Skills, MCP servers, rules, files, and secrets.</Card>
+  <Card title="Harnesses" href="/harnesses">The coding agents, with their models and effort.</Card>
+  <Card title="Runs" href="/runs/running">Plans, profiles, recording, and CI.</Card>
+  <Card title="Results" href="/results/output">Outcomes, transcripts, analysis, and queries.</Card>
+  <Card title="Recipes" href="/recipes/sdk">Test an SDK, a CLI, an MCP server, or your docs.</Card>
+</CardGroup>
 
 ## Next steps
 
-To install reeval and run a first comparison, see [Quick start](/quickstart).
+To install reeval and run your first comparison, see [Quick start](/quickstart).
