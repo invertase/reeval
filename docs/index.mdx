@@ -3,7 +3,9 @@ title: "reeval"
 description: "Evaluate how coding agents discover and use developer tools."
 ---
 
-reeval is an evaluation runner for developer tools. Use it to evaluate how coding agents use SDKs, CLIs, MCP servers, skills and docs, across different harnesses and versions.
+**reeval** is an open-source evaluation runner built for developer tools—including SDKs, CLIs, MCP servers, skills, and documentation.
+
+It launches real coding agents inside isolated sandboxes to run programming tasks, then looks at what they left behind using code assertions and LLM judges. By running identical prompts across a control setup (without your change) and a variant (with your change), reeval measures whether your tool, skill, or doc genuinely **helped**, or **made it worse**.
 
 ## Set it up
 
@@ -16,8 +18,6 @@ npx skills add https://github.com/invertase/reeval --skill setup
 To set it up by hand, see [Quick start](/quickstart).
 
 ## Run an evaluation
-
-An evaluation gives one or more harnesses a task in a fresh sandbox, then runs assertions and a judge on what each agent left behind.
 
 This one asks for a page in Anthropic's brand, as a control without Anthropic's `brand-guidelines` skill and a variant with it, on both Claude Code and Codex:
 
