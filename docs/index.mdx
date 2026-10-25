@@ -5,6 +5,8 @@ description: "Evaluate how coding agents discover and use developer tools."
 
 reeval is an evaluation runner for developer tools. Use it to evaluate how coding agents use SDKs, CLIs, MCP servers, skills and docs, across different harnesses and versions.
 
+## Set it up
+
 Ask your coding agent to set reeval up with the setup skill:
 
 ```bash
@@ -15,7 +17,9 @@ To set it up by hand, see [Quick start](/quickstart).
 
 ## Run an evaluation
 
-An evaluation gives one or more harnesses a task in a fresh sandbox, then checks and judges what each agent left behind. This one asks for a page in Anthropic's brand, as a control without Anthropic's `brand-guidelines` skill and a variant with it, on both Claude Code and Codex:
+An evaluation gives one or more harnesses a task in a fresh sandbox, then runs assertions and a judge on what each agent left behind.
+
+This one asks for a page in Anthropic's brand, as a control without Anthropic's `brand-guidelines` skill and a variant with it, on both Claude Code and Codex:
 
 ```ts title="with-library-skill-lift.eval.ts"
 // evals/with-library-skill-lift.eval.ts
@@ -91,10 +95,6 @@ pass             styles the page in Anthropic's brand
 ```
 
 The variant passed in 4 of 4 attempts and the control in none, so the skill `helped`. The judge verdict and the question's answer print alongside this per harness; they're trimmed here for space.
-
-<Info>
-This result comes from the example's scripted agent, so it runs without keys or a container. A real harness's counts can differ. For the project this is based on, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
-</Info>
 
 ## What you can find out
 
