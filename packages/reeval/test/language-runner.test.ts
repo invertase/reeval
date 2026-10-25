@@ -105,6 +105,40 @@ test('a JSON object on stdout that is no message is shown, not taken as one', as
   assert.deepEqual(seen, [{ type: 'done', key: 'k' }])
 })
 
+test('a message that is not JSON ends the session with an error instead of waiting', async () => {
+  const runner = await startLanguageRunner(
+    fakeRunner(`
+      send({ t: 'hello', protocol: ${RUNNER_PROTOCOL}, sdk: 'fake', version: '1', runtime: 'node' })
+      lines.on('line', () => {
+        process.stdout.write('{"t": "declared", "file": "x", "tree": {"attempts": NaN}}\\n')
+        setInterval(() => {}, 1_000)
+      })
+    `),
+    tmpdir(),
+  )
+  const gone = new Promise<string>((resolve) => runner.onGone(resolve))
+  runner.send({ t: 'collect', file: 'x' })
+  await assert.rejects(
+    runner.nextSession('declared'),
+    /The language runner stopped: it sent a message that isn't JSON \(NaN and Infinity aren't\): \{"t": "declared"/,
+  )
+  assert.match(await gone, /isn't JSON/)
+  await assert.rejects(runner.nextSession('declared'), /isn't JSON/)
+})
+
+test('a runner whose hello is not JSON says so', async () => {
+  await assert.rejects(
+    startLanguageRunner(
+      fakeRunner(`
+        process.stdout.write('{"t": "hello", "protocol": Infinity}\\n')
+        setInterval(() => {}, 1_000)
+      `),
+      tmpdir(),
+    ),
+    /stopped before it said hello: it sent a message that isn't JSON \(NaN and Infinity aren't\): \{"t": "hello", "protocol": Infinity\}/,
+  )
+})
+
 test('a runner that ignores its stdin closing is killed when reeval exits', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'reeval-runner-orphan-'))
   const host = join(dir, 'host.ts')

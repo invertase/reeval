@@ -27,15 +27,19 @@ export type LanguageRunner = {
 export class RunnerLoadError extends Error {}
 
 const STDERR_KEPT = 4_000
+const LINE_SHOWN = 200
 
-/** A runner's stdout line: a message, or `undefined` for output that isn't one. */
-function parsed(line: string): FromRunner | undefined {
+/**
+ * A runner's stdout line: a message, `undefined` for output that isn't one, or `unreadable` for
+ * a message that isn't JSON, which nothing could answer.
+ */
+function parsed(line: string): FromRunner | 'unreadable' | undefined {
   if (!line.startsWith('{')) return undefined
   try {
     const value: unknown = JSON.parse(line)
     return isFromRunner(value) ? value : undefined
   } catch {
-    return undefined
+    return 'unreadable'
   }
 }
 
@@ -71,11 +75,29 @@ export async function startLanguageRunner(
     )
   })
 
+  let unreadable: (reason: string) => void = () => {}
+  const broken = new Promise<string>((resolve) => {
+    unreadable = resolve
+  })
+  const stopped = Promise.race([broken, exited])
+
   const listeners: ((message: FromRunner) => void)[] = []
   const lines = createInterface({ input: child.stdout })
-  // Anything on stdout that isn't a message (a stray write the SDK didn't route) is shown, not parsed.
+  let unreadLine = false
+  // Anything on stdout that isn't a message (a stray write the SDK didn't route) is shown, not
+  // parsed. A message that isn't JSON (a NaN in it) ends the session: what it asked never gets
+  // an answer, so waiting on one would hang.
   lines.on('line', (line) => {
+    if (unreadLine) return
     const message = parsed(line)
+    if (message === 'unreadable') {
+      unreadLine = true
+      const shown = line.length > LINE_SHOWN ? `${line.slice(0, LINE_SHOWN)}…` : line
+      unreadable(`it sent a message that isn't JSON (NaN and Infinity aren't): ${shown}`)
+      lines.close()
+      child.kill()
+      return
+    }
     if (!message) return void (line && process.stderr.write(`${line}\n`))
     for (const listener of [...listeners]) listener(message)
   })
@@ -88,7 +110,7 @@ export async function startLanguageRunner(
     }
     listeners.push(listener)
   })
-  const first = await Promise.race([greeted, exited])
+  const first = await Promise.race([greeted, stopped])
   if (typeof first === 'string') {
     throw new RunnerLoadError(
       `The language runner (${command.join(' ')}) stopped before it said hello: ${first}\nAn SDK that speaks an older runner protocol than this reeval's (${RUNNER_PROTOCOL}) stops like this: update the SDK to the version that matches reeval.`,
@@ -107,7 +129,7 @@ export async function startLanguageRunner(
   const markGone = async () => {
     if (goneReason !== undefined) return
     goneReason = await Promise.race([
-      exited,
+      stopped,
       new Promise<string>((r) => setTimeout(() => r('it closed its stdout'), 1_000).unref()),
     ])
     for (const listener of gone) listener(goneReason)
@@ -134,7 +156,10 @@ export async function startLanguageRunner(
           else resolve(message as Extract<SessionFromRunner, { t: typeof t }>)
         }
         listeners.push(listener)
-        gone.push((reason) => reject(new RunnerLoadError(`The language runner stopped: ${reason}`)))
+        const stop = (reason: string) =>
+          reject(new RunnerLoadError(`The language runner stopped: ${reason}`))
+        if (goneReason !== undefined) stop(goneReason)
+        else gone.push(stop)
       }),
     close: () => {
       child.stdin.end()

@@ -96,7 +96,7 @@ see [Prior art](#prior-art-dart-spike) below):
 | Module | Role |
 |---|---|
 | `protocol.ts` | `RUNNER_PROTOCOL = 3`. Session messages use `t` (`hello`, `collect`, `declared`, `log`). Attempt traffic uses shapes from `src/contract/attempt.ts` (`start`, `abort`, `done`, `{id, call}`, replies), each with the `key` reeval gave the body in its `start` — no `t` on attempt lines. `key` is unique per started body; `attempt.id` isn't (two evals on one cell share it), so never multiplex on it. |
-| `transport.ts` | Spawns the runner; one JSON message a line on its stdin (to it) and stdout (from it). A stdout line that isn't a message is shown on stderr |
+| `transport.ts` | Spawns the runner; one JSON message a line on its stdin (to it) and stdout (from it). A stdout line that isn't a message is shown on stderr; one that starts with `{` but isn't JSON (a bare `NaN`) ends the session with an error |
 | `attempt-host.ts` | Maps protocol ops to real `AttemptContext` (`expect` → `match.ts`) |
 | `remote.ts` | `collectLanguageFile`: collect tree, `declareTree`, run remote bodies |
 
@@ -107,7 +107,9 @@ SDK runner responsibilities:
    child process nor the body's own input can write into a message or read one. A forked child
    shares those copies but not the runner's lock: send its output to stderr. reeval takes a
    stdout line as a message only when it has a message's shape (`isFromRunner`), so print
-   nothing else there that could pass for one. Send
+   nothing else there that could pass for one. Write strict JSON: a value with NaN or Infinity
+   in it fails the eval's call that passed it (Python's `allow_nan=False`), since reeval ends the
+   session on a line that starts with `{` but doesn't parse. Send
    `{ t: 'hello', protocol: 3, sdk, version, runtime }`. reeval sets `REEVAL_RUNNER=stdio` and
    `REEVAL_RUNNER_PROTOCOL`; a runner started without them, or on another protocol, exits
    non-zero with a sentence naming both versions instead of saying hello.
