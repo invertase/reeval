@@ -1063,6 +1063,119 @@ describe('redacting a secret split across stream parts', () => {
   })
 })
 
+describe('a second key of the provider whose key is in the environment', () => {
+  const anthropic = `sk-ant-api03-${'Qw3rTy7uIo9p'.repeat(7)}-A7b2C9d4`
+  const cases: Array<[string, string, string, string]> = [
+    [
+      'ANTHROPIC_API_KEY',
+      anthropic,
+      `sk-ant-api03-${'Zk9xQ2mN7pL4'.repeat(7)}-BBBBBBBB`,
+      'OpenAI or Anthropic key',
+    ],
+    [
+      'OPENAI_API_KEY',
+      `sk-proj-${'Hj6kLm2nBv8c'.repeat(8)}`,
+      `sk-proj-${'Rt5yUi3oPa7s'.repeat(8)}`,
+      'OpenAI or Anthropic key',
+    ],
+    [
+      'GITHUB_TOKEN',
+      `github_pat_11AAQ7ZKI0${'Fg4hJk8lMn2b'.repeat(7)}`,
+      `github_pat_11AAQ7ZKI0${'Xc6vBn9mQw3e'.repeat(7)}`,
+      'GitHub token',
+    ],
+  ]
+  for (const [name, own, other, shape] of cases) {
+    const env = { [name]: own }
+
+    test(`${name}: another key is masked whole, as with nothing in the environment`, () => {
+      assert.equal(redactSecrets(`key: ${other}`, {}), 'key: [REDACTED]')
+      assert.equal(redactSecrets(`key: ${other}`, env), 'key: [REDACTED]')
+      assert.equal(redactJsonText(JSON.stringify({ out: other }), env), '{"out":"[REDACTED]"}')
+      assert.deepEqual(JSON.parse(redactJson({ out: `a ${other} b` }, 2, env)), {
+        out: 'a [REDACTED] b',
+      })
+    })
+
+    test(`${name}: the environment's own key and its fragments are still masked`, () => {
+      assert.equal(redactSecrets(`a ${own} b`, env), 'a [REDACTED] b')
+      assert.equal(redactSecrets(`a ${own.slice(14, 40)} b`, env), 'a [REDACTED] b')
+      assert.equal(redactSecrets(`tail ${own.slice(-12)}`, env), 'tail [REDACTED]')
+    })
+
+    test(`${name}: findSecrets covers the other key whole and names the own key's variable`, () => {
+      const text = `own ${own} other ${other} end`
+      const found = findSecrets(text, env)
+      // The other key shares the own key's prefix, so none of it is shown, but it's named by its shape.
+      assert.deepEqual(
+        found.map((m) => [text.slice(m.start, m.end), m.known, maskedMatch(text, m)]),
+        [
+          [own, true, `the value of ${name}`],
+          [other, true, shape],
+        ],
+      )
+      assert.equal(countSecrets(`key: ${other}`, env), 1)
+    })
+
+    test(`${name}: a truncated copy of the own key shows none of it`, () => {
+      const text = `cut ${own.slice(0, 40)} end`
+      assert.equal(redactSecrets(text, env), 'cut [REDACTED] end')
+      assert.deepEqual(
+        findSecrets(text, env).map((m) => maskedMatch(text, m)),
+        [`the value of ${name}`],
+      )
+    })
+  }
+
+  const ghp = `ghp_${'Mn4bVc8xZl2k'.repeat(3)}`
+
+  test('a token running on into a password leaves none of the password', () => {
+    const env = { DB_PASSWORD: 'Hunter2Hunter2#tail-of-secret' }
+    const text = `x ${ghp}${env.DB_PASSWORD} y`
+    assert.equal(redactSecrets(text, env), 'x [REDACTED] y')
+    assert.deepEqual(
+      findSecrets(text, env).map((m) => [text.slice(m.start, m.end), maskedMatch(text, m)]),
+      [[`${ghp}${env.DB_PASSWORD}`, 'GitHub token']],
+    )
+  })
+
+  test('a token right after a secret is masked too', () => {
+    const env = { API_SECRET: '9f8e7d6c5b4a3210' }
+    for (const token of [ghp, `sk-proj-${'Rt5yUi3oPa7s'.repeat(4)}`]) {
+      const text = `x ${env.API_SECRET}${token} y`
+      assert.equal(redactSecrets(text, env), 'x [REDACTED][REDACTED] y')
+      assert.deepEqual(
+        findSecrets(text, env).map((m) => text.slice(m.start, m.end)),
+        [env.API_SECRET, token],
+      )
+    }
+  })
+
+  test('a value holding a token and more is masked whole, not only its token', () => {
+    const value = `https://reeval:pa55w0rd-9f3a@example.com/?t=ghp_${'Mn4bVc8xZl2k'.repeat(3)}`
+    const env = { GIT_CREDENTIALS: value }
+    assert.equal(redactSecrets(`url ${value} end`, env), 'url [REDACTED] end')
+    const text = `url ${value} end`
+    assert.deepEqual(
+      findSecrets(text, env).map((m) => [text.slice(m.start, m.end), m.rule]),
+      [[value, 'the value of GIT_CREDENTIALS']],
+    )
+  })
+
+  test('a JWT holding an encoded secret is masked whole', () => {
+    const value = 'reeval-jwt-inner-7f3a9c2e'
+    const env = { REEVAL_UNIT_JWT_SECRET: value }
+    const payload = Buffer.from(JSON.stringify({ sub: value, n: 1 })).toString('base64url')
+    const jwt = `eyJhbGciOiJIUzI1NiJ9.${payload}.${'Sg7hKj2lQw9e'.repeat(3)}`
+    assert.equal(redactSecrets(`Bearer ${jwt}`, env), 'Bearer [REDACTED]')
+    const text = `Bearer ${jwt}`
+    assert.deepEqual(
+      findSecrets(text, env).map((m) => [text.slice(m.start, m.end), m.known]),
+      [[jwt, true]],
+    )
+  })
+})
+
 // Last in the file: the short secrets these register would otherwise reach every test above.
 describe('redacting serialised JSON', () => {
   const record = {
@@ -1193,6 +1306,27 @@ describe('redacting serialised JSON', () => {
     assert.equal(findSecretsInJson('{"field":"field"}', {}).length, 1)
     // Twin: the same text outside a JSON file counts the literals too.
     assert.equal(scanText('run.txt', json).length > 2, true)
+  })
+
+  test('a declared secret inside a token shape leaves no part of the token', () => {
+    registerSecret('proj')
+    const key = `sk-proj-${'Rt5yUi3oPa7s'.repeat(8)}`
+    assert.equal(redactSecrets(`key: ${key}`, {}), 'key: [REDACTED]')
+    const text = `key: ${key}`
+    assert.deepEqual(
+      findSecrets(text, {}).map((m) => [text.slice(m.start, m.end), m.rule, m.known]),
+      [[key, 'OpenAI or Anthropic key', true]],
+    )
+  })
+
+  test('a declared secret at the end of a token right after a secret leaves no part of either', () => {
+    registerSecret('3C7Q7z')
+    const value = `https://u:g7b7w3P3S4@h.example/?t=ghp_${'N4T6a8f5v6M9'.repeat(3)}`
+    const token = `ghp_${'Q5m3h3M6J3j2'.repeat(3)}3C7Q7z`
+    assert.equal(
+      redactSecrets(`-${value}${token} end`, { GIT_CREDENTIALS: value }),
+      '-[REDACTED] end',
+    )
   })
 
   test("a report's scrubber keeps JSON Lines valid", () => {

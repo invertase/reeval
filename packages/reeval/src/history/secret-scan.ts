@@ -9,7 +9,7 @@ export type Finding = {
   file: string | null
   /** 1-based: in the patched file for a patch, else in the scanned file. Null outside a hunk. */
   line: number | null
-  /** The rule, and for a credential shape its first and last four characters. */
+  /** The rule, and for a credential shape with no known part its first and last four characters. */
   what: string
   /** The rule alone, with nothing of the value: safe to record. */
   rule: string
