@@ -105,7 +105,9 @@ export type JudgementRecord = {
   costUsd?: number
   /**
    * `<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a
-   * verdict can be followed across runs (and an edited question starts a new series).
+   * verdict can be followed across runs (and an edited question starts a new series). `<index>`
+   * is the call's place among the attempt's `c.judge()` calls, counting calls that failed,
+   * whichever finishes first.
    */
   key: string
   /** Transient provider errors retried before this verdict, with the backoff before each retry. */

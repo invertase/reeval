@@ -103,10 +103,11 @@ async function attemptBody(
     // A start that failed under a caught call or `expect.soft` still fails the attempt as itself.
     if (a.startFailure) throw a.startFailure.error
     if (missed) throw missed
-    const [only, ...more] = a.judgeErrors
+    const judgeErrors = a.judgeErrors.toSorted((x, y) => x.call - y.call).map((e) => e.message)
+    const [only, ...more] = judgeErrors
     if (only) {
       throw new Error(
-        more.length ? `${more.length + 1} judge calls failed:\n${a.judgeErrors.join('\n')}` : only,
+        more.length ? `${more.length + 1} judge calls failed:\n${judgeErrors.join('\n')}` : only,
       )
     }
   } catch (error) {
