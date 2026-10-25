@@ -13,9 +13,12 @@ import {
   execOptionsProblem,
 } from '../../src/contract/attempt.ts'
 import { declarationProblem } from '../../src/contract/declaration.ts'
+import type { DeclaredNode } from '../../src/declaration.ts'
+import { useEngine } from '../../src/engine/runtime.ts'
 import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
+import { declareTree } from '../../src/evaluate.ts'
 import { resolveModelGateway } from '../../src/gateway/models.ts'
 import { resolveGateway } from '../../src/gateway/resolve.ts'
 import { vercelCredentialProblem } from '../../src/gateway/vercel.ts'
@@ -39,6 +42,7 @@ import type {
   GatewayName,
   HarnessDescriptor,
   PluginSource,
+  RunContext,
   SandboxDescriptor,
 } from '../../src/types.ts'
 
@@ -112,6 +116,33 @@ const tree = (children: unknown) => () => {
   const problem = declarationProblem(children)
   if (problem) throw new UsageError(problem)
 }
+/** What declaring a tree refuses as it declares it, each in an eval file of its own. */
+let declaredFiles = 0
+const declares = (children: unknown[]) => () => {
+  const file = join(DIR, `evals/d${++declaredFiles}.eval.ts`)
+  const run: RunContext = {
+    runId: 'r',
+    stagingDir: DIR,
+    config: resolveConfig({ harness: fakeHarness() }, DIR),
+    tags: [],
+    concurrency: 1,
+    profile: null,
+  }
+  useEngine({
+    registerTest: () => {},
+    registerGroup: (_name, _mode, body) => body(),
+    getRunContext: () => run,
+    collectingFile: () => file,
+  })
+  declareTree(children as DeclaredNode[], () => async () => {})
+}
+const group = (name: string, children: unknown[]) => ({
+  type: 'group',
+  name,
+  mode: 'run',
+  options: {},
+  children,
+})
 const evalNode = (o: object = {}) => ({
   type: 'eval',
   name: 'e',
@@ -1319,6 +1350,87 @@ environment:
         { type: 'group', name: 'g', mode: 'skip', options: { runs: 2 }, children: [evalNode()] },
         evalNode({ family: { name: 'case %#', case: 1, cases: 2 } }),
         { type: 'todo', name: 'later' },
+      ]),
+    ],
+    ['declared: two evals with the same name', declares([evalNode(), evalNode({ body: 'b2' })])],
+    [
+      'declared: an eval named like a grouped eval',
+      declares([group('g', [evalNode()]), evalNode({ name: 'g › e', body: 'b2' })]),
+    ],
+    [
+      'declared: two families with the same template',
+      declares([
+        ...[0, 1].map((i) =>
+          evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+        ),
+        ...[0, 1, 2].map((i) =>
+          evalNode({ name: `d${i}`, body: `d${i}`, family: { name: 'c %#', case: i, cases: 3 } }),
+        ),
+      ]),
+    ],
+    [
+      'declared: a family case declared twice',
+      declares(
+        [0, 1, 1].map((i, n) =>
+          evalNode({ name: `c${n}`, body: `b${n}`, family: { name: 'c %#', case: i, cases: 3 } }),
+        ),
+      ),
+    ],
+    [
+      'declared: a family named like a grouped family',
+      declares([
+        group(
+          'g',
+          [0, 1].map((i) =>
+            evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+          ),
+        ),
+        evalNode({ name: 'd0', body: 'd0', family: { name: 'g › c %#', case: 0, cases: 2 } }),
+      ]),
+    ],
+    [
+      'declared: an eval named like a later family',
+      declares([
+        evalNode({ name: 'c %#' }),
+        ...[0, 1].map((i) =>
+          evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+        ),
+      ]),
+    ],
+    [
+      'declared: an eval named like an earlier family',
+      declares([
+        ...[0, 1].map((i) =>
+          evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+        ),
+        evalNode({ name: 'c %#', body: 'u0' }),
+      ]),
+    ],
+    [
+      "declared: a family's case named like its template",
+      declares(
+        ['c 1', 'c $n'].map((name, i) =>
+          evalNode({ name, body: `b${i}`, family: { name: 'c $n', case: i, cases: 2 } }),
+        ),
+      ),
+    ],
+    [
+      'declared: one template in two groups, and unpooled',
+      declares([
+        ...['g', 'h'].map((g) =>
+          group(
+            g,
+            [0, 1].map((i) =>
+              evalNode({
+                name: `c${i}`,
+                body: `b${i}`,
+                family: { name: 'c %#', case: i, cases: 2 },
+              }),
+            ),
+          ),
+        ),
+        evalNode({ name: 'c 0', body: 'u0' }),
+        evalNode({ name: 'c 1', body: 'u1' }),
       ]),
     ],
   ],
