@@ -168,6 +168,7 @@ export type Capture = {
  * default `name` is derived from the path. `wait` and `instructions` are call-only.
  */
 export type CaptureCall = {
+  /** The `artifacts/<name>.png` file name: 1 to 100 of `a-z`, `0-9`, `_` and `-`, starting with a letter or digit. Unique within the attempt. */
   name?: string
   path?: string
   viewport?: Viewport
