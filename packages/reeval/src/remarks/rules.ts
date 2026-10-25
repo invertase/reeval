@@ -435,13 +435,14 @@ function setupProcessSecret(e: EvalResult, entries: EvalEntry[], ctx: RemarkCont
   const [secret = ''] = secrets
   const list = secrets.join(', ')
   const which = secrets.length > 1 ? "to: 'checks' secrets" : "a to: 'checks' secret"
+  const [its, those] = commands.length > 1 ? ['their', 'those processes'] : ['its', 'that process']
   return [
     {
       id: remarkId('setup-process-secret', e.path, first.entry),
       evalId: e.path,
       kind: 'setup-process-secret',
       severity: 'concern',
-      text: `Setup left "${clip(commands[0] ?? '', 80)}"${more} running with ${list}, ${which} without hosts, in its environment${ofTries}, so the agent can read the real value from that process.`,
+      text: `Setup left "${clip(commands[0] ?? '', 80)}"${more} running with ${list}, ${which} without hosts, in ${its} environment${ofTries}, so the agent can read the real value from ${those}.`,
       evidence: hits.map(
         (h) => `${cellPaths.get(`${h.entry.id}\0${h.attempt.cell}`) ?? h.entry.id}#${h.attempt.n}`,
       ),

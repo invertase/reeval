@@ -268,7 +268,7 @@ evaluate('serves', { runs: 2, environment: server }, async (c) => {
     const [both] = raise(left([sleep], [server]), NO_HISTORY)
     assert.equal(
       both?.text,
-      `Setup left "sleep 600" (and 1 more) running with CHECK_TOKEN, API_TOKEN, to: 'checks' secrets without hosts, in its environment in 2 tries, so the agent can read the real value from that process.`,
+      `Setup left "sleep 600" (and 1 more) running with CHECK_TOKEN, API_TOKEN, to: 'checks' secrets without hosts, in their environment in 2 tries, so the agent can read the real value from those processes.`,
     )
     assert.equal(both?.evidence.length, 2)
   })
