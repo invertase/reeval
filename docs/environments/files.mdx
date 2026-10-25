@@ -7,53 +7,42 @@ You set `files` on an environment to put source in the workspace before the agen
 
 ## Write a file
 
-Set `files` to an object of destination paths and text. reeval writes each string into the sandbox as that file.
+Set `files` to an object of destination paths and contents. A string is written into the sandbox as that file.
 
 In the `evals/environments.ts` file, define the environment:
 
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
 
-export const app = defineEnvironment('app', () => ({
+export const csv = defineEnvironment('csv', ({ directory, file }) => ({
   files: {
-    'src/agent.ts': "export const systemPrompt = 'Use the SDK docs.'\n",
-    '~/.config/agent.json': '{ "maxSteps": 20 }\n',
+    ...directory('./project', { glob: ['!NOTES.md'] }),
+    'data/people.csv': file('./data/people.csv'),
+    '.gitignore': 'node_modules/\n',
   },
 }))
 ```
 
-The `src/agent.ts` file is written to the workspace. The `~/.config/agent.json` file is written to the home directory.
+The `.gitignore` entry writes that string to the workspace. For a runnable project, see [`with-fixture`](https://github.com/invertase/reeval/tree/main/examples/with-fixture).
 
 ## Copy a host file
 
-When the content already exists on your machine, pass a host path to `file`. A relative path resolves from the file that calls `file`. reeval uses an absolute path as given.
+When the content already exists on your machine, pass a host path to `file`, as the `data/people.csv` entry does. A relative path resolves from the file that calls `file`. reeval uses an absolute path as given.
 
-In the `evals/environments.ts` file, replace the string for the `src/agent.ts` file with `file`:
+reeval reads the host bytes when the attempt starts. A host file with its executable bit set stays executable in the sandbox. A destination that starts with `~/` goes in the home directory, outside the workspace and its diff:
 
-```diff title="evals/environments.ts"
--export const app = defineEnvironment('app', () => ({
-+export const app = defineEnvironment('app', ({ file }) => ({
--    'src/agent.ts': "export const systemPrompt = 'Use the SDK docs.'\n",
-+    'src/agent.ts': file('./fixtures/agent.ts'),
+```ts title="with-multi-turn.eval.ts"
+files: {
+  ...directory('./project'),
+  '~/checks/call.mjs': file('./checks/call.mjs'),
+},
 ```
-
-reeval reads the host bytes when the attempt starts. A host file with its executable bit set stays executable in the sandbox.
 
 ## Copy a directory
 
-Pass a host directory to `directory` to copy the files in it. `directory` chooses the files when you call it, and reeval reads each host file when the attempt starts. A relative path resolves from the file that calls `directory`.
+Pass a host directory to `directory` to copy the files in it, as the `./project` entry does. `directory` chooses the files when you call it, and reeval reads each host file when the attempt starts. A relative path resolves from the file that calls `directory`. Here `glob` leaves out the maintainer notes in `NOTES.md`.
 
-In the `evals/environments.ts` file, copy the TypeScript files from the `fixtures` directory into the `src` directory, and replace the copied `src/agent.ts` file:
-
-```diff title="evals/environments.ts"
--export const app = defineEnvironment('app', ({ file }) => ({
-+export const app = defineEnvironment('app', ({ directory }) => ({
--    'src/agent.ts': file('./fixtures/agent.ts'),
-+    ...directory('./fixtures', { into: 'src', glob: ['*.ts', '!*.test.ts'] }),
-+    'src/agent.ts': "export const systemPrompt = 'Use the SDK docs.'\n",
-```
-
-`into` is the destination directory. A value that starts with `~/` places the files under the home directory. `into` uses forward slashes and doesn't contain `..`.
+To copy into a subdirectory, pass `into`, such as `directory('./fixtures', { into: 'src' })`. `into` is the destination directory. A value that starts with `~/` places the files under the home directory. `into` uses forward slashes and doesn't contain `..`.
 
 `glob` is an ordered list of gitignore-style patterns over paths relative to the host directory. The last pattern that matches a path decides. A pattern that starts with `!` excludes that path. When a pattern includes files, reeval leaves out a file that no pattern matches. With only `!` patterns, or with `glob` omitted, every file starts included.
 
@@ -87,7 +76,7 @@ A leading `/` anchors a pattern to the top of the host directory. The `/build/` 
 
 To switch the default ignores off, set `defaultIgnores` to `false`. `directory` always leaves out the `.git` directory. A `glob` pattern can't include a path excluded by the defaults.
 
-`directory` doesn't copy an empty directory. Calling `directory` fails when the directory is missing, or when no file matches. A later entry in `files` replaces a copied file, as the string for the `src/agent.ts` file does above. A host file with its executable bit set stays executable in the sandbox.
+`directory` doesn't copy an empty directory. Calling `directory` fails when the directory is missing, or when no file matches. A later entry in `files` replaces a copied file. A host file with its executable bit set stays executable in the sandbox.
 
 ## Reference
 

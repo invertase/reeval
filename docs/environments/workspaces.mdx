@@ -12,42 +12,44 @@ In the `evals/environments.ts` file, set the environment's `workspace` to `git()
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
 
-export const chatbot = defineEnvironment('chatbot', ({ git }) => ({
-  workspace: git('github:vercel/ai-chatbot'),
-  setup: ['pnpm install --frozen-lockfile'],
+export const camelcase = defineEnvironment('camelcase', ({ git }) => ({
+  workspace: git('github:sindresorhus/camelcase', {
+    ref: 'v10.0.0',
+    init: true,
+  }),
 }))
 ```
 
-The workspace holds the tree with no `.git` directory, so the agent's diff starts after `setup`, and the repository never counts as the agent's change. In the `evals/chatbot.eval.ts` file, add the `chatbot` import and pass `environment: chatbot`:
+By default the workspace holds the tree with no `.git` directory, so the agent's diff starts after `setup`, and the repository never counts as the agent's change. `init: true` gives the workspace a `.git` directory with one commit of the tree and no remote, for an agent that expects a repository. In the `evals/camelcase.eval.ts` file, add the `camelcase` import and pass `environment: camelcase`:
 
-```diff title="evals/chatbot.eval.ts"
-+import { chatbot } from './environments.ts'
+```diff title="evals/camelcase.eval.ts"
++import { camelcase } from './environments.ts'
  evaluate(
-   'adds a health route',
-+  { environment: chatbot },
+   'adds a separators option',
++  { environment: camelcase },
    async (c) => {
 ```
 
-To give an agent that expects a repository a `.git` directory, pass `init: true`. The workspace then holds one commit of the tree and no remote.
+For a runnable project, see [`with-existing-codebase`](https://github.com/invertase/reeval/tree/main/examples/with-existing-codebase).
 
 ## Pin a ref or a path
 
-Without a `ref`, the workspace is the remote's `HEAD`, and `reeval run` warns that results aren't comparable over time. In the `evals/environments.ts` file, pin a tag or a commit SHA:
-
-```ts title="evals/environments.ts"
-  workspace: git('github:vercel/ai-chatbot', { ref: 'v3.1.0' }),
-```
+Without a `ref`, the workspace is the remote's `HEAD`, and `reeval run` warns that results aren't comparable over time. Pin a tag, such as `ref: 'v10.0.0'` above, or a commit SHA.
 
 To start from one directory of a repository, pass `path`. The directory's contents become the workspace:
 
-```ts title="evals/environments.ts"
-  workspace: git('github:vercel/next.js', {
-    ref: 'v16.3.7',
-    path: 'packages/create-next-app/templates/app-api/ts',
+```ts title="with-git-workspace.eval.ts"
+const math = defineEnvironment('reeval-math', ({ git }) => ({
+  workspace: git('github:invertase/reeval', {
+    ref: 'f60f255edb8a110d42d2ae4e483bd8555168b854',
+    path: 'examples/with-checks/project',
+    init: true,
   }),
+  files: { '.gitignore': 'node_modules/\n' },
+}))
 ```
 
-A GitHub `/tree/<ref>/<path>` URL sets both at once. Whatever you pin, the record keeps the commit the ref resolved to and the hash of the tree copied in. A ref, path, or URL that doesn't exist fails the attempts that use it with an infrastructure error.
+A GitHub `/tree/<ref>/<path>` URL sets both at once. Whatever you pin, the record keeps the commit the ref resolved to and the hash of the tree copied in. A ref, path, or URL that doesn't exist fails the attempts that use it with an infrastructure error. For a runnable project, see [`with-git-workspace`](https://github.com/invertase/reeval/tree/main/examples/with-git-workspace).
 
 ## Use a private repository
 

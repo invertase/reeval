@@ -9,25 +9,24 @@ You place a skill on an environment so the harness can load it during an attempt
 
 A skill directory holds a `SKILL.md` file. The frontmatter `name` is kebab-case, and `description` is required. When the frontmatter omits `name`, reeval uses the directory name. A `name` other than kebab-case, or a missing `description`, fails the attempt. Quote a frontmatter value that contains `": "`.
 
-The repository is `github:owner/repo`, an `https://` URL, an SSH URL, or a GitHub `/tree/<ref>/<path>` URL. In the `evals/environments.ts` file, place Matt Pocock's `migrate-to-shoehorn` skill:
+The repository is `github:owner/repo`, an `https://` URL, an SSH URL, or a GitHub `/tree/<ref>/<path>` URL. In the `evals/environments.ts` file, place Anthropic's `brand-guidelines` skill on a variant of `page`:
 
 ```ts title="evals/environments.ts"
-import { defineEnvironment } from '{{ pkg }}'
-
-export const withShoehorn = defineEnvironment(
-  'with-shoehorn',
+export const withSkill = page.extendEnvironment(
+  'brand-guidelines',
   ({ skill }) => ({
     skills: [
-      skill.git('github:mattpocock/skills', {
-        path: 'skills/misc',
-        only: ['migrate-to-shoehorn'],
+      skill.git('github:anthropics/skills', {
+        ref: 'dbd4588f9e1033efb41dad4bef2f7947c8993d44',
+        path: 'skills',
+        only: ['brand-guidelines'],
       }),
     ],
   }),
 )
 ```
 
-In the `evals/shoehorn.eval.ts` file, import `withShoehorn` from the `./environments.ts` file. Set the evaluation's `environment` option to `withShoehorn`.
+In the `evals/brand.eval.ts` file, import `withSkill` from the `./environments.ts` file and list it in `compare.variants`, as [Quick start](/quickstart) does. For a runnable project, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
 
 Without `ref`, reeval reads the default branch and warns that results aren't comparable over time. Pin `ref` to a commit or a tag to keep them comparable.
 
@@ -37,16 +36,37 @@ Pass `path` as the directory to read. It can be one skill directory or a directo
 
 reeval leaves out the `/evals/` directory, the `.history/` directory, and `*.eval.ts` files. reeval always leaves the `.git` directory out. Pass `exclude` to replace that list. To keep those paths out, repeat the three patterns in `exclude`.
 
-For more information about other skill sources and placement, see [Environment helpers](/reference/environment#skilllocal).
+## Use other skill sources
+
+`skill.git` is one of five sources. This excerpt places one skill from each of three:
+
+```ts title="with-skill-sources.eval.ts"
+skills: [
+  skill.git('github:anthropics/skills', {
+    ref: anthropicSkills,
+    only: ['brand-guidelines'],
+  }),
+  skill.registry('anthropics/skills@doc-coauthoring', {
+    version: anthropicSkills,
+  }),
+  skill.npm('reeval@0.13.0', { only: ['eval-rubric'] }),
+],
+```
+
+`skill.inline` writes a skill from a name, a description, and its content, and `skill.local` reads a skill directory on your machine. For a runnable project, see [`with-skill-sources`](https://github.com/invertase/reeval/tree/main/examples/with-skill-sources). For more information about each source and placement, see [Environment helpers](/reference/environment#skilllocal).
 
 ## Check the agent used the skill
 
 `toHaveCalledSkill` fails the attempt when the agent never loads that skill. It passes when a tool named `skill`, `Skill`, or `load_skill` loads the name, or when the agent reads a file under `skills/<name>/`.
 
-To check every turn of the attempt, pass `c` after the final `c.send()` call. To check one turn, pass the turn returned by `c.send()`. Import `expect` from `{{ pkg }}`. In the `evals/shoehorn.eval.ts` file, require the skill call:
+To check every turn of the attempt, pass `c` after the final `c.send()` call. To check one turn, pass the turn returned by `c.send()`:
 
-```ts title="evals/shoehorn.eval.ts"
-expect(c).toHaveCalledSkill('migrate-to-shoehorn')
+```ts title="with-skill.eval.ts"
+const turn = await c.send('Add a multiply(a, b) function to src/math.js.')
+
+expect(turn).toHaveCalledSkill('jsdoc')
 ```
+
+For a runnable project, see [`with-skill`](https://github.com/invertase/reeval/tree/main/examples/with-skill).
 
 For more information about this matcher, see [toHaveCalledSkill](/reference/matchers#tohavecalledskill).
