@@ -193,7 +193,7 @@ describe('runEngine: collecting and the plan', () => {
   })
 
   test("the plan has every collected file's harness ids, and whether a path filter left files out", async () => {
-    const { run } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
+    const { run, root } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
     const harnesses: Record<string, string[]> = { 'a.eval.ts': ['a', 'b'], 'b.eval.ts': ['b', 'c'] }
     const collectWith = (filters: string[]) => {
       let plan: CollectedPlan | undefined
@@ -211,8 +211,11 @@ describe('runEngine: collecting and the plan', () => {
     }
     const all = await collectWith([])
     assert.deepEqual([all?.harnesses.sort(), all?.partial], [['a', 'b', 'c'], false])
-    const one = await collectWith(['evals/a.eval.ts'])
+    const one = await collectWith([join(root, 'evals/a.eval.ts')])
     assert.deepEqual([one?.harnesses, one?.partial], [['a', 'b'], true])
+    // Not a path from the current directory, so it may match names in every file, which are collected.
+    const loose = await collectWith(['evals/a.eval.ts'])
+    assert.deepEqual([loose?.harnesses.sort(), loose?.partial], [['a', 'b', 'c'], false])
   })
 })
 

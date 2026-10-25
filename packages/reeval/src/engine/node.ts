@@ -75,6 +75,7 @@ export async function runEngine(
   if (specs.length === 0)
     return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
   const named = new Set(specs.map((file) => relativeFile(root, file)))
+  const toCollect = looseFilters.length ? files : specs
 
   // A file's worker holds its lane until all of its attempts finish, so `concurrency` attempts in
   // flight need that many workers.
@@ -92,7 +93,7 @@ export async function runEngine(
   const collected: Collected[] = []
   const failed = new Map<string, string[]>()
   let usage: string | undefined
-  await eachLimited(looseFilters.length ? files : specs, workers, async (file) => {
+  await eachLimited(toCollect, workers, async (file) => {
     const rel = relativeFile(root, file)
     const worker = spawn(entry, root)
     let tests: WireTest[] | undefined
@@ -130,7 +131,7 @@ export async function runEngine(
   collected.sort((a, b) => Number(a.file > b.file) - Number(a.file < b.file))
 
   if (options.onPlan) {
-    const plan = collectPlan(collected, matchesName, nameFilters, specs.length < files.length)
+    const plan = collectPlan(collected, matchesName, nameFilters, toCollect.length < files.length)
     // When no part matched anything, the run's own "no evals matched" says so.
     if (plan.unmatched.length === options.filters.length) plan.unmatched = []
     if (!(await options.onPlan(plan)))
