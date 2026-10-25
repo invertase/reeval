@@ -273,6 +273,22 @@ test('a compaction that continues nothing leaves the turn as it was', () => {
   assert.deepEqual(translate(compacted).parts, editAndRun())
 })
 
+test('a turn pi ended well is not undone by pi dying or the turn aborting while it compacts on a threshold', () => {
+  const lines = fixture('edit-and-run')
+  const agentEnd = at(lines, 'agent_end') + 1
+  const compacting = [
+    ...lines.slice(0, agentEnd),
+    JSON.stringify({ type: 'compaction_start', reason: 'threshold' }),
+  ]
+  for (const options of [{ exitCode: 137 }, { exitCode: 143, aborted: true }]) {
+    const t = new PiStreamTranslator()
+    const parts = [...compacting.flatMap((l) => t.push(l)), ...t.end(options)].filter(
+      (p) => p.type !== 'raw',
+    )
+    assert.deepEqual(parts, editAndRun(), JSON.stringify(options))
+  }
+})
+
 test("each stop reason pi ends a call with is that step's finish reason, pi's own kept raw", () => {
   const lastStep = (stopReason: string) => {
     const lines = fixture('edit-and-run').map((l) =>

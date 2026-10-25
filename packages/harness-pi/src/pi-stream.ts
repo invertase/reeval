@@ -131,7 +131,8 @@ export class PiStreamTranslator {
   private failure: PiMessage | undefined
   /**
    * The run's `agent_end` said pi won't retry, and pi hasn't settled or started another run: its
-   * last call's failure, whether pi is compacting, and why an overflow compaction failed.
+   * last call's failure, whether pi is in an overflow compaction (the only kind that can carry the
+   * turn on), and why one failed.
    */
   private ended: { failure?: PiMessage; compacting?: boolean; compactionError?: string } | undefined
   /** What pi is recovering from, as the process's death names it, until the next call ends. */
@@ -265,7 +266,7 @@ export class PiStreamTranslator {
     const ended = this.ended
     if (!ended) return
     if (e.type === 'compaction_start') {
-      ended.compacting = true
+      ended.compacting = e.reason === 'overflow'
     } else if (e.type === 'compaction_end') {
       ended.compacting = false
       if (e.willRetry) {
