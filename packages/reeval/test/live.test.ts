@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
@@ -500,6 +500,20 @@ describe('the studio serves and streams live runs', () => {
     await rm(file)
     await symlink(outside, file)
     assert.equal(await liveTranscript(source, RUN, done), null)
+  })
+
+  test('a staging run directory that is a symlink is neither listed nor served', async () => {
+    const { root, source, done } = await setup()
+    const linked = stamp(9)
+    const outside = join(root, 'outside')
+    await cp(join(stagingRoot(root), RUN), outside, { recursive: true })
+    await writeFile(join(outside, LIVE_FILE), JSON.stringify(progress(linked)))
+    await symlink(outside, join(stagingRoot(root), linked), 'dir')
+    assert.deepEqual(
+      (await listLive(source)).map((r) => r.runId),
+      [RUN],
+    )
+    assert.equal(await liveTranscript(source, linked, done), null)
   })
 
   test('/api/events streams run.progress with the runs, and history.changed', async () => {
