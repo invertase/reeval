@@ -222,7 +222,7 @@ Everything else works as the `reeval` user: `npm i`, `pip install` (as a user in
 |---|---|
 | It's a container, not a VM | It shares your machine's kernel. The steps above make a kernel or Docker bug much harder to reach, but they aren't a hardware boundary |
 | `allow-all` reaches anything | Only when an eval or the config sets it; the default, `proxy`, sends everything through the gateway. Under it the keys are still brokered, but the agent can go around the proxy to any host, cloud metadata and your LAN, unrecorded |
-| Secrets sent `to: 'checks'` are real values in setup steps and checks | Those run as the same `reeval` user as the agent, so a process the agent left running could read them while they run |
+| Secrets sent `to: 'checks'` without `hosts` are real values in setup steps and checks | Those run as the same `reeval` user as the agent, so a process the agent left running could read them while they run, and the agent could read them from a process setup left running (the `setup-process-secret` remark). With `hosts`, every process holds a placeholder |
 
 ## When an eval needs more
 

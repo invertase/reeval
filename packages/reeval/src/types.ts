@@ -2369,6 +2369,17 @@ export type StartRetry = {
   waitedMs: number
 }
 
+/**
+ * A process the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without
+ * `hosts` in its environment: it holds the real value while the agent works.
+ */
+export type SetupProcess = {
+  /** Its command line, cut at 200 characters. */
+  command: string
+  /** The `to: 'checks'` secrets without `hosts` in its environment, by name. */
+  secrets: string[]
+}
+
 /** One `expect` or `expect.soft` matcher call an attempt made. */
 export type AssertionRecord = {
   /**
@@ -2428,6 +2439,8 @@ export type EvalRecord = {
   env?: { vars: string[]; secrets: string[]; brokered: string[] }
   /** The environment's setup steps as they ran, output redacted later. */
   setup?: Array<{ run: string; exitCode: number | null; durationMs: number; output: string }>
+  /** See `AttemptRecord.setupProcesses`. */
+  setupProcesses?: SetupProcess[]
   egress?: EgressRecord
   /** See `AttemptRecord.servedModels`. */
   servedModels?: string[] | null

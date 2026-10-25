@@ -343,10 +343,10 @@ describe('unbrokered secrets', () => {
     assert.deepEqual(unbrokeredSecrets({}, child.layers), [{ label: 'KEY', from: 'KEY' }])
   })
 
-  test("a to: 'checks' secret's warning says the agent never gets it", () => {
+  test("a to: 'checks' secret's warning says what keeps it from the agent and what doesn't", () => {
     assert.equal(
       unbrokeredWarning({ label: 'CHECK_TOKEN', from: 'CHECK_TOKEN', checksOnly: true }),
-      "CHECK_TOKEN reaches the checks (c.exec, setup steps) as its real value; the agent never gets it. To give the checks only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('CHECK_TOKEN', { hosts: ['api.example.com'] }).",
+      "CHECK_TOKEN reaches the checks (c.exec, setup steps) as its real value. It's never in the agent's own environment, but a process a setup step leaves running holds it while the agent works. To give the checks only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('CHECK_TOKEN', { hosts: ['api.example.com'] }).",
     )
     const env = { CHECK_TOKEN: { kind: 'secret' as const, to: 'checks' as const } }
     const [found] = unbrokeredSecrets(env, [])

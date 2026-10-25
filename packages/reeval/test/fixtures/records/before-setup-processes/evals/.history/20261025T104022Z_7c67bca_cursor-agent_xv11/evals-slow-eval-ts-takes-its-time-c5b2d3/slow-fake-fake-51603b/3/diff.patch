@@ -1,0 +1,7 @@
+diff --git a/greet.js b/greet.js
+new file mode 100644
+index 0000000..45b983b
+--- /dev/null
++++ b/greet.js
+@@ -0,0 +1 @@
++hi

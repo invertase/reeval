@@ -230,6 +230,49 @@ evaluate('migrates', async (c) => {
     assert.deepEqual(kinds(egressed({ recorded: false }), NO_HISTORY), [])
   })
 
+  test("setup-process-secret: a process setup left running with a to: 'checks' secret, not without one", async () => {
+    const record = await recordOf('remarks-setup-process', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/server.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const server = defineEnvironment('server', ({ secret }) => ({
+  env: { CHECK_TOKEN: secret({ to: 'checks', optional: true }) },
+}))
+evaluate('serves', { runs: 2, environment: server }, async (c) => {
+  await c.send('go')
+  expect(true, 'served').toBe(true)
+})
+`,
+    })
+    assert.deepEqual(kinds(record, NO_HISTORY), [], 'the fake sandbox records no processes')
+    const left = (...processes: Array<Array<{ command: string; secrets: string[] }>>) => {
+      const copy = structuredClone(record)
+      for (const [i, a] of (copy.evals[0]?.attempts ?? []).entries()) {
+        if (processes[i]?.length) a.setupProcesses = processes[i]
+      }
+      return copy
+    }
+    const sleep = { command: 'sleep 600', secrets: ['CHECK_TOKEN'] }
+    const [remark] = raise(left([sleep]), NO_HISTORY)
+    assert.equal(remark?.kind, 'setup-process-secret')
+    assert.equal(remark?.severity, 'concern')
+    assert.equal(
+      remark?.text,
+      `Setup left "sleep 600" running with CHECK_TOKEN, a to: 'checks' secret without hosts, in its environment, so the agent can read the real value from that process.`,
+    )
+    assert.match(
+      remark?.fix.edit ?? '',
+      /^broker CHECK_TOKEN with the hosts the process sends it to/,
+    )
+    assert.equal(remark?.evidence.length, 1)
+    const server = { command: 'node server.js', secrets: ['API_TOKEN', 'CHECK_TOKEN'] }
+    const [both] = raise(left([sleep], [server]), NO_HISTORY)
+    assert.equal(
+      both?.text,
+      `Setup left "sleep 600" (and 1 more) running with CHECK_TOKEN, API_TOKEN, to: 'checks' secrets without hosts, in their environment in 2 tries, so the agent can read the real value from those processes.`,
+    )
+    assert.equal(both?.evidence.length, 2)
+  })
+
   test('slow-mcp-start: 2000 ms or no answer on a recorded turn, not 1999 ms', async () => {
     const record = await recordOf('remarks-mcp', {
       'reeval.config.ts': mcpConfig,

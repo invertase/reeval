@@ -17,6 +17,7 @@ import type {
   PhaseTimings,
   ResolvedJudgeStateOptions,
   SandboxWarning,
+  SetupProcess,
   StartRetry,
   TokenUsage,
   TurnStatus,
@@ -237,6 +238,15 @@ export type AttemptRecord = {
   judgements: JudgementRecord[]
   /** Harness session starts that didn't become ready within `startTimeout` and were started again (at most one). */
   startRetries?: StartRetry[]
+  /**
+   * Processes the setup steps left running in a Docker sandbox with a `to: 'checks'` secret
+   * without `hosts` in their environment, so they hold its real value while the agent works and
+   * the agent, as the same user, can read it from them. Found by the secret's variable name, so a
+   * copy under another name or in a command's arguments isn't. At most 20, each
+   * `{ command, secrets }`: its command line, masked and cut at 200 characters, and those secrets'
+   * names. Absent when there were none.
+   */
+  setupProcesses?: SetupProcess[]
   /**
    * Each foreground `c.exec`: its last try's exit code, and `durationMs` over all its tries. With
    * `retries`, `tries` has each try's `{ exitCode, durationMs }` and the log each try's output.
