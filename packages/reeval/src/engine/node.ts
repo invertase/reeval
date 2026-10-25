@@ -69,8 +69,8 @@ export async function runEngine(
   if (specs.length === 0)
     return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
 
-  // A file's worker holds its lane until all of its attempts finish, so capping workers below
-  // `concurrency` (at the CPU count, say) would cap the attempts in flight with them.
+  // A file's worker holds its lane until all of its attempts finish, so `concurrency` attempts in
+  // flight need that many workers.
   const workers = Math.max(1, Math.min(concurrency, specs.length))
   const entry = workerEntry(root, PACKAGE_NAMES)
   const hide = [...reevalFrames(PACKAGE_DIR), ...reevalFrames(join(entry, '..', '..'))]
