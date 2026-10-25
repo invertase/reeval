@@ -5,6 +5,7 @@
 // with their JSON Schema in schema/protocol/. Results reuse the attempt's own types (`TurnData`,
 // `ExecResult`, `AssertionRecord`), held to them at compile time and by their TSDoc.
 import { z } from 'zod'
+import { MAX_TIMER_MS, TIMER_LIMIT } from '../duration.ts'
 import type {
   AssertionRecord,
   Capture,
@@ -187,6 +188,7 @@ export const execRetrySchema = z
     interval: z
       .number()
       .min(0, 'must be 0 or more milliseconds')
+      .max(MAX_TIMER_MS, `must be ${TIMER_LIMIT}`)
       .optional()
       .describe('Milliseconds to wait before each extra try. Default 1000.'),
   })
@@ -420,12 +422,24 @@ export const matcherSubjectSchema = z
 
 const nonEmpty = z.string().regex(/\S/, 'must not be empty')
 
+/**
+ * A capture's name is the `<name>.png` segment of its artifact path, so it stays within what
+ * the studio serves as a path segment (`src/view/paths.ts`): a leading letter or digit, and
+ * short enough to leave room for `.png`.
+ */
+export const CAPTURE_NAME_MAX = 100
+export const CAPTURE_NAME = new RegExp(`^[a-z0-9][a-z0-9_-]{0,${CAPTURE_NAME_MAX - 1}}$`)
+export const CAPTURE_NAME_RULE = `must be 1 to ${CAPTURE_NAME_MAX} of a-z, 0-9, _ and -, starting with a letter or digit`
+
 const portSchema = z
   .number()
   .int()
   .min(1, 'a port from 1 to 65535')
   .max(65535, 'a port from 1 to 65535')
-const millisSchema = z.number().positive('more than zero milliseconds')
+const millisSchema = z
+  .number()
+  .positive('more than zero milliseconds')
+  .max(MAX_TIMER_MS, TIMER_LIMIT)
 
 export const captureWaitSchema = z
   .enum(['load', 'idle'])
@@ -441,7 +455,13 @@ export const captureInstructionSchema = z.union([nonEmpty, z.strictObject({ wait
 
 export const captureCallDataSchema = z
   .strictObject({
-    name: nonEmpty.optional(),
+    name: z
+      .string()
+      .regex(CAPTURE_NAME, CAPTURE_NAME_RULE)
+      .optional()
+      .describe(
+        'The `artifacts/<name>.png` file name: 1 to 100 of `a-z`, `0-9`, `_` and `-`, starting with a letter or digit. Unique within the attempt.',
+      ),
     path: z.string().optional(),
     viewport: z.union([captureWindowSchema, z.literal('full-page')]).optional(),
     timeout: durationSchema.optional(),

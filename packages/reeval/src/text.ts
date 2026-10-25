@@ -15,6 +15,12 @@ export function clip(text: string, max: number): string {
   return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`
 }
 
+/**
+ * A user's file without the byte-order mark editors on Windows may start it with, which Node's
+ * `'utf8'` decoding keeps and `JSON.parse`, `process.loadEnvFile` and a `^---` test don't skip.
+ */
+export const withoutBom = (text: string) => text.replace(/^\uFEFF/, '')
+
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters are what it removes
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g
 

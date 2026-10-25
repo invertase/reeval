@@ -510,6 +510,84 @@ evaluate('brackets', { environment: skilled }, async (c) => {
     assert.equal((await query(p.dir, 'effort')).length, 1)
   })
 
+  test('effort’s per-class call medians count an attempt with no tool calls as 0', async () => {
+    const p = await project('query-effort-zero-calls', {
+      'reeval.config.ts': fakeConfig({ harness: "{ script: [[], [{ exec: 'true' }]] }" }),
+      'evals/e.eval.ts': `import { evaluate } from 'reeval'
+const started = { once: 0, turnless: 0 }
+evaluate('once', { runs: 3 }, async (c) => {
+  await c.send('go')
+  if (++started.once === 1) await c.send('again')
+})
+evaluate('never', { runs: 3 }, async (c) => {
+  await c.send('go')
+})
+evaluate('turnless', { runs: 3 }, async (c) => {
+  if (++started.turnless > 1) return
+  await c.send('go')
+  await c.send('again')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const name = (r: Row) => String(r.eval_key).replace('evals/e.eval.ts › ', '')
+    const calls = await query(
+      p.dir,
+      `SELECT a.eval_key, a.turns, COUNT(t.line) AS n FROM attempts a LEFT JOIN tool_calls t
+        ON t.run_id = a.run_id AND t.attempt_key = a.key GROUP BY a.key ORDER BY a.eval_key, n, a.turns`,
+    )
+    assert.deepEqual(
+      calls.map((r) => `${name(r)} ${r.turns} turns ${r.n} calls`),
+      [
+        'never 1 turns 0 calls',
+        'never 1 turns 0 calls',
+        'never 1 turns 0 calls',
+        'once 1 turns 0 calls',
+        'once 1 turns 0 calls',
+        'once 2 turns 1 calls',
+        'turnless 0 turns 0 calls',
+        'turnless 0 turns 0 calls',
+        'turnless 2 turns 1 calls',
+      ],
+    )
+    const effort = await query(
+      p.dir,
+      'SELECT eval_key, n, tools_median, workspace_calls_median, verify_calls_median FROM effort ORDER BY eval_key',
+    )
+    assert.deepEqual(
+      effort.map(
+        (r) =>
+          `${name(r)} n=${r.n} ${r.tools_median} ${r.workspace_calls_median} ${r.verify_calls_median}`,
+      ),
+      ['never n=3 0 0 0', 'once n=3 0 0 0', 'turnless n=3 0 0 0'],
+    )
+  })
+
+  test('effort’s per-class call medians leave out an attempt with calls but no transcript file', async () => {
+    const p = await project('query-effort-missing-transcript', {
+      'reeval.config.ts': fakeConfig({ harness: "{ script: [[{ exec: 'true' }]] }" }),
+      'evals/e.eval.ts': `import { evaluate } from 'reeval'
+evaluate('calls', { runs: 3 }, async (c) => {
+  await c.send('go')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const { run, dir } = readRun(p.dir)
+    const attempts = run.evals[0]?.attempts ?? []
+    assert.deepEqual(
+      attempts.map((a) => a.activity.tools),
+      [1, 1, 1],
+    )
+    for (const a of attempts.slice(1)) {
+      rmSync(join(dir, ...(a.files.transcript?.path ?? '').split('/')))
+    }
+    assert.deepEqual(
+      await query(p.dir, 'SELECT n, tools_median, workspace_calls_median FROM effort'),
+      [{ n: 3, tools_median: 1, workspace_calls_median: 1 }],
+    )
+  })
+
   test('failing attempts join skills by environment digest, not name', async () => {
     const p = await project('query-joins', {
       'reeval.config.ts': fakeConfig(),
@@ -548,6 +626,49 @@ evaluate('with beta', { environment: b }, async (c) => { await c.send('x'); thro
        JOIN env_skills s ON s.run_id = e.run_id AND s.digest = e.digest`,
     )
     assert.equal(byName.length, 4, 'each attempt matches both environments named tools')
+  })
+
+  test('two environments with the same contents keep a row each and count skills once', async () => {
+    const p = await project('query-env-twins', {
+      'reeval.config.ts': fakeConfig(),
+      'skills/greet/SKILL.md': skill('greet'),
+      'evals/t.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const a = defineEnvironment('alpha', ({ skill }) => ({ sandbox, skills: [skill.local('../skills/greet')] }))
+const b = defineEnvironment('beta', ({ skill }) => ({ sandbox, skills: [skill.local('../skills/greet')] }))
+evaluate('one', { environment: a }, async (c) => { await c.send('x'); throw new Error('no') })
+evaluate('two', { environment: b }, async (c) => { await c.send('x'); throw new Error('no') })
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 1)
+    const envs = await query(p.dir, 'SELECT name, digest FROM environments ORDER BY name')
+    assert.deepEqual(
+      envs.map((r) => r.name),
+      ['alpha', 'beta'],
+    )
+    assert.equal(envs[0]?.digest, envs[1]?.digest, 'the same contents share a digest')
+    const reads = await query(p.dir, 'SELECT eval_key, skill FROM skill_reads ORDER BY eval_key')
+    assert.deepEqual(
+      reads.map((r) => r.skill),
+      ['greet', 'greet'],
+    )
+    const failing = await query(p.dir, 'SELECT environment, skill FROM failing_attempts')
+    assert.deepEqual(failing.map((r) => `${r.environment}:${r.skill}`).sort(), [
+      'alpha:greet',
+      'beta:greet',
+    ])
+    const joined = await query(
+      p.dir,
+      `SELECT c.environment AS cell, e.name AS env FROM cells c
+       JOIN environments e ON e.run_id = c.run_id AND e.name = c.environment
+         AND e.digest = c.environment_digest
+       ORDER BY cell`,
+    )
+    assert.deepEqual(
+      joined.map((r) => `${r.cell}:${r.env}`),
+      ['alpha:alpha', 'beta:beta'],
+    )
   })
 
   test('drift names the changed part; flaky cells and verdict flips are found', async () => {

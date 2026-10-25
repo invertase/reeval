@@ -1,12 +1,12 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
-import { extname, join } from 'node:path'
+import { extname, relative, sep } from 'node:path'
 import { Readable } from 'node:stream'
 import { type Context, Hono } from 'hono'
 import { getCookie, setCookie } from 'hono/cookie'
 import { streamSSE } from 'hono/streaming'
-import { attemptDebugDir, parseAttemptKey } from '../debug/files.ts'
+import { attemptDebugDir, debugRoot, parseAttemptKey } from '../debug/files.ts'
 import { type AnalysisIndex, sortAnalyses } from '../view/analysis.ts'
 import {
   DEBUG_LOG,
@@ -24,7 +24,7 @@ import { artifactType, parseDataPath, RUN_ID } from '../view/paths.ts'
 import { readableDebugRequest } from '../view/record.ts'
 import type { StudioAppFiles } from './app.ts'
 import { listLive, liveTranscript } from './live.ts'
-import { listHeaders, resolveFile, type StudioSource } from './source.ts'
+import { fileInside, listHeaders, resolveFile, type StudioSource } from './source.ts'
 
 export const COOKIE = 'reeval_studio_token'
 
@@ -186,33 +186,34 @@ export function createStudioApp(options: StudioServerOptions) {
     })
   })
 
-  // Local debug data from .reeval/debug: only here, never in a static build.
-  const debugDir = (runId: string, key: string | undefined) => {
+  // Local debug data from .reeval/debug: only here, never in a static build. Only the debug folder
+  // itself is resolved, so a symlinked run or attempt folder is never read through.
+  const debugFile = async (runId: string, key: string | undefined, name: string) => {
     const attempt = key ? parseAttemptKey(key) : null
     if (!RUN_ID.test(runId) || !attempt) return null
-    return attemptDebugDir(source.root, runId, attempt.evalId, attempt.cell, attempt.n)
+    const base = debugRoot(source.root)
+    const dir = attemptDebugDir(source.root, runId, attempt.evalId, attempt.cell, attempt.n)
+    return fileInside(base, relative(base, dir).split(sep), [name])
   }
-  const readText = (path: string) => readFile(path, 'utf8').catch(() => null)
+  const readText = async (file: string | null) =>
+    file === null ? null : readFile(file, 'utf8').catch(() => null)
   app.get('/api/debug/:runId', async (c) => {
-    const dir = debugDir(c.req.param('runId'), c.req.query('attempt'))
-    const log = dir && (await readText(join(dir, DEBUG_LOG)))
+    const file = (name: string) => debugFile(c.req.param('runId'), c.req.query('attempt'), name)
+    const log = await readText(await file(DEBUG_LOG))
     // Most attempts have none (recorded elsewhere, or cleaned): that's an answer, not an error.
-    if (!dir || log === null) return c.json(null, 200, { 'Cache-Control': 'no-cache' })
+    if (log === null) return c.json(null, 200, { 'Cache-Control': 'no-cache' })
     const view: DebugView = {
       lines: parseDebugLog(log),
-      requests: parseNdjson<DebugRequest>((await readText(join(dir, REQUESTS_FILE))) ?? '').map(
+      requests: parseNdjson<DebugRequest>((await readText(await file(REQUESTS_FILE))) ?? '').map(
         readableDebugRequest,
       ),
-      trace: (await stat(join(dir, TRACE_FILE)).catch(() => null))?.isFile() ?? false,
+      trace: (await file(TRACE_FILE)) !== null,
     }
     return c.json(view, 200, { 'Cache-Control': 'no-cache' })
   })
   app.get('/api/debug/:runId/trace', async (c) => {
-    const dir = debugDir(c.req.param('runId'), c.req.query('attempt'))
-    const file = dir && join(dir, TRACE_FILE)
-    if (!file || !(await stat(file).catch(() => null))?.isFile()) {
-      return c.text('No trace for this attempt', 404)
-    }
+    const file = await debugFile(c.req.param('runId'), c.req.query('attempt'), TRACE_FILE)
+    if (!file) return c.text('No trace for this attempt', 404)
     return sendFile(c, file, {
       'Cache-Control': 'no-cache',
       'Content-Type': 'text/plain; charset=utf-8',

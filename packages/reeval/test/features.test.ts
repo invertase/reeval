@@ -132,6 +132,7 @@ function blockOf(stdout: string, name: string): string {
 }
 
 const TOKEN = 'reeval-fixture-token-7c1d9a0b52e4'
+const AGENT_VALUE = 'reeval-fixture-agent-3f8e61b2a9d0'
 /** With characters each encoding changes: space, `/`, `+`, `"`, `&`, `?` and `=`. */
 const LEAKY = 'reeval leak/7c+1d"9a&b?0=e4f2'
 
@@ -882,6 +883,19 @@ export const features: Feature[] = [
     record: ({ runDir }) => assert.equal(filesContaining(runDir, TOKEN), ''),
   },
   {
+    dir: 'secrets/judge-sees-redacted',
+    tiers: ['fake', 'docker'],
+    env: 'tokens',
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN, REEVAL_FIXTURE_AGENT_VALUE: AGENT_VALUE },
+    canary: /expected '\[REDACTED\]' to be '\[REDACTED\]'/,
+    record: ({ run, project, runDir }) => {
+      const sent = JSON.parse(readFileSync(join(project, 'judge-saw-lands.json'), 'utf8'))
+      assert.deepEqual(judgeInputOf(run, runDir).state, sent, 'judge-input.json is what was sent')
+      assert.equal(filesContaining(runDir, TOKEN), '')
+      assert.equal(filesContaining(runDir, AGENT_VALUE), '')
+    },
+  },
+  {
     dir: 'secrets/brokered-agent-sees-placeholder',
     tiers: ['fake', 'docker', 'podman'],
     env: 'keys',
@@ -907,6 +921,44 @@ export const features: Feature[] = [
       })
       assert.equal(filesContaining(runDir, TOKEN), '')
       assert.notEqual(filesContaining(runDir, 'CHECK_TOKEN'), '', 'twin: the search finds the name')
+    },
+  },
+  {
+    dir: 'secrets/checks-setup-background',
+    tiers: ['docker'],
+    env: 'unbrokered',
+    canaryEnv: 'brokered',
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
+    canary: /expected 'placeholder' to be 'value'/,
+    record: ({ run, runDir, stdout }) => {
+      const byCommand = (a: { command: string }, b: { command: string }) =>
+        a.command.localeCompare(b.command)
+      assert.deepEqual(landed(run)?.setupProcesses?.toSorted(byCommand), [
+        { command: 'sh -c sleep 601; : one two', secrets: ['CHECK_TOKEN'] },
+        { command: 'sleep 600', secrets: ['CHECK_TOKEN'] },
+        { command: 'sleep 601', secrets: ['CHECK_TOKEN'] },
+      ])
+      assert.match(
+        stdout,
+        /Setup left "[^"]+" \(and 2 more\) running with CHECK_TOKEN, a to: 'checks' secret without hosts, in their environment, so the agent can read the real value from those processes\./,
+      )
+      // Twin: brokered with hosts, the same process holds a placeholder and nothing is recorded.
+      const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]
+      assert.ok(canary)
+      assert.equal(canary.setupProcesses, undefined)
+      assert.equal(filesContaining(runDir, TOKEN), '')
+    },
+  },
+  {
+    dir: 'secrets/checks-setup-finishes',
+    tiers: ['docker'],
+    env: 'finishes',
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
+    canary: /expected '' to be 'value'/,
+    record: ({ run, stdout }) => {
+      assert.ok(landed(run)?.files.setupLog, 'the setup step ran')
+      assert.equal(landed(run)?.setupProcesses, undefined)
+      assert.doesNotMatch(stdout, /Setup left/)
     },
   },
   {
@@ -2543,6 +2595,14 @@ export const features: Feature[] = [
     tiers: ['fake', 'docker'],
     env: 'seeded',
     canary: /expected no changes to test\/\*\*, got \["test\/greet\.test\.js" \(modified\)\]/,
+  },
+  {
+    dir: 'assert/changed-quoted-path',
+    tiers: ['fake', 'docker'],
+    env: 'notes',
+    canary: /expected no changes to notes\/café\.txt, got \["notes\/café\.txt" \(added\)\]/,
+    record: ({ run }) =>
+      assert.deepEqual(landed(run)?.changedFiles, [{ path: 'notes/café.txt', status: 'added' }]),
   },
   {
     dir: 'judge/state-contents',

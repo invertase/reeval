@@ -153,9 +153,11 @@ async function installPlugin(
     ...(abortSignal ? { abortSignal } : {}),
   })
   if (hooks === null) return
+  // A plugin's files are placed as they are, so its hooks.json may start with a byte-order mark.
+  const claude = JSON.parse(hooks.replace(/^\uFEFF/, ''))
   await sandbox.writeTextFile({
     path: posix.join(installed, 'hooks.json'),
-    content: `${JSON.stringify(antigravityHooks(plugin.name, JSON.parse(hooks), installed), null, 2)}\n`,
+    content: `${JSON.stringify(antigravityHooks(plugin.name, claude, installed), null, 2)}\n`,
     ...(abortSignal ? { abortSignal } : {}),
   })
 }

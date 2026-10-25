@@ -477,7 +477,7 @@ export const inventory: InventoryFeature[] = [
     id: 'selection.group-skip',
     area: 'Config and selection',
     name: '`group.skip` and `group.todo`, and todo shown in the plan, summary, record and studio',
-    plan: ['selection/only-local'],
+    plan: ['selection/only-local', 'only-in-skip/only-in-skipped-group'],
     tests: [
       engine("a skipped group's evals, nested ones too, are recorded as skipped and never run"),
       engine('group.todo shows as todo, like evaluate.todo'),
@@ -926,6 +926,19 @@ export const inventory: InventoryFeature[] = [
     tests: [secrets('twin: during a check, the checks secret is active')],
   },
   {
+    id: 'secret.checks-setup-processes',
+    area: 'Environments',
+    name: "Processes setup leaves running with a `to: 'checks'` secret without `hosts`: `setupProcesses` and the `setup-process-secret` remark",
+    fixtures: ['secrets/checks-setup-background', 'secrets/checks-setup-finishes'],
+    tests: [
+      "reeval/test/remarks.test.ts › setup-process-secret: a process setup left running with a to: 'checks' secret, not without one",
+      options(
+        "secrets: { unbrokered: 'error' } refuses a to: 'checks' secret without hosts before setup runs",
+      ),
+      secrets("a to: 'checks' secret's warning says what keeps it from the agent and what doesn't"),
+    ],
+  },
+  {
     id: 'secret.brokered',
     area: 'Environments',
     name: 'Brokered secrets (`hosts`, `in`) and their placeholders',
@@ -962,12 +975,20 @@ export const inventory: InventoryFeature[] = [
       secrets('redacting serialised JSON'),
       secrets('redacting encoded forms'),
       secrets('redacting fragments of a secret'),
+      secrets('redacting a secret split across stream parts'),
       secrets("every variable of a header's secret.template is a secret the run masks"),
       debug(
         "a declared secret under a plain name is masked in an eval's logs and failures on screen",
       ),
       debug("a secret in an error that stops the run is masked, config's and an eval file's"),
     ],
+  },
+  {
+    id: 'redaction.judge',
+    area: 'Environments',
+    name: 'Secrets masked in what the judge is sent',
+    fixtures: ['secrets/judge-sees-redacted'],
+    tests: [secrets('redacting serialised JSON')],
   },
   {
     id: 'setup.steps',
@@ -1883,11 +1904,12 @@ export const inventory: InventoryFeature[] = [
     id: 'assert.changed',
     area: 'Judges and matchers',
     name: '`toHaveChanged(paths?)`: files in the workspace diff, matched with globs',
-    fixtures: ['assert/changed'],
+    fixtures: ['assert/changed', 'assert/changed-quoted-path'],
     tests: [
       'reeval/test/assert.test.ts › matches the diff with globs, directories, RegExps and lists',
       'reeval/test/assert.test.ts › reads c as of its latest turn, and nothing before one',
       'reeval/test/assert.test.ts › names the files it saw',
+      'reeval/test/unit.test.ts › changed paths come back as written, however git would quote them',
     ],
   },
   {
@@ -2659,6 +2681,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       debug('redaction holds on screen, in debug.log and in trace.ndjson, encoded forms included'),
       debug("a key's tail is masked on screen, in debug.log, trace.ndjson and the transcript"),
+      secrets('trace.ndjson masks a secret streamed as deltas'),
       docker('-v and -vv trace the image, container, brokering, gateway and docker commands'),
     ],
   },
@@ -2730,7 +2753,7 @@ export const inventory: InventoryFeature[] = [
     area: 'CLI and runner',
     name: 'Python eval authoring SDK (conformance goldens and fake run)',
     fixtures: ['python-sdk/hello', 'python-sdk/attempt-isolation'],
-    plan: ['python/hello'],
+    plan: ['python/hello', 'python/dataclass-future'],
     tests: ['reeval/test/python-sdk.test.ts › Python SDK tests and conformance goldens'],
   },
 ]

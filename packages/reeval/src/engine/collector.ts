@@ -21,7 +21,7 @@ export type CollectedTest = {
   name: string
   /** The enclosing groups, outermost first. */
   groups: string[]
-  /** After `.only`, `.skip` and `.todo` are applied: `only` only inside a skipped group. */
+  /** After `.only`, `.skip` and `.todo` are applied, so never `only`. */
   mode: TestMode
   options: TestOptions
   body: (handle: TestHandle) => Promise<void>
@@ -126,8 +126,7 @@ function interpretModes(suite: Suite, onlyMode: boolean, parentIsOnly: boolean):
 
 function markAll(suite: Suite, mode: 'skip' | 'todo'): void {
   for (const t of suite.tasks) {
-    if (t.mode !== 'run') continue
-    t.mode = mode
-    if (t.type === 'suite') markAll(t, mode)
+    if (t.mode !== 'skip' && t.mode !== 'todo') t.mode = mode
+    if (t.type === 'suite') markAll(t, t.mode as 'skip' | 'todo')
   }
 }

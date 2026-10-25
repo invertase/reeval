@@ -4,7 +4,7 @@
 // what it returns.
 import { type AttemptSpec, setupAllowance } from './attempt/index.ts'
 import type { DeclaredFamily } from './declaration.ts'
-import { parseDuration } from './duration.ts'
+import { MAX_TIMER_MS, parseDuration } from './duration.ts'
 import { allowedHosts, unenforceable } from './egress.ts'
 import type { Gate, TestMode } from './engine/runtime.ts'
 import {
@@ -157,14 +157,17 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
         return { ...harness, gateway: route.name }
       })
   const plannedAttempts = resolvedEval.skip ? [] : expand({ ...resolved, harness: routed })
+  let judge: AttemptMeta['judge']
   if (plannedAttempts.length) {
     try {
-      resolveModelGateway(
+      const gateway = resolveModelGateway(
         resolved.judge.model,
         resolved.judge.gateway,
         { gateways },
         'the judge model',
       )
+      const { model } = resolved.judge
+      if (typeof model === 'string') judge = { model, ...(gateway ? { gateway } : {}) }
     } catch (error) {
       if (error instanceof UsageError) throw new UsageError(`${where}: ${error.message}`)
       throw error
@@ -269,12 +272,16 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       ...(routes.has(harnessId(planned.harness))
         ? { gateway: routes.get(harnessId(planned.harness)) }
         : {}),
+      ...(judge ? { judge } : {}),
     }
     return {
       name: `${name} [${attemptId(planned.cell.key, planned.n)}]`,
       mode: skip ? 'skip' : mode,
       attempt,
-      timeout: skip ? undefined : timeoutMs + setupAllowance(planned) + GRACE_MS,
+      timeout: skip
+        ? undefined
+        : // A longer backstop would fire at once.
+          Math.min(timeoutMs + setupAllowance(planned) + GRACE_MS, MAX_TIMER_MS),
       gate: skip
         ? undefined
         : {

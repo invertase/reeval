@@ -84,7 +84,7 @@ The type definitions are in `packages/reeval/src/history/types.ts`; the environm
 
 `runner` is `{ kind: 'ci', provider, runUrl, attempt, pr: { number, baseRef } | null }` in CI, or `{ kind: 'local', hostHash }` on your machine.
 
-An attempt's `error` is `{ kind, message, prepare?, resource? }`:
+An attempt's `error` is `{ kind, message, prepare?, resource? }`. `kind` is `judge` when a judge failed the attempt and no check did: a `toPass()` or `.not.toPass()` call failed, a `c.judge()` call failed, or no judge model was set. A failed `expect.soft` check beside a failed `toPass()`, in either order, makes it an `assertion` with the check's message, and so does a check failing beside a verdict the eval didn't assert. Pairwise questions leave those attempts out.
 
 | Field | Set when | Shape |
 |---|---|---|
@@ -379,7 +379,7 @@ Also has every field of `Cell`.
 <Property name="fingerprintParts" type="FingerprintParts"></Property>
 
 <Property name="environmentDigest" type="string | null">
-  The environment's digest: the join key into `RunRecord.environments`; null for none.
+  The environment's digest; null for none. With `environment`, the key into `RunRecord.environments`: environments with the same contents share a digest.
 </Property>
 
 <Property name="harnessKind" type="string"></Property>
@@ -744,6 +744,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   Harness session starts that didn't become ready within `startTimeout` and were started again (at most one).
 </Property>
 
+<Property name="setupProcesses" type="SetupProcess[]" optional>
+  Processes the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in their environment, so they hold its real value while the agent works and the agent, as the same user, can read it from them. Found by the secret's variable name, so a copy under another name or in a command's arguments isn't. At most 20, each `{ command, secrets }`: its command line, masked and cut at 200 characters, and those secrets' names. Absent when there were none.
+</Property>
+
 <Property name="checks" type="Array<{command: string; exitCode: number; durationMs: number; log?: FileRef; retries?: number; tries?: ExecTry[]}>">
   Each foreground `c.exec`: its last try's exit code, and `durationMs` over all its tries. With `retries`, `tries` has each try's `{ exitCode, durationMs }` and the log each try's output.
 </Property>
@@ -825,7 +829,7 @@ Also has every field of `FileRef`.
 </Property>
 
 <Property name="key" type="string">
-  `<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a verdict can be followed across runs (and an edited question starts a new series).
+  `<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a verdict can be followed across runs (and an edited question starts a new series). `<index>` is the call's place among the attempt's `c.judge()` calls, counting calls that failed, whichever finishes first.
 </Property>
 
 <Property name="retries" type="JudgeRetry[]" optional>

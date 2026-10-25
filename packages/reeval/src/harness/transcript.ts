@@ -162,7 +162,10 @@ function fileEdits(
   // pi's edit reports a unified `patch` in its `details`.
   const patch = str(record(result.details).patch)
   if (patch) {
-    const body = lines(patch).filter((l) => !l.startsWith('+++') && !l.startsWith('---'))
+    // Only the `---` and `+++` before the first `@@` are headers: in a hunk, `--- x` removes `-- x`.
+    const all = lines(patch)
+    const hunks = all.findIndex((l) => l.startsWith('@@'))
+    const body = hunks < 0 ? [] : all.slice(hunks + 1)
     return [
       {
         type: 'file-edit',

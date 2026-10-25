@@ -9,7 +9,7 @@ import { delimiter, dirname, join, relative, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
 import { loadConfig } from '../src/config.ts'
-import { configShape } from '../src/report/collect.ts'
+import { configShape, traceTail } from '../src/report/collect.ts'
 import { readInvocations } from '../src/report/invocations.ts'
 import {
   FIELDS,
@@ -168,6 +168,31 @@ describe('reeval report: redaction', () => {
     assert.deepEqual(scrub.value({ [`/home/alice/${NAMED}`]: [NAMED] }), {
       '~/[REDACTED]': ['[REDACTED]'],
     })
+  })
+
+  test('a trace line is scrubbed before it is cut, so a path or value across the cut goes whole', () => {
+    const scrub = scrubber({ env: { MY_API_KEY: NAMED }, home: '/home/alice-tester' })
+    // Each puts its value 4 characters before the line's 500-character cut.
+    const line = (value: string) =>
+      JSON.stringify({
+        phase: 'docker',
+        data: { stdout: `${'x'.repeat(459)} ${value} ${'y'.repeat(99)}` },
+      })
+    const masked = { added: 0 }
+    const lines = traceTail(
+      [
+        line('/home/alice-tester/work'),
+        line(NAMED),
+        line('[REDACTED]').replace('xxx', '[REDACTED]'),
+        JSON.stringify({ data: `${NAMED} short` }),
+      ].join('\n'),
+      scrub,
+      masked,
+    )
+    const kept = lines.join('\n')
+    assert.doesNotMatch(kept, /\/hom|sk-l/)
+    assert.match(kept, / ~\/wo…\n.* \[RED…\n/)
+    assert.equal(masked.added, 1, 'only the mask the scrubbing adds, not the ones already there')
   })
 
   test('canary: the leak check finds every seed when nothing scrubs', () => {

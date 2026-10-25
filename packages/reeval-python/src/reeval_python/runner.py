@@ -70,7 +70,11 @@ class _Frames:
         self.pid = os.getpid()
 
     def write(self, msg: dict[str, Any]) -> None:
-        data = (json.dumps(msg) + "\n").encode()
+        try:
+            data = (json.dumps(msg, allow_nan=False) + "\n").encode()
+        except ValueError as exc:
+            # reeval can't read a bare NaN, so the call that passed one fails here instead.
+            raise ValueError(f"a value isn't JSON, which has no NaN or Infinity: {exc}") from None
         if os.getpid() != self.pid:
             # A forked child (multiprocessing, os.fork) shares the frame fd but not the lock, so
             # its writes would interleave with the runner's: what it says goes to stderr.

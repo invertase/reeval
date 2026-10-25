@@ -119,7 +119,10 @@ export function turnSender(
     a.record.turns.push(entry)
     const turnNumber = a.record.turns.length
     a.report({ kind: 'turn-start', turn: turnNumber })
-    debugLog('harness', `turn ${turnNumber} started: ${JSON.stringify(clip(prompt, 160))}`)
+    debugLog(
+      'harness',
+      `turn ${turnNumber} started: ${JSON.stringify(clip(redactSecrets(prompt), 160))}`,
+    )
     debugTrace('harness', 'prompt', { turn: turnNumber, prompt }, `turn ${turnNumber} prompt`)
     const watch = a.mcpStartup && watchMcpStartup(a.mcpStartup)
     const signal = watch ? AbortSignal.any([a.signal, watch.signal]) : a.signal
@@ -196,13 +199,13 @@ export function turnSender(
       tools: count('tool', 'web-search', 'web-fetch'),
       fileEdits: count('file-edit'),
       ...(failure?.type === 'error'
-        ? { error: redactSecrets(clip(failure.message.trim(), 300)) }
+        ? { error: clip(redactSecrets(failure.message.trim()), 300) }
         : {}),
     })
     const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
     debugLog(
       'harness',
-      `turn ${turnNumber} ${result.status} in ${formatDuration(result.durationMs)} · ${plural(count('tool', 'web-search', 'web-fetch'), 'tool call')} · ${plural(count('file-edit'), 'file edit')}${failure && 'message' in failure ? ` · error: ${clip(String(failure.message), 200)}` : ''}${result.model ? ` · model ${result.model}` : ''}`,
+      `turn ${turnNumber} ${result.status} in ${formatDuration(result.durationMs)} · ${plural(count('tool', 'web-search', 'web-fetch'), 'tool call')} · ${plural(count('file-edit'), 'file edit')}${failure && 'message' in failure ? ` · error: ${clip(redactSecrets(String(failure.message)), 200)}` : ''}${result.model ? ` · model ${result.model}` : ''}`,
     )
     for (const s of entry.mcpStartup ?? []) {
       debugLog(

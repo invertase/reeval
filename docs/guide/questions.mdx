@@ -170,7 +170,7 @@ A model error prints as a warning, and the outcomes stand.
 }
 ```
 
-Each answer points at its file (`input`). A pairwise question's file has one call per pair and order, with `labels` saying which side the model saw as A, and screenshots pointing at the attempts' own PNGs. `prompt` is the text the model was sent, secrets masked. `summary.md` and the studio link to the file, and `history.artifacts` keeps it or drops it with the eval's other files.
+Each answer points at its file (`input`). A pairwise question's file has one call per pair and order, with `labels` saying which side the model saw as A, and screenshots pointing at the attempts' own PNGs. `prompt` is the text the model was sent, with `[REDACTED]` in place of each secret's value, as in what `c.judge()` sends. `summary.md` and the studio link to the file, and `history.artifacts` keeps it or drops it with the eval's other files.
 
 ## Next
 

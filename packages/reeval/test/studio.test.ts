@@ -798,6 +798,78 @@ describe('view-models over a real history', () => {
       ],
     )
   })
+
+  test("patch lines that start with -- or ++ count, and the file's own header lines don't", () => {
+    const [file] = splitPatch(
+      [
+        'diff --git a/schema.sql b/schema.sql',
+        'index 1111111..2222222 100644',
+        '--- a/schema.sql',
+        '+++ b/schema.sql',
+        '@@ -1,3 +1,3 @@',
+        '--- drop the legacy table',
+        '-DROP TABLE legacy;',
+        '+++ counter',
+        '+SELECT 1;',
+        ' -- unchanged',
+        '@@ -9 +9 @@',
+        '----',
+        '+++i;',
+        '',
+      ].join('\n'),
+    )
+    assert.deepEqual([file?.path, file?.added, file?.removed], ['schema.sql', 3, 3])
+  })
+
+  test('patches name files git quotes, renames and binaries by their real path', () => {
+    const files = splitPatch(
+      [
+        'diff --git "a/t\\tab \\"q\\".txt" "b/t\\tab \\"q\\".txt"',
+        'new file mode 100644',
+        '--- /dev/null',
+        '+++ "b/t\\tab \\"q\\".txt"',
+        '@@ -0,0 +1 @@',
+        '+x',
+        'diff --git "a/caf\\303\\251.txt" "b/caf\\303\\251.txt"',
+        'deleted file mode 100644',
+        '--- "a/caf\\303\\251.txt"',
+        '+++ /dev/null',
+        '@@ -1 +0,0 @@',
+        '-x',
+        'diff --git a/with space.txt b/with space.txt',
+        '--- a/with space.txt\t',
+        '+++ b/with space.txt\t',
+        '@@ -1 +1 @@',
+        '-a',
+        '+b',
+        'diff --git a/old name.txt b/new name.txt',
+        'similarity index 100%',
+        'rename from old name.txt',
+        'rename to new name.txt',
+        'diff --git a/b b/logo b.png b/b b/logo b.png',
+        'new file mode 100644',
+        'index 0000000..1111111',
+        'GIT binary patch',
+        'literal 1',
+        'IcmZo*0000H00000',
+        '',
+        'literal 0',
+        'HcmV?d00001',
+        '',
+        '',
+      ].join('\n'),
+    )
+    assert.deepEqual(
+      files.map((f) => [f.path, f.status]),
+      [
+        ['t\tab "q".txt', 'added'],
+        ['café.txt', 'deleted'],
+        ['with space.txt', 'modified'],
+        ['new name.txt', 'renamed'],
+        ['b b/logo b.png', 'added'],
+      ],
+    )
+  })
 })
 
 const HOST = '127.0.0.1:4984'
@@ -921,6 +993,53 @@ describe('studio server', () => {
     }
   })
 
+  test('a run directory that is a symlink serves nothing from its target', async () => {
+    const runId = headers[0]?.runId as string
+    const outside = await mkdtemp(join(tmpdir(), 'reeval-outside-'))
+    writeFileSync(join(outside, 'summary.md'), 'outside the history folder')
+    const [out, sibling] = ['20990102T000000Z_abc1234_x_a1b2', '20990103T000000Z_abc1234_x_a1b2']
+    for (const [id, target] of [
+      [out, outside],
+      [sibling, join(source.historyDir, runId)],
+    ] as const) {
+      writeFileSync(join(source.historyDir, `${id}.json`), '{}')
+      await symlink(target, join(source.historyDir, id), 'dir')
+    }
+    assert.equal((await get(`/${recordPath(out)}`)).status, 200)
+    assert.equal((await get(`/${artifactPath(out, 'summary.md')}`)).status, 404)
+    const ref = records.get(runId)?.evals[0]?.attempts[0]?.files.diff
+    assert.ok(ref)
+    assert.equal((await get(`/${artifactPath(runId, ref.path)}`)).status, 200)
+    assert.equal((await get(`/${artifactPath(sibling, ref.path)}`)).status, 404)
+
+    // Nor are its saved analyses, or notes under a symlinked `.reeval/analysis/<run>`.
+    const saved = 'test/fixtures/records/before-proxy-egress/evals/.history'
+    await cp(
+      join(saved, '20261023T093806Z_66722ad_cursor-agent_e3gk', 'analysis'),
+      join(outside, 'analysis'),
+      { recursive: true },
+    )
+    mkdirSync(join(outside, 'notes'))
+    const note: AnalysisNote = {
+      kind: 'reeval-analysis-note',
+      schemaVersion: 1,
+      runId: out,
+      evalId: 'e',
+      harness: 'fake',
+      model: 'fake',
+      resolvedModel: null,
+      createdAt: '2026-10-21T00:00:00.000Z',
+      attempts: ['fake#1'],
+      text: 'A note.',
+      usage: { inputTokens: null, outputTokens: null },
+    }
+    writeFileSync(join(outside, 'notes', 'e__fake.json'), JSON.stringify(note))
+    mkdirSync(join(source.root, '.reeval/analysis'), { recursive: true })
+    await symlink(outside, join(source.root, '.reeval/analysis', out), 'dir')
+    const analysis = await (await get(`/${analysisDataPath(out)}`)).json()
+    assert.deepEqual([analysis.entries, analysis.notes], [[], undefined])
+  })
+
   test("serves an attempt's local debug data, and null where there is none", async () => {
     assert.equal((await (await get('/studio.json')).json()).features.debug, true)
     // The second run fails its judge, so its attempt kept a trace; the first passed.
@@ -957,6 +1076,16 @@ describe('studio server', () => {
     ]) {
       assert.equal(await view(runId as string, key as string), null, key)
     }
+
+    // A debug folder that is a symlink to another run's isn't read through.
+    const linked = '20990104T000000Z_abc1234_x_a1b2'
+    await symlink(
+      join(dir, '.reeval/debug', failed.runId),
+      join(dir, '.reeval/debug', linked),
+      'dir',
+    )
+    assert.equal(await view(linked, failed.key), null)
+    assert.equal((await get(`/${traceApiPath(linked, failed.key)}`)).status, 404)
   })
 
   test("without the scratch source, unrecorded runs aren't served", async () => {

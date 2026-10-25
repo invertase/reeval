@@ -45,6 +45,7 @@
   "fakeHarness effort empty": "UsageError: fakeHarness({ effort }) is the value that CLI takes, e.g. fakeHarness({ effort: 'high' }) (got \"\")",
   "fakeHarness with a typo": "UsageError: Unknown fakeHarness() option \"txt\". Did you mean \"text\"?",
   "fakeHarness text a number": "UsageError: fakeHarness({ text }) must be a string (got 3)",
+  "fakeHarness delayMs over 596h": "UsageError: fakeHarness({ delayMs }) must be at most 596h (2147483647ms), the longest timer Node can set (got 2147483648)",
   "fakeHarness files not strings": "UsageError: fakeHarness({ files[\"a.txt\"] }) must be a string (got 1)",
   "fakeHarness a tool with an extra key": "UsageError: fakeHarness({ tools[0] }) has an unknown key \"okay\"",
   "cursor with an empty id": "UsageError: cursor({ id }) must be a non-empty string (got \"\")",

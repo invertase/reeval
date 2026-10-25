@@ -697,6 +697,51 @@ evaluate('judged', async (c) => {
     )
   })
 
+  test("a group's or eval's judge needs its key before any attempt, and a malformed one exits 2", async () => {
+    const p = await project('eval-judge-key', {
+      'reeval.config.ts': `import { direct, vercel } from 'reeval/gateway'${fakeConfig({
+        extra: `gateway: [direct(), vercel()],`,
+      })}`,
+      'evals/j.eval.ts': `import { evaluate, expect, group } from 'reeval'
+evaluate('own judge', { judge: { model: 'anthropic/claude-sonnet-5' } }, async (c) => {
+  await c.send('x')
+  expect(await c.judge('Did it?')).toPass()
+})
+group('judged', { judge: { model: 'openai/gpt-6-luna', gateway: 'vercel' } }, () => {
+  evaluate('group judge', async (c) => {
+    await c.send('x')
+    expect(await c.judge('Did it?')).toPass()
+  })
+})
+`,
+    })
+    const noKeys = {
+      ANTHROPIC_API_KEY: '',
+      OPENAI_API_KEY: '',
+      AI_GATEWAY_API_KEY: '',
+      VERCEL_OIDC_TOKEN: '',
+    }
+    const missing = await runCli(p.dir, ['run'], { env: noKeys })
+    assert.equal(missing.code, 2, missing.stdout + missing.stderr)
+    assert.match(
+      missing.stderr,
+      /Missing credentials: ANTHROPIC_API_KEY \(for direct\(\)\) for the judge model, "anthropic\/claude-sonnet-5"; AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(for vercel\(\)\) for the judge model, "openai\/gpt-6-luna"\./,
+    )
+    assert.doesNotMatch(missing.stdout, /own judge|group judge/, 'no attempt started')
+    const malformed = await runCli(p.dir, ['run'], {
+      env: { ...noKeys, ANTHROPIC_API_KEY: 'sk-ant\nrest', AI_GATEWAY_API_KEY: 'vck test' },
+    })
+    assert.equal(malformed.code, 2, malformed.stdout + malformed.stderr)
+    assert.match(
+      malformed.stderr,
+      /Credentials with whitespace or a line break in them: ANTHROPIC_API_KEY \(character 7\), AI_GATEWAY_API_KEY \(character 4\)/,
+    )
+    const narrowed = await runCli(p.dir, ['run', 'own judge'], { env: noKeys })
+    assert.equal(narrowed.code, 2, narrowed.stdout + narrowed.stderr)
+    assert.match(narrowed.stderr, /Missing credentials: ANTHROPIC_API_KEY \(for direct\(\)\)/)
+    assert.doesNotMatch(narrowed.stderr, /AI_GATEWAY_API_KEY/, 'a filtered-out eval needs no key')
+  })
+
   const judgeKeyCases: Array<[string, string, RegExp]> = [
     [
       'anthropic/claude-sonnet-5',
@@ -994,6 +1039,26 @@ evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})
       /evaluate\("adds 1"\) is declared twice in this file\. .* For evaluate\.each, put \$key, %s or %# in the name \("adds \$a"\) so each case's name differs\./,
     ],
     [
+      'two pooled evaluate.each with the same name template',
+      `evaluate.each([{ n: 1 }, { n: 2 }])('case $n', async () => {}); evaluate.each([{ n: 3 }, { n: 4 }, { n: 5 }])('case $n', async () => {})`,
+      /evaluate\.each\("case \$n"\) is declared twice in this file\. Each pooled evaluate\.each needs its own name, or their cases are pooled into one family\. Give each its own name template, or pass evaluate\.each\(cases, \{ pool: false \}\) to keep the cases apart\./,
+    ],
+    [
+      'an eval named like a grouped eval',
+      `group('g', () => { evaluate('e', async () => {}) }); evaluate('g › e', async () => {})`,
+      /evaluate\("g › e"\) is declared twice in this file\. Each eval needs its own name, or its attempts are merged into one eval\. " › " joins the group and eval names in an eval's id, so a name containing it can be a grouped eval's id\./,
+    ],
+    [
+      'an evaluate.each named like a grouped one',
+      `group('g', () => { evaluate.each([1, 2])('n %s', async () => {}) }); evaluate.each([3, 4])('g › n %s', async () => {})`,
+      /evaluate\.each\("g › n %s"\) is declared twice in this file\. .* " › " joins the group and eval names/,
+    ],
+    [
+      'an eval named like a pooled template',
+      `evaluate('case $n', async () => {}); evaluate.each([{ n: 1 }, { n: 2 }])('case $n', async () => {})`,
+      /evaluate\("case \$n"\) has the same id as the pooled evaluate\.each\("case \$n"\) in this file: a family's id is its name template\. Give the eval or the template another name\./,
+    ],
+    [
       "pool in an eval's options",
       `evaluate.each([1, 2])('n %s', { pool: false } as never, async () => {})`,
       /Unknown option "pool" in evaluate\("n 1"\)\. pool is an option of evaluate\.each, beside the cases: evaluate\.each\(cases, \{ pool: false \}\)\./,
@@ -1007,6 +1072,11 @@ evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})
       'a zero timeout',
       `evaluate('e', { timeout: 0 }, async () => {})`,
       /Invalid duration 0\. A duration is more than zero: use e\.g\. "90s" or "15m"\./,
+    ],
+    [
+      'a timeout longer than a timer can be',
+      `evaluate('e', { timeout: '1000h' }, async () => {})`,
+      /Invalid duration "1000h"\. A duration is at most 596h \(2147483647ms\), the longest timer Node can set\./,
     ],
     [
       'a zero setup step timeout',
@@ -1714,6 +1784,37 @@ evaluate('one', { environment: maybe }, async () => {})
       r.stderr,
       /AWS_SECRET_ACCESS_KEY in evaluate\("one"\) isn't brokered, and secrets\.unbrokered is 'error' in reeval\.config\.ts\. To broker it, add the hosts it's sent to, e\.g\. secret\.fromEnv\('AWS_SECRET_ACCESS_KEY', \{ hosts: \['api\.example\.com'\] \}\)\./,
     )
+  })
+
+  test("secrets: { unbrokered: 'error' } refuses a to: 'checks' secret without hosts before setup runs", async () => {
+    const serverEval = (secret: string) => `import { defineEnvironment, evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
+const server = defineEnvironment('server', ({ secret }) => ({
+  sandbox: docker(),
+  env: { CHECK_TOKEN: ${secret} },
+  setup: ['nohup sleep 600 >/dev/null 2>&1 &'],
+}))
+evaluate('one', { environment: server }, async () => {})
+`
+    const config = fakeConfig({ extra: "secrets: { unbrokered: 'error' }," })
+    const env = { CHECK_TOKEN: 'set-on-this-host' }
+    const p = await project('unbrokered-checks-strict', {
+      'reeval.config.ts': config,
+      'evals/o.eval.ts': serverEval("secret({ to: 'checks' })"),
+    })
+    const r = await runCli(p.dir, ['run'], { env })
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /CHECK_TOKEN in evaluate\("one"\) isn't brokered, and secrets\.unbrokered is 'error' in reeval\.config\.ts\./,
+    )
+    // Twin: brokered with hosts, the same eval plans.
+    const brokered = await project('unbrokered-checks-brokered', {
+      'reeval.config.ts': config,
+      'evals/o.eval.ts': serverEval("secret({ to: 'checks', hosts: ['api.example.com'] })"),
+    })
+    const ok = await runCli(brokered.dir, ['run', '--dry-run'], { env })
+    assert.equal(ok.code, 0, ok.stdout + ok.stderr)
   })
 
   test('a moving git ref warns in the plan', async () => {

@@ -168,6 +168,7 @@ export type Capture = {
  * default `name` is derived from the path. `wait` and `instructions` are call-only.
  */
 export type CaptureCall = {
+  /** The `artifacts/<name>.png` file name: 1 to 100 of `a-z`, `0-9`, `_` and `-`, starting with a letter or digit. Unique within the attempt. */
   name?: string
   path?: string
   viewport?: Viewport
@@ -2368,6 +2369,17 @@ export type StartRetry = {
   waitedMs: number
 }
 
+/**
+ * A process the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without
+ * `hosts` in its environment: it holds the real value while the agent works.
+ */
+export type SetupProcess = {
+  /** Its command line, cut at 200 characters. */
+  command: string
+  /** The `to: 'checks'` secrets without `hosts` in its environment, by name. */
+  secrets: string[]
+}
+
 /** One `expect` or `expect.soft` matcher call an attempt made. */
 export type AssertionRecord = {
   /**
@@ -2408,8 +2420,12 @@ export type EvalRecord = {
   >
   /** Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none. */
   assertions?: AssertionRecord[]
-  /** With `retries` when transient provider errors were retried on the way to the verdict. */
-  judgements: Array<Verdict & { retries?: JudgeRetry[] }>
+  /**
+   * In call order, with `retries` when transient provider errors were retried on the way to the
+   * verdict. `call` is the call's place among the attempt's `c.judge()` calls, failed ones
+   * included, which its judgement key is numbered by.
+   */
+  judgements: Array<Verdict & { retries?: JudgeRetry[]; call?: number }>
   /** Session starts that didn't become ready in time and were started again. */
   startRetries?: StartRetry[]
   timings: PhaseTimings
@@ -2423,6 +2439,8 @@ export type EvalRecord = {
   env?: { vars: string[]; secrets: string[]; brokered: string[] }
   /** The environment's setup steps as they ran, output redacted later. */
   setup?: Array<{ run: string; exitCode: number | null; durationMs: number; output: string }>
+  /** See `AttemptRecord.setupProcesses`. */
+  setupProcesses?: SetupProcess[]
   egress?: EgressRecord
   /** See `AttemptRecord.servedModels`. */
   servedModels?: string[] | null
@@ -2570,6 +2588,12 @@ export type AttemptMeta = {
   family?: FamilyMeta
   /** The gateway its harness resolved to; unset when no config, profile or pin names one. */
   gateway?: ResolvedGateway
+  /**
+   * Its judge's `'provider/model'`, as the config, profile, groups and eval set it, and the
+   * gateway its calls go through, so the run checks the judge's key before any attempt starts.
+   * Unset for a fake judge, a model object, or none.
+   */
+  judge?: { model: string; gateway?: GatewayName }
 }
 
 /** Where a cell's harness resolved in the `gateway` list, and the entries before it that couldn't serve it. */

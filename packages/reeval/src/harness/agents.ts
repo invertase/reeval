@@ -29,6 +29,7 @@ import {
   VERCEL_KEY,
 } from '../gateway/vercel.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
+import { withoutBom } from '../text.ts'
 import type {
   AgentHarnessDescriptor,
   EnvironmentLayer,
@@ -688,7 +689,7 @@ export async function writePluginFiles(
     if (existing?.trim()) {
       let base: unknown
       try {
-        base = JSON.parse(existing)
+        base = JSON.parse(withoutBom(existing))
       } catch {}
       if (!isObject(base)) {
         throw new InfraError(

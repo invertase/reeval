@@ -86,7 +86,7 @@ group(name, fn, options)
 | `evaluate.only(name, …)` | Runs only the `.only` evals and groups of its file. |
 | `evaluate.todo(name)` | A placeholder with no body. It's one entry marked todo: a `todo` row in `--dry-run` (and `mode: 'todo'` under `excluded` in `--json`), `todo` in the summary and `summary.md`, `todo: true` with outcome `skipped` in the record, and Todo in the studio. It counts as skipped. |
 | `evaluate.each(cases, options?)(name, …)` | One eval per case, pooled into a family. The body gets `(c, item)`. |
-| `group.skip(name, …)` | Skips every eval in the group, nested groups included; each counts as skipped. |
+| `group.skip(name, …)` | Skips every eval in the group, nested groups included, `.only` ones too; each counts as skipped. A `.only` inside still narrows its file, so the file's other evals skip too. |
 | `group.only(name, …)` | Runs only this group's evals within its file. |
 | `group.todo(name)` | A placeholder group, shown exactly as `evaluate.todo(name)` is: one todo entry, with the id `file › …groups › name`. |
 
@@ -137,7 +137,7 @@ A pooled `evaluate.each` is a family, with the id `file › …groups › name t
 | `evals[].family` and `families[]` | The [run record](/reference/record) |
 | `family_lift` | [`reeval query`](/reference/cli/query) |
 
-`minLift` on a family gates its pooled lift only, not each case's. Renaming the template starts a new family. See [Suites of cases](/recipes/eval-each) and [Lift](/concepts/lift).
+`minLift` on a family gates its pooled lift only, not each case's. Renaming the template starts a new family. Two pooled `evaluate.each` with the same template in the same group and file stop the run with exit 2 (`evaluate.each("case $n") is declared twice in this file. …`), since their cases would pool into one family: give each its own template, or pass `{ pool: false }`. An eval named like the template in the same group (`evaluate('case $n')`) is refused too, since it would share the family's id. See [Suites of cases](/recipes/eval-each) and [Lift](/concepts/lift).
 
 ## Eval ids
 
@@ -146,6 +146,8 @@ An eval's id is its file path (relative to the config's directory), its groups a
 ```text
 ge/math.eval.ts › math › writes add.js
 ```
+
+Two evals with the same id stop the run with exit 2, including an eval whose name contains ` › ` and so reads as a grouped eval's id: `evaluate('math › writes add.js')` beside `group('math', …)`'s `evaluate('writes add.js')`.
 
 The id is what the plan, the reporters, `reeval history` and the run record show, and what `reeval run` filters match. Each attempt also has an id, `<cell key>#<n>`, such as `cursor/-/docker#1`.
 

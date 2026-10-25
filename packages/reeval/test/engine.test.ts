@@ -323,7 +323,7 @@ group('area', () => {
     assert.match(read('summary.md'), /^todo {13}someday$/m)
   })
 
-  test('.env.local wins over .env, the shell wins over both, and evals see them', async () => {
+  test('.env.local wins over .env, the shell wins over both, and evals see them, past a byte-order mark', async () => {
     const p = await project('dotenv', {
       'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
@@ -335,7 +335,7 @@ export default defineConfig({
 })
 `,
       '.env': 'REEVAL_T_BOTH=from-env\nREEVAL_T_ENV=only-env\nREEVAL_T_SHELL=from-env\n',
-      '.env.local': 'REEVAL_T_BOTH=from-local\nREEVAL_T_SHELL=from-local\n',
+      '.env.local': '\uFEFFREEVAL_T_BOTH=from-local\nREEVAL_T_SHELL=from-local\n',
       'evals/sees.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('sees', async () => expect(process.env.REEVAL_T_BOTH).toBe('from-local'))
 `,
@@ -1211,6 +1211,49 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     assert.equal(inputs[1]?.error, undefined)
   })
 
+  test("judgement keys and judge inputs follow the calls' order, whichever finishes first or fails", async () => {
+    const p = await project('judge-call-order', {
+      'reeval.config.ts': fakeConfig({ harness: `{ files: { 'a.txt': 'hi\\n' } }` }),
+      'evals/agent.eval.ts': agentEval(`
+  await c.judge('foreign?', { on: { exec() {} } as never }).catch(() => {})
+  await c.judge('failed?', { model: 'no-provider' })
+  const [style, greets] = await Promise.all([
+    c.judge('style?', { state: { contents: ['a.txt'] } }),
+    c.judge('greets?'),
+  ])
+  expect.soft(style).toPass()
+  expect.soft(greets).toPass()
+  await Promise.all([
+    c.judge('late?', { model: 'no-provider', state: { contents: ['a.txt'] } }),
+    c.judge('early?', { model: 'no-provider' }),
+  ])
+`),
+    })
+    await runCli(p.dir)
+    const [e] = readRun(p.dir).evals
+    assert.deepEqual(
+      e?.trial.judgements.map((j) => [j.question, j.key.split(':')[0]]),
+      [
+        ['style?', '2'],
+        ['greets?', '3'],
+      ],
+    )
+    assert.deepEqual(
+      judgeInputs(e).map((i) => i.question),
+      ['failed?', 'style?', 'greets?', 'late?', 'early?'],
+    )
+    assert.deepEqual(
+      [...(e?.error?.message ?? '').matchAll(/c\.judge\("(\w+\?)"\) failed/g)].map((m) => m[1]),
+      ['failed?', 'late?', 'early?'],
+      'the failures are listed in call order',
+    )
+    assert.equal(
+      'call' in (judgeInputs(e)[0] ?? {}),
+      false,
+      "the call's place stays out of the judge input",
+    )
+  })
+
   test('a judge failure the eval never asserts on still fails the attempt, after its body', async () => {
     const p = await project('judge-unasserted', {
       'reeval.config.ts': fakeConfig(),
@@ -1230,6 +1273,88 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
       e?.trial.checks.map((c) => c.command),
       ['echo after'],
     )
+  })
+
+  test("a check that fails after a failing verdict the eval didn't assert is the check's error", async () => {
+    const p = await project('judge-informational', {
+      'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.2 }) }' }),
+      'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('unasserted', async (c) => {
+  await c.send('go')
+  await c.judge('nice?')
+  await expect(c.exec('exit 3'), 'tests pass').toSucceed()
+})
+evaluate('asserted not', async (c) => {
+  await c.send('go')
+  expect(await c.judge('nice?')).not.toPass()
+  await expect.soft(c.exec('exit 3'), 'tests pass').toSucceed()
+})
+evaluate('judge first', async (c) => {
+  await c.send('go')
+  expect.soft(await c.judge('nice?')).toPass()
+  await expect.soft(c.exec('exit 3'), 'tests pass').toSucceed()
+})
+evaluate('canary', async (c) => {
+  await c.send('go')
+  await expect(c.exec('exit 0'), 'tests pass').toSucceed()
+  expect.soft(await c.judge('nice?')).toPass()
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const run = readRun(p.dir)
+    const byName = Object.fromEntries(run.evals.map((e) => [e.name, e]))
+    for (const name of ['unasserted', 'asserted not', 'judge first']) {
+      const e = byName[name]
+      assert.equal(e?.trial.judgements[0]?.verdict, 'fail', name)
+      assert.equal(e?.error?.kind, 'assertion', name)
+      assert.match(e?.error?.message ?? '', /^tests pass: expected command to succeed/, name)
+    }
+    assert.equal(byName.canary?.error?.kind, 'judge', 'a failed toPass is the judge’s')
+    const summary = run.read('summary.md')
+    const attempts = summary.slice(summary.indexOf('## Attempts'))
+    assert.equal(
+      attempts.match(/tests pass: expected command to succeed/g)?.length,
+      3,
+      'each check failure is shown',
+    )
+  })
+
+  test('a failed check fails the attempt as itself beside a failed toPass, in either order', async () => {
+    const p = await project('judge-beside-check', {
+      'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.2 }) }' }),
+      'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('check then judge', async (c) => {
+  await c.send('go')
+  await expect.soft(c.exec('exit 3'), 'tests pass').toSucceed()
+  expect(await c.judge('nice?')).toPass()
+})
+evaluate('judge then erroring check', async (c) => {
+  await c.send('go')
+  expect.soft(await c.judge('nice?')).toPass()
+  await expect.soft(42 as never, 'tests pass').toSucceed()
+})
+evaluate('caught check', async (c) => {
+  await c.send('go')
+  try {
+    await expect(c.exec('exit 3'), 'optional').toSucceed()
+  } catch {}
+  expect(await c.judge('nice?')).toPass()
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const byName = Object.fromEntries(readRun(p.dir).evals.map((e) => [e.name, e]))
+    const check = byName['check then judge']?.error
+    assert.equal(check?.kind, 'assertion')
+    assert.match(check?.message ?? '', /^tests pass: expected command to succeed/)
+    const erroring = byName['judge then erroring check']?.error
+    assert.equal(erroring?.kind, 'assertion', 'a check that errored didn’t hold either')
+    assert.match(erroring?.message ?? '', /toSucceed\(\) expects/)
+    assert.equal(byName['caught check']?.error?.kind, 'judge', 'a caught check fails nothing')
+    assert.match(r.stdout, /Error: tests pass: expected command to succeed/)
   })
 
   test('judge state cascades key by key from the config to the call; build output is dropped', async () => {
@@ -2062,4 +2187,43 @@ evaluate('agent eval', async (c) => {
     assert.equal(readRun(p.dir).run.status, 'interrupted')
     assert.deepEqual(liveSandboxes(p), [])
   })
+
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    test(`${signal} while a file is still loading leaves no worker behind`, {
+      skip: noSignals,
+    }, async () => {
+      // The worker is the CLI's child: the file signals the CLI itself, mid-load, then never
+      // finishes loading.
+      const p = await project('signal-loading', {
+        'reeval.config.ts': fakeConfig(),
+        'evals/hang.eval.ts': `import { writeFileSync } from 'node:fs'
+import { evaluate } from 'reeval'
+writeFileSync(new URL('../worker.pid', import.meta.url), String(process.pid))
+setInterval(() => {}, 1000)
+process.kill(process.ppid, '${signal}')
+await new Promise(() => {})
+evaluate('never', async () => {})
+`,
+      })
+      const r = await runCli(p.dir, ['run'], { timeoutMs: 20_000 })
+      assert.notEqual(r.code, 0, r.stdout + r.stderr)
+      const worker = Number(readFileSync(join(p.dir, 'worker.pid'), 'utf8'))
+      const alive = () => {
+        try {
+          process.kill(worker, 0)
+          return true
+        } catch {
+          return false
+        }
+      }
+      try {
+        const deadline = Date.now() + 10_000
+        while (alive() && Date.now() < deadline)
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        assert.equal(alive(), false, 'the worker exited')
+      } finally {
+        if (alive()) process.kill(worker, 'SIGKILL')
+      }
+    })
+  }
 })

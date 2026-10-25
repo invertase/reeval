@@ -189,6 +189,14 @@ describe('checkTsconfig', () => {
     checkTsconfig(root, root)
   })
 
+  test('a tsconfig saved with a UTF-8 BOM passes, as tsc reads it', () => {
+    const root = tree({
+      'tsconfig.json': '\uFEFF{ "extends": "./base.json" }',
+      'base.json': '\uFEFF{ "compilerOptions": { "strict": true } }',
+    })
+    checkTsconfig(root, root)
+  })
+
   test('a tsconfig that extends a missing file fails, naming it', () => {
     const root = tree({ 'tsconfig.json': '{ "extends": "../../tsconfig.base.json" }' })
     assert.throws(

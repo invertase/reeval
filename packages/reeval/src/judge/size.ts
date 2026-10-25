@@ -1,4 +1,5 @@
 import type { JSONValue } from '../types.ts'
+import { patchPath } from '../view/patch.ts'
 
 /** Roughly four characters a token, as `reeval analyze` counts: an estimate, not the model's. */
 const CHARS_PER_TOKEN = 4
@@ -13,7 +14,7 @@ const diffItems = (patch: string) =>
   patch
     .split(/(?=^diff --git )/m)
     .map((part) => ({
-      name: /^diff --git a\/.+ b\/(.+)$/m.exec(part)?.[1] ?? '',
+      name: patchPath(part) ?? '',
       chars: part.length,
     }))
     .filter((item) => item.name)

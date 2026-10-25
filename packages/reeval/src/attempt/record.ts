@@ -2,15 +2,17 @@ import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { debugLog } from '../debug/attempt.ts'
 import { allowedHosts, isDirect } from '../egress.ts'
+import type { RawAssertion } from '../engine/runtime.ts'
 import { isTimeout } from '../errors.ts'
 import { expectedBlockedFor } from '../harness/agents.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
 import { sandboxProvider } from '../options.ts'
-import { redactJson, redactSecrets } from '../redact.ts'
+import { redactJson, redactSecrets, redactSplitSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { PrepareError } from '../sandbox/provider.ts'
 import { capMiddle, clip } from '../text.ts'
-import type { ErrorKind, EvalMeta, TranscriptEvent } from '../types.ts'
+import type { ErrorKind, EvalMeta, EvalRecord, TranscriptEvent } from '../types.ts'
+import { softFailure } from './assertions.ts'
 import { writeCaptureSidecars } from './capture.ts'
 import type { Attempt } from './state.ts'
 
@@ -25,22 +27,57 @@ function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; messa
   return { kind: 'assertion', message }
 }
 
+const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+const judged = (r: RawAssertion) => /(^|\.)toPass$/.test(r.matcher)
+
+/**
+ * Whether `error` is a judge's: one a judge threw, or what a `toPass()` or `.not.toPass()` call
+ * failed with. A failing verdict the eval didn't assert, or asserted with `.not.toPass()`, isn't.
+ * By message too, since another language's runner hands back its own copy of the error.
+ */
+function isJudges(a: Attempt, error: unknown, raw: readonly RawAssertion[]): boolean {
+  const message = messageOf(error)
+  if (a.judgeThrown.has(message)) return true
+  return raw.some(
+    (r) =>
+      r.status !== 'pass' && judged(r) && (r.error === error || messageOf(r.error) === message),
+  )
+}
+
+/**
+ * The error that fails the attempt: a judge's gives way to the first `expect.soft` check that
+ * didn't hold, whichever came first, so the attempt fails as that check. A hard check the eval
+ * caught doesn't fail the attempt, with a judge or without one.
+ */
+export function attemptError(a: Attempt, error: unknown, raw: readonly RawAssertion[]): unknown {
+  if (!isJudges(a, error, raw)) return error
+  const check = raw.find((r) => r.soft && r.status !== 'pass' && !judged(r))
+  return check ? softFailure([check]) : error
+}
+
 /**
  * Why the attempt failed, into the record: the eval's own timeout, a cancel, an infra error, or an
- * assertion, which is the judge's when a judge call failed or gave a failing verdict.
+ * assertion, which is the judge's when `error`, from `attemptError`, is a judge's.
  */
-export function recordFailure(a: Attempt, error: unknown, timedOut: boolean): void {
+export function recordFailure(
+  a: Attempt,
+  error: unknown,
+  timedOut: boolean,
+  raw: readonly RawAssertion[],
+): void {
   const { record } = a
   record.error = timedOut
     ? { kind: 'timeout', message: 'The eval timed out' }
     : classify(error, a.signal)
-  record.error.message = capMiddle(record.error.message)
+  record.error.message = capMiddle(redactSecrets(record.error.message))
   if (error instanceof PrepareError && !timedOut) {
     const { class: kind, stage, ref, cause, log, setBy } = error.failure
     record.error.prepare = { class: kind, stage, ref, cause, log, setBy: setBy ?? [] }
   }
-  const judgeFailed = a.judgeErrored || record.judgements.some((j) => j.verdict !== 'pass')
-  if (record.error.kind === 'assertion' && judgeFailed) record.error.kind = 'judge'
+  if (record.error.kind === 'assertion' && isJudges(a, error, raw)) {
+    record.error.kind = 'judge'
+  }
   record.outcome = record.error.kind === 'infra' ? 'infra_error' : 'fail'
 }
 
@@ -96,6 +133,24 @@ export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
   if (cost !== undefined) a.record.reportedCostUsd = cost
 }
 
+/**
+ * The record as its staging file holds it: redacted, with a secret split across a turn's raw
+ * stream parts masked first, since masking each part on its own leaves pieces of it to rebuild.
+ */
+export function stagedRecordJson(record: EvalRecord): string {
+  const turns = record.turns.map((turn) =>
+    turn.raw
+      ? {
+          ...turn,
+          raw: redactSplitSecrets(turn.raw.map((part) => JSON.stringify(part))).map(
+            (line) => JSON.parse(line) as unknown,
+          ),
+        }
+      : turn,
+  )
+  return redactJson({ ...record, turns }, 2)
+}
+
 /** Writes the attempt's record, redacted, and returns what the runner reports. */
 export async function writeRecord(a: Attempt, stagingDir: string, id: string): Promise<EvalMeta> {
   const { record, spec } = a
@@ -112,7 +167,7 @@ export async function writeRecord(a: Attempt, stagingDir: string, id: string): P
   )
   // Replaced whole: reeval studio reads it while the run goes on.
   const tmp = `${recordPath}.${process.pid}.tmp`
-  await writeFile(tmp, redactJson(record, 2))
+  await writeFile(tmp, stagedRecordJson(record))
   await rename(tmp, recordPath)
   return {
     outcome: record.outcome,
@@ -135,7 +190,7 @@ export function turnErrors(transcripts: TranscriptEvent[][]): string[] {
   return transcripts.flatMap((events, i) => {
     const found = events.find((e) => e.type === 'error')
     return found?.type === 'error'
-      ? [`turn ${i + 1} error: ${redactSecrets(clip(found.message.trim(), 500))}`]
+      ? [`turn ${i + 1} error: ${clip(redactSecrets(found.message.trim()), 500)}`]
       : []
   })
 }

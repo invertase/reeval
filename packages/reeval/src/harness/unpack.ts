@@ -4,6 +4,7 @@
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { PLUGIN_ROOT, type PluginFile } from '../environment/plugins.ts'
 import { InfraError } from '../sandbox/types.ts'
+import { withoutBom } from '../text.ts'
 import type { PluginPart } from '../types.ts'
 
 /**
@@ -90,7 +91,7 @@ function hookHandlers(
   const what = `the ${plugin.name} plugin's hooks/hooks.json`
   let raw: unknown
   try {
-    raw = JSON.parse(text)
+    raw = JSON.parse(withoutBom(text))
   } catch {
     throw new InfraError(`${what} isn't valid JSON`)
   }
@@ -167,7 +168,7 @@ export function unpackPlugins(
         if (!hooks) {
           let own: unknown = {}
           try {
-            own = hooksFile === null ? {} : JSON.parse(hooksFile)
+            own = hooksFile === null ? {} : JSON.parse(withoutBom(hooksFile))
           } catch {
             throw new InfraError(
               `The workspace's ${unpack.hooks.file} isn't valid JSON, so reeval can't add the plugins' hooks to it`,

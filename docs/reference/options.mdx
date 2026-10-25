@@ -133,7 +133,7 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 </Property>
 
 <Property name="timeout" type="number | string">
-  Per attempt: milliseconds, or `'500ms'`, `'90s'`, `'15m'`, `'1h'`. **Replaces**. Image builds and setup steps don't count, and the clock starts when the attempt gets a concurrency slot. Default `'15m'`.
+  Per attempt: milliseconds, or `'500ms'`, `'90s'`, `'15m'`, `'1h'`, at most `'596h'`. **Replaces**. Image builds and setup steps don't count, and the clock starts when the attempt gets a concurrency slot. Default `'15m'`.
 </Property>
 
 <Property name="tags" type="string[]">

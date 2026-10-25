@@ -215,6 +215,25 @@ registerTest('waits', { mode: 'run' }, async (h) => {
     assert.deepEqual(orphan.exits.slice(0, 1), [0])
   })
 
+  for (const select of [null, [0]]) {
+    test(`an orphan whose file never finishes loading exits at once (select ${JSON.stringify(select)})`, async () => {
+      const c = fakeChannel()
+      startWorker(c.channel)
+      const { file, run } = evalFile(`
+;(globalThis as any).__loading = true
+await new Promise(() => {})
+registerTest('never', { mode: 'run' }, async () => {})
+`)
+      c.send({ t: 'init', run, file, select })
+      await until(() => (globalThis as { __loading?: boolean }).__loading === true)
+      delete (globalThis as { __loading?: boolean }).__loading
+      c.disconnect()
+      await c.exit
+      assert.deepEqual(c.exits, [0])
+      assert.deepEqual(c.types(), ['hello'])
+    })
+  }
+
   test('an orphan with nothing running exits at once, and unhandled errors are reported', async () => {
     const c = fakeChannel()
     const worker = startWorker(c.channel)

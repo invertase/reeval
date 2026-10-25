@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
+import itertools
 import re
+import sys
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -101,16 +103,38 @@ _tree_children: list[DeclNode] | None = None
 _group_stack: list[_GroupFrame] = []
 _suites: list[_Suite] = []
 _bodies: dict[str, Callable[..., Any]] = {}
-_names: set[tuple[str, ...]] = set()
+# By id (the names joined with " › "): each eval's name path and whether it is a family's case.
+_names: dict[str, tuple[tuple[str, ...], bool]] = {}
+# Each pooled evaluate_each's name path, by its id.
+_families: dict[str, tuple[str, ...]] = {}
 
 
 def reset_collector() -> None:
-    global _tree_children, _group_stack, _suites, _bodies, _names
+    global _tree_children, _group_stack, _suites, _bodies, _names, _families
     _tree_children = []
     _group_stack = []
     _suites = [_Suite()]
     _bodies = {}
-    _names = set()
+    _names = {}
+    _families = {}
+
+
+def _separator_hint(path: tuple[str, ...], earlier: tuple[str, ...]) -> str:
+    """Two name paths with one id differ only where a name holds the " › " joining them."""
+    if len(path) == len(earlier):
+        return ""
+    return (
+        """ " › " joins the group and eval names in an eval's id, so a name containing it can be """
+        "a grouped eval's id."
+    )
+
+
+def _named_like_family(path: tuple[str, ...], family: tuple[str, ...]) -> ValueError:
+    return ValueError(
+        f"evaluate({' › '.join(path)!r}) has the same id as the pooled "
+        f"evaluate_each({' › '.join(family)!r}) in this file: a family's id is its name "
+        f"template. Give the eval or the template another name.{_separator_hint(path, family)}"
+    )
 
 
 def _next_body(fn: Callable[..., Any]) -> str:
@@ -326,9 +350,24 @@ def evaluate_each(
             ) from None
         except ValueError:
             pass
+        pooled = pool and len(cases) > 1
+        if pooled:
+            path = (*(frame.name for frame in _group_stack), name_template)
+            key = " › ".join(path)
+            if key in _families:
+                raise ValueError(
+                    f"evaluate_each({key!r}) is declared twice in this file. Each pooled "
+                    "evaluate_each needs its own name, or their cases are pooled into one family. "
+                    "Give each its own name template, or pass pool=False to keep the cases apart."
+                    f"{_separator_hint(path, _families[key])}"
+                )
+            plain = _names.get(key)
+            if plain is not None and not plain[1]:
+                raise _named_like_family(plain[0], path)
+            _families[key] = path
         for index, case in enumerate(cases):
             family = None
-            if pool and len(cases) > 1:
+            if pooled:
                 family = DeclaredFamily(name=name_template, case=index, cases=len(cases))
             name = _case_name(name_template, case, index)
             _register_eval(name, "run", opts, _with_case(fn, case), family, hint)
@@ -352,12 +391,16 @@ def _register_eval(
     path = (*(frame.name for frame in _group_stack), name)
     where = f"evaluate({' › '.join(path)!r})"
     _refuse_generator(fn, where)
-    if path in _names:
+    key = " › ".join(path)
+    earlier = _names.get(key)
+    if earlier is not None:
         raise ValueError(
             f"{where} is declared twice in this file. Each eval needs its own name, or its "
-            f"attempts are merged into one eval.{hint}"
+            f"attempts are merged into one eval.{hint}{_separator_hint(path, earlier[0])}"
         )
-    _names.add(path)
+    if family is None and key in _families:
+        raise _named_like_family(path, _families[key])
+    _names[key] = (path, family is not None)
     body = _next_body(fn)
     _declare(
         DeclaredEval(
@@ -395,16 +438,27 @@ def get_body(body_id: str) -> Callable[..., Any]:
     return _bodies[body_id]
 
 
+_module_ids = itertools.count(1)
+
+
 def collect_eval_file(path: Path) -> w.DeclarationTree:
     """Import one *.eval.py file and return its declaration tree JSON."""
 
     def loader() -> None:
-        spec = importlib.util.spec_from_file_location("reeval_eval", path)
+        # dataclasses, typing.get_type_hints and pickle find a class's module in sys.modules,
+        # so the file stays registered there, under a name no other file shares.
+        name = f"reeval_eval_{next(_module_ids)}"
+        spec = importlib.util.spec_from_file_location(name, path)
         if spec is None:
             raise ImportError(f"can't load {path}")
         module = importlib.util.module_from_spec(spec)
         module.__dict__[ASSERT_HOOK] = check
         source = importlib.util.decode_source(path.read_bytes())
-        exec(compile_eval(source, str(path)), module.__dict__)  # noqa: S102
+        sys.modules[name] = module
+        try:
+            exec(compile_eval(source, str(path)), module.__dict__)  # noqa: S102
+        except BaseException:
+            sys.modules.pop(name, None)
+            raise
 
     return collect_module_tree_sync(loader)

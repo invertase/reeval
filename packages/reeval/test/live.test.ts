@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
@@ -26,7 +26,7 @@ import {
   liveTranscriptPath,
   readableLiveProgress,
 } from '../src/view/index.ts'
-import { baseEnv, fakeConfig, pkgRoot, project } from './helpers.ts'
+import { baseEnv, fakeConfig, pkgRoot, project, readRun } from './helpers.ts'
 
 const RUN = '20260927T180000Z_abc1234_elliot_k3f9'
 const cli = join(pkgRoot, 'dist/cli.js')
@@ -254,6 +254,43 @@ describe('the progress file', () => {
       ['queued', 'skipped'],
     )
     assert.equal(readLive(dir).counts.done, 1)
+  })
+
+  test('an attempt a resume kept starts with its outcome, and its skip leaves it', async () => {
+    const dir = join(await temp(), RUN)
+    const items = planned(['one', 'two', 'three'])
+    for (const item of items.slice(0, 2))
+      (item.attempt.plan as { skip?: string }).skip = 'already completed in this run'
+    const [one, two] = items.map((i) => i.key) as [string, string]
+    const live = writeLiveProgress({
+      dir,
+      runId: RUN,
+      startedAt: new Date(),
+      planned: items,
+      kept: new Map([
+        [one, { outcome: 'pass', startedAt: '2026-09-27T18:00:01.000Z', durationMs: 900 }],
+        [two, { outcome: 'infra_error', startedAt: null, durationMs: null }],
+      ]),
+    })
+    live.end(result(one, 'skipped'))
+    live.stop()
+    const file = readLive(dir)
+    assert.deepEqual(
+      file.attempts.map((a) => [a.status, a.startedAt, a.durationMs]),
+      [
+        ['pass', '2026-09-27T18:00:01.000Z', 900],
+        ['infra_error', null, null],
+        ['queued', null, null],
+      ],
+    )
+    assert.deepEqual(file.counts, {
+      done: 2,
+      passed: 1,
+      failed: 0,
+      errored: 1,
+      skipped: 0,
+      running: 0,
+    })
   })
 })
 
@@ -502,6 +539,20 @@ describe('the studio serves and streams live runs', () => {
     assert.equal(await liveTranscript(source, RUN, done), null)
   })
 
+  test('a staging run directory that is a symlink is neither listed nor served', async () => {
+    const { root, source, done } = await setup()
+    const linked = stamp(9)
+    const outside = join(root, 'outside')
+    await cp(join(stagingRoot(root), RUN), outside, { recursive: true })
+    await writeFile(join(outside, LIVE_FILE), JSON.stringify(progress(linked)))
+    await symlink(outside, join(stagingRoot(root), linked), 'dir')
+    assert.deepEqual(
+      (await listLive(source)).map((r) => r.runId),
+      [RUN],
+    )
+    assert.equal(await liveTranscript(source, linked, done), null)
+  })
+
   test('/api/events streams run.progress with the runs, and history.changed', async () => {
     const { app, send, listeners } = await setup()
     const res = await get(app, 'api/events')
@@ -672,6 +723,112 @@ evaluate('writes hello', { runs: 20 }, async (c) => {
     assert.equal(runs.length, 1)
     assert.equal(runs[0]?.state, 'stopped')
     assert.equal(runs[0]?.counts.done, 1)
+  })
+
+  test('a resume shows the attempts it kept with their outcome and transcript', async () => {
+    const p = await project('live-resume', {
+      'reeval.config.ts': fakeConfig({ harness: agent(0) }),
+      'evals/hello.eval.ts': `import { existsSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
+import { evaluate, expect } from 'reeval'
+evaluate('kept pass', async (c) => {
+  await c.send('write hello.txt')
+  await expect(c.exec('test -f hello.txt')).toSucceed()
+})
+evaluate('kept fail', async (c) => {
+  await c.send('write hello.txt')
+  await expect(c.exec('test -f missing.txt')).toSucceed()
+})
+evaluate('waits', { runs: 2 }, async (c) => {
+  while (!existsSync(new URL('../gate', import.meta.url))) await sleep(20)
+  await c.send('write hello.txt')
+})
+`,
+    })
+    const gate = join(p.dir, 'gate')
+    writeFileSync(gate, '')
+    const first = spawnSync(process.execPath, [cli, 'run'], {
+      cwd: p.dir,
+      env: baseEnv,
+      encoding: 'utf8',
+    })
+    assert.equal(first.status, 1, first.stdout + first.stderr)
+    // Rewritten as a budget stop that never started the second `waits` attempt.
+    const { run } = readRun(p.dir)
+    run.status = 'budget'
+    const waits = run.evals.find((e) => e.name === 'waits')
+    assert.ok(waits)
+    waits.attempts = waits.attempts.map((a) =>
+      a.n === 2 ? { ...a, outcome: 'skipped', error: null, files: {}, checks: [] } : a,
+    )
+    writeFileSync(join(p.dir, '.reeval/runs', `${run.runId}.json`), JSON.stringify(run))
+    const was = (name: string, n = 1) =>
+      run.evals.find((e) => e.name === name)?.attempts.find((a) => a.n === n)
+    const keptKey = was('kept pass')?.key as string
+    const keptFile = was('kept pass')?.files.transcript?.path as string
+    const keptTranscript = readFileSync(join(p.dir, '.reeval/runs', run.runId, keptFile), 'utf8')
+    assert.match(keptTranscript, /write hello\.txt/)
+    await rm(gate)
+
+    const child = spawn(process.execPath, [cli, 'run', '--resume', run.runId], {
+      cwd: p.dir,
+      env: baseEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let output = ''
+    child.stdout.on('data', (d) => (output += d))
+    child.stderr.on('data', (d) => (output += d))
+    const exited = new Promise<number | null>((resolve) => child.on('close', resolve))
+    const source = { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true }
+    let live: LiveRun | undefined
+    let served: string | null = null
+    try {
+      const deadline = Date.now() + 30_000
+      while (!live?.attempts.some((a) => a.status === 'running')) {
+        assert.ok(Date.now() < deadline, `the resume never started an attempt: ${output}`)
+        await sleep(25)
+        live = (await listLive(source))[0]
+      }
+      served = await liveTranscript(source, run.runId, keptKey)
+    } finally {
+      writeFileSync(gate, '')
+    }
+    assert.equal(await exited, 1, output)
+    assert.equal(served, keptTranscript)
+
+    const seen = (name: string, n = 1) => live?.attempts.find((a) => a.name === name && a.n === n)
+    for (const [name, n, status] of [
+      ['kept pass', 1, 'pass'],
+      ['kept fail', 1, 'fail'],
+      ['waits', 1, 'pass'],
+    ] as const) {
+      const before = was(name, n)
+      assert.deepEqual(
+        [seen(name, n)?.status, seen(name, n)?.startedAt, seen(name, n)?.durationMs],
+        [status, before?.startedAt, before?.durationMs],
+        name,
+      )
+    }
+    assert.equal(seen('waits', 2)?.status, 'running')
+    assert.deepEqual(live?.counts, {
+      done: 3,
+      passed: 2,
+      failed: 1,
+      errored: 0,
+      skipped: 0,
+      running: 1,
+    })
+
+    const record = readRun(p.dir)
+    assert.equal(record.run.runId, run.runId)
+    assert.deepEqual(
+      record.run.evals.map((e) => [e.name, e.attempts.map((a) => a.outcome)]),
+      [
+        ['kept pass', ['pass']],
+        ['kept fail', ['fail']],
+        ['waits', ['pass', 'pass']],
+      ],
+    )
   })
 
   test('a run that stops at the plan leaves no progress file', async () => {

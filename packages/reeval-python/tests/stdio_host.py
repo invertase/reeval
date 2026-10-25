@@ -57,7 +57,9 @@ def reply_to(call: dict[str, Any]) -> dict[str, Any]:
 
 
 class Host:
-    def __init__(self, root: Path, source: str, *, answer: bool = True) -> None:
+    def __init__(
+        self, root: Path, source: str, *, answer: bool = True, collect: bool = True
+    ) -> None:
         (root / "evals").mkdir(exist_ok=True)
         (root / "evals" / "x.eval.py").write_text(source)
         env = {
@@ -77,6 +79,7 @@ class Host:
         )
         self.answer = answer
         self.seen: list[dict[str, Any]] = []
+        self.raw: list[str] = []
         self.bad: list[bytes] = []
         self.closed = False
         self._stderr: list[bytes] = []
@@ -85,6 +88,8 @@ class Host:
         threading.Thread(target=self._pump, daemon=True).start()
         threading.Thread(target=self._drain, daemon=True).start()
         self.hello = self.wait(lambda m: m.get("t") == "hello")
+        if not collect:
+            return
         self.send({"t": "collect", "file": "evals/x.eval.py"})
         declared = self.wait(lambda m: m.get("t") in ("declared", "load-error"))
         assert declared["t"] == "declared", declared
@@ -93,6 +98,7 @@ class Host:
     def _pump(self) -> None:
         assert self.proc.stdout is not None
         for line in self.proc.stdout:
+            self.raw.append(line.decode(errors="replace"))
             try:
                 msg = json.loads(line)
             except ValueError:

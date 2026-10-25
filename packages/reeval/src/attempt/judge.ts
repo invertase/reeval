@@ -19,6 +19,7 @@ import { withInputSize } from '../judge/size.ts'
 import { type Draft, type DraftTurn, stateOf } from '../judge/state.ts'
 import { mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
 import { transcriptForJudge } from '../judge/transcript.ts'
+import { redactSecrets, redactValue } from '../redact.ts'
 import { withLease } from '../scheduler/client.ts'
 import { clip, formatDuration } from '../text.ts'
 import type {
@@ -135,6 +136,15 @@ function checksShown(
 }
 
 /**
+ * Where `order` goes among `calls`, which are in ascending order: calls finish in any order, but
+ * what they record stays in the order they were made.
+ */
+function placeFor(calls: readonly number[], order: number): number {
+  const after = calls.findIndex((c) => c > order)
+  return after < 0 ? calls.length : after
+}
+
+/**
  * Grades a turn (the last by default) or a value against a question, under
  * the judge provider's concurrency lease. Every call's input is recorded, including calls that
  * fail. A call that fails returns a `JudgeFailure` and fails the attempt as a judge error after the eval's body, so the judges and
@@ -145,6 +155,7 @@ export function judgeCaller(
   readFile: (path: string) => Promise<string | null>,
 ): AttemptContext['judge'] {
   const ask = async (
+    order: number,
     question: string,
     { on, ...call }: Omit<JudgeCallOptions, 'on'> & { on?: JudgeOn } = {},
   ): Promise<Verdict | JudgeFailure> => {
@@ -168,8 +179,9 @@ export function judgeCaller(
     const options = mergeJudge(a.spec.judge, call)
     const { model } = options
     if (model === undefined) {
-      a.judgeErrored = true
-      throw new Error(noJudgeModel(getRunContext().config.file))
+      const message = noJudgeModel(getRunContext().config.file)
+      a.judgeThrown.add(message)
+      throw new Error(message)
     }
     const wanted = resolveStateOptions(options.state)
     if (on && 'value' in on && !wanted.output) {
@@ -187,7 +199,8 @@ export function judgeCaller(
       listFiles: async () => workspaceFiles(await sandboxFor(a, 'c.judge()'), a.signal),
     })
     const name = judgeModelName(model)
-    const state = stateOf(draft)
+    // Masked as the record will be, so judge-input.json is what the model was sent.
+    const state = redactValue(stateOf(draft))
     const resolved = resolveJudgeArtifacts(call.artifacts, a.artifactBlobs)
     const refs = artifactRefsOf(resolved)
     const decide = decideState(state, filePartsOf(resolved))
@@ -199,18 +212,22 @@ export function judgeCaller(
       ...(refs.length ? { artifacts: refs } : {}),
       ...(dropped.length ? { dropped } : {}),
     }
-    a.record.judgeInputs?.push(input)
+    const place = placeFor(a.judgeInputCalls, order)
+    a.judgeInputCalls.splice(place, 0, order)
+    a.record.judgeInputs?.splice(place, 0, input)
     const start = performance.now()
     const ms = () => Math.round(performance.now() - start)
     const atLeast = options.threshold ?? 0.8
     a.report({ kind: 'judge-start', question })
-    debugLog('judge', `asking ${name}: ${JSON.stringify(clip(question, 160))}`)
+    debugLog('judge', `asking ${name}: ${JSON.stringify(clip(redactSecrets(question), 160))}`)
     if (dropped.length) debugLog('judge', `left out of the judge's input: ${dropped.join(' · ')}`)
     debugTrace('judge', 'prompt', input, 'judge prompt')
 
     const failed = (message: string, retries?: RetriedError['retries']): JudgeFailure => {
-      a.judgeErrored = true
-      a.judgeErrors.push(`c.judge(${JSON.stringify(clip(question, 80))}) failed: ${message}`)
+      a.judgeErrors.push({
+        call: order,
+        message: `c.judge(${JSON.stringify(clip(redactSecrets(question), 80))}) failed: ${message}`,
+      })
       input.error = message
       if (retries?.length) input.retries = retries
       debugLog('judge', `${name} · ${formatDuration(ms())} · error: ${message}`)
@@ -251,7 +268,15 @@ export function judgeCaller(
         ),
       )
       const recorded = refs.length ? { ...verdict, artifacts: refs } : verdict
-      a.record.judgements.push(retries.length ? { ...recorded, retries } : recorded)
+      const { judgements } = a.record
+      judgements.splice(
+        placeFor(
+          judgements.map((j) => j.call ?? 0),
+          order,
+        ),
+        0,
+        { ...recorded, ...(retries.length ? { retries } : {}), call: order },
+      )
       const { score } = verdict
       debugLog(
         'judge',
@@ -268,10 +293,7 @@ export function judgeCaller(
       })
       return recorded
     } catch (error) {
-      if (a.signal.aborted) {
-        a.judgeErrored = true
-        throw error
-      }
+      if (a.signal.aborted) throw error
       const { retries } = error as Partial<RetriedError>
       const message = error instanceof Error ? error.message : String(error)
       return failed(isApiError(error) ? withInputSize(message, state, question) : message, retries)
@@ -279,7 +301,8 @@ export function judgeCaller(
   }
   // A verdict names its question in `expect(verdict).toPass()`'s default label.
   return async (question, { on, ...options } = {}) => {
+    const order = a.judgeCalls++
     const call = on === undefined ? options : { ...options, on: judgeOn(a.turns, on) }
-    return Object.defineProperty(await ask(question, call), SUBJECT, { value: question })
+    return Object.defineProperty(await ask(order, question, call), SUBJECT, { value: question })
   }
 }

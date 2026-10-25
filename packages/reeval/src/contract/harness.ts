@@ -3,6 +3,7 @@
 // One schema per kind, joined on `kind`; the types in types.ts are held to them by
 // `_SameAsSchema`.
 import { z } from 'zod'
+import { MAX_TIMER_MS, TIMER_LIMIT } from '../duration.ts'
 import type {
   AntigravityHarnessDescriptor,
   ClaudeCodeHarnessDescriptor,
@@ -291,7 +292,11 @@ export const fakeHarnessSchema = z
       .string()
       .optional()
       .describe("The fake agent's final message on every turn; default `Done.`."),
-    delayMs: z.number().optional().describe('Simulated turn length, honours the abort signal.'),
+    delayMs: z
+      .number()
+      .max(MAX_TIMER_MS, `must be ${TIMER_LIMIT}`)
+      .optional()
+      .describe('Simulated turn length, honours the abort signal.'),
     ignoreAbort: z
       .boolean()
       .optional()

@@ -3,12 +3,23 @@
 // The network-level proof (the upstream gets the value, the container never has it) is in
 // sandbox-docker's proxy and Docker tests.
 import assert from 'node:assert/strict'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
-import type { Substitution } from '@reeval/sandbox-docker'
+import { docker, type Substitution } from '@reeval/sandbox-docker'
+import { assertionRecords } from '../src/attempt/assertions.ts'
+import { recordFailure, stagedRecordJson, turnErrors } from '../src/attempt/record.ts'
+import type { Attempt } from '../src/attempt/state.ts'
+import { AttemptDebug, withDebug } from '../src/debug/attempt.ts'
+import '../src/debug/docker.ts'
+import type { RawAssertion } from '../src/engine/runtime.ts'
 import { type BrokeredSecret, resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment, unbrokeredSecrets } from '../src/environment.ts'
 import { cursorMcpServers } from '../src/harness/agents.ts'
+import { capText, OUTPUT_CAP, rawLines, turnError, turnText } from '../src/history/assemble.ts'
 import { findingLines, findingSummary, scanText } from '../src/history/secret-scan.ts'
+import { transcriptForJudge } from '../src/judge/transcript.ts'
 import type { PlannedAttempt } from '../src/options.ts'
 import { brokeredIn, secretVarsIn, unbrokered, unbrokeredWarning } from '../src/options.ts'
 import {
@@ -20,12 +31,16 @@ import {
   redactJsonText,
   redactKey,
   redactSecrets,
+  redactSplitSecrets,
+  redactValue,
   registerSecret,
   type SecretMatch,
 } from '../src/redact.ts'
 import { scrubber } from '../src/report/scrub.ts'
 import { brokerPhases } from '../src/sandbox/phases.ts'
-import type { EnvironmentInput } from '../src/types.ts'
+import { FAILURE_CAP } from '../src/text.ts'
+import type { EnvironmentInput, EvalRecord, TranscriptEvent } from '../src/types.ts'
+import { tempDir } from './helpers.ts'
 
 const VALUE = 'reeval-unit-brokered-4f1c9e2a7b'
 const OTHER = 'reeval-unit-other-9d3a61c0e5'
@@ -328,10 +343,10 @@ describe('unbrokered secrets', () => {
     assert.deepEqual(unbrokeredSecrets({}, child.layers), [{ label: 'KEY', from: 'KEY' }])
   })
 
-  test("a to: 'checks' secret's warning says the agent never gets it", () => {
+  test("a to: 'checks' secret's warning says what keeps it from the agent and what doesn't", () => {
     assert.equal(
       unbrokeredWarning({ label: 'CHECK_TOKEN', from: 'CHECK_TOKEN', checksOnly: true }),
-      "CHECK_TOKEN reaches the checks (c.exec, setup steps) as its real value; the agent never gets it. To give the checks only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('CHECK_TOKEN', { hosts: ['api.example.com'] }).",
+      "CHECK_TOKEN reaches the checks (c.exec, setup steps) as its real value. It's never in the agent's own environment, but a process a setup step leaves running holds it while the agent works. To give the checks only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('CHECK_TOKEN', { hosts: ['api.example.com'] }).",
     )
     const env = { CHECK_TOKEN: { kind: 'secret' as const, to: 'checks' as const } }
     const [found] = unbrokeredSecrets(env, [])
@@ -544,9 +559,455 @@ describe('redacting fragments of a secret', () => {
       scanText('notes.txt', `one\ntwo ${google}\n`).map((f) => [f.file, f.line]),
       [[null, 2]],
     )
+    // A host git with core.quotePath on quotes a non-ASCII name; ` b/` can be inside a name.
+    const awkward = [
+      'diff --git a/README.md b/README.md',
+      '--- a/README.md',
+      '+++ b/README.md',
+      '@@ -1 +1 @@',
+      '+new',
+      'diff --git "a/caf\\303\\251.env" "b/caf\\303\\251.env"',
+      'new file mode 100644',
+      '--- /dev/null',
+      '+++ "b/caf\\303\\251.env"',
+      '@@ -0,0 +1 @@',
+      `+KEY=${google}`,
+      'diff --git a/x b/y.env b/x b/y.env',
+      '--- a/x b/y.env',
+      '+++ b/x b/y.env',
+      '@@ -1 +1 @@',
+      `+KEY=${google}`,
+      '',
+    ].join('\n')
+    assert.deepEqual(
+      scanText('worktree.patch', awkward).map((f) => [f.file, f.line]),
+      [
+        ['café.env', 1],
+        ['x b/y.env', 1],
+      ],
+    )
     const many = scanText('notes.txt', Array.from({ length: 7 }, () => google).join('\n'))
     assert.equal(findingLines('notes.txt', many).at(-1), 'notes.txt: and 2 more')
     assert.equal(findingSummary(many).endsWith(', and 4 more'), true)
+  })
+})
+
+describe('redacting a secret split across stream parts', () => {
+  const key = 'sk-ant-api03-Zq8vR2mN4xL7pK1wT9yB3cF6hJ0'
+  const env = { ANTHROPIC_API_KEY: key }
+  const pin = 'Tr0ub4dor&3'
+  registerSecret(pin)
+  const reply = `Your key is ${key} and the PIN is ${pin}.`
+  const chunks = (text: string) => text.match(/.{1,4}/g) as string[]
+  /** The AI SDK parts of one streamed text block, one line each, as trace and raw lines hold them. */
+  const textParts = (text: string, id = 't', type = 'text') => [
+    JSON.stringify({ ms: 0, part: { type: `${type}-start`, id } }),
+    ...chunks(text).map((d, i) =>
+      JSON.stringify({ ms: i + 1, part: { type: `${type}-delta`, id, text: d } }),
+    ),
+    JSON.stringify({ ms: 99, part: { type: `${type}-end`, id } }),
+  ]
+  /** What a reader rebuilds from the lines: every string at `pick`, joined. */
+  const rebuilt = (lines: string[], pick: (v: Record<string, never>) => unknown) =>
+    lines
+      .map((l) => pick(JSON.parse(l)))
+      .filter((s) => typeof s === 'string')
+      .join('')
+  const written = (lines: string[]) =>
+    redactJsonText(redactSplitSecrets(lines, env).join('\n'), env).split('\n')
+  const deltaText = (lines: string[]) =>
+    rebuilt(lines, (l) => (l as { part: { text?: string } }).part.text)
+
+  test('canary: masked line by line, 4-character deltas still rebuild the key and the PIN', () => {
+    const lines = redactJsonText(textParts(reply).join('\n'), env).split('\n')
+    assert.equal(deltaText(lines), reply)
+  })
+
+  test('the deltas of a reply rebuild it with the key and the PIN masked once each', () => {
+    const lines = written(textParts(reply))
+    assert.equal(deltaText(lines), 'Your key is [REDACTED] and the PIN is [REDACTED].')
+    assert.equal(lines.length, textParts(reply).length)
+  })
+
+  test("a harness's native chunks are masked too, between other parts and in another shape", () => {
+    // ACP's agent_message_chunk, as a raw part beside the AI SDK delta it became.
+    const lines = chunks(reply).flatMap((d, i) => [
+      JSON.stringify({
+        turn: 0,
+        ms: i,
+        part: {
+          type: 'raw',
+          rawValue: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: d } },
+        },
+      }),
+      JSON.stringify({ turn: 0, ms: i, part: { type: 'text-delta', id: 'm', text: d } }),
+      JSON.stringify({
+        turn: 0,
+        ms: i,
+        part: { type: 'raw', rawValue: { sessionUpdate: 'usage_update', used: i } },
+      }),
+    ])
+    const out = written(lines)
+    const native = rebuilt(
+      out,
+      (l) =>
+        (l as { part: { rawValue?: { content?: { text?: string } } } }).part.rawValue?.content
+          ?.text,
+    )
+    assert.equal(native, 'Your key is [REDACTED] and the PIN is [REDACTED].')
+    assert.equal(deltaText(out), 'Your key is [REDACTED] and the PIN is [REDACTED].')
+  })
+
+  test('interleaved reasoning and text deltas each join by their type', () => {
+    const text = textParts(`The key: ${key}`, 'a', 'text')
+    const reasoning = textParts(`Thinking about ${key} now`, 'b', 'reasoning')
+    const lines = text
+      .flatMap((l, i) => [l, reasoning[i] as string])
+      .concat(reasoning.slice(text.length))
+    const out = written(lines)
+    assert.equal(out.join('\n').includes(key), false)
+    for (const [type, want] of [
+      ['text-delta', 'The key: [REDACTED]'],
+      ['reasoning-delta', 'Thinking about [REDACTED] now'],
+    ]) {
+      const joined = rebuilt(out, (l) => {
+        const p = (l as { part: { type: string; text?: string } }).part
+        return p.type === type ? p.text : undefined
+      })
+      assert.equal(joined, want)
+      assert.equal(joined.includes(key.slice(0, 8)), false)
+    }
+  })
+
+  test('two interleaved text blocks each join by their id', () => {
+    const a = textParts(`Block a has ${key} in it`, 'a')
+    const b = textParts('Block b is about something else, and it runs on for a while longer', 'b')
+    const lines = b.flatMap((l, i) => [...(a[i] ? [a[i] as string] : []), l])
+    const out = written(lines)
+    assert.equal(out.join('\n').includes(key.slice(0, 8)), false)
+    const block = (id: string) =>
+      rebuilt(out, (l) => {
+        const p = (l as { part: { id: string; text?: string } }).part
+        return p.id === id ? p.text : undefined
+      })
+    assert.equal(block('a'), 'Block a has [REDACTED] in it')
+    assert.equal(block('b'), 'Block b is about something else, and it runs on for a while longer')
+  })
+
+  test('ACP message chunks join by their update, with thought chunks between them', () => {
+    const acp = (sessionUpdate: string, text: string) =>
+      JSON.stringify({
+        part: { type: 'raw', rawValue: { sessionUpdate, content: { type: 'text', text } } },
+      })
+    const thoughts = chunks('I should answer the question about the key without delay')
+    const lines = chunks(reply).flatMap((d, i) => [
+      acp('agent_message_chunk', d),
+      ...(thoughts[i] ? [acp('agent_thought_chunk', thoughts[i] as string)] : []),
+    ])
+    const out = written(lines)
+    const message = rebuilt(out, (l) => {
+      const v = (l as { part: { rawValue: { sessionUpdate: string; content: { text: string } } } })
+        .part.rawValue
+      return v.sessionUpdate === 'agent_message_chunk' ? v.content.text : undefined
+    })
+    assert.equal(message, 'Your key is [REDACTED] and the PIN is [REDACTED].')
+  })
+
+  test('twin: lines with no split secret, and a line that is not JSON, stay byte for byte', () => {
+    const lines = [
+      ...textParts('nothing to see here, only a long enough reply'),
+      '{"a": 1,  "b": "spaced"}',
+      'not json',
+      JSON.stringify({ part: { type: 'text-delta', text: `whole ${key}` } }),
+    ]
+    assert.deepEqual(redactSplitSecrets(lines, env), lines)
+  })
+
+  test('trace.ndjson masks a secret streamed as deltas', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'reeval-split-trace-'))
+    const before = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = key
+    try {
+      const debug = new AttemptDebug({ dir, verbosity: 0, traceLimit: 1024 * 1024 })
+      for (const line of textParts(reply)) debug.trace('harness', 'stream', JSON.parse(line), false)
+      await debug.finish(true)
+      const trace = readFileSync(join(dir, 'trace.ndjson'), 'utf8').trim().split('\n').slice(1)
+      const joined = rebuilt(
+        trace,
+        (l) => (l as { data: { part: { text?: string } } }).data.part.text,
+      )
+      assert.equal(joined, 'Your key is [REDACTED] and the PIN is [REDACTED].')
+    } finally {
+      if (before === undefined) delete process.env.ANTHROPIC_API_KEY
+      else process.env.ANTHROPIC_API_KEY = before
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('transcript.raw.jsonl masks a secret streamed as deltas', () => {
+    const before = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = key
+    try {
+      const raw = textParts(reply).map((l) => JSON.parse(l))
+      const text = rawLines({ turns: [{ raw }] } as unknown as EvalRecord) as string
+      const lines = text.trim().split('\n')
+      assert.equal(lines.length, raw.length)
+      assert.equal(JSON.parse(lines[0] as string).turn, 0)
+      assert.equal(deltaText(lines), 'Your key is [REDACTED] and the PIN is [REDACTED].')
+    } finally {
+      if (before === undefined) delete process.env.ANTHROPIC_API_KEY
+      else process.env.ANTHROPIC_API_KEY = before
+    }
+  })
+
+  test('the staging record masks it, so transcript.raw.jsonl built from it has no pieces left', () => {
+    const before = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = key
+    try {
+      // Deltas of 8 or more characters are masked one by one; the short ones between them aren't.
+      const sizes = [16, 4, 12, 4, 12, 4, 40]
+      let at = 0
+      const raw = sizes.map((n) => {
+        const text = reply.slice(at, at + n)
+        at += n
+        return { type: 'text-delta', id: 't', text }
+      })
+      const staged = JSON.parse(stagedRecordJson({ turns: [{ raw }] } as unknown as EvalRecord))
+      const want = 'Your key is [REDACTED] and the PIN is [REDACTED].'
+      assert.equal(
+        rebuilt(staged.turns[0].raw.map(JSON.stringify), (p) => (p as { text: string }).text),
+        want,
+      )
+      const lines = (rawLines(staged) as string).trim().split('\n')
+      assert.equal(
+        rebuilt(lines, (l) => (l as { text: string }).text),
+        want,
+      )
+    } finally {
+      if (before === undefined) delete process.env.ANTHROPIC_API_KEY
+      else process.env.ANTHROPIC_API_KEY = before
+    }
+  })
+})
+
+describe('a second key of the provider whose key is in the environment', () => {
+  const anthropic = `sk-ant-api03-${'Qw3rTy7uIo9p'.repeat(7)}-A7b2C9d4`
+  const cases: Array<[string, string, string, string]> = [
+    [
+      'ANTHROPIC_API_KEY',
+      anthropic,
+      `sk-ant-api03-${'Zk9xQ2mN7pL4'.repeat(7)}-BBBBBBBB`,
+      'OpenAI or Anthropic key',
+    ],
+    [
+      'OPENAI_API_KEY',
+      `sk-proj-${'Hj6kLm2nBv8c'.repeat(8)}`,
+      `sk-proj-${'Rt5yUi3oPa7s'.repeat(8)}`,
+      'OpenAI or Anthropic key',
+    ],
+    [
+      'GITHUB_TOKEN',
+      `github_pat_11AAQ7ZKI0${'Fg4hJk8lMn2b'.repeat(7)}`,
+      `github_pat_11AAQ7ZKI0${'Xc6vBn9mQw3e'.repeat(7)}`,
+      'GitHub token',
+    ],
+  ]
+  for (const [name, own, other, shape] of cases) {
+    const env = { [name]: own }
+
+    test(`${name}: another key is masked whole, as with nothing in the environment`, () => {
+      assert.equal(redactSecrets(`key: ${other}`, {}), 'key: [REDACTED]')
+      assert.equal(redactSecrets(`key: ${other}`, env), 'key: [REDACTED]')
+      assert.equal(redactJsonText(JSON.stringify({ out: other }), env), '{"out":"[REDACTED]"}')
+      assert.deepEqual(JSON.parse(redactJson({ out: `a ${other} b` }, 2, env)), {
+        out: 'a [REDACTED] b',
+      })
+    })
+
+    test(`${name}: the environment's own key and its fragments are still masked`, () => {
+      assert.equal(redactSecrets(`a ${own} b`, env), 'a [REDACTED] b')
+      assert.equal(redactSecrets(`a ${own.slice(14, 40)} b`, env), 'a [REDACTED] b')
+      assert.equal(redactSecrets(`tail ${own.slice(-12)}`, env), 'tail [REDACTED]')
+    })
+
+    test(`${name}: findSecrets covers the other key whole and names the own key's variable`, () => {
+      const text = `own ${own} other ${other} end`
+      const found = findSecrets(text, env)
+      // The other key shares the own key's prefix, so none of it is shown, but it's named by its shape.
+      assert.deepEqual(
+        found.map((m) => [text.slice(m.start, m.end), m.known, maskedMatch(text, m)]),
+        [
+          [own, true, `the value of ${name}`],
+          [other, true, shape],
+        ],
+      )
+      assert.equal(countSecrets(`key: ${other}`, env), 1)
+    })
+
+    test(`${name}: a truncated copy of the own key shows none of it`, () => {
+      const text = `cut ${own.slice(0, 40)} end`
+      assert.equal(redactSecrets(text, env), 'cut [REDACTED] end')
+      assert.deepEqual(
+        findSecrets(text, env).map((m) => maskedMatch(text, m)),
+        [`the value of ${name}`],
+      )
+    })
+  }
+
+  const ghp = `ghp_${'Mn4bVc8xZl2k'.repeat(3)}`
+
+  test('a token running on into a password leaves none of the password', () => {
+    const env = { DB_PASSWORD: 'Hunter2Hunter2#tail-of-secret' }
+    const text = `x ${ghp}${env.DB_PASSWORD} y`
+    assert.equal(redactSecrets(text, env), 'x [REDACTED] y')
+    assert.deepEqual(
+      findSecrets(text, env).map((m) => [text.slice(m.start, m.end), maskedMatch(text, m)]),
+      [[`${ghp}${env.DB_PASSWORD}`, 'GitHub token']],
+    )
+  })
+
+  test('a token right after a secret is masked too', () => {
+    const env = { API_SECRET: '9f8e7d6c5b4a3210' }
+    for (const token of [ghp, `sk-proj-${'Rt5yUi3oPa7s'.repeat(4)}`]) {
+      const text = `x ${env.API_SECRET}${token} y`
+      assert.equal(redactSecrets(text, env), 'x [REDACTED][REDACTED] y')
+      assert.deepEqual(
+        findSecrets(text, env).map((m) => text.slice(m.start, m.end)),
+        [env.API_SECRET, token],
+      )
+    }
+  })
+
+  test('a value holding a token and more is masked whole, not only its token', () => {
+    const value = `https://reeval:pa55w0rd-9f3a@example.com/?t=ghp_${'Mn4bVc8xZl2k'.repeat(3)}`
+    const env = { GIT_CREDENTIALS: value }
+    assert.equal(redactSecrets(`url ${value} end`, env), 'url [REDACTED] end')
+    const text = `url ${value} end`
+    assert.deepEqual(
+      findSecrets(text, env).map((m) => [text.slice(m.start, m.end), m.rule]),
+      [[value, 'the value of GIT_CREDENTIALS']],
+    )
+  })
+
+  test('a JWT holding an encoded secret is masked whole', () => {
+    const value = 'reeval-jwt-inner-7f3a9c2e'
+    const env = { REEVAL_UNIT_JWT_SECRET: value }
+    const payload = Buffer.from(JSON.stringify({ sub: value, n: 1 })).toString('base64url')
+    const jwt = `eyJhbGciOiJIUzI1NiJ9.${payload}.${'Sg7hKj2lQw9e'.repeat(3)}`
+    assert.equal(redactSecrets(`Bearer ${jwt}`, env), 'Bearer [REDACTED]')
+    const text = `Bearer ${jwt}`
+    assert.deepEqual(
+      findSecrets(text, env).map((m) => [text.slice(m.start, m.end), m.known]),
+      [[jwt, true]],
+    )
+  })
+})
+
+describe('a token right after a letter, digit or underscore', () => {
+  const anthropic = `sk-ant-api03-${'Zk9xQ2mN7pL4'.repeat(7)}-BBBBBBBB`
+  const github = `ghp_${'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8'.slice(0, 36)}`
+  const aws = 'AKIAQ7ZKI0FG4HJK8LMN'
+  const slack = `xoxb-${'1234567890'}-${'Ab3dEf6hIj'}`
+  const jwt = `eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.${'Sg7hKj2lQw9e'.repeat(3)}`
+  const cases: Array<[string, string]> = [
+    ['key%3D', anthropic],
+    ['key%3d', anthropic],
+    ['token%3D', github],
+    ['echo "a\\n', github],
+    ['echo "a\\t', anthropic],
+    ['{"a":"\\u003d', anthropic],
+    ['TOKEN_', github],
+    ['KEY_', anthropic],
+    ['id%3D', aws],
+    ['AWS_', aws],
+    ['SLACK_', slack],
+    ['t%3D', jwt],
+    ['abc', github],
+  ]
+
+  for (const [before, token] of cases) {
+    const text = `${before}${token} end`
+    test(`${before}${token.slice(0, 8)}… is masked by redactSecrets and findSecrets`, () => {
+      assert.equal(redactSecrets(text, {}), `${before}[REDACTED] end`)
+      assert.deepEqual(
+        findSecrets(text, {}).map((m) => text.slice(m.start, m.end)),
+        [token],
+      )
+    })
+    test(`${before}${token.slice(0, 8)}… is masked by redactJsonText`, () => {
+      assert.equal(
+        redactJsonText(JSON.stringify({ out: text }), {}),
+        JSON.stringify({ out: `${before}[REDACTED] end` }),
+      )
+      assert.equal(redactJsonText(`not json ${text}`, {}), `not json ${before}[REDACTED] end`)
+    })
+  }
+
+  test('a word ending in sk- is not a key', () => {
+    const words = [
+      'task-runner-abcdefghijklmnopqrstuvwxyz',
+      'risk-assessment-quarterly-report-2026',
+      'ask-me-anything-about-the-release-plan',
+      'disk-usage-report-for-the-build-cache',
+      'TASK_ask-me-anything-about-the-release-plan',
+      '%3Dtask-runner-abcdefghijklmnopqrstuvwxyz',
+      '\\ntask-runner-abcdefghijklmnopqrstuvwxyz',
+    ]
+    for (const word of words) {
+      assert.equal(redactSecrets(`run ${word} now`, {}), `run ${word} now`, word)
+      assert.deepEqual(findSecrets(word, {}), [], word)
+    }
+  })
+
+  test('hashes, ids and base64 are not tokens', () => {
+    const bytes = Buffer.from(Array.from({ length: 3000 }, (_, i) => (i * 131 + 7) % 256))
+    const texts = [
+      '1c37028e4b9f0d2a6c8e1f3b5d7a9c0e2f4b6d8a',
+      'commit aff05a41c2b3d4e5f60718293a4b5c6d7e8f9012',
+      'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+      bytes.toString('base64'),
+      bytes.toString('base64url'),
+      bytes.toString('hex').toUpperCase(),
+    ]
+    for (const text of texts) assert.equal(redactSecrets(text, {}), text, text.slice(0, 40))
+  })
+
+  test('a token right after another of the same shape is masked too', () => {
+    const second = `ghp_${'Q5m3h3M6J3j2'.repeat(3)}`
+    const text = `x ${github}${second} y`
+    assert.equal(redactSecrets(text, {}), 'x [REDACTED] y')
+    assert.deepEqual(
+      findSecrets(text, {}).map((m) => text.slice(m.start, m.end)),
+      [`${github}${second}`],
+    )
+  })
+
+  test('masking twice changes nothing more', () => {
+    for (const [before, token] of cases) {
+      const once = redactSecrets(`${before}${token}`, {})
+      assert.equal(redactSecrets(once, {}), once)
+    }
+  })
+
+  test('a large text with many near-misses is masked in linear time', () => {
+    const chunk = 'task-%3Dx\\nKEY_AKIA eyJ ghp_ xoxb ask-sk- '
+    const text = chunk.repeat(50_000)
+    const started = performance.now()
+    assert.equal(redactSecrets(`${text}key%3D${anthropic}`, {}), `${text}key%3D[REDACTED]`)
+    assert.ok(performance.now() - started < 2000, `${performance.now() - started}ms`)
+  })
+
+  test('base64 of JSON, full of eyJ, is masked in linear time', () => {
+    const objects = Array.from({ length: 4000 }, (_, i) => ({ id: i, tags: [{ k: 'a', v: i }] }))
+    for (const text of [
+      Buffer.from(JSON.stringify(objects)).toString('base64'),
+      Buffer.from(JSON.stringify(objects)).toString('base64url'),
+      'aeyJ'.repeat(20_000),
+    ]) {
+      const started = performance.now()
+      assert.equal(redactSecrets(text, {}), text)
+      assert.ok(performance.now() - started < 500, `${performance.now() - started}ms`)
+    }
   })
 })
 
@@ -575,6 +1036,24 @@ describe('redacting serialised JSON', () => {
     )
     // Twin: redacting the serialised text breaks it.
     assert.throws(() => JSON.parse(redactSecrets(JSON.stringify(record), {})))
+  })
+
+  test('redactValue masks a value the way its record is masked once written', () => {
+    const state = {
+      output: 1234,
+      checks: [{ command: 'printf %s "$CHECK_TOKEN"', exitCode: 0, stdout: VALUE, stderr: '' }],
+      contents: { 'missing.txt': null, '.env': `TOKEN=${VALUE}\n` },
+    }
+    const masked = redactValue(state, { CHECK_TOKEN: VALUE })
+    assert.deepEqual(masked, {
+      output: 1234,
+      checks: [{ ...state.checks[0], stdout: '[REDACTED]' }],
+      contents: { 'missing.txt': null, '.env': 'TOKEN=[REDACTED]\n' },
+    })
+    assert.equal(
+      redactJson(masked, 2, { CHECK_TOKEN: VALUE }),
+      redactJson(state, 2, { CHECK_TOKEN: VALUE }),
+    )
   })
 
   test('JSON Lines keep every byte outside the strings they mask, and a broken line is masked as text', () => {
@@ -664,6 +1143,27 @@ describe('redacting serialised JSON', () => {
     assert.equal(scanText('run.txt', json).length > 2, true)
   })
 
+  test('a declared secret inside a token shape leaves no part of the token', () => {
+    registerSecret('proj')
+    const key = `sk-proj-${'Rt5yUi3oPa7s'.repeat(8)}`
+    assert.equal(redactSecrets(`key: ${key}`, {}), 'key: [REDACTED]')
+    const text = `key: ${key}`
+    assert.deepEqual(
+      findSecrets(text, {}).map((m) => [text.slice(m.start, m.end), m.rule, m.known]),
+      [[key, 'OpenAI or Anthropic key', true]],
+    )
+  })
+
+  test('a declared secret at the end of a token right after a secret leaves no part of either', () => {
+    registerSecret('3C7Q7z')
+    const value = `https://u:g7b7w3P3S4@h.example/?t=ghp_${'N4T6a8f5v6M9'.repeat(3)}`
+    const token = `ghp_${'Q5m3h3M6J3j2'.repeat(3)}3C7Q7z`
+    assert.equal(
+      redactSecrets(`-${value}${token} end`, { GIT_CREDENTIALS: value }),
+      '-[REDACTED] end',
+    )
+  })
+
   test("a report's scrubber keeps JSON Lines valid", () => {
     registerSecret('null')
     const scrub = scrubber({ env: {}, home: '/home/someone', project: '/home/someone/p' })
@@ -671,4 +1171,155 @@ describe('redacting serialised JSON', () => {
     assert.equal(scrub.json(line), '{"error":null,"cwd":"<project>/x","said":"[REDACTED]"}')
     assert.deepEqual(scrub.value({ error: 'null' }), { error: '[REDACTED]' })
   })
+})
+
+describe('masking before shortening', () => {
+  // Secret-named but not token-like, so only the whole value is masked, never its fragments.
+  const secret = 'correct-horse-battery-staple'
+  const withSecret = (fn: () => Promise<void> | void) => async () => {
+    process.env.REEVAL_TEST_CUT_PASSWORD = secret
+    try {
+      await fn()
+    } finally {
+      delete process.env.REEVAL_TEST_CUT_PASSWORD
+    }
+  }
+
+  test(
+    "a failure's message is masked before its middle is cut",
+    withSecret(() => {
+      const head = Math.floor(FAILURE_CAP * 0.75)
+      const message = `${'x'.repeat(head - 14)} password=${secret} ${'y'.repeat(FAILURE_CAP)}`
+      const a = {
+        record: { error: null, judgements: [], outcome: 'pass' },
+        signal: new AbortController().signal,
+        judgeThrown: new Set(),
+      } as unknown as Attempt
+      recordFailure(a, new Error(message), false, [])
+      assert.match(a.record.error?.message ?? '', /characters cut/)
+      assert.match(a.record.error?.message ?? '', /password=\[RED/)
+      assert.doesNotMatch(a.record.error?.message ?? '', /password=corr/)
+    }),
+  )
+
+  test(
+    "a turn's error is masked before it's clipped",
+    withSecret(() => {
+      const message = `${'x'.repeat(480)}=${secret}`
+      const [line] = turnErrors([[{ type: 'error', message } as TranscriptEvent]])
+      assert.match(line ?? '', /=\[REDACTED\]/)
+      assert.doesNotMatch(line ?? '', /=corr/)
+    }),
+  )
+
+  test(
+    "an assertion's label and message are masked before they're clipped",
+    withSecret(() => {
+      const [x] = assertionRecords([
+        {
+          matcher: 'toBe',
+          args: [`${'x'.repeat(40)}=${secret}`],
+          status: 'fail',
+          soft: false,
+          error: new Error(`${'x'.repeat(1017)}=${secret}`),
+        } as unknown as RawAssertion,
+      ])
+      assert.match(`${x?.label} ${x?.message}`, /=\[RED.*=\[RED/)
+      assert.doesNotMatch(`${x?.label} ${x?.message}`, /=corr/)
+    }),
+  )
+
+  test(
+    'an oversized trace entry is masked before its head is kept',
+    withSecret(async () => {
+      const dir = tempDir('trace-head')
+      const debug = new AttemptDebug({ dir, verbosity: 0, traceLimit: 1024 * 1024 })
+      // The entry's head is the first 64 KB of `{"text":"…"}`: the secret starts 4 characters before it ends.
+      const text = `${'x'.repeat(64 * 1024 - 23)} password=${secret} ${'y'.repeat(300 * 1024)}`
+      debug.trace('harness', 'big', { text }, false)
+      await debug.finish(true)
+      const trace = readFileSync(join(dir, 'trace.ndjson'), 'utf8')
+      assert.match(trace, /"clipped":/)
+      assert.match(trace, /password=\[RED/)
+      assert.doesNotMatch(trace, /password=corr/)
+    }),
+  )
+
+  test(
+    "a docker command's output is masked before the attempt's trace clips it",
+    withSecret(async () => {
+      // A `docker` on the PATH whose stdout puts the secret across the trace's 4096-character clip.
+      const bin = tempDir('trace-docker')
+      writeFileSync(
+        join(bin, 'docker.js'),
+        `process.stdout.write('x'.repeat(4096 - 14) + ' password=' + process.env.REEVAL_TEST_CUT_PASSWORD + ' ' + 'y'.repeat(5000))\n`,
+      )
+      writeFileSync(join(bin, 'docker'), '#!/bin/sh\nexec node "$(dirname "$0")/docker.js" "$@"\n')
+      chmodSync(join(bin, 'docker'), 0o755)
+      writeFileSync(join(bin, 'docker.cmd'), '@node "%~dp0docker.js" %*\r\n')
+      const dir = tempDir('trace-docker-debug')
+      const shown: string[] = []
+      const debug = new AttemptDebug({
+        dir,
+        verbosity: 2,
+        traceLimit: 1024 * 1024,
+        emit: (line) => shown.push(line.detail ?? ''),
+      })
+      const path = process.env.PATH
+      process.env.PATH = `${bin}${delimiter}${path}`
+      try {
+        await withDebug(debug, () => docker(['exec', 'c1', 'cat', '--', '/f']))
+      } finally {
+        process.env.PATH = path
+      }
+      await debug.finish(true)
+      const trace = readFileSync(join(dir, 'trace.ndjson'), 'utf8')
+      for (const text of [trace, shown.join('\n')]) {
+        assert.match(text, /more\)/)
+        assert.match(text, /password=\[RED/)
+        assert.doesNotMatch(text, /password=corr/)
+      }
+    }),
+  )
+
+  test(
+    "the judge's transcript cuts a tool's output before a secret, not through it",
+    withSecret(() => {
+      // No whitespace, so `clip` cuts at its limit: the secret starts 4 characters before it.
+      const output = JSON.stringify({ rows: 'x'.repeat(267), dsn: `password=${secret}` })
+      const event = { type: 'tool', tool: 'shell', input: { command: 'psql' }, output, ok: true }
+      const shown = transcriptForJudge([event as TranscriptEvent], true).join('\n')
+      assert.match(shown, /"password=…$/)
+      assert.doesNotMatch(redactJson({ shown }), /password=corr/)
+      const plain = { ...event, output: 'y'.repeat(400) }
+      assert.match(transcriptForJudge([plain as TranscriptEvent], true)[0] ?? '', /y{299}…$/)
+    }),
+  )
+
+  test(
+    "a turn's final message and error are masked before the record cuts them",
+    withSecret(() => {
+      const text = turnText(`${'x'.repeat(8 * 1024 - 14)} password=${secret} ${'y'.repeat(100)}`)
+      assert.match(text, /reeval: truncated/)
+      assert.match(text, /password=\[RED/)
+      assert.doesNotMatch(text, /password=corr/)
+      const message = `${'x'.repeat(1024 - 14)} password=${secret}`
+      const error = turnError([{ type: 'error', message } as TranscriptEvent]) ?? ''
+      assert.match(error, /password=\[RED/)
+      assert.doesNotMatch(error, /password=corr/)
+    }),
+  )
+
+  test(
+    'a large output is masked before its head and tail are kept',
+    withSecret(() => {
+      const head = 96 * 1024
+      const tail = 16 * 1024
+      const big = `${'x'.repeat(head - 14)} password=${secret} ${'y'.repeat(OUTPUT_CAP)}${secret}.${'z'.repeat(tail - 8)}`
+      const capped = capText(big)
+      assert.match(capped, /reeval: truncated/)
+      assert.match(capped, /password=\[RED/)
+      assert.doesNotMatch(capped, /password=corr|staple\.z/)
+    }),
+  )
 })

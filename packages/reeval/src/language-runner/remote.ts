@@ -66,11 +66,13 @@ export async function collectLanguageFile(file: string, root: string): Promise<v
       live.get(message.key)?.onDone(message)
     }
   })
+  let goneReason: string | undefined
   runner.onGone((reason) => {
+    goneReason = reason
     for (const attempt of live.values()) attempt.gone(reason)
   })
 
-  declareTree(tree.children, (body) => remoteBody(liveRunner, live, body, rel))
+  declareTree(tree.children, (body) => remoteBody(liveRunner, live, body, rel, () => goneReason))
 }
 
 let started = 0
@@ -80,6 +82,7 @@ function remoteBody(
   live: Map<string, Live>,
   body: string,
   file: string,
+  gone: () => string | undefined,
 ): EvalFn {
   return (t) =>
     new Promise<void>((resolve, reject) => {
@@ -126,6 +129,9 @@ function remoteBody(
       })
 
       if (t.signal.aborted) return onAbort()
+      // A runner that has gone would never answer this body's start.
+      const reason = gone()
+      if (reason !== undefined) return live.get(attemptKey)?.gone(reason)
       t.signal.addEventListener('abort', onAbort, { once: true })
 
       const start: RunnerAttemptStart = {

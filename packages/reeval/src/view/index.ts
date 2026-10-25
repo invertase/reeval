@@ -25,6 +25,7 @@ export * from './insights.ts'
 export * from './judgements.ts'
 export * from './live.ts'
 export * from './model.ts'
+export * from './patch.ts'
 export * from './paths.ts'
 export {
   NewerSchemaError,

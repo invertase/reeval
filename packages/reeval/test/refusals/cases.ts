@@ -13,9 +13,12 @@ import {
   execOptionsProblem,
 } from '../../src/contract/attempt.ts'
 import { declarationProblem } from '../../src/contract/declaration.ts'
+import type { DeclaredNode } from '../../src/declaration.ts'
+import { useEngine } from '../../src/engine/runtime.ts'
 import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
+import { declareTree } from '../../src/evaluate.ts'
 import { resolveModelGateway } from '../../src/gateway/models.ts'
 import { resolveGateway } from '../../src/gateway/resolve.ts'
 import { vercelCredentialProblem } from '../../src/gateway/vercel.ts'
@@ -39,6 +42,7 @@ import type {
   GatewayName,
   HarnessDescriptor,
   PluginSource,
+  RunContext,
   SandboxDescriptor,
 } from '../../src/types.ts'
 
@@ -112,6 +116,33 @@ const tree = (children: unknown) => () => {
   const problem = declarationProblem(children)
   if (problem) throw new UsageError(problem)
 }
+/** What declaring a tree refuses as it declares it, each in an eval file of its own. */
+let declaredFiles = 0
+const declares = (children: unknown[]) => () => {
+  const file = join(DIR, `evals/d${++declaredFiles}.eval.ts`)
+  const run: RunContext = {
+    runId: 'r',
+    stagingDir: DIR,
+    config: resolveConfig({ harness: fakeHarness() }, DIR),
+    tags: [],
+    concurrency: 1,
+    profile: null,
+  }
+  useEngine({
+    registerTest: () => {},
+    registerGroup: (_name, _mode, body) => body(),
+    getRunContext: () => run,
+    collectingFile: () => file,
+  })
+  declareTree(children as DeclaredNode[], () => async () => {})
+}
+const group = (name: string, children: unknown[]) => ({
+  type: 'group',
+  name,
+  mode: 'run',
+  options: {},
+  children,
+})
 const evalNode = (o: object = {}) => ({
   type: 'eval',
   name: 'e',
@@ -176,6 +207,13 @@ export const CASES: Record<string, Case[]> = {
     ['duration: setup timeout 0s', env({ setup: [{ run: 'ls', timeout: '0s' }] })],
     ['duration: setup timeout -5s', env({ setup: [{ run: 'ls', timeout: '-5s' }] })],
     ['duration: setup timeout 1.5m', env({ setup: [{ run: 'ls', timeout: '1.5m' }] })],
+    ['duration: setup timeout 596h', env({ setup: [{ run: 'ls', timeout: '596h' }] })],
+    ['duration: setup timeout 597h', env({ setup: [{ run: 'ls', timeout: '597h' }] })],
+    ['duration: setup timeout 2^31 ms', env({ setup: [{ run: 'ls', timeout: 2 ** 31 }] })],
+    ['duration: config timeout 1000h', config({ timeout: '1000h' })],
+    ['duration: budget duration 1000h', config({ budget: { duration: '1000h' } })],
+    ['duration: yaml budget duration 1000h', yaml('budget: { duration: 1000h }\n')],
+    ['duration: harness startTimeout 1000h', harnesses(fakeHarness({ startTimeout: '1000h' }))],
     [
       'duration: harness startTimeout soon',
       harnesses(fakeHarness({ startTimeout: 'soon' as never })),
@@ -204,6 +242,7 @@ export const CASES: Record<string, Case[]> = {
     ['a bad install timeout', any(docker, { install: [{ run: 'x', timeout: 'soon' }] })],
     ['a zero install timeout', any(docker, { install: [{ run: 'ls', timeout: 0 }] })],
     ['a negative install timeout', any(docker, { install: [{ run: 'ls', timeout: '-5s' }] })],
+    ['an install timeout over 596h', any(docker, { install: [{ run: 'ls', timeout: '1000h' }] })],
     ['steps instead of install', any(docker, { steps: ['x'] })],
     ['user instead of root', any(docker, { user: 'root' })],
     ['an unknown key without a hint', any(docker, { colour: 'blue' })],
@@ -301,6 +340,7 @@ export const CASES: Record<string, Case[]> = {
     ['fakeHarness effort empty', any(fakeHarness, { effort: '' })],
     ['fakeHarness with a typo', any(fakeHarness, { txt: 'x' })],
     ['fakeHarness text a number', any(fakeHarness, { text: 3 })],
+    ['fakeHarness delayMs over 596h', any(fakeHarness, { delayMs: 2 ** 31 })],
     ['fakeHarness files not strings', any(fakeHarness, { files: { 'a.txt': 1 } })],
     [
       'fakeHarness a tool with an extra key',
@@ -1312,6 +1352,87 @@ environment:
         { type: 'todo', name: 'later' },
       ]),
     ],
+    ['declared: two evals with the same name', declares([evalNode(), evalNode({ body: 'b2' })])],
+    [
+      'declared: an eval named like a grouped eval',
+      declares([group('g', [evalNode()]), evalNode({ name: 'g › e', body: 'b2' })]),
+    ],
+    [
+      'declared: two families with the same template',
+      declares([
+        ...[0, 1].map((i) =>
+          evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+        ),
+        ...[0, 1, 2].map((i) =>
+          evalNode({ name: `d${i}`, body: `d${i}`, family: { name: 'c %#', case: i, cases: 3 } }),
+        ),
+      ]),
+    ],
+    [
+      'declared: a family case declared twice',
+      declares(
+        [0, 1, 1].map((i, n) =>
+          evalNode({ name: `c${n}`, body: `b${n}`, family: { name: 'c %#', case: i, cases: 3 } }),
+        ),
+      ),
+    ],
+    [
+      'declared: a family named like a grouped family',
+      declares([
+        group(
+          'g',
+          [0, 1].map((i) =>
+            evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+          ),
+        ),
+        evalNode({ name: 'd0', body: 'd0', family: { name: 'g › c %#', case: 0, cases: 2 } }),
+      ]),
+    ],
+    [
+      'declared: an eval named like a later family',
+      declares([
+        evalNode({ name: 'c %#' }),
+        ...[0, 1].map((i) =>
+          evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+        ),
+      ]),
+    ],
+    [
+      'declared: an eval named like an earlier family',
+      declares([
+        ...[0, 1].map((i) =>
+          evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+        ),
+        evalNode({ name: 'c %#', body: 'u0' }),
+      ]),
+    ],
+    [
+      "declared: a family's case named like its template",
+      declares(
+        ['c 1', 'c $n'].map((name, i) =>
+          evalNode({ name, body: `b${i}`, family: { name: 'c $n', case: i, cases: 2 } }),
+        ),
+      ),
+    ],
+    [
+      'declared: one template in two groups, and unpooled',
+      declares([
+        ...['g', 'h'].map((g) =>
+          group(
+            g,
+            [0, 1].map((i) =>
+              evalNode({
+                name: `c${i}`,
+                body: `b${i}`,
+                family: { name: 'c %#', case: i, cases: 2 },
+              }),
+            ),
+          ),
+        ),
+        evalNode({ name: 'c 0', body: 'u0' }),
+        evalNode({ name: 'c 1', body: 'u1' }),
+      ]),
+    ],
   ],
   lifecycle: [
     ['start without its attempt', start({ attempt: undefined })],
@@ -1492,6 +1613,7 @@ environment:
     ['c.exec with fractional retries', execOptions({ retries: 0.5 })],
     ['c.exec with infinite retries', execOptions({ retries: Number.POSITIVE_INFINITY })],
     ['c.exec with an interval as a duration string', execOptions({ interval: '1s' })],
+    ['c.exec with an interval over 596h', execOptions({ retries: 1, interval: 2 ** 31 })],
     ['c.exec with a retry typo', execOptions({ retry: 2 })],
     ['c.exec with retries in the background', execOptions({ background: true, retries: 1 })],
     ['good: c.exec with retries', execOptions({ retries: 3, interval: 250 })],
@@ -1527,10 +1649,40 @@ environment:
       request({ op: 'capture', target: { port: 3000 }, options: { wait: { ms: -1 } } }),
     ],
     [
+      'capture with a name starting with an underscore',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: '_home' } }),
+    ],
+    [
+      'capture with a name starting with a hyphen',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: '-home' } }),
+    ],
+    [
+      'capture with a name of 101 characters',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: 'a'.repeat(101) } }),
+    ],
+    [
+      'capture with an upper-case name',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: 'Home' } }),
+    ],
+    [
+      'good: capture with a name of 100 characters',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: 'a'.repeat(100) } }),
+    ],
+    [
       'poll on a value',
       request(expectCall({ subject: { value: 1 }, matcher: 'toBe', args: [1], poll: {} })),
     ],
     ['poll with a zero interval', request(expectCall({ poll: { interval: 0 } }))],
+    ['poll with a timeout over 596h', request(expectCall({ poll: { timeout: 2 ** 31 } }))],
+    ['poll with an interval over 596h', request(expectCall({ poll: { interval: 2 ** 31 } }))],
+    [
+      'capture with a wait over 596h',
+      request({ op: 'capture', target: { port: 3000 }, options: { wait: { ms: 2 ** 31 } } }),
+    ],
+    [
+      'capture with a timeout over 596h',
+      request({ op: 'capture', target: { port: 3000 }, options: { timeout: '1000h' } }),
+    ],
     ['poll with a typo', request(expectCall({ poll: { timout: 5000 } }))],
     ['good: send', request({ op: 'send', prompt: 'Write greet.js.' })],
     ['good: judge', request({ op: 'judge', question: 'Does greet.js export greet?' })],

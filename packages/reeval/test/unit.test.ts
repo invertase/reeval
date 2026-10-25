@@ -77,13 +77,14 @@ import { backoffMs, isApiError, isTransient } from '../src/judge/retry.ts'
 import { withInputSize } from '../src/judge/size.ts'
 import { fakeJudge } from '../src/judge.ts'
 import { cascade, checkOptions, expand, type Resolved } from '../src/options.ts'
-import { redactSecrets } from '../src/redact.ts'
+import { redactSecrets, registerSecret } from '../src/redact.ts'
 import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
 import { fakeSandbox } from '../src/sandbox.ts'
 import { clip } from '../src/text.ts'
 import type { GatewayDescriptor, Outcome } from '../src/types.ts'
 import { rowKey } from '../src/view/compare.ts'
 import { gatePart } from '../src/view/gate.ts'
+import { splitPatch } from '../src/view/patch.ts'
 import { project } from './helpers.ts'
 
 test("the -v broker line names each brokered endpoint's path matcher", () => {
@@ -251,6 +252,44 @@ test("the snapshot keeps one commit and no placed file's earlier content", async
     await box.destroy()
   }
   assert.ok(!existsSync(box.stateDir), 'destroy removes the state directory')
+})
+
+test('changed paths come back as written, however git would quote them', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  // Windows filenames can't hold a tab or `"`.
+  const names = [
+    'café.txt',
+    'a b.txt',
+    ...(process.platform === 'win32' ? [] : ['t\tab.txt', 'q"uote\\.txt']),
+  ]
+  try {
+    await box.writeFile('keep.txt', 'kept\n')
+    await snapshot(box)
+    for (const name of names) await box.writeFile(name, 'new\n')
+    await box.writeFile('keep.txt', 'changed\n')
+    const diff = await diffSinceSnapshot(box)
+    const expected = [
+      ...names.map((path) => ({ path, status: 'added' })),
+      { path: 'keep.txt', status: 'modified' },
+    ]
+    const byPath = (a: { path: string }, b: { path: string }) => (a.path < b.path ? -1 : 1)
+    assert.deepEqual([...diff.files].sort(byPath), expected.sort(byPath))
+    assert.deepEqual(
+      splitPatch(diff.patch)
+        .map((f) => [f.path, f.added, f.removed])
+        .sort(),
+      [...names.map((n) => [n, 1, 0]), ['keep.txt', 1, 1]].sort(),
+    )
+    const judged = judgeDiff(diff, { patterns: ['!café.txt', '!t*', '!q*'] })
+    assert.doesNotMatch(
+      judged.patch,
+      /caf|t\tab|uote/,
+      'a pattern drops a quoted path from the diff',
+    )
+    assert.match(judged.patch, /a b\.txt/)
+  } finally {
+    await box.destroy()
+  }
 })
 
 test('the snapshot ignores a config the workspace user could plant in its HOME', async () => {
@@ -459,6 +498,15 @@ test('parseDuration', () => {
       `parseDuration(${String(value)})`,
     )
   }
+  assert.equal(parseDuration('596h'), 2_145_600_000)
+  assert.equal(parseDuration(2 ** 31 - 1), 2 ** 31 - 1)
+  for (const value of ['597h', '1000h', 2 ** 31, '2147483648ms']) {
+    assert.throws(
+      () => parseDuration(value as never),
+      /A duration is at most 596h \(2147483647ms\), the longest timer Node can set\./,
+      `parseDuration(${String(value)})`,
+    )
+  }
 })
 
 test('resolveConfig defaults', () => {
@@ -634,6 +682,38 @@ test("the credential checks ask for the key of the judge the run uses, the profi
   assert.deepEqual(malformedCredentials(config, bad, { profile: profile('jev') }), [
     'TYPESAFE_AI_API_KEY (character 2)',
   ])
+})
+
+test("the credential checks ask for the keys of the judges the plan's attempts resolve", () => {
+  const config = resolveConfig({ judge: { model: 'google/gemini-2.5-flash' } }, '/p')
+  const env = { CURSOR_API_KEY: 'k', GOOGLE_GENERATIVE_AI_API_KEY: 'g' }
+  const judges = [
+    { model: 'google/gemini-2.5-flash', gateway: 'direct' as const },
+    { model: 'anthropic/claude-sonnet-5', gateway: 'direct' as const },
+    { model: 'anthropic/claude-sonnet-5', gateway: 'vercel' as const },
+  ]
+  assert.deepEqual(missingCredentials(config, env, { judges }), [
+    'ANTHROPIC_API_KEY (for direct()) for the judge model, "anthropic/claude-sonnet-5"',
+    'AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (for vercel()) for the judge model, "anthropic/claude-sonnet-5"',
+  ])
+  assert.deepEqual(
+    missingCredentials(
+      config,
+      { ...env, ANTHROPIC_API_KEY: 'a', AI_GATEWAY_API_KEY: 'v' },
+      { judges },
+    ),
+    [],
+  )
+  assert.deepEqual(
+    malformedCredentials(
+      config,
+      { ...env, ANTHROPIC_API_KEY: 'a\nb', AI_GATEWAY_API_KEY: ' v' },
+      {
+        judges,
+      },
+    ),
+    ['ANTHROPIC_API_KEY (character 2)', 'AI_GATEWAY_API_KEY (character 1)'],
+  )
 })
 
 test('judge strings use the provider package on direct, and the AI Gateway only on vercel', () => {
@@ -1636,6 +1716,32 @@ test('judge calls fail at once on permanent errors, and after the last try on tr
   assert.equal(down.calls, quick.attempts)
 })
 
+test('a judge model is sent the question with secrets masked, and the verdict keeps it as asked', async () => {
+  const value = 'judge-question-secret-5d2c8e1a'
+  registerSecret(value)
+  const asked: unknown[] = []
+  const model = {
+    specificationVersion: 'v4',
+    provider: 'mock',
+    modelId: 'spy',
+    supportedQuestionTypes: ['boolean'],
+    async doEvaluate({ questions }: { questions: Record<string, { instructions?: unknown }> }) {
+      asked.push(questions.answer?.instructions)
+      return { answers: { answer: { type: 'boolean', probability: 0.9 } }, warnings: [] }
+    },
+  }
+  const question = `Did the agent keep ${value} out of the log?`
+  const { verdict } = await runJudge(
+    question,
+    { output: 'x' },
+    { model, threshold: 0.8 },
+    new AbortController().signal,
+    quick,
+  )
+  assert.deepEqual(asked, ['Did the agent keep [REDACTED] out of the log?'])
+  assert.equal(verdict.question, question)
+})
+
 test('isTimeout is the TimeoutError name, not the message', () => {
   assert.equal(isTimeout(new TimeoutError('Eval timed out after 1s')), true)
   assert.equal(isTimeout(new DOMException('Eval timed out after 1s', 'TimeoutError')), true)
@@ -1953,6 +2059,14 @@ test('SKILL.md frontmatter is parsed as YAML', () => {
     parseSkillMd('---\r\nname: crlf\r\ndescription: |\r\n  Windows.\r\n---\r\nBody', 's')
       .description,
     'Windows.',
+  )
+  assert.deepEqual(
+    parseSkillMd('\uFEFF---\nname: bom\ndescription: Saved by Notepad\n---\nBody', 's'),
+    {
+      name: 'bom',
+      description: 'Saved by Notepad',
+      body: 'Body',
+    },
   )
   assert.deepEqual(parseSkillMd('No frontmatter.', 's'), { body: 'No frontmatter.' })
   assert.deepEqual(parseSkillMd('---\n---\nBody', 's'), {

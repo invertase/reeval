@@ -107,7 +107,13 @@ export const cases: PlanCase[] = [
   {
     dir: 'python',
     name: 'hello',
-    args: [],
+    args: ['hello.eval'],
+    prepare: (dir) => syncPythonFixtureProject(dir),
+  },
+  {
+    dir: 'python',
+    name: 'dataclass-future',
+    args: ['dataclass-future.eval'],
     prepare: (dir) => syncPythonFixtureProject(dir),
   },
   { dir: 'gateway', name: 'default', args: ['--config', 'reeval.default.config.ts'] },
@@ -136,6 +142,7 @@ export const cases: PlanCase[] = [
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
+  { dir: 'only-in-skip', name: 'only-in-skipped-group', args: [] },
   { dir: 'images', name: 'install-from-dockerfile', args: ['evals/i.eval.ts'], env: NO_DOCKER },
   { dir: 'images', name: 'plugin-builds', args: ['evals/plugins.eval.ts'], env: NO_DOCKER },
   { dir: 'harnesses', name: 'claude-code', args: [] },

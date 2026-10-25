@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import math
 import re
 from collections.abc import Iterable
 from datetime import timedelta
@@ -28,7 +29,7 @@ def seconds(value: object, where: str) -> float:
     """A duration the eval wrote, as seconds: a `timedelta`, or a number of seconds."""
     if isinstance(value, timedelta):
         return value.total_seconds()
-    if isinstance(value, int | float) and not isinstance(value, bool):
+    if isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value):
         return float(value)
     raise TypeError(
         f"{where} takes seconds or a timedelta, e.g. 90 or timedelta(minutes=5) (got {value!r})"
@@ -88,9 +89,12 @@ def json_value(value: Any, where: str) -> Any:
     if isinstance(value, Verdict):
         return value._data  # pyright: ignore[reportPrivateUsage]
     try:
-        json.dumps(value)
-    except (TypeError, ValueError) as exc:
+        json.dumps(value, allow_nan=False)
+    except TypeError as exc:
         raise TypeError(f"{where}: {exc}") from None
+    except ValueError:
+        # Python's own message for this names no value on some versions.
+        raise TypeError(f"{where}: it isn't JSON, which has no NaN or Infinity") from None
     return value
 
 

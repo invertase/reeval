@@ -84,7 +84,7 @@ Cursor's SDK leaves web search and fetch calls out of its stream: Cursor's backe
 When it can't (the store is unreadable, or the turn ended before the result), the turn has `unreported: ['web-search', 'web-fetch']`, the record's `activity.webSearches` and `webFetches` are `null` rather than 0, and the web matchers refuse the turn. Cursor reports file edits relative to the workspace, with line counts.
 
 <Property name="retry" type="{ message }">
-  A model call that failed while the turn went on: the agent retried it. Antigravity's CLI retries a call Gemini refuses or drops mid-reply, up to 9 times; each retried attempt is a `retry` event, and its partial reply isn't a `text` event. The call that ends the turn is its `error`.
+  A model call that failed while the turn went on: the agent retried it. Antigravity's CLI retries a call Gemini refuses or drops mid-reply, up to 9 times; each retried attempt is a `retry` event, and its partial reply isn't a `text` event. The call that ends the turn is its `error`. pi retries a call that fails with a transient error (a 429, a 5xx, an overloaded model) up to 3 times, each failed attempt a `retry` event; a tool call a failed attempt streamed isn't a `tool` event, since pi never runs it.
 </Property>
 
 <Property name="error" type="{ message }">
@@ -135,7 +135,7 @@ A tool output over 128 KB keeps its first 96 KB and last 16 KB, with a marker be
 REEVAL_RAW_TRANSCRIPT=1 npx reeval run greet
 ```
 
-With `REEVAL_RAW_TRANSCRIPT=1`, each attempt also writes `transcript.raw.jsonl`: every stream part the harness adapter sent, unnormalised, one per line with its `turn`. It's for debugging how reeval reads a harness, and it can be large.
+With `REEVAL_RAW_TRANSCRIPT=1`, each attempt also writes `transcript.raw.jsonl`: every stream part the harness adapter sent, unnormalised, one per line with its `turn`. It's for debugging how reeval reads a harness, and it can be large. A secret split across several parts' deltas or native chunks is masked as in `trace.ndjson` (see [Debug data](/reference/debug-data)): the first piece reads `[REDACTED]` and the others are empty.
 
 ## Related
 

@@ -525,6 +525,13 @@
             }
           ]
         },
+        "setupProcesses": {
+          "description": "Processes the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in their environment, so they hold its real value while the agent works and the agent, as the same user, can read it from them. Found by the secret's variable name, so a copy under another name or in a command's arguments isn't. At most 20, each `{ command, secrets }`: its command line, masked and cut at 200 characters, and those secrets' names. Absent when there were none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SetupProcess"
+          }
+        },
         "startedAt": {
           "anyOf": [
             {
@@ -745,7 +752,7 @@
           "type": "string"
         },
         "environmentDigest": {
-          "description": "The environment's digest: the join key into `RunRecord.environments`; null for none.",
+          "description": "The environment's digest; null for none. With `environment`, the key into `RunRecord.environments`: environments with the same contents share a digest.",
           "anyOf": [
             {
               "type": "null"
@@ -1934,7 +1941,7 @@
           "type": "string"
         },
         "key": {
-          "description": "`<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a verdict can be followed across runs (and an edited question starts a new series).",
+          "description": "`<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a verdict can be followed across runs (and an edited question starts a new series). `<index>` is the call's place among the attempt's `c.judge()` calls, counting calls that failed, whichever finishes first.",
           "type": "string"
         },
         "model": {
@@ -2933,6 +2940,24 @@
         }
       },
       "required": ["file", "kind", "level", "message", "where"]
+    },
+    "SetupProcess": {
+      "description": "A process the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in its environment: it holds the real value while the agent works.",
+      "type": "object",
+      "properties": {
+        "command": {
+          "description": "Its command line, cut at 200 characters.",
+          "type": "string"
+        },
+        "secrets": {
+          "description": "The `to: 'checks'` secrets without `hosts` in its environment, by name.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["command", "secrets"]
     },
     "SkillPlacement": {
       "description": "`harness` (default): the agent's own skills, via its adapter. `workspace`: its repo skill dir.",

@@ -30,6 +30,7 @@ export function startWorker(channel: Channel): Worker {
   const cancel = new AbortController()
   let grant: ((id: string) => void) | undefined
   let working: Promise<void> = Promise.resolve()
+  let running = false
   const stop = () =>
     cancel.abort(Object.assign(new Error('The run was cancelled'), { name: 'AbortError' }))
   channel.onMessage((message) => {
@@ -38,9 +39,12 @@ export function startWorker(channel: Channel): Worker {
     else stop()
   })
   // The main process closed the channel after `done`, or is gone (the CLI was killed): cancel, let
-  // every attempt clean up, then go.
+  // every attempt clean up, then go. A file still loading has nothing to clean up and may never
+  // finish (a top-level await, a language runner that hangs), so the worker goes at once; exiting
+  // kills its language runner.
   channel.onDisconnect(() => {
     stop()
+    if (!running) return channel.exit(0)
     void working.finally(() => channel.exit(0))
   })
 
@@ -71,6 +75,7 @@ export function startWorker(channel: Channel): Worker {
         })),
       })
       if (select) {
+        running = true
         grant = useSchedulerChannel((message) => channel.send(message as FromWorker))
         await runTests(tests, new Set(select), {
           file,

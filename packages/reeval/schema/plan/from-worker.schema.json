@@ -88,6 +88,19 @@
         "harness": {
           "$ref": "#/$defs/HarnessDescriptor"
         },
+        "judge": {
+          "description": "Its judge's `'provider/model'`, as the config, profile, groups and eval set it, and the gateway its calls go through, so the run checks the judge's key before any attempt starts. Unset for a fake judge, a model object, or none.",
+          "type": "object",
+          "properties": {
+            "gateway": {
+              "enum": ["direct", "openrouter", "vercel"]
+            },
+            "model": {
+              "type": "string"
+            }
+          },
+          "required": ["model"]
+        },
         "label": {
           "description": "The harness, then the role (with `compare`), plus `#n` when it has several runs.",
           "type": "string"
@@ -540,11 +553,12 @@
       "additionalProperties": false
     },
     "Duration": {
-      "description": "More than zero: `90s`, `15m`, `1h`, or a number of milliseconds.",
+      "description": "More than zero and at most 596h: `90s`, `15m`, `1h`, or a number of milliseconds.",
       "anyOf": [
         {
           "type": "number",
-          "exclusiveMinimum": 0
+          "exclusiveMinimum": 0,
+          "maximum": 2147483647
         },
         {
           "type": "string",
@@ -796,7 +810,8 @@
       "properties": {
         "delayMs": {
           "description": "Simulated turn length, honours the abort signal.",
-          "type": "number"
+          "type": "number",
+          "maximum": 2147483647
         },
         "effort": {
           "description": "Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what the turn reports (`fake-1[effort=medium]`). Fast is not this.",

@@ -456,6 +456,60 @@ evaluate(
     )
   })
 
+  test('runs further back than the first 20,000 commits are still in HEAD’s history', async () => {
+    const p = await gitProject('record-deep', { 'evals/agent.eval.ts': agent() })
+    const commit = async (name: string) => {
+      await writeFile(join(p.dir, `${name}.txt`), 'x\n')
+      sh(p.dir, 'add', `${name}.txt`)
+      sh(p.dir, 'commit', '-q', '-m', name)
+      return sh(p.dir, 'rev-parse', 'HEAD')
+    }
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const second = await commit('second')
+    await commit('third')
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    // A later run on `second`: its base is the run on the first commit, not the one on `third`.
+    sh(p.dir, 'checkout', '-q', second)
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    // The canary: a run on a commit no branch keeps is still flagged.
+    await commit('dropped')
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    sh(p.dir, 'checkout', '-q', 'main')
+    const [onFirst, onThird, head, onDropped] = recordedRuns(p.dir)
+    const parent = sh(p.dir, 'rev-parse', 'HEAD')
+    let stream = ''
+    for (let i = 1; i <= 20_001; i++) {
+      stream += `commit refs/heads/main\ncommitter t <t@example.com> ${1_700_000_000 + i} +0000\n`
+      stream += `data ${String(i).length}\n${i}\n${i === 1 ? `from ${parent}\n` : ''}\n`
+    }
+    execFileSync('git', ['fast-import', '--quiet'], { cwd: p.dir, input: stream, env: GIT_ENV })
+    sh(p.dir, 'reset', '-q', '--hard', 'main')
+
+    assert.equal(sh(p.dir, 'rev-list', '--count', 'HEAD'), '20004')
+
+    assert.deepEqual(
+      (await historyJson(p.dir)).orphaned,
+      [onDropped],
+      'the others are ancestors of HEAD',
+    )
+
+    const cmp = await runCli(p.dir, ['compare', '--json', head ?? ''])
+    assert.equal(cmp.code, 0, cmp.stderr)
+    const result = JSON.parse(cmp.stdout)
+    assert.equal(result.base.runId, onFirst, `not ${onThird}, a commit after head's`)
+    assert.equal(result.base.inHistory, true)
+    assert.equal(result.head.inHistory, true)
+    const two = await runCli(p.dir, ['compare', '--json', onFirst ?? '', onDropped ?? ''])
+    assert.deepEqual(
+      [JSON.parse(two.stdout).base.inHistory, JSON.parse(two.stdout).head.inHistory],
+      [true, false],
+    )
+
+    const analyze = await runCli(p.dir, ['analyze', head ?? '', '--dry-run'])
+    assert.equal(analyze.code, 0, analyze.stderr)
+    assert.match(analyze.stdout, new RegExp(`^digest ${head} vs ${onFirst}:`))
+  })
+
   test('recording refuses files that look like secrets, or that changed after the run', async () => {
     const leaked = 'totally-private-value-4242'
     const p = await gitProject('record-secret', { 'evals/agent.eval.ts': agent() })

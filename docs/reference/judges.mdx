@@ -63,7 +63,7 @@ const verdict = await c.judge('Does sign-in handle a wrong password?', {
 })
 ```
 
-The judge gets your question and a JSON state, which `state` chooses. It's in `judge-input.json` as each call's `state`; the resolved option is beside it as `stateOptions`.
+The judge gets your question and a JSON state, which `state` chooses. It's in `judge-input.json` as each call's `state`, exactly as it was sent; the resolved option is beside it as `stateOptions`. Secrets are masked first, as the record masks them: the judge reads `[REDACTED]` where a check's output, the transcript or a file held one, `to: 'checks'` secrets included.
 
 With `artifacts`, the state is an ordered list: one JSON part, then each capture as a file part. The score is the model's probability that the answer is yes.
 
@@ -147,7 +147,7 @@ A judge answers through a decision API, so two routes take only decision models.
 
 `analysis.model`, insights and questions route the same way. They need a language model, though, so an evaluation model such as `typesafe-ai/jev-1.14.0` can judge but can't write an analysis.
 
-The run checks the judge's key before it starts, with the harness's. When the run's profile sets a judge `model`, that judge's key is the one checked, and a `fakeJudge()` needs none. The message names the model and the key its gateway takes; when `AI_GATEWAY_API_KEY` is set but no gateway uses it, it says how to:
+The run checks the judge's key before it starts, with the harness's. When the run's profile sets a judge `model`, that judge's key is the one checked, and a `fakeJudge()` needs none. A group or eval that sets its own judge `model` (or `gateway`) adds that judge's key, for the attempts the run plans; one the filters or tags leave out adds none. The message names the model and the key its gateway takes; when `AI_GATEWAY_API_KEY` is set but no gateway uses it, it says how to:
 
 ```text
 reeval: Missing credentials: CURSOR_API_KEY; ANTHROPIC_API_KEY (for direct()) for the judge model, "anthropic/claude-sonnet-5". Set them in the environment or .env.local. AI_GATEWAY_API_KEY is set, but no gateway in the config uses it: add vercel() to gateway to call the model through Vercel AI Gateway.

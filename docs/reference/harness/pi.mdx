@@ -94,6 +94,10 @@ Nor on [`openrouter()`](/reference/gateway#openrouter): pi reaches a Gemini mode
 
 Each model call pi makes is one step, and each turn has their sum.
 
+pi retries a model call that fails with a transient error (a 429, a 5xx, "overloaded", a dropped connection) up to 3 times, in the same turn. Each failed attempt is a step that ended in error, counted in the sum, and a `retry` event in the transcript; a tool call it streamed before failing isn't in the transcript, since pi never runs it. A call that still fails after its last retry ends the turn with its error.
+
+A call that overflows the model's context window, or stops at `length` below the model's output limit, isn't retried: pi compacts the session's context and runs the call again in the same turn. An overflowed call is a step that ended in error and a `retry` event; a `length` call keeps its `length` step and text. If the compaction fails, or the rerun overflows again, the turn ends with the call's error and pi's reason; a `length` call ends it as it stopped. The summary call pi compacts with isn't a step, and its tokens aren't in the sum.
+
 ## Turns and settings
 
 ```bash
@@ -179,6 +183,10 @@ pi refuses `:` in a server name, so a plugin's `docs` server is `house_docs`, an
 | A plugin server named like one the environment has (at plan time, exit 2) | `evaluate("<eval>") on pi:<model>: pi names the house:docs MCP server house_docs, as it does the house_docs server, and keeps only one: rename one` |
 | A non-Docker sandbox | `The pi harness needs the Docker sandbox: set sandbox: docker() …` |
 | pi dies mid-turn | `pi exited with code <n> before ending the turn: …` |
+| pi dies while it waits to retry a failed call | `pi exited with code <n> before ending the turn while retrying a failed model call (<pi's error>)` |
+| A call overflows the context and pi can't compact it | `<pi's error> (Context overflow recovery failed: …)` |
+| pi dies while it compacts for a call | `pi exited with code <n> before ending the turn while compacting its context after a failed model call (<pi's error>)` |
+| pi dies after compacting, before the call runs again | `pi exited with code <n> before ending the turn while continuing after compacting its context (<pi's error>)` |
 
 ## Related
 

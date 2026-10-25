@@ -5,7 +5,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { redactJson, redactJsonText, redactSecrets } from '../redact.ts'
+import { redactJson, redactJsonText, redactSecrets, redactSplitSecrets } from '../redact.ts'
 import {
   DEBUG_LOG,
   type DebugLine,
@@ -104,7 +104,7 @@ export class AttemptDebug {
       data,
     })
     if (entry.length > MAX_ENTRY) {
-      const head = json(data).slice(0, ENTRY_HEAD)
+      const head = redactJsonText(json(data)).slice(0, ENTRY_HEAD)
       entry = json({
         at: new Date(at).toISOString(),
         ms: at - this.#startedAt,
@@ -195,7 +195,7 @@ export class AttemptDebug {
         limitBytes: this.#limit,
         dropped: this.#dropped,
       })
-      const body = this.#trace.slice(this.#head).join('\n')
+      const body = redactSplitSecrets(this.#trace.slice(this.#head)).join('\n')
       await writeFile(join(this.dir, TRACE_FILE), redactJsonText(`${head}\n${body}\n`)).catch(
         () => {},
       )
