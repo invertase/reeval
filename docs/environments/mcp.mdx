@@ -9,23 +9,24 @@ You set `mcp` on an environment to give the agent servers it can call during an 
 
 `mcp.stdio` runs a command in the sandbox. The command must use MCP over stdin and stdout. The key in `mcp` is the server name.
 
-In the `evals/environments.ts` file, add a stdio server:
+In the `evals/environments.ts` file, copy the server's script into the workspace and add it as the `releases` server:
 
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
 
-export const withDocs = defineEnvironment('with-docs', ({ mcp }) => ({
-  mcp: {
-    docs: mcp.stdio('npx', [
-      '-y',
-      '@modelcontextprotocol/server-filesystem',
-      '/reeval/workspace',
-    ]),
-  },
-}))
+export const app = defineEnvironment(
+  'acme-cli',
+  ({ directory, file, mcp }) => ({
+    files: {
+      ...directory('./project'),
+      'mcp/releases.mjs': file('./mcp/releases.mjs'),
+    },
+    mcp: { releases: mcp.stdio('node', ['mcp/releases.mjs']) },
+  }),
+)
 ```
 
-The `/reeval/workspace` directory is the attempt's workspace. This server may read that directory. `npx` downloads the package when the sandbox does not have it.
+The command runs in the workspace, so `mcp/releases.mjs` is the copied script. A server from npm runs the same way, such as `mcp.stdio('npx', ['-y', '<package>'])`.
 
 For more information about connecting a server by URL with `mcp.http` or `mcp.sse`, see [Environment helpers](/reference/environment#mcpstdio).
 
@@ -33,21 +34,27 @@ For more information about connecting a server by URL with `mcp.http` or `mcp.ss
 
 `toHaveCalledMcp` passes when the transcript has a call named `mcp__<server>__<tool>`. Pass the server name, the tool name the server advertises, and `c` or the turn that `c.send` returns.
 
-In the body of an evaluation that runs in `withDocs`, send the task and check the call:
+In the `evals/releases.eval.ts` file, send the task and check the call:
 
-```ts title="evals/docs.eval.ts"
-    const turn = await c.send(
-      'Call list_directory on the docs server for /reeval/workspace.',
-    )
-    expect(turn, 'listed the directory').toHaveCalledMcp(
-      'docs',
-      'list_directory',
-    )
+```ts title="evals/releases.eval.ts"
+evaluate('bumps to the latest release', { environment: app }, async (c) => {
+  const turn = await c.send(
+    "Set package.json's version to the latest acme-cli release. " +
+      "The releases MCP server's latest_version tool knows it.",
+  )
+
+  expect(turn).toHaveCalledMcp('releases', 'latest_version')
+  await expect(turn).toHaveFile('package.json', /"version": "2\.4\.0"/)
+})
 ```
 
-The transcript names that call `mcp__docs__list_directory`. The second argument to `expect` is the label in the result. For more information about setting up the evaluation, see [Write an evaluation](/evals/evaluate).
+The attempt's transcript names that call `mcp__releases__latest_version`:
 
-To match the tool input, pass a string, a regular expression, or an object as the third argument. For more information about the arguments, see [the `toHaveCalledMcp` matcher](/reference/matchers#tohavecalledmcp).
+```text
+{"turn":0,…,"type":"tool","toolCallId":"call_1","tool":"mcp__releases__latest_version","input":{},"output":"acme-cli 2.4.0","ok":true,"durationMs":178}
+```
+
+To match the tool input, pass a string, a regular expression, or an object as the third argument. For more information about the arguments, see [the `toHaveCalledMcp` matcher](/reference/matchers#tohavecalledmcp). For a runnable project, see [`with-mcp`](https://github.com/invertase/reeval/tree/main/examples/with-mcp).
 
 ## Troubleshooting
 
@@ -55,6 +62,6 @@ Match the message to a fix:
 
 | Symptom | Check | Next action |
 |---|---|---|
-| `MCP server docs didn't answer initialize within 60s` | The stdio command never answered `initialize`. The attempt stops. | Run the command in the sandbox and read why it exits. |
-| `MCP server docs took 4s to start.` | A stdio server took at least 2 seconds to answer `initialize`. | Install the package in the image. For more information about install layers, see [Add install layers](/sandboxes/toolchains#add-install-layers). |
-| `expected MCP calls matching docs/list_directory, got none` | The transcript has no matching MCP call. | Pass the server name from `mcp` and the tool name the server advertises. |
+| `MCP server releases didn't answer initialize within 60s` | The stdio command never answered `initialize`. The attempt stops. | Run the command in the sandbox and read why it exits. |
+| `MCP server releases took 4s to start.` | A stdio server took at least 2 seconds to answer `initialize`. | Install the package in the image. For more information about install layers, see [Add install layers](/sandboxes/toolchains#add-install-layers). |
+| `expected MCP calls matching releases/latest_version, got none` | The transcript has no matching MCP call. | Pass the server name from `mcp` and the tool name the server advertises. |
