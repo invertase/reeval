@@ -42,7 +42,7 @@
 | `reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part | ✓ 6 | ✓ 5 | — | — | — | — |
 | `budget.attempts`, `budget.duration` and `--force` | ✓ 2 | ✓ 1 | — | — | — | — |
 | `evaluate.only`, `.skip`, `.todo` and `.for`; `group.only` | ✓ 5 | ✓ 1 | — | — | — | — |
-| `group.skip` and `group.todo`, and todo shown in the plan, summary, record and studio | ✓ 2 | ✓ 1 | — | — | — | — |
+| `group.skip` and `group.todo`, and todo shown in the plan, summary, record and studio | ✓ 2 | ✓ 2 | — | — | — | — |
 | Tags: `--tag`, `!tag` and profile tags | ✓ 1 | ✓ 1 | — | — | — | — |
 | Filters (path, eval name, cell key; the kinds narrow each other); no match exits 2 | ✓ 5 | ✓ 2 | — | — | — | — |
 
