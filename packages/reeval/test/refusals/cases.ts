@@ -1049,6 +1049,33 @@ export const CASES: Record<string, Case[]> = {
       "unbrokered 'error': an https:// MCP server's header secret that sets hosts",
       strict({ sandbox: docker(), environment: hostsHeader('https://mcp.internal/mcp') }),
     ],
+    [
+      "unbrokered 'error': an http:// MCP server's header secret that sets hosts, from a declaration tree",
+      strict({
+        sandbox: docker(),
+        environment: {
+          kind: 'environment',
+          name: 'e',
+          layers: [
+            {
+              name: 'e',
+              spec: {
+                mcp: {
+                  docs: {
+                    kind: 'mcp',
+                    transport: 'sse',
+                    url: 'http://mcp.internal/events',
+                    headers: {
+                      Authorization: { kind: 'secret', from: 'MCP_TOKEN', hosts: ['mcp.internal'] },
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      }),
+    ],
     ['yaml: empty', yaml('')],
     ['yaml: not YAML', yaml('harness: [a\n')],
     ['yaml: a repeated key', yaml('runs: 1\nruns: 2\n')],
