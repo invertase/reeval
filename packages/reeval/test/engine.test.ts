@@ -2062,4 +2062,43 @@ evaluate('agent eval', async (c) => {
     assert.equal(readRun(p.dir).run.status, 'interrupted')
     assert.deepEqual(liveSandboxes(p), [])
   })
+
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    test(`${signal} while a file is still loading leaves no worker behind`, {
+      skip: noSignals,
+    }, async () => {
+      // The worker is the CLI's child: the file signals the CLI itself, mid-load, then never
+      // finishes loading.
+      const p = await project('signal-loading', {
+        'reeval.config.ts': fakeConfig(),
+        'evals/hang.eval.ts': `import { writeFileSync } from 'node:fs'
+import { evaluate } from 'reeval'
+writeFileSync(new URL('../worker.pid', import.meta.url), String(process.pid))
+setInterval(() => {}, 1000)
+process.kill(process.ppid, '${signal}')
+await new Promise(() => {})
+evaluate('never', async () => {})
+`,
+      })
+      const r = await runCli(p.dir, ['run'], { timeoutMs: 20_000 })
+      assert.notEqual(r.code, 0, r.stdout + r.stderr)
+      const worker = Number(readFileSync(join(p.dir, 'worker.pid'), 'utf8'))
+      const alive = () => {
+        try {
+          process.kill(worker, 0)
+          return true
+        } catch {
+          return false
+        }
+      }
+      try {
+        const deadline = Date.now() + 10_000
+        while (alive() && Date.now() < deadline)
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        assert.equal(alive(), false, 'the worker exited')
+      } finally {
+        if (alive()) process.kill(worker, 'SIGKILL')
+      }
+    })
+  }
 })
