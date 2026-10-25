@@ -19,6 +19,7 @@ import { withInputSize } from '../judge/size.ts'
 import { type Draft, type DraftTurn, stateOf } from '../judge/state.ts'
 import { mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
 import { transcriptForJudge } from '../judge/transcript.ts'
+import { redactValue } from '../redact.ts'
 import { withLease } from '../scheduler/client.ts'
 import { clip, formatDuration } from '../text.ts'
 import type {
@@ -187,7 +188,8 @@ export function judgeCaller(
       listFiles: async () => workspaceFiles(await sandboxFor(a, 'c.judge()'), a.signal),
     })
     const name = judgeModelName(model)
-    const state = stateOf(draft)
+    // Masked as the record will be, so judge-input.json is what the model was sent.
+    const state = redactValue(stateOf(draft))
     const resolved = resolveJudgeArtifacts(call.artifacts, a.artifactBlobs)
     const refs = artifactRefsOf(resolved)
     const decide = decideState(state, filePartsOf(resolved))

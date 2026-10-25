@@ -20,6 +20,7 @@ import {
   redactJsonText,
   redactKey,
   redactSecrets,
+  redactValue,
   registerSecret,
   type SecretMatch,
 } from '../src/redact.ts'
@@ -575,6 +576,24 @@ describe('redacting serialised JSON', () => {
     )
     // Twin: redacting the serialised text breaks it.
     assert.throws(() => JSON.parse(redactSecrets(JSON.stringify(record), {})))
+  })
+
+  test('redactValue masks a value the way its record is masked once written', () => {
+    const state = {
+      output: 1234,
+      checks: [{ command: 'printf %s "$CHECK_TOKEN"', exitCode: 0, stdout: VALUE, stderr: '' }],
+      contents: { 'missing.txt': null, '.env': `TOKEN=${VALUE}\n` },
+    }
+    const masked = redactValue(state, { CHECK_TOKEN: VALUE })
+    assert.deepEqual(masked, {
+      output: 1234,
+      checks: [{ ...state.checks[0], stdout: '[REDACTED]' }],
+      contents: { 'missing.txt': null, '.env': 'TOKEN=[REDACTED]\n' },
+    })
+    assert.equal(
+      redactJson(masked, 2, { CHECK_TOKEN: VALUE }),
+      redactJson(state, 2, { CHECK_TOKEN: VALUE }),
+    )
   })
 
   test('JSON Lines keep every byte outside the strings they mask, and a broken line is masked as text', () => {

@@ -314,6 +314,13 @@ export function redactJson(
 }
 
 /**
+ * `value` with its strings masked as `redactJson` masks them, as a JSON value again: what a model
+ * is sent, so it reads as the record of it will once that's written.
+ */
+export const redactValue = <T>(value: T, env: NodeJS.ProcessEnv = process.env): T =>
+  JSON.parse(redactJson(value, undefined, env))
+
+/**
  * Serialised JSON or JSON Lines, masked as `redactJson` masks a value, with the text kept byte
  * for byte outside the strings it masks. A line that isn't JSON is masked as plain text.
  */

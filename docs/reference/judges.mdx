@@ -63,7 +63,7 @@ const verdict = await c.judge('Does sign-in handle a wrong password?', {
 })
 ```
 
-The judge gets your question and a JSON state, which `state` chooses. It's in `judge-input.json` as each call's `state`; the resolved option is beside it as `stateOptions`.
+The judge gets your question and a JSON state, which `state` chooses. It's in `judge-input.json` as each call's `state`, exactly as it was sent; the resolved option is beside it as `stateOptions`. Secrets are masked first, as the record masks them: the judge reads `[REDACTED]` where a check's output, the transcript or a file held one, `to: 'checks'` secrets included.
 
 With `artifacts`, the state is an ordered list: one JSON part, then each capture as a file part. The score is the model's probability that the answer is yes.
 
