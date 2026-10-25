@@ -11,6 +11,7 @@
   "revision a number": null,
   "revision a string": null,
   "a bound body": "UsageError: evaluate(\"e\")'s body is a bound or built-in function, whose source reeval can't read to fingerprint the eval. Pass the function itself, e.g. async (c) => { … }, not fn.bind(…).",
+  "a case that is not JSON data": "UsageError: evaluate.each(\"e\") case 0: reeval fingerprints each case as JSON data, and this one isn't (it holds a RegExp). Pass plain objects, arrays, strings, finite numbers, booleans, null, functions or environments, and build the rest in the body.",
   "egress a list": "UsageError: egress in evals/a.eval.ts › e is 'proxy' (the default), 'allow-all', 'deny-all', or { allow: ['api.example.com', '*.example.org'] } (got [\"api.example.com\"]). For a list of hosts, use { allow: [\"api.example.com\"] }.",
   "egress a string": "UsageError: egress in evals/a.eval.ts › e is 'proxy' (the default), 'allow-all', 'deny-all', or { allow: ['api.example.com', '*.example.org'] } (got \"none\").",
   "egress deny key": "UsageError: Unknown egress key \"deny\" in evals/a.eval.ts › e. A policy lists what's allowed; everything else is refused.",

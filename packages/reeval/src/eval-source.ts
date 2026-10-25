@@ -5,6 +5,7 @@
 // author's to mark by bumping `revision`. Packages are covered by the recorded lockfiles.
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { originalText } from './engine/loader.ts'
 import { isEnvironment } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { relativeFile, sha256 } from './ids.ts'
@@ -18,30 +19,48 @@ import type {
   SandboxDescriptor,
 } from './types.ts'
 
-/** Kept out of the options hash: selection and labels, `revision`'s own part, and the gate, which compare reads as a policy change. */
-const UNHASHED = new Set(['tags', 'description', 'revision', 'gate'])
+/** Kept out of the options hash: `tags` (selection), `revision`'s own part, and the gate, which compare reads as a policy change. */
+const UNHASHED = new Set(['tags', 'revision', 'gate'])
 
-/** The `sources` fingerprint part. */
+/**
+ * The `sources` fingerprint part. An attempt without a source (one kept from a record that had
+ * none, or one that never ran) hashes its eval file instead.
+ */
 export function sourcesPart(
   source: EvalSource | undefined,
   revision: Revision | undefined,
+  files: ReadonlyArray<{ path: string; sha256: string }>,
 ): string {
-  return sha256(canonicalJson({ ...source, ...(revision !== undefined ? { revision } : {}) }))
+  const what = source ?? { files }
+  return sha256(canonicalJson({ ...what, ...(revision !== undefined ? { revision } : {}) }))
 }
 
-/** sha256 of a TypeScript eval body's source text. Throws when it has none to read. */
-export function bodyHash(fn: (...args: never[]) => unknown, where: string): string {
+/**
+ * sha256 of a TypeScript eval body's source text, as the file has it rather than as the loader
+ * transformed it. Throws when it has none to read.
+ */
+export function bodyHash(fn: (...args: never[]) => unknown, where: string, file?: string): string {
   const text = Function.prototype.toString.call(fn)
   if (/\{\s*\[native code\]\s*\}\s*$/.test(text)) {
     throw new UsageError(
       `${where}'s body is a bound or built-in function, whose source reeval can't read to fingerprint the eval. Pass the function itself, e.g. async (c) => { … }, not fn.bind(…).`,
     )
   }
-  return sha256(text)
+  return sha256(originalText(text, file) ?? text)
 }
 
-/** sha256 of an `evaluate.each` case in canonical JSON. */
-export const caseHash = (item: unknown): string => sha256(canonicalJson(item))
+/**
+ * sha256 of an `evaluate.each` case in canonical JSON. Throws on a value that isn't JSON data (a
+ * class instance such as a RegExp or Map, a non-finite number), whose changes JSON can't see.
+ */
+export function caseHash(item: unknown, where: string, file?: string): string {
+  const refuse = (what: string): never => {
+    throw new UsageError(
+      `${where}: reeval fingerprints each case as JSON data, and this one isn't (it holds ${what}). Pass plain objects, arrays, strings, finite numbers, booleans, null, functions or environments, and build the rest in the body.`,
+    )
+  }
+  return sha256(canonicalJson(item, { file, refuse }))
+}
 
 /** sha256 of the eval's options and its enclosing groups', outermost first, in canonical form. */
 export function optionsHash(levels: readonly EvalOptions[]): string {
@@ -100,29 +119,45 @@ function modelId(model: unknown): unknown {
     : 'custom'
 }
 
-/**
- * JSON with object keys sorted and `undefined` dropped. A function is its source text, an
- * environment its name (its contents are the cell's `environment` part), a bigint its digits.
- */
-export function canonicalJson(value: unknown): string {
-  return JSON.stringify(canonical(value, new Set())) ?? 'null'
+type Canonical = {
+  /** The file the value was declared in, where a function's source is looked up first. */
+  file?: string
+  /** Called on a value whose JSON would lose what it holds; without it, that value is kept. */
+  refuse?: (what: string) => never
 }
 
-function canonical(value: unknown, path: Set<object>): unknown {
-  if (typeof value === 'function') return Function.prototype.toString.call(value)
+/**
+ * JSON with object keys sorted (by UTF-16 code unit) and `undefined` dropped. A function is its
+ * source text as its file has it, an environment its name (its contents are the cell's
+ * `environment` part), a bigint its digits, an object with `toJSON` what that returns.
+ */
+export function canonicalJson(value: unknown, how: Canonical = {}): string {
+  return JSON.stringify(canonical(value, new Set(), how)) ?? 'null'
+}
+
+function canonical(value: unknown, path: Set<object>, how: Canonical): unknown {
+  if (typeof value === 'function') {
+    const text = Function.prototype.toString.call(value)
+    return originalText(text, how.file) ?? text
+  }
   if (typeof value === 'bigint') return value.toString()
   if (typeof value === 'symbol' || value === undefined) return undefined
+  if (typeof value === 'number' && !Number.isFinite(value)) how.refuse?.(String(value))
   if (value === null || typeof value !== 'object') return value
   if (path.has(value)) return '[circular]'
   if (isEnvironment(value)) return { environment: value.name }
   const toJSON = (value as { toJSON?: unknown }).toJSON
-  if (typeof toJSON === 'function') return canonical(toJSON.call(value), path)
+  if (typeof toJSON === 'function') return canonical(toJSON.call(value), path, how)
+  const proto = Object.getPrototypeOf(value)
+  if (!Array.isArray(value) && proto !== Object.prototype && proto !== null) {
+    how.refuse?.(`a ${proto?.constructor?.name ?? 'class instance'}`)
+  }
   path.add(value)
   try {
-    if (Array.isArray(value)) return value.map((v) => canonical(v, path) ?? null)
+    if (Array.isArray(value)) return value.map((v) => canonical(v, path, how) ?? null)
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(value).sort()) {
-      const v = canonical((value as Record<string, unknown>)[key], path)
+      const v = canonical((value as Record<string, unknown>)[key], path, how)
       if (v !== undefined) out[key] = v
     }
     return out

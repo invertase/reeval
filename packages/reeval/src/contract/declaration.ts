@@ -37,7 +37,8 @@ export const declaredTodoSchema = z
   })
   .describe('`evaluate.todo` or `group.todo`.')
 
-const hash = () => z.string().regex(/^[0-9a-f]{64}$/)
+const hash = () =>
+  z.string().regex(/^[0-9a-f]{64}$/, 'must be a sha256 hash: 64 lowercase hex digits')
 
 export const declaredSourceSchema = z
   .strictObject({
@@ -47,7 +48,7 @@ export const declaredSourceSchema = z
       .describe("sha256 of the case's data; set on each case of an `evaluate.each`."),
   })
   .describe(
-    "An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source text, and of an `evaluate.each` case's data as canonical JSON (keys sorted, no whitespace).",
+    "An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source text, and of an `evaluate.each` case's data as canonical JSON (object keys sorted, no whitespace, non-ASCII characters as themselves).",
   )
 
 export const declaredEvalSchema = z
@@ -59,9 +60,7 @@ export const declaredEvalSchema = z
     mode: declaredModeSchema,
     options: evalOptionsDataSchema.describe("The eval's own options, before the cascade."),
     body: z.string().describe("Names the eval's body to whoever runs it."),
-    source: declaredSourceSchema.describe(
-      "Hashes of the eval's own source, for the `sources` part of its fingerprint.",
-    ),
+    source: declaredSourceSchema,
     family: declaredFamilySchema
       .optional()
       .describe(

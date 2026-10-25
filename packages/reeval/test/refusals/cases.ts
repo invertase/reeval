@@ -18,7 +18,7 @@ import { useEngine } from '../../src/engine/runtime.ts'
 import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
-import { bodyHash } from '../../src/eval-source.ts'
+import { bodyHash, caseHash } from '../../src/eval-source.ts'
 import { declareTree } from '../../src/evaluate.ts'
 import { resolveModelGateway } from '../../src/gateway/models.ts'
 import { resolveGateway } from '../../src/gateway/resolve.ts'
@@ -684,6 +684,7 @@ export const CASES: Record<string, Case[]> = {
     ['revision a number', options({ revision: 2 })],
     ['revision a string', options({ revision: '2026-10-25' })],
     ['a bound body', () => bodyHash((async () => {}).bind(null), 'evaluate("e")')],
+    ['a case that is not JSON data', () => caseHash({ want: /hi/ }, 'evaluate.each("e") case 0')],
     ['egress a list', options({ egress: ['api.example.com'] })],
     ['egress a string', options({ egress: 'none' })],
     ['egress deny key', options({ egress: { deny: ['x.com'] } })],

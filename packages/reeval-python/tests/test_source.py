@@ -92,6 +92,48 @@ def test_a_bound_method_and_a_wrapped_function_hash_the_function_itself(tmp_path
     assert found["wrapped"] == same["plain"], "the wrapper is looked through, decorators left out"
 
 
+LAMBDAS = """
+from reeval_python import evaluate
+
+evaluate("c", lambda c: c.send("{c}")); evaluate("d", lambda c: c.send("{d}"))
+evaluate("n", lambda c: (lambda: c.send("x"))())
+"""
+
+
+def test_a_lambda_hashes_its_own_text_not_its_line(tmp_path: Path) -> None:
+    import hashlib
+
+    base = _sources(tmp_path, LAMBDAS.format(c="a", d="a"))
+    edited = _sources(tmp_path, LAMBDAS.format(c="a", d="bye"))
+    assert edited["c"] == base["c"], "editing the lambda beside it doesn't change this eval"
+    assert edited["d"] != base["d"]
+    own = 'lambda c: c.send("a")'
+    assert base["c"]["body"] == hashlib.sha256(own.encode()).hexdigest()
+    nested = 'lambda c: (lambda: c.send("x"))()'
+    assert base["n"]["body"] == hashlib.sha256(nested.encode()).hexdigest()
+
+
+UNWRAPPED = """
+from reeval_python import evaluate
+
+def logged(fn):
+    def wrapper(c):
+        return fn(c)
+    return wrapper
+
+@evaluate("e")
+@logged
+def body(c):
+    c.send("{say}")
+"""
+
+
+def test_a_decorator_without_wraps_still_hashes_the_body_it_wrapped(tmp_path: Path) -> None:
+    base = _sources(tmp_path, UNWRAPPED.format(say="hi"))
+    assert _sources(tmp_path, UNWRAPPED.format(say="hi")) == base, "the same source, the same hash"
+    assert _sources(tmp_path, UNWRAPPED.format(say="bye"))["e"] != base["e"]
+
+
 @pytest.mark.parametrize(
     ("text", "message"),
     [

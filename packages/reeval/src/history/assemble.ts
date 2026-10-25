@@ -713,7 +713,7 @@ async function addPreviousAttempt(
     if (cellRecord.overrides.length === 0) cellRecord.overrides = [...beforeCell.overrides]
   } else {
     const parts: FingerprintParts = {
-      sources: sourcesPart(source, revision),
+      sources: sourcesPart(source, revision, sources),
       harness: sha256(JSON.stringify(e.attempt ? withoutCaps(e.attempt.harness) : null)),
       environment: cellRecord.environmentDigest,
       image: kept.imageId,
@@ -777,7 +777,7 @@ async function addAttempt(
   if (!cellRecord.fingerprint || record) {
     if (record) measured.add(cellRecord)
     const parts: FingerprintParts = {
-      sources: sourcesPart(source, revision),
+      sources: sourcesPart(source, revision, sources),
       harness: sha256(JSON.stringify(e.attempt ? withoutCaps(e.attempt.harness) : null)),
       environment: environment?.digest ?? null,
       image: record?.image?.id ?? null,

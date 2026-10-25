@@ -288,7 +288,13 @@ const defineEval =
     checkOnly(mode, 'evaluate')
     const [own, fn] = splitArgs<EvalFn>('evaluate', name, a, b)
     const where = `evaluate("${name}")`
-    register(mode, name, withPaths(own, where), fn, declared ?? { body: bodyHash(fn, where) })
+    register(
+      mode,
+      name,
+      withPaths(own, where),
+      fn,
+      declared ?? { body: bodyHash(fn, where, collectingFile()) },
+    )
   }
 
 /** `$key` is a property of the case, `%s` the case itself, `%#` its index. */
@@ -347,10 +353,11 @@ const evalEach =
     const own = withPaths(written, `evaluate.each("${name}")`)
     const hint = ` For evaluate.each, put $key, %s or %# in the name ("${name}") so each case's name differs.`
     const pooled = pool && cases.length >= 2
-    const body = bodyHash(fn, `evaluate.each("${name}")`)
+    const file = collectingFile()
+    const body = bodyHash(fn, `evaluate.each("${name}")`, file)
     cases.forEach((item, i) => {
       const family = pooled ? { name, case: i, cases: cases.length } : undefined
-      const source = { body, case: caseHash(item) }
+      const source = { body, case: caseHash(item, `evaluate.each("${name}") case ${i}`, file) }
       register('run', formatName(name, item, i), own, (c) => fn(c, item), source, hint, family)
     })
   }

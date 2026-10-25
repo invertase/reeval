@@ -877,6 +877,7 @@ evaluate('sibling', async (c) => {
     const p = await gitProject('eval-source', {
       'evals/agent.eval.ts': importing(),
       'evals/helpers.ts': "export const prompt = 'write hello.txt'\n",
+      'lib/helpers.ts': "export const other = 'write third.txt'\n",
     })
     const write = (text: string) => writeFile(join(p.dir, 'evals/agent.eval.ts'), text)
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
@@ -898,6 +899,13 @@ evaluate('sibling', async (c) => {
     assert.deepEqual(await agentRow(p.dir), ['same', []])
     const sibling = (await compareJson(p.dir)).rows.find((r) => r.id.endsWith('sibling'))
     assert.deepEqual([sibling?.status, sibling?.changes], ['drift', ['body changed']])
+    // The loader renames this file's import of ./helpers.ts once another helpers module comes
+    // first; the body is still the same source.
+    const third = "evaluate('third', async (c) => {\n  await c.send(other)\n})\n"
+    await write(
+      `import { other } from '../lib/helpers.ts'\n${importing({ tags: "'a', 'b'", sibling: 'write another.txt' })}${third}`,
+    )
+    assert.deepEqual(await agentRow(p.dir), ['same', []])
 
     await write(importing({ revision: 2 }))
     assert.deepEqual(await agentRow(p.dir), ['drift', ['revision 1 → 2']])

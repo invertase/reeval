@@ -548,14 +548,6 @@ class DeclarationTree(TypedDict):
     children: list[DeclaredNode]
 
 
-# Hashes of the eval's own source, for the `sources` part of its fingerprint.
-class DeclaredEvalSource(TypedDict):
-    # sha256 of the body function's source text.
-    body: str
-    # sha256 of the case's data; set on each case of an `evaluate.each`.
-    case: NotRequired[str]
-
-
 # An `evaluate`: one eval, planned into a test per attempt.
 class DeclaredEval(TypedDict):
     # Names the eval's body to whoever runs it.
@@ -567,8 +559,7 @@ class DeclaredEval(TypedDict):
     name: str
     # The eval's own options, before the cascade.
     options: EvalOptionsData
-    # Hashes of the eval's own source, for the `sources` part of its fingerprint.
-    source: DeclaredEvalSource
+    source: DeclaredSource
     type: Literal["eval"]
 
 
@@ -602,7 +593,8 @@ DeclaredNode: TypeAlias = "DeclaredEval | DeclaredGroup | DeclaredTodo"
 
 
 # An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source
-# text, and of an `evaluate.each` case's data as canonical JSON (keys sorted, no whitespace).
+# text, and of an `evaluate.each` case's data as canonical JSON (object keys sorted, no
+# whitespace, non-ASCII characters as themselves).
 class DeclaredSource(TypedDict):
     # sha256 of the body function's source text.
     body: str

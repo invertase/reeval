@@ -10,6 +10,7 @@ import importlib.util
 import inspect
 import itertools
 import json
+import linecache
 import re
 import sys
 import textwrap
@@ -268,7 +269,9 @@ def _case_name(template: str, case: Any, index: int) -> str:
 def body_hash(fn: Callable[..., Any], where: str) -> str:
     """sha256 of a body's source text, from `def` on: decorators (`@evaluate(…)` among them) are
     left out, a bound method is its function, and a decorator that keeps `functools.wraps` is
-    looked through. Raises when there's no source to read, rather than fingerprint less."""
+    looked through. A lambda is its own text, not its line's. Functions the body closes over
+    (what a decorator without `functools.wraps` wrapped) are hashed with it. Raises when there's
+    no source to read, rather than fingerprint less."""
     target: Any = getattr(fn, "__func__", fn)
     try:
         target = inspect.unwrap(target)
@@ -281,20 +284,90 @@ def body_hash(fn: Callable[..., Any], where: str) -> str:
             "calls changes"
         )
     try:
-        text = textwrap.dedent(inspect.getsource(target))
+        text = _source(target)
     except (OSError, TypeError) as exc:
         raise TypeError(
             f"{where}: reeval can't read the body's source to fingerprint the eval ({exc}). "
             "Declare it with def or async def in the .eval.py file: a body made by exec, typed "
             "at a REPL or a callable object has none"
         ) from None
+    seen = {id(target)}
+    for captured in _captured(target, seen):
+        try:
+            text += "\n" + _source(captured)
+        except (OSError, TypeError):
+            continue
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _source(fn: Any) -> str:
+    if getattr(fn, "__name__", None) == "<lambda>":
+        own = _lambda_source(fn)
+        if own is not None:
+            return own
+    text = textwrap.dedent(inspect.getsource(fn))
     try:
         node = ast.parse(text).body[0]
     except (SyntaxError, IndexError):
         node = None
     if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
         text = "".join(text.splitlines(keepends=True)[node.lineno - 1 :])
-    return hashlib.sha256(text.encode()).hexdigest()
+    return text
+
+
+def _lambda_source(fn: Any) -> str | None:
+    """A lambda's own text: `inspect.getsource` gives its whole line, which may hold others. The
+    lambda is the innermost one around every position its code reports."""
+    code = fn.__code__
+    spans = [
+        ((line, col), (end_line, end_col))
+        for line, end_line, col, end_col in code.co_positions()
+        if line
+        and end_line
+        and col is not None
+        and end_col is not None
+        and (end_line, end_col) > (line, col)
+    ]
+    linecache.checkcache(code.co_filename)
+    lines = linecache.getlines(code.co_filename)
+    if not spans or not lines:
+        return None
+    source = "".join(lines)
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return None
+    first = min(start for start, _ in spans)
+    last = max(end for _, end in spans)
+    around = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Lambda)
+        and node.end_lineno is not None
+        and node.end_col_offset is not None
+        and (node.lineno, node.col_offset) <= first
+        and last <= (node.end_lineno, node.end_col_offset)
+    ]
+    if not around:
+        return None
+    innermost = max(around, key=lambda node: (node.lineno, node.col_offset))
+    return ast.get_source_segment(source, innermost)
+
+
+def _captured(fn: Any, seen: set[int]) -> list[Any]:
+    """The functions `fn` closes over, and theirs, each once."""
+    out: list[Any] = []
+    for cell in getattr(fn, "__closure__", None) or ():
+        try:
+            value = cell.cell_contents
+        except ValueError:
+            continue
+        value = getattr(value, "__func__", value)
+        if inspect.isfunction(value) and id(value) not in seen:
+            seen.add(id(value))
+            out.append(value)
+            out.extend(_captured(value, seen))
+    return out
 
 
 def _case_default(value: Any) -> Any:

@@ -482,11 +482,18 @@ describe("an eval's source", () => {
 
   test('the sources part covers the source and revision, and 2 is not "2"', () => {
     const source = { body, options: 'b'.repeat(64) }
-    const none = sourcesPart(source, undefined)
-    assert.notEqual(sourcesPart(source, 2), none)
-    assert.notEqual(sourcesPart(source, 2), sourcesPart(source, '2'))
-    assert.notEqual(sourcesPart({ ...source, case: 'c'.repeat(64) }, undefined), none)
-    assert.equal(sourcesPart({ options: source.options, body }, undefined), none)
+    const file = [{ path: 'evals/a.eval.ts', sha256: 'd'.repeat(64) }]
+    const none = sourcesPart(source, undefined, file)
+    assert.notEqual(sourcesPart(source, 2, file), none)
+    assert.notEqual(sourcesPart(source, 2, file), sourcesPart(source, '2', file))
+    assert.notEqual(sourcesPart({ ...source, case: 'c'.repeat(64) }, undefined, file), none)
+    assert.equal(sourcesPart({ options: source.options, body }, undefined, []), none)
+    const other = [{ path: 'evals/b.eval.ts', sha256: 'e'.repeat(64) }]
+    assert.notEqual(
+      sourcesPart(undefined, undefined, file),
+      sourcesPart(undefined, undefined, other),
+      'without a source, the eval file stands in',
+    )
   })
 
   test('a body hashes its own source text; a bound function is refused', () => {
@@ -495,11 +502,30 @@ describe("an eval's source", () => {
       await Promise.resolve()
     }
     assert.notEqual(bodyHash(a, 'evaluate("a")'), bodyHash(b, 'evaluate("b")'))
-    assert.equal(caseHash({ n: 1, s: 'x' }), caseHash({ s: 'x', n: 1 }))
     assert.throws(
       () => bodyHash(a.bind(null), 'evaluate("bound")'),
       /evaluate\("bound"\)'s body is a bound or built-in function/,
     )
+  })
+
+  test("a case hashes as JSON data, and data JSON can't see is refused", () => {
+    const at = 'evaluate.each("e") case 0'
+    assert.equal(caseHash({ n: 1, s: 'x' }, at), caseHash({ s: 'x', n: 1 }, at))
+    assert.notEqual(caseHash({ n: 1 }, at), caseHash({ n: 2 }, at), 'twin: another value')
+    const env = defineEnvironment('skilled', {})
+    assert.equal(caseHash({ env, at: new Date(0) }, at), caseHash({ env, at: new Date(0) }, at))
+    for (const [value, what] of [
+      [/hello/, 'a RegExp'],
+      [new Map([['a', 1]]), 'a Map'],
+      [new Set([1]), 'a Set'],
+      [Number.NaN, 'NaN'],
+      [Number.POSITIVE_INFINITY, 'Infinity'],
+    ] as const) {
+      assert.throws(
+        () => caseHash({ want: value }, at),
+        new RegExp(`^UsageError: evaluate\\.each\\("e"\\) case 0: .* \\(it holds ${what}\\)`),
+      )
+    }
   })
 })
 

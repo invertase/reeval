@@ -30,7 +30,6 @@ export type DeclaredEval = {
   options: EvalOptionsData
   /** Names the eval's body to whoever runs it. */
   body: string
-  /** Hashes of the eval's own source, for the `sources` part of its fingerprint. */
   source: DeclaredSource
   /** Set on each case of a pooled `evaluate.each`: its template, index and the list's length. */
   family?: DeclaredFamily
@@ -38,7 +37,8 @@ export type DeclaredEval = {
 
 /**
  * An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source
- * text, and of an `evaluate.each` case's data as canonical JSON (keys sorted, no whitespace).
+ * text, and of an `evaluate.each` case's data as canonical JSON (object keys sorted, no
+ * whitespace, non-ASCII characters as themselves).
  */
 export type DeclaredSource = {
   /** sha256 of the body function's source text. */

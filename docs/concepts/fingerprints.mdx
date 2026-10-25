@@ -47,18 +47,18 @@ The `sources` part is the same in TypeScript and Python. It hashes four things, 
 
 | Hashed | Read as |
 |---|---|
-| The eval's body | Its function's source text: `fn.toString()` in TypeScript, `inspect.getsource(fn)` from `def` on in Python |
+| The eval's body | Its function's source text as the file has it: `fn.toString()` mapped back through the loader's source map in TypeScript, `inspect.getsource(fn)` from `def` on in Python |
 | Its options | Its own and its groups', keys sorted; each harness, sandbox, environment and judge model by its id. `tags`, `gate` and `revision` are left out |
-| Its case | The `evaluate.each` case's data, as JSON with sorted keys |
+| Its case | The `evaluate.each` case's data, as JSON with sorted keys; a function in it is its source |
 | `revision` | As written: `2` and `'2'` differ |
 
 Editing one eval leaves its siblings in the same file comparable. Helpers, constants outside the body, fixtures and data the eval reads aren't hashed, so editing `helpers.ts` above changes nothing. When such a change matters to what the eval measures, bump its `revision`, or a group's to cover every eval in it.
 
 <Warning>
-  A body reeval can't read the source of is refused at plan time rather than fingerprinted less: a bound TypeScript function, and in Python a function made by `exec`, typed at a REPL, a `functools.partial` or a callable object. A body a helper returns hashes the returned function, so a change inside the helper needs a `revision` bump.
+  A body or case reeval can't read is refused at plan time rather than fingerprinted less: a bound TypeScript function; in Python, a function made by `exec`, typed at a REPL, a `functools.partial` or a callable object; and a case holding something JSON can't see, such as a `RegExp`, `Map`, `Set` or `NaN`. A TypeScript body a helper returns hashes the returned function, so a change inside the helper needs a `revision` bump.
 </Warning>
 
-Python looks through decorators that keep `functools.wraps`, and reads a bound method as its function. A Python lambda's source is the line it's written on. Packages are covered by the lockfile hashes the run records.
+Python looks through decorators that keep `functools.wraps`, reads a bound method as its function and a lambda as its own text, and hashes the functions a body closes over with it, so a decorator without `functools.wraps` still sees edits to the body it wrapped. Packages are covered by the lockfile hashes the run records.
 
 ## Read a compare
 
