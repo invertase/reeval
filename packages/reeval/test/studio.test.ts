@@ -939,6 +939,33 @@ describe('studio server', () => {
     assert.ok(ref)
     assert.equal((await get(`/${artifactPath(runId, ref.path)}`)).status, 200)
     assert.equal((await get(`/${artifactPath(sibling, ref.path)}`)).status, 404)
+
+    // Nor are its saved analyses, or notes under a symlinked `.reeval/analysis/<run>`.
+    const saved = 'test/fixtures/records/before-proxy-egress/evals/.history'
+    await cp(
+      join(saved, '20261023T093806Z_66722ad_cursor-agent_e3gk', 'analysis'),
+      join(outside, 'analysis'),
+      { recursive: true },
+    )
+    mkdirSync(join(outside, 'notes'))
+    const note: AnalysisNote = {
+      kind: 'reeval-analysis-note',
+      schemaVersion: 1,
+      runId: out,
+      evalId: 'e',
+      harness: 'fake',
+      model: 'fake',
+      resolvedModel: null,
+      createdAt: '2026-10-21T00:00:00.000Z',
+      attempts: ['fake#1'],
+      text: 'A note.',
+      usage: { inputTokens: null, outputTokens: null },
+    }
+    writeFileSync(join(outside, 'notes', 'e__fake.json'), JSON.stringify(note))
+    mkdirSync(join(source.root, '.reeval/analysis'), { recursive: true })
+    await symlink(outside, join(source.root, '.reeval/analysis', out), 'dir')
+    const analysis = await (await get(`/${analysisDataPath(out)}`)).json()
+    assert.deepEqual([analysis.entries, analysis.notes], [[], undefined])
   })
 
   test("serves an attempt's local debug data, and null where there is none", async () => {
