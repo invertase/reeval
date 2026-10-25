@@ -956,6 +956,7 @@ export const inventory: InventoryFeature[] = [
     id: 'secret.unbrokered',
     area: 'Environments',
     name: '`secrets: { unbrokered }` and the unbrokered warning',
+    plan: ['secrets/plain-headers'],
     tests: [
       options('a Docker secret without hosts warns once in the plan'),
       options("an optional secret that isn't set gets no real-value warning"),
@@ -963,6 +964,7 @@ export const inventory: InventoryFeature[] = [
         "secrets: { unbrokered: 'error' } refuses an optional secret whether or not it's set",
       ),
       secrets('lists env and MCP secrets the sandbox would get as real values'),
+      secrets('lists those named like a credential or shaped like a token, not secrets or others'),
     ],
   },
   {
@@ -981,6 +983,10 @@ export const inventory: InventoryFeature[] = [
         "a declared secret under a plain name is masked in an eval's logs and failures on screen",
       ),
       debug("a secret in an error that stops the run is masked, config's and an eval file's"),
+      secrets('resolving the environment masks the credential-like values, and only those'),
+      debug(
+        'a credential-like MCP header written as a plain string is masked on screen, in the trace and the record',
+      ),
     ],
   },
   {

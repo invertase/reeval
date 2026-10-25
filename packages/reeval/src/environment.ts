@@ -22,7 +22,7 @@ import { closest, genericProblem, got, type Issue, refusal } from './contract/sh
 import { parseDuration } from './duration.ts'
 import { localPluginServers, PLUGIN_NAME, PLUGIN_PARTS } from './environment/plugins.ts'
 import { isObjectLike } from './object.ts'
-import { SECRET_NAME } from './redact.ts'
+import { hasTokenShape, SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
 import type {
   EgressPolicy,
@@ -231,12 +231,8 @@ export type UnbrokeredSecret = Omit<PlannedSecret, 'hosts'>
  */
 export function plannedSecrets(env: EnvVars, layers: readonly EnvironmentLayer[]): PlannedSecret[] {
   const vars: EnvVars = { ...env }
-  const servers = new Map<string, McpServer>()
-  for (const { spec } of layers) {
-    Object.assign(vars, spec.env)
-    for (const [name, server] of Object.entries(spec.mcp ?? {})) servers.set(name, server)
-  }
-  for (const [name, server] of localPluginServers(layers)) servers.set(name, server)
+  for (const { spec } of layers) Object.assign(vars, spec.env)
+  const servers = layeredServers(layers)
   const out = new Map<string, PlannedSecret>()
   const add = (
     label: string,
@@ -283,6 +279,53 @@ export function plannedSecrets(env: EnvVars, layers: readonly EnvironmentLayer[]
     }
   }
   return [...out.values()]
+}
+
+/** The layers' MCP servers and their local plugins', a later one replacing an earlier one of its name. */
+function layeredServers(layers: readonly EnvironmentLayer[]): Map<string, McpServer> {
+  const servers = new Map<string, McpServer>()
+  for (const { spec } of layers) {
+    for (const [name, server] of Object.entries(spec.mcp ?? {})) servers.set(name, server)
+  }
+  for (const [name, server] of localPluginServers(layers)) servers.set(name, server)
+  return servers
+}
+
+const CREDENTIAL_HEADER = /^(?:proxy-)?authorization$|^cookie$|(?:^|[-_])auth(?:$|[-_])/i
+/** An `Authorization`-style value, whatever the header is called. */
+const AUTH_SCHEME = /^(?:Bearer|Basic|Token)\s+\S/i
+
+/** Whether an MCP header written as a plain string looks like a credential, by its name or its value's shape. */
+export const credentialHeader = (name: string, value: string) =>
+  CREDENTIAL_HEADER.test(name.trim()) ||
+  SECRET_NAME.test(name) ||
+  AUTH_SCHEME.test(value.trim()) ||
+  hasTokenShape(value)
+
+/**
+ * The plain-header values masked like a secret-named host variable's: 8 or more characters, so a
+ * guessed-at header such as `X-Token-Count: '1000'` can't mask every `1000` the attempt writes.
+ */
+export const maskedHeaderValue = (name: string, value: string) =>
+  value.length >= 8 && credentialHeader(name, value)
+
+/** An MCP header written as a plain string that looks like a credential, and whether its server is on HTTPS. */
+export type PlainCredentialHeader = { label: string; https: boolean }
+
+/** The layers' MCP headers that look like credentials but aren't a `secret()` or `secret.template`. */
+export function plainCredentialHeaders(
+  layers: readonly EnvironmentLayer[],
+): PlainCredentialHeader[] {
+  const out: PlainCredentialHeader[] = []
+  for (const [server, s] of layeredServers(layers)) {
+    if (s.transport === 'stdio') continue
+    for (const [header, value] of Object.entries(s.headers)) {
+      if (typeof value === 'string' && credentialHeader(header, value)) {
+        out.push({ label: `mcp.${server}.headers.${header}`, https: mcpHosts(s.url) !== undefined })
+      }
+    }
+  }
+  return out
 }
 
 /** The secrets the sandbox gets as real values: no `hosts`, and none implied by an MCP URL. */
