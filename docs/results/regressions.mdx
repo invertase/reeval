@@ -28,12 +28,13 @@ When no earlier recorded run exists, `reeval compare` says so and lists every ev
 `reeval compare` prints one block per evaluation that changed, in file order, and collapses each run of unchanged evaluations to `+N same`. A regressed block lists the checks whose outcomes changed, and a block that can't be compared names what changed:
 
 ```text
-can't compare    streams with Vercel AI SDK
-  changed          environment
-  base             20261020T230147Z_958e309_cursor-agent_aamj  pass
-  head             20261020T230148Z_958e309_cursor-agent_qghb  fail
-  uses streamText  failed
+can't compare    adds a tested multiply function
+  changed          harness config
+  base             20261024T145533Z_…  pass
+  head             20261024T145534Z_…  fail
+  tests pass       failed
     expected command to succeed, exit code 1
+  +1 more passed
 
 +1 same
 
@@ -45,6 +46,8 @@ regressed        adds a LangGraph node
   state schema     not run
   +1 more passed
 ```
+
+The `can't compare` block comes from [`with-history`](https://github.com/invertase/reeval/tree/main/examples/with-history), whose scripted agent changed between the runs. A harness that fails with nothing changed reads `regressed`.
 
 Each block and the tally use these words:
 

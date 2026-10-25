@@ -13,19 +13,19 @@ In the `reeval.config.ts` file, add a `profiles` map with one entry per kind of 
 import { defineConfig } from '{{ pkg }}'
 
 export default defineConfig({
+  defaultProfile: { ci: 'pr' },
   profiles: {
-    pr: {
-      limit: { runs: 1, compare: false },
-      budget: { attempts: 5 },
-    },
+    pr: { limit: { runs: 1 }, budget: { attempts: 10 } },
     nightly: {
-      defaults: { runs: 3 },
+      defaults: { runs: 4 },
       record: 'always',
-      budget: { attempts: 80, duration: '2h' },
+      budget: { duration: '2h' },
     },
   },
 })
 ```
+
+`defaultProfile.ci` picks `pr` whenever the `CI` variable is set. For a runnable project, see [`with-profiles`](https://github.com/invertase/reeval/tree/main/examples/with-profiles). For one profile per harness, each in Docker with its own judge, see the examples' shared [`profiles.ts`](https://github.com/invertase/reeval/blob/main/examples/profiles.ts).
 
 reeval applies a profile's `defaults` after the `reeval.config.ts` file and before groups and evaluations, so an evaluation that sets its own `runs` keeps it. A profile's `tags` select evaluations like `--tag` does, and `'!slow'` excludes a tag. `record: 'always'` copies every run under that profile into the history folder.
 
@@ -54,12 +54,14 @@ A profile's `limit` applies after every group and evaluation, and it only narrow
         compare: false,
         harness: ['claude-code:claude-sonnet-5'],
       },
+      budget: { attempts: 10 },
+    },
 ```
 
 The relevant notes show each cut. reeval skips an evaluation when a profile leaves it with no harness:
 
 ```text
-runs 3 → 1 (profile pr)
+runs 4 → 1 (profile pr)
 compare off (profile pr)
 skipped: no harness left: profile pr allows claude-code:claude-sonnet-5
 ```
@@ -68,9 +70,9 @@ The `--runs` flag replaces every evaluation's `runs` outright, so a profile's `l
 
 ## Pin an evaluation
 
-An evaluation or group's `pin` option names the keys a profile's `limit` may not narrow: `'runs'`, `'compare'`, or `'harness'`. For a regression that must keep its variant on every run, pin `compare` and `runs` in the `evals/shoehorn.eval.ts` file:
+An evaluation or group's `pin` option names the keys a profile's `limit` may not narrow: `'runs'`, `'compare'`, or `'harness'`. For a regression that must keep its variant on every run, pin `compare` and `runs` in the `evals/brand.eval.ts` file:
 
-```ts title="evals/shoehorn.eval.ts"
+```ts title="evals/brand.eval.ts"
 pin: ['compare', 'runs'],
 ```
 

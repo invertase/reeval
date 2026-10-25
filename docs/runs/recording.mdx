@@ -21,7 +21,14 @@ export default defineConfig({
 })
 ```
 
-For more information about the `record` and `history` options, see [Configuration](/reference/config).
+To record every run and keep transcripts only for failing attempts, override both:
+
+```ts title="with-history/reeval.config.ts"
+  record: 'always',
+  history: { dir: 'history', artifacts: 'failures' },
+```
+
+For a runnable project, see [`with-history`](https://github.com/invertase/reeval/tree/main/examples/with-history). For more information about the `record` and `history` options, see [Configuration](/reference/config).
 
 Record the most recent run and commit the history folder:
 

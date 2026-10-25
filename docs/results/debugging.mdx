@@ -15,7 +15,20 @@ Print the phase trace for the run.
 npx reeval run -v
 ```
 
-After the attempt's tag, a failed check has this shape.
+Each line starts with the attempt's tag. This trace follows the evaluation in [Write an evaluation](/evals/evaluate), from the pinned checkout to the hidden test:
+
+```text
+[adds#1 fake] 15:04:40 env       workspace github:sindresorhus/camelcase#v10.0.0 at 328428291b2f (92160 bytes of tar, with a .git) in 25ms
+[adds#1 fake] 15:04:40 env       workspace snapshot taken: the diff starts here
+…
+[adds#1 fake] 15:04:41 check     assert ✓ the repo's tests pass (toSucceed, pass)
+[adds#1 fake] 15:04:41 check     assert ✓ toHaveFile readme.md (toHaveFile, pass)
+[adds#1 fake] 15:04:41 check     assert ✓ the option works (toSucceed, pass)
+```
+
+This trace comes from the example's scripted agent, so its tag reads `fake`. For a runnable project, see [`with-existing-codebase`](https://github.com/invertase/reeval/tree/main/examples/with-existing-codebase).
+
+After the attempt's tag, a failed command check has this shape.
 
 ```text
 12:50:01 check     $ test -f src/user.test.ts → exit 1 · 4ms

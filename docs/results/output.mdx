@@ -16,10 +16,10 @@ On one attempt, a failed check prints `failed`. Several attempts add a tries row
 A failed evaluation prints like this:
 
 ```text
-fail             streams with Vercel AI SDK
-  uses streamText  failed
+fail             adds a tested multiply function
+  toSucceed node --test  failed
     expected command to succeed, exit code 1
-  +1 more passed
+  +2 more passed
 ```
 
 The tally omits zeros, as in `2 fail · 1 pass · 1 infra error`. A failure outside any evaluation counts as a `run error`. With no analysis model, this line follows the tally:
@@ -34,16 +34,16 @@ For more information about setting that model, see [Analyse a run with reeval an
 
 Rows for the control and each variant print under `arm`, `harness`, or `sandbox`. The `pass` column is passed attempts out of counted attempts. The effect word is `helped`, `made it worse`, or `can't tell yet`. Equal pass rates, with at least four counted attempts a side, print no effect word. For more information about how reeval chooses an effect word, see [Comparison](/core-concepts#comparison).
 
-Here `plain` is the control and `ai-sdk` is the variant:
+Here `page` is the control and `brand-guidelines` is the variant:
 
 ```text
-fail             streams with Vercel AI SDK
-  arm              pass
-  plain            0 of 4
-  ai-sdk           4 of 4  helped
+pass             styles the page in Anthropic's brand
+  arm               pass
+  page              0 of 4
+  brand-guidelines  4 of 4  helped
 ```
 
-When the variant does not reach `compare.minLift`, the row includes `not by minLift 25`. To print the interval under the variant, pass `-v`:
+When the variant does not reach `compare.minLift`, the row reads like `helped, not by minLift 50`. To print the interval under the variant, pass `-v`:
 
 ```text
     difference +100 points, 95% interval +31…+100
@@ -60,34 +60,36 @@ The `check` table has one column per cell and lists checks that failed or did no
 The checks in a comparison look like this:
 
 ```text
-  check            plain   ai-sdk
-  uses streamText  0 of 4  4 of 4
-    expected command to succeed, exit code 1
+  check             page    brand-guidelines
+  brand orange      0 of 4  4 of 4
+    expected styles.css to match /#d97757/i
+  brand fonts       0 of 4  4 of 4
+    expected styles.css to match /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/
   +1 more passed
 ```
 
 The `effort` table lists `tools` and `time`, plus `tokens` when a cell reported them. Each number is the median. The `effort` table prints when there are at least four counted attempts and either effort differs between cells or the evaluation failed.
 
-The effort rows look like this:
+The effort rows look like this, for two arms that pass alike:
 
 ```text
-  effort           tools  time  tokens
-  plain            12     21s   18k
-  ai-sdk           5      9.0s  7,000
+  effort           tools  time
+  math             1      1.0s
+  project-layout   1      <0.1s
 ```
 
 ## Read insights and Remarks
 
-An analysis model adds an answer under the name, a sentence under a row, a finding after the tables, and a headline before the tally:
+An analysis model adds an answer under the name and a headline before the tally:
 
 ```text
-fail             streams with Vercel AI SDK
-  No: only 0 of 4 passed "uses streamText" with plain.
-  plain            0 of 4
-    Only 0 of 4 passed "uses streamText".
-  ai-sdk helped: 4 of 4 tries passed, against 0 of 4 on plain.
-1 fail; start with "streams with Vercel AI SDK".
+pass             adds a tested multiply function
+  Yes: the agent added it and the tests pass.
+
+Every eval passed.
 ```
+
+On a comparison or a failure, it also adds a sentence under a row and a finding after the tables.
 
 The outcome word stays the checks' result. For more information about what insights and Remarks are, see [Analysis](/core-concepts#analysis).
 
@@ -97,9 +99,8 @@ A remark looks like this:
 
 ```text
 Remarks:
-  looks it up: MCP server docs took 2s to start on each of 2 turns.
-    fix  evals/docs.eval.ts:5  install what docs needs in the image
-  +1 more (-v)
+  reads an SSH banner over raw TCP: It failed with "Temporary failure in name resolution" and nothing reached the egress gateway: under egress 'proxy' only HTTP(S) through the gateway leaves the sandbox, so raw TCP, UDP, SSH and database connections fail.
+    fix  with-egress-allow-all.eval.ts:5  set egress: 'allow-all' on the eval if it needs raw TCP or UDP, or point the client at HTTPS_PROXY
 ```
 
 ## Show one run

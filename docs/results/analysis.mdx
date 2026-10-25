@@ -52,7 +52,7 @@ For more information about the other `analysis` fields, see [the `analysis` opti
 Run the evaluation:
 
 ```bash
-npx reeval run shoehorn
+npx reeval run
 ```
 
 After the attempts finish, the analysis model's answer is the line under the evaluation name. A headline prints above the tally. Your sentences and counts can differ.
@@ -60,14 +60,15 @@ After the attempts finish, the analysis model's answer is the line under the eva
 The block uses this format:
 
 ```text
-pass             tests build only the request fields they read
-  Yes: every try passed.
-  arm              pass
-  plain            0 of 4
-  with-shoehorn    4 of 4  helped
-  check            plain   with-shoehorn
-  uses shoehorn    0 of 4  4 of 4
+insights: 1 eval with fake (Ctrl-C skips the rest; --no-insights skips them all)
+
+pass             adds a tested multiply function
+  Yes: the agent added it and the tests pass.
+
+Every eval passed.
 ```
+
+This output comes from the scripted analysis model in [`with-analysis`](https://github.com/invertase/reeval/tree/main/examples/with-analysis), which has a runnable project.
 
 reeval fixes the outcome and exit code before the insights print. Remarks print under the tally.
 
