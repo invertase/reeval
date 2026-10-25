@@ -675,6 +675,38 @@ test("the credential checks ask for the key of the judge the run uses, the profi
   ])
 })
 
+test("the credential checks ask for the keys of the judges the plan's attempts resolve", () => {
+  const config = resolveConfig({ judge: { model: 'google/gemini-2.5-flash' } }, '/p')
+  const env = { CURSOR_API_KEY: 'k', GOOGLE_GENERATIVE_AI_API_KEY: 'g' }
+  const judges = [
+    { model: 'google/gemini-2.5-flash', gateway: 'direct' as const },
+    { model: 'anthropic/claude-sonnet-5', gateway: 'direct' as const },
+    { model: 'anthropic/claude-sonnet-5', gateway: 'vercel' as const },
+  ]
+  assert.deepEqual(missingCredentials(config, env, { judges }), [
+    'ANTHROPIC_API_KEY (for direct()) for the judge model, "anthropic/claude-sonnet-5"',
+    'AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (for vercel()) for the judge model, "anthropic/claude-sonnet-5"',
+  ])
+  assert.deepEqual(
+    missingCredentials(
+      config,
+      { ...env, ANTHROPIC_API_KEY: 'a', AI_GATEWAY_API_KEY: 'v' },
+      { judges },
+    ),
+    [],
+  )
+  assert.deepEqual(
+    malformedCredentials(
+      config,
+      { ...env, ANTHROPIC_API_KEY: 'a\nb', AI_GATEWAY_API_KEY: ' v' },
+      {
+        judges,
+      },
+    ),
+    ['ANTHROPIC_API_KEY (character 2)', 'AI_GATEWAY_API_KEY (character 1)'],
+  )
+})
+
 test('judge strings use the provider package on direct, and the AI Gateway only on vercel', () => {
   const jev = 'typesafe-ai/jev-1.14.0'
   assert.deepEqual(judgeRoute(jev, { TYPESAFE_AI_API_KEY: 't', AI_GATEWAY_API_KEY: 'g' }), {
