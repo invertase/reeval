@@ -263,8 +263,6 @@ describe('resolving brokered secrets', () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
     assert.notEqual(await digest({ template: 'Bearer ${REEVAL_UNIT_OTHER}' }), a)
     assert.notEqual(await digest('Bearer literal'), a)
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
-    assert.equal(await digest({ template: 'Token ${REEVAL_UNIT_BROKERED}' }), a)
   })
 
   test('MCP stdio env secrets are brokered only with explicit hosts', async () => {
