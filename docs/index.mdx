@@ -9,46 +9,66 @@ reeval is an evaluation runner for SDKs, CLIs, MCP servers, and docs. It evaluat
 
 An evaluation gives a harness a task in a sandbox, then checks what the agent did. A comparison runs the same evaluation on a control and on a variant with one change. reeval reports whether the change `helped`, `made it worse`, or `can't tell yet`. For more information about each term, see [Core concepts](/core-concepts).
 
-This example measures the Vercel AI SDK's own skill. The control is a project with the `ai` package installed. The variant adds the `ai-sdk` skill from the `vercel/ai` repository. The skill tells agents to build on `ToolLoopAgent` instead of a hand-written tool loop. The evaluation declares the control, the variant, and the comparison in one file:
+This example measures Anthropic's published `brand-guidelines` skill. The control is an unstyled HTML page. The variant adds the skill from the `anthropics/skills` repository at a pinned commit. The evaluation declares the control, the variant, and the comparison in one file:
 
-```ts title="evals/agent.eval.ts"
+```ts title="with-library-skill-lift.eval.ts"
 import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
 
-const plain = defineEnvironment('plain', { setup: ['npm install ai zod'] })
-
-const withAiSdk = plain.extendEnvironment('with-ai-sdk', ({ skill }) => ({
+const page = defineEnvironment('page', ({ directory }) => ({
+  files: directory('./project'),
+}))
+const withSkill = page.extendEnvironment('brand-guidelines', ({ skill }) => ({
   skills: [
-    skill.git('github:vercel/ai', {
-      path: 'skills/use-ai-sdk',
+    skill.git('github:anthropics/skills', {
+      ref: 'dbd4588f9e1033efb41dad4bef2f7947c8993d44',
+      path: 'skills',
+      only: ['brand-guidelines'],
     }),
   ],
 }))
 
 evaluate(
-  'the weather agent loops on its tool',
-  { runs: 4, compare: { baseline: plain, variants: [withAiSdk] } },
+  "styles the page in Anthropic's brand",
+  {
+    environment: page,
+    compare: { variants: [withSkill] },
+    runs: 4,
+    gate: { passRate: 0.75 },
+  },
   async (c) => {
-    await c.send('Add a weather agent with a getWeather tool to src/agent.ts.')
-    await expect(c, 'uses ToolLoopAgent').toHaveFile(
-      'src/agent.ts',
-      /ToolLoopAgent/,
+    await c.send(
+      "Give index.html Anthropic's look: write styles.css with Anthropic's " +
+        'brand colours and fonts, and link it from index.html.',
+    )
+
+    await expect
+      .soft(c, 'links styles.css')
+      .toHaveFile('index.html', /href="styles\.css"/)
+    await expect.soft(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
+    await expect(c, 'brand fonts').toHaveFile(
+      'styles.css',
+      /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/,
     )
   },
 )
 ```
 
-The prompt doesn't name `ToolLoopAgent`, so the labelled check passes only when the harness uses the skill. When the variant passes all four attempts and the control passes none, the run prints this block:
+The prompt doesn't name the brand's colour or fonts, so `brand orange` and `brand fonts` pass only when the harness knows them. When the variant passes all four attempts and the control passes none, the run prints this block:
 
 ```text
-pass             the weather agent loops on its tool
-  arm                 pass
-  plain               0 of 4
-  with-ai-sdk         4 of 4  helped
-  check               plain   with-ai-sdk
-  uses ToolLoopAgent  0 of 4  4 of 4
+pass             styles the page in Anthropic's brand
+  arm               pass
+  page              0 of 4
+  brand-guidelines  4 of 4  helped
+  check             page    brand-guidelines
+  brand orange      0 of 4  4 of 4
+    expected styles.css to match /#d97757/i
+  brand fonts       0 of 4  4 of 4
+    expected styles.css to match /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/
+  +1 more passed
 ```
 
-The `arm` column lists the control and the variant. The variant passed `uses ToolLoopAgent` in 4 of 4 attempts and the control in 0 of 4, so the effect reads `helped`. A real run's counts can differ. For more information about how reeval reaches the effect, see [Statistics](/evals/statistics).
+The `arm` column lists the control and the variant. The variant passed both brand checks in 4 of 4 attempts and the control in 0 of 4, so the effect reads `helped`. This block comes from the example's scripted agent, and a real run's counts can differ. For more information about how reeval reaches the effect, see [Statistics](/evals/statistics). For the runnable project, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
 
 ## What reeval supports
 

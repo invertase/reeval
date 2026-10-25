@@ -5,57 +5,65 @@ description: "Declare an evaluation that gives your harness one task and checks 
 
 An evaluation is one `evaluate()` call that gives your harness a task and checks the outcome. For more information about how an evaluation fits into a run, see [Core concepts](/core-concepts#evaluation).
 
-reeval loads every `*.eval.ts` file under the `evals/` folder. This page uses the `plain` and `withShoehorn` environments from [Quick start](/quickstart), which live in the `evals/environments.ts` file.
+reeval loads every `*.eval.ts` file under the `evals/` folder. This page's evaluation adds a feature to `sindresorhus/camelcase`, a real npm package, checked out at a release tag.
 
 ## Write the evaluation
 
 <Steps>
 <Step title="Name the question">
 
-Pass the evaluation name as the first argument to `evaluate()`. The name states the question the evaluation answers. Results and insights lead with the name, so you know what a pass means before reading any check. In the `evals/shoehorn.eval.ts` file, declare the evaluation:
+Pass the evaluation name as the first argument to `evaluate()`. The name states the question the evaluation answers. Results and insights lead with the name, so you know what a pass means before reading any check. In the `evals/camelcase.eval.ts` file, declare the evaluation:
 
-```ts title="evals/shoehorn.eval.ts"
-import { evaluate, expect } from '{{ pkg }}'
-import { plain } from './environments.ts'
+```ts title="evals/camelcase.eval.ts"
+import { readFileSync } from 'node:fs'
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
 
-evaluate(
-  'tests build only the request fields they read',
-  { environment: plain },
-  async (c) => {
-    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
-    await expect(c, 'uses fromPartial').toHaveFile(
-      'src/user.test.ts',
-      /fromPartial(<\w+>)?\(/,
-    )
-  },
+const camelcase = defineEnvironment('camelcase', ({ git }) => ({
+  workspace: git('github:sindresorhus/camelcase', {
+    ref: 'v10.0.0',
+    init: true,
+  }),
+}))
+const hidden = readFileSync(
+  new URL('./hidden/separators.test.js', import.meta.url),
+  'utf8',
 )
+
+evaluate('adds a separators option', { environment: camelcase }, async (c) => {
+  await c.send(
+    'Add a separators option to camelCase: a string of extra characters ' +
+      "that also separate words, so camelCase('foo/bar', {separators: '/'}) " +
+      "is 'fooBar'. Add tests to test.js and document it in readme.md. " +
+      'Run the tests with node --test.',
+  )
+
+  await expect(c.exec('node --test'), "the repo's tests pass").toSucceed()
+  await expect(c).toHaveFile('readme.md', /separators/)
+  await c.writeFile('separators.test.js', hidden)
+  await expect(
+    c.exec('node --test separators.test.js'),
+    'the option works',
+  ).toSucceed()
+})
 ```
 
-A name such as `shoehorn test 2` says nothing about what passed. Renaming an evaluation starts its history again, so settle the name before you record runs.
+A name such as `camelcase test 2` says nothing about what passed. Renaming an evaluation starts its history again, so settle the name before you record runs.
 
 </Step>
 <Step title="Write one prompt">
 
 Ask for the outcome you want in `c.send()`. The checks then decide whether the harness reached it.
 
-Name the file the task is about, such as `src/user.test.ts`. Leave out the rule and its terms, such as shoehorn or `fromPartial`, so a pass shows that the harness found the rule. Don't name a file the rule decides, because the prompt then makes that choice for the harness.
+Name the files the task is about, such as `test.js` and `readme.md`. Leave out the hidden test: the evaluation writes `separators.test.js` only after the harness finishes, so a pass shows the option works on cases the harness never saw.
 
 For more information about sending several prompts in one attempt, see [Turns](/evals/turns).
 
 </Step>
-<Step title="Add a comparison">
+<Step title="Check the outcome">
 
-In the `evals/shoehorn.eval.ts` file, replace `environment` with `compare` to measure a change:
+Each `expect` line is a check. The label, such as `'the option works'`, names the check's row in the result. For more information about every kind of check, see [Checks](/evals/checks).
 
-```ts title="evals/shoehorn.eval.ts"
-import { plain, withShoehorn } from './environments.ts'
-// ...
-  { compare: { baseline: plain, variants: [withShoehorn] } },
-```
-
-Each `expect` line is a check. The label, such as `'uses fromPartial'`, names the check's row in the result. For more information about every kind of check, see [Checks](/evals/checks).
-
-For more information about the control, the variant, and the effect, see [Compare setups](/evals/compare).
+To measure a change, such as a skill, replace `environment` with `compare`. For more information about the control, the variant, and the effect, see [Compare setups](/evals/compare).
 
 </Step>
 <Step title="Verify with the `reeval run --dry-run` command">
@@ -77,31 +85,33 @@ A table below the `plan` line lists each evaluation by its file and name. If you
 </Step>
 </Steps>
 
-To start the attempts, run the same command without `--dry-run`.
+To start the attempts, run the same command without `--dry-run`. For the runnable project, see [`with-existing-codebase`](https://github.com/invertase/reeval/tree/main/examples/with-existing-codebase).
 
 ## Set a timeout
 
-The `timeout` option limits each attempt, and it defaults to `'15m'`. The clock starts after the setup commands finish. An attempt that reaches the timeout fails. In the `evals/shoehorn.eval.ts` file, add `timeout` to the options:
+The `timeout` option limits each attempt, and it defaults to `'15m'`. The clock starts after the setup commands finish. An attempt that reaches the timeout fails. In the `evals/camelcase.eval.ts` file, add `timeout` to the options:
 
-```ts title="evals/shoehorn.eval.ts"
-  { compare: { baseline: plain, variants: [withShoehorn] }, timeout: '30m' },
+```ts title="evals/camelcase.eval.ts"
+evaluate(
+  'adds a separators option',
+  { environment: camelcase, timeout: '30m' },
+  // ...
 ```
 
 For more information about the accepted durations, see [the `timeout` option](/reference/options#timeout).
 
 ## Skip, focus, or plan evaluations
 
-The `evaluate.skip`, `evaluate.only`, and `evaluate.todo` functions change which evaluations run. In an evaluation file such as `evals/shoehorn.eval.ts`, focus one evaluation and plan another:
+The `evaluate.skip`, `evaluate.only`, and `evaluate.todo` functions change which evaluations run. In the `evals/camelcase.eval.ts` file, focus the evaluation:
 
-```ts title="evals/shoehorn.eval.ts"
+```ts title="evals/camelcase.eval.ts"
 evaluate.only(
-  'tests build only the request fields they read',
+  'adds a separators option',
   // ...
 )
-evaluate.todo('tests mock only the services they call')
 ```
 
-`evaluate.skip` keeps an evaluation in the file without running it. `evaluate.only` runs only the marked evaluations in its own file, and other files still run. reeval refuses `evaluate.only` when the environment contains the `CI` variable. `evaluate.todo` takes a name and no body, and the plan lists it as `todo`.
+`evaluate.skip` keeps an evaluation in the file without running it. `evaluate.only` runs only the marked evaluations in its own file, and other files still run. reeval refuses `evaluate.only` when the environment contains the `CI` variable. `evaluate.todo` takes a name and no body, and the plan lists it as `todo`. For a runnable project with `skip` and `todo`, see [`with-groups`](https://github.com/invertase/reeval/tree/main/examples/with-groups).
 
 For more information about sharing options across several evaluations, see [Groups](/evals/groups).
 
