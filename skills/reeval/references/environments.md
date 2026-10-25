@@ -80,9 +80,10 @@ Submodules and LFS files aren't fetched.
 ## Skills and composition
 
 Skills: `skill.local | git | npm | registry | inline` (pin git refs; `placement: 'workspace'`
-writes them into the repo's skill directory). `extendEnvironment` is the only composition; the
-child wins on shared keys and **replaces** `sandbox` entirely when it sets one (install is not
-merged onto the parent image).
+writes them into the repo's skill directory). A git, npm or plugin source URL with a password or
+token in it is refused: reeval fetches on the host with its own git and npm credentials.
+`extendEnvironment` is the only composition; the child wins on shared keys and **replaces**
+`sandbox` entirely when it sets one (install is not merged onto the parent image).
 
 A skill is a directory whose `SKILL.md` has YAML frontmatter
 (`name`, `description`; quote values containing `: `). Baking (`from`, `install`, `dockerfile`)

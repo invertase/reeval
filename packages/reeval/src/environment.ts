@@ -7,6 +7,7 @@ import { sandboxProblem } from './contract/docker.ts'
 import { environmentDataSchema, environmentSpecSchema, NAME } from './contract/environment.ts'
 import {
   badHost,
+  credentialsIn,
   descriptorProblem,
   egressProblem,
   gitWorkspaceSchema,
@@ -358,14 +359,15 @@ export function sameWorkspaceOnly(
 export const filesOf = (layers: readonly EnvironmentLayer[]): string[] =>
   [...new Set(layers.flatMap((l) => Object.keys(l.spec.files ?? {})))].sort()
 
-/** A URL with its password (or an https username, which is where tokens go) masked. */
-function credentialsIn(repo: string): string | undefined {
-  if (!URL.canParse(repo)) return undefined
-  const u = new URL(repo)
-  if (!u.password && !(u.username && /^https?:$/.test(u.protocol))) return undefined
-  u.username = u.username && '***'
-  u.password = u.password && '***'
-  return u.href
+const NO_GIT_CREDENTIALS =
+  'the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials; remove it from the URL.'
+const NO_NPM_CREDENTIALS =
+  'the URL has a password or token in it. reeval runs npm pack on the host, with your own npm and git credentials; remove it from the URL.'
+
+/** Throws when an npm spec is a URL (a tarball, git+https:, git+ssh:) with a password or token. */
+function npmCredentials(call: string, spec: string) {
+  const masked = credentialsIn(spec)
+  if (masked) throw new DefinitionError(`${call}(${JSON.stringify(masked)}): ${NO_NPM_CREDENTIALS}`)
 }
 
 const GIT_OPTIONS = ['ref', 'path', 'init', 'token']
@@ -495,6 +497,10 @@ function skillHelper(base: string): SkillHelper {
           `skill.git() needs a repository URL, e.g. skill.git('https://github.com/acme/skills') (got ${JSON.stringify(repo)})`,
         )
       }
+      const masked = credentialsIn(repo)
+      if (masked) {
+        throw new DefinitionError(`skill.git(${JSON.stringify(masked)}): ${NO_GIT_CREDENTIALS}`)
+      }
       const parsed = parseGitRepo(repo)
       const ref = o.ref ?? parsed.ref
       const path = o.path ?? parsed.path
@@ -523,15 +529,18 @@ function skillHelper(base: string): SkillHelper {
         placement: placement(o.placement),
       }
     },
-    npm: (spec, o = {}) => ({
-      kind: 'skill',
-      source: 'npm',
-      spec: localNpmSpec(spec, base),
-      path: o.path ?? 'skills',
-      ...(o.only ? { only: [...o.only] } : {}),
-      ...exclude(o.exclude),
-      placement: placement(o.placement),
-    }),
+    npm: (spec, o = {}) => {
+      if (typeof spec === 'string') npmCredentials('skill.npm', spec)
+      return {
+        kind: 'skill',
+        source: 'npm',
+        spec: localNpmSpec(spec, base),
+        path: o.path ?? 'skills',
+        ...(o.only ? { only: [...o.only] } : {}),
+        ...exclude(o.exclude),
+        placement: placement(o.placement),
+      }
+    },
     inline: (skill, o = {}) => ({
       kind: 'skill',
       source: 'inline',
@@ -659,9 +668,7 @@ function pluginHelper(base: string): PluginHelper {
       const what = `plugin.git(${JSON.stringify(repo)})`
       const masked = credentialsIn(repo)
       if (masked) {
-        throw new DefinitionError(
-          `plugin.git(${JSON.stringify(masked)}): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials; remove it from the URL.`,
-        )
+        throw new DefinitionError(`plugin.git(${JSON.stringify(masked)}): ${NO_GIT_CREDENTIALS}`)
       }
       const options = common(what, o, ['ref', 'path'])
       const parsed = parseGitRepo(repo)
@@ -687,6 +694,7 @@ function pluginHelper(base: string): PluginHelper {
           `plugin.npm() needs a pinned package spec, e.g. plugin.npm('@acme/review-plugin@1.2.0') (got ${JSON.stringify(spec)})`,
         )
       }
+      npmCredentials('plugin.npm', spec)
       const what = `plugin.npm(${JSON.stringify(spec)})`
       const options = common(what, o, ['path'])
       const path = dirPath(what, (o as { path?: unknown }).path, 'package')
@@ -723,6 +731,12 @@ function pluginHelper(base: string): PluginHelper {
         }
         const spec = from.slice('npm:'.length)
         if (!spec) throw new DefinitionError(`${what}: npm: needs a package spec`)
+        const masked = credentialsIn(spec)
+        if (masked) {
+          throw new DefinitionError(
+            `plugin.marketplace(${JSON.stringify(`${name}@npm:${masked}`)}): ${NO_NPM_CREDENTIALS}`,
+          )
+        }
         return {
           kind: 'plugin',
           source: 'marketplace',
@@ -734,7 +748,7 @@ function pluginHelper(base: string): PluginHelper {
       const masked = credentialsIn(from)
       if (masked) {
         throw new DefinitionError(
-          `plugin.marketplace(${JSON.stringify(`${name}@${masked}`)}): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials; remove it from the URL.`,
+          `plugin.marketplace(${JSON.stringify(`${name}@${masked}`)}): ${NO_GIT_CREDENTIALS}`,
         )
       }
       const parsed = parseGitRepo(from)

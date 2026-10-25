@@ -637,6 +637,46 @@ export const CASES: Record<string, Case[]> = {
     ],
     ['skill.git without a repo', helpers(({ skill }) => ({ skills: [skill.git('')] }))],
     [
+      'skill.git with credentials',
+      helpers(({ skill }) => ({
+        skills: [skill.git('https://deploy:secret@github.com/acme/skills.git')],
+      })),
+    ],
+    [
+      'skill.git with a token as the username',
+      helpers(({ skill }) => ({ skills: [skill.git('https://token@github.com/acme/skills')] })),
+    ],
+    [
+      'skill.npm tarball URL with credentials',
+      helpers(({ skill }) => ({
+        skills: [skill.npm('https://ci:token@npm.example.com/skills-1.0.0.tgz')],
+      })),
+    ],
+    [
+      'skill.npm git+https with a token',
+      helpers(({ skill }) => ({
+        skills: [skill.npm('git+https://token@github.com/acme/skills.git#v1')],
+      })),
+    ],
+    [
+      'skill.npm git+ssh with a password',
+      helpers(({ skill }) => ({
+        skills: [skill.npm('git+ssh://git:secret@github.com/acme/skills.git#v1')],
+      })),
+    ],
+    [
+      'skill.npm URL specs without credentials',
+      helpers(({ skill }) => ({
+        skills: [
+          skill.npm('git+ssh://git@github.com/acme/skills.git#v1'),
+          skill.npm('git+https://github.com/acme/skills.git#v1'),
+          skill.npm('https://npm.example.com/skills-1.0.0.tgz'),
+          skill.npm('github:acme/skills#v1'),
+          skill.npm('npm:@acme/skills@1.0.0'),
+        ],
+      })),
+    ],
+    [
       'skill.registry a bad id',
       helpers(({ skill }) => ({ skills: [skill.registry('owner/repo')] })),
     ],
@@ -659,6 +699,33 @@ export const CASES: Record<string, Case[]> = {
     [
       'data: skill with an unknown source',
       env({ skills: [{ kind: 'skill', source: 'ftp', placement: 'harness' }] }),
+    ],
+    [
+      'data: skill.git with credentials',
+      env({
+        skills: [
+          {
+            kind: 'skill',
+            source: 'git',
+            repo: 'https://deploy:secret@github.com/acme/skills.git',
+            placement: 'harness',
+          },
+        ],
+      }),
+    ],
+    [
+      'data: skill.npm with credentials',
+      env({
+        skills: [
+          {
+            kind: 'skill',
+            source: 'npm',
+            spec: 'git+https://token@github.com/acme/skills.git#v1',
+            path: 'skills',
+            placement: 'harness',
+          },
+        ],
+      }),
     ],
     [
       'plugin only an unknown part',
@@ -688,6 +755,24 @@ export const CASES: Record<string, Case[]> = {
       })),
     ],
     ['plugin.npm without a spec', helpers(({ plugin }) => ({ plugins: [plugin.npm('')] }))],
+    [
+      'plugin.npm URL with credentials',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.npm('https://ci:token@npm.example.com/review-1.0.0.tgz')],
+      })),
+    ],
+    [
+      'plugin.npm git+https with a token',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.npm('git+https://token@github.com/acme/review.git#v1')],
+      })),
+    ],
+    [
+      'plugin.marketplace npm URL with credentials',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@npm:https://ci:token@npm.example.com/tools.tgz')],
+      })),
+    ],
     [
       'plugin.marketplace without a name',
       helpers(({ plugin }) => ({ plugins: [plugin.marketplace('github:acme/agent-plugins')] })),
@@ -757,6 +842,46 @@ export const CASES: Record<string, Case[]> = {
     [
       'data: plugin with an unknown source',
       env({ plugins: [{ kind: 'plugin', source: 'zip', name: 'x' }] }),
+    ],
+    [
+      'data: plugin.git with credentials',
+      env({
+        plugins: [{ kind: 'plugin', source: 'git', repo: 'https://user:token@github.com/o/r' }],
+      }),
+    ],
+    [
+      'data: plugin.npm with credentials',
+      env({
+        plugins: [
+          { kind: 'plugin', source: 'npm', spec: 'https://ci:token@npm.example.com/r.tgz' },
+        ],
+      }),
+    ],
+    [
+      'data: plugin.marketplace with credentials',
+      env({
+        plugins: [
+          {
+            kind: 'plugin',
+            source: 'marketplace',
+            name: 'lint',
+            marketplace: { source: 'git', repo: 'https://user:token@github.com/acme/tools' },
+          },
+        ],
+      }),
+    ],
+    [
+      'data: plugin.marketplace npm with credentials',
+      env({
+        plugins: [
+          {
+            kind: 'plugin',
+            source: 'marketplace',
+            name: 'lint',
+            marketplace: { source: 'npm', spec: 'https://ci:token@npm.example.com/tools.tgz' },
+          },
+        ],
+      }),
     ],
     [
       'data: plugin marketplace without its source',
@@ -948,6 +1073,16 @@ export const CASES: Record<string, Case[]> = {
       env({ workspace: { kind: 'git', repo: 'r', url: 'r', token: 'ghp_abc-123' } }),
     ],
     ['data: workspace good', env({ workspace: { kind: 'git', repo: 'r', url: 'r', ref: 'v1' } })],
+    [
+      'data: workspace with credentials',
+      env({
+        workspace: {
+          kind: 'git',
+          repo: 'github:o/r',
+          url: 'https://x-access-token:secret@github.com/o/r.git',
+        },
+      }),
+    ],
   ],
   environment: [
     ['a bad name', any(defineEnvironment, 'a b', {})],
@@ -988,6 +1123,21 @@ export const CASES: Record<string, Case[]> = {
     ['options: not an environment', options({ environment: 'one' })],
     ['data: a typo in a layer', options({ environment: envData({ setpu: [] }) })],
     ['data: a bad setup step', options({ environment: envData({ setup: [{ run: '' }] }) })],
+    [
+      'data: a skill URL with a token in a layer',
+      options({
+        environment: envData({
+          skills: [
+            {
+              kind: 'skill',
+              source: 'git',
+              repo: 'https://token@github.com/acme/skills.git',
+              placement: 'harness',
+            },
+          ],
+        }),
+      }),
+    ],
     [
       'data: a layer without a spec',
       options({ environment: { kind: 'environment', name: 'x', layers: [{ name: 'x' }] } }),

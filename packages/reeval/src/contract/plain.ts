@@ -38,6 +38,31 @@ import {
 /** A host environment variable's name. */
 export const VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
 
+/**
+ * A URL with its password (or a username on http(s) or git+http(s), which is where tokens go)
+ * masked, or undefined when it has neither or isn't a URL. An SSH username (`git@`) is no secret.
+ */
+export function credentialsIn(url: string): string | undefined {
+  if (!URL.canParse(url)) return undefined
+  const u = new URL(url)
+  if (!u.password && !(u.username && /^(?:git\+)?https?:$/.test(u.protocol))) return undefined
+  u.username = u.username && '***'
+  u.password = u.password && '***'
+  return u.href
+}
+
+/** A source reeval fetches on the host: a URL in it may not carry a password or token. */
+const fetched = () =>
+  nonEmpty().superRefine((url, ctx) => {
+    const masked = credentialsIn(url)
+    if (masked) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `${JSON.stringify(masked)} has a password or token in it, which reeval would record. reeval fetches it on the host with your own git and npm credentials; remove it from the URL.`,
+      })
+    }
+  })
+
 /** A host name, or `*.` and a domain for its subdomains. */
 const HOST = /^(?:\*\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/i
 
@@ -190,7 +215,7 @@ export const skillSourceSchema = z
       exclude: z.array(z.string()).optional().describe(EXCLUDE),
     }),
     skill('git', {
-      repo: nonEmpty().describe(
+      repo: fetched().describe(
         'As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL.',
       ),
       ref: z
@@ -209,7 +234,7 @@ export const skillSourceSchema = z
       version: z.string().optional().describe("A git ref of the skill's repository."),
     }),
     skill('npm', {
-      spec: nonEmpty().describe('A pinned npm package spec.'),
+      spec: fetched().describe('A pinned npm package spec.'),
       path: z
         .string()
         .describe('The directory in the package to read skills from; default `skills`.'),
@@ -237,7 +262,7 @@ export const pluginMarketplaceSchema = z
   .discriminatedUnion('source', [
     z.strictObject({
       source: z.literal('git'),
-      repo: nonEmpty().describe('As written: a URL or `github:owner/repo`.'),
+      repo: fetched().describe('As written: a URL or `github:owner/repo`.'),
       ref: z
         .string()
         .optional()
@@ -245,7 +270,7 @@ export const pluginMarketplaceSchema = z
     }),
     z.strictObject({
       source: z.literal('npm'),
-      spec: nonEmpty().describe('An npm package spec.'),
+      spec: fetched().describe('An npm package spec.'),
     }),
   ])
   .describe(
@@ -296,7 +321,7 @@ export const pluginSourceSchema = z
       path: nonEmpty().describe('A host directory with a `.claude-plugin/plugin.json`.'),
     }),
     plugin('git', {
-      repo: nonEmpty().describe(
+      repo: fetched().describe(
         'As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL.',
       ),
       ref: z
@@ -309,7 +334,7 @@ export const pluginSourceSchema = z
         .describe("The plugin's directory in the repository; default its root."),
     }),
     plugin('npm', {
-      spec: nonEmpty().describe('A pinned npm package spec.'),
+      spec: fetched().describe('A pinned npm package spec.'),
       path: z
         .string()
         .optional()
@@ -353,8 +378,8 @@ export const mcpServerSchema = z
 export const gitWorkspaceSchema = z
   .strictObject({
     kind: z.literal('git'),
-    repo: nonEmpty().describe('As written: a URL, `github:owner/repo`, or a local path.'),
-    url: nonEmpty().describe(
+    repo: fetched().describe('As written: a URL, `github:owner/repo`, or a local path.'),
+    url: fetched().describe(
       'What reeval fetches: the clone URL, or an absolute path for a local repository.',
     ),
     ref: z
