@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { UsageError } from '../errors.ts'
 import { attemptKey, evalId, relativeFile } from '../ids.ts'
+import { redactSecrets } from '../redact.ts'
 import { ownVersion, PACKAGE_DIR, PACKAGE_NAMES } from '../root.ts'
 import { Scheduler } from '../scheduler/core.ts'
 import { capMiddle } from '../text.ts'
@@ -226,10 +227,10 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
     ...identify(rel, test),
     state: result.state,
     durationMs: Math.round(result.durationMs),
-    errors: result.errors.map((e) => capMiddle(String(e.message))),
+    errors: result.errors.map((e) => capMiddle(redactSecrets(String(e.message)))),
     ...(result.errors[0]?.name ? { errorName: result.errors[0].name } : {}),
     formattedErrors: result.errors.map((e) =>
-      capMiddle(formatError(e, { root, hide, columns: process.stdout.columns })),
+      capMiddle(redactSecrets(formatError(e, { root, hide, columns: process.stdout.columns }))),
     ),
     meta: result.meta,
     ...(test.mode === 'todo' ? { todo: true as const } : {}),

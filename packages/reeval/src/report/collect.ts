@@ -128,7 +128,31 @@ function failedAttempts(record: RunRecord): AttemptRecord[] {
   )
 }
 
-function attemptSlice(root: string, runId: string, attempt: AttemptRecord): ReportAttempt {
+const cutLine = (l: string) =>
+  l.length > TRACE_LINE_CHARS ? `${l.slice(0, TRACE_LINE_CHARS)}…` : l
+
+/**
+ * The last trace lines, each scrubbed before it's cut, so a value or path the cut goes through is
+ * masked whole. `masked.added` counts the masks they hold beyond the lines cut as they were read,
+ * which are the ones reeval masked before the report.
+ */
+export function traceTail(text: string, scrub: Scrubber, masked = { added: 0 }): string[] {
+  return tail(withoutConfig(text), TRACE_LINES)
+    .filter(Boolean)
+    .map((line) => {
+      const kept = cutLine(scrub.json(line))
+      masked.added += masks(kept) - masks(cutLine(line))
+      return kept
+    })
+}
+
+function attemptSlice(
+  root: string,
+  runId: string,
+  attempt: AttemptRecord,
+  scrub: Scrubber,
+  masked: { added: number },
+): ReportAttempt {
   const key = parseAttemptKey(attempt.key)
   const dir = key ? attemptDebugDir(root, runId, key.evalId, key.cell, key.n) : ''
   const requests = tail(read(join(dir, 'requests.ndjson')), 500).filter((line) => {
@@ -146,9 +170,7 @@ function attemptSlice(root: string, runId: string, attempt: AttemptRecord): Repo
     turnErrors: attempt.turns.flatMap((t) => (t.error ? [t.error] : [])),
     debugFiles: dir ? filesIn(dir) : [],
     debugLog: tail(read(join(dir, 'debug.log')), LOG_LINES).filter(Boolean),
-    trace: tail(withoutConfig(read(join(dir, 'trace.ndjson'))), TRACE_LINES)
-      .filter(Boolean)
-      .map((l) => (l.length > TRACE_LINE_CHARS ? `${l.slice(0, TRACE_LINE_CHARS)}…` : l)),
+    trace: traceTail(read(join(dir, 'trace.ndjson')), scrub, masked),
     requests: requests.slice(-20),
   }
 }
@@ -211,6 +233,7 @@ export async function collectReport(
   const ref = refs[0] ?? (flags.last && invocation?.runId ? invocation.runId : 'latest')
   const attachments: TarEntry[] = []
   const attachedMasks = { before: 0, after: 0 }
+  const traceMasks = { added: 0 }
   if (config) {
     const found = await findRun(config, ref)
     if ('error' in found) runError = found.error
@@ -224,7 +247,9 @@ export async function collectReport(
         outcome: runOutcome(record),
         summary: { ...record.summary },
         stack: record.stack,
-        failures: failed.slice(0, MAX_FAILURES).map((a) => attemptSlice(root, record.runId, a)),
+        failures: failed
+          .slice(0, MAX_FAILURES)
+          .map((a) => attemptSlice(root, record.runId, a, scrub, traceMasks)),
         moreFailures: Math.max(0, failed.length - MAX_FAILURES),
       }
       let bytes = 0
@@ -277,7 +302,7 @@ export async function collectReport(
   const bundle = scrub.value(raw)
   // Counted as markers, so values reeval masked before the report read them (in the record, the
   // debug logs, the command log) count as well as the ones the report masks itself.
-  const upstream = masks(JSON.stringify(raw)) + attachedMasks.before
+  const upstream = masks(JSON.stringify(raw)) - traceMasks.added + attachedMasks.before
   const masked = masks(JSON.stringify(bundle)) + attachedMasks.after
   bundle.redaction = { masked, upstream, paths: scrub.paths }
   return { bundle, attachments, root, scrub }

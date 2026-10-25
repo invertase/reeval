@@ -22,14 +22,35 @@ const MAX_ARG = 300
 
 type Listener = (command: DockerCommand) => void
 let listener: Listener | undefined
+const asIs = (text: string) => text
+let mask = asIs
 
-/** Calls `fn` for every docker command this process runs, or stops with `undefined`. */
-export function onDockerCommand(fn: Listener | undefined): void {
+/**
+ * Calls `fn` for every docker command this process runs, or stops with `undefined`. `redact`
+ * masks each argument, stream and error before it's clipped, so a value the clip would cut
+ * through is masked whole.
+ */
+export function onDockerCommand(
+  fn: Listener | undefined,
+  redact: (text: string) => string = asIs,
+): void {
   listener = fn
+  mask = redact
 }
 
-const clip = (text: string, max: number) =>
-  text.length > max ? `${text.slice(0, max)}… (${text.length - max} more)` : text
+/**
+ * How far past the clip `redact` reads, so a value that starts before the clip and is shorter
+ * than this is masked whole, without masking all of a large output.
+ */
+const MASK_SPAN = 16 * 1024
+
+const clip = (raw: string, max: number) => {
+  const read = raw.slice(0, max + MASK_SPAN)
+  const text = mask(read)
+  const unread = raw.length - read.length
+  if (text.length <= max && !unread) return text
+  return `${text.slice(0, max)}… (${Math.max(0, text.length - max) + unread} more)`
+}
 
 /** Text as is (clipped), or a byte count for binary output such as a file read with `cat`. */
 export function streamPreview(data: Buffer | string): string {
@@ -51,7 +72,7 @@ export function traceDocker(
   try {
     if ('error' in result) {
       const error = result.error instanceof Error ? result.error.message : String(result.error)
-      listener({ ...base, exitCode: null, stdout: '', stderr: '', error })
+      listener({ ...base, exitCode: null, stdout: '', stderr: '', error: mask(error) })
       return
     }
     listener({

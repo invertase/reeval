@@ -3,18 +3,23 @@
 // The network-level proof (the upstream gets the value, the container never has it) is in
 // sandbox-docker's proxy and Docker tests.
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
-import type { Substitution } from '@reeval/sandbox-docker'
-import { stagedRecordJson } from '../src/attempt/record.ts'
-import { AttemptDebug } from '../src/debug/attempt.ts'
+import { docker, type Substitution } from '@reeval/sandbox-docker'
+import { assertionRecords } from '../src/attempt/assertions.ts'
+import { recordFailure, stagedRecordJson, turnErrors } from '../src/attempt/record.ts'
+import type { Attempt } from '../src/attempt/state.ts'
+import { AttemptDebug, withDebug } from '../src/debug/attempt.ts'
+import '../src/debug/docker.ts'
+import type { RawAssertion } from '../src/engine/runtime.ts'
 import { type BrokeredSecret, resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment, unbrokeredSecrets } from '../src/environment.ts'
 import { cursorMcpServers } from '../src/harness/agents.ts'
-import { rawLines } from '../src/history/assemble.ts'
+import { capText, OUTPUT_CAP, rawLines, turnError, turnText } from '../src/history/assemble.ts'
 import { findingLines, findingSummary, scanText } from '../src/history/secret-scan.ts'
+import { transcriptForJudge } from '../src/judge/transcript.ts'
 import type { PlannedAttempt } from '../src/options.ts'
 import { brokeredIn, secretVarsIn, unbrokered, unbrokeredWarning } from '../src/options.ts'
 import {
@@ -33,7 +38,9 @@ import {
 } from '../src/redact.ts'
 import { scrubber } from '../src/report/scrub.ts'
 import { brokerPhases } from '../src/sandbox/phases.ts'
-import type { EnvironmentInput, EvalRecord } from '../src/types.ts'
+import { FAILURE_CAP } from '../src/text.ts'
+import type { EnvironmentInput, EvalRecord, TranscriptEvent } from '../src/types.ts'
+import { tempDir } from './helpers.ts'
 
 const VALUE = 'reeval-unit-brokered-4f1c9e2a7b'
 const OTHER = 'reeval-unit-other-9d3a61c0e5'
@@ -922,4 +929,155 @@ describe('redacting serialised JSON', () => {
     assert.equal(scrub.json(line), '{"error":null,"cwd":"<project>/x","said":"[REDACTED]"}')
     assert.deepEqual(scrub.value({ error: 'null' }), { error: '[REDACTED]' })
   })
+})
+
+describe('masking before shortening', () => {
+  // Secret-named but not token-like, so only the whole value is masked, never its fragments.
+  const secret = 'correct-horse-battery-staple'
+  const withSecret = (fn: () => Promise<void> | void) => async () => {
+    process.env.REEVAL_TEST_CUT_PASSWORD = secret
+    try {
+      await fn()
+    } finally {
+      delete process.env.REEVAL_TEST_CUT_PASSWORD
+    }
+  }
+
+  test(
+    "a failure's message is masked before its middle is cut",
+    withSecret(() => {
+      const head = Math.floor(FAILURE_CAP * 0.75)
+      const message = `${'x'.repeat(head - 14)} password=${secret} ${'y'.repeat(FAILURE_CAP)}`
+      const a = {
+        record: { error: null, judgements: [], outcome: 'pass' },
+        signal: new AbortController().signal,
+        judgeErrored: false,
+      } as unknown as Attempt
+      recordFailure(a, new Error(message), false)
+      assert.match(a.record.error?.message ?? '', /characters cut/)
+      assert.match(a.record.error?.message ?? '', /password=\[RED/)
+      assert.doesNotMatch(a.record.error?.message ?? '', /password=corr/)
+    }),
+  )
+
+  test(
+    "a turn's error is masked before it's clipped",
+    withSecret(() => {
+      const message = `${'x'.repeat(480)}=${secret}`
+      const [line] = turnErrors([[{ type: 'error', message } as TranscriptEvent]])
+      assert.match(line ?? '', /=\[REDACTED\]/)
+      assert.doesNotMatch(line ?? '', /=corr/)
+    }),
+  )
+
+  test(
+    "an assertion's label and message are masked before they're clipped",
+    withSecret(() => {
+      const [x] = assertionRecords([
+        {
+          matcher: 'toBe',
+          args: [`${'x'.repeat(40)}=${secret}`],
+          status: 'fail',
+          soft: false,
+          error: new Error(`${'x'.repeat(1017)}=${secret}`),
+        } as unknown as RawAssertion,
+      ])
+      assert.match(`${x?.label} ${x?.message}`, /=\[RED.*=\[RED/)
+      assert.doesNotMatch(`${x?.label} ${x?.message}`, /=corr/)
+    }),
+  )
+
+  test(
+    'an oversized trace entry is masked before its head is kept',
+    withSecret(async () => {
+      const dir = tempDir('trace-head')
+      const debug = new AttemptDebug({ dir, verbosity: 0, traceLimit: 1024 * 1024 })
+      // The entry's head is the first 64 KB of `{"text":"…"}`: the secret starts 4 characters before it ends.
+      const text = `${'x'.repeat(64 * 1024 - 23)} password=${secret} ${'y'.repeat(300 * 1024)}`
+      debug.trace('harness', 'big', { text }, false)
+      await debug.finish(true)
+      const trace = readFileSync(join(dir, 'trace.ndjson'), 'utf8')
+      assert.match(trace, /"clipped":/)
+      assert.match(trace, /password=\[RED/)
+      assert.doesNotMatch(trace, /password=corr/)
+    }),
+  )
+
+  test(
+    "a docker command's output is masked before the attempt's trace clips it",
+    withSecret(async () => {
+      // A `docker` on the PATH whose stdout puts the secret across the trace's 4096-character clip.
+      const bin = tempDir('trace-docker')
+      writeFileSync(
+        join(bin, 'docker.js'),
+        `process.stdout.write('x'.repeat(4096 - 14) + ' password=' + process.env.REEVAL_TEST_CUT_PASSWORD + ' ' + 'y'.repeat(5000))\n`,
+      )
+      writeFileSync(join(bin, 'docker'), '#!/bin/sh\nexec node "$(dirname "$0")/docker.js" "$@"\n')
+      chmodSync(join(bin, 'docker'), 0o755)
+      writeFileSync(join(bin, 'docker.cmd'), '@node "%~dp0docker.js" %*\r\n')
+      const dir = tempDir('trace-docker-debug')
+      const shown: string[] = []
+      const debug = new AttemptDebug({
+        dir,
+        verbosity: 2,
+        traceLimit: 1024 * 1024,
+        emit: (line) => shown.push(line.detail ?? ''),
+      })
+      const path = process.env.PATH
+      process.env.PATH = `${bin}${delimiter}${path}`
+      try {
+        await withDebug(debug, () => docker(['exec', 'c1', 'cat', '--', '/f']))
+      } finally {
+        process.env.PATH = path
+      }
+      await debug.finish(true)
+      const trace = readFileSync(join(dir, 'trace.ndjson'), 'utf8')
+      for (const text of [trace, shown.join('\n')]) {
+        assert.match(text, /more\)/)
+        assert.match(text, /password=\[RED/)
+        assert.doesNotMatch(text, /password=corr/)
+      }
+    }),
+  )
+
+  test(
+    "the judge's transcript cuts a tool's output before a secret, not through it",
+    withSecret(() => {
+      // No whitespace, so `clip` cuts at its limit: the secret starts 4 characters before it.
+      const output = JSON.stringify({ rows: 'x'.repeat(267), dsn: `password=${secret}` })
+      const event = { type: 'tool', tool: 'shell', input: { command: 'psql' }, output, ok: true }
+      const shown = transcriptForJudge([event as TranscriptEvent], true).join('\n')
+      assert.match(shown, /"password=…$/)
+      assert.doesNotMatch(redactJson({ shown }), /password=corr/)
+      const plain = { ...event, output: 'y'.repeat(400) }
+      assert.match(transcriptForJudge([plain as TranscriptEvent], true)[0] ?? '', /y{299}…$/)
+    }),
+  )
+
+  test(
+    "a turn's final message and error are masked before the record cuts them",
+    withSecret(() => {
+      const text = turnText(`${'x'.repeat(8 * 1024 - 14)} password=${secret} ${'y'.repeat(100)}`)
+      assert.match(text, /reeval: truncated/)
+      assert.match(text, /password=\[RED/)
+      assert.doesNotMatch(text, /password=corr/)
+      const message = `${'x'.repeat(1024 - 14)} password=${secret}`
+      const error = turnError([{ type: 'error', message } as TranscriptEvent]) ?? ''
+      assert.match(error, /password=\[RED/)
+      assert.doesNotMatch(error, /password=corr/)
+    }),
+  )
+
+  test(
+    'a large output is masked before its head and tail are kept',
+    withSecret(() => {
+      const head = 96 * 1024
+      const tail = 16 * 1024
+      const big = `${'x'.repeat(head - 14)} password=${secret} ${'y'.repeat(OUTPUT_CAP)}${secret}.${'z'.repeat(tail - 8)}`
+      const capped = capText(big)
+      assert.match(capped, /reeval: truncated/)
+      assert.match(capped, /password=\[RED/)
+      assert.doesNotMatch(capped, /password=corr|staple\.z/)
+    }),
+  )
 })

@@ -21,6 +21,7 @@ import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
 import type { Harness, HarnessSession, Treatments } from '../harness/types.ts'
 import { type PluginUnpack, unpackPlugins } from '../harness/unpack.ts'
 import { harnessId } from '../options.ts'
+import { redactSecrets } from '../redact.ts'
 import { createSandbox, InfraError, type Sandbox } from '../sandbox/index.ts'
 import { brokerPhases } from '../sandbox/phases.ts'
 import { clip, formatDuration } from '../text.ts'
@@ -36,7 +37,7 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
   const steps: ResolvedStep[] = env.setup
   record.setup = []
   for (const [i, step] of steps.entries()) {
-    const what = `setup step ${i + 1}/${steps.length} "${clip(step.run, 80)}" in environment ${spec.environment.name}`
+    const what = `setup step ${i + 1}/${steps.length} "${clip(redactSecrets(step.run), 80)}" in environment ${spec.environment.name}`
     const start = performance.now()
     const stepSignal = AbortSignal.any([a.signal, AbortSignal.timeout(step.timeoutMs)])
     const r = await asCheck(a, () =>
@@ -59,7 +60,7 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
     record.setup.push({ run: step.run, exitCode: r?.exitCode ?? null, durationMs, output })
     debugLog(
       'env',
-      `setup ${i + 1}/${steps.length} $ ${clip(step.run, 120)} → ${r ? `exit ${r.exitCode}` : `timed out after ${formatDuration(step.timeoutMs)}`} · ${formatDuration(durationMs)}${step.cwd ? ` · in ${step.cwd}` : ''}`,
+      `setup ${i + 1}/${steps.length} $ ${clip(redactSecrets(step.run), 120)} → ${r ? `exit ${r.exitCode}` : `timed out after ${formatDuration(step.timeoutMs)}`} · ${formatDuration(durationMs)}${step.cwd ? ` · in ${step.cwd}` : ''}`,
     )
     debugTrace(
       'env',
