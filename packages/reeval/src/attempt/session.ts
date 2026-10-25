@@ -21,6 +21,7 @@ import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
 import type { Harness, HarnessSession, Treatments } from '../harness/types.ts'
 import { type PluginUnpack, unpackPlugins } from '../harness/unpack.ts'
 import { harnessId } from '../options.ts'
+import { redactSecrets } from '../redact.ts'
 import { createSandbox, InfraError, type Sandbox } from '../sandbox/index.ts'
 import { brokerPhases } from '../sandbox/phases.ts'
 import { clip, formatDuration } from '../text.ts'
@@ -122,7 +123,9 @@ async function leftRunning(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
     .slice(0, 20)
     .map((line) => {
       const [held = '', ...command] = line.split('\t')
-      return { command: clip(command.join('\t').trim(), 200), secrets: held.trim().split(' ') }
+      // Masked before it's cut, so a cut can't leave part of a value the masking wouldn't match.
+      const masked = redactSecrets(command.join('\t').trim())
+      return { command: clip(masked, 200), secrets: held.trim().split(' ') }
     })
 }
 

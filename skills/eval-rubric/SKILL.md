@@ -137,3 +137,12 @@ refused nothing, so the connection never reached it: a raw TCP or UDP client, SS
 driver, or a client that ignores `HTTPS_PROXY`. It's about what happened in the run, so it prints in
 every run it happens. **Fix:** set `egress: 'allow-all'` on the eval if it needs raw TCP or UDP, or
 point the client at `HTTPS_PROXY`.
+
+## `setup-process-secret`
+
+reeval's rule, concern. In Docker, a setup step left a process running (`nohup server &`) with a
+`to: 'checks'` secret without `hosts` in its environment, so the process holds the real value while
+the agent, as the same user, works beside it and can read it. The attempt's `setupProcesses` names
+each process and secret. It's about what happened in the run, so it prints in every run it happens.
+**Fix:** broker the secret with the hosts the process sends it to, so it holds a placeholder, or
+start the process from `c.exec` after the agent's turn.
