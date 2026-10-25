@@ -5,9 +5,11 @@ import type { Diff, FileChange } from './types.ts'
 
 // No reflog and no automatic gc: `prune` then removes every object HEAD and the index don't
 // reach, and nothing is ever packed where a loose-object prune can't remove it.
+// `core.quotePath=false` keeps non-ASCII paths readable in the patch; git still C-quotes a path
+// with a tab, newline, `"` or `\` there. Only `-z` output is never quoted.
 const GIT =
   'git -c user.name=reeval -c user.email=reeval@localhost -c core.hooksPath=/dev/null' +
-  ' -c core.logAllRefUpdates=false -c gc.auto=0'
+  ' -c core.logAllRefUpdates=false -c gc.auto=0 -c core.quotePath=false'
 
 // The git dir is root's, but `execOwn`'s HOME is the image's, which a custom `from` image could
 // point at the agent's own home. Ignore every config file git would otherwise read, so the agent
@@ -62,20 +64,23 @@ export async function diffSinceSnapshot(sandbox: Sandbox, signal?: AbortSignal):
   const env = `${snapshotEnv(sandbox)} && ${GIT} add -A && `
   const patch = await sandbox.execOwn(`${env}${GIT} diff --cached --binary HEAD`, { signal })
   const names = await sandbox.execOwn(
-    `${env}${GIT} diff --cached --name-status --no-renames HEAD`,
+    `${env}${GIT} diff --cached --name-status --no-renames -z HEAD`,
     { signal },
   )
   if (patch.exitCode !== 0 || names.exitCode !== 0) {
     throw new InfraError(`Failed to diff the workspace: ${patch.stderr || names.stderr}`)
   }
   const status = { A: 'added', M: 'modified', D: 'deleted' } as const
-  const files = names.stdout
-    .split('\n')
-    .filter(Boolean)
-    .map((line): FileChange => {
-      const [code = 'M', ...rest] = line.split('\t')
-      return { path: rest.join('\t'), status: status[code[0] as keyof typeof status] ?? 'modified' }
+  // `-z` gives `status\0path\0` pairs, the path as is.
+  const fields = names.stdout.split('\0')
+  const files: FileChange[] = []
+  for (let i = 0; i + 1 < fields.length; i += 2) {
+    const code = fields[i] as string
+    files.push({
+      path: fields[i + 1] as string,
+      status: status[code[0] as keyof typeof status] ?? 'modified',
     })
+  }
   return { patch: patch.stdout, files }
 }
 

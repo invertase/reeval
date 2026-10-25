@@ -1,4 +1,5 @@
 import { globFilter } from '../environment.ts'
+import { patchPath } from '../view/patch.ts'
 
 /** Installed dependencies: one entry per directory, never one per file. */
 const DEPENDENCY_DIR = /^(.*?(?:^|\/)(?:node_modules|\.venv|\.dart_tool|\.pub-cache|__pycache__)\/)/
@@ -74,7 +75,7 @@ export function judgeDiff(
   ]
   if (!diff.patch) return { files: fileLines, patch: diff.patch, dropped }
   const parts = diff.patch.split(/(?=^diff --git )/m).filter((part) => part.length > 0)
-  const paths = parts.map(diffPath)
+  const paths = parts.map(patchPath)
   const dirCounts = new Map<string, number>()
   const dirOf = (path: string) => DEPENDENCY_DIR.exec(path)?.[1] ?? BUILD_DIR.exec(path)?.[1]
   for (const path of paths) {
@@ -130,8 +131,3 @@ export const patchForJudge = (patch: string): string => judgeDiff({ patch, files
 /** `status path` lines for the judge, with dependency and build directories collapsed. */
 export const changedFilesForJudge = (files: Array<{ path: string; status: string }>): string[] =>
   judgeDiff({ patch: '', files }).files
-
-function diffPath(part: string): string | null {
-  const header = /^(?:diff --git a\/.+ b\/(.+))$/m.exec(part)
-  return header?.[1] ?? null
-}

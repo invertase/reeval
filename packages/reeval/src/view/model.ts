@@ -717,46 +717,6 @@ export function transcriptItems(lines: TranscriptLine[]): TranscriptItem[] {
   })
 }
 
-// ── Diffs ────────────────────────────────────────────────────────────────────────────────────
-
-export type PatchFile = {
-  path: string
-  status: 'added' | 'deleted' | 'modified' | 'renamed' | 'binary'
-  added: number
-  removed: number
-  text: string
-}
-
-const HEADER = /^diff --git a\/(.+?) b\/(.+)$/m
-
-/** Splits a git patch into one entry per file, with line counts. */
-export function splitPatch(patch: string): PatchFile[] {
-  if (!patch.trim()) return []
-  return patch
-    .split(/(?=^diff --git )/m)
-    .filter((part) => part.startsWith('diff --git '))
-    .map((text) => {
-      const header = HEADER.exec(text)
-      const path = header?.[2] ?? header?.[1] ?? 'unknown'
-      let added = 0
-      let removed = 0
-      for (const line of text.split('\n')) {
-        if (line.startsWith('+') && !line.startsWith('+++ ')) added++
-        else if (line.startsWith('-') && !line.startsWith('--- ')) removed++
-      }
-      const status: PatchFile['status'] = /^new file mode/m.test(text)
-        ? 'added'
-        : /^deleted file mode/m.test(text)
-          ? 'deleted'
-          : /^rename from/m.test(text)
-            ? 'renamed'
-            : /^(Binary files|GIT binary patch)/m.test(text)
-              ? 'binary'
-              : 'modified'
-      return { path, status, added, removed, text }
-    })
-}
-
 // ── Lookups ──────────────────────────────────────────────────────────────────────────────────
 
 export const findEval = (record: Pick<RunRecord, 'evals'>, slug: string) =>
