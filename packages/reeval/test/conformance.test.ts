@@ -1,8 +1,8 @@
 // The conformance goldens in test/conformance/ (see its README), run against the real code. A
 // declare/ case's TypeScript eval file must record its expected.json, and that tree, declared in
-// place of the file, must plan the plan case's existing snapshot. A context/ script's requests are
-// made on a real attempt by the reference runner (conformance/runner.ts), and reeval's answers and
-// the attempt's record must be the script's. Every message fits the attempt protocol's Zod schemas
+// place of the file, must plan the plan case's existing snapshot. A context/ script's requests go
+// to reeval's attempt host on a real attempt through the reference runner (conformance/runner.ts),
+// and reeval's answers, the attempt's record and what each judge call graded must be the script's. Every message fits the attempt protocol's Zod schemas
 // and its JSON Schema. REEVAL_UPDATE_SNAPSHOTS=1 rewrites the goldens; review the diff.
 import assert from 'node:assert/strict'
 import { cpSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -271,18 +271,25 @@ describe('context goldens', () => {
       assert.ok(existsSync(out), `${name}: the runner wrote nothing\n${r.stdout}${r.stderr}`)
       const entry = evals.find((e) => e.name === name)
       assert.ok(entry, `${name}: no eval in the run record`)
-      const { outcome, error, assertions = [], judgements, checks } = entry.trial
-      const lines = parse(readFileSync(out, 'utf8')).map((line) => {
-        const m = line.reeval
-        if (m?.op !== 'expect' || typeof m.assertion !== 'number') return line
-        return { reeval: { ...m, assertion: assertions[m.assertion] } }
-      })
+      const { outcome, error, assertions = [], judgements, checks, files } = entry.trial
+      type Graded = { question: string; state: { task?: string; output?: unknown } }
+      const inputs: Graded[] = files.judgeInput ? JSON.parse(entry.read(files.judgeInput.path)) : []
+      const lines = parse(readFileSync(out, 'utf8'))
       lines.push({
         record: {
           outcome,
           error,
           assertions,
           judgements: judgements.map(({ key: _, ...j }) => j),
+          ...(inputs.length
+            ? {
+                graded: inputs.map(({ question, state: { task, output } }) => ({
+                  question,
+                  ...(task === undefined ? {} : { task }),
+                  output,
+                })),
+              }
+            : {}),
           checks: checks.map(({ command, exitCode, retries, tries }) => ({
             command,
             exitCode,

@@ -6,12 +6,18 @@ import {
   type AttemptReply,
   type AttemptRequest,
   attemptRequestProblem,
+  type JudgeOn,
 } from '../contract/attempt.ts'
 import type { RawAssertion } from '../engine/runtime.ts'
 import type { AttemptContext, BackgroundHandle, JudgeCallOptions, Turn } from '../types.ts'
 
-const isTurnRef = (value: unknown): value is { turn: number } =>
-  typeof value === 'object' && value !== null && 'turn' in value
+/** The turn or value a wire `JudgeOn` names, as `c.judge`'s own `on` takes it. */
+function judgeTarget(c: AttemptContext, on: JudgeOn): JudgeCallOptions['on'] {
+  if ('value' in on) return on.value
+  const turn = c.turns[on.turn]
+  if (!turn) throw new RangeError(`c.judge() on turn ${on.turn}: the attempt has ${c.turns.length}`)
+  return turn
+}
 
 export async function replyToAttempt(
   c: AttemptContext,
@@ -77,13 +83,10 @@ async function perform(
       return { assertion: recordCall(matcherCalls, call) }
     case 'judge': {
       const { question, options } = call
-      const opts = (options ?? {}) as JudgeCallOptions & { on?: unknown }
-      const on = opts.on
-      const target = isTurnRef(on) ? c.turns[on.turn] : on
-      const { on: _drop, ...rest } = opts
+      const { on, ...rest } = (options ?? {}) as Omit<JudgeCallOptions, 'on'> & { on?: JudgeOn }
       const verdict = await c.judge(question, {
         ...rest,
-        ...(on !== undefined ? { on: target as JudgeCallOptions['on'] } : {}),
+        ...(on === undefined ? {} : { on: judgeTarget(c, on) }),
       })
       return { verdict }
     }
