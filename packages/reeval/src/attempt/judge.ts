@@ -135,6 +135,15 @@ function checksShown(
 }
 
 /**
+ * Where `order` goes among `calls`, which are in ascending order: calls finish in any order, but
+ * what they record stays in the order they were made.
+ */
+function placeFor(calls: readonly number[], order: number): number {
+  const after = calls.findIndex((c) => c > order)
+  return after < 0 ? calls.length : after
+}
+
+/**
  * Grades a turn (the last by default) or a value against a question, under
  * the judge provider's concurrency lease. Every call's input is recorded, including calls that
  * fail. A call that fails returns a `JudgeFailure` and fails the attempt as a judge error after the eval's body, so the judges and
@@ -148,6 +157,7 @@ export function judgeCaller(
     question: string,
     { on, ...call }: Omit<JudgeCallOptions, 'on'> & { on?: JudgeOn } = {},
   ): Promise<Verdict | JudgeFailure> => {
+    const order = a.judgeCalls++
     if (typeof question !== 'string' || !question.trim()) {
       throw new Error(
         `c.judge() needs a question: a non-empty string (got ${JSON.stringify(question)})`,
@@ -199,7 +209,9 @@ export function judgeCaller(
       ...(refs.length ? { artifacts: refs } : {}),
       ...(dropped.length ? { dropped } : {}),
     }
-    a.record.judgeInputs?.push(input)
+    const place = placeFor(a.judgeInputCalls, order)
+    a.judgeInputCalls.splice(place, 0, order)
+    a.record.judgeInputs?.splice(place, 0, input)
     const start = performance.now()
     const ms = () => Math.round(performance.now() - start)
     const atLeast = options.threshold ?? 0.8
@@ -251,7 +263,15 @@ export function judgeCaller(
         ),
       )
       const recorded = refs.length ? { ...verdict, artifacts: refs } : verdict
-      a.record.judgements.push(retries.length ? { ...recorded, retries } : recorded)
+      const { judgements } = a.record
+      judgements.splice(
+        placeFor(
+          judgements.map((j) => j.call ?? 0),
+          order,
+        ),
+        0,
+        { ...recorded, ...(retries.length ? { retries } : {}), call: order },
+      )
       const { score } = verdict
       debugLog(
         'judge',

@@ -72,6 +72,10 @@ export type Attempt = {
   judgeErrored: boolean
   /** Judge calls that failed without throwing, which fail the attempt once the eval's body is done. */
   judgeErrors: string[]
+  /** `c.judge()` calls made so far: the next call's place, taken before it awaits anything. */
+  judgeCalls: number
+  /** The place of each entry in `record.judgeInputs`, which is kept in place order. */
+  judgeInputCalls: number[]
   /** `c.capture()` names already used in this attempt. */
   captureNames: Set<string>
   /** Background processes from `c.exec({ background })` / `c.serve`; teardown kills leftovers. */
@@ -129,6 +133,8 @@ export function createAttempt(
     signal,
     judgeErrored: false,
     judgeErrors: [],
+    judgeCalls: 0,
+    judgeInputCalls: [],
     captureNames: new Set(),
     backgrounds: [],
     artifactBlobs: new Map(),

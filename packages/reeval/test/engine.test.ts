@@ -1211,6 +1211,39 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     assert.equal(inputs[1]?.error, undefined)
   })
 
+  test("judgement keys and judge inputs follow the calls' order, whichever finishes first or fails", async () => {
+    const p = await project('judge-call-order', {
+      'reeval.config.ts': fakeConfig({ harness: `{ files: { 'a.txt': 'hi\\n' } }` }),
+      'evals/agent.eval.ts': agentEval(`
+  await c.judge('failed?', { model: 'no-provider' })
+  const [style, greets] = await Promise.all([
+    c.judge('style?', { state: { contents: ['a.txt'] } }),
+    c.judge('greets?'),
+  ])
+  expect.soft(style).toPass()
+  expect.soft(greets).toPass()
+`),
+    })
+    await runCli(p.dir)
+    const [e] = readRun(p.dir).evals
+    assert.deepEqual(
+      e?.trial.judgements.map((j) => [j.question, j.key.split(':')[0]]),
+      [
+        ['style?', '1'],
+        ['greets?', '2'],
+      ],
+    )
+    assert.deepEqual(
+      judgeInputs(e).map((i) => i.question),
+      ['failed?', 'style?', 'greets?'],
+    )
+    assert.equal(
+      'call' in (judgeInputs(e)[0] ?? {}),
+      false,
+      "the call's place stays out of the judge input",
+    )
+  })
+
   test('a judge failure the eval never asserts on still fails the attempt, after its body', async () => {
     const p = await project('judge-unasserted', {
       'reeval.config.ts': fakeConfig(),
