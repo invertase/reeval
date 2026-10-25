@@ -76,8 +76,8 @@ const CASES: Case[] = [
   },
   {
     name: 'character classes, escapes and regexp characters',
-    ignore: 'f[0-9]\ng[^a]\nh\\*i\nx.y\nk+\n',
-    files: ['f1', 'fa', 'ga', 'gb', 'h*i', 'hxi', 'x.y', 'xzy', 'kk', 'k+'],
+    ignore: 'f[0-9]\ng[^a]\nh\\[i\nx.y\nk+\n',
+    files: ['f1', 'fa', 'ga', 'gb', 'h[i', 'hxi', 'x.y', 'xzy', 'kk', 'k+'],
     sent: ['fa', 'ga', 'hxi', 'kk', 'xzy'],
   },
   {
@@ -138,9 +138,7 @@ describe('contextFiles', () => {
   })
 })
 
-const dockerUp =
-  ENGINE === 'docker' &&
-  (REQUIRE_ENGINE || spawnSync(CLI, ['info'], { stdio: 'ignore' }).status === 0)
+const dockerUp = REQUIRE_ENGINE || spawnSync(CLI, ['info'], { stdio: 'ignore' }).status === 0
 
 const files = (root: string, rel = ''): string[] =>
   readdirSync(join(root, rel), { withFileTypes: true }).flatMap((entry) => {
@@ -150,7 +148,11 @@ const files = (root: string, rel = ''): string[] =>
 
 describe('what docker build sends', {
   skip:
-    ENGINE !== 'docker' ? 'the cases are Docker BuildKit semantics' : !dockerUp && 'needs Docker',
+    ENGINE !== 'docker'
+      ? 'the cases are Docker BuildKit semantics'
+      : process.platform !== 'linux'
+        ? 'needs Linux containers'
+        : !dockerUp && 'needs Docker',
 }, () => {
   for (const c of CASES) {
     test(c.name, () => {
