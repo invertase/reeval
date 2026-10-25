@@ -224,7 +224,7 @@ A run is resumable when it isn't `complete` and no process for that id is still 
 
 With no ref, a live leftover is named (`still running`) rather than reported as missing. `.reeval/current` points at the id from the moment the run starts, after the plan, so `--resume` can find a crash that never assembled. A usage error at plan time writes nothing.
 
-In-flight attempts start again from the beginning, and completed ones keep their outcome, including a pass. The assembled record replaces the interrupted or budget scratch under the same id.
+In-flight attempts start again from the beginning, and completed ones keep their outcome, including a pass. They also keep their evidence and provenance: artifacts, sources, environment digest, image and fingerprint. A variant cell keeps its `minLift` gate, and an eval whose attempts all finished keeps its pairwise answers and their `questions/<n>.json`. The assembled record replaces the interrupted or budget scratch under the same id.
 
 On GitHub Actions, the id goes to `GITHUB_OUTPUT` as `run-id` and to the step summary when the run starts, so the job log has it even if SIGKILL skips assembly. A re-run still needs the leftover staging (or interrupted scratch) restored onto the new VM.
 

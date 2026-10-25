@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { UsageError } from '../src/errors.ts'
+import type { CellRecord, EvalEntry, RunRecord } from '../src/history/types.ts'
 import { RefError } from '../src/history/views.ts'
 import { attemptKey, evalId } from '../src/ids.ts'
 import {
@@ -289,6 +291,118 @@ evaluate('leftover', async () => {})
     const r = await runCli(p.dir, ['run', '--resume', run.runId])
     assert.equal(r.code, 2, r.stdout + r.stderr)
     assert.match(r.stderr, /is complete and cannot be resumed/)
+  })
+})
+
+describe('reeval run --resume of a budget-stopped record', () => {
+  // `gated` finishes inside the budget (both arms pass, so its lift of 0 fails minLift 0.5, and
+  // its pairwise question is answered); `slow` starts after it and is cut.
+  const budgeted = {
+    'reeval.config.ts': `
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
+import { base } from './evals/envs.ts'
+export default defineConfig({
+  harness: fakeHarness({ delayMs: 2000 }),
+  environment: base,
+  judge: { model: fakeJudge({ score: 0.9 }) },
+  analysis: { model: fakeAnalysis({ vote: 'A' }) },
+  concurrency: 1,
+  budget: { duration: '3s' },
+})
+`,
+    'skills/house-greeting/SKILL.md':
+      '---\nname: house-greeting\ndescription: The house greeting.\n---\n\nSay "Ahoy".\n',
+    'evals/envs.ts': `import { defineEnvironment } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
+export const base = defineEnvironment('base', { sandbox, env: { MODE: 'base' } })
+export const skilled = base.extendEnvironment('skilled', ({ skill }) => ({
+  env: { MODE: 'skilled' },
+  skills: [skill.local('../skills')],
+}))
+`,
+    'evals/e.eval.ts': `import { evaluate } from 'reeval'
+import { base, skilled } from './envs.ts'
+evaluate(
+  'gated',
+  {
+    compare: { baseline: base, variants: [skilled], minLift: 0.5 },
+    questions: [{ question: 'Which is cleaner?', across: 'environment' }],
+  },
+  async (c) => { await c.send('go') },
+)
+evaluate('slow', { runs: 2 }, async (c) => { await c.send('x') })
+`,
+  }
+
+  async function stopped(name: string) {
+    const p = await project(name, budgeted)
+    const r = await runCli(p.dir, ['run', '--ui', 'plain'], { timeoutMs: 120_000 })
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const { run } = readRun(p.dir)
+    assert.equal(run.status, 'budget')
+    const gated = run.evals.find((e) => e.name === 'gated')
+    assert.ok(gated)
+    assert.equal(gated.outcome, 'fail')
+    assert.equal(gated.cells.find((c) => c.role === 'variant')?.lift?.minLift, 0.5)
+    assert.equal(gated.answers?.length, 1)
+    assert.ok(gated.answers[0]?.input)
+    assert.ok(
+      run.evals.find((e) => e.name === 'slow')?.attempts.some((a) => a.outcome === 'skipped'),
+    )
+    return { dir: p.dir, first: run }
+  }
+
+  function assertKept(dir: string, first: RunRecord, second: RunRecord) {
+    const was = first.evals.find((e) => e.name === 'gated')
+    const gated = second.evals.find((e) => e.name === 'gated')
+    assert.ok(was && gated)
+    assert.equal(gated.outcome, 'fail')
+    const variant = gated.cells.find((c) => c.role === 'variant')
+    assert.equal(variant?.outcome, 'fail')
+    assert.equal(variant?.lift?.minLift, 0.5)
+    assert.deepEqual(gated.sources, was.sources)
+    assert.ok(gated.sources.length > 0)
+    const provenance = (e: EvalEntry) =>
+      e.cells.map((c) => [c.key, c.fingerprint, c.fingerprintParts, c.environmentDigest])
+    assert.deepEqual(provenance(gated), provenance(was))
+    assert.equal(gated.fingerprint, was.fingerprint)
+    for (const env of first.environments)
+      assert.ok(second.environments.some((x) => x.digest === env.digest))
+    assert.deepEqual(gated.answers, was.answers)
+    const input = gated.answers?.[0]?.input
+    assert.ok(input)
+    const bytes = readFileSync(join(dir, '.reeval', 'runs', second.runId, input.path))
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), input.sha256)
+  }
+
+  test('keeps a finished eval’s minLift gate, provenance and pairwise answers', async () => {
+    const { dir, first } = await stopped('resume-budget-kept')
+    const r = await runCli(dir, ['run', '--resume', first.runId, '--ui', 'plain'], {
+      timeoutMs: 120_000,
+    })
+    const second = readRun(dir).run
+    assertKept(dir, first, second)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const slow = second.evals.find((e) => e.name === 'slow')
+    assert.ok(slow?.attempts.some((a) => a.outcome === 'pass'))
+    assert.deepEqual(slow?.sources, first.evals.find((e) => e.name === 'slow')?.sources)
+  })
+
+  test('keeps them for an eval a filtered resume leaves out', async () => {
+    const { dir, first } = await stopped('resume-budget-filtered')
+    const r = await runCli(dir, ['run', '--resume', first.runId, 'slow', '--ui', 'plain'], {
+      timeoutMs: 120_000,
+    })
+    const second = readRun(dir).run
+    assertKept(dir, first, second)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const was = first.evals.find((e) => e.name === 'gated')?.cells
+    const cells = second.evals.find((e) => e.name === 'gated')?.cells
+    const meta = (c: CellRecord) => [c.key, c.role, c.gate, c.harnessKind, c.model, c.overrides]
+    assert.deepEqual(cells?.map(meta), was?.map(meta))
   })
 })
 
