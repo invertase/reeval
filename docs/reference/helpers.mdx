@@ -59,6 +59,8 @@ A secret is read from the host when an attempt starts. Its value is masked in ev
 
 A stretch made only of lower-case letters, upper-case letters or digits isn't masked on its own, so words and numbers stay readable, nor is one with quotes, commas, colons, brackets or spaces, so a record's JSON stays whole. Secret-named host variables under 8 characters and declared secrets under 4 aren't masked at all.
 
+A token shape is masked wherever it starts, even straight after a name or an encoded character (`TOKEN_ghp_…`, `key%3Dsk-…`, `"a\nghp_…"`). Only `sk-…` and AWS keys, whose prefixes end ordinary words such as `task-`, must follow a character that isn't a letter or digit, or a `%3D`, `\n` or `\u003d` escape.
+
 In records, transcripts, `.reeval/debug` and other JSON reeval writes, masking applies to string values only. A short secret such as `1234` or `null` leaves `null`, numbers, booleans and field names as they are, so the file stays valid JSON. A secret held as a number isn't masked. In a key that reads as a field name, such as `durationMs`, only matches of 8 or more characters are masked; other keys, such as paths, are masked like values.
 
 Still, don't print any part of a key to check for a leak: compare on the host, or pass the sandbox a hash.
