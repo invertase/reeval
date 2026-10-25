@@ -477,7 +477,7 @@ export const inventory: InventoryFeature[] = [
     id: 'selection.group-skip',
     area: 'Config and selection',
     name: '`group.skip` and `group.todo`, and todo shown in the plan, summary, record and studio',
-    plan: ['selection/only-local'],
+    plan: ['selection/only-local', 'only-in-skip/only-in-skipped-group'],
     tests: [
       engine("a skipped group's evals, nested ones too, are recorded as skipped and never run"),
       engine('group.todo shows as todo, like evaluate.todo'),

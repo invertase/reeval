@@ -139,11 +139,24 @@ describe('modes', () => {
     assert.deepEqual(modes(tests), ['focused/not this:skip', 'focused/this:run'])
   })
 
-  test('an only test inside a skipped group stays only, which runs nothing (as in Vitest)', async () => {
+  test('a skipped group wins over .only inside it, which runs nothing (as in Vitest)', async () => {
     const tests = await collect('/f', async () => {
-      g('parked', () => t('focused', 'only'), 'skip')
+      g(
+        'parked',
+        () => {
+          t('focused', 'only')
+          g('nested', () => t('deeper'), 'only')
+        },
+        'skip',
+      )
+      g('later', () => t('focused', 'only'), 'todo')
       t('plain')
     })
-    assert.deepEqual(modes(tests), ['parked/focused:only', 'plain:skip'])
+    assert.deepEqual(modes(tests), [
+      'parked/focused:skip',
+      'parked/nested/deeper:skip',
+      'later/focused:todo',
+      'plain:skip',
+    ])
   })
 })
