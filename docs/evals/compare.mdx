@@ -5,112 +5,121 @@ description: "See whether a skill, doc, or MCP server changes what your harness 
 
 A comparison runs one evaluation on a control without your change and on a variant with it. Both get the same prompt and checks. reeval reports whether the variant `helped`, `made it worse`, or `can't tell yet`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For more information about where a comparison appears in a run, see [Core concepts](/core-concepts#comparison).
 
-This page uses the control `plain` and the variant `with-shoehorn`, which adds Matt Pocock's `migrate-to-shoehorn` skill. For more information about building the control and variant, see [Quick start](/quickstart) or [Environments](/environments).
+This page uses the control `page`, an unstyled HTML page, and the variant `brand-guidelines`, which adds Anthropic's `brand-guidelines` skill. For more information about building them, see [Quick start](/quickstart) or [Environments](/environments).
 
 ## Run the comparison
 
-In the `evals/shoehorn.eval.ts` file, name the control in `compare.baseline` and the variants in `compare.variants`:
+In the `evals/brand.eval.ts` file, name the variants in `compare.variants`:
 
-```ts title="evals/shoehorn.eval.ts"
-import { evaluate, expect } from '{{ pkg }}'
-import { plain, withShoehorn } from './environments.ts'
-
+```ts title="evals/brand.eval.ts"
 evaluate(
-  'tests build only the request fields they read',
-  { runs: 2, compare: { baseline: plain, variants: [withShoehorn] } },
+  "styles the page in Anthropic's brand",
+  {
+    environment: page,
+    compare: { variants: [withSkill] },
+    runs: 4,
+    gate: { passRate: 0.75 },
+  },
   async (c) => {
-    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
-    await expect(c, 'uses fromPartial').toHaveFile(
-      'src/user.test.ts',
-      /fromPartial(<\w+>)?\(/,
+    await c.send(
+      "Give index.html Anthropic's look: write styles.css with Anthropic's " +
+        'brand colours and fonts, and link it from index.html.',
+    )
+
+    await expect
+      .soft(c, 'links styles.css')
+      .toHaveFile('index.html', /href="styles\.css"/)
+    await expect.soft(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
+    await expect(c, 'brand fonts').toHaveFile(
+      'styles.css',
+      /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/,
     )
   },
 )
 ```
 
-The prompt doesn't name shoehorn, so the check passes only when the skill leads the harness to call `fromPartial`. `runs: 2` gives each cell two attempts. Run the evaluation:
+With no `compare.baseline`, the evaluation's `environment` is the control. To name a different control, set `compare.baseline`. `runs: 4` gives each cell four attempts. Run the evaluation:
 
 ```bash
-npx reeval run shoehorn
+npx reeval run brand
 ```
 
 ## Read the result
 
-The run prints one block for the evaluation. Your counts can differ, and the block uses this format ([Output](/results/output)):
+The run prints one block for the evaluation, in this format ([Output](/results/output)):
 
 ```text
-pass             tests build only the request fields they read
+pass             styles the page in Anthropic's brand
   arm               pass
-  plain             0 of 2
-  with-shoehorn     2 of 2  can't tell yet
-  check             plain   with-shoehorn
-  uses fromPartial  0 of 2  2 of 2
-    expected src/user.test.ts to match /fromPartial(<\w+>)?\(/
+  page              0 of 4
+  brand-guidelines  4 of 4  helped
+  check             page    brand-guidelines
+  brand orange      0 of 4  4 of 4
+    expected styles.css to match /#d97757/i
+  brand fonts       0 of 4  4 of 4
+    expected styles.css to match /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/
+  +1 more passed
 ```
 
-The `arm` column lists the control and the variant. The evaluation's outcome, `pass`, is the variant's, because reeval gates only variants by default. Set `compare.gate` to `'all'` to gate the control too, or `'none'` to gate neither.
+The `arm` column lists the control and the variant. The evaluation's outcome, `pass`, is the variant's, because reeval gates only variants by default. Set `compare.gate` to `'all'` to gate the control too, or `'none'` to gate neither. `gate: { passRate: 0.75 }` passes a cell when at least 3 of its 4 attempts pass.
 
-The effect reads `can't tell yet` even at 2 of 2 against 0 of 2. Below four counted attempts a side, reeval doesn't call `helped` or `made it worse`. Set `runs: 4` so reeval can report an effect ([Statistics](/evals/statistics)).
+Below four counted attempts a side, reeval doesn't call `helped` or `made it worse`. With `runs: 2`, the same counts read `can't tell yet` ([Statistics](/evals/statistics)).
 
 If the control and the variant both pass, the harness already does what the skill teaches, and this task can't show the change. A control that includes the change measures nothing either. A rules file or a doc that repeats the skill gives both cells the same instructions.
 
 ## Add more variants
 
-In the `evals/shoehorn.eval.ts` file, add each extra environment to `compare.variants`. Here `withRules` is `plain` with a rules file that names shoehorn ([Rules](/environments/rules)):
+Add each extra environment to `compare.variants`. This excerpt measures one convention as a skill and as a doc:
 
-```ts title="evals/shoehorn.eval.ts"
-import { plain, withRules, withShoehorn } from './environments.ts'
-// ...
-runs: 4,
-compare: { baseline: plain, variants: [withShoehorn, withRules] },
+```ts title="with-two-variants.eval.ts"
+{ compare: { baseline: math, variants: [withSkill, withDoc] } },
 ```
 
-Each variant gets its own row and effect. reeval gates each variant separately. With `runs` above 1, a variant passes only when every attempt passes, so `with-rules` at 3 of 4 can read `helped` and still fail the evaluation. To gate on a pass rate instead, set [`gate`](/reference/options#gate) to `{ passRate: 0.75 }`.
+Each variant gets its own row and effect. reeval gates each variant separately. For a runnable project, see [`with-two-variants`](https://github.com/invertase/reeval/tree/main/examples/with-two-variants).
 
 ## Gate on lift
 
-In the `evals/shoehorn.eval.ts` file, set `compare.minLift` to the smallest lift you accept, from -1 to 1:
+Set `compare.minLift` to the smallest lift you accept, from -1 to 1:
 
-```ts title="evals/shoehorn.eval.ts"
-compare: { baseline: plain, variants: [withShoehorn], minLift: 0.25 },
+```ts title="with-min-lift.eval.ts"
+compare: { baseline: math, variants: [withJsdoc], minLift: 0.2 },
 ```
 
-A variant whose lift may be below 25 points fails and prints `not by minLift 25`, even when it `helped`.
+A variant whose lift may be below 20 points fails, even when it `helped`, and its row reads `helped, not by minLift 20`. For a runnable project, see [`with-min-lift`](https://github.com/invertase/reeval/tree/main/examples/with-min-lift).
 
 ## Compare harnesses
 
-In the `evals/shoehorn.eval.ts` file, import the harnesses and list them in `harness`. This example lists two harnesses, and any harness works ([Harnesses](/harnesses)):
+List several harnesses in `harness`. Any harness works ([Harnesses](/harnesses)):
 
-```ts title="evals/shoehorn.eval.ts"
-import { claudeCode, cursor } from '{{ pkg }}/harness'
-// ...
+```ts title="with-compare-harness.eval.ts"
 harness: [
-  cursor({ model: 'composer-2.5' }),
   claudeCode({ model: 'claude-sonnet-5' }),
+  codex({ model: 'gpt-5.6-luna' }),
 ],
+compare: {
+  variants: [withJsdoc],
+  harness: ['claude-code:claude-sonnet-5'],
+},
 ```
 
-Each harness reads its API key from the `.env.local` file. reeval measures each variant against the control on the same harness. To limit a variant to certain harnesses, list their IDs in `compare.harness`.
+Each harness reads its API key from the `.env.local` file. reeval measures each variant against the control on the same harness. `compare.harness` limits the variant to the listed harnesses, and the others run the control only. For a runnable project, see [`with-compare-harness`](https://github.com/invertase/reeval/tree/main/examples/with-compare-harness).
 
 ## Ask which did better
 
-A pairwise question asks a language model which of two attempts did better. `across: 'environment'` pairs the control with each variant on the same harness. The comparison leaves out attempts that failed their checks, so the question needs a check both sides can pass. In the `evals/shoehorn.eval.ts` file, add the question and replace the check with one both sides can pass:
+A pairwise question asks a language model which of two attempts did better. The comparison leaves out attempts that failed their checks, so the question needs a check both sides can pass. Add the question to the evaluation's options:
 
-```ts title="evals/shoehorn.eval.ts"
-compare: { baseline: plain, variants: [withShoehorn] },
+```ts title="with-compare-questions.eval.ts"
 questions: [
   {
-    question: 'Which test reads more like a specification?',
+    question: 'Which divide() says more clearly what went wrong when b is 0?',
     across: 'environment',
   },
 ],
-// ...
-await expect(c, 'test file').toHaveFile('src/user.test.ts')
 ```
 
-After the run, the block prints each side's wins as `won W of N`. reeval asks about each pair in both orders with the sides unlabelled. `npx reeval query question_pairs` lists the wins, ties, and splits ([Query views](/reference/query)). For more information about the model that answers a question, see [`question`](/reference/options#question).
+`across: 'environment'` pairs the control with each variant on the same harness, and `across: 'harness'` pairs harnesses in the same environment. After the run, the block prints each side's wins as `won W of N`. reeval asks about each pair in both orders with the sides unlabelled. `npx reeval query question_pairs` lists the wins, ties, and splits ([Query views](/reference/query)). For more information about the model that answers a question, see [`question`](/reference/options#question).
 
-Questions never gate. They don't change an outcome or the exit code.
+Questions never gate. They don't change an outcome or the exit code. For a runnable project, see [`with-compare-questions`](https://github.com/invertase/reeval/tree/main/examples/with-compare-questions).
 
 ## Next steps
 

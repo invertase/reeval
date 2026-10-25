@@ -9,94 +9,83 @@ Before you rely on a check, verify the plan with the `reeval run --dry-run` comm
 
 ## Check a file the agent wrote
 
-`toHaveFile` reads a file in the sandbox. Await it. The second argument to `expect` is the label in the result. The `plain` environment comes from the `evals/environments.ts` file.
+`toHaveFile` reads a file in the sandbox. Await it. The second argument to `expect` is the label in the result. The `camelcase` environment is the one from [Write an evaluation](/evals/evaluate).
 
-In the `evals/shoehorn.eval.ts` file, send the task and check the test file:
+In the `evals/camelcase.eval.ts` file, send the task and check that the readme documents the option:
 
-```ts title="evals/shoehorn.eval.ts"
-import { evaluate, expect } from '{{ pkg }}'
-import { plain } from './environments.ts'
+```ts title="evals/camelcase.eval.ts"
+evaluate('adds a separators option', { environment: camelcase }, async (c) => {
+  await c.send(
+    'Add a separators option to camelCase: a string of extra characters ' +
+      "that also separate words, so camelCase('foo/bar', {separators: '/'}) " +
+      "is 'fooBar'. Add tests to test.js and document it in readme.md. " +
+      'Run the tests with node --test.',
+  )
 
-evaluate(
-  'tests build only the request fields they read',
-  { environment: plain },
-  async (c) => {
-    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
-    await expect(c, 'uses fromPartial').toHaveFile(
-      'src/user.test.ts',
-      /fromPartial(<\w+>)?\(/,
-    )
-  },
-)
+  await expect(c).toHaveFile('readme.md', /separators/)
+})
 ```
 
-`c.readFile` returns the file text, or `null` when the path is missing. In the `evals/shoehorn.eval.ts` file, add a text check:
+Without a label, the row reads `toHaveFile readme.md`. `c.readFile` returns the file text, or `null` when the path is missing:
 
-```ts title="evals/shoehorn.eval.ts"
-    const source = await c.readFile('src/user.test.ts')
-    expect(source, 'mentions getUserId').toContain('getUserId')
+```ts title="with-soft-checks.eval.ts"
+expect
+  .soft(await c.readFile('test/math.test.js'), 'tests divide')
+  .toContain('divide(')
 ```
 
-`c.writeFile` writes a file into the sandbox. The diff leaves that write out, and it shows a later edit to the file. In the `evals/shoehorn.eval.ts` file, place a file in the sandbox:
+`c.writeFile` writes a file into the sandbox after the harness finishes. The diff leaves that write out. In the `evals/camelcase.eval.ts` file, add the hidden test the prompt never mentions:
 
-```ts title="evals/shoehorn.eval.ts"
-    await c.writeFile(
-      'src/note.ts',
-      'export const hint = "Cover getUserId."\n',
-    )
+```ts title="evals/camelcase.eval.ts"
+  await c.writeFile('separators.test.js', hidden)
 ```
 
 ## Run the project's tests
 
 `c.exec` runs a command in the sandbox and returns `exitCode`, `stdout`, and `stderr`. `toSucceed` passes when `exitCode` is 0. Await it.
 
-In the `evals/shoehorn.eval.ts` file, add the test command:
+In the `evals/camelcase.eval.ts` file, run the repository's tests, then the hidden test:
 
-```ts title="evals/shoehorn.eval.ts"
-    await expect(c.exec('npm test'), 'tests pass').toSucceed()
+```ts title="evals/camelcase.eval.ts"
+  await expect(c.exec('node --test'), "the repo's tests pass").toSucceed()
+  // ...
+  await expect(
+    c.exec('node --test separators.test.js'),
+    'the option works',
+  ).toSucceed()
 ```
 
-For more information about `c.exec`, see [the `c.exec` method](/reference/context#cexec).
+For more information about `c.exec`, see [the `c.exec` method](/reference/context#cexec). For a runnable project, see [`with-existing-codebase`](https://github.com/invertase/reeval/tree/main/examples/with-existing-codebase).
 
 ## Check what the agent did
 
-`toHaveEdited` checks file edits in the transcript. `toHaveRun` checks shell commands the harness ran. Pass `c` or the turn that `c.send` returns.
+`toHaveEdited` checks file edits in the transcript. `toHaveRun` checks shell commands the harness ran. Pass `c` or the turn that `c.send` returns:
 
-In the `evals/shoehorn.eval.ts` file, keep the turn and add both checks:
-
-```ts title="evals/shoehorn.eval.ts"
-    const turn = await c.send(
-      'Add a Vitest test for getUserId in src/user.test.ts.',
-    )
-    expect(turn, 'edited the test').toHaveEdited('src/user.test.ts')
-    expect(turn, 'ran vitest').toHaveRun(/vitest/)
+```ts title="with-transcript-matchers.eval.ts"
+expect(turn, 'edited math.js').toHaveEdited('src/math.js')
+expect(turn, 'ran the tests').toHaveRun(/node --test|npm (test|t)\b/)
+expect(turn, 'installed nothing').not.toHaveRun(/npm (install|i)\b/)
 ```
 
-`toHaveCalledTool`, `toHaveCalledMcp`, and `toHaveCalledSkill` read the same transcript. For more information about their arguments, see [Matchers](/reference/matchers).
+`toHaveCalledTool`, `toHaveCalledMcp`, and `toHaveCalledSkill` read the same transcript. For more information about their arguments, see [Matchers](/reference/matchers). For a runnable project, see [`with-transcript-matchers`](https://github.com/invertase/reeval/tree/main/examples/with-transcript-matchers).
 
 `toHaveSearched` and `toHaveFetched` throw `HarnessCapabilityError` when the harness does not report web searches or web fetches. Check the reply or a file, or use a harness that reports those events.
 
 ## Use soft and polled checks
 
-`expect.soft` records a failure and runs the later checks. The attempt fails at the end on the first soft check that did not pass.
+`expect.soft` records a failure and runs the later checks. The attempt fails at the end on the first soft check that did not pass. The [Quick start](/quickstart) evaluation makes two of its three checks soft, so each attempt reports all three:
 
-In the `evals/shoehorn.eval.ts` file, replace the file check:
-
-```ts title="evals/shoehorn.eval.ts"
-    await expect.soft(c, 'uses fromPartial').toHaveFile(
-      'src/user.test.ts',
-      /fromPartial(<\w+>)?\(/,
-    )
+```ts title="evals/brand.eval.ts"
+await expect
+  .soft(c, 'links styles.css')
+  .toHaveFile('index.html', /href="styles\.css"/)
+await expect.soft(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
 ```
 
-`expect.poll` calls a function until the matcher passes, every 50 milliseconds, for at most 1000 milliseconds. It then fails with the last error. Await it. Pass `{ interval, timeout }` in milliseconds to change the wait. `message` sets the label.
+`expect.poll` calls a function until the matcher passes, every 50 milliseconds, for at most 1000 milliseconds. It then fails with the last error. Await it. Pass `{ interval, timeout }` in milliseconds to change the wait. `message` sets the label:
 
-In the `evals/shoehorn.eval.ts` file, poll `c` until the test file exists:
-
-```ts title="evals/shoehorn.eval.ts"
-    await expect
-      .poll(() => c, { timeout: 5000 })
-      .toHaveFile('src/user.test.ts')
+```ts
+await expect.poll(() => c, { timeout: 5000 }).toHaveFile('readme.md')
 ```
 
 ## Troubleshooting
@@ -105,7 +94,7 @@ Match the attempt error to a fix:
 
 | Symptom | Check | Next action |
 |---|---|---|
-| `expected file src/user.test.ts to exist` | `toHaveFile` found no file at that path. | Use the path the prompt names. |
+| `expected file readme.md to exist` | `toHaveFile` found no file at that path. | Use the path the prompt names. |
 | `expected command to succeed, exit code 1` | `exitCode` was not 0. The message includes the tail of `stderr` and `stdout`. | Read that tail, then change the command or the task. |
 | `expect(…).toHaveFile() wasn't awaited` | An async matcher ran without `await`. | Put `await` before `toHaveFile`, `toSucceed`, or `expect.poll`. |
 | `toHaveSearched() can't check this turn: its harness doesn't report web searches` | The matcher threw `HarnessCapabilityError`. | Check the reply or a file, or use a harness that reports web searches. |
