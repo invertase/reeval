@@ -24,6 +24,7 @@ import { layoutOf, refusedPlugins } from '../harness/agents.ts'
 import { sha256 } from '../ids.ts'
 import { badCharacterAt, registerSecret } from '../redact.ts'
 import { InfraError } from '../sandbox/types.ts'
+import { withoutBom } from '../text.ts'
 import type {
   EgressPolicy,
   EnvironmentRecord,
@@ -208,7 +209,7 @@ export function parseSkillMd(
   text: string,
   where: string,
 ): { name?: string; description?: string; body: string } {
-  const match = /^---\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)([\s\S]*)$/.exec(text)
+  const match = /^---\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)([\s\S]*)$/.exec(withoutBom(text))
   if (!match) return { body: text }
   let front: unknown
   try {

@@ -110,7 +110,11 @@ describe('createAntigravity', () => {
         ],
       },
     }
-    sandbox.files.set('/root/.reeval/plugins/house/hooks/hooks.json', JSON.stringify(claude))
+    // A byte-order mark, as editors on Windows may save it, is no part of the JSON.
+    sandbox.files.set(
+      '/root/.reeval/plugins/house/hooks/hooks.json',
+      `\uFEFF${JSON.stringify(claude)}`,
+    )
     await start(sandbox, {
       plugins: [
         { name: 'house', dir: '/root/.reeval/plugins/house' },
