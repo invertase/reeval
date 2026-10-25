@@ -32,6 +32,16 @@ export const cases: PlanCase[] = [
     args: ['--profile', 'off', 'evals/omitted.eval.ts'],
   },
   { dir: 'compare', name: 'harness-scoped', args: ['evals/scoped.eval.ts'] },
+  {
+    dir: 'compare',
+    name: 'harness-scoped-dropped',
+    args: ['--profile', 'one', 'evals/scoped.eval.ts'],
+  },
+  {
+    dir: 'compare',
+    name: 'harness-scoped-dropped-pinned',
+    args: ['--profile', 'one-lean', 'evals/scoped-pinned.eval.ts'],
+  },
   { dir: 'compare', name: 'each-pooled', args: ['evals/each.eval.ts'] },
   { dir: 'compare', name: 'each-filtered', args: ['evals/each.eval.ts', 'grace'] },
   { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.eval.ts', 'b/skilled'] },
