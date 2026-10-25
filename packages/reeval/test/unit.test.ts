@@ -77,7 +77,7 @@ import { backoffMs, isApiError, isTransient } from '../src/judge/retry.ts'
 import { withInputSize } from '../src/judge/size.ts'
 import { fakeJudge } from '../src/judge.ts'
 import { cascade, checkOptions, expand, type Resolved } from '../src/options.ts'
-import { redactSecrets } from '../src/redact.ts'
+import { redactSecrets, registerSecret } from '../src/redact.ts'
 import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
 import { fakeSandbox } from '../src/sandbox.ts'
 import { clip } from '../src/text.ts'
@@ -1705,6 +1705,32 @@ test('judge calls fail at once on permanent errors, and after the last try on tr
   const down = scriptedModel(Array(10).fill({ message: 'Service Unavailable', statusCode: 503 }))
   await assert.rejects(judge(down), (e: Error & { retries: unknown[] }) => e.retries.length === 3)
   assert.equal(down.calls, quick.attempts)
+})
+
+test('a judge model is sent the question with secrets masked, and the verdict keeps it as asked', async () => {
+  const value = 'judge-question-secret-5d2c8e1a'
+  registerSecret(value)
+  const asked: unknown[] = []
+  const model = {
+    specificationVersion: 'v4',
+    provider: 'mock',
+    modelId: 'spy',
+    supportedQuestionTypes: ['boolean'],
+    async doEvaluate({ questions }: { questions: Record<string, { instructions?: unknown }> }) {
+      asked.push(questions.answer?.instructions)
+      return { answers: { answer: { type: 'boolean', probability: 0.9 } }, warnings: [] }
+    },
+  }
+  const question = `Did the agent keep ${value} out of the log?`
+  const { verdict } = await runJudge(
+    question,
+    { output: 'x' },
+    { model, threshold: 0.8 },
+    new AbortController().signal,
+    quick,
+  )
+  assert.deepEqual(asked, ['Did the agent keep [REDACTED] out of the log?'])
+  assert.equal(verdict.question, question)
 })
 
 test('isTimeout is the TimeoutError name, not the message', () => {
