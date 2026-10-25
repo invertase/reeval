@@ -1012,6 +1012,130 @@ evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
     assert.equal((await compareCode('--fail-on-regression')).code, 0, 'canary: passing, it is fine')
   })
 
+  test("reeval compare names a config gate change and re-scores base under head's gate", async () => {
+    const config = (gate: string) =>
+      fakeConfig({ harness: harness(), extra: `runs: 2, gate: ${gate},` })
+    const p = await gitProject('compare-gate', {
+      'reeval.config.ts': config('{ passRate: 0.5 }'),
+      'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('flaky', async (c) => {
+  await c.send('go')
+  expect(process.env.REEVAL_TEST_BREAK || c.attempt.n === 2 ? 'miss' : 'ok').toBe('ok')
+})
+`,
+    })
+    type Row = {
+      status: string
+      base: string
+      head: string
+      changes?: string[]
+      gate?: { base: string; head: string; rescored: string }
+    }
+    const compareCode = async () => {
+      const r = await runCli(p.dir, ['compare', '--fail-on-regression'])
+      return { code: r.code, out: r.stdout + r.stderr }
+    }
+    const row = async () =>
+      (JSON.parse((await runCli(p.dir, ['compare', '--json'])).stdout).rows as Row[])[0]
+    const setGate = (gate: string) => writeFile(join(p.dir, 'reeval.config.ts'), config(gate))
+
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0, 'one pass in two is enough')
+
+    await setGate("'all'")
+    assert.equal((await runCli(p.dir)).code, 1, 'the stricter gate fails the run')
+    const tightened = await compareCode()
+    assert.equal(tightened.code, 0, `only the gate explains the flip\n${tightened.out}`)
+    assert.match(
+      tightened.out,
+      /^gate changed {5}flaky\n {2}gate +passRate 0\.5 → all {2}base would fail under it\n {2}base +\S+ {2}pass\n {2}head +\S+ {2}fail$/m,
+    )
+    assert.match(tightened.out, /^1 gate changed$/m)
+    const { perCell: _, ...tightenedRow } = (await row()) as Row & { perCell?: unknown }
+    assert.deepEqual(tightenedRow, {
+      id: 'evals/e.eval.ts › flaky',
+      status: 'gate',
+      base: 'pass',
+      head: 'fail',
+      changes: ['gate changed'],
+      gate: { base: 'passRate 0.5', head: 'all', rescored: 'fail' },
+    })
+
+    // Canary: base would still pass under head's looser gate, so head failing it is a regression.
+    await setGate('{ passRate: 0.3 }')
+    assert.equal((await runCli(p.dir, ['run'], { env: { REEVAL_TEST_BREAK: '1' } })).code, 1)
+    const regressed = await compareCode()
+    assert.equal(regressed.code, 1, regressed.out)
+    assert.match(
+      regressed.out,
+      /^ {2}gate +passRate 0\.5 → passRate 0\.3 {2}base would still pass under it$/m,
+    )
+    assert.deepEqual((await row())?.gate?.rescored, 'pass')
+    assert.equal((await row())?.status, 'regressed')
+
+    // Twin: the same gate as base has no gate change to name.
+    await setGate('{ passRate: 0.5 }')
+    assert.equal((await runCli(p.dir)).code, 0)
+    assert.equal((await compareCode()).code, 0)
+    const same = await row()
+    assert.deepEqual([same?.status, same?.changes, same?.gate], ['same', undefined, undefined])
+  })
+
+  test('a gate change leaves a pooled family comparable, and its real regression still fails', async () => {
+    const config = (gate: string) =>
+      fakeConfig({
+        harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }",
+        extra: `gate: ${gate},`,
+      })
+    const p = await gitProject('compare-family-gate-change', {
+      'reeval.config.ts': config("'all'"),
+      'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
+      'evals/e.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const plain = defineEnvironment('plain', { sandbox })
+const skilled = defineEnvironment('skilled', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/s')],
+}))
+evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
+  'writes ok.txt for %s',
+  { compare: { baseline: plain, variants: [skilled], minLift: 0.2 } },
+  async (c) => {
+    await c.send('go')
+    if (c.attempt.cell.role === 'control' && process.env.REEVAL_TEST_BASE_OK) return
+    await expect(c).toHaveFile('ok.txt')
+  },
+)
+`,
+    })
+    type Row = { kind?: string; status: string; changes?: string[] }
+    const rows = async () =>
+      JSON.parse((await runCli(p.dir, ['compare', '--json'])).stdout).rows as Row[]
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    await writeFile(join(p.dir, 'reeval.config.ts'), config('{ passRate: 0.5 }'))
+
+    assert.equal((await runCli(p.dir)).code, 0)
+    const same = await rows()
+    assert.deepEqual(
+      same.map((r) => [r.kind ?? 'eval', r.status, r.changes?.join()]),
+      [...Array(6).fill(['eval', 'same', 'gate changed']), ['family', 'same', undefined]],
+      'the gate names the change but leaves the cases and family comparable',
+    )
+    const shown = await runCli(p.dir, ['compare', '--fail-on-regression'])
+    assert.equal(shown.code, 0, `nothing regressed\n${shown.stdout}`)
+    assert.match(
+      shown.stdout,
+      /^same {13}writes ok\.txt for ada\n {2}gate +all → passRate 0\.5 {2}base would still pass under it$/m,
+      'a gate change is named even where the outcome held',
+    )
+
+    // Canary: a pooled lift that falls below minLift is still a regression across the gate change.
+    assert.equal((await runCli(p.dir, ['run'], { env: { REEVAL_TEST_BASE_OK: '1' } })).code, 1)
+    const family = (await rows()).find((r) => r.kind === 'family')
+    assert.equal(family?.status, 'regressed')
+    assert.equal((await runCli(p.dir, ['compare', '--fail-on-regression'])).code, 1)
+  })
+
   test('reeval compare has no row for a pooled family without a gate', async () => {
     const p = await gitProject('compare-family-ungated', {
       'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'

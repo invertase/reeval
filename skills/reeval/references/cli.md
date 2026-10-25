@@ -123,7 +123,10 @@ regressed        greets in the house style
 ```
 
 A check head never reached reads `not run`, not a failure. `can't compare` names what changed
-(`changed  environment`, `evals/helpers.ts`): that flip isn't a regression. An eval Ctrl-C
+(`changed  environment`, `evals/helpers.ts`): that flip isn't a regression. A changed gate
+(eval, config or profile `defaults`) keeps the eval comparable: base's attempts are re-scored
+under head's gate, so a flip the gate alone explains is `gate changed`, not a regression, and
+one base would still have passed under the new gate is `regressed`. An eval Ctrl-C
 cancelled is `can't compare` with that side `cancelled`. A pooled family with a `minLift` gets
 its own `<template> (all cases)` row for its pooled gate, which can regress while every case passes
 (`kind: "family"` in `--json`). `--fail-on-regression` exits 1 on a regressed eval or family gate,

@@ -46,6 +46,7 @@ import type {
 } from '../types.ts'
 import { promptTokens, sumUsage } from '../usage.ts'
 import { checkVerdict } from '../view/contrasts.ts'
+import { cellOutcome, gatePart, passRateOf, worstOutcome } from '../view/gate.ts'
 import { checkTries } from '../view/judgements.ts'
 import { familiesOf } from './families.ts'
 import { type Source, traceSources } from './sources.ts'
@@ -162,20 +163,6 @@ export function mergeOutcome(e: EngineEval, record: EvalRecord | null): Merged {
       ? { kind: 'timeout' as const, message }
       : { kind: 'assertion' as const, message })
   return { outcome: record?.outcome === 'infra_error' ? 'infra_error' : 'fail', error }
-}
-
-/** Any failure fails; then infra errors; then all-skipped; else pass. */
-export function worstOutcome(outcomes: Outcome[]): Outcome {
-  if (outcomes.includes('fail')) return 'fail'
-  if (outcomes.includes('infra_error')) return 'infra_error'
-  if (outcomes.length > 0 && outcomes.every((o) => o === 'skipped')) return 'skipped'
-  return outcomes.length ? 'pass' : 'skipped'
-}
-
-const passRateOf = (outcomes: Outcome[]) => {
-  const pass = outcomes.filter((o) => o === 'pass').length
-  const counted = pass + outcomes.filter((o) => o === 'fail').length
-  return counted ? pass / counted : null
 }
 
 /**
@@ -711,6 +698,7 @@ async function addPreviousAttempt(
       judge,
       context: sha256(JSON.stringify(kept.context)),
       ...gatewayPart(e.attempt?.gateway),
+      ...gatePart(cellRecord.gate),
     }
     cellRecord.fingerprintParts = parts
     cellRecord.fingerprint = fingerprintOf(parts)
@@ -772,6 +760,7 @@ async function addAttempt(
       judge,
       context: sha256(JSON.stringify(context)),
       ...gatewayPart(e.attempt?.gateway),
+      ...gatePart(cellRecord.gate),
     }
     cellRecord.fingerprintParts = parts
     cellRecord.fingerprint = fingerprintOf(parts)
@@ -977,18 +966,6 @@ function discrimination(control: CellRecord, variant: CellRecord): void {
     const verdict = checkVerdict(check, k)
     if (verdict) check.verdict = verdict
   }
-}
-
-/**
- * A cell's outcome by its gate. `'all'` matches `{ passRate: 1 }`: every counted attempt must
- * pass, and it is an infra error only when nothing counted. `'none'` takes the worst attempt.
- */
-export function cellOutcome(outcomes: Outcome[], gate: CellGate): Outcome {
-  if (gate === 'none') return worstOutcome(outcomes)
-  const required = gate === 'all' ? 1 : gate.passRate
-  const rate = passRateOf(outcomes)
-  if (rate === null) return worstOutcome(outcomes)
-  return rate >= required ? 'pass' : 'fail'
 }
 
 /** Per-cell and per-eval counts, pass rates, lift, outcomes and fingerprints, once every attempt is in. */

@@ -1,8 +1,9 @@
 // `reeval compare`'s layout, catch regressions: a block per eval that changed between two runs, in
 // file-path then source order, with each run of unchanged evals collapsed to `+N same`, then the
 // tally. A regressed eval lists the checks that flipped; a fixed one, the checks that now pass; one
-// that can't be compared names the part that changed. Pure and deterministic, from the two runs'
-// SuiteResults and compare rows; statistics print only with `verbose`.
+// that can't be compared names the part that changed. An eval whose gate changed names both gates
+// and how base would score under head's, and isn't collapsed. Pure and deterministic, from the two
+// runs' SuiteResults and compare rows; statistics print only with `verbose`.
 import type { HistoryCell, RunRecord } from '../history/types.ts'
 import { fenced } from '../text.ts'
 import {
@@ -70,6 +71,7 @@ export type CompareOptions = {
 const WORD: Record<CompareStatus, string> = {
   regressed: 'regressed',
   fixed: 'fixed',
+  gate: 'gate changed',
   drift: "can't compare",
   infra: 'infra error',
   added: 'new',
@@ -78,7 +80,16 @@ const WORD: Record<CompareStatus, string> = {
 }
 
 /** The tally's order: what needs a look first. */
-const TALLY: CompareStatus[] = ['regressed', 'fixed', 'drift', 'infra', 'added', 'removed', 'same']
+const TALLY: CompareStatus[] = [
+  'regressed',
+  'fixed',
+  'drift',
+  'gate',
+  'infra',
+  'added',
+  'removed',
+  'same',
+]
 
 const paintStatus = (c: Colors, s: CompareStatus): Paint =>
   s === 'regressed' ? c.red : s === 'fixed' ? c.green : s === 'same' ? c.dim : c.yellow
@@ -301,6 +312,18 @@ const idRow = (c: Colors, side: 'base' | 'head', id: string, outcome?: Shown | n
   cells: [side, id, ...(outcome ? [t(OUTCOME[outcome], paintOutcome(c, outcome))] : [])],
 })
 
+/**
+ * `gate  passRate 0.5 → all  base would fail under it`: a changed gate, and base's outcome with
+ * its recorded attempts scored under head's gate.
+ */
+function gateRows(c: Colors, row: CompareRow): Item[] {
+  if (!row.gate) return []
+  const { base, head, rescored } = row.gate
+  const still = rescored === row.base ? 'still ' : ''
+  const note = `base would ${still}${OUTCOME[rescored]} under it`
+  return [{ indent: 2, cells: ['gate', `${base} → ${head}`, t(note, c.dim)] }]
+}
+
 /** `environment`, `evals/helpers.ts`: what made an eval not comparable, as the row says it. */
 function changedParts(row: CompareRow, changes: StackChange[]): string {
   const parts = (row.changes ?? []).map((p) => p.replace(/ changed$/, ''))
@@ -414,7 +437,20 @@ function block(
       ...cellRows(row),
       ...evidence,
     ]
-    return { lines: [top, ...table(items), ...table(stats)], ids }
+    return { lines: [top, ...table(gateRows(c, row)), ...table(items), ...table(stats)], ids }
+  }
+  if (row.status === 'gate') {
+    const lines = [
+      top,
+      ...table(gateRows(c, row)),
+      ...table([
+        idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(rowKey(row)))),
+        idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(rowKey(row)))),
+      ]),
+      ...table([...cellRows(row), ...stats]),
+      ...resultBody(c, head),
+    ]
+    return { lines, ids: true }
   }
   if (row.status === 'drift' || row.status === 'infra') {
     const changed = row.status === 'drift' ? changedParts(row, input.changes) : ''
@@ -455,7 +491,7 @@ function block(
       ids: true,
     }
   }
-  return { lines: [top, ...table(stats)], ids: false }
+  return { lines: [top, ...table(gateRows(c, row)), ...table(stats)], ids: false }
 }
 
 /** `1 regressed · 1 fixed · 1 can't compare · 4 same`: what needs a look first, zeros left out. */
@@ -534,7 +570,8 @@ export function renderCompare(input: CompareInput, opts: CompareOptions): string
     same = 0
   }
   for (const entry of ordered(input.rows, units)) {
-    if (entry.row.status === 'same' && !(opts.verbose && entry.row.perCell?.length)) {
+    const shown = entry.row.gate || (opts.verbose && entry.row.perCell?.length)
+    if (entry.row.status === 'same' && !shown) {
       same++
       continue
     }

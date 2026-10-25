@@ -14,6 +14,7 @@ import {
   type EffortVerdict,
   effortOf,
 } from '../view/effort.ts'
+import { gateLabel } from '../view/gate.ts'
 import { rowsOf } from './rows.ts'
 import { TOOL_CLASSES } from './tool-class.ts'
 import type { CheckTally, FingerprintParts } from './types.ts'
@@ -113,6 +114,8 @@ type Cell = {
   model: string | null
   environment: string
   sandbox: string
+  gate: 'all' | 'none' | 'passRate'
+  gate_pass_rate: number | null
   fingerprint: string
   comparable: string
   lift_vs: string | null
@@ -148,8 +151,12 @@ export const PART_COLUMNS = {
   judge: ['judge', 'fp_judge'],
   context: ['context', 'fp_context'],
   gateway: ['gateway', 'fp_gateway'],
+  gate: ['gate', 'fp_gate'],
 } as const satisfies Record<keyof FingerprintParts, readonly [string, `fp_${string}`]>
 const PARTS = Object.values(PART_COLUMNS)
+
+const gateOf = (c: Cell) =>
+  c.gate === 'passRate' ? gateLabel({ passRate: c.gate_pass_rate ?? 1 }) : c.gate
 
 const r4 = (x: number | null) => (x === null ? null : Math.round(x * 10_000) / 10_000)
 const s1 = (ms: number) => Math.round(ms / 100) / 10
@@ -697,7 +704,11 @@ export function deriveFacts(db: DatabaseSync): void {
       const prev = list[i - 1] as Cell
       const cur = list[i] as Cell
       if (prev.fingerprint === cur.fingerprint) continue
-      const changed = PARTS.filter(([, col]) => prev[col] !== cur[col]).map(([name]) => name)
+      // A record from before the gate was a part has none, whatever its gate: the cells' own say.
+      const changed = PARTS.filter(([name, col]) =>
+        name === 'gate' ? gateOf(prev) !== gateOf(cur) : prev[col] !== cur[col],
+      ).map(([name]) => name)
+      if (!changed.length && prev.fp_gate !== cur.fp_gate) continue
       let paths: string[] = []
       if (changed.includes('context')) {
         const a = cellContext(prev)
@@ -716,14 +727,16 @@ export function deriveFacts(db: DatabaseSync): void {
         noise: real.length === 0 ? 1 : 0,
         real_changed: real.join(' ') || null,
       })
-      if (real.length === 0) continue
+      // The gate scores the attempts but doesn't change them: a policy change, not an effect.
+      const effects = real.filter((part) => part !== 'gate')
+      if (effects.length === 0) continue
       // Observed over time: what changed between two runs of the same cell.
-      const judgeOnly = real.length === 1 && real[0] === 'judge'
-      const sourcesChanged = real.includes('sources')
+      const judgeOnly = effects.length === 1 && effects[0] === 'judge'
+      const sourcesChanged = effects.includes('sources')
       const cols = passCols(side(cur), side(prev))
       if (sourcesChanged) cols.pass_verdict = 'not_comparable'
       factorRows.push({
-        factor: real.length === 1 ? (real[0] as string) : 'confounded',
+        factor: effects.length === 1 ? (effects[0] as string) : 'confounded',
         level: cur.run_id,
         baseline: prev.run_id,
         context: `${cur.eval_key} # ${cur.key}`,
@@ -738,8 +751,8 @@ export function deriveFacts(db: DatabaseSync): void {
           ? 'the eval changed: not comparable, not an effect of the thing under test'
           : judgeOnly
             ? 'the judge changed: a measurement change, not an effect of the thing under test'
-            : real.length > 1
-              ? `confounded: ${real.join(', ')} changed together`
+            : effects.length > 1
+              ? `confounded: ${effects.join(', ')} changed together`
               : null,
       })
     }

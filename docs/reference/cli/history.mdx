@@ -61,8 +61,9 @@ reeval compare [base] [head]  Diff two runs; base defaults to head's nearest rec
 [//]: # (/generated:cli-help:compare)
 
 - **Defaults:** head is `latest`. Base is the nearest recorded, complete run on head's git ancestry, falling back to the previous run by time.
-- **Blocks:** one per eval that changed, in file order: `regressed` (both run ids and each check that flipped, `pass → fail` with its message, or `not run`), `fixed` (the checks that pass now), `can't compare` (what changed, and each side's id and result), `infra error`, `new` and `removed`. Runs of unchanged evals collapse to `+N same`. The last line is the tally, regressed first, zeros left out.
+- **Blocks:** one per eval that changed, in file order: `regressed` (both run ids and each check that flipped, `pass → fail` with its message, or `not run`), `fixed` (the checks that pass now), `can't compare` (what changed, and each side's id and result), `gate changed` (both gates, how base would score under head's, and each side's id and result), `infra error`, `new` and `removed`. Runs of unchanged evals collapse to `+N same`. The last line is the tally, regressed first, zeros left out.
 - **Can't compare** means a fingerprint part or the grader changed, and reeval names it: `changed  evals/helpers.ts`.
+- **Gate changes:** the cells' resolved gate (from the eval file, `reeval.config.ts` or a profile's `defaults`) is a fingerprint part, but a change to it alone leaves the eval comparable. reeval scores base's recorded attempts under head's gate and classifies the eval on that: `gate changed` when the gate alone explains the flip, `regressed` when base would pass under the new gate and head fails it, `fixed` the other way round, even when both sides' own outcomes match. Each such block names both gates, `gate  passRate 0.5 → all  base would fail under it`. In `--json` the row has `changes: ["gate changed"]` and `gate: { base, head, rescored }`, its status `gate` for a flip the gate alone explains. A gate edit in the eval file changes its source too, so that eval can't compare.
 - **Not run:** a check head never reached reads `not run`, never `fail`, and a check neither side reached is never a flip.
 - **Unfinished runs:** when base or head was interrupted or stopped at its duration budget, a note above the tally says so, since some of its evals didn't run to the end.
 - **Cancelled evals:** an eval that failed only because Ctrl-C cancelled its attempts reads `can't compare`, with that side's result `cancelled`, never `regressed` or `fixed`. In `--json` its row is `drift` with `cancelled: ["head"]` (or `"base"`).
@@ -71,7 +72,7 @@ reeval compare [base] [head]  Diff two runs; base defaults to head's nearest rec
 - `-v` adds each cell's lift and effort, base → head, and every stack change. The default output has no statistics.
 - `--md` prints a `### reeval compare: head vs base` heading and the same blocks in a text block, for a PR comment. `--json` returns `{ base, head, changes, rows }`.
 - **No earlier recorded run:** `No earlier recorded run to compare <run> with, so every eval is new.`, then head's result blocks and `N new evals` (and `N pooled gates`); `--json` has `base: null`. That's not an error.
-- `--fail-on-regression` exits 1 when any eval or pooled family's gate regressed, or when a `new` or `can't compare` one fails, since no comparable earlier run vouches for it. A changed eval that passes, or one whose head was cancelled, doesn't count. Without the flag, `reeval compare` exits 0.
+- `--fail-on-regression` exits 1 when any eval or pooled family's gate regressed, or when a `new` or `can't compare` one fails, since no comparable earlier run vouches for it. A changed eval that passes, one whose head was cancelled, or a `gate changed` one, whose flip only the gate explains, doesn't count. Without the flag, `reeval compare` exits 0.
 
 ```text
 regressed        greets in the house style

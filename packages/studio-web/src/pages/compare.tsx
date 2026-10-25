@@ -38,6 +38,7 @@ const route = getRouteApi('/compare')
 const STATUS: Record<CompareStatus, { label: string; className: string }> = {
   regressed: { label: 'Regressed', className: 'border-fail/30 bg-fail/10 text-fail' },
   fixed: { label: 'Fixed', className: 'border-pass/30 bg-pass/10 text-pass' },
+  gate: { label: 'Gate changed', className: 'border-drift/30 bg-drift/10 text-drift' },
   drift: { label: 'Not comparable', className: 'border-drift/30 bg-drift/10 text-drift' },
   infra: { label: 'Infra error', className: 'border-infra/30 bg-infra/10 text-infra' },
   added: { label: 'New', className: 'text-brand border-brand/30' },
@@ -153,6 +154,13 @@ function Row({ row, head }: { row: CompareViewRow; head: string }) {
             compared on the {family ? 'variants' : 'cells'} both runs have
             {row.cells.added.length ? ` · added ${row.cells.added.join(', ')}` : ''}
             {row.cells.removed.length ? ` · removed ${row.cells.removed.join(', ')}` : ''}
+          </div>
+        ) : null}
+        {row.gate ? (
+          <div className="text-[11px] text-muted-foreground">
+            gate {row.gate.base} → {row.gate.head} · base would{' '}
+            {row.gate.rescored === row.base ? 'still ' : ''}
+            {row.gate.rescored.replace('_', ' ')} under it
           </div>
         ) : null}
         {row.lifts?.length ? (
@@ -282,8 +290,21 @@ export function ComparePage() {
             </EmptyState>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {(['regressed', 'fixed', 'drift', 'same'] as const).map((s) => (
+              <div
+                className={cn(
+                  'grid grid-cols-2 gap-3',
+                  view.counts.gate ? 'sm:grid-cols-5' : 'sm:grid-cols-4',
+                )}
+              >
+                {(
+                  [
+                    'regressed',
+                    'fixed',
+                    'drift',
+                    ...(view.counts.gate ? (['gate'] as const) : []),
+                    'same',
+                  ] as const
+                ).map((s) => (
                   <div key={s} className="rounded-xl border bg-card px-4 py-3">
                     <div className="text-xs text-muted-foreground">{STATUS[s].label}</div>
                     <div
@@ -291,7 +312,7 @@ export function ComparePage() {
                         'mt-1 text-2xl font-semibold tracking-tight',
                         view.counts[s] && s === 'regressed' && 'text-fail',
                         view.counts[s] && s === 'fixed' && 'text-pass',
-                        view.counts[s] && s === 'drift' && 'text-drift',
+                        view.counts[s] && (s === 'drift' || s === 'gate') && 'text-drift',
                       )}
                     >
                       {view.counts[s]}

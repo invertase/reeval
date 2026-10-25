@@ -646,6 +646,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   The gateway its model calls went through; unset on `direct`, each provider's own key.
 </Property>
 
+<Property name="gate" type="string" optional>
+  The cell's gate (`none`, `passRate 0.5`); unset on the default `all`. Compare reads a change in it as a policy change, not a reason the runs can't be compared.
+</Property>
+
 ### AttemptRecord
 
 <Property name="key" type="string">

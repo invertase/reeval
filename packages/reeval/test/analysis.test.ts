@@ -370,6 +370,52 @@ describe('canaries: the verdicts flip when the data does', () => {
     assert.deepEqual(observed(await query(same.dir, 'factor_effects')), [])
   })
 
+  test('a config gate change is drift on the gate: a policy change, not noise or an effect', async () => {
+    type C = { fingerprint: string; fingerprintParts: FingerprintParts }
+    const config = (gate: string) => fakeConfig({ extra: `runs: 2, gate: ${gate},` })
+    const p = await project('canary-gate', {
+      'reeval.config.ts': config('{ passRate: 0.5 }'),
+      'evals/g.eval.ts': `import { evaluate } from 'reeval'
+evaluate('half', async (c) => {
+  await c.send('go')
+  if (c.attempt.n === 2) throw new Error('the second attempt fails')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    assert.equal((await runCli(p.dir)).code, 0)
+    assert.deepEqual(await query(p.dir, 'drift'), [], 'twin: the same gate is no drift')
+    edit(p.dir, (record) => {
+      for (const c of record.evals.flatMap((e) => e.cells as C[])) {
+        delete c.fingerprintParts.gate
+        c.fingerprint = fingerprintOf(c.fingerprintParts)
+      }
+    })
+    assert.deepEqual(
+      await query(p.dir, 'drift'),
+      [],
+      'a record from before the gate was a part, with the same gate, is no drift either',
+    )
+
+    writeFileSync(join(p.dir, 'reeval.config.ts'), config("'all'"))
+    assert.equal((await runCli(p.dir)).code, 1)
+    const drift = await query(p.dir, 'SELECT changed, noise, real_changed FROM drift')
+    assert.deepEqual(drift, [{ changed: 'gate', noise: 0, real_changed: 'gate' }])
+    assert.deepEqual(
+      (await query(p.dir, 'SELECT fp_gate FROM cells ORDER BY run_id')).map((c) => c.fp_gate),
+      [null, 'passRate 0.5', null],
+    )
+    assert.deepEqual(
+      await query(p.dir, "SELECT factor FROM factor_effects WHERE tier = 'observed'"),
+      [],
+      'the gate scores the same attempts, so it has no effect to observe',
+    )
+    const flaky = await query(p.dir, 'SELECT counted FROM flaky_cells')
+    assert.deepEqual(flaky, [{ counted: 6 }], 'attempts pool across the gate change')
+    const { text } = await digestOf(p.dir, ['--vs', 'latest~1'])
+    assert.match(text, /policy change: the gate scores the same attempts differently/)
+  })
+
   test('mixed outcomes over enough comparable attempts are flaky, caused by the agent', async () => {
     const p = await project('canary-flaky', {
       'reeval.config.ts': fakeConfig(),

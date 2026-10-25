@@ -6,16 +6,34 @@ import type {
   StackSummary,
 } from '../history/types.ts'
 import type { Outcome } from '../types.ts'
+import { gateLabel, rescore } from './gate.ts'
 
-export type CompareStatus = 'regressed' | 'fixed' | 'same' | 'drift' | 'added' | 'removed' | 'infra'
+export type CompareStatus =
+  | 'regressed'
+  | 'fixed'
+  | 'same'
+  | 'gate'
+  | 'drift'
+  | 'added'
+  | 'removed'
+  | 'infra'
 
 export type CompareRow = {
   id: string
   status: CompareStatus
   base: Outcome | null
   head: Outcome | null
-  /** For `drift`: what changed, e.g. `evals/helpers.ts changed` or `harness config changed`. */
+  /**
+   * For `drift`: what changed, e.g. `evals/helpers.ts changed` or `harness config changed`. On
+   * any other row, `gate changed` when the cells' gate did.
+   */
   changes?: string[]
+  /**
+   * When the cells' gate changed but nothing else did: each side's gate, and base's outcome with
+   * its recorded attempts scored under head's gate. `status` compares that with head, so a flip
+   * the gate alone explains is `gate`, not `regressed` or `fixed`.
+   */
+  gate?: { base: string; head: string; rescored: Outcome }
   /**
    * When the runs ran different cells of the eval: the cells only head or only base has. Then
    * `status`, `base` and `head` are over the cells both have.
@@ -177,7 +195,7 @@ export function sourceChanges(
   })
 }
 
-const PART_LABELS: Record<Exclude<keyof FingerprintParts, 'sources'>, string> = {
+const PART_LABELS: Record<Exclude<keyof FingerprintParts, 'sources' | 'gate'>, string> = {
   harness: 'harness config',
   environment: 'environment',
   image: 'image',
@@ -202,8 +220,54 @@ export function whyChanged(base: ComparableEval, head: ComparableEval): string[]
     for (const part of Object.keys(PART_LABELS) as Array<keyof typeof PART_LABELS>) {
       if (b.fingerprintParts[part] !== h.fingerprintParts[part]) parts.add(PART_LABELS[part])
     }
+    if (gateLabel(b.gate) !== gateLabel(h.gate)) parts.add('gate')
   }
   return [...out, ...[...parts].map((p) => `${p} changed`)]
+}
+
+const withoutGate = ({ gate: _, ...parts }: FingerprintParts) => JSON.stringify(parts)
+
+type FingerprintedCell = Pick<HistoryCell, 'fingerprint' | 'fingerprintParts'>
+
+/**
+ * Whether two runs of a cell are comparable: the same fingerprint, the gate aside. A record from
+ * before the gate was a part has none, so its parts are compared without it.
+ */
+const sameCell = (b: FingerprintedCell, h: FingerprintedCell) =>
+  b.fingerprint === h.fingerprint ||
+  ((b.fingerprintParts.gate !== undefined || h.fingerprintParts.gate !== undefined) &&
+    withoutGate(b.fingerprintParts) === withoutGate(h.fingerprintParts))
+
+/** Whether two runs of an eval ran the same cells, each comparable. */
+function sameEval(b: ComparableEval, h: ComparableEval): boolean {
+  if (b.fingerprint === h.fingerprint) return true
+  if (b.cells.length !== h.cells.length) return false
+  const before = new Map(b.cells.map((c) => [c.key, c]))
+  return h.cells.every((c) => {
+    const was = before.get(c.key)
+    return was !== undefined && sameCell(was, c)
+  })
+}
+
+/**
+ * When the gate of a cell both sides ran changed: each side's gates, and base's outcome over
+ * those cells with each one's attempts scored under head's gate.
+ */
+function gateChange(base: Cells, head: Cells): CompareRow['gate'] | undefined {
+  const before = new Map(base.map((c) => [c.key, c]))
+  const pairs = head.flatMap((h): Array<[Cells[number], Cells[number]]> => {
+    const b = before.get(h.key)
+    return b ? [[b, h]] : []
+  })
+  const changed = pairs.filter(([b, h]) => gateLabel(b.gate) !== gateLabel(h.gate))
+  if (!changed.length) return undefined
+  const labels = (side: 0 | 1) =>
+    [...new Set(changed.map((p) => gateLabel(p[side].gate)))].join(', ')
+  return {
+    base: labels(0),
+    head: labels(1),
+    rescored: outcomeOf(pairs.map(([b, h]) => ({ gate: h.gate, outcome: rescore(b, h.gate) }))),
+  }
 }
 
 /** An eval's outcome from some of its cells, as the run rolls it up: ungated failures pass. */
@@ -256,9 +320,7 @@ export const addedRow = (h: ComparableEval): CompareRow => ({
 function sharedScope(b: ComparableEval, h: ComparableEval) {
   const before = new Map(b.cells.map((c) => [c.key, c]))
   const shared = h.cells.filter((c) => before.has(c.key))
-  if (!shared.length || shared.some((c) => before.get(c.key)?.fingerprint !== c.fingerprint)) {
-    return null
-  }
+  if (!shared.length || shared.some((c) => !sameCell(before.get(c.key) ?? c, c))) return null
   const keys = new Set(h.cells.map((c) => c.key))
   const baseCells = shared.map((c) => before.get(c.key) ?? c)
   return {
@@ -437,7 +499,8 @@ function evalRows(base: Comparable, head: Comparable, graderChanged: boolean): C
         ...cancelledSides({ base: b.outcome, head: null }, { base: b.cells }),
       }
     }
-    const scoped = b.fingerprint === h.fingerprint ? null : sharedScope(b, h)
+    const comparable = sameEval(b, h)
+    const scoped = comparable ? null : sharedScope(b, h)
     const outcomes = scoped
       ? { base: scoped.base, head: scoped.head }
       : { base: b.outcome, head: h.outcome }
@@ -450,13 +513,15 @@ function evalRows(base: Comparable, head: Comparable, graderChanged: boolean): C
     const perCell = compareCells(b, h)
     if (perCell.length) row.perCell = perCell
     if (row.base === 'infra_error' || row.head === 'infra_error') return { ...row, status: 'infra' }
-    if (b.fingerprint !== h.fingerprint && !scoped) {
-      return { ...row, status: 'drift', changes: whyChanged(b, h) }
-    }
+    if (!comparable && !scoped) return { ...row, status: 'drift', changes: whyChanged(b, h) }
+    const over = scoped?.over ?? { base: b.cells ?? [], head: h.cells ?? [] }
+    const gate = gateChange(over.base, over.head)
+    if (gate) Object.assign(row, { changes: ['gate changed'], gate })
+    const from = gate?.rescored ?? row.base
     if (row.cancelled) return { ...row, status: 'drift' }
-    if (graderChanged && row.base !== row.head) return { ...row, status: 'drift' }
-    if (row.base === 'pass' && row.head === 'fail') return { ...row, status: 'regressed' }
-    if (row.base === 'fail' && row.head === 'pass') return { ...row, status: 'fixed' }
-    return { ...row, status: 'same' }
+    if (graderChanged && from !== row.head) return { ...row, status: 'drift' }
+    if (from === 'pass' && row.head === 'fail') return { ...row, status: 'regressed' }
+    if (from === 'fail' && row.head === 'pass') return { ...row, status: 'fixed' }
+    return { ...row, status: row.base === row.head ? 'same' : 'gate' }
   })
 }

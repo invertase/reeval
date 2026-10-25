@@ -2009,6 +2009,19 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'compare.gate-change',
+    area: 'Records and studio',
+    name: "A changed gate is a fingerprint part `reeval compare` names and re-scores base under, so `--fail-on-regression` fails only on a flip the gate doesn't explain",
+    tests: [
+      "reeval/test/history.test.ts › reeval compare names a config gate change and re-scores base under head's gate",
+      'reeval/test/history.test.ts › a gate change leaves a pooled family comparable, and its real regression still fails',
+      analysis(
+        'a config gate change is drift on the gate: a policy change, not noise or an effect',
+      ),
+      unit("compare names a gate change and classifies base's attempts under head's gate"),
+    ],
+  },
+  {
     id: 'query',
     area: 'Records and studio',
     name: '`reeval query`',
