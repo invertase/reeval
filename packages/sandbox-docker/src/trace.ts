@@ -38,9 +38,18 @@ export function onDockerCommand(
   mask = redact
 }
 
+/**
+ * How far past the clip `redact` reads, so a value that starts before the clip and is shorter
+ * than this is masked whole, without masking all of a large output.
+ */
+const MASK_SPAN = 16 * 1024
+
 const clip = (raw: string, max: number) => {
-  const text = mask(raw)
-  return text.length > max ? `${text.slice(0, max)}… (${text.length - max} more)` : text
+  const read = raw.slice(0, max + MASK_SPAN)
+  const text = mask(read)
+  const unread = raw.length - read.length
+  if (text.length <= max && !unread) return text
+  return `${text.slice(0, max)}… (${Math.max(0, text.length - max) + unread} more)`
 }
 
 /** Text as is (clipped), or a byte count for binary output such as a file read with `cat`. */
