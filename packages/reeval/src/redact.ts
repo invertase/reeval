@@ -7,28 +7,61 @@ export const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i
 export const badCharacterAt = (value: string) =>
   [...value].findIndex((c) => /[\s\p{Cc}]/u.test(c)) + 1
 
-/** Well-known credential shapes, masked even when they aren't in this process's environment. */
-const TOKEN_PATTERNS: Array<{ rule: string; pattern: RegExp }> = [
-  { rule: 'Google API key', pattern: /AIza[0-9A-Za-z_-]{35}/g },
-  { rule: 'OpenAI or Anthropic key', pattern: /\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}/g },
-  { rule: 'GitHub token', pattern: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}/g },
-  { rule: 'GitHub token', pattern: /\bgithub_pat_[A-Za-z0-9_]{22,}/g },
-  { rule: 'AWS access key', pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
-  { rule: 'Slack token', pattern: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g },
+/**
+ * Well-known credential shapes, masked even when they aren't in this process's environment.
+ * Distinctive prefixes match after any character (`TOKEN_ghp_…`, `key%3Dghp_…`). A prefix that
+ * ordinary words share (`task-…`, `ASIAN…`) has `word`, the characters it may not follow.
+ */
+const TOKEN_SHAPES: Array<{ rule: string; prefix: string; rest: string; word?: string }> = [
+  { rule: 'Google API key', prefix: 'AIza', rest: '[0-9A-Za-z_-]{35}' },
+  {
+    rule: 'OpenAI or Anthropic key',
+    prefix: 'sk-',
+    rest: '(?:ant-|proj-)?[A-Za-z0-9_-]{20,}',
+    word: 'A-Za-z0-9',
+  },
+  { rule: 'GitHub token', prefix: '(?:ghp|gho|ghu|ghs|ghr)_', rest: '[A-Za-z0-9]{36,}' },
+  { rule: 'GitHub token', prefix: 'github_pat_', rest: '[A-Za-z0-9_]{22,}' },
+  {
+    rule: 'AWS access key',
+    prefix: '(?:AKIA|ASIA)',
+    rest: '[0-9A-Z]{16}(?![0-9A-Za-z])',
+    word: '0-9A-Z',
+  },
+  { rule: 'Slack token', prefix: 'xox[abprs]-', rest: '[A-Za-z0-9-]{10,}' },
   {
     rule: 'JWT',
-    pattern: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
+    prefix: 'eyJ',
+    rest: '[A-Za-z0-9_-]{10,}\\.eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}',
+
+    // Base64 of JSON holds `eyJ` wherever a `{"` lines up: unguarded, each one would scan to the
+    // end of the run.
+    word: 'A-Za-z0-9',
   },
   {
     rule: 'private key',
-    pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+    prefix: '-----BEGIN ',
+    rest: '[A-Z ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY-----',
   },
 ]
 
-/** The token shapes that start at a word boundary, matched exactly where they're asked to start. */
-const TOKEN_AFTER = TOKEN_PATTERNS.filter(({ pattern }) => pattern.source.startsWith('\\b')).map(
-  ({ rule, pattern }) => ({ rule, pattern: new RegExp(pattern.source.slice(2), 'y') }),
-)
+/**
+ * After `prefix`, so the search still scans for the prefix first: it follows none of `word`'s
+ * characters, or follows an escape that may stand for any character (`%3D`, `\n`, `\u003d`).
+ */
+const follows = (prefix: string, word: string) =>
+  `(?<=(?:^|[^${word}]|%[0-9A-Fa-f]{2}|\\\\[nrtbf]|\\\\u[0-9A-Fa-f]{4})${prefix})`
+
+const TOKEN_PATTERNS = TOKEN_SHAPES.map(({ rule, prefix, rest, word }) => ({
+  rule,
+  pattern: new RegExp(`${prefix}${word ? follows(prefix, word) : ''}${rest}`, 'g'),
+}))
+
+/** The guarded token shapes, matched exactly where they're asked to start, whatever is before. */
+const TOKEN_AFTER = TOKEN_SHAPES.filter(({ word }) => word).map(({ rule, prefix, rest }) => ({
+  rule,
+  pattern: new RegExp(`${prefix}${rest}`, 'y'),
+}))
 
 /** Values declared with `secret()`, masked whatever their variable is called. */
 const declared = new Set<string>()
@@ -218,8 +251,20 @@ function secretRanges(text: string, secrets: Secrets, forms = secrets.forms): Ra
   }
   const ends = new Set(found.map((r) => r.end))
   for (const { rule, pattern } of TOKEN_PATTERNS) {
-    for (const m of text.matchAll(pattern)) {
-      found.push({ start: m.index, end: m.index + m[0].length, rule, known: false })
+    // A token can start inside the one before it and run past its end (`ghp_…ghp_…`, whose first
+    // match takes the second's `ghp`), so each search after a match starts one character into it.
+    // One that ends no later than the match ends the search there, which keeps the scan linear.
+    let last = -1
+    pattern.lastIndex = 0
+    for (let m = pattern.exec(text); m; m = pattern.exec(text)) {
+      const end = m.index + m[0].length
+      if (end <= last) {
+        pattern.lastIndex = last
+        continue
+      }
+      found.push({ start: m.index, end, rule, known: false })
+      last = end
+      pattern.lastIndex = m.index + 1
     }
   }
   for (const end of ends) {
