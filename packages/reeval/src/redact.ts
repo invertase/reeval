@@ -35,7 +35,11 @@ const TOKEN_SHAPES: Array<{ rule: string; prefix: string; rest: string; word?: s
   { rule: 'Groq API key', prefix: 'gsk_', rest: '[A-Za-z0-9]{40,}', word: 'A-Za-z0-9' },
   { rule: 'Perplexity API key', prefix: 'pplx-', rest: '[A-Za-z0-9]{32,}', word: 'A-Za-z0-9' },
   { rule: 'Hugging Face token', prefix: 'hf_', rest: '[A-Za-z0-9]{34,}', word: 'A-Za-z0-9' },
-  { rule: 'GitLab token', prefix: 'glpat-', rest: '[A-Za-z0-9_-]{20,}(?:\\.[0-9a-z]{9})?' },
+  {
+    rule: 'GitLab token',
+    prefix: 'glpat-',
+    rest: '[A-Za-z0-9_-]{20,}(?:(?:\\.[0-9a-z]{2})?\\.[0-9a-z]{9})?',
+  },
   {
     rule: 'Stripe key',
     prefix: '[rs]k_(?:live|test)_',
@@ -43,9 +47,18 @@ const TOKEN_SHAPES: Array<{ rule: string; prefix: string; rest: string; word?: s
     word: 'A-Za-z0-9',
   },
   { rule: 'npm token', prefix: 'npm_', rest: '[A-Za-z0-9]{36,}', word: 'A-Za-z0-9' },
-  { rule: 'PyPI token', prefix: 'pypi-AgEIcHlwaS5vcmc', rest: '[A-Za-z0-9_-]{50,}' },
-  // `ya29.c.` and `ya29.d.` tokens have more dots after the prefix.
-  { rule: 'Google OAuth token', prefix: 'ya29\\.', rest: '[A-Za-z0-9_.-]{30,}' },
+  {
+    rule: 'PyPI token',
+    prefix: 'pypi-AgE(?:IcHlwaS5vcmc|NdGVzdC5weXBpLm9yZw)',
+    rest: '[A-Za-z0-9_-]{50,}',
+  },
+  // `ya29.c.` and `ya29.d.` tokens have more dots after the prefix; the last character isn't
+  // one, so a full stop after a token stays.
+  {
+    rule: 'Google OAuth token',
+    prefix: 'ya29\\.',
+    rest: '[A-Za-z0-9_.-]{30,}(?<!\\.)',
+  },
   { rule: 'Google OAuth client secret', prefix: 'GOCSPX-', rest: '[A-Za-z0-9_-]{28,}' },
   {
     rule: 'JWT',

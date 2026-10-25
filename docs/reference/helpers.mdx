@@ -56,7 +56,7 @@ A secret is read from the host when an attempt starts. Its value is masked in ev
 | Any stretch of 8 or more of their characters, such as a key's last 12 | The same, for declared secrets of 12+ characters and token-like variables (16+ characters of letters, digits and `_.~+/=:-`, with at least one letter and one digit, not a path or URL) |
 | Well-known token shapes (below) | The same, even when they aren't set on the host |
 
-The token shapes are distinctive prefixes followed by at least as many characters as a real key has, so a short value or an identifier such as `npm_config_registry` stays readable:
+The token shapes are distinctive prefixes followed by enough characters to look like a real key, so a short value or an identifier such as `npm_config_registry` stays readable:
 
 | Provider | Shape |
 |---|---|
@@ -66,7 +66,7 @@ The token shapes are distinctive prefixes followed by at least as many character
 | Vercel, including AI Gateway | `vck_…`, `vcp_…`, `vci_…`, `vca_…` and `vcr_…` |
 | Groq, Perplexity, Hugging Face | `gsk_…`, `pplx-…`, `hf_…` |
 | GitHub, GitLab | `ghp_…`, `gho_…`, `ghu_…`, `ghs_…`, `ghr_…`, `github_pat_…`; `glpat-…` |
-| npm, PyPI | `npm_…`; upload tokens (`pypi-AgEIcHlwaS5vcmc…`) |
+| npm, PyPI | `npm_…`; upload tokens for PyPI and TestPyPI (`pypi-AgEIcHlwaS5vcmc…`, `pypi-AgENdGVzdC5weXBpLm9yZw…`) |
 | Stripe | secret and restricted keys (`sk_live_…`, `sk_test_…`, `rk_live_…`, `rk_test_…`) |
 | Slack | `xoxa-`, `xoxb-`, `xoxp-`, `xoxr-`, `xoxs-` and app-level `xapp-` tokens |
 | AWS | access key IDs (`AKIA…`, `ASIA…`) |
@@ -74,7 +74,7 @@ The token shapes are distinctive prefixes followed by at least as many character
 
 A stretch made only of lower-case letters, upper-case letters or digits isn't masked on its own, so words and numbers stay readable, nor is one with quotes, commas, colons, brackets or spaces, so a record's JSON stays whole. Secret-named host variables under 8 characters and declared secrets under 4 aren't masked at all.
 
-A token shape is masked wherever it starts, even straight after a name or an encoded character (`TOKEN_ghp_…`, `key%3Dsk-…`, `"a\nghp_…"`). Three shapes whose prefixes also occur inside ordinary words or data (`task-`, base64) are guarded. `sk-…` and JWTs must follow a character that isn't a letter or digit, and AWS keys one that isn't a digit or upper-case letter, or any of them a `%3D`, `\n` or `\u003d` escape.
+A token shape is masked wherever it starts, even straight after a name or an encoded character (`TOKEN_ghp_…`, `key%3Dsk-…`, `"a\nghp_…"`). Shapes whose prefixes also occur inside ordinary words, identifiers or data (`task-`, `pnpm_`, `work_live_`, base64) are guarded. `sk-…`, JWTs, `xai-…`, Vercel's `vc?_…`, `gsk_…`, `pplx-…`, `hf_…`, Stripe's `sk_`/`rk_` keys and `npm_…` must follow a character that isn't a letter or digit, and AWS keys one that isn't a digit or upper-case letter, or any of them a `%3D`, `\n` or `\u003d` escape.
 
 In records, transcripts, `.reeval/debug` and other JSON reeval writes, masking applies to string values only. A short secret such as `1234` or `null` leaves `null`, numbers, booleans and field names as they are, so the file stays valid JSON. A secret held as a number isn't masked. In a key that reads as a field name, such as `durationMs`, only matches of 8 or more characters are masked; other keys, such as paths, are masked like values.
 

@@ -1023,10 +1023,12 @@ describe('redacting credential shapes', () => {
     ['Hugging Face token', `hf_${body(34)}`],
     ['GitLab token', `glpat-${body(20)}`],
     ['GitLab token', `glpat-${body(27)}.01${body(7).toLowerCase()}`],
+    ['GitLab token', `glpat-${body(36)}.01.y5q3zl7y5`],
     ['Stripe key', `sk_live_${body(24)}`],
     ['Stripe key', `rk_test_${body(99)}`],
     ['npm token', `npm_${body(36)}`],
     ['PyPI token', `pypi-AgEIcHlwaS5vcmc${body(60)}`],
+    ['PyPI token', `pypi-AgENdGVzdC5weXBpLm9yZw${body(60)}`],
     ['Google OAuth token', `ya29.${body(120)}`],
     ['Google OAuth token', `ya29.c.${body(40)}.${body(80)}`],
     ['Google OAuth client secret', `GOCSPX-${body(28)}`],
@@ -1044,6 +1046,11 @@ describe('redacting credential shapes', () => {
       )
     })
   }
+
+  test('a full stop after a Google OAuth token stays', () => {
+    const token = `ya29.${body(60)}`
+    assert.equal(redactSecrets(`token ${token}. Next`, {}), 'token [REDACTED]. Next')
+  })
 
   test('a short prefix after a letter or digit stays, after `_` or an escape it is masked', () => {
     for (const text of [`work_live_${body(30)}`, `pnpm_${body(40)}`, `shf_${body(40)}`]) {
