@@ -684,6 +684,9 @@ importers:
       '@ai-sdk/typesafe-ai':
         specifier: 3.0.22
         version: 3.0.22(zod@4.6.7)
+      '@balena/dockerignore':
+        specifier: 1.0.2
+        version: 1.0.2
       '@hono/node-server':
         specifier: 2.1.5
         version: 2.1.5(hono@4.13.13)
@@ -786,6 +789,9 @@ importers:
       '@ai-sdk/harness-claude-code':
         specifier: 1.0.160
         version: 1.0.160(patch_hash=b17cde509b136b4f78b4c87a51841cc4348f6a0c0bd18e748b127dbbd9f1e514)(zod@4.6.7)
+      '@balena/dockerignore':
+        specifier: 1.0.2
+        version: 1.0.2
       '@reeval/harness-antigravity':
         specifier: workspace:0.1.12
         version: link:../harness-antigravity
@@ -937,6 +943,9 @@ packages:
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
+
+  '@balena/dockerignore@1.0.2':
+    resolution: {integrity: sha512-wMue2Sy4GAVTk6Ic4tJVcnfdau+gx2EnG7S+uAEe+TWJFqE4YoWN4/H8MSLj4eYJKxGg26lZwboEniNiNwZQ6Q==}
 
   '@bcoe/v8-coverage@1.0.2':
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
@@ -3622,6 +3631,8 @@ snapshots:
       '@ai-sdk/provider': 4.0.30
       '@ai-sdk/provider-utils': 5.0.63(zod@4.6.7)
       zod: 4.6.7
+
+  '@balena/dockerignore@1.0.2': {}
 
   '@bcoe/v8-coverage@1.0.2': {}
 

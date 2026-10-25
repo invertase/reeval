@@ -1028,13 +1028,13 @@ describe('package boundary', () => {
       e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)],
     )
 
-  test('imports only Node built-ins, @ai-sdk harness packages and its own files', () => {
+  test('imports only Node built-ins, @ai-sdk harness packages, @balena/dockerignore and its own files', () => {
     for (const file of files(join(root, 'src'))) {
       const source = readFileSync(file, 'utf8')
       for (const [, spec] of source.matchAll(/from '([^']+)'/g)) {
         assert.match(
           spec ?? '',
-          /^(node:|\.\.?\/|@ai-sdk\/harness(-cursor|-claude-code)?(\/|$))/,
+          /^(node:|\.\.?\/|@ai-sdk\/harness(-cursor|-claude-code)?(\/|$)|@balena\/dockerignore$)/,
           `${file} imports ${spec}`,
         )
       }
