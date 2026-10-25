@@ -175,7 +175,7 @@ evals/mcp.eval.ts › mcp canary  cursor:composer-2.5/stamped/docker           1
 | `cell_checks` | `run_id`, `eval_key`, `cell_key`, `label`, `pass`, `fail`, `error`, `not_run`, `control_pass`, `control_fail`, `control_error`, `control_not_run`, `verdict` |
 | `cells` | `run_id`, `eval_key`, `key`, `role`, `variant`, `harness`, `harness_kind`, `model`, `reasoning_effort`, `environment`, `environment_digest`, `sandbox`, `gate`, `gate_pass_rate`, `fingerprint`, `fp_sources`, `fp_harness`, `fp_environment`, `fp_image`, `fp_agent_cli`, `fp_judge`, `fp_context`, `fp_gateway`, `fp_gate`, `runs`, `pass`, `fail`, `infra_error`, `skipped`, `pass_at_1`, `outcome`, `lift_vs`, `lift_points`, `lift_lo`, `lift_hi`, `within_noise`, `min_lift`, `comparable` |
 | `context_reads` | `run_id`, `attempt_key`, `line`, `path` |
-| `env_skills` | `run_id`, `digest`, `name`, `source`, `commit_sha`, `sha256`, `placement` |
+| `env_skills` | `run_id`, `environment`, `digest`, `name`, `source`, `commit_sha`, `sha256`, `placement` |
 | `environments` | `run_id`, `name`, `digest`, `parent`, `overrides` |
 | `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_at_1`, `sources`, `family_id`, `case_index` |
 | `families` | `run_id`, `family_id`, `file`, `groups`, `name`, `cases`, `ran`, `cell_key`, `cell_cases`, `pass`, `counted`, `pass_at_1`, `lo`, `hi`, `method`, `outcome` |
@@ -188,7 +188,7 @@ evals/mcp.eval.ts › mcp canary  cursor:composer-2.5/stamped/docker           1
 
 [//]: # (/generated:query-tables)
 
-The tables mirror [the run record](/reference/record) and join on `run_id` plus the keys below. A table's own key is plain `key` (or `digest`), so most joins pair differently named columns:
+The tables mirror [the run record](/reference/record) and join on `run_id` plus the keys below. A table's own key is plain `key` (an environment's, `name` and `digest`), so most joins pair differently named columns:
 
 | Column | Joins | Also on |
 |---|---|---|
@@ -196,7 +196,7 @@ The tables mirror [the run record](/reference/record) and join on `run_id` plus 
 | `attempts.cell_key`, `assertions.cell_key`, `cell_checks.cell_key`, `families.cell_key` | `cells.key` | `run_id`, `eval_key` (`families`: its cases' evals) |
 | `cells.lift_vs` | `cells.key` of the control | `run_id`, `eval_key` |
 | `judgements.attempt_key`, `assertions.attempt_key`, `tool_calls.attempt_key`, `artifacts.attempt_key`, `attempt_context.attempt_key`, `context_reads.attempt_key` | `attempts.key` | `run_id` |
-| `cells.environment_digest` | `environments.digest`, `env_skills.digest` | `run_id` |
+| `cells.environment`, `cells.environment_digest` | `environments.name`, `environments.digest`; `env_skills.environment`, `env_skills.digest` | `run_id` (join on both: two environments can share a name or a digest) |
 | `evals.family_id` | `families.family_id` | `run_id` |
 
 ```sql
