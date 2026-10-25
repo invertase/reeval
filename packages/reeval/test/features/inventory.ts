@@ -2684,6 +2684,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/resume.test.ts › --dry-run does not write the pointer or move an interrupted scratch',
       'reeval/test/resume.test.ts › keeps a finished eval’s minLift gate, provenance and pairwise answers',
       'reeval/test/resume.test.ts › keeps them for an eval a filtered resume leaves out',
+      'reeval/test/resume.test.ts › asks a pairwise question again over the kept and new attempts',
       'reeval/test/results.test.ts › a skipped attempt keeps a staged pass',
       'reeval/test/ui.test.ts › grouped: start lines stream',
     ],

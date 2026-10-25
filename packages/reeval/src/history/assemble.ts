@@ -478,6 +478,7 @@ class Seen {
     for (const t of kept.turns) if (t.model) resolved.add(t.model)
     this.resolvedHarnesses.set(cell.harness, resolved)
   }
+
   entry(e: EngineEval, sources: Source[]): EvalEntry {
     let entry = this.byEval.get(e.id)
     if (!entry) {
@@ -645,12 +646,13 @@ async function addPreviousAttempt(
     cellRecord.effort = beforeCell.effort
     if (beforeCell.gateway !== undefined) cellRecord.gateway = beforeCell.gateway
   }
-  const minLift =
-    e.attempt?.minLift ??
-    beforeCell?.lift?.minLift ??
-    previous.families
-      ?.find((f) => f.id === before?.family?.id)
-      ?.lifts.find((l) => l.variant === kept.cell)?.minLift
+  // Planned, the eval's own options decide; only an unplanned kept attempt reads the old gate.
+  const minLift = e.attempt
+    ? e.attempt.minLift
+    : (beforeCell?.lift?.minLift ??
+      previous.families
+        ?.find((f) => f.id === before?.family?.id)
+        ?.lifts.find((l) => l.variant === kept.cell)?.minLift)
   if (minLift !== undefined) minLifts.set(cellRecord, minLift)
   const files: AttemptFiles = {}
   for (const [name, ref] of Object.entries(kept.files) as Array<

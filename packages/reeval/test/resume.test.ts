@@ -5,7 +5,7 @@ import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { UsageError } from '../src/errors.ts'
-import type { CellRecord, EvalEntry, RunRecord } from '../src/history/types.ts'
+import type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from '../src/history/types.ts'
 import { RefError } from '../src/history/views.ts'
 import { attemptKey, evalId } from '../src/ids.ts'
 import {
@@ -295,8 +295,8 @@ evaluate('leftover', async () => {})
 })
 
 describe('reeval run --resume of a budget-stopped record', () => {
-  // `gated` finishes inside the budget (both arms pass, so its lift of 0 fails minLift 0.5, and
-  // its pairwise question is answered); `slow` starts after it and is cut.
+  // Both arms of `gated` pass, so its lift of 0 fails minLift 0.5; its pairwise question is
+  // answered over both runs. The run completes and is then rewritten as a budget stop.
   const budgeted = {
     'reeval.config.ts': `
 import { defineConfig } from 'reeval'
@@ -304,12 +304,10 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { base } from './evals/envs.ts'
 export default defineConfig({
-  harness: fakeHarness({ delayMs: 2000 }),
+  harness: fakeHarness({}),
   environment: base,
   judge: { model: fakeJudge({ score: 0.9 }) },
   analysis: { model: fakeAnalysis({ vote: 'A' }) },
-  concurrency: 1,
-  budget: { duration: '3s' },
 })
 `,
     'skills/house-greeting/SKILL.md':
@@ -328,6 +326,7 @@ import { base, skilled } from './envs.ts'
 evaluate(
   'gated',
   {
+    runs: 2,
     compare: { baseline: base, variants: [skilled], minLift: 0.5 },
     questions: [{ question: 'Which is cleaner?', across: 'environment' }],
   },
@@ -337,23 +336,29 @@ evaluate('slow', { runs: 2 }, async (c) => { await c.send('x') })
 `,
   }
 
-  async function stopped(name: string) {
+  /** A finished run rewritten as a budget stop that never started the attempts `cut` picks. */
+  async function stopped(name: string, cut: (e: EvalEntry, a: AttemptRecord) => boolean) {
     const p = await project(name, budgeted)
-    const r = await runCli(p.dir, ['run', '--ui', 'plain'], { timeoutMs: 120_000 })
+    const r = await runCli(p.dir, ['run', '--ui', 'plain'])
     assert.equal(r.code, 1, r.stdout + r.stderr)
     const { run } = readRun(p.dir)
-    assert.equal(run.status, 'budget')
     const gated = run.evals.find((e) => e.name === 'gated')
     assert.ok(gated)
     assert.equal(gated.outcome, 'fail')
     assert.equal(gated.cells.find((c) => c.role === 'variant')?.lift?.minLift, 0.5)
-    assert.equal(gated.answers?.length, 1)
-    assert.ok(gated.answers[0]?.input)
-    assert.ok(
-      run.evals.find((e) => e.name === 'slow')?.attempts.some((a) => a.outcome === 'skipped'),
-    )
+    assert.ok(gated.answers?.[0]?.votes.length)
+    assert.ok(gated.answers[0].input)
+    run.status = 'budget'
+    for (const e of run.evals) {
+      e.attempts = e.attempts.map((a) =>
+        cut(e, a) ? { ...a, outcome: 'skipped', error: null, files: {}, checks: [] } : a,
+      )
+    }
+    writeFileSync(join(p.dir, '.reeval', 'runs', `${run.runId}.json`), JSON.stringify(run))
     return { dir: p.dir, first: run }
   }
+
+  const slowOnly = (e: EvalEntry) => e.name === 'slow'
 
   function assertKept(dir: string, first: RunRecord, second: RunRecord) {
     const was = first.evals.find((e) => e.name === 'gated')
@@ -379,23 +384,27 @@ evaluate('slow', { runs: 2 }, async (c) => { await c.send('x') })
   }
 
   test('keeps a finished eval’s minLift gate, provenance and pairwise answers', async () => {
-    const { dir, first } = await stopped('resume-budget-kept')
-    const r = await runCli(dir, ['run', '--resume', first.runId, '--ui', 'plain'], {
-      timeoutMs: 120_000,
-    })
+    const { dir, first } = await stopped('resume-budget-kept', slowOnly)
+    // Edited before the resume: `slow` runs on the new file, `gated` keeps what it ran on.
+    writeFileSync(join(dir, 'evals/e.eval.ts'), `${budgeted['evals/e.eval.ts']}// edited\n`)
+    const r = await runCli(dir, ['run', '--resume', first.runId, '--ui', 'plain'])
     const second = readRun(dir).run
     assertKept(dir, first, second)
     assert.equal(r.code, 1, r.stdout + r.stderr)
     const slow = second.evals.find((e) => e.name === 'slow')
-    assert.ok(slow?.attempts.some((a) => a.outcome === 'pass'))
-    assert.deepEqual(slow?.sources, first.evals.find((e) => e.name === 'slow')?.sources)
+    assert.ok(slow?.attempts.every((a) => a.outcome === 'pass'))
+    const file = (e: EvalEntry | undefined) =>
+      e?.sources.find((s) => s.path === 'evals/e.eval.ts')?.sha256
+    const edited = createHash('sha256')
+      .update(readFileSync(join(dir, 'evals/e.eval.ts')))
+      .digest('hex')
+    assert.equal(file(slow), edited)
+    assert.notEqual(file(first.evals.find((e) => e.name === 'gated')), edited)
   })
 
   test('keeps them for an eval a filtered resume leaves out', async () => {
-    const { dir, first } = await stopped('resume-budget-filtered')
-    const r = await runCli(dir, ['run', '--resume', first.runId, 'slow', '--ui', 'plain'], {
-      timeoutMs: 120_000,
-    })
+    const { dir, first } = await stopped('resume-budget-filtered', slowOnly)
+    const r = await runCli(dir, ['run', '--resume', first.runId, 'slow', '--ui', 'plain'])
     const second = readRun(dir).run
     assertKept(dir, first, second)
     assert.equal(r.code, 1, r.stdout + r.stderr)
@@ -403,6 +412,32 @@ evaluate('slow', { runs: 2 }, async (c) => { await c.send('x') })
     const cells = second.evals.find((e) => e.name === 'gated')?.cells
     const meta = (c: CellRecord) => [c.key, c.role, c.gate, c.harnessKind, c.model, c.overrides]
     assert.deepEqual(cells?.map(meta), was?.map(meta))
+  })
+
+  test('asks a pairwise question again over the kept and new attempts', async () => {
+    const { dir, first } = await stopped(
+      'resume-budget-mixed',
+      (e, a) => e.name === 'gated' && a.cell.includes('skilled') && a.n === 2,
+    )
+    const was = first.evals.find((e) => e.name === 'gated')
+    const asked = (runs: string, path: string | undefined) =>
+      JSON.parse(readFileSync(join(runs, first.runId, path ?? ''), 'utf8'))
+    const runs = join(dir, '.reeval', 'runs')
+    const before = asked(runs, was?.answers?.[0]?.input?.path)
+    const r = await runCli(dir, ['run', '--resume', first.runId, '--ui', 'plain'])
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const gated = readRun(dir).run.evals.find((e) => e.name === 'gated')
+    assert.equal(gated?.attempts.filter((a) => a.outcome === 'pass').length, 4)
+    const fingerprints = (e: EvalEntry | undefined) => e?.cells.map((c) => [c.key, c.fingerprint])
+    assert.deepEqual(fingerprints(gated), fingerprints(was))
+    const answer = gated?.answers?.[0]
+    assert.equal(answer?.error, undefined)
+    assert.deepEqual(
+      answer?.votes.map((v) => [v.run, v.a, v.b, v.swapped]),
+      was?.answers?.[0]?.votes.map((v) => [v.run, v.a, v.b, v.swapped]),
+    )
+    // The kept attempts' turns, diff and checks reach the model as they did the first time.
+    assert.deepEqual(asked(runs, answer?.input?.path), before)
   })
 })
 
