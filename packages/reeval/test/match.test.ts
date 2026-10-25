@@ -361,6 +361,19 @@ describe('one matcher table', () => {
     assert.equal(assertionRecords(calls).length, 4)
   })
 
+  test('a reply already sent keeps its label when a later given label looks like its #n', () => {
+    const calls: RawAssertion[] = []
+    const check = { op: 'record', matcher: 'assert', status: 'pass' } as const
+    const replies = ['build', 'build', 'build #2'].map(
+      (label) => recordCall(calls, { ...check, label }).label,
+    )
+    assert.deepEqual(replies, ['build', 'build #2', 'build #2 #2'])
+    assert.deepEqual(
+      assertionRecords(calls).map((r) => r.label),
+      replies,
+    )
+  })
+
   test('wire arguments become the values expect takes, patterns at any depth', () => {
     assert.deepEqual(fromWire([re('a', 'i'), { k: re('b') }, 'c', 1, null, { regexp: 1 }]), [
       /a/i,

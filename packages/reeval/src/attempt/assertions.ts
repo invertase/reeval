@@ -26,18 +26,27 @@ const shownSubject = (subject: unknown) =>
 
 /**
  * The records of an attempt's matcher calls, in call order. Without a label, one is
- * `<matcher> <first argument>` (or what the subject names); repeats get ` #2`, ` #3`.
+ * `<matcher> <first argument>` (or what the subject names); repeats get ` #2`, ` #3`, skipping
+ * any label already recorded, so each record's label is unique (a given `build #2` after two
+ * `build`s is `build #2 #2`).
  */
 export function assertionRecords(raw: readonly RawAssertion[]): AssertionRecord[] {
   const seen = new Map<string, number>()
+  const used = new Set<string>()
   return raw.map((r) => {
     const named = r.args.length ? shown(r.args[0]) : shownSubject(r.subject)
     const base =
       r.label ?? clipped(named === undefined ? r.matcher : `${r.matcher} ${named}`, LABEL_LIMIT)
-    const n = (seen.get(base) ?? 0) + 1
+    let n = seen.get(base) ?? 0
+    let label: string
+    do {
+      n += 1
+      label = n > 1 ? `${base} #${n}` : base
+    } while (used.has(label))
     seen.set(base, n)
+    used.add(label)
     return {
-      label: n > 1 ? `${base} #${n}` : base,
+      label,
       labelled: r.label !== undefined,
       matcher: r.matcher,
       status: r.status,

@@ -31,6 +31,37 @@ test("a record's message is what the matcher threw, cut at 1 KB", () => {
   })
 })
 
+test("labels are unique within an attempt, even when one given looks like another's #n", () => {
+  const labels = (calls: Partial<RawAssertion>[]) =>
+    assertionRecords(calls.map(raw)).map((r) => r.label)
+  assert.deepEqual(labels([{ label: 'build' }, { label: 'build' }, { label: 'build' }]), [
+    'build',
+    'build #2',
+    'build #3',
+  ])
+  assert.deepEqual(labels([{ label: 'build' }, { label: 'build' }, { label: 'build #2' }]), [
+    'build',
+    'build #2',
+    'build #2 #2',
+  ])
+  assert.deepEqual(labels([{ label: 'build #2' }, { label: 'build' }, { label: 'build' }]), [
+    'build #2',
+    'build',
+    'build #3',
+  ])
+  assert.deepEqual(labels([{}, {}, { label: 'toBe 1 #2' }]), [
+    'toBe 1',
+    'toBe 1 #2',
+    'toBe 1 #2 #2',
+  ])
+  assert.deepEqual(labels([{ label: 'toBe 1 #2' }, {}, {}, {}]), [
+    'toBe 1 #2',
+    'toBe 1',
+    'toBe 1 #3',
+    'toBe 1 #4',
+  ])
+})
+
 test('the first soft call that did not pass fails the attempt, as what it threw', () => {
   const thrown = new Error('expected 1 to be 2')
   assert.equal(softFailure([raw({}), raw({ status: 'fail', error: thrown })]), undefined)
