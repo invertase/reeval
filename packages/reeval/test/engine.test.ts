@@ -1246,6 +1246,11 @@ evaluate('asserted not', async (c) => {
   expect(await c.judge('nice?')).not.toPass()
   await expect.soft(c.exec('exit 3'), 'tests pass').toSucceed()
 })
+evaluate('judge first', async (c) => {
+  await c.send('go')
+  expect.soft(await c.judge('nice?')).toPass()
+  await expect.soft(c.exec('exit 3'), 'tests pass').toSucceed()
+})
 evaluate('canary', async (c) => {
   await c.send('go')
   await expect(c.exec('exit 0'), 'tests pass').toSucceed()
@@ -1263,13 +1268,14 @@ evaluate('canary', async (c) => {
       assert.equal(e?.error?.kind, 'assertion', name)
       assert.match(e?.error?.message ?? '', /^tests pass: expected command to succeed/, name)
     }
+    assert.equal(byName['judge first']?.error?.kind, 'assertion', 'a check failed too')
     assert.equal(byName.canary?.error?.kind, 'judge', 'a failed toPass is the judge’s')
     const summary = run.read('summary.md')
     const attempts = summary.slice(summary.indexOf('## Attempts'))
     assert.equal(
       attempts.match(/tests pass: expected command to succeed/g)?.length,
       2,
-      'both check failures are shown',
+      'the unasserted and asserted-not check failures are shown',
     )
   })
 

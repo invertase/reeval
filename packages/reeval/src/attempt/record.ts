@@ -30,18 +30,18 @@ const messageOf = (error: unknown) => (error instanceof Error ? error.message : 
 
 /**
  * Whether the error that failed the attempt is a judge's: one a judge threw, or what a
- * `toPass()` or `.not.toPass()` call failed with. A failing verdict the eval didn't assert, or
- * asserted with `.not.toPass()`, leaves another failure as it is. By message too, since another
- * language's runner hands back its own copy of the error.
+ * `toPass()` or `.not.toPass()` call failed with, and no other matcher call failed. A failing
+ * verdict the eval didn't assert, or asserted with `.not.toPass()`, leaves another failure as it
+ * is. By message too, since another language's runner hands back its own copy of the error.
  */
 function isJudgeFailure(a: Attempt, error: unknown, raw: readonly RawAssertion[]): boolean {
+  const judged = (r: RawAssertion) => /(^|\.)toPass$/.test(r.matcher)
+  if (raw.some((r) => r.status === 'fail' && !judged(r))) return false
   const message = messageOf(error)
   if (a.judgeThrown.has(message)) return true
   return raw.some(
     (r) =>
-      r.status !== 'pass' &&
-      /(^|\.)toPass$/.test(r.matcher) &&
-      (r.error === error || messageOf(r.error) === message),
+      r.status !== 'pass' && judged(r) && (r.error === error || messageOf(r.error) === message),
   )
 }
 
