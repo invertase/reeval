@@ -122,11 +122,11 @@ Every skill source takes `placement`: `'harness'` (default) lets the harness ada
 </Property>
 
 <Property name="skill.git(repo, options?)" type="SkillSource">
-  A git repository: `https://…`, `git@…`, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL. `ref` is a branch, tag or SHA; `path` is the directory inside the repository. Without `path`, reeval reads the root when it has a `SKILL.md`, else the repository's `skills/` directory when it has one, as `skill.registry` does, else the root's subdirectories. From there it looks one level down only: each skill is a directory with its own `SKILL.md`.
+  A git repository: `https://…`, `git@…`, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL. `ref` is a branch, tag or SHA; `path` is the directory inside the repository. Without `path`, reeval reads the root when it has a `SKILL.md`, else the repository's `skills/` directory when it has one, as `skill.registry` does, else the root's subdirectories. From there it looks one level down only: each skill is a directory with its own `SKILL.md`. A URL with a password or token in it is refused: reeval clones with your own git credentials.
 </Property>
 
 <Property name="skill.npm(spec, options?)" type="SkillSource">
-  A pinned npm package, fetched with `npm pack` on the host from the registry npm is configured for (`.npmrc` or `npm_config_registry`). A local tarball or folder (`./vendor/skills-1.2.3.tgz`, `../pkg`, an absolute path, or `file:` with one of those) resolves against the file that calls `skill.npm`, as `file()` does. Skills are read from `path` inside it, default `skills`.
+  A pinned npm package, fetched with `npm pack` on the host from the registry npm is configured for (`.npmrc` or `npm_config_registry`). A local tarball or folder (`./vendor/skills-1.2.3.tgz`, `../pkg`, an absolute path, or `file:` with one of those) resolves against the file that calls `skill.npm`, as `file()` does. Skills are read from `path` inside it, default `skills`. A spec that's a URL (a tarball, `git+https://` or `git+ssh://`) with a password or token in it is refused; an SSH user such as `git@` is fine.
 </Property>
 
 <Property name="skill.registry(id, options?)" type="SkillSource">
@@ -195,7 +195,7 @@ A plugin is a directory in Claude Code's layout: `.claude-plugin/plugin.json` wi
 </Property>
 
 <Property name="plugin.npm(spec, options?)" type="PluginSource">
-  A pinned npm package, fetched as for `skill.npm`. `path` is the plugin's directory in it, default the package root.
+  A pinned npm package, fetched as for `skill.npm`, and refused for a password or token in a URL as it is. `path` is the plugin's directory in it, default the package root.
 </Property>
 
 <Property name="plugin.marketplace('name@source', options?)" type="PluginSource">
@@ -406,6 +406,8 @@ warning: workspace git(github:acme/template) uses no ref (the default branch): r
 | A bad `build` | `plugin.npm("@acme/review-plugin@1.2.0"): build is a shell command, a list of them, or { run, cwd } (got 3)` |
 | An unknown `build` key | `plugin.npm("@acme/review-plugin@1.2.0"): build takes { run, cwd }, not "dir"` |
 | A bad `build.cwd` | `plugin.git("github:acme/agent-plugins"): build.cwd is a directory relative to the source's root, with forward slashes and no .., or '.' for the root (got "../x")` |
+| A token in a skill or plugin URL | `skill.git("https://***@github.com/acme/skills"): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials; remove it from the URL.` (also `plugin.git` and `plugin.marketplace`) |
+| A token in an npm URL spec | `skill.npm("git+https://***@github.com/acme/skills.git#v1"): the URL has a password or token in it. reeval runs npm pack on the host, with your own npm and git credentials; remove it from the URL.` (also `plugin.npm` and an `npm:` marketplace) |
 | No plugin repository | `plugin.git() needs a repository: a URL or github:owner/repo, e.g. plugin.git('github:acme/agent-plugins', { ref: 'v1.2.0' }) (got "")` |
 | No command | `mcp.stdio() needs a command, e.g. mcp.stdio('npx', ['-y', 'server']) (got "")` |
 | A token in the URL | `git("https://***:***@github.com/acme/app"): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials (a credential helper, gh auth setup-git or an SSH key), and the sandbox never gets them; remove it from the URL.` |

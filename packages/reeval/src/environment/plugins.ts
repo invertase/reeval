@@ -5,6 +5,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'n
 import { basename, isAbsolute, join, posix, relative, sep, win32 } from 'node:path'
 import { hostAllowed } from '@reeval/sandbox-docker'
 import { parse as parseYaml } from 'yaml'
+import { credentialsIn } from '../contract/plain.ts'
 import { closest } from '../contract/shared.ts'
 import { sha256 } from '../ids.ts'
 import { stripCredentials } from '../redact.ts'
@@ -168,12 +169,6 @@ const githubRepo = (s: string) => /^\w[\w.-]*\/[\w.-]+$/.test(s)
 const gitUrl = (s: string) =>
   /^(?:https?|ssh|git|file):\/\/\S+$/i.test(s) || /^\w[\w.-]*@[\w.-]+:[^\s-]\S*$/.test(s)
 
-const hasCredentials = (url: string) => {
-  if (!URL.canParse(url)) return false
-  const u = new URL(url)
-  return u.password !== '' || (u.username !== '' && /^https?:$/.test(u.protocol))
-}
-
 /** A registry package name: an entry's `package` may not be a path, URL or git spec. */
 const NPM_NAME = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/i
 const NPM_VERSION = /^[\w.^~<>=|*+][\w.^~<>=|*+ -]*$/
@@ -297,7 +292,7 @@ export function readMarketplace(
     case 'git-subdir': {
       const written = str('url')
       if (!written) throw unfetchable()
-      if (hasCredentials(written)) {
+      if (credentialsIn(written)) {
         throw new PluginProblem(
           `${what} has a password or token in its url, which reeval would record: reeval fetches git sources with your own git credentials (a credential helper, gh auth setup-git or an SSH key), so the marketplace mustn't carry one`,
         )
