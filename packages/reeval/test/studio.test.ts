@@ -993,6 +993,53 @@ describe('studio server', () => {
     }
   })
 
+  test('a run directory that is a symlink serves nothing from its target', async () => {
+    const runId = headers[0]?.runId as string
+    const outside = await mkdtemp(join(tmpdir(), 'reeval-outside-'))
+    writeFileSync(join(outside, 'summary.md'), 'outside the history folder')
+    const [out, sibling] = ['20990102T000000Z_abc1234_x_a1b2', '20990103T000000Z_abc1234_x_a1b2']
+    for (const [id, target] of [
+      [out, outside],
+      [sibling, join(source.historyDir, runId)],
+    ] as const) {
+      writeFileSync(join(source.historyDir, `${id}.json`), '{}')
+      await symlink(target, join(source.historyDir, id), 'dir')
+    }
+    assert.equal((await get(`/${recordPath(out)}`)).status, 200)
+    assert.equal((await get(`/${artifactPath(out, 'summary.md')}`)).status, 404)
+    const ref = records.get(runId)?.evals[0]?.attempts[0]?.files.diff
+    assert.ok(ref)
+    assert.equal((await get(`/${artifactPath(runId, ref.path)}`)).status, 200)
+    assert.equal((await get(`/${artifactPath(sibling, ref.path)}`)).status, 404)
+
+    // Nor are its saved analyses, or notes under a symlinked `.reeval/analysis/<run>`.
+    const saved = 'test/fixtures/records/before-proxy-egress/evals/.history'
+    await cp(
+      join(saved, '20261023T093806Z_66722ad_cursor-agent_e3gk', 'analysis'),
+      join(outside, 'analysis'),
+      { recursive: true },
+    )
+    mkdirSync(join(outside, 'notes'))
+    const note: AnalysisNote = {
+      kind: 'reeval-analysis-note',
+      schemaVersion: 1,
+      runId: out,
+      evalId: 'e',
+      harness: 'fake',
+      model: 'fake',
+      resolvedModel: null,
+      createdAt: '2026-10-21T00:00:00.000Z',
+      attempts: ['fake#1'],
+      text: 'A note.',
+      usage: { inputTokens: null, outputTokens: null },
+    }
+    writeFileSync(join(outside, 'notes', 'e__fake.json'), JSON.stringify(note))
+    mkdirSync(join(source.root, '.reeval/analysis'), { recursive: true })
+    await symlink(outside, join(source.root, '.reeval/analysis', out), 'dir')
+    const analysis = await (await get(`/${analysisDataPath(out)}`)).json()
+    assert.deepEqual([analysis.entries, analysis.notes], [[], undefined])
+  })
+
   test("serves an attempt's local debug data, and null where there is none", async () => {
     assert.equal((await (await get('/studio.json')).json()).features.debug, true)
     // The second run fails its judge, so its attempt kept a trace; the first passed.
@@ -1029,6 +1076,16 @@ describe('studio server', () => {
     ]) {
       assert.equal(await view(runId as string, key as string), null, key)
     }
+
+    // A debug folder that is a symlink to another run's isn't read through.
+    const linked = '20990104T000000Z_abc1234_x_a1b2'
+    await symlink(
+      join(dir, '.reeval/debug', failed.runId),
+      join(dir, '.reeval/debug', linked),
+      'dir',
+    )
+    assert.equal(await view(linked, failed.key), null)
+    assert.equal((await get(`/${traceApiPath(linked, failed.key)}`)).status, 404)
   })
 
   test("without the scratch source, unrecorded runs aren't served", async () => {

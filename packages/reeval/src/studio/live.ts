@@ -2,9 +2,9 @@
 // until its record lands. Only the local server reads these; a static build never has them.
 
 import { existsSync } from 'node:fs'
-import { readdir, readFile, realpath } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
-import { join, sep } from 'node:path'
+import { join } from 'node:path'
 import { recordFile, scratchDir } from '../history/files.ts'
 import { recordFileName } from '../ids.ts'
 import { redactJsonText } from '../redact.ts'
@@ -17,7 +17,7 @@ import {
   readableLiveProgress,
 } from '../view/live.ts'
 import { RUN_ID } from '../view/paths.ts'
-import type { StudioSource } from './source.ts'
+import { fileInside, type StudioSource } from './source.ts'
 
 /** A live run whose heartbeat is older than this is shown as stopped. */
 export const STALE_MS = 15_000
@@ -38,8 +38,9 @@ function exited(progress: LiveProgress): boolean {
 }
 
 async function readProgress(root: string, runId: string): Promise<LiveProgress | null> {
-  const text = await readFile(join(stagingRoot(root), runId, LIVE_FILE), 'utf8').catch(() => null)
-  if (text === null) return null
+  const file = await fileInside(stagingRoot(root), [runId], [LIVE_FILE])
+  const text = file && (await readFile(file, 'utf8').catch(() => null))
+  if (!text) return null
   try {
     const progress = readableLiveProgress(JSON.parse(text))
     return progress?.runId === runId ? progress : null
@@ -90,14 +91,10 @@ export async function liveTranscript(
   const progress = await readProgress(source.root, runId)
   const attempt = progress?.attempts.find((a) => a.key === key)
   if (!attempt || !isFinished(attempt.status)) return null
-  const base = join(stagingRoot(source.root), runId)
+  const file = await fileInside(stagingRoot(source.root), [runId], ['evals', recordFileName(key)])
+  if (!file) return null
   try {
-    const [realBase, real] = await Promise.all([
-      realpath(base),
-      realpath(join(base, 'evals', recordFileName(key))),
-    ])
-    if (!real.startsWith(realBase + sep)) return null
-    const record = JSON.parse(await readFile(real, 'utf8')) as EvalRecord
+    const record = JSON.parse(await readFile(file, 'utf8')) as EvalRecord
     const { transcriptLines } = await import('../history/assemble.ts')
     return redactJsonText(transcriptLines(record))
   } catch {
