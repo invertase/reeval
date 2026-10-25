@@ -1144,7 +1144,7 @@
       "type": "object",
       "properties": {
         "brokered": {
-          "description": "Secrets the sandbox only had placeholders for, swapped in by the egress gateway.",
+          "description": "Secrets the sandbox only had placeholders for, swapped in by the egress gateway, named as in `secrets`. A variable it also got as its real value somewhere (an `http://` header, an env secret without `hosts`) isn't listed.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1209,6 +1209,7 @@
           }
         },
         "secrets": {
+          "description": "Every secret, by the variable it's set as in the sandbox; an MCP header's (`secret.fromEnv`, `secret.template`, a plugin's `${VAR}`) by each host variable it reads.",
           "type": "array",
           "items": {
             "type": "string"
