@@ -1327,6 +1327,44 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'history/artifacts-failures',
+    tiers: ['fake'],
+    env: 'marked',
+    cells: ['plain', 'marked'],
+    lands: {
+      outcome: 'pass',
+      error: { kind: 'assertion', message: /has the marker: expected file marker\.txt to exist/ },
+    },
+    landsPass: ['marked'],
+    canaryCells: ['marked', 'plain'],
+    canary: /has the marker: expected file marker\.txt to exist/,
+    canaryPass: ['marked'],
+    record: ({ project }) => {
+      const history = readRun(project, { history: 'evals/.history' })
+      assert.equal(history.run.artifacts, 'failures')
+      const kept = history.run.evals.flatMap((e) =>
+        e.attempts.map((a) => {
+          const refs = [
+            ...Object.values(a.files).flatMap((v) => (Array.isArray(v) ? v : v ? [v] : [])),
+            ...a.checks.flatMap((c) => (c.log ? [c.log] : [])),
+          ]
+          for (const ref of refs) assert.ok(existsSync(join(history.dir, ref.path)), ref.path)
+          return [e.name, e.cells.find((c) => c.key === a.cell)?.role, a.outcome, refs.length > 0]
+        }),
+      )
+      assert.deepEqual(
+        kept,
+        [
+          ['canary', 'control', 'pass', false],
+          ['canary', 'variant', 'fail', true],
+          ['lands', 'control', 'fail', true],
+          ['lands', 'variant', 'pass', false],
+        ],
+        'each failed attempt keeps its files, whatever its eval did',
+      )
+    },
+  },
+  {
     dir: 'compare/check-not-run',
     tiers: ['fake'],
     env: 'marked',

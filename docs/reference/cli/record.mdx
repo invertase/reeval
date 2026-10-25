@@ -28,7 +28,7 @@ reeval record [run...]        Copy runs (default: latest) from .reeval/runs into
 - **Idempotent:** recording a run that's already recorded does nothing.
 - **Refusals** (exit 2): an interrupted or budget-stopped run, unless `--allow-incomplete` (`reeval run` records a budget-stopped run itself when it records); and any file that still looks like a secret after redaction, unless `--skip-secret-scan`. The refusal names each file, the line, the rule and a masked value.
 - **`worktree.patch`:** a patch of uncommitted changes that looks like it holds a secret is left out rather than refused (below).
-- **Artifacts:** `--artifacts` overrides the config's `history.artifacts` for this copy: `all` (every attempt's files), `failures` (only failing attempts') or `none` (the record only).
+- **Artifacts:** `--artifacts` overrides the config's `history.artifacts` for this copy: `all` (every attempt's files), `failures` (only failed or infra-errored attempts', even in an eval that passed; a compare's pairwise question inputs stay when any of its attempts, or the eval, failed) or `none` (the record only).
 - **Logs:** it writes `.gitignore` in the history folder (if missing) so a parent `*.log` does not drop `setup.log` or `checks/<n>.log`. After writing, it runs `git check-ignore` and warns for any file still ignored, naming the rule.
 
 A real record, after a run:

@@ -26,7 +26,14 @@ import {
 } from './ignore.ts'
 import { type Finding, findingLines, findingSummary, scanText } from './secret-scan.ts'
 import { renderSummary } from './summary.ts'
-import type { ArtifactLevel, EvalEntry, FileRef, HistoryEntry, RunRecord } from './types.ts'
+import type {
+  ArtifactLevel,
+  AttemptRecord,
+  EvalEntry,
+  FileRef,
+  HistoryEntry,
+  RunRecord,
+} from './types.ts'
 
 export class HistoryError extends Error {
   override name = 'HistoryError'
@@ -259,17 +266,19 @@ export async function writeRun(
   return { recordPath, artifactDir, created: true }
 }
 
-const keeps = (e: EvalEntry, level: ArtifactLevel) =>
-  level === 'all' || (level === 'failures' && (e.outcome === 'fail' || e.outcome === 'infra_error'))
+const failed = (x: { outcome: string }) => x.outcome === 'fail' || x.outcome === 'infra_error'
 
-const refsOf = (e: EvalEntry): FileRef[] =>
-  e.attempts
-    .flatMap((a) => [
-      ...Object.values(a.files).flatMap((v) => (Array.isArray(v) ? v : v ? [v] : [])),
-      ...a.checks.flatMap((c) => (c.log ? [c.log] : [])),
-      ...(a.answers ?? []).flatMap((q) => (q.input ? [q.input] : [])),
-    ])
-    .concat((e.answers ?? []).flatMap((q) => (q.input ? [q.input] : [])))
+const keeps = (x: { outcome: string }, level: ArtifactLevel) =>
+  level === 'all' || (level === 'failures' && failed(x))
+
+const attemptRefs = (a: AttemptRecord): FileRef[] => [
+  ...Object.values(a.files).flatMap((v) => (Array.isArray(v) ? v : v ? [v] : [])),
+  ...a.checks.flatMap((c) => (c.log ? [c.log] : [])),
+  ...(a.answers ?? []).flatMap((q) => (q.input ? [q.input] : [])),
+]
+
+const evalRefs = (e: EvalEntry): FileRef[] =>
+  (e.answers ?? []).flatMap((q) => (q.input ? [q.input] : []))
 
 export type RecordOptions = {
   root: string
@@ -314,21 +323,29 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
   const record: RunRecord = structuredClone(scratch)
   record.artifacts = level
   const files = new Map<string, Uint8Array>()
-  for (const e of record.evals) {
-    if (level !== 'none' && keeps(e, level)) {
-      for (const ref of refsOf(e)) {
-        const bytes = await readFile(join(source, runId, ...ref.path.split('/')))
-        if (sha256(bytes) !== ref.sha256) {
-          throw new HistoryError(`${runId}/${ref.path} changed since the run wrote it`)
-        }
-        files.set(ref.path, bytes)
+  const keep = async (refs: FileRef[]) => {
+    for (const ref of refs) {
+      const bytes = await readFile(join(source, runId, ...ref.path.split('/')))
+      if (sha256(bytes) !== ref.sha256) {
+        throw new HistoryError(`${runId}/${ref.path} changed since the run wrote it`)
       }
-      continue
+      files.set(ref.path, bytes)
     }
+  }
+  for (const e of record.evals) {
     for (const a of e.attempts) {
+      if (level !== 'none' && keeps(a, level)) {
+        await keep(attemptRefs(a))
+        continue
+      }
       a.files = {}
       for (const c of a.checks) delete c.log
       for (const q of a.answers ?? []) delete q.input
+    }
+    // A compare's pairwise inputs hold every pair's sides: kept when the eval or any attempt failed.
+    if (level !== 'none' && (keeps(e, level) || e.attempts.some((a) => keeps(a, level)))) {
+      await keep(evalRefs(e))
+      continue
     }
     for (const q of e.answers ?? []) delete q.input
   }
