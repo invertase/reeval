@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -610,6 +610,41 @@ evaluate('killed', async (c) => {
         ['evals/dies.eval.ts › killed', 'fail'],
         ['evals/lives.eval.ts › math', 'pass'],
       ],
+    )
+  })
+
+  test('a file that loads for the plan but not for its run fails its attempts with the load error', async () => {
+    const flaky = `import { existsSync, writeFileSync } from 'node:fs'
+import { evaluate } from 'reeval'
+const marker = new URL('../loaded-once', import.meta.url)
+if (existsSync(marker)) throw new Error('fixture service unavailable')
+writeFileSync(marker, '')
+evaluate('flaky load', async () => {})
+`
+    const p = await project('run-pass-load-error', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/flaky.eval.ts': flaky,
+      'evals/lives.eval.ts': math(1),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /^error: evals\/flaky\.eval\.ts: fixture service unavailable$/m)
+    const record = readRun(p.dir)
+    assert.deepEqual(
+      record.evals.map((e) => [e.id, e.outcome, e.attempts[0]?.error?.message ?? null]),
+      [
+        ['evals/flaky.eval.ts › flaky load', 'fail', 'fixture service unavailable'],
+        ['evals/lives.eval.ts › math', 'pass', null],
+      ],
+    )
+    // On its own, the file is still its failed attempt, not "No evals matched".
+    rmSync(join(p.dir, 'loaded-once'))
+    const alone = await runCli(p.dir, ['run', 'evals/flaky.eval.ts'])
+    assert.equal(alone.code, 1, alone.stdout + alone.stderr)
+    assert.doesNotMatch(alone.stdout + alone.stderr, /No evals matched/)
+    assert.deepEqual(
+      readRun(p.dir).evals.map((e) => [e.id, e.outcome]),
+      [['evals/flaky.eval.ts › flaky load', 'fail']],
     )
   })
 
