@@ -16,9 +16,7 @@ import { Duplex, PassThrough } from 'node:stream'
 import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
-  contextFiles,
   dockerfileTag,
-  dockerignoreMatcher,
   harnessImageFor,
   installLayerTag,
   installScript,
@@ -37,6 +35,7 @@ import {
   removeContainerDetached,
   retryConnection,
 } from '../src/docker-cli.ts'
+import { contextFiles, dockerignoreMatcher } from '../src/dockerignore.ts'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import { createMux, forwarderScript, link } from '../src/egress/mux.ts'
 import { createPolicyCheck, defaultAllowedHosts, hostAllowed } from '../src/egress/policy.ts'
@@ -1029,13 +1028,13 @@ describe('package boundary', () => {
       e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)],
     )
 
-  test('imports only Node built-ins, @ai-sdk harness packages and its own files', () => {
+  test('imports only Node built-ins, @ai-sdk harness packages, @balena/dockerignore and its own files', () => {
     for (const file of files(join(root, 'src'))) {
       const source = readFileSync(file, 'utf8')
       for (const [, spec] of source.matchAll(/from '([^']+)'/g)) {
         assert.match(
           spec ?? '',
-          /^(node:|\.\.?\/|@ai-sdk\/harness(-cursor|-claude-code)?(\/|$))/,
+          /^(node:|\.\.?\/|@ai-sdk\/harness(-cursor|-claude-code)?(\/|$)|@balena\/dockerignore$)/,
           `${file} imports ${spec}`,
         )
       }
