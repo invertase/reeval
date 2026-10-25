@@ -975,6 +975,11 @@ test('resolving places each plugin, records it, and lists its skills and MCP ser
   )
   assert.deepEqual(r.record.mcp, ['review:docs', 'review:search'])
   assert.deepEqual(
+    [r.record.secrets, r.record.brokered],
+    [['DOCS_TOKEN', 'SEARCH_KEY'], ['SEARCH_KEY']],
+    "a plugin header's host variable is a secret the record names, brokered to the server's host",
+  )
+  assert.deepEqual(
     r.skills.map((s) => s.name),
     ['own', 'review-lint'],
     'the fake agent takes plugin items flat, so its skills are harness skills',
