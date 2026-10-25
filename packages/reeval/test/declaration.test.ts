@@ -335,8 +335,8 @@ test("planEval holds the engine's backstop to the longest timer Node can set", (
   const ctx = { ...run, file: join(run.config.root, 'evals/p.eval.ts'), order: 0 }
   const environment = defineEnvironment('slow', { setup: [{ run: 'ls', timeout: '30m' }] })
   const plan = (timeout: string) =>
-    planEval({ name: 'p', mode: 'run', groups: [], options: { timeout, environment } }, ctx)?.[0]
-      ?.timeout
+    planEval({ name: 'p', mode: 'run', groups: [], options: { timeout, environment } }, ctx)
+      .tests?.[0]?.timeout
   // 596h and the setup step each fit a timer; with the harness's start allowance they don't.
   assert.equal(plan('596h'), 2 ** 31 - 1)
   assert.equal(plan('1h'), 3_600_000 + 1_800_000 + 2 * 90_000 + 5_000)
