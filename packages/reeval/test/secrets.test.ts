@@ -732,6 +732,16 @@ describe('a token right after a letter, digit or underscore', () => {
     for (const text of texts) assert.equal(redactSecrets(text, {}), text, text.slice(0, 40))
   })
 
+  test('a token right after another of the same shape is masked too', () => {
+    const second = `ghp_${'Q5m3h3M6J3j2'.repeat(3)}`
+    const text = `x ${github}${second} y`
+    assert.equal(redactSecrets(text, {}), 'x [REDACTED] y')
+    assert.deepEqual(
+      findSecrets(text, {}).map((m) => text.slice(m.start, m.end)),
+      [`${github}${second}`],
+    )
+  })
+
   test('masking twice changes nothing more', () => {
     for (const [before, token] of cases) {
       const once = redactSecrets(`${before}${token}`, {})
