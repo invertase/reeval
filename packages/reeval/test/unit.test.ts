@@ -81,7 +81,8 @@ import { redactSecrets } from '../src/redact.ts'
 import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
 import { fakeSandbox } from '../src/sandbox.ts'
 import { clip } from '../src/text.ts'
-import type { GatewayDescriptor } from '../src/types.ts'
+import type { GatewayDescriptor, Outcome } from '../src/types.ts'
+import { rowKey } from '../src/view/compare.ts'
 import { project } from './helpers.ts'
 
 test("the -v broker line names each brokered endpoint's path matcher", () => {
@@ -1323,6 +1324,115 @@ test('compare classifies an eval on the cells both runs have, and lists the rest
   assert.equal(compare(base, changed)[0]?.status, 'drift')
   const disjoint = run('pass', [cell('other/-', 'pass')])
   assert.equal(compare(base, disjoint)[0]?.status, 'drift', 'no shared cell: not comparable')
+})
+
+test("compare has a row for a pooled family's gate, comparable when its cases and variants are", () => {
+  const FAMILY = 'evals/e.eval.ts › greets %s'
+  type Lift = { variant: string; outcome: 'pass' | 'fail'; minLift?: number }
+  const lift = (variant: string, outcome: 'pass' | 'fail', minLift: number | null = 0.2) => ({
+    variant,
+    outcome,
+    ...(minLift === null ? {} : { minLift }),
+  })
+  const run = (
+    lifts: Lift[],
+    opts: { cases?: string[]; caseOutcome?: Outcome; cancelled?: number; fp?: string } = {},
+  ): HistoryEntry => {
+    const cases = opts.cases ?? ['ada', 'grace']
+    return {
+      ...entry('pass'),
+      evals: cases.map(
+        (name) =>
+          ({
+            id: `evals/e.eval.ts › greets ${name}`,
+            outcome: opts.caseOutcome ?? 'pass',
+            sources: [],
+            fingerprint: opts.fp ?? 'fp',
+            cells: [
+              {
+                key: 'k',
+                gate: 'all',
+                outcome: opts.caseOutcome ?? 'pass',
+                fingerprint: opts.fp ?? 'fp',
+                fingerprintParts: {},
+                ...(opts.cancelled ? { cancelled: opts.cancelled } : {}),
+              },
+            ],
+          }) as unknown as HistoryEntry['evals'][number],
+      ),
+      families: [
+        {
+          id: FAMILY,
+          name: 'greets %s',
+          cases: cases.length,
+          ran: cases.length,
+          outcome: lifts.some((l) => l.outcome === 'fail') ? 'fail' : 'pass',
+          caseIds: cases.map((name) => `evals/e.eval.ts › greets ${name}`),
+          lifts: lifts.map((l) => ({ vs: 'control', points: 0, lo: 0, hi: 0, ...l })),
+        },
+      ],
+    }
+  }
+  const family = (base: HistoryEntry, head: HistoryEntry) =>
+    compare(base, head).find((r) => r.kind === 'family')
+  const status = (base: HistoryEntry, head: HistoryEntry) => {
+    const r = family(base, head)
+    return r && [r.status, r.base, r.head]
+  }
+
+  assert.deepEqual(status(run([lift('a', 'pass')]), run([lift('a', 'fail')])), [
+    'regressed',
+    'pass',
+    'fail',
+  ])
+  assert.deepEqual(status(run([lift('a', 'fail')]), run([lift('a', 'pass')])), [
+    'fixed',
+    'fail',
+    'pass',
+  ])
+  assert.equal(status(run([lift('a', 'pass')]), run([lift('a', 'pass')]))?.[0], 'same')
+  assert.equal(
+    family(run([lift('a', 'pass', null)]), run([lift('a', 'pass', null)])),
+    undefined,
+    'no minLift on either side: no row',
+  )
+
+  // Over the variants both have; with none in common, not comparable.
+  const scoped = family(run([lift('a', 'pass'), lift('b', 'fail')]), run([lift('a', 'fail')]))
+  assert.deepEqual(
+    [scoped?.status, scoped?.base, scoped?.cells],
+    ['regressed', 'pass', { added: [], removed: ['b'] }],
+  )
+  const disjoint = family(run([lift('a', 'pass')]), run([lift('b', 'fail')]))
+  assert.deepEqual([disjoint?.status, disjoint?.cells], ['drift', { added: ['b'], removed: ['a'] }])
+
+  // Its cases decide whether it's comparable.
+  const fewer = family(run([lift('a', 'pass')]), run([lift('a', 'fail')], { cases: ['ada'] }))
+  assert.deepEqual([fewer?.status, fewer?.changes], ['drift', ['case greets grace removed']])
+  assert.equal(
+    status(run([lift('a', 'pass')]), run([lift('a', 'fail')], { fp: 'changed' }))?.[0],
+    'drift',
+  )
+  assert.equal(
+    status(run([lift('a', 'pass')]), run([lift('a', 'fail')], { caseOutcome: 'infra_error' }))?.[0],
+    'infra',
+  )
+  const cancelled = family(run([lift('a', 'pass')]), run([lift('a', 'fail')], { cancelled: 1 }))
+  assert.deepEqual([cancelled?.status, cancelled?.cancelled], ['drift', ['head']])
+
+  // An eval may share the family's id; the rows still tell them apart.
+  const twin = (r: HistoryEntry): HistoryEntry => ({
+    ...r,
+    evals: [...r.evals, { ...(r.evals[0] as HistoryEntry['evals'][number]), id: FAMILY }],
+  })
+  const rows = compare(twin(run([lift('a', 'pass')])), twin(run([lift('a', 'fail')])))
+  assert.deepEqual(
+    rows.filter((r) => r.id === FAMILY).map((r) => [rowKey(r), r.status]),
+    [
+      [FAMILY, 'same'],
+      [`family\0${FAMILY}`, 'regressed'],
+    ],
+  )
 })
 
 test('compare calls a flip drift when the judge changed outside the fingerprint', () => {

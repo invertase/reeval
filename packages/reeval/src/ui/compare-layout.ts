@@ -5,12 +5,13 @@
 // SuiteResults and compare rows; statistics print only with `verbose`.
 import type { HistoryCell, RunRecord } from '../history/types.ts'
 import { fenced } from '../text.ts'
-import type {
-  CompareCell,
-  CompareFamilyLift,
-  CompareRow,
-  CompareStatus,
-  StackChange,
+import {
+  type CompareCell,
+  type CompareFamilyLift,
+  type CompareRow,
+  type CompareStatus,
+  rowKey,
+  type StackChange,
 } from '../view/compare.ts'
 import { effortChangeLabel } from '../view/effort.ts'
 import {
@@ -130,7 +131,7 @@ function unitsOf(suite: SuiteResult): Map<string, Unit> {
         continue
       }
       for (const k of e.cases) out.set(k.id, { file: file.path, result: caseAsEval(e, k) })
-      out.set(e.id, { file: file.path, result: e })
+      out.set(rowKey({ id: e.id, kind: 'family' }), { file: file.path, result: e })
     }
   }
   return out
@@ -158,7 +159,7 @@ type Units = { base: Map<string, Unit>; head: Map<string, Unit> }
  * before it in base's, so a removed eval sits where it was (beside the one renamed from it).
  */
 function ordered(rows: CompareRow[], units: Units): Array<{ row: CompareRow; unit?: Unit }> {
-  const byId = new Map(rows.map((r) => [r.id, r]))
+  const byId = new Map(rows.map((r) => [rowKey(r), r]))
   const all = [...units.head.values(), ...units.base.values()]
   const files = [...new Set(all.map((u) => u.file))].sort()
   const out: Array<{ row: CompareRow; unit?: Unit }> = []
@@ -177,8 +178,8 @@ function ordered(rows: CompareRow[], units: Units): Array<{ row: CompareRow; uni
       out.push({ row: byId.get(id) as CompareRow, ...(unit ? { unit } : {}) })
     }
   }
-  const seen = new Set(out.map((e) => e.row.id))
-  for (const row of rows) if (!seen.has(row.id)) out.push({ row })
+  const seen = new Set(out.map((e) => rowKey(e.row)))
+  for (const row of rows) if (!seen.has(rowKey(row))) out.push({ row })
   return out
 }
 
@@ -310,14 +311,18 @@ function changedParts(row: CompareRow, changes: StackChange[]): string {
     .join(', ')
 }
 
-/** The cells only one run ran, when the runs ran different cells of the eval. */
+/**
+ * The cells only one run ran, when the runs ran different cells of the eval; on a family, the
+ * variants whose pooled lift only one run has.
+ */
 function cellRows(row: CompareRow): Item[] {
+  const noun = row.kind === 'family' ? 'variants' : 'cells'
   return [
     ...(row.cells?.added.length
-      ? [{ indent: 2, cells: ['cells added', row.cells.added.join(', ')] }]
+      ? [{ indent: 2, cells: [`${noun} added`, row.cells.added.join(', ')] }]
       : []),
     ...(row.cells?.removed.length
-      ? [{ indent: 2, cells: ['cells removed', row.cells.removed.join(', ')] }]
+      ? [{ indent: 2, cells: [`${noun} removed`, row.cells.removed.join(', ')] }]
       : []),
   ]
 }
@@ -385,8 +390,8 @@ function block(
   { row, unit }: { row: CompareRow; unit?: Unit },
   opts: CompareOptions,
 ): Block {
-  const base = units.base.get(row.id)?.result
-  const head = units.head.get(row.id)?.result
+  const base = units.base.get(rowKey(row))?.result
+  const head = units.head.get(rowKey(row))?.result
   const word = t(WORD[row.status], paintStatus(c, row.status))
   const top = headLine(word, nameOf(row, unit))
   const baseId = input.base?.runId ?? ''
@@ -417,8 +422,8 @@ function block(
       top,
       ...(changed ? table([{ indent: 2, cells: ['changed', changed] }]) : []),
       ...table([
-        idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(row.id))),
-        idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(row.id))),
+        idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(rowKey(row)))),
+        idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(rowKey(row)))),
       ]),
       ...table([...cellRows(row), ...stats, ...(family ? pooledItems(c, row) : [])]),
       ...(family ? [] : resultBody(c, head)),
@@ -430,7 +435,7 @@ function block(
       lines: [
         top,
         ...table([
-          idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(row.id))),
+          idRow(c, 'head', headId, shownOutcome(row, 'head', units.head.get(rowKey(row)))),
           ...(family ? pooledItems(c, row) : []),
         ]),
         ...(family ? [] : resultBody(c, head)),
@@ -443,7 +448,7 @@ function block(
       lines: [
         top,
         ...table([
-          idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(row.id))),
+          idRow(c, 'base', baseId, shownOutcome(row, 'base', units.base.get(rowKey(row)))),
           ...(family ? pooledItems(c, row) : []),
         ]),
       ],
@@ -493,7 +498,7 @@ function noBaseline(c: Colors, input: CompareInput, opts: CompareOptions): strin
   const units = unitsOf(suite)
   const order = ['fail', 'infra_error', 'cancelled', 'pass', 'not_gated', 'skipped'] as const
   const tally = (rows: CompareRow[], noun: string) => {
-    const shown = rows.map((r) => shownOutcome(r, 'head', units.get(r.id)))
+    const shown = rows.map((r) => shownOutcome(r, 'head', units.get(rowKey(r))))
     const counts = order.flatMap((o) => {
       const n = shown.filter((x) => x === o).length
       return n ? [paintOutcome(c, o)(`${n} ${OUTCOME[o]}`)] : []

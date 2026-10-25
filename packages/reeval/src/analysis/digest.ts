@@ -841,14 +841,24 @@ export async function buildDigestKeepingDropped(
         verdict: d.noise ? 'noise: agent runtime state only' : `real change: ${d.real_changed}`,
       })
     }
-    const rows = compare(runHeader(base.record, true), runHeader(head.record, true)).filter((row) =>
-      scopeEvals.some((e) => e.id === row.id),
+    const [baseHeader, headHeader] = [runHeader(base.record, true), runHeader(head.record, true)]
+    const inScope = (id: string) => scopeEvals.some((e) => e.id === id)
+    const familyCases = new Map(
+      [...(baseHeader.families ?? []), ...(headHeader.families ?? [])].map((f) => [
+        f.id,
+        f.caseIds,
+      ]),
+    )
+    const rows = compare(baseHeader, headHeader).filter((row) =>
+      row.kind === 'family' ? (familyCases.get(row.id) ?? []).some(inScope) : inScope(row.id),
     )
     fact('compare', {
       base: 'r1',
       head: 'r2',
       rows: rows.map((row) => ({
-        eval: tagOf(scopeEvals.find((e) => e.id === row.id)?.key ?? row.id),
+        ...(row.kind === 'family'
+          ? { family: row.id }
+          : { eval: tagOf(scopeEvals.find((e) => e.id === row.id)?.key ?? row.id) }),
         status: row.status,
         ...(row.changes?.length ? { changes: row.changes } : {}),
         ...(row.cancelled ? { cancelled: row.cancelled } : {}),

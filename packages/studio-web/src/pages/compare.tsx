@@ -114,12 +114,18 @@ const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x) *
 const liftShort = (l: CompareViewRow['perCell'][number]['base']['lift']) =>
   l ? `${signed(l.points)} (${signed(l.lo)}…${signed(l.hi)})${l.withinNoise ? ' noise' : ''}` : '–'
 
+const pooledShort = (l: NonNullable<CompareViewRow['lifts']>[number]['base']) =>
+  l
+    ? `${signed(l.points)} (${signed(l.lo)}…${signed(l.hi)})${l.outcome === 'fail' ? ' fail' : ''}`
+    : '–'
+
 const formatScore = (n: number) => n.toFixed(2)
 const formatRate = (n: number) => formatPercent(n)
 
 function Row({ row, head }: { row: CompareViewRow; head: string }) {
   const s = STATUS[row.status]
-  const name = row.id.split(' › ').slice(1).join(' › ') || row.id
+  const family = row.kind === 'family'
+  const name = `${row.id.split(' › ').slice(1).join(' › ') || row.id}${family ? ' (all cases)' : ''}`
   return (
     <TableRow className={row.status === 'same' ? 'opacity-70' : undefined}>
       <TableCell className="pl-4">
@@ -144,10 +150,24 @@ function Row({ row, head }: { row: CompareViewRow; head: string }) {
         </div>
         {row.cells ? (
           <div className="text-[11px] text-muted-foreground">
-            compared on the cells both runs have
+            compared on the {family ? 'variants' : 'cells'} both runs have
             {row.cells.added.length ? ` · added ${row.cells.added.join(', ')}` : ''}
             {row.cells.removed.length ? ` · removed ${row.cells.removed.join(', ')}` : ''}
           </div>
+        ) : null}
+        {row.lifts?.length ? (
+          <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
+            {row.lifts.map((l) => (
+              <li key={l.key} className="tabular">
+                <span className="font-mono">{l.key}</span>
+                {' · pooled lift '}
+                {pooledShort(l.base)} → {pooledShort(l.head)}
+                {(l.head ?? l.base)?.minLift !== undefined
+                  ? ` · minLift ${signed((l.head ?? l.base)?.minLift ?? 0)}`
+                  : ''}
+              </li>
+            ))}
+          </ul>
         ) : null}
         {row.perCell.length ? (
           <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
@@ -316,7 +336,7 @@ export function ComparePage() {
                   </TableHeader>
                   <TableBody>
                     {view.rows.map((row) => (
-                      <Row key={row.id} row={row} head={head.runId} />
+                      <Row key={`${row.kind ?? 'eval'}:${row.id}`} row={row} head={head.runId} />
                     ))}
                   </TableBody>
                 </Table>

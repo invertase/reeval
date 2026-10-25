@@ -177,7 +177,7 @@
 | `reeval history`, `reeval show` and `reeval compare`, with `--json` and `--md` | ✓ 7 | — | — | — | — | ◐ 2 (2 without a canary) |
 | `reeval compare --fail-on-regression` | ✓ 2 | — | — | — | — | — |
 | An eval Ctrl-C cancelled reads `can't compare` with that side `cancelled` in `reeval compare`, never `regressed`, and doesn't fail `--fail-on-regression` | ✓ 2 | — | — | — | — | — |
-| A pooled family's `minLift` gate is a row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail | ✓ 2 | — | — | — | — | — |
+| A pooled family's `minLift` gate is a row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail | ✓ 3 | — | — | — | — | — |
 | `reeval query` | ✓ 1 | — | — | — | — | ◐ 1 (1 without a canary) |
 | `reeval mcp`: run history as read-only MCP tools and resources, over stdio or stateless HTTP | ✓ 6 | — | — | — | — | — |
 | `reeval mcp` for debugging a failed run: `failures` (each failed attempt's checks, judge scores, error, check logs and transcript tail, and whether its cell failed before) and `history` listing scratch runs, with a note, when nothing is recorded | ✓ 2 | — | — | — | — | — |

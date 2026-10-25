@@ -327,31 +327,40 @@ export const newRows = (head: Comparable): CompareRow[] => [
   ...(head.families ?? []).filter(gated).map(addedFamilyRow),
 ]
 
+/** What a family's row reads besides the two families: its cases' rows and attempts. */
+type FamilyContext = {
+  rows: ReadonlyMap<string, CompareRow>
+  graderChanged: boolean
+  /** Whether the run's interrupt cancelled an attempt of any of these cases on that side. */
+  cancelledIn: (side: 'base' | 'head', caseIds: readonly string[]) => boolean
+}
+
 /**
  * A gated family's row. Its pooled outcome is comparable only when both runs ran the same cases
- * and every case is: a case that changed, was cancelled or hit an infrastructure error makes the
- * family `drift` or `infra` as it does the case. With different variants, it's over the lifts both
- * have.
+ * and every case is: a case that changed or hit an infrastructure error makes the family `drift`
+ * or `infra` as it does the case, and a failing side with a cancelled attempt in any case reads
+ * `cancelled`, since the pooled lift counts it. With different variants, it's over the lifts both
+ * have, and with none in common it can't compare them.
  */
 function familyRow(
   id: string,
   b: ComparableFamily | undefined,
   h: ComparableFamily | undefined,
-  rows: ReadonlyMap<string, CompareRow>,
-  graderChanged: boolean,
+  ctx: FamilyContext,
 ): CompareRow {
   if (!b) return addedFamilyRow(h as ComparableFamily)
   const lifts = familyLifts(b, h ?? null)
   if (!h) return { id, kind: 'family', base: b.outcome, head: null, status: 'removed', lifts }
   const shared = lifts.flatMap((l) => (l.base && l.head ? [{ base: l.base, head: l.head }] : []))
   const scoped = shared.length > 0 && shared.length < lifts.length
+  const disjoint = !shared.length && b.lifts.length > 0 && h.lifts.length > 0
   const row: Omit<CompareRow, 'status'> = {
     id,
     kind: 'family',
     base: scoped ? liftsOutcome(shared.map((l) => l.base)) : b.outcome,
     head: scoped ? liftsOutcome(shared.map((l) => l.head)) : h.outcome,
     lifts,
-    ...(scoped
+    ...(scoped || disjoint
       ? {
           cells: {
             added: lifts.filter((l) => !l.base).map((l) => l.key),
@@ -365,7 +374,7 @@ function familyRow(
     caseId.startsWith(prefix) ? caseId.slice(prefix.length) : caseId
   const before = new Set(b.caseIds)
   const after = new Set(h.caseIds)
-  const caseRows = [...new Set([...h.caseIds, ...b.caseIds])].flatMap((c) => rows.get(c) ?? [])
+  const caseRows = [...new Set([...h.caseIds, ...b.caseIds])].flatMap((c) => ctx.rows.get(c) ?? [])
   const changes = [
     ...new Set([
       ...h.caseIds.filter((c) => !before.has(c)).map((c) => `case ${name(c)} added`),
@@ -374,15 +383,15 @@ function familyRow(
     ]),
   ]
   const cancelled = (['base', 'head'] as const).filter(
-    (s) => row[s] === 'fail' && caseRows.some((r) => r.cancelled?.includes(s)),
+    (s) => row[s] === 'fail' && ctx.cancelledIn(s, s === 'base' ? b.caseIds : h.caseIds),
   )
   if (cancelled.length) row.cancelled = cancelled
   if (caseRows.some((r) => r.status === 'infra')) return { ...row, status: 'infra' }
   if (changes.length) return { ...row, status: 'drift', changes }
-  if (row.cancelled || caseRows.some((r) => r.status === 'drift')) {
+  if (disjoint || row.cancelled || caseRows.some((r) => r.status === 'drift')) {
     return { ...row, status: 'drift' }
   }
-  if (graderChanged && row.base !== row.head) return { ...row, status: 'drift' }
+  if (ctx.graderChanged && row.base !== row.head) return { ...row, status: 'drift' }
   if (row.base === 'pass' && row.head === 'fail') return { ...row, status: 'regressed' }
   if (row.base === 'fail' && row.head === 'pass') return { ...row, status: 'fixed' }
   return { ...row, status: 'same' }
@@ -392,17 +401,26 @@ function familyRow(
 export function compare(base: Comparable, head: Comparable): CompareRow[] {
   const graderChanged = stackChanges(base, head).some((c) => c.outsideFingerprint)
   const rows = evalRows(base, head, graderChanged)
-  const byId = new Map(rows.map((r) => [r.id, r]))
   const before = new Map((base.families ?? []).map((f) => [f.id, f]))
   const after = new Map((head.families ?? []).map((f) => [f.id, f]))
   const families = [...new Set([...after.keys(), ...before.keys()])].filter(
     (id) => gated(before.get(id)) || gated(after.get(id)),
   )
-  return [
-    ...rows,
-    ...families.map((id) => familyRow(id, before.get(id), after.get(id), byId, graderChanged)),
-  ]
+  const runs = { base, head }
+  const ctx: FamilyContext = {
+    rows: new Map(rows.map((r) => [r.id, r])),
+    graderChanged,
+    cancelledIn: (side, caseIds) =>
+      runs[side].evals.some(
+        (e) => caseIds.includes(e.id) && e.cells.some((c) => (c.cancelled ?? 0) > 0),
+      ),
+  }
+  return [...rows, ...families.map((id) => familyRow(id, before.get(id), after.get(id), ctx))]
 }
+
+/** The key that tells a family's row from an eval's, whose ids can coincide. */
+export const rowKey = (row: Pick<CompareRow, 'id' | 'kind'>) =>
+  row.kind === 'family' ? `family\0${row.id}` : row.id
 
 function evalRows(base: Comparable, head: Comparable, graderChanged: boolean): CompareRow[] {
   const ids = [...new Set([...head.evals.map((e) => e.id), ...base.evals.map((e) => e.id)])]

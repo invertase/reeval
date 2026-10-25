@@ -2003,6 +2003,9 @@ export const inventory: InventoryFeature[] = [
     tests: [
       "reeval/test/history.test.ts › reeval compare has a row for a pooled family's minLift gate",
       'reeval/test/history.test.ts › reeval compare has no row for a pooled family without a gate',
+      unit(
+        "compare has a row for a pooled family's gate, comparable when its cases and variants are",
+      ),
     ],
   },
   {
