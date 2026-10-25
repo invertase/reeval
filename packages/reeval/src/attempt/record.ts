@@ -6,11 +6,11 @@ import { isTimeout } from '../errors.ts'
 import { expectedBlockedFor } from '../harness/agents.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
 import { sandboxProvider } from '../options.ts'
-import { redactJson, redactSecrets } from '../redact.ts'
+import { redactJson, redactSecrets, redactSplitSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { PrepareError } from '../sandbox/provider.ts'
 import { capMiddle, clip } from '../text.ts'
-import type { ErrorKind, EvalMeta, TranscriptEvent } from '../types.ts'
+import type { ErrorKind, EvalMeta, EvalRecord, TranscriptEvent } from '../types.ts'
 import { writeCaptureSidecars } from './capture.ts'
 import type { Attempt } from './state.ts'
 
@@ -96,6 +96,24 @@ export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
   if (cost !== undefined) a.record.reportedCostUsd = cost
 }
 
+/**
+ * The record as its staging file holds it: redacted, with a secret split across a turn's raw
+ * stream parts masked first, since masking each part on its own leaves pieces of it to rebuild.
+ */
+export function stagedRecordJson(record: EvalRecord): string {
+  const turns = record.turns.map((turn) =>
+    turn.raw
+      ? {
+          ...turn,
+          raw: redactSplitSecrets(turn.raw.map((part) => JSON.stringify(part))).map(
+            (line) => JSON.parse(line) as unknown,
+          ),
+        }
+      : turn,
+  )
+  return redactJson({ ...record, turns }, 2)
+}
+
 /** Writes the attempt's record, redacted, and returns what the runner reports. */
 export async function writeRecord(a: Attempt, stagingDir: string, id: string): Promise<EvalMeta> {
   const { record, spec } = a
@@ -112,7 +130,7 @@ export async function writeRecord(a: Attempt, stagingDir: string, id: string): P
   )
   // Replaced whole: reeval studio reads it while the run goes on.
   const tmp = `${recordPath}.${process.pid}.tmp`
-  await writeFile(tmp, redactJson(record, 2))
+  await writeFile(tmp, stagedRecordJson(record))
   await rename(tmp, recordPath)
   return {
     outcome: record.outcome,

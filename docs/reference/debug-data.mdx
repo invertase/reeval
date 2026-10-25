@@ -82,6 +82,8 @@ The buffer holds `debug.traceBufferMb` megabytes, dropping the oldest entries fi
 
 The first line is a header: `limitBytes` is the buffer size and `dropped` how many entries fell out. Each later line has `at`, `ms` (since the attempt started), `phase`, `kind` and `data`. An entry over 256 KB keeps its first 64 KB.
 
+Each stream part the harness sends is its own entry, so a reply arrives as many short deltas. A secret that shows only when those pieces are joined is still masked: its first piece reads `[REDACTED]` and its other pieces are empty strings.
+
 ## Retention
 
 At the end of each `reeval run`, reeval keeps the newest `debug.keep` runs (default 20) and removes older ones. `reeval clean` removes them all, or all but the newest `--keep n`:

@@ -962,6 +962,7 @@ export const inventory: InventoryFeature[] = [
       secrets('redacting serialised JSON'),
       secrets('redacting encoded forms'),
       secrets('redacting fragments of a secret'),
+      secrets('redacting a secret split across stream parts'),
       secrets("every variable of a header's secret.template is a secret the run masks"),
       debug(
         "a declared secret under a plain name is masked in an eval's logs and failures on screen",
@@ -2660,6 +2661,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       debug('redaction holds on screen, in debug.log and in trace.ndjson, encoded forms included'),
       debug("a key's tail is masked on screen, in debug.log, trace.ndjson and the transcript"),
+      secrets('trace.ndjson masks a secret streamed as deltas'),
       docker('-v and -vv trace the image, container, brokering, gateway and docker commands'),
     ],
   },
