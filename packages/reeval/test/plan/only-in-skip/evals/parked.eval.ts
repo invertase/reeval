@@ -6,5 +6,9 @@ group.skip('parked', () => {
   group.only('nested', () => {
     evaluate('deeper', async () => {})
   })
+  group.skip('shelved', () => {
+    evaluate('buried', async () => {})
+    evaluate.only('buried focus', async () => {})
+  })
 })
 evaluate('outer', async () => {})

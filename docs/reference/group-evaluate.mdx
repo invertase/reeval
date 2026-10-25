@@ -86,7 +86,7 @@ group(name, fn, options)
 | `evaluate.only(name, …)` | Runs only the `.only` evals and groups of its file. |
 | `evaluate.todo(name)` | A placeholder with no body. It's one entry marked todo: a `todo` row in `--dry-run` (and `mode: 'todo'` under `excluded` in `--json`), `todo` in the summary and `summary.md`, `todo: true` with outcome `skipped` in the record, and Todo in the studio. It counts as skipped. |
 | `evaluate.each(cases, options?)(name, …)` | One eval per case, pooled into a family. The body gets `(c, item)`. |
-| `group.skip(name, …)` | Skips every eval in the group, nested groups included, `.only` ones too; each counts as skipped. |
+| `group.skip(name, …)` | Skips every eval in the group, nested groups included, `.only` ones too; each counts as skipped. A `.only` inside still narrows its file, so the file's other evals skip too. |
 | `group.only(name, …)` | Runs only this group's evals within its file. |
 | `group.todo(name)` | A placeholder group, shown exactly as `evaluate.todo(name)` is: one todo entry, with the id `file › …groups › name`. |
 

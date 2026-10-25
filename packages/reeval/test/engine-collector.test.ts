@@ -159,4 +159,28 @@ describe('modes', () => {
       'plain:skip',
     ])
   })
+
+  test('a skipped group inside a skipped group skips its evals, .only ones too', async () => {
+    const tests = await collect('/f', async () => {
+      g(
+        'outer',
+        () =>
+          g(
+            'inner',
+            () => {
+              t('plain')
+              t('focused', 'only')
+            },
+            'skip',
+          ),
+        'skip',
+      )
+      g('parked', () => g('inner', () => t('plain'), 'skip'), 'todo')
+    })
+    assert.deepEqual(modes(tests), [
+      'outer/inner/plain:skip',
+      'outer/inner/focused:skip',
+      'parked/inner/plain:skip',
+    ])
+  })
 })
