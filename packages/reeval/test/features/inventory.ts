@@ -1472,6 +1472,8 @@ export const inventory: InventoryFeature[] = [
       ),
       opencodeAdapter('unit', "session titles run on the turn's model, not a second one"),
       opencodeAdapter('unit', 'the musl builds are left out of the install, and only those'),
+      harness('refuses an MCP value OpenCode would substitute, naming the server and field'),
+      'reeval/test/plan.test.ts › an MCP value OpenCode would substitute exits 2 at plan time on OpenCode only, naming the server and field',
     ],
   },
   {

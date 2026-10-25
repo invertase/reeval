@@ -131,7 +131,7 @@
 | Real Cursor, end to end | — | — | ● 1 | ● 2 | — | ● 5 |
 | `claudeCode()`: its image, rules, skills and MCP shape | ✓ 1 | ✓ 1 | ● 2 | ● 3 | — | — |
 | `antigravity()`: its image, rules, skills, MCP shape and brokered Gemini key | ✓ 2 | ✓ 1 | ● 3 | ● 4 | — | — |
-| `opencode()`: OpenCode 2 over ACP on a brokered provider's key, its image, config, rules, skills, tool names, web search and config MCP servers | ✓ 11 | ✓ 1 | ● 3 | ● 4 | — | — |
+| `opencode()`: OpenCode 2 over ACP on a brokered provider's key, its image, config, rules, skills, tool names, web search and config MCP servers | ✓ 13 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `opencode({ model: '<provider>/<model>' })`: OpenCode on any provider whose key goes in a header on known hosts, with only that provider's key brokered, its hosts automatic and its served model recorded; the others refused at plan time | ✓ 15 | ✓ 2 | — | — | — | ● 1 |
 | `goose()`: Goose over ACP on a brokered Gemini key, its image, rules, skills, MCP extensions and tool names | ✓ 4 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens and stdio and HTTP MCP servers | ✓ 7 | ✓ 1 | ● 3 | ● 4 | — | — |

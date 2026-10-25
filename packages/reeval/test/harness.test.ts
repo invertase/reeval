@@ -512,6 +512,60 @@ describe('the OpenCode harness', () => {
     )
   })
 
+  test('refuses an MCP value OpenCode would substitute, naming the server and field', () => {
+    const refused = (server: Parameters<typeof AGENTS.opencode.mcpServers>[0][string]) => {
+      try {
+        AGENTS.opencode.mcpServers({ 'review:events': server })
+        return undefined
+      } catch (error) {
+        return /wouldn't get (.+) as written/.exec((error as Error).message)?.[1]
+      }
+    }
+    const stdio = (args: string[], env: Record<string, string> = {}) =>
+      ({ transport: 'stdio', command: 'node', args, env }) as const
+    assert.equal(refused(stdio(['a', '{file:/tmp/x}'])), 'mcp["review:events"].args[1]')
+    assert.equal(
+      refused(stdio([], { GREETING: 'Hello {env:USER}' })),
+      'mcp["review:events"].env.GREETING',
+    )
+    assert.equal(refused(stdio(['{env:'])), 'mcp["review:events"].args[0]')
+    assert.equal(
+      refused({ transport: 'http', url: 'https://x.example/mcp', headers: { 'X-Key': '{env:K}' } }),
+      'mcp["review:events"].headers["X-Key"]',
+    )
+    assert.equal(refused(stdio(['{env:}', '{file:}', '{ENV:X}', '{ env:X}'])), undefined)
+  })
+
+  test('refuses an MCP server, env or header name OpenCode would substitute, naming no value', () => {
+    const refusal = (servers: Parameters<typeof AGENTS.opencode.mcpServers>[0]) => {
+      try {
+        AGENTS.opencode.mcpServers(servers)
+        return undefined
+      } catch (error) {
+        return (error as Error).message
+      }
+    }
+    const field = (servers: Parameters<typeof AGENTS.opencode.mcpServers>[0]) =>
+      /wouldn't get (.+) as written/.exec(refusal(servers) ?? '')?.[1]
+    const stdio = (env: Record<string, string> = {}) =>
+      ({ transport: 'stdio', command: 'node', args: [], env }) as const
+    assert.equal(field({ 'a{file:/etc/hostname}': stdio() }), 'its name')
+    assert.equal(field({ 'p:{env:USER}': stdio() }), 'its name')
+    assert.equal(
+      field({ docs: stdio({ '{env:USER}': 'sk-live-1234' }) }),
+      'the env name {env:USER} in mcp.docs.env',
+    )
+    assert.equal(field({ docs: stdio({ '{env:': 'X}' }) }), 'the env name {env: in mcp.docs.env')
+    assert.equal(
+      field({
+        docs: { transport: 'http', url: 'https://x.example/mcp', headers: { 'X-{env:USER}': 's' } },
+      }),
+      'the header name X-{env:USER} in mcp.docs.headers',
+    )
+    assert.doesNotMatch(refusal({ docs: stdio({ '{env:USER}': 'sk-live-1234' }) }) ?? '', /sk-live/)
+    assert.equal(field({ docs: stdio({ '{env:}': 'a', 'X_{file:}': 'b' }) }), undefined)
+  })
+
   test('its brokered requests name the served model, as Antigravity’s do', () => {
     const served = brokeringFor(opencode({ model: 'google/gemini-3.8-flash' }))?.servedModel
     assert.equal(

@@ -526,6 +526,39 @@ evaluate('streams', { environment: events }, async () => {})
     }
   })
 
+  test('an MCP value OpenCode would substitute exits 2 at plan time on OpenCode only, naming the server and field', async () => {
+    const evals = `import { defineEnvironment, evaluate } from 'reeval'
+const docs = defineEnvironment('docs', ({ mcp }) => ({
+  mcp: { docs: mcp.stdio('node', ['srv.js', '{file:/tmp/tok.txt}'], { env: { GREETING: 'Hello {env:USER}' } }) },
+}))
+evaluate('reads docs', { environment: docs }, async () => {})
+`
+    const refused = await project('opencode-substitution', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor, opencode } from 'reeval/harness'
+export default defineConfig({
+  harness: [cursor({ model: 'composer-2.5' }), opencode({ model: 'google/gemini-3.8-flash' })],
+})
+`,
+      'evals/d.eval.ts': evals,
+    })
+    const r = await runCli(refused.dir, ['run', '--dry-run'])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /evaluate\("reads docs"\) on opencode:gemini-3\.8-flash: OpenCode substitutes \{env:…\} and \{file:…\} anywhere in its config, with no escape, so the docs server wouldn't get mcp\.docs\.args\[1\] as written/,
+    )
+    const elsewhere = await project('opencode-substitution-elsewhere', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
+export default defineConfig({ harness: cursor({ model: 'composer-2.5' }) })
+`,
+      'evals/d.eval.ts': evals,
+    })
+    const ok = await runCli(elsewhere.dir, ['run', '--dry-run'])
+    assert.equal(ok.code, 0, ok.stdout + ok.stderr)
+  })
+
   test('pi and Goose take stdio and http MCP servers; pi exits 2 on a server name it would skip', async () => {
     const config = (factory: string) => `import { defineConfig } from 'reeval'
 import { ${factory} } from 'reeval/harness'
