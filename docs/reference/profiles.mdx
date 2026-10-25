@@ -12,7 +12,7 @@ export default defineConfig({
   defaultProfile: { ci: 'pr' },
   profiles: {
     pr: {
-      limit: { runs: 1, compare: false, harness: ['cursor'] },
+      limit: { runs: 1, compare: false, harness: ['cursor:composer-2.5'] },
       budget: { attempts: 20 },
     },
     nightly: {
@@ -46,7 +46,7 @@ reeval: Unknown profile "nigthly". Profiles in reeval.config.ts: smoke, nightly.
 A profile takes `defaults`, `limit`, `judge`, `budget`, `record`, `tags` and `gateway`. Anything else is an error.
 
 <Property name="defaults" type="object" optional>
-  Options that fill in what the config set and the eval files didn't. Accepts `harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge` and `timeout`, with the same types as on [Options](/reference/options). `sandbox` is the default machine when the resolved environment omits one. They sit above the config and below every group and eval. When `defaults.harness` is set and an eval sets its own, the plan notes `harness set by the eval`.
+  Options that fill in what the config set and the eval files didn't. Accepts `harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge`, `capture`, `question` and `timeout`, with the same types as on [Options](/reference/options). `sandbox` is the default machine when the resolved environment omits one. They sit above the config and below every group and eval. When `defaults.harness` is set and an eval sets its own, the plan notes `harness set by the eval`.
 </Property>
 
 <Property name="limit" type="{ runs?, compare?, harness? }" optional>
@@ -82,11 +82,11 @@ A profile takes `defaults`, `limit`, `judge`, `budget`, `record`, `tags` and `ga
 </Property>
 
 <Property name="compare" type="false | { maxVariants: number }" optional>
-  `false` turns `compare` off, so only the control runs. `{ maxVariants: n }` keeps the first `n` variants. A limit that leaves only the control, `false` or `{ maxVariants: 0 }`, also drops the compare's `question`s, and the plan notes `questions off (profile pr)`. That lone control gates on the eval's `gate`, as without `compare`, whatever `compare.gate` says.
+  `false` turns `compare` off, so only the control runs. `{ maxVariants: n }` keeps the first `n` variants. A pairwise `question` whose `across` no longer varies is dropped, and the plan notes `1 pairwise question off (profile pr)`; a question asked of each attempt stays. A limit that leaves only the control, `false` or `{ maxVariants: 0 }`, runs that control alone. It gates on the eval's `gate`, as without `compare`, whatever `compare.gate` says.
 </Property>
 
 <Property name="harness" type="string[]" optional>
-  Harness ids to keep. The others are dropped from each eval; an eval left with none is skipped. It can't add a harness: use `defaults.harness` for that.
+  Harness ids to keep, matched exactly: `cursor:composer-2.5` keeps the default harness, and a bare `cursor` matches none. The others are dropped from each eval; an eval left with none is skipped. It can't add a harness: use `defaults.harness` for that.
 </Property>
 
 The plan shows what `limit` changed in the notes column. This is the `pr` profile above, run in CI against an eval group with `compare` and `runs: 3`, using the fake harness:
