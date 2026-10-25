@@ -211,6 +211,7 @@ test("a dashed server's tools are named with its configured name, not pi's mcp__
         toolCall: { id: 'c1', name: 'mcp__my_docs__latest_version', arguments: {} },
       },
     }),
+    JSON.stringify({ type: 'message_end', message: { role: 'assistant', stopReason: 'toolUse' } }),
     JSON.stringify({
       type: 'tool_execution_end',
       toolCallId: 'c1',

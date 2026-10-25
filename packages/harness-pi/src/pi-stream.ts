@@ -121,6 +121,11 @@ export class PiStreamTranslator {
   private failure: PiMessage | undefined
   /** The error of the call pi is retrying, until the retry's call ends. */
   private retrying: string | undefined
+  /**
+   * The call's parts from its first tool call on, until its `message_end`: pi runs a call's tools
+   * only when it doesn't fail, so a failed call's tool calls are dropped.
+   */
+  private held: HarnessV1StreamPart[] | undefined
 
   /** Parts for one stdout line. Lines that aren't JSON events are passed through as raw. */
   push(line: string): HarnessV1StreamPart[] {
@@ -143,7 +148,9 @@ export class PiStreamTranslator {
     if (this.finished) return []
     const parts: HarnessV1StreamPart[] = []
     this.start(parts)
-    this.close(parts)
+    this.close(this.held ?? parts)
+    parts.push(...(this.held ?? []))
+    this.held = undefined
     if (!options.aborted) {
       const detail = options.stderr?.trim()
       const call = this.failure
@@ -177,12 +184,16 @@ export class PiStreamTranslator {
       return
     }
     if (e.type === 'message_end' && m?.role === 'assistant') {
-      this.close(parts)
+      const held = this.held ?? []
+      this.held = undefined
+      this.close(held)
       this.retrying = undefined
       if (m.stopReason === 'error') {
+        parts.push(...held.filter((p) => p.type !== 'tool-call'))
         this.failure = m
         return
       }
+      parts.push(...held)
       this.failure = undefined
       if (m.usage) this.total = add(this.total, m.usage)
       parts.push({
@@ -232,9 +243,10 @@ export class PiStreamTranslator {
     }
   }
 
-  private update(e: PiEvent, parts: HarnessV1StreamPart[]) {
+  private update(e: PiEvent, out: HarnessV1StreamPart[]) {
     const u = e.assistantMessageEvent
     if (!u?.type) return
+    const parts = this.held ?? out
     const id = `${u.type.startsWith('thinking') ? 'reasoning' : 'text'}-${u.contentIndex ?? 0}`
     if (u.type === 'text_start' || u.type === 'thinking_start') {
       this.close(parts)
@@ -251,7 +263,8 @@ export class PiStreamTranslator {
       this.close(parts)
     } else if (u.type === 'toolcall_end' && u.toolCall?.id) {
       this.close(parts)
-      parts.push({
+      this.held ??= []
+      this.held.push({
         type: 'tool-call',
         toolCallId: u.toolCall.id,
         toolName: this.toolName(u.toolCall.name),

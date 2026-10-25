@@ -94,7 +94,7 @@ Nor on [`openrouter()`](/reference/gateway#openrouter): pi reaches a Gemini mode
 
 Each model call pi makes is one step, and each turn has their sum.
 
-pi retries a model call that fails with a transient error (a 429, a 5xx, "overloaded", a dropped connection) up to 3 times, in the same turn. Each failed attempt is a step that ended in error, counted in the sum, and a `retry` event in the transcript. A call that still fails after its last retry ends the turn with its error.
+pi retries a model call that fails with a transient error (a 429, a 5xx, "overloaded", a dropped connection) up to 3 times, in the same turn. Each failed attempt is a step that ended in error, counted in the sum, and a `retry` event in the transcript; a tool call it streamed before failing isn't in the transcript, since pi never runs it. A call that still fails after its last retry ends the turn with its error.
 
 ## Turns and settings
 

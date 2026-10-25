@@ -823,8 +823,9 @@ describe("replay: pi's format holds every stop reason pi defines, and a failed c
     assert.deepEqual(unknownIn(packageCapture('harness-pi', 'bad-key.ndjson')), [])
   })
 
-  // The edit-and-run turn with a 503 on its second call, in pi 1.4.0's auto-retry order
-  // (harness-pi's test/fixtures): recovered on the first retry, and failing every retry.
+  // Synthetic, not captured: the edit-and-run turn with a 503 on its second call, in pi 1.4.0's
+  // auto-retry order (harness-pi's test/fixtures): recovered on the first retry, and failing every
+  // retry.
   const normalised = (name: string) => {
     const t = new PiStreamTranslator()
     const lines = packageCapture('harness-pi', name).map((e) => JSON.stringify(e))
