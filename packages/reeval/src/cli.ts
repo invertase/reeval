@@ -894,6 +894,11 @@ async function executeRun(
       questions = questionRunner({
         evals: asked,
         stagingDir,
+        resumed: {
+          completed: new Set(run.completed),
+          previous: ctx.previous,
+          artifacts: ctx.previousArtifacts,
+        },
         maxInputTokens: config.analysis.maxInputTokens,
         maxOutputTokens: config.analysis.maxOutputTokens,
         onAnswer: (id, answer) => {
