@@ -2,6 +2,7 @@
 // and usage errors, filters, leases across workers, events, cancel and workers that die.
 import assert from 'node:assert/strict'
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { availableParallelism } from 'node:os'
 import { basename, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { runEngine } from '../src/engine/node.ts'
@@ -416,6 +417,34 @@ describe('runEngine: running', () => {
       r.evals.map((e) => e.state),
       ['passed', 'passed'],
     )
+  })
+
+  test('workers: up to concurrency files at once, even above the CPU count', async () => {
+    const n = availableParallelism() + 2
+    const names = Array.from({ length: n }, (_, i) => `f${i}.eval.ts`)
+    const { run } = project(names.map((f) => `evals/${f}`))
+    const tests = Object.fromEntries(names.map((f) => [f, [test0(0, f)]]))
+    for (const concurrency of [n, n - 1, n + 5]) {
+      const live = { collect: 0, run: 0 }
+      const peak = { collect: 0, run: 0 }
+      const { spawn } = fakeSpawn((ctl) => {
+        const pass = ctl.init.select ? 'run' : 'collect'
+        peak[pass] = Math.max(peak[pass], ++live[pass])
+        const exit = ctl.exit
+        ctl.exit = (e) =>
+          setTimeout(() => {
+            live[pass]--
+            exit(e)
+          }, 20)
+        passing(tests)(ctl)
+      })
+      const r = await engine({ run: { ...run, concurrency } }, spawn)
+      assert.equal(r.evals.length, n)
+      assert.deepEqual(peak, {
+        collect: Math.min(concurrency, n),
+        run: Math.min(concurrency, n),
+      })
+    }
   })
 
   test('a failed result keeps the error name so assemble can classify without sniffing', async () => {
