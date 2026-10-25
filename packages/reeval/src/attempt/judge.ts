@@ -154,10 +154,10 @@ export function judgeCaller(
   readFile: (path: string) => Promise<string | null>,
 ): AttemptContext['judge'] {
   const ask = async (
+    order: number,
     question: string,
     { on, ...call }: Omit<JudgeCallOptions, 'on'> & { on?: JudgeOn } = {},
   ): Promise<Verdict | JudgeFailure> => {
-    const order = a.judgeCalls++
     if (typeof question !== 'string' || !question.trim()) {
       throw new Error(
         `c.judge() needs a question: a non-empty string (got ${JSON.stringify(question)})`,
@@ -299,7 +299,8 @@ export function judgeCaller(
   }
   // A verdict names its question in `expect(verdict).toPass()`'s default label.
   return async (question, { on, ...options } = {}) => {
+    const order = a.judgeCalls++
     const call = on === undefined ? options : { ...options, on: judgeOn(a.turns, on) }
-    return Object.defineProperty(await ask(question, call), SUBJECT, { value: question })
+    return Object.defineProperty(await ask(order, question, call), SUBJECT, { value: question })
   }
 }

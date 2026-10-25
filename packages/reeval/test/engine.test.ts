@@ -1215,6 +1215,7 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     const p = await project('judge-call-order', {
       'reeval.config.ts': fakeConfig({ harness: `{ files: { 'a.txt': 'hi\\n' } }` }),
       'evals/agent.eval.ts': agentEval(`
+  await c.judge('foreign?', { on: { exec() {} } as never }).catch(() => {})
   await c.judge('failed?', { model: 'no-provider' })
   const [style, greets] = await Promise.all([
     c.judge('style?', { state: { contents: ['a.txt'] } }),
@@ -1222,6 +1223,10 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
   ])
   expect.soft(style).toPass()
   expect.soft(greets).toPass()
+  await Promise.all([
+    c.judge('late?', { model: 'no-provider', state: { contents: ['a.txt'] } }),
+    c.judge('early?', { model: 'no-provider' }),
+  ])
 `),
     })
     await runCli(p.dir)
@@ -1229,13 +1234,13 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     assert.deepEqual(
       e?.trial.judgements.map((j) => [j.question, j.key.split(':')[0]]),
       [
-        ['style?', '1'],
-        ['greets?', '2'],
+        ['style?', '2'],
+        ['greets?', '3'],
       ],
     )
     assert.deepEqual(
       judgeInputs(e).map((i) => i.question),
-      ['failed?', 'style?', 'greets?'],
+      ['failed?', 'style?', 'greets?', 'late?', 'early?'],
     )
     assert.equal(
       'call' in (judgeInputs(e)[0] ?? {}),
