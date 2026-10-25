@@ -11,11 +11,11 @@ import { parseDuration } from '../config.ts'
 import { DEFAULT_EGRESS } from '../egress.ts'
 import {
   type AppliedEnvironment,
-  credentialHeader,
   DEFAULT_SKILL_EXCLUDE,
   isHostFile,
   isSecret,
   isSecretTemplate,
+  maskedHeaderValue,
   mcpHosts,
   parseGitRepo,
   stepCommand,
@@ -792,7 +792,7 @@ export async function resolveEnvironment(
       const h: Record<string, string> = {}
       const hosts = mcpHosts(s.url)
       for (const [k, v] of Object.entries(s.headers)) {
-        if (typeof v === 'string' && credentialHeader(k, v)) registerSecret(v)
+        if (typeof v === 'string' && maskedHeaderValue(k, v)) registerSecret(v)
         const r = secretOf(v, k, hosts)
         if (r !== undefined) h[k] = r
       }

@@ -399,7 +399,12 @@ describe('MCP headers written as plain strings', () => {
           'X-Session-Token': 't',
           'X-Client-Secret': 's',
           'X-Trace': 'xoxb-0123456789-abcdefghij',
+          'Authorization ': 'Bearer spaced-name',
+          'X-Password': 'p',
+          'X-Auth': 'a',
+          'X-Upstream': 'Bearer abc123',
           'X-Request-Source': 'reeval',
+          'X-Author': 'me',
           Accept: 'application/json',
         },
       }),
@@ -424,6 +429,10 @@ describe('MCP headers written as plain strings', () => {
       { label: 'mcp.local.headers.X-Session-Token', https: false },
       { label: 'mcp.local.headers.X-Client-Secret', https: false },
       { label: 'mcp.local.headers.X-Trace', https: false },
+      { label: 'mcp.local.headers.Authorization ', https: false },
+      { label: 'mcp.local.headers.X-Password', https: false },
+      { label: 'mcp.local.headers.X-Auth', https: false },
+      { label: 'mcp.local.headers.X-Upstream', https: false },
       { label: 'mcp.remote.headers.X-Org-Token', https: true },
     ])
   })
@@ -456,6 +465,18 @@ describe('MCP headers written as plain strings', () => {
     assert.equal(redactSecrets(`sent ${value}`, {}), 'sent [REDACTED]')
     assert.equal(redactSecrets(`token ${value.slice(7)}`, {}), 'token [REDACTED]')
     assert.equal(redactSecrets(`sent ${neutral}`, {}), `sent ${neutral}`)
+  })
+
+  test("a value under 8 characters isn't masked, so it can't eat ordinary text", async () => {
+    await resolve(({ mcp }) => ({
+      mcp: {
+        local: mcp.http('http://localhost:1', {
+          headers: { 'X-Token-Count': '4096', 'X-Api-Key-Required': 'true' },
+        }),
+      },
+    }))
+    const text = '{"tokens":4096,"ok":"true"}'
+    assert.equal(redactSecrets(text, {}), text)
   })
 })
 

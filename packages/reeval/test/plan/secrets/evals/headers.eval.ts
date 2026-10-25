@@ -6,6 +6,7 @@ const plain = defineEnvironment('plain-headers', ({ mcp, secret }) => ({
       headers: {
         Authorization: 'Bearer 9f8e7d6c5b4a39281706f5e4d3c2b1a0',
         'X-Trace': 'ghp_0123456789abcdefghijABCDEFGHIJ0123456789',
+        'X-Upstream': 'Bearer upstream-token',
         'X-Request-Source': 'reeval',
       },
     }),

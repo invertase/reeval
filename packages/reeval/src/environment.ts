@@ -290,11 +290,23 @@ function layeredServers(layers: readonly EnvironmentLayer[]): Map<string, McpSer
   return servers
 }
 
-const CREDENTIAL_HEADER = /^(?:proxy-)?authorization$|^cookie$|key|token|secret/i
+const CREDENTIAL_HEADER = /^(?:proxy-)?authorization$|^cookie$|(?:^|[-_])auth(?:$|[-_])/i
+/** An `Authorization`-style value, whatever the header is called. */
+const AUTH_SCHEME = /^(?:Bearer|Basic|Token)\s+\S/i
 
 /** Whether an MCP header written as a plain string looks like a credential, by its name or its value's shape. */
 export const credentialHeader = (name: string, value: string) =>
-  CREDENTIAL_HEADER.test(name) || hasTokenShape(value)
+  CREDENTIAL_HEADER.test(name.trim()) ||
+  SECRET_NAME.test(name) ||
+  AUTH_SCHEME.test(value.trim()) ||
+  hasTokenShape(value)
+
+/**
+ * The plain-header values masked like a secret-named host variable's: 8 or more characters, so a
+ * guessed-at header such as `X-Token-Count: '1000'` can't mask every `1000` the attempt writes.
+ */
+export const maskedHeaderValue = (name: string, value: string) =>
+  value.length >= 8 && credentialHeader(name, value)
 
 /** An MCP header written as a plain string that looks like a credential, and whether its server is on HTTPS. */
 export type PlainCredentialHeader = { label: string; https: boolean }
