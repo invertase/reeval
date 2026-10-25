@@ -1358,9 +1358,9 @@ describe('masking before shortening', () => {
       const a = {
         record: { error: null, judgements: [], outcome: 'pass' },
         signal: new AbortController().signal,
-        judgeErrored: false,
+        judgeThrown: new Set(),
       } as unknown as Attempt
-      recordFailure(a, new Error(message), false)
+      recordFailure(a, new Error(message), false, [])
       assert.match(a.record.error?.message ?? '', /characters cut/)
       assert.match(a.record.error?.message ?? '', /password=\[RED/)
       assert.doesNotMatch(a.record.error?.message ?? '', /password=corr/)
