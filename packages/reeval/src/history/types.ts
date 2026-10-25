@@ -453,7 +453,10 @@ export type CellRecord = Cell & {
   /** `sha256` of `fingerprintParts`; results are comparable only when it matches. */
   fingerprint: string
   fingerprintParts: FingerprintParts
-  /** The environment's digest: the join key into `RunRecord.environments`; null for none. */
+  /**
+   * The environment's digest; null for none. With `environment`, the key into
+   * `RunRecord.environments`: environments with the same contents share a digest.
+   */
   environmentDigest: string | null
   harnessKind: string
   /**

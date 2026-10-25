@@ -379,7 +379,7 @@ Also has every field of `Cell`.
 <Property name="fingerprintParts" type="FingerprintParts"></Property>
 
 <Property name="environmentDigest" type="string | null">
-  The environment's digest: the join key into `RunRecord.environments`; null for none.
+  The environment's digest; null for none. With `environment`, the key into `RunRecord.environments`: environments with the same contents share a digest.
 </Property>
 
 <Property name="harnessKind" type="string"></Property>
