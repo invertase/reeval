@@ -58,9 +58,13 @@ def own_version() -> str | None:
         return None
 
 
+def pinned_version() -> str:
+    """REEVAL_VERSION as reeval spells its version, so 1.0.0rc1 is 1.0.0-rc.1; empty if unset."""
+    return semver(os.environ.get("REEVAL_VERSION", "").strip().removeprefix("v"))
+
+
 def binary_version() -> str:
-    pinned = os.environ.get("REEVAL_VERSION", "").strip().removeprefix("v")
-    if pinned:
+    if pinned := pinned_version():
         return pinned
     if own := own_version():
         return own
@@ -415,7 +419,7 @@ def resolve() -> Path:
                 f"REEVAL_BINARY is {override}, which is this `reeval` command, not the binary.", 2
             )
         return path
-    pinned = os.environ.get("REEVAL_VERSION", "").strip().removeprefix("v")
+    pinned = pinned_version()
     own = bundled()
     if own.is_file() and pinned in ("", own_version()):
         if not WINDOWS and not os.access(own, os.X_OK):
