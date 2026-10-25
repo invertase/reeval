@@ -34,7 +34,7 @@ import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.t
 import type { GitInfo } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
-import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
+import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { harnessId, plannedSandboxes } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
@@ -44,6 +44,7 @@ import { commandOf, redactArgv } from './report/scrub.ts'
 import type { CliInvocation } from './report/types.ts'
 import {
   completedKeysFor,
+  keptAttempts,
   loadPrevious,
   prepareResume,
   resolveResume,
@@ -722,6 +723,7 @@ async function executeRun(
   let budgetTimer: NodeJS.Timeout | undefined
   let toRun: PlannedItem[] = []
   let live: LiveProgressWriter | undefined
+  let kept = new Map<string, LiveKept>()
   let questions: QuestionRunner | undefined
   const onPlan = async ({ planned, excluded, matched, unmatched }: CollectedPlan) => {
     if (unmatched.length) throw unmatchedFilter(config, unmatched)
@@ -782,6 +784,7 @@ async function executeRun(
     }
     if (completed.size) plan.resume = { runId, completed: completed.size }
     run.completed = [...completed]
+    kept = keptAttempts(completed, stagingDir, ctx.previous)
     const { imageStages, imageTargets } = await import('./sandbox/images.ts')
     const targets = imageTargets(
       skipped
@@ -1041,6 +1044,7 @@ async function executeRun(
           runId,
           startedAt: ctx.startedAt,
           planned: toRun,
+          kept,
         })
         renderer.onEvent({
           type: 'run-start',
