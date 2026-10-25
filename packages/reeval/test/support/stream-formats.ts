@@ -85,9 +85,11 @@ const PI_DEFINED = Object.fromEntries(
     kind === 'message_start/assistant' ? ['pending', ...PI_STOP] : PI_STOP,
   ]),
 )
+// A compaction pi couldn't finish has its `errorMessage` (and no `result`).
 const PI_OPTIONAL = [
   ...PI_MESSAGES.map((kind) => `${kind} .message.errorMessage`),
   'message_start/assistant .message.thinkingLevel',
+  'compaction_end .errorMessage',
 ]
 
 // The Cursor runner's lines, as CursorSdkRunnerLine types them, and the SDK's (1.0.32) own values:
