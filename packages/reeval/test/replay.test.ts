@@ -823,6 +823,48 @@ describe("replay: pi's format holds every stop reason pi defines, and a failed c
     assert.deepEqual(unknownIn(packageCapture('harness-pi', 'bad-key.ndjson')), [])
   })
 
+  // Synthetic, not captured: the edit-and-run turn with a 503 on its second call, in pi 1.4.0's
+  // auto-retry order (harness-pi's test/fixtures): recovered on the first retry, and failing every
+  // retry.
+  const normalised = (name: string) => {
+    const t = new PiStreamTranslator()
+    const lines = packageCapture('harness-pi', name).map((e) => JSON.stringify(e))
+    // As the harness agent passes them on: a step's finish reason flat, a call's input parsed.
+    const agentPart = (p: HarnessV1StreamPart) =>
+      p.type === 'finish-step'
+        ? { ...p, finishReason: p.finishReason.unified, rawFinishReason: p.finishReason.raw }
+        : p.type === 'tool-call'
+          ? { ...p, input: JSON.parse(p.input) }
+          : p
+    const parts = [...lines.flatMap((l) => t.push(l)), ...t.end({ exitCode: 0 })]
+    return events(parts.map((p, ms) => ({ turn: 0, ms, part: agentPart(p) as Line['part'] })))
+  }
+  const kinds = (es: TranscriptEvent[]) => es.map((e) => e.type)
+
+  test("a turn pi auto-retried is not a format change, and keeps the retry's work", () => {
+    for (const name of ['auto-retry.ndjson', 'auto-retry-exhausted.ndjson'])
+      assert.deepEqual(unknownIn(packageCapture('harness-pi', name)), [], name)
+    const retried = normalised('auto-retry.ndjson')
+    assert.ok(!kinds(retried).includes('error'), kinds(retried).join(' '))
+    assert.equal(kinds(retried).filter((k) => k === 'retry').length, 1)
+    const plain = normalised('edit-and-run.ndjson')
+    assert.deepEqual(
+      [...tools(retried), ...edits(retried)].map((e) => e.toolCallId),
+      [...tools(plain), ...edits(plain)].map((e) => e.toolCallId),
+    )
+    assert.equal(edits(retried).length, 2)
+  })
+
+  test('twin: a call pi gave up retrying is an error, after a retry for each attempt', () => {
+    const failed = kinds(normalised('auto-retry-exhausted.ndjson'))
+    assert.equal(failed.filter((k) => k === 'retry').length, 3)
+    assert.equal(failed.at(-1), 'error')
+    const renamed = packageCapture('harness-pi', 'auto-retry.ndjson').map((e) =>
+      e.type === 'auto_retry_start' ? { ...e, max_attempts: e.maxAttempts } : e,
+    )
+    assert.notDeepEqual(unknownIn(renamed), [])
+  })
+
   for (const to of ['length', 'aborted', 'error'])
     test(`"stopReason":"${to}" is not a format change`, () => {
       const base = read('pi', 'edit-and-run.raw.jsonl')
