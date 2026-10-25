@@ -5,6 +5,7 @@ import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { acceptIntoSnapshot } from '../diff.ts'
 import { SUBJECT } from '../engine/runtime.ts'
 import { UsageError } from '../errors.ts'
+import { redactSecrets } from '../redact.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { BackgroundHandle, ExecResult, ExecRetry } from '../types.ts'
@@ -38,7 +39,7 @@ export function createChecks(a: Attempt) {
         if (r.exitCode === 0 || tries.length > retries) return r
         debugLog(
           'check',
-          `$ ${clip(command, 160)} → exit ${r.exitCode} on try ${tries.length} of ${retries + 1}, again in ${formatDuration(interval)}`,
+          `$ ${clip(redactSecrets(command), 160)} → exit ${r.exitCode} on try ${tries.length} of ${retries + 1}, again in ${formatDuration(interval)}`,
         )
         await sleep(interval, undefined, { signal: a.signal })
       }
@@ -49,13 +50,13 @@ export function createChecks(a: Attempt) {
     const of = retries > 0 ? ` on try ${tries.length} of ${retries + 1}` : ''
     debugLog(
       'check',
-      `$ ${clip(command, 160)} → exit ${r.exitCode}${of} · ${formatDuration(durationMs)}`,
+      `$ ${clip(redactSecrets(command), 160)} → exit ${r.exitCode}${of} · ${formatDuration(durationMs)}`,
     )
     debugTrace(
       'check',
       'output',
       { command, ...r, durationMs, ...retried },
-      `check output: ${clip(command, 80)}`,
+      `check output: ${clip(redactSecrets(command), 80)}`,
     )
     a.report({
       kind: 'check-end',

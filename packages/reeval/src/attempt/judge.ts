@@ -19,6 +19,7 @@ import { withInputSize } from '../judge/size.ts'
 import { type Draft, type DraftTurn, stateOf } from '../judge/state.ts'
 import { mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
 import { transcriptForJudge } from '../judge/transcript.ts'
+import { redactSecrets } from '../redact.ts'
 import { withLease } from '../scheduler/client.ts'
 import { clip, formatDuration } from '../text.ts'
 import type {
@@ -204,13 +205,15 @@ export function judgeCaller(
     const ms = () => Math.round(performance.now() - start)
     const atLeast = options.threshold ?? 0.8
     a.report({ kind: 'judge-start', question })
-    debugLog('judge', `asking ${name}: ${JSON.stringify(clip(question, 160))}`)
+    debugLog('judge', `asking ${name}: ${JSON.stringify(clip(redactSecrets(question), 160))}`)
     if (dropped.length) debugLog('judge', `left out of the judge's input: ${dropped.join(' · ')}`)
     debugTrace('judge', 'prompt', input, 'judge prompt')
 
     const failed = (message: string, retries?: RetriedError['retries']): JudgeFailure => {
       a.judgeErrored = true
-      a.judgeErrors.push(`c.judge(${JSON.stringify(clip(question, 80))}) failed: ${message}`)
+      a.judgeErrors.push(
+        `c.judge(${JSON.stringify(clip(redactSecrets(question), 80))}) failed: ${message}`,
+      )
       input.error = message
       if (retries?.length) input.retries = retries
       debugLog('judge', `${name} · ${formatDuration(ms())} · error: ${message}`)

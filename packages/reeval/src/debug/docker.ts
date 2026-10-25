@@ -1,6 +1,7 @@
 // Every docker (or podman) command an attempt runs, into its trace (`-vv`, and trace.ndjson). Imported for its
 // side effect by the modules that drive Docker; commands outside an attempt aren't traced.
 import { onDockerCommand } from '@reeval/sandbox-docker'
+import { redactSecrets } from '../redact.ts'
 import { attemptDebug } from './attempt.ts'
 
 const word = (arg: string) =>
@@ -19,4 +20,4 @@ onDockerCommand((command) => {
     .filter(Boolean)
     .join('\n')
   debug.traceLine('docker', 'command', command, `$ ${line} → ${result} · ${command.ms}ms`, detail)
-})
+}, redactSecrets)

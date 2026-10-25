@@ -6,6 +6,7 @@ import { attemptDebugDir } from '../debug/files.ts'
 import { getRunContext, type TestHandle } from '../engine/runtime.ts'
 import { TimeoutError } from '../errors.ts'
 import { attemptId, evalId, evalSlug, relativeFile } from '../ids.ts'
+import { redactSecrets } from '../redact.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { AttemptContext, EvalFn } from '../types.ts'
 import { assertionRecords, softFailure } from './assertions.ts'
@@ -143,7 +144,7 @@ async function attemptBody(
     const checked = assertionRecords(assertions())
     if (checked.length) record.assertions = checked
     for (const x of checked) {
-      const why = x.message ? ` · ${clip(x.message.split('\n')[0] ?? '', 160)}` : ''
+      const why = x.message ? ` · ${clip(redactSecrets(x.message.split('\n')[0] ?? ''), 160)}` : ''
       debug.log(
         'check',
         `assert ${x.status === 'pass' ? '✓' : '✗'} ${x.label} (${x.matcher}, ${x.status})${why}`,

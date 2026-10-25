@@ -34,7 +34,7 @@ export function recordFailure(a: Attempt, error: unknown, timedOut: boolean): vo
   record.error = timedOut
     ? { kind: 'timeout', message: 'The eval timed out' }
     : classify(error, a.signal)
-  record.error.message = capMiddle(record.error.message)
+  record.error.message = capMiddle(redactSecrets(record.error.message))
   if (error instanceof PrepareError && !timedOut) {
     const { class: kind, stage, ref, cause, log, setBy } = error.failure
     record.error.prepare = { class: kind, stage, ref, cause, log, setBy: setBy ?? [] }
@@ -135,7 +135,7 @@ export function turnErrors(transcripts: TranscriptEvent[][]): string[] {
   return transcripts.flatMap((events, i) => {
     const found = events.find((e) => e.type === 'error')
     return found?.type === 'error'
-      ? [`turn ${i + 1} error: ${redactSecrets(clip(found.message.trim(), 500))}`]
+      ? [`turn ${i + 1} error: ${clip(redactSecrets(found.message.trim()), 500)}`]
       : []
   })
 }

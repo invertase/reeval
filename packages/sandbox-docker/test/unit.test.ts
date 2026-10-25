@@ -1312,4 +1312,29 @@ describe('docker command traces', () => {
       'nothing once the listener is gone',
     )
   })
+
+  test('a secret across the clip is masked whole, in every stream, argument and error', () => {
+    const secret = 'correct-horse-battery-staple'
+    const seen: DockerCommand[] = []
+    onDockerCommand(
+      (c) => seen.push(c),
+      (text) => text.replaceAll(secret, '[REDACTED]'),
+    )
+    const across = (max: number) => `${'.'.repeat(max - 4)}${secret}`
+    try {
+      const at = Date.now()
+      traceDocker(['exec', across(300)], at, {
+        exitCode: 1,
+        stdout: Buffer.from(across(4096)),
+        stderr: across(4096),
+      })
+      traceDocker(['exec', across(300)], at, { stdout: across(4096), exitCode: 0 })
+      traceDocker(['ps'], at, { error: new Error(`failed: ${secret}`) })
+    } finally {
+      onDockerCommand(undefined)
+    }
+    const traced = JSON.stringify(seen)
+    assert.doesNotMatch(traced, /\.corr/)
+    assert.equal(traced.match(/\[RED/g)?.length, 6)
+  })
 })

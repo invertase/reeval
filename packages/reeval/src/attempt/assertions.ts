@@ -2,12 +2,17 @@
 // TypeScript `expect` or the attempt protocol's `expect` call): the one place a record's label,
 // its ` #n` and its message are decided, so the same calls make the same history keys.
 import type { RawAssertion } from '../engine/runtime.ts'
+import { redactSecrets } from '../redact.ts'
 import type { AssertionRecord } from '../types.ts'
 
 const MESSAGE_LIMIT = 1024
 const LABEL_LIMIT = 60
 
-const clipped = (s: string, limit: number) => (s.length > limit ? `${s.slice(0, limit)}…` : s)
+/** Masked first, so a secret the limit would cut through is masked whole. */
+const clipped = (text: string, limit: number) => {
+  const s = redactSecrets(text)
+  return s.length > limit ? `${s.slice(0, limit)}…` : s
+}
 
 const text = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
