@@ -1242,6 +1242,11 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
       judgeInputs(e).map((i) => i.question),
       ['failed?', 'style?', 'greets?', 'late?', 'early?'],
     )
+    assert.deepEqual(
+      [...(e?.error?.message ?? '').matchAll(/c\.judge\("(\w+\?)"\) failed/g)].map((m) => m[1]),
+      ['failed?', 'late?', 'early?'],
+      'the failures are listed in call order',
+    )
     assert.equal(
       'call' in (judgeInputs(e)[0] ?? {}),
       false,

@@ -222,7 +222,10 @@ export function judgeCaller(
 
     const failed = (message: string, retries?: RetriedError['retries']): JudgeFailure => {
       a.judgeErrored = true
-      a.judgeErrors.push(`c.judge(${JSON.stringify(clip(question, 80))}) failed: ${message}`)
+      a.judgeErrors.push({
+        call: order,
+        message: `c.judge(${JSON.stringify(clip(question, 80))}) failed: ${message}`,
+      })
       input.error = message
       if (retries?.length) input.retries = retries
       debugLog('judge', `${name} · ${formatDuration(ms())} · error: ${message}`)
