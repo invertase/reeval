@@ -697,6 +697,51 @@ evaluate('judged', async (c) => {
     )
   })
 
+  test("a group's or eval's judge needs its key before any attempt, and a malformed one exits 2", async () => {
+    const p = await project('eval-judge-key', {
+      'reeval.config.ts': `import { direct, vercel } from 'reeval/gateway'${fakeConfig({
+        extra: `gateway: [direct(), vercel()],`,
+      })}`,
+      'evals/j.eval.ts': `import { evaluate, expect, group } from 'reeval'
+evaluate('own judge', { judge: { model: 'anthropic/claude-sonnet-5' } }, async (c) => {
+  await c.send('x')
+  expect(await c.judge('Did it?')).toPass()
+})
+group('judged', { judge: { model: 'openai/gpt-6-luna', gateway: 'vercel' } }, () => {
+  evaluate('group judge', async (c) => {
+    await c.send('x')
+    expect(await c.judge('Did it?')).toPass()
+  })
+})
+`,
+    })
+    const noKeys = {
+      ANTHROPIC_API_KEY: '',
+      OPENAI_API_KEY: '',
+      AI_GATEWAY_API_KEY: '',
+      VERCEL_OIDC_TOKEN: '',
+    }
+    const missing = await runCli(p.dir, ['run'], { env: noKeys })
+    assert.equal(missing.code, 2, missing.stdout + missing.stderr)
+    assert.match(
+      missing.stderr,
+      /Missing credentials: ANTHROPIC_API_KEY \(for direct\(\)\) for the judge model, "anthropic\/claude-sonnet-5"; AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(for vercel\(\)\) for the judge model, "openai\/gpt-6-luna"\./,
+    )
+    assert.doesNotMatch(missing.stdout, /own judge|group judge/, 'no attempt started')
+    const malformed = await runCli(p.dir, ['run'], {
+      env: { ...noKeys, ANTHROPIC_API_KEY: 'sk-ant\nrest', AI_GATEWAY_API_KEY: 'vck test' },
+    })
+    assert.equal(malformed.code, 2, malformed.stdout + malformed.stderr)
+    assert.match(
+      malformed.stderr,
+      /Credentials with whitespace or a line break in them: ANTHROPIC_API_KEY \(character 7\), AI_GATEWAY_API_KEY \(character 4\)/,
+    )
+    const narrowed = await runCli(p.dir, ['run', 'own judge'], { env: noKeys })
+    assert.equal(narrowed.code, 2, narrowed.stdout + narrowed.stderr)
+    assert.match(narrowed.stderr, /Missing credentials: ANTHROPIC_API_KEY \(for direct\(\)\)/)
+    assert.doesNotMatch(narrowed.stderr, /AI_GATEWAY_API_KEY/, 'a filtered-out eval needs no key')
+  })
+
   const judgeKeyCases: Array<[string, string, RegExp]> = [
     [
       'anthropic/claude-sonnet-5',

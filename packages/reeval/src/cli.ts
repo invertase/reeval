@@ -15,6 +15,7 @@ import {
   loadConfig,
   malformedCredentials,
   missingCredentials,
+  type PlannedJudge,
   parseDuration,
   requireConfig,
   resolveConcurrency,
@@ -865,10 +866,16 @@ async function executeRun(
       for (const q of questions) if (typeof q.model === 'string') questionModels.add(q.model)
       if (questions.length) asked.push({ row, questions })
     }
+    const judges = new Map<string, PlannedJudge>()
+    for (const p of skipped) {
+      const j = p.attempt.judge
+      if (j && !p.attempt.plan.skip) judges.set(`${j.model}\0${j.gateway ?? ''}`, j)
+    }
     const missing = missingCredentials(config, process.env, {
       harnesses: plan.harnessDescriptors,
       profile,
       questionModels: [...questionModels],
+      judges: [...judges.values()],
     })
     if (missing.length) {
       const hint = missing.some((m) => m.includes('(for direct())'))
@@ -882,6 +889,7 @@ async function executeRun(
       harnesses: plan.harnessDescriptors,
       profile,
       questionModels: [...questionModels],
+      judges: [...judges.values()],
     })
     if (malformed.length) {
       throw new UsageError(

@@ -2570,6 +2570,12 @@ export type AttemptMeta = {
   family?: FamilyMeta
   /** The gateway its harness resolved to; unset when no config, profile or pin names one. */
   gateway?: ResolvedGateway
+  /**
+   * Its judge's `'provider/model'`, as the config, profile, groups and eval set it, and the
+   * gateway its calls go through, so the run checks the judge's key before any attempt starts.
+   * Unset for a fake judge, a model object, or none.
+   */
+  judge?: { model: string; gateway?: GatewayName }
 }
 
 /** Where a cell's harness resolved in the `gateway` list, and the entries before it that couldn't serve it. */
