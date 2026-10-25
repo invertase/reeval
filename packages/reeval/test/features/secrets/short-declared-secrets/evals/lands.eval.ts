@@ -5,5 +5,5 @@ import { pins } from './env.ts'
 // reads, with its nulls and numbers (the 1234 lines the agent added) intact.
 evaluate('lands', { environment: pins }, async (c) => {
   await c.send('print PIN and PLACEHOLDER')
-  expect((await c.exec('printenv PIN PLACEHOLDER')).stdout).toBe('1234\nnull\n')
+  expect((await c.exec('printf "%s\\n" "$PIN" "$PLACEHOLDER"')).stdout).toBe('1234\nnull\n')
 })
