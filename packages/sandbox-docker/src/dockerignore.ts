@@ -139,7 +139,8 @@ export function dockerignoreMatcher(text: string): (path: string) => boolean {
  * Files in the build context that `docker build` would send, sorted, relative to `context`, plus
  * the Dockerfile and `.dockerignore`. A Dockerfile read from stdin (`dockerfile` null) has no
  * `<Dockerfile>.dockerignore` of its own. An excluded directory is skipped only where BuildKit
- * skips it: when every `!` rule is a literal path (less a trailing `/*` or `/**`) outside it.
+ * skips it: when every `!` rule is a literal path (less a trailing `/**`, then a trailing `/*`)
+ * outside it, so a re-include of everything under `a`'s subdirectories reaches none of them.
  */
 export function contextFiles(context: string, dockerfile: string | null): string[] {
   const own = [
@@ -149,7 +150,7 @@ export function contextFiles(context: string, dockerfile: string | null): string
   const rules = parseRules(own ? readFileSync(own, 'utf8') : '')
   const reincludes = rules
     .filter((rule) => rule.negate)
-    .map((rule) => rule.pattern.replace(/\/\*\*?$/, ''))
+    .map((rule) => rule.pattern.replace(/\/\*\*$/, '').replace(/\/\*$/, ''))
   const literal = reincludes.every((pattern) => !/[*?[\]^\\]/.test(pattern))
   const always = new Set([...(dockerfile ? [relative(context, dockerfile)] : []), '.dockerignore'])
   const files: string[] = []

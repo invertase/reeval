@@ -51,6 +51,12 @@ const CASES: Case[] = [
     sent: ['dirx/y'],
   },
   {
+    name: 'a re-include ending /*/** is pruned below its literal prefix',
+    ignore: 'a\n!a/*/**\n',
+    files: ['a/b/c', 'a/d', 'e'],
+    sent: ['e'],
+  },
+  {
     name: '** inside a segment spans whole directories only',
     ignore: 'a**b\n',
     files: ['ab', 'axb', 'ax/b'],
