@@ -457,6 +457,15 @@ test('parseDuration', () => {
       `parseDuration(${String(value)})`,
     )
   }
+  assert.equal(parseDuration('596h'), 2_145_600_000)
+  assert.equal(parseDuration(2 ** 31 - 1), 2 ** 31 - 1)
+  for (const value of ['597h', '1000h', 2 ** 31, '2147483648ms']) {
+    assert.throws(
+      () => parseDuration(value as never),
+      /A duration is at most 596h \(2147483647ms\), the longest timer Node can set\./,
+      `parseDuration(${String(value)})`,
+    )
+  }
 })
 
 test('resolveConfig defaults', () => {

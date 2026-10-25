@@ -62,7 +62,8 @@
             "interval": {
               "description": "Milliseconds to wait before each extra try. Default 1000.",
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 2147483647
             },
             "op": {
               "type": "string",
@@ -240,12 +241,14 @@
                 "interval": {
                   "description": "Milliseconds between tries. Default 50.",
                   "type": "number",
-                  "exclusiveMinimum": 0
+                  "exclusiveMinimum": 0,
+                  "maximum": 2147483647
                 },
                 "timeout": {
                   "description": "Milliseconds before it fails with the last error. Default 1000.",
                   "type": "number",
-                  "exclusiveMinimum": 0
+                  "exclusiveMinimum": 0,
+                  "maximum": 2147483647
                 }
               },
               "additionalProperties": false
@@ -471,11 +474,12 @@
       "additionalProperties": false
     },
     "Duration": {
-      "description": "More than zero: `90s`, `15m`, `1h`, or a number of milliseconds.",
+      "description": "More than zero and at most 596h: `90s`, `15m`, `1h`, or a number of milliseconds.",
       "anyOf": [
         {
           "type": "number",
-          "exclusiveMinimum": 0
+          "exclusiveMinimum": 0,
+          "maximum": 2147483647
         },
         {
           "type": "string",
@@ -895,7 +899,8 @@
           "properties": {
             "ms": {
               "type": "number",
-              "exclusiveMinimum": 0
+              "exclusiveMinimum": 0,
+              "maximum": 2147483647
             }
           },
           "required": ["ms"],

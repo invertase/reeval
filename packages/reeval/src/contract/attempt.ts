@@ -5,6 +5,7 @@
 // with their JSON Schema in schema/protocol/. Results reuse the attempt's own types (`TurnData`,
 // `ExecResult`, `AssertionRecord`), held to them at compile time and by their TSDoc.
 import { z } from 'zod'
+import { MAX_TIMER_MS, TIMER_LIMIT } from '../duration.ts'
 import type {
   AssertionRecord,
   Capture,
@@ -187,6 +188,7 @@ export const execRetrySchema = z
     interval: z
       .number()
       .min(0, 'must be 0 or more milliseconds')
+      .max(MAX_TIMER_MS, `must be ${TIMER_LIMIT}`)
       .optional()
       .describe('Milliseconds to wait before each extra try. Default 1000.'),
   })
@@ -425,7 +427,10 @@ const portSchema = z
   .int()
   .min(1, 'a port from 1 to 65535')
   .max(65535, 'a port from 1 to 65535')
-const millisSchema = z.number().positive('more than zero milliseconds')
+const millisSchema = z
+  .number()
+  .positive('more than zero milliseconds')
+  .max(MAX_TIMER_MS, TIMER_LIMIT)
 
 export const captureWaitSchema = z
   .enum(['load', 'idle'])

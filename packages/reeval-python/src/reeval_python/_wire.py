@@ -628,7 +628,7 @@ DockerSandboxDescriptor = TypedDict(
 )
 
 
-# More than zero: `90s`, `15m`, `1h`, or a number of milliseconds.
+# More than zero and at most 596h: `90s`, `15m`, `1h`, or a number of milliseconds.
 Duration: TypeAlias = "float | str"
 
 
