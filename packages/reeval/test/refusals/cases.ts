@@ -35,6 +35,7 @@ import {
   pi,
 } from '../../src/harness.ts'
 import { checkHarnesses, checkOptions } from '../../src/options.ts'
+import { planEval } from '../../src/plan-eval.ts'
 import { docker, fakeSandbox, podman } from '../../src/sandbox.ts'
 import type {
   EnvironmentHelpers,
@@ -110,6 +111,32 @@ const hostEntry = () => {
   )
   return dir
 }
+
+/** What planning an eval with `options` refuses under `secrets: { unbrokered: 'error' }`. */
+const strict = (o: unknown) => () => {
+  const config = resolveConfig(
+    { harness: fakeHarness(), sandbox: fakeSandbox(), secrets: { unbrokered: 'error' } },
+    DIR,
+    'reeval.config.ts',
+  )
+  planEval(
+    { name: 'e', mode: 'run', groups: [], options: o as never },
+    { config, profile: null, tags: [], concurrency: 1, file: undefined, order: 0 },
+  )
+}
+/** An environment with one MCP server on `url` that sends `headers`. */
+const mcpHeaders = (url: string, headers: Record<string, unknown>) =>
+  defineEnvironment('e', ({ mcp }) => ({ mcp: { docs: mcp.http(url, { headers } as never) } }))
+
+/** An environment with one MCP server on `url` whose Authorization secret sets `hosts`. */
+const hostsHeader = (url: string) =>
+  defineEnvironment('e', ({ mcp, secret }) => ({
+    mcp: {
+      docs: mcp.http(url, {
+        headers: { Authorization: secret.fromEnv('MCP_TOKEN', { hosts: ['mcp.internal'] }) },
+      }),
+    },
+  }))
 
 /** What `declareTree` checks before it declares anything. */
 const tree = (children: unknown) => () => {
@@ -637,6 +664,46 @@ export const CASES: Record<string, Case[]> = {
     ],
     ['skill.git without a repo', helpers(({ skill }) => ({ skills: [skill.git('')] }))],
     [
+      'skill.git with credentials',
+      helpers(({ skill }) => ({
+        skills: [skill.git('https://deploy:secret@github.com/acme/skills.git')],
+      })),
+    ],
+    [
+      'skill.git with a token as the username',
+      helpers(({ skill }) => ({ skills: [skill.git('https://token@github.com/acme/skills')] })),
+    ],
+    [
+      'skill.npm tarball URL with credentials',
+      helpers(({ skill }) => ({
+        skills: [skill.npm('https://ci:token@npm.example.com/skills-1.0.0.tgz')],
+      })),
+    ],
+    [
+      'skill.npm git+https with a token',
+      helpers(({ skill }) => ({
+        skills: [skill.npm('git+https://token@github.com/acme/skills.git#v1')],
+      })),
+    ],
+    [
+      'skill.npm git+ssh with a password',
+      helpers(({ skill }) => ({
+        skills: [skill.npm('git+ssh://git:secret@github.com/acme/skills.git#v1')],
+      })),
+    ],
+    [
+      'skill.npm URL specs without credentials',
+      helpers(({ skill }) => ({
+        skills: [
+          skill.npm('git+ssh://git@github.com/acme/skills.git#v1'),
+          skill.npm('git+https://github.com/acme/skills.git#v1'),
+          skill.npm('https://npm.example.com/skills-1.0.0.tgz'),
+          skill.npm('github:acme/skills#v1'),
+          skill.npm('npm:@acme/skills@1.0.0'),
+        ],
+      })),
+    ],
+    [
       'skill.registry a bad id',
       helpers(({ skill }) => ({ skills: [skill.registry('owner/repo')] })),
     ],
@@ -659,6 +726,33 @@ export const CASES: Record<string, Case[]> = {
     [
       'data: skill with an unknown source',
       env({ skills: [{ kind: 'skill', source: 'ftp', placement: 'harness' }] }),
+    ],
+    [
+      'data: skill.git with credentials',
+      env({
+        skills: [
+          {
+            kind: 'skill',
+            source: 'git',
+            repo: 'https://deploy:secret@github.com/acme/skills.git',
+            placement: 'harness',
+          },
+        ],
+      }),
+    ],
+    [
+      'data: skill.npm with credentials',
+      env({
+        skills: [
+          {
+            kind: 'skill',
+            source: 'npm',
+            spec: 'git+https://token@github.com/acme/skills.git#v1',
+            path: 'skills',
+            placement: 'harness',
+          },
+        ],
+      }),
     ],
     [
       'plugin only an unknown part',
@@ -688,6 +782,24 @@ export const CASES: Record<string, Case[]> = {
       })),
     ],
     ['plugin.npm without a spec', helpers(({ plugin }) => ({ plugins: [plugin.npm('')] }))],
+    [
+      'plugin.npm URL with credentials',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.npm('https://ci:token@npm.example.com/review-1.0.0.tgz')],
+      })),
+    ],
+    [
+      'plugin.npm git+https with a token',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.npm('git+https://token@github.com/acme/review.git#v1')],
+      })),
+    ],
+    [
+      'plugin.marketplace npm URL with credentials',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@npm:https://ci:token@npm.example.com/tools.tgz')],
+      })),
+    ],
     [
       'plugin.marketplace without a name',
       helpers(({ plugin }) => ({ plugins: [plugin.marketplace('github:acme/agent-plugins')] })),
@@ -757,6 +869,46 @@ export const CASES: Record<string, Case[]> = {
     [
       'data: plugin with an unknown source',
       env({ plugins: [{ kind: 'plugin', source: 'zip', name: 'x' }] }),
+    ],
+    [
+      'data: plugin.git with credentials',
+      env({
+        plugins: [{ kind: 'plugin', source: 'git', repo: 'https://user:token@github.com/o/r' }],
+      }),
+    ],
+    [
+      'data: plugin.npm with credentials',
+      env({
+        plugins: [
+          { kind: 'plugin', source: 'npm', spec: 'https://ci:token@npm.example.com/r.tgz' },
+        ],
+      }),
+    ],
+    [
+      'data: plugin.marketplace with credentials',
+      env({
+        plugins: [
+          {
+            kind: 'plugin',
+            source: 'marketplace',
+            name: 'lint',
+            marketplace: { source: 'git', repo: 'https://user:token@github.com/acme/tools' },
+          },
+        ],
+      }),
+    ],
+    [
+      'data: plugin.marketplace npm with credentials',
+      env({
+        plugins: [
+          {
+            kind: 'plugin',
+            source: 'marketplace',
+            name: 'lint',
+            marketplace: { source: 'npm', spec: 'https://ci:token@npm.example.com/tools.tgz' },
+          },
+        ],
+      }),
     ],
     [
       'data: plugin marketplace without its source',
@@ -948,6 +1100,16 @@ export const CASES: Record<string, Case[]> = {
       env({ workspace: { kind: 'git', repo: 'r', url: 'r', token: 'ghp_abc-123' } }),
     ],
     ['data: workspace good', env({ workspace: { kind: 'git', repo: 'r', url: 'r', ref: 'v1' } })],
+    [
+      'data: workspace with credentials',
+      env({
+        workspace: {
+          kind: 'git',
+          repo: 'github:o/r',
+          url: 'https://x-access-token:secret@github.com/o/r.git',
+        },
+      }),
+    ],
   ],
   environment: [
     ['a bad name', any(defineEnvironment, 'a b', {})],
@@ -989,6 +1151,21 @@ export const CASES: Record<string, Case[]> = {
     ['data: a typo in a layer', options({ environment: envData({ setpu: [] }) })],
     ['data: a bad setup step', options({ environment: envData({ setup: [{ run: '' }] }) })],
     [
+      'data: a skill URL with a token in a layer',
+      options({
+        environment: envData({
+          skills: [
+            {
+              kind: 'skill',
+              source: 'git',
+              repo: 'https://token@github.com/acme/skills.git',
+              placement: 'harness',
+            },
+          ],
+        }),
+      }),
+    ],
+    [
       'data: a layer without a spec',
       options({ environment: { kind: 'environment', name: 'x', layers: [{ name: 'x' }] } }),
     ],
@@ -999,6 +1176,96 @@ export const CASES: Record<string, Case[]> = {
     ['data: good', options({ environment: envData({ setup: ['ls'], files: { 'a.txt': 'a' } }) })],
   ],
   config: [
+    [
+      "unbrokered 'error': a plain MCP header named like a credential",
+      strict({
+        environment: mcpHeaders('https://mcp.example.com', { Authorization: 'Bearer abc123' }),
+      }),
+    ],
+    [
+      "unbrokered 'error': a plain MCP header with a token's shape, on http://",
+      strict({
+        environment: mcpHeaders('http://localhost:4000', {
+          'X-Trace': 'ghp_0123456789abcdefghijABCDEFGHIJ0123456789',
+        }),
+      }),
+    ],
+    [
+      "unbrokered 'error': a plain MCP header from a declaration tree",
+      strict({
+        environment: {
+          kind: 'environment',
+          name: 'e',
+          layers: [
+            {
+              name: 'e',
+              spec: {
+                mcp: {
+                  docs: {
+                    kind: 'mcp',
+                    transport: 'http',
+                    url: 'https://mcp.example.com',
+                    headers: { 'x-session-token': 'abc123' },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      }),
+    ],
+    [
+      "unbrokered 'error': a neutral plain MCP header",
+      strict({ environment: mcpHeaders('https://mcp.example.com', { 'X-Request-Source': 'ci' }) }),
+    ],
+    [
+      "unbrokered 'error': a secret.template MCP header on https://",
+      strict({
+        environment: defineEnvironment('e', ({ mcp, secret }) => ({
+          mcp: {
+            docs: mcp.http('https://mcp.example.com', {
+              // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+              headers: { Authorization: secret.template('Bearer ${MCP_TOKEN}') },
+            }),
+          },
+        })),
+      }),
+    ],
+    [
+      "unbrokered 'error': an http:// MCP server's header secret that sets hosts",
+      strict({ sandbox: docker(), environment: hostsHeader('http://mcp.internal/mcp') }),
+    ],
+    [
+      "unbrokered 'error': an https:// MCP server's header secret that sets hosts",
+      strict({ sandbox: docker(), environment: hostsHeader('https://mcp.internal/mcp') }),
+    ],
+    [
+      "unbrokered 'error': an http:// MCP server's header secret that sets hosts, from a declaration tree",
+      strict({
+        sandbox: docker(),
+        environment: {
+          kind: 'environment',
+          name: 'e',
+          layers: [
+            {
+              name: 'e',
+              spec: {
+                mcp: {
+                  docs: {
+                    kind: 'mcp',
+                    transport: 'sse',
+                    url: 'http://mcp.internal/events',
+                    headers: {
+                      Authorization: { kind: 'secret', from: 'MCP_TOKEN', hosts: ['mcp.internal'] },
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      }),
+    ],
     ['yaml: empty', yaml('')],
     ['yaml: not YAML', yaml('harness: [a\n')],
     ['yaml: a repeated key', yaml('runs: 1\nruns: 2\n')],

@@ -1957,7 +1957,7 @@ export type ReevalConfig = {
   profiles?: Record<string, Profile>
   /** The profile when neither `--profile` nor `REEVAL_PROFILE` names one: `ci` when `CI` is set. */
   defaultProfile?: { ci?: string; local?: string }
-  /** `unbrokered: 'error'` refuses Docker secrets without `hosts` instead of warning (default `'warn'`). */
+  /** `unbrokered: 'error'` refuses Docker secrets without `hosts`, and credential-like MCP headers written as plain strings, instead of warning (default `'warn'`). */
   secrets?: { unbrokered?: 'warn' | 'error' }
   /**
    * Local debug data in `.reeval/debug`: how many runs to keep (default 20), and how many MB of raw
@@ -2275,8 +2275,16 @@ export type EnvironmentRecord = {
   plugins?: PluginRecord[]
   files: Array<{ path: string; sha256: string }>
   vars: string[]
+  /**
+   * Every secret, by the variable it's set as in the sandbox; an MCP header's (`secret.fromEnv`,
+   * `secret.template`, a plugin's `${VAR}`) by each host variable it reads.
+   */
   secrets: string[]
-  /** Secrets the sandbox only had placeholders for, swapped in by the egress gateway. */
+  /**
+   * Secrets the sandbox only had placeholders for, swapped in by the egress gateway, named as in
+   * `secrets`. A variable it also got as its real value somewhere (an `http://` header, an env
+   * secret without `hosts`) isn't listed.
+   */
   brokered: string[]
   /** Optional secrets whose host variable was unset, so they weren't injected. */
   unset: string[]

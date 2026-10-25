@@ -27,6 +27,8 @@ import {
   environmentDataProblem,
   isEnvironment,
   isMovingRef,
+  type PlainCredentialHeader,
+  plainCredentialHeaders,
   plannedSecrets,
   sameWorkspaceOnly,
   sandboxOf,
@@ -986,7 +988,7 @@ export const secretVarsIn = (env: EnvVars, attempt: PlannedAttempt): string[] =>
 
 const brokerHint = (s: UnbrokeredSecret) =>
   /^mcp\.[^.]+\.headers\./.test(s.label)
-    ? 'give the MCP server an https:// URL (reeval brokers its header secrets to its own host, over HTTPS only)'
+    ? 'give the MCP server an https:// URL (reeval brokers its header secrets over HTTPS only, to its own host unless they set hosts)'
     : `add the hosts it's sent to, e.g. secret.fromEnv('${s.from}', { hosts: ['api.example.com'] })`
 
 export const unbrokeredWarning = (s: UnbrokeredSecret) =>
@@ -996,6 +998,24 @@ export const unbrokeredWarning = (s: UnbrokeredSecret) =>
 
 export const unbrokeredError = (s: UnbrokeredSecret, where: string, configFile: string) =>
   `${s.label} in ${where} isn't brokered, and secrets.unbrokered is 'error' in ${configFile}. To broker it, ${brokerHint(s)}.`
+
+/** The attempts' MCP headers written as plain strings that look like credentials, once each. */
+export function plainHeaders(attempts: PlannedAttempt[]): PlainCredentialHeader[] {
+  const out = new Map<string, PlainCredentialHeader>()
+  for (const a of attempts) {
+    for (const h of plainCredentialHeaders(a.environment.layers)) out.set(h.label, h)
+  }
+  return [...out.values()]
+}
+
+const templateHint = (h: PlainCredentialHeader) =>
+  `read it from a host variable with secret.template, e.g. secret.template('Bearer \${VAR}')${h.https ? '' : ' and give the MCP server an https:// URL'}`
+
+export const plainHeaderWarning = (h: PlainCredentialHeader) =>
+  `${h.label} is a plain string, so it's in the sandbox as its real value. To give the agent only a placeholder, ${templateHint(h)}.`
+
+export const plainHeaderError = (h: PlainCredentialHeader, where: string, configFile: string) =>
+  `${h.label} in ${where} is a plain string, and secrets.unbrokered is 'error' in ${configFile}. To broker it, ${templateHint(h)}.`
 
 export const levelOf = (where: string): SandboxWarning['level'] =>
   where.startsWith('evaluate(')
@@ -1086,6 +1106,7 @@ export function evalPlan(
       ...environmentWarnings(attempts),
       ...(skip ? [] : questionWarnings(resolved)),
       ...unbrokered(r.resolved.env, attempts).filter(reachesSandbox).map(unbrokeredWarning),
+      ...plainHeaders(attempts).map(plainHeaderWarning),
     ],
     sandboxWarnings: skip ? [] : sandboxWarnings(attempts, resolved, origin),
     brokered: [...new Set(attempts.flatMap((a) => brokeredIn(r.resolved.env, a)))],

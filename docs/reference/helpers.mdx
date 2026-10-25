@@ -55,6 +55,7 @@ A secret is read from the host when an attempt starts. Its value is masked in ev
 | Their JSON-, URL- and base64-encoded forms | The same |
 | Any stretch of 8 or more of their characters, such as a key's last 12 | The same, for declared secrets of 12+ characters and token-like variables (16+ characters of letters, digits and `_.~+/=:-`, with at least one letter and one digit, not a path or URL) |
 | Well-known token shapes (`AIza…`, `sk-…`, `ghp_…`, AWS keys, JWTs, private keys) | The same, even when they aren't set on the host |
+| MCP header values of 8 or more characters written as plain strings that look like credentials (below) | What an attempt writes: `.reeval/debug`, `-v`, records and transcripts |
 
 A stretch made only of lower-case letters, upper-case letters or digits isn't masked on its own, so words and numbers stay readable, nor is one with quotes, commas, colons, brackets or spaces, so a record's JSON stays whole. Secret-named host variables under 8 characters and declared secrets under 4 aren't masked at all.
 
@@ -73,7 +74,7 @@ Still, don't print any part of a key to check for a leak: compare on the host, o
 </Property>
 
 <Property name="secret.template(template)" type="SecretTemplate">
-  A string with host variables substituted, for MCP headers: `secret.template('Bearer ${TOKEN}')`. Every variable must be set.
+  A string with host variables substituted, for MCP headers: `secret.template('Bearer ${TOKEN}')`. Every variable must be set. The record lists each variable among the environment's secrets, as it lists the host variable of a header's `secret.fromEnv`.
 </Property>
 
 <Property name="secret.hosts" type="{ gemini, openai, anthropic, github }">
@@ -124,11 +125,11 @@ Every skill source takes `placement`: `'harness'` (default) lets the harness ada
 </Property>
 
 <Property name="skill.git(repo, options?)" type="SkillSource">
-  A git repository: `https://…`, `git@…`, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL. `ref` is a branch, tag or SHA; `path` is the directory inside the repository. Without `path`, reeval reads the root when it has a `SKILL.md`, else the repository's `skills/` directory when it has one, as `skill.registry` does, else the root's subdirectories. From there it looks one level down only: each skill is a directory with its own `SKILL.md`.
+  A git repository: `https://…`, `git@…`, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL. `ref` is a branch, tag or SHA; `path` is the directory inside the repository. Without `path`, reeval reads the root when it has a `SKILL.md`, else the repository's `skills/` directory when it has one, as `skill.registry` does, else the root's subdirectories. From there it looks one level down only: each skill is a directory with its own `SKILL.md`. A URL with a password or token in it is refused: reeval clones with your own git credentials.
 </Property>
 
 <Property name="skill.npm(spec, options?)" type="SkillSource">
-  A pinned npm package, fetched with `npm pack` on the host from the registry npm is configured for (`.npmrc` or `npm_config_registry`). A local tarball or folder (`./vendor/skills-1.2.3.tgz`, `../pkg`, an absolute path, or `file:` with one of those) resolves against the file that calls `skill.npm`, as `file()` does. Skills are read from `path` inside it, default `skills`.
+  A pinned npm package, fetched with `npm pack` on the host from the registry npm is configured for (`.npmrc` or `npm_config_registry`). A local tarball or folder (`./vendor/skills-1.2.3.tgz`, `../pkg`, an absolute path, or `file:` with one of those) resolves against the file that calls `skill.npm`, as `file()` does. Skills are read from `path` inside it, default `skills`. A spec that's a URL (a tarball, `git+https://` or `git+ssh://`) with a password or token in it is refused; an SSH user such as `git@` is fine.
 </Property>
 
 <Property name="skill.registry(id, options?)" type="SkillSource">
@@ -197,7 +198,7 @@ A plugin is a directory in Claude Code's layout: `.claude-plugin/plugin.json` wi
 </Property>
 
 <Property name="plugin.npm(spec, options?)" type="PluginSource">
-  A pinned npm package, fetched as for `skill.npm`. `path` is the plugin's directory in it, default the package root.
+  A pinned npm package, fetched as for `skill.npm`, and refused for a password or token in a URL as it is. `path` is the plugin's directory in it, default the package root.
 </Property>
 
 <Property name="plugin.marketplace('name@source', options?)" type="PluginSource">
@@ -266,11 +267,28 @@ the fetcher plugin's MCP server "search" runs npx, which fetches from registry.n
   A server-sent events server, with the same options as `mcp.http`. Cursor, Claude Code, Antigravity and fx get it as an SSE server; OpenCode, Goose, pi and Codex have no SSE transport, so a plan that gives any of them an `mcp.sse` server exits 2 before any attempt starts (`--dry-run` shows it).
 </Property>
 
-A secret in an HTTPS server's headers is brokered to that server's host unless it sets its own `hosts`, and the host is allowed through a restricted egress policy. The plan shows it:
+A secret in an HTTPS server's headers is brokered to that server's host unless it sets its own `hosts`, and the host is allowed through a restricted egress policy. On an `http://` server a header secret is never brokered, `hosts` or not, since the gateway swaps secrets in over HTTPS only: the agent gets the real value, the plan warns, and `secrets: { unbrokered: 'error' }` refuses it. The plan shows what's brokered:
 
 ```text
 brokered: GEMINI_API_KEY → generativelanguage.googleapis.com; mcp.search.headers.Authorization → mcp.acme.dev
 ```
+
+A header written as a plain string goes to the agent's MCP config as written. When its name looks like a credential (`Authorization`, `Proxy-Authorization`, `Cookie`, an `auth` segment such as `X-Auth`, or a name containing `key`, `token`, `secret`, `password` or `credential`, in any case) or its value does (`Bearer …`, `Basic …`, `Token …` or a well-known token shape), the plan warns, and `secrets: { unbrokered: 'error' }` refuses it:
+
+```ts
+mcp: {
+  // warning: mcp.search.headers.Authorization is a plain string, …
+  search: mcp.http('https://mcp.acme.dev', {
+    headers: { Authorization: `Bearer ${process.env.ACME_TOKEN}` },
+  }),
+  // brokered: mcp.docs.headers.Authorization → docs.acme.dev
+  docs: mcp.http('https://docs.acme.dev', {
+    headers: { Authorization: secret.template('Bearer ${ACME_TOKEN}') },
+  }),
+},
+```
+
+A credential-like plain header's value of 8 or more characters is still masked in what the attempt writes, but the agent gets the real value, and an eval that prints the value itself isn't masked on screen. Read it from a host variable with `secret.template` instead.
 
 ## file
 
@@ -408,6 +426,8 @@ warning: workspace git(github:acme/template) uses no ref (the default branch): r
 | A bad `build` | `plugin.npm("@acme/review-plugin@1.2.0"): build is a shell command, a list of them, or { run, cwd } (got 3)` |
 | An unknown `build` key | `plugin.npm("@acme/review-plugin@1.2.0"): build takes { run, cwd }, not "dir"` |
 | A bad `build.cwd` | `plugin.git("github:acme/agent-plugins"): build.cwd is a directory relative to the source's root, with forward slashes and no .., or '.' for the root (got "../x")` |
+| A token in a skill or plugin URL | `skill.git("https://***@github.com/acme/skills"): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials; remove it from the URL.` (also `plugin.git` and `plugin.marketplace`) |
+| A token in an npm URL spec | `skill.npm("git+https://***@github.com/acme/skills.git#v1"): the URL has a password or token in it. reeval runs npm pack on the host, with your own npm and git credentials; remove it from the URL.` (also `plugin.npm` and an `npm:` marketplace) |
 | No plugin repository | `plugin.git() needs a repository: a URL or github:owner/repo, e.g. plugin.git('github:acme/agent-plugins', { ref: 'v1.2.0' }) (got "")` |
 | No command | `mcp.stdio() needs a command, e.g. mcp.stdio('npx', ['-y', 'server']) (got "")` |
 | A token in the URL | `git("https://***:***@github.com/acme/app"): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials (a credential helper, gh auth setup-git or an SSH key), and the sandbox never gets them; remove it from the URL.` |

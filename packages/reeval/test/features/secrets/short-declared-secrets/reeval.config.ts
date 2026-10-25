@@ -5,7 +5,7 @@ import { fakeHarness } from 'reeval/harness'
 // `"added": 1234` beside the `null`s every record has.
 export default defineConfig({
   harness: fakeHarness({
-    script: [[{ exec: 'printenv PIN PLACEHOLDER' }]],
+    script: [[{ exec: 'printf "%s\\n" "$PIN" "$PLACEHOLDER"' }]],
     files: { 'pins.txt': 'pin\n'.repeat(1234) },
   }),
 })

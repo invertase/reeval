@@ -17,8 +17,12 @@ const docs = defineEnvironment('docs', ({ mcp, secret }) => ({
   mcp: {
     remote: mcp.http('https://mcp.example.com/v1', { headers: { 'x-api-key': secret() } }),
     local: mcp.http('http://localhost:3333', {
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
-      headers: { authorization: secret.template('Bearer ${LOCAL_TOKEN}') },
+      headers: {
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+        authorization: secret.template('Bearer ${LOCAL_TOKEN}'),
+        // Plain HTTP is never swapped, so its hosts don't broker it.
+        'x-api-key': secret.fromEnv('LOCAL_KEY', { hosts: ['localhost'] }),
+      },
     }),
   },
 }))

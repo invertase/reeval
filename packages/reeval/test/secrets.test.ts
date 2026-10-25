@@ -15,7 +15,12 @@ import { AttemptDebug, withDebug } from '../src/debug/attempt.ts'
 import '../src/debug/docker.ts'
 import type { RawAssertion } from '../src/engine/runtime.ts'
 import { type BrokeredSecret, resolveEnvironment } from '../src/environment/resolve.ts'
-import { applied, defineEnvironment, unbrokeredSecrets } from '../src/environment.ts'
+import {
+  applied,
+  defineEnvironment,
+  plainCredentialHeaders,
+  unbrokeredSecrets,
+} from '../src/environment.ts'
 import { cursorMcpServers } from '../src/harness/agents.ts'
 import { capText, OUTPUT_CAP, rawLines, turnError, turnText } from '../src/history/assemble.ts'
 import { findingLines, findingSummary, scanText } from '../src/history/secret-scan.ts'
@@ -40,7 +45,7 @@ import { scrubber } from '../src/report/scrub.ts'
 import { brokerPhases } from '../src/sandbox/phases.ts'
 import { FAILURE_CAP } from '../src/text.ts'
 import type { EnvironmentInput, EvalRecord, TranscriptEvent } from '../src/types.ts'
-import { tempDir } from './helpers.ts'
+import { fakeConfig, project, readRun, runCli, tempDir } from './helpers.ts'
 
 const VALUE = 'reeval-unit-brokered-4f1c9e2a7b'
 const OTHER = 'reeval-unit-other-9d3a61c0e5'
@@ -181,7 +186,7 @@ describe('resolving brokered secrets', () => {
     assert.deepEqual(
       r.substitutions.map((s) => [s.name, s.value, s.hosts]),
       [
-        ['x-api-key', VALUE, ['mcp.example.com']],
+        ['REEVAL_UNIT_BROKERED', VALUE, ['mcp.example.com']],
         ['REEVAL_UNIT_OTHER', OTHER, ['mcp.example.com']],
       ],
     )
@@ -199,6 +204,163 @@ describe('resolving brokered secrets', () => {
     assert.ok(server && server.transport === 'http')
     assert.equal(server.headers['x-api-key'], VALUE)
     assert.deepEqual(r.substitutions, [])
+  })
+
+  test('twin: MCP header secrets on plain HTTP stay real values when they set hosts', async () => {
+    const r = await resolve(({ secret, mcp }) => ({
+      mcp: {
+        local: mcp.http('http://mcp.local:3333/mcp', {
+          headers: {
+            'x-api-key': secret.fromEnv('REEVAL_UNIT_BROKERED', { hosts: ['mcp.local'] }),
+            'x-other-key': secret.fromEnv('REEVAL_UNIT_OTHER', { hosts: ['api.example.com'] }),
+          },
+        }),
+      },
+    }))
+    const server = r.mcp.local
+    assert.ok(server && server.transport === 'http')
+    assert.equal(server.headers['x-api-key'], VALUE)
+    assert.equal(server.headers['x-other-key'], OTHER)
+    assert.deepEqual(r.substitutions, [])
+    assert.deepEqual(r.record.brokered, [])
+  })
+
+  test("a header's secret.template records each host variable it reads, on HTTP and HTTPS", async () => {
+    const headers = (url: string) =>
+      resolve(({ secret, mcp }) => ({
+        mcp: {
+          docs: mcp.http(url, {
+            headers: {
+              // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+              authorization: secret.template('Basic ${REEVAL_UNIT_OTHER}:${REEVAL_UNIT_BROKERED}'),
+            },
+          }),
+        },
+      }))
+    const plain = await headers('http://localhost:3333')
+    assert.deepEqual(plain.record.secrets, ['REEVAL_UNIT_BROKERED', 'REEVAL_UNIT_OTHER'])
+    assert.deepEqual(plain.record.brokered, [])
+    const tls = await headers('https://mcp.example.com/v1')
+    assert.deepEqual(tls.record.secrets, ['REEVAL_UNIT_BROKERED', 'REEVAL_UNIT_OTHER'])
+    assert.deepEqual(tls.record.brokered, ['REEVAL_UNIT_BROKERED', 'REEVAL_UNIT_OTHER'])
+  })
+
+  test('secret.fromEnv and secret.template name a header secret by the host variable alike', async () => {
+    const record = async (url: string, fromEnv: boolean) =>
+      (
+        await resolve(({ secret, mcp }) => ({
+          mcp: {
+            docs: mcp.http(url, {
+              headers: {
+                authorization: fromEnv
+                  ? secret.fromEnv('REEVAL_UNIT_OTHER')
+                  : // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+                    secret.template('${REEVAL_UNIT_OTHER}'),
+              },
+            }),
+          },
+        }))
+      ).record
+    for (const url of ['http://localhost:3333', 'https://mcp.example.com/v1']) {
+      const [a, b] = [await record(url, true), await record(url, false)]
+      assert.deepEqual(a.secrets, ['REEVAL_UNIT_OTHER'])
+      assert.deepEqual([a.secrets, a.brokered], [b.secrets, b.brokered])
+    }
+  })
+
+  test("a header's host variable doesn't hide a plain env var of the same name", async () => {
+    const r = await resolve(({ secret, mcp }) => ({
+      env: { REEVAL_UNIT_OTHER: 'plain' },
+      mcp: {
+        local: mcp.http('http://localhost:3333', {
+          headers: { authorization: secret.fromEnv('REEVAL_UNIT_OTHER') },
+        }),
+      },
+    }))
+    assert.deepEqual(r.record.vars, ['REEVAL_UNIT_OTHER'])
+    assert.deepEqual(r.record.secrets, ['REEVAL_UNIT_OTHER'])
+  })
+
+  test("the digest covers a header's secret.template variables", async () => {
+    const digest = async (authorization: string | { template: string }) =>
+      (
+        await resolve(({ secret, mcp }) => ({
+          mcp: {
+            local: mcp.http('http://localhost:3333', {
+              headers: {
+                authorization:
+                  typeof authorization === 'string'
+                    ? authorization
+                    : secret.template(authorization.template),
+              },
+            }),
+          },
+        }))
+      ).record.digest
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+    const a = await digest({ template: 'Bearer ${REEVAL_UNIT_BROKERED}' })
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+    assert.notEqual(await digest({ template: 'Bearer ${REEVAL_UNIT_OTHER}' }), a)
+    assert.notEqual(await digest('Bearer literal'), a)
+  })
+
+  test('a variable the sandbox also gets as its real value is not recorded as brokered', async () => {
+    const tls = 'https://mcp.example.com/v1'
+    const record = async (urls: string[], env = false) =>
+      (
+        await resolve(({ secret, mcp }) => ({
+          ...(env ? { env: { REEVAL_UNIT_OTHER: secret.fromEnv('REEVAL_UNIT_OTHER') } } : {}),
+          mcp: Object.fromEntries(
+            urls.map((url, i) => [
+              `s${i}`,
+              mcp.http(url, {
+                headers: {
+                  authorization:
+                    i % 2
+                      ? secret.fromEnv('REEVAL_UNIT_OTHER')
+                      : // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+                        secret.template('Bearer ${REEVAL_UNIT_OTHER}'),
+                },
+              }),
+            ]),
+          ),
+        }))
+      ).record
+    const mixed = await record([tls, 'http://localhost:3333'])
+    assert.deepEqual([mixed.secrets, mixed.brokered], [['REEVAL_UNIT_OTHER'], []])
+    const withEnv = await record([tls], true)
+    assert.deepEqual([withEnv.secrets, withEnv.brokered], [['REEVAL_UNIT_OTHER'], []])
+    const everywhere = await record([tls, tls])
+    assert.deepEqual(everywhere.brokered, ['REEVAL_UNIT_OTHER'], 'twin: brokered everywhere')
+    assert.notEqual(mixed.digest, everywhere.digest)
+  })
+
+  test("the attempt's env lists a plain var a header's host variable shares a name with", async () => {
+    const p = await project('secrets-attempt-env', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const env = defineEnvironment('shared-name', ({ secret, mcp }) => ({
+  env: { REEVAL_UNIT_MODE: 'plain' },
+  mcp: {
+    docs: mcp.http('http://127.0.0.1:9/mcp', {
+      headers: { authorization: secret.template('Bearer \${REEVAL_UNIT_MODE}') },
+    }),
+  },
+}))
+evaluate('shares a name', { environment: env }, async (c) => {
+  await c.send('hi')
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run'], { env: { REEVAL_UNIT_MODE: OTHER } })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run, evals } = readRun(p.dir)
+    assert.deepEqual(run.environments[0]?.vars, ['REEVAL_UNIT_MODE'])
+    assert.deepEqual(evals[0]?.trial.env, {
+      vars: ['REEVAL_UNIT_MODE'],
+      secrets: ['REEVAL_UNIT_MODE'],
+      brokered: [],
+    })
   })
 
   test('MCP stdio env secrets are brokered only with explicit hosts', async () => {
@@ -327,6 +489,24 @@ describe('unbrokered secrets', () => {
     ])
   })
 
+  test("an http:// MCP server's header secret is unbrokered even when it sets hosts", () => {
+    const env = defineEnvironment('e', ({ secret, mcp }) => ({
+      mcp: {
+        local: mcp.http('http://mcp.local/mcp', {
+          headers: { auth: secret.fromEnv('LOCAL_TOKEN', { hosts: ['mcp.local'] }) },
+        }),
+        remote: mcp.http('https://mcp.example.com', {
+          headers: { auth: secret.fromEnv('REMOTE_TOKEN', { hosts: ['auth.example.com'] }) },
+        }),
+      },
+    }))
+    assert.deepEqual(unbrokeredSecrets({}, env.layers), [
+      { label: 'mcp.local.headers.auth', from: 'LOCAL_TOKEN' },
+    ])
+    const attempt = { sandbox: { kind: 'docker' }, environment: applied(env) } as PlannedAttempt
+    assert.deepEqual(brokeredIn({}, attempt), ['mcp.remote.headers.auth → auth.example.com'])
+  })
+
   test('a later layer that brokers a variable leaves nothing unbrokered', () => {
     const parent = defineEnvironment('parent', ({ secret }) => ({ env: { KEY: secret() } }))
     const child = parent.extendEnvironment('child', ({ secret }) => ({
@@ -394,6 +574,99 @@ describe('unbrokered secrets', () => {
     assert.deepEqual(unbrokered({}, [attempt('docker'), attempt('docker')]), [
       { label: 'PLAIN', from: 'PLAIN' },
     ])
+  })
+})
+
+describe('MCP headers written as plain strings', () => {
+  const env = defineEnvironment('e', ({ mcp, secret }) => ({
+    mcp: {
+      local: mcp.http('http://localhost:1', {
+        headers: {
+          Authorization: 'Bearer plain-auth-7f3c',
+          'proxy-authorization': 'Basic dXNlcjpwYXNz',
+          Cookie: 'sid=1',
+          'X-Api-Key': 'k',
+          'X-Session-Token': 't',
+          'X-Client-Secret': 's',
+          'X-Trace': 'xoxb-0123456789-abcdefghij',
+          'Authorization ': 'Bearer spaced-name',
+          'X-Password': 'p',
+          'X-Auth': 'a',
+          'X-Upstream': 'Bearer abc123',
+          'X-Request-Source': 'reeval',
+          'X-Author': 'me',
+          Accept: 'application/json',
+        },
+      }),
+      remote: mcp.http('https://mcp.example.com', {
+        headers: {
+          Authorization: secret(),
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+          'X-Api-Key': secret.template('${REEVAL_UNIT_OTHER}'),
+          'X-Org-Token': 'plain',
+        },
+      }),
+      stdio: mcp.stdio('x', [], { env: { MODE: 'fast' } }),
+    },
+  }))
+
+  test('lists those named like a credential or shaped like a token, not secrets or others', () => {
+    assert.deepEqual(plainCredentialHeaders(env.layers), [
+      { label: 'mcp.local.headers.Authorization', https: false },
+      { label: 'mcp.local.headers.proxy-authorization', https: false },
+      { label: 'mcp.local.headers.Cookie', https: false },
+      { label: 'mcp.local.headers.X-Api-Key', https: false },
+      { label: 'mcp.local.headers.X-Session-Token', https: false },
+      { label: 'mcp.local.headers.X-Client-Secret', https: false },
+      { label: 'mcp.local.headers.X-Trace', https: false },
+      { label: 'mcp.local.headers.Authorization ', https: false },
+      { label: 'mcp.local.headers.X-Password', https: false },
+      { label: 'mcp.local.headers.X-Auth', https: false },
+      { label: 'mcp.local.headers.X-Upstream', https: false },
+      { label: 'mcp.remote.headers.X-Org-Token', https: true },
+    ])
+  })
+
+  test('a later layer that makes the header a secret leaves nothing to warn of', () => {
+    const parent = defineEnvironment('parent', ({ mcp }) => ({
+      mcp: { docs: mcp.http('https://mcp.example.com', { headers: { Authorization: 'x' } }) },
+    }))
+    const child = parent.extendEnvironment('child', ({ mcp, secret }) => ({
+      mcp: {
+        docs: mcp.http('https://mcp.example.com', { headers: { Authorization: secret() } }),
+      },
+    }))
+    assert.equal(plainCredentialHeaders(parent.layers).length, 1)
+    assert.deepEqual(plainCredentialHeaders(child.layers), [])
+  })
+
+  test('resolving the environment masks the credential-like values, and only those', async () => {
+    const value = 'Bearer 3e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b'
+    const neutral = 'nightly-ci-9z8y7x6w'
+    const r = await resolve(({ mcp }) => ({
+      mcp: {
+        local: mcp.http('http://localhost:1', {
+          headers: { Authorization: value, 'X-Request-Source': neutral },
+        }),
+      },
+    }))
+    const server = r.mcp.local
+    assert.equal(server?.transport === 'http' && server.headers.Authorization, value)
+    assert.equal(redactSecrets(`sent ${value}`, {}), 'sent [REDACTED]')
+    assert.equal(redactSecrets(`token ${value.slice(7)}`, {}), 'token [REDACTED]')
+    assert.equal(redactSecrets(`sent ${neutral}`, {}), `sent ${neutral}`)
+  })
+
+  test("a value under 8 characters isn't masked, so it can't eat ordinary text", async () => {
+    await resolve(({ mcp }) => ({
+      mcp: {
+        local: mcp.http('http://localhost:1', {
+          headers: { 'X-Token-Count': '4096', 'X-Api-Key-Required': 'true' },
+        }),
+      },
+    }))
+    const text = '{"tokens":4096,"ok":"true"}'
+    assert.equal(redactSecrets(text, {}), text)
   })
 })
 
