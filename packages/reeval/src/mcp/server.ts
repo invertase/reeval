@@ -245,7 +245,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Compare two runs',
         description:
-          "Diffs two reeval runs eval by eval to find a regression (reeval compare --json): each changed row's base and head outcome and status (regressed, fixed, drift = not comparable, added, removed, infra), per-cell lift and effort, and what changed in the stack; same counts the unchanged evals, which all: true lists too. With only head, the base is head's nearest recorded ancestor.",
+          "Diffs two reeval runs eval by eval to find a regression (reeval compare --json): each changed row's base and head outcome and status (regressed, fixed, drift = not comparable, added, removed, infra), per-cell lift and effort, a row per pooled family with a minLift gate (kind: family), and what changed in the stack; same counts the unchanged evals, which all: true lists too. With only head, the base is head's nearest recorded ancestor.",
         inputSchema: z.object({
           base: z.string().optional().describe(`${RUN_REF}; needs head too`),
           head: z.string().optional().describe(RUN_REF),

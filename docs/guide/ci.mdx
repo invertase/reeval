@@ -106,7 +106,7 @@ jobs:
 
 Ubuntu runners have Docker running, so `reeval image build` and `reeval run` work as they do locally, and `reeval run` fails the job when a gated cell fails. `reeval compare` then diffs the run against the nearest recorded run in the branch's git history, and `--md` writes the evals that changed to the job summary: each regressed eval with the checks that flipped, and a tally such as `1 regressed · 4 same`.
 
-`--fail-on-regression` fails the job if any eval regressed, or a new or changed eval fails. With no recorded run to compare with, every eval is new.
+`--fail-on-regression` fails the job if any eval or pooled family's `minLift` gate regressed, or a new or changed one fails. With no recorded run to compare with, every eval is new.
 
 <Info>
   `fetch-depth: 0` gives `reeval compare` the git history it needs to find that ancestor. In a shallow clone it falls back to the previous run by time.

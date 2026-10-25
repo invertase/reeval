@@ -569,6 +569,9 @@ export type CompareViewRow = {
   headScore: number | null
   /** Cells in both runs, with lift and effort on each side. */
   perCell: CompareCell[]
+  /** See `CompareRow`: a pooled family's gate, with no slug, pass@1 or score of its own. */
+  kind?: 'family'
+  lifts?: CompareRow['lifts']
 }
 
 const meanScore = (e: EvalEntry | undefined) => {
@@ -640,8 +643,10 @@ export function compareView(
   records: { base?: RunRecord; head?: RunRecord } = {},
 ) {
   const rows: CompareViewRow[] = compare(base, head).map((row) => {
-    const b = base.evals.find((e) => e.id === row.id)
-    const h = head.evals.find((e) => e.id === row.id)
+    const evalOf = (run: HistoryEntry) =>
+      row.kind === 'family' ? undefined : run.evals.find((e) => e.id === row.id)
+    const b = evalOf(base)
+    const h = evalOf(head)
     const baseKeys = new Set(b?.cells.map((c) => c.key))
     const shared =
       row.cells && new Set(h?.cells.filter((c) => baseKeys.has(c.key)).map((c) => c.key))
@@ -654,8 +659,8 @@ export function compareView(
       slug: h?.slug ?? b?.slug ?? null,
       basePassAt1: passAt1(b),
       headPassAt1: passAt1(h),
-      baseScore: meanScore(records.base?.evals.find((e) => e.id === row.id)),
-      headScore: meanScore(records.head?.evals.find((e) => e.id === row.id)),
+      baseScore: b ? meanScore(records.base?.evals.find((e) => e.id === row.id)) : null,
+      headScore: h ? meanScore(records.head?.evals.find((e) => e.id === row.id)) : null,
       perCell: row.perCell ?? [],
     }
   })

@@ -8,12 +8,12 @@ import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
 import type { ArtifactLevel, HistoryEntry } from './history/types.ts'
 import {
-  addedRow,
   type CompareRow,
   compare,
   formatHistory,
   formatShow,
   history,
+  newRows,
   pickBaseline,
   type Reachability,
   resolveRun,
@@ -201,7 +201,7 @@ export async function compareView(config: ResolvedConfig, refs: string[]) {
     const candidates = entries.filter((e) => e.recorded && e.runId !== head.runId)
     base = pickBaseline(candidates, head, ancestry)
   }
-  const rows = base ? compare(base, head) : head.evals.map(addedRow)
+  const rows = base ? compare(base, head) : newRows(head)
   const flag = (e: HistoryEntry) => ({
     runId: e.runId,
     recorded: e.recorded,
@@ -244,9 +244,9 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
 }
 
 /**
- * What `--fail-on-regression` fails on: an eval that went from pass to fail, and a new or
- * changed (can't compare) eval that fails, since nothing earlier vouches for it. A head the run's
- * interrupt cancelled didn't fail.
+ * What `--fail-on-regression` fails on: an eval or a pooled family's gate that went from pass to
+ * fail, and a new or changed (can't compare) one that fails, since nothing earlier vouches for it.
+ * A head the run's interrupt cancelled didn't fail.
  */
 export const regressions = (rows: CompareRow[]) =>
   rows.filter(

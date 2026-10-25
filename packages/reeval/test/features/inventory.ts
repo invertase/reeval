@@ -1997,6 +1997,18 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'compare.family-gate',
+    area: 'Records and studio',
+    name: "A pooled family's `minLift` gate is a row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail",
+    tests: [
+      "reeval/test/history.test.ts › reeval compare has a row for a pooled family's minLift gate",
+      'reeval/test/history.test.ts › reeval compare has no row for a pooled family without a gate',
+      unit(
+        "compare has a row for a pooled family's gate, comparable when its cases and variants are",
+      ),
+    ],
+  },
+  {
     id: 'query',
     area: 'Records and studio',
     name: '`reeval query`',

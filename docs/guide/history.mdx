@@ -131,6 +131,7 @@ new              greets in Spanish
 | `fixed` | The checks that pass now |
 | `can't compare` | What changed, such as the environment, the eval's file or a helper it imports, and each side's result. An eval Ctrl-C cancelled on one side reads `cancelled` there |
 | `new`, `removed` | An eval only one run has, with its result |
+| `… (all cases)` | A pooled family's `minLift` gate, after its cases, with each gated variant's pooled lift, base → head. It can regress while every case passes |
 
 A check that didn't run on one side reads `not run`, never `fail`. `-v` adds each cell's lift and effort, base → head.
 
