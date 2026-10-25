@@ -926,6 +926,19 @@ export const inventory: InventoryFeature[] = [
     tests: [secrets('twin: during a check, the checks secret is active')],
   },
   {
+    id: 'secret.checks-setup-processes',
+    area: 'Environments',
+    name: "Processes setup leaves running with a `to: 'checks'` secret without `hosts`: `setupProcesses` and the `setup-process-secret` remark",
+    fixtures: ['secrets/checks-setup-background', 'secrets/checks-setup-finishes'],
+    tests: [
+      "reeval/test/remarks.test.ts › setup-process-secret: a process setup left running with a to: 'checks' secret, not without one",
+      options(
+        "secrets: { unbrokered: 'error' } refuses a to: 'checks' secret without hosts before setup runs",
+      ),
+      secrets("a to: 'checks' secret's warning says what keeps it from the agent and what doesn't"),
+    ],
+  },
+  {
     id: 'secret.brokered',
     area: 'Environments',
     name: 'Brokered secrets (`hosts`, `in`) and their placeholders',

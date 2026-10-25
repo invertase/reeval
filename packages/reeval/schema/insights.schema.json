@@ -178,6 +178,7 @@
             "no-baseline",
             "prompt-names-tool",
             "proxy-only-egress",
+            "setup-process-secret",
             "slow-mcp-start",
             "too-few-tries"
           ]

@@ -83,6 +83,49 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
   }
 }
 
+/** The `to: 'checks'` secrets the setup steps got as their real value: those without `hosts`. */
+function unbrokeredChecks(env: ResolvedEnvironment): string[] {
+  const brokered = new Set(env.substitutions.filter((s) => s.phase === 'checks').map((s) => s.name))
+  return Object.keys(env.checkVars).filter((name) => !brokered.has(name))
+}
+
+/**
+ * The processes the setup steps left running with an unbrokered `to: 'checks'` secret in their
+ * environment. The listing runs as the agent's user, with no checks secrets of its own, so it
+ * finds exactly the processes the agent could read the value from, and prints names, never
+ * values. Docker only: the fake sandbox runs on the host, with no separation to report on.
+ */
+async function leftRunning(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
+  const names = unbrokeredChecks(env)
+  if (a.spec.sandbox.kind !== 'docker' || !env.setup.length || !names.length) return []
+  const r = await box.exec(
+    [
+      'for p in /proc/[0-9]*; do',
+      '  [ "$p" = "/proc/$$" ] && continue',
+      `  n=$(tr '\\0' '\\n' < "$p/environ" 2>/dev/null | sed -n -E 's/^(${names.join('|')})=.*/\\1/p' | sort -u | tr '\\n' ' ')`,
+      '  [ -n "$n" ] || continue',
+      `  c=$(tr '\\0' ' ' < "$p/cmdline" 2>/dev/null)`,
+      '  [ -n "$c" ] || c=$(cat "$p/comm" 2>/dev/null)',
+      `  printf '%s\\t%s\\n' "$n" "$c"`,
+      'done',
+      'true',
+    ].join('\n'),
+    { signal: a.signal },
+  )
+  if (r.exitCode !== 0) {
+    debugLog('env', `couldn't list the processes setup left running: ${tailOf(r.stderr)}`)
+    return []
+  }
+  return r.stdout
+    .split('\n')
+    .filter(Boolean)
+    .slice(0, 20)
+    .map((line) => {
+      const [held = '', ...command] = line.split('\t')
+      return { command: clip(command.join('\t').trim(), 200), secrets: held.trim().split(' ') }
+    })
+}
+
 // A relative path: GNU tar (Git for Windows' too) reads a `C:` in its file name as a remote host.
 const WORKSPACE_TAR = '.reeval-workspace.tar'
 
@@ -415,6 +458,14 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     )
   }
   await runSetup(a, box, env)
+  const running = await leftRunning(a, box, env)
+  if (running.length) {
+    a.record.setupProcesses = running
+    debugLog(
+      'env',
+      `setup left ${running.length} process${running.length === 1 ? '' : 'es'} running with ${[...new Set(running.flatMap((p) => p.secrets))].join(', ')} (to: 'checks', no hosts) in the environment: ${running.map((p) => clip(p.command, 80)).join('; ')}`,
+    )
+  }
   await snapshot(box, a.signal)
   debugLog('env', 'workspace snapshot taken: the diff starts here')
   const timed = await timeMcpServers(box, env.mcp, a.signal)

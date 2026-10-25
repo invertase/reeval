@@ -89,7 +89,7 @@ Options for `secret()` and `secret.fromEnv()`:
 </Property>
 
 <Property name="to" type="'agent' | 'checks'" optional>
-  `agent` (default) puts it in the container's environment. `checks` gives it only to `c.exec` and `setup` steps, never the agent.
+  `agent` (default) puts it in the container's environment. `checks` gives it only to `c.exec` and `setup` steps: it's never in the agent's own environment. A process a setup step or `c.exec` starts keeps it while it runs, and the agent runs as the same user, so a long-running process that needs the value while the agent works (a server the checks call) should get it brokered with `hosts`.
 </Property>
 
 <Property name="optional" type="boolean" optional>
@@ -109,7 +109,7 @@ A secret without `hosts` reaches the sandbox as its real value, and the plan war
 warning: SENTRY_DSN is in the sandbox as its real value. To give the agent only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('SENTRY_DSN', { hosts: ['api.example.com'] }).
 ```
 
-A `to: 'checks'` secret without `hosts` warns that it `reaches the checks (c.exec, setup steps) as its real value; the agent never gets it.`
+A `to: 'checks'` secret without `hosts` warns that it `reaches the checks (c.exec, setup steps) as its real value. It's never in the agent's own environment, but a process a setup step leaves running holds it while the agent works.` In Docker, when a setup step does leave a process running with it, the attempt records the process in `setupProcesses` and the run ends with the [`setup-process-secret`](/reference/cli/run#remarks) remark. `secrets: { unbrokered: 'error' }` refuses it before anything runs.
 
 A required secret that isn't set fails the attempt with `Secret NAME for <where> isn't set. Set it in the environment or .env.local.` Secrets in the config (and profile `defaults`) are checked before the run starts. See [Credential brokering](/concepts/credential-brokering).
 

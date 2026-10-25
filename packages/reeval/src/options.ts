@@ -991,7 +991,7 @@ const brokerHint = (s: UnbrokeredSecret) =>
 
 export const unbrokeredWarning = (s: UnbrokeredSecret) =>
   s.checksOnly
-    ? `${s.label} reaches the checks (c.exec, setup steps) as its real value; the agent never gets it. To give the checks only a placeholder, ${brokerHint(s)}.`
+    ? `${s.label} reaches the checks (c.exec, setup steps) as its real value. It's never in the agent's own environment, but a process a setup step leaves running holds it while the agent works. To give the checks only a placeholder, ${brokerHint(s)}.`
     : `${s.label} is in the sandbox as its real value. To give the agent only a placeholder, ${brokerHint(s)}.`
 
 export const unbrokeredError = (s: UnbrokeredSecret, where: string, configFile: string) =>

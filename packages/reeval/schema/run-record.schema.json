@@ -525,6 +525,13 @@
             }
           ]
         },
+        "setupProcesses": {
+          "description": "Processes the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in their environment, so they hold its real value while the agent works and the agent, as the same user, can read it from them. Each is `{ command, secrets }`: its command line, cut at 200 characters, and those secrets' names. Absent when there were none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SetupProcess"
+          }
+        },
         "startedAt": {
           "anyOf": [
             {
@@ -2933,6 +2940,24 @@
         }
       },
       "required": ["file", "kind", "level", "message", "where"]
+    },
+    "SetupProcess": {
+      "description": "A process the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in its environment: it holds the real value while the agent works.",
+      "type": "object",
+      "properties": {
+        "command": {
+          "description": "Its command line, cut at 200 characters.",
+          "type": "string"
+        },
+        "secrets": {
+          "description": "The `to: 'checks'` secrets without `hosts` in its environment, by name.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["command", "secrets"]
     },
     "SkillPlacement": {
       "description": "`harness` (default): the agent's own skills, via its adapter. `workspace`: its repo skill dir.",

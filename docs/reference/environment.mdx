@@ -86,7 +86,7 @@ It returns a frozen `Environment` with `name`, `layers` and `extend` / `extendEn
 </Property>
 
 <Property name="setup" type="Array<string | { run: string, timeout?: string | number, cwd?: string }>" optional>
-  Shell commands run in every attempt, in order, after files and rules and before the agent starts. They see the environment's secrets, including those sent only `to: 'checks'`. Each step's `timeout` defaults to `'5m'`; `cwd` is the directory it runs in, relative to the workspace or absolute. A step object takes only `run`, `timeout` and `cwd`. Output goes to the attempt's `setup.log`. A failing step is an infra error, not a failed eval.
+  Shell commands run in every attempt, in order, after files and rules and before the agent starts. They see the environment's secrets, including those sent only `to: 'checks'`; a process a step leaves running keeps them while the agent works, so broker one it needs with `hosts` (see [secret](/reference/helpers#secret)). Each step's `timeout` defaults to `'5m'`; `cwd` is the directory it runs in, relative to the workspace or absolute. A step object takes only `run`, `timeout` and `cwd`. Output goes to the attempt's `setup.log`. A failing step is an infra error, not a failed eval.
 </Property>
 
 <Property name="skills" type="SkillSource[]" optional>

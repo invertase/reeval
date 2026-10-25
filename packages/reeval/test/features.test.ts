@@ -910,6 +910,40 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'secrets/checks-setup-background',
+    tiers: ['docker'],
+    env: 'unbrokered',
+    canaryEnv: 'brokered',
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
+    canary: /expected 'placeholder' to be 'value'/,
+    record: ({ run, runDir, stdout }) => {
+      assert.deepEqual(landed(run)?.setupProcesses, [
+        { command: 'sleep 600', secrets: ['CHECK_TOKEN'] },
+      ])
+      assert.match(
+        stdout,
+        /Setup left "sleep 600" running with CHECK_TOKEN, a to: 'checks' secret without hosts, in its environment, so the agent can read the real value from that process\./,
+      )
+      // Twin: brokered with hosts, the same process holds a placeholder and nothing is recorded.
+      const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]
+      assert.ok(canary)
+      assert.equal(canary.setupProcesses, undefined)
+      assert.equal(filesContaining(runDir, TOKEN), '')
+    },
+  },
+  {
+    dir: 'secrets/checks-setup-finishes',
+    tiers: ['docker'],
+    env: 'finishes',
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
+    canary: /expected '' to be 'value'/,
+    record: ({ run, stdout }) => {
+      assert.ok(landed(run)?.files.setupLog, 'the setup step ran')
+      assert.equal(landed(run)?.setupProcesses, undefined)
+      assert.doesNotMatch(stdout, /Setup left/)
+    },
+  },
+  {
     dir: 'secrets/cursor-session-tokens',
     tiers: ['real'],
     env: 'plain',

@@ -1716,6 +1716,37 @@ evaluate('one', { environment: maybe }, async () => {})
     )
   })
 
+  test("secrets: { unbrokered: 'error' } refuses a to: 'checks' secret without hosts before setup runs", async () => {
+    const serverEval = (secret: string) => `import { defineEnvironment, evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
+const server = defineEnvironment('server', ({ secret }) => ({
+  sandbox: docker(),
+  env: { CHECK_TOKEN: ${secret} },
+  setup: ['nohup sleep 600 >/dev/null 2>&1 &'],
+}))
+evaluate('one', { environment: server }, async () => {})
+`
+    const config = fakeConfig({ extra: "secrets: { unbrokered: 'error' }," })
+    const env = { CHECK_TOKEN: 'set-on-this-host' }
+    const p = await project('unbrokered-checks-strict', {
+      'reeval.config.ts': config,
+      'evals/o.eval.ts': serverEval("secret({ to: 'checks' })"),
+    })
+    const r = await runCli(p.dir, ['run'], { env })
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /CHECK_TOKEN in evaluate\("one"\) isn't brokered, and secrets\.unbrokered is 'error' in reeval\.config\.ts\./,
+    )
+    // Twin: brokered with hosts, the same eval plans.
+    const brokered = await project('unbrokered-checks-brokered', {
+      'reeval.config.ts': config,
+      'evals/o.eval.ts': serverEval("secret({ to: 'checks', hosts: ['api.example.com'] })"),
+    })
+    const ok = await runCli(brokered.dir, ['run', '--dry-run'], { env })
+    assert.equal(ok.code, 0, ok.stdout + ok.stderr)
+  })
+
   test('a moving git ref warns in the plan', async () => {
     const p = await project('moving-ref', {
       'reeval.config.ts': fakeConfig(),
