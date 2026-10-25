@@ -120,7 +120,7 @@ test('a message that is not JSON ends the session with an error instead of waiti
   runner.send({ t: 'collect', file: 'x' })
   await assert.rejects(
     runner.nextSession('declared'),
-    /The language runner stopped: it sent a message that isn't JSON \(NaN and Infinity aren't\): \{"t": "declared"/,
+    /The language runner stopped: it sent a message that isn't JSON \(a NaN or Infinity in it, or a line cut short\): \{"t": "declared"/,
   )
   assert.match(await gone, /isn't JSON/)
   await assert.rejects(runner.nextSession('declared'), /isn't JSON/)
@@ -135,7 +135,7 @@ test('a runner whose hello is not JSON says so', async () => {
       `),
       tmpdir(),
     ),
-    /stopped before it said hello: it sent a message that isn't JSON \(NaN and Infinity aren't\): \{"t": "hello", "protocol": Infinity\}/,
+    /stopped before it said hello: it sent a message that isn't JSON \(a NaN or Infinity in it, or a line cut short\): \{"t": "hello", "protocol": Infinity\}/,
   )
 })
 

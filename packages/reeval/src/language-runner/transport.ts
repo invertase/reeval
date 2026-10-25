@@ -93,7 +93,9 @@ export async function startLanguageRunner(
     if (message === 'unreadable') {
       unreadLine = true
       const shown = line.length > LINE_SHOWN ? `${line.slice(0, LINE_SHOWN)}…` : line
-      unreadable(`it sent a message that isn't JSON (NaN and Infinity aren't): ${shown}`)
+      unreadable(
+        `it sent a message that isn't JSON (a NaN or Infinity in it, or a line cut short): ${shown}`,
+      )
       lines.close()
       child.kill()
       return
