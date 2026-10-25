@@ -1,8 +1,14 @@
 import { defineEnvironment, type Turn } from 'reeval'
 import { docker } from 'reeval/sandbox'
 
-/** A server the checks call later, started by setup with the environment it gives. */
-const setup = ['nohup sleep 600 >/dev/null 2>&1 &']
+/**
+ * Servers the checks call later, started by setup with the environment it gives; the second has
+ * a line break in an argument, which stays on its own command line.
+ */
+const setup = [
+  'nohup sleep 600 >/dev/null 2>&1 &',
+  `nohup sh -c 'sleep 601; :' "$(printf 'one\\ntwo')" >/dev/null 2>&1 &`,
+]
 
 export const unbrokered = defineEnvironment('unbrokered', ({ secret }) => ({
   sandbox: docker(),

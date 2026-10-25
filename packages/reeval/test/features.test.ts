@@ -917,12 +917,16 @@ export const features: Feature[] = [
     hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
     canary: /expected 'placeholder' to be 'value'/,
     record: ({ run, runDir, stdout }) => {
-      assert.deepEqual(landed(run)?.setupProcesses, [
+      const byCommand = (a: { command: string }, b: { command: string }) =>
+        a.command.localeCompare(b.command)
+      assert.deepEqual(landed(run)?.setupProcesses?.toSorted(byCommand), [
+        { command: 'sh -c sleep 601; : one two', secrets: ['CHECK_TOKEN'] },
         { command: 'sleep 600', secrets: ['CHECK_TOKEN'] },
+        { command: 'sleep 601', secrets: ['CHECK_TOKEN'] },
       ])
       assert.match(
         stdout,
-        /Setup left "sleep 600" running with CHECK_TOKEN, a to: 'checks' secret without hosts, in its environment, so the agent can read the real value from that process\./,
+        /Setup left "[^"]+" \(and 2 more\) running with CHECK_TOKEN, a to: 'checks' secret without hosts, in their environment, so the agent can read the real value from those processes\./,
       )
       // Twin: brokered with hosts, the same process holds a placeholder and nothing is recorded.
       const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]

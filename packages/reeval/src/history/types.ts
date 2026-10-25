@@ -239,8 +239,10 @@ export type AttemptRecord = {
   /**
    * Processes the setup steps left running in a Docker sandbox with a `to: 'checks'` secret
    * without `hosts` in their environment, so they hold its real value while the agent works and
-   * the agent, as the same user, can read it from them. Each is `{ command, secrets }`: its command
-   * line, cut at 200 characters, and those secrets' names. Absent when there were none.
+   * the agent, as the same user, can read it from them. Found by the secret's variable name, so a
+   * copy under another name or in a command's arguments isn't. At most 20, each
+   * `{ command, secrets }`: its command line, masked and cut at 200 characters, and those secrets'
+   * names. Absent when there were none.
    */
   setupProcesses?: SetupProcess[]
   /**

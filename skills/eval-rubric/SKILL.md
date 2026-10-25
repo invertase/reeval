@@ -143,6 +143,8 @@ point the client at `HTTPS_PROXY`.
 reeval's rule, concern. In Docker, a setup step left a process running (`nohup server &`) with a
 `to: 'checks'` secret without `hosts` in its environment, so the process holds the real value while
 the agent, as the same user, works beside it and can read it. The attempt's `setupProcesses` names
-each process and secret. It's about what happened in the run, so it prints in every run it happens.
+each process and secret. It matches the secret's variable name, so no remark doesn't mean no
+process holds the value: a copy under another name or in a command's arguments isn't found. It's
+about what happened in the run, so it prints in every run it happens.
 **Fix:** broker the secret with the hosts the process sends it to, so it holds a placeholder, or
 start the process from `c.exec` after the agent's turn.

@@ -90,23 +90,30 @@ function unbrokeredChecks(env: ResolvedEnvironment): string[] {
   return Object.keys(env.checkVars).filter((name) => !brokered.has(name))
 }
 
+/** How many of the processes setup left running the record keeps, and how much of each command line. */
+const SETUP_PROCESSES = 20
+const SETUP_COMMAND_CHARS = 200
+
 /**
  * The processes the setup steps left running with an unbrokered `to: 'checks'` secret in their
- * environment. The listing runs as the agent's user, with no checks secrets of its own, so it
- * finds exactly the processes the agent could read the value from, and prints names, never
- * values. Docker only: the fake sandbox runs on the host, with no separation to report on.
+ * environment, by the secret's variable name: a copy under another name or in a process's
+ * arguments isn't found. The listing runs as the agent's user, with no checks secrets of its own,
+ * so it sees the environments the agent could read, and prints names, never values. Docker only:
+ * the fake sandbox runs on the host, with no separation to report on.
  */
 async function leftRunning(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
   const names = unbrokeredChecks(env)
   if (a.spec.sandbox.kind !== 'docker' || !env.setup.length || !names.length) return []
   const r = await box.exec(
     [
+      'for t in tr sed sort; do command -v "$t" >/dev/null || { echo "no $t in the image" >&2; exit 1; }; done',
       'for p in /proc/[0-9]*; do',
       '  [ "$p" = "/proc/$$" ] && continue',
       `  n=$(tr '\\0' '\\n' < "$p/environ" 2>/dev/null | sed -n -E 's/^(${names.join('|')})=.*/\\1/p' | sort -u | tr '\\n' ' ')`,
       '  [ -n "$n" ] || continue',
-      `  c=$(tr '\\0' ' ' < "$p/cmdline" 2>/dev/null)`,
-      '  [ -n "$c" ] || c=$(cat "$p/comm" 2>/dev/null)',
+      // An argument can hold a tab or a line break, which would end the field or the line.
+      `  c=$(tr '\\0\\t\\n' '   ' < "$p/cmdline" 2>/dev/null)`,
+      `  [ -n "$c" ] || c=$(tr '\\t\\n' '  ' < "$p/comm" 2>/dev/null)`,
       `  printf '%s\\t%s\\n' "$n" "$c"`,
       'done',
       'true',
@@ -117,16 +124,25 @@ async function leftRunning(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
     debugLog('env', `couldn't list the processes setup left running: ${tailOf(r.stderr)}`)
     return []
   }
-  return r.stdout
-    .split('\n')
-    .filter(Boolean)
-    .slice(0, 20)
-    .map((line) => {
-      const [held = '', ...command] = line.split('\t')
-      // Masked before it's cut, so a cut can't leave part of a value the masking wouldn't match.
-      const masked = redactSecrets(command.join('\t').trim())
-      return { command: clip(masked, 200), secrets: held.trim().split(' ') }
-    })
+  const known = new Set(names)
+  const found = r.stdout.split('\n').flatMap((line) => {
+    const tab = line.indexOf('\t')
+    if (tab < 0) return []
+    const secrets = line
+      .slice(0, tab)
+      .split(' ')
+      .filter((n) => known.has(n))
+    // Masked before it's cut, so a cut can't leave part of a value the masking wouldn't match.
+    const command = clip(redactSecrets(line.slice(tab + 1).trim()), SETUP_COMMAND_CHARS)
+    return secrets.length ? [{ command, secrets }] : []
+  })
+  if (found.length > SETUP_PROCESSES) {
+    debugLog(
+      'env',
+      `setup left ${found.length} processes running with a checks secret; the record keeps the first ${SETUP_PROCESSES}`,
+    )
+  }
+  return found.slice(0, SETUP_PROCESSES)
 }
 
 // A relative path: GNU tar (Git for Windows' too) reads a `C:` in its file name as a remote host.
