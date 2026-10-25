@@ -92,7 +92,9 @@ export const historyConfigSchema = z.strictObject({
   artifacts: z
     .enum(['all', 'failures', 'none'])
     .optional()
-    .describe("Artifacts recorded next to each run: every eval's, failing evals' only, or none."),
+    .describe(
+      "Artifacts recorded next to each run: every attempt's, failed attempts' only, or none.",
+    ),
 })
 
 const recordMode = z.enum(['manual', 'ci', 'always'])

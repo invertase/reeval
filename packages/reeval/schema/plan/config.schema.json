@@ -1262,7 +1262,7 @@
       "type": "object",
       "properties": {
         "artifacts": {
-          "description": "Artifacts recorded next to each run: every eval's, failing evals' only, or none.",
+          "description": "Artifacts recorded next to each run: every attempt's, failed attempts' only, or none.",
           "type": "string",
           "enum": ["all", "failures", "none"]
         },
