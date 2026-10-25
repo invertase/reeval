@@ -34,7 +34,7 @@ import {
   opencode,
   pi,
 } from '../../src/harness.ts'
-import { checkHarnesses, checkOptions } from '../../src/options.ts'
+import { checkHarnesses, checkLimitHarness, checkOptions } from '../../src/options.ts'
 import { docker, fakeSandbox, podman } from '../../src/sandbox.ts'
 import type {
   EnvironmentHelpers,
@@ -42,6 +42,7 @@ import type {
   GatewayName,
   HarnessDescriptor,
   PluginSource,
+  ResolvedProfile,
   RunContext,
   SandboxDescriptor,
 } from '../../src/types.ts'
@@ -60,6 +61,18 @@ const yaml = (text: string) => () =>
 const configIn = (c: unknown) => () => resolveConfig(c as never, DIR, 'reeval.config.ts')
 const yamlIn = (text: string) => () =>
   resolveConfigData(parseYamlConfig(text, 'reeval.yaml'), DIR, 'reeval.yaml')
+/** A `pr` profile's `limit.harness` against the harness ids the collected evals run on. */
+const limitHarness =
+  (ids: string[], harnesses: string[], partial = false) =>
+  () =>
+    checkLimitHarness(
+      { name: 'pr', limit: { harness: ids } } as ResolvedProfile,
+      'reeval.config.ts',
+      {
+        harnesses,
+        partial,
+      },
+    )
 const env = (spec: unknown) => () => defineEnvironment('e', spec as never)
 const helpers = (use: (h: EnvironmentHelpers) => unknown) => () =>
   defineEnvironment('e', (h) => ({ files: { 'a.txt': 'a' }, ...(use(h) as object) }))
@@ -133,6 +146,7 @@ const declares = (children: unknown[]) => () => {
     registerGroup: (_name, _mode, body) => body(),
     getRunContext: () => run,
     collectingFile: () => file,
+    declareHarnesses: () => {},
   })
   declareTree(children as DeclaredNode[], () => async () => {})
 }
@@ -1199,6 +1213,22 @@ environment:
       }),
     ],
     ['ts: a relative fake dir as data', configIn({ sandbox: { kind: 'fake', dir: './tmp' } })],
+    [
+      'collected: a limit.harness id no eval runs on',
+      limitHarness(['cursor'], ['cursor:composer-2.5', 'pi:gemini-3.8-flash']),
+    ],
+    [
+      'collected: two limit.harness ids, one no eval runs on',
+      limitHarness(['cursor:composer-2.5', 'codex'], ['cursor:composer-2.5']),
+    ],
+    ['collected: every limit.harness id matches', limitHarness(['a', 'b'], ['b', 'a', 'c'])],
+    ['collected: an empty limit.harness', limitHarness([], ['a'])],
+    ['collected: a limit.harness id with no harnesses collected', limitHarness(['a'], [])],
+    [
+      'collected: a path filter, one limit.harness id matches',
+      limitHarness(['a', 'b'], ['a'], true),
+    ],
+    ['collected: a path filter, no limit.harness id matches', limitHarness(['b'], ['a'], true)],
   ],
   gateway: [
     ['ts: an empty list', config({ gateway: [] })],

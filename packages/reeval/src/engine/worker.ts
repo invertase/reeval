@@ -59,7 +59,16 @@ export function startWorker(channel: Channel): Worker {
   }
 
   async function init(run: RunContext, file: string, select: number[] | null): Promise<void> {
-    useEngine({ registerTest, registerGroup, getRunContext: () => run, collectingFile })
+    const harnesses = new Set<string>()
+    useEngine({
+      registerTest,
+      registerGroup,
+      getRunContext: () => run,
+      collectingFile,
+      declareHarnesses: (ids) => {
+        for (const id of ids) harnesses.add(id)
+      },
+    })
     extendExpect(evalMatchers)
     routeConsole(reporter)
     try {
@@ -73,6 +82,7 @@ export function startWorker(channel: Channel): Worker {
           mode,
           ...(options.attempt ? { attempt: options.attempt } : {}),
         })),
+        harnesses: [...harnesses],
       })
       if (select) {
         running = true

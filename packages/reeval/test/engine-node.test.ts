@@ -110,7 +110,7 @@ const passing =
   (tests: Record<string, WireTest[]>, extra?: (ctl: Ctl) => void): Script =>
   (ctl) => {
     const list = tests[basename(ctl.init.file)] ?? []
-    ctl.emit({ t: 'collected', tests: list })
+    ctl.emit({ t: 'collected', tests: list, harnesses: [] })
     if (ctl.init.select) {
       extra?.(ctl)
       for (const t of list) {
@@ -187,6 +187,29 @@ describe('runEngine: collecting and the plan', () => {
       { id: 'evals/b.eval.ts › g › later', mode: 'todo' },
     ])
     assert.deepEqual([plan?.matched, plan?.unmatched], [6, []])
+  })
+
+  test("the plan has every collected file's harness ids, and whether a path filter left files out", async () => {
+    const { run } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
+    const harnesses: Record<string, string[]> = { 'a.eval.ts': ['a', 'b'], 'b.eval.ts': ['b', 'c'] }
+    const collectWith = (filters: string[]) => {
+      let plan: CollectedPlan | undefined
+      const { spawn } = fakeSpawn((ctl) => {
+        const file = basename(ctl.init.file)
+        ctl.emit({ t: 'collected', tests: [test0(0, 'x')], harnesses: harnesses[file] ?? [] })
+        ctl.emit({ t: 'done' })
+        ctl.exit()
+      })
+      const onPlan = async (p: CollectedPlan) => {
+        plan = p
+        return false
+      }
+      return engine({ run, filters, onPlan }, spawn).then(() => plan)
+    }
+    const all = await collectWith([])
+    assert.deepEqual([all?.harnesses.sort(), all?.partial], [['a', 'b', 'c'], false])
+    const one = await collectWith(['evals/a.eval.ts'])
+    assert.deepEqual([one?.harnesses, one?.partial], [['a', 'b'], true])
   })
 })
 
@@ -381,7 +404,7 @@ describe('runEngine: running', () => {
     const tests = { 'a.eval.ts': [test0(0, 'a')], 'b.eval.ts': [test0(0, 'b')] }
     const { spawn } = fakeSpawn((ctl) => {
       const name = basename(ctl.init.file) as 'a.eval.ts'
-      ctl.emit({ t: 'collected', tests: tests[name] })
+      ctl.emit({ t: 'collected', tests: tests[name], harnesses: [] })
       if (!ctl.init.select) {
         ctl.emit({ t: 'done' })
         ctl.exit()
@@ -421,7 +444,7 @@ describe('runEngine: running', () => {
   test('a failed result keeps the error name so assemble can classify without sniffing', async () => {
     const { run } = project(['evals/a.eval.ts'])
     const { spawn } = fakeSpawn((ctl) => {
-      ctl.emit({ t: 'collected', tests: [test0(0, 'a')] })
+      ctl.emit({ t: 'collected', tests: [test0(0, 'a')], harnesses: [] })
       if (ctl.init.select) {
         ctl.emit({
           t: 'result',
@@ -476,7 +499,7 @@ describe('runEngine: running', () => {
     const tests = { 'a.eval.ts': [test0(0, 'a')], 'b.eval.ts': [test0(0, 'b')] }
     const { spawn, spawned } = fakeSpawn((ctl) => {
       const name = basename(ctl.init.file) as 'a.eval.ts'
-      ctl.emit({ t: 'collected', tests: tests[name] })
+      ctl.emit({ t: 'collected', tests: tests[name], harnesses: [] })
       if (!ctl.init.select) {
         ctl.emit({ t: 'done' })
         ctl.exit()
@@ -528,7 +551,7 @@ describe('runEngine: running', () => {
     const { run } = project(['evals/a.eval.ts'])
     const { spawn } = fakeSpawn(
       (ctl) => {
-        ctl.emit({ t: 'collected', tests: [test0(0, 'a')] })
+        ctl.emit({ t: 'collected', tests: [test0(0, 'a')], harnesses: [] })
         if (!ctl.init.select) {
           ctl.emit({ t: 'done' })
           ctl.exit()
@@ -568,7 +591,7 @@ describe('runEngine: running', () => {
     ]
     const events: ReevalEvent[] = []
     const { spawn } = fakeSpawn((ctl) => {
-      ctl.emit({ t: 'collected', tests })
+      ctl.emit({ t: 'collected', tests, harnesses: [] })
       if (!ctl.init.select) {
         ctl.emit({ t: 'done' })
         ctl.exit()
@@ -597,7 +620,7 @@ describe('runEngine: running', () => {
   test('a file that fails to load on its second pass, or a worker that fails its handshake, is reported', async () => {
     const { run } = project(['evals/a.eval.ts'])
     const { spawn } = fakeSpawn((ctl) => {
-      if (!ctl.init.select) ctl.emit({ t: 'collected', tests: [test0(0, 'a')] })
+      if (!ctl.init.select) ctl.emit({ t: 'collected', tests: [test0(0, 'a')], harnesses: [] })
       else ctl.emit({ t: 'load-error', error: { message: 'changed on disk' } })
       ctl.emit({ t: 'done' })
       ctl.exit()

@@ -116,6 +116,7 @@ See [reeval doctor](/reference/cli/doctor) for every check.
 | `this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)` | Narrow the run, raise `budget.attempts`, or pass `--force`. |
 | `defaultProfile.ci in reeval.config.ts names "pr", which isn't a profile (profiles: smoke, nightly). Add it under profiles, or name one that's there.` | Fix the name, or add the profile. |
 | `profiles.pr.limit.runs in reeval.config.ts must be a whole number of at least 1 (got 0)` | Every profile key names its path and file the same way. |
+| `profiles.pr.limit.harness in reeval.config.ts lists "cursor", which no eval runs on. Harness ids the evals run on: cursor:composer-2.5.` | `limit.harness` matches whole harness ids. Use one from the list, as the plan names it. |
 | `profiles.pr.budget.usd in reeval.config.ts isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.` | Cap with `attempts` or `duration` (`budget.tokens` gets the same message). |
 
 See [Profiles and budgets](/reference/profiles).

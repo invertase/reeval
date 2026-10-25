@@ -8,7 +8,13 @@ import type {
   DeclaredMode,
   DeclaredNode,
 } from './declaration.ts'
-import { collectingFile, getRunContext, registerGroup, registerTest } from './engine/runtime.ts'
+import {
+  collectingFile,
+  declareHarnesses,
+  getRunContext,
+  registerGroup,
+  registerTest,
+} from './engine/runtime.ts'
 import { inCI } from './env.ts'
 import {
   callerDir,
@@ -240,7 +246,7 @@ function register(
   const body = `b${bodies.size + 1}`
   bodies.set(body, fn)
   declare({ type: 'eval', name, mode, options: data(own), body, ...(family ? { family } : {}) })
-  const tests = planEval(
+  const { tests, harnesses } = planEval(
     {
       name,
       mode,
@@ -250,6 +256,7 @@ function register(
     },
     { ...getRunContext(), file: collectingFile(), order: registered },
   )
+  declareHarnesses(harnesses)
   if (!tests) return
   registered++
   for (const { name: testName, spec, ...options } of tests)

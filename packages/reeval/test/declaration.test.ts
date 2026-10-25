@@ -12,6 +12,7 @@ import { useEngine } from '../src/engine/runtime.ts'
 import { defineEnvironment } from '../src/environment.ts'
 import { declaredBody, declaredTree, declareTree, evaluate, group } from '../src/evaluate.ts'
 import { cursor, fakeHarness } from '../src/harness.ts'
+import { harnessId } from '../src/options.ts'
 import { planEval } from '../src/plan-eval.ts'
 import type { RunContext } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
@@ -30,7 +31,13 @@ function runIn(root: string): RunContext {
 /** Collects `file` under `root` with `declare`, as a worker would. */
 async function collected(root: string, declare: () => void) {
   const run = runIn(root)
-  useEngine({ registerTest, registerGroup, getRunContext: () => run, collectingFile })
+  useEngine({
+    registerTest,
+    registerGroup,
+    getRunContext: () => run,
+    collectingFile,
+    declareHarnesses: () => {},
+  })
   const file = join(root, 'evals/x.eval.ts')
   const tests = await collect(file, async () => declare())
   return {
@@ -305,19 +312,21 @@ test('planEval is pure: the same declaration and context give the same tests, ga
   const run = runIn(tempDir('pure'))
   const ctx = { ...run, file: join(run.config.root, 'evals/p.eval.ts'), order: 3 }
   const declaration = { name: 'p', mode: 'run' as const, groups: [], options: { runs: 2 } }
-  const once = planEval(declaration, ctx)
+  const { tests: once, harnesses } = planEval(declaration, ctx)
   assert.deepEqual(
-    JSON.parse(JSON.stringify(planEval(declaration, ctx))),
+    JSON.parse(JSON.stringify(planEval(declaration, ctx).tests)),
     JSON.parse(JSON.stringify(once)),
   )
   assert.equal(once?.length, 4)
+  assert.deepEqual(harnesses, run.config.harness.map(harnessId))
   assert.deepEqual(once?.[0]?.gate, {
     limits: { attempts: 4 },
     rank: { eval: 'evals/p.eval.ts › p', file: 'evals/p.eval.ts', order: 3, n: 1, cell: 0 },
   })
-  assert.equal(
+  assert.deepEqual(
     planEval({ ...declaration, options: { tags: ['x'] } }, { ...ctx, tags: ['y'] }),
-    null,
+    { tests: null, harnesses },
+    'an eval the tags leave out still names its harnesses',
   )
 })
 

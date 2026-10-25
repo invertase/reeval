@@ -29,6 +29,10 @@ export type CollectedPlan = {
   excluded: ExcludedEval[]
   matched: number
   unmatched: string[]
+  /** The harness ids the collected files' evals run on before a profile's limit, whatever the filters pick. */
+  harnesses: string[]
+  /** A path filter left some eval files uncollected. */
+  partial: boolean
 }
 
 export type EngineOptions = {

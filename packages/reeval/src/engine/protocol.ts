@@ -8,7 +8,7 @@ import type { DebugLine } from '../view/debug.ts'
 import type { SerializedError } from './errors.ts'
 
 /** Bumped whenever a message changes shape or meaning, or the framing changes (PROTOCOL.md). */
-export const PROTOCOL = 3
+export const PROTOCOL = 4
 
 /** What one registered test looks like to the main process. */
 export type WireTest = {
@@ -39,7 +39,8 @@ export type ToWorker =
 
 export type FromWorker =
   | { t: 'hello'; protocol: number }
-  | { t: 'collected'; tests: WireTest[] }
+  /** `harnesses`: the ids the file's evals run on before a profile's limit, tag-filtered ones too. */
+  | { t: 'collected'; tests: WireTest[]; harnesses: string[] }
   | { t: 'load-error'; error: SerializedError }
   | { t: 'request'; id: string; limits: Limits; rank?: Rank }
   | { t: 'release'; id: string }

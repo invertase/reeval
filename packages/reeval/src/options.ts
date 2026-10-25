@@ -603,6 +603,8 @@ export type ResolvedEval = {
   notes: string[]
   /** Set when a profile's limit leaves the eval nothing to run. */
   skip?: string
+  /** The ids of the harnesses the eval runs on before a profile's limit narrows them. */
+  harnesses: string[]
 }
 
 /**
@@ -703,6 +705,7 @@ export function cascade(
     )
 
   let skip: string | undefined
+  const harnesses = out.harness.map(harnessId)
   const limit = profile?.limit
   if (profile && limit) {
     const tag = `profile ${profile.name}`
@@ -766,7 +769,30 @@ export function cascade(
     out.questions = kept
   }
   if (options.runs !== undefined) out.runs = options.runs
-  return { resolved: out, notes, ...(skip ? { skip } : {}) }
+  return { resolved: out, notes, harnesses, ...(skip ? { skip } : {}) }
+}
+
+/**
+ * Refuses a profile's `limit.harness` id that no collected eval runs on: it keeps nothing, and a
+ * limit that keeps nothing skips every eval. `harnesses` are the ids every eval in the loaded
+ * files runs on before the limit, whatever the tag and name filters pick. When a path filter
+ * loaded only some files (`partial`), an id may name a harness of the others, so only a limit
+ * none of whose ids match is refused.
+ */
+export function checkLimitHarness(
+  profile: ResolvedProfile | null | undefined,
+  configFile: string,
+  collected: { harnesses: readonly string[]; partial: boolean },
+): void {
+  const ids = profile?.limit.harness
+  if (!profile || !ids?.length) return
+  const unknown = ids.filter((id) => !collected.harnesses.includes(id))
+  if (!unknown.length || (collected.partial && unknown.length < ids.length)) return
+  const listed = unknown.map((id) => JSON.stringify(id)).join(', ')
+  const have = [...new Set(collected.harnesses)].sort()
+  throw new UsageError(
+    `profiles.${profile.name}.limit.harness in ${configFile} lists ${listed}, which no eval runs on. Harness ids the evals run on: ${have.join(', ') || 'none'}.`,
+  )
 }
 
 export type PlannedAttempt = {
