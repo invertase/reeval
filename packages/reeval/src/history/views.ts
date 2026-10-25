@@ -97,8 +97,9 @@ export type HistoryRow = {
 }
 
 /**
- * Commits reachable from HEAD, or null when git can't say (not a repo, shallow clone). Runs whose
- * commit isn't in here were rebased or dropped: still shown and compared, but flagged.
+ * Commits reachable from HEAD, holding every run commit a view asks about that is, or null when git
+ * can't say (not a repo, shallow clone). Runs whose commit isn't in here were rebased or dropped:
+ * still shown and compared, but flagged.
  */
 export type Reachability = Set<string> | null
 

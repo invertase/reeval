@@ -456,6 +456,41 @@ evaluate(
     )
   })
 
+  test('runs further back than the first 20,000 commits are still in HEAD’s history', async () => {
+    const p = await gitProject('record-deep', { 'evals/agent.eval.ts': agent() })
+    const first = sh(p.dir, 'rev-parse', 'HEAD')
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    await writeFile(join(p.dir, 'second.txt'), 'x\n')
+    sh(p.dir, 'add', 'second.txt')
+    sh(p.dir, 'commit', '-q', '-m', 'second')
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    // A later run back on the first commit: its base is the run there, not the one on `second`.
+    sh(p.dir, 'checkout', '-q', first)
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    sh(p.dir, 'checkout', '-q', 'main')
+    const [onFirst, onSecond, head] = recordedRuns(p.dir)
+    const parent = sh(p.dir, 'rev-parse', 'HEAD')
+    let stream = ''
+    for (let i = 1; i <= 20_001; i++) {
+      stream += `commit refs/heads/main\ncommitter t <t@example.com> ${1_700_000_000 + i} +0000\n`
+      stream += `data ${String(i).length}\n${i}\n${i === 1 ? `from ${parent}\n` : ''}\n`
+    }
+    execFileSync('git', ['fast-import', '--quiet'], { cwd: p.dir, input: stream, env: GIT_ENV })
+    sh(p.dir, 'reset', '-q', '--hard', 'main')
+
+    assert.equal(sh(p.dir, 'rev-list', '--count', 'HEAD'), '20003')
+
+    assert.deepEqual((await historyJson(p.dir)).orphaned, [], 'their commits are ancestors of HEAD')
+    assert.doesNotMatch((await runCli(p.dir, ['history'])).stdout, /rebased or dropped/)
+
+    const cmp = await runCli(p.dir, ['compare', '--json', head ?? ''])
+    assert.equal(cmp.code, 0, cmp.stderr)
+    const result = JSON.parse(cmp.stdout)
+    assert.equal(result.base.runId, onFirst, `not ${onSecond}, a commit after head's`)
+    assert.equal(result.base.inHistory, true)
+    assert.equal(result.head.inHistory, true)
+  })
+
   test('recording refuses files that look like secrets, or that changed after the run', async () => {
     const leaked = 'totally-private-value-4242'
     const p = await gitProject('record-secret', { 'evals/agent.eval.ts': agent() })
