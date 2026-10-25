@@ -47,7 +47,7 @@ reeval: Refusing to record 20260930T165330Z_97e4f24_test-author_1a2x: 1 file(s) 
 Check them, then pass --skip-secret-scan if these are false positives.
 ```
 
-A variable's value is named, never shown. A credential shape shows its first and last four characters.
+A variable's value is named, never shown. A credential shape shows its first and last four characters, unless it holds part of a variable's value.
 
 `worktree.patch` is your checkout's uncommitted changes when the run started, not the agents' work. It's kept byte for byte, so `reeval checkout` can apply it, which means it can't be masked. When it looks like it holds a secret, `reeval record` leaves it out, records the run, and says why:
 

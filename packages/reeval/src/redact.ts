@@ -25,6 +25,11 @@ const TOKEN_PATTERNS: Array<{ rule: string; pattern: RegExp }> = [
   },
 ]
 
+/** The token shapes that start at a word boundary, matched exactly where they're asked to start. */
+const TOKEN_AFTER = TOKEN_PATTERNS.filter(({ pattern }) => pattern.source.startsWith('\\b')).map(
+  ({ rule, pattern }) => ({ rule, pattern: new RegExp(pattern.source.slice(2), 'y') }),
+)
+
 /** Values declared with `secret()`, masked whatever their variable is called. */
 const declared = new Set<string>()
 
@@ -118,11 +123,6 @@ type Secrets = {
    * characters, so a short declared secret (`error`, `text`) can't rename a record's fields.
    */
   keyForms: string[]
-  /**
-   * The forms holding a token shape and more (`https://user:pass@host/?t=ghp_…`), masked before
-   * token shapes are: masking the token first would leave the rest of the value showing.
-   */
-  wrappers: Set<string>
   /** Text shorter than this can't hold any form, window or token shape. */
   shortest: number
   /** Each form's rule: the value of which variable, or a declared secret. */
@@ -168,13 +168,8 @@ function envSecrets(env: NodeJS.ProcessEnv): Secrets {
     }
   }
   const keyForms = forms.filter((f) => f.length >= MIN_FRAGMENT)
-  const wrappers = new Set(
-    forms.filter((f) =>
-      TOKEN_PATTERNS.some(({ pattern }) => f.match(pattern)?.some((m) => m.length < f.length)),
-    ),
-  )
   const shortest = Math.min(MIN_FRAGMENT, ...forms.map((f) => f.length))
-  const secrets = { forms, keyForms, wrappers, shortest, formRules, windows, starts }
+  const secrets = { forms, keyForms, shortest, formRules, windows, starts }
   cached = { key, secrets }
   return secrets
 }
@@ -197,36 +192,73 @@ function fragmentRanges(
   return ranges
 }
 
-function maskFragments(text: string, secrets: Secrets): string {
-  const ranges = fragmentRanges(text, secrets)
-  if (ranges.length === 0) return text
-  let out = ''
-  let at = 0
-  for (const [start, end] of ranges) {
-    out += `${text.slice(at, start)}${REDACTED}`
-    at = end
+type Range = { start: number; end: number; rule: string; known: boolean }
+
+/**
+ * Every stretch of `text` to mask, in order, with overlapping ones merged: each of `forms`, each
+ * stretch of fragments and each token shape, all found in `text` as it is. Masking one before
+ * looking for the others would cut into them: a fragment of one key inside a second key that
+ * shares its `sk-ant-api03-` breaks the second's shape, and a token running on into a password
+ * leaves the rest of the password. A token shape may also start right where a known stretch
+ * ends, word boundary or not, as it would once that stretch reads `[REDACTED]`. A merged stretch
+ * is `known` when any part is, and takes the rule of the stretch starting first (the longer on a
+ * tie, else the known one).
+ */
+function secretRanges(text: string, secrets: Secrets, forms = secrets.forms): Range[] {
+  if (text.length < secrets.shortest) return []
+  const found: Range[] = []
+  for (const form of forms) {
+    const rule = secrets.formRules.get(form) as string
+    for (let at = text.indexOf(form); at !== -1; at = text.indexOf(form, at + form.length)) {
+      found.push({ start: at, end: at + form.length, rule, known: true })
+    }
   }
-  return out + text.slice(at)
+  for (const [start, end, rule] of fragmentRanges(text, secrets)) {
+    found.push({ start, end, rule, known: true })
+  }
+  const ends = new Set(found.map((r) => r.end))
+  for (const { rule, pattern } of TOKEN_PATTERNS) {
+    for (const m of text.matchAll(pattern)) {
+      found.push({ start: m.index, end: m.index + m[0].length, rule, known: false })
+    }
+  }
+  for (const end of ends) {
+    for (const { rule, pattern } of TOKEN_AFTER) {
+      pattern.lastIndex = end
+      const m = pattern.exec(text)
+      if (m) found.push({ start: end, end: end + m[0].length, rule, known: false })
+    }
+  }
+  found.sort((a, b) => a.start - b.start || b.end - a.end || Number(b.known) - Number(a.known))
+  const merged: Range[] = []
+  for (const range of found) {
+    const last = merged.at(-1)
+    if (last && range.start < last.end) {
+      last.end = Math.max(last.end, range.end)
+      last.known ||= range.known
+    } else merged.push({ ...range })
+  }
+  return merged
 }
 
 /**
  * Masks well-known token shapes, the values of secret-looking environment variables and declared
  * secrets, raw or JSON-, URL- or base64-encoded, and any stretch of `MIN_FRAGMENT` or more of
- * their characters, anywhere in `text`. Token shapes go first, after only the values that hold
- * one: a known value or fragment masked inside another token (a second key sharing the first's
- * `sk-ant-api03-`) would break its shape and leave the rest of it showing.
+ * their characters, anywhere in `text`.
  */
 export const redactSecrets = (text: string, env: NodeJS.ProcessEnv = process.env): string =>
   redactWith(text, envSecrets(env))
 
 function redactWith(text: string, secrets: Secrets, forms = secrets.forms): string {
-  if (text.length < secrets.shortest) return text
-  let out = text
-  for (const secret of forms)
-    if (secrets.wrappers.has(secret)) out = out.replaceAll(secret, REDACTED)
-  for (const { pattern } of TOKEN_PATTERNS) out = out.replace(pattern, REDACTED)
-  for (const secret of forms) out = out.replaceAll(secret, REDACTED)
-  return maskFragments(out, secrets)
+  const ranges = secretRanges(text, secrets, forms)
+  if (ranges.length === 0) return text
+  let out = ''
+  let at = 0
+  for (const { start, end } of ranges) {
+    out += `${text.slice(at, start)}${REDACTED}`
+    at = end
+  }
+  return out + text.slice(at)
 }
 
 /** A JSON string literal: `[start, end)` with its quotes, and whether it's an object's key. */
@@ -343,45 +375,17 @@ export type SecretMatch = {
   end: number
   /** `the value of NAME`, `a declared secret`, or a credential shape such as `Google API key`. */
   rule: string
-  /** Whether `rule` names a variable or a declared secret, so no part of the value may be shown. */
+  /**
+   * Whether some part of the stretch is a variable's value, a declared secret or a fragment of
+   * one, so no part of it may be shown. `rule` may still name a credential shape, when the known
+   * part is inside one.
+   */
   known: boolean
 }
 
 /** What `redactSecrets` would mask, in order. Used as a last check before anything leaves the machine. */
-export function findSecrets(text: string, env: NodeJS.ProcessEnv = process.env): SecretMatch[] {
-  const secrets = envSecrets(env)
-  const found: SecretMatch[] = []
-  let rest = text
-  const findForm = (secret: string) => {
-    let at = rest.indexOf(secret)
-    if (at === -1) return
-    const rule = secrets.formRules.get(secret) as string
-    while (at !== -1) {
-      found.push({ start: at, end: at + secret.length, rule, known: true })
-      at = rest.indexOf(secret, at + secret.length)
-    }
-    // Same length, so later matches keep their offsets. No form, window or token shape spans a
-    // NUL but the private key, which spans `[REDACTED]` in `redactSecrets` too.
-    rest = rest.replaceAll(secret, '\0'.repeat(secret.length))
-  }
-  for (const secret of secrets.forms) if (secrets.wrappers.has(secret)) findForm(secret)
-  for (const { rule, pattern } of TOKEN_PATTERNS) {
-    for (const m of rest.matchAll(pattern)) {
-      const start = m.index
-      const end = start + m[0].length
-      // A token holding a known value is reported as that value, so no part of it is shown.
-      const form = secrets.forms.find((f) => m[0].includes(f))
-      if (form === undefined) found.push({ start, end, rule, known: false })
-      else found.push({ start, end, rule: secrets.formRules.get(form) as string, known: true })
-    }
-    rest = rest.replace(pattern, (m) => '\0'.repeat(m.length))
-  }
-  for (const secret of secrets.forms) findForm(secret)
-  for (const [start, end, rule] of fragmentRanges(rest, secrets)) {
-    found.push({ start, end, rule, known: true })
-  }
-  return found.sort((a, b) => a.start - b.start)
-}
+export const findSecrets = (text: string, env: NodeJS.ProcessEnv = process.env): SecretMatch[] =>
+  secretRanges(text, envSecrets(env))
 
 /**
  * What `redactJsonText` would mask in serialised JSON or JSON Lines: `findSecrets`' matches inside
@@ -432,7 +436,7 @@ export const countSecrets = (text: string, env: NodeJS.ProcessEnv = process.env)
 
 /**
  * A found secret as it can be shown: a variable's value never, a credential shape by its first
- * and last four characters.
+ * and last four characters unless it holds a known part.
  */
 export function maskedMatch(text: string, match: SecretMatch): string {
   if (match.known) return match.rule
