@@ -362,6 +362,21 @@ export function findSecrets(text: string, env: NodeJS.ProcessEnv = process.env):
 }
 
 /**
+ * The end of a cut at or before `end` that goes through no stretch `findSecrets` finds, for text
+ * that's kept unmasked but masked later: a cut through a secret would keep a part the later mask
+ * can't match.
+ */
+export function cutOutsideSecrets(
+  text: string,
+  end: number,
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  let at = end
+  for (const m of findSecrets(text, env).reverse()) if (m.start < at && m.end > at) at = m.start
+  return at
+}
+
+/**
  * What `redactJsonText` would mask in serialised JSON or JSON Lines: `findSecrets`' matches inside
  * the string literals it would change, and every match in lines that aren't JSON.
  */

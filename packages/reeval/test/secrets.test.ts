@@ -18,6 +18,7 @@ import { applied, defineEnvironment, unbrokeredSecrets } from '../src/environmen
 import { cursorMcpServers } from '../src/harness/agents.ts'
 import { capText, OUTPUT_CAP, turnError, turnText } from '../src/history/assemble.ts'
 import { findingLines, findingSummary, scanText } from '../src/history/secret-scan.ts'
+import { transcriptForJudge } from '../src/judge/transcript.ts'
 import type { PlannedAttempt } from '../src/options.ts'
 import { brokeredIn, secretVarsIn, unbrokered, unbrokeredWarning } from '../src/options.ts'
 import {
@@ -790,6 +791,20 @@ describe('masking before shortening', () => {
         assert.match(text, /password=\[RED/)
         assert.doesNotMatch(text, /password=corr/)
       }
+    }),
+  )
+
+  test(
+    "the judge's transcript cuts a tool's output before a secret, not through it",
+    withSecret(() => {
+      // No whitespace, so `clip` cuts at its limit: the secret starts 4 characters before it.
+      const output = JSON.stringify({ rows: 'x'.repeat(267), dsn: `password=${secret}` })
+      const event = { type: 'tool', tool: 'shell', input: { command: 'psql' }, output, ok: true }
+      const shown = transcriptForJudge([event as TranscriptEvent], true).join('\n')
+      assert.match(shown, /"password=…$/)
+      assert.doesNotMatch(redactJson({ shown }), /password=corr/)
+      const plain = { ...event, output: 'y'.repeat(400) }
+      assert.match(transcriptForJudge([plain as TranscriptEvent], true)[0] ?? '', /y{299}…$/)
     }),
   )
 

@@ -1,4 +1,5 @@
 import { isObjectLike } from '../object.ts'
+import { cutOutsideSecrets } from '../redact.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { JudgeStateOptions, TranscriptEvent } from '../types.ts'
 
@@ -33,7 +34,13 @@ const indent = (block: string) =>
  */
 export function transcriptForJudge(events: readonly TranscriptEvent[], mode: Mode): string[] {
   const full = mode === 'full'
-  const cut = (s: string) => (full ? s : clip(s, TOOL_OUTPUT_CHARS))
+  const cut = (s: string) => {
+    const c = full ? s : clip(s, TOOL_OUTPUT_CHARS)
+    if (c === s) return s
+    const kept = c.length - 1
+    const at = cutOutsideSecrets(s, kept)
+    return at < kept ? `${s.slice(0, at).trimEnd()}…` : c
+  }
   const took = (ms: number | null) => (ms === null ? '' : ` · ${formatDuration(ms)}`)
   const out: string[] = []
   for (const e of events) {
