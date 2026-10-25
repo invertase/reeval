@@ -33,7 +33,7 @@ export const durationSchema = z
     z
       .templateLiteral([z.number(), z.enum(['ms', 's', 'm', 'h'])])
       .check(z.regex(DURATION))
-      .refine((value) => durationProblem(value) === undefined, TIMER_LIMIT)
+      .refine((value) => !DURATION.test(value) || durationProblem(value) === undefined, TIMER_LIMIT)
       .meta({ pattern: DURATION.source }),
   ])
   .describe('More than zero and at most 596h: `90s`, `15m`, `1h`, or a number of milliseconds.')
