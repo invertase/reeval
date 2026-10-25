@@ -177,6 +177,12 @@ type RequestTracker = {
 /** HTTP/1.1 and HTTP/2 compatibility responses share this surface. */
 type Response = http.ServerResponse
 
+/** A TLS record's first byte when it carries a handshake, as a ClientHello does. */
+const TLS_HANDSHAKE = 0x16
+
+/** How long a decrypted CONNECT waits for its client's first byte: Node's TLS handshake timeout. */
+const FIRST_BYTE_TIMEOUT = 120_000
+
 const HOP_BY_HOP = new Set([
   'connection',
   'keep-alive',
@@ -433,7 +439,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         log(`reeval:egress CONNECT ${host}:${port} decrypt`)
         socket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
         if (head.length) socket.unshift(head)
-        return decrypt(socket, target)
+        return firstByte(socket, (byte) =>
+          byte === TLS_HANDSHAKE ? decrypt(socket, target) : plainInTunnel(socket, target),
+        )
       }
       log(`reeval:egress CONNECT ${host}:${port} tunnel`)
       let status = 200
@@ -492,6 +500,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       via: secure ? 'decrypted' : 'http',
       requestHeaders: plainHeaders(req.headers),
     })
+    const path = url.pathname + url.search
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
         log(`reeval:egress ${req.method} ${shown} denied (${verdict.reason})`)
@@ -502,31 +511,165 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
           .end(`blocked by the reeval egress policy: ${verdict.reason}\n`)
       }
       contact(req.socket, host, port)
+      const target = { host, port, address: verdict.address }
       if (secure) {
         // The request line's authority wins over Host (RFC 9112 §3.2.2): clients send the proxy's.
         const headers = { ...req.headers, host: url.host }
-        const target = { host, port, address: verdict.address }
-        return void onDecrypted(target, req, res, url.pathname + url.search, headers, done)
+        return void onDecrypted(target, req, res, path, headers, done)
       }
-      log(`reeval:egress ${req.method} http://${host}:${port}${url.pathname}`)
-      const upstream = http.request({
-        host: verdict.address,
-        port,
-        method: req.method,
-        path: url.pathname + url.search,
-        headers: { ...endToEnd(req.headers), host: url.host },
-      })
-      forwardHttp1(req.pipe(counter(done.sent)), res, upstream, {
-        own: [],
-        creds: [],
-        url: `${shown}${url.pathname}`,
-        t: done,
-      })
+      onPlain(target, req, res, path, url.host, done)
     })
   })
   front.on('upgrade', (_req: http.IncomingMessage, socket: Duplex) => {
     reply(socket, 501, 'reeval egress gateway: use CONNECT for websockets')
   })
+
+  /**
+   * Sends a plain-HTTP request upstream as the sandbox sent it: never given credentials or
+   * substitutions, so a placeholder sent over plain HTTP goes out as the placeholder.
+   */
+  function onPlain(
+    target: Target,
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    path: string,
+    host: string,
+    done: RequestTracker,
+  ) {
+    const url = `http://${target.host}:${target.port}${pathOnly(path)}`
+    log(`reeval:egress ${req.method} ${url}`)
+    const upstream = http.request({
+      host: target.address,
+      port: target.port,
+      method: req.method,
+      path,
+      headers: { ...endToEnd(req.headers), host },
+    })
+    forwardHttp1(req.pipe(counter(done.sent)), res, upstream, { own: [], creds: [], url, t: done })
+  }
+
+  /** Calls `then` with the connection's first byte once it arrives, left unread for the next reader. */
+  function firstByte(socket: Duplex, then: (byte: number) => void) {
+    const timer = setTimeout(() => socket.destroy(), FIRST_BYTE_TIMEOUT)
+    const onReadable = () => {
+      const chunk = socket.read() as Buffer | null
+      if (!chunk?.length) return
+      stop()
+      socket.unshift(chunk)
+      then(chunk[0] as number)
+    }
+    const stop = () => {
+      clearTimeout(timer)
+      socket.off('readable', onReadable)
+      socket.off('close', stop)
+    }
+    socket.on('readable', onReadable)
+    socket.once('close', stop)
+  }
+
+  /**
+   * Serves a CONNECT to a decrypted host whose client speaks plain HTTP/1.1 in the tunnel, as a
+   * Node client sends an `http://` request through a proxy: each request goes upstream as an
+   * absolute-form `http://` one does, with no credentials or substitutions.
+   */
+  function plainInTunnel(socket: Duplex, target: Target) {
+    const authority = authorityOf(target.host, target.port)
+    const server = http.createServer((req, res) => {
+      const asked = req.url ?? '/'
+      const absolute = asked.startsWith('/') ? undefined : URL.parse(asked)
+      const path = absolute ? absolute.pathname + absolute.search : asked
+      const done = requestEvent(res, {
+        method: req.method ?? 'GET',
+        url: `http://${authority}${pathOnly(path)}`,
+        host: target.host,
+        port: target.port,
+        via: 'http',
+        requestHeaders: plainHeaders(req.headers),
+      })
+      onPlain(target, req, res, path, req.headers.host ?? authority, done)
+    })
+    server.on('upgrade', (req: http.IncomingMessage, s: Duplex, head: Buffer) =>
+      onPlainUpgrade(target, req, track(s), head),
+    )
+    server.on('clientError', (_error, s: Duplex) => {
+      const reason = `reeval egress gateway: the connection to ${authority} carries neither a TLS handshake nor an HTTP/1.1 request. reeval reads every connection to a host with a brokered secret.`
+      log(`reeval:egress CONNECT ${authority} refused (neither TLS nor HTTP/1.1)`)
+      emit({
+        type: 'request',
+        method: 'CONNECT',
+        url: authority,
+        host: target.host,
+        port: target.port,
+        via: 'http',
+        allowed: false,
+        status: 400,
+        reason,
+        sent: 0,
+        received: 0,
+        substituted: [],
+        credentials: [],
+        ms: 0,
+      })
+      reply(s, 400, reason)
+    })
+    server.emit('connection', socket)
+  }
+
+  /** A plain-HTTP upgrade (a `ws://` WebSocket) in a tunnel, passed upstream as it is. */
+  function onPlainUpgrade(target: Target, req: http.IncomingMessage, socket: Duplex, head: Buffer) {
+    const method = req.method ?? 'GET'
+    const startedAt = Date.now()
+    const authority = authorityOf(target.host, target.port)
+    const upgraded = (fields: Partial<EgressRequestEvent>) =>
+      emit({
+        type: 'request',
+        method,
+        url: `http://${authority}${pathOnly(req.url ?? '/')}`,
+        host: target.host,
+        port: target.port,
+        via: 'http',
+        allowed: true,
+        sent: 0,
+        received: 0,
+        substituted: [],
+        credentials: [],
+        requestHeaders: plainHeaders(req.headers),
+        ...fields,
+        ms: Date.now() - startedAt,
+      })
+    log(`reeval:egress ${method} http://${authority}${pathOnly(req.url ?? '/')} (upgrade)`)
+    const upstream = http.request({
+      host: target.address,
+      port: target.port,
+      method,
+      path: req.url ?? '/',
+      headers: {
+        ...endToEnd(req.headers, ['upgrade', 'connection']),
+        host: req.headers.host ?? authority,
+      },
+    })
+    upstream.once('upgrade', (up, upSocket: Duplex, upHead: Buffer) => {
+      upgraded({ status: up.statusCode, responseHeaders: plainHeaders(up.headers) })
+      const lines = [`HTTP/1.1 ${up.statusCode} ${up.statusMessage}`]
+      for (let i = 0; i < up.rawHeaders.length; i += 2) {
+        lines.push(`${up.rawHeaders[i]}: ${up.rawHeaders[i + 1] ?? ''}`)
+      }
+      socket.write(`${lines.join('\r\n')}\r\n\r\n`)
+      if (head.length) upSocket.write(head)
+      if (upHead.length) socket.write(upHead)
+      link(socket, track(upSocket))
+    })
+    upstream.once('response', (up) => {
+      upgraded({ status: up.statusCode })
+      reply(socket, up.statusCode ?? 502, `upstream refused the upgrade (${up.statusCode})`)
+      up.resume()
+    })
+    upstream.once('error', (error) => {
+      upgraded({ status: 502, reason: error.message })
+      reply(socket, 502, `reeval egress gateway: ${error.message}`)
+    })
+    upstream.end()
+  }
 
   /**
    * Terminates TLS with a certificate for the CONNECT host. One server per connection, since the
