@@ -1,7 +1,7 @@
 import { OPENROUTER_KEY } from '../gateway/openrouter.ts'
 import { VERCEL_KEY, VERCEL_OIDC, vercelCredentialProblem } from '../gateway/vercel.ts'
 import type { JudgeRetry } from '../history/types.ts'
-import { badCharacterAt } from '../redact.ts'
+import { badCharacterAt, redactSecrets } from '../redact.ts'
 import type {
   FakeJudgeModel,
   GatewayName,
@@ -198,7 +198,15 @@ export async function runJudge(
     const { scoreWithModel } = await import('./model.ts')
     const scored = await withRetries(
       () =>
-        scoreWithModel(model, question, state, options.providerOptions, signal, gateway, fallbacks),
+        scoreWithModel(
+          model,
+          redactSecrets(question),
+          state,
+          options.providerOptions,
+          signal,
+          gateway,
+          fallbacks,
+        ),
       retry,
       signal,
     )

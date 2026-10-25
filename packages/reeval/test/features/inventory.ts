@@ -971,6 +971,13 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'redaction.judge',
+    area: 'Environments',
+    name: 'Secrets masked in what the judge is sent',
+    fixtures: ['secrets/judge-sees-redacted'],
+    tests: [secrets('redacting serialised JSON')],
+  },
+  {
     id: 'setup.steps',
     area: 'Environments',
     name: '`setup` steps: order, a failing step named, a missing `cwd`, `setup.log`',

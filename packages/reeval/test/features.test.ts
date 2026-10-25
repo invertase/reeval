@@ -132,6 +132,7 @@ function blockOf(stdout: string, name: string): string {
 }
 
 const TOKEN = 'reeval-fixture-token-7c1d9a0b52e4'
+const AGENT_VALUE = 'reeval-fixture-agent-3f8e61b2a9d0'
 /** With characters each encoding changes: space, `/`, `+`, `"`, `&`, `?` and `=`. */
 const LEAKY = 'reeval leak/7c+1d"9a&b?0=e4f2'
 
@@ -880,6 +881,19 @@ export const features: Feature[] = [
     hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
     canary: /expected '\[REDACTED\]' to be ''/,
     record: ({ runDir }) => assert.equal(filesContaining(runDir, TOKEN), ''),
+  },
+  {
+    dir: 'secrets/judge-sees-redacted',
+    tiers: ['fake', 'docker'],
+    env: 'tokens',
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN, REEVAL_FIXTURE_AGENT_VALUE: AGENT_VALUE },
+    canary: /expected '\[REDACTED\]' to be '\[REDACTED\]'/,
+    record: ({ run, project, runDir }) => {
+      const sent = JSON.parse(readFileSync(join(project, 'judge-saw-lands.json'), 'utf8'))
+      assert.deepEqual(judgeInputOf(run, runDir).state, sent, 'judge-input.json is what was sent')
+      assert.equal(filesContaining(runDir, TOKEN), '')
+      assert.equal(filesContaining(runDir, AGENT_VALUE), '')
+    },
   },
   {
     dir: 'secrets/brokered-agent-sees-placeholder',
