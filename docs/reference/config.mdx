@@ -221,7 +221,7 @@ reeval: judge.model.score in reeval.yaml must be at most 1 (got 2)
 </Property>
 
 <Property name="history" type="{ dir?: string, artifacts?: 'all' | 'failures' | 'none' }">
-  `dir` is the history folder, relative to the config's directory; default `.history` inside the folder of your eval files (`evals/.history`). `artifacts` says which attempts keep their transcripts, diffs and logs: `'all'` (default), `'failures'` (each attempt that failed or hit an infra error, whatever its eval's outcome) or `'none'`.
+  `dir` is the history folder, relative to the config's directory; default `.history` inside the folder of your eval files (`evals/.history`). `artifacts` says which attempts keep their transcripts, diffs and logs: `'all'` (default), `'failures'` (each attempt that failed or hit an infra error, whatever its eval's outcome; see [`reeval record`](/reference/cli/record)) or `'none'`.
 </Property>
 
 <Property name="budget" type="{ attempts?: number, duration?: string | number }">

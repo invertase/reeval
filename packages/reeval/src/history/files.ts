@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path'
 import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { factsHash } from '../insights/hash.ts'
 import { BUILD_ID } from '../root.ts'
+import type { QuestionInput } from '../types.ts'
 import { runHeader } from '../view/header.ts'
 import { fromModel, INSIGHTS_FILE, type RunInsights } from '../view/insights.ts'
 import { NewerSchemaError, readableInsights, readableRecord } from '../view/record.ts'
@@ -26,14 +27,7 @@ import {
 } from './ignore.ts'
 import { type Finding, findingLines, findingSummary, scanText } from './secret-scan.ts'
 import { renderSummary } from './summary.ts'
-import type {
-  ArtifactLevel,
-  AttemptRecord,
-  EvalEntry,
-  FileRef,
-  HistoryEntry,
-  RunRecord,
-} from './types.ts'
+import type { ArtifactLevel, AttemptRecord, FileRef, HistoryEntry, RunRecord } from './types.ts'
 
 export class HistoryError extends Error {
   override name = 'HistoryError'
@@ -277,9 +271,6 @@ const attemptRefs = (a: AttemptRecord): FileRef[] => [
   ...(a.answers ?? []).flatMap((q) => (q.input ? [q.input] : [])),
 ]
 
-const evalRefs = (e: EvalEntry): FileRef[] =>
-  (e.answers ?? []).flatMap((q) => (q.input ? [q.input] : []))
-
 export type RecordOptions = {
   root: string
   historyDir: string
@@ -323,31 +314,49 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
   const record: RunRecord = structuredClone(scratch)
   record.artifacts = level
   const files = new Map<string, Uint8Array>()
-  const keep = async (refs: FileRef[]) => {
-    for (const ref of refs) {
-      const bytes = await readFile(join(source, runId, ...ref.path.split('/')))
-      if (sha256(bytes) !== ref.sha256) {
-        throw new HistoryError(`${runId}/${ref.path} changed since the run wrote it`)
-      }
-      files.set(ref.path, bytes)
+  const keep = async (ref: FileRef) => {
+    const bytes = await readFile(join(source, runId, ...ref.path.split('/')))
+    if (sha256(bytes) !== ref.sha256) {
+      throw new HistoryError(`${runId}/${ref.path} changed since the run wrote it`)
     }
+    files.set(ref.path, bytes)
+    return bytes
   }
   for (const e of record.evals) {
-    for (const a of e.attempts) {
-      if (level !== 'none' && keeps(a, level)) {
-        await keep(attemptRefs(a))
+    // A pairwise input goes with its eval, and so do the screenshots it names: the sides it
+    // compares passed, so their attempts don't keep them.
+    const shown = new Set<string>()
+    for (const q of e.answers ?? []) {
+      if (!q.input) continue
+      if (level === 'none' || !keeps(e, level)) {
+        delete q.input
         continue
       }
-      a.files = {}
+      const input = JSON.parse(Buffer.from(await keep(q.input)).toString()) as QuestionInput
+      for (const s of input.calls.flatMap((c) => c.screenshots ?? [])) {
+        if ('path' in s && s.path) shown.add(s.path)
+      }
+    }
+    // An eval that failed with no failed attempt (a `minLift` gate) keeps every attempt's files.
+    const all = failed(e) && !e.attempts.some(failed)
+    for (const a of e.attempts) {
+      const cellFailed = e.attempts.some((b) => b.cell === a.cell && failed(b))
+      if (level !== 'none' && (all || keeps(a, level))) {
+        for (const ref of attemptRefs(a)) await keep(ref)
+        continue
+      }
+      // Kept beside a failed attempt in its cell: `flaky_cells` tells the checks varying from the
+      // agent by whether a failed attempt's diff matches a passing one's.
+      const diff = level !== 'none' && cellFailed ? a.files.diff : undefined
+      const screenshots = (a.files.artifacts ?? []).filter((r) => shown.has(r.path))
+      a.files = {
+        ...(diff ? { diff } : {}),
+        ...(screenshots.length ? { artifacts: screenshots } : {}),
+      }
+      for (const ref of [...(diff ? [diff] : []), ...screenshots]) await keep(ref)
       for (const c of a.checks) delete c.log
       for (const q of a.answers ?? []) delete q.input
     }
-    // A compare's pairwise inputs hold every pair's sides: kept when the eval or any attempt failed.
-    if (level !== 'none' && (keeps(e, level) || e.attempts.some((a) => keeps(a, level)))) {
-      await keep(evalRefs(e))
-      continue
-    }
-    for (const q of e.answers ?? []) delete q.input
   }
   const patch = record.git?.worktreePatch
   let droppedPatch: string[] = []

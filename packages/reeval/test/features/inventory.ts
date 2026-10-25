@@ -1917,7 +1917,10 @@ export const inventory: InventoryFeature[] = [
     area: 'Records and studio',
     name: "`history.artifacts` and `reeval record --artifacts`: `'failures'` keeps each failed attempt's files, whatever its eval did",
     fixtures: ['history/artifacts-failures'],
-    tests: [history('artifact levels, and config.record modes')],
+    tests: [
+      history('artifact levels, and config.record modes'),
+      history("artifacts 'failures' keeps what a failed eval's compare input and lift gate need"),
+    ],
   },
   {
     id: 'history.logs',

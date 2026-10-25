@@ -172,7 +172,7 @@
 | `evals[].answers[].input`: what each pairwise question's model was sent, per pair and order | ✓ 1 | — | ● 1 | ● 1 | — | — |
 | Budget-stopped runs are recorded with status `budget` | ✓ 2 | — | — | — | — | — |
 | Recording, merges across branches, rebases and `reeval checkout` | ✓ 3 | — | — | — | — | — |
-| `history.artifacts` and `reeval record --artifacts`: `'failures'` keeps each failed attempt's files, whatever its eval did | ✓ 1 | — | ● 1 | — | — | — |
+| `history.artifacts` and `reeval record --artifacts`: `'failures'` keeps each failed attempt's files, whatever its eval did | ✓ 2 | — | ● 1 | — | — | — |
 | History `.gitignore` un-ignores recorded logs; `reeval record` warns when git still ignores them | ✓ 3 | — | — | — | — | — |
 | `reeval history`, `reeval show` and `reeval compare`, with `--json` and `--md` | ✓ 7 | — | — | — | — | ◐ 2 (2 without a canary) |
 | `reeval compare --fail-on-regression` | ✓ 2 | — | — | — | — | — |

@@ -233,6 +233,75 @@ describe('recording runs into evals/.history', () => {
     }
   })
 
+  test("artifacts 'failures' keeps what a failed eval's compare input and lift gate need", async () => {
+    const p = await fixture('features/compare/question-artifacts')
+    await rm(join(p.dir, 'evals/lands.eval.ts'))
+    await rm(join(p.dir, 'evals/canary.eval.ts'))
+    await writeFile(
+      join(p.dir, 'evals/mixed.eval.ts'),
+      `import { evaluate, expect } from 'reeval'
+import { baseline, variant } from './env.ts'
+
+evaluate(
+  'mixed',
+  {
+    runs: 2,
+    compare: { baseline, variants: [variant] },
+    questions: [{ question: 'Which page looks better?', across: 'environment', artifacts: ['landing'] }],
+  },
+  async (c) => {
+    await c.send('write the page')
+    const server = await c.serve('node server.mjs')
+    await c.capture(server, { name: 'aside' })
+    await c.capture(server, { name: 'landing' })
+    expect(c.attempt.n, 'first try').toBe(1)
+  },
+)
+`,
+    )
+    await writeFile(
+      join(p.dir, 'evals/flat.eval.ts'),
+      `import { evaluate } from 'reeval'
+import { baseline, variant } from './env.ts'
+
+evaluate('flat', { compare: { baseline, variants: [variant], minLift: 0.5 } }, async (c) => {
+  await c.send('write the page')
+})
+`,
+    )
+    assert.equal((await runCli(p.dir)).code, 1)
+    const r = await runCli(p.dir, ['record', '--artifacts', 'failures'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run, dir } = readRun(p.dir, { history: HISTORY })
+    const evalOf = (name: string) => run.evals.find((e) => e.name === name)
+    const mixed = evalOf('mixed')
+    assert.equal(mixed?.outcome, 'fail')
+    const input = mixed?.answers?.[0]?.input
+    assert.ok(input && existsSync(join(dir, input.path)), 'the failed eval keeps its compare input')
+    const shots = JSON.parse(readFileSync(join(dir, input.path), 'utf8')).calls.flatMap(
+      (c: { screenshots?: { path?: string }[] }) => c.screenshots ?? [],
+    )
+    assert.ok(shots.length > 0)
+    for (const s of shots) assert.ok(s.path && existsSync(join(dir, s.path)), s.path)
+    for (const a of mixed?.attempts ?? []) {
+      const kept = Object.keys(a.files).sort()
+      if (a.outcome === 'fail') assert.ok(a.files.transcript, `${a.id} keeps its transcript`)
+      else {
+        assert.deepEqual(kept, ['artifacts', 'diff'], `${a.id}: the shown capture and its diff`)
+        assert.deepEqual(
+          a.files.artifacts?.map((x) => x.name),
+          ['landing'],
+        )
+      }
+    }
+    const flat = evalOf('flat')
+    assert.equal(flat?.outcome, 'fail')
+    assert.ok(
+      flat?.attempts.every((a) => a.outcome === 'pass' && a.files.transcript),
+      'a lift gate that failed with no failed attempt keeps every attempt',
+    )
+  })
+
   test('artifact levels, and config.record modes', async () => {
     const p = await gitProject(
       'record-levels',
