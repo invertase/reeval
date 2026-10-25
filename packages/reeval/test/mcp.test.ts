@@ -11,6 +11,7 @@ import { after, before, describe, test } from 'node:test'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
 import { killTree } from '@reeval/sandbox-docker/process'
+import { fingerprintOf } from '../src/history/assemble.ts'
 import { VIEW_NAMES } from '../src/history/db.ts'
 import { firstKeyword, sqlProblem } from '../src/mcp/server.ts'
 import { baseEnv, pkgRoot, project, recordedRuns, runCli } from './helpers.ts'
@@ -517,14 +518,19 @@ describe('reeval mcp', () => {
     }
   })
 
-  test("failures names a part only the last passing run's fingerprint has", async () => {
+  test("failures names a gateway only the last passing run's fingerprint has", async () => {
     const p = await project('mcp-gateway', { 'reeval.config.ts': config, ...evals })
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
     assert.equal((await runCli(p.dir, ['run', '--record'], { env: { BREAK: '1' } })).code, 1)
     const [passed] = recordedRuns(p.dir)
     const path = join(p.dir, 'evals/.history', `${passed}.json`)
     const record = JSON.parse(readFileSync(path, 'utf8'))
-    for (const e of record.evals) for (const c of e.cells) c.fingerprintParts.gateway = 'vercel'
+    for (const e of record.evals) {
+      for (const c of e.cells) {
+        c.fingerprintParts.gateway = 'vercel'
+        c.fingerprint = fingerprintOf(c.fingerprintParts)
+      }
+    }
     writeFileSync(path, JSON.stringify(record))
     const client = await connect(p.dir, MODERN)
     try {

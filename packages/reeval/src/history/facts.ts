@@ -139,7 +139,7 @@ type Attempt = {
 }
 
 /** Each fingerprint part's name in `drift.changed` and its `cells` column; every part has one. */
-const PART_COLUMNS = {
+export const PART_COLUMNS = {
   sources: ['sources', 'fp_sources'],
   harness: ['harness', 'fp_harness'],
   environment: ['environment', 'fp_environment'],
