@@ -12,6 +12,7 @@ import {
   completedKeysFor,
   HOLDER_FILE,
   isCompletedAttempt,
+  keptAttempts,
   prepareResume,
   readCurrent,
   resolveResume,
@@ -161,6 +162,31 @@ describe('completedKeysFor and prepareResume', () => {
       join(p.dir, '.reeval', 'staging', SEEDED_RUN_ID),
     )
     assert.deepEqual([...keys], [key])
+  })
+
+  test('keptAttempts: the previous assemble wins, else the staged record without a duration', async () => {
+    const p = await project('resume-kept', { 'reeval.config.ts': fakeConfig() })
+    const staged = attemptKey(evalId('evals/r.eval.ts', ['staged']), 'fake/-/docker', 1)
+    const both = attemptKey(evalId('evals/r.eval.ts', ['both']), 'fake/-/docker', 1)
+    const staging = writeStoppedStaging(p.dir, SEEDED_RUN_ID, [
+      { file: 'evals/r.eval.ts', name: 'staged', cell: 'fake/-/docker' },
+      { file: 'evals/r.eval.ts', name: 'both', cell: 'fake/-/docker' },
+    ])
+    const previous = {
+      evals: [
+        {
+          attempts: [
+            { key: both, outcome: 'fail', error: null, startedAt: null, durationMs: 42 },
+            { key: 'aborted', outcome: 'fail', error: { kind: 'aborted' }, durationMs: 1 },
+          ],
+        },
+      ],
+    } as unknown as RunRecord
+    const kept = keptAttempts([staged, both, 'aborted', 'missing'], staging, previous)
+    assert.deepEqual(Object.fromEntries(kept), {
+      [staged]: { outcome: 'pass', startedAt: '2026-01-01T00:00:00.000Z', durationMs: null },
+      [both]: { outcome: 'fail', startedAt: null, durationMs: 42 },
+    })
   })
 
   test('refuses a second claim while this process holds the id', async () => {

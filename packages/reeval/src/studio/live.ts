@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { recordFile, scratchDir } from '../history/files.ts'
 import { recordFileName } from '../ids.ts'
 import { redactJsonText } from '../redact.ts'
+import { isCompletedAttempt, loadPrevious, previousAttempt } from '../resume.ts'
 import type { EvalRecord } from '../types.ts'
 import {
   isFinished,
@@ -79,8 +80,23 @@ export async function listLive(
 }
 
 /**
- * A finished attempt's transcript, as `transcript.jsonl` has it, from the record its worker staged;
- * null for an attempt that isn't live and finished, or a file outside the run's staging directory.
+ * The transcript a resume's previous assemble filed for an attempt it kept, or undefined when it
+ * kept none there. The staged record a resume writes for a kept attempt has no turns.
+ */
+async function keptTranscript(root: string, runId: string, key: string) {
+  const { record } = await loadPrevious(join(stagingRoot(root), runId))
+  const kept = previousAttempt(record, key)
+  const ref = kept && isCompletedAttempt(kept.outcome, kept.error) ? kept.files.transcript : null
+  if (!ref) return undefined
+  const path = ['previous-artifacts', ...ref.path.split('/')]
+  const file = await fileInside(stagingRoot(root), [runId], path)
+  return file ? redactJsonText(await readFile(file, 'utf8')) : undefined
+}
+
+/**
+ * A finished attempt's transcript, as `transcript.jsonl` has it, from the record its worker staged
+ * (or, for one a resume kept, the transcript filed for it before); null for an attempt that isn't
+ * live and finished, or a file outside the run's staging directory.
  */
 export async function liveTranscript(
   source: StudioSource,
@@ -91,9 +107,11 @@ export async function liveTranscript(
   const progress = await readProgress(source.root, runId)
   const attempt = progress?.attempts.find((a) => a.key === key)
   if (!attempt || !isFinished(attempt.status)) return null
-  const file = await fileInside(stagingRoot(source.root), [runId], ['evals', recordFileName(key)])
-  if (!file) return null
   try {
+    const kept = await keptTranscript(source.root, runId, key)
+    if (kept !== undefined) return kept
+    const file = await fileInside(stagingRoot(source.root), [runId], ['evals', recordFileName(key)])
+    if (!file) return null
     const record = JSON.parse(await readFile(file, 'utf8')) as EvalRecord
     const { transcriptLines } = await import('../history/assemble.ts')
     return redactJsonText(transcriptLines(record))
