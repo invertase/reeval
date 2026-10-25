@@ -612,6 +612,34 @@ describe('runEngine: running', () => {
     )
   })
 
+  test("a resume's completed attempts stay skipped when the file fails to load on its second pass", async () => {
+    const { run } = project(['evals/a.eval.ts'])
+    run.completed = ['evals/a.eval.ts › done']
+    const events: ReevalEvent[] = []
+    const { spawn } = fakeSpawn((ctl) => {
+      if (ctl.init.select) ctl.emit({ t: 'load-error', error: { message: 'changed on disk' } })
+      else ctl.emit({ t: 'collected', tests: [test0(0, 'done'), test0(1, 'leftover')] })
+      ctl.emit({ t: 'done' })
+      ctl.exit()
+    })
+    const r = await engine({ run, onEvent: (e) => events.push(e) }, spawn)
+    assert.deepEqual(
+      r.evals.map((e) => [e.id, e.state, e.errors]),
+      [
+        ['evals/a.eval.ts › done', 'skipped', []],
+        ['evals/a.eval.ts › leftover', 'failed', ['changed on disk']],
+      ],
+    )
+    const collected = events.find((e) => e.type === 'collected')
+    assert.deepEqual(
+      collected?.type === 'collected' && collected.evals.map((e) => [e.name, e.skipped]),
+      [
+        ['done', true],
+        ['leftover', false],
+      ],
+    )
+  })
+
   test('a worker that fails its handshake fails the run', async () => {
     const { run } = project(['evals/a.eval.ts'])
     let spawns = 0

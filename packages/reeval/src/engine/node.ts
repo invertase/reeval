@@ -198,6 +198,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
   const root = run.config.root
   const emit = input.onEvent ?? (() => {})
   const unhandledErrors: string[] = []
+  const completed = new Set(run.completed)
   const live = new Set<WorkerProcess>()
   const byFile = new Map<string, FileRun>()
   // Every file in the first round asks for its leases before any is granted, so the first
@@ -245,8 +246,12 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
       live.add(worker)
       owners.set(id, worker)
       // Until the worker collects again, the file's tests are the plan's, so a file that fails to
-      // load this time still fails its attempts instead of dropping them.
-      const state: FileRun = { rel, tests: planned, results: new Map() }
+      // load this time still fails its attempts instead of dropping them. The plan was collected
+      // before a resume knew which attempts were done, so those are skipped, as the worker would.
+      const tests = planned.map(
+        (t): WireTest => (completed.has(identify(rel, t).key) ? { ...t, mode: 'skip' } : t),
+      )
+      const state: FileRun = { rel, tests, results: new Map() }
       byFile.set(file, state)
       let done = false
       let ready = false
