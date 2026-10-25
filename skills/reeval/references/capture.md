@@ -16,7 +16,8 @@ evaluate('builds the sign-in page', async (c) => {
 - `await c.capture(port | server, { name?, path?,
   wait?, instructions?, viewport?, model? })` screenshots the tunneled port into
   `artifacts/<name>.png`. The first argument is the container port or a `ServeHandle`;
-  default `path` is `/`, default `name` comes from the path. `wait` is once, before the
+  default `path` is `/`, default `name` comes from the path. A `name` is 1 to 100 of
+  `a-z`, `0-9`, `_` and `-`, starting with a letter or digit. `wait` is once, before the
   first model shot or the saved PNG (`'load'`, `'idle'`, or `{ ms }`). `instructions` is
   a journey of goal strings and `{ wait }` beats (`{ wait: 'idle' }` waits for the
   network to go quiet from that beat, so it covers a click that only fetches) — no

@@ -23,6 +23,7 @@ import {
 } from '../src/capture/index.ts'
 import { unzip } from '../src/capture/zip.ts'
 import { posixShell } from '../src/sandbox/fake.ts'
+import { artifactPath, parseDataPath } from '../src/view/paths.ts'
 
 const viewport = { width: 1280, height: 720 }
 
@@ -162,13 +163,45 @@ test('nameFromPath slugs the path', () => {
   assert.equal(nameFromPath('/login'), 'login')
   assert.equal(nameFromPath('/foo/bar'), 'foo-bar')
   assert.equal(nameFromPath('/Login'), 'login')
+  assert.equal(nameFromPath('/_next/data'), 'next-data')
+  assert.equal(nameFromPath('/-/x'), 'x')
+  assert.equal(nameFromPath(`/${'a'.repeat(99)}/b`), 'a'.repeat(99))
+  assert.equal(nameFromPath(`/${'a'.repeat(150)}`), 'a'.repeat(100))
 })
 
-test('checkCaptureName accepts [a-z0-9_-]+', () => {
+test('checkCaptureName accepts 1 to 100 of [a-z0-9_-], starting with a letter or digit', () => {
   checkCaptureName('home')
   checkCaptureName('login_1')
-  assert.throws(() => checkCaptureName('Home'), /name must match/)
-  assert.throws(() => checkCaptureName('has space'), /name must match/)
+  checkCaptureName('0-home_')
+  checkCaptureName('a'.repeat(100))
+  for (const bad of ['Home', 'has space', '', '_home', '-home', 'a'.repeat(101)]) {
+    assert.throws(
+      () => checkCaptureName(bad),
+      /name must be 1 to 100 of a-z, 0-9, _ and -, starting with a letter or digit/,
+      bad,
+    )
+  }
+})
+
+test('every capture name reeval accepts or derives is one the studio serves', () => {
+  const run = '20260101T000000Z_a1b2c3d_main_ab12'
+  const served = (name: string) =>
+    parseDataPath(artifactPath(run, `evals/a/e/0/artifacts/${name}.png`)) !== null
+  const accepted = (name: string) => {
+    try {
+      checkCaptureName(name)
+      return true
+    } catch {
+      return false
+    }
+  }
+  for (const name of ['home', '0', '_home', '-home', 'a'.repeat(100), 'a'.repeat(124)]) {
+    if (accepted(name)) assert.ok(served(name), name)
+  }
+  for (const path of ['/', '/_home', '/-home', `/${'a'.repeat(300)}`, '/A B/C']) {
+    const name = nameFromPath(path)
+    assert.ok(accepted(name) && served(name), path)
+  }
 })
 
 test('pickPageDebuggerUrl skips the browser target', () => {

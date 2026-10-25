@@ -400,8 +400,9 @@
           "type": "string"
         },
         "name": {
+          "description": "The `artifacts/<name>.png` file name: 1 to 100 of `a-z`, `0-9`, `_` and `-`, starting with a letter or digit. Unique within the attempt.",
           "type": "string",
-          "pattern": "\\S"
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,99}$"
         },
         "path": {
           "type": "string"

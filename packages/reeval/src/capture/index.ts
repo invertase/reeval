@@ -1,6 +1,7 @@
 import { createServer } from 'node:net'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { CAPTURE_NAME, CAPTURE_NAME_MAX, CAPTURE_NAME_RULE } from '../contract/attempt.ts'
 import { parseDuration } from '../duration.ts'
 import { isOneOf } from '../object.ts'
 import { cacheDir } from '../root.ts'
@@ -38,8 +39,6 @@ export const DEFAULT_VIEWPORT: CaptureWindow = { width: 1280, height: 720 }
 
 /** Default poll (and screenshot) budget when the call and cascade omit `timeout`. */
 export const DEFAULT_TIMEOUT: Duration = '60s'
-
-export const CAPTURE_NAME = /^[a-z0-9_-]+$/
 
 export const CAPTURE_WAITS = ['load', 'idle'] as const
 
@@ -151,7 +150,10 @@ export function resolveCaptureTarget(target: number | ServeHandle): number {
   throw new Error('c.capture() needs a port or a ServeHandle as the first argument')
 }
 
-/** Artifact name from a path: `/login` → `login`, `/foo/bar` → `foo-bar`, `/` → `root`. */
+/**
+ * Artifact name from a path: `/login` → `login`, `/foo/bar` → `foo-bar`, `/` → `root`. Always
+ * a valid capture name: leading `_` and `-` go, and it's cut at the name's length limit.
+ */
 export function nameFromPath(path: string): string {
   const slug = (path.split(/[?#]/, 1)[0] ?? '')
     .replaceAll('\\', '/')
@@ -160,7 +162,9 @@ export function nameFromPath(path: string): string {
     .join('-')
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replace(/^[_-]+/, '')
+    .slice(0, CAPTURE_NAME_MAX)
+    .replace(/-+$/, '')
   return slug || 'root'
 }
 
@@ -241,7 +245,7 @@ function checkCallModel(model: string): void {
 
 export function checkCaptureName(name: string): void {
   if (!CAPTURE_NAME.test(name)) {
-    throw new Error(`c.capture() name must match [a-z0-9_-]+ (got ${JSON.stringify(name)})`)
+    throw new Error(`c.capture() name ${CAPTURE_NAME_RULE} (got ${JSON.stringify(name)})`)
   }
 }
 

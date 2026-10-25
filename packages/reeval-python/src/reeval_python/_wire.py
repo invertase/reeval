@@ -389,6 +389,8 @@ class CaptureCallData(TypedDict):
     instructions: NotRequired[list[CaptureInstruction]]
     # Overrides cascaded `capture.model` for this call.
     model: NotRequired[str]
+    # The `artifacts/<name>.png` file name: 1 to 100 of `a-z`, `0-9`, `_` and `-`, starting with
+    # a letter or digit. Unique within the attempt.
     name: NotRequired[str]
     path: NotRequired[str]
     timeout: NotRequired[Duration]

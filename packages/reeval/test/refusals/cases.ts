@@ -1677,6 +1677,26 @@ environment:
       request({ op: 'capture', target: { port: 3000 }, options: { wait: { ms: -1 } } }),
     ],
     [
+      'capture with a name starting with an underscore',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: '_home' } }),
+    ],
+    [
+      'capture with a name starting with a hyphen',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: '-home' } }),
+    ],
+    [
+      'capture with a name of 101 characters',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: 'a'.repeat(101) } }),
+    ],
+    [
+      'capture with an upper-case name',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: 'Home' } }),
+    ],
+    [
+      'good: capture with a name of 100 characters',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: 'a'.repeat(100) } }),
+    ],
+    [
       'poll on a value',
       request(expectCall({ subject: { value: 1 }, matcher: 'toBe', args: [1], poll: {} })),
     ],
