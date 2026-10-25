@@ -33,6 +33,10 @@ const TOKEN_SHAPES: Array<{ rule: string; prefix: string; rest: string; word?: s
     rule: 'JWT',
     prefix: 'eyJ',
     rest: '[A-Za-z0-9_-]{10,}\\.eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}',
+
+    // Base64 of JSON holds `eyJ` wherever a `{"` lines up: unguarded, each one would scan to the
+    // end of the run.
+    word: 'A-Za-z0-9',
   },
   {
     rule: 'private key',
@@ -247,9 +251,9 @@ function secretRanges(text: string, secrets: Secrets, forms = secrets.forms): Ra
   }
   const ends = new Set(found.map((r) => r.end))
   for (const { rule, pattern } of TOKEN_PATTERNS) {
-    // A token can start inside the one before it (`ghp_…ghp_…`, whose first match takes the
-    // second's `ghp`), so each search after a match starts one character into it. One that ends
-    // no later than the match ends the search inside it, which keeps the scan linear.
+    // A token can start inside the one before it and run past its end (`ghp_…ghp_…`, whose first
+    // match takes the second's `ghp`), so each search after a match starts one character into it.
+    // One that ends no later than the match ends the search there, which keeps the scan linear.
     let last = -1
     pattern.lastIndex = 0
     for (let m = pattern.exec(text); m; m = pattern.exec(text)) {

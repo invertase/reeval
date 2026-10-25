@@ -756,6 +756,19 @@ describe('a token right after a letter, digit or underscore', () => {
     assert.equal(redactSecrets(`${text}key%3D${anthropic}`, {}), `${text}key%3D[REDACTED]`)
     assert.ok(performance.now() - started < 2000, `${performance.now() - started}ms`)
   })
+
+  test('base64 of JSON, full of eyJ, is masked in linear time', () => {
+    const objects = Array.from({ length: 4000 }, (_, i) => ({ id: i, tags: [{ k: 'a', v: i }] }))
+    for (const text of [
+      Buffer.from(JSON.stringify(objects)).toString('base64'),
+      Buffer.from(JSON.stringify(objects)).toString('base64url'),
+      'aeyJ'.repeat(20_000),
+    ]) {
+      const started = performance.now()
+      assert.equal(redactSecrets(text, {}), text)
+      assert.ok(performance.now() - started < 500, `${performance.now() - started}ms`)
+    }
+  })
 })
 
 // Last in the file: the short secrets these register would otherwise reach every test above.
