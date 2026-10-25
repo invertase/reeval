@@ -94,14 +94,16 @@ Each harness reads its API key from the `.env.local` file. reeval measures each 
 
 ## Ask which did better
 
-A comparison question asks a language model which of two attempts did better. The comparison leaves out attempts that failed their checks, so the question needs a check both sides can pass. In the `evals/shoehorn.eval.ts` file, add the question and replace the check with one both sides can pass:
+A pairwise question asks a language model which of two attempts did better. `across: 'environment'` pairs the control with each variant on the same harness. The comparison leaves out attempts that failed their checks, so the question needs a check both sides can pass. In the `evals/shoehorn.eval.ts` file, add the question and replace the check with one both sides can pass:
 
 ```ts title="evals/shoehorn.eval.ts"
-compare: {
-  baseline: plain,
-  variants: [withShoehorn],
-  questions: ['Which test reads more like a specification?'],
-},
+compare: { baseline: plain, variants: [withShoehorn] },
+questions: [
+  {
+    question: 'Which test reads more like a specification?',
+    across: 'environment',
+  },
+],
 // ...
 await expect(c, 'test file').toHaveFile('src/user.test.ts')
 ```

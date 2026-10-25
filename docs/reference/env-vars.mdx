@@ -19,6 +19,10 @@ For more information about config keys, see [Options](/reference/options). For m
 
 `REEVAL_CONCURRENCY` is how many attempts run together (`--concurrency`, then the `concurrency` key). Unset, the cap is 8, one per CPU and per GB of memory where the sandboxes run, and at least 1. A value that is not a whole number of at least 1 stops the command.
 
+## `REEVAL_PRICES`
+
+`REEVAL_PRICES` names a JSON file of your own model prices for the `reeval run --dry-run` cost estimate. Its prices take precedence over models.dev's. `none` shows tokens only, with no cost. A file reeval can't read or parse stops the command.
+
 ## `REEVAL_CAPTURE_BROWSER`
 
 `REEVAL_CAPTURE_BROWSER` of `0` refuses the host browser for `c.capture()`. Any other value allows it. `capture.browser` of `false` refuses it too.
@@ -65,7 +69,11 @@ A non-empty `REEVAL_NO_REPORT_HINT` hides the `reeval report` hint after a crash
 
 ## `AI_GATEWAY_API_KEY`
 
-`AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` calls Vercel AI Gateway for `judge.model` and `analysis.model`. The `provider/model` prefix selects the credential, and every prefix without a direct key set uses the gateway.
+`AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` calls Vercel AI Gateway for `judge.model` and `analysis.model`, and for harness models when `vercel()` is in the `gateway` list. The `provider/model` prefix selects the credential, and every prefix without a direct key set uses the gateway.
+
+## `OPENROUTER_API_KEY`
+
+`OPENROUTER_API_KEY` is the key for `openrouter()` in the `gateway` list, for harness, judge, and analysis models it serves.
 
 ## `VERCEL_OIDC_TOKEN`
 

@@ -81,6 +81,31 @@ For more information about supported providers, see [the `opencode` harness refe
   The harness sets `default_reasoning_effort` to `low`, `medium`, or `high` for a model that accepts it.
 </Property>
 
+## Route models through a gateway
+
+A gateway serves your harness's and judge's model calls on one key. In the `reeval.config.ts` file, list `vercel()` in a profile's `gateway`:
+
+```ts title="reeval.config.ts"
+import { vercel } from '{{ pkg }}/gateway'
+// ...
+  vercel: {
+    defaults: {
+      harness: claudeCode({ model: 'claude-sonnet-5' }),
+      sandbox: docker(),
+    },
+    judge: { model: 'typesafe-ai/jev-1.14.0' },
+    gateway: [vercel()],
+  },
+```
+
+The key is `AI_GATEWAY_API_KEY`. With `vercel()` alone in the list, a model Vercel AI Gateway can't serve stops the plan. Add `direct()` after it to fall back to the provider's own key. `openrouter()` routes through OpenRouter on `OPENROUTER_API_KEY`.
+
+<Property name="gateway" type="'direct' | 'vercel' | 'openrouter'" optional>
+  On a harness factory or `judge`, the one gateway its calls go through. It must be in the config's `gateway` list, and it skips the list's fallback.
+</Property>
+
+For a runnable project, see [`with-vercel-gateway`](https://github.com/invertase/reeval/tree/main/examples/with-vercel-gateway). For more information about the list, see [the `gateway` option](/reference/options#gateway).
+
 ## `turns[].model`
 
 The record keeps the model that served each turn beside the configured `model`.

@@ -5,7 +5,7 @@ description: "Look up each profile key and how reeval chooses a profile."
 
 ## `profiles`
 
-`profiles` in the `reeval.config.ts` file maps a name to `defaults`, `limit`, `judge`, `budget`, `record`, and `tags`. reeval exits with code 2 for an unknown key or a value of the wrong shape.
+`profiles` in the `reeval.config.ts` file maps a name to `defaults`, `limit`, `judge`, `budget`, `record`, `tags`, and `gateway`. reeval exits with code 2 for an unknown key or a value of the wrong shape.
 
 A profile object sets every key.
 
@@ -139,6 +139,14 @@ For more information about copying a run later, see [reeval record](/reference/c
 reeval exits with code 2 when `tags` is not a list of strings.
 
 For more information about tags on a group or evaluation, see [Options reference](/reference/options#tags).
+
+## `gateway`
+
+`gateway` replaces the config's `gateway` list while the profile is selected.
+
+<Property name="gateway" type="GatewayDescriptor[]" optional>
+  The same helpers as the config's [`gateway`](/reference/options#gateway), in the order you prefer them.
+</Property>
 
 ## `defaultProfile`
 

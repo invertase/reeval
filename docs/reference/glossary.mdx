@@ -93,7 +93,7 @@ The **history folder** is `.history`. `reeval history` is the pass/fail list ove
 
 ### question
 
-A **judge question** is the argument to `c.judge()`. A **comparison question** is an entry of `compare.questions`.
+A **judge question** is the argument to `c.judge()`. A **question** in `questions` is asked after the attempts end; one with `across` is a **pairwise question**.
 
 ### model
 
@@ -101,7 +101,7 @@ The **harness model** is `model`. Separate from it are `judge.model`, `capture.m
 
 ### artifacts
 
-**Judge artifacts** are `artifacts` on `c.judge()` and on a comparison question. **Stored artefacts** are `history.artifacts` and `reeval record --artifacts`.
+**Judge artifacts** are `artifacts` on `c.judge()` and on a question. **Stored artefacts** are `history.artifacts` and `reeval record --artifacts`.
 
 ### verdict
 

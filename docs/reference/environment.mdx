@@ -47,8 +47,8 @@ export const chatbot = defineEnvironment('chatbot', ({
   A sandbox string or secret. The name is letters, digits, and `_`, starting with a letter or `_`, and a literal whose name contains `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, or `CREDENTIAL` stops the run with exit code 2.
 </Property>
 
-<Property name="egress" type="'allow-all' | 'deny-all' | { allow: string[] }" optional>
-  Where the sandbox may connect. The default is the inherited policy: `'allow-all'` permits every host, `'deny-all'` the automatic hosts, and `{ allow }` extra hosts, with `*.example.com` for subdomains.
+<Property name="egress" type="'proxy' | 'allow-all' | 'deny-all' | { allow: string[] }" optional>
+  Where the sandbox may connect. The default is the inherited policy: `'proxy'` permits any host over HTTP and HTTPS through the egress gateway, `'allow-all'` also permits raw TCP and UDP, `'deny-all'` the automatic hosts, and `{ allow }` extra hosts, with `*.example.com` for subdomains.
 </Property>
 
 <Property name="files" type="Record<string, string | HostFile>" optional>

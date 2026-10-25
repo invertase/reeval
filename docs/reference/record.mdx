@@ -24,7 +24,7 @@ Each row is one closed alias. `RecordMode` is the `record` option.
 
 [//]: # (/generated:record-values)
 
-`CellRole` is `control` or `variant`. `CellGate` is `all`, `{ passRate: number }`, or `none`. `CheckVerdict` is `discriminates`, `both-pass`, `both-fail`, or `mixed`. `EgressPolicy` is `allow-all`, `deny-all`, or `{ allow: string[] }`. `SkillPlacement` is `harness` or `workspace`. `WebEventType` is `web-search` or `web-fetch`. `CompareCut` is `within` or `across`.
+`CellRole` is `control` or `variant`. `CellGate` is `all`, `{ passRate: number }`, or `none`. `CheckVerdict` is `discriminates`, `both-pass`, `both-fail`, or `mixed`. `EgressPolicy` is `proxy`, `allow-all`, `deny-all`, or `{ allow: string[] }`. `SkillPlacement` is `harness` or `workspace`. `WebEventType` is `web-search` or `web-fetch`. `CompareCut` is `within` or `across`.
 
 For more information about which hosts a sandbox can reach, see [Egress](/environments/egress).
 
@@ -80,7 +80,9 @@ For more information about the keys on `stack.judge.state`, see [the `judge` opt
 
 <Property name="budget" type="{attempts?: number; duration?: string | number} | null"></Property>
 
-<Property name="config" type="{sandbox: string; environment: string | null; runs: number; judgeModel: string | null; threshold: number; timeoutMs: number; concurrency: number; configHash: string}"></Property>
+<Property name="config" type="{sandbox: string; environment: string | null; runs: number; judgeModel: string | null; threshold: number; timeoutMs: number; concurrency: number; configHash: string}">
+  The run's settings. `sandbox` is the id of each sandbox the planned attempts ran on, after the profile's defaults, joined with `, `.
+</Property>
 
 <Property name="cost" type="Cost"></Property>
 
@@ -297,7 +299,7 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 <Property name="attempts" type="AttemptRecord[]"></Property>
 
 <Property name="answers" type="CompareAnswer[]" optional>
-  The compare's questions, answered after its attempts by pairwise votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, and a sample of reasons). Each answer's `input` is the `<eval-slug>/questions/<n>.json` file: every call its model was sent, per pair and order, with secrets masked and screenshots as refs; unset where the evaluation's files weren't kept.
+  The eval's pairwise questions (those with `across`), answered after its attempts by votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, and a sample of reasons). Each answer's `input` is the `<eval-slug>/questions/<n>.json` file: every call its model was sent, per pair and order, with secrets masked and screenshots as refs; unset where the evaluation's files weren't kept.
 </Property>
 
 <Property name="family" type="{id: string; name: string; case: number; cases: number}" optional>
@@ -321,6 +323,10 @@ Also has every field of `Cell`.
 </Property>
 
 <Property name="harnessKind" type="string"></Property>
+
+<Property name="gateway" type="string" optional>
+  The gateway in the config's `gateway` list its harness resolved to (`direct` is each provider's own key); unset when no config, profile or pin named one.
+</Property>
 
 <Property name="model" type="string | null">
   The configured harness model, when it has one.
@@ -576,6 +582,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   Over the attempt's context files.
 </Property>
 
+<Property name="gateway" type="string" optional>
+  The gateway its model calls went through; unset on `direct`, each provider's own key.
+</Property>
+
 ### `AttemptRecord`
 
 <Property name="key" type="string">
@@ -620,6 +630,18 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   The models served by the harness's API calls, as observed by the egress gateway. Values may come from requests or responses and include reported effort; null when no model was named or recorded.
 </Property>
 
+<Property name="askedModels" type="string[]" optional>
+  The models the harness's successful API calls asked for, when nothing named the one that served them (fx on Vercel AI Gateway with a Gemini model): the agent's word, not the gateway's, so never part of `servedModels`. Absent when there's none.
+</Property>
+
+<Property name="upstreams" type="UpstreamCount[]" optional>
+  The upstream providers a gateway said served the harness's own API calls (OpenRouter's `provider`), each with how many it served, in the order first seen; more than one means the gateway spread or failed the calls over between them. Absent when the gateway names none.
+</Property>
+
+<Property name="reportedCostUsd" type="number" optional>
+  What a gateway said the harness's own API calls cost, in US dollars, summed (OpenRouter's `usage.cost`); absent when it names none.
+</Property>
+
 <Property name="effort" type="string | null">
   The reasoning effort the harness factory asked for (`claudeCode({ effort: 'high' })`); null when the factory left it unset. Fast is not this.
 </Property>
@@ -658,7 +680,9 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   Harness session starts that didn't become ready within `startTimeout` and were started again (at most one).
 </Property>
 
-<Property name="checks" type="Array<{command: string; exitCode: number; durationMs: number; log?: FileRef}>"></Property>
+<Property name="checks" type="Array<{command: string; exitCode: number; durationMs: number; log?: FileRef; retries?: number; tries?: ExecTry[]}>">
+  Each foreground `c.exec`: its last try's exit code, and `durationMs` over all its tries. With `retries`, `tries` has each try's `{ exitCode, durationMs }` and the log each try's output.
+</Property>
 
 <Property name="assertions" type="AssertionRecord[]" optional>
   Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none.
@@ -669,6 +693,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="files" type="AttemptFiles"></Property>
+
+<Property name="answers" type="AttemptAnswer[]" optional>
+  The eval's questions asked of this attempt on its own (those without `across`), in question order; unset without any. They annotate: `outcome` never depends on them. Asked once the attempt ends, when it ran to a pass or a fail. Each answer's `input` is `questions/<n>.json` in the attempt's directory, `<n>` the question's place in the eval's `questions`.
+</Property>
 
 ### `AttemptFiles`
 
@@ -718,6 +746,18 @@ Also has every field of `FileRef`.
 
 <Property name="resolvedModel" type="string" optional>
   The model id the provider says served the call, when it reports one.
+</Property>
+
+<Property name="gateway" type="string" optional>
+  The gateway from the config's `gateway` list the call went through; unset without one.
+</Property>
+
+<Property name="upstream" type="string" optional>
+  The upstream provider the gateway says served the call (OpenRouter's); unset when it names none.
+</Property>
+
+<Property name="costUsd" type="number" optional>
+  What the gateway says the call cost, in US dollars (OpenRouter's `usage.cost`); unset when it names none.
 </Property>
 
 <Property name="key" type="string">
@@ -839,7 +879,7 @@ An environment as it was applied, without secret values.
 </Property>
 
 <Property name="egress" type="EgressPolicy">
-  The policy the attempt ran under, from the options and the environment; in the digest unless `allow-all`.
+  The policy the attempt ran under, from the options and the environment; in the digest unless `proxy`.
 </Property>
 
 <Property name="workspace" type="{source: string; ref: string | null; path: string | null; commit: string; tree: string; init?: boolean}" optional>
@@ -848,13 +888,17 @@ An environment as it was applied, without secret values.
 
 ### `EgressRecord`
 
-An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked` contains only unexpected refusals.
+An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked` contains only unexpected refusals.
 
 <Property name="policy" type="EgressPolicy"></Property>
 
 <Property name="allowed" type="string[] | null"></Property>
 
 <Property name="recorded" type="boolean"></Property>
+
+<Property name="partial" type="true" optional>
+  True when traffic could leave around the gateway (`allow-all` in a container that kept its network): `contacted` lists only what went through the gateway, and anything that ignored the proxy (raw TCP and UDP, SSH, database drivers) went out unrecorded. Unset otherwise.
+</Property>
 
 <Property name="contacted" type="Array<{host: string; port: number; connections: number; sent: number; received: number}>"></Property>
 
@@ -964,7 +1008,7 @@ A `StartRetry` is one entry of `AttemptRecord.startRetries`. `error` is `<harnes
 
 ## `CompareAnswer`
 
-`EvalEntry.answers` holds one `CompareAnswer` per comparison question. `outcome` and `passRate` do not depend on it. `question`, `model`, and `resolvedModel` identify the question and the model. `votes` holds `PairVote` values, and `rates` holds `wins` out of `n` per `cut` and `name`. `error` is set when the model call fails. `artifacts` is `true` or capture names. `input` is a `FileRef` for the `questions/<n>.json` file. `stateOptions` is the state each side showed.
+`EvalEntry.answers` holds one `CompareAnswer` per pairwise question. `outcome` and `passRate` do not depend on it. `question`, `model`, and `resolvedModel` identify the question and the model. `votes` holds `PairVote` values, and `rates` holds `wins` out of `n` per `cut` and `name`. `error` is set when the model call fails. `artifacts` is `true` or capture names. `input` is a `FileRef` for the `questions/<n>.json` file. `stateOptions` is the state each side showed.
 
 For more information about `stateOptions`, see [the `question` option](/reference/options#question).
 

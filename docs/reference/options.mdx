@@ -12,6 +12,7 @@ The table shows where reeval accepts each key.
 | Key | `reeval.config.ts` | Profile `defaults` | Group or eval | Profile `limit` |
 |---|---|---|---|---|
 | [`include`](#include) | ✓ |  |  |  |
+| [`gateway`](#gateway) | ✓ |  |  |  |
 | [`harness`](#harness) | ✓ | ✓ | ✓ | ✓ |
 | [`sandbox`](#sandbox) | ✓ | ✓ | ✓ |  |
 | [`environment`](#environment) | ✓ | ✓ | ✓ |  |
@@ -33,6 +34,7 @@ The table shows where reeval accepts each key.
 | [`debug`](#debug) | ✓ |  |  |  |
 | [`analysis`](#analysis) | ✓ |  |  |  |
 | [`compare`](#compare) |  |  | ✓ | ✓ |
+| [`questions`](#questions) |  |  | ✓ |  |
 | [`tags`](#tags) |  |  | ✓ |  |
 | [`pin`](#pin) |  |  | ✓ |  |
 
@@ -53,6 +55,16 @@ For more information about overriding an option, see [Group evaluations](/evals/
 <Property name="include" type="string[]" optional>
   The default is `evals/**/*.eval.ts` and `evals/**/*.eval.py`.
 </Property>
+
+## `gateway`
+
+`gateway` lists the gateways that serve model calls, in the order you prefer them.
+
+<Property name="gateway" type="GatewayDescriptor[]" optional>
+  Helpers from `{{ pkg }}/gateway`: `direct()` is each provider's own key, `vercel()` is Vercel AI Gateway, and `openrouter()` is OpenRouter. The default is `[direct()]`. Each harness and judge model takes the first gateway that can serve it. reeval refuses a gateway listed twice, and a plan where no listed gateway can serve a model.
+</Property>
+
+A harness or a judge that names its own `gateway` skips the list's fallback. For more information about models, see [Models](/harnesses/models#route-models-through-a-gateway).
 
 ## `harness`
 
@@ -118,14 +130,6 @@ For more information about environments, see [Define an environment](/environmen
   The harnesses to compare on; the others run the control only. reeval refuses an id the evaluation does not run.
 </Property>
 
-<Property name="compare.questions" type="CompareQuestion[]" optional>
-  A non-empty list of unique questions, as strings or objects with `question`, `model`, `across`, `state`, and `artifacts`. They annotate the comparison with win rates and never change pass, fail, or the exit code.
-</Property>
-
-<Property name="compare.across" type="'environment' | 'harness' | Array<'environment' | 'harness'>" optional>
-  The factor a question without its own `across` varies; omitted, or both, asks both pair kinds. A list must be non-empty and contain each factor once.
-</Property>
-
 For more information about comparisons, see [Compare setups](/evals/compare).
 
 ## `runs`
@@ -156,8 +160,8 @@ For more information about comparisons, see [Compare setups](/evals/compare).
 
 `egress` is where the sandbox may connect. An environment accepts it too.
 
-<Property name="egress" type="'allow-all' | 'deny-all' | { allow: string[] }" optional>
-  `'allow-all'` (the default) allows every host, `'deny-all'` blocks all but the automatic hosts, and `{ allow }` adds hosts to them. A group or an evaluation overrides the environment, which overrides the inherited policy.
+<Property name="egress" type="'proxy' | 'allow-all' | 'deny-all' | { allow: string[] }" optional>
+  `'proxy'` (the default) allows any host over HTTP and HTTPS through the egress gateway, `'allow-all'` also allows raw TCP and UDP around the gateway, `'deny-all'` blocks all but the automatic hosts, and `{ allow }` adds hosts to them. A group or an evaluation overrides the environment, which overrides the inherited policy.
 </Property>
 
 For more information about the automatic hosts, see [Egress](/environments/egress).
@@ -252,7 +256,7 @@ For more information about screenshots, see [Check an app](/evals/servers#set-th
 
 ## `question`
 
-`question` is the defaults for every comparison question.
+`question` is the defaults for every question in `questions`.
 
 <Property name="question" type="QuestionOptions" optional>
   reeval refuses a question showing nothing but `turns` and no `artifacts`.
@@ -298,7 +302,23 @@ For more information about screenshots, see [Check an app](/evals/servers#set-th
   Each side's captures as `true` or a non-empty list of non-empty capture names, below a question's own `artifacts`. The default is none.
 </Property>
 
-For more information about comparison questions, see [Compare setups](/evals/compare#ask-which-did-better).
+## `questions`
+
+`questions` lists what a language model is asked about the attempts after they end.
+
+<Property name="questions" type="Question[]" optional>
+  Strings, or objects with `question`, `model`, `across`, `choices`, `state`, and `artifacts`. A list replaces the inherited one, so `[]` asks none. Questions never change pass, fail, or the exit code.
+</Property>
+
+<Property name="questions[].across" type="'environment' | 'harness' | Array<'environment' | 'harness'>" optional>
+  The factor a pairwise question varies: `'environment'` holds the harness, and `'harness'` holds the environment. reeval asks it about each pair of attempts that passed their checks, in both orders. Without `across`, reeval asks the question of each attempt on its own.
+</Property>
+
+<Property name="questions[].choices" type="string[]" optional>
+  The answers a question asked of each attempt picks from, with a short reason.
+</Property>
+
+For more information about pairwise questions, see [Compare setups](/evals/compare#ask-which-did-better).
 
 ## `timeout`
 
@@ -394,14 +414,14 @@ For more information about brokering a secret, see [Secrets](/environments/secre
 
 ## `analysis`
 
-`analysis` is the language model for insights, `reeval analyze`, and comparison questions.
+`analysis` is the language model for insights, `reeval analyze`, and questions.
 
 <Property name="analysis" type="AnalysisConfig" optional>
   The model, insights, token caps, and prompt text.
 </Property>
 
 <Property name="analysis.model" type="string" optional>
-  A `'provider/model'` string; reeval refuses an evaluation model. `reeval analyze` and comparison questions fall back to a judge language model.
+  A `'provider/model'` string; reeval refuses an evaluation model. `reeval analyze` and questions fall back to a judge language model.
 </Property>
 
 <Property name="analysis.insights" type="boolean" optional>

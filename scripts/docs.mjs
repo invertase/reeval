@@ -106,6 +106,7 @@ const INTERNAL_VARIABLES = [
   'REEVAL_PYTHON_SDK',
   'REEVAL_RUNNER',
   'REEVAL_RUNNER_TOKEN',
+  'REEVAL_RUNNER_PROTOCOL',
 ]
 
 function reevalVariables() {

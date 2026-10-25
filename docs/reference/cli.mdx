@@ -68,7 +68,7 @@ reeval doctor                 Check Node and npm, the config, Docker and its mem
 
 ## `reeval run`
 
-The `reeval run` command plans the evaluations and runs their attempts. `--ui`, `--log-order`, `--log-prefix`, and `--output-logs` also accept `auto`, the default. `--resume latest` equals a bare `--resume`, and `--resume latest~N` counts back over the resumable runs. `--no-insights` does not stop comparison questions, which still call their own model or the analysis model.
+The `reeval run` command plans the evaluations and runs their attempts. `--ui`, `--log-order`, `--log-prefix`, and `--output-logs` also accept `auto`, the default. `--resume latest` equals a bare `--resume`, and `--resume latest~N` counts back over the resumable runs. `--no-insights` does not stop questions, which still call their own model or the analysis model.
 
 [//]: # (generated:cli-help:run)
 
@@ -77,7 +77,7 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
                               (parts of one kind OR; a name and a cell key are one kind)
   --profile <name>            Size the run with a profile from reeval.config.ts (also REEVAL_PROFILE;
                               default: defaultProfile.ci in CI, else defaultProfile.local)
-  --dry-run                   Print the plan (evals, cells, attempts, estimate) and exit 0;
+  --dry-run                   Print the plan (evals, cells, attempts, time and cost) and exit 0;
                               with --json, as one JSON document (every cell, and what's excluded)
   --json                      Print the run's results (suiteResult from reeval/view) as one JSON
                               document on stdout when it ends; progress goes to stderr
