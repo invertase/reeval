@@ -19,7 +19,7 @@ import { mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
 import { harnessId, plannedSandboxes, profileJudge, sandboxId } from '../options.ts'
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
-import { redactSecrets } from '../redact.ts'
+import { redactJsonText, redactSecrets } from '../redact.ts'
 import { isCompletedAttempt, previousAttempt } from '../resume.ts'
 import { containsZero, liftInterval, round3 } from '../stats.ts'
 import { formatDuration } from '../text.ts'
@@ -206,12 +206,17 @@ export const gatewayPart = (
 export const judgementKey = (index: number, question: string) =>
   `${index}:${sha256(question).slice(0, 12)}`
 
+const JSON_FILE = /\.(?:json|jsonl|ndjson)$/
+
 /** Collects artifact files, redacting before anything is hashed. */
 class Artifacts {
   readonly files = new Map<string, Uint8Array>()
 
+  /** JSON and JSON Lines files are masked inside their strings only, so they stay valid. */
   add(path: string, content: string): FileRef {
-    const bytes = Buffer.from(redactSecrets(content))
+    const bytes = Buffer.from(
+      JSON_FILE.test(path) ? redactJsonText(content) : redactSecrets(content),
+    )
     this.files.set(path, bytes)
     return { path, sha256: sha256(bytes), bytes: bytes.length }
   }

@@ -6,7 +6,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { HistoryError, runDir, scratchDir } from '../history/files.ts'
 import { fromCwd } from '../ids.ts'
-import { countSecrets } from '../redact.ts'
+import { findSecretsInJson } from '../redact.ts'
 import { INSIGHTS_FILE, type RunInsights } from '../view/insights.ts'
 import { NewerSchemaError, readableInsights } from '../view/record.ts'
 
@@ -24,7 +24,7 @@ export const runInsightsFile = (
 
 function insightsJson(file: string, doc: RunInsights): string {
   const json = `${JSON.stringify(doc, null, 2)}\n`
-  if (countSecrets(json) > 0) {
+  if (findSecretsInJson(json).length > 0) {
     throw new HistoryError(
       `Refusing to write ${fromCwd(file)}: it looks like it contains a secret.`,
     )

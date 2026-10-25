@@ -113,6 +113,13 @@ const STRUCTURAL = /["'\\,:{}[\]\s]/
 type Secrets = {
   /** Whole values and their encoded forms, longest first. */
   forms: string[]
+  /**
+   * The forms masked in a JSON object's keys: those of `MIN_FRAGMENT` or more characters, so a
+   * short declared secret (`error`, `1234`) can't rename a record's fields.
+   */
+  keyForms: string[]
+  /** Text shorter than this can't hold any form, window or token shape. */
+  shortest: number
   /** Each form's rule: the value of which variable, or a declared secret. */
   formRules: Map<string, string>
   /** Every `MIN_FRAGMENT`-character window of the values whose fragments are masked, and its rule. */
@@ -155,7 +162,9 @@ function envSecrets(env: NodeJS.ProcessEnv): Secrets {
       starts[pairHash(value, i)] = 1
     }
   }
-  const secrets = { forms, formRules, windows, starts }
+  const keyForms = forms.filter((f) => f.length >= MIN_FRAGMENT)
+  const shortest = Math.min(MIN_FRAGMENT, ...forms.map((f) => f.length))
+  const secrets = { forms, keyForms, shortest, formRules, windows, starts }
   cached = { key, secrets }
   return secrets
 }
@@ -195,14 +204,111 @@ function maskFragments(text: string, secrets: Secrets): string {
  * JSON-, URL- or base64-encoded, any stretch of `MIN_FRAGMENT` or more of their characters, and
  * well-known token shapes, anywhere in `text`.
  */
-export function redactSecrets(text: string, env: NodeJS.ProcessEnv = process.env): string {
-  const secrets = envSecrets(env)
+export const redactSecrets = (text: string, env: NodeJS.ProcessEnv = process.env): string =>
+  redactWith(text, envSecrets(env))
+
+function redactWith(text: string, secrets: Secrets, forms = secrets.forms): string {
+  if (text.length < secrets.shortest) return text
   let out = text
-  for (const secret of secrets.forms) out = out.replaceAll(secret, REDACTED)
+  for (const secret of forms) out = out.replaceAll(secret, REDACTED)
   out = maskFragments(out, secrets)
   for (const { pattern } of TOKEN_PATTERNS) out = out.replace(pattern, REDACTED)
   return out
 }
+
+/** A JSON string literal: `[start, end)` with its quotes, and whether it's an object's key. */
+type Literal = { start: number; end: number; key: boolean }
+
+/** The string literals of valid JSON text, in order. */
+function literals(json: string): Literal[] {
+  const out: Literal[] = []
+  for (let i = json.indexOf('"'); i !== -1; i = json.indexOf('"', i)) {
+    let j = i + 1
+    while (json[j] !== '"') j += json[j] === '\\' ? 2 : 1
+    let next = j + 1
+    while (next < json.length && ' \t\r\n'.includes(json[next] as string)) next++
+    out.push({ start: i, end: j + 1, key: json[next] === ':' })
+    i = j + 1
+  }
+  return out
+}
+
+const isJson = (text: string) => {
+  try {
+    JSON.parse(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * `text` as JSON documents: the whole of it when it parses, else each line (JSON Lines), marked
+ * when it isn't JSON. Blank lines count as JSON: they have no literals.
+ */
+function jsonChunks(text: string): Array<{ at: number; text: string; json: boolean }> {
+  if (isJson(text)) return [{ at: 0, text, json: true }]
+  let at = 0
+  return text.split('\n').map((line) => {
+    const chunk = { at, text: line, json: !line.trim() || isJson(line) }
+    at += line.length + 1
+    return chunk
+  })
+}
+
+/** Maps valid JSON's string literals, re-escaping the ones `map` changes. */
+function mapLiterals(json: string, map: (value: string, key: boolean) => string): string {
+  let out = ''
+  let at = 0
+  for (const { start, end, key } of literals(json)) {
+    const raw = json.slice(start, end)
+    const value: string = raw.includes('\\') ? JSON.parse(raw) : raw.slice(1, -1)
+    const mapped = map(value, key)
+    if (mapped === value) continue
+    out += `${json.slice(at, start)}${JSON.stringify(mapped)}`
+    at = end
+  }
+  return out + json.slice(at)
+}
+
+/**
+ * Serialised JSON or JSON Lines with every string literal (object keys included) passed through
+ * `map`, and the text kept byte for byte outside the ones it changes, so `null`, numbers and
+ * booleans stay as they are. A line that isn't JSON goes through `map` whole, as a value.
+ */
+export function mapJsonStrings(text: string, map: (value: string, key: boolean) => string): string {
+  return jsonChunks(text)
+    .map((c) => (c.json ? mapLiterals(c.text, map) : map(c.text, false)))
+    .join('\n')
+}
+
+const redactLiteral = (secrets: Secrets) => (value: string, key: boolean) =>
+  redactWith(value, secrets, key ? secrets.keyForms : secrets.forms)
+
+/**
+ * `value` serialised (`JSON.stringify(value, null, space)`), with secrets masked as
+ * `redactSecrets` masks them but only inside its strings: the result is valid JSON of the same
+ * shape, and `null`, numbers and booleans stay as they are whatever the secrets are. In keys,
+ * only stretches of `MIN_FRAGMENT` or more characters are masked.
+ */
+export function redactJson(
+  value: unknown,
+  space?: number,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return mapLiterals(JSON.stringify(value, null, space), redactLiteral(envSecrets(env)))
+}
+
+/**
+ * Serialised JSON or JSON Lines, masked as `redactJson` masks a value, with the text kept byte
+ * for byte outside the strings it masks. A line that isn't JSON is masked as plain text.
+ */
+export const redactJsonText = (text: string, env: NodeJS.ProcessEnv = process.env): string =>
+  mapJsonStrings(text, redactLiteral(envSecrets(env)))
+
+/** A JSON object key masked as `redactJson` masks one. */
+export const redactKey = (key: string, env: NodeJS.ProcessEnv = process.env): string =>
+  redactLiteral(envSecrets(env))(key, true)
 
 /** One stretch `redactSecrets` would mask: where it is in the text, and why. */
 export type SecretMatch = {
@@ -239,6 +345,44 @@ export function findSecrets(text: string, env: NodeJS.ProcessEnv = process.env):
     }
   }
   return found.sort((a, b) => a.start - b.start)
+}
+
+/**
+ * What `redactJsonText` would mask in serialised JSON or JSON Lines: `findSecrets`' matches inside
+ * string literals (in keys, only those of `MIN_FRAGMENT` or more characters), and every match on a
+ * line that isn't JSON.
+ */
+export function findSecretsInJson(
+  text: string,
+  env: NodeJS.ProcessEnv = process.env,
+): SecretMatch[] {
+  const found = findSecrets(text, env)
+  if (found.length === 0) return found
+  const spans: Literal[] = jsonChunks(text).flatMap((c) =>
+    c.json
+      ? literals(c.text).map((l) => ({
+          start: c.at + l.start + 1,
+          end: c.at + l.end - 1,
+          key: l.key,
+        }))
+      : [{ start: c.at, end: c.at + c.text.length, key: false }],
+  )
+  return found.filter((m) => {
+    let lo = 0
+    let hi = spans.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if ((spans[mid] as Literal).start <= m.start) lo = mid
+      else hi = mid - 1
+    }
+    const span = spans[lo]
+    return (
+      span !== undefined &&
+      span.start <= m.start &&
+      m.end <= span.end &&
+      (!span.key || m.end - m.start >= MIN_FRAGMENT)
+    )
+  })
 }
 
 /** How many stretches `redactSecrets` would mask. */

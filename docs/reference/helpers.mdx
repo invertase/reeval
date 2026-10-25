@@ -58,6 +58,8 @@ A secret is read from the host when an attempt starts. Its value is masked in ev
 
 A stretch made only of lower-case letters, upper-case letters or digits isn't masked on its own, so words and numbers stay readable, nor is one with quotes, commas, colons, brackets or spaces, so a record's JSON stays whole. Secret-named host variables under 8 characters and declared secrets under 4 aren't masked at all.
 
+In records, transcripts, `.reeval/debug` and other JSON reeval writes, masking applies to string values only. A short secret such as `1234` or `null` leaves `null`, numbers, booleans and field names as they are, so the file stays valid JSON. In object keys, only matches of 8 or more characters are masked.
+
 Still, don't print any part of a key to check for a leak: compare on the host, or pass the sandbox a hash.
 
 <Property name="secret(options?)" type="Secret">

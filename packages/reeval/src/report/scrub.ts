@@ -1,13 +1,15 @@
 import { realpathSync } from 'node:fs'
 import { parseEnv } from 'node:util'
 import { COMMANDS, FLAGS, type FlagName, isFlagName } from '../cli-spec.ts'
-import { REDACTED, redactSecrets, registerSecret } from '../redact.ts'
+import { mapJsonStrings, REDACTED, redactKey, redactSecrets, registerSecret } from '../redact.ts'
 
 export type Scrubber = {
   /** Masks secrets as records are masked, then the project root and the home directory. */
   text: (text: string) => string
   /** The same over every string (and key) in a value. */
   value: <T>(value: T) => T
+  /** The same over the strings of serialised JSON or JSON Lines, which stays valid. */
+  json: (text: string) => string
   /** What was replaced: `~`, and `<project>` when there's a project. */
   paths: string[]
 }
@@ -60,17 +62,19 @@ export function scrubber(options: {
     for (const from of froms) out = out.replaceAll(from, to)
     return out
   }
-  const text = (input: string) =>
-    replace(replace(redactSecrets(input, options.env), project, '<project>'), home, '~')
+  const paths = (input: string) => replace(replace(input, project, '<project>'), home, '~')
+  const text = (input: string) => paths(redactSecrets(input, options.env))
+  const key = (input: string) => paths(redactKey(input, options.env))
   const value = <T>(input: T): T => {
     if (typeof input === 'string') return text(input) as T
     if (Array.isArray(input)) return input.map(value) as T
     if (input && typeof input === 'object') {
-      return Object.fromEntries(Object.entries(input).map(([k, v]) => [text(k), value(v)])) as T
+      return Object.fromEntries(Object.entries(input).map(([k, v]) => [key(k), value(v)])) as T
     }
     return input
   }
-  return { text, value, paths: ['~', ...(project.length ? ['<project>'] : [])] }
+  const json = (input: string) => mapJsonStrings(input, (s, isKey) => (isKey ? key(s) : text(s)))
+  return { text, value, json, paths: ['~', ...(project.length ? ['<project>'] : [])] }
 }
 
 /** How many masked values `text` shows. */

@@ -6,7 +6,7 @@ import { isTimeout } from '../errors.ts'
 import { expectedBlockedFor } from '../harness/agents.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
 import { sandboxProvider } from '../options.ts'
-import { redactSecrets } from '../redact.ts'
+import { redactJson, redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { PrepareError } from '../sandbox/provider.ts'
 import { capMiddle, clip } from '../text.ts'
@@ -112,7 +112,7 @@ export async function writeRecord(a: Attempt, stagingDir: string, id: string): P
   )
   // Replaced whole: reeval studio reads it while the run goes on.
   const tmp = `${recordPath}.${process.pid}.tmp`
-  await writeFile(tmp, redactSecrets(JSON.stringify(record, null, 2)))
+  await writeFile(tmp, redactJson(record, 2))
   await rename(tmp, recordPath)
   return {
     outcome: record.outcome,

@@ -952,6 +952,30 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'secrets/short-declared-secrets',
+    tiers: ['fake', 'docker'],
+    env: 'pins',
+    hostEnv: { REEVAL_FIXTURE_PIN: '1234', REEVAL_FIXTURE_PLACEHOLDER: 'null' },
+    canary: /expected '\[REDACTED\]\\n\[REDACTED\]\\n' to be '\[REDACTED\]\\n'/,
+    // Recorded as it runs, so the history's secret scan has the declared secrets to look for.
+    args: ['--record'],
+    record({ run, project, runDir }) {
+      const attempt = landed(run)
+      assert.equal(attempt?.error, null)
+      const lines = readFileSync(join(runDir, attempt?.files.transcript?.path ?? ''), 'utf8')
+        .trim()
+        .split('\n')
+        .map((l) => JSON.parse(l))
+      const edit = lines.find((e) => e.type === 'file-edit' && e.path.endsWith('pins.txt'))
+      assert.equal(edit?.added, 1234)
+      const shell = lines.find((e) => e.type === 'tool' && e.tool === 'shell')
+      assert.equal(shell?.output, '[REDACTED]\n[REDACTED]\n')
+      // The history's secret scan reads `null` and 1234 outside strings as JSON, not leaks.
+      const history = join(project, 'evals', '.history')
+      assert.ok(existsSync(join(history, `${run.runId}.json`)), 'the run was recorded')
+    },
+  },
+  {
     dir: 'egress/allowed-host-reachable',
     tiers: ['docker', 'podman'],
     env: 'listed',
