@@ -63,12 +63,45 @@ export async function lines(root: string, args: string[]): Promise<string[] | nu
   return r.stdout.toString('utf8').split('\n').filter(Boolean)
 }
 
-/** Commits reachable from HEAD; null when git can't tell (no repo, or a shallow clone). */
-export async function reachability(root: string): Promise<Reachability> {
+const LISTED = 20_000
+const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
+
+/**
+ * Commits reachable from HEAD that `shas` asks about; null when git can't tell (no repo, or a
+ * shallow clone). It lists HEAD's newest commits, and when the history goes further back, asks git
+ * about each of `shas` that list leaves out.
+ */
+export async function reachability(
+  root: string,
+  shas: Array<string | undefined>,
+): Promise<Reachability> {
   const shallow = await lines(root, ['rev-parse', '--is-shallow-repository'])
   if (!shallow || shallow[0] === 'true') return null
-  const shas = await lines(root, ['rev-list', '--max-count=20000', 'HEAD'])
-  return shas ? new Set(shas) : null
+  const listed = await lines(root, ['rev-list', `--max-count=${LISTED}`, 'HEAD'])
+  if (!listed) return null
+  const reach = new Set(listed)
+  await settle(root, reach, shas)
+  return reach
+}
+
+/**
+ * Adds each of `shas` that's an ancestor of HEAD but past the commits `reach` lists. One commit is
+ * one `merge-base`; several are one walk of HEAD's whole history, since each `merge-base` costs
+ * about a walk.
+ */
+async function settle(root: string, reach: Reachability, shas: Array<string | undefined>) {
+  if (!reach || reach.size < LISTED) return
+  const asked = new Set(
+    shas.filter((sha): sha is string => !!sha && FULL_SHA.test(sha) && !reach.has(sha)),
+  )
+  const [only, ...more] = asked
+  if (only && more.length === 0) {
+    if ((await git(root, ['merge-base', '--is-ancestor', only, 'HEAD'])).code === 0) reach.add(only)
+  } else if (only) {
+    for (const sha of (await lines(root, ['rev-list', `--skip=${LISTED}`, 'HEAD'])) ?? []) {
+      if (asked.has(sha)) reach.add(sha)
+    }
+  }
 }
 
 const rel = (path: string) => fromCwd(path) || path
@@ -139,7 +172,8 @@ export async function historyView(
   const limit = options.limit ?? 20
   if (!(limit > 0))
     throw new CommandError(`--limit must be a number above 0 (got ${options.limit})`)
-  const reach = await reachability(config.root)
+  const shown = entries.slice(-limit).map((e) => e.git?.sha)
+  const reach = await reachability(config.root, shown)
   return history(entries, { filter: options.filter || undefined, limit, reach })
 }
 
@@ -187,19 +221,22 @@ export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
 export async function compareView(config: ResolvedConfig, refs: string[]) {
   const { root } = config
   const entries = await allRuns(config)
-  const reach = await reachability(root)
   let base: HistoryEntry | null
   let head: HistoryEntry
+  let reach: Reachability
   if (refs.length >= 2) {
     base = resolveRun(entries, refs[0])
     head = resolveRun(entries, refs[1])
+    reach = await reachability(root, [base.git?.sha, head.git?.sha])
   } else {
     head = resolveRun(entries, refs[0] ?? 'latest')
+    reach = await reachability(root, [head.git?.sha])
     // Ancestry of head's commit, or of HEAD when that commit was rebased away.
     const from = head.git && (!reach || reach.has(head.git.sha)) ? head.git.sha : 'HEAD'
     const ancestry = await lines(root, ['rev-list', '--max-count=5000', from])
     const candidates = entries.filter((e) => e.recorded && e.runId !== head.runId)
     base = pickBaseline(candidates, head, ancestry)
+    await settle(root, reach, [base?.git?.sha])
   }
   const rows = base ? compare(base, head) : newRows(head)
   const flag = (e: HistoryEntry) => ({
