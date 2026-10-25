@@ -204,6 +204,9 @@ function parseAuthority(authority: string, defaultPort: number): { host: string;
   return { host: (m?.[1] ?? authority).toLowerCase(), port: Number(m?.[2] ?? defaultPort) }
 }
 
+/** Whether a parsed port names a TCP port; `net.connect` and `tls.connect` throw above 65535. */
+const isPort = (port: number) => Number.isInteger(port) && port >= 1 && port <= 65535
+
 /** `host` or `host:port` for a Host header or URL, IPv6 in brackets. */
 const authorityOf = (host: string, port: number) => {
   const name = net.isIPv6(host) ? `[${host}]` : host
@@ -396,6 +399,10 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const front = http.createServer()
   front.on('connect', (req: http.IncomingMessage, socket: Duplex, head: Buffer) => {
     const { host, port } = parseAuthority(req.url ?? '', 443)
+    if (!isPort(port)) {
+      log(`reeval:egress CONNECT ${req.url} refused (invalid port)`)
+      return reply(socket, 400, `reeval egress gateway: invalid port ${port} in CONNECT ${req.url}`)
+    }
     const startedAt = Date.now()
     const tunnel = {
       type: 'request' as const,
@@ -483,6 +490,12 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         .end(`reeval egress gateway: expected an http:// or https:// URL, not ${url.protocol}\n`)
     const secure = url.protocol === 'https:'
     const { host, port } = parseAuthority(url.host, secure ? 443 : 80)
+    if (!isPort(port)) {
+      log(`reeval:egress ${req.method} ${url.protocol}//${url.host} refused (invalid port)`)
+      return res
+        .writeHead(400)
+        .end(`reeval egress gateway: invalid port ${port} in ${url.origin}\n`)
+    }
     const shown = secure ? `https://${host}` : `http://${host}:${port}`
     const done = requestEvent(res, {
       method: req.method ?? 'GET',
