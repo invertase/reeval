@@ -166,7 +166,7 @@ describe('resolving brokered secrets', () => {
     assert.deepEqual(
       r.substitutions.map((s) => [s.name, s.value, s.hosts]),
       [
-        ['x-api-key', VALUE, ['mcp.example.com']],
+        ['REEVAL_UNIT_BROKERED', VALUE, ['mcp.example.com']],
         ['REEVAL_UNIT_OTHER', OTHER, ['mcp.example.com']],
       ],
     )
@@ -227,6 +227,19 @@ describe('resolving brokered secrets', () => {
       assert.deepEqual(a.secrets, ['REEVAL_UNIT_OTHER'])
       assert.deepEqual([a.secrets, a.brokered], [b.secrets, b.brokered])
     }
+  })
+
+  test("a header's host variable doesn't hide a plain env var of the same name", async () => {
+    const r = await resolve(({ secret, mcp }) => ({
+      env: { REEVAL_UNIT_OTHER: 'plain' },
+      mcp: {
+        local: mcp.http('http://localhost:3333', {
+          headers: { authorization: secret.fromEnv('REEVAL_UNIT_OTHER') },
+        }),
+      },
+    }))
+    assert.deepEqual(r.record.vars, ['REEVAL_UNIT_OTHER'])
+    assert.deepEqual(r.record.secrets, ['REEVAL_UNIT_OTHER'])
   })
 
   test("the digest covers a header's secret.template variables", async () => {

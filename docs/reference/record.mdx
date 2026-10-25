@@ -930,10 +930,12 @@ An environment as it was applied, without secret values.
 
 <Property name="vars" type="string[]"></Property>
 
-<Property name="secrets" type="string[]"></Property>
+<Property name="secrets" type="string[]">
+  Every secret, by the variable it's set as in the sandbox; an MCP header's (`secret.fromEnv`, `secret.template`, a plugin's `${VAR}`) by each host variable it reads.
+</Property>
 
 <Property name="brokered" type="string[]">
-  Secrets the sandbox only had placeholders for, swapped in by the egress gateway.
+  Secrets the sandbox only had placeholders for, swapped in by the egress gateway, named as in `secrets`.
 </Property>
 
 <Property name="unset" type="string[]">

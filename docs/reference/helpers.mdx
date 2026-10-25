@@ -71,7 +71,7 @@ Still, don't print any part of a key to check for a leak: compare on the host, o
 </Property>
 
 <Property name="secret.template(template)" type="SecretTemplate">
-  A string with host variables substituted, for MCP headers: `secret.template('Bearer ${TOKEN}')`. Every variable must be set.
+  A string with host variables substituted, for MCP headers: `secret.template('Bearer ${TOKEN}')`. Every variable must be set. The record lists each variable among the environment's secrets, as it lists the host variable of a header's `secret.fromEnv`.
 </Property>
 
 <Property name="secret.hosts" type="{ gemini, openai, anthropic, github }">

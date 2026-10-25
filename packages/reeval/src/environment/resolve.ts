@@ -154,19 +154,23 @@ function broker(
   return sub.placeholder
 }
 
-/** The host value, or its placeholder when it's brokered to `secret.hosts` (else `hosts`). */
+/**
+ * The host value, or its placeholder when it's brokered to `secret.hosts` (else `hosts`). The
+ * record names it `as`: the variable it's set as in the sandbox, or for a header the host variable.
+ */
 function hostValue(
   name: string,
   secret: Secret,
   where: string,
   secrets: Secrets,
   hosts: readonly string[] | undefined = secret.hosts,
+  as = name,
 ) {
   const from = secret.from ?? name
   const value = process.env[from]
   if (!value) {
     if (secret.optional) {
-      secrets.unset.push(name)
+      secrets.unset.push(as)
       return undefined
     }
     const source = from === name ? name : `${name} (from ${from})`
@@ -175,13 +179,16 @@ function hostValue(
     )
   }
   registerSecret(value)
-  if (secret.to === 'checks') secrets.checks.push(name)
-  else secrets.names.push(name)
+  if (secret.to === 'checks') secrets.checks.push(as)
+  else secrets.names.push(as)
   if (!hosts) return value
-  return broker(secrets, name, value, hosts, secret.in, secret.to === 'checks' ? 'checks' : 'agent')
+  return broker(secrets, as, value, hosts, secret.in, secret.to === 'checks' ? 'checks' : 'agent')
 }
 
-/** Each host variable in the template, or with `hosts` one placeholder per variable. */
+/**
+ * Each host variable in the template, or with `hosts` one placeholder per variable. The record
+ * names each by its host variable, as `hostValue` names a header's secret.
+ */
 function template(
   value: SecretTemplate,
   where: string,
@@ -196,6 +203,7 @@ function template(
         `secret.template for ${where} needs ${name}, which isn't set. Set it in the environment or .env.local.`,
       )
     registerSecret(v)
+    secrets.names.push(name)
     if (!hosts) return v
     const p = placeholders.get(name) ?? broker(secrets, name, v, hosts)
     placeholders.set(name, p)
@@ -772,18 +780,20 @@ export async function resolveEnvironment(
   const secretOf = (
     value: string | Secret | SecretTemplate,
     key: string,
+    header: boolean,
     hosts?: readonly string[],
   ): string | undefined => {
     if (typeof value === 'string') return value
     if (isSecretTemplate(value)) return template(value, envWhere, secrets, hosts)
-    return hostValue(key, value, envWhere, secrets, value.hosts ?? hosts)
+    const as = header ? (value.from ?? key) : key
+    return hostValue(key, value, envWhere, secrets, value.hosts ?? hosts, as)
   }
   const resolvedMcp: Record<string, ResolvedMcpServer> = {}
   for (const [name, s] of mcp) {
     if (s.transport === 'stdio') {
       const e: Record<string, string> = {}
       for (const [k, v] of Object.entries(s.env)) {
-        const r = secretOf(v, k)
+        const r = secretOf(v, k, false)
         if (r !== undefined) e[k] = r
       }
       resolvedMcp[name] = { transport: 'stdio', command: s.command, args: s.args, env: e }
@@ -791,7 +801,7 @@ export async function resolveEnvironment(
       const h: Record<string, string> = {}
       const hosts = mcpHosts(s.url)
       for (const [k, v] of Object.entries(s.headers)) {
-        const r = secretOf(v, k, hosts)
+        const r = secretOf(v, k, true, hosts)
         if (r !== undefined) h[k] = r
       }
       resolvedMcp[name] = { transport: s.transport, url: s.url, headers: h }
@@ -841,7 +851,7 @@ export async function resolveEnvironment(
     .sort()
   const brokeredNames = [...new Set(secrets.brokered.map((b) => b.name))].sort()
   const varNames = Object.keys(vars)
-    .filter((n) => !secrets.names.includes(n))
+    .filter((n) => !isSecret(env[n]))
     .sort()
   const literalVars = Object.fromEntries(varNames.map((n) => [n, vars[n]]))
   const mcpShape = Object.fromEntries(

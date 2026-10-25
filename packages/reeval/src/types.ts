@@ -2274,8 +2274,12 @@ export type EnvironmentRecord = {
   plugins?: PluginRecord[]
   files: Array<{ path: string; sha256: string }>
   vars: string[]
+  /**
+   * Every secret, by the variable it's set as in the sandbox; an MCP header's (`secret.fromEnv`,
+   * `secret.template`, a plugin's `${VAR}`) by each host variable it reads.
+   */
   secrets: string[]
-  /** Secrets the sandbox only had placeholders for, swapped in by the egress gateway. */
+  /** Secrets the sandbox only had placeholders for, swapped in by the egress gateway, named as in `secrets`. */
   brokered: string[]
   /** Optional secrets whose host variable was unset, so they weren't injected. */
   unset: string[]
