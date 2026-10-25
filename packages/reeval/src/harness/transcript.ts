@@ -142,10 +142,10 @@ function claudeEdit(toolCallId: string, output: Record<string, unknown>): FileEd
 function fileEdits(
   toolCallId: string,
   output: unknown,
-  deleted: boolean,
+  tool: 'edit' | 'write' | 'delete',
   input: Record<string, unknown>,
 ): FileEditEvent[] {
-  if (deleted) {
+  if (tool === 'delete') {
     return [
       {
         type: 'file-edit',
@@ -233,6 +233,20 @@ function fileEdits(
       },
     ]
   }
+  // A write whose result doesn't say whether it created the file (Antigravity's, fx's, Goose's
+  // and pi's): the content, when the input has it, is every line written.
+  if (tool === 'write') {
+    return [
+      {
+        type: 'file-edit',
+        toolCallId,
+        path: editPath(input),
+        kind: 'write',
+        added: typeof input.content === 'string' ? lines(input.content).length : null,
+        removed: null,
+      },
+    ]
+  }
   return [
     {
       type: 'file-edit',
@@ -312,7 +326,7 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
     const output = name === 'bash' && typeof raw === 'string' ? raw.replace(/\r\n/g, '\n') : raw
     const base = { ...stamp(call.ms), durationMs, ...stallFlags(name, durationMs) }
     if ((name === 'edit' || name === 'write' || name === 'delete') && !failed) {
-      for (const edit of fileEdits(id, output, name === 'delete', input)) {
+      for (const edit of fileEdits(id, output, name, input)) {
         out.push({ at: call.ms, event: { ...base, ...edit, ...stallFlags(name, durationMs) } })
       }
       return

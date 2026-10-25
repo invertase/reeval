@@ -10,7 +10,11 @@ export type FileEditEvent = {
   type: 'file-edit'
   toolCallId: string
   path: string
-  kind: 'create' | 'modify' | 'delete'
+  /**
+   * `write` is a whole-file write whose result doesn't say whether the file existed before
+   * (Antigravity's, fx's, Goose's and pi's write tools, for example).
+   */
+  kind: 'create' | 'modify' | 'write' | 'delete'
   /** Line counts, or null when the harness didn't send the content (e.g. deletes). */
   added: number | null
   removed: number | null

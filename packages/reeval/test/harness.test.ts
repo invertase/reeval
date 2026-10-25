@@ -1737,6 +1737,38 @@ describe('OpenCode transcripts', () => {
   })
 })
 
+describe('writes that say nothing of the file before', () => {
+  test('a write is a write, counting its content; an edit stays a modify', () => {
+    const call = (id: string, toolName: string, input: unknown) => ({
+      ms: 10,
+      part: { type: 'tool-call', toolCallId: id, toolName, input },
+    })
+    const result = (id: string, output: unknown) => ({
+      ms: 20,
+      part: { type: 'tool-result', toolCallId: id, output },
+    })
+    const events = normaliseStream(
+      [
+        call('p', 'write', { path: 'a.txt', content: 'one\ntwo\n' }),
+        result('p', 'Successfully wrote to a.txt'),
+        call('g', 'write', { path: 'b.txt' }),
+        result('g', ''),
+        call('e', 'edit', { path: 'c.txt', old_string: 'x', new_string: 'y' }),
+        result('e', [{ type: 'content', content: { type: 'text', text: 'edited c.txt' } }]),
+      ],
+      0,
+    )
+    assert.deepEqual(
+      events.map((e) => (e.type === 'file-edit' ? [e.path, e.kind, e.added, e.removed] : e.type)),
+      [
+        ['a.txt', 'write', 2, null],
+        ['b.txt', 'write', null, null],
+        ['c.txt', 'modify', null, null],
+      ],
+    )
+  })
+})
+
 describe('Claude Code transcripts', () => {
   test('its Edit and Write tools are file edits, keyed by file_path', () => {
     const call = (id: string, toolName: string, input: unknown) => ({
@@ -1951,7 +1983,7 @@ describe('Antigravity transcripts', () => {
                 : [e.type],
       ),
       [
-        ['file-edit', '/reeval/workspace/a.txt', 'modify'],
+        ['file-edit', '/reeval/workspace/a.txt', 'write'],
         ['file-edit', '/reeval/workspace/a.txt', 'modify'],
         ['tool', 'bash', 'hi\nthere\n', true],
         ['web-search', 'antigravity cli', true],

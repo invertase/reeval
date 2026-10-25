@@ -104,6 +104,22 @@ test('there are captures for Cursor, Antigravity, OpenCode, Goose, pi, Codex and
   ])
 })
 
+test("skill.raw.jsonl's new file is a create where the harness says so, and a write otherwise", () => {
+  const proof = (harness: string) =>
+    edits(events(parse(read(harness, 'skill.raw.jsonl'))))
+      .filter((e) => e.path.endsWith('skill-proof.txt'))
+      .map((e) => [e.kind, e.added, e.removed])
+  assert.deepEqual(Object.fromEntries(harnesses.map((h) => [h, proof(h)])), {
+    antigravity: [['write', null, null]],
+    codex: [['create', null, null]],
+    cursor: [['create', 1, 0]],
+    fx: [['write', 1, null]],
+    goose: [['write', 1, null]],
+    opencode: [['create', 1, 0]],
+    pi: [['write', 1, null]],
+  })
+})
+
 for (const harness of harnesses) {
   describe(`replay: ${harness}`, () => {
     const files = readdirSync(join(root, harness)).filter((f) => f.endsWith('.raw.jsonl'))
