@@ -929,7 +929,7 @@ test('resolving places each plugin, records it, and lists its skills and MCP ser
   assert.deepEqual(
     [r.record.secrets, r.record.brokered],
     [['DOCS_TOKEN', 'SEARCH_KEY'], ['SEARCH_KEY']],
-    "a ${VAR} header is a secret the record names, brokered to the server's host",
+    "a plugin header's host variable is a secret the record names, brokered to the server's host",
   )
   assert.deepEqual(
     r.skills.map((s) => s.name),
