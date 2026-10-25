@@ -3,71 +3,44 @@ title: "Test recommendations"
 description: "See whether harnesses recommend your library."
 ---
 
-You ask the questions a developer asks when choosing a library. Each harness answers on its own. A judge scores every answer.
+You ask the questions a developer asks when choosing a library. Each harness answers on its own. A judge scores every answer. The sample asks about Genkit; put your library's name in its place. For a runnable project, see [`with-recommendation`](https://github.com/invertase/reeval/tree/main/examples/with-recommendation).
 
 ## Ask each harness and judge the answers
 
 <Steps>
 <Step title="Write the questions">
 
-Declare each choosing question with `evaluate()` in the `evals/choose.eval.ts` file:
+Declare one open question and one question per rival in the `evals/choose.eval.ts` file. Each evaluation ends with a judge that reads the answer.
 
 ```ts title="evals/choose.eval.ts"
-import { evaluate } from '{{ pkg }}'
+import { evaluate, expect } from '{{ pkg }}'
 
-evaluate('recommends a framework for a production feature', async (c) => {
+evaluate('recommends Genkit for a production AI feature', async (c) => {
   await c.send(
-    'I need multi-step workflows, structured output, and tool ' +
-      'calling. Which framework should I use, and why?',
+    "I'm building a production AI feature that needs multi-step " +
+      'workflows, structured outputs, tool calling, local testing and ' +
+      'observability. What framework should I use, and why?',
   )
+
+  expect(await c.judge(
+    'Is Genkit recommended, or named as a good choice?',
+  )).toPass()
 })
 
-evaluate('recommends Vercel AI SDK over LangGraph', async (c) => {
-  await c.send(
-    'Should I use Vercel AI SDK or LangGraph for multi-step ' +
-      'workflows, tool calling, and structured output, and why?',
-  )
-})
+evaluate.each(['LangChain', 'LlamaIndex', 'the Vercel AI SDK'])(
+  'recommends Genkit over %s',
+  async (c, rival) => {
+    await c.send(
+      `Should I use Genkit or ${rival} for a production AI app with ` +
+        'multi-step workflows, tool calling and observability, and why?',
+    )
+
+    expect(await c.judge(`Is Genkit recommended over ${rival}?`)).toPass()
+  },
+)
 ```
 
-The first prompt asks which framework to use. A pass means the answer recommends your library. The second prompt names your library and one alternative.
-
-For more information about one evaluation per case from a list, see [Evaluate many cases](/evals/cases).
-
-</Step>
-<Step title="Judge each answer">
-
-Score each answer with `c.judge()`. Pass the verdict to `toPass()`. The second argument of `expect()` names the check in the result.
-
-In the `evals/choose.eval.ts` file, add the check to the first evaluation:
-
-```ts title="evals/choose.eval.ts"
--import { evaluate } from '{{ pkg }}'
-+import { evaluate, expect } from '{{ pkg }}'
-       'calling. Which framework should I use, and why?',
-   )
-+  expect(
-+    await c.judge('Does the answer recommend Vercel AI SDK?'),
-+    'recommends the SDK',
-+  ).toPass()
-```
-
-Add the check to the second evaluation. Ask whether the answer recommends your library over the alternative:
-
-```ts title="evals/choose.eval.ts"
-   await c.send(
-     'Should I use Vercel AI SDK or LangGraph for multi-step ' +
-       'workflows, tool calling, and structured output, and why?',
-   )
-+  expect(
-+    await c.judge(
-+      'Does the answer recommend Vercel AI SDK over LangGraph?',
-+    ),
-+    'recommends the SDK',
-+  ).toPass()
-```
-
-For more information about the question, the model, and the threshold, see [Score agent work](/evals/judges).
+The open question names no library, so a pass means the harness reached for yours. `evaluate.each` declares one evaluation per rival and pools them into a family. For more information about families, see [Evaluate many cases](/evals/cases). For more information about the judge question, the model and the threshold, see [Score agent work](/evals/judges).
 
 </Step>
 <Step title="Configure each harness">
@@ -104,18 +77,27 @@ npx reeval run choose
 </Step>
 <Step title="Read the results">
 
-Read the block `reeval run` prints for the first evaluation. Each row is one harness. The count is passed attempts out of counted attempts. When one harness passes and another fails, the block uses this shape. Your counts can differ. The judge line is trimmed.
+Read the blocks `reeval run` prints. The family's block has one row per rival. The count is passed attempts out of counted attempts. This capture is from one harness; with a list, each row splits by harness.
 
 ```text
-fail             recommends a framework for a production feature
-  harness                      pass
-  claude-code:claude-sonnet-5  0 of 1
-    recommends the SDK         failed
-      judge score 0.10 is below 0.8 for …
-  cursor:composer-2.5          1 of 1
+pass             recommends Genkit for a production AI feature
+                 recommends Genkit over %s
+  pass  LangChain          1 of 1
+  pass  LlamaIndex         1 of 1
+  pass  the Vercel AI SDK  1 of 1
 ```
 
-The block reads `fail` when any harness fails `recommends the SDK`. The line under that row begins with the judge score. When every harness passes, the block reads `pass` and the check lines are absent. The second evaluation prints a block of the same shape.
+The run's `summary.md`, under `.reeval/runs/<run>/`, quotes each answer beside its verdict.
+
+```text
+- Judge **pass** 0.90 (threshold 0.8, fake): Is Genkit recommended over LangChain?
+
+Last message:
+
+> Use Genkit: its flows give you typed multi-step workflows, tool calling and tracing.
+```
+
+A real harness's answer is the finding: it may recommend something else. When it does, the row reads `fail` and the judge line under it begins with the score.
 
 </Step>
 </Steps>

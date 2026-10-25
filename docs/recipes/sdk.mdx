@@ -1,59 +1,51 @@
 ---
 title: "Test an SDK"
-description: "See whether an agent can build a working app with your SDK."
+description: "See whether an agent can use your SDK correctly."
 ---
 
-An SDK test starts the harness in a starter app, gives the harness the SDK's API key, and checks the app the harness builds.
+An SDK test seeds the SDK into the workspace, asks the harness to build with it, and checks the result with a script the harness never sees. The sample tests the small Acme weather SDK. For a runnable project, see [`with-sdk-usage`](https://github.com/invertase/reeval/tree/main/examples/with-sdk-usage).
 
-## Test the SDK in a starter app
+## Test the SDK in a package
 
 <Steps>
 <Step title="Write the evaluation">
 
-Create the `evals/sdk.eval.ts` file with the starter, the `setup` command, the API key, and the checks. The sample uses Vercel AI SDK.
+Create the `evals/sdk.eval.ts` file with the environment, the task, the check script and a judge.
 
 ```ts title="evals/sdk.eval.ts"
+import { readFileSync } from 'node:fs'
 import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
-import { claudeCode } from '{{ pkg }}/harness'
 
-const starter = defineEnvironment('ai-sdk', ({ git, secret }) => ({
-  workspace: git('github:vercel/ai', {
-    ref: 'ai@6.0.0', path: 'examples/express',
-  }),
-  setup: ['npm install'],
-  env: {
-    OPENAI_API_KEY: secret.fromEnv('OPENAI_API_KEY', {
-      hosts: secret.hosts.openai,
-    }),
+// An empty package with the Acme SDK seeded into vendor/acme.
+const app = defineEnvironment('acme-app', ({ directory }) => ({
+  files: {
+    ...directory('./project'),
+    ...directory('./acme-sdk', { into: 'vendor/acme' }),
   },
 }))
+const checkClient = readFileSync(
+  new URL('./hidden/check-client.mjs', import.meta.url), 'utf8',
+)
 
-evaluate('adds a weather tool with AI SDK', {
-  environment: starter,
-  harness: claudeCode({ model: 'claude-sonnet-5' }),
-}, async (c) => {
+evaluate('uses the Acme SDK correctly', { environment: app }, async (c) => {
   await c.send(
-    'Add src/weather.ts that exports an AI SDK tool() and does not call it.',
+    'Write src/forecast.js exporting forecast(city), which resolves to ' +
+      'the temperature in Celsius from the Acme SDK in vendor/acme (see ' +
+      'its README.md), with the key in ACME_API_KEY. The API sometimes ' +
+      'answers 503; retry those.',
   )
-  await expect(c, 'uses a tool').toHaveFile('src/weather.ts', /tool\(/)
-  await expect(c.exec('npx tsx src/weather.ts'), 'loads').toSucceed()
+
+  await c.writeFile('check-client.mjs', checkClient)
+  await expect(c.exec('node check-client.mjs')).toSucceed()
+  expect(await c.judge(
+    'Does forecast() use client.retry rather than its own loop?',
+  )).toPass()
 })
 ```
 
-For more information about the starter repository, see [Start from a repository](/environments/workspaces). For more information about the `setup` command, see [Run setup commands](/environments/setup).
+`directory('./acme-sdk', { into: 'vendor/acme' })` copies the SDK and its `README.md` into the workspace. For more information about seeding files, see [Place files](/environments/files).
 
-The `uses a tool` check requires `tool(` in the `src/weather.ts` file. The `loads` check runs that file and passes when the process exits with code 0. For more information about file and command checks, see [Check an attempt](/evals/checks).
-
-</Step>
-<Step title="Set the API key">
-
-Put the API key in the `.env.local` file next to the `reeval.config.ts` file.
-
-```bash title=".env.local"
-OPENAI_API_KEY=replace-with-your-key
-```
-
-`secret.fromEnv('OPENAI_API_KEY')` reads that variable. For more information about keeping the key on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host). For more information about which hosts the sandbox reaches, see [Control sandbox egress](/environments/egress).
+`c.writeFile` adds `check-client.mjs` after the harness finishes, so the harness never sees it. The script runs `forecast()` against a stand-in API that answers `503` once. The judge asks the one question a command can't answer. For more information about judges, see [Score agent work](/evals/judges).
 
 </Step>
 <Step title="Run the evaluation">
@@ -64,15 +56,28 @@ From the directory that contains the `reeval.config.ts` file, run the `evals/sdk
 npx reeval run sdk
 ```
 
-The run needs an API key for your harness. For more information about that key, see [the harness reference](/harnesses/claude-code).
+The run needs an API key for your harness and for the judge. For more information about that key, see [the harness reference](/harnesses/claude-code).
 
 </Step>
 <Step title="Read the outcome">
 
-Read the block for the `adds a weather tool with AI SDK` evaluation. When both checks pass, the block is one line.
+When both checks pass, the block for `uses the Acme SDK correctly` is one line. A `forecast()` that calls the SDK without retrying fails the check script.
 
 ```text
-pass             adds a weather tool with AI SDK
+fail             uses the Acme SDK correctly
+  toSucceed node check-client.mjs  failed
+    expected command to succeed, exit code 1
+```
+
+The attempt's `checks/1.log`, under `.reeval/runs/<run>/`, has the command's output.
+
+```text
+$ node check-client.mjs
+exit 1
+…
+AcmeError: Acme API answered 503
+    at Object.weather (file:///…/work/vendor/acme/index.js:15:24)
+    at async forecast (file:///…/work/src/forecast.js:5:11)
 ```
 
 For more information about outcome words, see [Read the outcomes](/results/output#read-the-outcomes).
@@ -82,4 +87,4 @@ For more information about outcome words, see [Read the outcomes](/results/outpu
 
 ## Next
 
-For more information about a question a file check and a command check can't answer, see [Score agent work](/evals/judges).
+For more information about file, command and transcript checks, see [Check an attempt](/evals/checks).
