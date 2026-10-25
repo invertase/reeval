@@ -518,11 +518,12 @@
       "additionalProperties": false
     },
     "Duration": {
-      "description": "More than zero: `90s`, `15m`, `1h`, or a number of milliseconds.",
+      "description": "More than zero and at most 596h: `90s`, `15m`, `1h`, or a number of milliseconds.",
       "anyOf": [
         {
           "type": "number",
-          "exclusiveMinimum": 0
+          "exclusiveMinimum": 0,
+          "maximum": 2147483647
         },
         {
           "type": "string",
@@ -705,7 +706,8 @@
       "properties": {
         "delayMs": {
           "description": "Simulated turn length, honours the abort signal.",
-          "type": "number"
+          "type": "number",
+          "maximum": 2147483647
         },
         "effort": {
           "description": "Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what the turn reports (`fake-1[effort=medium]`). Fast is not this.",

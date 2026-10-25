@@ -119,6 +119,18 @@ describe('standalone expect', () => {
       .not.toBe('waiting')
   })
 
+  test('expect.poll refuses a timeout or interval longer than a timer can be', () => {
+    for (const key of ['timeout', 'interval']) {
+      fails(
+        () => createExpect().poll(() => 1, { [key]: 2 ** 31 }),
+        new RegExp(
+          `expect\\.poll's ${key} is at most 596h \\(2147483647ms\\), the longest timer Node can set \\(got 2147483648\\)$`,
+        ),
+      )
+      createExpect().poll(() => 1, { [key]: 2 ** 31 - 1 })
+    }
+  })
+
   test('expect.poll fails with the last error at its timeout, pointing at the call', async () => {
     const poll = createExpect().poll(() => 'no', { interval: 10, timeout: 60, message: 'ready?' })
     await assert.rejects(

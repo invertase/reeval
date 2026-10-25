@@ -254,6 +254,9 @@ function explainDocker(issue: Issue, value: unknown): string {
     const hint = DOCKER_HINTS[key] ? ` Did you mean "${DOCKER_HINTS[key]}"?` : ''
     return `Unknown docker() option "${key}".${hint}`
   }
+  if (issue.path[0] === 'install' && issue.path.length > 1) {
+    return installMessage((options.install as unknown[])[issue.path[1] as number])
+  }
   if (issue.code === 'custom') {
     const { bases } = (issue.params ?? {}) as { bases?: string[] }
     return bases
@@ -261,9 +264,6 @@ function explainDocker(issue: Issue, value: unknown): string {
       : "docker() takes dockerfile or install, not both: put the install commands in the Dockerfile as RUN lines, so there's one recipe for the image."
   }
   const key = String(issue.path[0])
-  if (key === 'install' && issue.path.length > 1) {
-    return installMessage((options.install as unknown[])[issue.path[1] as number])
-  }
   return (FIELD[key] ?? ((v) => `docker({ ${key} }) is invalid (got ${got(v)})`))(options[key])
 }
 

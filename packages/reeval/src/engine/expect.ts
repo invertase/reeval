@@ -297,6 +297,9 @@ export function createExpect(task?: ExpectTask): ExpectStatic {
   return expect
 }
 
+/** A longer `setTimeout` or `AbortSignal.timeout` fires after 1 ms instead. */
+const MAX_TIMER_MS = 2 ** 31 - 1
+
 /**
  * `expect.poll(fn).matcher()`: calls `fn` and the matcher until the matcher passes, every
  * `interval` ms, for at most `timeout` ms, then fails with the last error.
@@ -304,6 +307,16 @@ export function createExpect(task?: ExpectTask): ExpectStatic {
 function createPoll(expect: ExpectStatic, list?: Recorded[]): ExpectStatic['poll'] {
   return (fn, options = {}) => {
     const { interval = 50, timeout = 1000, message } = options
+    for (const [key, ms] of [
+      ['timeout', timeout],
+      ['interval', interval],
+    ] as const) {
+      if (ms > MAX_TIMER_MS) {
+        throw new TypeError(
+          `expect.poll's ${key} is at most 596h (${MAX_TIMER_MS}ms), the longest timer Node can set (got ${ms})`,
+        )
+      }
+    }
     const assertion = expect(null, message) as unknown as Chai.Assertion
     chai.util.flag(assertion, 'poll', true)
     const proxy: object = new Proxy(assertion, {
