@@ -663,6 +663,91 @@ describe('a second key of the provider whose key is in the environment', () => {
   })
 })
 
+describe('a token right after a letter, digit or underscore', () => {
+  const anthropic = `sk-ant-api03-${'Zk9xQ2mN7pL4'.repeat(7)}-BBBBBBBB`
+  const github = `ghp_${'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8'.slice(0, 36)}`
+  const aws = 'AKIAQ7ZKI0FG4HJK8LMN'
+  const slack = `xoxb-${'1234567890'}-${'Ab3dEf6hIj'}`
+  const jwt = `eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.${'Sg7hKj2lQw9e'.repeat(3)}`
+  const cases: Array<[string, string]> = [
+    ['key%3D', anthropic],
+    ['key%3d', anthropic],
+    ['token%3D', github],
+    ['echo "a\\n', github],
+    ['echo "a\\t', anthropic],
+    ['{"a":"\\u003d', anthropic],
+    ['TOKEN_', github],
+    ['KEY_', anthropic],
+    ['id%3D', aws],
+    ['AWS_', aws],
+    ['SLACK_', slack],
+    ['t%3D', jwt],
+    ['abc', github],
+  ]
+
+  for (const [before, token] of cases) {
+    const text = `${before}${token} end`
+    test(`${before}${token.slice(0, 8)}… is masked by redactSecrets and findSecrets`, () => {
+      assert.equal(redactSecrets(text, {}), `${before}[REDACTED] end`)
+      assert.deepEqual(
+        findSecrets(text, {}).map((m) => text.slice(m.start, m.end)),
+        [token],
+      )
+    })
+    test(`${before}${token.slice(0, 8)}… is masked by redactJsonText`, () => {
+      assert.equal(
+        redactJsonText(JSON.stringify({ out: text }), {}),
+        JSON.stringify({ out: `${before}[REDACTED] end` }),
+      )
+      assert.equal(redactJsonText(`not json ${text}`, {}), `not json ${before}[REDACTED] end`)
+    })
+  }
+
+  test('a word ending in sk- is not a key', () => {
+    const words = [
+      'task-runner-abcdefghijklmnopqrstuvwxyz',
+      'risk-assessment-quarterly-report-2026',
+      'ask-me-anything-about-the-release-plan',
+      'disk-usage-report-for-the-build-cache',
+      'TASK_ask-me-anything-about-the-release-plan',
+      '%3Dtask-runner-abcdefghijklmnopqrstuvwxyz',
+      '\\ntask-runner-abcdefghijklmnopqrstuvwxyz',
+    ]
+    for (const word of words) {
+      assert.equal(redactSecrets(`run ${word} now`, {}), `run ${word} now`, word)
+      assert.deepEqual(findSecrets(word, {}), [], word)
+    }
+  })
+
+  test('hashes, ids and base64 are not tokens', () => {
+    const bytes = Buffer.from(Array.from({ length: 3000 }, (_, i) => (i * 131 + 7) % 256))
+    const texts = [
+      '1c37028e4b9f0d2a6c8e1f3b5d7a9c0e2f4b6d8a',
+      'commit aff05a41c2b3d4e5f60718293a4b5c6d7e8f9012',
+      'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+      bytes.toString('base64'),
+      bytes.toString('base64url'),
+      bytes.toString('hex').toUpperCase(),
+    ]
+    for (const text of texts) assert.equal(redactSecrets(text, {}), text, text.slice(0, 40))
+  })
+
+  test('masking twice changes nothing more', () => {
+    for (const [before, token] of cases) {
+      const once = redactSecrets(`${before}${token}`, {})
+      assert.equal(redactSecrets(once, {}), once)
+    }
+  })
+
+  test('a large text with many near-misses is masked in linear time', () => {
+    const chunk = 'task-%3Dx\\nKEY_AKIA eyJ ghp_ xoxb ask-sk- '
+    const text = chunk.repeat(50_000)
+    const started = performance.now()
+    assert.equal(redactSecrets(`${text}key%3D${anthropic}`, {}), `${text}key%3D[REDACTED]`)
+    assert.ok(performance.now() - started < 2000, `${performance.now() - started}ms`)
+  })
+})
+
 // Last in the file: the short secrets these register would otherwise reach every test above.
 describe('redacting serialised JSON', () => {
   const record = {
