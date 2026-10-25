@@ -15,13 +15,14 @@ const REGEXP_SPECIAL = new Set(['.', '+', '(', ')', '{', '}', '$', '|'])
 
 /**
  * A cleaned pattern as moby/patternmatcher matches it: a literal path, a `dir/**` prefix, a
- * `**suffix`, or else a regexp where `*` and `?` stay within a segment and `**` spans whole
- * directories. A pattern Docker refuses as invalid matches nothing here.
+ * `**suffix`, or else a regexp over code points, as Go's are, where `*` and `?` stay within a
+ * segment and `**` spans whole directories. A pattern Docker refuses as invalid matches nothing here.
  */
 function compile(pattern: string): (path: string) => boolean {
   const chars = [...pattern]
   let type: 'exact' | 'prefix' | 'suffix' | 'regexp' = 'exact'
   let re = '^'
+  let inClass = false
   for (let i = 0; i < chars.length; i++) {
     const start = i
     const c = chars[i] as string
@@ -48,12 +49,14 @@ function compile(pattern: string): (path: string) => boolean {
     } else if (REGEXP_SPECIAL.has(c)) re += `\\${c}`
     else if (c === '\\') {
       if (i + 1 === chars.length) return () => false
-      re += `\\${chars[++i]}`
+      const next = chars[++i] as string
+      re += /[A-Za-z0-9]/.test(next) ? `\\${next}` : `\\u{${next.codePointAt(0)?.toString(16)}}`
       type = 'regexp'
-    } else {
-      if (c === '[' || c === ']') type = 'regexp'
-      re += c
-    }
+    } else if (c === '[' || c === ']') {
+      re += c === ']' && !inClass ? '\\]' : c
+      inClass = c === '[' || (inClass && c !== ']')
+      type = 'regexp'
+    } else re += c
   }
   if (type === 'exact') return (path) => path === pattern
   if (type === 'prefix') {
@@ -65,7 +68,7 @@ function compile(pattern: string): (path: string) => boolean {
     return (path) => path.endsWith(suffix) || (suffix[0] === '/' && path === suffix.slice(1))
   }
   try {
-    const regexp = new RegExp(`${re}$`)
+    const regexp = new RegExp(`${re}$`, 'u')
     return (path) => regexp.test(path)
   } catch {
     return () => false

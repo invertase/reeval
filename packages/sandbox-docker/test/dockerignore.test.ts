@@ -81,6 +81,18 @@ const CASES: Case[] = [
     sent: ['fa', 'ga', 'hxi', 'kk', 'xzy'],
   },
   {
+    name: '? and a negated class match one character beyond the BMP',
+    ignore: 'a?\n[^x]c\n',
+    files: ['a😀', 'b', '😀c', 'xc'],
+    sent: ['b', 'xc'],
+  },
+  {
+    name: 'an escaped letter is a regexp escape and a lone ] is literal',
+    ignore: '\\a\nb]\n',
+    files: ['a', 'b]', 'c'],
+    sent: ['a', 'c'],
+  },
+  {
     name: 'patterns are cleaned',
     ignore: 'x/../y\n./z\n',
     files: ['y', 'z', 'x/w'],
