@@ -1,7 +1,7 @@
 {"case":"expect-fail","about":"a matcher name reeval doesn't have is an error reply; a failed expect is a result, and the runner ends the body with it","options":{}}
 {"reeval":{"type":"start","attempt":{"id":"fake/-/fake#1","cell":{"key":"fake/-/fake","harness":"fake","environment":"-","sandbox":"fake","role":"control"},"n":1},"file":"evals/expect-fail.eval.ts","body":"b1"}}
 {"runner":{"id":"1","call":{"op":"expect","subject":{"value":1},"matcher":"toBeShiny","args":[],"not":false,"soft":false}}}
-{"reeval":{"id":"1","ok":false,"op":"expect","error":{"name":"Error","message":"Invalid Chai property: toBeShiny"}}}
+{"reeval":{"id":"1","ok":false,"op":"expect","error":{"name":"UsageError","message":"toBeShiny isn't one of reeval's matchers (toBe, toEqual, toBeNull, toBeTruthy, toContain, toHaveFile, toSucceed, toHaveSearched, toHaveFetched, toHaveCalledSkill, toHaveCalledMcp, toHaveCalledTool, toHaveRun, toHaveEdited, toHaveChanged, toPass)"}}}
 {"runner":{"id":"2","call":{"op":"expect","subject":{"value":1},"matcher":"toBe","args":[2],"not":false,"soft":false,"label":"one is two"}}}
 {"reeval":{"id":"2","ok":true,"op":"expect","assertion":{"label":"one is two","labelled":true,"matcher":"toBe","status":"fail","soft":false,"message":"one is two: expected 1 to be 2 // Object.is equality"}}}
 {"runner":{"type":"done","error":{"name":"AssertionError","message":"one is two: expected 1 to be 2 // Object.is equality"}}}
