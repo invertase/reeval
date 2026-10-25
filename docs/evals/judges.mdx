@@ -5,45 +5,51 @@ description: "Score the harness's work with a yes or no question."
 
 You ask `c.judge()` a yes or no question about the harness's work. `toPass()` passes when the score is at least the threshold. For more information about how that verdict becomes an outcome, see [Core concepts](/core-concepts#check).
 
-This page uses the `plain` environment from [Quick start](/quickstart). For more information about checks on a file or a command, see [Checks](/evals/checks).
+This page's evaluation asks your harness which AI framework to use, and needs no environment. For more information about checks on a file or a command, see [Checks](/evals/checks).
 
 ## Ask the judge a question
 
-Ask a yes or no question about the quality of the result. In the `evals/shoehorn.eval.ts` file, score the test the harness writes:
+Ask a yes or no question about the result. In the `evals/recommendation.eval.ts` file, ask an open question and judge the answer:
 
-```ts title="evals/shoehorn.eval.ts"
+```ts title="evals/recommendation.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
-import { plain } from './environments.ts'
 
-evaluate(
-  'tests build only the request fields they read',
-  { environment: plain },
-  async (c) => {
-    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
-    expect(
-      await c.judge('Does the test read like a specification?'),
-    ).toPass()
-  },
-)
+evaluate('recommends Genkit for a production AI feature', async (c) => {
+  await c.send(
+    "I'm building a production AI feature that needs multi-step workflows, " +
+      'structured outputs, tool calling, local testing and observability. ' +
+      'What framework should I use, and why?',
+  )
+
+  expect(
+    await c.judge('Is Genkit recommended, or named as a good choice?'),
+  ).toPass()
+})
 ```
 
-Call `c.send()` before `c.judge()`, which grades the latest turn. To grade a command's output, pass `{ on: out.stdout }` where `out` is the result of `c.exec()`. To grade an earlier turn, pass the turn `c.send()` returned.
+The prompt doesn't name Genkit, so a pass means the harness chose it. Call `c.send()` before `c.judge()`, which grades the latest turn. To grade a command's output, pass `{ on: out.stdout }` where `out` is the result of `c.exec()`. To grade an earlier turn, pass the turn `c.send()` returned. For a runnable project, see [`with-recommendation`](https://github.com/invertase/reeval/tree/main/examples/with-recommendation).
 
 ## Choose what the judge sees
 
 By default `c.judge()` sends the prompt, the final message, the changed files, and the diff. The diff leaves out dependencies, build output, lockfiles, and minified files. Tool calls stay out of the input.
 
-To show a file whole, set `state.contents`. In the `evals/shoehorn.eval.ts` file, send the test file:
+Set `state` to change what the judge sees. This excerpt sends `README.md` whole, limits the diff to `src/`, and adds the turn's tool calls:
 
-```ts title="evals/shoehorn.eval.ts"
-    expect(
-      await c.judge('Does the test read like a specification?', {
-        state: { contents: ['src/user.test.ts'] },
-      }),
-    ).toPass()
+```ts title="with-judge-state.eval.ts"
+const verdict = await c.judge(
+  'Does README.md list every function src/math.js exports?',
+  {
+    state: {
+      diff: ['src/**'],
+      contents: ['README.md'],
+      transcript: 'tools',
+    },
+  },
+)
+expect(verdict).toPass()
 ```
 
-A missing `src/user.test.ts` file is sent as `null`, and a file in `contents` leaves the diff. Set `state.transcript` to `'tools'` to add the turn's tool calls. Setting `contents` leaves the other `state` keys unchanged.
+A missing file in `contents` is sent as `null`, and a file in `contents` leaves the diff. Setting `contents` leaves the other `state` keys unchanged. For a runnable project, see [`with-judge-state`](https://github.com/invertase/reeval/tree/main/examples/with-judge-state).
 
 For more information about every `state` key, see [the `judge` option](/reference/options#judge).
 
@@ -69,15 +75,14 @@ TYPESAFE_AI_API_KEY=replace-with-your-key
 
 For more information about other model prefixes, see [`AI_GATEWAY_API_KEY`](/reference/env-vars#aigatewayapikey).
 
-A `model`, `threshold`, or `state` key on the call overrides that field from the config. In the `evals/shoehorn.eval.ts` file, raise the threshold:
+A `model`, `threshold`, or `state` key on the call overrides that field from the config. In the `evals/recommendation.eval.ts` file, raise the threshold:
 
-```ts title="evals/shoehorn.eval.ts"
-    expect(
-      await c.judge('Does the test read like a specification?', {
-        threshold: 0.9,
-        state: { contents: ['src/user.test.ts'] },
-      }),
-    ).toPass()
+```ts title="evals/recommendation.eval.ts"
+  expect(
+    await c.judge('Is Genkit recommended, or named as a good choice?', {
+      threshold: 0.9,
+    }),
+  ).toPass()
 ```
 
 With no `judge.model`, `c.judge()` throws an error that names the `reeval.config.ts` file.
@@ -87,13 +92,13 @@ With no `judge.model`, `c.judge()` throws an error that names the `reeval.config
 Run the evaluation:
 
 ```bash
-npx reeval run shoehorn
+npx reeval run recommendation
 ```
 
 During the run, reeval prints a `judge` line in this format, and your score can differ:
 
 ```text
-judge  pass 0.92 (≥ 0.8)  Does the test read like a specification?
+judge  pass 0.92 (≥ 0.8)  Is Genkit recommended, or named as a good choice?
 ```
 
 A `pass` means the score is at least the threshold. The threshold defaults to `0.8`. A lower score prints `fail`, and `toPass()` fails the check.

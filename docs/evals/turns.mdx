@@ -55,7 +55,7 @@ const second = await c.send('Make src/user.ts satisfy that test.')
 const earlier = c.turns[0]
 ```
 
-`second.text` is only the second reply. `second.diff` includes files from the first turn because each diff compares the current workspace with its state before your harness runs. `earlier` is the same turn as `first`. `first.text` stays the first reply.
+`second.text` is only the second reply. `second.diff` includes files from the first turn because each diff compares the current workspace with its state before your harness runs. `earlier` is the same turn as `first`. `first.text` stays the first reply. For a runnable project that checks each turn, see [`with-multi-turn`](https://github.com/invertase/reeval/tree/main/examples/with-multi-turn).
 
 ## Reference
 

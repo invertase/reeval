@@ -3,7 +3,7 @@ title: "Group evaluations"
 description: "Apply the same options to several evaluations."
 ---
 
-Use `group()` when several evaluations share an environment, tags, or a judge. This page continues the `evals/shoehorn.eval.ts` file in [Write an evaluation](/evals/evaluate).
+Use `group()` when several evaluations share an environment, tags, or a judge. This page's two evaluations ask for Vitest tests in a `plain` environment, defined in the `evals/environments.ts` file.
 
 ## Group evaluations
 
@@ -32,7 +32,7 @@ group('request builders', { environment: plain, tags: ['smoke'] }, () => {
 })
 ```
 
-`group.skip` keeps a group in the file and skips every evaluation inside it, including a nested group. `group.only` runs only that group in its own file, and other files still run. reeval refuses `group.only` when the `CI` variable is set. `group.todo` takes a name and no body, and the plan lists it as `todo`. The groups around a `group.todo` still add their tags to it.
+`group.skip` keeps a group in the file and skips every evaluation inside it, including a nested group. `group.only` runs only that group in its own file, and other files still run. reeval refuses `group.only` when the `CI` variable is set. `group.todo` takes a name and no body, and the plan lists it as `todo`. The groups around a `group.todo` still add their tags to it. For a runnable project with a group, `evaluate.skip`, and `evaluate.todo`, see [`with-groups`](https://github.com/invertase/reeval/tree/main/examples/with-groups).
 
 In the `evals/shoehorn.eval.ts` file, focus the group and leave a placeholder:
 

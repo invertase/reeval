@@ -34,7 +34,7 @@ expect
   .toContain('divide(')
 ```
 
-`c.writeFile` writes a file into the sandbox after the harness finishes. The diff leaves that write out. In the `evals/camelcase.eval.ts` file, add the hidden test the prompt never mentions:
+`c.writeFile` writes a file into the sandbox. The diff leaves that write out. In the `evals/camelcase.eval.ts` file, add the hidden test the prompt never mentions:
 
 ```ts title="evals/camelcase.eval.ts"
   await c.writeFile('separators.test.js', hidden)
