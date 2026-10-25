@@ -436,59 +436,56 @@ export async function buildDigestKeepingDropped(
     fact('effort', {
       run: short.get(runId),
       eval: tagOf(first.eval_key),
-      cells: rows.map((row) => ({
-        cell: cellTag(runId, row.eval_key, row.cell_key),
-        n: row.n,
-        medianToolCalls: row.tools_median,
-        medianAgentS: row.agent_s_median,
-        ...(row.tokens_median != null ? { medianTokens: row.tokens_median } : {}),
-        ...(row.workspace_calls_median != null
-          ? {
-              medianCallsByClass: Object.fromEntries(
-                TOOL_CLASSES.flatMap((k) => {
-                  const m = row[`${k}_calls_median`]
-                  return m ? [[k, m]] : []
-                }),
-              ),
-            }
-          : {}),
-        ...(row.control_key
-          ? {
-              vsControl: {
-                n: `${row.n} vs ${row.control_n}`,
-                toolCalls: `${row.tools_median} vs ${row.control_tools_median} (${ratioText(row.tools_ratio)})`,
-                agentS: bothUnderATenth(
-                  Number(row.agent_s_median) * 1000,
-                  Number(row.control_agent_s_median) * 1000,
-                )
-                  ? '<0.1 vs <0.1'
-                  : `${row.agent_s_median} vs ${row.control_agent_s_median} (${ratioText(row.agent_s_ratio)})`,
-                p: row.tools_p,
-                verdict: row.verdict,
-                timeVerdict: row.time_verdict,
-                ...(row.tokens_verdict
-                  ? {
-                      tokens: `${formatTokens(row.tokens_median as number)} vs ${formatTokens(row.control_tokens_median as number)} (${ratioText(row.tokens_ratio)})`,
-                      tokensP: row.tokens_p,
-                      tokensVerdict: row.tokens_verdict,
-                    }
-                  : {}),
-                ...(Math.min(Number(row.n), Number(row.control_n)) >= DIRECTIONAL_MIN
-                  ? {
-                      separated: {
-                        tools: row.separated === 1,
-                        agentS: row.time_separated === 1,
-                        ...(row.tokens_separated != null
-                          ? { tokens: row.tokens_separated === 1 }
-                          : {}),
-                      },
-                    }
-                  : {}),
-                ...(row.tokens_note ? { unreportedUsage: row.tokens_note } : {}),
-              },
-            }
-          : {}),
-      })),
+      cells: rows.map((row) => {
+        const byClass = TOOL_CLASSES.flatMap((k) => {
+          const m = row[`${k}_calls_median`]
+          return m ? [[k, m] as const] : []
+        })
+        return {
+          cell: cellTag(runId, row.eval_key, row.cell_key),
+          n: row.n,
+          medianToolCalls: row.tools_median,
+          medianAgentS: row.agent_s_median,
+          ...(row.tokens_median != null ? { medianTokens: row.tokens_median } : {}),
+          ...(byClass.length ? { medianCallsByClass: Object.fromEntries(byClass) } : {}),
+          ...(row.control_key
+            ? {
+                vsControl: {
+                  n: `${row.n} vs ${row.control_n}`,
+                  toolCalls: `${row.tools_median} vs ${row.control_tools_median} (${ratioText(row.tools_ratio)})`,
+                  agentS: bothUnderATenth(
+                    Number(row.agent_s_median) * 1000,
+                    Number(row.control_agent_s_median) * 1000,
+                  )
+                    ? '<0.1 vs <0.1'
+                    : `${row.agent_s_median} vs ${row.control_agent_s_median} (${ratioText(row.agent_s_ratio)})`,
+                  p: row.tools_p,
+                  verdict: row.verdict,
+                  timeVerdict: row.time_verdict,
+                  ...(row.tokens_verdict
+                    ? {
+                        tokens: `${formatTokens(row.tokens_median as number)} vs ${formatTokens(row.control_tokens_median as number)} (${ratioText(row.tokens_ratio)})`,
+                        tokensP: row.tokens_p,
+                        tokensVerdict: row.tokens_verdict,
+                      }
+                    : {}),
+                  ...(Math.min(Number(row.n), Number(row.control_n)) >= DIRECTIONAL_MIN
+                    ? {
+                        separated: {
+                          tools: row.separated === 1,
+                          agentS: row.time_separated === 1,
+                          ...(row.tokens_separated != null
+                            ? { tokens: row.tokens_separated === 1 }
+                            : {}),
+                        },
+                      }
+                    : {}),
+                  ...(row.tokens_note ? { unreportedUsage: row.tokens_note } : {}),
+                },
+              }
+            : {}),
+        }
+      }),
     })
   }
 
