@@ -26,6 +26,7 @@ import {
 import { scrubber } from '../src/report/scrub.ts'
 import { brokerPhases } from '../src/sandbox/phases.ts'
 import type { EnvironmentInput } from '../src/types.ts'
+import { fakeConfig, project, readRun, runCli } from './helpers.ts'
 
 const VALUE = 'reeval-unit-brokered-4f1c9e2a7b'
 const OTHER = 'reeval-unit-other-9d3a61c0e5'
@@ -263,6 +264,34 @@ describe('resolving brokered secrets', () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
     assert.notEqual(await digest({ template: 'Bearer ${REEVAL_UNIT_OTHER}' }), a)
     assert.notEqual(await digest('Bearer literal'), a)
+  })
+
+  test("the attempt's env lists a plain var a header's host variable shares a name with", async () => {
+    const p = await project('secrets-attempt-env', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const env = defineEnvironment('shared-name', ({ secret, mcp }) => ({
+  env: { REEVAL_UNIT_MODE: 'plain' },
+  mcp: {
+    docs: mcp.http('http://127.0.0.1:9/mcp', {
+      headers: { authorization: secret.template('Bearer \${REEVAL_UNIT_MODE}') },
+    }),
+  },
+}))
+evaluate('shares a name', { environment: env }, async (c) => {
+  await c.send('hi')
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run'], { env: { REEVAL_UNIT_MODE: OTHER } })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run, evals } = readRun(p.dir)
+    assert.deepEqual(run.environments[0]?.vars, ['REEVAL_UNIT_MODE'])
+    assert.deepEqual(evals[0]?.trial.env, {
+      vars: ['REEVAL_UNIT_MODE'],
+      secrets: ['REEVAL_UNIT_MODE'],
+      brokered: [],
+    })
   })
 
   test('MCP stdio env secrets are brokered only with explicit hosts', async () => {

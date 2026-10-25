@@ -33,14 +33,8 @@ export async function prepareEnvironment(
   )
   a.env = env
   record.environment = env.record
-  const { secrets, brokered } = env.record
-  record.env = {
-    vars: Object.keys(env.vars)
-      .filter((n) => !secrets.includes(n))
-      .sort(),
-    secrets,
-    brokered,
-  }
+  const { vars, secrets, brokered } = env.record
+  record.env = { vars, secrets, brokered }
   const debug = attemptDebug()
   if (debug) traceEnvironment(debug, spec, env)
   record.image = null
