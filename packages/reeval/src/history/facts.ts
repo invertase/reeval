@@ -362,14 +362,10 @@ export function deriveFacts(db: DatabaseSync): void {
   const find = (run: string, evalKey: string, key: string) =>
     cells.find((c) => c.run_id === run && c.eval_key === evalKey && c.key === key)
 
-  // Tool calls by class per counted attempt, for each cell's per-class medians. An attempt whose
-  // run kept its transcript, or that made no tool calls (a turnless one has no transcript),
-  // counts, with 0 for each class it made no calls in; null for a cell with no such attempt.
-  const transcribed = new Set(
-    rowsOf<{ run_id: string; attempt_key: string }>(
-      db.prepare(`SELECT run_id, attempt_key FROM artifacts WHERE kind = 'transcript'`),
-    ).map((r) => `${r.run_id}\0${r.attempt_key}`),
-  )
+  // Tool calls by class per counted attempt, for each cell's per-class medians. An attempt counts
+  // when its calls were read from its transcript or its record says it made none (a turnless one
+  // has no transcript), with 0 for each class it made no calls in; one whose record has calls but
+  // whose transcript couldn't be read stays out. Null for a cell with no attempt that counts.
   const classCounts = new Map<string, Map<string, number>>()
   for (const r of rowsOf<{ run_id: string; attempt_key: string; class: string; n: number }>(
     db.prepare(
@@ -386,10 +382,8 @@ export function deriveFacts(db: DatabaseSync): void {
       (a) => a.outcome === 'pass' || a.outcome === 'fail',
     )
     const known = counted.flatMap((a) => {
-      const id = `${a.run_id}\0${a.key}`
-      return transcribed.has(id) || a.tools === 0
-        ? [classCounts.get(id) ?? new Map<string, number>()]
-        : []
+      const m = classCounts.get(`${a.run_id}\0${a.key}`)
+      return m ? [m] : a.tools === 0 ? [new Map<string, number>()] : []
     })
     return Object.fromEntries(
       TOOL_CLASSES.map((k) => [

@@ -563,6 +563,31 @@ evaluate('turnless', { runs: 3 }, async (c) => {
     )
   })
 
+  test('effort’s per-class call medians leave out an attempt with calls but no transcript file', async () => {
+    const p = await project('query-effort-missing-transcript', {
+      'reeval.config.ts': fakeConfig({ harness: "{ script: [[{ exec: 'true' }]] }" }),
+      'evals/e.eval.ts': `import { evaluate } from 'reeval'
+evaluate('calls', { runs: 3 }, async (c) => {
+  await c.send('go')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const { run, dir } = readRun(p.dir)
+    const attempts = run.evals[0]?.attempts ?? []
+    assert.deepEqual(
+      attempts.map((a) => a.activity.tools),
+      [1, 1, 1],
+    )
+    for (const a of attempts.slice(1)) {
+      rmSync(join(dir, ...(a.files.transcript?.path ?? '').split('/')))
+    }
+    assert.deepEqual(
+      await query(p.dir, 'SELECT n, tools_median, workspace_calls_median FROM effort'),
+      [{ n: 3, tools_median: 1, workspace_calls_median: 1 }],
+    )
+  })
+
   test('failing attempts join skills by environment digest, not name', async () => {
     const p = await project('query-joins', {
       'reeval.config.ts': fakeConfig(),
