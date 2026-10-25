@@ -2545,6 +2545,14 @@ export const features: Feature[] = [
     canary: /expected no changes to test\/\*\*, got \["test\/greet\.test\.js" \(modified\)\]/,
   },
   {
+    dir: 'assert/changed-quoted-path',
+    tiers: ['fake', 'docker'],
+    env: 'notes',
+    canary: /expected no changes to notes\/café\.txt, got \["notes\/café\.txt" \(added\)\]/,
+    record: ({ run }) =>
+      assert.deepEqual(landed(run)?.changedFiles, [{ path: 'notes/café.txt', status: 'added' }]),
+  },
+  {
     dir: 'judge/state-contents',
     tiers: ['fake'],
     env: 'readme-app',

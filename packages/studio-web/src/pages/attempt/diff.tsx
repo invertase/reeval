@@ -7,8 +7,10 @@ import { cn } from '@/lib/utils'
 
 const MAX_LINES = 5000
 
-function lineClass(line: string) {
-  if (line.startsWith('+++ ') || line.startsWith('--- ')) return 'text-muted-foreground'
+/** `inHunk`: past a file's first `@@`, where `--- x` is a removed `-- x`, not a header. */
+function lineClass(line: string, inHunk: boolean) {
+  if (!inHunk && (line.startsWith('+++ ') || line.startsWith('--- ')))
+    return 'text-muted-foreground'
   if (line.startsWith('+')) return 'bg-pass/10 text-pass'
   if (line.startsWith('-')) return 'bg-fail/10 text-fail'
   if (line.startsWith('@@')) return 'bg-brand/8 text-brand'
@@ -20,12 +22,18 @@ function lineClass(line: string) {
 export function PatchView({ text, className }: { text: string; className?: string }) {
   const lines = text.split('\n')
   const shown = lines.slice(0, MAX_LINES)
+  let inHunk = false
+  const classes = shown.map((line) => {
+    if (line.startsWith('diff --git ')) inHunk = false
+    else if (line.startsWith('@@')) inHunk = true
+    return lineClass(line, inHunk)
+  })
   return (
     <div className={cn('overflow-auto rounded-lg border bg-card', className)}>
       <pre className="min-w-fit py-2 font-mono text-xs leading-5">
         {shown.map((line, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: lines of an immutable file
-          <div key={i} className={cn('px-4 whitespace-pre', lineClass(line))}>
+          <div key={i} className={cn('px-4 whitespace-pre', classes[i])}>
             {line || ' '}
           </div>
         ))}
