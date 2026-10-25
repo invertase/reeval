@@ -420,6 +420,15 @@ export const matcherSubjectSchema = z
 
 const nonEmpty = z.string().regex(/\S/, 'must not be empty')
 
+/**
+ * A capture's name is the `<name>.png` segment of its artifact path, so it stays within what
+ * the studio serves as a path segment (`src/view/paths.ts`): a leading letter or digit, and
+ * short enough to leave room for `.png`.
+ */
+export const CAPTURE_NAME_MAX = 100
+export const CAPTURE_NAME = new RegExp(`^[a-z0-9][a-z0-9_-]{0,${CAPTURE_NAME_MAX - 1}}$`)
+export const CAPTURE_NAME_RULE = `must be 1 to ${CAPTURE_NAME_MAX} of a-z, 0-9, _ and -, starting with a letter or digit`
+
 const portSchema = z
   .number()
   .int()
@@ -441,7 +450,13 @@ export const captureInstructionSchema = z.union([nonEmpty, z.strictObject({ wait
 
 export const captureCallDataSchema = z
   .strictObject({
-    name: nonEmpty.optional(),
+    name: z
+      .string()
+      .regex(CAPTURE_NAME, CAPTURE_NAME_RULE)
+      .optional()
+      .describe(
+        'The `artifacts/<name>.png` file name: 1 to 100 of `a-z`, `0-9`, `_` and `-`, starting with a letter or digit. Unique within the attempt.',
+      ),
     path: z.string().optional(),
     viewport: z.union([captureWindowSchema, z.literal('full-page')]).optional(),
     timeout: durationSchema.optional(),
