@@ -68,7 +68,7 @@ def test_a_duration_is_seconds_or_a_timedelta(given: Any, wire: str) -> None:
     assert sandbox == {"sandbox": {"kind": "docker", "startTimeout": wire}}
 
 
-@pytest.mark.parametrize("given", ["1s", True, None])
+@pytest.mark.parametrize("given", ["1s", True, None, float("nan"), float("inf")])
 def test_a_duration_refuses_anything_but_seconds(given: Any) -> None:
     with pytest.raises(TypeError, match="timeout takes seconds or a timedelta"):
         options_to_wire({"timeout": given})
