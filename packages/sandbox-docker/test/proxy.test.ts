@@ -1885,10 +1885,11 @@ describe('brokered secrets through the proxy', () => {
 
     test('a TLS ClientHello split after its first byte is still decrypted', bounded, async () => {
       const { gw } = await brokered(false)
+      let socket: net.Socket | undefined
       try {
         const tunnel = await connect(gw, HOST, h1.port)
         assert.ok(tunnel.ok)
-        const { socket } = tunnel
+        socket = tunnel.socket
         let first = true
         const split = new Duplex({
           write(chunk: Buffer, _encoding, done) {
@@ -1925,6 +1926,7 @@ describe('brokered secrets through the proxy', () => {
         assert.equal(JSON.parse(body).path, '/echo')
         assert.equal(seen.at(-1)?.headers.authorization, `Bearer ${SECRET}`)
       } finally {
+        socket?.destroy()
         gw.close()
       }
     })
