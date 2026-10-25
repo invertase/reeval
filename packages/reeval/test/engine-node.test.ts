@@ -412,22 +412,41 @@ describe('runEngine: running', () => {
     )
   })
 
-  test('a file no path part names is left out when it fails to load', async () => {
-    const { run } = project(['evals/a.eval.ts', 'evals/b.eval.ts', 'evals/c.eval.ts'])
-    const { spawn } = fakeSpawn((ctl) => {
-      const name = basename(ctl.init.file)
-      if (name === 'b.eval.ts') {
-        ctl.emit({ t: 'load-error', error: { name: 'Error', message: 'boom' } })
-        ctl.exit()
-      } else if (name === 'c.eval.ts') {
-        ctl.emit({ t: 'load-error', error: { name: 'UsageError', message: 'twice' } })
-        ctl.exit()
-      } else passing({ 'a.eval.ts': [test0(0, 'one')] })(ctl)
-    })
-    const r = await engine({ run, filters: ['a.eval'] }, spawn)
+  test('a path on disk is only a path: it collects only the files it names', async () => {
+    const { root, run } = project(['evals/fake/a.eval.ts', 'evals/b.eval.ts', 'evals/c.eval.ts'])
+    const tests = {
+      'a.eval.ts': [test0(0, 'alpha [left#1]', { attempt: attempt('alpha', cell('left')) })],
+      'b.eval.ts': [test0(0, 'beta [fake#1]', { attempt: attempt('beta', cell('fake')) })],
+    }
+    for (const filter of [join(root, 'evals/b.eval.ts'), join(root, 'evals/fake')]) {
+      const { spawn, spawned } = fakeSpawn(passing(tests))
+      const r = await engine({ run, filters: [filter] }, spawn)
+      const file = filter.endsWith('fake') ? 'a.eval.ts' : 'b.eval.ts'
+      assert.deepEqual(spawned.sort(), [`${file}:0`, `${file}:collect`], filter)
+      assert.deepEqual(r.evals.length, 1, filter)
+    }
+  })
+
+  test('a file fails the run when it fails to load under a part that may match it by name', async () => {
+    const { root, run } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
+    const script: Script = (ctl) => {
+      if (basename(ctl.init.file) !== 'b.eval.ts')
+        return passing({ 'a.eval.ts': [test0(0, 'one')] })(ctl)
+      ctl.emit({ t: 'load-error', error: { name: 'Error', message: 'boom' } })
+      ctl.exit()
+    }
+    await assert.rejects(
+      engine({ run, filters: ['a.eval'] }, fakeSpawn(script).spawn),
+      /An eval file failed to load:\nevals\/b\.eval\.ts: boom/,
+    )
+    const r = await engine(
+      { run, filters: [join(root, 'evals/a.eval.ts')] },
+      fakeSpawn(script).spawn,
+    )
     assert.deepEqual(
       r.evals.map((e) => [e.id, e.state]),
       [['evals/a.eval.ts › one', 'passed']],
+      'an exact path never loads the file it does not name',
     )
   })
 

@@ -1,8 +1,9 @@
 // The engine's main process: finds the eval files, collects each in a fresh worker for the plan,
 // then runs each in a fresh worker again, at most one per CPU at once, handing out the
 // scheduler's leases over IPC and turning what workers report into reeval's events and results.
+import { existsSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { UsageError } from '../errors.ts'
 import { attemptKey, evalId, relativeFile } from '../ids.ts'
@@ -62,11 +63,14 @@ export async function runEngine(
     '**/.reeval/**',
     `${relativeFile(root, config.history.dir)}/**`,
   ])
-  // A part that names an eval file picks every eval in the files it names, and also matches as a
-  // name or cell part anywhere, so a directory called `fake` doesn't hide the `fake` cells of
-  // the other files. Any other part picks evals by name or cell. Parts of one kind widen the
-  // selection, and the two kinds narrow each other.
+  // A part that names an eval file picks every eval in the files it names. One that is a file or
+  // directory on disk (from the current directory, or absolute) is only a path; any other, such
+  // as `right` beside `evals/right/`, also matches as a name or cell part anywhere, so a
+  // directory called `fake` doesn't hide the `fake` cells of the other files. Any other part
+  // picks evals by name or cell. Parts of one kind widen the selection, and the two kinds
+  // narrow each other.
   const pathFilters = options.filters.filter((f) => filterFiles(files, [f], root).length)
+  const looseFilters = pathFilters.filter((f) => !existsSync(resolve(f)))
   const nameFilters = options.filters.filter((f) => !pathFilters.includes(f))
   const specs = filterFiles(files, pathFilters, root)
   if (specs.length === 0)
@@ -78,17 +82,17 @@ export async function runEngine(
   const entry = workerEntry(root, PACKAGE_NAMES)
   const hide = [...reevalFrames(PACKAGE_DIR), ...reevalFrames(join(entry, '..', '..'))]
   const matchesName = (e: { id: string; file: string; attempt?: EngineEval['attempt'] }) =>
-    (named.has(e.file) || pathFilters.some((f) => matchesFilter(e, f))) &&
+    (named.has(e.file) || looseFilters.some((f) => matchesFilter(e, f))) &&
     (nameFilters.length === 0 || nameFilters.some((f) => matchesFilter(e, f)))
   const run = options.run
 
-  // Collect: each file in a worker of its own, for the plan. A file no path part names is
-  // collected only for the evals a path part matches by name or cell, so one that fails to
-  // load is left out rather than failing a run that didn't name it.
+  // Collect: each file in a worker of its own, for the plan. Paths on disk collect only the
+  // files they name; a part that may match by name or cell collects every file, and any of
+  // them failing to load fails the run, as it may hold evals the part picks.
   const collected: Collected[] = []
   const failed = new Map<string, string[]>()
   let usage: string | undefined
-  await eachLimited(files, workers, async (file) => {
+  await eachLimited(looseFilters.length ? files : specs, workers, async (file) => {
     const rel = relativeFile(root, file)
     const worker = spawn(entry, root)
     let tests: WireTest[] | undefined
@@ -101,7 +105,6 @@ export async function runEngine(
     worker.send({ t: 'init', run, file, select: null })
     const exit = await worker.exited
     if (tests) collected.push({ file, rel, tests })
-    else if (!named.has(rel)) return
     else if (error?.name === 'OnlyInCiError') usage = onlyInCi(rel)
     else if (error?.name === 'UsageError' || error?.name === 'DefinitionError')
       usage = `${rel}: ${error.message}`
