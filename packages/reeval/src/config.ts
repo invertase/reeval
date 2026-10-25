@@ -42,6 +42,7 @@ import { badCharacterAt } from './redact.ts'
 import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
 import type {
+  AttemptMeta,
   Budget,
   ConfigHelpers,
   EnvVars,
@@ -850,10 +851,13 @@ function runModelGateway(
   return modelGatewayOrNone(model, pin, gatewayScope(config, profile))
 }
 
+/** A judge an attempt resolves: its `'provider/model'` and the gateway its calls go through. */
+export type PlannedJudge = NonNullable<AttemptMeta['judge']>
+
 /**
  * Names the environment variables the run's providers need but don't have: the harnesses it
- * plans (default: the config's), the run's judge, the models that answer questions,
- * and required config and profile secrets. Insights' model isn't among them: without its key a run
+ * plans (default: the config's), the run's judge and the judges its attempts resolve, the models
+ * that answer questions, and required config and profile secrets. Insights' model isn't among them: without its key a run
  * prints no insights, and never stops for it.
  */
 export function missingCredentials(
@@ -864,6 +868,8 @@ export function missingCredentials(
     profile?: ResolvedProfile | null
     /** The `'provider/model'`s that answer questions. */
     questionModels?: string[]
+    /** The judges the planned attempts resolve, each with the gateway it goes through. */
+    judges?: PlannedJudge[]
   } = {},
 ): string[] {
   const missing: string[] = []
@@ -871,19 +877,29 @@ export function missingCredentials(
   for (const key of keys) if (!env[key]) missing.push(key)
   const judge = runJudgeModel(config, options.profile)
   const models = [
-    ...(judge !== undefined ? [{ model: judge, what: 'the judge model', judge: true }] : []),
+    ...(typeof judge === 'string'
+      ? [
+          {
+            model: judge,
+            gateway: runModelGateway(config, options.profile, judge, true),
+            what: 'the judge model',
+          },
+        ]
+      : []),
+    ...(options.judges ?? []).map((j) => ({ ...j, what: 'the judge model' })),
     ...(options.questionModels ?? []).map((model) => ({
       model,
+      gateway: runModelGateway(config, options.profile, model),
       what: 'questions',
-      judge: false,
     })),
   ]
   const named = new Set<string>()
-  for (const { model, what, judge: isJudge } of models) {
-    if (typeof model !== 'string' || named.has(model)) continue
-    named.add(model)
-    const gateway = runModelGateway(config, options.profile, model, isJudge)
-    if (!judgeCredentials(model, gateway).some((k) => env[k])) {
+  for (const { model, gateway, what } of models) {
+    const keys = judgeCredentials(model, gateway)
+    const once = `${keys.join(' ')}\0${model}`
+    if (named.has(once)) continue
+    named.add(once)
+    if (!keys.some((k) => env[k])) {
       missing.push(`${modelKeyOptions(model, gateway)} for ${what}, "${model}"`)
     }
   }
@@ -895,11 +911,10 @@ export function missingCredentials(
 }
 
 /**
- * Keys the run sends in request headers (the agents' credentials, the run's judge's and the
- * questions' models') whose value has
- * whitespace or a control character in it, with where the first one is: a key pasted from a
- * wrapped terminal line picks up a line break, and the agent then hangs on a request it can't send
- * rather than failing to authenticate.
+ * Keys the run sends in request headers (the agents' credentials, the run's and attempts' judges'
+ * and the questions' models') whose value has whitespace or a control character in it, with where
+ * the first one is: a key pasted from a wrapped terminal line picks up a line break, and the agent
+ * then hangs on a request it can't send rather than failing to authenticate.
  */
 export function malformedCredentials(
   config: ResolvedConfig,
@@ -908,12 +923,16 @@ export function malformedCredentials(
     harnesses?: HarnessDescriptor[]
     profile?: ResolvedProfile | null
     questionModels?: string[]
+    judges?: PlannedJudge[]
   } = {},
 ): string[] {
   const names = (options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? [])
   const judge = runJudgeModel(config, options.profile)
   if (judge !== undefined) {
     names.push(...judgeCredentials(judge, runModelGateway(config, options.profile, judge, true)))
+  }
+  for (const { model, gateway } of options.judges ?? []) {
+    names.push(...judgeCredentials(model, gateway))
   }
   for (const model of options.questionModels ?? []) {
     names.push(...judgeCredentials(model, runModelGateway(config, options.profile, model)))
