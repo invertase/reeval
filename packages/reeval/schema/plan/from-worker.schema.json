@@ -1128,6 +1128,27 @@
         {
           "type": "object",
           "properties": {
+            "harnesses": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "t": {
+              "const": "collected"
+            },
+            "tests": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/WireTest"
+              }
+            }
+          },
+          "required": ["harnesses", "t", "tests"]
+        },
+        {
+          "type": "object",
+          "properties": {
             "id": {
               "type": "string"
             },
@@ -1226,21 +1247,6 @@
             }
           },
           "required": ["protocol", "t"]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "t": {
-              "const": "collected"
-            },
-            "tests": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/WireTest"
-              }
-            }
-          },
-          "required": ["t", "tests"]
         },
         {
           "type": "object",

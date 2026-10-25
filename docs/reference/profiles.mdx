@@ -86,7 +86,7 @@ A profile takes `defaults`, `limit`, `judge`, `budget`, `record`, `tags` and `ga
 </Property>
 
 <Property name="harness" type="string[]" optional>
-  Harness ids to keep, matched exactly: `cursor:composer-2.5` keeps the default harness, and a bare `cursor` matches none. The others are dropped from each eval; an eval left with none is skipped. It can't add a harness: use `defaults.harness` for that.
+  Harness ids to keep, matched exactly: `cursor:composer-2.5` keeps the default harness, and a bare `cursor` matches none. The others are dropped from each eval; an eval left with none is skipped. It can't add a harness: use `defaults.harness` for that. An id that no eval in the run's files runs on stops the run before anything starts (exit 2), whatever `--tag` and name filters pick. When a path filter loads only some eval files, reeval refuses only a list none of whose ids match, since the others may name harnesses of files it didn't load. A pinned eval's own harness counts like any other: the eval keeps it whatever the limit says, but the limit still has to name a harness some eval runs on. When it drops every harness in an eval's `compare.harness`, no harness runs a variant, so the compare is off as with `limit.compare: false`, even when the eval pins `compare`, and the plan notes `compare off: no compared harness left (profile pr)`.
 </Property>
 
 The plan shows what `limit` changed in the notes column. This is the `pr` profile above with `harness: ['fake']`, run in CI against an eval group with `compare` and `runs: 3`, using the fake harness:
@@ -153,6 +153,7 @@ reeval: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Na
 | An unknown `defaultProfile` key | `Unknown option "remote" in defaultProfile in reeval.config.ts. Use ci, local.` |
 | A default that isn't a profile | `defaultProfile.ci in reeval.config.ts names "pr", which isn't a profile (it defines none). Add it under profiles, or name one that's there.` |
 | A harness object in `limit.harness` | `profiles.pr.limit.harness in reeval.config.ts can only list harness ids to allow (got cursor({ … })). To add harnesses, use profiles.pr.defaults.harness.` |
+| A `limit.harness` id no eval runs on | `profiles.pr.limit.harness in reeval.config.ts lists "cursor", which no eval runs on. Harness ids the evals run on: cursor:composer-2.5.` |
 | A bad `limit.compare` | `profiles.pr.limit.compare in reeval.config.ts must be false or { maxVariants: n }, e.g. { maxVariants: 1 } (got true)` |
 | A bad `limit.runs` | `profiles.pr.limit.runs in reeval.config.ts must be a whole number of at least 1 (got 0)` |
 | Tags that aren't strings | `profiles.pr.tags in reeval.config.ts must be a list of tag filters, e.g. tags: ['smoke'] (got "smoke")` |

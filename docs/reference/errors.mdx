@@ -104,6 +104,7 @@ See [reeval doctor](/reference/cli/doctor) for every check.
 | `Unknown cursor() option "modle". Did you mean "model"?` | Every harness factory refuses a key it doesn't take. Use the suggested one. See the harness's page under [Harnesses](/reference/harness/cursor). |
 | `call.options.artifacts[0].file is missing: it must be an object` | Data from another language that misses a field, or has one of the wrong type, names the field's full path. A value that can take several forms is explained against the form it came closest to. |
 | `harness in evals/a.eval.ts › e: Unknown cursor() option "modle". …` | A harness, sandbox, secret, skill, MCP server, file, workspace or environment built as plain data (by hand, or by an SDK in another language) is checked as its helper's result is, and named by where it sits: `sandbox in …`, `env.A_KEY in …`, `skills[0] in …`, `mcp.s in …`, `files["a.txt"] in …`, `workspace in …`. Build it with the helper, or fix the named field. |
+| `evaluate("x") on opencode:<model>: OpenCode substitutes {env:…} and {file:…} anywhere in its config, with no escape, so the docs server wouldn't get mcp.docs.args[1] as written: …` | OpenCode replaces `{env:NAME}` and `{file:path}` in an MCP server's name, command, args, env names and values, url and header names and values, so the plan refuses them on OpenCode only, naming the field. Take the reference out, pass the value another way (a file the server reads, say), or leave OpenCode out of that cell. See [OpenCode](/reference/harness/opencode#mcp-servers). |
 | `Unknown field "setpu" in layer "x" of environment "x" in evals/a.eval.ts › e.` | An environment as data has each layer's spec checked as `defineEnvironment` checks it. Fix the named field. |
 | `evaluate("x") has no function. …` | Pass the eval's body: `evaluate("x", async (c) => { … })`. |
 | `evaluate.only isn't allowed in CI` | Remove the `.only` before pushing. |
@@ -116,6 +117,7 @@ See [reeval doctor](/reference/cli/doctor) for every check.
 | `this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)` | Narrow the run, raise `budget.attempts`, or pass `--force`. |
 | `defaultProfile.ci in reeval.config.ts names "pr", which isn't a profile (profiles: smoke, nightly). Add it under profiles, or name one that's there.` | Fix the name, or add the profile. |
 | `profiles.pr.limit.runs in reeval.config.ts must be a whole number of at least 1 (got 0)` | Every profile key names its path and file the same way. |
+| `profiles.pr.limit.harness in reeval.config.ts lists "cursor", which no eval runs on. Harness ids the evals run on: cursor:composer-2.5.` | `limit.harness` matches whole harness ids. Use one from the list, as the plan names it. |
 | `profiles.pr.budget.usd in reeval.config.ts isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.` | Cap with `attempts` or `duration` (`budget.tokens` gets the same message). |
 
 See [Profiles and budgets](/reference/profiles).

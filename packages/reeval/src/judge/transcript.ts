@@ -52,7 +52,8 @@ export function transcriptForJudge(events: readonly TranscriptEvent[], mode: Mod
         if (full) out.push(`reasoning: ${e.text}`)
         break
       case 'file-edit': {
-        const lines = e.added === null ? '' : `, +${e.added} −${e.removed ?? 0}`
+        const removed = e.removed === null ? '' : ` −${e.removed}`
+        const lines = e.added === null ? '' : `, +${e.added}${removed}`
         out.push(`edit ${e.path} (${e.kind}${lines})${took(e.durationMs)}`)
         break
       }

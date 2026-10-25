@@ -35,7 +35,7 @@ import type { GitInfo } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
-import { harnessId, plannedSandboxes } from './options.ts'
+import { checkLimitHarness, harnessId, plannedSandboxes } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
 import { redactSecrets, registerSecret } from './redact.ts'
@@ -725,9 +725,11 @@ async function executeRun(
   let live: LiveProgressWriter | undefined
   let kept = new Map<string, LiveKept>()
   let questions: QuestionRunner | undefined
-  const onPlan = async ({ planned, excluded, matched, unmatched }: CollectedPlan) => {
+  const onPlan = async (collected: CollectedPlan) => {
+    const { planned, excluded, matched, unmatched } = collected
     if (unmatched.length) throw unmatchedFilter(config, unmatched)
     if (matched === 0) throw noMatch(config, filters, tags)
+    checkLimitHarness(profile, config.file, collected)
     const completed = completedKeysFor(planned, stagingDir, ctx.previous)
     const skipped = planned.map((p) =>
       completed.has(p.key)

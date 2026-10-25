@@ -22,6 +22,7 @@ import { declareTree } from '../../src/evaluate.ts'
 import { resolveModelGateway } from '../../src/gateway/models.ts'
 import { resolveGateway } from '../../src/gateway/resolve.ts'
 import { vercelCredentialProblem } from '../../src/gateway/vercel.ts'
+import { refusedMcp } from '../../src/harness/agents.ts'
 import {
   antigravity,
   claudeCode,
@@ -34,7 +35,7 @@ import {
   opencode,
   pi,
 } from '../../src/harness.ts'
-import { checkHarnesses, checkOptions } from '../../src/options.ts'
+import { checkHarnesses, checkLimitHarness, checkOptions } from '../../src/options.ts'
 import { planEval } from '../../src/plan-eval.ts'
 import { docker, fakeSandbox, podman } from '../../src/sandbox.ts'
 import type {
@@ -43,6 +44,7 @@ import type {
   GatewayName,
   HarnessDescriptor,
   PluginSource,
+  ResolvedProfile,
   RunContext,
   SandboxDescriptor,
 } from '../../src/types.ts'
@@ -61,6 +63,18 @@ const yaml = (text: string) => () =>
 const configIn = (c: unknown) => () => resolveConfig(c as never, DIR, 'reeval.config.ts')
 const yamlIn = (text: string) => () =>
   resolveConfigData(parseYamlConfig(text, 'reeval.yaml'), DIR, 'reeval.yaml')
+/** A `pr` profile's `limit.harness` against the harness ids the collected evals run on. */
+const limitHarness =
+  (ids: string[], harnesses: string[], partial = false) =>
+  () =>
+    checkLimitHarness(
+      { name: 'pr', limit: { harness: ids } } as ResolvedProfile,
+      'reeval.config.ts',
+      {
+        harnesses,
+        partial,
+      },
+    )
 const env = (spec: unknown) => () => defineEnvironment('e', spec as never)
 const helpers = (use: (h: EnvironmentHelpers) => unknown) => () =>
   defineEnvironment('e', (h) => ({ files: { 'a.txt': 'a' }, ...(use(h) as object) }))
@@ -74,6 +88,13 @@ const any =
     (f: (...args: any[]) => unknown, ...args: unknown[]) =>
     () =>
       f(...args)
+
+/** What the plan says of an environment's MCP servers on a harness. */
+const mcpOn = (harness: HarnessDescriptor, use: (h: EnvironmentHelpers) => object) => () => {
+  const refusal = refusedMcp(harness, defineEnvironment('e', use).layers)
+  if (refusal) throw new UsageError(refusal)
+}
+const OPENCODE = opencode({ model: 'google/gemini-3.8-flash' })
 
 /** Which gateway a harness resolves to in a list, with reeval's own gateways. */
 const route = (gateways: GatewayDescriptor[], harness: HarnessDescriptor) => () =>
@@ -160,6 +181,7 @@ const declares = (children: unknown[]) => () => {
     registerGroup: (_name, _mode, body) => body(),
     getRunContext: () => run,
     collectingFile: () => file,
+    declareHarnesses: () => {},
   })
   declareTree(children as DeclaredNode[], () => async () => {})
 }
@@ -378,6 +400,85 @@ export const CASES: Record<string, Case[]> = {
     [
       'fakeHarness good',
       any(fakeHarness, { script: [[{ exec: 'ls' }, { mcp: 's/t' }]], layout: 'pi' }),
+    ],
+    [
+      'opencode mcp: {file:} in an arg',
+      mcpOn(OPENCODE, ({ mcp }) => ({
+        mcp: { docs: mcp.stdio('node', ['--token', '{file:~/token.txt}']) },
+      })),
+    ],
+    [
+      'opencode mcp: {env:} in an env value',
+      mcpOn(OPENCODE, ({ mcp }) => ({
+        mcp: { docs: mcp.stdio('node', ['srv.js'], { env: { GREETING: 'Hello {env:USER}' } }) },
+      })),
+    ],
+    [
+      'opencode mcp: {env:} in the command',
+      mcpOn(OPENCODE, ({ mcp }) => ({ mcp: { docs: mcp.stdio('{env:HOME}/srv') } })),
+    ],
+    [
+      'opencode mcp: {env:} in a header',
+      mcpOn(OPENCODE, ({ mcp }) => ({
+        mcp: { docs: mcp.http('https://x.com/mcp', { headers: { 'X-Token': '{env:TOKEN}' } }) },
+      })),
+    ],
+    [
+      'opencode mcp: {file:} in a secret.template',
+      mcpOn(OPENCODE, ({ mcp, secret }) => ({
+        mcp: {
+          docs: mcp.http('https://x.com/mcp', {
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+            headers: { a: secret.template('{file:/run/t} ${T}') },
+          }),
+        },
+      })),
+    ],
+    [
+      'opencode mcp: {env:} in the url',
+      mcpOn(OPENCODE, ({ mcp }) => ({ mcp: { docs: mcp.http('https://x.com/{env:P}/mcp') } })),
+    ],
+    [
+      'opencode mcp: {env: left open at the end of an arg',
+      mcpOn(OPENCODE, ({ mcp }) => ({ mcp: { docs: mcp.stdio('node', ['{env:', 'X}']) } })),
+    ],
+    [
+      'opencode mcp: a server name that is not an identifier',
+      mcpOn(OPENCODE, ({ mcp }) => ({ mcp: { 'my-docs': mcp.stdio('node', ['{file:a}']) } })),
+    ],
+    [
+      'opencode mcp: {file:} in a server name',
+      mcpOn(OPENCODE, ({ mcp }) => ({ mcp: { 'a{file:/etc/hostname}': mcp.stdio('node') } })),
+    ],
+    [
+      'opencode mcp: {env:} in the env name of a host secret',
+      mcpOn(OPENCODE, ({ mcp, secret }) => ({
+        mcp: { docs: mcp.stdio('node', [], { env: { '{env:USER}': secret.fromEnv('TOKEN') } }) },
+      })),
+    ],
+    [
+      'opencode mcp: {env:} in a header name',
+      mcpOn(OPENCODE, ({ mcp }) => ({
+        mcp: { docs: mcp.http('https://x.com/mcp', { headers: { 'X-{env:USER}': 'a' } }) },
+      })),
+    ],
+    [
+      'opencode mcp: good, with nothing OpenCode substitutes',
+      mcpOn(OPENCODE, ({ mcp, secret }) => ({
+        mcp: {
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: a shell variable, left as written
+          files: mcp.stdio('node', ['{env:}', '{file:}', '{ENV:X}', 'env:X', '${HOME}'], {
+            env: { TOKEN: secret.fromEnv('HOST_TOKEN') },
+          }),
+          docs: mcp.http('https://x.com/mcp', { headers: { a: secret({ hosts: ['x.com'] }) } }),
+        },
+      })),
+    ],
+    [
+      'claude code mcp: {env:} and {file:} left as written',
+      mcpOn(claudeCode({ model: 'sonnet' }), ({ mcp }) => ({
+        mcp: { docs: mcp.stdio('node', ['{file:a}'], { env: { A: '{env:B}' } }) },
+      })),
     ],
     ['data: not a harness', harnesses({ kind: 'vim' })],
     ['data: a list item that is a string', harnesses('cursor')],
@@ -1466,6 +1567,22 @@ environment:
       }),
     ],
     ['ts: a relative fake dir as data', configIn({ sandbox: { kind: 'fake', dir: './tmp' } })],
+    [
+      'collected: a limit.harness id no eval runs on',
+      limitHarness(['cursor'], ['cursor:composer-2.5', 'pi:gemini-3.8-flash']),
+    ],
+    [
+      'collected: two limit.harness ids, one no eval runs on',
+      limitHarness(['cursor:composer-2.5', 'codex'], ['cursor:composer-2.5']),
+    ],
+    ['collected: every limit.harness id matches', limitHarness(['a', 'b'], ['b', 'a', 'c'])],
+    ['collected: an empty limit.harness', limitHarness([], ['a'])],
+    ['collected: a limit.harness id with no harnesses collected', limitHarness(['a'], [])],
+    [
+      'collected: a path filter, one limit.harness id matches',
+      limitHarness(['a', 'b'], ['a'], true),
+    ],
+    ['collected: a path filter, no limit.harness id matches', limitHarness(['b'], ['a'], true)],
   ],
   gateway: [
     ['ts: an empty list', config({ gateway: [] })],

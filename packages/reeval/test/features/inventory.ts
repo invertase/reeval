@@ -286,6 +286,7 @@ export const inventory: InventoryFeature[] = [
       unit('selectProfile: --profile, then REEVAL_PROFILE'),
       unit('cascade: profile defaults sit under evals'),
       options('a profile name typo exits 2'),
+      options('a profile limit.harness id no collected eval runs on exits 2'),
       history("a profile's defaults.sandbox is the sandbox the run header and the record name"),
     ],
   },
@@ -412,6 +413,12 @@ export const inventory: InventoryFeature[] = [
     plan: ['compare/off-study', 'compare/zero-variants', 'compare/baseline-omitted-off'],
   },
   {
+    id: 'profiles.limit-harness-drops-compare',
+    area: 'Config and selection',
+    name: '`limit.harness` leaving none of `compare.harness`: the compare is off and each control gates like an eval without compare',
+    plan: ['compare/harness-scoped-dropped', 'compare/harness-scoped-dropped-pinned'],
+  },
+  {
     id: 'plan.json',
     area: 'Config and selection',
     name: '`reeval run --dry-run` and `--dry-run --json`',
@@ -493,11 +500,17 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'selection.filters',
     area: 'Config and selection',
-    name: 'Filters (path, eval name, cell key; the kinds narrow each other); no match exits 2',
-    plan: ['compare/mixed-filter', 'selection/group-and-eval-filter'],
+    name: 'Filters (path, eval name, cell key; the kinds narrow each other; a part naming a file but not on disk also matches names and cells); no match exits 2',
+    plan: [
+      'compare/mixed-filter',
+      'selection/group-and-eval-filter',
+      'filters/dir-named-like-cell',
+      'filters/dir-path-only',
+    ],
     tests: [
       engine('filters match paths, then eval names'),
       engine('a path filter and a cell filter together run only that cell of that file'),
+      engine('a directory named like a cell keeps that cell in the other files'),
       options('a filter that matches nothing exits 2'),
       "reeval/test/plan.test.ts › a cell filter narrows each row's counts in the text plan",
       'reeval/test/plan.test.ts › a filter part that matches no file, eval name or cell exits 2',
@@ -978,6 +991,7 @@ export const inventory: InventoryFeature[] = [
       secrets('redacting encoded forms'),
       secrets('redacting fragments of a secret'),
       secrets('redacting a secret split across stream parts'),
+      secrets('redacting credential shapes'),
       secrets("every variable of a header's secret.template is a secret the run masks"),
       debug(
         "a declared secret under a plain name is masked in an eval's logs and failures on screen",
@@ -1459,6 +1473,8 @@ export const inventory: InventoryFeature[] = [
       ),
       opencodeAdapter('unit', "session titles run on the turn's model, not a second one"),
       opencodeAdapter('unit', 'the musl builds are left out of the install, and only those'),
+      harness('refuses an MCP value OpenCode would substitute, naming the server and field'),
+      'reeval/test/plan.test.ts › an MCP value OpenCode would substitute exits 2 at plan time on OpenCode only, naming the server and field',
     ],
   },
   {

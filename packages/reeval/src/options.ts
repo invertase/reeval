@@ -605,6 +605,8 @@ export type ResolvedEval = {
   notes: string[]
   /** Set when a profile's limit leaves the eval nothing to run. */
   skip?: string
+  /** The ids of the harnesses the eval runs on before a profile's limit narrows them. */
+  harnesses: string[]
 }
 
 /**
@@ -705,6 +707,7 @@ export function cascade(
     )
 
   let skip: string | undefined
+  const harnesses = out.harness.map(harnessId)
   const limit = profile?.limit
   if (profile && limit) {
     const tag = `profile ${profile.name}`
@@ -719,6 +722,7 @@ export function cascade(
       notes.push(`runs ${out.runs} → ${limit.runs} (${tag})`)
       out.runs = limit.runs
     }
+    let comparedLeft = true
     if (limit.harness && !pinned('harness')) {
       const kept = out.harness.filter((h) => limit.harness?.includes(harnessId(h)))
       if (kept.length === 0) {
@@ -726,9 +730,21 @@ export function cascade(
       } else if (kept.length < out.harness.length) {
         notes.push(`harnesses ${out.harness.length} → ${kept.length} (${tag})`)
         out.harness = kept
+        // With every harness compare.harness names gone, no harness runs a variant, so the
+        // compare is off and its controls gate as limit.compare: false leaves them.
+        const scope = out.compare?.harness
+        if (
+          out.compare?.variants.length &&
+          scope &&
+          !kept.some((h) => scope.includes(harnessId(h)))
+        ) {
+          notes.push(`compare off: no compared harness left (${tag})`)
+          out.compare = { ...out.compare, variants: [] }
+          comparedLeft = false
+        }
       }
     }
-    if (out.compare && limit.compare !== undefined && !pinned('compare')) {
+    if (out.compare && comparedLeft && limit.compare !== undefined && !pinned('compare')) {
       if (limit.compare === false) {
         notes.push(`compare off (${tag})`)
         out.compare = { ...out.compare, variants: [] }
@@ -743,7 +759,9 @@ export function cascade(
       }
     }
     const pins = out.pin.filter((k) =>
-      k === 'compare' ? limit.compare !== undefined && out.compare : limit[k] !== undefined,
+      k === 'compare'
+        ? limit.compare !== undefined && out.compare && comparedLeft
+        : limit[k] !== undefined,
     )
     if (pins.length) notes.push(`pinned: ${pins.join(', ')}`)
   }
@@ -768,7 +786,32 @@ export function cascade(
     out.questions = kept
   }
   if (options.runs !== undefined) out.runs = options.runs
-  return { resolved: out, notes, ...(skip ? { skip } : {}) }
+  return { resolved: out, notes, harnesses, ...(skip ? { skip } : {}) }
+}
+
+/**
+ * Refuses a profile's `limit.harness` id that no collected eval runs on: it keeps nothing, and a
+ * limit that keeps nothing skips every eval. `harnesses` are the ids every eval in the loaded
+ * files runs on before the limit, whatever the tag and name filters pick. When a path filter
+ * loaded only some files (`partial`), an id may name a harness of the others, so only a limit
+ * none of whose ids match is refused.
+ */
+export function checkLimitHarness(
+  profile: ResolvedProfile | null | undefined,
+  configFile: string,
+  collected: { harnesses: readonly string[]; partial: boolean },
+): void {
+  const ids = profile?.limit.harness
+  if (!profile || !ids?.length) return
+  const unknown = ids.filter((id) => !collected.harnesses.includes(id))
+  if (!unknown.length || (collected.partial && unknown.length < ids.length)) return
+  const listed = unknown.map((id) => JSON.stringify(id)).join(', ')
+  const have = [...collected.harnesses].sort()
+  const evals = collected.partial ? 'eval in the selected files' : 'eval'
+  const the = collected.partial ? 'the evals in the selected files' : 'the evals'
+  throw new UsageError(
+    `profiles.${profile.name}.limit.harness in ${configFile} lists ${listed}, which no ${evals} runs on. Harness ids ${the} run on: ${have.join(', ') || 'none'}.`,
+  )
 }
 
 export type PlannedAttempt = {

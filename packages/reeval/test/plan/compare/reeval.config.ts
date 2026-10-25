@@ -10,5 +10,6 @@ export default defineConfig({
     // A language-model judge answers the questions that name no model of their own.
     judged: { judge: { model: 'google/gemini-3.8-flash' } },
     one: { limit: { harness: ['a'] } },
+    'one-lean': { limit: { harness: ['a'], compare: { maxVariants: 1 } } },
   },
 })

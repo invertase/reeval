@@ -1,0 +1,5 @@
+profile one (--profile) · 1 evals · 1 cells · 1 attempts
+evals/scoped.eval.ts › variant on b only  a/base/docker  control  gated  ×1  harnesses 2 → 1 (profile one) · compare off: no compared harness left (profile one)
+excluded: —
+image docker · cursor · 1 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

@@ -32,6 +32,16 @@ export const cases: PlanCase[] = [
     args: ['--profile', 'off', 'evals/omitted.eval.ts'],
   },
   { dir: 'compare', name: 'harness-scoped', args: ['evals/scoped.eval.ts'] },
+  {
+    dir: 'compare',
+    name: 'harness-scoped-dropped',
+    args: ['--profile', 'one', 'evals/scoped.eval.ts'],
+  },
+  {
+    dir: 'compare',
+    name: 'harness-scoped-dropped-pinned',
+    args: ['--profile', 'one-lean', 'evals/scoped-pinned.eval.ts'],
+  },
   { dir: 'compare', name: 'each-pooled', args: ['evals/each.eval.ts'] },
   { dir: 'compare', name: 'each-filtered', args: ['evals/each.eval.ts', 'grace'] },
   { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.eval.ts', 'b/skilled'] },
@@ -143,6 +153,8 @@ export const cases: PlanCase[] = [
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
   { dir: 'only-in-skip', name: 'only-in-skipped-group', args: [] },
+  { dir: 'filters', name: 'dir-named-like-cell', args: ['right'] },
+  { dir: 'filters', name: 'dir-path-only', args: ['evals/right'] },
   { dir: 'images', name: 'install-from-dockerfile', args: ['evals/i.eval.ts'], env: NO_DOCKER },
   { dir: 'images', name: 'plugin-builds', args: ['evals/plugins.eval.ts'], env: NO_DOCKER },
   { dir: 'harnesses', name: 'claude-code', args: [] },
@@ -512,6 +524,39 @@ evaluate('streams', { environment: events }, async () => {})
         assert.match(r.stderr, refusal)
       }
     }
+  })
+
+  test('an MCP value OpenCode would substitute exits 2 at plan time on OpenCode only, naming the server and field', async () => {
+    const evals = `import { defineEnvironment, evaluate } from 'reeval'
+const docs = defineEnvironment('docs', ({ mcp }) => ({
+  mcp: { docs: mcp.stdio('node', ['srv.js', '{file:/tmp/tok.txt}'], { env: { GREETING: 'Hello {env:USER}' } }) },
+}))
+evaluate('reads docs', { environment: docs }, async () => {})
+`
+    const refused = await project('opencode-substitution', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor, opencode } from 'reeval/harness'
+export default defineConfig({
+  harness: [cursor({ model: 'composer-2.5' }), opencode({ model: 'google/gemini-3.8-flash' })],
+})
+`,
+      'evals/d.eval.ts': evals,
+    })
+    const r = await runCli(refused.dir, ['run', '--dry-run'])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /evaluate\("reads docs"\) on opencode:gemini-3\.8-flash: OpenCode substitutes \{env:…\} and \{file:…\} anywhere in its config, with no escape, so the docs server wouldn't get mcp\.docs\.args\[1\] as written/,
+    )
+    const elsewhere = await project('opencode-substitution-elsewhere', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
+export default defineConfig({ harness: cursor({ model: 'composer-2.5' }) })
+`,
+      'evals/d.eval.ts': evals,
+    })
+    const ok = await runCli(elsewhere.dir, ['run', '--dry-run'])
+    assert.equal(ok.code, 0, ok.stdout + ok.stderr)
   })
 
   test('pi and Goose take stdio and http MCP servers; pi exits 2 on a server name it would skip', async () => {

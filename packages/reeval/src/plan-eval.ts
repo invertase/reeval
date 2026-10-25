@@ -41,6 +41,7 @@ import {
   plainHeaderError,
   plainHeaders,
   type Resolved,
+  type ResolvedEval,
   sandboxProvider,
   sandboxSetBy,
   secretVarsIn,
@@ -115,14 +116,17 @@ function configLevel(config: ResolvedConfig): Resolved {
   }
 }
 
-/**
- * The tests an eval registers, or `null` when the run's tags leave it out (it isn't counted in
- * `order`). Throws a UsageError for options the plan refuses.
- */
-export function planEval(declaration: EvalDeclaration, ctx: PlanContext): PlannedTest[] | null {
-  const { name, mode, groups: enclosing, options: own } = declaration
-  const groups = enclosing.map((g) => g.name)
-  const where = `evaluate("${[...groups, name].join(' › ')}")`
+/** An eval's plan: its tests, and the harness ids it runs on before a profile's limit. */
+export type PlannedEval = {
+  /** `null` when the run's tags leave the eval out (it isn't counted in `order`). */
+  tests: PlannedTest[] | null
+  harnesses: string[]
+}
+
+/** The tests an eval registers. Throws a UsageError for options the plan refuses. */
+export function planEval(declaration: EvalDeclaration, ctx: PlanContext): PlannedEval {
+  const { name, groups: enclosing, options: own } = declaration
+  const where = `evaluate("${[...enclosing.map((g) => g.name), name].join(' › ')}")`
   checkOptions(own, where)
   const levels: Level[] = [
     ...enclosing.map((g) => ({ options: g.options, where: `group("${g.name}")` })),
@@ -131,10 +135,22 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
   const resolvedEval = cascade(configLevel(ctx.config), levels, where, {
     profile: ctx.profile,
     runs: ctx.runs,
-    skipped: mode === 'skip' || mode === 'todo',
+    skipped: declaration.mode === 'skip' || declaration.mode === 'todo',
   })
+  const { harnesses } = resolvedEval
+  if (!matchesTags(resolvedEval.resolved.tags, ctx.tags)) return { tests: null, harnesses }
+  return { tests: planTests(declaration, ctx, where, resolvedEval), harnesses }
+}
+
+function planTests(
+  declaration: EvalDeclaration,
+  ctx: PlanContext,
+  where: string,
+  resolvedEval: ResolvedEval,
+): PlannedTest[] {
+  const { name, mode, groups: enclosing } = declaration
+  const groups = enclosing.map((g) => g.name)
   const { resolved } = resolvedEval
-  if (!matchesTags(resolved.tags, ctx.tags)) return null
   const timeoutMs =
     resolved.timeout === undefined ? ctx.config.timeoutMs : parseDuration(resolved.timeout)
   const gateways = ctx.profile?.gateway ?? ctx.config.gateway

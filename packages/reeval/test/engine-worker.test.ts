@@ -5,14 +5,21 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { type FromWorker, PROTOCOL, type ToWorker } from '../src/engine/protocol.ts'
-import { getRunContext, registerGroup, registerTest } from '../src/engine/runtime.ts'
+import {
+  declareHarnesses,
+  getRunContext,
+  registerGroup,
+  registerTest,
+} from '../src/engine/runtime.ts'
 import { type Channel, startWorker } from '../src/engine/worker.ts'
 import type { RunContext } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
 
 // Eval files load through jiti, not this process's own module graph, so they reach the runtime
 // the worker installed through a global.
-Object.assign(globalThis, { __es: { registerTest, registerGroup, getRunContext } })
+Object.assign(globalThis, {
+  __es: { registerTest, registerGroup, getRunContext, declareHarnesses },
+})
 
 /** A channel whose main process closes it once `done` arrives, as forkWorker's does. */
 function fakeChannel({ closeAfterDone = true } = {}) {
@@ -68,7 +75,7 @@ const until = async (check: () => boolean) => {
 }
 
 describe('startWorker', () => {
-  test('says hello, collects, reports the tests with their attempts and exits', async () => {
+  test('says hello, collects, reports the tests with their attempts and harnesses, and exits', async () => {
     const c = fakeChannel()
     startWorker(c.channel)
     assert.deepEqual(c.sent[0], { t: 'hello', protocol: PROTOCOL })
@@ -78,14 +85,21 @@ registerGroup('g', 'run', () => {
   registerTest('a [x#1]', { mode: 'run', attempt: { name: 'a' } }, async () => {})
 })
 registerTest('todo', { mode: 'todo' }, async () => {})
+const { declareHarnesses } = (globalThis as any).__es
+declareHarnesses(['a', 'b'])
+declareHarnesses(['b', 'c'])
 `)
     c.send({ t: 'init', run, file, select: null })
     await c.exit
     assert.deepEqual(c.types(), ['hello', 'collected', 'done'])
-    assert.deepEqual((c.sent[1] as { tests: unknown }).tests, [
-      { index: 0, name: 'a [x#1]', groups: ['g'], mode: 'run', attempt: { name: 'a' } },
-      { index: 1, name: 'todo', groups: [], mode: 'todo' },
-    ])
+    assert.deepEqual(c.sent[1], {
+      t: 'collected',
+      tests: [
+        { index: 0, name: 'a [x#1]', groups: ['g'], mode: 'run', attempt: { name: 'a' } },
+        { index: 1, name: 'todo', groups: [], mode: 'todo' },
+      ],
+      harnesses: ['a', 'b', 'c'],
+    })
     assert.deepEqual(c.exits, [0])
   })
 
