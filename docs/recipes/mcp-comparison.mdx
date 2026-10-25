@@ -5,106 +5,73 @@ description: "See whether an MCP server helped your harness."
 
 You measure an MCP server by running one task on a control with no server and a variant with the server. The effect reads `helped`, `made it worse`, or `can't tell yet`. For more information about adding MCP servers, see [Connect MCP servers](/environments/mcp).
 
-This page uses the control `plain` and the variant `withDocs`, which adds a filesystem server.
+This page's server is `releases`, a stdio server that knows the latest `acme-cli` release.
 
 ## Run one task with and without the server
 
 <Steps>
-<Step title="Define the control and variant">
+<Step title="Define the environment with the server">
 
-Define the control `plain` and the variant `withDocs` in the `evals/environments.ts` file. The `plain` control places the `src/user.ts` file and sets no `mcp` field. The `withDocs` variant extends `plain` under the name `with-docs`.
+In the `evals/environments.ts` file, define the environment. It copies the project and the server's script into the workspace, and starts the server in the sandbox:
 
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
 
-export const plain = defineEnvironment('plain', {
-  files: {
-    'src/user.ts': 'export const id = 1\n',
-  },
-})
-
-export const withDocs = plain.extendEnvironment('with-docs', ({ mcp }) => ({
-  mcp: {
-    docs: mcp.stdio('npx', [
-      '-y',
-      '@modelcontextprotocol/server-filesystem',
-      '/reeval/workspace',
-    ]),
-  },
-}))
+export const app = defineEnvironment(
+  'acme-cli',
+  ({ directory, file, mcp }) => ({
+    files: {
+      ...directory('./project'),
+      'mcp/releases.mjs': file('./mcp/releases.mjs'),
+    },
+    mcp: { releases: mcp.stdio('node', ['mcp/releases.mjs']) },
+  }),
+)
 ```
-
-`withDocs` keeps the `src/user.ts` file. The server is the only change.
 
 </Step>
 <Step title="Write the evaluation">
 
-Declare the evaluation in the `evals/docs.eval.ts` file. The prompt doesn't name the server or `list_directory`.
+In the `evals/releases.eval.ts` file, declare the evaluation. `toHaveCalledMcp` fails the attempt when the harness never calls the server's tool, and the file check decides whether the task was done:
 
-```ts title="evals/docs.eval.ts"
+```ts title="evals/releases.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
-import { plain, withDocs } from './environments.ts'
+import { app } from './environments.ts'
 
-evaluate(
-  'lists the workspace paths',
-  { runs: 4, compare: { baseline: plain, variants: [withDocs] } },
-  async (c) => {
-    await c.send(
-      'Write every path in the workspace to listing.txt, one per line.',
-    )
-    await expect(c, 'writes the listing').toHaveFile(
-      'listing.txt',
-      /src\/user\.ts/,
-    )
-  },
-)
+evaluate('bumps to the latest release', { environment: app }, async (c) => {
+  const turn = await c.send(
+    "Set package.json's version to the latest acme-cli release. " +
+      "The releases MCP server's latest_version tool knows it.",
+  )
+
+  expect(turn).toHaveCalledMcp('releases', 'latest_version')
+  await expect(turn).toHaveFile('package.json', /"version": "2\.4\.0"/)
+})
 ```
 
-`runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect reads `can't tell yet`.
+For more information about the matcher, see [`toHaveCalledMcp`](/reference/matchers#tohavecalledmcp). For a runnable project, see [`with-mcp`](https://github.com/invertase/reeval/tree/main/examples/with-mcp).
 
 </Step>
-<Step title="Check the server was called">
+<Step title="Run and read the call">
 
-Add a `toHaveCalledMcp` check after the file check in the `evals/docs.eval.ts` file. `toHaveCalledMcp` fails the attempt when the harness never calls the server's tool.
-
-```ts title="evals/docs.eval.ts"
-    expect(c, 'called the server').toHaveCalledMcp(
-      'docs',
-      'list_directory',
-    )
-```
-
-The control has no server, so `called the server` fails there. For more information about the matcher, see [`toHaveCalledMcp`](/reference/matchers#tohavecalledmcp).
-
-</Step>
-<Step title="Run the comparison">
-
-Run the evaluation with the harness named in the `reeval.config.ts` file.
+Run the evaluation with the harness named in the `reeval.config.ts` file:
 
 ```bash
-npx reeval run docs
+npx reeval run releases
+```
+
+The attempt's `transcript.jsonl` file, under `.reeval/runs/<run>/`, names the call `mcp__<server>__<tool>`, which is what `toHaveCalledMcp` matches:
+
+```text
+{"turn":0,…,"type":"tool","toolCallId":"call_1","tool":"mcp__releases__latest_version","input":{},"output":"acme-cli 2.4.0","ok":true,"durationMs":178}
 ```
 
 </Step>
-<Step title="Read whether it helped">
+<Step title="Compare with a control">
 
-Read the block the run prints for the evaluation. When `with-docs` passes every attempt and `plain` passes none, the block looks like this:
+To measure what the server changed, run the same evaluation on a control without `mcp`, and the environment with the server as the variant ([Compare setups](/evals/compare)). Set `runs: 4`, because below four counted attempts a side the effect reads `can't tell yet`.
 
-```text
-pass             lists the workspace paths
-  arm                 pass
-  plain               0 of 4
-  with-docs           4 of 4  helped
-  check               plain   with-docs
-  writes the listing  0 of 4  4 of 4
-    expected file listing.txt to exist
-  called the server   0 of 4  4 of 4
-    expected MCP calls matching docs/list_directory, got none
-```
-
-Your counts can differ. The outcome follows the variant by default. `called the server` fails on `plain`, so read the `writes the listing` row for the task.
-
-When `writes the listing` passes on both sides, the harness already lists the workspace, and this task cannot show what the server changed. The arm can still read `helped`, because `called the server` fails on `plain`. For more information about the rows, see [Read the results summary](/results/output).
+The control has no server, so `toHaveCalledMcp` fails on every control attempt. Read the file check's row for the task. When the file check passes on both sides, the harness finds the version without the server, and this task can't show what the server changed. For more information about the rows, see [Read the results summary](/results/output).
 
 </Step>
 </Steps>
