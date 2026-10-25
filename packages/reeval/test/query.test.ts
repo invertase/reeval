@@ -510,6 +510,57 @@ evaluate('brackets', { environment: skilled }, async (c) => {
     assert.equal((await query(p.dir, 'effort')).length, 1)
   })
 
+  test('effort’s per-class call medians count an attempt with no tool calls as 0', async () => {
+    const p = await project('query-effort-zero-calls', {
+      'reeval.config.ts': fakeConfig({
+        harness: "{ script: [[], [{ exec: 'true' }]], files: { 'ok.txt': 'y' } }",
+      }),
+      'evals/e.eval.ts': `import { evaluate } from 'reeval'
+let started = 0
+evaluate('once', { runs: 3 }, async (c) => {
+  await c.send('go')
+  if (++started === 1) await c.send('again')
+})
+evaluate('never', { runs: 3 }, async (c) => {
+  await c.send('go')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const calls = await query(
+      p.dir,
+      `SELECT a.eval_key, COUNT(t.line) AS n FROM attempts a LEFT JOIN tool_calls t
+        ON t.run_id = a.run_id AND t.attempt_key = a.key GROUP BY a.key ORDER BY a.eval_key, n`,
+    )
+    assert.deepEqual(
+      calls.map((r) => `${String(r.eval_key).replace('evals/e.eval.ts › ', '')}:${r.n}`),
+      ['never:0', 'never:0', 'never:0', 'once:0', 'once:0', 'once:1'],
+    )
+    const effort = await query(
+      p.dir,
+      'SELECT eval_key, n, tools_median, workspace_calls_median, verify_calls_median FROM effort ORDER BY eval_key',
+    )
+    assert.deepEqual(
+      effort.map((r) => ({ ...r, eval_key: String(r.eval_key).replace('evals/e.eval.ts › ', '') })),
+      [
+        {
+          eval_key: 'never',
+          n: 3,
+          tools_median: 0,
+          workspace_calls_median: 0,
+          verify_calls_median: 0,
+        },
+        {
+          eval_key: 'once',
+          n: 3,
+          tools_median: 0,
+          workspace_calls_median: 0,
+          verify_calls_median: 0,
+        },
+      ],
+    )
+  })
+
   test('failing attempts join skills by environment digest, not name', async () => {
     const p = await project('query-joins', {
       'reeval.config.ts': fakeConfig(),
