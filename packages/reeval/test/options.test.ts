@@ -1009,6 +1009,11 @@ evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})
       /evaluate\.each\("g › n %s"\) is declared twice in this file\. .* " › " joins the group and eval names/,
     ],
     [
+      'an eval named like a pooled template',
+      `evaluate('case $n', async () => {}); evaluate.each([{ n: 1 }, { n: 2 }])('case $n', async () => {})`,
+      /evaluate\("case \$n"\) has the same id as the pooled evaluate\.each\("case \$n"\) in this file: a family's id is its name template\. Give the eval or the template another name\./,
+    ],
+    [
       "pool in an eval's options",
       `evaluate.each([1, 2])('n %s', { pool: false } as never, async () => {})`,
       /Unknown option "pool" in evaluate\("n 1"\)\. pool is an option of evaluate\.each, beside the cases: evaluate\.each\(cases, \{ pool: false \}\)\./,

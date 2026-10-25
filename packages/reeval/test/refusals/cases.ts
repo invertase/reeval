@@ -1380,6 +1380,32 @@ environment:
       ]),
     ],
     [
+      'declared: an eval named like a later family',
+      declares([
+        evalNode({ name: 'c %#' }),
+        ...[0, 1].map((i) =>
+          evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+        ),
+      ]),
+    ],
+    [
+      'declared: an eval named like an earlier family',
+      declares([
+        ...[0, 1].map((i) =>
+          evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+        ),
+        evalNode({ name: 'c %#', body: 'u0' }),
+      ]),
+    ],
+    [
+      "declared: a family's case named like its template",
+      declares(
+        ['c 1', 'c $n'].map((name, i) =>
+          evalNode({ name, body: `b${i}`, family: { name: 'c $n', case: i, cases: 2 } }),
+        ),
+      ),
+    ],
+    [
       'declared: one template in two groups, and unpooled',
       declares([
         ...['g', 'h'].map((g) =>

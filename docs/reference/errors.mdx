@@ -72,6 +72,7 @@ See [reeval doctor](/reference/cli/doctor) for every check.
 | `Invalid duration 0. A duration is more than zero: …` | A timeout or budget of zero (or less) would stop every attempt at once. Give a positive duration. |
 | `evaluate("e") is declared twice in this file. …` | Give each eval its own name. For `evaluate.each`, put `$key`, `%s` or `%#` in the name. A name containing ` › ` can match a grouped eval's id (`evaluate("g › e")` beside `group("g")`'s `evaluate("e")`); rename one. |
 | `evaluate.each("case $n") is declared twice in this file. …` | Two pooled `evaluate.each` share a name template in the same group and file, so their cases would pool into one family. Give each its own template, or pass `evaluate.each(cases, { pool: false })`. |
+| `evaluate("case $n") has the same id as the pooled evaluate.each("case $n") in this file: …` | A family's id is its name template, so an eval named like it would share the family's id in the run's results. Rename the eval or the template. |
 | `evaluate.each(cases, options) takes { pool?: boolean } (got …). Eval options such as compare go after the name: …` | Move the eval's options after the name: `evaluate.each(cases)(name, { compare }, fn)`. |
 | `evaluate.each takes an array of cases (got …)` | Pass an array: `evaluate.each([{ n: 1 }, { n: 2 }])`. |
 | `Unknown option "pool" in evaluate("x"). pool is an option of evaluate.each, beside the cases: …` | Pass `pool` to `evaluate.each(cases, { pool: false })`, not to the eval. |

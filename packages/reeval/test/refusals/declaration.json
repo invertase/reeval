@@ -19,5 +19,8 @@
   "declared: two families with the same template": "UsageError: evaluate.each(\"c %#\") is declared twice in this file. Each pooled evaluate.each needs its own name, or their cases are pooled into one family. Give each its own name template, or pass evaluate.each(cases, { pool: false }) to keep the cases apart.",
   "declared: a family case declared twice": "UsageError: evaluate.each(\"c %#\") is declared twice in this file. Each pooled evaluate.each needs its own name, or their cases are pooled into one family. Give each its own name template, or pass evaluate.each(cases, { pool: false }) to keep the cases apart.",
   "declared: a family named like a grouped family": "UsageError: evaluate.each(\"g › c %#\") is declared twice in this file. Each pooled evaluate.each needs its own name, or their cases are pooled into one family. Give each its own name template, or pass evaluate.each(cases, { pool: false }) to keep the cases apart. \" › \" joins the group and eval names in an eval's id, so a name containing it can be a grouped eval's id.",
+  "declared: an eval named like a later family": "UsageError: evaluate(\"c %#\") has the same id as the pooled evaluate.each(\"c %#\") in this file: a family's id is its name template. Give the eval or the template another name.",
+  "declared: an eval named like an earlier family": "UsageError: evaluate(\"c %#\") has the same id as the pooled evaluate.each(\"c %#\") in this file: a family's id is its name template. Give the eval or the template another name.",
+  "declared: a family's case named like its template": null,
   "declared: one template in two groups, and unpooled": null
 }

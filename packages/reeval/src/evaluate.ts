@@ -159,8 +159,11 @@ type EvaluateFn<F = EvalFn> = {
   (name: string, options: EvalOptions, fn: F): void
 }
 
-/** The evals declared so far, by id, with their name paths, so a second id is refused. */
-const declared = new Map<string, string[]>()
+/**
+ * The evals declared so far, by id, with their name paths and whether each is a family's case,
+ * so a second id is refused.
+ */
+const declared = new Map<string, { path: string[]; inFamily: boolean }>()
 
 /** The pooled families declared so far, by id: their name path, length and the cases seen. */
 const families = new Map<string, { path: string[]; cases: number; seen: Set<number> }>()
@@ -171,16 +174,30 @@ const separatorHint = (path: string[], earlier: string[]) =>
     ? ''
     : ` " › " joins the group and eval names in an eval's id, so a name containing it can be a grouped eval's id.`
 
-function checkUnique(where: string, groups: string[], name: string, hint: string): void {
+/** A run's facts name an eval and a family alike by id, so an eval can't take a family's. */
+const namedLikeFamily = (eval_: string[], family: string[]) =>
+  new UsageError(
+    `evaluate("${eval_.join(' › ')}") has the same id as the pooled evaluate.each("${family.join(' › ')}") in this file: a family's id is its name template. Give the eval or the template another name.${separatorHint(eval_, family)}`,
+  )
+
+function checkUnique(
+  where: string,
+  groups: string[],
+  name: string,
+  hint: string,
+  inFamily: boolean,
+): void {
   const path = [...groups, name]
   const id = evalId(collectingFile() ?? '', path)
   const earlier = declared.get(id)
   if (earlier) {
     throw new UsageError(
-      `${where} is declared twice in this file. Each eval needs its own name, or its attempts are merged into one eval.${hint}${separatorHint(path, earlier)}`,
+      `${where} is declared twice in this file. Each eval needs its own name, or its attempts are merged into one eval.${hint}${separatorHint(path, earlier.path)}`,
     )
   }
-  declared.set(id, path)
+  const family = inFamily ? undefined : families.get(id)
+  if (family) throw namedLikeFamily(path, family.path)
+  declared.set(id, { path, inFamily })
 }
 
 /**
@@ -192,6 +209,8 @@ function checkFamily(groups: string[], family: DeclaredFamily): void {
   const id = evalId(collectingFile() ?? '', path)
   const earlier = families.get(id)
   if (!earlier) {
+    const plain = declared.get(id)
+    if (plain && !plain.inFamily) throw namedLikeFamily(plain.path, path)
     families.set(id, { path, cases: family.cases, seen: new Set([family.case]) })
     return
   }
@@ -217,7 +236,7 @@ function register(
 ): void {
   const groups = groupStack.map((g) => g.name)
   if (family) checkFamily(groups, family)
-  checkUnique(`evaluate("${[...groups, name].join(' › ')}")`, groups, name, hint)
+  checkUnique(`evaluate("${[...groups, name].join(' › ')}")`, groups, name, hint, !!family)
   const body = `b${bodies.size + 1}`
   bodies.set(body, fn)
   declare({ type: 'eval', name, mode, options: data(own), body, ...(family ? { family } : {}) })
