@@ -512,6 +512,30 @@ describe('the OpenCode harness', () => {
     )
   })
 
+  test('refuses an MCP value OpenCode would substitute, naming the server and field', () => {
+    const refused = (server: Parameters<typeof AGENTS.opencode.mcpServers>[0][string]) => {
+      try {
+        AGENTS.opencode.mcpServers({ 'review:events': server })
+        return undefined
+      } catch (error) {
+        return /wouldn't get (\S+) as written/.exec((error as Error).message)?.[1]
+      }
+    }
+    const stdio = (args: string[], env: Record<string, string> = {}) =>
+      ({ transport: 'stdio', command: 'node', args, env }) as const
+    assert.equal(refused(stdio(['a', '{file:/tmp/x}'])), 'mcp["review:events"].args[1]')
+    assert.equal(
+      refused(stdio([], { GREETING: 'Hello {env:USER}' })),
+      'mcp["review:events"].env.GREETING',
+    )
+    assert.equal(refused(stdio(['{env:'])), 'mcp["review:events"].args[0]')
+    assert.equal(
+      refused({ transport: 'http', url: 'https://x.example/mcp', headers: { 'X-Key': '{env:K}' } }),
+      'mcp["review:events"].headers["X-Key"]',
+    )
+    assert.equal(refused(stdio(['{env:}', '{file:}', '{ENV:X}', '{ env:X}'])), undefined)
+  })
+
   test('its brokered requests name the served model, as Antigravity’s do', () => {
     const served = brokeringFor(opencode({ model: 'google/gemini-3.8-flash' }))?.servedModel
     assert.equal(

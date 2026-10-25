@@ -36,6 +36,8 @@ import type {
   HarnessDescriptor,
   McpServer,
   PluginPart,
+  Secret,
+  SecretTemplate,
   WebEventType,
 } from '../types.ts'
 import type { PlacedPlugin } from './types.ts'
@@ -378,8 +380,41 @@ export function antigravityMcpServers(
 }
 
 /**
+ * A `{env:…}` or `{file:…}` OpenCode would substitute. It runs `\{env:[^}]+\}`, then
+ * `\{file:[^}]+\}`, over its whole config text with no escape, so a reference left open at the end
+ * of a value runs on into the JSON after it, and only `{env:}` and `{file:}` are left alone.
+ */
+const OPENCODE_REFERENCE = /\{(?:env|file):(?!\})/
+
+const fieldKey = (key: string) =>
+  /^[A-Za-z_$][\w$]*$/.test(key) ? `.${key}` : `[${JSON.stringify(key)}]`
+
+/** The first of a server's values that OpenCode would substitute, as `mcp.<name>.<field>`. */
+function openCodeReference(name: string, s: ResolvedMcpServer): string | undefined {
+  const fields: [string, string][] =
+    s.transport === 'stdio'
+      ? [
+          ['.command', s.command],
+          ...s.args.map((a, i): [string, string] => [`.args[${i}]`, a]),
+          ...Object.entries(s.env ?? {}).map(([k, v]): [string, string] => [
+            `.env${fieldKey(k)}`,
+            v,
+          ]),
+        ]
+      : [
+          ['.url', s.url],
+          ...Object.entries(s.headers ?? {}).map(([k, v]): [string, string] => [
+            `.headers${fieldKey(k)}`,
+            v,
+          ]),
+        ]
+  const hit = fields.find(([, value]) => OPENCODE_REFERENCE.test(value))
+  return hit && `mcp${fieldKey(name)}${hit[0]}`
+}
+
+/**
  * OpenCode's config shape (its `mcp.servers`), which the adapter sets `codemode: false` on.
- * OpenCode has no SSE transport.
+ * OpenCode has no SSE transport, and refuses a value it would substitute.
  */
 export function opencodeMcpServers(
   servers: Record<string, ResolvedMcpServer>,
@@ -389,6 +424,12 @@ export function opencodeMcpServers(
       if (s.transport === 'sse') {
         throw new InfraError(
           `OpenCode has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
+        )
+      }
+      const field = openCodeReference(name, s)
+      if (field) {
+        throw new InfraError(
+          `OpenCode substitutes {env:…} and {file:…} anywhere in its config, with no escape, so the ${name} server wouldn't get ${field} as written: take the reference out, or leave OpenCode out of this cell`,
         )
       }
       return s.transport === 'stdio'
@@ -1109,9 +1150,25 @@ export const isAgentKind = (kind: unknown): kind is AgentKind =>
   typeof kind === 'string' && Object.hasOwn(AGENTS, kind)
 
 /**
+ * A server as the plan knows it: its literal values and each `secret.template`'s text. A host
+ * secret's value is read when the attempt starts, so the plan leaves it out.
+ */
+function plannedMcpServer(s: McpServer): ResolvedMcpServer {
+  const literal = (values: Record<string, string | Secret | SecretTemplate>) =>
+    Object.fromEntries(
+      Object.entries(values).flatMap(([k, v]): [string, string][] =>
+        typeof v === 'string' ? [[k, v]] : v.kind === 'secret-template' ? [[k, v.template]] : [],
+      ),
+    )
+  return s.transport === 'stdio'
+    ? { transport: 'stdio', command: s.command, args: s.args, env: literal(s.env) }
+    : { transport: s.transport, url: s.url, headers: literal(s.headers) }
+}
+
+/**
  * Why a harness's agent can't take the environment's MCP servers (Goose, OpenCode, pi and Codex
- * take no `mcp.sse`), in the agent's own words, so the plan refuses them before any attempt
- * starts; undefined when it can.
+ * take no `mcp.sse`; OpenCode would substitute a `{env:…}` or `{file:…}` in a value), in the
+ * agent's own words, so the plan refuses them before any attempt starts; undefined when it can.
  */
 export function refusedMcp(
   harness: HarnessDescriptor,
@@ -1121,10 +1178,7 @@ export function refusedMcp(
   const servers = new Map<string, ResolvedMcpServer>()
   for (const { spec } of layers) {
     for (const [name, server] of Object.entries(spec.mcp ?? {})) {
-      servers.set(
-        name,
-        server.transport === 'stdio' ? { ...server, env: {} } : { ...server, headers: {} },
-      )
+      servers.set(name, plannedMcpServer(server))
     }
   }
   if (servers.size === 0) return undefined
@@ -1217,7 +1271,7 @@ export function refusedPlugins(
     plugins.flatMap((p) =>
       Object.entries(p.mcp).map(([server, s]): [string, ResolvedMcpServer] => [
         pluginServerName(p.name, server),
-        s.transport === 'stdio' ? { ...s, env: {} } : { ...s, headers: {} },
+        plannedMcpServer(s),
       ]),
     ),
   )

@@ -214,6 +214,14 @@ The environment's MCP servers go in OpenCode's config (`mcp.servers`), `stdio` a
 
 An `sse` server is refused at plan time (exit 2).
 
+OpenCode replaces `{env:NAME}` with a variable and `{file:path}` with a file's contents anywhere in its config, with no way to escape them, so an MCP server would get a different value on OpenCode than on every other harness. reeval refuses one at plan time (exit 2) when its command, an arg, an env value, its url or a header has `{env:` or `{file:` followed by anything but `}`, naming the field:
+
+```text
+reeval: evals/docs.eval.ts: evaluate("reads docs") on opencode:gemini-3.8-flash: OpenCode substitutes {env:…} and {file:…} anywhere in its config, with no escape, so the docs server wouldn't get mcp.docs.args[1] as written: take the reference out, or leave OpenCode out of this cell
+```
+
+A plugin's server is named the same way, as `mcp["<plugin>:<server>"]`. A host secret's value isn't known until the attempt starts, so one that has a reference fails that attempt with the same message (exit 3).
+
 OpenCode connects config MCP servers in the background once the session exists. reeval runs `opencode acp` behind a small gate that holds the first prompt until each server has connected or failed (at most 30 seconds), so the first step has their tools.
 
 ## Plugins
@@ -267,6 +275,7 @@ Items are flat, not namespaced, so two plugins' subagents or commands with the s
 | No key for the run's providers | `Missing credentials: ANTHROPIC_API_KEY. Set them in the environment or .env.local.` |
 | A non-Docker sandbox | `The OpenCode harness needs the Docker sandbox: set sandbox: docker() …` |
 | An `mcp.sse` server (at plan time, exit 2) | `evaluate("<eval>") on opencode:<model>: OpenCode has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
+| An MCP value with `{env:…}` or `{file:…}` (at plan time, exit 2) | `evaluate("<eval>") on opencode:<model>: OpenCode substitutes {env:…} and {file:…} anywhere in its config, with no escape, so the <name> server wouldn't get mcp.<name>.args[1] as written: take the reference out, or leave OpenCode out of this cell` |
 | A plugin with hooks or rules (at plan time, exit 2) | `evaluate("<eval>") on opencode:<model>: OpenCode can't load the <plugin> plugin's rules (rules/): use only: ['skills', 'agents', 'commands', 'mcp'], or leave the plugin out of this cell` |
 | OpenCode doesn't start | `OpenCode harness failed to start: …` |
 | A model OpenCode's catalogue doesn't have | The turn fails with `Invalid params: model not found: <provider>/<model>` |
