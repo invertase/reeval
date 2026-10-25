@@ -2,7 +2,16 @@
 // returns, and the Docker test below checks every file a real `docker build` sends is in it.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -17,6 +26,9 @@ type Case = {
   /** Every file in the context but those `docker build` leaves out, and some it sends. */
   hashed: string[]
   dockerfile?: string
+  setup?: (dir: string) => void
+  /** Names or symlinks Windows can't make. */
+  posix?: true
 }
 
 const CASES: Case[] = [
@@ -81,6 +93,36 @@ const CASES: Case[] = [
     hashed: ['#k', 'y'],
   },
   {
+    name: 'a pattern that cleans to a leading ! keeps everything',
+    ignore: '*\n!!a\n/!d/x\n',
+    files: ['!a', 'd/x', 'y'],
+    hashed: ['!a', 'd/x', 'y'],
+  },
+  {
+    name: 'a name with a line terminator is always hashed',
+    ignore: '*\n!a/**\n',
+    files: ['a/b\rc', 'a\nb', 'y'],
+    hashed: ['a/b\rc', 'a\nb'],
+    posix: true,
+  },
+  {
+    name: 'an ignore file that is a symlink is not applied',
+    ignore: 'a\n',
+    files: ['a', 'b'],
+    hashed: ['a', 'b', 'rules'],
+    posix: true,
+    setup: (dir) => {
+      renameSync(join(dir, '.dockerignore'), join(dir, 'rules'))
+      symlinkSync('rules', join(dir, '.dockerignore'))
+    },
+  },
+  {
+    name: 'an ignore file that is a directory is not applied',
+    ignore: 'a\n',
+    files: ['a', 'Dockerfile.dockerignore/b'],
+    hashed: ['a', 'Dockerfile.dockerignore/b'],
+  },
+  {
     name: 'a name beyond the BMP is always hashed',
     ignore: 'a??\n*c\n',
     files: ['a😀', 'ab', '😀c', 'xc'],
@@ -119,6 +161,7 @@ function context(c: Case): { dir: string; file: string } {
     mkdirSync(dirname(join(dir, path)), { recursive: true })
     writeFileSync(join(dir, path), `${path}\n`)
   }
+  c.setup?.(dir)
   return { dir, file }
 }
 
@@ -126,12 +169,22 @@ const listed = (c: Case) => [...c.hashed, c.dockerfile ?? 'Dockerfile', '.docker
 
 describe('contextFiles', () => {
   for (const c of CASES) {
-    test(c.name, () => {
+    test(c.name, { skip: c.posix && process.platform === 'win32' && 'not on Windows' }, () => {
       const { dir, file } = context(c)
       assert.deepEqual(contextFiles(dir, file), listed(c))
       rmSync(dir, { recursive: true, force: true })
     })
   }
+
+  test('a directory it cannot read is skipped', {
+    skip: (process.platform === 'win32' || process.getuid?.() === 0) && 'needs file permissions',
+  }, () => {
+    const { dir, file } = context({ name: '', ignore: 'd+\n', files: ['d+/x', 'y'], hashed: [] })
+    chmodSync(join(dir, 'd+'), 0)
+    assert.deepEqual(contextFiles(dir, file), ['.dockerignore', 'Dockerfile', 'y'])
+    chmodSync(join(dir, 'd+'), 0o755)
+    rmSync(dir, { recursive: true, force: true })
+  })
 
   test('editing a re-included file changes the Dockerfile tag', () => {
     const { dir, file } = context(CASES[0] as Case)
