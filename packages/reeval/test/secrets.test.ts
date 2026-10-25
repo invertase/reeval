@@ -599,12 +599,30 @@ describe('redacting serialised JSON', () => {
     )
   })
 
-  test('keys: a short declared secret never renames a field, a long secret is masked', () => {
+  test('a private key across lines that are not JSON is masked whole, and a byte-order mark is kept', () => {
+    const pem = '-----BEGIN PRIVATE KEY-----\nMIIEabc\n-----END PRIVATE KEY-----'
+    assert.equal(redactJsonText(`{"a":1}\n${pem}\n{"b":2}`, {}), '{"a":1}\n[REDACTED]\n{"b":2}')
+    registerSecret('null')
+    assert.equal(
+      redactJsonText('\uFEFF{"e":null,"s":"null"}', {}),
+      '\uFEFF{"e":null,"s":"[REDACTED]"}',
+    )
+  })
+
+  test('keys: a short declared secret never renames a field, but is masked in a data key', () => {
     registerSecret('error')
+    registerSecret('pin7')
     const key = 'reeval-unit-key-as-a-key-8b2f'
     registerSecret(key)
-    const out = JSON.parse(redactJson({ error: 'an error', [key]: 1 }, undefined, {}))
-    assert.deepEqual(out, { error: 'an [REDACTED]', '[REDACTED]': 1 })
+    const out = JSON.parse(
+      redactJson({ error: 'an error', [key]: 1, 'file-pin7.txt': 2, pin7: 3 }, undefined, {}),
+    )
+    assert.deepEqual(out, {
+      error: 'an [REDACTED]',
+      '[REDACTED]': 1,
+      'file-[REDACTED].txt': 2,
+      pin7: 3,
+    })
     assert.equal(redactKey('error', {}), 'error')
   })
 
@@ -635,6 +653,13 @@ describe('redacting serialised JSON', () => {
       scanText('t.jsonl', '{"x":null}\n{"y":"null"}\n').map((f) => f.line),
       [2],
     )
+    // The scan flags a key exactly when redaction masks it.
+    registerSecret('abcdef"')
+    assert.equal(redactJsonText('{"abcdef\\"":1}', {}), '{"[REDACTED]":1}')
+    assert.equal(findSecretsInJson('{"abcdef\\"":1}', {}).length, 1)
+    registerSecret('field')
+    assert.equal(redactJsonText('{"field":"field"}', {}), '{"field":"[REDACTED]"}')
+    assert.equal(findSecretsInJson('{"field":"field"}', {}).length, 1)
     // Twin: the same text outside a JSON file counts the literals too.
     assert.equal(scanText('run.txt', json).length > 2, true)
   })

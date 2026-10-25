@@ -115,7 +115,7 @@ export class AttemptDebug {
     }
     this.#push(entry)
     if (this.verbosity < 2 || show === false) return
-    const payload = redactJsonText(json(data))
+    const payload = redactJsonText(json(data) ?? '')
     this.#emit?.({
       at,
       level: 2,
