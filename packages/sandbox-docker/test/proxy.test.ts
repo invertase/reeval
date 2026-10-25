@@ -1169,6 +1169,71 @@ describe('egress policy through the proxy', () => {
   })
 })
 
+describe('a port outside 1-65535', () => {
+  let h1: { port: number; close(): void }
+  before(async () => {
+    h1 = await startUpstream(HOST, false)
+  })
+  after(() => h1.close())
+
+  test('a tunnelled CONNECT gets a 400, and the gateway keeps serving', async () => {
+    const gw = await startProxy()
+    try {
+      for (const port of [99999, 0, 65536]) {
+        const r = await connect(gw, HOST, port)
+        assert.equal(!r.ok && r.status, 400, `port ${port}`)
+        assert.match(!r.ok ? r.body : '', new RegExp(`invalid port ${port}`))
+      }
+      assert.ok((await connect(gw, HOST, h1.port)).ok)
+      assert.deepEqual(
+        gw.proxy.traffic().contacted.map((h) => [h.host, h.port]),
+        [[HOST, h1.port]],
+      )
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a CONNECT to a host the gateway decrypts gets a 400 before the handshake', async () => {
+    const gw = await startProxy()
+    try {
+      gw.proxy.setSubstitutions([
+        {
+          name: 'S',
+          placeholder: 'reeval_secret_x',
+          value: 'v'.repeat(20),
+          hosts: [HOST],
+          in: ['header'],
+        },
+      ])
+      const r = await connect(gw, HOST, 99999)
+      assert.equal(!r.ok && r.status, 400)
+      const ok = await viaProxy(gw, HOST, h1.port, { path: '/echo' })
+      assert.equal(ok.status, 200)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('an absolute-form request gets a 400, over https:// and http://', async () => {
+    const gw = await startProxy()
+    try {
+      seen.length = 0
+      for (const url of [`https://${HOST}:0/echo`, `http://${HOST}:0/echo`]) {
+        const r = await absolute(gw, url)
+        assert.equal(r.status, 400, url)
+        assert.match(r.body, /invalid port 0/)
+      }
+      const outOfRange = await absolute(gw, `http://${HOST}:99999/`)
+      assert.equal(outOfRange.status, 400)
+      assert.equal(seen.length, 0)
+      assert.deepEqual(gw.proxy.traffic(), { contacted: [], blocked: [] })
+    } finally {
+      gw.close()
+    }
+  })
+})
+
 describe('brokered secrets through the proxy', () => {
   const SECRET = 'AIza-real-secret-value-0123456789abcdef'
   const HOLDER = `reeval_secret_${'Q'.repeat(32)}`
