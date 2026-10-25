@@ -1011,6 +1011,116 @@ describe('a token right after a letter, digit or underscore', () => {
   })
 })
 
+describe('redacting credential shapes', () => {
+  const body = (n: number) => 'aB3dE5gH7jK9mN1pQ2rS4tU6vW8xY0z'.repeat(4).slice(0, n)
+  const shapes: Array<[string, string]> = [
+    ['Slack token', `xapp-1-A0${body(9)}-1234567890123-${body(64).toLowerCase()}`],
+    ['xAI API key', `xai-${body(80)}`],
+    ['Vercel token', `vck_${body(56)}`],
+    ['Vercel token', `vcp_${body(24)}`],
+    ['Groq API key', `gsk_${body(52)}`],
+    ['Perplexity API key', `pplx-${body(48)}`],
+    ['Hugging Face token', `hf_${body(34)}`],
+    ['GitLab token', `glpat-${body(20)}`],
+    ['GitLab token', `glpat-${body(27)}.01${body(7).toLowerCase()}`],
+    ['Stripe key', `sk_live_${body(24)}`],
+    ['Stripe key', `rk_test_${body(99)}`],
+    ['npm token', `npm_${body(36)}`],
+    ['PyPI token', `pypi-AgEIcHlwaS5vcmc${body(60)}`],
+    ['Google OAuth token', `ya29.${body(120)}`],
+    ['Google OAuth token', `ya29.c.${body(40)}.${body(80)}`],
+    ['Google OAuth client secret', `GOCSPX-${body(28)}`],
+  ]
+  for (const [rule, token] of shapes) {
+    test(`masks a ${rule} (${token.slice(0, 8)}…) whole, with no variable holding it`, () => {
+      for (const text of [`key ${token} here`, `"${token}"`, `X=${token}\n`]) {
+        const out = redactSecrets(text, {})
+        assert.equal(out, text.replace(token, '[REDACTED]'), text)
+      }
+      const found = findSecrets(`key ${token}`, {})
+      assert.deepEqual(
+        found.map((m) => [m.start, m.end, m.rule, m.known]),
+        [[4, 4 + token.length, rule, false]],
+      )
+    })
+  }
+
+  test('a short prefix after a letter or digit stays, after `_` or an escape it is masked', () => {
+    for (const text of [`work_live_${body(30)}`, `pnpm_${body(40)}`, `shf_${body(40)}`]) {
+      assert.equal(redactSecrets(text, {}), text)
+    }
+    assert.equal(redactSecrets(`TOKEN_npm_${body(40)}`, {}), 'TOKEN_[REDACTED]')
+    assert.equal(redactSecrets(`TOKEN_rk_live_${body(30)}`, {}), 'TOKEN_[REDACTED]')
+    assert.equal(redactSecrets(`key%3Dxai-${body(80)}`, {}), 'key%3D[REDACTED]')
+    assert.equal(redactSecrets(`"a\\nhf_${body(34)}"`, {}), '"a\\n[REDACTED]"')
+  })
+
+  test('twin: ordinary words, identifiers and short or embedded values near each prefix stay', () => {
+    const ordinary = [
+      '@xai-official/grok-linux-x64',
+      'xai-grok-4-fast-reasoning',
+      `xai-${body(39)}`,
+      'xai-not_a_real_key_0000000000000000',
+      'vck_test',
+      `vck_${body(23)}`,
+      'vcs_and_vcr_are_version_control_words',
+      `gsk_${body(39)}`,
+      'gsk_test_fixture_name',
+      'pplx-70b-online pplx-api',
+      `pplx-${body(31)}`,
+      'hf_hub_download hf_transfer',
+      `hf_${body(33)}`,
+      'hf_tokenizer_config_loader_with_a_very_long_name',
+      'glpat-abc123',
+      `glpat-${body(19)}`,
+      'sk_live_mode rk_test_helper sk_prod_key',
+      `sk_live_${body(23)}`,
+      `pk_live_${body(24)}`,
+      'npm_config_user_agent npm_config_registry',
+      `npm_${body(35)}`,
+      `cnpm_${body(36)}`,
+      'pypi-AgEIcHlwaS5vcmc',
+      'ya29.short ya29.c.abc',
+      `ya29.${body(29)}`,
+      `GOCSPX-${body(27)}`,
+      'xapp-1-short',
+      `myxai-${body(80)}`,
+    ]
+    for (const text of ordinary) {
+      assert.equal(redactSecrets(text, {}), text, text)
+      assert.deepEqual(findSecrets(text, {}), [], text)
+    }
+  })
+
+  test('every shape scans long near-miss text in linear time', () => {
+    const prefixes = [
+      ...['xapp-1-', 'xai-', 'vck_', 'gsk_', 'pplx-', 'hf_', 'glpat-'],
+      ...['sk_live_', 'npm_', 'pypi-AgEIcHlwaS5vcmc', 'ya29.', 'GOCSPX-'],
+    ]
+    const time = (text: string) => {
+      const start = performance.now()
+      redactSecrets(text, {})
+      findSecrets(text, {})
+      return performance.now() - start
+    }
+    for (const prefix of prefixes) {
+      const short = `${prefix}${'a'.repeat(19)} `
+      const inputs = [
+        prefix.repeat(40_000),
+        short.repeat(8_000),
+        `${prefix}${'a'.repeat(200_000)}!`,
+      ]
+      for (const text of inputs) {
+        const ms = time(text)
+        assert.ok(ms < 1500, `${prefix}: ${text.length} characters took ${Math.round(ms)}ms`)
+      }
+      const small = time(short.repeat(4_000))
+      const large = time(short.repeat(16_000))
+      assert.ok(large < Math.max(small, 5) * 16, `${prefix}: ${small}ms then ${large}ms`)
+    }
+  })
+})
+
 // Last in the file: the short secrets these register would otherwise reach every test above.
 describe('redacting serialised JSON', () => {
   const record = {

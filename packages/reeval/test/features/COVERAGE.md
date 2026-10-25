@@ -84,7 +84,7 @@
 | Processes setup leaves running with a `to: 'checks'` secret without `hosts`: `setupProcesses` and the `setup-process-secret` remark | ✓ 3 | — | — | ● 2 | — | — |
 | Brokered secrets (`hosts`, `in`) and their placeholders | ✓ 2 | ✓ 1 | ● 2 | ● 2 | ● 1 | — |
 | `secrets: { unbrokered }` and the unbrokered warning | ✓ 4 | — | — | — | — | — |
-| Secrets masked in everything reeval writes | ✓ 8 | — | ● 2 | ● 2 | — | — |
+| Secrets masked in everything reeval writes | ✓ 9 | — | ● 2 | ● 2 | — | — |
 | Secrets masked in what the judge is sent | ✓ 1 | — | ● 1 | ● 1 | — | — |
 | `setup` steps: order, a failing step named, a missing `cwd`, `setup.log` | ✓ 1 | — | ● 2 | ● 2 | — | — |
 | A setup step's own `timeout` | — | — | ● 1 | ● 1 | — | — |
