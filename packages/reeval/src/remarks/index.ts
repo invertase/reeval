@@ -222,13 +222,17 @@ function locator(root: string) {
   }
 }
 
-/** What the rules may look up in an eval's source: its name, check labels and MCP servers. */
+/**
+ * What the rules may look up in an eval's source: its name, check labels, MCP servers and the
+ * secrets setup's processes hold.
+ */
 function needlesOf(entry: EvalEntry): Array<string | null> {
   const labels = entry.cells.flatMap((c) => (c.checks ?? []).map((k) => k.label))
   const servers = entry.attempts.flatMap((a) =>
     a.turns.flatMap((t) => (t.mcpStartup ?? []).map((m) => m.server.split(':')[0] as string)),
   )
-  return [null, ...new Set([...labels, ...servers])]
+  const secrets = entry.attempts.flatMap((a) => (a.setupProcesses ?? []).flatMap((p) => p.secrets))
+  return [null, ...new Set([...labels, ...servers, ...secrets])]
 }
 
 /** The run's remarks, each with the run that first printed it. History-based kinds need an earlier run. */

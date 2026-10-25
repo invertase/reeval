@@ -5,6 +5,7 @@
 import { FLAKY_MIN_ATTEMPTS } from '../history/facts.ts'
 import type { AttemptRecord, EvalEntry, RunRecord } from '../history/types.ts'
 import { sha256 } from '../ids.ts'
+import { clip } from '../text.ts'
 import type { EvalInsight, Remark } from '../view/insights.ts'
 import {
   type CellResult,
@@ -56,6 +57,7 @@ const KIND_ORDER: Remark['kind'][] = [
   'no-baseline',
   'slow-mcp-start',
   'proxy-only-egress',
+  'setup-process-secret',
   'too-few-tries',
   'compound-judge',
   'check-never-fails',
@@ -412,6 +414,48 @@ function proxyOnlyEgress(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext
 }
 
 /**
+ * setup-process-secret (concern): a setup step left a process running with a `to: 'checks'` secret
+ * without `hosts` in its environment (`setupProcesses`), so it holds the real value while the agent,
+ * as the same user, works beside it. One per eval.
+ */
+function setupProcessSecret(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext): Candidate[] {
+  const cellPaths = new Map<string, string>()
+  for (const u of units(e)) for (const c of u.cells) cellPaths.set(`${u.id}\0${c.key}`, c.path)
+  const hits = entries.flatMap((entry) =>
+    entry.attempts.flatMap((attempt) =>
+      attempt.setupProcesses?.length ? [{ entry, attempt, processes: attempt.setupProcesses }] : [],
+    ),
+  )
+  const [first] = hits
+  if (!first) return []
+  const secrets = [...new Set(hits.flatMap((h) => h.processes.flatMap((p) => p.secrets)))]
+  const commands = [...new Set(hits.flatMap((h) => h.processes.map((p) => p.command)))]
+  const more = commands.length > 1 ? ` (and ${commands.length - 1} more)` : ''
+  const ofTries = hits.length > 1 ? ` in ${hits.length} tries` : ''
+  const [secret = ''] = secrets
+  const list = secrets.join(', ')
+  const which = secrets.length > 1 ? "to: 'checks' secrets" : "a to: 'checks' secret"
+  const [its, those] = commands.length > 1 ? ['their', 'those processes'] : ['its', 'that process']
+  return [
+    {
+      id: remarkId('setup-process-secret', e.path, first.entry),
+      evalId: e.path,
+      kind: 'setup-process-secret',
+      severity: 'concern',
+      text: `Setup left "${clip(commands[0] ?? '', 80)}"${more} running with ${list}, ${which} without hosts, in ${its} environment${ofTries}, so the agent can read the real value from ${those}.`,
+      evidence: hits.map(
+        (h) => `${cellPaths.get(`${h.entry.id}\0${h.attempt.cell}`) ?? h.entry.id}#${h.attempt.n}`,
+      ),
+      fix: {
+        at: ctx.locate(first.entry, secret),
+        edit: `broker ${secret} with the hosts the process sends it to, e.g. secret({ to: 'checks', hosts: ['api.example.com'] }), so it holds a placeholder, or start the process from c.exec after the agent's turn`,
+      },
+      origin: 'deterministic',
+    },
+  ]
+}
+
+/**
  * no-baseline (concern): the classification says the eval is about a change (`subject.change`),
  * but it declares no compare, so nothing shows what the change does. A profile's
  * `limit.compare: false` stripped the compare on purpose, so it never raises it.
@@ -471,6 +515,7 @@ export function deterministicRemarks(
         ...flakyCheck(e, entries, ctx),
         ...slowMcpStart(e, own, ctx),
         ...proxyOnlyEgress(e, own, ctx),
+        ...setupProcessSecret(e, own, ctx),
         ...tooFewTries(e, first, ctx),
         ...checkNeverFails(e, entries, ctx),
       )

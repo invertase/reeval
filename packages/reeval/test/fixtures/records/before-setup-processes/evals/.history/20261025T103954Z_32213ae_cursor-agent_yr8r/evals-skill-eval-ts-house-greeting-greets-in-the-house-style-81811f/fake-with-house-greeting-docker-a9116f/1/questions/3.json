@@ -1,0 +1,19 @@
+{
+  "question": "Does the greeting use the house style?",
+  "model": "fake",
+  "stateOptions": {
+    "task": true,
+    "output": true,
+    "files": false,
+    "diff": true,
+    "transcript": true,
+    "turns": "all",
+    "checks": false
+  },
+  "choices": [
+    "yes",
+    "no"
+  ],
+  "system": "You answer one question about an attempt by a coding agent at a task.\nThe attempt is shown as the prompts it was sent, its final message, its transcript and the changes it made to the project, as a unified diff.\nAnswer only from what is shown. Pick the one of the choices that answers it, and give a short reason for the pick.",
+  "prompt": "Question: Does the greeting use the house style?\n\nChoices:\n- yes\n- no\n\n<attempt>\n<turn n=\"1\">\n<task>\nWrite greet.js that greets in our house style.\n</task>\n<output>\nI wrote greet.js in the house style.\n</output>\n<transcript>\nmessage: Working on: Write greet.js that greets in our house style.\nmessage: Loaded skills: house-greeting\ntool shell: ls → ok · 0ms\n  package.json\nedit greet.js (create, +1 −0) · 128ms\nmessage: I wrote greet.js in the house style.\n</transcript>\n</turn>\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..8f6cfcf\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Ahoy, ' + name + '!'\n\n</diff>\n</attempt>"
+}

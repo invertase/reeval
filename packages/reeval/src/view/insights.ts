@@ -147,6 +147,7 @@ export const REMARK_KINDS: Record<
   'no-baseline': { origin: 'deterministic', severity: 'concern' },
   'slow-mcp-start': { origin: 'deterministic', severity: 'concern' },
   'proxy-only-egress': { origin: 'deterministic', severity: 'concern' },
+  'setup-process-secret': { origin: 'deterministic', severity: 'concern' },
 }
 
 /** The kinds an analysis model may raise; a remark of any other kind from it is dropped. */
@@ -176,6 +177,7 @@ export type Remark = {
     | 'no-baseline'
     | 'slow-mcp-start'
     | 'proxy-only-egress'
+    | 'setup-process-secret'
   /** Fixed by kind (`REMARK_KINDS`), never chosen by the model. */
   severity: 'concern' | 'suggestion'
   /** One plain sentence: what's wrong. */
