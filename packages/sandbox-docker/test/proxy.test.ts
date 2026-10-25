@@ -272,7 +272,13 @@ async function startProxy(
   policy: NetworkPolicy = { mode: 'allow-all' },
   extra: Pick<
     EgressProxyOptions,
-    'endpoints' | 'onRefused' | 'onUnsubstituted' | 'derivedTokens' | 'onEvent' | 'modelResponses'
+    | 'endpoints'
+    | 'onRefused'
+    | 'onUnsubstituted'
+    | 'derivedTokens'
+    | 'onEvent'
+    | 'modelResponses'
+    | 'firstByteTimeout'
   > = {},
   /** Hand each connection over as a plain Duplex, as the gateway's mux streams are. */
   asMux = false,
@@ -1588,9 +1594,13 @@ describe('brokered secrets through the proxy', () => {
     })
     after(() => plain.close())
 
-    const brokered = async (asMux: boolean) => {
+    const brokered = async (asMux: boolean, firstByteTimeout?: number) => {
       const events: EgressEvent[] = []
-      const gw = await startProxy({ mode: 'allow-all' }, { onEvent: (e) => events.push(e) }, asMux)
+      const gw = await startProxy(
+        { mode: 'allow-all' },
+        { onEvent: (e) => events.push(e), ...(firstByteTimeout ? { firstByteTimeout } : {}) },
+        asMux,
+      )
       gw.proxy.setSubstitutions([sub({ hosts: [HOST, PLAIN] })])
       const requests = async (n: number) => {
         for (let i = 0; i < 100 && events.filter((e) => e.type === 'request').length < n; i++) {
@@ -1688,6 +1698,23 @@ describe('brokered secrets through the proxy', () => {
         assert.equal(event?.type === 'request' && event.via, 'http')
         assert.equal(event?.type === 'request' && event.status, 101)
         assert.equal(event?.type === 'request' && event.url, `http://${PLAIN}:${port}/ws`)
+      } finally {
+        gw.close()
+      }
+    })
+
+    test("a client that sends nothing is closed after the wait, and it's traced", async () => {
+      const { gw, requests } = await brokered(false, 200)
+      try {
+        const tunnel = await connect(gw, PLAIN, port)
+        assert.ok(tunnel.ok)
+        await new Promise((resolve) => tunnel.socket.once('close', resolve))
+        const [event] = await requests(1)
+        assert.equal(event?.type === 'request' && event.method, 'CONNECT')
+        assert.equal(
+          event?.type === 'request' && event.reason,
+          'the client sent nothing within 0.2s',
+        )
       } finally {
         gw.close()
       }

@@ -44,6 +44,8 @@ export type EgressProxyOptions = {
   allowLoopback?: boolean
   /** `false` sends responses from brokered hosts back unscrubbed. For tests only. */
   scrubResponses?: boolean
+  /** How long a decrypted CONNECT waits for its client's first byte, in ms. For tests only. */
+  firstByteTimeout?: number
   /**
    * The only requests a credential may be swapped into. A request a transformation matches that
    * isn't one of them gets a 403 from the gateway, not the placeholder sent upstream.
@@ -181,7 +183,7 @@ type Response = http.ServerResponse
 const TLS_HANDSHAKE = 0x16
 
 /** How long a decrypted CONNECT waits for its client's first byte: Node's TLS handshake timeout. */
-const FIRST_BYTE_TIMEOUT = 120_000
+const FIRST_BYTE_TIMEOUT_MS = 120_000
 
 const HOP_BY_HOP = new Set([
   'connection',
@@ -258,6 +260,7 @@ const plainHeaders = (headers: IncomingHttpHeaders | OutgoingHttpHeaders): Heade
 
 export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const log = options.log ?? (() => {})
+  const firstByteTimeout = options.firstByteTimeout ?? FIRST_BYTE_TIMEOUT_MS
   const emit = (event: EgressEvent) => {
     try {
       options.onEvent?.(event)
@@ -439,8 +442,22 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         log(`reeval:egress CONNECT ${host}:${port} decrypt`)
         socket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
         if (head.length) socket.unshift(head)
-        return firstByte(socket, (byte) =>
-          byte === TLS_HANDSHAKE ? decrypt(socket, target) : plainInTunnel(socket, target),
+        return firstByte(
+          socket,
+          (byte) =>
+            byte === TLS_HANDSHAKE ? decrypt(socket, target) : plainInTunnel(socket, target),
+          () => {
+            const reason = `the client sent nothing within ${firstByteTimeout / 1000}s`
+            log(`reeval:egress CONNECT ${host}:${port} closed (${reason})`)
+            emit({
+              ...tunnel,
+              allowed: true,
+              reason,
+              sent: 0,
+              received: 0,
+              ms: Date.now() - startedAt,
+            })
+          },
         )
       }
       log(`reeval:egress CONNECT ${host}:${port} tunnel`)
@@ -548,9 +565,16 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     forwardHttp1(req.pipe(counter(done.sent)), res, upstream, { own: [], creds: [], url, t: done })
   }
 
-  /** Calls `then` with the connection's first byte once it arrives, left unread for the next reader. */
-  function firstByte(socket: Duplex, then: (byte: number) => void) {
-    const timer = setTimeout(() => socket.destroy(), FIRST_BYTE_TIMEOUT)
+  /**
+   * Calls `then` with the connection's first byte once it arrives, left unread for the next
+   * reader, or `idle` once it has waited `firstByteTimeout` and closed the connection.
+   */
+  function firstByte(socket: Duplex, then: (byte: number) => void, idle: () => void) {
+    const timer = setTimeout(() => {
+      stop()
+      socket.destroy()
+      idle()
+    }, firstByteTimeout)
     const onReadable = () => {
       const chunk = socket.read() as Buffer | null
       if (!chunk?.length) return
@@ -591,7 +615,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     server.on('upgrade', (req: http.IncomingMessage, s: Duplex, head: Buffer) =>
       onPlainUpgrade(target, req, track(s), head),
     )
-    server.on('clientError', (_error, s: Duplex) => {
+    server.on('clientError', (error: NodeJS.ErrnoException, s: Duplex) => {
+      // Node reports the socket's own errors (a reset) here too; only a parse error is the client's.
+      if (!error.code?.startsWith('HPE_')) return s.destroy()
       const reason = `reeval egress gateway: the connection to ${authority} carries neither a TLS handshake nor an HTTP/1.1 request. reeval reads every connection to a host with a brokered secret.`
       log(`reeval:egress CONNECT ${authority} refused (neither TLS nor HTTP/1.1)`)
       emit({
