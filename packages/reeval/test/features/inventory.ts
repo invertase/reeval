@@ -412,6 +412,12 @@ export const inventory: InventoryFeature[] = [
     plan: ['compare/off-study', 'compare/zero-variants', 'compare/baseline-omitted-off'],
   },
   {
+    id: 'profiles.limit-harness-drops-compare',
+    area: 'Config and selection',
+    name: '`limit.harness` leaving none of `compare.harness`: the compare is off and each control gates like an eval without compare',
+    plan: ['compare/harness-scoped-dropped'],
+  },
+  {
     id: 'plan.json',
     area: 'Config and selection',
     name: '`reeval run --dry-run` and `--dry-run --json`',

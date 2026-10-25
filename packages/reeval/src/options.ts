@@ -717,6 +717,7 @@ export function cascade(
       notes.push(`runs ${out.runs} → ${limit.runs} (${tag})`)
       out.runs = limit.runs
     }
+    let comparedLeft = true
     if (limit.harness && !pinned('harness')) {
       const kept = out.harness.filter((h) => limit.harness?.includes(harnessId(h)))
       if (kept.length === 0) {
@@ -724,9 +725,21 @@ export function cascade(
       } else if (kept.length < out.harness.length) {
         notes.push(`harnesses ${out.harness.length} → ${kept.length} (${tag})`)
         out.harness = kept
+        // With every harness compare.harness names gone, no harness runs a variant, so the
+        // compare is off and its controls gate as limit.compare: false leaves them.
+        const scope = out.compare?.harness
+        if (
+          out.compare?.variants.length &&
+          scope &&
+          !kept.some((h) => scope.includes(harnessId(h)))
+        ) {
+          notes.push(`compare off: no compared harness left (${tag})`)
+          out.compare = { ...out.compare, variants: [] }
+          comparedLeft = false
+        }
       }
     }
-    if (out.compare && limit.compare !== undefined && !pinned('compare')) {
+    if (out.compare && comparedLeft && limit.compare !== undefined && !pinned('compare')) {
       if (limit.compare === false) {
         notes.push(`compare off (${tag})`)
         out.compare = { ...out.compare, variants: [] }
