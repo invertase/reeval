@@ -168,8 +168,9 @@ export function judgeCaller(
     const options = mergeJudge(a.spec.judge, call)
     const { model } = options
     if (model === undefined) {
-      a.judgeErrored = true
-      throw new Error(noJudgeModel(getRunContext().config.file))
+      const message = noJudgeModel(getRunContext().config.file)
+      a.judgeThrown.add(message)
+      throw new Error(message)
     }
     const wanted = resolveStateOptions(options.state)
     if (on && 'value' in on && !wanted.output) {
@@ -209,7 +210,6 @@ export function judgeCaller(
     debugTrace('judge', 'prompt', input, 'judge prompt')
 
     const failed = (message: string, retries?: RetriedError['retries']): JudgeFailure => {
-      a.judgeErrored = true
       a.judgeErrors.push(`c.judge(${JSON.stringify(clip(question, 80))}) failed: ${message}`)
       input.error = message
       if (retries?.length) input.retries = retries
@@ -268,10 +268,7 @@ export function judgeCaller(
       })
       return recorded
     } catch (error) {
-      if (a.signal.aborted) {
-        a.judgeErrored = true
-        throw error
-      }
+      if (a.signal.aborted) throw error
       const { retries } = error as Partial<RetriedError>
       const message = error instanceof Error ? error.message : String(error)
       return failed(isApiError(error) ? withInputSize(message, state, question) : message, retries)

@@ -105,12 +105,14 @@ async function attemptBody(
     if (missed) throw missed
     const [only, ...more] = a.judgeErrors
     if (only) {
-      throw new Error(
-        more.length ? `${more.length + 1} judge calls failed:\n${a.judgeErrors.join('\n')}` : only,
-      )
+      const message = more.length
+        ? `${more.length + 1} judge calls failed:\n${a.judgeErrors.join('\n')}`
+        : only
+      a.judgeThrown.add(message)
+      throw new Error(message)
     }
   } catch (error) {
-    recordFailure(a, error, timedOut())
+    recordFailure(a, error, timedOut(), assertions())
     failure = {
       error: timedOut()
         ? new TimeoutError(`Eval timed out after ${spec.timeoutMs / 1000}s`)

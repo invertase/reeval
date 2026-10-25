@@ -2,6 +2,7 @@ import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { debugLog } from '../debug/attempt.ts'
 import { allowedHosts, isDirect } from '../egress.ts'
+import type { RawAssertion } from '../engine/runtime.ts'
 import { isTimeout } from '../errors.ts'
 import { expectedBlockedFor } from '../harness/agents.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
@@ -25,11 +26,35 @@ function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; messa
   return { kind: 'assertion', message }
 }
 
+const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+/**
+ * Whether the error that failed the attempt is a judge's: one a judge threw, or what a
+ * `toPass()` or `.not.toPass()` call failed with. A failing verdict the eval didn't assert, or
+ * asserted with `.not.toPass()`, leaves another failure as it is. By message too, since another
+ * language's runner hands back its own copy of the error.
+ */
+function isJudgeFailure(a: Attempt, error: unknown, raw: readonly RawAssertion[]): boolean {
+  const message = messageOf(error)
+  if (a.judgeThrown.has(message)) return true
+  return raw.some(
+    (r) =>
+      r.status !== 'pass' &&
+      /(^|\.)toPass$/.test(r.matcher) &&
+      (r.error === error || messageOf(r.error) === message),
+  )
+}
+
 /**
  * Why the attempt failed, into the record: the eval's own timeout, a cancel, an infra error, or an
- * assertion, which is the judge's when a judge call failed or gave a failing verdict.
+ * assertion, which is the judge's when a judge's call or verdict failed it.
  */
-export function recordFailure(a: Attempt, error: unknown, timedOut: boolean): void {
+export function recordFailure(
+  a: Attempt,
+  error: unknown,
+  timedOut: boolean,
+  raw: readonly RawAssertion[],
+): void {
   const { record } = a
   record.error = timedOut
     ? { kind: 'timeout', message: 'The eval timed out' }
@@ -39,8 +64,9 @@ export function recordFailure(a: Attempt, error: unknown, timedOut: boolean): vo
     const { class: kind, stage, ref, cause, log, setBy } = error.failure
     record.error.prepare = { class: kind, stage, ref, cause, log, setBy: setBy ?? [] }
   }
-  const judgeFailed = a.judgeErrored || record.judgements.some((j) => j.verdict !== 'pass')
-  if (record.error.kind === 'assertion' && judgeFailed) record.error.kind = 'judge'
+  if (record.error.kind === 'assertion' && isJudgeFailure(a, error, raw)) {
+    record.error.kind = 'judge'
+  }
   record.outcome = record.error.kind === 'infra' ? 'infra_error' : 'fail'
 }
 

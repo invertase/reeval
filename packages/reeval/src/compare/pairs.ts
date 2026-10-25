@@ -5,9 +5,11 @@ import { clip } from '../text.ts'
 import type {
   CompareAnswer,
   CompareCut,
+  ErrorKind,
   ExecResult,
   FakeVote,
   FileChange,
+  Outcome,
   PairFactor,
   PairVote,
   TranscriptEvent,
@@ -83,6 +85,14 @@ export const pairFactors = (across?: PairFactor | readonly PairFactor[]): PairFa
 export const acrossOf = (across: PairFactor | readonly PairFactor[]): CompareCut[] => {
   const factors = pairFactors(across)
   return ALL_CUTS.filter((cut) => factors.includes(cut === 'within' ? 'environment' : 'harness'))
+}
+
+/**
+ * Whether an attempt's deterministic checks held, so a pair can include it: it passed, or a
+ * judge's call or verdict failed it (`error.kind` is `judge` only then).
+ */
+export function checksHeld(outcome: Outcome, error: { kind: ErrorKind } | null): boolean {
+  return outcome === 'pass' || (outcome === 'fail' && error?.kind === 'judge')
 }
 
 /**

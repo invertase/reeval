@@ -68,8 +68,11 @@ export type Attempt = {
   startFailure?: { error: unknown }
   /** The MCP timer's log, once the session starts with a stdio MCP server. */
   mcpStartup?: McpStartupLog
-  /** A judge call failed or had no model: a failed assertion is then the judge's. */
-  judgeErrored: boolean
+  /**
+   * The messages of the errors a judge throws: no model, or the calls that failed, once the body
+   * is done. By message, since another language's runner hands back its own copy.
+   */
+  judgeThrown: Set<string>
   /** Judge calls that failed without throwing, which fail the attempt once the eval's body is done. */
   judgeErrors: string[]
   /** `c.capture()` names already used in this attempt. */
@@ -127,7 +130,7 @@ export function createAttempt(
       }
     },
     signal,
-    judgeErrored: false,
+    judgeThrown: new Set(),
     judgeErrors: [],
     captureNames: new Set(),
     backgrounds: [],

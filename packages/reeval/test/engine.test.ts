@@ -1232,6 +1232,47 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     )
   })
 
+  test("a check that fails after a failing verdict the eval didn't assert is the check's error", async () => {
+    const p = await project('judge-informational', {
+      'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.2 }) }' }),
+      'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('unasserted', async (c) => {
+  await c.send('go')
+  await c.judge('nice?')
+  await expect(c.exec('exit 3'), 'tests pass').toSucceed()
+})
+evaluate('asserted not', async (c) => {
+  await c.send('go')
+  expect(await c.judge('nice?')).not.toPass()
+  await expect.soft(c.exec('exit 3'), 'tests pass').toSucceed()
+})
+evaluate('canary', async (c) => {
+  await c.send('go')
+  await expect(c.exec('exit 0'), 'tests pass').toSucceed()
+  expect.soft(await c.judge('nice?')).toPass()
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const run = readRun(p.dir)
+    const byName = Object.fromEntries(run.evals.map((e) => [e.name, e]))
+    for (const name of ['unasserted', 'asserted not']) {
+      const e = byName[name]
+      assert.equal(e?.trial.judgements[0]?.verdict, 'fail', name)
+      assert.equal(e?.error?.kind, 'assertion', name)
+      assert.match(e?.error?.message ?? '', /^tests pass: expected command to succeed/, name)
+    }
+    assert.equal(byName.canary?.error?.kind, 'judge', 'a failed toPass is the judge’s')
+    const summary = run.read('summary.md')
+    const attempts = summary.slice(summary.indexOf('## Attempts'))
+    assert.equal(
+      attempts.match(/tests pass: expected command to succeed/g)?.length,
+      2,
+      'both check failures are shown',
+    )
+  })
+
   test('judge state cascades key by key from the config to the call; build output is dropped', async () => {
     const p = await project('judge-scope', {
       'reeval.config.ts': fakeConfig({
