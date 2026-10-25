@@ -35,6 +35,8 @@ export type PiEvent = {
   toolName?: string
   result?: { content?: PiContent[]; details?: unknown }
   isError?: boolean
+  /** On `agent_end`: pi will run the agent again to retry the failed call that ended this run. */
+  willRetry?: boolean
 }
 
 /** pi's counts in the AI SDK's shape. `input` is uncached; pi's is too. */
@@ -67,13 +69,15 @@ const add = (a: PiUsage | undefined, b: PiUsage): PiUsage => ({
   reasoning: (a?.reasoning ?? 0) + (b.reasoning ?? 0),
 })
 
-/** pi's stop reasons for a call that didn't fail; `error` is an error part instead. */
+/** pi's stop reasons for a call that didn't fail; a failed call is handled on `agent_end`. */
 const UNIFIED: Record<string, FinishReason['unified']> = {
   stop: 'stop',
   toolUse: 'tool-calls',
   length: 'length',
   aborted: 'other',
 }
+
+const reason = (m: PiMessage) => m.errorMessage || 'pi reported a failed model call'
 
 const text = (content: PiContent[] | undefined) =>
   (content ?? []).flatMap((c) => (c.type === 'text' && c.text ? [c.text] : [])).join('')
@@ -96,7 +100,10 @@ export function configuredMcpToolName(name: string, servers: readonly string[]):
 /**
  * Turns one `pi --mode json` process's NDJSON into harness stream parts. Each assistant message
  * is one model call: its `message_end` is a `finish-step` with that call's usage, and the turn's
- * `finish` has their sum. A call pi reports as failed (`stopReason: 'error'`) is an error part.
+ * `finish` has their sum. A call pi reports as failed (`stopReason: 'error'`) waits for the
+ * run's `agent_end`: with `willRetry` (pi's auto-retry of a transient failure, which starts a new
+ * run in the same process) it's a `finish-step` that ended in `error` and the turn goes on;
+ * otherwise it's an error part that fails the turn.
  */
 export class PiStreamTranslator {
   sessionId: string | undefined
@@ -110,7 +117,10 @@ export class PiStreamTranslator {
   /** The block a `*_start` opened; its start part goes out with its first non-empty delta. */
   private open: { id: string; type: 'text' | 'reasoning'; emitted: boolean } | undefined
   private total: PiUsage | undefined
-  private failed = false
+  /** The run's last call, when it failed and its `agent_end` hasn't said whether pi retries it. */
+  private failure: PiMessage | undefined
+  /** The error of the call pi is retrying, until the retry's call ends. */
+  private retrying: string | undefined
 
   /** Parts for one stdout line. Lines that aren't JSON events are passed through as raw. */
   push(line: string): HarnessV1StreamPart[] {
@@ -136,10 +146,15 @@ export class PiStreamTranslator {
     this.close(parts)
     if (!options.aborted) {
       const detail = options.stderr?.trim()
+      const call = this.failure
+        ? ` after a failed model call (${reason(this.failure)})`
+        : this.retrying !== undefined
+          ? ` while retrying a failed model call (${this.retrying})`
+          : ''
       parts.push({
         type: 'error',
         error: new Error(
-          `pi exited with code ${options.exitCode} before ending the turn${detail ? `: ${detail}` : ''}`,
+          `pi exited with code ${options.exitCode} before ending the turn${call}${detail ? `: ${detail}` : ''}`,
         ),
       })
     }
@@ -163,14 +178,12 @@ export class PiStreamTranslator {
     }
     if (e.type === 'message_end' && m?.role === 'assistant') {
       this.close(parts)
+      this.retrying = undefined
       if (m.stopReason === 'error') {
-        this.failed = true
-        parts.push({
-          type: 'error',
-          error: new Error(m.errorMessage || 'pi reported a failed model call'),
-        })
+        this.failure = m
         return
       }
+      this.failure = undefined
       if (m.usage) this.total = add(this.total, m.usage)
       parts.push({
         type: 'finish-step',
@@ -197,7 +210,25 @@ export class PiStreamTranslator {
     if (e.type === 'agent_end') {
       this.start(parts)
       this.close(parts)
-      this.finish(parts, this.failed ? 'error' : 'stop')
+      const failure = this.failure
+      this.failure = undefined
+      if (e.willRetry) {
+        if (!failure) return
+        this.retrying = reason(failure)
+        if (failure.usage) this.total = add(this.total, failure.usage)
+        parts.push({
+          type: 'finish-step',
+          finishReason: { unified: 'error', raw: 'error' },
+          usage: toUsage(failure.usage),
+        })
+        return
+      }
+      if (failure)
+        parts.push({
+          type: 'error',
+          error: new Error(reason(failure)),
+        })
+      this.finish(parts, failure ? 'error' : 'stop')
     }
   }
 
