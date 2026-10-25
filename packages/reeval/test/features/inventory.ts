@@ -2701,7 +2701,7 @@ export const inventory: InventoryFeature[] = [
     area: 'CLI and runner',
     name: 'Python eval authoring SDK (conformance goldens and fake run)',
     fixtures: ['python-sdk/hello', 'python-sdk/attempt-isolation'],
-    plan: ['python/hello'],
+    plan: ['python/hello', 'python/dataclass-future'],
     tests: ['reeval/test/python-sdk.test.ts › Python SDK tests and conformance goldens'],
   },
 ]
