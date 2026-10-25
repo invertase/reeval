@@ -100,7 +100,7 @@ export const withSkill = page.extendEnvironment(
 )
 ```
 
-The prompt doesn't name the brand's colour or fonts, so those checks pass only when the harness knows them. Create the evaluation:
+The prompt doesn't name the brand's colour or fonts, so those assertions pass only when the harness knows them. Create the evaluation:
 
 ```ts title="evals/brand.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
@@ -155,7 +155,7 @@ pass             styles the page in Anthropic's brand
   +1 more passed
 ```
 
-The variant passed both brand checks in 4 of 4 attempts and the control in 0 of 4, so the effect reads `helped`. Your counts can differ.
+The variant passed both brand assertions in 4 of 4 attempts and the control in 0 of 4, so the effect reads `helped`. Your counts can differ.
 
 ## Next steps
 

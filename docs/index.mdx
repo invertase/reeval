@@ -68,14 +68,14 @@ evaluate(
       /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/,
     )
 
-    // A judge call for what the checks above can't read
+    // A judge call for what the assertions above can't read
     const verdict = await c.judge("Does styles.css look designed for Anthropic's site?")
     expect(verdict).toPass()
   },
 )
 ```
 
-The prompt never names the colour or the fonts, so those checks pass only when the agent knows them. `reeval run` prints the outcome for each side:
+The prompt never names the colour or the fonts, so those assertions pass only when the agent knows them. `reeval run` prints the outcome for each side:
 
 ```text
 pass             styles the page in Anthropic's brand
@@ -129,7 +129,7 @@ reeval runs on your machine, and each run leaves a record you can commit:
 ## Explore the docs
 
 <CardGroup cols={3}>
-  <Card title="Evaluations" href="/evals/evaluate">Tasks, checks, judges, and comparisons.</Card>
+  <Card title="Evaluations" href="/evals/evaluate">Tasks, assertions, judges, and comparisons.</Card>
   <Card title="Environments" href="/environments">Skills, MCP servers, rules, files, and secrets.</Card>
   <Card title="Harnesses" href="/harnesses">The coding agents, with their models and effort.</Card>
   <Card title="Runs" href="/runs/running">Plans, profiles, recording, and CI.</Card>

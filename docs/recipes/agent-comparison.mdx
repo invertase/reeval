@@ -3,7 +3,7 @@ title: "Compare harnesses"
 description: "Run one task on each harness and read each one's pass rate and effort."
 ---
 
-You compare harnesses by running one task on each harness in one run. Each harness is its own cell with the same prompt, checks, and attempts, so the block reads side by side. For a runnable project, see [`with-many-harnesses`](https://github.com/invertase/reeval/tree/main/examples/with-many-harnesses). For more information about choosing a harness and its key, see [Harnesses](/harnesses).
+You compare harnesses by running one task on each harness in one run. Each harness is its own cell with the same prompt, assertions, and attempts, so the block reads side by side. For a runnable project, see [`with-many-harnesses`](https://github.com/invertase/reeval/tree/main/examples/with-many-harnesses). For more information about choosing a harness and its key, see [Harnesses](/harnesses).
 
 To measure a change on each harness instead, add `compare` ([Compare harnesses](/evals/compare#compare-harnesses)).
 
@@ -58,7 +58,7 @@ To list the cells without starting a harness, pass `--dry-run`.
 </Step>
 <Step title="Read the pass rate per harness">
 
-Read the block the run prints for the evaluation. Rows print under `harness`, one per cell, with passed attempts out of counted attempts. A harness that failed an attempt lists the checks it failed under its row. Your counts can differ:
+Read the block the run prints for the evaluation. Rows print under `harness`, one per cell, with passed attempts out of counted attempts. A harness that failed an attempt lists the assertions it failed under its row. Your counts can differ:
 
 ```text
 fail             streams with Vercel AI SDK

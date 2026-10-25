@@ -3,7 +3,7 @@ title: "Judge a running app"
 description: "See whether the app the harness built renders what you asked for."
 ---
 
-A file check tells you the harness wrote a page. It can't tell you the page renders. You start the app the harness built, capture one page, and ask the judge what the picture shows. For a runnable project that captures a page after a model drives it, see [`with-capture-journey`](https://github.com/invertase/reeval/tree/main/examples/with-capture-journey).
+A file assertion tells you the harness wrote a page. It can't tell you the page renders. You start the app the harness built, capture one page, and ask the judge what the picture shows. For a runnable project that captures a page after a model drives it, see [`with-capture-journey`](https://github.com/invertase/reeval/tree/main/examples/with-capture-journey).
 
 This page uses the `nextApp` environment, whose workspace holds a Next.js app on the Vercel AI SDK with `build` and `start` scripts. For more information about putting an app in the workspace, see [Workspaces](/environments/workspaces).
 
@@ -28,12 +28,12 @@ evaluate(
 )
 ```
 
-The `builds` check runs before the app starts, so a build error fails the attempt with the compiler's output instead of a blank capture.
+The `builds` assertion runs before the app starts, so a build error fails the attempt with the compiler's output instead of a blank capture.
 
 </Step>
 <Step title="Start the app">
 
-Start the built app with `c.serve`. In the `evals/chat.eval.ts` file, add the server after the `builds` check:
+Start the built app with `c.serve`. In the `evals/chat.eval.ts` file, add the server after the `builds` assertion:
 
 ```diff title="evals/chat.eval.ts"
      await expect(c.exec('npm run build'), 'builds').toSucceed()
@@ -79,7 +79,7 @@ At the end, the block for the evaluation reads `pass`:
 pass             the chat page shows a composer
 ```
 
-A score below the threshold fails the `renders` check, and the block prints the score. To see what the judge saw, open the `artifacts/chat.png` file under the run's directory in the `.reeval/runs/` directory. For more information about the results summary, see [Read the results summary](/results/output).
+A score below the threshold fails the `renders` assertion, and the block prints the score. To see what the judge saw, open the `artifacts/chat.png` file under the run's directory in the `.reeval/runs/` directory. For more information about the results summary, see [Read the results summary](/results/output).
 
 </Step>
 </Steps>

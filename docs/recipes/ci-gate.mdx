@@ -45,7 +45,7 @@ Set `compare.gate` and `compare.minLift` in the `evals/shoehorn.eval.ts` file.
 +  },
 ```
 
-`compare.minLift` is the smallest lift you accept, from -1 to 1. `compare.gate` at `'variants'` is the default, so a variant's failure fails the evaluation. A control that fails its checks does not fail the run, so `reeval run` can exit 0.
+`compare.minLift` is the smallest lift you accept, from -1 to 1. `compare.gate` at `'variants'` is the default, so a variant's failure fails the evaluation. A control that fails its assertions does not fail the run, so `reeval run` can exit 0.
 
 For more information about the comparison and the other `compare.gate` values, see [Compare setups](/evals/compare).
 

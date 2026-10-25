@@ -9,9 +9,9 @@ description: "Interpret a run's results summary."
 
 The outcome word is `pass`, `fail`, `infra error`, `cancelled`, `skipped`, `todo`, or `not gated`. `not gated` replaces `pass` on the block when no cell is gated. The tally counts that block as `pass`. A `todo` block counts as `skipped`.
 
-A `fail` block lists each check that failed or did not run. For more information about what a check decides, see [Check](/core-concepts#check).
+A `fail` block lists each assertion that failed or did not run. For more information about what an assertion decides, see [Assertion](/core-concepts#assertion).
 
-On one attempt, a failed check prints `failed`. Several attempts add a tries row. Passed checks print as `+N more passed`. For more information about the trace of a failed check, see [Debug a failing attempt](/results/debugging).
+On one attempt, a failed assertion prints `failed`. Several attempts add a tries row. Passed assertions print as `+N more passed`. For more information about the trace of a failed assertion, see [Debug a failing attempt](/results/debugging).
 
 A failed evaluation prints like this:
 
@@ -53,11 +53,11 @@ For more information about that interval, see [How reeval decides a change helpe
 
 For the control and each variant, a pairwise question prints `won 3 of 4`. The outcome word does not change.
 
-## Read the check and effort tables
+## Read the assertion and effort tables
 
-The `check` table has one column per cell and lists checks that failed or did not run in some cell. Passed checks print as `+N more passed`. `couldn't check` means the check raised an error.
+The assertion table, headed `check`, has one column per cell and lists assertions that failed or did not run in some cell. Passed assertions print as `+N more passed`. `couldn't check` means the assertion raised an error.
 
-The checks in a comparison look like this:
+The assertions in a comparison look like this:
 
 ```text
   check             page    brand-guidelines
@@ -91,7 +91,7 @@ Every eval passed.
 
 On a comparison or a failure, it also adds a sentence under a row and a finding after the tables.
 
-The outcome word stays the checks' result. For more information about what insights and Remarks are, see [Analysis](/core-concepts#analysis).
+The outcome word stays the assertions' result. For more information about what insights and Remarks are, see [Analysis](/core-concepts#analysis).
 
 After the tally, `Remarks:` names concerns about the evaluations. A `fix` or `at` line names the file location. At most three concerns print, then `+1 more (-v)`. To print the rest and any suggestion, pass `-v`. A concern prints on the run that first raises it. A slow server start prints on every run where it happens.
 

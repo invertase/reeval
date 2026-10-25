@@ -7,7 +7,7 @@ Each matcher reads a turn from `c.send()`, the attempt context `c`, a `c.exec()`
 
 For more information about standard matchers, see [Vitest's `expect` reference](https://vitest.dev/api/expect).
 
-For more information about checking an attempt, see [Check an attempt](/evals/checks).
+For more information about checking an attempt, see [Assertions](/evals/checks).
 
 ## `expect()`
 
@@ -24,14 +24,14 @@ await expect(c.exec('npm test'), 'tests pass').toSucceed()
 </Property>
 
 <Property name="label" type="string" optional>
-  The check's name in the output and the run record. Without a label, the name is the matcher and its first argument, such as `toHaveEdited src/user.test.ts`, or the command or question the subject carries. A repeated name gets a ` #2` or ` #3` suffix.
+  The assertion's name in the output and the run record. Without a label, the name is the matcher and its first argument, such as `toHaveEdited src/user.test.ts`, or the command or question the subject carries. A repeated name gets a ` #2` or ` #3` suffix.
 </Property>
 
-`.not` inverts the matcher. `toHaveFile()` and `toSucceed()` return promises. An unawaited asynchronous check fails the attempt and names the check.
+`.not` inverts the matcher. `toHaveFile()` and `toSucceed()` return promises. An unawaited asynchronous assertion fails the attempt and names the assertion.
 
 ## `expect.soft()`
 
-`expect.soft(actual, label?)` records a failure and lets the body continue. The attempt fails at its end on the first soft check that did not pass. A soft check can use `toHaveFile()`.
+`expect.soft(actual, label?)` records a failure and lets the body continue. The attempt fails at its end on the first soft assertion that did not pass. A soft assertion can use `toHaveFile()`.
 
 ```ts
     await expect.soft(c, 'uses fromPartial').toHaveFile(
@@ -61,7 +61,7 @@ The arguments are those of `expect()`.
 </Property>
 
 <Property name="options.timeout" type="number" optional>
-  Milliseconds before the check fails. Defaults to `1000`.
+  Milliseconds before the assertion fails. Defaults to `1000`.
 </Property>
 
 <Property name="options.message" type="string" optional>
@@ -84,7 +84,7 @@ The arguments are those of `expect()`.
 </Property>
 
 <Property name="pattern" type="string | RegExp" optional>
-  Text the file contains, or a regular expression it matches. Without a pattern, the check passes when the file exists.
+  Text the file contains, or a regular expression it matches. Without a pattern, the assertion passes when the file exists.
 </Property>
 
 When an existing file does not match `pattern`, the failure message ends with its last 20 lines, up to 2,000 characters. A missing file failure says that the file at `path` does not exist.
@@ -122,7 +122,7 @@ A failed judge call answers nothing, so `toPass()` and `.not.toPass()` both fail
   A glob, a regular expression, or a list of either. A glob matches dotfiles and every file under the directory it names, so the `test` path pattern also matches the `test/user.test.ts` file. A leading `./` and a trailing `/` are ignored. Without `paths`, any change passes.
 </Property>
 
-The check passes when at least one changed file matches one of the patterns. When no file matches, the failure message lists every changed file with its status. A negated failure lists only the matching files.
+The assertion passes when at least one changed file matches one of the patterns. When no file matches, the failure message lists every changed file with its status. A negated failure lists only the matching files.
 
 ## `toHaveEdited()`
 
@@ -221,7 +221,7 @@ The failure message lists every skill-like call, such as a read under a `skills/
   Text the search query contains, or a regular expression it matches. Without a query, any web search passes.
 </Property>
 
-`toHaveSearched()` refuses a turn whose `unreported` lists `web-search`, and it refuses `c` when any turn so far lists `web-search`, since the harness did not report searches and the agent may have searched with no event. The refusal throws a `HarnessCapabilityError`, and the record marks the check as an error rather than a failure.
+`toHaveSearched()` refuses a turn whose `unreported` lists `web-search`, and it refuses `c` when any turn so far lists `web-search`, since the harness did not report searches and the agent may have searched with no event. The refusal throws a `HarnessCapabilityError`, and the record marks the assertion as an error rather than a failure.
 
 For more information about the error, see [`HarnessCapabilityError`](/reference/api#harnesscapabilityerror).
 

@@ -484,7 +484,7 @@ export type CellRecord = Cell & {
   outcome: Outcome
   lift?: Lift
   /**
-   * Each check (assertion label) seen in any attempt of the evaluation, over this cell's counted
+   * Each assertion, by label, seen in any attempt of the evaluation, over this cell's counted
    * attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.
    */
   checks?: CellCheck[]

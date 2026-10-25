@@ -40,7 +40,7 @@ export const withRules = plain.extendEnvironment('with-rules', ({ file }) => ({
 
 reeval resolves the path against the `evals/environments.ts` file. reeval reads the `rules/sdk.md` file when the attempt starts, so the next run uses edits to that file without a change to the environment.
 
-To check that reeval wrote the rules, read the `AGENTS.md` file in the evaluation body ([Checks](/evals/checks)).
+To check that reeval wrote the rules, read the `AGENTS.md` file in the evaluation body ([Assertions](/evals/checks)).
 
 ```ts title="evals/rules.eval.ts"
 expect(await c.readFile('AGENTS.md')).toContain('generateText')

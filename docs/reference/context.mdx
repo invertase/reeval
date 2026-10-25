@@ -21,7 +21,7 @@ For more information about the returned turn's fields, see [`Turn`](#turn). For 
 
 ## `c.exec()`
 
-`c.exec(command, options?)` runs a shell command in the workspace, with the variables and secrets the environment gives to checks.
+`c.exec(command, options?)` runs a shell command in the workspace, with the variables and secrets the environment gives to assertions.
 
 ```ts
 const result = await c.exec('npm test')
@@ -56,7 +56,7 @@ The `BackgroundHandle` has this method:
   Stops the process and its children, as the end of the attempt does.
 </Property>
 
-For more information about asserting on a command, see [Checks](/evals/checks).
+For more information about asserting on a command, see [Assertions](/evals/checks).
 
 ## `c.serve()`
 

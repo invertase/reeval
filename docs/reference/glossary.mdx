@@ -7,6 +7,10 @@ description: "Look up each core noun, and the distinct terms that share a word."
 
 An analysis is what a language model writes about a run, including insights on what the harness did. `reeval analyze` writes the analysis from the run's digest. For more information about analysis, see [Analysis](/results/analysis).
 
+## Assertion
+
+An assertion is a named pass or fail on what an attempt produced, from `expect`, `c.exec`, or `c.judge`. For more information about assertions, see [Assertions](/evals/checks).
+
 ## Attempt
 
 An attempt is one execution of a cell in a fresh sandbox, and its outcome is pass, fail, infra error, or skipped. For more information about an attempt, see [Core concepts](/core-concepts#attempt).
@@ -14,10 +18,6 @@ An attempt is one execution of a cell in a fresh sandbox, and its outcome is pas
 ## Cell
 
 A cell is one harness, one environment, and one sandbox of an evaluation. In a comparison, the control and each variant are separate cells. For more information about a cell, see [Core concepts](/core-concepts#cell).
-
-## Check
-
-A check is a named assertion on what an attempt produced, from `expect`, `c.exec`, or `c.judge`. For more information about checks, see [Checks](/evals/checks).
 
 ## Comparison
 
@@ -29,7 +29,7 @@ An environment is what the harness receives in an attempt, such as skills, MCP s
 
 ## Evaluation
 
-An evaluation is one task for the harness and the checks on its result, declared with `evaluate()` or as one case of `evaluate.each()` in a `*.eval.ts` file. The evaluation fails when a cell that counts towards it fails. For more information about an evaluation, see [Write an evaluation](/evals/evaluate).
+An evaluation is one task for the harness and the assertions on its result, declared with `evaluate()` or as one case of `evaluate.each()` in a `*.eval.ts` file. The evaluation fails when a cell that counts towards it fails. For more information about an evaluation, see [Write an evaluation](/evals/evaluate).
 
 ## Harness
 
@@ -105,7 +105,7 @@ The **harness model** is `model`. Separate from it are `judge.model`, `capture.m
 
 ### verdict
 
-A **judge verdict** is `Verdict`, checked with `toPass()`. A **family verdict** is `FamilyVerdict`. An **effort verdict** is `EffortVerdict`. A **check verdict** is `CheckVerdict`. An **outcome** (`pass`, `fail`, infra error, or `skipped`) is never called a verdict.
+A **judge verdict** is `Verdict`, checked with `toPass()`. A **family verdict** is `FamilyVerdict`. An **effort verdict** is `EffortVerdict`. An **assertion verdict** is `CheckVerdict`. An **outcome** (`pass`, `fail`, infra error, or `skipped`) is never called a verdict.
 
 ### effect
 
@@ -143,9 +143,9 @@ Harness `maxConcurrent`, sandbox `maxConcurrent`, and `judge.maxConcurrent` are 
 
 `placement` on a skill is `'harness'` or `'workspace'`. Those values are not the harness and not the workspace.
 
-### check
+### assertion
 
-A **check** is one assertion. **Doctor checks** are what `reeval doctor` verifies. The **check matrix** is the terminal table of checks by cell.
+An **assertion** is one pass or fail on an attempt's work. **Doctor checks** are what `reeval doctor` verifies, and are not assertions. The **assertion table** is the terminal table of assertions by cell, headed `check`.
 
 ### agent
 

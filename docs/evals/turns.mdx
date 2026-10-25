@@ -38,7 +38,7 @@ const result = await turn.exec('npx vitest run src/user.test.ts')
 
 `turn.diff.files` lists each path with a status of `added`, `modified`, or `deleted`, and `turn.diff.patch` is the patch for those files. Read the generated token count from `turn.usage.output` when the harness reports usage. `turn.readFile()` reads a workspace-relative path and returns `null` when that file is missing. Both `turn.exec()` and `turn.readFile()` run in the sandbox at the time you call them. A call to `turn.exec()` returns `exitCode`, `stdout`, and `stderr`.
 
-For more information about asserting on a turn, see [Checks](/evals/checks).
+For more information about asserting on a turn, see [Assertions](/evals/checks).
 
 ## Continue over several turns
 

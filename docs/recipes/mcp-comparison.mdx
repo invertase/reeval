@@ -32,7 +32,7 @@ export const app = defineEnvironment(
 </Step>
 <Step title="Write the evaluation">
 
-In the `evals/releases.eval.ts` file, declare the evaluation. `toHaveCalledMcp` fails the attempt when the harness never calls the server's tool, and the file check decides whether the task was done:
+In the `evals/releases.eval.ts` file, declare the evaluation. `toHaveCalledMcp` fails the attempt when the harness never calls the server's tool, and the file assertion decides whether the task was done:
 
 ```ts title="evals/releases.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
@@ -71,7 +71,7 @@ The attempt's `transcript.jsonl` file, under `.reeval/runs/<run>/`, names the ca
 
 To measure what the server changed, run the same evaluation on a control without `mcp`, and the environment with the server as the variant ([Compare setups](/evals/compare)). Set `runs: 4`, because below four counted attempts a side the effect reads `can't tell yet`.
 
-The control has no server, so `toHaveCalledMcp` fails on every control attempt. Read the file check's row for the task. When the file check passes on both sides, the harness finds the version without the server, and this task can't show what the server changed. For more information about the rows, see [Read the results summary](/results/output).
+The control has no server, so `toHaveCalledMcp` fails on every control attempt. Read the file assertion's row for the task. When the file assertion passes on both sides, the harness finds the version without the server, and this task can't show what the server changed. For more information about the rows, see [Read the results summary](/results/output).
 
 </Step>
 </Steps>

@@ -34,7 +34,7 @@ const withJq = defineEnvironment('jq', ({ directory }) => ({
 reeval runs those commands when it builds the image, so every attempt has the CLI. The `project/orders.json` file has five orders, and two of them have a total over 100.
 
 </Step>
-<Step title="Write the task and the checks">
+<Step title="Write the task and the assertions">
 
 In the `evals/cli.eval.ts` file, write the task that uses the CLI and check its result:
 
@@ -52,7 +52,7 @@ evaluate('counts the large orders with jq', {
 })
 ```
 
-`c.exec` runs a command in the sandbox after `c.send` returns. The first check confirms the image has `jq`; `toSucceed` passes when `exitCode` is 0. The second runs the harness's script and compares what it prints with the expected count. For more information about `c.exec` and `toSucceed`, see [Check an attempt](/evals/checks).
+`c.exec` runs a command in the sandbox after `c.send` returns. The first assertion confirms the image has `jq`; `toSucceed` passes when `exitCode` is 0. The second runs the harness's script and compares what it prints with the expected count. For more information about `c.exec` and `toSucceed`, see [Assertions](/evals/checks).
 
 To check the commands the harness ran during the turn, use `toHaveRun`. For more information, see [Check what the agent did](/evals/checks#check-what-the-agent-did).
 
@@ -65,7 +65,7 @@ From the project root, run the evaluation in the `evals/cli.eval.ts` file. The c
 npx reeval run cli
 ```
 
-When both checks pass, the block for the evaluation reads `pass` and the check lines are absent. For more information about the results summary, see [Read the results summary](/results/output).
+When both assertions pass, the block for the evaluation reads `pass` and the assertion lines are absent. For more information about the results summary, see [Read the results summary](/results/output).
 
 </Step>
 <Step title="Check the install layer">

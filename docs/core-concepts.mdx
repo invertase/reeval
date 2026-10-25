@@ -43,11 +43,11 @@ A turn is one `c.send(prompt)` and everything the harness does in reply. The tur
 
 ## Transcript
 
-A transcript is every message and tool call of an attempt, in order, saved in the `transcript.jsonl` file with the run. When a check fails, the [transcript](/results/debugging#read-a-transcript) shows what the agent did.
+A transcript is every message and tool call of an attempt, in order, saved in the `transcript.jsonl` file with the run. When an assertion fails, the [transcript](/results/debugging#read-a-transcript) shows what the agent did.
 
-## Check
+## Assertion
 
-A check is an `expect` assertion on what an attempt produced, such as a file, a command's result, a tool call, or a [judge](/evals/judges)'s verdict. An attempt passes when all of its [checks](/evals/checks) pass.
+An assertion is an `expect` call on what an attempt produced, such as a file, a command's result, a tool call, or a [judge](/evals/judges)'s verdict. An attempt passes when all of its [assertions](/evals/checks) pass.
 
 ## Comparison
 
@@ -55,7 +55,7 @@ A [comparison](/evals/compare) runs one evaluation, through the `compare` option
 
 ## Record
 
-A record is the saved result of a run, with every attempt's outcome, checks, token usage, transcript, and diff. A scratch record lives in the `.reeval/runs/` directory, whereas [recording](/runs/recording) saves selected records beside the code they ran on.
+A record is the saved result of a run, with every attempt's outcome, assertions, token usage, transcript, and diff. A scratch record lives in the `.reeval/runs/` directory, whereas [recording](/runs/recording) saves selected records beside the code they ran on.
 
 ## Analysis
 

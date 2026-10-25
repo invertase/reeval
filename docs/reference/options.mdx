@@ -104,7 +104,7 @@ For more information about environments, see [Define an environment](/environmen
 
 ## `compare`
 
-`compare` runs the control and each variant with the same prompt and checks.
+`compare` runs the control and each variant with the same prompt and assertions.
 
 <Property name="compare" type="CompareOptions | false | { maxVariants: number }" optional>
   A group or an evaluation refuses `false`. On a profile `limit`, `false` drops the variants and `{ maxVariants }` keeps the first that many, where `maxVariants` is a whole number of at least 0.
@@ -311,7 +311,7 @@ For more information about screenshots, see [Check an app](/evals/servers#set-th
 </Property>
 
 <Property name="questions[].across" type="'environment' | 'harness' | Array<'environment' | 'harness'>" optional>
-  The factor a pairwise question varies: `'environment'` holds the harness, and `'harness'` holds the environment. reeval asks it about each pair of attempts that passed their checks, in both orders. Without `across`, reeval asks the question of each attempt on its own.
+  The factor a pairwise question varies: `'environment'` holds the harness, and `'harness'` holds the environment. reeval asks it about each pair of attempts that passed their assertions, in both orders. Without `across`, reeval asks the question of each attempt on its own.
 </Property>
 
 <Property name="questions[].choices" type="string[]" optional>

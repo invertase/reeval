@@ -723,7 +723,7 @@
       "type": "object",
       "properties": {
         "checks": {
-          "description": "Each check (assertion label) seen in any attempt of the evaluation, over this cell's counted attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.",
+          "description": "Each assertion, by label, seen in any attempt of the evaluation, over this cell's counted attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/CellCheck"

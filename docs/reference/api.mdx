@@ -173,7 +173,7 @@ For more information about `EnvironmentSpec`, `EnvironmentHelpers`, each field's
 
 ## `HarnessCapabilityError`
 
-`HarnessCapabilityError` is the error `toHaveSearched()` and `toHaveFetched()` throw when the turn's `unreported` list holds `web-search` or `web-fetch`. The following check catches it:
+`HarnessCapabilityError` is the error `toHaveSearched()` and `toHaveFetched()` throw when the turn's `unreported` list holds `web-search` or `web-fetch`. The following assertion catches it:
 
 ```ts title="evals/search.eval.ts"
 import { evaluate, expect, HarnessCapabilityError } from '{{ pkg }}'
@@ -194,8 +194,8 @@ import { evaluate, expect, HarnessCapabilityError } from '{{ pkg }}'
   Names the matcher, the event type, and the alternatives.
 </Property>
 
-Uncaught, it fails the attempt, and the record lists the check with status `error` rather than `fail`. With `expect.soft()`, the attempt still fails at its end.
+Uncaught, it fails the attempt, and the record lists the assertion with status `error` rather than `fail`. With `expect.soft()`, the attempt still fails at its end.
 
 For more information about the two matchers, see [Matchers reference](/reference/matchers#tohavesearched).
 
-For more information about `RunRecord` and the check's record, see [Run record reference](/reference/record).
+For more information about `RunRecord` and the assertion's record, see [Run record reference](/reference/record).

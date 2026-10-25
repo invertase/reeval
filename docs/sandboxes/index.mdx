@@ -3,7 +3,7 @@ title: "Choose a sandbox"
 description: "Run each attempt in a fresh container on your machine."
 ---
 
-A sandbox is the container an attempt runs in. reeval starts one container per attempt, runs the harness, the setup commands, and the checks in it, and removes it when the attempt ends. Without a `sandbox` option, every attempt runs in `docker()`.
+A sandbox is the container an attempt runs in. reeval starts one container per attempt, runs the harness, the setup commands, and the assertions in it, and removes it when the attempt ends. Without a `sandbox` option, every attempt runs in `docker()`.
 
 ## Choose Docker or Podman
 
@@ -49,7 +49,7 @@ For a runnable project, see [`with-resource-limits`](https://github.com/invertas
 | `cpus` | `2` | CPUs the container may use, capped at the host's; fractions allowed |
 | `pids` | `1024` | Concurrent processes and threads |
 
-The agent, the setup commands, and the checks run as an unprivileged user with every capability dropped. For more information about `root`, `capabilities`, and `maxConcurrent`, see [Docker sandbox](/sandboxes/docker).
+The agent, the setup commands, and the assertions run as an unprivileged user with every capability dropped. For more information about `root`, `capabilities`, and `maxConcurrent`, see [Docker sandbox](/sandboxes/docker).
 
 ## Verify with reeval doctor
 

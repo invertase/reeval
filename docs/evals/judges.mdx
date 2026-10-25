@@ -3,9 +3,9 @@ title: "Score agent work"
 description: "Score the harness's work with a yes or no question."
 ---
 
-You ask `c.judge()` a yes or no question about the harness's work. `toPass()` passes when the score is at least the threshold. For more information about how that verdict becomes an outcome, see [Core concepts](/core-concepts#check).
+You ask `c.judge()` a yes or no question about the harness's work. `toPass()` passes when the score is at least the threshold. For more information about how that verdict becomes an outcome, see [Core concepts](/core-concepts#assertion).
 
-This page's evaluation asks your harness which AI framework to use, and needs no environment. For more information about checks on a file or a command, see [Checks](/evals/checks).
+This page's evaluation asks your harness which AI framework to use, and needs no environment. For more information about assertions on a file or a command, see [Assertions](/evals/checks).
 
 ## Ask the judge a question
 
@@ -101,9 +101,9 @@ During the run, reeval prints a `judge` line in this format, and your score can 
 judge  pass 0.92 (≥ 0.8)  Is Genkit recommended, or named as a good choice?
 ```
 
-A `pass` means the score is at least the threshold. The threshold defaults to `0.8`. A lower score prints `fail`, and `toPass()` fails the check.
+A `pass` means the score is at least the threshold. The threshold defaults to `0.8`. A lower score prints `fail`, and `toPass()` fails the assertion.
 
-When the model call fails, `c.judge()` returns `{ verdict: 'error', score: null }`. Later checks still run, and the attempt fails after the body finishes.
+When the model call fails, `c.judge()` returns `{ verdict: 'error', score: null }`. Later assertions still run, and the attempt fails after the body finishes.
 
 ## Reference
 

@@ -1,9 +1,9 @@
 ---
 title: "Measure your docs"
-description: "See whether your docs helped the agent pass a check."
+description: "See whether your docs helped the agent pass an assertion."
 ---
 
-You run one task on a control without your docs and on a variant that has them. The cells share the prompt and the checks.
+You run one task on a control without your docs and on a variant that has them. The cells share the prompt and the assertions.
 
 ## Run one task with and without your docs
 
@@ -55,7 +55,7 @@ evaluate(
 )
 ```
 
-The rules text names `streamText` from the Vercel AI SDK. The prompt does not name `streamText`, so the check passes only when the docs lead the harness to call it.
+The rules text names `streamText` from the Vercel AI SDK. The prompt does not name `streamText`, so the assertion passes only when the docs lead the harness to call it.
 
 `runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect reads `can't tell yet`.
 
@@ -83,7 +83,7 @@ pass             streams the chat reply
     expected src/chat.ts to match /streamText/
 ```
 
-Your counts can differ. The `with-docs` row reads `helped` because the `with-docs` variant passed the `uses streamText` check in 4 of 4 attempts, and the `plain` cell passed it in 0 of 4. The other effect words are `made it worse` and `can't tell yet`.
+Your counts can differ. The `with-docs` row reads `helped` because the `with-docs` variant passed the `uses streamText` assertion in 4 of 4 attempts, and the `plain` cell passed it in 0 of 4. The other effect words are `made it worse` and `can't tell yet`.
 
 If the `plain` control and the `with-docs` variant both pass, the harness already calls `streamText`, and this task cannot show what the docs changed. A control that already includes the docs measures nothing.
 

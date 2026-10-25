@@ -43,7 +43,7 @@ The `notes` column shows each evaluation's policy and its automatic hosts:
 egress: deny-all + auto: api.anthropic.com, *.anthropic.com
 ```
 
-An evaluation or group's `egress` option overrides the environment's, which overrides the one in the `reeval.config.ts` file or a profile. A blocked request never fails the attempt on its own. The agent gets a refusal, and your checks decide what that means.
+An evaluation or group's `egress` option overrides the environment's, which overrides the one in the `reeval.config.ts` file or a profile. A blocked request never fails the attempt on its own. The agent gets a refusal, and your assertions decide what that means.
 
 ## Allow a list of hosts
 

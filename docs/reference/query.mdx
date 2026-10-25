@@ -333,7 +333,7 @@ reeval query "SELECT question, prev_pass_rate, pass_rate FROM verdict_flips"
 
 ## `check_discrimination`
 
-`check_discrimination` lists one row per check on a variant cell, beside its control, in these columns.
+`check_discrimination` lists one row per assertion on a variant cell, beside its control, in these columns.
 
 <CodeGroup>
 
@@ -353,7 +353,7 @@ reeval query "SELECT label, verdict FROM check_discrimination"
 
 ## `check_rates`
 
-`check_rates` lists one row per check on a cell in a run, in these columns.
+`check_rates` lists one row per assertion on a cell in a run, in these columns.
 
 <CodeGroup>
 
@@ -372,7 +372,7 @@ reeval query "SELECT label, pass, fail, rate FROM check_rates"
 
 ## `check_streaks`
 
-`check_streaks` lists how many recorded runs in a row a check passed, for one cell, fingerprint, and branch, with no `run_id` column, in these columns.
+`check_streaks` lists how many recorded runs in a row an assertion passed, for one cell, fingerprint, and branch, with no `run_id` column, in these columns.
 
 <CodeGroup>
 
