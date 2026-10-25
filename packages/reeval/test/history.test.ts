@@ -269,6 +269,21 @@ evaluate('flat', { compare: { baseline, variants: [variant], minLift: 0.5 } }, a
 })
 `,
     )
+    await writeFile(
+      join(p.dir, 'evals/lifted.eval.ts'),
+      `import { evaluate, expect } from 'reeval'
+import { baseline, variant } from './env.ts'
+
+evaluate(
+  'lifted',
+  { runs: 2, compare: { baseline, variants: [variant], minLift: 0.6 } },
+  async (c) => {
+    await c.send('write the page')
+    expect(c.attempt.cell.role === 'variant' || c.attempt.n === 1, 'passes').toBe(true)
+  },
+)
+`,
+    )
     assert.equal((await runCli(p.dir)).code, 1)
     const r = await runCli(p.dir, ['record', '--artifacts', 'failures'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -299,6 +314,15 @@ evaluate('flat', { compare: { baseline, variants: [variant], minLift: 0.5 } }, a
     assert.ok(
       flat?.attempts.every((a) => a.outcome === 'pass' && a.files.transcript),
       'a lift gate that failed with no failed attempt keeps every attempt',
+    )
+    const lifted = evalOf('lifted')
+    const variantCell = lifted?.cells.find((c) => c.role === 'variant')
+    assert.equal(variantCell?.outcome, 'fail', 'the variant misses its minLift')
+    assert.ok(
+      lifted?.attempts
+        .filter((a) => a.cell === variantCell?.key)
+        .every((a) => a.outcome === 'pass' && a.files.transcript),
+      "the lift-failed cell keeps its attempts beside the control's failure",
     )
   })
 

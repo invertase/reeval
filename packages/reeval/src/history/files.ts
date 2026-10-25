@@ -337,10 +337,13 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
         if ('path' in s && s.path) shown.add(s.path)
       }
     }
-    // An eval that failed with no failed attempt (a `minLift` gate) keeps every attempt's files.
-    const all = failed(e) && !e.attempts.some(failed)
+    // A cell or eval that failed with no failed attempt (a `minLift` gate) keeps every attempt's
+    // files, as the only evidence of it.
+    const whole = failed(e) && !e.attempts.some(failed)
     for (const a of e.attempts) {
       const cellFailed = e.attempts.some((b) => b.cell === a.cell && failed(b))
+      const cell = e.cells.find((c) => c.key === a.cell)
+      const all = whole || (cell !== undefined && failed(cell) && !cellFailed)
       if (level !== 'none' && (all || keeps(a, level))) {
         for (const ref of attemptRefs(a)) await keep(ref)
         continue
