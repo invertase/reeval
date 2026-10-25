@@ -10,6 +10,7 @@ import {
   unlink,
   writeFile,
 } from 'node:fs/promises'
+import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { factsHash } from '../insights/hash.ts'
@@ -206,44 +207,171 @@ async function writeCache(root: string, cache: Cache): Promise<void> {
 export type WrittenRun = { recordPath: string; artifactDir: string | null; created: boolean }
 
 /**
- * Writes `<dir>/<runId>/` (artifacts), then `<dir>/<runId>.json` (the record). The record lands
- * last and create-only, so a reader never sees a half-written run, and a run is never rewritten.
+ * `<dir>/.tmp-<runId>.claim`: whoever creates it owns `<dir>/<runId>/` and `<dir>/<runId>.json`
+ * until it's removed. It holds `<pid>\n<host>\n<token>\n`, linked into place whole.
+ */
+const claimFile = (dir: string, runId: string) => join(dir, `.tmp-${runId}.claim`)
+
+const busy = (runId: string, file: string) =>
+  new HistoryError(
+    `${runId} is being recorded by another process right now. Try again once it finishes; if no reeval is running, delete ${fromCwd(file)}.`,
+  )
+
+/** A claim whose process is gone on this host. Another host's can't be probed, so it holds. */
+function claimGone(held: string): boolean {
+  const [pidLine, host] = held.split('\n')
+  const pid = Number(pidLine)
+  if (!Number.isInteger(pid) || pid <= 0 || !host) return true
+  if (host !== hostname()) return false
+  try {
+    process.kill(pid, 0)
+    return false
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ESRCH'
+  }
+}
+
+/**
+ * Removes the stale claim `held`, and only it. Breakers of one claim take
+ * `<claim>.<hash of held>.break` first, so only one at a time may unlink it; while `held` is in
+ * place nobody else can remove or replace it, so reading it then unlinking it is safe.
+ */
+async function breakClaim(file: string, held: string, runId: string): Promise<void> {
+  const lock = `${file}.${sha256(held).slice(0, 12)}.break`
+  try {
+    await writeFile(lock, '', { flag: 'wx' })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST' || inFlux(error)) {
+      throw busy(runId, file)
+    }
+    throw error
+  }
+  try {
+    let now: string | null
+    try {
+      now = await readFile(file, 'utf8')
+    } catch (error) {
+      if (isMissing(error)) return
+      if (inFlux(error)) throw busy(runId, file)
+      throw error
+    }
+    if (now === held) await unlink(file)
+  } finally {
+    await unlink(lock).catch(() => {})
+  }
+}
+
+/** Takes `runId`'s claim in `dir`, breaking one a dead process left; returns its release. */
+async function claimRun(dir: string, runId: string): Promise<() => Promise<void>> {
+  const file = claimFile(dir, runId)
+  const body = `${process.pid}\n${hostname()}\n${randomBytes(6).toString('hex')}\n`
+  const tmp = `${file}.${tmpName()}`
+  await writeFile(tmp, body)
+  try {
+    for (let tries = 0; tries < 3; tries++) {
+      try {
+        await link(tmp, file)
+        return async () => {
+          if ((await readFile(file, 'utf8').catch(() => null)) === body) {
+            await unlink(file).catch(() => {})
+          }
+        }
+      } catch (error) {
+        // Windows reserves a name another process is still deleting: EPERM, not EEXIST.
+        if (!['EEXIST', 'EPERM', 'EBUSY'].includes((error as NodeJS.ErrnoException).code ?? '')) {
+          throw error
+        }
+      }
+      let held: string
+      try {
+        held = await readFile(file, 'utf8')
+      } catch (error) {
+        if (isMissing(error)) continue
+        if (inFlux(error)) throw busy(runId, file)
+        throw error
+      }
+      if (!claimGone(held)) throw busy(runId, file)
+      await breakClaim(file, held, runId)
+    }
+    throw busy(runId, file)
+  } finally {
+    await unlink(tmp).catch(() => {})
+  }
+}
+
+/** A record a resumed run replaces: the run stopped before it finished. */
+const unfinished = (bytes: Buffer, where: string) => {
+  try {
+    const status = parseRecord(bytes, where).status
+    return status === 'interrupted' || status === 'budget'
+  } catch {
+    return false
+  }
+}
+
+const readIfThere = (path: string) =>
+  readFile(path).catch((error) => {
+    if (isMissing(error)) return null
+    throw error
+  })
+
+/**
+ * Claims the run, then writes `<dir>/<runId>/` (artifacts), then `<dir>/<runId>.json` (the
+ * record). The record lands last and create-only, so a reader never sees a half-written run, and
+ * a run is never rewritten, except an interrupted or budget-stopped one by its resumed run.
  */
 export async function writeRun(
   dir: string,
   record: RunRecord,
   artifacts: Map<string, Uint8Array>,
 ): Promise<WrittenRun> {
-  const recordPath = join(dir, `${record.runId}.json`)
-  const artifactDir = artifacts.size > 0 ? join(dir, record.runId) : null
+  const recordPath = recordFile(dir, record.runId)
+  const artifactDir = artifacts.size > 0 ? runDir(dir, record.runId) : null
   const bytes = encodeRecord(record)
-  let existing: Buffer | null = null
-  try {
-    existing = await readFile(recordPath)
-  } catch (error) {
-    if (!isMissing(error)) throw error
-  }
-  if (existing) {
-    if (existing.equals(bytes)) return { recordPath, artifactDir, created: false }
-    throw new HistoryError(
-      `${record.runId} is already recorded with different content (another --artifacts level?). Recorded runs are never rewritten.`,
-    )
+  // A landed record is only ever removed by a writer replacing an unfinished one, so an equal
+  // one needs no claim.
+  if ((await readIfThere(recordPath))?.equals(bytes)) {
+    return { recordPath, artifactDir, created: false }
   }
   await mkdir(dir, { recursive: true })
-  // An artifact dir without a record is left over from an interrupted write.
-  await rm(join(dir, record.runId), { recursive: true, force: true })
-  if (artifactDir) {
-    const staging = join(dir, `.tmp-${tmpName()}`)
-    try {
+  const release = await claimRun(dir, record.runId)
+  try {
+    return await writeClaimed(dir, record.runId, bytes, artifacts)
+  } finally {
+    await release()
+  }
+}
+
+async function writeClaimed(
+  dir: string,
+  runId: string,
+  bytes: Buffer,
+  artifacts: Map<string, Uint8Array>,
+): Promise<WrittenRun> {
+  const recordPath = recordFile(dir, runId)
+  const artifactDir = artifacts.size > 0 ? runDir(dir, runId) : null
+  const existing = await readIfThere(recordPath)
+  if (existing?.equals(bytes)) return { recordPath, artifactDir, created: false }
+  if (existing && !unfinished(existing, recordPath)) {
+    throw new HistoryError(
+      `${runId} is already recorded with different content (another --artifacts level?). Recorded runs are never rewritten.`,
+    )
+  }
+  const staging = artifactDir ? join(dir, `.tmp-${tmpName()}`) : null
+  try {
+    if (staging) {
       for (const [path, content] of artifacts) {
         const file = join(staging, ...path.split('/'))
         await mkdir(dirname(file), { recursive: true })
         await writeFile(file, content)
       }
-      await rename(staging, artifactDir)
-    } finally {
-      await rm(staging, { recursive: true, force: true })
     }
+    if (existing) await rm(recordPath, { force: true })
+    // An artifact dir without a record is left over from an interrupted write.
+    await rm(runDir(dir, runId), { recursive: true, force: true })
+    if (staging && artifactDir) await rename(staging, artifactDir)
+  } finally {
+    if (staging) await rm(staging, { recursive: true, force: true })
   }
   const tmp = join(dir, `.tmp-${tmpName()}.json`)
   await writeFile(tmp, bytes)
@@ -422,14 +550,6 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     }
   }
   await ensureHistoryGitignore(options.historyDir)
-  const dest = recordFile(options.historyDir, runId)
-  try {
-    const old = await readRecord(dest)
-    if (old.status === 'interrupted' || old.status === 'budget') {
-      await rm(dest, { force: true })
-      await rm(runDir(options.historyDir, runId), { recursive: true, force: true })
-    }
-  } catch {}
   const written = await writeRun(options.historyDir, record, files)
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)
   if (!written.created) return { ...written, files: files.size, bytes, droppedPatch, ignored: [] }

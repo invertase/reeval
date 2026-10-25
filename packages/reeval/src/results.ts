@@ -2,7 +2,7 @@ import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { hasAnalysisModel } from './config.ts'
 import { type AssembleInput, assembleRun } from './history/assemble.ts'
-import { readRecord, scratchDir, type WrittenRun, writeRun } from './history/files.ts'
+import { scratchDir, type WrittenRun, writeRun } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
 import type { RunRecord } from './history/types.ts'
 import type { ResolvedConfig } from './types.ts'
@@ -65,14 +65,6 @@ export async function writeScratchRun(
     Buffer.from(renderSummary(record, { hint: !hasAnalysisModel(input.ctx.config), insights })),
   )
   const scratch = scratchDir(input.ctx.config.root)
-  const existing = join(scratch, `${record.runId}.json`)
-  try {
-    const old = await readRecord(existing)
-    if (old.status === 'interrupted' || old.status === 'budget') {
-      await rm(existing, { force: true })
-      await rm(join(scratch, record.runId), { recursive: true, force: true })
-    }
-  } catch {}
   const written = await writeRun(scratch, record, artifacts)
   landed?.()
   await rm(input.ctx.stagingDir, { recursive: true, force: true })
