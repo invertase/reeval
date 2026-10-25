@@ -33,7 +33,7 @@ That's one cell of a real Cursor run. The cell's `fingerprint` is the hash of th
 | `gateway` | The gateway the model calls went through; unset on `direct` | You add, change or drop a gateway |
 | `gate` | The cell's resolved gate, from the eval, the config or a profile's `defaults`; unset on `'all'` | You change `gate` or `compare.gate` |
 
-Only local imports are traced; packages are covered by the lockfile hashes the run records. Records from before `cursor()` moved to the Cursor SDK list files its old CLI rewrote every session, such as `~/.cursor/cli-config.json`; reeval treats changes to those as noise, not drift.
+Only local imports are traced; packages are covered by the lockfile hashes the run records. Imports are traced in TypeScript eval files only: a Python or other-language eval's `sources` is the eval file alone, so editing a local helper module it imports isn't seen yet. Records from before `cursor()` moved to the Cursor SDK list files its old CLI rewrote every session, such as `~/.cursor/cli-config.json`; reeval treats changes to those as noise, not drift.
 
 ## Read a compare
 
