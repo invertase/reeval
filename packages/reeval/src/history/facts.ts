@@ -16,7 +16,7 @@ import {
 } from '../view/effort.ts'
 import { rowsOf } from './rows.ts'
 import { TOOL_CLASSES } from './tool-class.ts'
-import type { CheckTally } from './types.ts'
+import type { CheckTally, FingerprintParts } from './types.ts'
 
 /** Counted attempts, pooled over comparable runs, before a cell with mixed outcomes is `flaky`. */
 export const FLAKY_MIN_ATTEMPTS = 6
@@ -138,15 +138,18 @@ type Attempt = {
   reasoning_tokens: number | null
 }
 
-const PARTS = [
-  ['sources', 'fp_sources'],
-  ['harness', 'fp_harness'],
-  ['environment', 'fp_environment'],
-  ['image', 'fp_image'],
-  ['agent_cli', 'fp_agent_cli'],
-  ['judge', 'fp_judge'],
-  ['context', 'fp_context'],
-] as const
+/** Each fingerprint part's name in `drift.changed` and its `cells` column; every part has one. */
+const PART_COLUMNS = {
+  sources: ['sources', 'fp_sources'],
+  harness: ['harness', 'fp_harness'],
+  environment: ['environment', 'fp_environment'],
+  image: ['image', 'fp_image'],
+  agentCli: ['agent_cli', 'fp_agent_cli'],
+  judge: ['judge', 'fp_judge'],
+  context: ['context', 'fp_context'],
+  gateway: ['gateway', 'fp_gateway'],
+} as const satisfies Record<keyof FingerprintParts, readonly [string, `fp_${string}`]>
+const PARTS = Object.values(PART_COLUMNS)
 
 const r4 = (x: number | null) => (x === null ? null : Math.round(x * 10_000) / 10_000)
 const s1 = (ms: number) => Math.round(ms / 100) / 10

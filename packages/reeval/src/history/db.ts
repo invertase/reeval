@@ -19,7 +19,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 14
+const DB_VERSION = 15
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -114,7 +114,7 @@ CREATE TABLE cells (
   harness TEXT, harness_kind TEXT, model TEXT, reasoning_effort TEXT, environment TEXT,
   environment_digest TEXT, sandbox TEXT, gate TEXT, gate_pass_rate REAL, fingerprint TEXT,
   fp_sources TEXT, fp_harness TEXT, fp_environment TEXT, fp_image TEXT, fp_agent_cli TEXT,
-  fp_judge TEXT, fp_context TEXT, runs INTEGER, pass INTEGER, fail INTEGER, infra_error INTEGER,
+  fp_judge TEXT, fp_context TEXT, fp_gateway TEXT, runs INTEGER, pass INTEGER, fail INTEGER, infra_error INTEGER,
   skipped INTEGER, pass_at_1 REAL, outcome TEXT, lift_vs TEXT, lift_points REAL, lift_lo REAL,
   lift_hi REAL, within_noise INTEGER, min_lift REAL, comparable TEXT,
   PRIMARY KEY (run_id, eval_key, key)
@@ -522,7 +522,7 @@ function insertRun(
     for (const c of e.cells) {
       const p = c.fingerprintParts
       run(
-        `INSERT INTO cells VALUES (${Array(36).fill('?').join(', ')})`,
+        `INSERT INTO cells VALUES (${Array(37).fill('?').join(', ')})`,
         record.runId,
         e.key,
         c.key,
@@ -545,6 +545,7 @@ function insertRun(
         p.agentCli,
         p.judge,
         p.context,
+        p.gateway ?? null,
         c.runs,
         c.pass,
         c.fail,

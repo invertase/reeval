@@ -76,7 +76,9 @@ function transcriptTail(lines: TranscriptLine[], tail: number) {
 const failedHere = (c: Pick<HistoryCell, 'fail' | 'infraError'>) => c.fail > 0 || c.infraError > 0
 
 const changedParts = (a: FingerprintParts, b: FingerprintParts) =>
-  (Object.keys(a) as Array<keyof FingerprintParts>).filter((k) => a[k] !== b[k])
+  ([...new Set([...Object.keys(a), ...Object.keys(b)])] as Array<keyof FingerprintParts>).filter(
+    (k) => a[k] !== b[k],
+  )
 
 function changedSources(
   now: EvalEntry['sources'],
