@@ -89,7 +89,7 @@ A profile takes `defaults`, `limit`, `judge`, `budget`, `record`, `tags` and `ga
   Harness ids to keep, matched exactly: `cursor:composer-2.5` keeps the default harness, and a bare `cursor` matches none. The others are dropped from each eval; an eval left with none is skipped. It can't add a harness: use `defaults.harness` for that.
 </Property>
 
-The plan shows what `limit` changed in the notes column. This is the `pr` profile above, run in CI against an eval group with `compare` and `runs: 3`, using the fake harness:
+The plan shows what `limit` changed in the notes column. This is the `pr` profile above with `harness: ['fake']`, run in CI against an eval group with `compare` and `runs: 3`, using the fake harness:
 
 ```text
 plan  profile pr (auto: CI is set) · 3 evals (1 skipped) · 4 cells · 4 attempts · …
