@@ -15,6 +15,7 @@ import type { RawAssertion } from '../src/engine/runtime.ts'
 import { type BrokeredSecret, resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment, unbrokeredSecrets } from '../src/environment.ts'
 import { cursorMcpServers } from '../src/harness/agents.ts'
+import { capText, OUTPUT_CAP, turnError, turnText } from '../src/history/assemble.ts'
 import { findingLines, findingSummary, scanText } from '../src/history/secret-scan.ts'
 import type { PlannedAttempt } from '../src/options.ts'
 import { brokeredIn, secretVarsIn, unbrokered, unbrokeredWarning } from '../src/options.ts'
@@ -751,6 +752,33 @@ describe('masking before shortening', () => {
       assert.match(trace, /"clipped":/)
       assert.match(trace, /password=\[RED/)
       assert.doesNotMatch(trace, /password=corr/)
+    }),
+  )
+
+  test(
+    "a turn's final message and error are masked before the record cuts them",
+    withSecret(() => {
+      const text = turnText(`${'x'.repeat(8 * 1024 - 14)} password=${secret} ${'y'.repeat(100)}`)
+      assert.match(text, /reeval: truncated/)
+      assert.match(text, /password=\[RED/)
+      assert.doesNotMatch(text, /password=corr/)
+      const message = `${'x'.repeat(1024 - 14)} password=${secret}`
+      const error = turnError([{ type: 'error', message } as TranscriptEvent]) ?? ''
+      assert.match(error, /password=\[RED/)
+      assert.doesNotMatch(error, /password=corr/)
+    }),
+  )
+
+  test(
+    'a large output is masked before its head and tail are kept',
+    withSecret(() => {
+      const head = 96 * 1024
+      const tail = 16 * 1024
+      const big = `${'x'.repeat(head - 14)} password=${secret} ${'y'.repeat(OUTPUT_CAP)}${secret}.${'z'.repeat(tail - 8)}`
+      const capped = capText(big)
+      assert.match(capped, /reeval: truncated/)
+      assert.match(capped, /password=\[RED/)
+      assert.doesNotMatch(capped, /password=corr|staple\.z/)
     }),
   )
 })

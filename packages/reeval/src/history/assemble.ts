@@ -72,12 +72,27 @@ import {
 const TURN_TEXT_LIMIT = 8 * 1024
 const TURN_ERROR_LIMIT = 1024
 
+/**
+ * `text` masked when it's longer than `limit`, so a secret the cut would go through is masked
+ * whole. Text that fits is masked when the record is written.
+ */
+const maskedOver = (text: string, limit: number) =>
+  text.length > limit ? redactSecrets(text) : text
+
 /** A turn's first error event, such as the provider's "Credit balance is too low". */
-function turnError(transcript: TranscriptEvent[] | undefined): string | null {
+export function turnError(transcript: TranscriptEvent[] | undefined): string | null {
   const found = transcript?.find((e) => e.type === 'error')
   if (found?.type !== 'error') return null
-  const message = found.message.trim()
+  const message = maskedOver(found.message.trim(), TURN_ERROR_LIMIT)
   return message.length > TURN_ERROR_LIMIT ? `${message.slice(0, TURN_ERROR_LIMIT)}…` : message
+}
+
+/** A turn's final message, cut at `TURN_TEXT_LIMIT`. */
+export function turnText(text: string): string {
+  const s = maskedOver(text, TURN_TEXT_LIMIT)
+  return s.length > TURN_TEXT_LIMIT
+    ? `${s.slice(0, TURN_TEXT_LIMIT)}… [reeval: truncated ${s.length} characters; the whole message is the turn's last text event in transcript.jsonl]`
+    : s
 }
 
 /** Tokens across every turn that reported them. */
@@ -136,7 +151,8 @@ export type AssembledRun = {
 }
 
 /** Keeps evidence readable without letting one `cat` of a lockfile dominate the record. */
-export function capText(text: string, cap = OUTPUT_CAP): string {
+export function capText(raw: string, cap = OUTPUT_CAP): string {
+  const text = maskedOver(raw, cap)
   if (text.length <= cap) return text
   const omitted = text.length - HEAD - TAIL
   return `${text.slice(0, HEAD)}\n[reeval: truncated ${omitted} of ${text.length} characters, sha256 ${sha256(text)}]\n${text.slice(-TAIL)}`
@@ -810,10 +826,7 @@ async function attemptEvidence(
       unreported: t.unreported ?? [],
       error: turnError(t.transcript),
       ...(t.mcpStartup ? { mcpStartup: t.mcpStartup } : {}),
-      text:
-        t.text.length > TURN_TEXT_LIMIT
-          ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [reeval: truncated ${t.text.length} characters; the whole message is the turn's last text event in transcript.jsonl]`
-          : t.text,
+      text: turnText(t.text),
     })),
     usage: sumUsage((record?.turns ?? []).map((t) => t.usage)),
     ...(record?.captureUse ? { captureUse: record.captureUse } : {}),
