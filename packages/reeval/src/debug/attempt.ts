@@ -104,7 +104,7 @@ export class AttemptDebug {
       data,
     })
     if (entry.length > MAX_ENTRY) {
-      const head = json(data).slice(0, ENTRY_HEAD)
+      const head = redactJsonText(json(data)).slice(0, ENTRY_HEAD)
       entry = json({
         at: new Date(at).toISOString(),
         ms: at - this.#startedAt,

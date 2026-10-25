@@ -1312,4 +1312,52 @@ describe('docker command traces', () => {
       'nothing once the listener is gone',
     )
   })
+
+  test('a secret across the clip is masked whole, in every stream, argument and error', () => {
+    const secret = 'correct-horse-battery-staple'
+    const seen: DockerCommand[] = []
+    onDockerCommand(
+      (c) => seen.push(c),
+      (text) => text.replaceAll(secret, '[REDACTED]'),
+    )
+    const across = (max: number) => `${'.'.repeat(max - 4)}${secret}`
+    try {
+      const at = Date.now()
+      traceDocker(['exec', across(300)], at, {
+        exitCode: 1,
+        stdout: Buffer.from(across(4096)),
+        stderr: across(4096),
+      })
+      traceDocker(['exec', across(300)], at, { stdout: across(4096), exitCode: 0 })
+      traceDocker(['ps'], at, { error: new Error(`failed: ${secret}`) })
+    } finally {
+      onDockerCommand(undefined)
+    }
+    const traced = JSON.stringify(seen)
+    assert.doesNotMatch(traced, /\.corr/)
+    assert.equal(traced.match(/\[RED/g)?.length, 6)
+  })
+
+  test('a large stream is masked only as far past the clip as a secret reaches, and counted whole', () => {
+    const secret = 'correct-horse-battery-staple'
+    const seen: DockerCommand[] = []
+    let longest = 0
+    onDockerCommand(
+      (c) => seen.push(c),
+      (text) => {
+        longest = Math.max(longest, text.length)
+        return text.replaceAll(secret, '[REDACTED]')
+      },
+    )
+    try {
+      const big = `${'.'.repeat(4092)}${secret}${'y'.repeat(10_000_000)}`
+      traceDocker(['exec'], Date.now(), { exitCode: 0, stdout: big, stderr: 'z'.repeat(5000) })
+    } finally {
+      onDockerCommand(undefined)
+    }
+    assert.ok(longest <= 4096 + 16 * 1024, `masked ${longest} characters`)
+    const [c] = seen
+    assert.equal(c?.stdout, `${'.'.repeat(4092)}[RED… (${10_000_000 + 6} more)`)
+    assert.equal(c?.stderr, `${'z'.repeat(4096)}… (904 more)`)
+  })
 })

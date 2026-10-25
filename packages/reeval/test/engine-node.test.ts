@@ -8,6 +8,7 @@ import { runEngine } from '../src/engine/node.ts'
 import type { Exit, Spawn, WorkerProcess } from '../src/engine/pool.ts'
 import { type FromWorker, PROTOCOL, type ToWorker, type WireTest } from '../src/engine/protocol.ts'
 import type { CollectedPlan, EngineOptions } from '../src/engine/types.ts'
+import { FAILURE_CAP } from '../src/text.ts'
 import type { AttemptMeta, RunContext } from '../src/types.ts'
 import type { ReevalEvent } from '../src/ui/events.ts'
 import { tempDir } from './helpers.ts'
@@ -439,6 +440,33 @@ describe('runEngine: running', () => {
     const r = await engine({ run }, spawn)
     assert.equal(r.evals[0]?.errorName, 'TimeoutError')
     assert.equal(r.evals[0]?.errors[0], 'Eval timed out after 1s')
+  })
+
+  test('a long error is masked before its middle is cut, so a secret across the cut goes whole', async () => {
+    const { run } = project(['evals/a.eval.ts'])
+    const secret = 'correct-horse-battery-staple'
+    process.env.REEVAL_TEST_CUT_PASSWORD = secret
+    const head = Math.floor(FAILURE_CAP * 0.75)
+    const message = `${'x'.repeat(head - 14)} password=${secret} ${'y'.repeat(FAILURE_CAP)}`
+    const { spawn } = fakeSpawn((ctl) => {
+      ctl.emit({ t: 'collected', tests: [test0(0, 'a')] })
+      if (ctl.init.select) {
+        const errors = [{ name: 'Error', message }]
+        ctl.emit({ t: 'result', index: 0, result: { state: 'failed', errors, durationMs: 1 } })
+        ctl.emit({ t: 'ready' })
+      }
+      ctl.emit({ t: 'done' })
+      ctl.exit()
+    })
+    try {
+      const r = await engine({ run }, spawn)
+      assert.match(r.evals[0]?.errors[0] ?? '', /password=\[RED\n\[… \d+ characters cut/)
+      for (const text of [r.evals[0]?.errors[0], r.evals[0]?.formattedErrors[0]]) {
+        assert.doesNotMatch(text ?? '', /=corr/)
+      }
+    } finally {
+      delete process.env.REEVAL_TEST_CUT_PASSWORD
+    }
   })
 
   test('a cancel reaches running workers, and files not started never start', async () => {
