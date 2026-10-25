@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { Substitution } from '@reeval/sandbox-docker'
+import { stagedRecordJson } from '../src/attempt/record.ts'
 import { AttemptDebug } from '../src/debug/attempt.ts'
 import { type BrokeredSecret, resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment, unbrokeredSecrets } from '../src/environment.ts'
@@ -718,6 +719,35 @@ describe('redacting a secret split across stream parts', () => {
       assert.equal(lines.length, raw.length)
       assert.equal(JSON.parse(lines[0] as string).turn, 0)
       assert.equal(deltaText(lines), 'Your key is [REDACTED] and the PIN is [REDACTED].')
+    } finally {
+      if (before === undefined) delete process.env.ANTHROPIC_API_KEY
+      else process.env.ANTHROPIC_API_KEY = before
+    }
+  })
+
+  test('the staging record masks it, so transcript.raw.jsonl built from it has no pieces left', () => {
+    const before = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = key
+    try {
+      // Deltas of 8 or more characters are masked one by one; the short ones between them aren't.
+      const sizes = [16, 4, 12, 4, 12, 4, 40]
+      let at = 0
+      const raw = sizes.map((n) => {
+        const text = reply.slice(at, at + n)
+        at += n
+        return { type: 'text-delta', id: 't', text }
+      })
+      const staged = JSON.parse(stagedRecordJson({ turns: [{ raw }] } as unknown as EvalRecord))
+      const want = 'Your key is [REDACTED] and the PIN is [REDACTED].'
+      assert.equal(
+        rebuilt(staged.turns[0].raw.map(JSON.stringify), (p) => (p as { text: string }).text),
+        want,
+      )
+      const lines = (rawLines(staged) as string).trim().split('\n')
+      assert.equal(
+        rebuilt(lines, (l) => (l as { text: string }).text),
+        want,
+      )
     } finally {
       if (before === undefined) delete process.env.ANTHROPIC_API_KEY
       else process.env.ANTHROPIC_API_KEY = before
