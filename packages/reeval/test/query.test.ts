@@ -550,6 +550,49 @@ evaluate('with beta', { environment: b }, async (c) => { await c.send('x'); thro
     assert.equal(byName.length, 4, 'each attempt matches both environments named tools')
   })
 
+  test('two environments with the same contents keep a row each and count skills once', async () => {
+    const p = await project('query-env-twins', {
+      'reeval.config.ts': fakeConfig(),
+      'skills/greet/SKILL.md': skill('greet'),
+      'evals/t.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const a = defineEnvironment('alpha', ({ skill }) => ({ sandbox, skills: [skill.local('../skills/greet')] }))
+const b = defineEnvironment('beta', ({ skill }) => ({ sandbox, skills: [skill.local('../skills/greet')] }))
+evaluate('one', { environment: a }, async (c) => { await c.send('x'); throw new Error('no') })
+evaluate('two', { environment: b }, async (c) => { await c.send('x'); throw new Error('no') })
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 1)
+    const envs = await query(p.dir, 'SELECT name, digest FROM environments ORDER BY name')
+    assert.deepEqual(
+      envs.map((r) => r.name),
+      ['alpha', 'beta'],
+    )
+    assert.equal(envs[0]?.digest, envs[1]?.digest, 'the same contents share a digest')
+    const reads = await query(p.dir, 'SELECT eval_key, skill FROM skill_reads ORDER BY eval_key')
+    assert.deepEqual(
+      reads.map((r) => r.skill),
+      ['greet', 'greet'],
+    )
+    const failing = await query(p.dir, 'SELECT environment, skill FROM failing_attempts')
+    assert.deepEqual(failing.map((r) => `${r.environment}:${r.skill}`).sort(), [
+      'alpha:greet',
+      'beta:greet',
+    ])
+    const joined = await query(
+      p.dir,
+      `SELECT c.environment AS cell, e.name AS env FROM cells c
+       JOIN environments e ON e.run_id = c.run_id AND e.name = c.environment
+         AND e.digest = c.environment_digest
+       ORDER BY cell`,
+    )
+    assert.deepEqual(
+      joined.map((r) => `${r.cell}:${r.env}`),
+      ['alpha:alpha', 'beta:beta'],
+    )
+  })
+
   test('drift names the changed part; flaky cells and verdict flips are found', async () => {
     const p = await project('query-drift', {
       'reeval.config.ts': fakeConfig({

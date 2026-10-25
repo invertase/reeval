@@ -139,11 +139,12 @@ CREATE TABLE judgements (
 );
 CREATE TABLE environments (
   run_id TEXT NOT NULL, name TEXT NOT NULL, digest TEXT NOT NULL, parent TEXT, overrides TEXT,
-  PRIMARY KEY (run_id, digest)
+  PRIMARY KEY (run_id, name, digest)
 );
 CREATE TABLE env_skills (
-  run_id TEXT NOT NULL, digest TEXT NOT NULL, name TEXT NOT NULL, source TEXT, commit_sha TEXT,
-  sha256 TEXT, placement TEXT
+  run_id TEXT NOT NULL, environment TEXT NOT NULL, digest TEXT NOT NULL, name TEXT NOT NULL,
+  source TEXT, commit_sha TEXT, sha256 TEXT, placement TEXT,
+  PRIMARY KEY (run_id, environment, digest, name)
 );
 CREATE TABLE artifacts (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, kind TEXT NOT NULL, path TEXT NOT NULL,
@@ -189,7 +190,6 @@ CREATE INDEX tool_calls_by_attempt ON tool_calls (run_id, attempt_key);
 CREATE INDEX context_by_attempt ON attempt_context (run_id, attempt_key);
 CREATE INDEX context_reads_by_attempt ON context_reads (run_id, attempt_key);
 CREATE INDEX attempts_by_cell ON attempts (run_id, eval_key, cell_key);
-CREATE INDEX env_skills_by_digest ON env_skills (run_id, digest);
 `
 
 /** Canned questions about the history, as views to filter. */
@@ -260,7 +260,8 @@ CREATE VIEW skill_reads AS
         OR (t.tool IN ('skill', 'Skill', 'load_skill') AND t.target = s.name))) AS reads
   FROM attempts a
   JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
-  JOIN env_skills s ON s.run_id = c.run_id AND s.digest = c.environment_digest;
+  JOIN env_skills s ON s.run_id = c.run_id AND s.environment = c.environment
+    AND s.digest = c.environment_digest;
 
 -- Tool calls per attempt by class: context (a placed skill, rules file or other placed file, a
 -- skill load, an MCP tool of the environment), dependency (node_modules, site-packages, vendor,
@@ -300,7 +301,8 @@ CREATE VIEW failing_attempts AS
       AND x.status = 'fail' ORDER BY x.seq LIMIT 1) AS first_failed_check
   FROM attempts a JOIN runs r USING (run_id)
   JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
-  LEFT JOIN env_skills s ON s.run_id = c.run_id AND s.digest = c.environment_digest
+  LEFT JOIN env_skills s ON s.run_id = c.run_id AND s.environment = c.environment
+    AND s.digest = c.environment_digest
   WHERE a.outcome IN ('fail', 'infra_error');
 
 -- Each check of a variant cell beside its control's: whether it tells them apart.
@@ -492,8 +494,9 @@ function insertRun(
     )
     for (const s of env.skills) {
       run(
-        'INSERT INTO env_skills VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT OR IGNORE INTO env_skills VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         record.runId,
+        env.name,
         env.digest,
         s.name,
         s.source,
