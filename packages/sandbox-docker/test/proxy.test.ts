@@ -235,13 +235,19 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
       `HTTP/1.1 101 Switching Protocols\r\nupgrade: websocket\r\nconnection: Upgrade\r\nsec-websocket-accept: ${accept}\r\n${echoed}\r\n`,
     )
     if (req.url === '/ws-key') {
-      // The key back in a text message split over two frames with a ping between them, then
-      // whole in a binary one.
+      // The key back in a text message split over two frames with a ping carrying it between
+      // them, then whole in a binary one, then in a close frame's reason.
       const text = `key: ${req.headers.authorization}`
       const cut = text.length - 10
       socket.write(wsFrame(1, text.slice(0, cut), false))
-      socket.write(wsFrame(9, 'ping'))
-      socket.end(Buffer.concat([wsFrame(0, text.slice(cut)), wsFrame(2, text)]))
+      socket.write(wsFrame(9, `ping ${text}`))
+      socket.end(
+        Buffer.concat([
+          wsFrame(0, text.slice(cut)),
+          wsFrame(2, text),
+          wsFrame(8, Buffer.concat([Buffer.from([0x03, 0xf0]), Buffer.from(`invalid ${text}`)])),
+        ]),
+      )
       return
     }
     socket.pipe(socket)
@@ -601,11 +607,13 @@ describe('egress proxy', () => {
     )
     assert.doesNotMatch(received.toString('latin1'), new RegExp(REAL))
     const key = `key: Bearer ${PLACEHOLDER}`
-    // The fragmented text message arrives whole, after the ping that came between its frames.
+    // The fragmented text message arrives whole, after the ping that came between its frames,
+    // and the control frames are scrubbed too.
     assert.deepEqual(wsFrames(received.subarray(split)), [
-      [true, 9, 'ping'],
+      [true, 9, `ping ${key}`],
       [true, 1, key],
       [true, 2, key],
+      [true, 8, `${Buffer.from([0x03, 0xf0])}invalid ${key}`],
     ])
     secure.destroy()
   })
