@@ -123,7 +123,8 @@ export function checkTsconfig(dir: string, root: string): void {
   }
   if (!found) return
   try {
-    JSON.parse(stripJsonComments(readFileSync(found.path, 'utf8')))
+    // tsc accepts a leading byte order mark, which Node's 'utf8' decoding keeps.
+    JSON.parse(stripJsonComments(readFileSync(found.path, 'utf8').replace(/^\uFEFF/, '')))
   } catch (error) {
     throw new TsconfigError(
       `Failed to load tsconfig '${relativeFile(root, found.path)}': ${(error as Error).message}`,

@@ -8,6 +8,7 @@ import { parse as parseYaml } from 'yaml'
 import { closest } from '../contract/shared.ts'
 import { sha256 } from '../ids.ts'
 import { stripCredentials } from '../redact.ts'
+import { withoutBom } from '../text.ts'
 import type {
   EnvironmentLayer,
   EnvVars,
@@ -21,6 +22,8 @@ import type {
   SecretTemplate,
   SkillSource,
 } from '../types.ts'
+
+const readText = (path: string) => withoutBom(readFileSync(path, 'utf8'))
 
 export const PLUGIN_PARTS: readonly PluginPart[] = [
   'skills',
@@ -57,7 +60,7 @@ export const OTHER_MANIFESTS = [
 function agentPluginsSchema(dir: string): boolean {
   try {
     const file = join(dir, 'plugin.json')
-    const schema = (JSON.parse(readFileSync(file, 'utf8')) as { $schema?: unknown }).$schema
+    const schema = (JSON.parse(readText(file)) as { $schema?: unknown }).$schema
     return typeof schema === 'string' && schema.startsWith('https://agent-plugins.org/schemas/')
   } catch {
     return false
@@ -379,7 +382,7 @@ export type PluginContents = {
 
 const readJson = (path: string, what: string): unknown => {
   try {
-    return JSON.parse(readFileSync(path, 'utf8'))
+    return JSON.parse(readText(path))
   } catch (error) {
     throw new PluginProblem(`${what} isn't valid JSON (${(error as Error).message.split('\n')[0]})`)
   }
@@ -400,7 +403,7 @@ const filesIn = (dir: string, test: (name: string) => boolean) =>
 
 /** A skill's name from its `SKILL.md` frontmatter, else its directory's; `loadSkills` checks it. */
 function skillName(dir: string): string {
-  const text = readFileSync(join(dir, 'SKILL.md'), 'utf8')
+  const text = readText(join(dir, 'SKILL.md'))
   const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)
   try {
     const front = match ? parseYaml(match[1] ?? '') : undefined
@@ -600,7 +603,7 @@ export function readPlugin(
     rootSchema: agentPluginsSchema(dir),
     manifest:
       kept.includes('mcp') || manifest.mcpServers === undefined
-        ? readFileSync(manifestPath, 'utf8')
+        ? readText(manifestPath)
         : `${JSON.stringify(rest, null, 2)}\n`,
   }
 }
