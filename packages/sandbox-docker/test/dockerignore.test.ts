@@ -99,6 +99,18 @@ const CASES: Case[] = [
     hashed: ['!a', 'd/x', 'y'],
   },
   {
+    name: 'a pattern that cleans to a space and a ! keeps everything',
+    ignore: '*\n/ !d/x\n',
+    files: ['d/x', 'y'],
+    hashed: ['d/x', 'y'],
+  },
+  {
+    name: 'a pattern too long for a JavaScript regexp is dropped',
+    ignore: `a\n${'z'.repeat(40000)}\n`,
+    files: ['a', 'y'],
+    hashed: ['y'],
+  },
+  {
     name: 'a name with a line terminator is always hashed',
     ignore: '*\n!a/**\n',
     files: ['a/b\rc', 'a\nb', 'y'],

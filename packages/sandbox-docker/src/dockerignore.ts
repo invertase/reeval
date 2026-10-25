@@ -7,7 +7,8 @@ const ignore = dockerignore.default
 /**
  * A pattern `@balena/dockerignore` may match differently from BuildKit: escapes, character
  * classes and the regexp characters it doesn't escape, a `**` joined to other characters, and the
- * whitespace Go and JavaScript trim differently.
+ * whitespace Go and JavaScript trim differently. One over 1024 characters is risky too, since
+ * JavaScript refuses a regexp that long that Go accepts.
  */
 const RISKY = /[\\[\]^+(){}|\u0085\uFEFF]|[^/]\*\*|\*\*[^/]/
 /**
@@ -31,7 +32,7 @@ type Rules = {
  * directory it's in: BuildKit then excludes it whatever order the rules are in, so this never
  * leaves out a file `docker build` sends, though it keeps some it doesn't. A risky exclusion is
  * dropped, and a risky `!` rule keeps everything, as does one `@balena/dockerignore` would read
- * as a comment or a pattern that cleans to a leading `!` (`!!a`, `/!a`), which the two read
+ * as a comment or a pattern that cleans to a leading `!` (`!!a`, `/ !a`), which the two read
  * differently.
  */
 function parseRules(text: string): Rules {
@@ -44,8 +45,8 @@ function parseRules(text: string): Rules {
     if (negate) pattern = pattern.slice(1).trim()
     if (!pattern) continue
     const cleaned = clean(pattern)
-    const risky = RISKY.test(pattern) || ['.', ''].includes(cleaned)
-    const reread = cleaned.startsWith('!') || (negate && pattern.startsWith('#'))
+    const risky = RISKY.test(pattern) || pattern.length > 1024 || ['.', ''].includes(cleaned)
+    const reread = cleaned.trim().startsWith('!') || (negate && pattern.startsWith('#'))
     if (reread || (negate && risky)) return { left: () => false, literal: null }
     if (!negate) {
       if (!risky) excludes.push(line)
