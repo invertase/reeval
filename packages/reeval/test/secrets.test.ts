@@ -3,14 +3,15 @@
 // The network-level proof (the upstream gets the value, the container never has it) is in
 // sandbox-docker's proxy and Docker tests.
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
+import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
-import type { Substitution } from '@reeval/sandbox-docker'
+import { docker, type Substitution } from '@reeval/sandbox-docker'
 import { assertionRecords } from '../src/attempt/assertions.ts'
 import { recordFailure, turnErrors } from '../src/attempt/record.ts'
 import type { Attempt } from '../src/attempt/state.ts'
-import { AttemptDebug } from '../src/debug/attempt.ts'
+import { AttemptDebug, withDebug } from '../src/debug/attempt.ts'
+import '../src/debug/docker.ts'
 import type { RawAssertion } from '../src/engine/runtime.ts'
 import { type BrokeredSecret, resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment, unbrokeredSecrets } from '../src/environment.ts'
@@ -752,6 +753,43 @@ describe('masking before shortening', () => {
       assert.match(trace, /"clipped":/)
       assert.match(trace, /password=\[RED/)
       assert.doesNotMatch(trace, /password=corr/)
+    }),
+  )
+
+  test(
+    "a docker command's output is masked before the attempt's trace clips it",
+    withSecret(async () => {
+      // A `docker` on the PATH whose stdout puts the secret across the trace's 4096-character clip.
+      const bin = tempDir('trace-docker')
+      writeFileSync(
+        join(bin, 'docker.js'),
+        `process.stdout.write('x'.repeat(4096 - 14) + ' password=' + process.env.REEVAL_TEST_CUT_PASSWORD + ' ' + 'y'.repeat(5000))\n`,
+      )
+      writeFileSync(join(bin, 'docker'), '#!/bin/sh\nexec node "$(dirname "$0")/docker.js" "$@"\n')
+      chmodSync(join(bin, 'docker'), 0o755)
+      writeFileSync(join(bin, 'docker.cmd'), '@node "%~dp0docker.js" %*\r\n')
+      const dir = tempDir('trace-docker-debug')
+      const shown: string[] = []
+      const debug = new AttemptDebug({
+        dir,
+        verbosity: 2,
+        traceLimit: 1024 * 1024,
+        emit: (line) => shown.push(line.detail ?? ''),
+      })
+      const path = process.env.PATH
+      process.env.PATH = `${bin}${delimiter}${path}`
+      try {
+        await withDebug(debug, () => docker(['exec', 'c1', 'cat', '--', '/f']))
+      } finally {
+        process.env.PATH = path
+      }
+      await debug.finish(true)
+      const trace = readFileSync(join(dir, 'trace.ndjson'), 'utf8')
+      for (const text of [trace, shown.join('\n')]) {
+        assert.match(text, /more\)/)
+        assert.match(text, /password=\[RED/)
+        assert.doesNotMatch(text, /password=corr/)
+      }
     }),
   )
 
