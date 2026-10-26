@@ -79,7 +79,9 @@ Each variant gets its own row and effect. reeval gates each variant separately. 
 
 ## Compare harnesses
 
-List several harnesses in `harness`. Any harness works ([Harnesses](/agents)):
+To measure the variant on more than one harness, list them in `harness`. For setting up each harness and its key, see [Compare harnesses](/recipes/agent-comparison).
+
+This excerpt limits the variant to Claude Code:
 
 ```ts title="with-compare-harness.eval.ts"
 harness: [
@@ -92,7 +94,7 @@ compare: {
 },
 ```
 
-Each harness reads its API key from the `.env.local` file. reeval measures each variant against the baseline on the same harness. `compare.harness` limits the variant to the listed harnesses, and the others run the baseline only. For a runnable project, see [`with-compare-harness`](https://github.com/invertase/reeval/tree/main/examples/with-compare-harness).
+reeval measures each variant against the baseline on the same harness. `compare.harness` limits the variant to the listed harnesses, and the others run the baseline only. For a runnable project, see [`with-compare-harness`](https://github.com/invertase/reeval/tree/main/examples/with-compare-harness).
 
 ## Gate on lift
 
