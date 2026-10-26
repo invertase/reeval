@@ -55,6 +55,7 @@ export type HarnessRow = {
     | 'goose-openrouter'
     | 'pi-openrouter'
     | 'grok-build-openrouter'
+    | 'fx-openrouter'
   /**
    * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
    * providers than Google's, and the rows on AI Gateway and OpenRouter.
@@ -695,6 +696,24 @@ export const harnesses: HarnessRow[] = [
     wireModel: /grok-4\.6/,
     upstream: true,
     effort: { value: 'low', asked: /^reasoning_effort=low$/ },
+  },
+  {
+    // fx on OpenRouter: its Chat Completions API as the configured provider `openrouter`, through
+    // the relay, the OpenAI id as openai/<id>.
+    id: 'fx-openrouter',
+    harness: 'fx',
+    gateway: 'openrouter',
+    model: 'gpt-5.5',
+    key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
+    image: 'fx',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['openrouter.ai'],
+    apiHost: 'openrouter.ai',
+    tokens: true,
+    servedModel: /^openai\/gpt-5\.5$/,
+    wireModel: /^openai\/gpt-5\.5$/,
+    upstream: true,
   },
 ]
 

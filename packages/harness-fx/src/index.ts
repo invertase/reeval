@@ -1,4 +1,4 @@
-// `@reeval/harness-fx`: fx on Vercel AI Gateway or OpenAI's API, as an AI SDK harness over ACP.
+// `@reeval/harness-fx`: fx on Vercel AI Gateway, OpenAI's API or OpenRouter, as an AI SDK harness over ACP.
 export {
   createFx,
   FX_CLI_SHA256,

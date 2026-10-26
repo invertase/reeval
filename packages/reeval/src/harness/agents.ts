@@ -1136,6 +1136,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
       (await import('@reeval/harness-fx')).createFx({
         auth,
         model,
+        ...(auth[OPENROUTER_KEY] ? { provider: 'openrouter' as const } : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),

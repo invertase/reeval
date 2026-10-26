@@ -390,7 +390,7 @@ describe('Vercel AI Gateway routes', () => {
   test("a gateway id isn't fx on direct: it falls through to Vercel, or names it", () => {
     const fx = { kind: 'fx', model: 'google/gemini-3-flash' } as HarnessDescriptor
     const why =
-      'fx runs a gateway id such as "google/gemini-3-flash" only through Vercel AI Gateway'
+      'fx runs a gateway id such as "google/gemini-3-flash" only through Vercel AI Gateway or OpenRouter'
     assert.deepEqual(resolve(list('direct', 'vercel'), fx), {
       name: 'vercel',
       skipped: [{ gateway: 'direct', why }],
@@ -569,15 +569,14 @@ describe('OpenRouter routes', () => {
   const call = (path: string, extra: object = {}) =>
     ({ method: 'POST', host: 'openrouter.ai', path, status: 200, ...extra }) as never
 
-  test('it serves Claude Code, Codex, Goose, OpenCode, Grok Build and pi, and says why not the rest', () => {
-    const served = ['claude-code', 'codex', 'goose', 'opencode', 'grok-build', 'pi']
+  test('it serves Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi, and says why not the rest', () => {
+    const served = ['claude-code', 'codex', 'goose', 'opencode', 'fx', 'grok-build', 'pi']
     assert.deepEqual(Object.keys(OPENROUTER_GATEWAY.routes).sort(), [...served].sort())
     for (const [kind, why] of [
       ['cursor', /Cursor's agent only calls Cursor's own API/],
       ['antigravity', /OpenRouter has no Gemini API/],
-      ['fx', /fx reaches models only on Vercel AI Gateway or OpenAI's API/],
     ] as const) {
-      const h = { kind, model: kind === 'fx' ? 'gpt-4.1' : 'm' } as HarnessDescriptor
+      const h = { kind, model: 'm' } as HarnessDescriptor
       assert.throws(() => resolve(list('openrouter'), h), why, kind)
       assert.equal(resolve(list('openrouter', 'direct'), h).name, 'direct', `${kind} falls through`)
     }
@@ -605,7 +604,7 @@ describe('OpenRouter routes', () => {
     assert.equal(anthropicOnOpenRouter('anthropic/claude-x'), 'anthropic/claude-x')
   })
 
-  test("Codex, Goose, Grok Build and pi name their provider in the id, on OpenRouter's API paths", () => {
+  test("Codex, Goose, fx, Grok Build and pi name their provider in the id, on OpenRouter's API paths", () => {
     for (const [h, path, id] of [
       [codex, '/api/v1/responses', 'openai/gpt-5.4-mini'],
       [
@@ -613,6 +612,7 @@ describe('OpenRouter routes', () => {
         '/api/v1/chat/completions',
         'google/gemini-3-flash',
       ],
+      [{ kind: 'fx', model: 'gpt-5.5' }, '/api/v1/chat/completions', 'openai/gpt-5.5'],
       [{ kind: 'grok-build', model: 'grok-4.6' }, '/api/v1/chat/completions', 'x-ai/grok-4.6'],
       [
         { kind: 'pi', model: 'gemini-3.8-flash' },
@@ -651,6 +651,7 @@ describe('OpenRouter routes', () => {
     for (const [kind, model] of [
       ['goose', 'google/gemini-3-flash'],
       ['codex', 'openai/gpt-5.4-mini'],
+      ['fx', 'openai/gpt-5.5'],
       ['grok-build', 'x-ai/grok-4.6'],
       ['pi', 'google/gemini-3.8-flash'],
     ] as const) {

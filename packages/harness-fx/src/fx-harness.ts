@@ -17,16 +17,18 @@ export const FX_CLI_SHA256 = {
 
 /**
  * Where a model runs: Vercel AI Gateway for a gateway id (`anthropic/claude-sonnet-5`), fx's own
- * provider, or OpenAI's Chat Completions API for a bare OpenAI id (`gpt-5.5`), as an fx
- * configured provider. Each takes one key, sent as a bearer token.
+ * provider; OpenAI's Chat Completions API for a bare OpenAI id (`gpt-5.5`); or OpenRouter's, for
+ * an OpenRouter id (`openai/gpt-5-mini`) when asked for. The last two are fx configured providers
+ * at `path` on the relay. Each takes one key, sent as a bearer token.
  */
 export const FX_PROVIDERS = {
   gateway: { credential: 'AI_GATEWAY_API_KEY', url: 'https://ai-gateway.vercel.sh' },
-  openai: { credential: 'OPENAI_API_KEY', url: 'https://api.openai.com' },
+  openai: { credential: 'OPENAI_API_KEY', url: 'https://api.openai.com', path: '/v1' },
+  openrouter: { credential: 'OPENROUTER_API_KEY', url: 'https://openrouter.ai', path: '/api/v1' },
 } as const
 export type FxProvider = keyof typeof FX_PROVIDERS
 
-/** The provider a model id names: a gateway id has a `/`, an OpenAI id doesn't. */
+/** The provider a model id names when none is asked for: a gateway id has a `/`, an OpenAI id doesn't. */
 export const fxProviderOf = (model: string): FxProvider =>
   model.includes('/') ? 'gateway' : 'openai'
 
@@ -109,8 +111,10 @@ export const FX_GATEWAY_CHAT_PATH = '/v4/ai/language-model'
 export type FxHarnessSettings = {
   /** The model's provider's key only (see {@link FX_PROVIDERS}). The host environment is never read. */
   readonly auth: HarnessV1AuthenticationEnvironment
-  /** A gateway id (`anthropic/claude-sonnet-5`) or a bare OpenAI id (`gpt-5.5`). */
+  /** A gateway id (`anthropic/claude-sonnet-5`), a bare OpenAI id (`gpt-5.5`) or an OpenRouter id. */
   readonly model: string
+  /** Where the model runs; by default the one {@link fxProviderOf} names. */
+  readonly provider?: FxProvider
   /** MCP servers in ACP's `McpServer` shape, keyed by name, passed on `session/new`. */
   readonly mcpServers?: Record<string, Record<string, unknown>>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
@@ -121,8 +125,7 @@ export type FxHarnessSettings = {
  * fx's process env: quiet flags, the provider, the model and the relay. The same keys for every
  * model, so the bootstrap an image bakes for one provider serves the other.
  */
-export function fxEnv(model: string) {
-  const provider = fxProviderOf(model)
+export function fxEnv(model: string, provider: FxProvider = fxProviderOf(model)) {
   return {
     ...FX_QUIET_ENV,
     FX_PROVIDER: provider,
@@ -137,17 +140,18 @@ export function fxEnv(model: string) {
 /**
  * fx's `settings.json`: no session titles, which fx otherwise generates on its own model
  * (`openai/gpt-5.6-luna`) with each first prompt, so the run's model is the only one called; and
- * for a bare OpenAI id, OpenAI's Chat Completions API as the configured provider `openai`.
+ * off AI Gateway, the provider's Chat Completions API as the configured provider of its name.
  */
-export function fxSettings(model: string) {
+export function fxSettings(model: string, provider: FxProvider = fxProviderOf(model)) {
+  const configured = provider === 'gateway' ? undefined : FX_PROVIDERS[provider]
   const settings = {
     session_titles: false,
-    ...(fxProviderOf(model) === 'openai' && {
+    ...(configured && {
       providers: {
-        openai: {
+        [provider]: {
           protocol: 'openai-chat-completions',
-          base_url: `${relayUrl}/v1`,
-          auth: { type: 'bearer', env: FX_PROVIDERS.openai.credential },
+          base_url: `${relayUrl}${configured.path}`,
+          auth: { type: 'bearer', env: configured.credential },
         },
       },
     }),
@@ -156,13 +160,14 @@ export function fxSettings(model: string) {
 }
 
 /**
- * fx (`fx acp`) as an AI SDK harness, on Vercel AI Gateway or OpenAI's API by the model id. Thin
+ * fx (`fx acp`) as an AI SDK harness, on Vercel AI Gateway, OpenAI's API or OpenRouter. Thin
  * config over `@ai-sdk/harness-acp`: fx names its tool calls, and its ACP `PromptResponse.usage`
  * is the turn's summed tokens, so {@link FxStreamTranslator} only renames MCP calls, rebuilds
  * command output and keeps the reasoning tokens.
  */
 export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools> {
-  const provider = FX_PROVIDERS[fxProviderOf(settings.model)]
+  const providerName = settings.provider ?? fxProviderOf(settings.model)
+  const provider = FX_PROVIDERS[providerName]
   if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[provider.credential]) {
     throw new Error(
       `fx auth must be an environment object with ${provider.credential} for ${settings.model}`,
@@ -177,7 +182,7 @@ export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools>
     executable: 'fx-acp',
     args: [],
     auth: settings.auth,
-    env: fxEnv(settings.model),
+    env: fxEnv(settings.model, providerName),
     credentialEnv: Object.values(FX_PROVIDERS).map((each) => each.credential),
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[provider.credential]
@@ -201,7 +206,7 @@ export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools>
     },
     skillsDirectory: FX_HOME_SKILLS_DIR,
     // Not authentication: the hook that writes into fx's private home before it starts.
-    authenticationFiles: () => fxSettings(settings.model),
+    authenticationFiles: () => fxSettings(settings.model, providerName),
   })
   return {
     ...acp,

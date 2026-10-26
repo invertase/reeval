@@ -27,7 +27,7 @@ export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
   direct: {
     cantServe: (h) => {
       if (h.kind === 'fx' && h.model.includes('/')) {
-        return `fx runs a gateway id such as ${JSON.stringify(h.model)} only through Vercel AI Gateway`
+        return `fx runs a gateway id such as ${JSON.stringify(h.model)} only through Vercel AI Gateway or OpenRouter`
       }
       if (h.kind === 'opencode') {
         const resolved = resolveOpenCodeProvider(h.model, process.env)

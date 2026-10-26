@@ -42,7 +42,7 @@ Define your harnesses once, in their own module, so the config, evals and profil
 | `goose()` | `GOOGLE_GENERATIVE_AI_API_KEY`, a Gemini API key | Required: a Gemini model id, such as `gemini-3.8-flash` |
 | `pi()` | `GOOGLE_GENERATIVE_AI_API_KEY`, a Gemini API key | Required: a Gemini model id, such as `gemini-3.8-flash` |
 | `codex()` | `OPENAI_API_KEY`, an OpenAI API key | Required: an OpenAI model id, such as `gpt-5.6-luna` |
-| `fx()` | `AI_GATEWAY_API_KEY` for a gateway id, with [`vercel()`](/reference/gateway) in `gateway`; `OPENAI_API_KEY` for a bare OpenAI id | Required: `anthropic/claude-sonnet-5` (AI Gateway) or `gpt-5.5` (OpenAI) |
+| `fx()` | `AI_GATEWAY_API_KEY` for a gateway id, with [`vercel()`](/reference/gateway) in `gateway`; `OPENROUTER_API_KEY` with [`openrouter()`](/reference/gateway#openrouter); `OPENAI_API_KEY` for a bare OpenAI id | Required: `anthropic/claude-sonnet-5` (AI Gateway) or `gpt-5.5` (OpenAI) |
 | `grokBuild()` | `XAI_API_KEY`, an xAI API key | Required: an xAI model id, such as `grok-4.6` |
 
 ```bash title=".env.local"
