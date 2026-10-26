@@ -1,7 +1,8 @@
 // Vertex AI as a route for a harness's model calls: the project and region from the vertex()
 // entry, a host-minted Google Cloud access token the egress gateway adds to the agent's model
 // calls, and what Vertex can't serve.
-import type { EndpointMatch, RequestTransformation } from '@reeval/sandbox-docker'
+import { generateKeyPairSync } from 'node:crypto'
+import type { EndpointMatch, LocalResponse, RequestTransformation } from '@reeval/sandbox-docker'
 import { UsageError } from '../errors.ts'
 import type { AgentKind, ModelSpecific } from '../harness/agents.ts'
 import type { GatewayDescriptor, VertexGatewayDescriptor, VertexPublisher } from '../types.ts'
@@ -80,8 +81,25 @@ export type VertexRoute = ModelSpecific & {
   /** The model id Vertex serves for the harness's own id. */
   modelId: (model: string) => string
   /** Variables the adapter sets for the agent, pointing it at the project and region. */
-  routeEnv: Record<string, string>
+  routeEnv?: Record<string, string>
   token: BrokeredToken
+  /** Application Default Credentials the agent's CLI reads in the sandbox, for a CLI that needs some. */
+  adc?: SandboxAdc
+  /** Requests the egress gateway answers itself, never reaching Google. */
+  localResponses?: readonly LocalResponse[]
+}
+
+/**
+ * A service-account file in the sandbox with a key made up for it, which Google's client
+ * libraries trade for a token at `oauth2.googleapis.com/token`. The egress gateway answers that
+ * with a placeholder, and adds the real token to the model calls.
+ */
+export type SandboxAdc = {
+  project: string
+  location: string
+  /** Where it goes, beside the workspace: `../<file>` from it. */
+  file: string
+  content: string
 }
 
 /**
@@ -99,12 +117,13 @@ function publisherEndpoint(
   settings: VertexSettings,
   publisher: VertexPublisher,
   methods: readonly string[],
+  versions: readonly string[] = ['v1'],
 ): EndpointMatch {
   const region = vertexRegion(settings, publisher)
   return {
     host: vertexHost(region),
     path: {
-      regex: `^/v1/projects/${escapeRegex(settings.project)}/locations/${escapeRegex(region)}/publishers/${publisher}/models/[^/:?]+:(?:${methods.join('|')})(?:\\?.*)?$`,
+      regex: `^/(?:${versions.join('|')})/projects/${escapeRegex(settings.project)}/locations/${escapeRegex(region)}/publishers/${publisher}/models/[^/:?]+:(?:${methods.join('|')})(?:\\?.*)?$`,
     },
     method: ['POST'],
   }
@@ -147,11 +166,120 @@ function claudeCode(settings: VertexSettings, source = vertexTokens()): VertexRo
   }
 }
 
+/** Where Google's client libraries trade a service account's signed assertion for a token. */
+const TOKEN_ENDPOINT: EndpointMatch = {
+  host: 'oauth2.googleapis.com',
+  path: { exact: '/token' },
+  method: ['POST'],
+}
+
+/** The access token the sandbox's CLI gets, which the gateway replaces on the model calls. */
+export const SANDBOX_ACCESS_TOKEN = 'reeval-vertex-placeholder'
+
+let sandboxKey: string | undefined
+/** The private key of every sandbox's service account: made up, once a process, and never valid. */
+const sandboxPrivateKey = () => {
+  sandboxKey ??= generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+  }).privateKey
+  return sandboxKey
+}
+
+const sandboxAccount = (project: string) => `reeval-sandbox@${project}.iam.gserviceaccount.com`
+
+/** A service account in the project that only the egress gateway's token endpoint accepts. */
+function sandboxAdc(settings: VertexSettings): SandboxAdc {
+  const content = JSON.stringify({
+    type: 'service_account',
+    project_id: settings.project,
+    private_key_id: 'reeval-sandbox',
+    private_key: sandboxPrivateKey(),
+    client_email: sandboxAccount(settings.project),
+    client_id: '0',
+    token_uri: `https://${TOKEN_ENDPOINT.host}/token`,
+  })
+  return {
+    project: settings.project,
+    location: vertexRegion(settings, 'google'),
+    file: 'google-adc.json',
+    content,
+  }
+}
+
+const json = (body: unknown) => JSON.stringify(body)
+
+/** The token endpoint's answer, a placeholder token for an hour. */
+const tokenResponse: LocalResponse = {
+  match: TOKEN_ENDPOINT,
+  status: 200,
+  body: json({ access_token: SANDBOX_ACCESS_TOKEN, expires_in: 3599, token_type: 'Bearer' }),
+}
+
+/**
+ * A Gemini CLI on Vertex through Application Default Credentials: the service account in
+ * `adc`, its token from the gateway, and the gateway's bearer on Google's model calls in the
+ * project (`v1` or `v1beta1`, streamed or not).
+ */
+function gemini(
+  extraHosts: readonly string[] = [],
+  extraResponses: (settings: VertexSettings) => readonly LocalResponse[] = () => [],
+  modelId: (model: string) => string = (model) => model.replace(/^google\//, ''),
+) {
+  return (settings: VertexSettings, source = vertexTokens()): VertexRoute => {
+    const region = vertexRegion(settings, 'google')
+    const endpoints = [
+      publisherEndpoint(
+        settings,
+        'google',
+        ['streamGenerateContent', 'generateContent'],
+        ['v1', 'v1beta1'],
+      ),
+    ]
+    return {
+      credential: 'Google Cloud credentials',
+      endpoints,
+      hosts: [vertexHost(region), TOKEN_ENDPOINT.host, ...extraHosts],
+      servedModel: ({ host, path }) =>
+        host === vertexHost(region)
+          ? /\/publishers\/google\/models\/([^/:]+):/.exec(path)?.[1]
+          : undefined,
+      modelId,
+      token: { source, transformations: bearerOn(endpoints) },
+      adc: sandboxAdc(settings),
+      localResponses: [tokenResponse, ...extraResponses(settings)],
+    }
+  }
+}
+
+/** The account Antigravity looks up with its token as a session starts, answered as the sandbox's. */
+const antigravityUserinfo = (settings: VertexSettings): LocalResponse[] => [
+  {
+    match: { host: 'www.googleapis.com', path: { exact: '/oauth2/v2/userinfo' }, method: ['GET'] },
+    status: 200,
+    body: json({ id: '0', email: sandboxAccount(settings.project), verified_email: true }),
+  },
+]
+
+/** OpenCode's id for a Gemini model on Vertex: `google-vertex/<model>`. */
+export const openCodeVertexId = (model: string) =>
+  `google-vertex/${model.replace(/^(?:google|google-vertex)\//, '')}`
+
 /** The harnesses reeval runs on Vertex, and what each needs there. */
 export const VERTEX_ROUTES: Partial<
   Record<AgentKind, (settings: VertexSettings, source?: TokenSource) => VertexRoute>
 > = {
   'claude-code': claudeCode,
+  // AGY_ADC_AUTH: the CLI calls `/v1/…:streamGenerateContent`, titles on gemini-3.1-flash-lite.
+  antigravity: gemini(['www.googleapis.com'], antigravityUserinfo, (model) => model),
+  // gcp_vertex_ai: `/v1beta1/…:streamGenerateContent`.
+  goose: gemini(),
+  // google-vertex: `/v1/…:streamGenerateContent`.
+  pi: gemini(),
+  // google-vertex: `/v1beta1/…:streamGenerateContent`, the session's title on the same model, and
+  // web search on Exa's keyless MCP server.
+  opencode: gemini(['mcp.exa.ai'], () => [], openCodeVertexId),
 }
 
 /** Why Vertex AI can't serve an agent, beyond the ones reeval doesn't route there yet. */

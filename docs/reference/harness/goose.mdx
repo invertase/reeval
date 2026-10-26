@@ -74,6 +74,8 @@ On a [`gateway` list](/reference/gateway#vercel-ai-gateway) that resolves the ha
 
 On [`openrouter()`](/reference/gateway#openrouter), the key is `OPENROUTER_API_KEY`, and Goose runs its own `openrouter` provider with the model as `google/<model>`. The gateway brokers it as a Bearer token on `openrouter.ai` only, on `POST /api/v1/chat/completions` and `GET /api/v1/models`, and reads the served model, the upstream provider and the cost from each response. `effort` isn't taken there yet.
 
+On [`vertex()`](/reference/gateway#vertex-ai) there's no key: Goose runs its own `gcp_vertex_ai` provider with `GCP_PROJECT_ID` and `GCP_LOCATION`, reading a service account reeval writes for it, and the gateway adds an access token from your Application Default Credentials to its `POST /v1beta1/…/publishers/google/models/<model>:streamGenerateContent` calls.
+
 ## Tokens
 
 | A 4-call turn | Input tokens |

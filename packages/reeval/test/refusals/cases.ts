@@ -1740,6 +1740,7 @@ environment:
     ['route: cursor on vertex alone', route([VERTEX], cursor({ model: 'composer-2.5' }))],
     ['route: claude code on vertex alone', route([VERTEX], claudeCode({ model: 'm' }))],
     ['route: goose on vertex alone', route([VERTEX], goose({ model: 'gemini-3.8-flash' }))],
+    ['route: grok build on vertex alone', route([VERTEX], grokBuild({ model: 'm' }))],
     ['vertex: no project', vertexEntry({}, {})],
     [
       'vertex: the project from GOOGLE_CLOUD_PROJECT',

@@ -40,6 +40,10 @@ export type HarnessRow = {
     | 'fx-gateway'
     | 'claude-code-gateway'
     | 'claude-code-vertex'
+    | 'antigravity-vertex'
+    | 'opencode-vertex'
+    | 'goose-vertex'
+    | 'pi-vertex'
     | 'codex-gateway'
     | 'opencode-gateway'
     | 'goose-gateway'
@@ -53,7 +57,15 @@ export type HarnessRow = {
    * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
    * providers than Google's, and the rows on AI Gateway and OpenRouter.
    */
-  harness?: 'opencode' | 'fx' | 'claude-code' | 'codex' | 'goose' | 'pi' | 'grok-build'
+  harness?:
+    | 'antigravity'
+    | 'opencode'
+    | 'fx'
+    | 'claude-code'
+    | 'codex'
+    | 'goose'
+    | 'pi'
+    | 'grok-build'
   /** `REEVAL_CONTRACT_GATEWAY`: the config's `gateway` list is this gateway alone. */
   gateway?: 'vercel' | 'openrouter' | 'vertex'
   /**
@@ -128,6 +140,8 @@ export type HarnessRow = {
    */
   upstream?: true
 }
+
+const VERTEX_GEMINI_GATE = 'its Vertex AI route has had no real run yet'
 
 export const harnesses: HarnessRow[] = [
   {
@@ -383,6 +397,76 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /claude-haiku-4-5/,
     wireModel: /claude-haiku-4-5/,
+  },
+  {
+    // The Gemini CLIs on Vertex AI through `gateway: [vertex()]`: each reads a service account
+    // reeval makes up for the sandbox, trades it for a placeholder token the gateway answers
+    // itself, and the gateway adds the host's real token to its model calls.
+    id: 'antigravity-vertex',
+    harness: 'antigravity',
+    gateway: 'vertex',
+    gated: VERTEX_GEMINI_GATE,
+    model: 'gemini-3.8-flash-low',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'antigravity',
+    skillContext: /^~\/\.gemini\/config\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com', 'oauth2.googleapis.com', 'www.googleapis.com'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: true,
+    servedModel: /^gemini-3\.8-flash/,
+    wireModel: /^gemini-3\.8-flash$/,
+  },
+  {
+    id: 'opencode-vertex',
+    harness: 'opencode',
+    gateway: 'vertex',
+    gated: VERTEX_GEMINI_GATE,
+    model: 'google/gemini-3.8-flash',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'opencode',
+    skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com', 'oauth2.googleapis.com', 'mcp.exa.ai'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: true,
+    servedModel: /^gemini-3\.8-flash$/,
+    wireModel: /^gemini-3\.8-flash$/,
+  },
+  {
+    id: 'goose-vertex',
+    harness: 'goose',
+    gateway: 'vertex',
+    gated: VERTEX_GEMINI_GATE,
+    model: 'gemini-3.8-flash',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'goose',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com', 'oauth2.googleapis.com'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: false,
+    tokensWhy:
+      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    servedModel: /^gemini-3\.8-flash$/,
+    wireModel: /^gemini-3\.8-flash$/,
+  },
+  {
+    id: 'pi-vertex',
+    harness: 'pi',
+    gateway: 'vertex',
+    gated: VERTEX_GEMINI_GATE,
+    model: 'gemini-3.8-flash',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com', 'oauth2.googleapis.com'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: true,
+    servedModel: /^gemini-3\.8-flash$/,
+    wireModel: /^gemini-3\.8-flash$/,
   },
   {
     // Codex on Vercel AI Gateway: a Responses API provider on Vercel, the model as openai/<id>.

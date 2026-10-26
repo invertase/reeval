@@ -170,6 +170,7 @@ export async function createDockerSandbox(
         endpoints: brokering.endpoints,
         ...(brokering.modelResponses ? { modelResponses: brokering.modelResponses } : {}),
         ...(brokering.tokens ? { derivedTokens: [brokering.tokens] } : {}),
+        ...(brokering.localResponses ? { localResponses: brokering.localResponses } : {}),
         onRefused: ({ method, url }) =>
           console.warn(
             `warning: the egress gateway refused ${method} ${url}: it carries ${brokering.credential}'s placeholder and isn't one of the endpoints reeval brokers it for`,

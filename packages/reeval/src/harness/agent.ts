@@ -3,12 +3,19 @@ import { HarnessAgent } from '@ai-sdk/harness/agent'
 import { WORKSPACE_DIR } from '@reeval/sandbox-docker'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { brokerToken } from '../gateway/token.ts'
-import type { VertexSettings } from '../gateway/vertex.ts'
+import type { SandboxAdc, VertexSettings } from '../gateway/vertex.ts'
 import { isDockerSandbox } from '../sandbox/docker.ts'
-import { InfraError } from '../sandbox/types.ts'
+import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type { AgentHarnessDescriptor, TokenUsage, TranscriptEvent, TurnStatus } from '../types.ts'
 import { addUsage } from '../usage.ts'
-import { agentAuth, agentFor, agentMcp, authHint, writePluginFiles } from './agents.ts'
+import {
+  type AdapterVertex,
+  agentAuth,
+  agentFor,
+  agentMcp,
+  authHint,
+  writePluginFiles,
+} from './agents.ts'
 import { errorText, normaliseStream, type StampedPart } from './transcript.ts'
 import type { Harness } from './types.ts'
 
@@ -122,6 +129,14 @@ export function everyCallFailed(name: string, statuses: readonly number[]): stri
   return `every ${name} model call in the turn failed (HTTP ${[...new Set(statuses)].join(', ')})`
 }
 
+/** The route's service account, written beside the workspace, as the adapter takes it. */
+async function writeAdc(sandbox: Sandbox, adc: SandboxAdc): Promise<AdapterVertex> {
+  await sandbox.writeFile(`../${adc.file}`, adc.content)
+  const credentialsFile = `${sandbox.workdir.replace(/[\\/][^\\/]*$/, '')}/${adc.file}`
+  debugLog('env', `Vertex AI service account → ${credentialsFile}`)
+  return { project: adc.project, location: adc.location, credentialsFile }
+}
+
 /** A real agent through its AI SDK harness adapter, in the Docker sandbox's container. */
 export function createAgentHarness(
   descriptor: AgentHarnessDescriptor,
@@ -135,9 +150,11 @@ export function createAgentHarness(
       let finishMetadata: unknown
       const servers = agentMcp(catalog, mcp, plugins)
       const model = catalog.modelId?.(descriptor.model) ?? descriptor.model
+      const vertex = catalog.adc ? await writeAdc(sandbox, catalog.adc) : undefined
       const adapter = await catalog.adapter({
         auth,
         ...(catalog.routeEnv ? { env: catalog.routeEnv } : {}),
+        ...(vertex ? { vertex } : {}),
         descriptor,
         model,
         plugins,

@@ -111,6 +111,15 @@ gateway: [openrouter(), direct()],
 
 With [`openrouter()`](/reference/gateway#openrouter) in the config's `gateway`, OpenCode runs on its own `openrouter` provider, as `openrouter/<model>`, on `OPENROUTER_API_KEY`, brokered on `POST openrouter.ai/api/v1/chat/completions`. Write the model as its provider's id: an `openrouter/…` id would skip the gateway list, so it exits 2 at plan time. Each call records the upstream provider OpenRouter says served it, and its cost. `effort` isn't taken on `openrouter()` yet, so such a cell falls through to the next gateway.
 
+## On Vertex AI
+
+```ts title="reeval.config.ts"
+harness: opencode({ model: 'google/gemini-3.8-flash' }),
+gateway: [vertex(), direct()],
+```
+
+With [`vertex()`](/reference/gateway#vertex-ai) in the config's `gateway`, a Gemini model runs on OpenCode's own `google-vertex` provider, as `google-vertex/<model>`, with no key: it reads a service account reeval writes for it, and the gateway adds an access token from your Application Default Credentials to its `POST /v1beta1/…/publishers/google/models/<model>:streamGenerateContent` calls. On `direct()`, a `google-vertex/…` model stays refused.
+
 ## Amazon Bedrock
 
 ```bash title=".env.local"

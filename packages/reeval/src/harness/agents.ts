@@ -8,7 +8,12 @@ import {
   resolveOpenCodeProvider,
 } from '@reeval/harness-opencode/providers'
 import type { PiMcpServer } from '@reeval/harness-pi'
-import type { BakedHarness, DerivedTokens, EndpointMatch } from '@reeval/sandbox-docker'
+import type {
+  BakedHarness,
+  DerivedTokens,
+  EndpointMatch,
+  LocalResponse,
+} from '@reeval/sandbox-docker'
 import {
   PART_PATHS,
   PLUGIN_DIR,
@@ -29,7 +34,7 @@ import {
   VERCEL_HOST,
   VERCEL_KEY,
 } from '../gateway/vercel.ts'
-import { VERTEX_ROUTES, type VertexSettings } from '../gateway/vertex.ts'
+import { type SandboxAdc, VERTEX_ROUTES, type VertexSettings } from '../gateway/vertex.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import { withoutBom } from '../text.ts'
 import type {
@@ -100,6 +105,10 @@ export type Agent = Layout & {
   token?: BrokeredToken
   /** Variables the adapter sets for the agent on its gateway's route (Vertex's project and region). */
   routeEnv?: Record<string, string>
+  /** The service account the agent's CLI reads on Vertex, written beside the workspace. */
+  adc?: SandboxAdc
+  /** Requests the egress gateway answers itself on the agent's route (Vertex's token exchange). */
+  localResponses?: readonly LocalResponse[]
   /** The variable the adapter takes the credential as, when not its own name (a gateway's key). */
   authAs?: string
   /** Variables the adapter takes beside the credential, such as the base URL a gateway sets. */
@@ -187,12 +196,17 @@ export type Agent = Layout & {
     auth: Record<string, string>
     /** `routeEnv`, for the agent's environment. */
     env?: Record<string, string>
+    /** On Vertex through `adc`: the project, region and where the service account was written. */
+    vertex?: AdapterVertex
     descriptor: AgentHarnessDescriptor
     /** The model id the agent asks for: `modelId` of the harness's own. */
     model: string
     plugins: readonly PlacedPlugin[]
   }) => Promise<HarnessAgentAdapter>
 }
+
+/** What a Gemini CLI's adapter takes to run on Vertex AI from Application Default Credentials. */
+export type AdapterVertex = { project: string; location: string; credentialsFile: string }
 
 /** The part of an agent's catalog entry its model's provider decides. */
 export type ModelSpecific = Pick<
@@ -965,9 +979,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // The CLI's `-low`/`-high` ids name an effort; the URL names the model that served it.
     servedModel: geminiServedModel,
     mcpServers: antigravityMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor, plugins }) =>
+    adapter: async ({ auth, mcpServers, descriptor, plugins, vertex }) =>
       (await import('@reeval/harness-antigravity')).createAntigravity({
         auth,
+        ...(vertex ? { vertex } : {}),
         ...(mcpServers ? { mcpServers } : {}),
         ...(plugins.length ? { plugins: plugins.map(({ name, dir }) => ({ name, dir })) } : {}),
         ...(descriptor.kind === 'antigravity' && descriptor.effort
@@ -991,11 +1006,11 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // titles), probed per provider (harness-opencode's opencode-provider-table.ts).
     forModel: opencodeForModel,
     mcpServers: opencodeMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor, model }) =>
+    adapter: async ({ auth, mcpServers, descriptor, model, vertex }) =>
       (await import('@reeval/harness-opencode')).createOpenCode({
         auth,
         model,
-        vars: opencodeVars(model),
+        ...(vertex ? { vertex } : { vars: opencodeVars(model) }),
         ...(descriptor.kind === 'opencode' && descriptor.effort
           ? { effort: descriptor.effort }
           : {}),
@@ -1020,8 +1035,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
     },
     servedModel: geminiServedModel,
     mcpServers: gooseMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor, model }) =>
+    adapter: async ({ auth, mcpServers, descriptor, model, vertex }) =>
       (await import('@reeval/harness-goose')).createGoose({
+        ...(vertex ? { vertex } : {}),
         ...(auth[VERCEL_KEY]
           ? { auth, provider: (await import('@reeval/harness-goose')).AI_GATEWAY_PROVIDER }
           : auth[OPENROUTER_KEY]
@@ -1047,10 +1063,11 @@ export const AGENTS: Record<AgentKind, Agent> = {
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
     mcpServers: piMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor }) =>
+    adapter: async ({ auth, mcpServers, descriptor, vertex }) =>
       (await import('@reeval/harness-pi')).createPi({
         // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
         auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
+        ...(vertex ? { vertex } : {}),
         ...(descriptor.kind === 'pi' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers ? { mcpServers: mcpServers as Record<string, PiMcpServer> } : {}),
         requireCredentialBrokering: true,
@@ -1508,12 +1525,14 @@ export type Brokering = {
   askedModel?: ServedModel
   modelResponses?: readonly EndpointMatch[]
   upstream?: Upstream
+  localResponses?: readonly LocalResponse[]
 }
 
 export function brokeringFor(h: HarnessDescriptor, vertex?: VertexSettings): Brokering | undefined {
   const agent = agentOf(h, vertex)
   if (!agent) return undefined
   const { credential, endpoints, tokens, servedModel, askedModel, modelResponses, upstream } = agent
+  const { localResponses } = agent
   return {
     credential,
     endpoints,
@@ -1522,5 +1541,6 @@ export function brokeringFor(h: HarnessDescriptor, vertex?: VertexSettings): Bro
     ...(askedModel ? { askedModel } : {}),
     ...(modelResponses ? { modelResponses } : {}),
     ...(upstream ? { upstream } : {}),
+    ...(localResponses?.length ? { localResponses } : {}),
   }
 }

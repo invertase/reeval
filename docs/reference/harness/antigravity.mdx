@@ -67,6 +67,8 @@ The harness uses a Gemini API key only, never the CLI's Google sign-in, which Go
 
 The adapter refuses to run in a sandbox that can't broker the key, so it can't leak through a plain environment variable.
 
+On [`vertex()`](/reference/gateway#vertex-ai) there's no key: the CLI runs with `AGY_ADC_AUTH=1`, `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION`, and without `modelProvider: 'gemini'`, which it refuses in that mode. It reads a service account reeval writes for it, and the gateway adds an access token from your Application Default Credentials to its `POST /v1/…/publishers/google/models/<model>:streamGenerateContent` calls.
+
 ## Settings
 
 | Setting | Why |
