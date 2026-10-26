@@ -1,0 +1,20 @@
+---
+title: "vertex gateway"
+description: "Use the Google Vertex AI for an LLM model."
+---
+
+Using a Google Vertex AI Gateway means that LLM calls will go through the Google Vertex AI, and requires that a Google Vertex AI API key is provided.
+
+```ts
+import { defineConfig } from 'reeval'
+import { vertex } from 'reeval/gateway'
+import { claudeCode, codex, cursor, opencode } from 'reeval/harness'
+
+export default defineConfig({
+  gateway: [
+    vertex({ project: 'my-project', location: 'us-central1' })
+  ]
+})
+```
+
+
