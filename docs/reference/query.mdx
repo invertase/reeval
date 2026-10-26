@@ -1,6 +1,6 @@
 ---
 title: "Query views"
-description: "Look up a query view, its columns, and its row."
+description: "reeval query runs SQL against the views and tables of a project's run history."
 ---
 
 `reeval query` reads views and tables in the `.reeval/history.db` file.
@@ -62,7 +62,7 @@ Each built-in view returns one kind of row. The columns are in this table.
 
 ## `lift`
 
-`lift` lists one row per variant cell in a run, beside its control, in these columns.
+`lift` lists one row per variant cell in a run, beside its baseline, in these columns.
 
 <CodeGroup>
 
@@ -103,7 +103,7 @@ reeval query "SELECT name, variant, points FROM family_lift"
 
 ## `effort`
 
-`effort` lists one row per cell, with a variant's ratios against its control, in these columns.
+`effort` lists one row per cell, with a variant's ratios against its baseline, in these columns.
 
 <CodeGroup>
 
@@ -333,7 +333,7 @@ reeval query "SELECT question, prev_pass_rate, pass_rate FROM verdict_flips"
 
 ## `check_discrimination`
 
-`check_discrimination` lists one row per assertion on a variant cell, beside its control, in these columns.
+`check_discrimination` lists one row per assertion on a variant cell, beside its baseline, in these columns.
 
 <CodeGroup>
 
@@ -387,7 +387,7 @@ reeval query "SELECT label, streak_runs, ended_by FROM check_streaks"
 
 </CodeGroup>
 
-On a variant, the streak counts a run only when the variant and the control both pass.
+On a variant, the streak counts a run only when the variant and the baseline both pass.
 
 ## Tables
 

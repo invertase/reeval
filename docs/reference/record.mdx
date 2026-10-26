@@ -1,6 +1,6 @@
 ---
 title: "Run record reference"
-description: "Look up every field of the run record."
+description: "The run record is the JSON file reeval writes for each run."
 ---
 
 The `reeval show --json` command prints one run's record. The record is the `<runId>.json` file in the `.reeval/runs/` directory, or the same name in the history folder, with artifacts in the `<runId>` directory.
@@ -1000,11 +1000,11 @@ A `StartRetry` is one entry of `AttemptRecord.startRetries`. `error` is `<harnes
 
 ## `CellCheck`
 
-`CellRecord.checks` tallies one label over the cell's counted attempts. `pass`, `fail`, `error`, and `notRun` are those counts, and `control` repeats them for the control. `verdict` is `discriminates` when every answered instance passes on one side and fails on the other, `both-pass` when every answered instance passes on both sides, `both-fail` when every answered instance fails on both sides, or `mixed` otherwise. It is absent when either side has no pass or fail.
+`CellRecord.checks` tallies one label over the cell's counted attempts. `pass`, `fail`, `error`, and `notRun` are those counts, and `control` repeats them for the baseline. `verdict` is `discriminates` when every answered instance passes on one side and fails on the other, `both-pass` when every answered instance passes on both sides, `both-fail` when every answered instance fails on both sides, or `mixed` otherwise. It is absent when either side has no pass or fail.
 
 ## `EvalCompareMeta`
 
-`EvalEntry.compare` names the control when the evaluation uses `compare`. `baseline` is that environment's name. When `compare.baseline` was omitted, `from` is `environment` for the cascaded environment, or `empty` for an empty environment named `baseline`.
+`EvalEntry.compare` names the baseline when the evaluation uses `compare`. `baseline` is that environment's name. When `compare.baseline` was omitted, `from` is `environment` for the cascaded environment, or `empty` for an empty environment named `baseline`.
 
 ## `CompareAnswer`
 

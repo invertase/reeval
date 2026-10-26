@@ -1,6 +1,6 @@
 ---
 title: "Attempt context reference"
-description: "Look up every method and field of c and of the turn it returns."
+description: "c is the attempt context: it sends prompts on the harness session and returns each finished turn."
 ---
 
 `c` is the attempt context the evaluation body receives, for one cell and one run. The sandbox and the harness session start on the first call that needs them.
@@ -236,7 +236,7 @@ A `JudgeFailure` has `verdict` `'error'` and `score` `null`.
   The provider's message on a `JudgeFailure`, after any retries.
 </Property>
 
-For more information about the cascaded defaults, see [the `judge` option](/reference/options#judge). For more information about scoring, see [Judges](/evals/judges).
+For more information about the cascaded defaults, see [the `judge` option](/reference/options#judge). For more information about scoring, see [Judge agent work](/evals/judges).
 
 ## `c.readFile()`
 
@@ -282,7 +282,7 @@ const first = c.turns[0]
 
 ## `c.signal`
 
-`c.signal` aborts when the evaluation times out or the run is cancelled.
+`c.signal` aborts when the evaluation times out or the run is canceled.
 
 ```ts
 const response = await fetch(url, { signal: c.signal })
