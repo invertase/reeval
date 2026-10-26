@@ -11,16 +11,6 @@ It runs coding agents inside isolated sandboxes, then grades their output using 
 
 The evaluation is code, committed alongside the tool, skill, or doc you are changing. The result is reproducible evidence you can share in pull requests, docs, or release notes.
 
-## Set it up
-
-Ask your coding agent to set reeval up with the setup skill:
-
-```bash
-npx skills add https://github.com/invertase/reeval --skill setup
-```
-
-To set it up by hand, see [Quick start](/quickstart).
-
 ## How reeval works
 
 Agents, environments, and attempts multiply into sandboxes, grading reads each workspace, and the results measure, compare, and analyze the run.
@@ -37,85 +27,6 @@ Agents, environments, and attempts multiply into sandboxes, grading reads each w
   alt="Configuration > Agents > Harness + model; Configuration > Environments > Baseline or variant; Configuration > Attempts > Repeat count; Configuration > Sandboxes > Number to spawn; Evaluation > Sandbox > Agent; Evaluation > Sandbox > Environment; Evaluation > Sandbox > Task; Evaluation > Sandbox > Workspace > Artifacts; Evaluation > Sandbox > Workspace > Transcript; Evaluation > Grading > Assertions > Deterministic checks; Evaluation > Grading > Judgments > LLM verdicts; Evaluation > Grading > Questions > Across attempts; Results > Measure > Pass rate; Results > Measure > Tokens; Results > Measure > Tool calls; Results > Measure > Turns; Results > Measure > Cost; Results > Measure > Time; Results > Compare > Lift > Variant against baseline; Results > Compare > Past runs > This run against earlier ones; Results > Analyze > Answers > What the questions found; Results > Analyze > Insights > What the agent did and why"
   width={828}
 />
-
-## Run an evaluation
-
-This one asks for a page in Anthropic's brand, as a baseline without Anthropic's `brand-guidelines` skill and a variant with it, on both Claude Code and Codex:
-
-```ts title="with-library-skill-lift.eval.ts"
-// evals/with-library-skill-lift.eval.ts
-import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
-import { claudeCode, codex } from '{{ pkg }}/harness'
-
-const page = defineEnvironment('page', ({ directory }) => ({
-  files: directory('./project'),
-}))
-
-const withSkill = page.extendEnvironment('brand-guidelines', ({ skill }) => ({
-  skills: [
-    skill.git('github:anthropics/skills', {
-      ref: 'dbd4588f9e1033efb41dad4bef2f7947c8993d44',
-      path: 'skills',
-      only: ['brand-guidelines'],
-    }),
-  ],
-}))
-
-evaluate(
-  "styles the page in Anthropic's brand",
-  {
-    environment: page,
-    compare: { variants: [withSkill] },
-
-    // Claude Code runs by default; Codex runs the same prompt too.
-    harness: [claudeCode({ model: 'claude-sonnet-5' }), codex({ model: 'gpt-5.6-luna' })],
-    runs: 4,
-    gate: { passRate: 0.75 },
-
-    // Asks each harness which of its own two pages looks more on-brand.
-    questions: [
-      { question: "Which page looks more like Anthropic's brand?", across: 'environment' },
-    ],
-  },
-  async (c) => {
-    // Send a prompt to a harness in this run
-    await c.send(
-      "Give index.html Anthropic's look: write styles.css with Anthropic's " +
-        'brand colors and fonts, and link it from index.html.',
-    )
-
-    await expect.soft(c, 'links styles.css').toHaveFile('index.html', /href="styles\.css"/)
-    await expect.soft(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
-
-    // Check that the css file contains the brand fonts 'Poppins' and 'Lora'
-    await expect(c, 'brand fonts').toHaveFile(
-      'styles.css',
-      /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/,
-    )
-
-    // A judge call for what the assertions above can't read
-    const verdict = await c.judge("Does styles.css look designed for Anthropic's site?")
-    expect(verdict).toPass()
-  },
-)
-```
-
-The prompt never names the color or the fonts, so those assertions pass only when the agent knows them. `reeval run` prints the outcome for each side:
-
-```text
-pass             styles the page in Anthropic's brand
-  arm               pass
-  page              0 of 4
-  brand-guidelines  4 of 4  helped
-  check             page    brand-guidelines
-  brand orange      0 of 4  4 of 4
-    expected styles.css to match /#d97757/i
-  brand fonts       0 of 4  4 of 4
-    expected styles.css to match /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/
-  +1 more passed
-```
-
-The variant passed in 4 of 4 attempts and the baseline in none, so the skill `helped`. The judgment and the question's answer print alongside this per harness; they're trimmed here for space.
 
 ## What you can find out
 
