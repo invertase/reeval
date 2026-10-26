@@ -27,7 +27,8 @@ pnpm docs:gen && pnpm docs:check     # after any user-visible change
  `pnpm test:features` and a new refusal `test/refusals.test.ts` (in `packages/reeval`); `pnpm test`
  runs them all — but only in this block, not while you are still editing (see below).
 - **A new feature or option** takes the tier the [feature contract](./packages/reeval/test/features/README.md#which-tier)'s
- table gives it (a plan case or a fixture), an `inventory.ts` entry and `pnpm features:matrix --write`.
+ table gives it (a plan case or a fixture), an `inventory.ts` entry (unit tests count by file) and
+ `pnpm features:matrix --write`.
 - **A user-visible change** updates its page in `docs/reference/` (see [Docs](#docs)).
 - **After touching `src/contract/`** run `pnpm --filter reeval typecheck` and
  `pnpm --filter reeval schema:check`: each module's `_SameAsSchema` holds its hand-written type to
@@ -464,6 +465,12 @@ a fixture, how to run and debug the tiers, and what "done" means.
 behaviour in `options.test.ts` — not under `test/features/`. Register each eval option in
 `test/features/eval-options.ts`; `matrix.test.ts` fails when `--dry-run` coverage or refusals are
 missing.
+
+**The inventory** (`test/features/inventory.ts`) names what covers each feature: fixture
+directories (or one harness's row of a parameterised one, `harness/rules:pi`), plan cases, real
+checks, and the unit test *files* in `unit`, not their test titles. A behaviour every harness has
+in its own place (rules, skills, an image) is one fixture that reads `REEVAL_FIXTURE_LAYOUT`, run
+once per harness by `perHarness` in `features.test.ts`; don't copy the directory per harness.
 
 **Every user-visible change updates the docs in the same PR.** A new or changed option, helper,
 harness, CLI command or flag, exit code, `reeval query` view, record field or environment variable
