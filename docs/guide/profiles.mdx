@@ -49,7 +49,7 @@ npx reeval image build --profile nightly   # the images nightly's plan needs
 
 With `compare: false` (or `maxVariants: 0`), the lone control gates like an eval without `compare`, on the eval's `gate`, whatever `compare.gate` says.
 
-An eval that sets `runs: 5` still runs five times under `nightly`, because defaults sit under it. Under `pr` it runs once, because a limit sits over it, and `--runs` on the command line beats both.
+An eval that sets `runs: 5` still runs five times under `nightly`, because defaults sit under it. Under `pr` it runs once, because a limit sits over it, and `--runs` on the command line beats both. A compare that sets no `runs` defaults to 4 a cell, which `limit.runs` caps the same way.
 
 A profile can also set a default `judge`, when to `record`, and `tags` filters like `--tag`.
 

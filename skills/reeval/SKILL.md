@@ -97,7 +97,7 @@ export default defineConfig({
   harness: cursor({ model: 'composer-2.5' }), // model required; CURSOR_API_KEY
   // no default judge model; pin versions
   judge: { model: 'typesafe-ai/jev-1.14.0', threshold: 0.8 },
-  runs: 1,                                    // attempts per cell
+  // runs: attempts per cell; unset, 1, or 4 for a compare with variants
   timeout: '15m',                             // per attempt
 })
 ```
@@ -260,6 +260,8 @@ group(
   [references/environments.md](references/environments.md).
 - Attempts = evals × harnesses × (1 control + variants) × runs. The example is 1 eval, 2 cells
   (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 4 attempts.
+  Without `runs`, a compare runs 4 a cell (8 attempts here), the fewest for a lift verdict;
+  `runs: 1` at any level or a profile's `limit.runs: 1` keeps a smoke run cheap.
 - Each variant runs as that environment on its own; `compare` does not layer, inherit or
   extend. Share setup with `parent.extendEnvironment(name, spec)` before `compare`. Without
   `baseline`, the cascaded `environment` is the control.

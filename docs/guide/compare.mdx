@@ -97,7 +97,7 @@ pass             house greeting › greets in the house style
 
 Without the skill, Cursor searched for the house style for 55 tool calls and still failed the check, both times. With it, it passed both times in 3. The eval passes and the run exits 0: only the variant gates, and the control's misses never fail it.
 
-Each arm reads `N of M`, and the variant's effect is `can't tell yet`: two tries a side is too few to call, whatever the difference. With `--runs 4` it reads `helped`, and an effort table compares the arms' tool calls and time when they differ.
+Each arm reads `N of M`, and the variant's effect is `can't tell yet`: two tries a side is too few to call, whatever the difference. Leave out `--runs` and a compare runs each cell 4 times, its default, so it reads `helped`, with an effort table of the arms' tool calls and time when they differ.
 
 ## Control and variant
 

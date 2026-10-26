@@ -32,6 +32,7 @@ import { refusedMcp, refusedPlugins } from './harness/agents.ts'
 import { attemptId, attemptKey, evalId, relativeFile } from './ids.ts'
 import {
   brokeredIn,
+  type Cascading,
   cascade,
   checkOptions,
   evalPlan,
@@ -42,7 +43,6 @@ import {
   type PlannedAttempt,
   plainHeaderError,
   plainHeaders,
-  type Resolved,
   type ResolvedEval,
   sandboxProvider,
   sandboxSetBy,
@@ -99,7 +99,7 @@ export type PlannedTest = {
   spec?: AttemptSpec
 }
 
-function configLevel(config: ResolvedConfig): Resolved {
+function configLevel(config: ResolvedConfig): Cascading {
   return {
     harness: config.harness,
     sandbox: config.sandbox,
@@ -141,6 +141,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
     profile: ctx.profile,
     runs: ctx.runs,
     skipped: declaration.mode === 'skip' || declaration.mode === 'todo',
+    pooled: declaration.family !== undefined,
   })
   const { harnesses } = resolvedEval
   if (!matchesTags(resolvedEval.resolved.tags, ctx.tags)) return { tests: null, harnesses }

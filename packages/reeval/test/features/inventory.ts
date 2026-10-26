@@ -80,8 +80,17 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'matrix.harness-runs',
     area: 'Config and selection',
-    name: '`harness` lists × `runs`, and `--runs`',
-    plan: ['matrix/default', 'matrix/runs-override'],
+    name: '`harness` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once',
+    plan: [
+      'matrix/default',
+      'matrix/runs-override',
+      'runs-default/default',
+      'runs-default/runs-flag',
+      'runs-default/config-runs',
+      'runs-default/profile-defaults',
+      'runs-default/profile-limit',
+      'runs-default/compare-off',
+    ],
     unit: ['reeval/test/unit.test.ts', 'reeval/test/options.test.ts'],
   },
   {

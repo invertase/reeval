@@ -81,7 +81,7 @@ import { redactSecrets, registerSecret } from '../src/redact.ts'
 import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
 import { fakeSandbox } from '../src/sandbox.ts'
 import { clip } from '../src/text.ts'
-import type { Outcome } from '../src/types.ts'
+import type { EvalOptions, Outcome, ResolvedProfile } from '../src/types.ts'
 import { rowKey } from '../src/view/compare.ts'
 import { gatePart } from '../src/view/gate.ts'
 import { splitPatch } from '../src/view/patch.ts'
@@ -516,7 +516,7 @@ test('resolveConfig defaults', () => {
   assert.deepEqual(c.sandbox, { kind: 'docker' })
   assert.equal(c.environment, undefined, 'no environment by default')
   assert.deepEqual(c.profiles, {})
-  assert.equal(c.runs, 1)
+  assert.equal(c.runs, undefined, 'unset, so each eval takes its own default')
   assert.equal(c.judge.model, undefined, 'no default judge model')
   assert.equal(c.timeoutMs, 900_000)
 })
@@ -1899,9 +1899,9 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
   )
   assert.deepEqual(narrowed.resolved.compare?.variants, [])
   assert.deepEqual(narrowed.notes, [
-    'runs 5 → 1 (profile pr)',
     'harnesses 2 → 1 (profile pr)',
     'compare off (profile pr)',
+    'runs 5 → 1 (profile pr)',
   ])
   const pinned = cascade(
     base,
@@ -1929,6 +1929,47 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
     { profile },
   )
   assert.equal(skipped.skip, 'no harness left: profile pr allows a')
+})
+
+test('cascade: unset runs default to 4 for a compare with variants, 1 otherwise', () => {
+  const plain = defineEnvironment('plain', {})
+  const skill = defineEnvironment('skill', {})
+  const compare = { baseline: plain, variants: [skill] }
+  const unset = { ...base, runs: undefined }
+  const runsOf = (options: EvalOptions, opts: Parameters<typeof cascade>[3] = {}) =>
+    cascade(unset, [{ options, where: 'e' }], 'e', opts)
+  const compared = runsOf({ compare })
+  assert.equal(compared.resolved.runs, 4)
+  assert.deepEqual(compared.notes, ['runs 4 (compare default)'])
+  assert.equal(compared.resolved.sources?.runs, 'compare default: 4 a side')
+  assert.equal(runsOf({}).resolved.runs, 1, 'no compare runs once')
+  assert.equal(runsOf({ compare: { ...compare, variants: [] } }).resolved.runs, 1)
+  assert.equal(runsOf({ compare, runs: 1 }).resolved.runs, 1, 'an explicit 1 stands')
+  assert.equal(runsOf({ compare }, { runs: 2 }).resolved.runs, 2, '--runs replaces the default')
+  assert.equal(runsOf({ compare }, { pooled: true }).resolved.runs, 1, 'a pooled case runs once')
+  const profile = (p: Partial<ResolvedProfile>): ResolvedProfile => ({
+    name: 'pr',
+    reason: '--profile',
+    defaults: {},
+    limit: {},
+    judge: {},
+    tags: [],
+    budget: {},
+    ...p,
+  })
+  assert.equal(
+    runsOf({ compare }, { profile: profile({ defaults: { runs: 2 } }) }).resolved.runs,
+    2,
+  )
+  const capped = runsOf({ compare }, { profile: profile({ limit: { runs: 1 } }) })
+  assert.equal(capped.resolved.runs, 1)
+  assert.deepEqual(capped.notes, ['runs 4 (compare default)', 'runs 4 → 1 (profile pr)'])
+  const off = runsOf({ compare }, { profile: profile({ limit: { compare: false } }) })
+  assert.equal(off.resolved.runs, 1, 'a compare the limit turns off runs once')
+  assert.equal(
+    cascade({ ...base, runs: 2 }, [{ options: { compare }, where: 'e' }], 'e').resolved.runs,
+    2,
+  )
 })
 
 test('a check a side never ran has no verdict, and not-run attempts are not failures', async () => {

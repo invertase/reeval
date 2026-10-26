@@ -19,7 +19,7 @@
 | Config and option mistakes exit 2 with the fix | ✓ 4 | — | — | — | — | — |
 | `.env` and `.env.local` loading, from the config's directory | ✓ 1 | — | — | — | — | — |
 | Finding the nearest `reeval.config.*` upward from the current directory; `--config` wins | ✓ 2 | — | ● 1 | ● 1 | — | — |
-| `harness` lists × `runs`, and `--runs` | ✓ 2 | ✓ 2 | — | — | — | — |
+| `harness` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once | ✓ 2 | ✓ 8 | — | — | — | — |
 | Option cascade through groups and evals; harness edits (`{ add }`, `{ only }`, functions) | ✓ 2 | ✓ 1 | — | — | — | — |
 | `compare`: control, variants, lift and `minLift` | ✓ 2 | ✓ 2 | ● 1 | ● 1 | — | — |
 | `evaluate.each`: one eval per case, pooled into a family with a pass rate and a paired lift that `minLift` gates; `{ pool: false }` | ✓ 2 | ✓ 3 | ● 1 | — | — | — |

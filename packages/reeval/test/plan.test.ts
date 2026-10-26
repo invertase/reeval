@@ -22,6 +22,12 @@ const modelsDev = async (dir: string) => {
 export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'default', args: [] },
   { dir: 'matrix', name: 'runs-override', args: ['--runs', '1'] },
+  { dir: 'runs-default', name: 'default', args: [] },
+  { dir: 'runs-default', name: 'runs-flag', args: ['--runs', '2'] },
+  { dir: 'runs-default', name: 'config-runs', args: ['--config', 'reeval.once.config.ts'] },
+  { dir: 'runs-default', name: 'profile-defaults', args: ['--profile', 'two'] },
+  { dir: 'runs-default', name: 'profile-limit', args: ['--profile', 'pr'] },
+  { dir: 'runs-default', name: 'compare-off', args: ['--profile', 'off'] },
   { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.eval.ts'] },
   { dir: 'compare', name: 'independent', args: ['evals/independent.eval.ts'] },
   { dir: 'compare', name: 'baseline-omitted', args: ['evals/omitted.eval.ts'] },
@@ -936,13 +942,13 @@ evaluate('uses it', { environment: env${options ?? ''} }, async () => {})
     const p = await fixture('plan/compare')
     const r = await runCli(p.dir, ['run', '--dry-run', 'evals/variants.eval.ts', 'b/skilled'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /2 evals · 2 cells · 3 attempts/)
+    assert.match(r.stdout, /2 evals · 2 cells · 6 attempts/)
     const rows = r.stdout
       .split('\n')
       .filter((l) => l.startsWith('evals/variants.eval.ts'))
       .map((l) => l.split(/\s{2,}/).slice(1, 5))
     assert.deepEqual(rows, [
-      ['1', '1 of 2', '1', '1'],
+      ['1', '1 of 2', '4', '4'],
       ['1', '1', '2', '2'],
     ])
   })

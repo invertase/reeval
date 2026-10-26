@@ -132,7 +132,7 @@ ids as `anthropic/…`, never `openrouter/…` or `vercel/…`.
 | `env` | Merged by name |
 | `judge` | Merged by field |
 | `capture` | Shallow-merged camera defaults (`viewport`, `timeout`, `browser`, `model`, the vision model); `viewport` replaces the value, and the port is not an option |
-| `runs`, `gate`, `egress`, `timeout` | Replaced |
+| `runs`, `gate`, `egress`, `timeout` | Replaced (`runs` unset everywhere: 4 for a compare with variants, else 1) |
 | `tags`, `pin` | Unioned |
 | `compare` | Groups and evals only |
 

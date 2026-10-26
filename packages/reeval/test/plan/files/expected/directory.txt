@@ -1,9 +1,10 @@
-no profile · 4 evals · 5 cells · 5 attempts
+no profile · 4 evals · 5 cells · 11 attempts
+hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
 evals/files.eval.ts › a whole directory            fake/whole/docker       control           gated    ×1  files README.md, lib/build/tool.ts, package.json, py/notes.py, src/gen/keep.ts, src/gen/out.ts, src/index.test.ts, src/index.ts
 evals/files.eval.ts › globs and into               fake/picked/docker      control           gated    ×1  files app/package.json, app/src/gen/keep.ts, app/src/index.ts
 evals/files.eval.ts › without the default ignores  fake/everything/docker  control           gated    ×1  files .vscode/settings.json, README.md, build/out.txt, lib/build/tool.ts, package.json, py/notes.py, src/gen/keep.ts, src/gen/out.ts, src/index.test.ts, src/index.ts
-evals/files.eval.ts › a variant adds a directory   fake/whole/docker       control           ungated  ×1  files README.md, lib/build/tool.ts, package.json, py/notes.py, src/gen/keep.ts, src/gen/out.ts, src/index.test.ts, src/index.ts
-                                                   fake/composed/docker    variant composed  gated    ×1  files NOTES.md, README.md, lib/build/tool.ts, package.json, py/notes.py, src/gen/keep.ts, src/gen/out.ts, src/index.test.ts, src/index.ts, tools/notes.py
+evals/files.eval.ts › a variant adds a directory   fake/whole/docker       control           ungated  ×4  runs 4 (compare default) · files README.md, lib/build/tool.ts, package.json, py/notes.py, src/gen/keep.ts, src/gen/out.ts, src/index.test.ts, src/index.ts
+                                                   fake/composed/docker    variant composed  gated    ×4  files NOTES.md, README.md, lib/build/tool.ts, package.json, py/notes.py, src/gen/keep.ts, src/gen/out.ts, src/index.test.ts, src/index.ts, tools/notes.py
 excluded: —
 image docker · cursor · 4 evals
   base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
