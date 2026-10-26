@@ -77,16 +77,6 @@ Add each extra environment to `compare.variants`. This excerpt measures one conv
 
 Each variant gets its own row and effect. reeval gates each variant separately. For a runnable project, see [`with-two-variants`](https://github.com/invertase/reeval/tree/main/examples/with-two-variants).
 
-## Gate on lift
-
-Set `compare.minLift` to the smallest lift you accept, from -1 to 1:
-
-```ts title="with-min-lift.eval.ts"
-compare: { baseline: math, variants: [withJsdoc], minLift: 0.2 },
-```
-
-A variant whose lift may be below 20 points fails, even when it `helped`, and its row reads `helped, not by minLift 20`. For a runnable project, see [`with-min-lift`](https://github.com/invertase/reeval/tree/main/examples/with-min-lift).
-
 ## Compare harnesses
 
 List several harnesses in `harness`. Any harness works ([Harnesses](/agents)):
@@ -103,6 +93,16 @@ compare: {
 ```
 
 Each harness reads its API key from the `.env.local` file. reeval measures each variant against the baseline on the same harness. `compare.harness` limits the variant to the listed harnesses, and the others run the baseline only. For a runnable project, see [`with-compare-harness`](https://github.com/invertase/reeval/tree/main/examples/with-compare-harness).
+
+## Gate on lift
+
+Set `compare.minLift` to the smallest lift you accept, from -1 to 1:
+
+```ts title="with-min-lift.eval.ts"
+compare: { baseline: math, variants: [withJsdoc], minLift: 0.2 },
+```
+
+A variant whose lift may be below 20 points fails, even when it `helped`, and its row reads `helped, not by minLift 20`. For a runnable project, see [`with-min-lift`](https://github.com/invertase/reeval/tree/main/examples/with-min-lift).
 
 ## Ask which did better
 
@@ -121,6 +121,6 @@ questions: [
 
 Questions never gate. They don't change an outcome or the exit code. For a runnable project, see [`with-compare-questions`](https://github.com/invertase/reeval/tree/main/examples/with-compare-questions).
 
-## Next steps
+## Reference
 
 For more information about every `compare` key, see [the `compare` option](/reference/options#compare).
