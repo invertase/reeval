@@ -627,7 +627,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="servedModels" type="string[] | null">
-  The models served by the harness's API calls, as observed by the egress gateway. Values may come from requests or responses and include reported effort; null when no model was named or recorded.
+  The models served by the harness's API calls, as observed by the egress gateway. Values may come from requests or responses and include reported effort; null when no model was named or recorded. The gateway reads the request URL for Antigravity, Goose, pi, and OpenCode on a `google/` model, so a request for `<model>-low` records `<model>`, and the API response for Codex, Grok Build, and OpenCode on another provider. Null for Cursor and Claude Code, whose API requests name no model.
 </Property>
 
 <Property name="askedModels" type="string[]" optional>

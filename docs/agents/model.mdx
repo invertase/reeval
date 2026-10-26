@@ -89,11 +89,4 @@ For more information about sending model calls through one gateway key, see [Rou
 
 ## Check the model that served
 
-The record keeps what the provider served beside the configured `model` and `effort`:
-
-- Each turn's `model` holds the served model. The `cursor` harness adds parameters, such as `<model>[fast=false]`.
-- The attempt's `servedModels` lists the models the egress gateway saw. It reads the request URL for `antigravity`, `goose`, `pi`, and `opencode` on a `google/` model, so a request for `<model>-low` records `<model>`. It reads the API response for `codex`, `grokBuild`, and `opencode` on another provider. It is null for `cursor` and `claudeCode`, whose API requests name no model.
-- The attempt's `servedEffort` is the value after `effort=` in a served label, such as `medium` from Codex's `<model>[effort=medium]`.
-- The run record's `harnesses[]` entries collect these as `resolvedModels` and `resolvedEffort`.
-
-For more information about every run record field, see [Run record reference](/reference/record).
+The record keeps the model and effort that served each turn beside the configured `model` and `effort`. For more information about `servedModels`, `servedEffort`, and each harness's `resolvedModels` and `resolvedEffort`, see [Run record reference](/reference/record).
