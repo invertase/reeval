@@ -57,6 +57,25 @@ npx reeval run --dry-run --json
 
 The document lists every cell, and any evaluation set to `skip` or `todo`.
 
+## Set the attempts
+
+The `runs` option sets how many attempts each cell gets, and it defaults to 1. Each attempt runs in a fresh sandbox. In the `evals/camelcase.eval.ts` file, add `runs` to the options:
+
+```ts title="evals/camelcase.eval.ts"
+evaluate(
+  'adds a separators option',
+  { environment: camelcase, runs: 4 },
+  // ...
+```
+
+To set it for one run, pass `--runs`, which replaces the option:
+
+```bash
+npx reeval run --runs 4
+```
+
+A comparison needs at least four counted attempts a side before it calls an effect. For more information, see [Four-attempt minimum](/results/compare/statistics#four-attempt-minimum).
+
 ## Choose the output
 
 reeval chooses the output from where you run the command. These flags set the mode, the line order, the prefix, and which attempts print detail lines:
