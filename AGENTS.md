@@ -562,6 +562,6 @@ transcripts, the studio and the record) is in the user docs under [`docs/`](./do
 | Tab | For |
 |---|---|
 | [Guide](./docs/index.mdx) | Learning reeval in order, from a first eval to CI and analysis |
-| [Core concepts](./docs/core-concepts.mdx) | How and why it works: the matrix, lift, brokering, egress |
+| [Glossary](./docs/reference/glossary.mdx) | The words for a run and what a result reports |
 | [Recipes](./docs/recipes) | Complete solutions to common tasks |
 | [Reference](./docs/reference) | Every option, helper, command, flag, exit code and file format |

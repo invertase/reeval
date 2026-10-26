@@ -5,7 +5,7 @@ description: "The words name the parts of a run and what a result reports."
 
 ## Agent
 
-An agent is a harness plus its model, named in the `harness` option, such as `claude-code:claude-sonnet-5`. For more information about an agent, see [Configuration](/core-concepts#configuration).
+An agent is a harness plus its model, named in the `harness` option, such as `claude-code:claude-sonnet-5`. For more information about an agent, see [Harness](/reference/glossary#harness).
 
 ## Analysis
 
@@ -13,11 +13,11 @@ An analysis is what a language model writes about a run: answers and insights. `
 
 ## Answers
 
-Answers are what an evaluation's questions found, such as `won 3 of 4` for each side of a pairwise question. For more information about answers, see [Results](/core-concepts#results).
+Answers are what an evaluation's questions found, such as `won 3 of 4` for each side of a pairwise question. For more information about answers, see [Analysis](/reference/glossary#analysis).
 
 ## Artifacts
 
-Artifacts are what the agent leaves in the workspace: the files it wrote, the diff, and screenshots from `c.capture()`. For more information about artifacts, see [Evaluation](/core-concepts#evaluation).
+Artifacts are what the agent leaves in the workspace: the files it wrote, the diff, and screenshots from `c.capture()`. For more information about artifacts, see [Workspace](/reference/glossary#workspace).
 
 ## Assertion
 
@@ -25,7 +25,7 @@ An assertion is a named, deterministic pass or fail on what an attempt produced,
 
 ## Attempt
 
-An attempt is one execution of a cell in a fresh sandbox, and its outcome is pass, fail, infra error, or skipped. For more information about an attempt, see [Configuration](/core-concepts#configuration).
+An attempt is one execution of a cell in a fresh sandbox, and its outcome is pass, fail, infra error, or skipped. For more information about an attempt, see [Cell](/reference/glossary#cell).
 
 ## Baseline
 
@@ -33,7 +33,7 @@ The baseline is a comparison's environment without the change, and each variant 
 
 ## Cell
 
-A cell is one agent, one environment, and one `sandbox` option of an evaluation, and each of its attempts gets a fresh sandbox. In a comparison, the baseline and each variant are separate cells. For more information about a cell, see [Configuration](/core-concepts#configuration).
+A cell is one agent, one environment, and one `sandbox` option of an evaluation, and each of its attempts gets a fresh sandbox. In a comparison, the baseline and each variant are separate cells. For more information about a cell, see [Attempt](/reference/glossary#attempt).
 
 ## Comparison
 
@@ -65,7 +65,7 @@ Lift is a variant against the baseline: the difference in pass rate on the same 
 
 ## Measures
 
-The measures are pass rate, tokens, tool calls, turns, cost, and time. For more information about each measure, see [Results](/core-concepts#results).
+The measures are pass rate, tokens, tool calls, turns, cost, and time. For more information about each measure, see [Run](/reference/glossary#run).
 
 ## Past runs
 
@@ -77,7 +77,7 @@ A profile is a named preset that sizes a run, and the run's record stores the pr
 
 ## Question
 
-A question in `questions` reads across attempts after they end, and never changes an outcome. For more information about a question, see [Evaluation](/core-concepts#evaluation).
+A question in `questions` reads across attempts after they end, and never changes an outcome. For more information about a question, see [Attempt](/reference/glossary#attempt).
 
 ## Record
 
@@ -105,7 +105,7 @@ A turn is the agent's reply to one `c.send()` call. The turn holds the final mes
 
 ## Workspace
 
-The workspace is the directory in the sandbox where the agent works, and grading reads it. For more information about a workspace, see [Evaluation](/core-concepts#evaluation).
+The workspace is the directory in the sandbox where the agent works, and grading reads it. For more information about a workspace, see [Sandbox](/reference/glossary#sandbox).
 
 ## Shared words
 

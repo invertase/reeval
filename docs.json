@@ -59,23 +59,20 @@
     "/gateways/vercel": "/integrations/gateways/vercel",
     "/gateways/openrouter": "/integrations/gateways/openrouter",
     "/gateways/vertex": "/integrations/gateways/vertex",
-    "/integrations/sandboxes/toolchains": "/environments/toolchains"
+    "/integrations/sandboxes/toolchains": "/environments/toolchains",
+    "/core-concepts": "/reference/glossary"
   },
   "sidebar": [
     {
       "group": "Getting started",
       "pages": [
         {
-          "title": "reeval",
+          "title": "Introduction",
           "href": "/"
         },
         {
           "title": "Quickstart",
           "href": "/quickstart"
-        },
-        {
-          "title": "Core concepts",
-          "href": "/core-concepts"
         }
       ]
     },
@@ -251,6 +248,90 @@
               "href": "/environments/egress"
             }
           ]
+        },
+        {
+          "group": "Integrations",
+          "pages": [
+            {
+              "group": "Agents",
+              "pages": [
+                {
+                  "title": "Cursor",
+                  "href": "/integrations/agents/cursor"
+                },
+                {
+                  "title": "Claude Code",
+                  "href": "/integrations/agents/claude-code"
+                },
+                {
+                  "title": "Codex",
+                  "href": "/integrations/agents/codex"
+                },
+                {
+                  "title": "Antigravity",
+                  "href": "/integrations/agents/antigravity"
+                },
+                {
+                  "title": "OpenCode",
+                  "href": "/integrations/agents/opencode"
+                },
+                {
+                  "title": "Goose",
+                  "href": "/integrations/agents/goose"
+                },
+                {
+                  "title": "pi",
+                  "href": "/integrations/agents/pi"
+                },
+                {
+                  "title": "fx",
+                  "href": "/integrations/agents/fx"
+                },
+                {
+                  "title": "Grok Build",
+                  "href": "/integrations/agents/grok-build"
+                }
+              ]
+            },
+            {
+              "group": "Gateways",
+              "pages": [
+                {
+                  "title": "Direct",
+                  "href": "/integrations/gateways/direct"
+                },
+                {
+                  "title": "Vercel AI Gateway",
+                  "href": "/integrations/gateways/vercel"
+                },
+                {
+                  "title": "OpenRouter",
+                  "href": "/integrations/gateways/openrouter"
+                },
+                {
+                  "title": "Vertex AI",
+                  "href": "/integrations/gateways/vertex"
+                }
+              ]
+            },
+            {
+              "group": "Sandboxes",
+              "pages": [
+                {
+                  "title": "Choose a sandbox",
+                  "href": "/integrations/sandboxes"
+                },
+                {
+                  "title": "Docker",
+                  "href": "/integrations/sandboxes/docker"
+                },
+                {
+                  "title": "Podman",
+                  "href": "/integrations/sandboxes/podman"
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -301,143 +382,63 @@
       ]
     },
     {
-      "group": "Integrations",
       "pages": [
         {
-          "group": "Agents",
+          "group": "Reference",
           "pages": [
             {
-              "title": "Cursor",
-              "href": "/integrations/agents/cursor"
+              "title": "Authoring API",
+              "href": "/reference/api"
             },
             {
-              "title": "Claude Code",
-              "href": "/integrations/agents/claude-code"
+              "title": "Attempt context",
+              "href": "/reference/context"
             },
             {
-              "title": "Codex",
-              "href": "/integrations/agents/codex"
+              "title": "Matchers",
+              "href": "/reference/matchers"
             },
             {
-              "title": "Antigravity",
-              "href": "/integrations/agents/antigravity"
+              "title": "Options",
+              "href": "/reference/options"
             },
             {
-              "title": "OpenCode",
-              "href": "/integrations/agents/opencode"
+              "title": "Environment helpers",
+              "href": "/reference/environment"
             },
             {
-              "title": "Goose",
-              "href": "/integrations/agents/goose"
+              "title": "Configuration",
+              "href": "/reference/config"
             },
             {
-              "title": "pi",
-              "href": "/integrations/agents/pi"
+              "title": "Profiles",
+              "href": "/reference/profiles"
             },
             {
-              "title": "fx",
-              "href": "/integrations/agents/fx"
+              "title": "CLI",
+              "href": "/reference/cli"
             },
             {
-              "title": "Grok Build",
-              "href": "/integrations/agents/grok-build"
+              "title": "Environment variables",
+              "href": "/reference/env-vars"
+            },
+            {
+              "title": "Run record",
+              "href": "/reference/record"
+            },
+            {
+              "title": "Query views",
+              "href": "/reference/query"
+            },
+            {
+              "title": "History MCP server",
+              "href": "/reference/mcp-tools"
+            },
+            {
+              "title": "Glossary",
+              "href": "/reference/glossary"
             }
           ]
-        },
-        {
-          "group": "Gateways",
-          "pages": [
-            {
-              "title": "Direct",
-              "href": "/integrations/gateways/direct"
-            },
-            {
-              "title": "Vercel AI Gateway",
-              "href": "/integrations/gateways/vercel"
-            },
-            {
-              "title": "OpenRouter",
-              "href": "/integrations/gateways/openrouter"
-            },
-            {
-              "title": "Vertex AI",
-              "href": "/integrations/gateways/vertex"
-            }
-          ]
-        },
-        {
-          "group": "Sandboxes",
-          "pages": [
-            {
-              "title": "Choose a sandbox",
-              "href": "/integrations/sandboxes"
-            },
-            {
-              "title": "Docker",
-              "href": "/integrations/sandboxes/docker"
-            },
-            {
-              "title": "Podman",
-              "href": "/integrations/sandboxes/podman"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "group": "Reference",
-      "pages": [
-        {
-          "title": "Authoring API",
-          "href": "/reference/api"
-        },
-        {
-          "title": "Attempt context",
-          "href": "/reference/context"
-        },
-        {
-          "title": "Matchers",
-          "href": "/reference/matchers"
-        },
-        {
-          "title": "Options",
-          "href": "/reference/options"
-        },
-        {
-          "title": "Environment helpers",
-          "href": "/reference/environment"
-        },
-        {
-          "title": "Configuration",
-          "href": "/reference/config"
-        },
-        {
-          "title": "Profiles",
-          "href": "/reference/profiles"
-        },
-        {
-          "title": "CLI",
-          "href": "/reference/cli"
-        },
-        {
-          "title": "Environment variables",
-          "href": "/reference/env-vars"
-        },
-        {
-          "title": "Run record",
-          "href": "/reference/record"
-        },
-        {
-          "title": "Query views",
-          "href": "/reference/query"
-        },
-        {
-          "title": "History MCP server",
-          "href": "/reference/mcp-tools"
-        },
-        {
-          "title": "Glossary",
-          "href": "/reference/glossary"
         }
       ]
     }
