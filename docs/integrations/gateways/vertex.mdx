@@ -1,20 +1,58 @@
 ---
 title: "vertex gateway"
-description: "Use the Google Vertex AI for an LLM model."
+description: "Send model calls through Google Cloud's Vertex AI on Application Default Credentials."
 ---
 
-Using a Google Vertex AI Gateway means that LLM calls will go through the Google Vertex AI, and requires that a Google Vertex AI API key is provided.
+`vertex()` sends the model calls of the harnesses it serves through Google Cloud's Vertex AI. It takes no key: reeval mints an access token on the host from Application Default Credentials, and the egress gateway adds it to the agent's model calls only, so the token never enters the sandbox.
 
-```ts
+## Application Default Credentials
+
+```bash
+gcloud auth application-default login
+```
+
+`vertex()` reads Application Default Credentials, from `gcloud auth application-default login` or a credentials file named in `GOOGLE_APPLICATION_CREDENTIALS`. reeval swaps in a fresh token five minutes before each one expires. An attempt whose first token cannot be minted fails as an infrastructure error.
+
+`reeval doctor` checks each `vertex()` entry's project and where its credentials come from. With `--online`, it mints a token, checks that the Vertex AI API is on in the project, and asks Vertex for a token count on each model the config sends there.
+
+## `vertex()`
+
+`vertex()` is exported from `{{ pkg }}/gateway`:
+
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
-import { vertex } from '{{ pkg }}/gateway'
-import { claudeCode, codex, cursor, opencode } from '{{ pkg }}/harness'
+import { direct, vertex } from '{{ pkg }}/gateway'
 
 export default defineConfig({
   gateway: [
-    vertex({ project: 'my-project', location: 'us-central1' })
-  ]
+    vertex({ project: 'my-project', regions: { anthropic: 'us-east5' } }),
+    direct(),
+  ],
 })
 ```
 
+<Property name="project" type="string" optional>
+  The Google Cloud project the calls are billed to. Defaults to `GOOGLE_CLOUD_PROJECT`. A run exits with code 2 when neither names a project.
+</Property>
 
+<Property name="location" type="string" optional>
+  The region the models are called in, such as `us-east5`. Defaults to `global`.
+</Property>
+
+<Property name="regions" type="{ anthropic?: string; google?: string; xai?: string }" optional>
+  A region per publisher, where it differs from `location`.
+</Property>
+
+A harness `vertex()` cannot serve takes the next gateway in the list.
+
+For more information about combining gateways, see [Gateways](/agents/gateways).
+
+## Harnesses
+
+| Serves | Falls through |
+| :--- | :--- |
+| Claude Code, Antigravity, OpenCode, Goose, pi | Cursor, Codex, fx, Grok Build |
+
+Cursor's agent calls only Cursor's API, and Codex calls only OpenAI's Responses API. A Claude model's Anthropic API id, such as `claude-haiku-4-5-20251001`, goes to Vertex as Vertex's id, `claude-haiku-4-5@20251001`, so one model string works on `vertex()` and on `direct()`.
+
+The judge, `analysis.model`, captures, and questions call `anthropic/*` and `google/*` models on `vertex()`, from the host with the same token, in the publisher's region. Other models take the next gateway.
