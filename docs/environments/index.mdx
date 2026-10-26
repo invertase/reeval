@@ -96,7 +96,16 @@ For a runnable project, see [`with-library-skill-lift`](https://github.com/inver
 
 ## Give every evaluation an environment from the config
 
-For more information about config helpers, see [Config helpers](/reference/config#confighelpers).
+In the `reeval.config.ts` file, set `environment` to run every evaluation that sets none of its own in it:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { page } from './evals/environments.ts'
+
+export default defineConfig({ environment: page })
+```
+
+A group's or an evaluation's `environment` replaces the config's.
 
 ## Reference
 
