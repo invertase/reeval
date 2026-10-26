@@ -7,6 +7,9 @@
     "cli": "reeval",
     "node": "22.13"
   },
+  "agent": {
+    "key": "a54c1b85-c613-433a-a009-15c93df4339f"
+  },
   "content": {
     "zoomImages": true
   },
