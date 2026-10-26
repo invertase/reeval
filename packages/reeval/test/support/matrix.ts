@@ -131,13 +131,9 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
       if (planCases.has(c)) cells.plan.count++
       else problems.push(`${at}: plan case ${c} isn't in plan.test.ts`)
     }
-    for (const ref of feature.tests ?? []) {
-      const [file, title, ...rest] = ref.split(' › ')
-      const source = file ? sources.testSource(file) : null
-      if (!file || !title || rest.length) problems.push(`${at}: "${ref}" isn't "<file> › <title>"`)
-      else if (source === null) problems.push(`${at}: ${file} doesn't exist`)
-      else if (!testTitles(source).some((t) => t.includes(title)))
-        problems.push(`${at}: ${file} has no test "${title}"`)
+    for (const file of feature.unit ?? []) {
+      if (!/\.test\.ts$/.test(file)) problems.push(`${at}: "${file}" isn't a test file`)
+      else if (sources.testSource(file) === null) problems.push(`${at}: ${file} doesn't exist`)
       else cells.unit.count++
     }
     for (const ref of feature.real ?? []) {
@@ -164,7 +160,7 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
       problems.push(`${at}: it's covered now, so it's no longer a gap: remove its gap`)
     if (!covered(row) && !feature.gap)
       problems.push(
-        `${at}: nothing covers it on any tier. Add a fixture, plan case or test, or mark it a known gap with the reason`,
+        `${at}: nothing covers it on any tier. Add a fixture, plan case or test file, or mark it a known gap with the reason`,
       )
     return row
   })
@@ -202,11 +198,11 @@ export function renderMarkdown({ rows }: Matrix): string {
     '',
     `${rows.length} features: ${rows.length - gaps.length} covered on at least one tier, ${gaps.length} known gaps. Features per tier: ${perTier.join(', ')}.`,
     '',
-    '- **unit**: plain `node:test` cases, including runner-level tests through the CLI',
+    '- **unit**: test files with plain `node:test` cases, including runner-level tests through the CLI',
     '- **plan**: `reeval run --dry-run --json` snapshots in `plan.test.ts`',
     '- **fake**, **docker**, **podman**: feature fixtures in `features.test.ts` on the fake sandbox, in Docker and in rootless Podman',
     '- **real**: real-tier fixtures in `features.test.ts` (real Cursor), and the harness contract (`contract.test.ts`) and CLI end to end (`e2e-real.test.ts`) on every real harness',
-    '- `● n`: n fixtures or contract behaviours, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n cases or tests · `—`: nothing',
+    '- `● n`: n fixtures or contract behaviours, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n plan cases or test files · `—`: nothing',
     '',
   ]
   for (const area of AREAS) {

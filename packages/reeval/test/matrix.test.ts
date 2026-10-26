@@ -54,9 +54,7 @@ describe('the matrix check (twins: it can fail)', () => {
     planCases: ['matrix/default'],
     contract: [],
     testSource: (path) =>
-      path === 'reeval/test/unit.test.ts'
-        ? "// covers a comment\nconst label = 'a helper string'\ntest('parses a thing', () => {})"
-        : null,
+      path === 'reeval/test/unit.test.ts' ? "test('parses a thing', () => {})" : null,
     evalOptionKeys: ['harness'],
     evalOptionSpecs: [{ key: 'harness', featureId: 'x', plan: true }],
     refusalText: 'harness in evals/a.eval.ts',
@@ -70,7 +68,7 @@ describe('the matrix check (twins: it can fail)', () => {
   const everything = feature({
     fixtures: ['skills/a', 'skills/b'],
     plan: ['matrix/default'],
-    tests: ['reeval/test/unit.test.ts › parses a thing'],
+    unit: ['reeval/test/unit.test.ts'],
   })
 
   test('a fully covered inventory has no problems, and each tier counts what covers it', () => {
@@ -93,7 +91,7 @@ describe('the matrix check (twins: it can fail)', () => {
   test('a feature with nothing on any tier fails, unless it is a known gap with a reason', () => {
     const bare = buildMatrix([everything, feature({ id: 'y' })], sources).problems
     assert.deepEqual(bare, [
-      'inventory y: nothing covers it on any tier. Add a fixture, plan case or test, or mark it a known gap with the reason',
+      'inventory y: nothing covers it on any tier. Add a fixture, plan case or test file, or mark it a known gap with the reason',
     ])
     const gap = buildMatrix([everything, feature({ id: 'y', gap: 'needs a registry' })], sources)
     assert.deepEqual(gap.problems, [])
@@ -233,27 +231,18 @@ describe('the matrix check (twins: it can fail)', () => {
           id: 'y',
           fixtures: ['skills/nope'],
           plan: ['matrix/nope'],
-          tests: [
-            'reeval/test/unit.test.ts › a test that is not there',
-            'reeval/test/unit.test.ts › covers a comment',
-            'reeval/test/unit.test.ts › a helper string',
-            'reeval/test/nope.test.ts › anything',
-            'no title',
-          ],
+          unit: ['reeval/test/nope.test.ts', 'reeval/test/unit.test.ts › a title'],
         }),
-        feature({ id: 'y', tests: ['reeval/test/unit.test.ts › parses a thing'] }),
+        feature({ id: 'y', unit: ['reeval/test/unit.test.ts'] }),
       ],
       sources,
     )
     assert.deepEqual(m.problems, [
       "inventory y: fixture skills/nope isn't in features.test.ts",
       "inventory y: plan case matrix/nope isn't in plan.test.ts",
-      'inventory y: reeval/test/unit.test.ts has no test "a test that is not there"',
-      'inventory y: reeval/test/unit.test.ts has no test "covers a comment"',
-      'inventory y: reeval/test/unit.test.ts has no test "a helper string"',
       "inventory y: reeval/test/nope.test.ts doesn't exist",
-      'inventory y: "no title" isn\'t "<file> › <title>"',
-      'inventory y: nothing covers it on any tier. Add a fixture, plan case or test, or mark it a known gap with the reason',
+      'inventory y: "reeval/test/unit.test.ts › a title" isn\'t a test file',
+      'inventory y: nothing covers it on any tier. Add a fixture, plan case or test file, or mark it a known gap with the reason',
       'inventory y: the id is used twice',
     ])
   })
