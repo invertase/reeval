@@ -1,0 +1,31 @@
+---
+title: "Measure a run"
+description: "Read pass rate, tokens, tool calls, turns, cost, and time for each agent and environment."
+---
+
+Every attempt records what it took. The results summary prints the pass rate and the medians, and `reeval query` reads every measure.
+
+```bash
+npx reeval query "SELECT cell_key, outcome, turns, tools, input_tokens, output_tokens, agent_ms FROM attempts"
+```
+
+## Read the measures
+
+| Measure | What it counts | Where to read it |
+| :--- | :--- | :--- |
+| Pass rate | Passed attempts out of counted attempts | The `pass` column of the summary |
+| Tokens | Input, output, cache, and reasoning tokens, as the harness reports them | The `tokens` column of the `effort` table, and `input_tokens` and `output_tokens` on `attempts` |
+| Tool calls | The tools the agent called | The `tools` column of the `effort` table, and `tools` on `attempts` |
+| Turns | The prompts the evaluation sent, one per `c.send()` | `turns` on `attempts` |
+| Cost | The tokens priced with models.dev or your own prices, and what a gateway reported | `reeval run --dry-run` before a run, and `reportedCostUsd` in the record |
+| Time | Agent time per attempt | The `time` column of the `effort` table, and `agent_ms` on `attempts` |
+
+The `effort` table prints medians, and only when there are at least four counted attempts and the cells differ or the evaluation failed. For more information about the summary, see [Read the results summary](/results/output#read-the-assertion-and-effort-tables).
+
+## Compare the measures
+
+In a comparison, `npx reeval query effort` lists each variant's tool calls, time, and tokens against its baseline. For more information about how reeval calls a difference, see [Tokens, tool calls and time](/evals/statistics#tokens-tool-calls-and-time).
+
+## Reference
+
+For more information about every column, see [Query views](/reference/query). For more information about the record's token fields, see [Run record](/reference/record).
