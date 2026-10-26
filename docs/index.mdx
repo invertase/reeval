@@ -21,6 +21,23 @@ npx skills add https://github.com/invertase/reeval --skill setup
 
 To set it up by hand, see [Quick start](/quickstart).
 
+## How an evaluation works
+
+Each attempt runs in its own sandbox, then grading reads the workspace.
+
+<Image
+  theme="light"
+  src="/assets/mental-model-v26-light.png"
+  alt="Configuration > Agents > Harness + model; Configuration > Environments > Baseline or variant; Configuration > Attempts > Repeat count; Configuration > Sandboxes > Number to spawn; Evaluation > Sandbox > Agent; Evaluation > Sandbox > Environment; Evaluation > Sandbox > Task; Evaluation > Sandbox > Workspace > Artifacts; Evaluation > Sandbox > Workspace > Transcript; Evaluation > Grading > Assertions > Deterministic checks; Evaluation > Grading > Judgments > LLM verdicts; Evaluation > Grading > Questions > Across attempts; Results > Measure > Pass rate; Results > Measure > Tokens; Results > Measure > Tool calls; Results > Measure > Turns; Results > Measure > Cost; Results > Measure > Time; Results > Compare > Lift > Variant against baseline; Results > Compare > Past runs > This run against earlier ones; Results > Analyze > Answers > What the questions found; Results > Analyze > Insights > What the agent did and why"
+  width={828}
+/>
+<Image
+  theme="dark"
+  src="/assets/mental-model-v26-dark.png"
+  alt="Configuration > Agents > Harness + model; Configuration > Environments > Baseline or variant; Configuration > Attempts > Repeat count; Configuration > Sandboxes > Number to spawn; Evaluation > Sandbox > Agent; Evaluation > Sandbox > Environment; Evaluation > Sandbox > Task; Evaluation > Sandbox > Workspace > Artifacts; Evaluation > Sandbox > Workspace > Transcript; Evaluation > Grading > Assertions > Deterministic checks; Evaluation > Grading > Judgments > LLM verdicts; Evaluation > Grading > Questions > Across attempts; Results > Measure > Pass rate; Results > Measure > Tokens; Results > Measure > Tool calls; Results > Measure > Turns; Results > Measure > Cost; Results > Measure > Time; Results > Compare > Lift > Variant against baseline; Results > Compare > Past runs > This run against earlier ones; Results > Analyze > Answers > What the questions found; Results > Analyze > Insights > What the agent did and why"
+  width={828}
+/>
+
 ## Run an evaluation
 
 This one asks for a page in Anthropic's brand, as a control without Anthropic's `brand-guidelines` skill and a variant with it, on both Claude Code and Codex:
