@@ -191,10 +191,10 @@
       "group": "Configuration",
       "pages": [
         {
-          "group": "Choose an agent",
+          "group": "Agent",
           "pages": [
             {
-              "title": "Choose an agent",
+              "title": "Agent",
               "href": "/agents"
             },
             {
@@ -208,7 +208,7 @@
           ]
         },
         {
-          "group": "Set the environment",
+          "group": "Environment",
           "pages": [
             {
               "title": "Define an environment",
