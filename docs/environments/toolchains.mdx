@@ -70,7 +70,7 @@ A run builds the images its sandboxes are missing before the first attempt. To b
 npx reeval image build
 ```
 
-The command builds every image the planned evaluations need and exits with code 3 when any build fails. It takes the same filters and `--profile` as `reeval run`. To list each image's status without building, add `--dry-run`:
+The command builds every image the planned evaluations need. It exits with code 2 when every failed build failed on the config, such as an `image` tag that doesn't resolve, and with code 3 otherwise. It takes the same filters and `--profile` as `reeval run`. To list each image's status without building, add `--dry-run`:
 
 ```bash
 npx reeval image build --dry-run
