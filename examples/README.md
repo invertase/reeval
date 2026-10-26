@@ -48,6 +48,7 @@ Every example takes the real agents in [`profiles.ts`](./profiles.ts) by name: `
 | [`with-harness-edits`](./with-harness-edits) | An eval adding to the harness list it inherits |
 | [`with-reasoning-effort`](./with-reasoning-effort) | One agent at two reasoning efforts |
 | [`with-vercel-gateway`](./with-vercel-gateway) | Model calls through Vercel AI Gateway, on one key |
+| [`with-vertex-gateway`](./with-vertex-gateway) | Claude Code and its judge on Vertex AI, with no key |
 | [`with-fake-harness`](./with-fake-harness) | A scripted agent for building and testing evals |
 | [`with-oracle-canary`](./with-oracle-canary) | Proving an eval with an oracle and a canary |
 
