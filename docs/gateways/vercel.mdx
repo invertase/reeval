@@ -6,9 +6,9 @@ description: "Use the Vercel AI Gateway for an LLM model."
 Using a Vercel AI Gateway means that LLM calls will go through the Vercel AI Gateway, and requires that a Vercel AI Gateway API key is provided.
 
 ```ts
-import { defineConfig } from 'reeval'
-import { vercel } from 'reeval/gateway'
-import { claudeCode, codex, cursor, opencode } from 'reeval/harness'
+import { defineConfig } from '{{ pkg }}'
+import { vercel } from '{{ pkg }}/gateway'
+import { claudeCode, codex, cursor, opencode } from '{{ pkg }}/harness'
 
 export default defineConfig({
   gateway: [

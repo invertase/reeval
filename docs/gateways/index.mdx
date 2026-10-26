@@ -37,9 +37,9 @@ Please note, not all harnesses support gateways, and not all gateways are suppor
 Multiple gateways can be used together, and the gateway selection is done on a per-model-provider basis. The order of the gateways defines which provider will be used, and fallback downwards:
 
 ```ts
-import { defineConfig } from 'reeval'
-import { direct, vercel } from 'reeval/gateway'
-import { claudeCode, codex, cursor, opencode } from 'reeval/harness'
+import { defineConfig } from '{{ pkg }}'
+import { direct, vercel } from '{{ pkg }}/gateway'
+import { claudeCode, codex, cursor, opencode } from '{{ pkg }}/harness'
 
 export default defineConfig({
   gateway: [

@@ -6,9 +6,9 @@ description: "Use the OpenRouter for an LLM model."
 Using an OpenRouter gateway means that LLM calls will go through the OpenRouter, and requires that an OpenRouter API key is provided.
 
 ```ts
-import { defineConfig } from 'reeval'
-import { openrouter } from 'reeval/gateway'
-import { claudeCode, codex, cursor, opencode } from 'reeval/harness'
+import { defineConfig } from '{{ pkg }}'
+import { openrouter } from '{{ pkg }}/gateway'
+import { claudeCode, codex, cursor, opencode } from '{{ pkg }}/harness'
 
 export default defineConfig({
   gateway: [
