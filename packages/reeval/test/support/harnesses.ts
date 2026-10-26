@@ -141,8 +141,6 @@ export type HarnessRow = {
   upstream?: true
 }
 
-const VERTEX_GEMINI_GATE = 'its Vertex AI route has had no real run yet'
-
 export const harnesses: HarnessRow[] = [
   {
     id: 'fake',
@@ -405,7 +403,6 @@ export const harnesses: HarnessRow[] = [
     id: 'antigravity-vertex',
     harness: 'antigravity',
     gateway: 'vertex',
-    gated: VERTEX_GEMINI_GATE,
     model: 'gemini-3.8-flash-low',
     key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
     hostEnv: ['GOOGLE_CLOUD_PROJECT'],
@@ -421,7 +418,6 @@ export const harnesses: HarnessRow[] = [
     id: 'opencode-vertex',
     harness: 'opencode',
     gateway: 'vertex',
-    gated: VERTEX_GEMINI_GATE,
     model: 'google/gemini-3.8-flash',
     key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
     hostEnv: ['GOOGLE_CLOUD_PROJECT'],
@@ -437,7 +433,6 @@ export const harnesses: HarnessRow[] = [
     id: 'goose-vertex',
     harness: 'goose',
     gateway: 'vertex',
-    gated: VERTEX_GEMINI_GATE,
     model: 'gemini-3.8-flash',
     key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
     hostEnv: ['GOOGLE_CLOUD_PROJECT'],
@@ -456,7 +451,6 @@ export const harnesses: HarnessRow[] = [
     id: 'pi-vertex',
     harness: 'pi',
     gateway: 'vertex',
-    gated: VERTEX_GEMINI_GATE,
     model: 'gemini-3.8-flash',
     key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
     hostEnv: ['GOOGLE_CLOUD_PROJECT'],
