@@ -212,7 +212,7 @@ export const analysisConfigDataSchema = z
       .union([z.string(), fakeAnalysisDataSchema])
       .optional()
       .describe(
-        "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. `reeval analyze` and questions fall back to the judge's when it's a language model.",
+        "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Unset, `reeval analyze` and questions fall back to the judge's when it's a language model.",
       ),
     instructions: z
       .string()
@@ -329,7 +329,7 @@ export const reevalConfigDataSchema = z
       ),
     analysis: analysisConfigDataSchema
       .optional()
-      .describe('The model behind `reeval analyze` and questions without a model.'),
+      .describe('`reeval analyze`, and questions without a model of their own.'),
     gateway: z
       .array(gatewayEntryDataSchema)
       .min(1)

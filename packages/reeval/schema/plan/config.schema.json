@@ -8,10 +8,6 @@
       "description": "`AnalysisConfig` as data: the model by name, or a fake analysis.",
       "type": "object",
       "properties": {
-        "insights": {
-          "description": "`reeval run` classifies each eval and explains its result with `model` once the attempts finish (default true when `model` is set; `--no-insights` turns it off for one run).",
-          "type": "boolean"
-        },
         "instructions": {
           "description": "Added to the prompt, e.g. \"Fewer tool calls count as a win. The skill under test is reeval-good.\"",
           "type": "string"
@@ -28,14 +24,8 @@
           "minimum": 500,
           "maximum": 9007199254740991
         },
-        "maxTokens": {
-          "description": "Tokens (in and out) that one run's insights may use, over every classification, insight and headline call (default 250000). Past it, the evals left print without insights; the run's outcome and exit code never change.",
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9007199254740991
-        },
         "model": {
-          "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and questions fall back to the judge's when it's a language model.",
+          "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Unset, `reeval analyze` and questions fall back to the judge's when it's a language model.",
           "anyOf": [
             {
               "type": "string"
@@ -2222,7 +2212,7 @@
       "type": "object",
       "properties": {
         "analysis": {
-          "description": "Insights during `reeval run`, `reeval analyze`, and questions without a model.",
+          "description": "`reeval analyze`, and questions without a model of their own.",
           "$ref": "#/$defs/AnalysisConfigData"
         },
         "budget": {

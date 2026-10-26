@@ -1214,8 +1214,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'judge.providers',
     area: 'Judges and matchers',
-    plan: ['insights/anthropic-no-key', 'insights/anthropic-key'],
-    name: "Model routing for reeval's own calls (judge, analysis, insights, compare questions): `anthropic/*`, `google/*`, `openai/*` and `typesafe-ai/*` call their provider directly when its key is set, which wins over the AI Gateway; any other prefix goes through the Gateway; a missing or malformed key names the model, its prefix and every key that works, at plan time, in `reeval doctor` and at call time",
+    name: "Model routing for reeval's own calls (judge, analysis, compare questions): `anthropic/*`, `google/*`, `openai/*` and `typesafe-ai/*` call their provider directly when its key is set, which wins over the AI Gateway; any other prefix goes through the Gateway; a missing or malformed key names the model, its prefix and every key that works, at plan time, in `reeval doctor` and at call time",
     unit: [
       'reeval/test/unit.test.ts',
       'reeval/test/engine.test.ts',
@@ -1503,8 +1502,8 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'remarks',
     area: 'CLI and runner',
-    name: 'Deterministic remarks at the end of `reeval run` and in `reeval show`, with no model: concerns only (at most 3), suggestions with `-v`, each once per eval version except `slow-mcp-start`, kept in `insights.json` `remarks` with `origin: deterministic`',
-    unit: ['reeval/test/remarks.test.ts', 'reeval/test/insights.test.ts'],
+    name: 'Remarks at the end of `reeval run` and in `reeval show`, from fixed thresholds: concerns only (at most 3), suggestions with `-v`, each once per eval version except `slow-mcp-start`, kept in `<run>/remarks.json` (copied by `reeval record`)',
+    unit: ['reeval/test/remarks.test.ts'],
   },
   {
     id: 'remarks.too-few-tries',
@@ -1528,18 +1527,6 @@ export const inventory: InventoryFeature[] = [
     id: 'remarks.slow-mcp-start',
     area: 'CLI and runner',
     name: 'Remark `slow-mcp-start`: a stdio MCP server took 2s or more to answer `initialize`, or never did, counted over the turns that recorded it; prints in every run',
-    unit: ['reeval/test/remarks.test.ts'],
-  },
-  {
-    id: 'remarks.model',
-    area: 'CLI and runner',
-    name: 'Model remarks from the per-eval insights call, by the eval rubric (`skills/eval-rubric`): kinds `name-contradicts`, `name-no-intent`, `judge-too-loose`, `judge-leaks-answer`, `prompt-names-tool` and `compound-judge`, each kept only with a verbatim quote on its cited line of the file as the run saw it; printed once, with its fix when it has one; the exit code never changes',
-    unit: ['reeval/test/remarks.test.ts'],
-  },
-  {
-    id: 'remarks.no-baseline',
-    area: 'CLI and runner',
-    name: "Remark `no-baseline`: the classification names a change (`subject.change`) the eval doesn't compare; never under a profile's `limit.compare: false`",
     unit: ['reeval/test/remarks.test.ts'],
   },
   {
@@ -1571,20 +1558,6 @@ export const inventory: InventoryFeature[] = [
     area: 'Records and studio',
     name: '`reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them',
     unit: ['reeval/test/analysis.test.ts'],
-  },
-  {
-    id: 'analyze.insights',
-    area: 'Records and studio',
-    name: "`reeval analyze --insights`: each eval's intent, answer and row sentences, citing the facts and checked by the validator, written create-only to `<run>/insights.json`; `reeval show` prints them, and leaves out ones written for other facts",
-    unit: ['reeval/test/insights.test.ts', 'reeval/test/output.test.ts'],
-  },
-  {
-    id: 'run.insights',
-    area: 'Records and studio',
-    plan: ['insights/insights', 'insights/no-insights'],
-    name: "`reeval run`'s insights: once the exit code is fixed, `analysis.model` classifies and explains each eval into `.reeval/runs/<run>/insights.json` (copied by `reeval record`); `analysis.maxTokens` spends on failures, regressions and compares first and prints the evals it skipped; each eval's input trimmed to its cap and each call's output cap, timeout and one retry, an eval that still fails printing its facts alone; Ctrl-C keeping what finished, and `reeval analyze --insights` finishing what it, a failure or the budget left; the progress line; `--no-insights` and `analysis.insights: false`; classifications cached in `.reeval/analysis/classify/` and read back from the last recorded run",
-    unit: ['reeval/test/insights.test.ts', 'reeval/test/ui.test.ts', 'reeval/test/options.test.ts'],
-    real: ['questions › test/real-agents --profile questions'],
   },
   {
     id: 'analysis.notes',

@@ -879,7 +879,7 @@ describe('reeval doctor', () => {
     assert.equal(report.healthy, true)
     assert.deepEqual(
       [...new Set(report.checks.map((c: Check) => c.id))],
-      ['runtime', 'config', 'docker', 'key', 'judge', 'analysis', 'egress', 'gitignore'],
+      ['runtime', 'config', 'docker', 'key', 'judge', 'egress', 'gitignore'],
     )
   })
 

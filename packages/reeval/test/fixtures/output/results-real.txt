@@ -29,4 +29,3 @@ fail             skill canary
   error            expected null to be 'PROBE-7F3K-QUILL' // Object.is equality
 
 6 fail · 6 pass
-Set analysis.model in reeval.config.ts for answers to what each eval asks.
