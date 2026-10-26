@@ -28,13 +28,8 @@ The default is `[direct()]`: every harness calls its own provider with its own k
 |---|---|---|---|
 | `direct()` from `'{{ pkg }}/gateway'` | `direct` or `{ direct: {} }` | every harness; judge and analysis models whose provider reeval calls directly (`anthropic/*`, `google/*`, `openai/*`, `typesafe-ai/*`) | each harness's or provider's own, such as `CURSOR_API_KEY` |
 | `vercel()` from `'{{ pkg }}/gateway'` | `vercel` or `{ vercel: {} }` | Claude Code, Codex, Goose, OpenCode, fx, Grok Build, pi; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe-ai/jev-1.14.0` | `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN` |
-<<<<<<< HEAD
 | `openrouter({ fallbacks })` from `'{{ pkg }}/gateway'` | `openrouter` or `{ openrouter: { fallbacks: true } }` | Claude Code, Codex, Goose, OpenCode, Grok Build, pi; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe/jev-1.14` | `OPENROUTER_API_KEY` |
-| `vertex({ project?, location?, regions? })` from `'{{ pkg }}/gateway'` | `vertex` or `{ vertex: { project: p } }` | Claude Code, Antigravity, OpenCode, Goose and pi ([below](#vertex-ai)); `google/*` and `anthropic/*` judge and analysis models | Application Default Credentials |
-=======
-| `openrouter({ fallbacks })` from `'{{ pkg }}/gateway'` | `openrouter` or `{ openrouter: { fallbacks: true } }` | Claude Code, Codex, Goose, OpenCode, Grok Build; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe/jev-1.14` | `OPENROUTER_API_KEY` |
 | `vertex({ project?, location?, regions? })` from `'{{ pkg }}/gateway'` | `vertex` or `{ vertex: { project: p } }` | Claude Code, Antigravity, OpenCode, Goose, pi and fx ([below](#vertex-ai)); `google/*` and `anthropic/*` judge and analysis models | Application Default Credentials |
->>>>>>> 99c04225 (feat(gateway): run fx on Vertex AI)
 
 ## Vercel AI Gateway
 
