@@ -58,7 +58,6 @@ fail             greets in French
 …
 770ms · results .reeval/runs/20261020T211926Z_da3d797_cursor-agent_dcy5/summary.md
 3 fail · 1 pass · 1 infra error · 2 skipped
-Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
 
 Agent mode prints only the plan, the result blocks and the tally, with the `summary.md` path. reeval picks it on its own when a coding agent runs it, so an agent fixing your evals reads a few lines, not the whole log. `--ui agent` or `REEVAL_UI=agent` turns it on by hand.

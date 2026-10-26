@@ -158,7 +158,6 @@ infra error      summarises a JSON file with jq
 
 5s · results .reeval/runs/20261020T214011Z_…/summary.md
 1 pass · 1 infra error
-Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
 
 An image that fails fails only the attempts that need it, once each: they're infra errors that name the image and the level that set it, and everything else runs. When the config (or a profile) sets the failing sandbox, every eval needs it, so `reeval run` stops before any attempt with exit 3 (exit 2 for a missing `docker({ image })`).

@@ -121,7 +121,7 @@ reeval keeps no prices of its own, and never writes one to a record. The dry run
 
 - **[models.dev](https://models.dev)**, by default: the Anthropic, OpenAI, Google and xAI list prices, and Vercel AI Gateway's `provider/model` ids, cached for a day in reeval's host cache directory. The request sends nothing about your project, gives up after 2 seconds or 32 MB, and goes through `HTTPS_PROXY` when `NODE_USE_ENV_PROXY=1` is set (Node 22.21 or later), as the judge's calls do; a failure isn't retried for an hour. Offline, or when models.dev answers without prices, it uses an older copy and says so (`models.dev list prices of 2026-10-20 (offline)`, `(models.dev answered HTTP 500)`); with none, the line is tokens only.
 - **Your own**, with `REEVAL_PRICES=prices.json`: USD per million tokens by model id, in models.dev's field names (`input`, `output`, `cache_read`, `cache_write`), over models.dev's. A relative path is from the working directory. Any other field, ids that differ only in case, or a file that isn't such an object stops the dry run with exit 2. A model in the file takes its price from there, and every other from models.dev. Cursor's models aren't on models.dev, so this is how they get a price. When models.dev can't be reached, the file's prices are used alone. `REEVAL_PRICES=none` is tokens only, and fetches nothing.
-- **Model ids** match as written (`anthropic/claude-sonnet-4.5`) or without the `provider/` prefix, case-insensitively and without a trailing effort (`gemini-3.8-flash-medium`), and Cursor's `params: { fast: 'true' }` looks up `composer-2.5-fast`. The fake agent and judge cost nothing, and questions and insights, cents, aren't counted.
+- **Model ids** match as written (`anthropic/claude-sonnet-4.5`) or without the `provider/` prefix, case-insensitively and without a trailing effort (`gemini-3.8-flash-medium`), and Cursor's `params: { fast: 'true' }` looks up `composer-2.5-fast`. The fake agent and judge cost nothing, and questions, cents, aren't counted.
 
 ```json title="prices.json"
 { "composer-2.5": { "input": 0.5, "cache_read": 0.2, "output": 2.5 } }
@@ -260,7 +260,7 @@ Each has an environment variable: `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_P
 
 ## The result blocks
 
-Every mode ends with a block per eval, in file-path order and then source order, then the tally and, while `analysis.model` is unset, a hint to set it (the judge's model never stands in for it). `summary.md` and `reeval show` print the same blocks. A block starts with the eval's verdict and name:
+Every mode ends with a block per eval, in file-path order and then source order, then the tally. `summary.md` and `reeval show` print the same blocks. A block starts with the eval's verdict and name:
 
 | Verdict | The eval |
 |---|---|
@@ -275,15 +275,12 @@ Under the name, a pass prints nothing more. A fail prints each failed check with
 
 An error outside any attempt, such as an eval file's stray rejection, prints first as `error: …`; it fails the run (exit 1) even when every eval passed. An interrupted run still exits 130.
 
-With `analysis.model` set, the blocks also carry the run's [insights](/reference/cli/analyze#during-a-run): written once the attempts finish and the exit code is fixed, within `analysis.maxTokens` and [fixed caps per eval and call](/reference/cli/analyze#the-caps). Ctrl-C while they run skips the rest and keeps the run's exit code. `--no-insights` prints the facts only.
-
 The tally counts each eval, and each case of a family, once: `1 run error · 3 fail · 1 pass · 1 not gated · 1 infra error · 2 cancelled · 2 skipped`, run errors and fails first, zeros left out. A family whose pooled `minLift` gate fails counts one more fail. A study counts as `not gated`, never `pass`, whatever its attempts did; its arm rows have the real counts. Counts read `N of M`, with infra errors and cancelled and skipped tries named apart (`0 of 1 · 2 skipped`); `-v` adds each arm's difference and 95% interval. Judge scores per attempt, per-key judge rates and token usage per cell are in the studio and `reeval query`.
 
 ## Remarks
 
 ```text
 1 fail · 1 pass
-Set analysis.model in reeval.config.ts for answers to what each eval asks.
 
 Remarks:
   coin: "lands heads" passed 2 of 6 tries over 2 runs with nothing changed, so one try can pass or fail it.
@@ -293,9 +290,9 @@ Remarks:
   …
 ```
 
-After the tally and hint, a run lists what reeval noticed about the evals themselves, each with the source line to change. Only concerns print, at most three (`+N more (-v)`); `-v` adds the suggestions. Remarks never change the exit code.
+After the tally, a run lists what reeval noticed about the evals themselves, each with the source line to change. Only concerns print, at most three (`+N more (-v)`); `-v` adds the suggestions. Remarks never change the exit code.
 
-reeval's own remarks come from fixed thresholds over the record and the history, so they print without `analysis.model`:
+Remarks come from fixed thresholds over the record and the history, with no model call:
 
 | Remark | Severity | When |
 |---|---|---|
@@ -303,41 +300,16 @@ reeval's own remarks come from fixed thresholds over the record and the history,
 | `slow-mcp-start` | concern | A stdio MCP server took 2s or more to answer `initialize`, or never did. Turns count only where the server was started: every turn on a harness that starts servers per turn, the first on one that starts them per session |
 | `proxy-only-egress` | concern | A failed attempt under egress `'proxy'` (the default) shows a connection error (`Network is unreachable`, `connection refused`, `could not resolve host`, …) in its error, failed checks or turns, and the gateway refused nothing: a raw TCP or UDP client, or one that ignores `HTTPS_PROXY`. Its fix is `egress: 'allow-all'` on the eval. See [Egress](/reference/egress#connections-that-never-reach-the-gateway) |
 | `setup-process-secret` | concern | In Docker, a setup step left a process running (`nohup server &`) with a `to: 'checks'` secret without `hosts` in its environment, so it holds the real value while the agent, as the same user, works beside it. It looks for the secret's variable name in each process's environment, so a copy under another name or in a command's arguments isn't found. The attempt's `setupProcesses` names each process and secret, at most 20. Its fix is `hosts` on the secret, or starting the process from `c.exec` after the agent's turn. See [secret](/reference/helpers#secret) |
-| `no-baseline` | concern | With `analysis.model`: the classification says the eval is about a change (a skill, a doc, an MCP server), and the eval has no `compare`. Never under a profile's `limit.compare: false` |
 | `too-few-tries` | suggestion | A variant's and its baseline's pass rates differ by half or more, with fewer than 4 counted tries on a side |
 | `check-never-fails` | suggestion | A check passed every try, in every cell, this run and in the last 5 recorded runs on the default branch with 20 tries or more ([`check_streaks`](/reference/cli/query#views)); on a variant, on both sides |
 
-### Model remarks
-
-```text
-Remarks:
-  answers kindly: The judge asks whether the answer is okay, which any reply passes.
-    fix  evals/kinds.eval.ts:16  ask 'Does the reply thank the user by name and offer one next step?'
-  adds a cache: The name says it adds a cache, but the prompt asks to remove the debug logging.
-    fix  evals/kinds.eval.ts:4  rename it to 'removes the debug logging'
-  …
-```
-
-With `analysis.model`, each eval's [insights](/reference/cli/analyze#during-a-run) call may also raise remarks, by the eval rubric (`skills/eval-rubric/SKILL.md` in the repository and the package, its hash part of the insights prompt version). It's the same call, so `analysis.maxTokens` covers it. The model is told a remark is almost always none.
-
-| Remark | Severity | When |
-|---|---|---|
-| `name-contradicts` | concern | The name asks one thing and the checks or judge questions look at another |
-| `judge-too-loose` | concern | A judge question passed a reply that doesn't do what the eval asks |
-| `judge-leaks-answer` | concern | A judge question gives away the answer, so echoing its words passes |
-| `prompt-names-tool` | concern | A choose eval's prompt names the tool it asks about |
-| `name-no-intent` | suggestion | The name is a topic, a ticket id or "test 3" |
-| `compound-judge` | suggestion | One judge question asks two things, and failed |
-
-reeval checks every model remark in code and drops, without asking again, one whose kind isn't in this table, or that has no quote copied exactly from its cited line of the eval's declaration, in a file unchanged since the run. Its evidence and fix are the model's as written; one with no fix prints `at` and its quoted line. Each dropped remark is in `insights.json`'s `validation.drops` with the reason, and `reeval analyze --insights -v` lists them.
-
 ### Once per eval
 
-Each remark prints until a run prints it: one of reeval's for that version of the eval (its sources' hashes), so an edit prints it again; a model remark while its quote is in the eval. `slow-mcp-start`, `proxy-only-egress` and `setup-process-secret` print in every run that has them. A remark the cap or a run without `-v` left out isn't spent: the next run that raises it prints it. Only the terminal output counts as printed; `summary.md` holds the concerns a run without `-v` prints.
+Each remark prints until a run prints it for that version of the eval (its sources' hashes), so an edit prints it again. `slow-mcp-start`, `proxy-only-egress` and `setup-process-secret` print in every run that has them. A remark the cap or a run without `-v` left out isn't spent: the next run that raises it prints it. Only the terminal output counts as printed; `summary.md` holds the concerns a run without `-v` prints.
 
 The default branch is `origin`'s HEAD, else a local `main` or `master`, else, when `CI` is set, `GITHUB_BASE_REF` (a GitHub Actions pull request build has neither ref; a push build of `main` or `master` checks it out locally). Without one, `check-never-fails` isn't raised. The history kinds need an earlier run.
 
-A run writes its remarks to `.reeval/runs/<runId>/insights.json`, in the run's [insights](/reference/cli/analyze#during-a-run) when it writes them and alone (`model: "none"`) otherwise, and `reeval record` carries the file into the history folder. `reeval show` prints them, and [`reeval analyze --insights`](/reference/cli/analyze#insights) keeps them and adds the model's.
+A run that raises remarks writes them to `.reeval/runs/<runId>/remarks.json`, and `reeval record` carries the file into the history folder. `reeval show` prints them; [the remarks file](/reference/record#remarks) has its fields.
 
 ## What it writes
 
@@ -345,8 +317,7 @@ A run writes its remarks to `.reeval/runs/<runId>/insights.json`, in the run's [
 |---|---|---|
 | `.reeval/runs/<runId>.json` | The scratch run's record | Every run, including one where nothing passed |
 | `.reeval/runs/<runId>/` | Its artifacts | Every run |
-| `.reeval/runs/<runId>/insights.json` | The run's insights and [remarks](#remarks) | `analysis.model` set, without `--no-insights`, or the run raised remarks |
-| `.reeval/analysis/classify/` | Each eval's cached classification | With insights |
+| `.reeval/runs/<runId>/remarks.json` | The run's [remarks](#remarks) | The run raised remarks |
 | The history folder | A copy of both | `--record`, `record: 'ci'` with `CI` set, or `record: 'always'` |
 | `.reeval/debug/` | Each attempt's local debug data | Every run |
 

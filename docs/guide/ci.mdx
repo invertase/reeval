@@ -26,7 +26,6 @@ pass             summarises a JSON file with jq
 
 20s · 211k in (87k cached) · 1,896 out · results .reeval/runs/20261020T213201Z_a3fbded_ci_yqkc/summary.md
 3 pass
-Set analysis.model in reeval.config.ts for answers to what each eval asks.
 recorded evals/.history/20261020T213201Z_a3fbded_ci_yqkc.json + 14 artifact files in evals/.history/20261020T213201Z_a3fbded_ci_yqkc/ (392.9 KB). Commit it with git.
 ```
 
@@ -125,23 +124,20 @@ Ubuntu runners have Docker running, so `reeval image build` and `reeval run` wor
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
 ```
 
-Add `CURSOR_API_KEY`, your judge's key and `analysis.model`'s key as repository secrets, and pass them only to the step that runs `reeval`. Eval files run on the runner with those keys, so `persist-credentials: false` keeps a git token out of the same job.
+Add `CURSOR_API_KEY`, your judge's key and, when [questions](/guide/questions) use it, `analysis.model`'s key as repository secrets, and pass them only to the step that runs `reeval`. Eval files run on the runner with those keys, so `persist-credentials: false` keeps a git token out of the same job.
 
 GitHub doesn't give secrets to pull requests from forks, so a fork's eval code never runs with your keys; its run stops on the missing key instead.
 
-## Insights and remarks in CI
+## Remarks in CI
 
 ```text
 pass             creates greet.js
 
-insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY, or analysis: { insights: false }
 11s · 63k in (22k cached) · 386 out · results .reeval/runs/…/summary.md
 1 pass
 ```
 
-A CI run writes [insights](/concepts/insights) as a local one does, and `summary.md` takes them and the remarks' concerns into the job summary. Without `analysis.model`'s key, the run prints this line and its facts, with the same exit code. `--no-insights` skips them in a job that shouldn't spend tokens.
-
-Remarks need no key. `check-never-fails` counts runs recorded on the default branch: `origin`'s HEAD, a local `main` or `master`, else `GITHUB_BASE_REF`, which is what a GitHub Actions pull request build has.
+A CI run raises [remarks](/reference/cli/run#remarks) as a local one does, and `summary.md` takes their concerns into the job summary. Remarks need no key and make no model call. `check-never-fails` counts runs recorded on the default branch: `origin`'s HEAD, a local `main` or `master`, else `GITHUB_BASE_REF`, which is what a GitHub Actions pull request build has.
 
 ## Record runs from CI
 

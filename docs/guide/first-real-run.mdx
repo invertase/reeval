@@ -145,12 +145,11 @@ pass             greet module › adds a default name in a follow-up turn
 
 17s · 132k in (49k cached) · 1,489 out · results .reeval/runs/…/summary.md
 2 pass
-Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
 
 `hello` is a filter: it matches the file `evals/hello.eval.ts`. Each eval ran as one [attempt](/concepts/attempt-lifecycle) in its own container, side by side. With `--log-order grouped`, each attempt prints as one block when it ends: the sandbox, each turn, each check and each judge verdict (`pass 1.00 (≥ 0.8)`: its score against the threshold).
 
-Then comes a block per eval: a pass prints its name only. The line under the blocks has the run's time and the tokens Cursor reported (input, the cached part and output); reeval records them per turn and per attempt but prices no models, so there's no cost. Last are the tally and a hint: this config sets no `analysis.model`, which a config from `reeval init` sets so a model answers what each eval asks ([Insights and remarks](/concepts/insights)).
+Then comes a block per eval: a pass prints its name only. The line under the blocks has the run's time and the tokens Cursor reported (input, the cached part and output); reeval records them per turn and per attempt but prices no models, so there's no cost. Last is the tally.
 
 On a terminal, the same run is in colour:
 

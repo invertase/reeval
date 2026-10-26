@@ -58,27 +58,18 @@ Anomalies are number-checked, and a cited judge score that disagrees is dropped.
 When every cell is `gate: 'none'`, it reads the run as a study: how the arms differ, check by
 check, so label your expects. `analysis.instructions` is the question it answers.
 
-With `analysis.model` set, `reeval run` writes the run's insights at its end (`insights.json`
-beside the run; `reeval record` keeps it): each eval's job (`choose`, `finish` or `other`, read
-from its name first, so name evals for what they ask), its answer, and a sentence under each
-failing row, every one citing the facts. They never change a verdict or exit code.
-`analysis.maxTokens` (default 250000) caps their tokens, failing evals first;
-they run to the end (Ctrl-C skips the rest, keeping the exit code); `--no-insights` skips them.
-`reeval analyze <run> --insights` writes them for a run that has none, or finishes
-the evals a stopped, failed or over-budget run left out. Insights use
-`analysis.model` only, never the judge's model; `reeval init` sets it to
-`google/gemini-3.8-flash` (`GOOGLE_GENERATIVE_AI_API_KEY`; `AI_GATEWAY_API_KEY` only with
-`gateway: [vercel()]`). Without the key the plan warns up front, naming it, and the run prints
-`insights skipped: set <its key>, or analysis: { insights: false }` and its facts; `analysis.insights: false` turns them off.
-A sentence that cites no fact, or a count, quote or effect word its facts don't hold, is dropped
-before it prints (`-v` lists each with its reason), and a run headline prints above the tally.
+`analysis.model` is the model `reeval analyze` uses (else the judge's, when it's a language
+model), and the one questions without their own model use. `reeval init` sets it to `google/gemini-3.8-flash` (`GOOGLE_GENERATIVE_AI_API_KEY`;
+`AI_GATEWAY_API_KEY` only with `gateway: [vercel()]`).
 
 `reeval run` ends with `Remarks:` when an eval itself needs work, with no model: `flaky-check`,
-`slow-mcp-start` and `proxy-only-egress` (concerns, at most three), and with `-v` `too-few-tries`
-and `check-never-fails` (suggestions). Each names the source line to change (`fix  <file:line>`).
+`slow-mcp-start`, `proxy-only-egress` and `setup-process-secret` (concerns, at most three), and
+with `-v` `too-few-tries` and `check-never-fails` (suggestions). They go in `remarks.json` beside
+the run, which `reeval record` copies into the history folder. Each names the source line to change (`fix  <file:line>`).
 Act on them: raise `runs`, tighten or remove the check, bake the MCP server's dependencies into
 the image, or set `egress: 'allow-all'` on an eval that needs raw TCP. Each prints once per eval
-version (`slow-mcp-start` and `proxy-only-egress` every run); an edit re-arms it.
+version (`slow-mcp-start`, `proxy-only-egress` and `setup-process-secret` every run); an edit
+re-arms it.
 One the cap or a run without `-v` hid isn't spent: the next `reeval run -v` prints it.
 
 ## Config discovery, filters and exit codes
