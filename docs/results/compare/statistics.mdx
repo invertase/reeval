@@ -37,9 +37,15 @@ The 95% interval calls `helped`, `made it worse`, or `can't tell yet`, and below
 
 ## Tokens, tool calls and time
 
-reeval compares tool calls, agent time, and tokens by median and quartiles. An exact two-sided Mann-Whitney rank-sum test calls `fewer` when the variant ranks lower and `more` when it ranks higher, at a p below 0.05. Only tokens, tool calls, and time let a p below 0.05 decide.
+reeval compares tool calls, agent time, and tokens by median and quartiles. A two-sided Mann-Whitney rank-sum test, exact unless the samples are large, calls `fewer` when the variant ranks lower and `more` when it ranks higher, at a p below 0.05. Only tokens, tool calls, and time let a p below 0.05 decide.
 
 Counts that cannot reach a p below 0.05 are `insufficient`, and counts that can, but do not, are `noise`. With no ties, four against four can reach 2/70, and three against three can reach 2/20. Ties raise that floor. reeval omits the token comparison when either side has no token samples.
+
+## Flaky cells
+
+A cell is flaky when comparable runs, pooled, include a pass and a fail over at least six counted attempts. Comparable runs share sources, harness, environment, and image. Changes to an agent CLI's runtime files do not make runs incomparable. Six is a threshold, not a test, and a shorter pool is not flaky.
+
+For more information about the `flaky_cells` view, see [Query views](/reference/query).
 
 ## Comparison questions as pairwise judging
 
@@ -49,13 +55,7 @@ For more information about adding a pairwise question, see [Ask which did better
 
 The same side in both orders, or a tie and a named side, is a win. No named side is a tie. Opposite sides are a split.
 
-No test changes the outcome or the exit code.
-
-## Flaky cells
-
-A cell is flaky when comparable runs, pooled, include a pass and a fail over at least six counted attempts. Comparable runs share sources, harness, environment, and image. Changes to an agent CLI's runtime files do not make runs incomparable. Six is a threshold, not a test, and a shorter pool is not flaky.
-
-For more information about flaky cells and question pairs, see [Query views](/reference/query).
+A pairwise question never changes the outcome or the exit code. For more information about the `question_pairs` view, see [Query views](/reference/query).
 
 ## Next
 
