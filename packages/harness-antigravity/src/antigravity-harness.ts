@@ -83,6 +83,19 @@ export type AntigravityHarnessSettings = {
   readonly settings?: Record<string, unknown>
   /** Extra variables for the CLI process. */
   readonly env?: Record<string, string>
+  /**
+   * Vertex AI instead of the Gemini API: the CLI's Application Default Credentials mode
+   * (`AGY_ADC_AUTH`) on this project and region, with the credentials file at
+   * `credentialsFile` in the sandbox. No key is read; whoever runs the sandbox supplies the
+   * file and the token the CLI's calls carry.
+   */
+  readonly vertex?: AntigravityVertex
+}
+
+export type AntigravityVertex = {
+  readonly project: string
+  readonly location: string
+  readonly credentialsFile: string
 }
 
 const lifecycleData = z.object({ conversationId: z.string().nullable() })
@@ -180,13 +193,13 @@ export function createAntigravity(
   }
 }
 
-async function startSession(
+/** The key the CLI runs with in the sandbox: a placeholder the sandbox swaps, where it can. */
+async function brokerKey(
   settings: AntigravityHarnessSettings,
   options: HarnessV1StartOptions,
-): Promise<HarnessV1Session> {
-  const { sandboxSession: sandbox, sessionWorkDir, sessionId, abortSignal } = options
+): Promise<{ sandboxKey: string; baseUrl?: string }> {
+  const { sandboxSession: sandbox } = options
   const credentials = resolveAntigravityCredentials(settings.auth)
-
   let sandboxKey = credentials.apiKey
   if (canBroker(sandbox)) {
     sandboxKey = generateSandboxCredentialPlaceholder()
@@ -208,6 +221,15 @@ async function startSession(
       credentialEnvironmentVariables: [ANTIGRAVITY_CREDENTIAL_ENV],
     })
   }
+  return { sandboxKey, ...(credentials.baseUrl ? { baseUrl: credentials.baseUrl } : {}) }
+}
+
+async function startSession(
+  settings: AntigravityHarnessSettings,
+  options: HarnessV1StartOptions,
+): Promise<HarnessV1Session> {
+  const { sandboxSession: sandbox, sessionWorkDir, sessionId, abortSignal } = options
+  const auth = settings.vertex ? undefined : await brokerKey(settings, options)
 
   const home = await resolveSandboxHomeDir({ sandbox, abortSignal })
   const stateDir = harnessStateDirectoryPath({ sandboxHomeDir: home })
@@ -217,7 +239,7 @@ async function startSession(
     sandbox.writeTextFile({ path: posix.join(home, file), content, abortSignal })
   await write(
     ANTIGRAVITY_SETTINGS_FILE,
-    `${JSON.stringify({ enableTelemetry: false, ...settings.settings, modelProvider: 'gemini' }, null, 2)}\n`,
+    `${JSON.stringify({ enableTelemetry: false, ...settings.settings, ...(auth ? { modelProvider: 'gemini' } : {}) }, null, 2)}\n`,
   )
   if (settings.mcpServers && Object.keys(settings.mcpServers).length > 0) {
     await write(
@@ -231,9 +253,17 @@ async function startSession(
 
   const env: Record<string, string> = {
     ...settings.env,
-    [ANTIGRAVITY_CREDENTIAL_ENV]: sandboxKey,
+    ...(settings.vertex
+      ? {
+          AGY_ADC_AUTH: '1',
+          GOOGLE_CLOUD_PROJECT: settings.vertex.project,
+          GOOGLE_CLOUD_LOCATION: settings.vertex.location,
+          GOOGLE_APPLICATION_CREDENTIALS: settings.vertex.credentialsFile,
+        }
+      : {}),
+    ...(auth ? { [ANTIGRAVITY_CREDENTIAL_ENV]: auth.sandboxKey } : {}),
     AGY_CLI_DISABLE_AUTO_UPDATE: 'true',
-    ...(credentials.baseUrl ? { [ANTIGRAVITY_BASE_URL_ENV]: credentials.baseUrl } : {}),
+    ...(auth?.baseUrl ? { [ANTIGRAVITY_BASE_URL_ENV]: auth.baseUrl } : {}),
   }
 
   const resumed = lifecycleData.safeParse(options.resumeFrom?.data)

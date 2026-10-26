@@ -213,6 +213,16 @@ test('a model without a brokerable provider throws, saying why', () => {
   )
 })
 
+test('on Vertex AI, OpenCode runs a google-vertex/<model> id on a credentials file, with no key', () => {
+  const vertex = { project: 'p', location: 'global', credentialsFile: '/reeval/adc.json' }
+  const harness = createOpenCode({ auth: {}, model: 'google-vertex/gemini-3.8-flash', vertex })
+  assert.equal(harness.harnessId, 'opencode')
+  assert.throws(
+    () => createOpenCode({ auth: {}, model: 'google/gemini-3.8-flash', vertex }),
+    /OpenCode on Vertex AI runs a google-vertex\/<model> id/,
+  )
+})
+
 test("with requireCredentialBrokering, a sandbox that can't broker never gets the key", async () => {
   const harness = createOpenCode({
     auth: { OPENAI_API_KEY: 'sk-k' },

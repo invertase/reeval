@@ -10,6 +10,7 @@ import {
   escapePiConfigValue,
   PI_CREDENTIAL_ENV,
   PI_MCP_FILE,
+  type PiHarnessSettings,
   type PiMcpServer,
 } from '../src/pi-harness.ts'
 import { VERSION } from '../src/version.ts'
@@ -144,6 +145,7 @@ test('mcp.json declares every server directly, with literal env and headers, and
 function recordingSandbox(stdout: string[] = []) {
   const writes: Array<{ path: string; content: string }> = []
   const spawned: string[] = []
+  const envs: Array<Record<string, string>> = []
   const stream = (lines: string[] = []) =>
     new ReadableStream<Uint8Array>({
       start: (c) => {
@@ -158,8 +160,9 @@ function recordingSandbox(stdout: string[] = []) {
     writeTextFile: async (o: { path: string; content: string }) => {
       writes.push({ path: o.path, content: o.content })
     },
-    spawn: async (o: { command: string }) => {
+    spawn: async (o: { command: string; env: Record<string, string> }) => {
       spawned.push(o.command)
+      envs.push(o.env)
       return {
         stdout: stream(stdout),
         stderr: stream(),
@@ -168,14 +171,19 @@ function recordingSandbox(stdout: string[] = []) {
       }
     },
   }
-  return { sandbox, writes, spawned }
+  return { sandbox, writes, spawned, envs }
 }
 
-async function oneTurn(mcpServers?: Record<string, PiMcpServer>, stdout?: string[]) {
-  const { sandbox, writes, spawned } = recordingSandbox(stdout)
+async function oneTurn(
+  mcpServers?: Record<string, PiMcpServer>,
+  stdout?: string[],
+  settings: Partial<PiHarnessSettings> = { auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' } },
+) {
+  const { sandbox, writes, spawned, envs } = recordingSandbox(stdout)
   const parts: HarnessV1StreamPart[] = []
   const harness = createPi({
-    auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' },
+    auth: {},
+    ...settings,
     ...(mcpServers ? { mcpServers } : {}),
     requireCredentialBrokering: true,
   })
@@ -191,7 +199,7 @@ async function oneTurn(mcpServers?: Record<string, PiMcpServer>, stdout?: string
     emit: (part: HarnessV1StreamPart) => parts.push(part),
   } as never)
   await control.done
-  return { writes, spawned, parts }
+  return { writes, spawned, envs, parts }
 }
 
 test('a session with MCP servers writes mcp.json under the home and loads the mcp extension', async () => {
@@ -241,6 +249,18 @@ test('auth is an environment with the Gemini key, or it throws', () => {
     /pi auth must be an environment object with GEMINI_API_KEY/,
   )
   assert.equal(createPi({ auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' } }).harnessId, 'pi')
+})
+
+test('on Vertex AI, pi runs its google-vertex provider on a credentials file, with no key', async () => {
+  const vertex = { project: 'p', location: 'global', credentialsFile: '/reeval/adc.json' }
+  const { spawned, envs } = await oneTurn(undefined, undefined, { auth: {}, vertex })
+  assert.match(spawned[0] ?? '', / --provider google-vertex /)
+  assert.deepEqual(envs[0], {
+    GOOGLE_CLOUD_PROJECT: 'p',
+    GOOGLE_CLOUD_LOCATION: 'global',
+    GOOGLE_APPLICATION_CREDENTIALS: '/reeval/adc.json',
+    PI_OFFLINE: '1',
+  })
 })
 
 test("with requireCredentialBrokering, a sandbox that can't broker never gets the key", async () => {

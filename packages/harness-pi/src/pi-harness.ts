@@ -39,6 +39,8 @@ export const GEMINI_API_URL = 'https://generativelanguage.googleapis.com'
 /** The header pi's `google` provider sends the key in. */
 export const GEMINI_API_KEY_HEADER = 'x-goog-api-key'
 /** pi's agent directory under the home: its sessions, settings, global skills and rules. */
+/** pi's provider for Vertex AI, which authenticates from Application Default Credentials. */
+export const PI_VERTEX_PROVIDER = 'google-vertex'
 export const PI_AGENT_DIR = '.pi/agent'
 /** Where harness-placed skills go, under the sandbox home. */
 export const PI_HOME_SKILLS_DIR = `${PI_AGENT_DIR}/skills`
@@ -78,6 +80,19 @@ export type PiHarnessSettings = {
    * Reasoning effort, passed as `--thinking` (pi's name). Values are whatever that flag takes.
    */
   readonly effort?: string
+  /**
+   * Vertex AI instead of the Gemini API: pi's `google-vertex` provider on this project and
+   * region, reading the service-account file at `credentialsFile` in the sandbox. No key is read
+   * (`auth` may be empty); whoever runs the sandbox supplies the file and the token the calls
+   * carry.
+   */
+  readonly vertex?: PiVertex
+}
+
+export type PiVertex = {
+  readonly project: string
+  readonly location: string
+  readonly credentialsFile: string
 }
 
 /**
@@ -169,12 +184,13 @@ export function buildPiCommand(options: {
   sessionDir: string
   mcp?: boolean
   thinking?: string
+  provider?: string
 }): string {
   return [
     `cd ${shellQuote(options.workDir)} &&`,
     `exec ${shellQuote(options.cli)} --mode json -p --offline --approve --no-extensions`,
     ...(options.mcp ? ['-e builtin:mcp'] : []),
-    '--provider google',
+    `--provider ${options.provider ?? 'google'}`,
     ...(options.model ? [`--model ${shellQuote(options.model)}`] : []),
     ...(options.thinking ? [`--thinking ${shellQuote(options.thinking)}`] : []),
     `--session-id ${shellQuote(options.sessionId)} --session-dir ${shellQuote(options.sessionDir)}`,
@@ -192,7 +208,7 @@ export function createPi(settings: PiHarnessSettings): HarnessV1<PiBuiltinTools>
   const key = isHarnessAuthenticationEnvironment(settings.auth)
     ? settings.auth[PI_CREDENTIAL_ENV]
     : undefined
-  if (!key) {
+  if (!key && !settings.vertex) {
     throw new Error(
       `pi auth must be an environment object with ${PI_CREDENTIAL_ENV} (a Gemini API key)`,
     )
@@ -209,12 +225,15 @@ export function createPi(settings: PiHarnessSettings): HarnessV1<PiBuiltinTools>
 
 async function startSession(
   settings: PiHarnessSettings,
-  key: string,
+  key: string | undefined,
   options: HarnessV1StartOptions,
 ): Promise<HarnessV1Session> {
   const { sandboxSession: sandbox, sessionWorkDir, abortSignal } = options
+  const { vertex } = settings
   let sandboxKey = key
-  if (canBroker(sandbox)) {
+  if (!key || vertex) {
+    sandboxKey = undefined
+  } else if (canBroker(sandbox)) {
     sandboxKey = generateSandboxCredentialPlaceholder()
     await sandbox.addRequestTransformations([
       createCredentialRequestTransformation({
@@ -238,7 +257,14 @@ async function startSession(
   })
   const resumed = lifecycleData.safeParse(options.resumeFrom?.data)
   const piSession = resumed.success ? resumed.data.sessionId : randomUUID()
-  const env = { [PI_CREDENTIAL_ENV]: sandboxKey, PI_OFFLINE: '1' }
+  const env: Record<string, string> = vertex
+    ? {
+        GOOGLE_CLOUD_PROJECT: vertex.project,
+        GOOGLE_CLOUD_LOCATION: vertex.location,
+        GOOGLE_APPLICATION_CREDENTIALS: vertex.credentialsFile,
+        PI_OFFLINE: '1',
+      }
+    : { [PI_CREDENTIAL_ENV]: sandboxKey ?? '', PI_OFFLINE: '1' }
   const mcp = Object.keys(settings.mcpServers ?? {}).length > 0
   if (mcp) {
     await sandbox.writeTextFile({
@@ -299,6 +325,7 @@ async function startSession(
         sessionDir: posix.join(home, PI_AGENT_DIR, 'sessions'),
         mcp,
         ...(settings.effort ? { thinking: settings.effort } : {}),
+        ...(vertex ? { provider: PI_VERTEX_PROVIDER } : {}),
       })
       const translator = new PiStreamTranslator({
         mcpServers: Object.keys(settings.mcpServers ?? {}),
