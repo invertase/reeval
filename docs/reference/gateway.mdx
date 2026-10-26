@@ -111,11 +111,18 @@ There's no key. reeval mints a Google Cloud access token on the host from Applic
 
 | Harness | How it reaches Vertex | Brokered on | Model ids | Served model |
 |---|---|---|---|---|
-| Claude Code | `CLAUDE_CODE_USE_VERTEX`, with `ANTHROPIC_VERTEX_PROJECT_ID` and `CLOUD_ML_REGION` from the entry, and `CLAUDE_CODE_SKIP_VERTEX_AUTH` | `POST /v1/projects/<project>/locations/<region>/publishers/anthropic/models/<id>:streamRawPredict` (and `:rawPredict`) on the region's host | Vertex's, e.g. `claude-haiku-4-5@20251001`; an `anthropic/` prefix is dropped | from each call's path |
+| Claude Code | `CLAUDE_CODE_USE_VERTEX`, with `ANTHROPIC_VERTEX_PROJECT_ID` and `CLOUD_ML_REGION` from the entry, and `CLAUDE_CODE_SKIP_VERTEX_AUTH` | `POST /v1/projects/<project>/locations/<region>/publishers/anthropic/models/<id>:streamRawPredict` (and `:rawPredict`) on the region's host | Vertex's, e.g. `claude-haiku-4-5@20251001`, or the Anthropic API's (`claude-haiku-4-5-20251001`), sent as Vertex's; an `anthropic/` prefix is dropped | from each call's path |
 
 Every other harness falls through to the next gateway in the list, and the plan's hint says so. Cursor and Codex never can: Cursor's agent calls only Cursor's API, and Codex only OpenAI's Responses API.
 
-The judge, `analysis.model`, captures and compare's questions call `google/*` and `anthropic/*` models on Vertex too, from the host with the same token, in the publisher's region (`claude-haiku-4-5@20251001` keeps Vertex's id after the prefix). Other prefixes fall through. `reeval doctor` checks each entry's project and where its credentials come from; with `--online` it mints a token, names its account and checks the Vertex AI API is enabled in the project.
+The judge, `analysis.model`, captures and compare's questions call `google/*` and `anthropic/*` models on Vertex too, from the host with the same token, in the publisher's region. Other prefixes fall through.
+
+```ts title="reeval.config.ts"
+gateway: [vertex(), direct()],
+judge: { model: 'anthropic/claude-haiku-4-5-20251001' },
+```
+
+A Claude model's Anthropic API id, ending in its date (`-20251001`), is sent to Vertex as Vertex's id (`@20251001`), for Claude Code and for reeval's own calls. So one model string works on `vertex()` and on the `direct()` it falls through to; Vertex's own id works too. `reeval doctor` checks each entry's project and where its credentials come from; with `--online` it mints a token, names its account and checks the Vertex AI API is enabled in the project.
 
 ## Fallback
 

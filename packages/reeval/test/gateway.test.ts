@@ -761,6 +761,12 @@ describe('Vertex AI routes', () => {
     })
     assert.deepEqual(agentAuth(agent, {}), {}, 'no key from the environment')
     assert.equal(agent.modelId?.('anthropic/claude-sonnet-4-5'), 'claude-sonnet-4-5')
+    assert.equal(agent.modelId?.('claude-haiku-4-5-20251001'), 'claude-haiku-4-5@20251001')
+    assert.equal(
+      agent.modelId?.('anthropic/claude-haiku-4-5-20251001'),
+      'claude-haiku-4-5@20251001',
+    )
+    assert.equal(agent.modelId?.('claude-haiku-4-5@20251001'), 'claude-haiku-4-5@20251001')
     const on = (method: string, h: string, path: string) =>
       onEndpoint(agent.endpoints, { method, host: h, path, headers: {} })
     assert.ok(on('POST', host, `${STREAM}/claude-sonnet-4-5@20250929:streamRawPredict`))
@@ -843,7 +849,7 @@ describe('Vertex AI routes', () => {
     }) as typeof fetch
     try {
       const source = async () => ({ token: 'ya29.host', expiresAt: Date.now() + 3_600_000 })
-      for (const id of ['anthropic/claude-haiku-4-5@20251001', 'google/gemini-3.8-flash']) {
+      for (const id of ['anthropic/claude-haiku-4-5-20251001', 'google/gemini-3.8-flash']) {
         const model = await vertexDecisionModel(id, regional, source)
         assert.equal(model.provider, 'google-vertex.decision')
         const inner = await vertexLanguageModel(id, regional, source)
