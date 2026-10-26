@@ -31,7 +31,7 @@ await expect(c.exec('npm test'), 'tests pass').toSucceed()
 
 ## `expect.soft()`
 
-`expect.soft(actual, label?)` records a failure and lets the body continue. The attempt fails at its end on the first soft assertion that did not pass. A soft assertion can use `toHaveFile()`.
+`expect.soft(actual, label?)` records a failure and lets the body continue. The attempt fails at its end on the first soft assertion that did not pass. Soft assertions take the same matchers as `expect()`, including async ones; await those.
 
 ```ts
     await expect.soft(c, 'uses fromPartial').toHaveFile(
