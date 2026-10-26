@@ -1,13 +1,13 @@
 ---
 title: Environment helpers reference
-description: An environment spec sets what the agent starts with, built from the git, file, directory, skill, mcp, and secret helpers.
+description: An environment spec sets what the agent starts with, built from the git, file, directory, skill, mcp, plugin, and secret helpers.
 ---
 
 ## `EnvironmentSpec`
 
-`defineEnvironment()` and `extend()` take a spec or a callback with `git`, `file`, `directory`, `skill`, `mcp`, and `secret`. Relative host paths passed to those helpers resolve against the calling file. The return is synchronous, and a `Promise` stops the run with exit code 2.
+`defineEnvironment()` and `extend()` take a spec or a callback with `git`, `file`, `directory`, `skill`, `mcp`, `plugin`, and `secret`. Relative host paths passed to those helpers resolve against the calling file. The return is synchronous, and a `Promise` stops the run with exit code 2.
 
-A child merges `env`, `files`, and `mcp` by name and `skills` by skill name, and its value wins. `setup` appends. `sandbox`, `workspace`, `egress`, and `rules` replace when set. An omitted `sandbox` keeps the parent's, and a set `sandbox` keeps none of the parent's install steps.
+A child merges `env`, `files`, and `mcp` by name, `skills` by skill name, and `plugins` by plugin name, and its value wins. `setup` appends. `sandbox`, `workspace`, `egress`, and `rules` replace when set. An omitted `sandbox` keeps the parent's, and a set `sandbox` keeps none of the parent's install steps.
 
 For more information about defining an environment, see [Environments](/environments).
 
@@ -56,7 +56,7 @@ export const chatbot = defineEnvironment('chatbot', ({
 </Property>
 
 <Property name="rules" type="string | HostFile" optional>
-  Instructions for the harness rules file.
+  Instructions for the harness rules file, written after `files`. A string is copied, `file()` is read at attempt start, and a missing file ends the attempt as an infrastructure error. For more information about the file each harness reads, see [Harnesses](/agents#where-each-harness-reads-rules-and-skills).
 </Property>
 
 <Property name="setup" type="Array<string | { run: string; timeout?: Duration; cwd?: string }>" optional>
@@ -69,6 +69,10 @@ export const chatbot = defineEnvironment('chatbot', ({
 
 <Property name="mcp" type="Record<string, McpServer>" optional>
   MCP servers by name, from `mcp`.
+</Property>
+
+<Property name="plugins" type="PluginSource[]" optional>
+  Claude Code layout plugins from `plugin`. A child replaces a parent plugin of the same name.
 </Property>
 
 ## `git()`
@@ -120,14 +124,8 @@ export const chatbot = defineEnvironment('chatbot', ({
 </Property>
 
 <Property name="defaultIgnores" type="boolean" optional>
-  Defaults to `true` and skips paths such as the `node_modules/` directory and the top-level `/build/` and `/target/` directories. `false` walks those paths; the `vendor/` directory is copied either way; and the `.git` directory stays out.
+  Defaults to `true` and skips paths such as the `node_modules/` directory and the top-level `/build/` and `/target/` directories. `false` walks those paths; the `vendor/` directory is copied either way; and the `.git` directory stays out. The list is `DEFAULT_DIRECTORY_IGNORES` from `{{ pkg }}`.
 </Property>
-
-## `rules`
-
-`rules` is written after `files` and replaces a rules file from the workspace. A string is copied, `file()` is read at attempt start, and a missing file ends the attempt as an infrastructure error.
-
-For more information about the file each harness reads, see [Harnesses](/agents#where-each-harness-reads-rules-and-skills).
 
 ## `skill.local()`
 
@@ -142,7 +140,7 @@ A host directory with a `SKILL.md` file, or one whose immediate child directorie
 </Property>
 
 <Property name="exclude" type="string[]" optional>
-  Paths left out of each skill. Setting `exclude` replaces the default path patterns: `/evals/`, `.history/`, and `*.eval.ts`; `*` matches within one name; a leading or inner `/` anchors to the skill root; a trailing `/` matches directories; any other pattern matches a name at any depth; and the `.git` directory is always left out.
+  Paths left out of each skill. Setting `exclude` replaces the default path patterns: `/evals/`, `.history/`, and `*.eval.ts`; `*` matches within one name; a leading or inner `/` anchors to the skill root; a trailing `/` matches directories; any other pattern matches a name at any depth; and the `.git` directory is always left out. Import `DEFAULT_SKILL_EXCLUDE` from `{{ pkg }}` and spread it to add patterns.
 </Property>
 
 <Property name="placement" type="'harness' | 'workspace'" optional>
@@ -240,6 +238,62 @@ An MCP server over streamable HTTP. The `mcp` key is the server name.
 ## `mcp.sse()`
 
 An MCP server over SSE. `url`, `headers`, and the `mcp` key match `mcp.http()`.
+
+## `plugin.local()`
+
+A host directory with `.claude-plugin/plugin.json`.
+
+<Property name="path" type="string | URL" required>
+  The plugin directory, relative to the calling file or absolute.
+</Property>
+
+<Property name="only" type="PluginPart[]" optional>
+  Parts to place: `skills`, `agents`, `commands`, `hooks`, `mcp`, `rules`. Default: every part the plugin has.
+</Property>
+
+<Property name="build" type="string | string[] | { run: string | string[]; cwd?: string }" optional>
+  Commands baked into a Docker image layer from the plugin directory (or `cwd` relative to the source root).
+</Property>
+
+## `plugin.git()`
+
+Same `only` and `build` as `plugin.local()`.
+
+<Property name="repo" type="string" required>
+  An `https://` URL, SSH URL, `github:owner/repo`, or GitHub `/tree/<ref>/<path>` URL.
+</Property>
+
+<Property name="ref" type="string" optional>
+  A branch, tag, or commit SHA, defaulting to the remote `HEAD`.
+</Property>
+
+<Property name="path" type="string" optional>
+  Plugin directory in the repository. Default: repository root.
+</Property>
+
+## `plugin.npm()`
+
+Same `only` and `build` as `plugin.local()`.
+
+<Property name="spec" type="string" required>
+  A pinned package spec. Relative and `file:` paths resolve against the calling file.
+</Property>
+
+<Property name="path" type="string" optional>
+  Plugin directory in the package. Default: package root.
+</Property>
+
+## `plugin.marketplace()`
+
+`'name@source'` in a Claude Code marketplace. Same `only` and `build` as `plugin.local()`.
+
+<Property name="entry" type="string" required>
+  `name@` followed by a git URL, `github:owner/repo`, or `npm:<spec>`. Any other entry stops the run with exit code 2.
+</Property>
+
+<Property name="ref" type="string" optional>
+  Commit of a git marketplace. Pin an npm marketplace in its spec.
+</Property>
 
 ## `secret()`
 
