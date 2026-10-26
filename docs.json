@@ -84,6 +84,27 @@
           "href": "/write"
         },
         {
+          "group": "Task",
+          "pages": [
+            {
+              "title": "Turns",
+              "href": "/write/turns"
+            },
+            {
+              "title": "Cases",
+              "href": "/write/cases"
+            },
+            {
+              "title": "Groups",
+              "href": "/write/groups"
+            },
+            {
+              "title": "Apps",
+              "href": "/write/apps"
+            }
+          ]
+        },
+        {
           "group": "Grading",
           "pages": [
             {
@@ -99,22 +120,6 @@
               "href": "/write/questions"
             }
           ]
-        },
-        {
-          "title": "Turns",
-          "href": "/write/turns"
-        },
-        {
-          "title": "Apps",
-          "href": "/write/apps"
-        },
-        {
-          "title": "Cases",
-          "href": "/write/cases"
-        },
-        {
-          "title": "Groups",
-          "href": "/write/groups"
         },
         {
           "group": "Runs",
@@ -346,12 +351,12 @@
           "href": "/results/analyze"
         },
         {
-          "title": "Studio",
-          "href": "/results/studio"
-        },
-        {
           "title": "Debugging",
           "href": "/results/debugging"
+        },
+        {
+          "title": "Studio",
+          "href": "/results/studio"
         },
         {
           "title": "Queries",
