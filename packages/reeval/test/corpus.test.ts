@@ -112,18 +112,32 @@ function clean(where: string, stdout: string, stderr: string) {
   )
 }
 
-/** Runs a command in this process and returns its stdout, after checking it printed nothing odd. */
+/**
+ * Runs a command in this process and returns its stdout, after checking it printed nothing odd.
+ * The readers that skip an unreadable file warn on `process.stderr`, not on `err`, so that's
+ * captured too.
+ */
 async function capture(
   command: (out: Out, err: Out) => Promise<number>,
   where = 'reeval',
-  codes = [0, 1],
+  codes = [0],
 ): Promise<string> {
   let stdout = ''
   let stderr = ''
-  const code = await command(
-    (text) => (stdout += `${text}\n`),
-    (text) => (stderr += `${text}\n`),
-  )
+  const write = process.stderr.write
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    stderr += String(chunk)
+    return true
+  }) as typeof process.stderr.write
+  let code: number
+  try {
+    code = await command(
+      (text) => (stdout += `${text}\n`),
+      (text) => (stderr += `${text}\n`),
+    )
+  } finally {
+    process.stderr.write = write
+  }
   clean(where, stdout, stderr)
   assert.ok(codes.includes(code), `${where} exited ${code}\n${stdout}${stderr}`)
   return stdout
@@ -302,8 +316,11 @@ describe('the record corpus', { concurrency: 4 }, () => {
       test(`${entry.name}: every reader reads every run`, async () => {
         const { config } = await inProcess()
         const ids = entry.runs.map((r) => r.runId)
-        const run = (where: string, command: (out: Out, err: Out) => Promise<number>) =>
-          capture(command, `${where} in ${entry.name}`)
+        const run = (
+          where: string,
+          command: (out: Out, err: Out) => Promise<number>,
+          codes?: number[],
+        ) => capture(command, `${where} in ${entry.name}`, codes)
         for (const [i, r] of entry.runs.entries()) {
           const id = r.runId
           const vs = ids[i - 1] ?? 'none'
@@ -339,8 +356,10 @@ describe('the record corpus', { concurrency: 4 }, () => {
             ),
           )
           assert.deepEqual(shown, readableRecord(structuredClone(r.raw) as never))
-          await run(`reeval compare ${id}`, (out) =>
-            compareCommand({ config, flags: {}, out }, [id]),
+          await run(
+            `reeval compare ${id}`,
+            (out) => compareCommand({ config, flags: {}, out }, [id]),
+            [0, 1],
           )
           await run(`reeval analyze ${id} --dry-run --vs ${vs}`, (out, err) =>
             analyzeCommand({ config, flags: { 'dry-run': true, vs }, out, err }, [id]),
@@ -356,8 +375,10 @@ describe('the record corpus', { concurrency: 4 }, () => {
         for (const [i, id] of ids.entries()) {
           if (i === 0) continue
           for (const flags of [{}, { json: true }, { md: true }]) {
-            await run(`reeval compare ${ids[i - 1]} ${id} ${JSON.stringify(flags)}`, (out) =>
-              compareCommand({ config, flags, out }, [ids[i - 1] as string, id]),
+            await run(
+              `reeval compare ${ids[i - 1]} ${id} ${JSON.stringify(flags)}`,
+              (out) => compareCommand({ config, flags, out }, [ids[i - 1] as string, id]),
+              [0, 1],
             )
           }
         }

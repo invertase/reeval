@@ -449,9 +449,9 @@ pnpm --filter reeval schema:update   # accept a compatible change, then commit s
   (or `--from <project>` to copy runs from another project, such as real-harness runs). The
   corpus, [`test/fixtures/records/`](./packages/reeval/test/fixtures/records/README.md), is
   real runs from meaningful points; `schema:check` reads every file in it,
-  `test/corpus.test.ts` runs every CLI reader (`history`, `show`, `compare`, each `query` view,
-  `analyze --dry-run`, `studio build`) on every run, and the studio's browser test opens every
-  run and attempt tab.
+  `test/corpus.test.ts` merges every entry's runs into one history and runs every reader
+  (`history`, `show`, `compare`, each `query` view, `analyze --dry-run`, `studio build`) over
+  them, and the studio's browser test opens every run and attempt tab.
 
 ### Adding a feature
 

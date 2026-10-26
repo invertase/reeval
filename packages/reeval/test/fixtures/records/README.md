@@ -43,9 +43,11 @@ What reads them:
 - `pnpm --filter reeval schema:check` (and `test/schema.test.ts`): every record,
   transcript line and saved analysis, read the way reeval reads it, fits the current schema, and each
   read default runs on some file that lacks its field.
-- `test/corpus.test.ts`: `reeval history`, `show` (plain, `--md`, `--json`), `compare` (plain, `--md`,
-  `--json`), every `reeval query` table and view, `reeval analyze --dry-run` and `reeval studio build`, on every
-  run; and the corpus as a whole covers each kind of run the record describes.
+- `test/corpus.test.ts`: one project holding every entry's runs. `reeval history`, `query` and
+  `studio build` read all of it through the CLI. `show` (plain, `--md`, `--json`), `compare` (plain,
+  `--md`, `--json`), every `reeval query` table and view and `reeval analyze --dry-run` read every
+  run in the test's own process, and through the CLI on the oldest and newest. The corpus as a
+  whole covers each kind of run the record describes.
 - `packages/studio-web/test/e2e.test.ts`: every run, its analysis and every attempt tab in a
   browser.
 
@@ -64,7 +66,9 @@ pnpm --filter reeval corpus:add <name> --from <project> [--from <project>…] [<
 ```
 
 The first records `scripts/corpus/project` (the fake harness, no keys or Docker): one run of about
-3,000 lines. The second copies runs from other projects, such as real harness runs: recorded ones
+3,000 lines. It writes no budget-stopped run, profile, unpooled `evaluate.each`, judge error or
+turn without a served model: those shapes are in `fake-matrix` and the older entries, so a change
+to one of them takes a recipe of its own (`--from`). The second copies runs from other projects, such as real harness runs: recorded ones
 from `evals/.history`, and ones never recorded from `.reeval/runs`. Then add the entry to the table
 above.
 
