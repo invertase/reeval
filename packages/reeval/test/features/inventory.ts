@@ -1142,7 +1142,7 @@ export const inventory: InventoryFeature[] = [
       'harness-cursor-sdk/test/unit.test.ts',
       'reeval/test/cursor-sdk-shape.test.ts',
       'reeval/test/replay.test.ts',
-      'reeval/test/matchers.test.ts',
+      'reeval/test/match.test.ts',
     ],
     real: ['contract › nothing silently unreported'],
   },
@@ -1279,7 +1279,7 @@ export const inventory: InventoryFeature[] = [
     id: 'matchers',
     area: 'Judges and matchers',
     name: '`toHaveFile`, `toSucceed` and `toPass`',
-    unit: ['reeval/test/matchers.test.ts', 'reeval/test/engine.test.ts'],
+    unit: ['reeval/test/match.test.ts', 'reeval/test/engine.test.ts'],
   },
   {
     id: 'assert.exec-retries',
