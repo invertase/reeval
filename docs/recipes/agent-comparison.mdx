@@ -1,18 +1,18 @@
 ---
 title: "Compare harnesses"
-description: "Run one task on each harness and read each one's pass rate, tokens, tool calls, and time."
+description: "Run one task on each agent and read each one's pass rate, tokens, tool calls, and time."
 ---
 
-You compare harnesses by running one task on each harness in one run. Each harness is its own cell with the same prompt, assertions, and attempts, so the block reads side by side. For a runnable project, see [`with-many-harnesses`](https://github.com/invertase/reeval/tree/main/examples/with-many-harnesses). For more information about choosing a harness and its key, see [Harnesses](/agents).
+You compare agents by running one task on each agent in one run. Each agent is its own cell with the same prompt, assertions, and attempts, so the block reads side by side. For a runnable project, see [`with-many-harnesses`](https://github.com/invertase/reeval/tree/main/examples/with-many-harnesses). For more information about choosing an agent and its key, see [Choose an agent](/agents).
 
-To measure a change on each harness instead, add `compare` ([Compare harnesses](/results/compare/lift#compare-harnesses)).
+To measure a change on each agent instead, add `compare` ([Compare harnesses](/results/compare/lift#compare-harnesses)).
 
-## Run one task on each harness
+## Run one task on each agent
 
 <Steps>
 <Step title="Write the evaluation">
 
-In the `evals/stream.eval.ts` file, list the harnesses in `harness` and give each one four attempts with `runs`:
+In the `evals/stream.eval.ts` file, list the agents in `harness` and give each one four attempts with `runs`:
 
 ```ts title="evals/stream.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
@@ -42,23 +42,23 @@ evaluate(
 )
 ```
 
-A list in `harness` replaces the harnesses the evaluation inherits from the `reeval.config.ts` file. Each harness reads its API key from the `.env.local` file. For more information about the `add`, `only`, and function forms, see [the `harness` option](/reference/options#harness). For more information about model ids per harness, see [Models](/agents/model).
+A list in `harness` replaces the agents the evaluation inherits from the `reeval.config.ts` file. Each agent reads its API key from the `.env.local` file. For more information about the `add`, `only`, and function forms, see [the `harness` option](/reference/options#harness). For more information about model ids per agent, see [Models](/agents/model).
 
 </Step>
 <Step title="Run the evaluation">
 
-Run the evaluation on every harness it lists:
+Run the evaluation on every agent it lists:
 
 ```bash
 npx reeval run stream
 ```
 
-To list the cells without starting a harness, pass `--dry-run`.
+To list the cells without starting an agent, pass `--dry-run`.
 
 </Step>
-<Step title="Read the pass rate per harness">
+<Step title="Read the pass rate per agent">
 
-Read the block the run prints for the evaluation. Rows print under `harness`, one per cell, with passed attempts out of counted attempts. A harness that failed an attempt lists the assertions it failed under its row. Your counts can differ:
+Read the block the run prints for the evaluation. Rows print under `harness`, one per cell, with passed attempts out of counted attempts. An agent that failed an attempt lists the assertions it failed under its row. Your counts can differ:
 
 ```text
 fail             streams with Vercel AI SDK
@@ -71,19 +71,19 @@ fail             streams with Vercel AI SDK
     +1 more passed
 ```
 
-Every harness cell is gated, so one harness that fails an attempt fails the evaluation. To pass a cell on a share of its attempts, set [the `gate` option](/reference/options#gate). For more information about the rows, see [Read a comparison](/results/output#read-a-comparison).
+Every agent cell is gated, so one agent that fails an attempt fails the evaluation. To pass a cell on a share of its attempts, set [the `gate` option](/reference/options#gate). For more information about the rows, see [Read a comparison](/results/output#read-a-comparison).
 
 </Step>
-<Step title="Read the effort per harness">
+<Step title="Read the effort per agent">
 
-Read each harness's tool calls, time, and tokens from the `effort` view, because the block prints none of them for harness cells. The view holds each cell's median tool calls, agent seconds, and tokens. Select the last run's rows:
+Read each agent's tool calls, time, and tokens from the `effort` view, because the block prints none of them for these cells. The view holds each cell's median tool calls, agent seconds, and tokens. Select the last run's rows:
 
 ```bash
 npx reeval query "SELECT harness, tools_median, agent_s_median
   FROM effort WHERE run_id = :run" --run last
 ```
 
-The rows print one harness per line. Your numbers differ:
+The rows print one agent per line. Your numbers differ:
 
 ```text
 harness                      tools_median  agent_s_median
@@ -92,7 +92,7 @@ claude-code:claude-sonnet-5  9             0.3
 codex:gpt-5.6-luna           21            0.9
 ```
 
-A harness that passes with fewer tool calls and seconds did the task with less work. To add tokens, select `tokens_median`. For more information about the `reeval query` command, see [Query past runs](/results/queries).
+An agent that passes with fewer tool calls and seconds did the task with less work. To add tokens, select `tokens_median`. For more information about the `reeval query` command, see [Query past runs](/results/queries).
 
 </Step>
 </Steps>
