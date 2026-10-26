@@ -28,5 +28,5 @@
 {"turn":0,"type":"reasoning"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cd . && npx es run --dry-run --json 2>&1 | tail -100"},"ok":true,"durationMs":947}
 {"turn":0,"type":"reasoning"}
-{"turn":0,"type":"text","text":"Dry-run passes. The plan is 1 eval, 2 cells (empty control vs `with-docs`), 3 runs each, 6 attempts on the fake harness/sandbox.\n\n**Mistakes fixed:**\n\n1. **`compare` in `es.config.ts`** — moved to the…"}
+{"turn":0,"type":"text","text":"Dry-run passes. The plan is 1 eval, 2 cells (empty control vs `with-docs`), 3 runs each, 6 attempts on the fake harness/…"}
 {"turn":0,"type":"turn-end"}

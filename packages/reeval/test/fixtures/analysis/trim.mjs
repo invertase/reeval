@@ -1,8 +1,11 @@
 // Builds a golden analysis fixture from a real recorded history: `node trim.mjs <history> <out>`.
-// It keeps what the facts layer and the digest read, and shrinks the rest: each record loses long
-// final messages (cut at 2 KB, which is more than `attempts.last_text` keeps), each transcript keeps
-// every line, so line numbers still match, but only tool calls' targets and short text, and only
-// failing attempts keep their judge input and check logs. The records' file refs stay as they were.
+// It keeps what the facts layer and the digest read, and shrinks the rest: each record's messages
+// are cut at what the digest quotes (1,400 characters of a reply, 400 of a prompt), and its changed
+// files lose reeval's own state (`.es/` and `.reeval/` debug, runs and staging); its context loses
+// the files every attempt on that harness saw unchanged, skills aside; each transcript
+// keeps every line, so line numbers still match, but only tool calls' targets and short text, and
+// only failing attempts keep their judge input and check logs. The records' file refs stay as they
+// were. Running it on its own output changes nothing.
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
@@ -20,13 +23,14 @@ const TARGET_KEYS = [
   'url',
   'query',
 ]
+const OWN_STATE = /^\.(es|reeval)\/(debug|runs|staging)\//
 const clip = (s, n) => (typeof s === 'string' && s.length > n ? `${s.slice(0, n)}…` : s)
 
 function trimEvent(event, keepText) {
   if (event.type === 'tool') {
     const input = {}
     for (const key of TARGET_KEYS)
-      if (typeof event.input?.[key] === 'string') input[key] = clip(event.input[key], 300)
+      if (typeof event.input?.[key] === 'string') input[key] = clip(event.input[key], 160)
     return {
       turn: event.turn,
       type: 'tool',
@@ -37,9 +41,9 @@ function trimEvent(event, keepText) {
     }
   }
   if (event.type === 'text')
-    return { turn: event.turn, type: 'text', text: clip(event.text, keepText ? 2000 : 200) }
+    return { turn: event.turn, type: 'text', text: clip(event.text, keepText ? 1400 : 120) }
   if (event.type === 'prompt')
-    return { turn: event.turn, type: 'prompt', text: clip(event.text, 600) }
+    return { turn: event.turn, type: 'prompt', text: clip(event.text, 400) }
   return { turn: event.turn, type: event.type }
 }
 
@@ -48,14 +52,35 @@ const write = (path, content) => {
   writeFileSync(path, content)
 }
 
-for (const name of readdirSync(from)
+const records = readdirSync(from)
   .filter((n) => n.endsWith('.json'))
-  .sort()) {
-  const record = JSON.parse(readFileSync(join(from, name), 'utf8'))
+  .sort()
+  .map((name) => [name, JSON.parse(readFileSync(join(from, name), 'utf8'))])
+
+// A context file every attempt on its harness saw unchanged, in every run, can't drift or tell
+// attempts apart.
+const harnessOf = (a) => a.cell.split(':')[0]
+const attempts = records.flatMap(([, r]) => r.evals.flatMap((e) => e.attempts))
+const seen = new Map()
+const ofHarness = new Map()
+const id = (a, c) => `${harnessOf(a)}\0${c.path}\0${c.sha256}`
+for (const a of attempts) {
+  ofHarness.set(harnessOf(a), (ofHarness.get(harnessOf(a)) ?? 0) + 1)
+  for (const c of a.context) seen.set(id(a, c), (seen.get(id(a, c)) ?? 0) + 1)
+}
+const everywhere = (a, c) =>
+  seen.get(id(a, c)) === ofHarness.get(harnessOf(a)) && !/skills?\//.test(c.path)
+
+for (const [name, record] of records) {
   const runId = record.runId
   for (const e of record.evals) {
     for (const a of e.attempts) {
-      for (const t of a.turns) t.text = clip(t.text, 2000)
+      for (const t of a.turns) {
+        t.text = clip(t.text, 1400)
+        t.prompt = clip(t.prompt, 400)
+      }
+      a.changedFiles = a.changedFiles.filter((f) => !OWN_STATE.test(f.path))
+      a.context = a.context.filter((c) => !everywhere(a, c))
       const failed = a.outcome !== 'pass'
       const twin = e.attempts.some((x) => x.cell === a.cell && x.outcome !== 'pass')
       const src = (ref) => join(from, runId, ...ref.path.split('/'))

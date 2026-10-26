@@ -21,5 +21,5 @@
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npx es run --dry-run"},"ok":true,"durationMs":2343}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npx es run"},"ok":true,"durationMs":3460}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"git status -s"},"ok":true,"durationMs":1560}
-{"turn":0,"type":"text","text":"The issues in [es.config.ts](file:///es/workspace/es.config.ts) and [evals/docs.es.ts](file:///es/workspace/evals/docs.es.ts) have been resolved.\n\n### Mistakes fixed\n- Removed `compare: [withDocs]` fr…"}
+{"turn":0,"type":"text","text":"The issues in [es.config.ts](file:///es/workspace/es.config.ts) and [evals/docs.es.ts](file:///es/workspace/evals/docs.e…"}
 {"turn":0,"type":"turn-end"}

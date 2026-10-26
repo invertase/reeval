@@ -43,5 +43,5 @@
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npx es run --dry-run"},"ok":true,"durationMs":2279}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npx es run --dry-run --json"},"ok":true,"durationMs":2276}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"git status && git diff"},"ok":true,"durationMs":1175}
-{"turn":0,"type":"text","text":"The following mistakes were fixed:\n\n- Removed the disallowed `compare` property and unused `withDocs` import from [es.config.ts](file:///es/workspace/es.config.ts).\n- Removed the invalid `baseline` im…"}
+{"turn":0,"type":"text","text":"The following mistakes were fixed:\n\n- Removed the disallowed `compare` property and unused `withDocs` import from [es.co…"}
 {"turn":0,"type":"turn-end"}

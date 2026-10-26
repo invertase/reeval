@@ -29,5 +29,5 @@
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npx es run --dry-run"},"ok":true,"durationMs":2154}
 {"turn":0,"type":"tool","tool":"read","input":{"file_path":"es.config.ts"},"ok":true,"durationMs":887}
 {"turn":0,"type":"tool","tool":"read","input":{"file_path":"evals/docs.es.ts"},"ok":true,"durationMs":3001}
-{"turn":0,"type":"text","text":"The issues preventing `npx es run --dry-run` from executing have been resolved.\n\n### Mistakes Fixed\n- Removed `compare: [withDocs]` and the unused `withDocs` import from [es.config.ts](file:///es/work…"}
+{"turn":0,"type":"text","text":"The issues preventing `npx es run --dry-run` from executing have been resolved.\n\n### Mistakes Fixed\n- Removed `compare: …"}
 {"turn":0,"type":"turn-end"}

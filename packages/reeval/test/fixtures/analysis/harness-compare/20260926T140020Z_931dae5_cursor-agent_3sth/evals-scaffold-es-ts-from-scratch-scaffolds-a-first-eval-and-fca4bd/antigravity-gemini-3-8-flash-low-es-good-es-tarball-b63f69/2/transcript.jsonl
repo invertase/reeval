@@ -1,4 +1,4 @@
-{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to create hello.txt containing \"hello\" and checks that file with a deterministic assertion. Finish when `npx es run` passes."}
+{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to …"}
 {"turn":0,"type":"tool","tool":"read","input":{"file_path":"/root/.gemini/config/skills/es-good/SKILL.md"},"ok":true,"durationMs":1112}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"ls -la .; ls -la /opt/es/"},"ok":true,"durationMs":1289}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"node -v && npm -v"},"ok":true,"durationMs":1111}
@@ -9,7 +9,7 @@
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cat node_modules/@invertase/foobar/dist/matchers.d.ts"},"ok":true,"durationMs":1315}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cat node_modules/@invertase/foobar/dist/harness/fake.d.ts"},"ok":true,"durationMs":1062}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cat node_modules/@invertase/foobar/package.json"},"ok":true,"durationMs":1137}
-{"turn":0,"type":"tool","tool":"bash","input":{"command":"cat node_modules/@invertase/foobar/dist/harness.d.ts && echo \"---\" && cat node_modules/@invertase/foobar/dist/sandbox.d.ts && echo \"---\" && cat node_modules/@invertase/foobar/dist/judge.d.ts"},"ok":true,"durationMs":2789}
+{"turn":0,"type":"tool","tool":"bash","input":{"command":"cat node_modules/@invertase/foobar/dist/harness.d.ts && echo \"---\" && cat node_modules/@invertase/foobar/dist/sandbox.d.ts && echo \"---\" && cat node_modules/@in…"},"ok":true,"durationMs":2789}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cat node_modules/@invertase/foobar/dist/matchers.js"},"ok":true,"durationMs":1743}
 {"turn":0,"type":"file-edit"}
 {"turn":0,"type":"file-edit"}
@@ -18,5 +18,5 @@
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"ls -la ."},"ok":true,"durationMs":1187}
 {"turn":0,"type":"file-edit"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npx es run"},"ok":true,"durationMs":6398}
-{"turn":0,"type":"text","text":"ES (Eval Suite) has been set up and verified:\n\n1. **Installed `@invertase/foobar`**:\n   - Initialized `package.json` and installed the tarball from `/opt/es/invertase-foobar.tgz`.\n2. **Configured ES**…"}
+{"turn":0,"type":"text","text":"ES (Eval Suite) has been set up and verified:\n\n1. **Installed `@invertase/foobar`**:\n   - Initialized `package.json` and…"}
 {"turn":0,"type":"turn-end"}

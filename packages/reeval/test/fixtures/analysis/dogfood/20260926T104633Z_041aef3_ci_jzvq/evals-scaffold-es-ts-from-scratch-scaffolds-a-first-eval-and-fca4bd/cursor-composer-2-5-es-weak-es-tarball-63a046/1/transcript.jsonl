@@ -1,4 +1,4 @@
-{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to create hello.txt containing \"hello\" and checks that file with a deterministic assertion. Finish when `npx es run` passes."}
+{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to …"}
 {"turn":0,"type":"reasoning"}
 {"turn":0,"type":"text","text":"Setting up ES in this workspace. I'll read the ES skill and inspect the tarball package layout first.\n"}
 {"turn":0,"type":"tool","tool":"read","input":{"path":"/root/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home/.agents/skills/es-weak/SKILL.md"},"ok":true,"durationMs":146}
@@ -77,5 +77,5 @@
 {"turn":0,"type":"reasoning"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cd . && npm install && npx es run"},"ok":true,"durationMs":7483}
 {"turn":0,"type":"reasoning"}
-{"turn":0,"type":"text","text":"ES is set up and `npx es run` passes (1 eval, 1 passed).\n\n**`es.config.ts`** — fake harness, sandbox, and judge (no Docker or API keys):\n\n```1:11:/es/workspace/es.config.ts\nimport { defineConfig } fro…"}
+{"turn":0,"type":"text","text":"ES is set up and `npx es run` passes (1 eval, 1 passed).\n\n**`es.config.ts`** — fake harness, sandbox, and judge (no Dock…"}
 {"turn":0,"type":"turn-end"}

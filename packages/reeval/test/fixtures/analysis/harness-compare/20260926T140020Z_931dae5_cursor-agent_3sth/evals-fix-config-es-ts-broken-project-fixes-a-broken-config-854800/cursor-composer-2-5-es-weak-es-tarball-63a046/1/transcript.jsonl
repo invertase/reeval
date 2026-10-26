@@ -44,5 +44,5 @@
 {"turn":0,"type":"reasoning"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cd . && npx es run --dry-run 2>&1"},"ok":true,"durationMs":1100}
 {"turn":0,"type":"reasoning"}
-{"turn":0,"type":"text","text":"`npx es run --dry-run` now succeeds. Plan: **1 eval · 2 cells · 6 attempts** — control (no environment) and `with-docs` variant, 3 runs each, on the fake harness.\n\n### Mistakes fixed\n\n- Removed `compa…"}
+{"turn":0,"type":"text","text":"`npx es run --dry-run` now succeeds. Plan: **1 eval · 2 cells · 6 attempts** — control (no environment) and `with-docs` …"}
 {"turn":0,"type":"turn-end"}

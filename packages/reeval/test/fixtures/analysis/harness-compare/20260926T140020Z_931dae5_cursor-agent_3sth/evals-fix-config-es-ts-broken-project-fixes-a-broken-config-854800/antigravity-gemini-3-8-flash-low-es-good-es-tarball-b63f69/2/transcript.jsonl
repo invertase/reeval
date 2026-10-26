@@ -18,5 +18,5 @@
 {"turn":0,"type":"tool","tool":"read","input":{"file_path":"es.config.ts"},"ok":true,"durationMs":986}
 {"turn":0,"type":"tool","tool":"read","input":{"file_path":"evals/docs.es.ts"},"ok":true,"durationMs":1387}
 {"turn":0,"type":"file-edit"}
-{"turn":0,"type":"text","text":"The configuration in [es.config.ts](file:///es/workspace/es.config.ts) and the eval in [evals/docs.es.ts](file:///es/workspace/evals/docs.es.ts) have been updated so `npx es run --dry-run` plans 2 cel…"}
+{"turn":0,"type":"text","text":"The configuration in [es.config.ts](file:///es/workspace/es.config.ts) and the eval in [evals/docs.es.ts](file:///es/wor…"}
 {"turn":0,"type":"turn-end"}
