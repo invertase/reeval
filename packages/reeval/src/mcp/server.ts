@@ -36,7 +36,7 @@ const VIEW_ROWS: Record<string, string> = {
   skill_reads:
     'attempt and skill its environment placed: the transcript line of its first read (a path under skills/<name>/, or a skill / load_skill call), and how many',
   flaky_cells:
-    'cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict and a likely cause',
+    'cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict (flaky from 6 counted attempts, else mixed: too few to call it flaky) and a likely cause',
   drift:
     'run where a cell’s fingerprint changed from its previous run, what changed, and noise = 1 when only agent runtime state did',
   failing_attempts:

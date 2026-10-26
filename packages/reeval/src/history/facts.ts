@@ -19,7 +19,10 @@ import { rowsOf } from './rows.ts'
 import { TOOL_CLASSES } from './tool-class.ts'
 import type { CheckTally, FingerprintParts } from './types.ts'
 
-/** Counted attempts, pooled over comparable runs, before a cell with mixed outcomes is `flaky`. */
+/**
+ * Counted attempts, pooled over comparable runs, before a cell with mixed outcomes is `flaky`;
+ * below it the cell is `mixed`: it passed and failed, too few times to call it flaky.
+ */
 export const FLAKY_MIN_ATTEMPTS = 6
 /** A failing verdict this close to its threshold points at the judge, not the agent. */
 export const JUDGE_MARGIN = 0.1
@@ -839,7 +842,7 @@ export function deriveFacts(db: DatabaseSync): void {
       pass_at_1: round3(pass / (pass + fail)),
       lo: round3(w.low),
       hi: round3(w.high),
-      verdict: pass + fail >= FLAKY_MIN_ATTEMPTS ? 'flaky' : 'insufficient',
+      verdict: pass + fail >= FLAKY_MIN_ATTEMPTS ? 'flaky' : 'mixed',
       cause,
       min_attempts: FLAKY_MIN_ATTEMPTS,
     })

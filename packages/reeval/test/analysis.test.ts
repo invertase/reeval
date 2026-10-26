@@ -195,14 +195,14 @@ describe('facts on the dogfood history (2 runs, 36 real Cursor attempts)', () =>
     )
   })
 
-  test('flaky: one failure in 4 comparable attempts is insufficient, not flaky', async () => {
+  test('flaky: one failure in 4 comparable attempts is mixed, not flaky', async () => {
     const p = await historyProject('facts-flaky', 'dogfood')
     const old = await query(p.dir, 'SELECT eval_key, key FROM cells WHERE pass > 0 AND fail > 0')
     assert.equal(old.length, 1, 'one mixed cell is in cells')
     const flaky = await query(p.dir, 'SELECT * FROM flaky_cells')
     assert.deepEqual(
       flaky.map((f) => [f.cell_key, f.runs, f.pass, f.counted, f.verdict, f.cause]),
-      [['cursor:composer-2.5/broken-project/es-tarball', 2, 3, 4, 'insufficient', 'agent']],
+      [['cursor:composer-2.5/broken-project/es-tarball', 2, 3, 4, 'mixed', 'agent']],
       'pooled over both runs, which are comparable once runtime state is left out; a 0.10 verdict is the agent, not the judge',
     )
     assert.deepEqual([flaky[0]?.lo, flaky[0]?.hi], [0.301, 0.954])
@@ -429,6 +429,21 @@ evaluate('flips', { runs: 6, gate: { passRate: 0.5 } }, async (c) => {
     assert.equal((await runCli(p.dir)).code, 0)
     const [flaky] = await query(p.dir, 'SELECT pass, counted, verdict, cause FROM flaky_cells')
     assert.deepEqual(flaky, { pass: 3, counted: 6, verdict: 'flaky', cause: 'agent' })
+  })
+
+  test('mixed outcomes one attempt short of the minimum are mixed, not flaky', async () => {
+    const p = await project('canary-mixed', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/f.eval.ts': `import { evaluate } from 'reeval'
+evaluate('flips', { runs: 5, gate: { passRate: 0.4 } }, async (c) => {
+  await c.send('go')
+  if (c.attempt.n % 2 === 0) throw new Error('every other attempt fails')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const [flaky] = await query(p.dir, 'SELECT pass, counted, verdict FROM flaky_cells')
+    assert.deepEqual(flaky, { pass: 3, counted: 5, verdict: 'mixed' })
   })
 
   test('the same change passing and failing its check is caused by the check', async () => {

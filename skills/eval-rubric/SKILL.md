@@ -38,7 +38,8 @@ good result from a bad one. **Fix:** make it strict enough to fail on a wrong re
 
 ## `flaky-check`
 
-Concern. A cell is flaky over comparable runs (at least 6 counted tries), and the
+Concern. A cell is flaky over comparable runs (at least 6 counted tries; below that it's
+`mixed` and raises nothing), and the
 check both passed and failed in at least 2 of its newest 5 runs with nothing changed. **Fix:**
 check something every good try does, or raise `runs` so one try doesn't decide it.
 
