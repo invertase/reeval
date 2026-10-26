@@ -54,9 +54,7 @@ Capture the page and send the picture to the judge. In the `evals/chat.eval.ts` 
 +    expect(await c.judge(q, { artifacts: [shot] }), 'renders').toPass()
 ```
 
-`c.capture` polls the port until the server answers, opens the `/chat` path in a headless browser on your machine, and saves the `artifacts/chat.png` file in the attempt record. `wait: 'idle'` waits until the page has at most two network requests in flight for 500 ms before taking the shot.
-
-`artifacts: [shot]` sends that picture to the judge as an image. Ask about facts in the picture, such as an input or a button, not whether the page looks good. For more information about sending captures to the judge, see [Apps](/write/apps#judge-a-capture). For more information about the judge's model, threshold, and key, see [Judgments](/write/judgments).
+For the capture options, see [Apps](/write/apps#capture-a-page). For more information about the judge's model, threshold, and key, see [Judgments](/write/judgments).
 
 </Step>
 <Step title="Read the outcome">
