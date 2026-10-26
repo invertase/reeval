@@ -1,20 +1,39 @@
 ---
 title: "vercel gateway"
-description: "Use the Vercel AI Gateway for an LLM model."
+description: "Send model calls through the Vercel AI Gateway on one key."
 ---
 
-Using a Vercel AI Gateway means that LLM calls will go through the Vercel AI Gateway, and requires that a Vercel AI Gateway API key is provided.
+`vercel()` sends the model calls of the harnesses it serves through the Vercel AI Gateway, on one key. The egress gateway swaps the key in only on Vercel's model paths at `ai-gateway.vercel.sh`, so the key never enters the sandbox.
 
-```ts
+## `AI_GATEWAY_API_KEY`
+
+`vercel()` reads `AI_GATEWAY_API_KEY`, or `VERCEL_OIDC_TOKEN` when the key is unset, from the environment or the `.env.local` file. A run exits with code 2 when neither is set, or when `VERCEL_OIDC_TOKEN` has expired. `vercel env pull` writes a new token, which lasts about 12 hours.
+
+For more information about the variables, see [`AI_GATEWAY_API_KEY`](/reference/env-vars#aigatewayapikey) and [`VERCEL_OIDC_TOKEN`](/reference/env-vars#verceloidctoken).
+
+## `vercel()`
+
+`vercel()` is exported from `{{ pkg }}/gateway`. It takes no options:
+
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
-import { vercel } from '{{ pkg }}/gateway'
-import { claudeCode, codex, cursor, opencode } from '{{ pkg }}/harness'
+import { direct, vercel } from '{{ pkg }}/gateway'
 
 export default defineConfig({
-  gateway: [
-    vercel()
-  ]
+  gateway: [vercel(), direct()],
 })
 ```
 
-The environment variable `AI_GATEWAY_API_KEY` must be set to the API key for the Vercel AI Gateway.
+A harness `vercel()` cannot serve takes the next gateway in the list.
+
+For more information about combining gateways, see [Gateways](/agents/gateways).
+
+## Harnesses
+
+| Serves | Falls through |
+| :--- | :--- |
+| Claude Code, Codex, Goose, OpenCode, fx, Grok Build, pi | Cursor, Antigravity |
+
+Cursor's agent calls only Cursor's API, and Antigravity's CLI calls only Google's. A Goose harness with `effort` set, or an OpenCode harness with `effort` on a model other than Gemini, also takes the next gateway.
+
+On `vercel()`, a judge must be a decision model, such as `typesafe-ai/jev-1.14.0`, and each call to a language-model judge fails. Analysis, captures, and questions take language models.
