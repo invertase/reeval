@@ -554,27 +554,6 @@
           }
         ]
       }
-    ],
-    "paths": [
-      "evals%2Fgreet.es.ts › writes greet.js",
-      "evals%2Fgreet.es.ts › writes greet.js/fake+-+fake",
-      "evals%2Fgreet.es.ts › writes greet.js/broken+-+fake",
-      "evals%2Fgreet.es.ts › fails its check",
-      "evals%2Fgreet.es.ts › fails its check/fake+-+fake",
-      "evals%2Fgreet.es.ts › fails its check/broken+-+fake",
-      "evals%2Fgreet.es.ts › fails its judge",
-      "evals%2Fgreet.es.ts › fails its judge/fake+-+fake",
-      "evals%2Fgreet.es.ts › fails its judge/broken+-+fake",
-      "evals%2Fgreet.es.ts › is skipped for now",
-      "evals%2Fgreet.es.ts › is skipped for now/fake+-+fake",
-      "evals%2Fgreet.es.ts › is skipped for now/broken+-+fake",
-      "evals%2Fgreet.es.ts › greets in Welsh",
-      "evals%2Fgreet.es.ts › greets in Welsh/unknown+unknown+unknown",
-      "evals%2Fskill.es.ts › house greeting › greets in the house style",
-      "evals%2Fskill.es.ts › house greeting › greets in the house style/fake+-+fake",
-      "evals%2Fskill.es.ts › house greeting › greets in the house style/fake+with-house-greeting+fake",
-      "evals%2Fskill.es.ts › house greeting › greets in the house style/broken+-+fake",
-      "evals%2Fskill.es.ts › house greeting › greets in the house style/broken+with-house-greeting+fake"
     ]
   },
   "20260927T160437Z_59028a1_cursor-agent_13ds": {
@@ -643,10 +622,6 @@
           }
         ]
       }
-    ],
-    "paths": [
-      "evals%2Fslow.es.ts › takes its time",
-      "evals%2Fslow.es.ts › takes its time/slow+-+fake"
     ]
   }
 }

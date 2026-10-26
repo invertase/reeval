@@ -239,16 +239,6 @@
           }
         ]
       }
-    ],
-    "paths": [
-      "evals%2Fhello.es.ts › writes hello.txt",
-      "evals%2Fhello.es.ts › writes hello.txt/cursor:composer-2.5+-+docker",
-      "evals%2Fhello.es.ts › writes hello.txt/claude-code:claude-sonnet-5+-+docker",
-      "evals%2Fhello.es.ts › writes hello.txt/antigravity:gemini-3.8-flash-medium+-+docker",
-      "evals%2Fhello.es.ts › writes hello.txt/opencode:gemini-3.8-flash+-+docker",
-      "evals%2Fhello.es.ts › writes hello.txt/goose:gemini-3.8-flash+-+docker",
-      "evals%2Fhello.es.ts › writes hello.txt/pi:gemini-3.8-flash+-+docker",
-      "evals%2Fhello.es.ts › writes hello.txt/codex:gpt-5.4-mini+-+docker"
     ]
   }
 }

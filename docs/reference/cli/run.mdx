@@ -184,8 +184,7 @@ npx reeval run --config reeval.fake.config.ts --json > results.json
         }
       ]
     }
-  ],
-  "paths": ["evals%2Fgreetings.eval.ts › greets %25s in the house style", …]
+  ]
 }
 ```
 
@@ -202,7 +201,7 @@ npx reeval run --config reeval.fake.config.ts --json > results.json
 | `checks[].outcome` | `ran` with its counts and first failure, or `not run` when no counted attempt reached it. A cell with no counted attempt lists every check the eval (or family) recorded as `not run` |
 | `effect` | A variant against its baseline: `better`, `worse`, `same` or `unclear`. Fewer than 4 counted attempts a side is `unclear`, and so is a check the baseline never ran |
 | `effort` | Median tool calls, agent time and tokens, from 4 counted attempts |
-| `paths` | Every node's `path`, a stable id to cite it by: `<eval>/<case>/<harness>+<environment>+<sandbox>/checks/<label>` |
+| `path` | On every node, a stable id that remarks cite: `<eval>/<case>/<harness>+<environment>+<sandbox>/checks/<label>` |
 
 A sandbox that runs as root or with capabilities added back gets a line under the plan, one per config, profile, group or eval that set it. See [Privilege warnings](/reference/sandbox/docker#privilege-warnings).
 
