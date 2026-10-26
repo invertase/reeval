@@ -3,56 +3,15 @@ title: "OpenCode harness"
 description: "The OpenCode harness runs OpenCode in the sandbox on the key of the provider its model id names and records its events."
 ---
 
-## `opencode()`
-
-`opencode()` is one harness factory. It runs OpenCode in the sandbox on the provider the model id names, with that provider's key.
-
-`opencode()` is exported from `{{ pkg }}/harness`. The following configuration passes it as the `harness` option:
-
-```ts title="reeval.config.ts"
-import { defineConfig } from '{{ pkg }}'
-import { opencode } from '{{ pkg }}/harness'
-
-export default defineConfig({
-  harness: opencode({
-    model: 'google/gemini-3.8-flash',
-  }),
-})
-```
-
-`model` is required. The other fields are optional.
-
-<Property name="model" type="string" required>
-  OpenCode's model id, `<provider>/<model>`. The part before the first `/` picks the provider and its key. reeval refuses a bare id, an unknown provider, or a provider whose key it cannot broker at plan time with exit code 2.
-</Property>
-
-<Property name="effort" type="string" optional>
-  Reasoning effort, as a value the provider takes. reeval sets it as `options.thinking` on an `anthropic/` model and as `options.reasoningEffort` on every other provider.
-</Property>
-
-<Property name="id" type="string" optional>
-  Cell id. Defaults to `opencode:` followed by the part of `model` after its last `/`, in the form `opencode:<model>`, or `opencode:<model>[effort=high]` with `effort` set to `high`. The id uses letters, digits, and `._:@+-=[]`.
-</Property>
-
-<Property name="maxConcurrent" type="number" optional>
-  The most OpenCode attempts that run at the same time, across the run. A whole number of at least 1.
-</Property>
-
-<Property name="startTimeout" type="Duration" optional>
-  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
-</Property>
-
-In the sandbox, OpenCode runs with its `question` and browser tools off, self-update and share links off, and its model calls over HTTP. That configuration overrides the workspace's own `opencode.json` file where both set a key.
-
-For more information about choosing a harness, see [Choose an agent](/agents).
-
-For more information about model ids and effort values, see [Models and providers for each harness](/agents/model).
+`opencode()` runs OpenCode in the sandbox on the provider the model id names, with that provider's key. For more information about the sandbox, see [Choose a sandbox](/integrations/sandboxes).
 
 ## `provider/model`
 
 The harness runs on any provider whose key OpenCode sends in a header on known hosts. The table lists each provider's model id prefix, key variable, header, and hosts.
 
-`opencode()` reads the provider's key from the host, under the variable in the `Key` column. reeval swaps it into the `Header` on each request to the `Hosts`, and refuses it anywhere else. A host with a `{NAME}` placeholder takes that variable from the host too, or the provider's default.
+`opencode()` reads the provider's key from the environment or the `.env.local` file, under the variable in the `Key` column. reeval swaps it into the `Header` on each request to the `Hosts`, and refuses it anywhere else. A host with a `{NAME}` placeholder takes that variable from the host too, or the provider's default. A run exits with code 2 when the `Key` variable is unset, or when its value contains whitespace or a line break. A restricted egress policy allows the provider's `Hosts` and `mcp.exa.ai`.
+
+When the API rejects the key, the attempt error begins with `The API rejected <Key>: set a valid key in the environment or .env.local`, with the provider's `Key` variable.
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
@@ -270,6 +229,49 @@ For more information about every provider variable, see [Environment variables](
 
 [//]: # (/generated:opencode-providers)
 
+## `opencode()`
+
+`opencode()` is exported from `{{ pkg }}/harness`. The following configuration passes it as the `harness` option:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { opencode } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: opencode({
+    model: 'google/gemini-3.8-flash',
+  }),
+})
+```
+
+`model` is required. The other fields are optional.
+
+<Property name="model" type="string" required>
+  OpenCode's model id, `<provider>/<model>`. The part before the first `/` picks the provider and its key. reeval refuses a bare id, an unknown provider, or a provider whose key it cannot broker at plan time with exit code 2.
+</Property>
+
+<Property name="effort" type="string" optional>
+  Reasoning effort, as a value the provider takes. reeval sets it as `options.thinking` on an `anthropic/` model and as `options.reasoningEffort` on every other provider.
+</Property>
+
+<Property name="id" type="string" optional>
+  Cell id. Defaults to `opencode:` followed by the part of `model` after its last `/`, in the form `opencode:<model>`, or `opencode:<model>[effort=high]` with `effort` set to `high`. The id uses letters, digits, and `._:@+-=[]`.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most OpenCode attempts that run at the same time, across the run. A whole number of at least 1.
+</Property>
+
+<Property name="startTimeout" type="Duration" optional>
+  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
+</Property>
+
+In the sandbox, OpenCode runs with its `question` and browser tools off, self-update, share links, and the model-catalog fetch off, session titles on the run's model, and its model calls over HTTP. That configuration overrides the workspace's own `opencode.json` file where both set a key.
+
+For more information about choosing a harness, see [Choose an agent](/agents).
+
+For more information about model ids and effort values, see [Set the agent's model](/agents/model).
+
 ## `rules`
 
 The OpenCode harness reads rules from the `AGENTS.md` file in the workspace.
@@ -284,7 +286,7 @@ For more information about placing skills, see [Give the agent skills](/environm
 
 ## `mcp`
 
-The OpenCode harness accepts MCP servers on `stdio` and `http`. reeval refuses an `sse` server at plan time with exit code 2. The servers go in OpenCode's configuration with Code Mode off, so the agent calls their tools directly, and the first prompt waits until every server has connected.
+The OpenCode harness accepts MCP servers on `stdio` and `http`. reeval refuses an `sse` server at plan time with exit code 2. reeval writes a `stdio` server as `{ type: 'local', command: [command, ...args], environment }` and an `http` server as `{ type: 'remote', url, headers, oauth: false }` in OpenCode's configuration, with Code Mode off, so the agent calls their tools directly, and the first prompt waits until every server has connected.
 
 For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
 
@@ -308,6 +310,6 @@ For more information about the automatic hosts, see [Block non-automatic hosts](
 
 ## `web-fetch`
 
-The OpenCode harness records `web-fetch` events.
+The OpenCode harness records `web-fetch` events. The turn's `unreported` list stays empty, so `toHaveFetched()` reads those events.
 
 For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).
