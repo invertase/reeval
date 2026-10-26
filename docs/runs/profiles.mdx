@@ -25,7 +25,7 @@ export default defineConfig({
 })
 ```
 
-`defaultProfile.ci` picks `pr` whenever the `CI` variable is set. For a runnable project, see [`with-profiles`](https://github.com/invertase/reeval/tree/main/examples/with-profiles). For one profile per harness, each in Docker with its own judge, see the examples' shared [`profiles.ts`](https://github.com/invertase/reeval/blob/main/examples/profiles.ts).
+For a runnable project, see [`with-profiles`](https://github.com/invertase/reeval/tree/main/examples/with-profiles). For one profile per harness, each in Docker with its own judge, see the examples' shared [`profiles.ts`](https://github.com/invertase/reeval/blob/main/examples/profiles.ts).
 
 reeval applies a profile's `defaults` after the `reeval.config.ts` file and before groups and evaluations, so an evaluation that sets its own `runs` keeps it. A profile's `tags` select evaluations like `--tag` does, and `'!slow'` excludes a tag. `record: 'always'` copies every run under that profile into the history folder.
 
@@ -42,6 +42,16 @@ plan  profile nightly (--profile) · 5 evals · 13 cells · 35 attempts · …
 ```
 
 The `REEVAL_PROFILE` environment variable names a profile the same way. `--profile` takes precedence when both are set.
+
+## Pick a default profile
+
+The `defaultProfile` option chooses a profile when neither `--profile` nor `REEVAL_PROFILE` names one. In the `reeval.config.ts` file, make pull-request runs the default in CI:
+
+```ts title="reeval.config.ts"
+  defaultProfile: { ci: 'pr' },
+```
+
+reeval picks `defaultProfile.ci` when the `CI` variable is set and `defaultProfile.local` when it is not. Without a match, the run has no profile. The plan line reports the choice as `profile pr (auto: CI is set)`. reeval exits with code 2 and lists the profiles in the `reeval.config.ts` file when no profile defines the requested name.
 
 ## Limit a profile
 
@@ -101,16 +111,6 @@ Narrow it with --tag or --runs, or raise the budget.
 ```
 
 When `budget.duration` stops a run, reeval records the status as `budget`.
-
-## Pick a default profile
-
-The `defaultProfile` option chooses a profile when neither `--profile` nor `REEVAL_PROFILE` names one. In the `reeval.config.ts` file, make pull-request runs the default in CI:
-
-```ts title="reeval.config.ts"
-  defaultProfile: { ci: 'pr' },
-```
-
-reeval picks `defaultProfile.ci` when the `CI` variable is set, else `defaultProfile.local`, else no profile. The plan line reports the choice as `profile pr (auto: CI is set)`, or `no profile`. reeval exits with code 2 and lists the profiles in the `reeval.config.ts` file when no profile defines the requested name.
 
 ## Reference
 
