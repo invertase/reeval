@@ -86,7 +86,8 @@ class Host:
         self._cond = threading.Condition()
         self._write = threading.Lock()
         threading.Thread(target=self._pump, daemon=True).start()
-        threading.Thread(target=self._drain, daemon=True).start()
+        self._drainer = threading.Thread(target=self._drain, daemon=True)
+        self._drainer.start()
         self.hello = self.wait(lambda m: m.get("t") == "hello")
         if not collect:
             return
@@ -169,7 +170,10 @@ class Host:
         """Closes stdin as reeval does when it exits, and waits for the runner to end."""
         assert self.proc.stdin is not None
         self.proc.stdin.close()
-        return self.proc.wait(timeout=timeout)
+        code = self.proc.wait(timeout=timeout)
+        # The process can exit before the drain thread has read its last stderr.
+        self._drainer.join(timeout)
+        return code
 
     def kill(self) -> None:
         if self.proc.poll() is None:
