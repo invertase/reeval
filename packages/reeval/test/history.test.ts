@@ -849,10 +849,11 @@ describe('what a record says about comparability', () => {
     runs = 1,
     tags = "'a'",
     sibling = 'write other.txt',
+    extra = '',
   } = {}) => `import { evaluate, expect } from 'reeval'
 import { prompt } from './helpers.ts'
 const unused = 1
-evaluate('agent', { revision: ${revision}, runs: ${runs}, tags: [${tags}] }, async (c) => {
+evaluate('agent', { revision: ${revision}, runs: ${runs}, tags: [${tags}]${extra} }, async (c) => {
   await c.send(${prompt})
   expect(await c.judge('Did it write hello.txt?')).toPass()
 })
@@ -914,7 +915,9 @@ evaluate('sibling', async (c) => {
 
     await write(importing({ prompt: "prompt + '!'" }))
     assert.deepEqual(await agentRow(p.dir), ['drift', ['body changed']])
-    await write(importing({ runs: 2 }))
+    await write(importing({ runs: 2, extra: ", timeout: '10m'" }))
+    assert.deepEqual(await agentRow(p.dir), ['same', []], 'runs and timeout change nothing')
+    await write(importing({ extra: ", pin: ['harness']" }))
     const [status, changes] = await agentRow(p.dir)
     assert.equal(status, 'drift')
     assert.ok((changes as string[]).includes('options changed'), String(changes))

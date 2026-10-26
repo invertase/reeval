@@ -1,6 +1,6 @@
 import { evaluate, group } from 'reeval'
 
-group('versioned', { revision: 2 }, () => {
+group('versioned', { revision: 2, runs: 2, timeout: '2m' }, () => {
   evaluate('inherits', async () => {})
   evaluate('overrides', { revision: 'v3' }, async () => {})
 })

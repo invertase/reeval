@@ -48,7 +48,7 @@ The `sources` part is the same in TypeScript and Python. It hashes four things, 
 | Hashed | Read as |
 |---|---|
 | The eval's body | Its function's source text as the file has it: `fn.toString()` mapped back through the loader's source map in TypeScript, `inspect.getsource(fn)` from `def` on in Python |
-| Its options | Its own and its groups', keys sorted; each harness, sandbox, environment and judge model by its id. `tags`, `gate` and `revision` are left out |
+| Its options | Its own and its groups', keys sorted; each harness, sandbox, environment and judge model by its id. `tags`, `runs`, `timeout`, `gate` and `revision` are left out, since they don't change what an attempt measures or have their own part |
 | Its case | The `evaluate.each` case's data, as JSON with sorted keys; a function in it is its source |
 | `revision` | As written: `2` and `'2'` differ |
 

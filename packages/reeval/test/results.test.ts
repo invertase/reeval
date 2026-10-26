@@ -468,12 +468,18 @@ describe("an eval's source", () => {
     assert.equal(canonicalJson({ env }), '{"env":{"environment":"skilled"}}')
   })
 
-  test('the options hash leaves out tags, revision and gate, and reads harnesses and sandboxes by id', () => {
-    const base = optionsHash([{ runs: 2 }])
-    assert.equal(optionsHash([{ runs: 2, tags: ['slow'], revision: 3, gate: 'all' }]), base)
-    assert.equal(optionsHash([{}, { runs: 2 }]), base, 'an option-less group adds nothing')
-    assert.notEqual(optionsHash([{ runs: 3 }]), base, 'twin: another option changes it')
-    assert.notEqual(optionsHash([{ runs: 2 }, { runs: 2 }]), base, 'a group level is its own')
+  test('the options hash leaves out tags, runs, timeout, revision and gate, and reads harnesses and sandboxes by id', () => {
+    const base = optionsHash([{ pin: ['harness'] }])
+    const unhashed = { tags: ['slow'], runs: 5, timeout: '2m', revision: 3, gate: 'all' } as const
+    assert.equal(optionsHash([{ pin: ['harness'], ...unhashed }]), base)
+    assert.equal(optionsHash([{}, { pin: ['harness'] }]), base, 'an option-less group adds nothing')
+    assert.equal(optionsHash([{ runs: 2 }, { pin: ['harness'] }]), base, "a group's runs too")
+    assert.notEqual(optionsHash([{ pin: ['runs'] }]), base, 'twin: another option changes it')
+    assert.notEqual(
+      optionsHash([{ pin: ['harness'] }, { pin: ['harness'] }]),
+      base,
+      'a group level is its own',
+    )
     const at = (dir: string) => ({
       sandbox: { kind: 'docker' as const, dockerfile: join(dir, 'docker', 'Dockerfile') },
     })

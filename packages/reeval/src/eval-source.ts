@@ -1,8 +1,8 @@
 // What an eval's `sources` fingerprint part covers, the same in every language: the eval's own
 // body (its function's source text), its declared options and its enclosing groups' (`tags`,
-// `revision` and `gate` aside), an `evaluate.each` case's data, and its `revision`. Nothing else in
-// the file is read: helpers, constants outside the body, fixtures and data it reads are the
-// author's to mark by bumping `revision`. Packages are covered by the recorded lockfiles.
+// `runs`, `timeout`, `revision` and `gate` aside), an `evaluate.each` case's data, and its
+// `revision`. Nothing else in the file is read: helpers, constants outside the body, fixtures and
+// data it reads are the author's to mark by bumping `revision`. Packages are covered by the recorded lockfiles.
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { originalText } from './engine/loader.ts'
@@ -19,8 +19,12 @@ import type {
   SandboxDescriptor,
 } from './types.ts'
 
-/** Kept out of the options hash: `tags` (selection), `revision`'s own part, and the gate, which compare reads as a policy change. */
-const UNHASHED = new Set(['tags', 'revision', 'gate'])
+/**
+ * Kept out of the options hash: `tags` (selection), `runs` and `timeout` (how much and how long,
+ * not what an attempt measures), `revision`'s own part, and the gate, which compare reads as a
+ * policy change.
+ */
+const UNHASHED = new Set(['tags', 'runs', 'timeout', 'revision', 'gate'])
 
 /**
  * The `sources` fingerprint part. An attempt without a source (one kept from a record that had
