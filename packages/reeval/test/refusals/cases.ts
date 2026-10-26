@@ -1686,7 +1686,10 @@ environment:
     ['route: cursor on openrouter alone', route([OPENROUTER], cursor({ model: 'composer-2.5' }))],
     ['route: antigravity on openrouter alone', route([OPENROUTER], antigravity({ model: 'm' }))],
     ['route: fx on openrouter alone', route([OPENROUTER], fx({ model: 'gpt-5.5' }))],
-    ['route: pi on openrouter alone', route([OPENROUTER], pi({ model: 'gemini-3.8-flash' }))],
+    [
+      'route: pi with effort on a gemini model on openrouter',
+      route([OPENROUTER], pi({ model: 'gemini-3.8-flash', effort: 'low' })),
+    ],
     ['route: claude code on openrouter', route([OPENROUTER], claudeCode({ model: 'm' }))],
     ['route: opencode on openrouter', route([OPENROUTER], opencode({ model: 'anthropic/m' }))],
     [

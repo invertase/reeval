@@ -73,9 +73,8 @@ export const PI_ENDPOINTS = [
 export const PI_MODELS_FILE = `${PI_AGENT_DIR}/models.json`
 
 /**
- * An AI gateway pi reaches a Gemini model through, as a pi provider on the gateway's OpenAI-compatible
- * Chat Completions API: the key, sent as a Bearer token, and the `providerOptions` keys its
- * native Gemini `thinkingConfig` goes under.
+ * An AI gateway pi reaches a model through, as a pi provider on the gateway's OpenAI-compatible
+ * Chat Completions API, with the key sent as a Bearer token.
  */
 export type PiGateway = {
   /** For messages: `Vercel AI Gateway`. */
@@ -85,7 +84,12 @@ export type PiGateway = {
   readonly credentialEnv: string
   /** The Chat Completions base URL, ending `/v1`. */
   readonly baseUrl: string
-  readonly upstreams: readonly string[]
+  /**
+   * The `providerOptions` keys a Gemini model's native `thinkingConfig` goes under, in a provider
+   * of reeval's that each turn writes to `models.json`. Unset, `id` is a provider pi has built in,
+   * which runs the model from pi's own catalog for it.
+   */
+  readonly upstreams?: readonly string[]
 }
 
 /**
@@ -98,6 +102,18 @@ export const PI_AI_GATEWAY: PiGateway = {
   credentialEnv: 'AI_GATEWAY_API_KEY',
   baseUrl: 'https://ai-gateway.vercel.sh/v1',
   upstreams: ['google', 'vertex'],
+}
+
+/**
+ * OpenRouter, on pi's own `openrouter` provider: its catalog's ids name their provider
+ * (`google/gemini-3.8-flash`), and a Gemini 3 model's thinking level goes as OpenRouter's
+ * `reasoning.effort`, which OpenRouter sends Gemini as the same level.
+ */
+export const PI_OPENROUTER: PiGateway = {
+  name: 'OpenRouter',
+  id: 'openrouter',
+  credentialEnv: 'OPENROUTER_API_KEY',
+  baseUrl: 'https://openrouter.ai/api/v1',
 }
 
 /** The model call pi makes on a {@link PiGateway}: Chat Completions, which it streams. */
@@ -123,7 +139,8 @@ export type PiHarnessSettings = {
   readonly auth: HarnessV1AuthenticationEnvironment
   /**
    * Run the model on this gateway rather than Gemini's API: a model is the gateway's id
-   * (`google/gemini-3.8-flash`) of a Gemini model in pi's catalog that takes a thinking level.
+   * (`google/gemini-3.8-flash`), of a Gemini model in pi's catalog that takes a thinking level, or,
+   * on a provider pi has built in, of a model in pi's catalog for it.
    */
   readonly gateway?: PiGateway
   /** MCP servers by name, written to pi's `mcp.json` with their tools declared to the model. */
@@ -329,7 +346,7 @@ async function startSession(
     : { [credential]: sandboxKey ?? '', PI_OFFLINE: '1' }
   const bootstrapDir = posix.join(stateDir, PI_BOOTSTRAP_DIR)
   const modelsScript = posix.join(dataDir, 'gateway-models.mjs')
-  if (gateway) {
+  if (gateway?.upstreams) {
     await sandbox.writeTextFile({
       path: modelsScript,
       content: await piGatewayModelsScript(),
@@ -337,7 +354,7 @@ async function startSession(
     })
   }
   const writeModels = (model: string) =>
-    gateway
+    gateway?.upstreams
       ? [
           'node',
           ...[modelsScript, bootstrapDir, posix.join(home, PI_MODELS_FILE)],

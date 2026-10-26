@@ -569,14 +569,13 @@ describe('OpenRouter routes', () => {
   const call = (path: string, extra: object = {}) =>
     ({ method: 'POST', host: 'openrouter.ai', path, status: 200, ...extra }) as never
 
-  test('it serves Claude Code, Codex, Goose, OpenCode and Grok Build, and says why not the rest', () => {
-    const served = ['claude-code', 'codex', 'goose', 'opencode', 'grok-build']
+  test('it serves Claude Code, Codex, Goose, OpenCode, Grok Build and pi, and says why not the rest', () => {
+    const served = ['claude-code', 'codex', 'goose', 'opencode', 'grok-build', 'pi']
     assert.deepEqual(Object.keys(OPENROUTER_GATEWAY.routes).sort(), [...served].sort())
     for (const [kind, why] of [
       ['cursor', /Cursor's agent only calls Cursor's own API/],
       ['antigravity', /OpenRouter has no Gemini API/],
       ['fx', /fx reaches models only on Vercel AI Gateway or OpenAI's API/],
-      ['pi', /pi reaches a Gemini model on OpenRouter only through Chat Completions/],
     ] as const) {
       const h = { kind, model: kind === 'fx' ? 'gpt-4.1' : 'm' } as HarnessDescriptor
       assert.throws(() => resolve(list('openrouter'), h), why, kind)
@@ -606,7 +605,7 @@ describe('OpenRouter routes', () => {
     assert.equal(anthropicOnOpenRouter('anthropic/claude-x'), 'anthropic/claude-x')
   })
 
-  test("Codex, Goose and Grok Build name their provider in the id, on OpenRouter's API paths", () => {
+  test("Codex, Goose, Grok Build and pi name their provider in the id, on OpenRouter's API paths", () => {
     for (const [h, path, id] of [
       [codex, '/api/v1/responses', 'openai/gpt-5.4-mini'],
       [
@@ -615,6 +614,11 @@ describe('OpenRouter routes', () => {
         'google/gemini-3-flash',
       ],
       [{ kind: 'grok-build', model: 'grok-4.6' }, '/api/v1/chat/completions', 'x-ai/grok-4.6'],
+      [
+        { kind: 'pi', model: 'gemini-3.8-flash' },
+        '/api/v1/chat/completions',
+        'google/gemini-3.8-flash',
+      ],
     ] as const) {
       const agent = onOpenRouter(h as HarnessDescriptor)
       assert.equal(agent.credential, 'OPENROUTER_API_KEY', h.kind)
@@ -648,6 +652,7 @@ describe('OpenRouter routes', () => {
       ['goose', 'google/gemini-3-flash'],
       ['codex', 'openai/gpt-5.4-mini'],
       ['grok-build', 'x-ai/grok-4.6'],
+      ['pi', 'google/gemini-3.8-flash'],
     ] as const) {
       const descriptor = { kind, model, gateway: 'openrouter' } as never
       const agent = agentFor(descriptor)
@@ -697,6 +702,7 @@ describe('OpenRouter routes', () => {
       { kind: 'goose', model: 'gemini-3.8-flash' },
       { kind: 'opencode', model: 'google/gemini-3.8-flash' },
       { kind: 'grok-build', model: 'grok-4.6' },
+      { kind: 'pi', model: 'gemini-3.8-flash' },
     ]) {
       const high = { ...h, effort: 'high' } as HarnessDescriptor
       assert.equal(resolve(list('openrouter'), high).name, 'openrouter', high.kind)

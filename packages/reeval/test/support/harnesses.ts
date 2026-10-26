@@ -53,6 +53,7 @@ export type HarnessRow = {
     | 'codex-openrouter'
     | 'opencode-openrouter'
     | 'goose-openrouter'
+    | 'pi-openrouter'
     | 'grok-build-openrouter'
   /**
    * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
@@ -655,6 +656,24 @@ export const harnesses: HarnessRow[] = [
       "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
     servedModel: /gemini-3\.8-flash/,
     wireModel: /gemini-3\.8-flash/,
+    upstream: true,
+    effort: { value: 'low', asked: /^reasoning\.effort=low$/ },
+  },
+  {
+    // pi on OpenRouter: pi's own openrouter provider (Chat Completions, a Bearer key), the model
+    // as google/<id> from pi's catalog for OpenRouter, each thinking level as reasoning.effort.
+    id: 'pi-openrouter',
+    harness: 'pi',
+    gateway: 'openrouter',
+    model: 'gemini-3.8-flash',
+    key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['openrouter.ai'],
+    apiHost: 'openrouter.ai',
+    tokens: true,
+    servedModel: /^google\/gemini-3\.8-flash$/,
+    wireModel: /^google\/gemini-3\.8-flash$/,
     upstream: true,
     effort: { value: 'low', asked: /^reasoning\.effort=low$/ },
   },

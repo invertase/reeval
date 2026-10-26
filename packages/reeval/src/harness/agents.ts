@@ -1067,11 +1067,13 @@ export const AGENTS: Record<AgentKind, Agent> = {
       (await import('@reeval/harness-pi')).createPi({
         ...(auth[VERCEL_KEY]
           ? { auth, gateway: (await import('@reeval/harness-pi')).PI_AI_GATEWAY }
-          : {
-              // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
-              auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
-              ...(vertex ? { vertex } : {}),
-            }),
+          : auth[OPENROUTER_KEY]
+            ? { auth, gateway: (await import('@reeval/harness-pi')).PI_OPENROUTER }
+            : {
+                // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
+                auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
+                ...(vertex ? { vertex } : {}),
+              }),
         ...(descriptor.kind === 'pi' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers ? { mcpServers: mcpServers as Record<string, PiMcpServer> } : {}),
         requireCredentialBrokering: true,

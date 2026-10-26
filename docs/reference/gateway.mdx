@@ -28,7 +28,7 @@ The default is `[direct()]`: every harness calls its own provider with its own k
 |---|---|---|---|
 | `direct()` from `'{{ pkg }}/gateway'` | `direct` or `{ direct: {} }` | every harness; judge and analysis models whose provider reeval calls directly (`anthropic/*`, `google/*`, `openai/*`, `typesafe-ai/*`) | each harness's or provider's own, such as `CURSOR_API_KEY` |
 | `vercel()` from `'{{ pkg }}/gateway'` | `vercel` or `{ vercel: {} }` | Claude Code, Codex, Goose, OpenCode, fx, Grok Build, pi; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe-ai/jev-1.14.0` | `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN` |
-| `openrouter({ fallbacks })` from `'{{ pkg }}/gateway'` | `openrouter` or `{ openrouter: { fallbacks: true } }` | Claude Code, Codex, Goose, OpenCode, Grok Build; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe/jev-1.14` | `OPENROUTER_API_KEY` |
+| `openrouter({ fallbacks })` from `'{{ pkg }}/gateway'` | `openrouter` or `{ openrouter: { fallbacks: true } }` | Claude Code, Codex, Goose, OpenCode, Grok Build, pi; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe/jev-1.14` | `OPENROUTER_API_KEY` |
 | `vertex({ project?, location?, regions? })` from `'{{ pkg }}/gateway'` | `vertex` or `{ vertex: { project: p } }` | Claude Code, Antigravity, OpenCode, Goose and pi ([below](#vertex-ai)); `google/*` and `anthropic/*` judge and analysis models | Application Default Credentials |
 
 ## Vercel AI Gateway
@@ -74,10 +74,13 @@ One key, `OPENROUTER_API_KEY`, serves every harness and model on `openrouter()`.
 | Goose | its `openrouter` provider, a Bearer key | `POST /api/v1/chat/completions`, `GET /api/v1/models` | `google/` prefixed |
 | OpenCode | its `openrouter` provider, a Bearer key | `POST /api/v1/chat/completions` | `<provider>/<model>` as written, run as `openrouter/<provider>/<model>` |
 | Grok Build | a `[model."x-ai/<id>"]` table on OpenRouter's Chat Completions API, keyed by `env_key` | `POST /api/v1/chat/completions` | `x-ai/` prefixed |
+| pi | its own `openrouter` provider, a Bearer key | `POST /api/v1/chat/completions` | `google/` prefixed; a Gemini model in pi's own catalog for OpenRouter |
 
 An id that already names a provider (`anthropic/claude-sonnet-4.5`) runs as written. Every response names the served model and the upstream provider that served it, and the gateway reads both, with the call's `usage.cost`.
 
-Cursor, Antigravity, fx and pi don't run on `openrouter()`, and fall through to the next entry. `effort` runs as [Effort on a gateway](#effort-on-a-gateway) says.
+pi takes its model's limits, prices and thinking levels from its own catalog for OpenRouter, and sends each level as OpenRouter's `reasoning.effort`; a model outside the catalog fails the attempt.
+
+Cursor, Antigravity and fx don't run on `openrouter()`, and fall through to the next entry. `effort` runs as [Effort on a gateway](#effort-on-a-gateway) says.
 
 ## Effort on a gateway
 
@@ -88,7 +91,7 @@ Cursor, Antigravity, fx and pi don't run on `openrouter()`, and fall through to 
 | Goose | refused: its `vercel_ai_gateway` provider sends none | a Gemini model: OpenRouter's `reasoning.effort`, which it sends Gemini as its thinking level |
 | OpenCode | a Gemini model: Gemini's `thinkingConfig` under `providerOptions` | a Gemini model: OpenRouter's `reasoning.effort` |
 | Grok Build | `reasoning_effort`, which xAI's models take | the same |
-| pi | Gemini's `thinkingConfig` under `providerOptions` | pi doesn't run there |
+| pi | Gemini's `thinkingConfig` under `providerOptions` | a Gemini model: OpenRouter's `reasoning.effort` |
 
 The plan refuses `effort` for a harness and model the table doesn't cover, since nothing checks the model gets it as its own setting, and such a cell falls through to the next entry. fx takes no `effort`. Each request's reasoning settings are in `.reeval/debug` (see [Debug data](/reference/debug-data)).
 

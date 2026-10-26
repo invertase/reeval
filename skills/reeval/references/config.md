@@ -93,9 +93,9 @@ either form (`claude-haiku-4-5-20251001` is sent as Vertex's `claude-haiku-4-5@2
 string works through `[vertex(), direct()]`; `google/*` and `anthropic/*` judge and analysis models run there
 too. `reeval doctor --online` checks the token, the project's Vertex AI API and that Vertex serves each model the config sends there (Claude needs enabling in Model Garden). Default `[direct()]`:
 no gateway, so the judge, analysis and captures take only their provider's own key.
-`gateway: [openrouter(), direct()]` runs Claude Code, Codex, Goose, OpenCode and Grok Build on
-OpenRouter with one `OPENROUTER_API_KEY` (Cursor, Antigravity, fx, pi, and `effort` on any but
-Codex, fall through). Every OpenRouter call records its upstream provider and cost
+`gateway: [openrouter(), direct()]` runs Claude Code, Codex, Goose, OpenCode, Grok Build and pi on
+OpenRouter with one `OPENROUTER_API_KEY` (Cursor, Antigravity, fx, and `effort` on Claude Code or
+on Goose or OpenCode with a model other than Gemini, fall through). Every OpenRouter call records its upstream provider and cost
 (`attempts[].upstreams`, `reportedCostUsd`; a judgement's `upstream`, `costUsd`).
 `openrouter({ fallbacks: true })` lets reeval's own calls (judge, analysis, captures) fail over
 between upstreams; the agents' calls take OpenRouter's routing whatever it says. Write OpenCode
