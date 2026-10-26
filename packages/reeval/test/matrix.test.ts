@@ -109,6 +109,35 @@ describe('the matrix check (twins: it can fail)', () => {
     ])
   })
 
+  test('a parameterised fixture counts a row per harness; its directory names them all', () => {
+    const rows = {
+      ...sources,
+      fixtures: [
+        ...sources.fixtures,
+        { dir: 'harness/rules:pi', of: 'harness/rules', tiers: ['fake'], canary: true },
+        { dir: 'harness/rules:codex', of: 'harness/rules', tiers: ['fake'], canary: true },
+      ],
+    }
+    const m = buildMatrix(
+      [
+        everything,
+        feature({ id: 'y', fixtures: ['harness/rules'] }),
+        feature({ id: 'z', fixtures: ['harness/rules:pi'] }),
+      ],
+      rows,
+    )
+    assert.deepEqual(m.problems, [])
+    assert.deepEqual(m.rows[1]?.cells.fake, { count: 2, canaries: 2 })
+    assert.deepEqual(m.rows[2]?.cells.fake, { count: 1, canaries: 1 })
+    const unclaimed = buildMatrix(
+      [everything, feature({ id: 'z', fixtures: ['harness/rules:pi'] })],
+      rows,
+    )
+    assert.deepEqual(unclaimed.problems, [
+      'fixture harness/rules:codex covers no feature: add it to an entry in inventory.ts',
+    ])
+  })
+
   test('a fixture or plan case that covers no feature fails', () => {
     const m = buildMatrix([feature({ fixtures: ['skills/a'] })], sources)
     assert.deepEqual(m.problems, [

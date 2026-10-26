@@ -129,7 +129,7 @@
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | A refused harness key names its variable and how to fix it | ✓ 7 | — | — | — | — | — |
 | Real Cursor, end to end | — | — | ● 1 | ● 2 | — | ● 5 |
-| `claudeCode()`: its image, rules, skills and MCP shape | ✓ 1 | ✓ 1 | ● 2 | ● 3 | — | — |
+| `claudeCode()`: its image, rules, skills and MCP shape | ✓ 1 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `antigravity()`: its image, rules, skills, MCP shape and brokered Gemini key | ✓ 2 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `opencode()`: OpenCode 2 over ACP on a brokered provider's key, its image, config, rules, skills, tool names, web search and config MCP servers | ✓ 13 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `opencode({ model: '<provider>/<model>' })`: OpenCode on any provider whose key goes in a header on known hosts, with only that provider's key brokered, its hosts automatic and its served model recorded; the others refused at plan time | ✓ 15 | ✓ 2 | — | — | — | ● 1 |

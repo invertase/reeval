@@ -8,8 +8,11 @@ export type Tier = (typeof TIERS)[number]
 const FIXTURE_TIERS: readonly string[] = ['fake', 'docker', 'podman', 'real']
 
 export type Sources = {
-  /** The rows of features.test.ts, and whether each directory has a canary. */
-  fixtures: { dir: string; tiers: readonly string[]; canary: boolean }[]
+  /**
+   * The rows of features.test.ts, and whether each directory has a canary. A parameterised
+   * fixture's rows are named `<dir>:<harness>`, with `of` their directory.
+   */
+  fixtures: { dir: string; of?: string; tiers: readonly string[]; canary: boolean }[]
   /** plan.test.ts's cases, as `dir/name`. */
   planCases: string[]
   /** A test file's source, by its path under packages/; null when it doesn't exist. */
@@ -98,7 +101,8 @@ export function checkEvalOptionCoverage(
 
 export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Matrix {
   const problems: string[] = []
-  const fixtures = new Map(sources.fixtures.map((f) => [f.dir, f]))
+  /** The rows an inventory name covers: one row, or every row of a parameterised directory. */
+  const rowsOf = (name: string) => sources.fixtures.filter((f) => f.dir === name || f.of === name)
   const planCases = new Set(sources.planCases)
   const ids = new Set<string>()
   const rows = inventory.map((feature): MatrixRow => {
@@ -110,18 +114,17 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
       Cell
     >
     for (const dir of feature.fixtures ?? []) {
-      const f = fixtures.get(dir)
-      if (!f) {
-        problems.push(`${at}: fixture ${dir} isn't in features.test.ts`)
-        continue
-      }
-      for (const tier of f.tiers) {
-        if (!FIXTURE_TIERS.includes(tier)) {
-          problems.push(`${at}: fixture ${dir} lists tier ${tier}, which the matrix doesn't know`)
-          continue
+      const rows = rowsOf(dir)
+      if (!rows.length) problems.push(`${at}: fixture ${dir} isn't in features.test.ts`)
+      for (const f of rows) {
+        for (const tier of f.tiers) {
+          if (!FIXTURE_TIERS.includes(tier)) {
+            problems.push(`${at}: fixture ${dir} lists tier ${tier}, which the matrix doesn't know`)
+            continue
+          }
+          cells[tier as Tier].count++
+          if (f.canary) cells[tier as Tier].canaries++
         }
-        cells[tier as Tier].count++
-        if (f.canary) cells[tier as Tier].canaries++
       }
     }
     for (const c of feature.plan ?? []) {
@@ -168,7 +171,7 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
   const claimed = (key: 'fixtures' | 'plan', name: string) =>
     inventory.some((f) => f[key]?.includes(name))
   for (const f of sources.fixtures)
-    if (!claimed('fixtures', f.dir))
+    if (!claimed('fixtures', f.dir) && !(f.of && claimed('fixtures', f.of)))
       problems.push(`fixture ${f.dir} covers no feature: add it to an entry in inventory.ts`)
   for (const b of sources.contract)
     if (!inventory.some((f) => f.real?.includes(`contract › ${b.name}`)))
