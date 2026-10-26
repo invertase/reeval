@@ -64,7 +64,7 @@ For more information about overriding an option, see [Group evaluations](/write/
   Helpers from `{{ pkg }}/gateway`: `direct()` is each provider's own key, `vercel()` is Vercel AI Gateway, and `openrouter()` is OpenRouter. The default is `[direct()]`. Each harness and judge model takes the first gateway that can serve it. reeval refuses a gateway listed twice, and a plan where no listed gateway can serve a model.
 </Property>
 
-A harness or a judge that names its own `gateway` skips the list's fallback. For more information about models, see [Models](/agents/model#route-models-through-a-gateway).
+A harness or a judge that names its own `gateway` skips the list's fallback. For more information about pinning a gateway, see [Route models through a gateway](/agents/gateways#pin-one-gateway).
 
 ## `harness`
 

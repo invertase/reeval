@@ -45,6 +45,10 @@ For more information about supported providers, see [the `opencode` harness refe
   A model ID with no provider prefix. Key: `XAI_API_KEY`.
 </Property>
 
+<Property name="fx" type="string" required>
+  A Vercel AI Gateway ID, `<provider>/<model>`, on `AI_GATEWAY_API_KEY`, or a bare OpenAI model ID on `OPENAI_API_KEY`. `fx` takes no `effort`.
+</Property>
+
 ## `effort`
 
 `effort` is a reasoning-effort value the harness's own CLI or SDK takes. reeval passes it through, records it as `effort` on the cell, and names the cell `<kind>:<model>[effort=<value>]`. Only `claudeCode` checks the value at plan time.
@@ -81,55 +85,15 @@ For more information about supported providers, see [the `opencode` harness refe
   The harness sets `default_reasoning_effort` to `low`, `medium`, or `high` for a model that accepts it.
 </Property>
 
-## Route models through a gateway
+For more information about sending model calls through one gateway key, see [Route models through a gateway](/agents/gateways).
 
-A gateway serves your harness's and judge's model calls on one key. In the `reeval.config.ts` file, list `vercel()` in a profile's `gateway`:
+## Check the model that served
 
-```ts title="reeval.config.ts"
-import { vercel } from '{{ pkg }}/gateway'
-// ...
-  vercel: {
-    defaults: {
-      harness: claudeCode({ model: 'claude-sonnet-5' }),
-      sandbox: docker(),
-    },
-    judge: { model: 'typesafe-ai/jev-1.14.0' },
-    gateway: [vercel()],
-  },
-```
+The record keeps what the provider served beside the configured `model` and `effort`:
 
-The key is `AI_GATEWAY_API_KEY`. With `vercel()` alone in the list, a model Vercel AI Gateway can't serve stops the plan. Add `direct()` after it to fall back to the provider's own key. `openrouter()` routes through OpenRouter on `OPENROUTER_API_KEY`.
-
-<Property name="gateway" type="'direct' | 'vercel' | 'openrouter'" optional>
-  On a harness factory or `judge`, the one gateway its calls go through. It must be in the config's `gateway` list, and it skips the list's fallback.
-</Property>
-
-For a runnable project, see [`with-vercel-gateway`](https://github.com/invertase/reeval/tree/main/examples/with-vercel-gateway). For more information about the list, see [the `gateway` option](/reference/options#gateway).
-
-## `turns[].model`
-
-The record keeps the model that served each turn beside the configured `model`.
-
-Each turn's `model` holds the corresponding served value. The `cursor` harness also includes parameters, such as `<model>[fast=false]`.
-
-## `servedModels`
-
-The attempt's `servedModels` is null for `cursor` and `claudeCode` because their API requests name no model.
-
-The egress gateway reads the request URL into `servedModels` for `antigravity`, `goose`, `pi`, and `opencode` on a `google/` model. The harness sends `<model>-low` but the provider serves `<model>`.
-
-The gateway reads the API response into `servedModels` for `codex`, `grokBuild`, and `opencode` on another provider.
-
-## `servedEffort`
-
-The `codex` response also names the resolved effort, such as `<model>[effort=medium]`. The attempt records it as `servedEffort`.
-
-## `harnesses[].resolvedModels`
-
-The run record's `harnesses[]` entries collect those served models as `resolvedModels`.
-
-## `harnesses[].resolvedEffort`
-
-The run record's `harnesses[]` entries collect those effort suffixes as `resolvedEffort`.
+- Each turn's `model` holds the served model. The `cursor` harness adds parameters, such as `<model>[fast=false]`.
+- The attempt's `servedModels` lists the models the egress gateway saw. It reads the request URL for `antigravity`, `goose`, `pi`, and `opencode` on a `google/` model, so a request for `<model>-low` records `<model>`. It reads the API response for `codex`, `grokBuild`, and `opencode` on another provider. It is null for `cursor` and `claudeCode`, whose API requests name no model.
+- The attempt's `servedEffort` is the value after `effort=` in a served label, such as `medium` from Codex's `<model>[effort=medium]`.
+- The run record's `harnesses[]` entries collect these as `resolvedModels` and `resolvedEffort`.
 
 For more information about every run record field, see [Run record reference](/reference/record).
