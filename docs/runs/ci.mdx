@@ -70,11 +70,7 @@ In the `.github/workflows/reeval.yml` file, add this step to commit the history 
           git push
 ```
 
-The default `record` value is `'ci'`. It copies each finished run into the history directory when the `CI` variable is set to anything other than `false`. With the default include patterns, that directory is `evals/.history`.
-
-When that copy finishes, reeval prints a line that ends with `Commit it with git`.
-
-The copy includes a run whose evaluations fail. reeval leaves an interrupted run in the `.reeval/runs` directory. A run that `budget.duration` stops is recorded with status `budget`, and a later `reeval compare` skips a run with that status when it picks a base.
+With the default `record: 'ci'`, reeval copies each finished run into `evals/.history` when the `CI` variable is set ([Record automatically](/runs/recording#record-automatically)). The copy includes a run whose evaluations fail. reeval leaves an interrupted run in the `.reeval/runs` directory. A run that `budget.duration` stops is recorded with status `budget`, and a later `reeval compare` skips a run with that status when it picks a base.
 
 The commit step runs when `reeval run` passes or fails. `if: ${{ !cancelled() }}` skips it when the job is canceled.
 
@@ -92,11 +88,7 @@ In the `.github/workflows/reeval.yml` file, add these two steps. `reeval compare
         run: npx reeval compare --fail-on-regression
 ```
 
-The `reeval compare --fail-on-regression` command exits 1 when the diff says `regressed`, when an evaluation marked `new` fails, or when an evaluation marked `can't compare` fails. The gate ignores an evaluation whose only failures are attempts an interrupt cancels.
-
-With no earlier recorded run, `reeval compare` lists every evaluation as `new`, and the gate fails only when one of them fails.
-
-For more information about `regressed`, `new`, and `can't compare`, see [Regressions](/results/compare/past-runs).
+The gate fails when an evaluation `regressed`, or when a `new` or `can't compare` evaluation fails, so the first run with no earlier record fails only on a failing evaluation. For more information about those words, see [Compare with past runs](/results/compare/past-runs#fail-on-a-regression).
 
 </Step>
 </Steps>
