@@ -3,7 +3,7 @@ title: "Measure a skill"
 description: "See whether a skill helped your harness."
 ---
 
-You measure a skill by running one task on a baseline with no skill and a variant with the skill. The effect reads `helped`, `made it worse`, or `can't tell yet`.
+You measure a skill by running one task on a baseline with no skill and a variant with the skill. The effect reads `helped`, `made it worse`, or `can't tell yet`. For a runnable project, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
 
 ## Run one task with and without the skill
 
@@ -72,18 +72,6 @@ The prompt doesn't name the brand's color or fonts, so `brand orange` and `brand
 To also check that the variant loaded the skill, guard `toHaveCalledSkill` with `c.attempt.cell.role === 'variant'`, since the baseline has no skill to load ([Give the agent skills](/environments/skills#check-the-agent-used-the-skill)).
 
 </Step>
-<Step title="Require a minimum lift">
-
-In the `evals/brand.eval.ts` file, set `minLift` on the comparison. `compare.minLift` is the smallest lift you accept, from -1 to 1.
-
-```diff title="evals/brand.eval.ts"
--    compare: { variants: [withSkill] },
-+    compare: { variants: [withSkill], minLift: 0.25 },
-```
-
-A variant whose lift may be below `0.25` fails. Its row then reads `helped, not by minLift 25`. For more information about this gate, see [Gate on lift](/results/compare/lift#gate-on-lift).
-
-</Step>
 <Step title="Run the comparison">
 
 Run the evaluation with the harness named in the `reeval.config.ts` file:
@@ -110,9 +98,9 @@ pass             styles the page in Anthropic's brand
   +1 more passed
 ```
 
-`brand orange` and `brand fonts` are the rows that separate the cells. `links styles.css` passed on both, so it prints under `+1 more passed`. When the brand assertions pass on both sides, the harness already knows the brand, and this task can't show the skill. For a runnable project, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
+`brand orange` and `brand fonts` are the rows that separate the cells. `links styles.css` passed on both, so it prints under `+1 more passed`. When the brand assertions pass on both sides, the harness already knows the brand, and this task can't show the skill.
 
-For more information about the other gates, see [Measure lift against a baseline](/results/compare/lift). For more information about asking which attempt did better, see [Ask which did better](/results/compare/lift#ask-which-did-better).
+To fail the variant when its lift may be below a floor, set `compare.minLift` ([Gate on lift](/results/compare/lift#gate-on-lift)). For more information about the other gates, see [Measure lift against a baseline](/results/compare/lift). For more information about asking which attempt did better, see [Ask which did better](/results/compare/lift#ask-which-did-better).
 
 </Step>
 </Steps>
