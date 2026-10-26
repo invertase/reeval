@@ -3,63 +3,127 @@ title: "Core concepts"
 description: "Understand the nouns reeval uses to evaluate a coding agent."
 ---
 
-Each section defines one noun the reeval docs use. For more information about the code symbol behind each noun, see [Glossary](/reference/glossary).
+Each section defines one noun, in the order of [How reeval works](/#how-reeval-works): configuration, then evaluation, then results. For more information about the code symbol behind each noun, see [Glossary](/reference/glossary).
 
-## Run
+## Agent
 
-A run is one `reeval run` command and every attempt it starts. Each evaluation gets one cell per harness, environment, and sandbox. Each case repeats those cells, and the [`runs` option](/reference/options#runs) sets the attempts per cell.
-
-## Evaluation
-
-An evaluation is one `evaluate()` call in a `*.eval.ts` file beside the skill, docs, or tool it tests. The [evaluation](/evals/evaluate) gives the harness a task and checks what the agent did.
-
-## Harness
-
-A harness is the coding agent that does the task. The `harness` option identifies the [harness](/harnesses) that reeval starts in the sandbox, sends it each prompt, and records its messages and tool calls.
+An agent is a harness plus its model, such as `claude-code:claude-sonnet-5`. The `harness` option lists the [agents](/harnesses) an evaluation runs on, and reeval starts each one in its own sandbox.
 
 ## Environment
 
-An environment is what the harness gets in an attempt, such as skills, Model Context Protocol (MCP) servers, rules, files, setup commands, variables, and secrets. The `defineEnvironment()` function represents an [environment](/environments), including a comparison's control and variants.
+An environment is what the agent gets in an attempt, such as skills, Model Context Protocol (MCP) servers, rules, files, setup commands, variables, and secrets. In a comparison, each [environment](/environments) is the baseline or a variant.
+
+## Attempt
+
+An attempt is one try by one agent in one environment, and it ends with an outcome of pass, fail, infra error, cancelled, or skipped. Agents are non-deterministic, so one attempt proves little, and the [`runs` option](/reference/options#runs) sets how many attempts each agent and environment get.
 
 ## Sandbox
 
-A sandbox is the container an attempt runs in. The `sandbox` option identifies the [sandbox](/sandboxes) that holds the workspace, the harness, and whatever the environment adds.
+A sandbox is the container one attempt runs in, so a run spawns agents × environments × attempts sandboxes. It holds the agent, the environment, the task, and the workspace, and the `sandbox` option picks the [sandbox](/sandboxes) runtime.
+
+## Task
+
+The task is what the agent is asked to do, sent with `c.send(prompt)` in the [evaluation](/evals/evaluate)'s body. One task can take several prompts.
+
+## Workspace
+
+The workspace is the directory in the sandbox where the agent works. It starts from the environment's files or [repository](/environments/workspaces), and grading reads it after the agent finishes.
+
+### Artifacts
+
+Artifacts are what the agent leaves in the workspace: the files it wrote, the diff, and any screenshots from `c.capture()`.
+
+### Transcript
+
+A transcript is every message and tool call of an attempt, in order, saved in the `transcript.jsonl` file with the run. When an attempt fails, the [transcript](/results/debugging#read-a-transcript) shows what the agent did.
+
+## Assertion
+
+An assertion is a deterministic check written with `expect`, on a file, a command's result, a string, or a tool call. An attempt passes when all of its [assertions](/evals/checks) pass.
+
+## Judgment
+
+A judgment is an LLM verdict from `c.judge()` on a yes or no question about the agent's work. Wrapped as `expect(await c.judge(…)).toPass()`, a [judgment](/evals/judges) counts toward the attempt's outcome like an assertion.
+
+## Question
+
+A question reads across attempts after they end, set in the [`questions` option](/reference/options#questions). A pairwise question asks which of two attempts did better. Questions never change an outcome or the exit code.
+
+## Measures
+
+Six measures describe how an agent did in an environment across its attempts. The effort table prints the medians of tool calls, time, and tokens.
+
+### Pass rate
+
+Pass rate is the attempts that passed out of those counted, printed as `3 of 4`.
+
+### Tokens
+
+Tokens are the input and output tokens the agent used, where its harness reports them.
+
+### Tool calls
+
+Tool calls are how many tools the agent called in an attempt, printed as `tools`.
+
+### Turns
+
+A turn is the agent's reply to one `c.send()`, and an attempt can have several [turns](/evals/turns). Each turn records its final message, token usage, the model that served it, and the workspace diff.
+
+### Cost
+
+Cost is what the attempts' model calls cost. `reeval run --dry-run` estimates it from model prices, and a gateway that reports cost has it recorded.
+
+### Time
+
+Time is how long the agent took on an attempt, printed as `time`.
+
+## Comparison
+
+A [comparison](/evals/compare) runs one evaluation, through the `compare` option, on a baseline without your change and one or more variants with it.
+
+### Lift
+
+Lift is a variant against the baseline: the difference in pass rate on the same agent. Each variant reads `helped` or `made it worse` when the difference is [clear of chance](/evals/statistics), and `can't tell yet` below four counted attempts a side or when it's too close to call.
+
+### Past runs
+
+Past runs compare this run against earlier ones. `reeval compare` diffs two recorded runs and names each evaluation that [regressed](/results/regressions) or was fixed.
+
+## Analysis
+
+Analysis is what a language model writes about a run. It needs an [analysis model](/results/analysis#set-an-analysis-model) and never changes an outcome or the exit code.
+
+### Answers
+
+Answers are what the questions found, such as `won 3 of 4` for each side of a pairwise question.
+
+### Insights
+
+Insights are what the agent did and why, not only whether it passed. Beside them, Remarks flag problems with the evaluations themselves.
+
+## Evaluation
+
+An evaluation is one `evaluate()` call in a `*.eval.ts` file beside the skill, docs, or tool it tests. It gives the agent a task and grades the workspace with assertions and judgments.
+
+## Run
+
+A run is one `reeval run` command and every attempt it starts, across every evaluation, agent, and environment. Each case repeats those attempts.
+
+## Harness
+
+A harness is the coding agent's program, such as Claude Code or Codex. The `harness` option names it with a model, which makes an [agent](#agent).
+
+## Cell
+
+A cell is one agent, environment, and sandbox of an evaluation, keyed like `claude-code:claude-sonnet-5/-/docker`, where `-` means no environment. Each cell's [gate](/reference/options#gate) turns its attempts into its outcome, so the baseline and each variant pass or fail separately.
 
 ## Egress
 
 Egress is the hosts a sandbox can reach. A restricted policy leaves only the [gateway](/environments/egress).
 
-## Cell
-
-A cell is one harness, environment, and sandbox of an evaluation, keyed like `claude-code:claude-sonnet-5/-/docker`, where `-` means no environment. Each cell's [gate](/reference/options#gate) turns its attempts into its outcome, so a comparison's control and each variant pass or fail separately.
-
-## Attempt
-
-An attempt is one try at a cell in a fresh sandbox, and it ends with an outcome of pass, fail, infra error, cancelled, or skipped. Agents are non-deterministic, so one attempt proves little, and the [`runs` option](/reference/options#runs) sets how many attempts each cell gets.
-
-## Turn
-
-A turn is one `c.send(prompt)` and everything the harness does in reply. The turn holds the final message, the transcript, the token usage where the harness reports it, the model that served it, and the workspace diff; one attempt can have several [turns](/evals/turns).
-
-## Transcript
-
-A transcript is every message and tool call of an attempt, in order, saved in the `transcript.jsonl` file with the run. When an assertion fails, the [transcript](/results/debugging#read-a-transcript) shows what the agent did.
-
-## Assertion
-
-An assertion is an `expect` call on what an attempt produced, such as a file, a command's result, a tool call, or a [judge](/evals/judges)'s verdict. An attempt passes when all of its [assertions](/evals/checks) pass.
-
-## Comparison
-
-A [comparison](/evals/compare) runs one evaluation, through the `compare` option, on a control without your change and on one or more variants with it, then compares their pass rates. Each variant reads `helped` or `made it worse` when the difference is [clear of chance](/evals/statistics), and `can't tell yet` below four counted attempts a side or when the result is too close to call.
-
 ## Record
 
-A record is the saved result of a run, with every attempt's outcome, assertions, token usage, transcript, and diff. A scratch record lives in the `.reeval/runs/` directory, whereas [recording](/runs/recording) saves selected records beside the code they ran on.
-
-## Analysis
-
-Analysis is what a language model writes about a run, such as the insights that explain each evaluation's result beside the Remarks that flag problems with the evaluations themselves. Analysis needs an [analysis model](/results/analysis#set-an-analysis-model) and never changes an outcome or the exit code.
+A record is the saved result of a run, with every attempt's outcome, assertions, judgments, token usage, transcript, and diff. A scratch record lives in the `.reeval/runs/` directory, whereas [recording](/runs/recording) saves selected records beside the code they ran on.
 
 ## Profile
 
