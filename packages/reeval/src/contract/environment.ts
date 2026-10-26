@@ -27,86 +27,38 @@ export const NAME = /^[A-Za-z0-9][A-Za-z0-9._@+-]*$/
 
 export const sandboxDescriptorSchema = z.union([fakeSandboxSchema, dockerSandboxSchema])
 
-export const setupStepSchema = z
-  .union([
-    nonEmpty(),
-    z.strictObject({
-      run: nonEmpty().describe('The shell command.'),
-      timeout: durationSchema.optional().describe('Default 5m.'),
-      cwd: nonEmpty()
-        .optional()
-        .describe('Relative to the workspace, or absolute; default the workspace.'),
-    }),
-  ])
-  .describe(
-    'Runs in every attempt before the agent starts, with secrets, outside the eval timeout: a shell command, or `{ run, timeout?, cwd? }`.',
-  )
+export const setupStepSchema = z.union([
+  nonEmpty(),
+  z.strictObject({
+    run: nonEmpty(),
+    timeout: durationSchema.optional(),
+    cwd: nonEmpty().optional(),
+  }),
+])
 
-export const environmentSpecSchema = z
-  .strictObject({
-    sandbox: sandboxDescriptorSchema
-      .optional()
-      .describe(
-        "Where the attempt runs: `docker()` or `fakeSandbox()`. A child's `extend` / `extendEnvironment` replaces the parent's entirely when it sets one; install is not merged onto the parent image.",
-      ),
-    workspace: gitWorkspaceSchema
-      .optional()
-      .describe(
-        "The code the workspace starts as, before `files`, `rules` and `setup`; a child's replaces its parent's.",
-      ),
-    env: envVarsSchema
-      .optional()
-      .describe("Variables and secrets for the sandbox, merged by name over the parent's."),
-    egress: egressPolicySchema
-      .optional()
-      .describe("Replaces the inherited policy; an `extend` child's replaces its parent's."),
-    files: z
-      .record(z.string(), z.union([z.string(), hostFileSchema]))
-      .optional()
-      .describe('Workspace-relative, or `~/` for home.'),
-    rules: z
-      .union([z.string(), hostFileSchema])
-      .optional()
-      .describe(
-        "Project rules, written where the harness's agent reads them: `AGENTS.md`, or `CLAUDE.md` for Claude Code.",
-      ),
-    setup: z
-      .array(setupStepSchema)
-      .optional()
-      .describe(
-        "Shell commands run in every attempt before the agent starts; a child's run after its parent's.",
-      ),
-    skills: z.array(skillSourceSchema).optional().describe('Skills placed for the agent.'),
-    mcp: z
-      .record(z.string(), mcpServerSchema)
-      .optional()
-      .describe('MCP servers the agent gets, by name.'),
-    plugins: z
-      .array(pluginSourceSchema)
-      .optional()
-      .describe(
-        "Plugins in Claude Code's layout, made by the `plugin` helper; a child's replaces its parent's plugin of the same name.",
-      ),
-  })
-  .describe('What an eval runs in: the declarative, phased spec of one environment.')
+export const environmentSpecSchema = z.strictObject({
+  sandbox: sandboxDescriptorSchema.optional(),
+  workspace: gitWorkspaceSchema.optional(),
+  env: envVarsSchema.optional(),
+  egress: egressPolicySchema.optional(),
+  files: z.record(z.string(), z.union([z.string(), hostFileSchema])).optional(),
+  rules: z.union([z.string(), hostFileSchema]).optional(),
+  setup: z.array(setupStepSchema).optional(),
+  skills: z.array(skillSourceSchema).optional(),
+  mcp: z.record(z.string(), mcpServerSchema).optional(),
+  plugins: z.array(pluginSourceSchema).optional(),
+})
 
-export const environmentLayerSchema = z
-  .strictObject({
-    name: z.string().regex(NAME).describe('The name passed to `defineEnvironment` or `extend`.'),
-    spec: environmentSpecSchema.describe('The spec as that layer wrote it, before merging.'),
-  })
-  .describe('One environment in an `extend` chain.')
+export const environmentLayerSchema = z.strictObject({
+  name: z.string().regex(NAME),
+  spec: environmentSpecSchema,
+})
 
-export const environmentDataSchema = z
-  .strictObject({
-    kind: z.literal('environment'),
-    name: z
-      .string()
-      .regex(NAME)
-      .describe('The name it was defined or extended under, which names its cells.'),
-    layers: z.array(environmentLayerSchema).readonly().describe('Its `extend` chain, root first.'),
-  })
-  .describe('An `Environment` as data, as JSON carries it: without `extend` / `extendEnvironment`.')
+export const environmentDataSchema = z.strictObject({
+  kind: z.literal('environment'),
+  name: z.string().regex(NAME),
+  layers: z.array(environmentLayerSchema).readonly(),
+})
 
 export type _SameAsSchema = [
   Assert<Same<z.infer<typeof sandboxDescriptorSchema>, SandboxDescriptor>>,

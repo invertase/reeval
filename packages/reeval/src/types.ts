@@ -1,6 +1,7 @@
 import type { DeclaredSource } from './declaration.ts'
 import type { ArtifactLevel, FileRef, JudgeRetry, RecordMode } from './history/types.ts'
 
+/** More than zero and at most 596h: `90s`, `15m`, `1h`, or a number of milliseconds. */
 export type Duration = number | `${number}${'ms' | 's' | 'm' | 'h'}`
 
 /** When an event started: wall clock, and ms since its turn started. */

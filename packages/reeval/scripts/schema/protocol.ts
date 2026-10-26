@@ -1,10 +1,13 @@
 // The attempt protocol's JSON Schemas in schema/protocol/, generated from the Zod schemas in
 // src/contract/attempt.ts. A def that shares a hand-written type (`TurnData`, `ExecResult`, …) is
-// held to the def generated from that type: the same properties, required ones and descriptions.
+// held to the def generated from that type (the same properties and required ones), and every
+// schema a hand-written type documents takes its descriptions from that type's TSDoc.
+import type { z } from 'zod'
 import { ATTEMPT_SCHEMAS, ATTEMPT_TYPES } from '../../src/contract/attempt.ts'
-import { generate, type Schema, type ShapeSchema } from './generate.ts'
+import { CONTRACT_SCHEMAS } from '../../src/contract/index.ts'
+import { generate, type Schema, type ShapeSchema, typeDefs } from './generate.ts'
 import { PROTOCOL_SHAPES } from './shapes.ts'
-import { differences, zodDefs } from './zod.ts'
+import { differences, type TypeDocs, zodDefs } from './zod.ts'
 
 /** The `$defs` `root` refers to, itself included, sorted by name. */
 function reachable(defs: Record<string, Schema>, root: string): Record<string, Schema> {
@@ -39,9 +42,44 @@ export function typeDrift(defs: Record<string, Schema>): string[] {
   })
 }
 
+/** Protocol defs with no hand-written type in `ATTEMPT_TYPES`, documented by the type of their name. */
+const SAME_DOCS = ['Wait', 'JSONValue']
+
+/**
+ * Protocol schemas with no hand-written type of their own, and the type whose TSDoc documents the
+ * fields they share with it (the exec call's are `ExecRetry`'s, spread into it).
+ */
+const SHARED_DOCS: Record<string, string> = {
+  CaptureCallData: 'CaptureCall',
+  JudgeCallData: 'ConfigJudgeData',
+  ExecCall: 'ExecRetry',
+}
+
+/** Every protocol schema a hand-written type documents, with that type's def. */
+function protocolTypeDocs(): TypeDocs[] {
+  const own = [...ATTEMPT_TYPES.filter((type) => type in ATTEMPT_SCHEMAS), ...SAME_DOCS]
+  const contract = Object.keys(CONTRACT_SCHEMAS).filter((name) => !own.includes(name))
+  const typed = typeDefs({
+    ...Object.fromEntries([...own, ...contract].map((name) => [name, name])),
+    ...SHARED_DOCS,
+  })
+  const docs = (name: string, schema: z.ZodType | undefined, shared?: boolean) =>
+    schema ? [{ name, schema, typed: typed[name] as Schema, shared }] : []
+  const exec = (ATTEMPT_SCHEMAS.AttemptCall as z.ZodDiscriminatedUnion).options.find(
+    (option) => (option as z.ZodObject<{ op: z.ZodLiteral<string> }>).shape.op.value === 'exec',
+  ) as z.ZodType | undefined
+  return [
+    ...own.flatMap((name) => docs(name, ATTEMPT_SCHEMAS[name])),
+    ...contract.flatMap((name) => docs(name, CONTRACT_SCHEMAS[name])),
+    ...Object.entries({ ...ATTEMPT_SCHEMAS, ExecCall: exec })
+      .filter(([name]) => name in SHARED_DOCS)
+      .flatMap(([name, schema]) => docs(name, schema, true)),
+  ]
+}
+
 /** Every protocol shape's JSON Schema, by its name. */
 export function protocolDocs(): Map<string, ShapeSchema> {
-  const defs = zodDefs(ATTEMPT_SCHEMAS, {})
+  const defs = zodDefs(ATTEMPT_SCHEMAS, {}, protocolTypeDocs())
   const drift = typeDrift(defs)
   if (drift.length) {
     throw new Error(

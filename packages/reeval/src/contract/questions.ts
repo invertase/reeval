@@ -5,61 +5,20 @@ import { isObjectLike } from '../object.ts'
 import type { PairFactor, Question, QuestionOptions, QuestionStateOptions } from '../types.ts'
 import { type Assert, closest, nonEmpty, type Same } from './shared.ts'
 
-export const pairFactorSchema = z
-  .enum(['environment', 'harness'])
-  .describe('A matrix factor a pairwise question varies; the others are held.')
+export const pairFactorSchema = z.enum(['environment', 'harness'])
 
 /** Evaluation models score yes/no questions only, so they can't answer a question. */
 export const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
 
-export const questionStateSchema = z
-  .strictObject({
-    task: z
-      .boolean()
-      .optional()
-      .describe(
-        'The prompts the attempt was sent, once for both sides when they match. Default true.',
-      ),
-    output: z
-      .boolean()
-      .optional()
-      .describe(
-        "The final message: the agent's own account of its work. Default false in a pair, true per attempt.",
-      ),
-    files: z
-      .boolean()
-      .optional()
-      .describe(
-        "`status path` lines for the changed files, under `diff`'s patterns. Default false.",
-      ),
-    diff: z
-      .union([z.boolean(), z.array(nonEmpty()).min(1)])
-      .optional()
-      .describe(
-        'The diff since the eval started. A list is gitignore-style patterns over workspace paths: the last matching pattern wins and `!` excludes. Default true.',
-      ),
-    transcript: z
-      .union([z.boolean(), z.enum(['tools', 'full'])])
-      .optional()
-      .describe(
-        "The transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses isn't blind. Default false in a pair, true per attempt.",
-      ),
-    turns: z
-      .enum(['last', 'all'])
-      .optional()
-      .describe(
-        "`'all'`: every turn under `turns`, each with its task, output and (with `transcript`) transcript; `'last'`: the last turn only. Default `'all'`.",
-      ),
-    checks: z
-      .union([z.boolean(), z.array(nonEmpty())])
-      .optional()
-      .describe(
-        '`c.exec` results; a list shows only those commands, as passed to `c.exec`. Default false.',
-      ),
-  })
-  .describe(
-    "What a question is shown of each attempt: the keys of `judge.state` but `contents` (the attempts' workspaces are gone when questions are asked). An unset key keeps its default: a pairwise question shows the task and the diff; one asked of each attempt also shows the final message and the transcript.",
-  )
+export const questionStateSchema = z.strictObject({
+  task: z.boolean().optional(),
+  output: z.boolean().optional(),
+  files: z.boolean().optional(),
+  diff: z.union([z.boolean(), z.array(nonEmpty()).min(1)]).optional(),
+  transcript: z.union([z.boolean(), z.enum(['tools', 'full'])]).optional(),
+  turns: z.enum(['last', 'all']).optional(),
+  checks: z.union([z.boolean(), z.array(nonEmpty())]).optional(),
+})
 
 const questionArtifactsSchema = z.union([z.literal(true), z.array(nonEmpty()).min(1)])
 
@@ -68,19 +27,11 @@ const questionModelSchema = z
   .refine((m) => m.includes('/'), { params: { provider: true } })
   .refine((m) => !isEvaluationModel(m), { params: { evaluation: true } })
 
-export const questionOptionsSchema = z
-  .strictObject({
-    model: questionModelSchema
-      .optional()
-      .describe("`'provider/model'` that answers every question below it without its own `model`."),
-    state: questionStateSchema.optional().describe("What it's shown of each attempt."),
-    artifacts: questionArtifactsSchema
-      .optional()
-      .describe("Each attempt's own captures, by name; `true` sends all of them. Default none."),
-  })
-  .describe(
-    'Defaults for every question: `model` and `artifacts` replaced, `state` merged key by key.',
-  )
+export const questionOptionsSchema = z.strictObject({
+  model: questionModelSchema.optional(),
+  state: questionStateSchema.optional(),
+  artifacts: questionArtifactsSchema.optional(),
+})
 
 /** The first item a list holds twice. */
 const twice = (items: unknown[]) => items.find((k, i) => items.indexOf(k) !== i)
@@ -99,25 +50,11 @@ const choicesSchema = z.array(nonEmpty()).min(2).superRefine(unique)
 const questionObjectSchema = z
   .strictObject({
     question: nonEmpty(),
-    model: questionModelSchema
-      .optional()
-      .describe("`'provider/model'` that answers it, over the cascaded `question.model`."),
-    across: acrossSchema
-      .optional()
-      .describe(
-        "The factor it varies when pairing, or both: `'environment'` holds the harness, `'harness'` holds the environment. Unset, it's asked of each attempt on its own.",
-      ),
-    choices: choicesSchema
-      .optional()
-      .describe('The answers a question asked of each attempt picks from, with a short reason.'),
-    state: questionStateSchema
-      .optional()
-      .describe("What it's shown of each attempt, over the cascaded `question.state`, key by key."),
-    artifacts: questionArtifactsSchema
-      .optional()
-      .describe(
-        "Each attempt's own captures, by name; `true` sends all of them. Replaces `question.artifacts`.",
-      ),
+    model: questionModelSchema.optional(),
+    across: acrossSchema.optional(),
+    choices: choicesSchema.optional(),
+    state: questionStateSchema.optional(),
+    artifacts: questionArtifactsSchema.optional(),
   })
   .superRefine((q, ctx) => {
     if (q.across !== undefined && q.choices !== undefined) {
@@ -125,11 +62,7 @@ const questionObjectSchema = z
     }
   })
 
-export const questionSchema = z
-  .union([nonEmpty(), questionObjectSchema])
-  .describe(
-    "A question a language model answers after the attempts: its text, or the text and its options. With `across`, it picks between two attempts that differ only in that factor, in both orders; without it, it's asked of each attempt on its own. Without a model, the cascaded `question.model` answers, else `analysis.model`, else the judge's when it's a language model. `state` and `artifacts` choose what it's shown of each attempt.",
-  )
+export const questionSchema = z.union([nonEmpty(), questionObjectSchema])
 
 const questionText = (q: unknown) =>
   typeof q === 'string' ? q : (q as { question: string }).question
