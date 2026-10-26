@@ -36,6 +36,14 @@ const worker = await c.exec('npm run worker', { background: true })
   `true` returns a `BackgroundHandle` without waiting (default `false`, an `ExecResult` after exit).
 </Property>
 
+<Property name="options.retries" type="number" optional>
+  Extra tries after a non-zero exit (default `0`). Not with `background: true`.
+</Property>
+
+<Property name="options.interval" type="number" optional>
+  Milliseconds before each extra try (default `1000`). Not with `background: true`.
+</Property>
+
 The `ExecResult` has these fields:
 
 <Property name="exitCode" type="number" required>
@@ -168,36 +176,12 @@ const verdict = await c.judge('Does the test read like a specification?', {
   The most judge calls to this provider at a time, across the run.
 </Property>
 
-<Property name="options.state.task" type="boolean" optional>
-  Sends the graded turn's prompt (default `true`).
+<Property name="options.gateway" type="GatewayName | GatewayDescriptor" optional>
+  The gateway for this call, skipping the config list's fallback.
 </Property>
 
-<Property name="options.state.output" type="boolean" optional>
-  Sends the graded turn's final message, or the value of `on` (default `true`).
-</Property>
-
-<Property name="options.state.files" type="boolean" optional>
-  Sends a `status path` line for each changed file kept by any `state.diff` patterns (default `true`).
-</Property>
-
-<Property name="options.state.diff" type="boolean | string[]" optional>
-  Sends the diff, or only the paths the gitignore-style patterns keep (default `true`).
-</Property>
-
-<Property name="options.state.contents" type="string[]" optional>
-  Sends these files whole, by path or pattern, and drops them from the diff.
-</Property>
-
-<Property name="options.state.transcript" type="boolean | 'tools' | 'full'" optional>
-  Sends the graded turn's transcript clipped, as tool calls only, or in full (default `false`).
-</Property>
-
-<Property name="options.state.turns" type="'last' | 'all'" optional>
-  `'all'` sends every turn up to the graded one (default `'last'`).
-</Property>
-
-<Property name="options.state.checks" type="boolean | string[]" optional>
-  Sends the foreground `c.exec()` results so far, or only the listed commands (default `false`).
+<Property name="options.state" type="JudgeStateOptions" optional>
+  What the judge sees, with the keys and defaults of [`judge.state`](/reference/options#judge).
 </Property>
 
 A field on the call replaces the cascaded field, and `state` merges key by key. A `Verdict` has these fields:
@@ -224,6 +208,18 @@ A field on the call replaces the cascaded field, and `state` merges key by key. 
 
 <Property name="resolvedModel" type="string" optional>
   The model id the provider reports, when it reports one.
+</Property>
+
+<Property name="gateway" type="GatewayName" optional>
+  The config gateway the call used, when any.
+</Property>
+
+<Property name="upstream" type="string" optional>
+  The upstream provider the gateway reports (OpenRouter), when any.
+</Property>
+
+<Property name="costUsd" type="number" optional>
+  What the gateway reports the call cost, in US dollars, when any.
 </Property>
 
 <Property name="artifacts" type="JudgeArtifactRef[]" optional>
@@ -373,7 +369,7 @@ const changed = turn.diff.files.map((file) => file.path)
 </Property>
 
 <Property name="usage" type="TokenUsage | null" required>
-  `input`, `output`, `cacheRead`, `cacheWrite`, and `reasoning` tokens, or `null` when the harness reports none.
+  `input`, `output`, `cacheRead`, `cacheWrite`, and `reasoning` (`null` when the harness reports none for reasoning), or `null` when the harness reports no usage.
 </Property>
 
 <Property name="model" type="string | null" required>
@@ -388,8 +384,8 @@ const changed = turn.diff.files.map((file) => file.path)
   Workspace changes from the start of the evaluation, each file with a `path` and a `status` of `added`, `modified`, or `deleted`.
 </Property>
 
-<Property name="exec" type="(command: string) => Promise<ExecResult>" required>
-  Runs a foreground command in the sandbox, as `c.exec()` does, and returns `exitCode`, `stdout`, and `stderr`. It does not take `{ background: true }`.
+<Property name="exec" type="(command: string, options?: ExecRetry) => Promise<ExecResult>" required>
+  Runs a foreground command in the sandbox, as `c.exec()` does, with optional `{ retries, interval }`. It does not take `{ background: true }`.
 </Property>
 
 <Property name="readFile" type="(path: string) => Promise<string | null>" required>
@@ -468,10 +464,6 @@ const changed = turn.diff.files.map((file) => file.path)
   Wall time until the result, or `null` when the harness did not report the end.
 </Property>
 
-<Property name="stalled" type="boolean" optional>
-  `true` when a shell-like tool or an edit ran for at least two minutes.
-</Property>
-
 ### `web-fetch`
 
 <Property name="url" type="string" required>
@@ -488,10 +480,6 @@ const changed = turn.diff.files.map((file) => file.path)
 
 <Property name="durationMs" type="number | null" required>
   Wall time until the result, or `null` when the harness did not report the end.
-</Property>
-
-<Property name="stalled" type="boolean" optional>
-  `true` when a shell-like tool or an edit ran for at least two minutes.
 </Property>
 
 ### `tool`
