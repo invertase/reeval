@@ -84,16 +84,21 @@
           "href": "/write"
         },
         {
-          "title": "Assertions",
-          "href": "/write/assertions"
-        },
-        {
-          "title": "Judgments",
-          "href": "/write/judgments"
-        },
-        {
-          "title": "Questions",
-          "href": "/write/questions"
+          "group": "Grading",
+          "pages": [
+            {
+              "title": "Assertions",
+              "href": "/write/assertions"
+            },
+            {
+              "title": "Judgments",
+              "href": "/write/judgments"
+            },
+            {
+              "title": "Questions",
+              "href": "/write/questions"
+            }
+          ]
         },
         {
           "title": "Turns",
