@@ -2,6 +2,8 @@
   "agent_message_chunk .content",
   "agent_message_chunk .messageId",
   "agent_message_chunk .sessionUpdate",
+  "agent_thought_chunk .content",
+  "agent_thought_chunk .sessionUpdate",
   "available_commands_update .availableCommands",
   "available_commands_update .sessionUpdate",
   "prompt-response .stopReason",
