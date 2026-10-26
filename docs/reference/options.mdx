@@ -5,8 +5,6 @@ description: "Options set how evaluations run. Each key is accepted in set place
 
 ## Where each option is accepted
 
-The table shows where reeval accepts each key.
-
 [//]: # (generated:option-keys)
 
 | Key | `reeval.config.ts` | Profile `defaults` | Group or eval | Profile `limit` |
@@ -64,6 +62,8 @@ For more information about overriding an option, see [Group evaluations](/write/
   Helpers from `{{ pkg }}/gateway`: `direct()` is each provider's own key, `vercel()` is Vercel AI Gateway, and `openrouter()` is OpenRouter. The default is `[direct()]`. Each harness and judge model takes the first gateway that can serve it. reeval refuses a gateway listed twice, and a plan where no listed gateway can serve a model.
 </Property>
 
+A selected profile's [`gateway`](/reference/profiles#gateway) replaces this list.
+
 A harness or a judge that names its own `gateway` skips the list's fallback. For more information about pinning a gateway, see [Route models through a gateway](/agents/gateways#pin-one-gateway).
 
 ## `harness`
@@ -101,36 +101,6 @@ For more information about sandbox factories, see [Choose a sandbox](/integratio
 </Property>
 
 For more information about environments, see [Define an environment](/environments).
-
-## `compare`
-
-`compare` runs the baseline and each variant with the same prompt and assertions.
-
-<Property name="compare" type="CompareOptions | false | { maxVariants: number }" optional>
-  A group or an evaluation refuses `false`. On a profile `limit`, `false` drops the variants and `{ maxVariants }` keeps the first that many, where `maxVariants` is a whole number of at least 0.
-</Property>
-
-<Property name="compare.baseline" type="Environment" optional>
-  The baseline. Without it, the cascaded `environment`, or an empty environment named `baseline`.
-</Property>
-
-<Property name="compare.variants" type="Environment[]" required>
-  A non-empty list. reeval refuses two variants with one name, or one named like the baseline.
-</Property>
-
-<Property name="compare.gate" type="'variants' | 'all' | 'none'" optional>
-  `'variants'` (the default) gates the variants only, `'all'` every cell, and `'none'` no cell.
-</Property>
-
-<Property name="compare.minLift" type="number" optional>
-  Lift from -1 to 1; a variant cell fails when its lift interval's lower end is below it.
-</Property>
-
-<Property name="compare.harness" type="Array<string | HarnessDescriptor>" optional>
-  The harnesses to compare on; the others run the baseline only. reeval refuses an id the evaluation does not run.
-</Property>
-
-For more information about comparisons, see [Measure lift against a baseline](/results/compare/lift).
 
 ## `runs`
 
@@ -267,7 +237,7 @@ For more information about screenshots, see [Check an app](/write/apps#set-the-v
 </Property>
 
 <Property name="question.state" type="QuestionStateOptions" optional>
-  The keys of `judge.state` without `contents`, which reeval refuses because the workspaces are gone. An unset key keeps its default.
+  The keys of `judge.state` without `contents`, which reeval refuses because the workspaces are gone. An unset key keeps its default: pairwise questions (`across`) show the task and the diff; questions asked of each attempt also show the final message and the transcript.
 </Property>
 
 <Property name="question.state.task" type="boolean" optional>
@@ -275,7 +245,7 @@ For more information about screenshots, see [Check an app](/write/apps#set-the-v
 </Property>
 
 <Property name="question.state.output" type="boolean" optional>
-  The final message. The default is `false`.
+  The final message. Default `false` in a pair, `true` per attempt.
 </Property>
 
 <Property name="question.state.files" type="boolean" optional>
@@ -287,7 +257,7 @@ For more information about screenshots, see [Check an app](/write/apps#set-the-v
 </Property>
 
 <Property name="question.state.transcript" type="boolean | 'tools' | 'full'" optional>
-  The transcript as text lines. `true` is messages and tool calls with tool output clipped, `'tools'` is tool calls only, and `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses is not blind. The default is `false`.
+  The transcript as text lines. `true` is messages and tool calls with tool output clipped, `'tools'` is tool calls only, and `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses is not blind. Default `false` in a pair, `true` per attempt.
 </Property>
 
 <Property name="question.state.turns" type="'last' | 'all'" optional>
@@ -302,46 +272,12 @@ For more information about screenshots, see [Check an app](/write/apps#set-the-v
   Each side's captures as `true` or a non-empty list of non-empty capture names, below a question's own `artifacts`. The default is none.
 </Property>
 
-## `questions`
-
-`questions` lists what a language model is asked about the attempts after they end.
-
-<Property name="questions" type="Question[]" optional>
-  Strings, or objects with `question`, `model`, `across`, `choices`, `state`, and `artifacts`. A list replaces the inherited one, so `[]` asks none. Questions never change pass, fail, or the exit code.
-</Property>
-
-<Property name="questions[].across" type="'environment' | 'harness' | Array<'environment' | 'harness'>" optional>
-  The factor a pairwise question varies: `'environment'` holds the harness, and `'harness'` holds the environment. reeval asks it about each pair of attempts that passed their assertions, in both orders. Without `across`, reeval asks the question of each attempt on its own.
-</Property>
-
-<Property name="questions[].choices" type="string[]" optional>
-  The answers a question asked of each attempt picks from, with a short reason.
-</Property>
-
-For more information about questions, see [Ask questions across attempts](/write/questions).
-
 ## `timeout`
 
 `timeout` is the limit on one attempt.
 
 <Property name="timeout" type="Duration" optional>
   Milliseconds, or a number with `ms`, `s`, `m`, or `h`, above zero. The default is `'15m'`.
-</Property>
-
-## `tags`
-
-`tags` labels an evaluation for `--tag` and a profile's `tags`.
-
-<Property name="tags" type="string[]" optional>
-  Labels from each group and the evaluation, without duplicates. A filter is a label, or `!` and a label to exclude; every filter has to match.
-</Property>
-
-## `pin`
-
-`pin` lists the keys a profile `limit` does not narrow.
-
-<Property name="pin" type="Array<'harness' | 'runs' | 'compare'>" optional>
-  Any of `harness`, `runs`, and `compare`, kept from enclosing groups. reeval refuses any other entry.
 </Property>
 
 ## `concurrency`
@@ -357,7 +293,7 @@ For more information about questions, see [Ask questions across attempts](/write
 `record` is when a run is copied into the history directory.
 
 <Property name="record" type="'manual' | 'ci' | 'always'" optional>
-  `'manual'` copies on `reeval record`, `'ci'` (the default) when `CI` is set and is not `false`, and `'always'` every run except an interrupted one; a duration-budget-stopped run is recorded. A profile's `record` replaces it.
+  `'manual'` copies on `reeval record`, `'ci'` (the default) when `CI` is set and is not `false`, and `'always'` every run except an interrupted one; a duration-budget-stopped run is recorded. A profile may [replace it](/reference/profiles#record).
 </Property>
 
 ## `history`
@@ -373,7 +309,7 @@ For more information about questions, see [Ask questions across attempts](/write
 `budget` caps a run.
 
 <Property name="budget" type="{ attempts?: number, duration?: Duration }" optional>
-  `attempts` refuses a plan over the cap, unless `--force` is set, and must be a whole number of at least 1. From the first attempt's start, `duration` stops queued attempts from starting but lets running attempts finish. A profile's `budget` merges over the config value. reeval refuses `usd` and `tokens`.
+  `attempts` refuses a plan over the cap, unless `--force` is set, and must be a whole number of at least 1. From the first attempt's start, `duration` stops queued attempts from starting but lets running attempts finish. A profile's [`budget`](/reference/profiles#budget) merges over the config value. reeval refuses `usd` and `tokens`.
 </Property>
 
 ## `profiles`
@@ -381,7 +317,7 @@ For more information about questions, see [Ask questions across attempts](/write
 `profiles` holds the named profiles.
 
 <Property name="profiles" type="Record<string, Profile>" optional>
-  Each name maps to an object with `defaults`, `limit`, `judge`, `budget`, `record`, and `tags`.
+  Each name maps to an object with `defaults`, `limit`, `judge`, `budget`, `record`, `tags`, and `gateway`.
 </Property>
 
 For more information about each profile key, see [Profiles reference](/reference/profiles).
@@ -391,7 +327,7 @@ For more information about each profile key, see [Profiles reference](/reference
 `defaultProfile` names the profile when neither `--profile` nor `REEVAL_PROFILE` names one.
 
 <Property name="defaultProfile" type="{ ci?: string, local?: string }" optional>
-  `ci` applies when `CI` is set and is not `false`, and `local` otherwise. reeval refuses a name missing from `profiles`.
+  See [Profiles reference](/reference/profiles#defaultprofile).
 </Property>
 
 ## `secrets`
@@ -445,3 +381,67 @@ For more information about brokering a secret, see [Secrets](/environments/secre
 </Property>
 
 For more information about analysis, see [Analyze a run](/results/analyze#set-an-analysis-model).
+
+## `compare`
+
+`compare` runs the baseline and each variant with the same prompt and assertions.
+
+<Property name="compare" type="CompareOptions | false | { maxVariants: number }" optional>
+  A group or an evaluation refuses `false`. On a profile `limit`, `false` drops the variants and `{ maxVariants }` keeps the first that many, where `maxVariants` is a whole number of at least 0.
+</Property>
+
+<Property name="compare.baseline" type="Environment" optional>
+  The baseline. Without it, the cascaded `environment`, or an empty environment named `baseline`.
+</Property>
+
+<Property name="compare.variants" type="Environment[]" required>
+  A non-empty list. reeval refuses two variants with one name, or one named like the baseline.
+</Property>
+
+<Property name="compare.gate" type="'variants' | 'all' | 'none'" optional>
+  `'variants'` (the default) gates the variants only, `'all'` every cell, and `'none'` no cell.
+</Property>
+
+<Property name="compare.minLift" type="number" optional>
+  Lift from -1 to 1; a variant cell fails when its lift interval's lower end is below it.
+</Property>
+
+<Property name="compare.harness" type="Array<string | HarnessDescriptor>" optional>
+  The harnesses to compare on; the others run the baseline only. reeval refuses an id the evaluation does not run.
+</Property>
+
+For more information about comparisons, see [Measure lift against a baseline](/results/compare/lift).
+
+## `questions`
+
+`questions` lists what a language model is asked about the attempts after they end.
+
+<Property name="questions" type="Question[]" optional>
+  Strings, or objects with `question`, `model`, `across`, `choices`, `state`, and `artifacts`. A list replaces the inherited one, so `[]` asks none. Questions never change pass, fail, or the exit code.
+</Property>
+
+<Property name="questions[].across" type="'environment' | 'harness' | Array<'environment' | 'harness'>" optional>
+  The factor a pairwise question varies: `'environment'` holds the harness, and `'harness'` holds the environment. reeval asks it about each pair of attempts that passed their assertions, in both orders. Without `across`, reeval asks the question of each attempt on its own.
+</Property>
+
+<Property name="questions[].choices" type="string[]" optional>
+  The answers a question asked of each attempt picks from, with a short reason.
+</Property>
+
+For more information about questions, see [Ask questions across attempts](/write/questions).
+
+## `tags`
+
+`tags` labels an evaluation for `--tag` and a profile's `tags`.
+
+<Property name="tags" type="string[]" optional>
+  Labels from each group and the evaluation, without duplicates. A filter is a label, or `!` and a label to exclude; every filter has to match.
+</Property>
+
+## `pin`
+
+`pin` lists the keys a profile `limit` does not narrow.
+
+<Property name="pin" type="Array<'harness' | 'runs' | 'compare'>" optional>
+  Any of `harness`, `runs`, and `compare`, kept from enclosing groups. reeval refuses any other entry.
+</Property>
