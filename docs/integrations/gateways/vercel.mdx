@@ -32,8 +32,8 @@ For more information about combining gateways, see [Gateways](/agents/gateways).
 
 | Serves | Falls through |
 | :--- | :--- |
-| Claude Code, Codex, Goose, OpenCode, fx, Grok Build, pi | Cursor, Antigravity |
+| Claude Code, Codex, Goose, OpenCode, fx, Grok Build | Cursor, Antigravity, pi |
 
-Cursor's agent calls only Cursor's API, and Antigravity's CLI calls only Google's. A Goose harness with `effort` set, or an OpenCode harness with `effort` on a model other than Gemini, also takes the next gateway.
+Cursor's agent calls only Cursor's API, and Antigravity's CLI calls only Google's. reeval runs pi on its Gemini key. A Goose, OpenCode, or Grok Build harness with `effort` set also takes the next gateway.
 
 On `vercel()`, a judge must be a decision model, such as `typesafe-ai/jev-1.14.0`, and each call to a language-model judge fails. Analysis, captures, and questions take language models.
