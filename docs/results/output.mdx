@@ -30,11 +30,34 @@ Set analysis.model in reeval.config.ts for answers to what each eval asks.
 
 For more information about setting that model, see [Analyze a run with reeval analyze](/results/analyze).
 
+## Read the assertion and `effort` tables
+
+The assertion table, headed `check`, has one column per cell and lists assertions that failed or did not run in some cell. Passed assertions print as `+N more passed`. `couldn't check` means the assertion raised an error.
+
+In a comparison of the baseline `page` with the variant `brand-guidelines`, the assertions look like this:
+
+```text
+  check             page    brand-guidelines
+  brand orange      0 of 4  4 of 4
+    expected styles.css to match /#d97757/i
+  brand fonts       0 of 4  4 of 4
+    expected styles.css to match /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/
+  +1 more passed
+```
+
+The `effort` table lists `tools` and `time`, plus `tokens` when a cell reported them. Each number is the median. It prints when every cell has at least four counted attempts, and either the evaluation failed or a variant used fewer or more tokens, tool calls, or time than its baseline ([Tokens, tool calls and time](/results/compare/statistics#tokens-tool-calls-and-time)).
+
+The tool calls and time look like this, for two arms that pass alike:
+
+```text
+  effort           tools  time
+  math             1      1.0s
+  project-layout   1      <0.1s
+```
+
 ## Read a comparison
 
 Rows for the baseline and each variant print under `arm`, `harness`, or `sandbox`. The `pass` column is passed attempts out of counted attempts. The effect word is `helped`, `made it worse`, or `can't tell yet`. Equal pass rates, with at least four counted attempts a side, print no effect word. For more information about how reeval chooses an effect word, see [Comparison](/reference/glossary#comparison).
-
-Here `page` is the baseline and `brand-guidelines` is the variant:
 
 ```text
 pass             styles the page in Anthropic's brand
@@ -53,47 +76,13 @@ For more information about that interval, see [How reeval decides a change helpe
 
 For the baseline and each variant, a pairwise question prints `won 3 of 4`. The outcome word does not change.
 
-## Read the assertion and `effort` tables
-
-The assertion table, headed `check`, has one column per cell and lists assertions that failed or did not run in some cell. Passed assertions print as `+N more passed`. `couldn't check` means the assertion raised an error.
-
-The assertions in a comparison look like this:
-
-```text
-  check             page    brand-guidelines
-  brand orange      0 of 4  4 of 4
-    expected styles.css to match /#d97757/i
-  brand fonts       0 of 4  4 of 4
-    expected styles.css to match /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/
-  +1 more passed
-```
-
-The `effort` table lists `tools` and `time`, plus `tokens` when a cell reported them. Each number is the median. The `effort` table prints when there are at least four counted attempts and either the tokens, tool calls, or time differ between cells or the evaluation failed.
-
-The tool calls and time look like this, for two arms that pass alike:
-
-```text
-  effort           tools  time
-  math             1      1.0s
-  project-layout   1      <0.1s
-```
-
 ## Read insights
 
-An analysis model adds an answer under the name and a headline before the tally:
+With an analysis model, the block adds an answer under the name, a sentence under a comparison row or a failure, and a headline before the tally. The outcome word stays the assertions' result. For more information, see [Analyze a run](/results/analyze#read-the-answers).
 
-```text
-pass             adds a tested multiply function
-  Yes: the agent added it and the tests pass.
+## Read remarks
 
-Every eval passed.
-```
-
-On a comparison or a failure, it also adds a sentence under a row and a finding after the tables.
-
-The outcome word stays the assertions' result. For more information about what insights and Remarks are, see [Analysis](/reference/glossary#analysis).
-
-Insights also include Remarks. After the tally, `Remarks:` names concerns about the evaluations. A `fix` or `at` line names the file location. At most three concerns print, then `+1 more (-v)`. To print the rest and any suggestion, pass `-v`. A concern prints on the run that first raises it. A slow server start prints on every run where it happens.
+After the tally, `Remarks:` names concerns about the evaluations, such as a flaky assertion or a slow MCP server start. reeval's own rules raise them with or without an analysis model, and an analysis model adds its own. A `fix` or `at` line names the file location. At most three concerns print, then `+1 more (-v)`. To print the rest and any suggestion, pass `-v`. A concern prints on the run that first raises it. A slow server start prints on every run where it happens.
 
 A remark looks like this:
 
