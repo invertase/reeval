@@ -13,7 +13,7 @@ from reeval_python.declare import collect_eval_file
 
 def _sources(tmp_path: Path, text: str, name: str = "a.eval.py") -> dict[str, Any]:
     path = tmp_path / name
-    path.write_text(textwrap.dedent(text))
+    path.write_text(textwrap.dedent(text), encoding="utf-8")
     tree = collect_eval_file(path)
     found: dict[str, Any] = {}
 
@@ -153,7 +153,7 @@ def test_a_decorator_without_wraps_still_hashes_the_body_it_wrapped(tmp_path: Pa
 )
 def test_a_body_without_source_is_refused(tmp_path: Path, text: str, message: str) -> None:
     path = tmp_path / "a.eval.py"
-    path.write_text("from reeval_python import evaluate\n" + text)
+    path.write_text("from reeval_python import evaluate\n" + text, encoding="utf-8")
     with pytest.raises(TypeError, match=message):
         collect_eval_file(path)
 
@@ -184,7 +184,8 @@ def test_case_data_is_canonical_json_and_non_json_is_refused(tmp_path: Path) -> 
     path.write_text(
         "from reeval_python import evaluate_each\n"
         "@evaluate_each([object()], 'case %#')\n"
-        "def case(c, item): ...\n"
+        "def case(c, item): ...\n",
+        encoding="utf-8",
     )
     with pytest.raises(TypeError, match=r"evaluate_each\('case %#'\) case 0: reeval fingerprints"):
         collect_eval_file(path)
