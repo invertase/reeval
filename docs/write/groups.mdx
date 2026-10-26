@@ -32,18 +32,6 @@ group('request builders', { environment: plain, tags: ['smoke'] }, () => {
 })
 ```
 
-`group.skip` keeps a group in the file and skips every evaluation inside it, including a nested group. `group.only` runs only that group in its own file, and other files still run. reeval refuses `group.only` when the `CI` variable is set. `group.todo` takes a name and no body, and the plan lists it as `todo`. The groups around a `group.todo` still add their tags to it. For a runnable project with a group, `evaluate.skip`, and `evaluate.todo`, see [`with-groups`](https://github.com/invertase/reeval/tree/main/examples/with-groups).
-
-In the `evals/shoehorn.eval.ts` file, focus the group and leave a placeholder:
-
-```ts title="evals/shoehorn.eval.ts"
-group.only(
-  'request builders',
-  // ...
-)
-group.todo('payment builders')
-```
-
 ## Nest groups
 
 An inner `group()` inherits the outer group's options and can set its own. In the `evals/shoehorn.eval.ts` file, put the billing evaluation in an inner group:
@@ -71,6 +59,30 @@ An `environment`, `timeout`, `runs`, `gate`, or `sandbox` on one `evaluate()` ca
     )
 ```
 
+## Verify with the `reeval run --dry-run` command
+
+The `reeval run --dry-run` command plans the run without starting a sandbox or a harness, so it needs no API key. Plan the run:
+
+```bash
+npx reeval run --dry-run
+```
+
+The `plan` line counts the evaluations, cells, and attempts, and estimates the time. Each row names an evaluation by its file, its groups, and its name, joined with `›`. If an evaluation is missing, check that its file ends in `.eval.ts` and sits under the `evals/` folder.
+
+## Skip, focus, or plan groups
+
+In the `evals/shoehorn.eval.ts` file, focus the group and leave a placeholder:
+
+```ts title="evals/shoehorn.eval.ts"
+group.only(
+  'request builders',
+  // ...
+)
+group.todo('payment builders')
+```
+
+`group.skip` keeps a group in the file and skips every evaluation inside it, including a nested group. `group.only` runs only that group in its own file, and other files still run. reeval refuses `group.only` when the `CI` variable is set. `group.todo` takes a name and no body, and the plan lists it as `todo`. The groups around a `group.todo` still add their tags to it. For a runnable project with a group, `evaluate.skip`, and `evaluate.todo`, see [`with-groups`](https://github.com/invertase/reeval/tree/main/examples/with-groups).
+
 ## See how options cascade
 
 reeval applies options from the config, through each group, to the evaluation. A later level replaces `environment`, `runs`, `gate`, `timeout`, and `sandbox` when it sets them.
@@ -89,22 +101,8 @@ After the evaluation, a profile limit can narrow `runs`, `compare`, and `harness
 
 For more information about narrowing harnesses with `add` and `only`, see [Harnesses](/agents).
 
-`tags` are added at each group and on the evaluation, so an evaluation keeps every tag from the groups around it. Run the evaluations tagged `smoke`:
+`tags` are added at each group and on the evaluation, so an evaluation keeps every tag from the groups around it. `npx reeval run --tag smoke` runs both evaluations above. For more information about filtering by tag, see [Filter evaluations](/runs/running#filter-evaluations).
 
-```bash
-npx reeval run --tag smoke
-```
-
-Start a `--tag` value with `!` to leave that tag out. Repeat `--tag` to keep an evaluation only when every filter matches. For more information about `tags`, see [the `tags` option](/reference/options#tags).
-
-## Verify with the `reeval run --dry-run` command
-
-The `reeval run --dry-run` command plans the run without starting a sandbox or a harness, so it needs no API key. Plan the run:
-
-```bash
-npx reeval run --dry-run
-```
-
-The `plan` line counts the evaluations, cells, and attempts, and estimates the time. Each row names an evaluation by its file, its groups, and its name, joined with `›`. A `group.todo` row is marked `todo`. If an evaluation is missing, check that its file ends in `.eval.ts` and sits under the `evals/` folder.
+## Reference
 
 For more information about every argument `group()` takes, see [Authoring API](/reference/api#group).
