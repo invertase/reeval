@@ -3,9 +3,23 @@ title: "pi harness"
 description: "The pi harness runs pi in the sandbox on a Gemini API key and records its events."
 ---
 
-## `pi()`
+`pi()` runs pi in the sandbox as one `pi --mode json` process per turn that resumes the session's conversation. For more information about the sandbox, see [Choose a sandbox](/integrations/sandboxes).
 
-`pi()` is one harness factory. It runs pi in the sandbox on a Gemini API key, as one `pi --mode json` process per turn that resumes the session's conversation.
+## `GOOGLE_GENERATIVE_AI_API_KEY`
+
+`pi()` reads `GOOGLE_GENERATIVE_AI_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
+
+In the sandbox, pi sees a placeholder as `GEMINI_API_KEY`, and reeval swaps the real key into the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` at `generativelanguage.googleapis.com`. reeval refuses the key anywhere else. A restricted egress policy allows `generativelanguage.googleapis.com`.
+
+When the API rejects the key, the attempt error begins with `The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key in the environment or .env.local`.
+
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
+
+For more information about the variable, see [`GOOGLE_GENERATIVE_AI_API_KEY`](/reference/env-vars#googlegenerativeaiapikey).
+
+For more information about the automatic hosts, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts).
+
+## `pi()`
 
 `pi()` is exported from `{{ pkg }}/harness`. The following configuration passes it as the `harness` option:
 
@@ -46,17 +60,7 @@ In the sandbox, pi runs in print mode with the project trusted, its startup netw
 
 For more information about choosing a harness, see [Choose an agent](/agents).
 
-For more information about model ids and effort values, see [Models and providers for each harness](/agents/model).
-
-## `GOOGLE_GENERATIVE_AI_API_KEY`
-
-`pi()` reads `GOOGLE_GENERATIVE_AI_API_KEY` from the host. In the sandbox, pi sees a placeholder as `GEMINI_API_KEY`, and reeval swaps the real key into the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` at `generativelanguage.googleapis.com`. reeval refuses the key anywhere else, and that host is the harness's automatic egress host.
-
-For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
-
-For more information about the variable, see [`GOOGLE_GENERATIVE_AI_API_KEY`](/reference/env-vars#googlegenerativeaiapikey).
-
-For more information about the automatic hosts, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts).
+For more information about model ids and effort values, see [Set the agent's model](/agents/model).
 
 ## `rules`
 
