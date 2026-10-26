@@ -7,29 +7,6 @@ Recording copies a run from the `.reeval/runs/` directory into the history folde
 
 ## Record a run
 
-The `reeval.config.ts` file uses these defaults:
-
-```ts title="reeval.config.ts"
-import { defineConfig } from '{{ pkg }}'
-
-export default defineConfig({
-  record: 'ci',
-  history: {
-    dir: 'evals/.history',
-    artifacts: 'all',
-  },
-})
-```
-
-To record every run and keep transcripts only for failing attempts, override both:
-
-```ts title="with-history/reeval.config.ts"
-  record: 'always',
-  history: { dir: 'history', artifacts: 'failures' },
-```
-
-For a runnable project, see [`with-history`](https://github.com/invertase/reeval/tree/main/examples/with-history). For more information about the `record` and `history` options, see [Configuration](/reference/config).
-
 Record the most recent run and commit the history folder:
 
 1. Copy the most recent run from the `.reeval/runs/` directory.
@@ -56,9 +33,32 @@ Record the most recent run and commit the history folder:
    git commit -m "Record the latest evaluation run"
    ```
 
-The copy leaves the commit to you. When `dir` names another folder, stage that folder in step 2. The copy writes a `.gitignore` file in the history folder that un-ignores recorded `*.json`, `*.jsonl`, `*.md`, `*.patch`, and `*.log` files.
+The copy writes a `.gitignore` file in the history folder that un-ignores recorded `*.json`, `*.jsonl`, `*.md`, `*.patch`, and `*.log` files. To record an older run, pass its id. For more information about every flag, see [the `reeval record` command](/reference/cli#reeval-record).
 
-For more information about `reeval record`, see [the `reeval record` command](/reference/cli#reeval-record).
+## Record automatically
+
+The `reeval.config.ts` file uses these defaults:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+
+export default defineConfig({
+  record: 'ci',
+  history: {
+    dir: 'evals/.history',
+    artifacts: 'all',
+  },
+})
+```
+
+`record: 'ci'` copies each finished run when the `CI` variable is set, and `'manual'` never does. To record every run and keep transcripts only for failing evaluations, override both:
+
+```ts title="with-history/reeval.config.ts"
+  record: 'always',
+  history: { dir: 'history', artifacts: 'failures' },
+```
+
+When `dir` names another folder, stage that folder instead. For a runnable project, see [`with-history`](https://github.com/invertase/reeval/tree/main/examples/with-history). For more information about the `record` and `history` options, see [Options](/reference/options#record).
 
 ## Check out a run
 
