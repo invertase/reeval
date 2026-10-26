@@ -40,14 +40,7 @@ Pass the limits to the factory, in the `reeval.config.ts` file or on an evaluati
   sandbox: docker({ memory: '1g', swap: 0, cpus: 1, pids: 256 }),
 ```
 
-For a runnable project, see [`with-resource-limits`](https://github.com/invertase/reeval/tree/main/examples/with-resource-limits). Each limit applies to one container. These defaults apply:
-
-| Limit | Default | Meaning |
-| :--- | :--- | :--- |
-| `memory` | `'4g'` | The container's memory, as `'512m'`, `'4g'`, or bytes |
-| `swap` | as much as `memory` | Swap on top of `memory`; `0` sets `memory` as a hard limit |
-| `cpus` | `2` | CPUs the container may use, capped at the host's; fractions allowed |
-| `pids` | `1024` | Concurrent processes and threads |
+For a runnable project, see [`with-resource-limits`](https://github.com/invertase/reeval/tree/main/examples/with-resource-limits). Each limit applies to one container. For more information about each limit and its default, see [`memory`](/integrations/sandboxes/docker#memory), [`swap`](/integrations/sandboxes/docker#swap), [`cpus`](/integrations/sandboxes/docker#cpus), and [`pids`](/integrations/sandboxes/docker#pids).
 
 The agent, the setup commands, and the assertions run as an unprivileged user with every capability dropped. For more information about `root`, `capabilities`, and `maxConcurrent`, see [Docker sandbox](/integrations/sandboxes/docker).
 
