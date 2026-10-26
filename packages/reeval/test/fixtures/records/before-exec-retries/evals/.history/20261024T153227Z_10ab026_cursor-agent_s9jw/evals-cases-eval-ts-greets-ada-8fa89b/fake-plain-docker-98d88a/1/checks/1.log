@@ -1,4 +1,0 @@
-$ grep -q Ahoy greet.js
-exit 1
---- stdout
---- stderr

@@ -3,7 +3,7 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
-// A record corpus entry (the corpus recipe), recorded by reeval 0.11.0 at c4f8c7c0.
+// A record corpus entry (before turns[].mcpStartup and environments[].plugins), recorded by reeval 0.11.0 at c4f8c7c0.
 // Don't re-record it: test/corpus.test.ts reads it to prove this shape still loads.
 export default defineConfig({
   harness: fakeHarness(),

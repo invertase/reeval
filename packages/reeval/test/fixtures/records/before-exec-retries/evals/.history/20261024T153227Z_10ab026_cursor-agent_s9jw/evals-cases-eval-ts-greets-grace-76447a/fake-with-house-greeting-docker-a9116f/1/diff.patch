@@ -1,7 +1,0 @@
-diff --git a/greet.js b/greet.js
-new file mode 100644
-index 0000000..8f6cfcf
---- /dev/null
-+++ b/greet.js
-@@ -0,0 +1 @@
-+export const greet = (name) => 'Ahoy, ' + name + '!'

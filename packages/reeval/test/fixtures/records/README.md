@@ -16,21 +16,19 @@ config API like any other project.
 | `with-answers` | The corpus project's fake-harness runs with `evals[].answers`: a compare question answered with win rates, one whose model call failed, and questions with no pairs to judge |
 | `before-run-summary` | The corpus project's fake-harness runs, with a saved analysis, from before an analysis document's `error` (a failed analysis, cached with its error) |
 | `before-baseline-from` | The corpus project's fake-harness runs from before `evals[].compare.from` (a compare whose control came from the cascade because `baseline` was omitted) |
-| `before-oom` | The corpus project's fake-harness runs from before `evals[].attempts[].error.resource` (an OOM kill during an attempt, as an infra error) and `attempts.oom_kills` |
 | `with-oom` | The fake harness in Docker: one attempt whose process the kernel killed at its 128m memory limit, an infra error with `error.resource` |
-| `before-named-checks` | The corpus project's fake-harness runs from before `evals[].attempts[].assertions` and `evals[].cells[].checks` (each `expect`'s result, and each cell's tally of them) |
 | `with-named-checks` | The corpus project's fake-harness runs with `evals[].attempts[].assertions` and `evals[].cells[].checks`: labelled and default-labelled checks, a soft one, a compare whose variant's checks have verdicts, and cells with no counted attempts |
-| `before-families` | The corpus project's fake-harness runs from before `evals[].family` and `families` (a pooled `evaluate.each`) |
+| `before-families` | The corpus project's fake-harness runs from before `evals[].family` and `families` (a pooled `evaluate.each`); `evals[].attempts[].assertions` and `evals[].cells[].checks` (each `expect`'s result, and each cell's tally of them); and `evals[].attempts[].error.resource` and `attempts.oom_kills` (an OOM kill during an attempt, as an infra error) |
 | `with-families` | The corpus project's fake-harness runs with `families`: a pooled `evaluate.each` compare with per-cell rates, a paired lift that fails its `minLift`, and an unpooled `evaluate.each` |
 | `before-judge-state` | The corpus project's fake-harness runs from before `stack.judge.state` (the config's default of what the judge is given) |
 | `before-question-state` | The corpus project's fake-harness runs from before `evals[].answers[].stateOptions`, `answers[].artifacts` and `votes[].artifacts` (what each side of a compare question shows) |
 | `before-question-input` | The corpus project's fake-harness runs from before `evals[].answers[].input` (what each compare question's model saw, per pair and order) |
-| `before-attempt-answers` | The corpus project's fake-harness runs from before `evals[].attempts[].answers` (per-attempt questions, answered once for each attempt), when questions were set on `compare` |
+| `before-attempt-answers` | The corpus project's fake-harness runs from before `evals[].attempts[].answers` (per-attempt questions, answered once for each attempt), when questions were set on `compare`, and `evals[].attempts[].checks[].retries` and `checks[].tries` (each try of a `c.exec` with `retries`) |
 | `with-attempt-answers` | The corpus project's fake-harness runs with `questions` at the eval root: pairwise ones (with `across`) on the eval, and `evals[].attempts[].answers` from ones asked of each attempt, with `choices` and in words |
 | `with-plugins` | The fake harness with one local plugin placed: `environments[].plugins` (with `marketplace: null`), a plugin skill's `skills[].plugin`, from before `plugin.marketplace` |
+| `before-mcp-startup` | The corpus project's fake-harness runs from before `evals[].attempts[].turns[].mcpStartup` (each stdio MCP server's start, timed) and `environments[].plugins` |
 | `before-run-errors` | The corpus project's fake-harness runs from before `errors` (an error outside any attempt, which fails the run) |
 | `before-proxy-egress` | The corpus project's fake-harness runs from before egress `'proxy'` (the default policy) and `evals[].attempts[].egress.partial` (traffic that went around the gateway under `allow-all`), when `allow-all` was the default |
-| `before-exec-retries` | The corpus project's fake-harness runs from before `evals[].attempts[].checks[].retries` and `checks[].tries` (each try of a `c.exec` with `retries`) |
 | `before-gate-part` | The corpus project's fake-harness runs from before `evals[].cells[].fingerprintParts.gate` (the cell's gate as a fingerprint part), whose compare controls' `gate: 'none'` compare reads from the cell |
 | `before-setup-processes` | The corpus project's runs from before `evals[].attempts[].setupProcesses` (processes the setup steps left running with a `to: 'checks'` secret without `hosts`) and the `setup-process-secret` remark |
 | `before-eval-source` | The corpus project's fake-harness runs from before `evals[].source` and `evals[].revision`, when the `sources` fingerprint part hashed the eval file and the local files it imported |
@@ -58,7 +56,9 @@ What reads them:
 ## Adding an entry
 
 Add one whenever you change a persisted shape, recorded by the reeval before your change (check out
-your base, build, record, then switch back), so the change is tested against the old shape:
+your base, build, record, then switch back), so the change is tested against the old shape. Changes
+that share a base share one entry: a second recording of the corpus project by the same reeval is the same shape again, so
+name the fields the existing entry predates in its row instead:
 
 ```bash
 pnpm build
