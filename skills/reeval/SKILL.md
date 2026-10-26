@@ -223,6 +223,11 @@ group('hello', () => {
   `toHaveFetched(url?)`. `expect(c).not.toHaveChanged(globs)` guards files (it reads the diff;
   `toHaveEdited` reads the transcript, so don't use it as a guard). Label requirements with
   `expect`'s second argument: `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`.
+- A failed `expect` fails the attempt even when the eval catches it (TypeScript `try`/`catch`,
+  Python `try`/`except`), at the end like `expect.soft`. To wait for something, use
+  `expect.poll(() => c.exec(cmd), { timeout: 10_000 }).toSucceed()` (Python
+  `expect.poll(lambda: c.exec(cmd), timeout=10).to_succeed()`), never `expect` in a retry loop. A
+  caught plain Python `assert` records nothing, so `assert` or `if` in a loop also works.
 
 ## Environments and compare
 

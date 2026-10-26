@@ -149,6 +149,10 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
   'package.json'])` (sync): it reads the workspace diff, so a shell or subprocess write counts
   and a read doesn't. Strings are globs (a directory matches everything under it), RegExps work,
   and a turn means up to that turn. `toHaveEdited` reads the transcript; don't use it as a guard.
+- A failed `expect` the eval catches still fails the attempt, when the body ends, as
+  `expect.soft` does; its error says the eval caught it. Wait or retry with `expect.poll`
+  (`await expect.poll(() => c.exec(cmd), { timeout: 10_000 }).toSucceed()`), which records one
+  check with its final outcome, not with `expect` in a `try` loop.
 - **Label each requirement** with `expect`'s second argument:
   `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`. Every matcher call
   is recorded (`evals[].attempts[].assertions`; unlabelled ones get `<matcher> <first arg>`).

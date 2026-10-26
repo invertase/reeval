@@ -62,9 +62,22 @@ export function assertionRecords(raw: readonly RawAssertion[]): AssertionRecord[
   })
 }
 
-/** What fails the attempt at its end for its `expect.soft` calls: the first that didn't pass. */
-export function softFailure(raw: readonly RawAssertion[]): Error | undefined {
-  const failed = raw.find((r) => r.soft && r.status !== 'pass')
+export const CAUGHT_HINT =
+  '(the eval caught this failed check, which still fails the attempt; to wait or retry, use expect.poll)'
+
+/**
+ * What fails the attempt at its end for the checks that failed without ending the body: the first
+ * that didn't pass, an `expect.soft` as what it threw, a hard check the eval caught with
+ * `CAUGHT_HINT` after its message.
+ */
+export function checkFailure(raw: readonly RawAssertion[]): Error | undefined {
+  const failed = raw.find((r) => r.status !== 'pass')
   if (!failed) return undefined
-  return failed.error instanceof Error ? failed.error : new Error(text(failed.error))
+  const error = failed.error instanceof Error ? failed.error : new Error(text(failed.error))
+  if (failed.soft) return error
+  const caught = Object.assign(new Error(), error)
+  caught.name = error.name
+  caught.message = `${error.message} ${CAUGHT_HINT}`
+  caught.stack = error.stack?.replace(error.message, caught.message)
+  return caught
 }

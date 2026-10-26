@@ -2,7 +2,7 @@
 // attempt that asserts, with reeval's shims for the runner state @vitest/expect expects.
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
-import { assertionRecords, softFailure } from '../src/attempt/assertions.ts'
+import { assertionRecords, checkFailure } from '../src/attempt/assertions.ts'
 import {
   attemptExpectError,
   attemptRecordings,
@@ -100,7 +100,7 @@ describe('standalone expect', () => {
     assert.equal(own.soft(1).toBe(2), undefined)
     own.soft(3).toBe(3)
     assert.equal(attemptExpectError(own), undefined, 'a soft failure is not a count error')
-    const error = softFailure(rawAssertions(t))
+    const error = checkFailure(rawAssertions(t))
     assert.ok(error instanceof Error)
     assert.equal(error.name, 'AssertionError')
     assert.match(error.message, /expected 1 to be 2/)
@@ -264,7 +264,7 @@ describe('assertions recorded on the attempt', () => {
     const soft = rawAssertions(t).filter((x) => x.status === 'fail')
     assert.equal(soft.length, 3)
     assert.ok(soft.every((x) => x.error instanceof Error))
-    assert.match(softFailure(rawAssertions(t))?.message ?? '', /first: expected 1 to be 2/)
+    assert.match(checkFailure(rawAssertions(t))?.message ?? '', /first: expected 1 to be 2/)
   })
 
   test("a matcher that can't answer is an error, not a failure; a thrown non-Error keeps its text", () => {
@@ -403,7 +403,7 @@ describe('expect routed to the attempt', () => {
         ['expect.poll(…).toBe()', false],
       ],
     )
-    assert.match(softFailure(rawAssertions(t))?.message ?? '', /expected 1 to be 2/)
+    assert.match(checkFailure(rawAssertions(t))?.message ?? '', /expected 1 to be 2/)
     // Outside any attempt, nothing is tracked and the worker's expect counts.
     const before = pending.length
     void expect(Promise.resolve(1)).resolves.toBe(1)

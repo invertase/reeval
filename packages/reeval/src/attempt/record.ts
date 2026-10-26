@@ -12,7 +12,7 @@ import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { PrepareError } from '../sandbox/provider.ts'
 import { capMiddle, clip } from '../text.ts'
 import type { ErrorKind, EvalMeta, EvalRecord, TranscriptEvent } from '../types.ts'
-import { softFailure } from './assertions.ts'
+import { checkFailure } from './assertions.ts'
 import { writeCaptureSidecars } from './capture.ts'
 import type { Attempt } from './state.ts'
 
@@ -46,14 +46,14 @@ function isJudges(a: Attempt, error: unknown, raw: readonly RawAssertion[]): boo
 }
 
 /**
- * The error that fails the attempt: a judge's gives way to the first `expect.soft` check that
- * didn't hold, whichever came first, so the attempt fails as that check. A hard check the eval
- * caught doesn't fail the attempt, with a judge or without one.
+ * The error that fails the attempt: a judge's gives way to the first other check that didn't hold
+ * (an `expect.soft`, or a hard check the eval caught), whichever came first, so the attempt fails
+ * as that check.
  */
 export function attemptError(a: Attempt, error: unknown, raw: readonly RawAssertion[]): unknown {
   if (!isJudges(a, error, raw)) return error
-  const check = raw.find((r) => r.soft && r.status !== 'pass' && !judged(r))
-  return check ? softFailure([check]) : error
+  const check = raw.find((r) => r.status !== 'pass' && !judged(r))
+  return check ? checkFailure([check]) : error
 }
 
 /**

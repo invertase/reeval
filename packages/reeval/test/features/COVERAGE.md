@@ -242,7 +242,7 @@
 | `reeval run --resume [<ref>]`: continue a stopped, interrupted or budget-stopped run with the same id | ✓ 3 | ✓ 1 | ● 1 | — | — | — |
 | Eval timeouts, Ctrl-C and SIGTERM | ✓ 8 | — | — | — | — | — |
 | The packed package installs into a clean project and runs | ✓ 1 | — | — | — | — | — |
-| Python eval authoring SDK (conformance goldens and fake run) | ✓ 1 | ✓ 2 | ◐ 2 (2 without a canary) | ◐ 1 (1 without a canary) | — | ◐ 1 (1 without a canary) |
+| Python eval authoring SDK (conformance goldens and fake run) | ✓ 1 | ✓ 2 | ◐ 3 (3 without a canary) | ◐ 1 (1 without a canary) | — | ◐ 1 (1 without a canary) |
 
 ## Known gaps
 
