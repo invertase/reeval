@@ -45,7 +45,44 @@
       ]
     },
     {
-      "group": "Agents",
+      "group": "Write an evaluation",
+      "pages": [
+        {
+          "title": "Overview",
+          "href": "/evals/evaluate"
+        },
+        {
+          "title": "Turns",
+          "href": "/evals/turns"
+        },
+        {
+          "title": "Assertions",
+          "href": "/evals/checks"
+        },
+        {
+          "title": "Judgments",
+          "href": "/evals/judges"
+        },
+        {
+          "title": "Questions",
+          "href": "/evals/questions"
+        },
+        {
+          "title": "Groups",
+          "href": "/evals/groups"
+        },
+        {
+          "title": "Cases",
+          "href": "/evals/cases"
+        },
+        {
+          "title": "Apps",
+          "href": "/evals/servers"
+        }
+      ]
+    },
+    {
+      "group": "Choose an agent",
       "pages": [
         {
           "title": "Overview",
@@ -56,41 +93,13 @@
           "href": "/harnesses/models"
         },
         {
-          "title": "Cursor",
-          "href": "/harnesses/cursor"
-        },
-        {
-          "title": "Claude Code",
-          "href": "/harnesses/claude-code"
-        },
-        {
-          "title": "Codex",
-          "href": "/harnesses/codex"
-        },
-        {
-          "title": "Antigravity",
-          "href": "/harnesses/antigravity"
-        },
-        {
-          "title": "OpenCode",
-          "href": "/harnesses/opencode"
-        },
-        {
-          "title": "Goose",
-          "href": "/harnesses/goose"
-        },
-        {
-          "title": "pi",
-          "href": "/harnesses/pi"
-        },
-        {
-          "title": "Grok Build",
-          "href": "/harnesses/grok-build"
+          "title": "Gateways",
+          "href": "/gateways"
         }
       ]
     },
     {
-      "group": "Environments",
+      "group": "Set the environment",
       "pages": [
         {
           "title": "Overview",
@@ -131,44 +140,28 @@
       ]
     },
     {
-      "group": "Write an evaluation",
+      "group": "Run it",
       "pages": [
         {
-          "title": "Overview",
-          "href": "/evals/evaluate"
+          "title": "Running",
+          "href": "/runs/running"
         },
         {
-          "title": "Turns",
-          "href": "/evals/turns"
+          "title": "Profiles",
+          "href": "/runs/profiles"
         },
         {
-          "title": "Assertions",
-          "href": "/evals/checks"
+          "title": "Recording",
+          "href": "/runs/recording"
         },
         {
-          "title": "Judgments",
-          "href": "/evals/judges"
-        },
-        {
-          "title": "Questions",
-          "href": "/evals/questions"
-        },
-        {
-          "title": "Groups",
-          "href": "/evals/groups"
-        },
-        {
-          "title": "Cases",
-          "href": "/evals/cases"
-        },
-        {
-          "title": "Apps",
-          "href": "/evals/servers"
+          "title": "CI",
+          "href": "/runs/ci"
         }
       ]
     },
     {
-      "group": "Results",
+      "group": "Read the results",
       "pages": [
         {
           "title": "Measure",
@@ -210,27 +203,6 @@
         {
           "title": "Queries",
           "href": "/results/queries"
-        }
-      ]
-    },
-    {
-      "group": "Running",
-      "pages": [
-        {
-          "title": "Running",
-          "href": "/runs/running"
-        },
-        {
-          "title": "Profiles",
-          "href": "/runs/profiles"
-        },
-        {
-          "title": "Recording",
-          "href": "/runs/recording"
-        },
-        {
-          "title": "CI",
-          "href": "/runs/ci"
         }
       ]
     },
@@ -356,6 +328,64 @@
             {
               "title": "Glossary",
               "href": "/reference/glossary"
+            },
+            {
+              "group": "Agents",
+              "pages": [
+                {
+                  "title": "Cursor",
+                  "href": "/harnesses/cursor"
+                },
+                {
+                  "title": "Claude Code",
+                  "href": "/harnesses/claude-code"
+                },
+                {
+                  "title": "Codex",
+                  "href": "/harnesses/codex"
+                },
+                {
+                  "title": "Antigravity",
+                  "href": "/harnesses/antigravity"
+                },
+                {
+                  "title": "OpenCode",
+                  "href": "/harnesses/opencode"
+                },
+                {
+                  "title": "Goose",
+                  "href": "/harnesses/goose"
+                },
+                {
+                  "title": "pi",
+                  "href": "/harnesses/pi"
+                },
+                {
+                  "title": "Grok Build",
+                  "href": "/harnesses/grok-build"
+                }
+              ]
+            },
+            {
+              "group": "Gateways",
+              "pages": [
+                {
+                  "title": "Direct",
+                  "href": "/gateways/direct"
+                },
+                {
+                  "title": "Vercel AI Gateway",
+                  "href": "/gateways/vercel"
+                },
+                {
+                  "title": "OpenRouter",
+                  "href": "/gateways/openrouter"
+                },
+                {
+                  "title": "Vertex AI",
+                  "href": "/gateways/vertex"
+                }
+              ]
             }
           ]
         }
