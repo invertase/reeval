@@ -748,8 +748,8 @@ export async function judgeCallers(config: ResolvedConfig): Promise<string[]> {
 }
 
 /**
- * `analysis.model` and its key: a warning when either is missing, since a run then prints no
- * insights but never stops. Nothing when `analysis.insights: false` leaves the model unset.
+ * `analysis.model`'s key, when there's a model: a warning when it's missing, since `reeval
+ * analyze` and compare questions then can't run. Nothing when no model is set.
  */
 export async function checkAnalysis(
   config: ResolvedConfig,
@@ -758,17 +758,7 @@ export async function checkAnalysis(
   envFile: string,
 ): Promise<Check[]> {
   const model = config.analysis.model
-  if (model === undefined) {
-    if (!config.analysis.insights) return []
-    return [
-      {
-        id: 'analysis',
-        status: 'warn',
-        summary: 'no analysis.model, so runs print no insights',
-        fix: `set analysis: { model: '${RECOMMENDED_ANALYSIS_MODEL}' } in ${config.file} for answers to what each eval asks, or analysis: { insights: false } to go without`,
-      },
-    ]
-  }
+  if (model === undefined) return []
   if (typeof model !== 'string') {
     return [{ id: 'analysis', status: 'ok', summary: 'fakeAnalysis() needs no key' }]
   }

@@ -530,7 +530,7 @@ function stackNotes(c: Colors, changes: StackChange[]): string[] {
 /** Head on its own: no earlier recorded run, so every eval is new, shown as `reeval run` shows it. */
 function noBaseline(c: Colors, input: CompareInput, opts: CompareOptions): string[] {
   const { suite, runId } = input.head
-  const blocks = renderBlocks(suite, { color: opts.color, verbose: opts.verbose, hint: false })
+  const blocks = renderBlocks(suite, { color: opts.color, verbose: opts.verbose })
   const units = unitsOf(suite)
   const order = ['fail', 'infra_error', 'cancelled', 'pass', 'not_gated', 'skipped'] as const
   const tally = (rows: CompareRow[], noun: string) => {

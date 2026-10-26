@@ -100,41 +100,6 @@ export function questionModel(
   return model
 }
 
-/**
- * Why `analysis.model`'s calls would fail for want of a usable key: none of the keys that would
- * work for its provider is set, or the one reeval would send has whitespace or a line break in it.
- * Null when a usable key is set, or for any other model. `brief` names the first two keys only,
- * for the line a run ends with; the plan's warning has them all.
- */
-export function analysisKeyProblem(
-  config: ResolvedConfig,
-  env: NodeJS.ProcessEnv = process.env,
-  brief = false,
-): string | null {
-  const model = analysisModelOf(config)
-  if (typeof model !== 'string' || isEvaluationModel(model) || checkModelString(model)) return null
-  let gateway: GatewayName | undefined
-  try {
-    gateway = resolveModelGateway(model, undefined, gatewayScope(config), 'analysis.model')
-  } catch (error) {
-    return brief
-      ? 'add vercel() to gateway, or analysis: { insights: false }'
-      : `${(error as Error).message} Or analysis: { insights: false }.`
-  }
-  const keys = judgeCredentials(model, gateway)
-  if (!keys.some((k) => env[k])) {
-    if (brief) return `set ${keys.slice(0, 2).join(' or ')}, or analysis: { insights: false }`
-    const unused = unusedGatewayKey(env, gateway)
-    return `set ${modelKeyOptions(model, gateway)} for analysis.model, "${model}", in .env.local, or analysis: { insights: false }${unused ? `.${unused}` : ''}`
-  }
-  try {
-    judgeRoute(model, env, 'analysis model', gateway)
-    return null
-  } catch (error) {
-    return (error as Error).message
-  }
-}
-
 /** Checks the model and its credentials before any work; throws a UsageError (exit 2). */
 export function resolveAnalysisModel(config: ResolvedConfig): ResolvedAnalysisModel {
   const model = analysisModelName(config)

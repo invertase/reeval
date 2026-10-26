@@ -15,8 +15,6 @@ export type CorpusRun = {
   raw: Record<string, unknown>
   /** Saved analyses in the run's `analysis/` folder. */
   analyses: number
-  /** The run has an `insights.json`. */
-  insights: boolean
 }
 
 export type CorpusEntry = { name: string; dir: string; runs: CorpusRun[] }
@@ -41,7 +39,6 @@ export function corpusEntries(): CorpusEntry[] {
             analyses: existsSync(analysis)
               ? readdirSync(analysis).filter((f) => f.endsWith('.json')).length
               : 0,
-            insights: existsSync(join(history, runId, 'insights.json')),
           }
         })
       return { name: e.name, dir: join(root, e.name), runs }
@@ -53,19 +50,19 @@ export function corpus(): {
   records: Array<{ file: string; value: Record<string, unknown> }>
   transcripts: string[]
   analyses: Array<{ file: string; value: Record<string, unknown> }>
-  insights: Array<{ file: string; value: Record<string, unknown> }>
+  remarks: Array<{ file: string; value: Record<string, unknown> }>
 } {
   const records: Array<{ file: string; value: Record<string, unknown> }> = []
   const transcripts: string[] = []
   const analyses: Array<{ file: string; value: Record<string, unknown> }> = []
-  const insights: Array<{ file: string; value: Record<string, unknown> }> = []
+  const remarks: Array<{ file: string; value: Record<string, unknown> }> = []
   const walk = (dir: string) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, e.name)
       if (e.isDirectory()) walk(path)
       else if (e.name === 'transcript.jsonl') transcripts.push(path)
-      else if (e.name === 'insights.json') {
-        insights.push({ file: path, value: JSON.parse(readFileSync(path, 'utf8')) })
+      else if (e.name === 'remarks.json') {
+        remarks.push({ file: path, value: JSON.parse(readFileSync(path, 'utf8')) })
       } else if (e.name.endsWith('.json') && basename(dir) === 'analysis') {
         analyses.push({ file: path, value: JSON.parse(readFileSync(path, 'utf8')) })
       }
@@ -75,5 +72,5 @@ export function corpus(): {
     for (const run of entry.runs) records.push({ file: run.file, value: run.raw })
     walk(join(entry.dir, HISTORY_DIR))
   }
-  return { records, transcripts, analyses, insights }
+  return { records, transcripts, analyses, remarks }
 }

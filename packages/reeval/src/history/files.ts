@@ -13,12 +13,11 @@ import {
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
-import { factsHash } from '../insights/hash.ts'
 import { BUILD_ID } from '../root.ts'
 import type { QuestionInput } from '../types.ts'
 import { runHeader } from '../view/header.ts'
-import { fromModel, INSIGHTS_FILE, type RunInsights } from '../view/insights.ts'
-import { NewerSchemaError, readableInsights, readableRecord } from '../view/record.ts'
+import { REMARKS_FILE, type RunRemarks } from '../view/remarks.ts'
+import { NewerSchemaError, readableRecord, readableRemarks } from '../view/record.ts'
 import { suiteResult } from '../view/suite.ts'
 import {
   ensureHistoryGitignore,
@@ -407,8 +406,6 @@ export type RecordOptions = {
   allowIncomplete?: boolean
   /** Skip the last-chance secret scan, for false positives checked by hand. */
   skipSecretScan?: boolean
-  /** summary.md ends with the hint to set an analysis model: none resolves. */
-  hint: boolean
 }
 
 export type RecordResult = WrittenRun & {
@@ -509,27 +506,16 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     record.git.worktreePatch = null
     record.git.worktreePatchNote = "not kept: recorded with artifacts 'none'"
   }
-  // The run's insights go with it whatever the artifact level: they're its answers, not evidence.
-  // Remarks-only ones are restamped with the recorded record's facts, which can drop artifacts; a
-  // model's keep their hash, so ones written for other facts are still left out with a note.
-  const insightBytes = await readFile(join(source, runId, INSIGHTS_FILE)).catch(() => null)
-  let insights: RunInsights | null = null
-  if (insightBytes) {
+  // The run's remarks go with it whatever the artifact level: they're about the evals, not evidence.
+  const remarkBytes = await readFile(join(source, runId, REMARKS_FILE)).catch(() => null)
+  let remarks: RunRemarks | null = null
+  if (remarkBytes) {
     try {
-      const read = readableInsights(JSON.parse(insightBytes.toString()), INSIGHTS_FILE)
-      if (fromModel(read)) {
-        insights = read
-        files.set(INSIGHTS_FILE, insightBytes)
-      } else {
-        insights = { ...read, factsHash: factsHash(suiteResult(record)) }
-        files.set(INSIGHTS_FILE, Buffer.from(`${JSON.stringify(insights, null, 2)}\n`))
-      }
+      remarks = readableRemarks(JSON.parse(remarkBytes.toString()), REMARKS_FILE)
+      files.set(REMARKS_FILE, remarkBytes)
     } catch {}
   }
-  if (level !== 'none') {
-    const hint = options.hint && !(insights && fromModel(insights))
-    files.set('summary.md', Buffer.from(renderSummary(record, { hint, insights })))
-  }
+  if (level !== 'none') files.set('summary.md', Buffer.from(renderSummary(record, { remarks })))
 
   if (!options.skipSecretScan) {
     const scanned: Array<[string, Finding[]]> = [

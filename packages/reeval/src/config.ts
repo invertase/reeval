@@ -654,8 +654,6 @@ export function resolveConfig(
 export const ANALYSIS_DEFAULTS = {
   maxInputTokens: 20_000,
   maxOutputTokens: 8_000,
-  insights: true,
-  maxTokens: 250_000,
 } as const
 
 function checkAnalysis(
@@ -670,14 +668,12 @@ function checkAnalysis(
   }
   unknownKey(
     analysis,
-    ['model', 'insights', 'maxTokens', 'instructions', 'maxInputTokens', 'maxOutputTokens'],
+    ['model', 'instructions', 'maxInputTokens', 'maxOutputTokens'],
     'analysis',
     file,
   )
   const {
     model,
-    insights = ANALYSIS_DEFAULTS.insights,
-    maxTokens = ANALYSIS_DEFAULTS.maxTokens,
     instructions,
     maxInputTokens = ANALYSIS_DEFAULTS.maxInputTokens,
     maxOutputTokens = ANALYSIS_DEFAULTS.maxOutputTokens,
@@ -688,16 +684,6 @@ function checkAnalysis(
   } else if (model !== undefined && !(isObjectLike(model) && model.kind === 'fake-analysis')) {
     throw new UsageError(
       `analysis.model in ${file} must be a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${JSON.stringify(model)})`,
-    )
-  }
-  if (typeof insights !== 'boolean') {
-    throw new UsageError(
-      `analysis.insights in ${file} must be true or false (got ${JSON.stringify(insights)})`,
-    )
-  }
-  if (!(Number.isInteger(maxTokens) && maxTokens >= 1)) {
-    throw new UsageError(
-      `analysis.maxTokens in ${file} must be a whole number of tokens of at least 1, e.g. 250000 (got ${JSON.stringify(maxTokens)})`,
     )
   }
   if (instructions !== undefined && typeof instructions !== 'string') {
@@ -717,8 +703,6 @@ function checkAnalysis(
   }
   return {
     ...analysis,
-    insights,
-    maxTokens,
     maxInputTokens,
     maxOutputTokens,
   }
@@ -828,9 +812,6 @@ export function secretSources(env: EnvVars): Array<[string, string]> {
 export const analysisModelOf = (config: ResolvedConfig): string | FakeAnalysisModel | undefined =>
   config.analysis.model
 
-/** Whether `analysis.model` is set, so a model can answer what each eval asks. */
-export const hasAnalysisModel = (config: ResolvedConfig) => analysisModelOf(config) !== undefined
-
 /** The run's judge model: the profile's when it sets one, else the config's. */
 export function runJudgeModel(config: ResolvedConfig, profile: ResolvedProfile | null | undefined) {
   return profile ? (profileJudge(profile).model ?? config.judge.model) : config.judge.model
@@ -857,8 +838,7 @@ export type PlannedJudge = NonNullable<AttemptMeta['judge']>
 /**
  * Names the environment variables the run's providers need but don't have: the harnesses it
  * plans (default: the config's), the run's judge and the judges its attempts resolve, the models
- * that answer questions, and required config and profile secrets. Insights' model isn't among them: without its key a run
- * prints no insights, and never stops for it.
+ * that answer questions, and required config and profile secrets.
  */
 export function missingCredentials(
   config: ResolvedConfig,

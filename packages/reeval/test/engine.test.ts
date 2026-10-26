@@ -8,7 +8,6 @@ import { join, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
 import { defaultIncludeGlobs } from '../src/language-runner/adapter.ts'
-import { NO_MODEL_HINT } from '../src/ui/layout.ts'
 import {
   fakeConfig,
   liveSandboxes,
@@ -1048,49 +1047,6 @@ evaluate('fails', async (c) => {
     assert.match(bad.stderr, /--log-order is one of stream, grouped, auto \(got sideways\)/)
   })
 
-  test('with an analysis model the run, summary.md and reeval show end at the tally, no hint', async () => {
-    const p = await project('analysis-model-no-hint', {
-      'reeval.config.ts': fakeConfig({ extra: 'analysis: { model: fakeAnalysis({}) },' }).replace(
-        'import { fakeJudge }',
-        'import { fakeAnalysis, fakeJudge }',
-      ),
-      'evals/agent.eval.ts': `${agentEval('')}`,
-    })
-    const r = await runCli(p.dir, ['run'], {
-      env: { REEVAL_UI: 'agent', NO_COLOR: '', FORCE_COLOR: '' },
-    })
-    assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.equal(r.stdout.trimEnd().split('\n').at(-1), '1 pass')
-    assert.ok(!r.stdout.includes(NO_MODEL_HINT), 'canary: the hint is gone when a model resolves')
-    const summary = (r.stdout.match(/results (\S+summary\.md)/) ?? [])[1] ?? ''
-    assert.ok(!readFileSync(join(p.dir, summary), 'utf8').includes(NO_MODEL_HINT))
-    const show = await runCli(p.dir, ['show'])
-    assert.equal(show.stdout.trimEnd().split('\n').at(-1), '1 pass')
-  })
-
-  test('a language-model judge without analysis.model still ends with the hint', async () => {
-    const p = await project('judge-model-hint', {
-      'reeval.config.ts': fakeConfig({ judge: "{ model: 'google/gemini-3.8-flash' }" }),
-      'evals/agent.eval.ts': `${agentEval('')}`,
-    })
-    const r = await runCli(p.dir, ['run'], {
-      env: {
-        REEVAL_UI: 'agent',
-        NO_COLOR: '',
-        FORCE_COLOR: '',
-        GOOGLE_GENERATIVE_AI_API_KEY: 'test-key',
-      },
-    })
-    assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.equal(r.stdout.trimEnd().split('\n').at(-1), NO_MODEL_HINT)
-    const summary = (r.stdout.match(/results (\S+summary\.md)/) ?? [])[1] ?? ''
-    assert.ok(readFileSync(join(p.dir, summary), 'utf8').includes(NO_MODEL_HINT))
-    const show = await runCli(p.dir, ['show'], {
-      env: { GOOGLE_GENERATIVE_AI_API_KEY: 'test-key' },
-    })
-    assert.equal(show.stdout.trimEnd().split('\n').at(-1), NO_MODEL_HINT)
-  })
-
   test('agent mode prints the plan and the result blocks only, with no colour', async () => {
     const p = await project('agent-mode', {
       'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
@@ -1115,7 +1071,7 @@ evaluate('passes', async () => {})
       '',
     ])
     assert.match(out[8] ?? '', /^\d+m?s · results \.reeval\/runs\/[^/]+\/summary\.md$/)
-    assert.deepEqual(out.slice(9), ['1 fail · 1 pass', NO_MODEL_HINT])
+    assert.deepEqual(out.slice(9), ['1 fail · 1 pass'])
     assert.ok(existsSync(join(p.dir, (out[8] ?? '').replace(/^.* · results /, ''))))
     assert.ok(!r.stdout.includes('\x1b['))
   })

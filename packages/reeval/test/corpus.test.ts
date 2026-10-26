@@ -11,13 +11,10 @@ import { analyzeCommand } from '../src/analysis/command.ts'
 import { compareCommand, showCommand } from '../src/commands.ts'
 import { loadConfig } from '../src/config.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import { factsHash } from '../src/insights/hash.ts'
 import { queryCommand } from '../src/query.ts'
 import { countSecrets } from '../src/redact.ts'
 import type { ResolvedConfig } from '../src/types.ts'
-import { fromModel, type RunInsights } from '../src/view/insights.ts'
 import { readableRecord } from '../src/view/record.ts'
-import { suiteResult } from '../src/view/suite.ts'
 import { project, runCli } from './helpers.ts'
 import { CORPUS_DIR, corpusEntries, HISTORY_DIR } from './support/corpus.ts'
 import { REAL_HARNESSES, realAttempts } from './support/real-runs.ts'
@@ -36,7 +33,6 @@ const REQUIRED = [
   'todo',
   'status budget',
   'saved analysis',
-  'run insights',
   'transcript',
   'diff',
   'tokens',
@@ -51,12 +47,7 @@ const REQUIRED = [
   'before the reeval sandbox user',
 ]
 
-function covers(
-  record: RunRecord,
-  raw: Record<string, unknown>,
-  hasAnalysis: boolean,
-  hasInsights: boolean,
-): string[] {
+function covers(record: RunRecord, raw: Record<string, unknown>, hasAnalysis: boolean): string[] {
   const out = new Set<string>()
   const attempts = record.evals.flatMap((e) => e.attempts)
   if (record.evals.some((e) => e.cells.some((c) => c.lift))) out.add('compare with lift')
@@ -75,7 +66,6 @@ function covers(
   out.add(`status ${record.status}`)
   for (const h of record.stack.harnesses) out.add(`harness ${h.kind}`)
   if (hasAnalysis) out.add('saved analysis')
-  if (hasInsights) out.add('run insights')
   if (!('sandboxWarnings' in (raw.plan as object))) out.add('before plan.sandboxWarnings')
   if (JSON.stringify(raw).includes('/es/workspace/')) out.add('before the reeval sandbox user')
   return [...out]
@@ -194,12 +184,7 @@ describe('the record corpus', { concurrency: 4 }, () => {
     const found = new Set(
       entries.flatMap((e) =>
         e.runs.flatMap((r) =>
-          covers(
-            readableRecord(structuredClone(r.raw) as never),
-            r.raw,
-            r.analyses > 0,
-            r.insights,
-          ),
+          covers(readableRecord(structuredClone(r.raw) as never), r.raw, r.analyses > 0),
         ),
       ),
     )
@@ -329,24 +314,6 @@ describe('the record corpus', { concurrency: 4 }, () => {
           )
           for (const row of STATE_ROWS)
             assert.match(text, new RegExp(`\\n {2}${row} +\\S`), `${entry.name} ${id}: ${row}`)
-          if (r.insights) {
-            const written = JSON.parse(
-              readFileSync(join(entry.dir, HISTORY_DIR, id, 'insights.json'), 'utf8'),
-            ) as RunInsights
-            const { headline } = written
-            assert.doesNotMatch(text, /insights failed/)
-            // A later change to `SuiteResult` moves the facts' hash, so an older file is left out.
-            // Remarks-only insights have no model text to leave out, so they never get the note.
-            const suite = suiteResult(readableRecord(structuredClone(r.raw) as never))
-            if (!fromModel(written)) {
-              assert.doesNotMatch(text, /insights left out/)
-            } else if (written.factsHash !== factsHash(suite)) {
-              assert.match(text, /insights left out: insights\.json was written for other facts/)
-            } else if (headline) {
-              assert.ok(text.includes(headline.text), `${id}: the headline`)
-              assert.doesNotMatch(text, /insights left out/)
-            }
-          }
           await run(`reeval show ${id} --md`, (out) =>
             showCommand({ config, flags: { md: true }, out }, [id]),
           )

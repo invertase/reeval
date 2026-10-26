@@ -4,13 +4,13 @@
 // upstream provider and the cost), never the model's wording, and never retries. Skipped unless
 // REEVAL_TEST_REAL=1; asked for, it fails naming OPENROUTER_API_KEY when that isn't set.
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import type { ShapeSchema } from '../scripts/schema/generate.ts'
 import { validate } from '../scripts/schema/validate.ts'
 import { OPENROUTER_JUDGE_MODEL } from '../src/judge/index.ts'
-import { readableInsights } from '../src/view/record.ts'
+import type { AnalysisDoc } from '../src/view/analysis.ts'
 import { pkgRoot, project, readRun, runCli } from './helpers.ts'
 
 const ANALYSIS_MODEL = 'google/gemini-3.8-flash'
@@ -73,9 +73,16 @@ evaluate('writes a greet(name) function', async (c) => {
   )
   assert.match(r.stdout, /judge served by \S/, "the output names the judge's upstream")
 
-  const insights = join(p.dir, '.reeval/runs', run.runId, 'insights.json')
-  assert.ok(existsSync(insights), `no insights written\n${r.stdout}\n${r.stderr}`)
-  const doc = readableInsights(JSON.parse(readFileSync(insights, 'utf8')))
-  assert.equal(doc?.model, ANALYSIS_MODEL)
-  assert.ok(doc && doc.usage.inputTokens > 0 && doc.usage.outputTokens > 0, 'the analysis call ran')
+  const analyze = await runCli(p.dir, ['analyze', run.runId, '--json'], {
+    env: { OPENROUTER_API_KEY: key },
+    timeoutMs: 120_000,
+  })
+  assert.equal(analyze.code, 0, `reeval analyze\n${analyze.stdout}\n${analyze.stderr}`)
+  const doc = JSON.parse(analyze.stdout) as AnalysisDoc
+  assert.equal(doc.model, ANALYSIS_MODEL)
+  assert.equal(doc.route, 'openrouter')
+  assert.ok(
+    (doc.usage.inputTokens ?? 0) > 0 && (doc.usage.outputTokens ?? 0) > 0,
+    'the analysis call ran',
+  )
 })

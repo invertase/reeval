@@ -801,40 +801,6 @@ describe('each provider prefix with each combination of keys', () => {
       )
     })
   }
-  test('analysis.model names the keys for its prefix, briefly for the closing line', async () => {
-    const { analysisKeyProblem } = await import('../src/analysis/model.ts')
-    const config = (model: string, gateways?: GatewayDescriptor[]) =>
-      resolveConfig({ analysis: { model }, ...(gateways ? { gateway: gateways } : {}) }, '/p')
-    const anthropic = config('anthropic/claude-sonnet-5')
-    assert.equal(analysisKeyProblem(anthropic, { ANTHROPIC_API_KEY: 'a' }), null)
-    assert.equal(
-      analysisKeyProblem(anthropic, {}),
-      'set ANTHROPIC_API_KEY (for direct()) for analysis.model, "anthropic/claude-sonnet-5", in .env.local, or analysis: { insights: false }',
-    )
-    assert.equal(
-      analysisKeyProblem(anthropic, { AI_GATEWAY_API_KEY: 'g' }),
-      'set ANTHROPIC_API_KEY (for direct()) for analysis.model, "anthropic/claude-sonnet-5", in .env.local, or analysis: { insights: false }. AI_GATEWAY_API_KEY is set, but no gateway in the config uses it: add vercel() to gateway to call the model through Vercel AI Gateway.',
-    )
-    assert.equal(
-      analysisKeyProblem(config('anthropic/claude-sonnet-5', [vercel()]), {
-        AI_GATEWAY_API_KEY: 'g',
-      }),
-      null,
-    )
-    assert.equal(
-      analysisKeyProblem(config('openai/gpt-6-luna'), {}, true),
-      'set OPENAI_API_KEY, or analysis: { insights: false }',
-    )
-    assert.equal(
-      analysisKeyProblem(config('mistral/large'), { AI_GATEWAY_API_KEY: 'g' }),
-      'analysis.model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway. Or analysis: { insights: false }.',
-    )
-    assert.match(
-      analysisKeyProblem(anthropic, { ANTHROPIC_API_KEY: 'a\nb' }) ?? '',
-      /^ANTHROPIC_API_KEY for analysis model "anthropic\/claude-sonnet-5" has whitespace or a line break in it at character 2\./,
-    )
-  })
-
   test('any other prefix needs vercel()', () => {
     for (const env of [{}, { AI_GATEWAY_API_KEY: 'g' }]) {
       assert.throws(

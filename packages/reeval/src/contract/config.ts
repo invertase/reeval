@@ -212,21 +212,7 @@ export const analysisConfigDataSchema = z
       .union([z.string(), fakeAnalysisDataSchema])
       .optional()
       .describe(
-        "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and questions fall back to the judge's when it's a language model.",
-      ),
-    insights: z
-      .boolean()
-      .optional()
-      .describe(
-        '`reeval run` classifies each eval and explains its result with `model` once the attempts finish (default true when `model` is set; `--no-insights` turns it off for one run).',
-      ),
-    maxTokens: z
-      .number()
-      .int()
-      .min(1)
-      .optional()
-      .describe(
-        "Tokens (in and out) that one run's insights may use, over every classification, insight and headline call (default 250000). Past it, the evals left print without insights; the run's outcome and exit code never change.",
+        "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. `reeval analyze` and questions fall back to the judge's when it's a language model.",
       ),
     instructions: z
       .string()
@@ -343,7 +329,7 @@ export const reevalConfigDataSchema = z
       ),
     analysis: analysisConfigDataSchema
       .optional()
-      .describe('Insights during `reeval run`, `reeval analyze`, and questions without a model.'),
+      .describe('The model behind `reeval analyze` and questions without a model.'),
     gateway: z
       .array(gatewayEntryDataSchema)
       .min(1)

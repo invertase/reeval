@@ -24,10 +24,9 @@ export default defineConfig({
   sandbox: fakeSandbox(),
   // The model that answers the questions. This fake votes for the side whose diff has the
   // brand blue, without looking at the screenshots; set one that takes images, such as
-  // 'anthropic/claude-sonnet-5', for real votes. It writes no insights, so they're off.
+  // 'anthropic/claude-sonnet-5', for real votes.
   analysis: {
     model: fakeAnalysis({ vote: (pair) => (pair.a.diff?.includes('#2563eb') ? 'A' : 'B') }),
-    insights: false,
   },
   profiles: {
     // The real agents: `--profile claude-code`, or any other in ../profiles.ts. An example's own

@@ -260,8 +260,8 @@ export default defineConfig({
       // The published package's README is the repo-root README, copied so the
       // tarball has the same file. It is handwritten; `pnpm docs:gen` does not write it.
       cpSync(join(here, '../..', 'README.md'), join(here, 'README.md'))
-      // The eval rubric is a consumer skill in the repo's skills/, and the insight model's
-      // rubric (src/insights/rubric.ts), so it ships beside dist/.
+      // The eval rubric is a consumer skill in the repo's skills/ that remarks' fixes point
+      // to, so it ships beside dist/.
       rmSync(join(here, 'skills'), { recursive: true, force: true })
       cpSync(join(here, '../..', 'skills/eval-rubric'), join(here, 'skills/eval-rubric'), {
         recursive: true,

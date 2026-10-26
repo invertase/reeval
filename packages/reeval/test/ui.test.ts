@@ -8,7 +8,6 @@ import { AgentRenderer } from '../src/ui/agent.ts'
 import { colors } from '../src/ui/colors.ts'
 import type { EvalResult, Progress, ReevalEvent } from '../src/ui/events.ts'
 import { progressLine } from '../src/ui/format.ts'
-import { NO_MODEL_HINT } from '../src/ui/layout.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
 import { Tagger } from '../src/ui/tags.ts'
@@ -204,7 +203,6 @@ const interleaved: ReevalEvent[] = [
     record,
     summaryPath: '.reeval/runs/run-1/summary.md',
     results: [greetResult, defaultResult],
-    hint: true,
   },
 ]
 
@@ -272,7 +270,6 @@ const RESULT = [
   '',
   '6m 05s · results .reeval/runs/run-1/summary.md',
   '3 fail · 1 pass · 1 infra error · 2 skipped',
-  NO_MODEL_HINT,
 ]
 
 describe('plain renderer', () => {
@@ -483,49 +480,6 @@ test('a check with retries says which try it ended on', () => {
   assert.equal(line(0, 2, 3), '$ npm test  exit 0 2s · passed on try 2 of 3')
   assert.equal(line(1, 3, 3), '$ npm test  exit 1 2s · failed all 3 tries')
   assert.equal(line(1, 2, 3), '$ npm test  exit 1 2s · failed on try 2 of 3')
-})
-
-describe('insights progress', () => {
-  const end = interleaved.at(-1) as Extract<ReevalEvent, { type: 'run-end' }>
-  const progress = (done: number, at: number): ReevalEvent => ({
-    type: 'insights-progress',
-    at: s(at),
-    done,
-    total: 10,
-  })
-  const events: ReevalEvent[] = [
-    ...interleaved.slice(0, -1),
-    progress(0, 366),
-    progress(3, 380),
-    progress(7, 560),
-    progress(10, 600),
-    { ...end, at: s(601) },
-  ]
-
-  test('live: the status line counts the evals settled, in place, cleared before the result', () => {
-    const out = render(events, options({ requested: 'live', outputLogs: 'none' }))
-    const clear = '\r\x1b[2K'
-    for (const n of [0, 3, 7, 10]) assert.ok(out.includes(`${clear}insights ${n}/10…`), `${n}`)
-    assert.doesNotMatch(out, /… insights/)
-    assert.ok(out.endsWith(lines(...RESULT)))
-  })
-
-  test('plain: only the heartbeat says so, once a quiet minute, until the last eval settles', () => {
-    const out = render(events, options({ outputLogs: 'none' }))
-    assert.deepEqual(out.match(/^… insights .*$/gm), [
-      '… insights 3/10 after 54s',
-      '… insights 3/10 after 1m 54s',
-      '… insights 3/10 after 2m 54s',
-    ])
-    assert.doesNotMatch(render(events, options({ outputLogs: 'none', heartbeatMs: 0 })), /insights/)
-  })
-
-  test('agent: nothing', () => {
-    let text = ''
-    const renderer = new AgentRenderer({ out: { write: (chunk: string) => (text += chunk) } })
-    for (const e of events) renderer.onEvent(e)
-    assert.doesNotMatch(text, /insights \d/)
-  })
 })
 
 describe('agent renderer', () => {

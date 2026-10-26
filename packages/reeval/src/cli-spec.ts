@@ -55,8 +55,6 @@ export const FLAGS = {
   save: { type: 'boolean' },
   context: { type: 'boolean' },
   'no-cache': { type: 'boolean' },
-  insights: { type: 'boolean' },
-  'no-insights': { type: 'boolean' },
   yes: { type: 'boolean', short: 'y' },
   harness: { type: 'string' },
   bare: { type: 'boolean' },
@@ -106,7 +104,6 @@ const RUN_FLAGS: FlagName[] = [
   'verbose',
   'trace',
   'resume',
-  'no-insights',
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
@@ -172,9 +169,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --resume [ref]              Continue a stopped, interrupted or budget-stopped run: same run id,
                                 skip completed attempts, restart in-flight ones. Without a ref, the
                                 newest resumable (Stopped staging, or an interrupted/budget scratch),
-                                not assembled latest. Ref is a run id or unique prefix
-    --no-insights               Skip insights for this run: no analysis.model calls, the blocks
-                                print their facts only (also analysis.insights: false)`,
+                                not assembled latest. Ref is a run id or unique prefix`,
   },
   clean: {
     flags: ['keep', 'images'],
@@ -242,8 +237,6 @@ export const COMMANDS: Record<string, CommandSpec> = {
       'context',
       'dry-run',
       'no-cache',
-      'insights',
-      'verbose',
     ],
     positionals: 1,
     help: `
@@ -255,12 +248,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --save                      Also write it into the run's history folder: <run>/analysis/
     --context                   Print the digest and rules for your own coding agent (no key, no call)
     --dry-run                   Print the digest's size and the cache key, without calling the model
-    --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
-    --insights                  Write a run's insights instead: what each eval asks and its answer,
-                                citing the facts, into <run>/insights.json, as reeval run does at its
-                                end, or finish the evals one left unfinished; reeval show prints them.
-                                Takes --json and -v
-    -v, --verbose               With --insights, print each sentence the checks removed and why`,
+    --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again`,
   },
   mcp: {
     flags: ['http', 'port', 'host', 'token'],

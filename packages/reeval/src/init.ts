@@ -90,8 +90,7 @@ export default defineConfig({
   harness: ${h.factory}({ model: '${h.model}' }), // needs ${keyOf(h)}
   timeout: '15m',
   // For c.judge, add a judge, e.g. judge: { model: '${RECOMMENDED_ANALYSIS_MODEL}' }.
-  // Insights explain each eval after a run, with ${ANALYSIS_KEY};
-  // insights: false turns them off.
+  // reeval analyze explains a run, with ${ANALYSIS_KEY}.
   analysis: { model: '${RECOMMENDED_ANALYSIS_MODEL}' },
   defaultProfile: { ci: 'pr' },
   profiles: {
@@ -433,7 +432,7 @@ export function planInit(options: {
     config(
       dir,
       configSource(pkg, choice),
-      `harness ${cellOf(h)}; insights ${RECOMMENDED_ANALYSIS_MODEL}; profiles pr, nightly`,
+      `harness ${cellOf(h)}; analysis ${RECOMMENDED_ANALYSIS_MODEL}; profiles pr, nightly`,
       force,
       conflicts,
     ),
@@ -558,9 +557,6 @@ export async function initCommand(flags: Flags, args: string[], io: InitIO): Pro
       writeFileSync(path, a.content)
     }
   }
-  io.out(
-    `Insights: ${RECOMMENDED_ANALYSIS_MODEL} explains each eval after a run, with ${ANALYSIS_KEY}; analysis.insights: false or --no-insights turns them off`,
-  )
   const pm = packageManager(dir)
   const h = harnessOf(choice)
   const build = `${pm.exec} image build`

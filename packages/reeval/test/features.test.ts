@@ -34,7 +34,6 @@ import { PI_CLI_VERSION } from '@reeval/harness-pi'
 import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@reeval/sandbox-docker'
 import { pngSize, stubPng } from '../src/capture/stub.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import { NO_MODEL_HINT } from '../src/ui/layout.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
@@ -2916,8 +2915,7 @@ export const features: Feature[] = [
         blockOf(stdout, 'canary'),
         'fail             canary\n  second try       failed\n    expected 1 to be 2 // Object.is equality',
       )
-      assert.match(stdout, /\n1 fail · 1 pass\n/)
-      assert.ok(stdout.endsWith(`\n${NO_MODEL_HINT}\n`), stdout)
+      assert.ok(stdout.endsWith('\n1 fail · 1 pass\n'), stdout)
     },
   },
   {

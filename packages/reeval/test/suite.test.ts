@@ -280,7 +280,7 @@ describe('outcomes the record alone has', () => {
   const evalOf = (s: SuiteResult, name: string) =>
     s.files.flatMap((f) => f.evals).find((e) => e.name === name || e.template === name)
   const text = (s: SuiteResult) =>
-    render(s, null, { color: false, verbose: false, hint: false }).join('\n')
+    render(s, null, { color: false, verbose: false }).join('\n')
 
   /** An interrupted run, its `writes greet.js` attempt cancelled mid-turn. */
   function interrupted(): RunRecord {
@@ -337,7 +337,7 @@ describe('outcomes the record alone has', () => {
     assert.equal(s.outcome, 'fail')
     assert.deepEqual(s.errors, record.errors)
     assert.equal(s.tally.errors, 1)
-    const lines = render(s, null, { color: false, verbose: false, hint: false })
+    const lines = render(s, null, { color: false, verbose: false })
     assert.equal(lines[0], 'error: evals/a.eval.ts: Cannot find module ./missing.ts')
     assert.match(lines.at(-1) ?? '', /^1 run error · \d+ fail · /)
   })

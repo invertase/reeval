@@ -594,20 +594,9 @@ evaluate('a', async () => {})
     )
   })
 
-  test("analysis: analysis.model's key, a warning only: a run without it prints no insights", async () => {
+  test("analysis: analysis.model's key, a warning only; nothing without a model", async () => {
     const none = await configOf('analysis-none', '{ harness: fakeHarness() }')
-    const noModel = await checkAnalysis(none, deps(), false, '.env.local')
-    assert.deepEqual(statuses(noModel), ['warn'])
-    assert.equal(noModel[0]?.summary, 'no analysis.model, so runs print no insights')
-    assert.match(
-      noModel[0]?.fix ?? '',
-      /^set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in \S*reeval\.config\.ts for answers to what each eval asks, or analysis: \{ insights: false \} to go without$/,
-    )
-    const off = await configOf(
-      'analysis-off',
-      '{ harness: fakeHarness(), analysis: { insights: false } }',
-    )
-    assert.deepEqual(await checkAnalysis(off, deps(), false, '.env.local'), [])
+    assert.deepEqual(await checkAnalysis(none, deps(), false, '.env.local'), [])
     const model = await configOf(
       'analysis-model',
       "{ harness: fakeHarness(), analysis: { model: 'google/gemini-3.8-flash' } }",
