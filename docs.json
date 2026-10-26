@@ -80,7 +80,7 @@
       "group": "Evaluation",
       "pages": [
         {
-          "title": "Evaluation files",
+          "title": "Evaluations",
           "href": "/write"
         },
         {
@@ -188,21 +188,90 @@
       "group": "Configuration",
       "pages": [
         {
-          "group": "Agent",
+          "group": "Gateways",
+          "href": "/agents/gateways",
+          "pages": [
+            {
+              "title": "Direct",
+              "href": "/integrations/gateways/direct"
+            },
+            {
+              "title": "Vercel AI Gateway",
+              "href": "/integrations/gateways/vercel"
+            },
+            {
+              "title": "OpenRouter",
+              "href": "/integrations/gateways/openrouter"
+            },
+            {
+              "title": "Vertex AI",
+              "href": "/integrations/gateways/vertex"
+            }
+          ]
+        },
+        {
+          "group": "Agents",
+          "href": "/agents",
           "pages": [
             {
               "title": "Model",
               "href": "/agents/model"
             },
             {
-              "title": "Gateways",
-              "href": "/agents/gateways"
+              "title": "Cursor",
+              "href": "/integrations/agents/cursor"
+            },
+            {
+              "title": "Claude Code",
+              "href": "/integrations/agents/claude-code"
+            },
+            {
+              "title": "Codex",
+              "href": "/integrations/agents/codex"
+            },
+            {
+              "title": "Antigravity",
+              "href": "/integrations/agents/antigravity"
+            },
+            {
+              "title": "OpenCode",
+              "href": "/integrations/agents/opencode"
+            },
+            {
+              "title": "Goose",
+              "href": "/integrations/agents/goose"
+            },
+            {
+              "title": "pi",
+              "href": "/integrations/agents/pi"
+            },
+            {
+              "title": "fx",
+              "href": "/integrations/agents/fx"
+            },
+            {
+              "title": "Grok Build",
+              "href": "/integrations/agents/grok-build"
             }
-          ],
-          "href": "/agents"
+          ]
         },
         {
-          "group": "Environment",
+          "group": "Sandboxes",
+          "href": "/integrations/sandboxes",
+          "pages": [
+            {
+              "title": "Docker",
+              "href": "/integrations/sandboxes/docker"
+            },
+            {
+              "title": "Podman",
+              "href": "/integrations/sandboxes/podman"
+            }
+          ]
+        },
+        {
+          "group": "Environments",
+          "href": "/environments",
           "pages": [
             {
               "title": "Files",
@@ -239,88 +308,6 @@
             {
               "title": "Egress",
               "href": "/environments/egress"
-            }
-          ],
-          "href": "/environments"
-        },
-        {
-          "group": "Integrations",
-          "pages": [
-            {
-              "group": "Agents",
-              "pages": [
-                {
-                  "title": "Cursor",
-                  "href": "/integrations/agents/cursor"
-                },
-                {
-                  "title": "Claude Code",
-                  "href": "/integrations/agents/claude-code"
-                },
-                {
-                  "title": "Codex",
-                  "href": "/integrations/agents/codex"
-                },
-                {
-                  "title": "Antigravity",
-                  "href": "/integrations/agents/antigravity"
-                },
-                {
-                  "title": "OpenCode",
-                  "href": "/integrations/agents/opencode"
-                },
-                {
-                  "title": "Goose",
-                  "href": "/integrations/agents/goose"
-                },
-                {
-                  "title": "pi",
-                  "href": "/integrations/agents/pi"
-                },
-                {
-                  "title": "fx",
-                  "href": "/integrations/agents/fx"
-                },
-                {
-                  "title": "Grok Build",
-                  "href": "/integrations/agents/grok-build"
-                }
-              ]
-            },
-            {
-              "group": "Gateways",
-              "pages": [
-                {
-                  "title": "Direct",
-                  "href": "/integrations/gateways/direct"
-                },
-                {
-                  "title": "Vercel AI Gateway",
-                  "href": "/integrations/gateways/vercel"
-                },
-                {
-                  "title": "OpenRouter",
-                  "href": "/integrations/gateways/openrouter"
-                },
-                {
-                  "title": "Vertex AI",
-                  "href": "/integrations/gateways/vertex"
-                }
-              ]
-            },
-            {
-              "group": "Sandboxes",
-              "pages": [
-                {
-                  "title": "Docker",
-                  "href": "/integrations/sandboxes/docker"
-                },
-                {
-                  "title": "Podman",
-                  "href": "/integrations/sandboxes/podman"
-                }
-              ],
-              "href": "/integrations/sandboxes"
             }
           ]
         }
