@@ -9,6 +9,7 @@ import { recordFailure } from '../src/attempt/record.ts'
 import type { Attempt } from '../src/attempt/state.ts'
 import {
   acrossOf,
+  checksHeld,
   headToHeadLines,
   type PairAttempt,
   pairsOf,
@@ -632,6 +633,23 @@ describe('compare question pairs', () => {
     // Without it, h2's run-2 arms and run 2's ui harnesses have no pair; the rest stand.
     assert.equal(pairs.filter((p) => p.cut === 'within').length, 3)
     assert.equal(pairs.filter((p) => p.cut === 'across').length, 3)
+  })
+
+  test("checks held: a pass, or a fail only on the judge; a failed check or an infra error didn't", () => {
+    assert.equal(checksHeld('pass', null), true)
+    assert.equal(checksHeld('fail', { kind: 'judge' }), true)
+    assert.equal(checksHeld('fail', { kind: 'assertion' }), false)
+    assert.equal(checksHeld('fail', null), false)
+    assert.equal(checksHeld('infra_error', { kind: 'infra' }), false)
+  })
+
+  test('fakeAnalysis() without a vote calls every pair a tie', async () => {
+    const answer = await ask(pairsOf(matrix(['h'], ['sdk', 'ui'], 2)), undefined)
+    assert.deepEqual(
+      answer.votes.map((v) => v.winner),
+      ['tie', 'tie', 'tie', 'tie'],
+    )
+    assert.deepEqual(answer.rates, [])
   })
 
   test('every pair is sent twice, swapped, and each pick maps back to its name', async () => {
