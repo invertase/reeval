@@ -63,10 +63,10 @@
   },
   "sidebar": [
     {
-      "group": "Getting started",
+      "group": "Configuration",
       "pages": [
         {
-          "title": "Overview",
+          "title": "reeval",
           "href": "/"
         },
         {
@@ -76,131 +76,261 @@
         {
           "title": "Core concepts",
           "href": "/core-concepts"
+        },
+        {
+          "group": "Choose an agent",
+          "pages": [
+            {
+              "title": "Choose an agent",
+              "href": "/agents"
+            },
+            {
+              "title": "Model",
+              "href": "/agents/model"
+            },
+            {
+              "title": "Gateways",
+              "href": "/agents/gateways"
+            }
+          ]
+        },
+        {
+          "group": "Set the environment",
+          "pages": [
+            {
+              "title": "Define an environment",
+              "href": "/environments"
+            },
+            {
+              "title": "Files",
+              "href": "/environments/files"
+            },
+            {
+              "title": "Repositories",
+              "href": "/environments/repositories"
+            },
+            {
+              "title": "Skills",
+              "href": "/environments/skills"
+            },
+            {
+              "title": "Rules",
+              "href": "/environments/rules"
+            },
+            {
+              "title": "MCP servers",
+              "href": "/environments/mcp"
+            },
+            {
+              "title": "Toolchains",
+              "href": "/environments/toolchains"
+            },
+            {
+              "title": "Setup commands",
+              "href": "/environments/setup"
+            },
+            {
+              "title": "Secrets",
+              "href": "/environments/secrets"
+            },
+            {
+              "title": "Egress",
+              "href": "/environments/egress"
+            }
+          ]
+        },
+        {
+          "group": "Integrations",
+          "pages": [
+            {
+              "group": "Agents",
+              "pages": [
+                {
+                  "title": "Cursor",
+                  "href": "/integrations/agents/cursor"
+                },
+                {
+                  "title": "Claude Code",
+                  "href": "/integrations/agents/claude-code"
+                },
+                {
+                  "title": "Codex",
+                  "href": "/integrations/agents/codex"
+                },
+                {
+                  "title": "Antigravity",
+                  "href": "/integrations/agents/antigravity"
+                },
+                {
+                  "title": "OpenCode",
+                  "href": "/integrations/agents/opencode"
+                },
+                {
+                  "title": "Goose",
+                  "href": "/integrations/agents/goose"
+                },
+                {
+                  "title": "pi",
+                  "href": "/integrations/agents/pi"
+                },
+                {
+                  "title": "Grok Build",
+                  "href": "/integrations/agents/grok-build"
+                }
+              ]
+            },
+            {
+              "group": "Gateways",
+              "pages": [
+                {
+                  "title": "Direct",
+                  "href": "/integrations/gateways/direct"
+                },
+                {
+                  "title": "Vercel AI Gateway",
+                  "href": "/integrations/gateways/vercel"
+                },
+                {
+                  "title": "OpenRouter",
+                  "href": "/integrations/gateways/openrouter"
+                },
+                {
+                  "title": "Vertex AI",
+                  "href": "/integrations/gateways/vertex"
+                }
+              ]
+            },
+            {
+              "group": "Sandboxes",
+              "pages": [
+                {
+                  "title": "Choose a sandbox",
+                  "href": "/integrations/sandboxes"
+                },
+                {
+                  "title": "Docker",
+                  "href": "/integrations/sandboxes/docker"
+                },
+                {
+                  "title": "Podman",
+                  "href": "/integrations/sandboxes/podman"
+                }
+              ]
+            }
+          ]
         }
       ]
     },
     {
-      "group": "Write an evaluation",
+      "group": "Evaluation",
       "pages": [
         {
-          "title": "Overview",
-          "href": "/write"
+          "group": "Write an evaluation",
+          "pages": [
+            {
+              "title": "Write an evaluation",
+              "href": "/write"
+            },
+            {
+              "title": "Assertions",
+              "href": "/write/assertions"
+            },
+            {
+              "title": "Judgments",
+              "href": "/write/judgments"
+            },
+            {
+              "title": "Questions",
+              "href": "/write/questions"
+            },
+            {
+              "title": "Turns",
+              "href": "/write/turns"
+            },
+            {
+              "title": "Apps",
+              "href": "/write/apps"
+            },
+            {
+              "title": "Cases",
+              "href": "/write/cases"
+            },
+            {
+              "title": "Groups",
+              "href": "/write/groups"
+            }
+          ]
         },
         {
-          "title": "Assertions",
-          "href": "/write/assertions"
+          "group": "Run it",
+          "pages": [
+            {
+              "title": "Running",
+              "href": "/runs/running"
+            },
+            {
+              "title": "Profiles",
+              "href": "/runs/profiles"
+            },
+            {
+              "title": "Recording",
+              "href": "/runs/recording"
+            },
+            {
+              "title": "CI",
+              "href": "/runs/ci"
+            }
+          ]
         },
         {
-          "title": "Judgments",
-          "href": "/write/judgments"
-        },
-        {
-          "title": "Questions",
-          "href": "/write/questions"
-        },
-        {
-          "title": "Turns",
-          "href": "/write/turns"
-        },
-        {
-          "title": "Apps",
-          "href": "/write/apps"
-        },
-        {
-          "title": "Cases",
-          "href": "/write/cases"
-        },
-        {
-          "title": "Groups",
-          "href": "/write/groups"
+          "group": "Recipes",
+          "pages": [
+            {
+              "title": "Measure a skill",
+              "href": "/recipes/skill-comparison"
+            },
+            {
+              "title": "Measure your docs",
+              "href": "/recipes/docs-comparison"
+            },
+            {
+              "title": "Measure MCP servers",
+              "href": "/recipes/mcp-comparison"
+            },
+            {
+              "title": "Test an SDK",
+              "href": "/recipes/sdk"
+            },
+            {
+              "title": "Test a CLI",
+              "href": "/recipes/cli"
+            },
+            {
+              "title": "Test recommendations",
+              "href": "/recipes/recommendation"
+            },
+            {
+              "title": "Judge an app",
+              "href": "/recipes/app-check"
+            },
+            {
+              "title": "Compare harnesses",
+              "href": "/recipes/agent-comparison"
+            },
+            {
+              "title": "Gate pull requests",
+              "href": "/recipes/ci-gate"
+            },
+            {
+              "title": "Track past runs",
+              "href": "/recipes/results-over-time"
+            }
+          ]
         }
       ]
     },
     {
-      "group": "Choose an agent",
-      "pages": [
-        {
-          "title": "Overview",
-          "href": "/agents"
-        },
-        {
-          "title": "Model",
-          "href": "/agents/model"
-        },
-        {
-          "title": "Gateways",
-          "href": "/agents/gateways"
-        }
-      ]
-    },
-    {
-      "group": "Set the environment",
-      "pages": [
-        {
-          "title": "Overview",
-          "href": "/environments"
-        },
-        {
-          "title": "Files",
-          "href": "/environments/files"
-        },
-        {
-          "title": "Repositories",
-          "href": "/environments/repositories"
-        },
-        {
-          "title": "Skills",
-          "href": "/environments/skills"
-        },
-        {
-          "title": "Rules",
-          "href": "/environments/rules"
-        },
-        {
-          "title": "MCP servers",
-          "href": "/environments/mcp"
-        },
-        {
-          "title": "Toolchains",
-          "href": "/environments/toolchains"
-        },
-        {
-          "title": "Setup commands",
-          "href": "/environments/setup"
-        },
-        {
-          "title": "Secrets",
-          "href": "/environments/secrets"
-        },
-        {
-          "title": "Egress",
-          "href": "/environments/egress"
-        }
-      ]
-    },
-    {
-      "group": "Run it",
-      "pages": [
-        {
-          "title": "Running",
-          "href": "/runs/running"
-        },
-        {
-          "title": "Profiles",
-          "href": "/runs/profiles"
-        },
-        {
-          "title": "Recording",
-          "href": "/runs/recording"
-        },
-        {
-          "title": "CI",
-          "href": "/runs/ci"
-        }
-      ]
-    },
-    {
-      "group": "Read the results",
+      "group": "Results",
       "pages": [
         {
           "title": "Output",
@@ -246,188 +376,59 @@
       ]
     },
     {
-      "group": "Recipes",
+      "group": "Reference",
       "pages": [
         {
-          "title": "Measure a skill",
-          "href": "/recipes/skill-comparison"
+          "title": "Authoring API",
+          "href": "/reference/api"
         },
         {
-          "title": "Measure your docs",
-          "href": "/recipes/docs-comparison"
+          "title": "Attempt context",
+          "href": "/reference/context"
         },
         {
-          "title": "Measure MCP servers",
-          "href": "/recipes/mcp-comparison"
+          "title": "Matchers",
+          "href": "/reference/matchers"
         },
         {
-          "title": "Test an SDK",
-          "href": "/recipes/sdk"
+          "title": "Options",
+          "href": "/reference/options"
         },
         {
-          "title": "Test a CLI",
-          "href": "/recipes/cli"
+          "title": "Environment helpers",
+          "href": "/reference/environment"
         },
         {
-          "title": "Test recommendations",
-          "href": "/recipes/recommendation"
+          "title": "Configuration",
+          "href": "/reference/config"
         },
         {
-          "title": "Judge an app",
-          "href": "/recipes/app-check"
+          "title": "Profiles",
+          "href": "/reference/profiles"
         },
         {
-          "title": "Compare harnesses",
-          "href": "/recipes/agent-comparison"
+          "title": "CLI",
+          "href": "/reference/cli"
         },
         {
-          "title": "Gate pull requests",
-          "href": "/recipes/ci-gate"
+          "title": "Environment variables",
+          "href": "/reference/env-vars"
         },
         {
-          "title": "Track past runs",
-          "href": "/recipes/results-over-time"
-        }
-      ]
-    },
-    {
-      "group": "Integrations",
-      "pages": [
-        {
-          "group": "Agents",
-          "pages": [
-            {
-              "title": "Cursor",
-              "href": "/integrations/agents/cursor"
-            },
-            {
-              "title": "Claude Code",
-              "href": "/integrations/agents/claude-code"
-            },
-            {
-              "title": "Codex",
-              "href": "/integrations/agents/codex"
-            },
-            {
-              "title": "Antigravity",
-              "href": "/integrations/agents/antigravity"
-            },
-            {
-              "title": "OpenCode",
-              "href": "/integrations/agents/opencode"
-            },
-            {
-              "title": "Goose",
-              "href": "/integrations/agents/goose"
-            },
-            {
-              "title": "pi",
-              "href": "/integrations/agents/pi"
-            },
-            {
-              "title": "Grok Build",
-              "href": "/integrations/agents/grok-build"
-            }
-          ]
+          "title": "Run record",
+          "href": "/reference/record"
         },
         {
-          "group": "Gateways",
-          "pages": [
-            {
-              "title": "Direct",
-              "href": "/integrations/gateways/direct"
-            },
-            {
-              "title": "Vercel AI Gateway",
-              "href": "/integrations/gateways/vercel"
-            },
-            {
-              "title": "OpenRouter",
-              "href": "/integrations/gateways/openrouter"
-            },
-            {
-              "title": "Vertex AI",
-              "href": "/integrations/gateways/vertex"
-            }
-          ]
+          "title": "Query views",
+          "href": "/reference/query"
         },
         {
-          "group": "Sandboxes",
-          "pages": [
-            {
-              "title": "Overview",
-              "href": "/integrations/sandboxes"
-            },
-            {
-              "title": "Docker",
-              "href": "/integrations/sandboxes/docker"
-            },
-            {
-              "title": "Podman",
-              "href": "/integrations/sandboxes/podman"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "pages": [
+          "title": "History MCP server",
+          "href": "/reference/mcp-tools"
+        },
         {
-          "group": "Reference",
-          "pages": [
-            {
-              "title": "Authoring API",
-              "href": "/reference/api"
-            },
-            {
-              "title": "Attempt context",
-              "href": "/reference/context"
-            },
-            {
-              "title": "Matchers",
-              "href": "/reference/matchers"
-            },
-            {
-              "title": "Options",
-              "href": "/reference/options"
-            },
-            {
-              "title": "Environment helpers",
-              "href": "/reference/environment"
-            },
-            {
-              "title": "Configuration",
-              "href": "/reference/config"
-            },
-            {
-              "title": "Profiles",
-              "href": "/reference/profiles"
-            },
-            {
-              "title": "CLI",
-              "href": "/reference/cli"
-            },
-            {
-              "title": "Environment variables",
-              "href": "/reference/env-vars"
-            },
-            {
-              "title": "Run record",
-              "href": "/reference/record"
-            },
-            {
-              "title": "Query views",
-              "href": "/reference/query"
-            },
-            {
-              "title": "History MCP server",
-              "href": "/reference/mcp-tools"
-            },
-            {
-              "title": "Glossary",
-              "href": "/reference/glossary"
-            }
-          ]
+          "title": "Glossary",
+          "href": "/reference/glossary"
         }
       ]
     }
