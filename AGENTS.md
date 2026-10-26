@@ -27,11 +27,13 @@ pnpm docs:gen && pnpm docs:check     # after any user-visible change
  `pnpm test:features` and a new refusal `test/refusals.test.ts` (in `packages/reeval`); `pnpm test`
  runs them all — but only in this block, not while you are still editing (see below).
 - **A new feature or option** takes the tier the [feature contract](./packages/reeval/test/features/README.md#which-tier)'s
- table gives it (a plan case or a fixture), an `inventory.ts` entry and `pnpm features:matrix --write`.
+ table gives it (a plan case or a fixture), an `inventory.ts` entry (unit tests count by file) and
+ `pnpm features:matrix --write`.
 - **A user-visible change** updates its page in `docs/reference/` (see [Docs](#docs)).
 - **After touching `src/contract/`** run `pnpm --filter reeval typecheck` and
  `pnpm --filter reeval schema:check`: each module's `_SameAsSchema` holds its hand-written type to
- the Zod schema, and only the compiler sees it.
+ the Zod schema, and only the compiler sees it. A field's docs go in the type's TSDoc, not a
+ `.describe()`: the schema snapshots take their descriptions from it.
 
 ## While you work
 
@@ -103,7 +105,7 @@ every project in `examples/` depends on it as `"reeval": "workspace:*"`.
 | `packages/reeval-python` | Public PyPI package **reeval-python** (`reeval_python` import): src layout, uv lockfile, ruff and pyright; runner via `uv run` / `.venv` / `python3 -m reeval_python`; declare conformance in pytest |
 | `.agents/skills/add-a-language` | Repo skill for contributors adding the next language runtime: adapter checklist, transport v2, conformance and tier verification ([`SKILL.md`](./.agents/skills/add-a-language/SKILL.md)) |
 | `packages/reeval/src/evaluate.ts` | `evaluate` and `group`: they record the file's declaration tree (`declaration.ts`, JSON when its options are data) and register one test per attempt; `declareTree` declares a tree. `plan-eval.ts`'s pure `planEval` turns one declared eval into its tests: the options cascade, the matrix, the refusals and each attempt's gate, as data |
-| `packages/reeval/src/contract` | The plain-data contract another language's declaration tree carries: one Zod schema per shape (`docker.ts`, `harness.ts`, `compare.ts`, `plain.ts` for the gate, egress, secrets, skills, MCP servers, files and workspaces, `environment.ts`, `judge.ts` for the judge options and their `state`, `declaration.ts` for the tree `declareTree` takes), each validating the data, describing it and giving its JSON Schema. `attempt.ts` is the attempt protocol: the calls an eval's body makes on its attempt and reeval's replies, as a runner in another language would exchange them (in-process today), with their JSON Schema in `schema/protocol/`. `CONTRACT_SCHEMAS` (`index.ts`) names the `$def` each owns in `schema/plan/`; `shared.ts` has the duration schema and `refusal`, which turns a Zod issue into reeval's own sentence. Each module's `_SameAsSchema` holds the hand-written type to its schema, `pnpm schema:check` holds properties and descriptions to the TSDoc, and `test/refusals/` is the golden table of every refusal |
+| `packages/reeval/src/contract` | The plain-data contract another language's declaration tree carries: one Zod schema per shape (`docker.ts`, `harness.ts`, `compare.ts`, `plain.ts` for the gate, egress, secrets, skills, MCP servers, files and workspaces, `environment.ts`, `judge.ts` for the judge options and their `state`, `declaration.ts` for the tree `declareTree` takes), each validating the data and giving its JSON Schema. `attempt.ts` is the attempt protocol: the calls an eval's body makes on its attempt and reeval's replies, as a runner in another language would exchange them (in-process today), with their JSON Schema in `schema/protocol/`. `CONTRACT_SCHEMAS` (`index.ts`) names the `$def` each owns in `schema/plan/`; `shared.ts` has the duration schema and `refusal`, which turns a Zod issue into reeval's own sentence. Each module's `_SameAsSchema` holds the hand-written type to its schema, and `pnpm schema:check` holds the properties and required ones to the type. The type's TSDoc is the one copy of the docs: the schema snapshots take each description from it (`scripts/schema/zod.ts`), so a schema has no `.describe()` for what its type documents, and `schema:check` refuses one that repeats or contradicts the TSDoc; only the attempt protocol's own wording, where no type documents it, stays in `.describe()`. `test/refusals/` is the golden table of every refusal |
 | `packages/reeval/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, look up the image preflight prepared), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`, `debug.ts` (the plan and environment in the debug trace); `index.ts` runs them in order and tears down. `match.ts` is the attempt protocol's `expect` call, which runs the same `MATCHERS` rows (`src/matchers.ts`) the TypeScript `expect` does. `assertions.ts` turns the matcher calls either one made into the attempt's assertion records (labels, ` #n`, messages) and its `expect.soft` failure; the engine only hands it raw calls |
 | `packages/reeval/src/sandbox` | reeval's sandbox adapters (Docker and a fake), the provider prepare contract (`provider.ts`), preflight's generic layer (`preflight.ts`: check, prepare in parallel, retry, cache, scope or stop) and Docker's image preparation |
 | `packages/reeval/src/egress.ts` | Egress policies at plan time: the cascade, the automatic hosts, and what each sandbox can enforce |
@@ -464,6 +466,12 @@ a fixture, how to run and debug the tiers, and what "done" means.
 behaviour in `options.test.ts` — not under `test/features/`. Register each eval option in
 `test/features/eval-options.ts`; `matrix.test.ts` fails when `--dry-run` coverage or refusals are
 missing.
+
+**The inventory** (`test/features/inventory.ts`) names what covers each feature: fixture
+directories (or one harness's row of a parameterised one, `harness/rules:pi`), plan cases, real
+checks, and the unit test *files* in `unit`, not their test titles. A behaviour every harness has
+in its own place (rules, skills, an image) is one fixture that reads `REEVAL_FIXTURE_LAYOUT`, run
+once per harness by `perHarness` in `features.test.ts`; don't copy the directory per harness.
 
 **Every user-visible change updates the docs in the same PR.** A new or changed option, helper,
 harness, CLI command or flag, exit code, `reeval query` view, record field or environment variable

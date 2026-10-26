@@ -127,7 +127,7 @@ Every example takes the real agents in [`profiles.ts`](./profiles.ts) by name: `
 |---|---|
 | [`with-query`](./with-query) | SQL over your runs with `reeval query` |
 | [`with-studio`](./with-studio) | Browsing runs in the studio |
-| [`with-analysis`](./with-analysis) | Insights and `reeval analyze` |
+| [`with-analysis`](./with-analysis) | `reeval analyze` |
 | [`with-reeval-mcp`](./with-reeval-mcp) | Your coding agent reading reeval history |
 
 ## Real-world tasks

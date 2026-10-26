@@ -30,7 +30,6 @@ import { missingGitignoreEntries } from './init.ts'
 import {
   judgeCredentials,
   modelKeyOptions,
-  RECOMMENDED_ANALYSIS_MODEL,
   RECOMMENDED_JUDGE_MODEL,
   setGatewayKey,
 } from './judge/index.ts'
@@ -38,6 +37,7 @@ import { harnessId, sandboxId } from './options.ts'
 import { badCharacterAt, redactSecrets, SECRET_NAME } from './redact.ts'
 import { PACKAGE_DIR } from './root.ts'
 import type { ImageTarget, ImageUse } from './sandbox/images.ts'
+import { plural } from './text.ts'
 import type {
   EgressPolicy,
   FakeJudgeModel,
@@ -748,8 +748,8 @@ export async function judgeCallers(config: ResolvedConfig): Promise<string[]> {
 }
 
 /**
- * `analysis.model` and its key: a warning when either is missing, since a run then prints no
- * insights but never stops. Nothing when `analysis.insights: false` leaves the model unset.
+ * `analysis.model`'s key, when there's a model: a warning when it's missing, since `reeval
+ * analyze` and compare questions then can't run. Nothing when no model is set.
  */
 export async function checkAnalysis(
   config: ResolvedConfig,
@@ -758,17 +758,7 @@ export async function checkAnalysis(
   envFile: string,
 ): Promise<Check[]> {
   const model = config.analysis.model
-  if (model === undefined) {
-    if (!config.analysis.insights) return []
-    return [
-      {
-        id: 'analysis',
-        status: 'warn',
-        summary: 'no analysis.model, so runs print no insights',
-        fix: `set analysis: { model: '${RECOMMENDED_ANALYSIS_MODEL}' } in ${config.file} for answers to what each eval asks, or analysis: { insights: false } to go without`,
-      },
-    ]
-  }
+  if (model === undefined) return []
   if (typeof model !== 'string') {
     return [{ id: 'analysis', status: 'ok', summary: 'fakeAnalysis() needs no key' }]
   }
@@ -1075,15 +1065,14 @@ export function renderReport(report: DoctorReport, color: boolean): string[] {
     lines.push(`${mark[c.status]} ${c.id.padEnd(width)}  ${text}`)
     if (c.fix) lines.push(`  ${' '.repeat(width)}  ${dim(`fix: ${c.fix}`)}`)
   }
-  const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
   lines.push(
     '',
     report.problems
       ? red(
-          `${count(report.problems, 'problem')}, ${count(report.warnings, 'warning')}. Fix ${report.problems === 1 ? 'it' : 'them'} and run reeval doctor again.`,
+          `${plural(report.problems, 'problem')}, ${plural(report.warnings, 'warning')}. Fix ${report.problems === 1 ? 'it' : 'them'} and run reeval doctor again.`,
         )
       : report.warnings
-        ? yellow(`No problems, ${count(report.warnings, 'warning')}.`)
+        ? yellow(`No problems, ${plural(report.warnings, 'warning')}.`)
         : green('No problems.'),
   )
   return lines

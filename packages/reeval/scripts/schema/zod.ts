@@ -1,34 +1,90 @@
 // The `$defs` whose source of truth is a Zod schema in src/contract/, not the TypeScript type: their
-// JSON Schema comes from `z.toJSONSchema`, with Zod's descriptions, patterns and bounds. The
-// hand-written type a def replaces is held to its schema twice: at compile time (each contract
-// module's `_SameAsSchema`), and here, where the def generated from the type and Zod's must have
-// the same properties, the same required ones and the same descriptions.
+// JSON Schema comes from `z.toJSONSchema`, with Zod's patterns and bounds, and the descriptions of
+// the hand-written type's TSDoc, the one copy of the contract's docs. That type is held to its
+// schema twice: at compile time (each contract module's `_SameAsSchema`), and here, where the def
+// generated from the type and Zod's must have the same properties and the same required ones.
 import { z } from 'zod'
 import { CONTRACT_REFS, CONTRACT_SCHEMAS } from '../../src/contract/index.ts'
 import type { Schema } from './generate.ts'
 
-let cached: Record<string, Schema> | undefined
+/**
+ * A Zod schema and the def generated from the type whose TSDoc describes it, wherever the schema
+ * appears (a `$def`, or inlined). With `shared`, the type only documents the fields the schema
+ * shares with it: the schema's own description, and any field it describes in its own words, stay.
+ */
+export type TypeDocs = { name: string; schema: z.ZodType; typed: Schema; shared?: boolean }
 
-/** Zod's JSON Schema for every contract schema, by its `$def` name. */
+/** Zod's JSON Schema for every contract schema, by its `$def` name, described by `docs`. */
 export function zodDefs(
   schemas: Record<string, z.ZodType> = CONTRACT_SCHEMAS,
   refs: Record<string, z.ZodType> = CONTRACT_REFS,
+  docs: TypeDocs[] = [],
 ): Record<string, Schema> {
-  if (cached && schemas === CONTRACT_SCHEMAS) return cached
   const registry = z.registry<{ id: string }>()
   for (const [id, schema] of Object.entries({ ...refs, ...schemas })) registry.add(schema, { id })
+  const index = new Map(docs.map((d, i) => [d.schema, i]))
   const out = z.toJSONSchema(registry, {
     target: 'draft-2020-12',
     uri: (id) => `#/$defs/${id}`,
+    override: ({ zodSchema, jsonSchema }) => {
+      const i = index.get(zodSchema as z.ZodType)
+      if (i !== undefined) (jsonSchema as Record<string, unknown>)[DOCS] = i
+    },
   }).schemas
   const shared = (out.__shared?.$defs ?? {}) as Record<string, unknown>
-  const defs = Object.fromEntries(
-    Object.entries(inlineShared(out, shared) as typeof out)
+  const raw = JSON.stringify(inlineShared(out, shared))
+  const problems: string[] = []
+  withDocs(JSON.parse(raw), docs, (d) => (node, description, at) => {
+    if (d.shared && !at) return
+    if (node.description === description || (node.description && !d.shared)) {
+      problems.push(
+        `${d.name}${at}: its Zod schema's .describe() ${node.description === description ? 'repeats' : 'contradicts'} the TSDoc "${description}"`,
+      )
+    }
+  })
+  if (problems.length) {
+    throw new Error(
+      `The TSDoc of the hand-written types describes these, so delete the .describe() in src/contract/:\n  ${problems.join('\n  ')}`,
+    )
+  }
+  const fromTypes = new Set(docs.flatMap((d) => descriptionsIn(d.typed)))
+  const described = withDocs(JSON.parse(raw), docs, (d) => (node, description, at) => {
+    const zodsOwn = node.description !== undefined && !fromTypes.has(node.description)
+    if (!(d.shared && (!at || zodsOwn))) node.description = description
+  }) as typeof out
+  return Object.fromEntries(
+    Object.entries(described)
       .filter(([id]) => !(id in refs) && id !== '__shared')
       .map(([id, { $schema: _, $id: __, ...schema }]) => [id, canonical(schema) as Schema]),
   )
-  if (schemas === CONTRACT_SCHEMAS) cached = defs
-  return defs
+}
+
+const descriptionsIn = (schema: Schema): string[] =>
+  JSON.stringify(schema)
+    .match(/"description":"(?:[^"\\]|\\.)*"/g)
+    ?.map((pair) => JSON.parse(pair.slice('"description":'.length)) as string) ?? []
+
+/** Marks, in Zod's output, a node whose schema `docs` describes, by its index there. */
+const DOCS = 'x-reeval-docs'
+
+type SetDoc = (node: Schema, description: string, at: string) => void
+
+/**
+ * `value` with each node Zod marked described by its `docs` entry, through `set`: children first,
+ * so a property's description goes over the one its schema has wherever it appears.
+ */
+function withDocs(value: unknown, docs: TypeDocs[], set: (d: TypeDocs) => SetDoc): unknown {
+  if (Array.isArray(value)) return value.map((v) => withDocs(v, docs, set))
+  if (typeof value !== 'object' || value === null) return value
+  const node = Object.fromEntries(
+    Object.entries(value).map(([k, v]) => [k, withDocs(v, docs, set)]),
+  ) as Schema & { [DOCS]?: number }
+  const i = node[DOCS]
+  if (i === undefined) return node
+  delete node[DOCS]
+  const d = docs[i] as TypeDocs
+  fillDocs(node, d.typed, set(d))
+  return node
 }
 
 /**
@@ -101,7 +157,7 @@ export function withZodDefs(
 
 /**
  * Where a def generated from a type and Zod's differ, as lines: each object (a union's variants
- * named by their constant fields) by its properties, which are required and their descriptions.
+ * named by their constant fields) by its properties and which are required.
  */
 export function differences(generated: Schema, zod: Schema): string[] {
   const a = facts(generated)
@@ -112,26 +168,93 @@ export function differences(generated: Schema, zod: Schema): string[] {
   ]
 }
 
+const objectsOf = (schema: Schema) =>
+  (schema.anyOf ?? schema.oneOf ?? [schema]).filter((s) => s.type === 'object' && s.properties)
+
+/** The constant fields that tell a union's object variants apart: `kind=docker`. */
+const variantOf = (object: Schema) =>
+  Object.entries(object.properties ?? {})
+    .filter(([, p]) => p.const !== undefined)
+    .map(([k, p]) => `${k}=${String(p.const)}`)
+    .sort()
+    .join(',')
+
 function facts(schema: Schema): Set<string> {
   const out = new Set<string>()
-  if (schema.description) out.add(`(description) ${schema.description}`)
-  const objects = (schema.anyOf ?? schema.oneOf ?? [schema]).filter(
-    (s) => s.type === 'object' && s.properties,
-  )
+  const objects = objectsOf(schema)
   for (const object of objects) {
-    const properties = object.properties ?? {}
-    const variant = Object.entries(properties)
-      .filter(([, p]) => p.const !== undefined)
-      .map(([k, p]) => `${k}=${String(p.const)}`)
-      .sort()
-      .join(',')
+    const variant = variantOf(object)
     const prefix = variant && objects.length > 1 ? `{${variant}}.` : ''
-    for (const [key, p] of Object.entries(properties)) {
-      const required = object.required?.includes(key) ? '' : '?'
-      out.add(`${prefix}${key}${required}${p.description ? `: ${p.description}` : ''}`)
+    for (const key of Object.keys(object.properties ?? {})) {
+      out.add(`${prefix}${key}${object.required?.includes(key) ? '' : '?'}`)
     }
   }
   return out
+}
+
+const isObject = (s: Schema) => s.type === 'object' && s.properties !== undefined
+const keysOf = (object: Schema) =>
+  Object.keys(object.properties ?? {})
+    .sort()
+    .join(',')
+/** A union's object variant pairs with the one that has its constant fields, else its keys. */
+const sameVariant = (a: Schema, b: Schema) =>
+  variantOf(a) ? variantOf(a) === variantOf(b) : keysOf(a) === keysOf(b)
+/** What a union's other members are, to pair each with its twin: `array`, `string`, a `$ref`. */
+const shapeOf = (s: Schema) => s.$ref ?? JSON.stringify(s.type ?? s.const ?? s.enum ?? null)
+
+/**
+ * Walks Zod's JSON Schema `node` beside the def generated from its type, calling `set` wherever
+ * the type has a description: the node itself, each property, and on into inline objects, list
+ * items, record values and union members, up to a `$ref` (which its own schema describes). Each
+ * child it walks into is a copy, so a node Zod shares between schemas keeps its own description.
+ */
+function fillDocs(
+  node: Schema,
+  typed: Schema,
+  set: (node: Schema, description: string, at: string) => void,
+  at = '',
+): void {
+  if (typed.description) set(node, typed.description, at)
+  if (node.$ref || typed.$ref) return
+  const into = (child: Schema, twin: Schema, where: string) => {
+    const copy = { ...child }
+    fillDocs(copy, twin, set, where)
+    return copy
+  }
+  if (node.items && typed.items) node.items = into(node.items, typed.items, `${at}[]`)
+  if (
+    typeof node.additionalProperties === 'object' &&
+    typeof typed.additionalProperties === 'object'
+  )
+    node.additionalProperties = into(
+      node.additionalProperties,
+      typed.additionalProperties,
+      `${at}{}`,
+    )
+  const union = node.anyOf ? 'anyOf' : node.oneOf ? 'oneOf' : undefined
+  const typedObjects = objectsOf(typed)
+  if (union) {
+    const members = node[union] as Schema[]
+    const objects = members.filter(isObject)
+    const others = (typed.anyOf ?? typed.oneOf ?? []).filter((t) => !isObject(t))
+    node[union] = members.map((member) => {
+      const twin = isObject(member)
+        ? objects.length === 1 && typedObjects.length === 1
+          ? typedObjects[0]
+          : typedObjects.find((t) => sameVariant(t, member))
+        : others.find((t) => shapeOf(t) === shapeOf(member))
+      return twin ? into(member, twin, at) : member
+    })
+  } else if (node.properties && typedObjects.length === 1) {
+    const properties = typedObjects[0]?.properties ?? {}
+    node.properties = Object.fromEntries(
+      Object.entries(node.properties).map(([key, property]) => {
+        const twin = properties[key]
+        return [key, twin ? into(property, twin, `${at}.${key}`) : property]
+      }),
+    )
+  }
 }
 
 /**

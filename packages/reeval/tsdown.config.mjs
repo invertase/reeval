@@ -260,8 +260,8 @@ export default defineConfig({
       // The published package's README is the repo-root README, copied so the
       // tarball has the same file. It is handwritten; `pnpm docs:gen` does not write it.
       cpSync(join(here, '../..', 'README.md'), join(here, 'README.md'))
-      // The eval rubric is a consumer skill in the repo's skills/, and the insight model's
-      // rubric (src/insights/rubric.ts), so it ships beside dist/.
+      // The eval rubric is a consumer skill in the repo's skills/ that remarks' fixes point
+      // to, so it ships beside dist/.
       rmSync(join(here, 'skills'), { recursive: true, force: true })
       cpSync(join(here, '../..', 'skills/eval-rubric'), join(here, 'skills/eval-rubric'), {
         recursive: true,
@@ -288,8 +288,8 @@ export default defineConfig({
             ),
             source:
               'https://github.com/moby/profiles/blob/6fe7deb1b9fb7c0397a4593480d7d22b9ee8caef/seccomp/default.json',
-            files: ['packages/sandbox-docker/src/seccomp-profile.ts'],
-            into: "reeval's bundle (`dist/`), as data",
+            files: ['packages/sandbox-docker/docker/seccomp-default.json'],
+            into: 'reeval, which ships it as `docker/seccomp-default.json`',
             modified: false,
           },
         ]),

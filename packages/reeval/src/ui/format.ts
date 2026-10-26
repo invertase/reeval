@@ -1,4 +1,4 @@
-import { clip, formatDuration } from '../text.ts'
+import { clip, formatDuration, plural } from '../text.ts'
 import type { AttemptMeta } from '../types.ts'
 import { type DebugLine, debugTime } from '../view/debug.ts'
 import { triesNote } from '../view/judgements.ts'
@@ -42,8 +42,6 @@ export function outcomeOf(e: EvalResult): Outcome {
 export function attemptAxes(a: AttemptMeta | undefined, fallback: string): string {
   return a?.label.replace(/\s*#\d+$/, '') || a?.harness.kind || fallback
 }
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /** A command on one line: the first line, cut to 80 characters at a word boundary. */
 export function oneLine(text: string, max = 80): string {

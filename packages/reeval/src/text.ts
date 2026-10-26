@@ -7,6 +7,9 @@ export function formatDuration(ms: number): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`
 }
 
+/** `1 eval`, `3 evals`, `2 tries`. */
+export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
 /** At most `max` characters, cut at a word boundary where there is one, marked with `…`. */
 export function clip(text: string, max: number): string {
   if (text.length <= max) return text
@@ -20,12 +23,6 @@ export function clip(text: string, max: number): string {
  * `'utf8'` decoding keeps and `JSON.parse`, `process.loadEnvFile` and a `^---` test don't skip.
  */
 export const withoutBom = (text: string) => text.replace(/^\uFEFF/, '')
-
-// biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters are what it removes
-const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g
-
-/** Text as one printable line: control characters, escapes included, and whitespace runs become a space. */
-export const oneLine = (text: string) => text.replace(CONTROL, ' ').replace(/\s+/g, ' ').trim()
 
 /** A failure's text keeps at most this much: its start (the reason) and its end (the output's tail). */
 export const FAILURE_CAP = 16 * 1024

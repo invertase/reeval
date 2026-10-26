@@ -2,7 +2,6 @@
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { hasAnalysisModel } from './config.ts'
 import { git, gitText } from './git.ts'
 import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
@@ -21,10 +20,9 @@ import {
   unreachable,
 } from './history/views.ts'
 import { fromCwd, sha256 } from './ids.ts'
-import { readInsights, runInsightsFile } from './insights/files.ts'
+import { readRemarks, runRemarksFile } from './remarks/files.ts'
 import type { ResolvedConfig } from './types.ts'
 import { renderCompare, renderCompareMarkdown } from './ui/compare-layout.ts'
-import { fromModel } from './view/insights.ts'
 import { suiteResult } from './view/suite.ts'
 
 export type HistoryFlags = {
@@ -124,7 +122,6 @@ export async function record(
     artifacts: parseLevel(flags.artifacts, config.history.artifacts),
     allowIncomplete: flags['allow-incomplete'],
     skipSecretScan: flags['skip-secret-scan'],
-    hint: !hasAnalysisModel(config),
   })
   const where = rel(result.recordPath)
   if (!result.created) return `${where} is already recorded`
@@ -207,10 +204,9 @@ export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
     ctx.out(JSON.stringify(run, null, 2))
     return 0
   }
-  const insights = await readInsights(runInsightsFile(config, entry))
-  const hint = !(insights && fromModel(insights)) && !hasAnalysisModel(config)
-  if (ctx.flags.md) ctx.out(renderSummary(run, { hint, insights }).trimEnd())
-  else ctx.out(formatShow(run, { hint, insights }))
+  const remarks = await readRemarks(runRemarksFile(config, entry))
+  if (ctx.flags.md) ctx.out(renderSummary(run, { remarks }).trimEnd())
+  else ctx.out(formatShow(run, { remarks }))
   return 0
 }
 

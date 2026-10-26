@@ -4,7 +4,16 @@ import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
-import { fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts'
+import { resolveConfig } from '../src/config.ts'
+import { collect, collectingFile, registerGroup, registerTest } from '../src/engine/collector.ts'
+import { useEngine } from '../src/engine/runtime.ts'
+import { defineEnvironment } from '../src/environment.ts'
+import { evaluate, group } from '../src/evaluate.ts'
+import { fakeHarness } from '../src/harness.ts'
+import { fakeJudge } from '../src/judge.ts'
+import { fakeSandbox } from '../src/sandbox.ts'
+import type { EnvironmentHelpers, RunContext } from '../src/types.ts'
+import { fakeConfig, project, readRun, recordedRuns, runCli, tempDir } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 
 const config = (extra: string, harness = 'fakeHarness({})') => `
@@ -938,673 +947,547 @@ evaluate('slow', { runs: 4 }, async (c) => { await c.send('x') })
 })
 
 describe('common mistakes', { concurrency: 4 }, () => {
-  const cases: Array<[string, string, RegExp]> = [
-    [
-      'a question that shows the model nothing',
-      `group('g', { question: { state: { task: false } } }, () => { evaluate('e', { questions: [{ question: 'Q', state: { diff: false, output: false, transcript: false } }] }, async () => {}) })`,
-      /questions "Q" in evaluate\("g › e"\) shows the model nothing: every state key is off and it sends no artifacts\. Turn on a state key, such as state: \{ diff: true \}, or send artifacts\./,
-    ],
-    [
-      'a list of environments',
-      `group('genkit', { environment: [a, b] }, () => {})`,
-      /environment takes one environment, not a list \(group\("genkit"\)\)\. To compare environments, use compare: \{ baseline, variants: \[a, b\] \}\. baseline is the control; variants are not layered on it\./,
-    ],
-    [
-      'a variant with its own checks',
-      `evaluate('e', { compare: { baseline: a, variants: [{ environment: a, check: () => {} }] } }, async () => {})`,
-      /compare\.variants in evaluate\("e"\) must be environments from defineEnvironment \(got an object with "environment", "check"\)\. Variants share the eval's prompt and checks; if a variant needs different checks, write a separate eval\./,
-    ],
-    [
-      'compare scoped to a harness the eval does not run',
-      `evaluate('e', { compare: { baseline: b, variants: [a], harness: ['sonnet'] } }, async () => {})`,
-      /compare\.harness lists sonnet, which evaluate\("e"\) doesn't run \(it runs fake\)\./,
-    ],
-    [
-      'a compare baseline that is not an environment',
-      `evaluate('e', { compare: { baseline: 'a' as never, variants: [a] } }, async () => {})`,
-      /compare\.baseline in evaluate\("e"\) must be an environment from defineEnvironment \(got "a"\)\. .* Leave it out to use the eval's environment as the control\./,
-    ],
-    [
-      'compare arms whose refs come from unset variables',
-      `const base = defineEnvironment('base', ({ git }) => ({ workspace: git('..', { ref: process.env.REEVAL_TEST_UNSET_BASE }) }))
-const head = base.extendEnvironment('head', ({ git }) => ({ workspace: git('..', { ref: process.env.REEVAL_TEST_UNSET_HEAD }) }))
-evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})`,
-      /compare in evaluate\("e"\) runs head and base on the same tree: past what they share, each sets only workspace, and both are git\("\.\."\) with no ref \(the repository HEAD\)\. A ref read from an unset variable is undefined, so check the variables the arms take their refs from, and give each arm its own ref\./,
-    ],
-    [
-      'a variant that is the environment a compare without a baseline runs as its control',
-      `group('g', { environment: a }, () => { evaluate('e', { compare: { variants: [a, b] } }, async () => {}) })`,
-      /compare in evaluate\("g › e"\) lists a, which is the control: compare has no baseline, so the eval's environment is\./,
-    ],
-    [
-      'a variant named baseline in a compare without a baseline or environment',
-      `evaluate('e', { compare: { variants: [defineEnvironment('baseline', {})] } }, async () => {})`,
-      /compare in evaluate\("e"\) lists a variant named baseline, the name of the empty control a compare without a baseline or environment runs\. Rename the variant, or set compare\.baseline\./,
-    ],
-    [
-      'compare as an array',
-      `evaluate('e', { compare: [a] }, async () => {})`,
-      /compare in evaluate\("e"\) must be an object, not a list\. Use compare: \{ baseline, variants: \[\.\.\.\] \}\./,
-    ],
-    [
-      'a compare strategy',
-      `evaluate('e', { compare: { baseline: a, variants: [b], strategy: 'peer' } }, async () => {})`,
-      /Unknown compare option "strategy" in evaluate\("e"\)/,
-    ],
-    [
-      'questions as a single string',
-      `evaluate('e', { questions: 'Which?' as never }, async () => {})`,
-      /questions in evaluate\("e"\) is a list \(got "Which\?"\), e\.g\. questions: \['How did the agent find the failing test\?'\]\./,
-    ],
-    [
-      'choices on a pairwise question',
-      `evaluate('e', { compare: { baseline: a, variants: [b] }, questions: [{ question: 'Which?', across: 'environment', choices: ['a', 'b'] }] as never }, async () => {})`,
-      /questions "Which\?" in evaluate\("e"\) sets both across and choices\./,
-    ],
-    [
-      'a pairwise question across environments without a compare',
-      `evaluate('e', { questions: [{ question: 'Which?', across: 'environment' }] }, async () => {})`,
-      /questions "Which\?" in evaluate\("e"\) varies the environment \(across: 'environment'\), but evaluate\("e"\) runs one environment, so it has no pairs to ask\. Add compare: \{ variants: \[\.\.\.\] \}, or leave out across to ask each attempt on its own\./,
-    ],
-    [
-      'a pairwise question across harnesses on one harness',
-      `evaluate('e', { compare: { baseline: a, variants: [b] }, questions: [{ question: 'Which?', across: ['environment', 'harness'] }] }, async () => {})`,
-      /questions "Which\?" in evaluate\("e"\) varies the harness \(across: 'harness'\), but evaluate\("e"\) runs one harness \(fake\), so it has no pairs to ask\. Run it on two or more, harness: \[a, b\], or leave out across to ask each attempt on its own\./,
-    ],
-    [
-      'environment and compare.baseline on the same eval',
-      `evaluate('e', { environment: a, compare: { baseline: a, variants: [b] } }, async () => {})`,
-      /environment and compare\.baseline can't both be set in evaluate\("e"\)\. compare: \{ baseline, variants \} names every arm, so drop environment, or drop baseline to make environment the control\./,
-    ],
-    [
-      'compare: false on an eval',
-      `evaluate('e', { compare: false }, async () => {})`,
-      /compare: false can't be set in evaluate\("e"\)\. A profile turns compare off with limit\.compare: false/,
-    ],
-    [
-      'pinning something that cannot be pinned',
-      `evaluate('e', { pin: ['timeout'] }, async () => {})`,
-      /pin in evaluate\("e"\) lists harness, runs and\/or compare \(got "timeout"\)/,
-    ],
-    [
-      'a callback as group options',
-      `group('genkit', ({ secret }) => ({ env: { KEY: secret.fromEnv('KEY') } }), () => {})`,
-      /group\("genkit"\) got two functions\. Options must be a plain object; helpers such as secret are only available in defineConfig and defineEnvironment callbacks\./,
-    ],
-    [
-      'image steps on an environment',
-      `defineEnvironment('firebase', { image: ['npm i -g firebase-tools'] })`,
-      /"image" isn't an environment field \(defineEnvironment\("firebase"\)\)\. Put the image on the sandbox: sandbox: docker\(\{ install: … \}\)\./,
-    ],
-    [
-      'a dockerfile on an environment',
-      `defineEnvironment('py', { dockerfile: './Dockerfile' })`,
-      /"dockerfile" isn't an environment field \(defineEnvironment\("py"\)\)\. Put the image on the sandbox: sandbox: docker\(\{ dockerfile: … \}\)/,
-    ],
-    [
-      'an async callback',
-      `defineEnvironment('docs', async ({ file }) => ({ files: { 'docs/llms.txt': 'x' } }))`,
-      /defineEnvironment\("docs"\) returned a Promise\. The callback runs once at definition time and must return the environment synchronously; fetch remote content in a setup step instead\./,
-    ],
-    [
-      'a harness edit naming a harness the eval does not inherit',
-      `evaluate('e', { harness: { only: 'cursor' } }, async () => {})`,
-      /harness \{ only: "cursor" \} in evaluate\("e"\) names no inherited harness \(inherited: fake\)/,
-    ],
-    [
-      'a harness edit that adds and keeps at once',
-      `evaluate('e', { harness: { add: [], only: 'fake' } as never }, async () => {})`,
-      /harness in evaluate\("e"\) takes \{ add \} or \{ only \}, not both\. Use add/,
-    ],
-    [
-      'a sandbox that is not docker() or fakeSandbox() on evaluate',
-      `evaluate('e', { sandbox: { kind: 'vm' } as never }, async () => {})`,
-      /sandbox in evaluate\("e"\) must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
-    ],
-    [
-      'an old option name',
-      `group('g', { harnesses: [] }, () => {})`,
-      /Unknown option "harnesses" in group\("g"\)\. Did you mean "harness"\?/,
-    ],
-    [
-      'repeat instead of runs',
-      `evaluate('e', { repeat: 3 }, async () => {})`,
-      /Unknown option "repeat" .*Did you mean "runs"\?/,
-    ],
-    [
-      'an eval with no function',
-      `evaluate('x', {})`,
-      /evaluate\("x"\) has no function\. Pass the eval's body, e\.g\. evaluate\("x", async \(c\) => \{ … \}\)\./,
-    ],
-    [
-      'a base image on an environment',
-      `defineEnvironment('node', { image: 'node:22' })`,
-      /"image" isn't an environment field \(defineEnvironment\("node"\)\)\. Put the image on the sandbox: sandbox: docker\(\{ from: … \}\)/,
-    ],
-    [
-      'a setup step with an empty cwd',
-      `defineEnvironment('e', { setup: [{ run: 'ls', cwd: '' }] })`,
-      /setup step "ls" in defineEnvironment\("e"\): cwd must be a directory path, relative to the workspace or absolute \(got ""\)/,
-    ],
-    [
-      'a setup step with an unknown key',
-      `defineEnvironment('e', { setup: [{ run: 'ls', dir: 'x' } as never] })`,
-      /setup step "ls" in defineEnvironment\("e"\) has an unknown key "dir"; a step is a string or \{ run, timeout\?, cwd\? \}\./,
-    ],
-    [
-      'two evals with the same name',
-      `evaluate('e', async () => {}); evaluate('e', { runs: 2 }, async () => {})`,
-      /evaluate\("e"\) is declared twice in this file\. Each eval needs its own name, or its attempts are merged into one eval\./,
-    ],
-    [
-      'evaluate.each cases with the same name',
-      `evaluate.each([{ a: 1, b: 2 }, { a: 1, b: 3 }])('adds $a', async () => {})`,
-      /evaluate\("adds 1"\) is declared twice in this file\. .* For evaluate\.each, put \$key, %s or %# in the name \("adds \$a"\) so each case's name differs\./,
-    ],
-    [
-      'two pooled evaluate.each with the same name template',
-      `evaluate.each([{ n: 1 }, { n: 2 }])('case $n', async () => {}); evaluate.each([{ n: 3 }, { n: 4 }, { n: 5 }])('case $n', async () => {})`,
-      /evaluate\.each\("case \$n"\) is declared twice in this file\. Each pooled evaluate\.each needs its own name, or their cases are pooled into one family\. Give each its own name template, or pass evaluate\.each\(cases, \{ pool: false \}\) to keep the cases apart\./,
-    ],
-    [
-      'an eval named like a grouped eval',
-      `group('g', () => { evaluate('e', async () => {}) }); evaluate('g › e', async () => {})`,
-      /evaluate\("g › e"\) is declared twice in this file\. Each eval needs its own name, or its attempts are merged into one eval\. " › " joins the group and eval names in an eval's id, so a name containing it can be a grouped eval's id\./,
-    ],
-    [
-      'an evaluate.each named like a grouped one',
-      `group('g', () => { evaluate.each([1, 2])('n %s', async () => {}) }); evaluate.each([3, 4])('g › n %s', async () => {})`,
-      /evaluate\.each\("g › n %s"\) is declared twice in this file\. .* " › " joins the group and eval names/,
-    ],
-    [
-      'an eval named like a pooled template',
-      `evaluate('case $n', async () => {}); evaluate.each([{ n: 1 }, { n: 2 }])('case $n', async () => {})`,
-      /evaluate\("case \$n"\) has the same id as the pooled evaluate\.each\("case \$n"\) in this file: a family's id is its name template\. Give the eval or the template another name\./,
-    ],
-    [
-      "pool in an eval's options",
-      `evaluate.each([1, 2])('n %s', { pool: false } as never, async () => {})`,
-      /Unknown option "pool" in evaluate\("n 1"\)\. pool is an option of evaluate\.each, beside the cases: evaluate\.each\(cases, \{ pool: false \}\)\./,
-    ],
-    [
-      "eval options as evaluate.each's second argument",
-      `evaluate.each([1, 2], { runs: 2 } as never)('n %s', async () => {})`,
-      /evaluate\.each\(cases, options\) takes \{ pool\?: boolean \} \(got \{"runs":2\}\)\. Eval options such as compare go after the name/,
-    ],
-    [
-      'a zero timeout',
-      `evaluate('e', { timeout: 0 }, async () => {})`,
-      /Invalid duration 0\. A duration is more than zero: use e\.g\. "90s" or "15m"\./,
-    ],
-    [
-      'a timeout longer than a timer can be',
-      `evaluate('e', { timeout: '1000h' }, async () => {})`,
-      /Invalid duration "1000h"\. A duration is at most 596h \(2147483647ms\), the longest timer Node can set\./,
-    ],
-    [
-      'a zero setup step timeout',
-      `defineEnvironment('e', { setup: [{ run: 'ls', timeout: '0s' }] })`,
-      /Invalid duration "0s"\. A duration is more than zero/,
-    ],
-    [
-      'a judge threshold over 1 on a group',
-      `group('g', { judge: { threshold: 2 } }, () => { evaluate('e', async () => {}) })`,
-      /judge\.threshold in group\("g"\) must be between 0 and 1 \(got 2\)/,
-    ],
-    [
-      'a judge.state.diff pattern as one string on a group',
-      `group('g', { judge: { state: { diff: 'src/' as never } } }, () => { evaluate('e', async () => {}) })`,
-      /judge\.state\.diff in group\("g"\) must be true, false or a non-empty list of patterns \(got "src\/"\)/,
-    ],
-    [
-      'a file path that climbs out of the workspace',
-      `defineEnvironment('e', { files: { '../../escape.txt': 'x' } })`,
-      /files\["\.\.\/\.\.\/escape\.txt"\] in defineEnvironment\("e"\): paths are relative to the workspace, or start with ~\/ for the home directory, and never use \.\./,
-    ],
-    [
-      'a file path that climbs out of the home directory',
-      `defineEnvironment('e', { files: { '~/../../x': 'x' } })`,
-      /files\["~\/\.\.\/\.\.\/x"\] in defineEnvironment\("e"\): paths .* never use \.\./,
-    ],
-    [
-      'an absolute file path',
-      `defineEnvironment('e', { files: { '/etc/hosts': 'x' } })`,
-      /files\["\/etc\/hosts"\] in defineEnvironment\("e"\): paths are relative to the workspace/,
-    ],
-    [
-      'a Windows-style file path',
-      `defineEnvironment('e', { files: { 'docs\\\\api.md': 'x' } })`,
-      /files\["docs\\\\api\.md"\] in defineEnvironment\("e"\): use forward slashes \(docs\/api\.md\)/,
-    ],
-    [
-      'a directory that does not exist',
-      `defineEnvironment('e', ({ directory }) => ({ files: directory('../fixture') }))`,
-      /directory\("\.\.\/fixture"\): \S*fixture doesn't exist/,
-    ],
-    [
-      'a file passed to directory()',
-      `defineEnvironment('e', ({ directory }) => ({ files: directory('./o.eval.ts') }))`,
-      /directory\("\.\/o\.eval\.ts"\): \S*o\.eval\.ts is a file, not a directory\. Use file\("\.\/o\.eval\.ts"\) for one file\./,
-    ],
-    [
-      'directory() with ignore instead of glob',
-      `defineEnvironment('e', ({ directory }) => ({ files: directory('.', { ignore: ['dist'] } as never) }))`,
-      /directory\("\."\): unknown option "ignore"; it takes into, glob and defaultIgnores\. Exclude with a '!' pattern in glob, e\.g\. glob: \['!dist\/'\]\./,
-    ],
-    [
-      'a zero install step timeout',
-      `docker({ install: [{ run: 'ls', timeout: 0 }] })`,
-      /docker\(\{ install \}\) command "ls": Invalid duration 0\. A duration is more than zero/,
-    ],
-    [
-      'a negative install step timeout',
-      `docker({ install: [{ run: 'ls', timeout: '-5s' }] })`,
-      /docker\(\{ install \}\) command "ls": Invalid duration "-5s"\. Use e\.g\. "90s" or "15m"\./,
-    ],
-    [
-      'runs 0',
-      `evaluate('e', { runs: 0 }, async () => {})`,
-      /runs in evaluate\("e"\) must be a whole number of at least 1 \(got 0\)/,
-    ],
-    [
-      'a gate as a percentage',
-      `evaluate('e', { gate: { passRate: 80 } }, async () => {})`,
-      /gate in evaluate\("e"\) is 'all' \(every attempt passes\) or \{ passRate \} with a share above 0 and at most 1, e\.g\. gate: \{ passRate: 0\.8 \} \(got \{"passRate":80\}\)/,
-    ],
-    [
-      'passRate instead of gate',
-      `evaluate('e', { passRate: 0.8 } as never, async () => {})`,
-      /Unknown option "passRate" in evaluate\("e"\)\. Did you mean "gate"\?/,
-    ],
-    [
-      'no harness',
-      `evaluate('e', { harness: [] }, async () => {})`,
-      /harness is an empty list in evaluate\("e"\)/,
-    ],
-    [
-      'a harness kind reeval does not know',
-      `evaluate('e', { harness: { kind: 'cline' } as never }, async () => {})`,
-      /harness in evaluate\("e"\) must be like cursor\(\{ model: 'composer-2\.5' \}\) \(got an object with "kind"\)/,
-    ],
-    [
-      'Claude Code without a model',
-      `evaluate('e', { harness: (await import('reeval/harness')).claudeCode({} as never) }, async () => {})`,
-      /claudeCode\(\) needs a model, e\.g\. claudeCode\(\{ model: 'claude-sonnet-5' \}\)/,
-    ],
-    [
-      'Claude Code effort outside the adapter set',
-      `evaluate('e', { harness: (await import('reeval/harness')).claudeCode({ model: 'claude-sonnet-5', effort: 'nope' }) }, async () => {})`,
-      /claudeCode\(\{ effort \}\) must be low, medium, high, xhigh or max \(got "nope"\)/,
-    ],
-    [
-      'Antigravity without a model',
-      `evaluate('e', { harness: (await import('reeval/harness')).antigravity({} as never) }, async () => {})`,
-      /antigravity\(\) needs a model, e\.g\. antigravity\(\{ model: 'gemini-3\.8-flash-medium' \}\)/,
-    ],
-    [
-      'a fake agent layout reeval does not know',
-      `evaluate('e', { harness: fakeHarness({ layout: 'cline' as never }) }, async () => {})`,
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex', 'fx', 'grok-build' \(got "cline"\)/,
-    ],
-    [
-      'a fake agent script that is not one list per turn',
-      `evaluate('e', { harness: fakeHarness({ script: [{ exec: 'ls' }] as never }) }, async () => {})`,
-      /fakeHarness\(\{ script \}\) takes one list of steps per turn, e\.g\. script: \[\[\{ exec: 'cat notes\.txt' \}, \{ reply: 'done' \}\]\]/,
-    ],
-    [
-      'a fake agent script step with two actions',
-      `evaluate('e', { harness: fakeHarness({ script: [[{ exec: 'ls', reply: 'x' } as never]] }) }, async () => {})`,
-      /fakeHarness\(\{ script \}\) steps are \{ exec: string \}, \{ write: \{ path: content \} \}, \{ reply: string \}, \{ mcp: '<server>\/<tool>' \} or \{ error: string \}/,
-    ],
-    [
-      'a fake agent MCP step without a tool',
-      `evaluate('e', { harness: fakeHarness({ script: [[{ mcp: 'stamp' }]] }) }, async () => {})`,
-      /fakeHarness\(\{ script \}\) steps are .+ \{ mcp: '<server>\/<tool>' \} or \{ error: string \} \(got \{"mcp":"stamp"\}\)/,
-    ],
-    [
-      'an empty hosts list',
-      `defineEnvironment('k', ({ secret }) => ({ env: { K: secret.fromEnv('K', { hosts: [] }) } }))`,
-      /secret\.fromEnv\("K"\): hosts must list the hosts the secret is sent to, e\.g\. hosts: \['api\.example\.com'\] or secret\.hosts\.gemini \(got \[\]\)/,
-    ],
-    [
-      'a URL as a host',
-      `defineEnvironment('k', ({ secret }) => ({ env: { K: secret.fromEnv('K', { hosts: ['https://api.example.com/v1'] }) } }))`,
-      /secret\.fromEnv\("K"\): hosts are host names, not URLs: use 'api\.example\.com' \(got 'https:\/\/api\.example\.com\/v1'\)/,
-    ],
-    [
-      'a host that is not a string',
-      `defineEnvironment('k', ({ secret }) => ({ env: { K: secret.fromEnv('K', { hosts: [42 as never] }) } }))`,
-      /secret\.fromEnv\("K"\): 42 isn't a host\. Use a name like 'api\.example\.com', or '\*\.example\.com' for its subdomains\./,
-    ],
-    [
-      'substituting somewhere the gateway does not',
-      `defineEnvironment('k', ({ secret }) => ({ env: { K: secret({ hosts: ['api.example.com'], in: ['cookie' as never] }) } }))`,
-      /secret\(\): in lists where the gateway substitutes: 'header', 'query' and\/or 'body' \(got \["cookie"\]\)/,
-    ],
-    [
-      'in without hosts',
-      `defineEnvironment('k', ({ secret }) => ({ env: { K: secret.fromEnv('K', { in: ['query'] }) } }))`,
-      /secret\.fromEnv\("K"\): in only applies to a brokered secret; add hosts, e\.g\. \{ hosts: \['api\.example\.com'\], in: \["query"\] \}/,
-    ],
-    [
-      'egress as a list of hosts',
-      `evaluate('e', { egress: ['api.example.com'] as never }, async () => {})`,
-      /egress in evaluate\("e"\) is 'proxy' \(the default\), 'allow-all', 'deny-all', or \{ allow: \['api\.example\.com', '\*\.example\.org'\] \} \(got \["api\.example\.com"\]\)\. For a list of hosts, use \{ allow: \["api\.example\.com"\] \}\./,
-    ],
-    [
-      'an egress deny list',
-      `group('g', { egress: { deny: ['evil.example'] } as never }, () => {})`,
-      /Unknown egress key "deny" in group\("g"\)\. A policy lists what's allowed; everything else is refused\./,
-    ],
-    [
-      'a URL in an egress allowlist',
-      `defineEnvironment('n', { egress: { allow: ['https://api.example.com/v1'] } })`,
-      /egress\.allow in defineEnvironment\("n"\): hosts are host names, not URLs: use 'api\.example\.com' \(got 'https:\/\/api\.example\.com\/v1'\)/,
-    ],
-    [
-      'a port in an egress allowlist',
-      `evaluate('e', { egress: { allow: ['api.example.com:443'] } }, async () => {})`,
-      /egress\.allow in evaluate\("e"\): hosts are host names without a port: use 'api\.example\.com' \(got 'api\.example\.com:443'\)/,
-    ],
-    [
-      'a wildcard over a whole top-level domain',
-      `evaluate('e', { egress: { allow: ['*.com'] } }, async () => {})`,
-      /egress\.allow in evaluate\("e"\): '\*\.com' would allow every host under \.com; name the domain, e\.g\. '\*\.example\.com'\./,
-    ],
-    [
-      'a wildcard over IP addresses',
-      `evaluate('e', { egress: { allow: ['*.0.0.1'] } }, async () => {})`,
-      /egress\.allow in evaluate\("e"\): '\*\.0\.0\.1' isn't a host name or an IPv4 address, and a \*\. pattern never matches an address\./,
-    ],
-    [
-      'a short-form IPv4 address in an egress allowlist',
-      `evaluate('e', { egress: { allow: ['10.1'] } }, async () => {})`,
-      /egress\.allow in evaluate\("e"\): '10\.1' isn't a host name or an IPv4 address/,
-    ],
-    [
-      'the network policy under another name',
-      `evaluate('e', { network: 'deny-all' } as never, async () => {})`,
-      /Unknown option "network" in evaluate\("e"\)\. Did you mean "egress"\?/,
-    ],
-    [
-      'deny-all on the fake sandbox',
-      `evaluate('e', { egress: 'deny-all' }, async () => {})`,
-      /evaluate\("e"\) runs under egress 'deny-all', which needs turning egress off, but the fake sandbox enforces no egress policy \(its commands run on the host\)\. Run it in docker\(\), or set egress: 'allow-all'\./,
-    ],
-    [
-      "an environment's allowlist on the fake sandbox",
-      `evaluate('e', { environment: defineEnvironment('n', { sandbox: fakeSandbox(), egress: { allow: ['api.example.com'] } }) }, async () => {})`,
-      /evaluate\("e"\) runs under egress \{ allow: \['api\.example\.com'\] \}, which needs a host allowlist \(api\.example\.com\), but the fake sandbox enforces no egress policy/,
-    ],
-    [
-      'two harnesses with one id',
-      `evaluate('e', { harness: [fakeHarness(), fakeHarness()] }, async () => {})`,
-      /Two harnesses in evaluate\("e"\) resolve to the id "fake"/,
-    ],
-    [
-      'a repository URL as the workspace',
-      `defineEnvironment('app', { workspace: 'https://github.com/acme/app' as never })`,
-      /workspace in defineEnvironment\("app"\) must come from the git helper, e\.g\. workspace: git\('https:\/\/github\.com\/acme\/app', \{ ref: 'v1\.0\.0' \}\)/,
-    ],
-    [
-      "the token itself as git()'s token",
-      `defineEnvironment('app', ({ git }) => ({ workspace: git('github:acme/app', { token: 'ghp_abc123def456' }) }))`,
-      /git\("github:acme\/app"\): token names the host variable that holds the token, e\.g\. token: 'GITHUB_TOKEN'\. Don't put the token itself in the eval\./,
-    ],
-    [
-      'a token in the workspace URL',
-      `defineEnvironment('app', ({ git }) => ({ workspace: git('https://x-access-token:ghp_abc123@github.com/acme/app') }))`,
-      /git\("https:\/\/\*\*\*:\*\*\*@github\.com\/acme\/app"\): the URL has a password or token in it\. reeval fetches the repository on the host with your own git credentials/,
-    ],
-    [
-      'a plugin as a path',
-      `defineEnvironment('review', { plugins: ['./plugins/review' as never] })`,
-      /plugins in defineEnvironment\("review"\) must come from the plugin helper, e\.g\. plugins: \[plugin\.local\('\.\/plugins\/review'\)\] \(got "\.\/plugins\/review"\)/,
-    ],
-    [
-      'the singular plugin key',
-      `defineEnvironment('review', ({ plugin }) => ({ plugin: [plugin.local('.')] }) as never)`,
-      /Unknown field "plugin" in defineEnvironment\("review"\)\. Did you mean "plugins"\?/,
-    ],
-    [
-      'a plugin only as a string',
-      `defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('.', { only: 'skills' as never })] }))`,
-      /plugin\.local\("\."\): only lists the parts to place, from 'skills', 'agents', 'commands', 'hooks', 'mcp', 'rules'/,
-    ],
-    [
-      'a marketplace plugin without its entry name',
-      `defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.marketplace('github:acme/agent-plugins')] }))`,
-      /plugin\.marketplace\(\) needs 'name@source': the plugin's entry and the marketplace's git repository or npm:<package>, e\.g\. plugin\.marketplace\('lint@github:acme\/agent-plugins'\) \(got "github:acme\/agent-plugins"\)/,
+  describe('refused in-process', () => {
+    // Each refusal here happens while reeval collects the eval file or resolves the config, so the
+    // rows run that in-process, as a worker does; test/refusals/ holds the contract's own checks
+    // to golden messages, and the CLI rows below hold the wiring: exit 2 and the message printed.
+    const root = tempDir('mistakes')
+    const a = defineEnvironment('a', {})
+    const b = defineEnvironment('b', {})
+    const fakeConfigInput = (environment = true) => ({
+      harness: fakeHarness({}),
+      sandbox: fakeSandbox({ dir: join(root, 'sandboxes') }),
+      ...(environment ? { environment: defineEnvironment('fake', {}) } : {}),
+      judge: { model: fakeJudge({ score: 0.9 }) },
+    })
+    let files = 0
+
+    /**
+     * What collecting an eval file that runs `declare` refuses, under `fakeConfig()`'s config, or
+     * `null` when it plans.
+     */
+    async function refusal(
+      declare: () => void,
+      config = fakeConfigInput(),
+    ): Promise<string | null> {
+      const run: RunContext = {
+        runId: 'r',
+        stagingDir: root,
+        config: resolveConfig(config, root),
+        tags: [],
+        concurrency: 1,
+        profile: null,
+      }
+      useEngine({
+        registerTest,
+        registerGroup,
+        getRunContext: () => run,
+        collectingFile,
+        declareHarnesses: () => {},
+      })
+      const file = join(root, `evals/m${++files}.eval.ts`)
+      try {
+        await collect(file, async () => declare())
+      } catch (error) {
+        return (error as Error).message
+      }
+      return null
+    }
+
+    const cases: Array<[string, () => unknown, RegExp]> = [
+      [
+        'a question that shows the model nothing',
+        () =>
+          group('g', { question: { state: { task: false } } }, () => {
+            evaluate(
+              'e',
+              {
+                questions: [
+                  { question: 'Q', state: { diff: false, output: false, transcript: false } },
+                ],
+              },
+              async () => {},
+            )
+          }),
+        /questions "Q" in evaluate\("g › e"\) shows the model nothing: every state key is off and it sends no artifacts\. Turn on a state key, such as state: \{ diff: true \}, or send artifacts\./,
+      ],
+      [
+        'a variant with its own checks',
+        () =>
+          evaluate(
+            'e',
+            { compare: { baseline: a, variants: [{ environment: a, check: () => {} } as never] } },
+            async () => {},
+          ),
+        /compare\.variants in evaluate\("e"\) must be environments from defineEnvironment \(got an object with "environment", "check"\)\. Variants share the eval's prompt and checks; if a variant needs different checks, write a separate eval\./,
+      ],
+      [
+        'compare scoped to a harness the eval does not run',
+        () =>
+          evaluate(
+            'e',
+            { compare: { baseline: b, variants: [a], harness: ['sonnet'] } },
+            async () => {},
+          ),
+        /compare\.harness lists sonnet, which evaluate\("e"\) doesn't run \(it runs fake\)\./,
+      ],
+      [
+        'compare arms whose refs come from unset variables',
+        () => {
+          const base = defineEnvironment('base', ({ git }) => ({
+            workspace: git('..', { ref: process.env.REEVAL_TEST_UNSET_BASE }),
+          }))
+          const head = base.extendEnvironment('head', ({ git }) => ({
+            workspace: git('..', { ref: process.env.REEVAL_TEST_UNSET_HEAD }),
+          }))
+          evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})
+        },
+        /compare in evaluate\("e"\) runs head and base on the same tree: past what they share, each sets only workspace, and both are git\("\.\."\) with no ref \(the repository HEAD\)\. A ref read from an unset variable is undefined, so check the variables the arms take their refs from, and give each arm its own ref\./,
+      ],
+      [
+        'a variant that is the environment a compare without a baseline runs as its control',
+        () =>
+          group('g', { environment: a }, () => {
+            evaluate('e', { compare: { variants: [a, b] } }, async () => {})
+          }),
+        /compare in evaluate\("g › e"\) lists a, which is the control: compare has no baseline, so the eval's environment is\./,
+      ],
+      [
+        'a pairwise question across environments without a compare',
+        () =>
+          evaluate(
+            'e',
+            { questions: [{ question: 'Which?', across: 'environment' }] },
+            async () => {},
+          ),
+        /questions "Which\?" in evaluate\("e"\) varies the environment \(across: 'environment'\), but evaluate\("e"\) runs one environment, so it has no pairs to ask\. Add compare: \{ variants: \[\.\.\.\] \}, or leave out across to ask each attempt on its own\./,
+      ],
+      [
+        'a pairwise question across harnesses on one harness',
+        () =>
+          evaluate(
+            'e',
+            {
+              compare: { baseline: a, variants: [b] },
+              questions: [{ question: 'Which?', across: ['environment', 'harness'] }],
+            },
+            async () => {},
+          ),
+        /questions "Which\?" in evaluate\("e"\) varies the harness \(across: 'harness'\), but evaluate\("e"\) runs one harness \(fake\), so it has no pairs to ask\. Run it on two or more, harness: \[a, b\], or leave out across to ask each attempt on its own\./,
+      ],
+      [
+        'pinning something that cannot be pinned',
+        () => evaluate('e', { pin: ['timeout'] as never }, async () => {}),
+        /pin in evaluate\("e"\) lists harness, runs and\/or compare \(got "timeout"\)/,
+      ],
+      [
+        'a callback as group options',
+        () =>
+          group(
+            'genkit',
+            (({ secret }: { secret: { fromEnv: (k: string) => unknown } }) => ({
+              env: { KEY: secret.fromEnv('KEY') },
+            })) as never,
+            () => {},
+          ),
+        /group\("genkit"\) got two functions\. Options must be a plain object; helpers such as secret are only available in defineConfig and defineEnvironment callbacks\./,
+      ],
+      [
+        'a harness edit naming a harness the eval does not inherit',
+        () => evaluate('e', { harness: { only: 'cursor' } }, async () => {}),
+        /harness \{ only: "cursor" \} in evaluate\("e"\) names no inherited harness \(inherited: fake\)/,
+      ],
+      [
+        'a harness edit that adds and keeps at once',
+        () => evaluate('e', { harness: { add: [], only: 'fake' } as never }, async () => {}),
+        /harness in evaluate\("e"\) takes \{ add \} or \{ only \}, not both\. Use add/,
+      ],
+      [
+        'an old option name',
+        () => group('g', { harnesses: [] } as never, () => {}),
+        /Unknown option "harnesses" in group\("g"\)\. Did you mean "harness"\?/,
+      ],
+      [
+        'repeat instead of runs',
+        () => evaluate('e', { repeat: 3 } as never, async () => {}),
+        /Unknown option "repeat" .*Did you mean "runs"\?/,
+      ],
+      [
+        'an eval with no function',
+        () => (evaluate as (name: string, options: object) => void)('x', {}),
+        /evaluate\("x"\) has no function\. Pass the eval's body, e\.g\. evaluate\("x", async \(c\) => \{ … \}\)\./,
+      ],
+      [
+        'evaluate.each cases with the same name',
+        () =>
+          evaluate.each([
+            { a: 1, b: 2 },
+            { a: 1, b: 3 },
+          ])('adds $a', async () => {}),
+        /evaluate\("adds 1"\) is declared twice in this file\. .* For evaluate\.each, put \$key, %s or %# in the name \("adds \$a"\) so each case's name differs\./,
+      ],
+      [
+        "pool in an eval's options",
+        () => evaluate.each([1, 2])('n %s', { pool: false } as never, async () => {}),
+        /Unknown option "pool" in evaluate\("n 1"\)\. pool is an option of evaluate\.each, beside the cases: evaluate\.each\(cases, \{ pool: false \}\)\./,
+      ],
+      [
+        "eval options as evaluate.each's second argument",
+        () => evaluate.each([1, 2], { runs: 2 } as never)('n %s', async () => {}),
+        /evaluate\.each\(cases, options\) takes \{ pool\?: boolean \} \(got \{"runs":2\}\)\. Eval options such as compare go after the name/,
+      ],
+      [
+        'a zero timeout',
+        () => evaluate('e', { timeout: 0 }, async () => {}),
+        /Invalid duration 0\. A duration is more than zero: use e\.g\. "90s" or "15m"\./,
+      ],
+      [
+        'a timeout longer than a timer can be',
+        () => evaluate('e', { timeout: '1000h' }, async () => {}),
+        /Invalid duration "1000h"\. A duration is at most 596h \(2147483647ms\), the longest timer Node can set\./,
+      ],
+      [
+        'a judge.state.diff pattern as one string on a group',
+        () =>
+          group('g', { judge: { state: { diff: 'src/' as never } } }, () => {
+            evaluate('e', async () => {})
+          }),
+        /judge\.state\.diff in group\("g"\) must be true, false or a non-empty list of patterns \(got "src\/"\)/,
+      ],
+      [
+        'a file path that climbs out of the home directory',
+        () => defineEnvironment('e', { files: { '~/../../x': 'x' } }),
+        /files\["~\/\.\.\/\.\.\/x"\] in defineEnvironment\("e"\): paths .* never use \.\./,
+      ],
+      [
+        'runs 0',
+        () => evaluate('e', { runs: 0 }, async () => {}),
+        /runs in evaluate\("e"\) must be a whole number of at least 1 \(got 0\)/,
+      ],
+      [
+        'passRate instead of gate',
+        () => evaluate('e', { passRate: 0.8 } as never, async () => {}),
+        /Unknown option "passRate" in evaluate\("e"\)\. Did you mean "gate"\?/,
+      ],
+      [
+        'no harness',
+        () => evaluate('e', { harness: [] }, async () => {}),
+        /harness is an empty list in evaluate\("e"\)/,
+      ],
+      [
+        'an empty hosts list',
+        () =>
+          defineEnvironment('k', ({ secret }) => ({
+            env: { K: secret.fromEnv('K', { hosts: [] }) },
+          })),
+        /secret\.fromEnv\("K"\): hosts must list the hosts the secret is sent to, e\.g\. hosts: \['api\.example\.com'\] or secret\.hosts\.gemini \(got \[\]\)/,
+      ],
+      [
+        'a URL as a host',
+        () =>
+          defineEnvironment('k', ({ secret }) => ({
+            env: { K: secret.fromEnv('K', { hosts: ['https://api.example.com/v1'] }) },
+          })),
+        /secret\.fromEnv\("K"\): hosts are host names, not URLs: use 'api\.example\.com' \(got 'https:\/\/api\.example\.com\/v1'\)/,
+      ],
+      [
+        'a host that is not a string',
+        () =>
+          defineEnvironment('k', ({ secret }) => ({
+            env: { K: secret.fromEnv('K', { hosts: [42 as never] }) },
+          })),
+        /secret\.fromEnv\("K"\): 42 isn't a host\. Use a name like 'api\.example\.com', or '\*\.example\.com' for its subdomains\./,
+      ],
+      [
+        'in without hosts',
+        () =>
+          defineEnvironment('k', ({ secret }) => ({
+            env: { K: secret.fromEnv('K', { in: ['query'] }) },
+          })),
+        /secret\.fromEnv\("K"\): in only applies to a brokered secret; add hosts, e\.g\. \{ hosts: \['api\.example\.com'\], in: \["query"\] \}/,
+      ],
+      [
+        'a short-form IPv4 address in an egress allowlist',
+        () => evaluate('e', { egress: { allow: ['10.1'] } }, async () => {}),
+        /egress\.allow in evaluate\("e"\): '10\.1' isn't a host name or an IPv4 address/,
+      ],
+      [
+        'the network policy under another name',
+        () => evaluate('e', { network: 'deny-all' } as never, async () => {}),
+        /Unknown option "network" in evaluate\("e"\)\. Did you mean "egress"\?/,
+      ],
+      [
+        'deny-all on the fake sandbox',
+        () => evaluate('e', { egress: 'deny-all' }, async () => {}),
+        /evaluate\("e"\) runs under egress 'deny-all', which needs turning egress off, but the fake sandbox enforces no egress policy \(its commands run on the host\)\. Run it in docker\(\), or set egress: 'allow-all'\./,
+      ],
+      [
+        "an environment's allowlist on the fake sandbox",
+        () =>
+          evaluate(
+            'e',
+            {
+              environment: defineEnvironment('n', {
+                sandbox: fakeSandbox(),
+                egress: { allow: ['api.example.com'] },
+              }),
+            },
+            async () => {},
+          ),
+        /evaluate\("e"\) runs under egress \{ allow: \['api\.example\.com'\] \}, which needs a host allowlist \(api\.example\.com\), but the fake sandbox enforces no egress policy/,
+      ],
+      [
+        'two harnesses with one id',
+        () => evaluate('e', { harness: [fakeHarness(), fakeHarness()] }, async () => {}),
+        /Two harnesses in evaluate\("e"\) resolve to the id "fake"/,
+      ],
+      [
+        'the singular plugin key',
+        () =>
+          defineEnvironment('review', (({ plugin }: EnvironmentHelpers) => ({
+            plugin: [plugin.local('.')],
+          })) as never),
+        /Unknown field "plugin" in defineEnvironment\("review"\)\. Did you mean "plugins"\?/,
+      ],
+      [
+        'a plugin only as a string',
+        () =>
+          defineEnvironment('review', ({ plugin }) => ({
+            plugins: [plugin.local('.', { only: 'skills' as never })],
+          })),
+        /plugin\.local\("\."\): only lists the parts to place, from 'skills', 'agents', 'commands', 'hooks', 'mcp', 'rules'/,
+      ],
+      [
+        'capture as a number',
+        () => evaluate('e', { capture: 5173 as never }, async () => {}),
+        /capture in evaluate\("e"\) is \{ viewport\?, timeout\?, browser\?, model\? \} \(got 5173\)/,
+      ],
+      [
+        'an unknown capture key',
+        () => evaluate('e', { capture: { ready: true } as never }, async () => {}),
+        /Unknown capture key "ready" in evaluate\("e"\)\. Use viewport, timeout, browser, model\./,
+      ],
+      [
+        'capture.port on evaluate',
+        () => evaluate('e', { capture: { port: 5173 } as never }, async () => {}),
+        /Unknown capture key "port" in evaluate\("e"\)\. Use viewport, timeout, browser, model\./,
+      ],
+      [
+        'a capture viewport without height',
+        () => evaluate('e', { capture: { viewport: { width: 1280 } as never } }, async () => {}),
+        /capture\.viewport in evaluate\("e"\) is \{ width, height \} or 'full-page'/,
+      ],
+      [
+        'capture.browser as a string',
+        () => evaluate('e', { capture: { browser: 'off' as never } }, async () => {}),
+        /capture\.browser in evaluate\("e"\) is true or false \(got "off"\)/,
+      ],
+      [
+        'a capture viewport with height and fullPage',
+        () =>
+          evaluate(
+            'e',
+            { capture: { viewport: { height: 720, fullPage: true } as never } },
+            async () => {},
+          ),
+        /capture\.viewport in evaluate\("e"\) is \{ width, height \} or 'full-page', not \{ height, fullPage \}/,
+      ],
+      [
+        'instructions without a vision model',
+        () =>
+          evaluate('e', { capture: { instructions: ['Fill the form'] } as never }, async () => {}),
+        /capture\.instructions in evaluate\("e"\) can't be set: instructions go on the call/,
+      ],
+      [
+        'an evaluation-model capture.model',
+        () => evaluate('e', { capture: { model: 'typesafe-ai/jev-1.14.0' } }, async () => {}),
+        /capture\.model "typesafe-ai\/jev-1\.14\.0" in evaluate\("e"\) is an evaluation model/,
+      ],
+      [
+        'leftover capture.use',
+        () =>
+          evaluate(
+            'e',
+            { capture: { use: { model: 'google/gemini-3.8-flash' } } as never },
+            async () => {},
+          ),
+        /Unknown capture key "use" in evaluate\("e"\)\. Set capture\.model/,
+      ],
+      [
+        'leftover capture.fake',
+        () => evaluate('e', { capture: { fake: [] } as never }, async () => {}),
+        /Unknown capture key "fake" in evaluate\("e"\)\. Set capture\.model/,
+      ],
+    ]
+    for (const [what, declare, message] of cases) {
+      test(`${what} is refused with a fix`, async () => {
+        assert.match(String(await refusal(declare)), message)
+      })
+    }
+
+    test('a variant named baseline in a compare without a baseline or environment is refused', async () => {
+      const declare = () =>
+        evaluate(
+          'e',
+          { compare: { variants: [defineEnvironment('baseline', {})] } },
+          async () => {},
+        )
+      assert.match(
+        String(await refusal(declare, fakeConfigInput(false))),
+        /compare in evaluate\("e"\) lists a variant named baseline, the name of the empty control a compare without a baseline or environment runs\. Rename the variant, or set compare\.baseline\./,
+      )
+    })
+
+    test('compare arms on one workspace that differ in something else plan', async () => {
+      const declare = () => {
+        const base = defineEnvironment('base', ({ git }) => ({ workspace: git('..') }))
+        const skilled = base.extendEnvironment('skilled', ({ git }) => ({
+          workspace: git('..'),
+          files: { 'SKILL.md': 'x' },
+        }))
+        const ruled = defineEnvironment('ruled', ({ git }) => ({
+          workspace: git('..'),
+          rules: 'Be brief.',
+        }))
+        const bare = defineEnvironment('bare', ({ git }) => ({ workspace: git('..') }))
+        evaluate('extends', { compare: { baseline: base, variants: [skilled] } }, async () => {})
+        evaluate('apart', { compare: { baseline: ruled, variants: [bare] } }, async () => {})
+      }
+      assert.equal(await refusal(declare), null)
+    })
+
+    const configCases: Array<[string, Record<string, unknown>, RegExp]> = [
+      [
+        'a literal secret',
+        { env: { GOOGLE_API_KEY: 'AIza-not-really' } },
+        /env\.GOOGLE_API_KEY in reeval\.config\.ts is a literal string\. Pass secrets with secret\.fromEnv\(\) so they're redacted and never recorded\./,
+      ],
+      [
+        'widening in a profile limit',
+        { profiles: { pr: { limit: { harness: [fakeHarness({ id: 'a' })] } } } },
+        /profiles\.pr\.limit\.harness in reeval\.config\.ts can only list harness ids to allow \(got fakeHarness\(\{ … \}\)\)\. To add harnesses, use profiles\.pr\.defaults\.harness\./,
+      ],
+      [
+        'a usd budget',
+        { budget: { usd: 20 } },
+        /budget\.usd in reeval\.config\.ts isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget\. Cap the run with attempts or duration\./,
+      ],
+      [
+        'an unbrokered policy reeval does not know',
+        { secrets: { unbrokered: 'deny' } },
+        /secrets\.unbrokered in reeval\.config\.ts is 'warn' or 'error' \(got "deny"\)/,
+      ],
+      [
+        'maxConcurrent 0 on a config harness',
+        { harness: fakeHarness({ maxConcurrent: 0 }) },
+        /harness\.maxConcurrent in reeval\.config\.ts must be a whole number of at least 1 \(got 0\)/,
+      ],
+      [
+        'a judge diff option outside state',
+        { judge: { model: fakeJudge({ score: 0.9 }), diff: ['src/'] } },
+        /Unknown judge option "diff" in reeval\.config\.ts\. Did you mean "state\.diff"\?/,
+      ],
+      [
+        'a judge contents option outside state',
+        { judge: { model: fakeJudge({ score: 0.9 }), contents: ['README.md'] } },
+        /Unknown judge option "contents" in reeval\.config\.ts\. Did you mean "state\.contents"\?/,
+      ],
+      [
+        'a misspelt judge.state key',
+        { judge: { model: fakeJudge({ score: 0.9 }), state: { transcipt: true } } },
+        /Unknown judge\.state key "transcipt" in reeval\.config\.ts\. Did you mean "transcript"\?/,
+      ],
+      [
+        'a judge.state.transcript that is not a mode',
+        { judge: { model: fakeJudge({ score: 0.9 }), state: { transcript: 'all' } } },
+        /judge\.state\.transcript in reeval\.config\.ts must be true, false, 'tools' or 'full' \(got "all"\)/,
+      ],
+      [
+        'judge.state as a list',
+        { judge: { model: fakeJudge({ score: 0.9 }), state: ['transcript'] } },
+        /judge\.state in reeval\.config\.ts must be an object such as \{ transcript: 'tools' \} \(got \["transcript"\]\)/,
+      ],
+      [
+        'keeping no debug runs',
+        { debug: { keep: 0 } },
+        /debug\.keep in reeval\.config\.ts must be a whole number of at least 1 \(got 0\)/,
+      ],
+      [
+        'a trace buffer size as text',
+        { debug: { traceBufferMb: '8MB' } },
+        /debug\.traceBufferMb in reeval\.config\.ts must be a number of megabytes above 0 \(got "8MB"\)/,
+      ],
+      [
+        'a debug folder option',
+        { debug: { dir: '/tmp/debug' } },
+        /Unknown option "dir" in debug in reeval\.config\.ts\. Use keep, traceBufferMb\./,
+      ],
+      [
+        'control reuse',
+        { profiles: { pr: { reuse: 'control' } } },
+        /Unknown option "reuse" in profiles\.pr in reeval\.config\.ts\. Reusing control results from \.history isn’t built yet/,
+      ],
+      [
+        'a sandbox that is not docker() or fakeSandbox() on defineConfig',
+        { sandbox: { kind: 'vm' } },
+        /sandbox in reeval\.config\.ts must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
+      ],
+      [
+        'a sandbox that is not docker() or fakeSandbox() on profile defaults',
+        { profiles: { pr: { defaults: { sandbox: { kind: 'vm' } } } } },
+        /sandbox in profiles\.pr\.defaults in reeval\.config\.ts must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
+      ],
+    ]
+    for (const [what, extra, message] of configCases) {
+      test(`${what} in the config is refused with a fix`, () => {
+        assert.throws(
+          () =>
+            resolveConfig({ ...fakeConfigInput(), ...extra } as never, root, 'reeval.config.ts'),
+          message,
+        )
+      })
+    }
+  })
+
+  const cliCases: Array<[string, Record<string, string>, RegExp]> = [
+    [
+      'a refusal while the eval file loads',
+      {
+        'reeval.config.ts': fakeConfig(),
+        'evals/o.eval.ts': `import { defineEnvironment } from 'reeval'
+defineEnvironment('py', { dockerfile: './Dockerfile' } as never)
+`,
+      },
+      /^reeval: evals\/o\.eval\.ts: "dockerfile" isn't an environment field \(defineEnvironment\("py"\)\)\. Put the image on the sandbox: sandbox: docker\(\{ dockerfile: … \}\)/m,
+    ],
+    [
+      'a refusal while the eval is planned',
+      {
+        'reeval.config.ts': fakeConfig(),
+        'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const a = defineEnvironment('a', {})
+const b = defineEnvironment('b', {})
+evaluate('e', { compare: { baseline: b, variants: [a], harness: ['sonnet'] } }, async () => {})
+`,
+      },
+      /^reeval: evals\/o\.eval\.ts: compare\.harness lists sonnet, which evaluate\("e"\) doesn't run \(it runs fake\)\./m,
     ],
     [
       'a plugin without a manifest',
-      `evaluate('e', { environment: defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('..')] })) }, async () => {})`,
+      {
+        'reeval.config.ts': fakeConfig(),
+        'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+evaluate('e', { environment: defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('..')] })) }, async () => {})
+`,
+      },
       /evaluate\("e"\) on fake: plugin\.local\('\.'\) has no \.claude-plugin\/plugin\.json/,
     ],
-    [
-      'capture as a string',
-      `evaluate('e', { capture: 5173 as never }, async () => {})`,
-      /capture in evaluate\("e"\) is \{ viewport\?, timeout\?, browser\?, model\? \} \(got 5173\)/,
-    ],
-    [
-      'an unknown capture key',
-      `evaluate('e', { capture: { ready: true } as never }, async () => {})`,
-      /Unknown capture key "ready" in evaluate\("e"\)\. Use viewport, timeout, browser, model\./,
-    ],
-    [
-      'capture.port on evaluate',
-      `evaluate('e', { capture: { port: 5173 } as never }, async () => {})`,
-      /Unknown capture key "port" in evaluate\("e"\)\. Use viewport, timeout, browser, model\./,
-    ],
-    [
-      'a capture viewport without height',
-      `evaluate('e', { capture: { viewport: { width: 1280 } as never } }, async () => {})`,
-      /capture\.viewport in evaluate\("e"\) is \{ width, height \} or 'full-page'/,
-    ],
-    [
-      'capture.browser as a string',
-      `evaluate('e', { capture: { browser: 'off' as never } }, async () => {})`,
-      /capture\.browser in evaluate\("e"\) is true or false \(got "off"\)/,
-    ],
-    [
-      'a capture viewport with height and fullPage',
-      `evaluate('e', { capture: { viewport: { height: 720, fullPage: true } as never } }, async () => {})`,
-      /capture\.viewport in evaluate\("e"\) is \{ width, height \} or 'full-page', not \{ height, fullPage \}/,
-    ],
-    [
-      'instructions without a vision model',
-      `evaluate('e', { capture: { instructions: ['Fill the form'] } as never }, async () => {})`,
-      /capture\.instructions in evaluate\("e"\) can't be set: instructions go on the call/,
-    ],
-    [
-      'an evaluation-model capture.model',
-      `evaluate('e', { capture: { model: 'typesafe-ai/jev-1.14.0' } }, async () => {})`,
-      /capture\.model "typesafe-ai\/jev-1\.14\.0" in evaluate\("e"\) is an evaluation model/,
-    ],
-    [
-      'leftover capture.use',
-      `evaluate('e', { capture: { use: { model: 'google/gemini-3.8-flash' } } as never }, async () => {})`,
-      /Unknown capture key "use" in evaluate\("e"\)\. Set capture\.model/,
-    ],
-    [
-      'leftover capture.fake',
-      `evaluate('e', { capture: { fake: [] } as never }, async () => {})`,
-      /Unknown capture key "fake" in evaluate\("e"\)\. Set capture\.model/,
-    ],
   ]
-  for (const [what, body, message] of cases) {
+  for (const [what, files, message] of cliCases) {
     test(`${what} exits 2 with a fix`, async () => {
-      const noConfigEnv =
-        what === 'a variant named baseline in a compare without a baseline or environment'
-      const p = await project('mistake', {
-        'reeval.config.ts': noConfigEnv
-          ? `import { defineConfig } from 'reeval'
-import { fakeHarness } from 'reeval/harness'
-import { fakeJudge } from 'reeval/judge'
-export default defineConfig({
-  harness: fakeHarness({}),
-  judge: { model: fakeJudge({ score: 0.9 }) },
-})
-`
-          : fakeConfig(),
-        'evals/o.eval.ts': `import { defineEnvironment, evaluate, group } from 'reeval'
-import { fakeHarness } from 'reeval/harness'
-import { docker, fakeSandbox } from 'reeval/sandbox'
-const a = defineEnvironment('a', {})
-const b = defineEnvironment('b', {})
-${body}
-`,
-      })
+      const p = await project('mistake', files)
       const r = await runCli(p.dir)
-      assert.equal(r.code, 2, `${body}\n${r.stdout}${r.stderr}`)
-      assert.match(r.stderr, message)
-    })
-  }
-
-  test('compare arms on one workspace that differ in something else plan', async () => {
-    const p = await project('same-workspace-arms', {
-      'reeval.config.ts': fakeConfig(),
-      'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
-const base = defineEnvironment('base', ({ git }) => ({ workspace: git('..') }))
-const skilled = base.extendEnvironment('skilled', ({ git }) => ({ workspace: git('..'), files: { 'SKILL.md': 'x' } }))
-const ruled = defineEnvironment('ruled', ({ git }) => ({ workspace: git('..'), rules: 'Be brief.' }))
-const bare = defineEnvironment('bare', ({ git }) => ({ workspace: git('..') }))
-evaluate('extends', { compare: { baseline: base, variants: [skilled] } }, async () => {})
-evaluate('apart', { compare: { baseline: ruled, variants: [bare] } }, async () => {})
-`,
-    })
-    const r = await runCli(p.dir, ['run', '--dry-run'])
-    assert.equal(r.code, 0, r.stdout + r.stderr)
-  })
-
-  const configCases: Array<[string, string, RegExp]> = [
-    [
-      'compare in the config',
-      `compare: { variants: [defineEnvironment('x', {})] },`,
-      /compare can't be set in reeval\.config\.ts: it would multiply every eval\. Put it on the group or eval that asks the question\./,
-    ],
-    [
-      'a literal secret',
-      `env: { GOOGLE_API_KEY: 'AIza-not-really' },`,
-      /env\.GOOGLE_API_KEY in reeval\.config\.ts is a literal string\. Pass secrets with secret\.fromEnv\(\) so they're redacted and never recorded\./,
-    ],
-    [
-      'widening in a profile limit',
-      `profiles: { pr: { limit: { harness: [fakeHarness({ id: 'a' })] } } },`,
-      /profiles\.pr\.limit\.harness in reeval\.config\.ts can only list harness ids to allow \(got fakeHarness\(\{ … \}\)\)\. To add harnesses, use profiles\.pr\.defaults\.harness\./,
-    ],
-    [
-      'a usd budget',
-      `budget: { usd: 20 },`,
-      /budget\.usd in reeval\.config\.ts isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget\. Cap the run with attempts or duration\./,
-    ],
-    [
-      'an unbrokered policy reeval does not know',
-      `secrets: { unbrokered: 'deny' as never },`,
-      /secrets\.unbrokered in reeval\.config\.ts is 'warn' or 'error' \(got "deny"\)/,
-    ],
-    [
-      'maxConcurrent 0 on a config harness',
-      `harness: fakeHarness({ maxConcurrent: 0 }),`,
-      /harness\.maxConcurrent in reeval\.config\.ts must be a whole number of at least 1 \(got 0\)/,
-    ],
-    [
-      'a judge threshold as text in the config',
-      `judge: { model: fakeJudge({ score: 0.9 }), threshold: '0.8' as never },`,
-      /judge\.threshold in reeval\.config\.ts must be between 0 and 1 \(got "0\.8"\)/,
-    ],
-    [
-      'a judge diff option outside state',
-      `judge: { model: fakeJudge({ score: 0.9 }), diff: ['src/'] },`,
-      /Unknown judge option "diff" in reeval\.config\.ts\. Did you mean "state\.diff"\?/,
-    ],
-    [
-      'a judge contents option outside state',
-      `judge: { model: fakeJudge({ score: 0.9 }), contents: ['README.md'] },`,
-      /Unknown judge option "contents" in reeval\.config\.ts\. Did you mean "state\.contents"\?/,
-    ],
-    [
-      'a misspelt judge.state key',
-      `judge: { model: fakeJudge({ score: 0.9 }), state: { transcipt: true } as never },`,
-      /Unknown judge\.state key "transcipt" in reeval\.config\.ts\. Did you mean "transcript"\?/,
-    ],
-    [
-      'a judge.state.transcript that is not a mode',
-      `judge: { model: fakeJudge({ score: 0.9 }), state: { transcript: 'all' as never } },`,
-      /judge\.state\.transcript in reeval\.config\.ts must be true, false, 'tools' or 'full' \(got "all"\)/,
-    ],
-    [
-      'an empty path in judge.state.contents',
-      `judge: { model: fakeJudge({ score: 0.9 }), state: { contents: ['README.md', ''] } },`,
-      /judge\.state\.contents in reeval\.config\.ts must be a list of paths or patterns \(got \["README\.md",""\]\)/,
-    ],
-    [
-      'judge.state as a list',
-      `judge: { model: fakeJudge({ score: 0.9 }), state: ['transcript'] as never },`,
-      /judge\.state in reeval\.config\.ts must be an object such as \{ transcript: 'tools' \} \(got \["transcript"\]\)/,
-    ],
-    [
-      'a fake judge scoring with a function in the config',
-      `judge: { model: fakeJudge({ score: () => 1 }) },`,
-      /judge\.model in reeval\.config\.ts must be fakeJudge\(\{ score \}\) with a number\. Pass a score function per group, eval or call instead\./,
-    ],
-    [
-      'keeping no debug runs',
-      `debug: { keep: 0 },`,
-      /debug\.keep in reeval\.config\.ts must be a whole number of at least 1 \(got 0\)/,
-    ],
-    [
-      'a trace buffer size as text',
-      `debug: { traceBufferMb: '8MB' as never },`,
-      /debug\.traceBufferMb in reeval\.config\.ts must be a number of megabytes above 0 \(got "8MB"\)/,
-    ],
-    [
-      'analysis.agent, which insights replaced',
-      `analysis: { agent: true } as never,`,
-      /Unknown option "agent" in analysis in reeval\.config\.ts\. Use model, insights, maxTokens, instructions/,
-    ],
-    [
-      'analysis.insights as text',
-      `analysis: { insights: 'yes' as never },`,
-      /analysis\.insights in reeval\.config\.ts must be true or false \(got "yes"\)/,
-    ],
-    [
-      'a token budget of zero',
-      `analysis: { maxTokens: 0 },`,
-      /analysis\.maxTokens in reeval\.config\.ts must be a whole number of tokens of at least 1, e\.g\. 250000 \(got 0\)/,
-    ],
-    [
-      'a debug folder option',
-      `debug: { dir: '/tmp/debug' } as never,`,
-      /Unknown option "dir" in debug in reeval\.config\.ts\. Use keep, traceBufferMb\./,
-    ],
-    [
-      'control reuse',
-      `profiles: { pr: { reuse: 'control' } },`,
-      /Unknown option "reuse" in profiles\.pr in reeval\.config\.ts\. Reusing control results from \.history isn’t built yet/,
-    ],
-    [
-      'a sandbox that is not docker() or fakeSandbox() on defineConfig',
-      `sandbox: { kind: 'vm' } as never,`,
-      /sandbox in reeval\.config\.ts must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
-    ],
-    [
-      'a sandbox that is not docker() or fakeSandbox() on profile defaults',
-      `profiles: { pr: { defaults: { sandbox: { kind: 'vm' } as never } } },`,
-      /sandbox in profiles\.pr\.defaults in reeval\.config\.ts must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
-    ],
-  ]
-  for (const [what, extra, message] of configCases) {
-    test(`${what} exits 2 with a fix`, async () => {
-      const p = await project('config-mistake', {
-        'reeval.config.ts': config(extra).replace(
-          "import { defineConfig } from 'reeval'",
-          "import { defineConfig, defineEnvironment } from 'reeval'",
-        ),
-        'evals/o.eval.ts': `import { evaluate } from 'reeval'\nevaluate('e', async () => {})\n`,
-      })
-      const r = await runCli(p.dir)
-      assert.equal(r.code, 2, `${extra}\n${r.stdout}${r.stderr}`)
+      assert.equal(r.code, 2, r.stdout + r.stderr)
       assert.match(r.stderr, message)
     })
   }
@@ -1726,15 +1609,17 @@ evaluate('one', { environment: env }, async () => {})
         /secrets\.unbrokered is 'error' in reeval\.unbrokered\.config\.ts\./,
       ],
     ]
-    for (const [cwd, args, message] of cases) {
-      const r = await runCli(join(p.dir, cwd), ['run', ...args], {
-        env: { AWS_SECRET_ACCESS_KEY: 'not-a-real-secret-value' },
-      })
-      assert.equal(r.code, 2, `${args.join(' ')}\n${r.stdout}${r.stderr}`)
-      assert.match(r.stderr, message)
-      if (args.length)
-        assert.doesNotMatch(r.stderr, /(?<![\w./])reeval\.config\.ts/, args.join(' '))
-    }
+    await Promise.all(
+      cases.map(async ([cwd, args, message]) => {
+        const r = await runCli(join(p.dir, cwd), ['run', ...args], {
+          env: { AWS_SECRET_ACCESS_KEY: 'not-a-real-secret-value' },
+        })
+        assert.equal(r.code, 2, `${args.join(' ')}\n${r.stdout}${r.stderr}`)
+        assert.match(r.stderr, message)
+        if (args.length)
+          assert.doesNotMatch(r.stderr, /(?<![\w./])reeval\.config\.ts/, args.join(' '))
+      }),
+    )
     const judged = await runCli(p.dir, ['run', '--config', 'reeval.judge.config.ts', 'j.eval'])
     assert.equal(judged.code, 1, judged.stdout + judged.stderr)
     assert.match(

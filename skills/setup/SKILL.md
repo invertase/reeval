@@ -86,7 +86,7 @@ npx reeval init --bare --harness cursor      # pnpm reeval init … · yarn reev
 `--bare` writes only `reeval.config.ts`, the `.gitignore` entries (`.reeval/`, `.env*`) and the
 `eval` script; it merges into existing files and skips the rest. It exits 2 if reeval is set up
 already: that's your cue to stop initialising, not to `--force`. The config sets
-`analysis.model` for insights (needs `GOOGLE_GENERATIVE_AI_API_KEY`) and `pr` and `nightly`
+`analysis.model` for `reeval analyze` (needs `GOOGLE_GENERATIVE_AI_API_KEY`) and `pr` and `nightly`
 profiles. Leave them.
 
 ## 4. Write one to three evals
@@ -132,7 +132,7 @@ Each eval:
   the agent's code. Label each requirement with `expect.soft(x, 'label')`. Add a judge
   (`c.judge`) only for what no check can see, and then add `judge:` to the config.
 - **A name that states the question:** `stores invoice totals in cents with the billing skill`,
-  not `billing test`. Insights read the name first.
+  not `billing test`. The results and `reeval analyze` read in its terms.
 - **Small:** `runs: 2` on a compare (4 attempts), 1 elsewhere. Seed only the files the task
   needs. If it needs the repo, seed it with `directory('..', { glob: ['!.env*', '!.reeval/',
   '!evals/', '!reeval.config.*'] })`: `directory()` doesn't skip `.env*`, keys must not reach
@@ -160,10 +160,10 @@ npx reeval doctor               # Docker, image, keys; exit 1 names each fix
   message; fix it, don't work around it. Check the counts: a compare is 2 cells.
 - `doctor` lists each missing key as `fix: add NAME=... to .env.local`. Tell the user exactly
   those lines, and that `.env.local` goes next to `reeval.config.ts` (it's gitignored). The
-  analysis key is a warning only: runs pass or fail the same without insights.
+  analysis key is a warning only: runs pass or fail the same without it.
 - No Docker, or `doctor` says the image isn't built: the user installs or starts Docker, then
   runs `npx reeval image build` once (minutes, cached).
-- With Docker: `npx reeval run --profile canary --no-insights <eval-name>` must fail every
+- With Docker: `npx reeval run --profile canary <eval-name>` must fail every
   check you wrote, and `--profile oracle` must pass them. Name the eval: a fake agent writes the
   same files for every eval, so it answers only the one it was written for. Needs no keys,
   seconds each. A canary that passes means a check isn't checking; an oracle that fails means a
@@ -200,8 +200,8 @@ pass             stores invoice totals in cents with the billing skill
 - Each arm's `N of M` is passing attempts. The variant's word is its effect against the control:
   `helped`, `made it worse`, or `can't tell yet`, which it always is below 4 runs a side
   (`--runs 4` to find out). The check table shows which check told the arms apart.
-- The sentences under a block are insights (`analysis.model`): they explain, never change a
-  verdict. `Remarks:` after the tally names an eval that needs work, with the line to fix.
+- `Remarks:` after the tally names an eval that needs work, with the line to fix. Remarks never
+  change a verdict.
 - Both arms passing is a result, not a broken eval: the agent already does this without the
   skill. Say so, and suggest a harder task or a more specific rule from the skill next.
 - A check that fails every attempt on both arms is more often a broken check than a hard task.

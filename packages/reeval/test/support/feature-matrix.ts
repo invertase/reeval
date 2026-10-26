@@ -10,7 +10,7 @@ import { EVAL_OPTION_KEYS } from '../../src/options.ts'
 import { behaviours } from '../contract.test.ts'
 import { EVAL_OPTION_SPECS } from '../features/eval-options.ts'
 import { inventory } from '../features/inventory.ts'
-import { features } from '../features.test.ts'
+import { features, rowName } from '../features.test.ts'
 import { cases } from '../plan.test.ts'
 import { testDir } from './fixture.ts'
 import { buildMatrix, renderMarkdown } from './matrix.ts'
@@ -28,7 +28,8 @@ const refusalText = [
 
 const matrix = buildMatrix(inventory, {
   fixtures: features.map((f) => ({
-    dir: f.dir,
+    dir: rowName(f),
+    ...(f.layout ? { of: f.dir } : {}),
     tiers: f.tiers,
     canary: existsSync(join(testDir, 'features', f.dir, 'evals/canary.eval.ts')),
   })),

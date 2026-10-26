@@ -21,7 +21,6 @@ export * from './debug.ts'
 export * from './effort.ts'
 export * from './family.ts'
 export { runHeader } from './header.ts'
-export * from './insights.ts'
 export * from './judgements.ts'
 export * from './live.ts'
 export * from './model.ts'
@@ -30,8 +29,9 @@ export * from './paths.ts'
 export {
   NewerSchemaError,
   readableAnalysis,
-  readableInsights,
   readableRecord,
+  readableRemarks,
   readableTranscriptLine,
 } from './record.ts'
+export * from './remarks.ts'
 export * from './suite.ts'

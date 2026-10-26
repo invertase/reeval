@@ -5,7 +5,7 @@
 // gateway or a setup process holding a checks secret, which print in every run they happen. With
 // none to print there's no heading.
 import { clip } from '../text.ts'
-import type { Remark, RunInsights } from '../view/insights.ts'
+import type { Remark, RunRemarks } from '../view/remarks.ts'
 import type { SuiteResult } from '../view/suite.ts'
 import type { Colors } from './colors.ts'
 
@@ -43,10 +43,10 @@ const location = (at: string) => at.replace(/^source:/, '').replace(/#L(\d+)$/, 
 export function remarkLines(
   c: Colors,
   suite: SuiteResult,
-  insights: RunInsights | null,
+  remarks: RunRemarks | null,
   verbose: boolean,
 ): string[] {
-  const { shown, hidden } = shownRemarks(insights?.remarks ?? [], suite.runId, verbose)
+  const { shown, hidden } = shownRemarks(remarks?.remarks ?? [], suite.runId, verbose)
   if (!shown.length) return []
   const names = new Map(
     suite.files.flatMap((f) =>

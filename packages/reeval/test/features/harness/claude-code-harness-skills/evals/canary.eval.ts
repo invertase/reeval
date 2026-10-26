@@ -1,8 +1,0 @@
-import { evaluate, expect } from 'reeval'
-import { greeting, shellOutput } from './env.ts'
-
-// Must fail: a harness-placed skill isn't also written into the workspace's .claude/skills.
-evaluate('canary', { environment: greeting }, async (c) => {
-  const turn = await c.send('read the house greeting skill')
-  expect(shellOutput(turn, 1)).toContain('Greet people with "Ahoy, <name>!".')
-})

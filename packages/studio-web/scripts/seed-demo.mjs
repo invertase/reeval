@@ -114,7 +114,6 @@ export default defineConfig({
   // defaults the name. review.eval.ts's second question fails at the model. The per-attempt
   // question answers yes when the diff defaults the name.
   analysis: {
-    insights: false,
     model: fakeAnalysis({
       vote: (p) => {
         if (p.question.includes('missing name')) throw new Error('${QUESTION_ERROR}')

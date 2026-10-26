@@ -2,7 +2,6 @@ import { clip, fenced, formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { colors } from '../ui/colors.ts'
 import { render, tallyLine } from '../ui/layout.ts'
-import type { RunInsights } from '../view/insights.ts'
 import { checkLabels, checkTries, commandLine, labelledJudgements } from '../view/judgements.ts'
 import {
   evalMarkOutcome,
@@ -12,6 +11,7 @@ import {
   languageLabel,
   runtimeLabel,
 } from '../view/model.ts'
+import type { RunRemarks } from '../view/remarks.ts'
 import { suiteResult } from '../view/suite.ts'
 import { warnings } from './state.ts'
 import type { AttemptRecord, RunRecord } from './types.ts'
@@ -112,10 +112,7 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
 }
 
 /** Markdown for people and agents landing on a run cold. Links are relative to the artifact dir. */
-export function renderSummary(
-  run: RunRecord,
-  opts: { hint: boolean; insights?: RunInsights | null },
-): string {
+export function renderSummary(run: RunRecord, opts: { remarks?: RunRemarks | null } = {}): string {
   const lines = [
     `# reeval run ${run.runId}`,
     '',
@@ -127,11 +124,7 @@ export function renderSummary(
     '## Results',
     '',
     ...fenced(
-      render(suiteResult(run), opts.insights ?? null, {
-        color: false,
-        verbose: false,
-        hint: opts.hint,
-      }),
+      render(suiteResult(run), opts.remarks ?? null, { color: false, verbose: false }),
       'text',
     ),
     '',

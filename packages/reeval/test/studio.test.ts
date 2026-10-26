@@ -1223,7 +1223,7 @@ describe('reeval studio build', () => {
   test("a run's notes are in the build as the server serves them; a cached summary only live", async () => {
     const p = await project('studio-notes', {
       'reeval.config.ts': fakeConfig({
-        extra: `analysis: { insights: false, model: fakeAnalysis({ output: { tldr: 'A summary.', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'x' } } }) },`,
+        extra: `analysis: { model: fakeAnalysis({ output: { tldr: 'A summary.', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'x' } } }) },`,
       }).replace(
         "import { fakeJudge } from 'reeval/judge'",
         "import { fakeAnalysis, fakeJudge } from 'reeval/judge'",

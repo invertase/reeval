@@ -1,4 +1,5 @@
 import { globFilter } from '../environment.ts'
+import { plural } from '../text.ts'
 import { patchPath } from '../view/patch.ts'
 
 /** Installed dependencies: one entry per directory, never one per file. */
@@ -30,8 +31,6 @@ function collapse<T>(items: T[], pathOf: (item: T) => string, dirOf: RegExp): Co
   }
   return { kept, dirs: [...counts].map(([dir, count]) => ({ dir, count })) }
 }
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 const changedLineList = (part: string) =>
   part.split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l))

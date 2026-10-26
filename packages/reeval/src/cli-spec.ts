@@ -55,8 +55,6 @@ export const FLAGS = {
   save: { type: 'boolean' },
   context: { type: 'boolean' },
   'no-cache': { type: 'boolean' },
-  insights: { type: 'boolean' },
-  'no-insights': { type: 'boolean' },
   yes: { type: 'boolean', short: 'y' },
   harness: { type: 'string' },
   bare: { type: 'boolean' },
@@ -106,7 +104,6 @@ const RUN_FLAGS: FlagName[] = [
   'verbose',
   'trace',
   'resume',
-  'no-insights',
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
@@ -155,8 +152,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 most one per CPU and GB of Docker memory; also REEVAL_CONCURRENCY)
     --tag <tag>                 Only evals with this tag; !tag excludes it; repeat to combine (AND)
     --record                    Also record the run into the history folder (see config.record)
-    --ui <mode>                 live, plain or agent (default: agent under a coding agent, plain
-                                in CI or when piped, else live; live prints plain for now)
+    --ui <mode>                 plain or agent (default: agent under a coding agent, else plain,
+                                with a status line on a terminal outside CI)
     --log-order <order>         stream (every line as it happens) or grouped (each attempt as one
                                 block when it ends); default grouped in CI, else stream
     --log-prefix <prefix>       task or none: the [eval#n harness] prefix on detail lines
@@ -172,9 +169,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --resume [ref]              Continue a stopped, interrupted or budget-stopped run: same run id,
                                 skip completed attempts, restart in-flight ones. Without a ref, the
                                 newest resumable (Stopped staging, or an interrupted/budget scratch),
-                                not assembled latest. Ref is a run id or unique prefix
-    --no-insights               Skip insights for this run: no analysis.model calls, the blocks
-                                print their facts only (also analysis.insights: false)`,
+                                not assembled latest. Ref is a run id or unique prefix`,
   },
   clean: {
     flags: ['keep', 'images'],
@@ -233,18 +228,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --json                      Rows as JSON; --schema every table and column; --rebuild from scratch`,
   },
   analyze: {
-    flags: [
-      'vs',
-      'eval',
-      'json',
-      'md',
-      'save',
-      'context',
-      'dry-run',
-      'no-cache',
-      'insights',
-      'verbose',
-    ],
+    flags: ['vs', 'eval', 'json', 'md', 'save', 'context', 'dry-run', 'no-cache'],
     positionals: 1,
     help: `
   reeval analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
@@ -255,12 +239,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --save                      Also write it into the run's history folder: <run>/analysis/
     --context                   Print the digest and rules for your own coding agent (no key, no call)
     --dry-run                   Print the digest's size and the cache key, without calling the model
-    --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
-    --insights                  Write a run's insights instead: what each eval asks and its answer,
-                                citing the facts, into <run>/insights.json, as reeval run does at its
-                                end, or finish the evals one left unfinished; reeval show prints them.
-                                Takes --json and -v
-    -v, --verbose               With --insights, print each sentence the checks removed and why`,
+    --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again`,
   },
   mcp: {
     flags: ['http', 'port', 'host', 'token'],

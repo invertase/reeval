@@ -2,16 +2,14 @@
 // names in a corpus run, and each `reeval compare` block, from two corpus runs.
 // test/output.test.ts holds the files to these, and `output:preview all` prints them.
 
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { RunRecord } from '../../src/history/types.ts'
-import { factsHash } from '../../src/insights/hash.ts'
 import type { CompareInput } from '../../src/ui/compare-layout.ts'
 import { render } from '../../src/ui/layout.ts'
 import { compare, newRows, stackChanges } from '../../src/view/compare.ts'
 import { runHeader } from '../../src/view/header.ts'
-import type { RunInsights } from '../../src/view/insights.ts'
-import { readableInsights, readableRecord } from '../../src/view/record.ts'
+import { readableRecord } from '../../src/view/record.ts'
 import { type EvalResult, isStudy, type SuiteResult, suiteResult } from '../../src/view/suite.ts'
 import { CORPUS_DIR, corpusEntries } from '../schema/corpus.ts'
 
@@ -24,10 +22,6 @@ export type Golden = {
   evals?: string[]
   /** Rendered as `-v` prints it. */
   verbose?: boolean
-  /** Rendered with the run's insights.json, as `reeval show` prints it once insights are written. */
-  insights?: boolean
-  /** The insights as `analysis.maxTokens` leaves them when it runs out before the last `n` evals. */
-  budgetSkips?: number
 }
 
 const layouts = (...ids: string[]) => ids.map((id) => `evals/${id}`)
@@ -71,24 +65,6 @@ export const GOLDENS: Golden[] = [
     verbose: true,
   },
   { name: 'suite', entry: 'with-layouts' },
-  ...(
-    [
-      ['choose', 'choose.eval.ts'],
-      ['finish', 'results.eval.ts › greets in French'],
-      ['measure-a-change', 'measure.eval.ts'],
-      ['harness', 'harnesses.eval.ts › greets in the house style on each agent'],
-      ['both', 'harnesses.eval.ts › learns the house style from the skill'],
-      ['family', 'family.eval.ts'],
-      ['other', 'results.eval.ts › explains why greet.js fails'],
-    ] as const
-  ).map(([name, id]) => ({
-    name: `insights-${name}`,
-    entry: 'with-insights',
-    evals: layouts(id),
-    insights: true,
-  })),
-  { name: 'insights-suite', entry: 'with-insights', insights: true },
-  { name: 'insights-budget', entry: 'with-insights', insights: true, budgetSkips: 2 },
 ]
 
 export const OUTPUT_DIR = join(CORPUS_DIR, '..', 'output')
@@ -113,36 +89,9 @@ function goldenRun(g: Golden) {
   return run
 }
 
-/**
- * The golden's insights: its run's insights.json, or null, held to the suite's hash. The corpus
- * file keeps the hash of the facts the reeval that recorded it computed, which a later change to
- * `SuiteResult` moves; a golden shows the layout, and the stale file has its own test. A golden
- * cut to some evals leaves out the headline, which speaks for the whole run.
- */
-export function goldenInsights(g: Golden, suite: SuiteResult): RunInsights | null {
-  if (!g.insights) return null
-  const file = join(dirname(goldenRun(g).file), suite.runId, 'insights.json')
-  if (!existsSync(file)) throw new Error(`Golden ${g.name}: no ${file}`)
-  const stored = readableInsights(JSON.parse(readFileSync(file, 'utf8')), file)
-  const insights = g.budgetSkips ? overBudget(stored, g.budgetSkips) : stored
-  return { ...insights, factsHash: factsHash(suite), ...(g.evals ? { headline: null } : {}) }
-}
-
-const overBudget = (insights: RunInsights, n: number): RunInsights => ({
-  ...insights,
-  evals: insights.evals.slice(0, -n),
-  headline: null,
-  budget: { maxTokens: 20_000, skipped: insights.evals.slice(-n).map((e) => e.evalId) },
-})
-
-/** The golden's lines: with insights there's an analysis model, so no hint. */
+/** The golden's lines. */
 export function goldenRender(g: Golden, o: { color?: boolean; verbose?: boolean } = {}): string[] {
-  const suite = goldenSuite(g)
-  return render(suite, goldenInsights(g, suite), {
-    color: !!o.color,
-    verbose: !!o.verbose || !!g.verbose,
-    hint: !g.insights,
-  })
+  return render(goldenSuite(g), null, { color: !!o.color, verbose: !!o.verbose || !!g.verbose })
 }
 
 /** The golden's run as a SuiteResult, cut down to its evals, the tally counting only those. */

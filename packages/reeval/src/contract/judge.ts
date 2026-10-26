@@ -19,104 +19,42 @@ import type {
 import { GATEWAY_NAMES, gatewayDescriptorSchema, gatewayNameSchema } from './gateway.ts'
 import { type Assert, type Issue, jsonValueSchema, nonEmpty, type Same } from './shared.ts'
 
-export const judgeStateSchema = z
-  .strictObject({
-    task: z.boolean().optional().describe("The graded turn's prompt. Default true."),
-    output: z
-      .boolean()
-      .optional()
-      .describe("The graded turn's final message, or `on`'s value. Default true."),
-    files: z
-      .boolean()
-      .optional()
-      .describe(
-        "`status path` lines for the changed files, under `diff`'s patterns. Default true.",
-      ),
-    diff: z
-      .union([z.boolean(), z.array(nonEmpty()).min(1)])
-      .optional()
-      .describe(
-        'The diff since the eval started. A list is gitignore-style patterns over workspace paths: the last matching pattern wins and `!` excludes. Default true.',
-      ),
-    contents: z
-      .array(nonEmpty())
-      .optional()
-      .describe(
-        "Workspace files shown whole, as they are now, changed or not: exact paths or gitignore-style patterns (`'**'`, `'src/**'`; the last match wins, `!` excludes) over the files git sees in the workspace. A missing exact path is `null`; a pattern that matches nothing adds nothing. These files leave the diff. Default none.",
-      ),
-    transcript: z
-      .union([z.boolean(), z.enum(['tools', 'full'])])
-      .optional()
-      .describe(
-        "The graded turn's transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. Default false.",
-      ),
-    turns: z
-      .enum(['last', 'all'])
-      .optional()
-      .describe(
-        "`'all'`: every turn up to the graded one under `turns`, each with its task, output and (with `transcript`) transcript. Default `'last'`.",
-      ),
-    checks: z
-      .union([z.boolean(), z.array(nonEmpty())])
-      .optional()
-      .describe(
-        '`c.exec` results so far; a list shows only those commands, as passed to `c.exec`. Default false.',
-      ),
-  })
-  .describe(
-    'What the judge is given: each key is a key of the state in `judge-input.json`. An unset key keeps its default, which is what the judge gets with no `state` option at all.',
-  )
+export const judgeStateSchema = z.strictObject({
+  task: z.boolean().optional(),
+  output: z.boolean().optional(),
+  files: z.boolean().optional(),
+  diff: z.union([z.boolean(), z.array(nonEmpty()).min(1)]).optional(),
+  contents: z.array(nonEmpty()).optional(),
+  transcript: z.union([z.boolean(), z.enum(['tools', 'full'])]).optional(),
+  turns: z.enum(['last', 'all']).optional(),
+  checks: z.union([z.boolean(), z.array(nonEmpty())]).optional(),
+})
 
 export const judgeFields = {
   threshold: z
     .number()
     .min(0, 'must be between 0 and 1')
     .max(1, 'must be between 0 and 1')
-    .optional()
-    .describe('Minimum score (0–1) for a `pass` verdict.'),
-  providerOptions: z
-    .record(z.string(), z.record(z.string(), jsonValueSchema))
-    .optional()
-    .describe("AI SDK provider options for the judge's calls, keyed by provider."),
-  maxConcurrent: z
-    .number()
-    .int()
-    .min(1)
-    .optional()
-    .describe("The most judge calls to this model's provider at once, across the run."),
-  state: judgeStateSchema
-    .optional()
-    .describe(
-      "The judge's state: what the judge is given beside the question, not the workspace's or the attempt's state. Merged key by key down the cascade.",
-    ),
-  gateway: z
-    .union([gatewayNameSchema, gatewayDescriptorSchema])
-    .optional()
-    .describe(
-      "The gateway the judge's calls go through, by name or by its helper. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.",
-    ),
+    .optional(),
+  providerOptions: z.record(z.string(), z.record(z.string(), jsonValueSchema)).optional(),
+  maxConcurrent: z.number().int().min(1).optional(),
+  state: judgeStateSchema.optional(),
+  gateway: z.union([gatewayNameSchema, gatewayDescriptorSchema]).optional(),
 }
 
-export const fakeJudgeDataSchema = z
-  .strictObject({
-    kind: z.literal('fake-judge'),
-    score: z.number().min(0).max(1).describe('The score (0–1) every call gets.'),
-  })
-  .describe('`fakeJudge()` as data: the score every call gets.')
+export const fakeJudgeDataSchema = z.strictObject({
+  kind: z.literal('fake-judge'),
+  score: z.number().min(0).max(1),
+})
 
 export const judgeModelNameSchema = z
   .string()
   .regex(/\//, "must be a 'provider/model' string, e.g. 'google/gemini-3.8-flash'")
 
-export const configJudgeDataSchema = z
-  .strictObject({
-    model: z
-      .union([z.string(), fakeJudgeDataSchema])
-      .optional()
-      .describe("`'provider/model'`, or a fake judge."),
-    ...judgeFields,
-  })
-  .describe('`ConfigJudgeOptions` as data: the model by name, or a fake judge with a fixed score.')
+export const configJudgeDataSchema = z.strictObject({
+  model: z.union([z.string(), fakeJudgeDataSchema]).optional(),
+  ...judgeFields,
+})
 
 export const judgeOptionsSchema = z.strictObject({
   model: z.custom<JudgeModel>().optional(),

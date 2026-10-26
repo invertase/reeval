@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { test } from 'node:test'
-import { buildTable } from '../scripts/provider-table.ts'
+import { buildTable, renderTable } from '../scripts/provider-table.ts'
 import { OPENCODE_CLI_VERSION } from '../src/opencode-harness.ts'
 import { PROBED_VERSION } from '../src/opencode-provider-table.ts'
 import {
@@ -18,6 +20,12 @@ import {
 
 test('the table was probed on the pinned OpenCode', () => {
   assert.equal(PROBED_VERSION, OPENCODE_CLI_VERSION)
+})
+
+test('the committed table is what provider-table.ts writes for its data', () => {
+  const file = readFileSync(join(import.meta.dirname, '../src/opencode-provider-table.ts'), 'utf8')
+  const table = { supported: [...OPENCODE_PROVIDERS], refused: [...REFUSED_OPENCODE_PROVIDERS] }
+  assert.equal(renderTable(table, PROBED_VERSION), file)
 })
 
 test('each provider is supported or refused, once, and the table is well formed', () => {

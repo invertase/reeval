@@ -145,7 +145,7 @@ reeval uses no gateway by default. Without a [`gateway` list](/reference/gateway
 
 A judge answers through a decision API, so two routes take only decision models. An `openai/` judge calls OpenAI's Decisions API, which answers with `openai/gpt-6-luna`; a language model such as `openai/gpt-5.5` fails each call. On `vercel()`, a judge must be one of Vercel's decision models, such as `typesafe-ai/jev-1.14.0` or `openai/gpt-6-luna-decisions`; on `openrouter()`, one OpenRouter answers on its Decisions API, such as `typesafe/jev-1.14` (see [Gateways](/reference/gateway#the-judge-analysis-and-captures)). On OpenRouter each judgement also records the `upstream` provider that served it and its `costUsd`. `anthropic/` and `google/` judges take their language models on `direct()`.
 
-`analysis.model`, insights and questions route the same way. They need a language model, though, so an evaluation model such as `typesafe-ai/jev-1.14.0` can judge but can't write an analysis.
+`analysis.model` and questions route the same way. They need a language model, though, so an evaluation model such as `typesafe-ai/jev-1.14.0` can judge but can't write an analysis.
 
 The run checks the judge's key before it starts, with the harness's. When the run's profile sets a judge `model`, that judge's key is the one checked, and a `fakeJudge()` needs none. A group or eval that sets its own judge `model` (or `gateway`) adds that judge's key, for the attempts the run plans; one the filters or tags leave out adds none. The message names the model and the key its gateway takes; when `AI_GATEWAY_API_KEY` is set but no gateway uses it, it says how to:
 
@@ -207,22 +207,7 @@ analysis: {
 
 `answer` answers [questions](/guide/questions) asked of each attempt: a string for a free-text answer, `{ choice?, text? }` (a `choice` must be one of the question's), or a function of the blinded attempt (`{ question, prompt, choices?, attempt }`), where `attempt` holds the parts its `state` turned on, like a pair's side. Without it, a question with `choices` gets the first and a free-text one a fixed sentence. `{ error: '…' }` fails every call.
 
-```ts
-analysis: {
-  model: fakeAnalysis({
-    insights: (input) =>
-      input.call === 'classify'
-        ? { intent: { job: 'finish', question: 'Does it build?' } }
-        : input.call === 'insights'
-          ? { answer: { text: 'Yes: every try passed.', cites: [input.facts[0].id] } }
-          : { headline: null },
-  }),
-}
-```
-
-`insights` answers the run's [insights](/reference/cli/analyze#insights), at the end of `reeval run` and for `reeval analyze --insights`: fixed insights, or a function (or an async one) of each call's input. `input.call` is `classify` (the eval's name, prompts, judge questions, check labels and facts; answer `intent`), `insights` (the same, with `intent`, `slots`, the rows that take a sentence, and `source`, the eval's declaration as `L<n>` lines; answer `answer`, `findings`, `rows`, `namedTools` and `remarks`), or `headline`, once a run (answer `headline`). Each fact, attempt and eval carries the short `id` the model cites (`F1`, `A1`, `A1#L12` for a transcript line), and `slots.rows` lists fact ids. Every sentence goes through the validator, and every remark through the [remark gates](/reference/cli/run#model-remarks) (`source.at` and `fix.at` are `L<n>` lines, `evidence` fact or attempt ids), so a fake sentence that cites nothing is dropped as a model's would be; `{ error: '…' }` fails every call.
-
-Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake; without `insights`, insight calls fail, and `reeval run` prints `insights failed` with its facts.
+Without `vote`, every pair is a tie; and without `output`, `reeval analyze` refuses the fake.
 
 ## Errors
 

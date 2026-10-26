@@ -1503,7 +1503,7 @@ describe('records from before a field existed', () => {
   test('plan.sandboxWarnings: a record without it reads as none, and summary.md renders', () => {
     const r = raw()
     assert.deepEqual(readableRecord(r).plan.sandboxWarnings, [])
-    assert.doesNotMatch(renderSummary(readableRecord(raw()), { hint: true }), /running as root/)
+    assert.doesNotMatch(renderSummary(readableRecord(raw())), /running as root/)
   })
 
   test('stack.harnesses[].effort: a record without it reads as unset, and Fast is not served effort', () => {
@@ -1539,10 +1539,7 @@ describe('records from before a field existed', () => {
     assert.equal('runtime' in r.stack || 'language' in r.stack, false)
     assert.equal(runtimeLabel(r.stack), `node ${r.stack.node}`)
     assert.equal(languageLabel(r.stack), null)
-    assert.match(
-      renderSummary(r, { hint: true }),
-      new RegExp(`\\| reeval \\| \\S+ · node ${r.stack.node} · \\w+/`),
-    )
+    assert.match(renderSummary(r), new RegExp(`\\| reeval \\| \\S+ · node ${r.stack.node} · \\w+/`))
   })
 
   test('the runtime and language labels', () => {
@@ -1565,7 +1562,7 @@ describe('records from before a field existed', () => {
       r.evals.map((e) => e.todo),
       [false, false],
     )
-    assert.match(renderSummary(r, { hint: true }), /^pass {13}writes greet\.js$/m)
+    assert.match(renderSummary(r), /^pass {13}writes greet\.js$/m)
   })
 
   test('a newer record keeps what it has', () => {

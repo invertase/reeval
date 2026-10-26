@@ -17,7 +17,7 @@ import type { ErrorKind, Outcome } from '../types.ts'
 import { cellEffort, cellSamples, contrastEffort, type EffortVerdict } from './effort.ts'
 import { caseLabel } from './family.ts'
 import { checksByLabel, checkTries, labelledJudgements } from './judgements.ts'
-import { isNotGatedPass, runOutcome } from './model.ts'
+import { attemptAnswerRows, isNotGatedPass, runOutcome } from './model.ts'
 
 /**
  * A variant against its baseline: `better` or `worse` when the stored 95% interval on the
@@ -35,8 +35,7 @@ export type Across = 'none' | 'change' | 'harness' | 'both'
 export { EFFECT_MIN_COUNTED }
 
 /**
- * One finished run's facts. Every node has a `path`, a stable id to cite it by, and `paths`
- * lists them all in the order the nodes appear.
+ * One finished run's facts. Every node has a `path`, a stable id that remarks cite it by.
  *
  * A path is `/`-separated segments, each with `%`, `/` and `+` percent-encoded:
  *
@@ -45,7 +44,6 @@ export { EFFECT_MIN_COUNTED }
  * - `<eval>/<case>`: a family case, by its label (`GH-101` for `fixes GH-101`);
  * - `<eval>[/<case>]/<harness>+<environment>+<sandbox>`: a cell;
  * - `<cell>/checks/<label>`: a check, by its assertion label;
- * - `<cell>/effort`: the cell's effort, only when it was tested;
  * - `<eval>/<harness>+<environment>+<sandbox>`: on a family, a variant's pooled effect.
  *
  * A case segment never has a raw `+` and a cell segment always has two, so the two can't be
@@ -73,8 +71,6 @@ export type SuiteResult = {
   tally: SuiteTally
   /** Sorted by path. */
   files: ResultFile[]
-  /** Every node's `path`, in the order they appear. */
-  paths: string[]
 }
 
 export type SuiteTally = {
@@ -527,31 +523,21 @@ function questionsOf(e: EvalEntry): Array<QuestionResult | AttemptQuestionResult
       error: a.error ?? null,
     }),
   )
-  const each = new Map<string, AttemptQuestionResult>()
-  for (const a of e.attempts) {
-    for (const q of a.answers ?? []) {
-      const r = each.get(q.question) ?? {
-        kind: 'attempts' as const,
-        question: q.question,
-        asked: 0,
-        choices: q.choices ? q.choices.map((choice) => ({ choice, n: 0 })) : null,
-        answers: [],
-        failed: 0,
-        error: null,
-      }
-      each.set(q.question, r)
-      r.asked++
-      if (q.error !== undefined) {
-        r.failed++
-        r.error ??= q.error
-        continue
-      }
-      const picked = r.choices?.find((c) => c.choice === q.choice)
-      if (picked) picked.n++
-      r.answers.push({ attempt: a.id, choice: q.choice ?? null, text: q.text })
+  const each = attemptAnswerRows(e).map((row): AttemptQuestionResult => {
+    const failed = row.answers.filter((a) => a.error !== null)
+    return {
+      kind: 'attempts',
+      question: row.question,
+      asked: row.answers.length,
+      choices: row.choices,
+      answers: row.answers
+        .filter((a) => a.error === null)
+        .map((a) => ({ attempt: a.attempt, choice: a.choice, text: a.text })),
+      failed: failed.length,
+      error: failed[0]?.error ?? null,
     }
-  }
-  return [...pairs, ...each.values()]
+  })
+  return [...pairs, ...each]
 }
 
 function effortOf(e: EvalEntry, cell: CellRecord): EffortCounters | null {
@@ -798,27 +784,6 @@ function evalResult(record: RunRecord, e: EvalEntry, order: number): EvalResult 
   }
 }
 
-function pathsOf(files: ResultFile[]): string[] {
-  const out: string[] = []
-  const cell = (c: CellResult) => {
-    out.push(c.path)
-    for (const k of c.checks) out.push(k.path)
-    if (c.effort) out.push(`${c.path}/effort`)
-  }
-  for (const file of files) {
-    for (const e of file.evals) {
-      out.push(e.path)
-      for (const c of e.cells ?? []) cell(c)
-      for (const k of e.cases ?? []) {
-        out.push(k.path)
-        for (const c of k.cells) cell(c)
-      }
-      for (const p of e.pooled ?? []) out.push(p.path)
-    }
-  }
-  return out
-}
-
 /** The facts of a run, from its record. Pure: the same record always gives the same result. */
 export function suiteResult(record: RunRecord): SuiteResult {
   const families = new Map((record.families ?? []).map((f) => [f.id, f]))
@@ -865,6 +830,5 @@ export function suiteResult(record: RunRecord): SuiteResult {
     errors,
     tally,
     files,
-    paths: pathsOf(files),
   }
 }

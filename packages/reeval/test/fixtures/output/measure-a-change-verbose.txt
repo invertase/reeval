@@ -37,4 +37,3 @@ pass             greets once
     expected command to succeed, exit code 1
 
 2 fail · 1 pass
-Set analysis.model in reeval.config.ts for answers to what each eval asks.

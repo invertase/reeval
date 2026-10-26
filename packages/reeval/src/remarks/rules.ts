@@ -1,12 +1,11 @@
 // The deterministic remarks: hard thresholds over one run's facts and, for the kinds that need
-// it, the history's derived views. No model is involved, so they print without one, except
-// `no-baseline`, a rule on the model's classification. Pure: what the history and the eval's
+// it, the history's derived views. No model is involved. Pure: what the history and the eval's
 // source say comes in through `RemarkContext`.
 import { FLAKY_MIN_ATTEMPTS } from '../history/facts.ts'
 import type { AttemptRecord, EvalEntry, RunRecord } from '../history/types.ts'
 import { sha256 } from '../ids.ts'
 import { clip } from '../text.ts'
-import type { EvalInsight, Remark } from '../view/insights.ts'
+import type { Remark } from '../view/remarks.ts'
 import {
   type CellResult,
   EFFECT_MIN_COUNTED,
@@ -50,18 +49,11 @@ export type RemarkContext = {
 /** `KIND_ORDER` ranks remarks of one severity: the ones most worth acting on first. */
 const KIND_ORDER: Remark['kind'][] = [
   'flaky-check',
-  'judge-too-loose',
-  'judge-leaks-answer',
-  'name-contradicts',
-  'prompt-names-tool',
-  'no-baseline',
   'slow-mcp-start',
   'proxy-only-egress',
   'setup-process-secret',
   'too-few-tries',
-  'compound-judge',
   'check-never-fails',
-  'name-no-intent',
 ]
 
 /** Remarks ranked: concerns first, then by kind, then in the order they came. */
@@ -87,13 +79,6 @@ export function remarkId(kind: Remark['kind'], evalId: string, entry: EvalEntry,
   )
   return sha256(JSON.stringify([kind, evalId, sources, ...(extra ? [extra] : [])]))
 }
-
-/**
- * sha256(kind, eval, the quoted source text): a model remark's id. It holds while the quote is in
- * the file, so an edit elsewhere doesn't raise it again, and an edit to the quote acts on it.
- */
-export const quotedRemarkId = (kind: Remark['kind'], evalId: string, quote: string) =>
-  sha256(JSON.stringify([kind, evalId, 'quote', quote]))
 
 const tries = (n: number) => `${n} ${n === 1 ? 'try' : 'tries'}`
 const capital = (s: string) => `${s.slice(0, 1).toUpperCase()}${s.slice(1)}`
@@ -140,7 +125,6 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
         at: ctx.locate(entry, null),
         edit: `set runs: ${EFFECT_MIN_COUNTED} or more, so each side counts at least ${EFFECT_MIN_COUNTED} tries`,
       },
-      origin: 'deterministic',
     },
   ]
 }
@@ -212,7 +196,6 @@ function checkNeverFails(
           ? `make "${first.label}" check what the change affects, or remove it`
           : `make "${first.label}" strict enough to fail on a wrong result, or remove it`,
       },
-      origin: 'deterministic',
     },
   ]
 }
@@ -262,7 +245,6 @@ function flakyCheck(
         at: ctx.locate(first.entry, first.label),
         edit: `make "${first.label}" check something every good try does, or raise runs so one try doesn't decide it`,
       },
-      origin: 'deterministic',
     },
   ]
 }
@@ -361,7 +343,6 @@ function slowMcpStart(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext): 
           ? `run ${server}'s command in the sandbox with c.exec to see why it doesn't answer initialize`
           : `install what ${server} needs in the image (install or dockerfile), so it doesn't fetch or build it at start-up`,
       },
-      origin: 'deterministic',
     })
   }
   return out
@@ -417,7 +398,6 @@ function proxyOnlyEgress(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext
         at: ctx.locate(first.entry, null),
         edit: "set egress: 'allow-all' on the eval if it needs raw TCP or UDP, or point the client at HTTPS_PROXY",
       },
-      origin: 'deterministic',
     },
   ]
 }
@@ -459,50 +439,8 @@ function setupProcessSecret(e: EvalResult, entries: EvalEntry[], ctx: RemarkCont
         at: ctx.locate(first.entry, secret),
         edit: `broker ${secret} with the hosts the process sends it to, e.g. secret({ to: 'checks', hosts: ['api.example.com'] }), so it holds a placeholder, or start the process from c.exec after the agent's turn`,
       },
-      origin: 'deterministic',
     },
   ]
-}
-
-/**
- * no-baseline (concern): the classification says the eval is about a change (`subject.change`),
- * but it declares no compare, so nothing shows what the change does. A profile's
- * `limit.compare: false` stripped the compare on purpose, so it never raises it.
- */
-export function noBaseline(
-  suite: SuiteResult,
-  record: RunRecord,
-  insights: EvalInsight[],
-  ctx: RemarkContext,
-): Candidate[] {
-  if (record.profile?.limit.compare === false) return []
-  const intents = new Map(insights.map((i) => [i.evalId, i.intent]))
-  const byId = new Map(record.evals.map((e) => [e.id, e]))
-  const out: Candidate[] = []
-  for (const file of suite.files) {
-    for (const e of [...file.evals].sort((a, b) => a.order - b.order)) {
-      const change = intents.get(e.path)?.subject.change?.trim()
-      if (!change || e.todo || e.outcome === 'skipped') continue
-      const own = units(e).flatMap((u) => byId.get(u.id) ?? [])
-      const first = own[0]
-      if (!first || own.some((x) => x.compare)) continue
-      if (units(e).some((u) => u.cells.some((c) => c.vs))) continue
-      out.push({
-        id: remarkId('no-baseline', e.path, first),
-        evalId: e.path,
-        kind: 'no-baseline',
-        severity: 'concern',
-        text: `It's about ${change}, but nothing runs it without ${change}, so the result can't show what ${change} changes.`,
-        evidence: [e.path],
-        fix: {
-          at: ctx.locate(first, null),
-          edit: `add compare: { baseline: <an environment without ${change}>, variants: [<one with it>] }`,
-        },
-        origin: 'deterministic',
-      })
-    }
-  }
-  return out
 }
 
 /** Every deterministic remark the run raises, ranked: concerns first, then by kind and eval. */

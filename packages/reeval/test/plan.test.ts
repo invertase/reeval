@@ -70,19 +70,6 @@ export const cases: PlanCase[] = [
     name: 'questions-one-harness',
     args: ['--profile', 'one', 'evals/questions-attempts.eval.ts'],
   },
-  { dir: 'insights', name: 'insights', args: [] },
-  { dir: 'insights', name: 'no-insights', args: ['--no-insights'] },
-  {
-    dir: 'insights',
-    name: 'anthropic-no-key',
-    args: ['--config', 'reeval.anthropic.config.ts'],
-  },
-  {
-    dir: 'insights',
-    name: 'anthropic-key',
-    args: ['--config', 'reeval.anthropic.config.ts'],
-    env: { ANTHROPIC_API_KEY: 'sk-ant-test-key' },
-  },
   { dir: 'profiles', name: 'local-none', args: [] },
   { dir: 'profiles', name: 'pr-in-ci', args: [], env: { CI: 'true' } },
   { dir: 'profiles', name: 'nightly', args: ['--profile', 'nightly'] },
@@ -307,7 +294,6 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
       'warnings',
       'sandboxWarnings',
       'hints',
-      'insights',
       'evals',
       'excluded',
       'images',
@@ -991,7 +977,7 @@ evaluate('runs', async (c) => { await c.send('hi') })
     assert.equal(r.code, 0, r.stderr)
     const doc = JSON.parse(r.stdout)
     assert.equal(typeof doc.runId, 'string', r.stderr)
-    assert.ok(Array.isArray(doc.files) && Array.isArray(doc.paths), 'a SuiteResult')
+    assert.ok(Array.isArray(doc.files) && doc.tally !== undefined, 'a SuiteResult')
     assert.equal(doc.totals, undefined, 'not the plan document')
   })
 })

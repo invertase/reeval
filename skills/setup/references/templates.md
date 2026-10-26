@@ -89,7 +89,7 @@ import { cursor, fakeHarness } from 'reeval/harness'
     },
 ```
 
-`npx reeval run --profile canary --no-insights invoice` and `--profile oracle` run them in the
+`npx reeval run --profile canary invoice` and `--profile oracle` run them in the
 real Docker sandbox with no keys (after `npx reeval image build`): the canary must exit 1 and
 the oracle 0. Name the eval (`invoice` matches its name): the fake agent writes these files for
 every eval, so with a second eval, give it its own `canary-<name>` and `oracle-<name>`. One of

@@ -8,7 +8,6 @@ import { AgentRenderer } from '../src/ui/agent.ts'
 import { colors } from '../src/ui/colors.ts'
 import type { EvalResult, Progress, ReevalEvent } from '../src/ui/events.ts'
 import { progressLine } from '../src/ui/format.ts'
-import { NO_MODEL_HINT } from '../src/ui/layout.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
 import { Tagger } from '../src/ui/tags.ts'
@@ -204,13 +203,12 @@ const interleaved: ReevalEvent[] = [
     record,
     summaryPath: '.reeval/runs/run-1/summary.md',
     results: [greetResult, defaultResult],
-    hint: true,
   },
 ]
 
 const options = (overrides: Partial<OutputOptions> = {}): OutputOptions => ({
-  requested: 'plain',
   mode: 'plain',
+  statusLine: false,
   logOrder: 'grouped',
   logPrefix: 'task',
   outputLogs: 'full',
@@ -272,7 +270,6 @@ const RESULT = [
   '',
   '6m 05s · results .reeval/runs/run-1/summary.md',
   '3 fail · 1 pass · 1 infra error · 2 skipped',
-  NO_MODEL_HINT,
 ]
 
 describe('plain renderer', () => {
@@ -398,15 +395,15 @@ describe('plain renderer', () => {
     assert.doesNotMatch(render(interleaved, options({ logOrder: 'stream' })), / [✓✗] evals\//)
   })
 
-  test('live: one status line under the logs, rewritten in place, cleared before the result', () => {
-    const out = render(interleaved, options({ requested: 'live', outputLogs: 'none' }))
+  test('on a terminal: one status line under the logs, rewritten in place, cleared before the result', () => {
+    const out = render(interleaved, options({ statusLine: true, outputLogs: 'none' }))
     const clear = '\r\x1b[2K'
     assert.ok(out.includes(`${clear}2 evals · 0/2 tries`), out)
     assert.ok(out.includes(`${clear}2 evals · 1/2 tries`), out)
     assert.ok(out.includes(`${clear}2 evals · 2/2 tries${clear}\n`), out)
     assert.doesNotMatch(out, /running after/)
     assert.ok(out.endsWith(lines(...RESULT)))
-    const logs = render(interleaved, options({ requested: 'live', logOrder: 'stream' }))
+    const logs = render(interleaved, options({ statusLine: true, logOrder: 'stream' }))
     assert.ok(
       logs.includes(
         `${clear}[adds#1 cursor]  +1:09 stdout | seeding greet.js\n2 evals · 0/2 tries`,
@@ -485,49 +482,6 @@ test('a check with retries says which try it ended on', () => {
   assert.equal(line(1, 2, 3), '$ npm test  exit 1 2s · failed on try 2 of 3')
 })
 
-describe('insights progress', () => {
-  const end = interleaved.at(-1) as Extract<ReevalEvent, { type: 'run-end' }>
-  const progress = (done: number, at: number): ReevalEvent => ({
-    type: 'insights-progress',
-    at: s(at),
-    done,
-    total: 10,
-  })
-  const events: ReevalEvent[] = [
-    ...interleaved.slice(0, -1),
-    progress(0, 366),
-    progress(3, 380),
-    progress(7, 560),
-    progress(10, 600),
-    { ...end, at: s(601) },
-  ]
-
-  test('live: the status line counts the evals settled, in place, cleared before the result', () => {
-    const out = render(events, options({ requested: 'live', outputLogs: 'none' }))
-    const clear = '\r\x1b[2K'
-    for (const n of [0, 3, 7, 10]) assert.ok(out.includes(`${clear}insights ${n}/10…`), `${n}`)
-    assert.doesNotMatch(out, /… insights/)
-    assert.ok(out.endsWith(lines(...RESULT)))
-  })
-
-  test('plain: only the heartbeat says so, once a quiet minute, until the last eval settles', () => {
-    const out = render(events, options({ outputLogs: 'none' }))
-    assert.deepEqual(out.match(/^… insights .*$/gm), [
-      '… insights 3/10 after 54s',
-      '… insights 3/10 after 1m 54s',
-      '… insights 3/10 after 2m 54s',
-    ])
-    assert.doesNotMatch(render(events, options({ outputLogs: 'none', heartbeatMs: 0 })), /insights/)
-  })
-
-  test('agent: nothing', () => {
-    let text = ''
-    const renderer = new AgentRenderer({ out: { write: (chunk: string) => (text += chunk) } })
-    for (const e of events) renderer.onEvent(e)
-    assert.doesNotMatch(text, /insights \d/)
-  })
-})
-
 describe('agent renderer', () => {
   test('prints nothing per attempt, then the result without colour', () => {
     let text = ''
@@ -545,11 +499,18 @@ describe('output mode', () => {
   const resolve = (env: NodeJS.ProcessEnv, isTTY = true, agent?: string, flags = {}) =>
     resolveOutput({ flags, env, isTTY, agent })
 
-  test('auto: agent, then plain in CI or when piped, then live (printed as plain for now)', () => {
-    assert.equal(resolve({}, true, 'cursor').mode, 'agent')
-    assert.equal(resolve({ CI: '1' }).requested, 'plain')
-    assert.equal(resolve({}, false).requested, 'plain')
-    assert.deepEqual([resolve({}).requested, resolve({}).mode], ['live', 'plain'])
+  test('auto: agent, else plain, with a status line on a terminal outside CI', () => {
+    const shape = (o: OutputOptions) => [o.mode, o.statusLine]
+    assert.deepEqual(shape(resolve({}, true, 'cursor')), ['agent', false])
+    assert.deepEqual(shape(resolve({ CI: '1' })), ['plain', false])
+    assert.deepEqual(shape(resolve({}, false)), ['plain', false])
+    assert.deepEqual(shape(resolve({})), ['plain', true])
+    assert.deepEqual(shape(resolve({}, true, undefined, { ui: 'plain' })), ['plain', false])
+    assert.deepEqual(shape(resolve({ REEVAL_UI: 'auto' })), ['plain', true])
+    assert.throws(
+      () => resolve({}, true, undefined, { ui: 'live' }),
+      /--ui is one of plain, agent, auto \(got live\)/,
+    )
     assert.equal(resolve({ REEVAL_UI: 'plain' }, true, 'cursor').mode, 'plain')
     assert.equal(resolve({ REEVAL_UI: 'plain' }, true, 'cursor', { ui: 'agent' }).mode, 'agent')
     assert.throws(

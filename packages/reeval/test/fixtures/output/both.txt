@@ -21,4 +21,3 @@ fail             learns the house style from the skill
     with-skill      0      <0.1s
 
 1 fail
-Set analysis.model in reeval.config.ts for answers to what each eval asks.

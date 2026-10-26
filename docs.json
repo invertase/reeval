@@ -107,7 +107,6 @@
       "tab": "concepts",
       "pages": [
         { "title": "Output modes", "href": "/concepts/output" },
-        { "title": "Insights and remarks", "href": "/concepts/insights" },
         { "title": "Concurrency", "href": "/concepts/concurrency" }
       ]
     },

@@ -1,7 +1,7 @@
 // The sandbox descriptors' plain-data contract: what `docker()`, `podman()` and `fakeSandbox()` return and
 // what a declaration tree from any language carries. The Zod schemas are the source of truth for
-// validation, field descriptions and the JSON Schema in schema/plan/; the types in types.ts are
-// the hand-written ones users hover, held to the schemas by `_SameAsSchema` below.
+// validation and the JSON Schema in schema/plan/; the types in types.ts are the hand-written ones
+// users hover, whose TSDoc describes the fields, held to the schemas by `_SameAsSchema` below.
 import { z } from 'zod'
 import { UsageError } from '../errors.ts'
 import type {
@@ -25,74 +25,27 @@ import {
 /** Docker's memory size: bytes, or a number with `b`, `k`, `m` or `g`. */
 const MEMORY = /^\d+(\.\d+)?[bkmg]?$/i
 
-export const installStepSchema = z
-  .union([
-    nonEmpty(),
-    z.strictObject({
-      run: nonEmpty().describe('The shell command.'),
-      timeout: durationSchema.optional(),
-    }),
-  ])
-  .describe(
-    'A `docker({ install })` command, baked into a cached image layer: no secrets, root, cwd `/`.',
-  )
+export const installStepSchema = z.union([
+  nonEmpty(),
+  z.strictObject({
+    run: nonEmpty(),
+    timeout: durationSchema.optional(),
+  }),
+])
 
 /** Every field but `kind` and `dockerfile`, shared by the descriptor and `docker()`'s options. */
 const fields = {
-  id: nonEmpty()
-    .optional()
-    .describe(
-      'Cell id; defaults to `docker` (`podman`), or `docker:<image>` for other images, plus an install hash.',
-    ),
-  image: nonEmpty()
-    .optional()
-    .describe('An image that already has the harness baked in, used as is.'),
-  from: z
-    .string()
-    .regex(/^\S+$/, 'one word')
-    .optional()
-    .describe(
-      'A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top, cached.',
-    ),
-  install: z
-    .array(installStepSchema)
-    .min(1)
-    .optional()
-    .describe(
-      'Baked onto the sandbox image in one build container: in order, no secrets, no workspace.',
-    ),
-  maxConcurrent: z
-    .number()
-    .optional()
-    .describe('The most Docker sandboxes at once, across the run, whatever their image.'),
-  root: z
-    .boolean()
-    .optional()
-    .describe(
-      'Run the agent, setup steps and checks as root, with the capabilities `apt-get` needs, instead of the unprivileged `reeval` user. For evals that install system packages at run time.',
-    ),
-  capabilities: z
-    .array(z.string().regex(/^(CAP_)?[A-Z_]+$/))
-    .optional()
-    .describe("Linux capabilities to add back, e.g. `['NET_RAW']`; every other one is dropped."),
-  memory: z
-    .union([z.string().regex(MEMORY), z.int().positive()])
-    .optional()
-    .describe("The container's memory: `'4g'` (default), `'512m'`, or bytes."),
-  swap: z
-    .union([z.string().regex(MEMORY), z.int().nonnegative()])
-    .optional()
-    .describe(
-      'Swap on top of `memory`, in the same units. Default: as much as `memory`; `0` makes `memory` the hard ceiling. A host without swap has none to give.',
-    ),
-  cpus: z
-    .number()
-    .positive()
-    .optional()
-    .describe(
-      "CPUs the container may use, fractions allowed. Default 2, capped at the Docker host's.",
-    ),
-  pids: z.int().positive().optional().describe('Processes and threads at once. Default 1024.'),
+  id: nonEmpty().optional(),
+  image: nonEmpty().optional(),
+  from: z.string().regex(/^\S+$/, 'one word').optional(),
+  install: z.array(installStepSchema).min(1).optional(),
+  maxConcurrent: z.number().optional(),
+  root: z.boolean().optional(),
+  capabilities: z.array(z.string().regex(/^(CAP_)?[A-Z_]+$/)).optional(),
+  memory: z.union([z.string().regex(MEMORY), z.int().positive()]).optional(),
+  swap: z.union([z.string().regex(MEMORY), z.int().nonnegative()]).optional(),
+  cpus: z.number().positive().optional(),
+  pids: z.int().positive().optional(),
 }
 
 const BASES = ['image', 'from', 'dockerfile'] as const
@@ -108,44 +61,24 @@ function oneRecipe(value: Record<string, unknown>, ctx: z.RefinementCtx): void {
 export const dockerSandboxSchema = z
   .strictObject({
     kind: z.literal('docker'),
-    engine: z
-      .enum(['docker', 'podman'])
-      .optional()
-      .describe(
-        'The container CLI the sandbox runs on: `podman` for `podman()`, Docker when unset.',
-      ),
+    engine: z.enum(['docker', 'podman']).optional(),
     ...fields,
-    dockerfile: nonEmpty()
-      .optional()
-      .describe(
-        "A Dockerfile, absolute or relative to the directory of the file it's written in, built from its directory with `REEVAL_BASE` set to reeval's sandbox image and cached by content hash.",
-      ),
+    dockerfile: nonEmpty().optional(),
   })
   .superRefine(oneRecipe)
-  .describe('A local Docker container, made by `docker()`, or a Podman one, made by `podman()`.')
 
-export const fakeSandboxSchema = z
-  .strictObject({
-    kind: z.literal('fake'),
-    id: nonEmpty().optional().describe('Cell id; defaults to `fake`.'),
-    dir: nonEmpty()
-      .optional()
-      .describe('Parent directory for the per-eval workspace (defaults to the OS temp dir).'),
-    maxConcurrent: z
-      .number()
-      .optional()
-      .describe('The most attempts on this sandbox kind at once, across the run.'),
-  })
-  .describe('A temp directory on the host instead of a container, made by `fakeSandbox()`.')
+export const fakeSandboxSchema = z.strictObject({
+  kind: z.literal('fake'),
+  id: nonEmpty().optional(),
+  dir: nonEmpty().optional(),
+  maxConcurrent: z.number().optional(),
+})
 
 /** `docker()`'s argument: the descriptor's fields, with `dockerfile` relative or a `file:` URL. */
 export const dockerOptionsSchema = z
   .strictObject({
     ...fields,
-    dockerfile: z
-      .union([nonEmpty(), z.instanceof(URL)])
-      .optional()
-      .describe('Relative to the file that calls `docker()`, or an absolute path or `URL`.'),
+    dockerfile: z.union([nonEmpty(), z.instanceof(URL)]).optional(),
   })
   .superRefine(oneRecipe)
 

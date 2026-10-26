@@ -5,7 +5,7 @@
 // and how base would score under head's, and isn't collapsed. Pure and deterministic, from the two
 // runs' SuiteResults and compare rows; statistics print only with `verbose`.
 import type { HistoryCell, RunRecord } from '../history/types.ts'
-import { fenced } from '../text.ts'
+import { fenced, plural } from '../text.ts'
 import {
   type CompareCell,
   type CompareFamilyLift,
@@ -35,7 +35,6 @@ import {
   HEAD,
   type Item,
   labeller,
-  plural,
   renderBlocks,
   show,
   type Text,
@@ -530,7 +529,7 @@ function stackNotes(c: Colors, changes: StackChange[]): string[] {
 /** Head on its own: no earlier recorded run, so every eval is new, shown as `reeval run` shows it. */
 function noBaseline(c: Colors, input: CompareInput, opts: CompareOptions): string[] {
   const { suite, runId } = input.head
-  const blocks = renderBlocks(suite, { color: opts.color, verbose: opts.verbose, hint: false })
+  const blocks = renderBlocks(suite, { color: opts.color, verbose: opts.verbose })
   const units = unitsOf(suite)
   const order = ['fail', 'infra_error', 'cancelled', 'pass', 'not_gated', 'skipped'] as const
   const tally = (rows: CompareRow[], noun: string) => {

@@ -41,6 +41,19 @@ function matchJson(path: string, value: unknown): void {
   assert.deepEqual(value, golden, `test/${path} (REEVAL_UPDATE_SNAPSHOTS=1 rewrites it)`)
 }
 
+const pathsOf = (s: SuiteResult) =>
+  s.files.flatMap((f) =>
+    f.evals.flatMap((e) => [
+      e.path,
+      ...(e.cases ?? []).map((k) => k.path),
+      ...(e.pooled ?? []).map((p) => p.path),
+      ...[...(e.cells ?? []), ...(e.cases ?? []).flatMap((k) => k.cells)].flatMap((c) => [
+        c.path,
+        ...c.checks.map((k) => k.path),
+      ]),
+    ]),
+  )
+
 const cellsOf = (s: SuiteResult) =>
   s.files.flatMap((f) =>
     f.evals.flatMap((e) => [...(e.cells ?? []), ...(e.cases ?? []).flatMap((c) => c.cells)]),
@@ -53,10 +66,10 @@ describe('suiteResult over the record corpus', () => {
         const record = read(run.raw)
         const s = suiteResult(record)
         assert.equal(s.runId, record.runId)
-        assert.equal(new Set(s.paths).size, s.paths.length, 'every path is unique')
+        const paths = pathsOf(s)
+        assert.equal(new Set(paths).size, paths.length, 'every path is unique')
         const evals = s.files.flatMap((f) => f.evals)
         for (const e of evals) {
-          assert.ok(s.paths.includes(e.path))
           assert.equal((e.cells === null) !== (e.cases === null), true, 'cells or cases, not both')
           assert.equal(e.family, e.cases !== null)
         }
@@ -76,8 +89,6 @@ describe('suiteResult over the record corpus', () => {
         )
         for (const c of cellsOf(s)) {
           assert.equal(c.attempts, c.passed + c.failed + c.infraError + c.skipped, c.path)
-          assert.ok(s.paths.includes(c.path), c.path)
-          for (const k of c.checks) assert.ok(s.paths.includes(k.path), k.path)
         }
         assert.deepEqual(suiteResult(record), s, 'pure')
       })
@@ -253,13 +264,9 @@ describe('a record with checks that never ran', () => {
       (c) => c.harness === 'fake' && c.path.includes('greets in the house style'),
     )
     assert.ok(four.length)
-    for (const c of four) {
-      assert.notEqual(c.effort, null, c.path)
-      assert.ok(s.paths.includes(`${c.path}/effort`), c.path)
-    }
+    for (const c of four) assert.notEqual(c.effort, null, c.path)
     const one = suiteResult(read(raw))
     assert.ok(cellsOf(one).every((c) => c.effort === null))
-    assert.ok(!one.paths.some((p) => p.endsWith('/effort')))
   })
 
   test('a path segment escapes %, / and +', () => {
@@ -279,8 +286,7 @@ describe('outcomes the record alone has', () => {
   const raw = layouts?.runs.at(-1)?.raw as Record<string, unknown>
   const evalOf = (s: SuiteResult, name: string) =>
     s.files.flatMap((f) => f.evals).find((e) => e.name === name || e.template === name)
-  const text = (s: SuiteResult) =>
-    render(s, null, { color: false, verbose: false, hint: false }).join('\n')
+  const text = (s: SuiteResult) => render(s, null, { color: false, verbose: false }).join('\n')
 
   /** An interrupted run, its `writes greet.js` attempt cancelled mid-turn. */
   function interrupted(): RunRecord {
@@ -337,7 +343,7 @@ describe('outcomes the record alone has', () => {
     assert.equal(s.outcome, 'fail')
     assert.deepEqual(s.errors, record.errors)
     assert.equal(s.tally.errors, 1)
-    const lines = render(s, null, { color: false, verbose: false, hint: false })
+    const lines = render(s, null, { color: false, verbose: false })
     assert.equal(lines[0], 'error: evals/a.eval.ts: Cannot find module ./missing.ts')
     assert.match(lines.at(-1) ?? '', /^1 run error · \d+ fail · /)
   })

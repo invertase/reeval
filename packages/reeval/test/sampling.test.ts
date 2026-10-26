@@ -1,16 +1,11 @@
 // reeval's own model calls leave sampling to the provider: Anthropic's API refuses `temperature`,
 // `top_p` and `top_k` on newer models. Each call here goes through Vercel AI Gateway.
 import assert from 'node:assert/strict'
-import { join } from 'node:path'
 import { afterEach, beforeEach, describe, test } from 'node:test'
 import { callAnalysisModel, type ResolvedAnalysisModel } from '../src/analysis/model.ts'
 import type { PairAttempt } from '../src/compare/pairs.ts'
 import { answerQuestion } from '../src/compare/questions.ts'
-import type { RunRecord } from '../src/history/types.ts'
-import { generateInsights } from '../src/insights/generate.ts'
 import { scoreWithModel } from '../src/judge/model.ts'
-import { readableRecord } from '../src/view/record.ts'
-import { corpusEntries } from './support/corpus.ts'
 
 const MODEL = 'anthropic/claude-sonnet-4.5'
 const SAMPLING = ['temperature', 'topP', 'topK', 'top_p', 'top_k']
@@ -82,21 +77,6 @@ describe('sampling parameters on anthropic/* models', () => {
     })
     assert.ok(answer.error, 'the stubbed call failed')
     assertNoSampling('compare question')
-  })
-
-  test('insights', async () => {
-    const run = corpusEntries()
-      .find((e) => e.name === 'with-insights')
-      ?.runs.at(-1)
-    assert.ok(run, 'the with-insights corpus entry')
-    const record = readableRecord(structuredClone(run.raw) as never) as RunRecord
-    await generateInsights({
-      record,
-      runDir: join(run.file, '..', run.runId),
-      model: gateway,
-      concurrency: 1,
-    }).catch(() => undefined)
-    assertNoSampling('insights')
   })
 
   test('the judge', async () => {

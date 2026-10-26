@@ -16,7 +16,7 @@ import { JUDGE_RETRY, type RetryPolicy, withRetries } from './retry.ts'
 export const RECOMMENDED_JUDGE_MODEL = 'typesafe-ai/jev-1.14.0'
 /** The same judge as OpenRouter names it. */
 export const OPENROUTER_JUDGE_MODEL = 'typesafe/jev-1.14'
-/** The language model `reeval init` sets as `analysis.model` and the docs recommend for insights. */
+/** The language model `reeval init` sets as `analysis.model` and `reeval analyze` uses. */
 export const RECOMMENDED_ANALYSIS_MODEL = 'google/gemini-3.8-flash'
 export const DEFAULT_THRESHOLD = 0.8
 

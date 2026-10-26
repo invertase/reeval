@@ -8,7 +8,7 @@ import { fallbackHint } from './gateway/resolve.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
 import type { Prices } from './prices.ts'
-import { clip, formatDuration } from './text.ts'
+import { clip, formatDuration, plural } from './text.ts'
 import type {
   Budget,
   Cell,
@@ -20,7 +20,6 @@ import type {
   PairFactor,
   PlannedEgress,
   PlannedQuestion,
-  ResolvedConfig,
   ResolvedGateway,
   ResolvedProfile,
   Revision,
@@ -73,8 +72,6 @@ export type RunPlan = {
   harnesses: string[]
   /** The model that answers a question naming none; null when there's no language model. */
   questionModel: string | null
-  /** The insights `reeval run` asks for after its attempts; null when it asks for none. */
-  insights: PlanInsights | null
   /** The run this plan belongs to, minted or resumed before collect. */
   runId?: string
   /** Set when this plan continues a stopped, interrupted or budget-stopped run. */
@@ -124,7 +121,6 @@ export async function buildPlan(options: {
   root: string
   historyDir: string
   questionModel?: string | null
-  insights?: PlanInsights | null
   /** The run's judge model, `fake` for a fake judge; null or unset when there's none. */
   judgeModel?: string | null
   /** Prices for the cost estimate, which only `--dry-run` shows; unset leaves it out. */
@@ -223,24 +219,6 @@ export async function buildPlan(options: {
     harnessDescriptors: [...descriptors.values()],
     harnesses: [...harnesses],
     questionModel: options.questionModel ?? null,
-    insights: options.insights ?? null,
-  }
-}
-
-/** `analysis.model` and `analysis.maxTokens`, as the run uses them. */
-export type PlanInsights = { model: string; maxTokens: number }
-
-/** The plan's insights: null without `analysis.model`, with `analysis.insights: false` or `--no-insights`. */
-export async function planInsights(
-  config: ResolvedConfig,
-  flag: boolean,
-): Promise<PlanInsights | null> {
-  const { wantsInsights } = await import('./insights/run.ts')
-  if (!wantsInsights(config, flag)) return null
-  const { questionModelLabel } = await import('./analysis/model.ts')
-  return {
-    model: questionModelLabel(config) ?? 'fake',
-    maxTokens: config.analysis.maxTokens,
   }
 }
 
@@ -353,8 +331,6 @@ function gatewayHints(planned: PlannedItem[]): string[] {
   }
   return [...hints]
 }
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /**
  * `plan  profile pr (auto: CI is set) · 3 evals · 4 cells · 12 attempts · ~9m serial · …`, led by
@@ -510,8 +486,6 @@ export type PlanDocument = {
   /** Sandboxes that run as root or with capabilities added back, one per level that set them. */
   sandboxWarnings: SandboxWarning[]
   hints: string[]
-  /** The insights the run asks for after its attempts; null when none. */
-  insights: PlanInsights | null
   evals: PlanEval[]
   excluded: ExcludedEval[]
   images: PlanImage[]
@@ -594,7 +568,6 @@ export function planDocument(
     warnings: plan.warnings,
     sandboxWarnings: plan.sandboxWarnings,
     hints: plan.hints,
-    insights: plan.insights,
     evals: [...evals.values()],
     excluded,
     images,

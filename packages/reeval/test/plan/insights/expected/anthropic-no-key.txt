@@ -1,6 +1,0 @@
-no profile · 1 evals · 1 cells · 1 attempts · insights anthropic/claude-sonnet-5 maxTokens 100000
-warning: insights will be skipped: set ANTHROPIC_API_KEY (for direct()) for analysis.model, "anthropic/claude-sonnet-5", in .env.local, or analysis: { insights: false }
-evals/i.eval.ts › writes greet.js  fake/-/docker  control  gated  ×1
-excluded: —
-image docker · cursor · 1 evals
-  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

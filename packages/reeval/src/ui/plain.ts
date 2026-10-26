@@ -100,14 +100,12 @@ export class PlainRenderer implements Renderer {
   readonly #evals = new Set<string>()
   readonly #tries = new Set<string>()
   readonly #ended = new Set<string>()
-  /** Insights after the last attempt, once they've started: they take the status line. */
-  #insights: { done: number; total: number; startedAt: number } | null = null
 
   constructor(options: RendererOptions) {
     this.#o = options
     this.#c = options.colors
     this.#now = options.now ?? Date.now
-    this.#live = options.output.requested === 'live'
+    this.#live = options.output.statusLine
     const { heartbeatMs } = options.output
     if (options.timers !== false && heartbeatMs > 0) {
       this.#timer = setInterval(() => this.tick(), Math.min(heartbeatMs, 5000))
@@ -121,17 +119,11 @@ export class PlainRenderer implements Renderer {
     this.#lastWrite = this.#now()
   }
 
-  /** `7 evals · 12/28 tries`: what's collected so far and how many tries ended; then `insights 3/7…`. */
+  /** `7 evals · 12/28 tries`: what's collected so far and how many tries ended. */
   #drawStatus() {
-    if (!this.#live) return
-    let status: string
-    if (this.#insights) {
-      status = this.#c.dim(`insights ${this.#insights.done}/${this.#insights.total}…`)
-    } else {
-      if (!this.#tries.size) return
-      const evals = `${this.#evals.size} eval${this.#evals.size === 1 ? '' : 's'}`
-      status = this.#c.dim(`${evals} · ${this.#ended.size}/${this.#tries.size} tries`)
-    }
+    if (!this.#live || !this.#tries.size) return
+    const evals = `${this.#evals.size} eval${this.#evals.size === 1 ? '' : 's'}`
+    const status = this.#c.dim(`${evals} · ${this.#ended.size}/${this.#tries.size} tries`)
     if (status === this.#status) return
     this.#o.out.write(`${CLEAR}${status}`)
     this.#status = status
@@ -257,14 +249,6 @@ export class PlainRenderer implements Renderer {
         }
         return
       }
-      case 'insights-progress':
-        this.#insights = {
-          done: e.done,
-          total: e.total,
-          startedAt: this.#insights?.startedAt ?? e.at,
-        }
-        this.#drawStatus()
-        return
       case 'notice': {
         const paint = { info: c.dim, warn: c.yellow, error: c.red }[e.level]
         this.#write(paint(e.text))
@@ -342,21 +326,13 @@ export class PlainRenderer implements Renderer {
     }
   }
 
-  /** Prints the heartbeat if nothing was written for `heartbeatMs` and evals or insights are running. */
+  /** Prints the heartbeat if nothing was written for `heartbeatMs` and evals are running. */
   tick(now = this.#now()): void {
     const { heartbeatMs } = this.#o.output
     // On a TTY the status line already says the run is alive.
     if (this.#live || heartbeatMs <= 0) return
     if (now - this.#lastWrite < heartbeatMs) return
     const c = this.#c
-    const insights = this.#insights
-    if (insights) {
-      const elapsed = formatDuration(now - insights.startedAt)
-      if (insights.done < insights.total) {
-        this.#write(c.dim(`… insights ${insights.done}/${insights.total} after ${elapsed}`))
-      }
-      return
-    }
     if (this.#running.size === 0) return
     const running = [...this.#running.values()].map((a) => {
       const progress = a.last?.type === 'eval-progress' ? a.last.progress : undefined

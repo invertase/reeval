@@ -58,20 +58,46 @@ outside.
     of the run record.
 - The table test fails if a directory here is missing from the table, or lacks either eval.
 
+### One fixture, a row per harness
+
+A behaviour every harness has in its own place (where `rules`, workspace and home skills land, the
+image a Dockerfile builds on, a plugin kept whole) is **one** fixture, not a copy per harness:
+
+```text
+harness/rules/
+  layout.ts                       REEVAL_FIXTURE_LAYOUT, and a small map of what each harness expects
+  reeval.config.ts                fakeHarness({ layout })
+  evals/lands.eval.ts             reads the harness's own path from layout.ts
+  evals/canary.eval.ts            reads a path that harness must not use
+```
+
+In `features.test.ts`, `perHarness(layouts, (layout) => row)` makes one row per harness, named
+`<dir>:<harness>` (`harness/rules:pi [fake]`), with `REEVAL_FIXTURE_LAYOUT` and that harness's
+`image`. Each row is its own test: its own `lands` pass and its own canary failing. A new harness
+joins by adding its entry to each `layout.ts` map (a missing one throws). Keep a hand-written
+fixture where placement really differs, such as Cursor's plugin unpacking or Claude Code's
+marketplace.
+
 ## The inventory and COVERAGE.md
 
 Every user-facing feature has an entry in [`inventory.ts`](./inventory.ts): an id, its area, its
-name as the docs give it, and what covers it. That's `fixtures` (directories here), `plan` cases
-(`dir/name`) and `tests` (`<path under packages/> › <test title>`). [`COVERAGE.md`](./COVERAGE.md)
-is the feature × tier matrix (unit, plan, fake, docker, real) generated from it, the table in
-`features.test.ts` and the cases in `plan.test.ts`. CI writes the same matrix to the job summary.
+name as the docs give it, and what covers it. That's `fixtures` (directories here, or one row of a
+parameterised one, `harness/rules:pi`), `plan` cases (`dir/name`), `unit` (test files under
+`packages/`, such as `reeval/test/options.test.ts`) and `real` checks. Unit tests are listed by
+file, not by title. [`COVERAGE.md`](./COVERAGE.md) is the feature × tier matrix (unit, plan, fake,
+docker, real) generated from it, the table in `features.test.ts` and the cases in `plan.test.ts`.
+CI writes the same matrix to the job summary.
 
-- **A new feature adds its entry** in the same change, naming the fixtures, plan cases or tests
-  that cover it. Every fixture and plan case must be named by some entry.
+- **A new feature adds its entry** in the same change, naming the fixtures, plan cases or test
+  files that cover it. Every fixture row and plan case must be named by some entry.
+- **A parameterised fixture counts one row per harness.** Naming its directory claims and counts
+  every row (the generic feature, such as `rules`); naming `<dir>:<harness>` claims one row (that
+  harness's entry).
 - **A feature that nothing covers yet** needs `gap: '<why>'`. Once something covers it, delete
   the gap.
 - `pnpm features:matrix --write` regenerates `COVERAGE.md`. `matrix.test.ts` fails on anything
-  above that's missing, on a name that doesn't exist, when `COVERAGE.md` is stale, and when a new
+  above that's missing, on a fixture, plan case or test file that doesn't exist, when
+  `COVERAGE.md` is stale, and when a new
   eval option in `src/options.ts` lacks a row in [`eval-options.ts`](./eval-options.ts) with the
   plan and refusal coverage that row promises.
 
@@ -107,7 +133,9 @@ is the feature × tier matrix (unit, plan, fake, docker, real) generated from it
 - **Per-harness behaviour without a key:** `fakeHarness({ layout: 'claude-code' })` (or
   `'cursor'`) places rules and skills exactly where that agent reads them and runs in that
   agent's image, so a fixture under `harness/` covers what a real harness receives. List the
-  fixture's `image` in its row when it isn't Cursor's, so the Docker tier knows what to need.
+  fixture's `image` in its row when it isn't Cursor's, so the Docker tier knows what to need
+  (`perHarness` sets it). When every harness has the behaviour, make it one fixture with a row per
+  harness (see [above](#one-fixture-a-row-per-harness)).
 
 ## The real tier
 
