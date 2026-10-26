@@ -35,7 +35,7 @@ Create a project for your harness:
 npx reeval init --harness claude-code
 ```
 
-The command writes the `reeval.config.ts` and `evals/environments.ts` files and names the key your harness needs. Add the key to the `.env.local` file next to the `reeval.config.ts` file:
+The command writes the `reeval.config.ts` file, an example evaluation in `evals/greet.eval.ts`, and the `evals/environments.ts` file, and names the key your harness needs. Add the key to the `.env.local` file next to the `reeval.config.ts` file:
 
 ```bash title=".env.local"
 ANTHROPIC_API_KEY=replace-with-your-key
@@ -100,7 +100,7 @@ export const withSkill = page.extendEnvironment(
 )
 ```
 
-The prompt doesn't name the brand's color or fonts, so those assertions pass only when the harness knows them. Create the evaluation:
+Create the evaluation:
 
 ```ts title="evals/brand.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
@@ -132,7 +132,7 @@ evaluate(
 )
 ```
 
-The variant passes when at least 3 of its 4 attempts pass. For more information about why this evaluation uses four attempts, see [Statistics](/results/compare/statistics#four-attempt-minimum).
+The prompt doesn't name the brand's color or fonts, so the assertions pass only when the harness knows them. The variant passes when at least 3 of its 4 attempts pass. For more information about why this evaluation uses four attempts, see [Statistics](/results/compare/statistics#four-attempt-minimum).
 
 ## 3. Run the comparison
 
