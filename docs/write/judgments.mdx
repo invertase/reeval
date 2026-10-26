@@ -29,32 +29,6 @@ evaluate('recommends Genkit for a production AI feature', async (c) => {
 
 The prompt doesn't name Genkit, so a pass means the harness chose it. Call `c.send()` before `c.judge()`, which grades the latest turn. To grade a command's output, pass `{ on: out.stdout }` where `out` is the result of `c.exec()`. To grade an earlier turn, pass the turn `c.send()` returned. For a runnable project, see [`with-recommendation`](https://github.com/invertase/reeval/tree/main/examples/with-recommendation).
 
-## Choose what the judge sees
-
-By default `c.judge()` sends the prompt, the final message, the changed files, and the diff. The diff leaves out dependencies, build output, lockfiles, and minified files. Tool calls stay out of the input.
-
-Set `state` to change what the judge sees. This excerpt sends `README.md` whole, limits the diff to `src/`, and adds the turn's tool calls:
-
-```ts title="with-judge-state.eval.ts"
-const verdict = await c.judge(
-  'Does README.md list every function src/math.js exports?',
-  {
-    state: {
-      diff: ['src/**'],
-      contents: ['README.md'],
-      transcript: 'tools',
-    },
-  },
-)
-expect(verdict).toPass()
-```
-
-A missing file in `contents` is sent as `null`, and a file in `contents` leaves the diff. Setting `contents` leaves the other `state` keys unchanged. For a runnable project, see [`with-judge-state`](https://github.com/invertase/reeval/tree/main/examples/with-judge-state).
-
-For more information about every `state` key, see [the `judge` option](/reference/options#judge).
-
-For more information about sending a screenshot, see [Apps](/write/apps#judge-a-capture).
-
 ## Set the model and threshold
 
 In the `reeval.config.ts` file, set `judge.model` to the evaluation model `typesafe-ai/jev-1.14.0`. Its score is the probability that the answer is yes, from 0 to 1. A score of `0.8` or higher is a `pass`, and `0.8` is the default threshold.
@@ -73,7 +47,7 @@ In the `.env.local` file next to the `reeval.config.ts` file, add `TYPESAFE_AI_A
 TYPESAFE_AI_API_KEY=replace-with-your-key
 ```
 
-For more information about other model prefixes, see [`AI_GATEWAY_API_KEY`](/reference/env-vars#aigatewayapikey).
+For more information about other providers and gateways, see [Route models through a gateway](/agents/model#route-models-through-a-gateway).
 
 A `model`, `threshold`, or `state` key on the call overrides that field from the config. In the `evals/recommendation.eval.ts` file, raise the threshold:
 
@@ -101,9 +75,35 @@ During the run, reeval prints a `judge` line in this format, and your score can 
 judge  pass 0.92 (≥ 0.8)  Is Genkit recommended, or named as a good choice?
 ```
 
-A `pass` means the score is at least the threshold. The threshold defaults to `0.8`. A lower score prints `fail`, and `toPass()` fails the assertion.
+A score below the threshold prints `fail`, and `toPass()` fails the assertion.
 
 When the model call fails, `c.judge()` returns `{ verdict: 'error', score: null }`. Later assertions still run, and the attempt fails after the body finishes.
+
+## Choose what the judge sees
+
+By default `c.judge()` sends the prompt, the final message, the changed files, and the diff. The diff leaves out dependencies, build output, lockfiles, and minified files. Tool calls stay out of the input.
+
+Set `state` to change what the judge sees. This excerpt sends `README.md` whole, limits the diff to `src/`, and adds the turn's tool calls:
+
+```ts title="with-judge-state.eval.ts"
+const verdict = await c.judge(
+  'Does README.md list every function src/math.js exports?',
+  {
+    state: {
+      diff: ['src/**'],
+      contents: ['README.md'],
+      transcript: 'tools',
+    },
+  },
+)
+expect(verdict).toPass()
+```
+
+A missing file in `contents` is sent as `null`, and a file in `contents` leaves the diff. Setting `contents` leaves the other `state` keys unchanged. For a runnable project, see [`with-judge-state`](https://github.com/invertase/reeval/tree/main/examples/with-judge-state).
+
+For more information about every `state` key, see [the `judge` option](/reference/options#judge).
+
+For more information about sending a screenshot, see [Apps](/write/apps#judge-a-capture).
 
 ## Reference
 
