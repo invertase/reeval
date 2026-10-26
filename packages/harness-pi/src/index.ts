@@ -27,8 +27,8 @@ export {
   type PiGateway,
   type PiHarnessSettings,
   type PiMcpServer,
-  piGatewayEndpoints,
   type PiVertex,
+  piGatewayEndpoints,
 } from './pi-harness.ts'
 export { type PiEvent, PiStreamTranslator, type PiUsage, toUsage } from './pi-stream.ts'
 export { PI_BUILTIN_TOOLS, type PiBuiltinTools } from './pi-tools.ts'

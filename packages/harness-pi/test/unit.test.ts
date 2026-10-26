@@ -258,7 +258,7 @@ test('auth is an environment with the Gemini key, or it throws', () => {
 test('on Vertex AI, pi runs its google-vertex provider on a credentials file, with no key', async () => {
   const vertex = { project: 'p', location: 'global', credentialsFile: '/reeval/adc.json' }
   const { spawned, envs } = await oneTurn(undefined, undefined, { auth: {}, vertex })
-  assert.match(spawned[0] ?? '', / --provider google-vertex /)
+  assert.match(spawned[0] ?? '', / --provider 'google-vertex' /)
   assert.deepEqual(envs[0], {
     GOOGLE_CLOUD_PROJECT: 'p',
     GOOGLE_CLOUD_LOCATION: 'global',
