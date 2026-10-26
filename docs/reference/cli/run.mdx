@@ -250,7 +250,7 @@ Then it prepares every sandbox image the plan needs, three at a time, once each:
 
 | Flag | Values | Default |
 |---|---|---|
-| `--ui` | `live`, `plain`, `agent` | `agent` under a coding agent, `plain` in CI or when piped, else `live` (the logs under one redrawn progress line) |
+| `--ui` | `plain`, `agent` | `agent` under a coding agent, else `plain`, with the logs under one redrawn status line on a terminal outside CI |
 | `--log-order` | `stream`, `grouped` | `grouped` in CI, else `stream` |
 | `--log-prefix` | `task`, `none` | `task`, `none` inside GitHub Actions groups |
 | `--output-logs` | `full`, `errors-only`, `none` | `errors-only`: only failing attempts print their detail lines. `full` with `-v` or `-vv` |

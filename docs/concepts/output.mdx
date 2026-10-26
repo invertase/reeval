@@ -1,6 +1,6 @@
 ---
 title: Output modes
-description: How reeval run picks live, plain or agent output, what each eval's result block shows, and how grouped and stream logs differ.
+description: How reeval run picks plain or agent output, what each eval's result block shows, and how grouped and stream logs differ.
 ---
 
 `reeval run` prints for whoever is reading: a person at a terminal, a CI log or a coding agent. It picks a mode on its own, and a few flags, named after Turborepo's, change the details. Every mode ends the same way: a result block per eval and the tally.
@@ -17,16 +17,15 @@ flowchart TD
   A{"--ui or REEVAL_UI set?"} -- yes --> U[that mode]
   A -- no --> B{"under a coding agent?"}
   B -- yes --> AG[agent]
-  B -- no --> C{"CI, or stdout not a terminal?"}
-  C -- yes --> P[plain]
-  C -- no --> L[live]
+  B -- no --> P[plain]
+  P --> C{"on a terminal, outside CI?"}
+  C -- yes --> L[with a status line]
 ```
 
 | Mode | Picked when | Prints |
 |---|---|---|
 | `agent` | A coding agent runs reeval (Cursor, Claude Code, Codex, GitHub Copilot…, as std-env detects them) | The plan, then the result blocks and the tally; no attempt logs, colour or heartbeat |
-| `plain` | CI is detected (`CI`, `GITHUB_ACTIONS`, `BUILD_NUMBER`…), or stdout isn't a terminal | Append-only attempt logs, never rewritten, then the result blocks |
-| `live` | On a terminal | The same logs under one redrawn line (`7 evals · 12/28 tries`), then the result blocks |
+| `plain` | Anywhere else | Attempt logs, then the result blocks. On a terminal outside CI (`CI`, `GITHUB_ACTIONS`, `BUILD_NUMBER`…, as std-env detects them), and with no `--ui` named, the logs sit under one redrawn status line (`7 evals · 12/28 tries`); elsewhere they're append-only |
 
 If your agent isn't detected, set `REEVAL_UI=agent` (or `AI_AGENT=<name>`).
 
