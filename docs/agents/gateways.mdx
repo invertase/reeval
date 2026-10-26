@@ -1,58 +1,63 @@
 ---
-title: "gateways"
-description: "Route LLM calls via different gateway services."
+title: "Route models through a gateway"
+description: "Send the harness's and the judge's model calls through one gateway key."
 ---
 
-reeval supports using gateways as a mechanism to route LLM calls via different services. This enables you and your team to use many different LLM providers via a single service, rather than having to mint 
-new API keys for each provider.
+A gateway serves model calls for several providers on one key, so you don't need a key for each provider. The `{{ pkg }}/gateway` module exports `vercel()` for [Vercel AI Gateway](/integrations/gateways/vercel), `openrouter()` for [OpenRouter](/integrations/gateways/openrouter), and `direct()` for [each provider's own key](/integrations/gateways/direct), which is the default.
 
-## Supported gateways
+## Route calls through a gateway
 
-reeval supports the following gateway services:
+In the `reeval.config.ts` file, list gateways in `gateway`, in order of preference. Each harness and judge goes through the first gateway in the list that can serve it:
 
-- [Vercel AI Gateway](/integrations/gateways/vercel)
-- [Google Vertex AI](/integrations/gateways/vertex)
-- [OpenRouter](/integrations/gateways/openrouter)
-
-By default, reeval requires an API key for each model provider.
-
-## Using a gateway
-
-Not all harnesses support gateways, and not all gateways are supported by all harnesses.
-
-| Harness | Vercel | OpenRouter | Vertex |
-| --- | --- | --- | --- |
-| Cursor | ❌ | ❌ | ❌ |
-| Claude Code | ✅ | ⚠️ | ✅ |
-| Codex | ✅ | ✅ | ❌ |
-| Antigravity | ❌ | ❌ | ✅ |
-| OpenCode | ⚠️ | ⚠️ | ✅ |
-| Goose | ⚠️ | ⚠️ | ✅ |
-| pi | ❌ | ❌ | ✅ |
-| fx | ✅ | ❌ | ❌ |
-| Grok Build | ⚠️ | ⚠️ | ❌ |
-
-## Setting up a gateway
-
-Multiple gateways can be used together, and the gateway selection is done on a per-model-provider basis. The order of the gateways defines which provider will be used, and fallback downward:
-
-```ts
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { direct, vercel } from '{{ pkg }}/gateway'
-import { claudeCode, codex, cursor, opencode } from '{{ pkg }}/harness'
+import { claudeCode, cursor } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  gateway: [
-    vercel(),
-    direct()
-  ],
+  gateway: [vercel(), direct()],
   harness: [
-    claudeCode({ model: 'claude-sonnet-4-5' }), // Uses Vercel AI Gateway
-    opencode({ model: 'openai/gpt-5.4-mini' }), // Uses Vercel AI Gateway
-    codex({ model: 'gpt-5.4-mini' }), // Uses direct provider
-    cursor({ model: 'composer-2.5' }), // Uses direct provider
+    claudeCode({ model: 'claude-sonnet-5' }),
+    cursor({ model: 'composer-2.5' }),
   ],
 })
 ```
 
-In the above example, both `claudeCode` and `opencode` will use the Vercel AI Gateway, while `codex` and `cursor` will use the direct provider (as they don't support gateways). reeval will throw an error if a harness does not support a listed gateway provider.
+Vercel AI Gateway serves Claude Code on `AI_GATEWAY_API_KEY`. It can't serve Cursor, so Cursor falls back to `direct()` and its own `CURSOR_API_KEY`. Without `direct()` at the end, a harness that no gateway in the list serves stops the plan with exit code 2. The plan names the gateway each harness resolved to:
+
+```bash
+npx reeval run --dry-run
+```
+
+```text
+notes
+gateway: claude-code:claude-sonnet-5 → vercel
+```
+
+For a runnable project that also sends the judge through Vercel AI Gateway, see [`with-vercel-gateway`](https://github.com/invertase/reeval/tree/main/examples/with-vercel-gateway).
+
+## Pin one gateway
+
+To send one harness or the judge through a particular gateway, set `gateway` on its factory or on `judge`:
+
+```ts title="reeval.config.ts"
+harness: codex({ model: 'gpt-5.6-luna', gateway: 'openrouter' }),
+```
+
+The pinned gateway must be in the config's `gateway` list. A pinned gateway never falls back, so the plan stops when that gateway can't serve the harness. For more information about the list and the pin, see [the `gateway` option](/reference/options#gateway).
+
+## Harness support
+
+Each gateway serves the harnesses in this table. ✅ means reeval routes the harness and its `effort`. ⚠️ means it routes the harness, but the plan refuses `effort` on that gateway.
+
+| Harness | `vercel()` | `openrouter()` |
+| --- | --- | --- |
+| Cursor | ❌ | ❌ |
+| Claude Code | ✅ | ⚠️ |
+| Codex | ✅ | ✅ |
+| Antigravity | ❌ | ❌ |
+| OpenCode | ⚠️ | ⚠️ |
+| Goose | ⚠️ | ⚠️ |
+| pi | ❌ | ❌ |
+| fx | ✅ | ❌ |
+| Grok Build | ⚠️ | ⚠️ |
