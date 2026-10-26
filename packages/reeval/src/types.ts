@@ -804,9 +804,17 @@ export type GrokBuildHarnessDescriptor = {
  */
 export type GatewayName = 'direct' | 'vercel' | 'openrouter' | 'vertex'
 
-/** Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`. */
+/**
+ * Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends with
+ * it unless it's listed elsewhere, where it's tried in that place.
+ */
 export type DirectGatewayDescriptor = {
   kind: 'direct'
+  /**
+   * `false` turns off the fallback to each provider's own key, so a cell no other gateway in the
+   * list serves is refused at plan time. Default `true`.
+   */
+  enabled?: boolean
 }
 
 /**
@@ -1954,7 +1962,8 @@ export type ReevalConfig = {
   analysis?: AnalysisConfig
   /**
    * The gateways model calls may go through, in the order you prefer them: each harness takes
-   * the first that can serve it. Default `[direct()]`, each provider's own key.
+   * the first that can serve it. `direct()`, each provider's own key, ends the list unless it's listed
+   * in another place or turned off with `direct({ enabled: false })`. Default `[direct()]`.
    */
   gateway?: GatewayDescriptor[]
 }
@@ -2029,7 +2038,8 @@ export type ReevalConfigData = Omit<
   analysis?: AnalysisConfigData
   /**
    * The gateways model calls may go through, in the order you prefer them: each harness takes
-   * the first that can serve it. Default `[direct]`, each provider's own key.
+   * the first that can serve it. `direct`, each provider's own key, ends the list unless it's listed
+   * in another place or turned off with `{ direct: { enabled: false } }`. Default `[direct]`.
    */
   gateway?: GatewayEntryData[]
 }
@@ -2098,7 +2108,10 @@ export type ResolvedConfig = {
     maxInputTokens: number
     maxOutputTokens: number
   }
-  /** The `gateway` list, in preference order; `[direct()]` when the config sets none. */
+  /**
+   * The `gateway` list, in preference order, with `direct()` at the end unless it's listed
+   * elsewhere or turned off; `[direct()]` when the config sets none.
+   */
   gateway: GatewayDescriptor[]
   /** Whether the config sets `gateway`, so the plan shows where each cell resolved. */
   gatewaySet: boolean

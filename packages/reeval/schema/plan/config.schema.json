@@ -336,9 +336,13 @@
       "additionalProperties": false
     },
     "DirectGatewayDescriptor": {
-      "description": "Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.",
+      "description": "Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends with it unless it's listed elsewhere, where it's tried in that place.",
       "type": "object",
       "properties": {
+        "enabled": {
+          "description": "`false` turns off the fallback to each provider's own key, so a cell no other gateway in the list serves is refused at plan time. Default `true`.",
+          "type": "boolean"
+        },
         "kind": {
           "type": "string",
           "const": "direct"
@@ -1056,7 +1060,12 @@
           "properties": {
             "direct": {
               "type": "object",
-              "properties": {},
+              "properties": {
+                "enabled": {
+                  "description": "`false` turns off the fallback to each provider's own key, so a cell no other gateway in the list serves is refused at plan time. Default `true`.",
+                  "type": "boolean"
+                }
+              },
               "additionalProperties": false
             }
           },
@@ -2313,7 +2322,7 @@
           "$ref": "#/$defs/GatePolicy"
         },
         "gateway": {
-          "description": "The gateways model calls may go through, in the order you prefer them: each harness takes the first that can serve it. Default `[direct]`, each provider's own key.",
+          "description": "The gateways model calls may go through, in the order you prefer them: each harness takes the first that can serve it. `direct`, each provider's own key, ends the list unless it's listed in another place or turned off with `{ direct: { enabled: false } }`. Default `[direct]`.",
           "minItems": 1,
           "type": "array",
           "items": {

@@ -4,7 +4,12 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseYamlConfig, resolveConfig, resolveConfigData } from '../../src/config.ts'
+import {
+  checkGateways,
+  parseYamlConfig,
+  resolveConfig,
+  resolveConfigData,
+} from '../../src/config.ts'
 import {
   attemptAbortProblem,
   attemptDoneProblem,
@@ -98,14 +103,18 @@ const mcpOn = (harness: HarnessDescriptor, use: (h: EnvironmentHelpers) => objec
 }
 const OPENCODE = opencode({ model: 'google/gemini-3.8-flash' })
 
-/** Which gateway a harness resolves to in a list, with reeval's own gateways. */
+/** A config's `gateway` list as the plan walks it: `direct()` at the end unless placed or off. */
+const listed = (gateways: GatewayDescriptor[]) =>
+  checkGateways(gateways, 'gateway', 'reeval.config.ts')
+/** Which gateway a harness resolves to in a config's list, with reeval's own gateways. */
 const route = (gateways: GatewayDescriptor[], harness: HarnessDescriptor) => () =>
-  resolveGateway(gateways, harness, WHERE)
-/** Which gateway a model reeval calls itself (the judge's) resolves to in a list. */
+  resolveGateway(listed(gateways), harness, WHERE)
+/** Which gateway a model reeval calls itself (the judge's) resolves to in a config's list. */
 const model = (name: string, pin: GatewayName | undefined, gateways: GatewayDescriptor[]) => () =>
-  resolveModelGateway(name, pin, { gateways }, 'the judge model')
+  resolveModelGateway(name, pin, { gateways: listed(gateways) }, 'the judge model')
 const VERCEL: GatewayDescriptor = { kind: 'vercel' }
 const DIRECT: GatewayDescriptor = { kind: 'direct' }
+const OFF: GatewayDescriptor = { kind: 'direct', enabled: false }
 const OPENROUTER: GatewayDescriptor = { kind: 'openrouter' }
 const VERTEX: GatewayDescriptor = { kind: 'vertex' }
 /** What the plan says of Vercel's credentials, at noon on 1 January 2026. */
@@ -1605,6 +1614,21 @@ environment:
     ['ts: direct with a typo', config({ gateway: [{ kind: 'direct', apiKey: 'x' }] })],
     ['ts: a profile with an empty list', config({ profiles: { pr: { gateway: [] } } })],
     ['ts: good', config({ gateway: [{ kind: 'direct' }] })],
+    ['ts: direct placed first', config({ gateway: [{ kind: 'direct' }, { kind: 'vercel' }] })],
+    [
+      'ts: direct off',
+      config({ gateway: [{ kind: 'vercel' }, { kind: 'direct', enabled: false }] }),
+    ],
+    [
+      'ts: direct and direct off',
+      config({
+        gateway: [{ kind: 'direct' }, { kind: 'vercel' }, { kind: 'direct', enabled: false }],
+      }),
+    ],
+    ['ts: direct off alone', config({ gateway: [{ kind: 'direct', enabled: false }] })],
+    ['ts: direct enabled not a boolean', config({ gateway: [{ kind: 'direct', enabled: 'no' }] })],
+    ['ts: a profile with direct off alone', config({ profiles: { pr: { gateway: [OFF] } } })],
+    ['yaml: direct off', yaml('gateway: [vercel, { direct: { enabled: false } }]\n')],
     ['yaml: an unknown name', yaml('gateway: [vercell]\n')],
     ['yaml: a map with two keys', yaml('gateway: [{ direct: {}, vercel: {} }]\n')],
     ['yaml: direct with options', yaml('gateway: [{ direct: { apiKey: x } }]\n')],
@@ -1617,8 +1641,19 @@ environment:
     ['ts: vercel then direct', config({ gateway: [{ kind: 'vercel' }, { kind: 'direct' }] })],
     ['yaml: vercel with options', yaml('gateway: [{ vercel: { apikey: x } }]\n')],
     ['yaml: vercel then direct', yaml('gateway: [vercel, direct]\n')],
-    ['route: cursor on vercel alone', route([VERCEL], cursor({ model: 'composer-2.5' }))],
-    ['route: antigravity on vercel alone', route([VERCEL], antigravity({ model: 'm' }))],
+    [
+      'route: cursor on vercel falls back to direct',
+      route([VERCEL], cursor({ model: 'composer-2.5' })),
+    ],
+    [
+      'route: cursor pinned to direct, direct off',
+      route([VERCEL, OFF], cursor({ model: 'composer-2.5', gateway: 'direct' })),
+    ],
+    [
+      'route: cursor on vercel, direct off',
+      route([VERCEL, OFF], cursor({ model: 'composer-2.5' })),
+    ],
+    ['route: antigravity on vercel, direct off', route([VERCEL, OFF], antigravity({ model: 'm' }))],
     ['route: grok build on vercel', route([VERCEL], grokBuild({ model: 'm' }))],
     ['route: opencode on vercel', route([VERCEL], opencode({ model: 'anthropic/m' }))],
     ['route: an fx gateway id on direct alone', route([DIRECT], fx({ model: 'google/m' }))],
@@ -1633,18 +1668,18 @@ environment:
     ['route: a pin not in the list', route([DIRECT], codex({ model: 'm', gateway: 'vercel' }))],
     ['route: codex on vercel', route([VERCEL, DIRECT], codex({ model: 'm' }))],
     ['route: claude code on vercel', route([VERCEL], claudeCode({ model: 'm' }))],
-    ['route: pi on vercel alone', route([VERCEL], pi({ model: 'gemini-3.8-flash' }))],
+    ['route: pi on vercel, direct off', route([VERCEL, OFF], pi({ model: 'gemini-3.8-flash' }))],
     [
       'route: pi on vercel before direct',
       route([VERCEL, DIRECT], pi({ model: 'gemini-3.8-flash' })),
     ],
     [
-      'route: opencode with effort on vercel alone',
-      route([VERCEL], opencode({ model: 'anthropic/m', effort: 'high' })),
+      'route: opencode with effort on vercel, direct off',
+      route([VERCEL, OFF], opencode({ model: 'anthropic/m', effort: 'high' })),
     ],
     [
-      'route: goose with effort on vercel alone',
-      route([VERCEL], goose({ model: 'm', effort: 'high' })),
+      'route: goose with effort on vercel, direct off',
+      route([VERCEL, OFF], goose({ model: 'm', effort: 'high' })),
     ],
     [
       'route: opencode with effort on a gemini model on vercel',
@@ -1683,9 +1718,15 @@ environment:
       'yaml: openrouter with fallbacks',
       yaml('gateway: [{ openrouter: { fallbacks: true } }, direct]\n'),
     ],
-    ['route: cursor on openrouter alone', route([OPENROUTER], cursor({ model: 'composer-2.5' }))],
-    ['route: antigravity on openrouter alone', route([OPENROUTER], antigravity({ model: 'm' }))],
-    ['route: fx on openrouter alone', route([OPENROUTER], fx({ model: 'gpt-5.5' }))],
+    [
+      'route: cursor on openrouter, direct off',
+      route([OPENROUTER, OFF], cursor({ model: 'composer-2.5' })),
+    ],
+    [
+      'route: antigravity on openrouter, direct off',
+      route([OPENROUTER, OFF], antigravity({ model: 'm' })),
+    ],
+    ['route: fx on openrouter, direct off', route([OPENROUTER, OFF], fx({ model: 'gpt-5.5' }))],
     [
       'route: pi with effort on a gemini model on openrouter',
       route([OPENROUTER], pi({ model: 'gemini-3.8-flash', effort: 'low' })),
@@ -1697,8 +1738,8 @@ environment:
       route([OPENROUTER], codex({ model: 'm', effort: 'high' })),
     ],
     [
-      'route: claude code with effort on openrouter alone',
-      route([OPENROUTER], claudeCode({ model: 'm', effort: 'high' })),
+      'route: claude code with effort on openrouter, direct off',
+      route([OPENROUTER, OFF], claudeCode({ model: 'm', effort: 'high' })),
     ],
     [
       'route: goose with effort on a gemini model on openrouter',
@@ -1709,8 +1750,8 @@ environment:
       route([OPENROUTER, DIRECT], goose({ model: 'llama-4', effort: 'high' })),
     ],
     [
-      'route: opencode with effort on another model on openrouter alone',
-      route([OPENROUTER], opencode({ model: 'anthropic/m', effort: 'high' })),
+      'route: opencode with effort on another model on openrouter, direct off',
+      route([OPENROUTER, OFF], opencode({ model: 'anthropic/m', effort: 'high' })),
     ],
     [
       'route: grok build with effort on openrouter',
@@ -1729,6 +1770,8 @@ environment:
       config({ judge: { model: 'anthropic/m', gateway: { kind: 'vercel' } }, gateway: [VERCEL] }),
     ],
     ['judge: an eval pin not a name', options({ judge: { gateway: 3 } })],
+    ['model: openai on vertex falls back to direct', model('openai/m', undefined, [VERTEX])],
+    ['model: pinned to direct, direct off', model('anthropic/m', 'direct', [VERCEL, OFF])],
     ['model: mistral on direct alone', model('mistral/large', undefined, [DIRECT])],
     ['model: mistral on vercel then direct', model('mistral/large', undefined, [VERCEL, DIRECT])],
     ['model: pinned to vercel, not listed', model('anthropic/m', 'vercel', [DIRECT])],
@@ -1759,11 +1802,17 @@ environment:
       'yaml: vertex with settings',
       yaml('gateway: [{ vertex: { project: p, regions: { anthropic: us-east5 } } }, direct]\n'),
     ],
-    ['route: codex on vertex alone', route([VERTEX], codex({ model: 'm' }))],
-    ['route: cursor on vertex alone', route([VERTEX], cursor({ model: 'composer-2.5' }))],
-    ['route: claude code on vertex alone', route([VERTEX], claudeCode({ model: 'm' }))],
-    ['route: goose on vertex alone', route([VERTEX], goose({ model: 'gemini-3.8-flash' }))],
-    ['route: grok build on vertex alone', route([VERTEX], grokBuild({ model: 'm' }))],
+    ['route: codex on vertex, direct off', route([VERTEX, OFF], codex({ model: 'm' }))],
+    [
+      'route: cursor on vertex, direct off',
+      route([VERTEX, OFF], cursor({ model: 'composer-2.5' })),
+    ],
+    ['route: claude code on vertex, direct off', route([VERTEX, OFF], claudeCode({ model: 'm' }))],
+    [
+      'route: goose on vertex, direct off',
+      route([VERTEX, OFF], goose({ model: 'gemini-3.8-flash' })),
+    ],
+    ['route: grok build on vertex, direct off', route([VERTEX, OFF], grokBuild({ model: 'm' }))],
     ['vertex: no project', vertexEntry({}, {})],
     [
       'vertex: the project from GOOGLE_CLOUD_PROJECT',
@@ -1773,9 +1822,9 @@ environment:
       'route: claude code on vertex then direct',
       route([VERTEX, DIRECT], claudeCode({ model: 'm' })),
     ],
-    ['model: anthropic on vertex alone', model('anthropic/m', undefined, [VERTEX])],
-    ['model: google on vertex alone', model('google/m', undefined, [VERTEX])],
-    ['model: openai on vertex alone', model('openai/m', undefined, [VERTEX])],
+    ['model: anthropic on vertex, direct off', model('anthropic/m', undefined, [VERTEX, OFF])],
+    ['model: google on vertex, direct off', model('google/m', undefined, [VERTEX, OFF])],
+    ['model: openai on vertex, direct off', model('openai/m', undefined, [VERTEX, OFF])],
   ],
   declaration: [
     ['not a list', tree({ type: 'eval' })],

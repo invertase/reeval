@@ -18,7 +18,11 @@ export const GATEWAY_NAMES = ['direct', 'vercel', 'openrouter', 'vertex'] as con
 
 export const gatewayNameSchema = z.enum(GATEWAY_NAMES)
 
-export const directGatewaySchema = z.strictObject({ kind: z.literal('direct') })
+const directSettings = {
+  enabled: z.boolean().optional(),
+}
+
+export const directGatewaySchema = z.strictObject({ kind: z.literal('direct'), ...directSettings })
 
 export const vercelGatewaySchema = z.strictObject({ kind: z.literal('vercel') })
 
@@ -53,7 +57,7 @@ export const gatewayDescriptorSchema = z.discriminatedUnion('kind', [
 
 export const gatewayEntryDataSchema = z.union([
   gatewayNameSchema,
-  z.strictObject({ direct: z.strictObject({}) }),
+  z.strictObject({ direct: z.strictObject(directSettings) }),
   z.strictObject({ vercel: z.strictObject({}) }),
   z.strictObject({ openrouter: z.strictObject(openrouterSettings) }),
   z.strictObject({ vertex: vertexGatewaySchema.omit({ kind: true }) }),

@@ -824,9 +824,10 @@ export function checkGateways(config: ResolvedConfig, deps: DoctorDeps, envFile:
     const where = profile ? `profile ${profile}` : config.file
     const list = `gateway ${gateways.map((g) => g.kind).join(', ')}${profile ? ` in profile ${profile}` : ''}`
     try {
-      const routes = harnesses.map(
-        (h) => `${harnessId(h)} → ${resolveGateway(gateways, h, where).name}`,
-      )
+      const routes = harnesses.map((h) => {
+        const { name, skipped } = resolveGateway(gateways, h, where)
+        return `${harnessId(h)} → ${name}${name === 'direct' && skipped.length ? ' (fallback)' : ''}`
+      })
       checks.push({ id: 'gateway', status: 'ok', summary: `${list}: ${routes.join(', ')}` })
     } catch (error) {
       checks.push({ id: 'gateway', status: 'fail', summary: (error as Error).message })

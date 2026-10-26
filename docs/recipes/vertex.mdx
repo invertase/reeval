@@ -31,7 +31,7 @@ export default defineConfig({
 })
 ```
 
-With `vertex()` alone in the list, a harness or model Vertex can't serve stops the plan rather than falling back to a key. The Anthropic API's dated id goes to Vertex as `claude-haiku-4-5@20251001`, so the same string works on `direct()`.
+A harness or model Vertex can't serve falls back to its own key with `direct()`, which ends every list, and the plan's hint names it. The Anthropic API's dated id goes to Vertex as `claude-haiku-4-5@20251001`, so the same string works on `direct()`.
 
 | `vertex()` option | Default |
 |---|---|
@@ -78,7 +78,7 @@ reeval mints the token on the host and the egress gateway adds it to the agent's
 
 | Variation | How |
 |---|---|
-| Other agents on their own keys | `gateway: [vertex(), direct()]`: Claude Code on Vertex, and Cursor or Codex, which Vertex can't serve, on their keys |
+| Vertex only | `gateway: [vertex(), direct({ enabled: false })]`: a harness or model Vertex can't serve, such as Cursor or Codex, stops the plan rather than falling back to its key |
 | A Gemini judge | `judge: { model: 'google/gemini-3.8-flash' }`, called on Vertex in `regions.google` |
 | A Gemini agent | `goose({ model: 'gemini-3.8-flash' })`, or Antigravity, OpenCode or pi, on the same list. Each calls Vertex in `regions.google` with a made-up service account reeval writes for it, and the real token stays on the host |
 | One profile on Vertex | Put `gateway: [vertex()]` in a profile, and run it with `--profile` |

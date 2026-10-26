@@ -614,8 +614,12 @@ class Diff(TypedDict):
     patch: str
 
 
-# Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.
+# Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends
+# with it unless it's listed elsewhere, where it's tried in that place.
 class DirectGatewayDescriptor(TypedDict):
+    # `false` turns off the fallback to each provider's own key, so a cell no other gateway in
+    # the list serves is refused at plan time. Default `true`.
+    enabled: NotRequired[bool]
     kind: Literal["direct"]
 
 
@@ -1175,8 +1179,12 @@ class JudgeArtifactRef(TypedDict):
     sha256: str
 
 
-# Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.
+# Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends
+# with it unless it's listed elsewhere, where it's tried in that place.
 class JudgeCallDataGatewayDirect(TypedDict):
+    # `false` turns off the fallback to each provider's own key, so a cell no other gateway in
+    # the list serves is refused at plan time. Default `true`.
+    enabled: NotRequired[bool]
     kind: Literal["direct"]
 
 

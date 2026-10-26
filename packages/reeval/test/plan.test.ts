@@ -128,6 +128,8 @@ export const cases: PlanCase[] = [
     args: ['--config', 'reeval.vercel.config.ts', '--profile', 'codex-pin'],
   },
   { dir: 'gateway', name: 'vercel-yaml', args: ['--config', 'reeval.vercel.yaml'] },
+  { dir: 'gateway-strict', name: 'strict', args: [] },
+  { dir: 'gateway-strict', name: 'strict-yaml', args: ['--config', 'reeval.strict.yaml'] },
   { dir: 'gateway', name: 'openrouter', args: ['--config', 'reeval.openrouter.config.ts'] },
   {
     dir: 'gateway',
@@ -344,6 +346,36 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
         ['grok-build:grok-4.6', { name: 'vercel', skipped: [] }],
       ],
     )
+  })
+
+  test('with direct() off, a cell no listed gateway serves exits 2 at plan time', async () => {
+    const files = (gateway: string) => ({
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { direct, vercel } from 'reeval/gateway'
+import { cursor } from 'reeval/harness'
+export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), gateway: ${gateway} })
+`,
+      'evals/g.eval.ts': `import { evaluate } from 'reeval'
+evaluate('routed', async () => {})
+`,
+    })
+    const fallback = await project('gateway-fallback', files('[vercel()]'))
+    const planned = await runCli(fallback.dir, ['run', '--dry-run'])
+    assert.equal(planned.code, 0, planned.stdout + planned.stderr)
+    assert.match(
+      planned.stdout,
+      /hint: gateway: cursor:composer-2\.5 falls back to direct \(vercel can't serve it: Cursor's agent only calls Cursor's own API\)/,
+    )
+    const strict = await project('gateway-strict', files('[vercel(), direct({ enabled: false })]'))
+    for (const args of [['run', '--dry-run'], ['run']]) {
+      const r = await runCli(strict.dir, args)
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /on cursor:composer-2\.5: no gateway in the list can serve it \(vercel: Cursor's agent only calls Cursor's own API\)\. Drop direct\(\{ enabled: false \}\) from gateway to fall back to Cursor's own key\./,
+      )
+    }
+    assert.deepEqual(readdirSync(strict.dir).includes('.reeval'), false, 'nothing ran')
   })
 
   test('a gateway reeval does not know exits 2 at plan time, naming the ones it does', async () => {

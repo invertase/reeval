@@ -176,7 +176,9 @@ function planTests(
         const hid = harnessId(harness)
         if (gatewaySet || harness.gateway !== undefined) {
           routes.set(hid, route)
-          gatewayNotes.push(`gateway: ${hid} → ${route.name}`)
+          gatewayNotes.push(
+            `gateway: ${hid} → ${route.name}${route.name === 'direct' && route.skipped.length ? ' (fallback)' : ''}`,
+          )
         }
         if (route.name === 'direct') return harness
         if (harness.kind !== 'fake') {

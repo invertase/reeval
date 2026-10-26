@@ -15,7 +15,7 @@ import type {
   ResolvedConfig,
   ResolvedProfile,
 } from '../types.ts'
-import { gatewayHelper } from './resolve.ts'
+import { gatewayHelper, notListed } from './resolve.ts'
 import { vertexModelRefusal } from './vertex.ts'
 
 const providerOf = (model: string) => model.slice(0, model.indexOf('/'))
@@ -33,7 +33,10 @@ const MODEL_GATEWAYS: Readonly<Record<GatewayName, (model: string) => string | u
   vertex: vertexModelRefusal,
 }
 
-/** The run's gateway list: the profile's, else the config's (`[direct()]` when neither sets one). */
+/**
+ * The run's gateway list: the profile's, else the config's, each ending with `direct()` unless
+ * it's listed elsewhere or turned off (`[direct()]` when neither sets one).
+ */
 export type GatewayScope = { gateways: readonly GatewayDescriptor[] }
 
 export const gatewayScope = (
@@ -42,9 +45,9 @@ export const gatewayScope = (
 ): GatewayScope => ({ gateways: profile?.gateway ?? config.gateway })
 
 /**
- * The gateway `model` goes through: its pin, or the first in the list that can serve it. An unset
- * list is `[direct()]`, so a model takes its provider's own key unless the config lists another
- * gateway. A model object or a fake calls through itself, and is undefined. Throws a UsageError
+ * The gateway `model` goes through: its pin, or the first in the list that can serve it. A list
+ * ends with `direct()` unless it's turned off, so a model no other gateway serves takes its
+ * provider's own key. A model object or a fake calls through itself, and is undefined. Throws a UsageError
  * naming each gateway tried.
  */
 export function resolveModelGateway(
@@ -60,9 +63,7 @@ export function resolveModelGateway(
   const name = typeof pin === 'object' ? pin.kind : pin
   if (name !== undefined) {
     if (!listed.includes(name)) {
-      throw new UsageError(
-        `${on} pins gateway '${name}', which isn't in the gateway list (${listed.join(', ')}). Add ${gatewayHelper(name)} to gateway, or pin one that's there.`,
-      )
+      throw new UsageError(`${on} pins gateway '${name}', ${notListed(name, listed.join(', '))}`)
     }
     const refused = MODEL_GATEWAYS[name](model)
     if (refused) {
@@ -85,7 +86,7 @@ export function resolveModelGateway(
       ? ` There a judge must be a decision model, such as '${other === 'openrouter' ? OPENROUTER_JUDGE_MODEL : RECOMMENDED_JUDGE_MODEL}'.`
       : ''
   throw new UsageError(
-    `${on}: no gateway in the list can serve it (${skipped.join('; ')}).${other ? ` Add ${gatewayHelper(other)} to gateway.${judge}` : ''}`,
+    `${on}: no gateway in the list can serve it (${skipped.join('; ')}).${other === 'direct' ? ` Drop direct({ enabled: false }) from gateway to fall back to its provider's own key.` : other ? ` Add ${gatewayHelper(other)} to gateway.${judge}` : ''}`,
   )
 }
 
