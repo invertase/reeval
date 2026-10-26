@@ -54,7 +54,7 @@
       "ignoreDependencies": ["@ai-sdk/provider"]
     },
     "packages/harness-pi": {
-      "entry": ["test/**/*.ts"],
+      "entry": ["test/**/*.ts", "assets/*.mjs"],
       "ignoreDependencies": ["@ai-sdk/provider"]
     },
     "packages/harness-opencode": {

@@ -45,7 +45,7 @@ export default defineConfig({
 | | |
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
-| Credential | `GOOGLE_GENERATIVE_AI_API_KEY` (a Gemini API key; pi sees it as `GEMINI_API_KEY`) |
+| Credential | `GOOGLE_GENERATIVE_AI_API_KEY` (a Gemini API key; pi sees it as `GEMINI_API_KEY`), or `vercel()`'s on Vercel AI Gateway |
 | Adapter | `@reeval/harness-pi` 0.2.8, bundled with reeval |
 | CLI | `@earendil-works/pi-coding-agent` 1.4.0, from a pinned lockfile |
 | Sandbox | `docker()` only |
@@ -79,9 +79,11 @@ reeval passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gi
 
 The adapter refuses to run in a sandbox that can't broker the key.
 
-pi doesn't run on [`vercel()`](/reference/gateway#vercel-ai-gateway). pi's route there, its `vercel-ai-gateway` provider, reaches a Gemini model only through Anthropic's Messages API, sending Anthropic's thinking budget in place of Gemini's thinking level, and it doesn't behave as it does on Gemini's API. So the plan resolves pi past `vercel()` to the next gateway in the list, and stops with exit 2 when `vercel()` is the only one.
+On [`vercel()`](/reference/gateway#vercel-ai-gateway), the key is `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`), brokered as a Bearer token on `POST ai-gateway.vercel.sh/v1/chat/completions` only. Before each turn, reeval writes pi a provider in `~/.pi/agent/models.json` on Vercel's Chat Completions API, with the model as `google/<model>`.
 
-Nor on [`openrouter()`](/reference/gateway#openrouter): pi reaches a Gemini model there only through Chat Completions, which no run has checked behaves as it does on Gemini's API, so the plan resolves pi past it too.
+The model's limits, prices and thinking levels come from pi's own catalog, as on Gemini's API. Each thinking level goes as Gemini's own `thinkingConfig` under Vercel's `providerOptions`, not Vercel's `reasoning_effort`, which maps every Gemini 3 level but `low` to `high`. A model outside the catalog, or one on a thinking budget (Gemini 2.5), fails the attempt.
+
+pi doesn't run on [`openrouter()`](/reference/gateway#openrouter): it reaches a Gemini model there only through Chat Completions, which no run has checked behaves as it does on Gemini's API, so the plan resolves pi past it.
 
 On [`vertex()`](/reference/gateway#vertex-ai), pi runs `--provider google-vertex` with `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION`, and no key: it reads a service account reeval writes for it, and the gateway adds an access token from your Application Default Credentials to its `POST /v1/…/publishers/google/models/<model>:streamGenerateContent` calls.
 

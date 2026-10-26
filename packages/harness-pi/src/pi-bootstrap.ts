@@ -11,6 +11,9 @@ export const PI_CLI_PATH = 'node_modules/.bin/pi'
 const ASSETS = new URL('../assets/', import.meta.url)
 const asset = (name: string) => readFile(new URL(name, ASSETS), 'utf8')
 
+/** The script that writes pi's models.json for a gateway's provider, before each turn there. */
+export const piGatewayModelsScript = () => asset('gateway-models.mjs')
+
 /**
  * Installs pi from its lockfile. pi runs without the build scripts of `@google/genai`, `esbuild`
  * and `protobufjs`, so none run.

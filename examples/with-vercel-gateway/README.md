@@ -47,8 +47,8 @@ pass             adds a tested multiply function
               "gateway": "vercel",
 ```
 
-Vercel serves Claude Code, Codex, Goose, OpenCode, fx and Grok Build; add `direct()` after
-`vercel()` to send the others (Cursor, pi, Antigravity) on their own keys. Of the judge models
+Vercel serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build; add `direct()` after
+`vercel()` to send the others (Cursor, Antigravity) on their own keys. Of the judge models
 there, only Jev answers.
 
 | File | What it is |

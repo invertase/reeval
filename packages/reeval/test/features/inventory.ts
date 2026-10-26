@@ -248,7 +248,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'gateway.vercel',
     area: 'Config and selection',
-    name: "`vercel()`: Claude Code, Codex, Goose, OpenCode, fx and Grok Build on Vercel AI Gateway with one brokered key, fallback past it for the harnesses it cannot serve (pi among them) and for `effort` it does not carry yet, fx's asked model kept apart from the served one, a brokered 401 hinted as a refused key, an expired `VERCEL_OIDC_TOKEN` refused at plan time, and the judge, analysis and captures routed by the list or a judge pin",
+    name: "`vercel()`: Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build on Vercel AI Gateway with one brokered key, fallback past it for the harnesses it cannot serve and for `effort` the model would not read, fx's asked model kept apart from the served one, a brokered 401 hinted as a refused key, an expired `VERCEL_OIDC_TOKEN` refused at plan time, and the judge, analysis and captures routed by the list or a judge pin",
     plan: ['gateway/vercel', 'gateway/vercel-pin', 'gateway/vercel-yaml'],
     unit: [
       'reeval/test/plan.test.ts',
@@ -261,7 +261,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'gateway.openrouter',
     area: 'Config and selection',
-    name: "`openrouter()`: Claude Code, Codex, Goose, OpenCode and Grok Build on OpenRouter with one brokered key, fallback past it for Cursor, Antigravity, fx and pi and for `effort` it does not carry yet (Codex's excepted), the upstream provider and cost OpenRouter reports for every call in the record and the output, `fallbacks` for reeval's own calls (off by default), and the judge, analysis and captures through `@openrouter/ai-sdk-provider`",
+    name: "`openrouter()`: Claude Code, Codex, Goose, OpenCode and Grok Build on OpenRouter with one brokered key, fallback past it for Cursor, Antigravity, fx and pi and for `effort` the model would not read, the upstream provider and cost OpenRouter reports for every call in the record and the output, `fallbacks` for reeval's own calls (off by default), and the judge, analysis and captures through `@openrouter/ai-sdk-provider`",
     plan: ['gateway/openrouter', 'gateway/openrouter-fallbacks', 'gateway/openrouter-yaml'],
     unit: [
       'reeval/test/gateway.test.ts',
@@ -1123,9 +1123,10 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.effort',
     area: 'Harnesses',
-    name: '`effort` on each harness factory: default id, requested vs served',
+    name: "`effort` on each harness factory: default id, requested vs served, and sent as the model's own setting",
     fixtures: ['harness/effort-requested-and-served'],
     plan: ['effort/effort'],
+    real: ["contract › effort sent as the model's own setting"],
     unit: [
       'reeval/test/harness.test.ts',
       'harness-cursor-sdk/test/harness.test.ts',

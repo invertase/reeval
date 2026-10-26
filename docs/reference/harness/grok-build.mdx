@@ -21,7 +21,7 @@ export default defineConfig({
 </Property>
 
 <Property name="effort" type="string" optional>
-  Reasoning effort as Grok's `default_reasoning_effort`, such as `low`, `medium` or `high`, for a model that takes one. It isn't the measured [effort](/concepts/lift#effort-next-to-lift).
+  Reasoning effort as Grok's `default_reasoning_effort`, such as `low`, `medium` or `high`, for a model that takes one. On a gateway, the model's `[model."<id>"]` table also lists it in `reasoning_efforts`, which Grok needs before it sends a model of its own table any effort. It isn't the measured [effort](/concepts/lift#effort-next-to-lift).
 </Property>
 
 <Property name="id" type="string" optional>
@@ -70,9 +70,9 @@ reeval passes `XAI_API_KEY` to the adapter explicitly, and Grok gets a placehold
 
 The served model comes from each model call's response, which the gateway reads: Grok's ACP server doesn't name it. The adapter refuses to run in a sandbox that can't broker the key.
 
-On a [`gateway` list](/reference/gateway#vercel-ai-gateway) that resolves the harness to `vercel()`, the key is `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`). Grok's `config.toml` gets a `[model."xai/<model>"]` table on Vercel's Chat Completions API (`base_url = "https://ai-gateway.vercel.sh/v1"`, `env_key = "AI_GATEWAY_API_KEY"`), so Grok calls nothing on `api.x.ai`. The gateway brokers the key as a Bearer token on `POST /v1/chat/completions` at `ai-gateway.vercel.sh` only, and reads the served model from each response, in Vercel's name: `spacexai/grok-4.6` where direct records `grok-4.6`, so `reeval compare` across the two shows different served models. Grok also probes the gateway's root, which Vercel redirects to `vercel.com`; that block is expected. `effort` isn't taken on `vercel()` yet, so a cell with it falls through to the next gateway.
+On a [`gateway` list](/reference/gateway#vercel-ai-gateway) that resolves the harness to `vercel()`, the key is `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`). Grok's `config.toml` gets a `[model."xai/<model>"]` table on Vercel's Chat Completions API (`base_url = "https://ai-gateway.vercel.sh/v1"`, `env_key = "AI_GATEWAY_API_KEY"`), so Grok calls nothing on `api.x.ai`. The gateway brokers the key as a Bearer token on `POST /v1/chat/completions` at `ai-gateway.vercel.sh` only, and reads the served model from each response, in Vercel's name: `spacexai/grok-4.6` where direct records `grok-4.6`, so `reeval compare` across the two shows different served models. Grok also probes the gateway's root, which Vercel redirects to `vercel.com`; that block is expected. `effort` goes as `reasoning_effort` there.
 
-On [`openrouter()`](/reference/gateway#openrouter), the key is `OPENROUTER_API_KEY`, and Grok's `config.toml` gets a `[model."x-ai/<model>"]` table on OpenRouter's Chat Completions API (`base_url = "https://openrouter.ai/api/v1"`, `env_key = "OPENROUTER_API_KEY"`), so Grok calls nothing on `api.x.ai`. The gateway brokers the key as a Bearer token on `POST /api/v1/chat/completions` at `openrouter.ai` only, and reads the served model, the upstream provider and the cost from each response. `effort` isn't taken there yet.
+On [`openrouter()`](/reference/gateway#openrouter), the key is `OPENROUTER_API_KEY`, and Grok's `config.toml` gets a `[model."x-ai/<model>"]` table on OpenRouter's Chat Completions API (`base_url = "https://openrouter.ai/api/v1"`, `env_key = "OPENROUTER_API_KEY"`), so Grok calls nothing on `api.x.ai`. The gateway brokers the key as a Bearer token on `POST /api/v1/chat/completions` at `openrouter.ai` only, and reads the served model, the upstream provider and the cost from each response. `effort` goes as `reasoning_effort` there too.
 
 ## Settings
 

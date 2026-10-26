@@ -34,6 +34,7 @@ export type HarnessRow = {
     | 'opencode-openai'
     | 'goose'
     | 'pi'
+    | 'pi-gateway'
     | 'codex'
     | 'grok-build'
     | 'fx'
@@ -139,6 +140,13 @@ export type HarnessRow = {
    * cost (`upstreams`, `reportedCostUsd`): true on OpenRouter, whose responses say both.
    */
   upstream?: true
+  /**
+   * The effort the effort eval runs with, and what every answered model call it makes that sets
+   * any reasoning must carry in its body (`requestEffort` in `.reeval/debug`'s requests.ndjson, as
+   * `<path>=<value>`), where the model takes it as its own setting. Unset, the row leaves the
+   * effort eval out.
+   */
+  effort?: { value: string; asked: RegExp }
 }
 
 export const harnesses: HarnessRow[] = [
@@ -223,6 +231,7 @@ export const harnesses: HarnessRow[] = [
     // Its ACP server names no model; the turn records the one the gateway saw it request.
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
+    effort: { value: 'low', asked: /^generationConfig\.thinkingConfig\.thinkingLevel=low$/ },
   },
   {
     // OpenCode on another provider: Anthropic's key, in x-api-key, and its served model from the
@@ -238,6 +247,7 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /^claude-sonnet-5-5/,
     wireModel: /^claude-sonnet-5-5/,
+    effort: { value: 'high', asked: /^output_config\.effort=high thinking\.type=adaptive$/ },
   },
   {
     // And OpenAI's: a Bearer key, the Responses API over HTTP (not OpenCode's WebSocket), and
@@ -253,6 +263,7 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /^gpt-5\.4-mini-\d{4}-\d{2}-\d{2}\[effort=\w+\]$/,
     wireModel: /^gpt-5\.4-mini-\d{4}-\d{2}-\d{2}\[effort=\w+\]$/,
+    effort: { value: 'high', asked: /^reasoning\.effort=high$/ },
   },
   {
     id: 'goose',
@@ -277,6 +288,7 @@ export const harnesses: HarnessRow[] = [
     // Its ACP server names no model; the turn records the one the gateway saw it request.
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
+    effort: { value: 'low', asked: /^generationConfig\.thinkingConfig\.thinkingLevel=low$/ },
   },
   {
     id: 'pi',
@@ -296,6 +308,29 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
+    effort: { value: 'low', asked: /^generationConfig\.thinkingConfig\.thinkingLevel=LOW$/ },
+  },
+  {
+    // pi on Vercel AI Gateway through `gateway: [vercel()]`: a pi provider of reeval's on Vercel's
+    // Chat Completions API (a Bearer key), the model as google/<id>, and each thinking level as
+    // Gemini's own thinkingConfig under Vercel's providerOptions, never Vercel's shared effort.
+    id: 'pi-gateway',
+    harness: 'pi',
+    gateway: 'vercel',
+    model: 'gemini-3.8-flash',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /^google\/gemini-3\.8-flash$/,
+    wireModel: /^google\/gemini-3\.8-flash$/,
+    effort: {
+      value: 'low',
+      asked:
+        /^providerOptions\.google\.thinkingConfig\.thinkingLevel=low providerOptions\.vertex\.thinkingConfig\.thinkingLevel=low$/,
+    },
   },
   {
     id: 'codex',
@@ -428,6 +463,7 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
+    effort: { value: 'low', asked: /^generationConfig\.thinkingConfig\.thinkingLevel=low$/ },
   },
   {
     id: 'goose-vertex',
@@ -491,6 +527,12 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /gemini-3\.8-flash/,
     wireModel: /gemini-3\.8-flash/,
+    // OpenCode's session-title call also sets Anthropic's effort, at a level of its own.
+    effort: {
+      value: 'low',
+      asked:
+        /^providerOptions\.google\.thinkingConfig\.thinkingLevel=low providerOptions\.vertex\.thinkingConfig\.thinkingLevel=low( |$)/,
+    },
   },
   {
     // Goose on Vercel AI Gateway: its vercel_ai_gateway provider (OpenAI-compatible, a Bearer
@@ -525,6 +567,7 @@ export const harnesses: HarnessRow[] = [
     // Its ACP server names no model; the turn records the one xAI's Responses API answered with.
     servedModel: /^grok-4\.6/,
     wireModel: /^grok-4\.6/,
+    effort: { value: 'low', asked: /^reasoning\.effort=low$/ },
   },
   {
     // Grok Build on Vercel AI Gateway: the model as a [model."xai/<id>"] table on Vercel's Chat
@@ -542,6 +585,7 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /grok-4\.6/,
     wireModel: /grok-4\.6/,
+    effort: { value: 'low', asked: /^reasoning_effort=low$/ },
   },
   {
     // Claude Code on OpenRouter through `gateway: [openrouter()]`: its base URL at OpenRouter's
@@ -591,6 +635,7 @@ export const harnesses: HarnessRow[] = [
     servedModel: /gemini-3\.8-flash/,
     wireModel: /gemini-3\.8-flash/,
     upstream: true,
+    effort: { value: 'low', asked: /^reasoning\.effort=low$/ },
   },
   {
     // Goose on OpenRouter: its openrouter provider (Chat Completions, a Bearer key), the Gemini
@@ -611,6 +656,7 @@ export const harnesses: HarnessRow[] = [
     servedModel: /gemini-3\.8-flash/,
     wireModel: /gemini-3\.8-flash/,
     upstream: true,
+    effort: { value: 'low', asked: /^reasoning\.effort=low$/ },
   },
   {
     // Grok Build on OpenRouter: the model as a [model."x-ai/<id>"] table on OpenRouter's Chat
@@ -629,6 +675,7 @@ export const harnesses: HarnessRow[] = [
     servedModel: /grok-4\.6/,
     wireModel: /grok-4\.6/,
     upstream: true,
+    effort: { value: 'low', asked: /^reasoning_effort=low$/ },
   },
 ]
 
@@ -685,6 +732,7 @@ export function rowEnv(row: HarnessRow): NodeJS.ProcessEnv {
     ...(row.id === 'fake' ? {} : { REEVAL_CONTRACT_HARNESS: harnessOf(row) }),
     ...(row.model ? { REEVAL_CONTRACT_MODEL: row.model } : {}),
     ...(row.gateway ? { REEVAL_CONTRACT_GATEWAY: row.gateway } : {}),
+    ...(row.effort ? { REEVAL_CONTRACT_EFFORT: row.effort.value } : {}),
     ...(row.plugin ? { REEVAL_CONTRACT_PLUGIN_PARTS: row.plugin.parts.join(',') } : {}),
     ...(row.key && key ? { [row.key.name]: key } : {}),
     ...Object.fromEntries(

@@ -5,7 +5,7 @@ import {
   createOpenCode,
   OPENCODE_CLI_VERSION,
   openCodeConfig,
-  openCodeEffortOptions,
+  openCodeEffortBody,
   openCodeEnv,
 } from '../src/opencode-harness.ts'
 import {
@@ -78,27 +78,52 @@ test("the model's provider calls over HTTP, where the gateway reads the served m
   })
 })
 
-test("effort is that provider's thinking option", () => {
-  assert.deepEqual(openCodeEffortOptions('openai/gpt-5.4-mini', 'high'), {
-    reasoningEffort: 'high',
+test("effort goes in the request body's own field for the model's provider", () => {
+  assert.deepEqual(openCodeEffortBody('google/gemini-3.8-flash', 'low'), {
+    generationConfig: { thinkingConfig: { thinkingLevel: 'low' } },
   })
-  assert.deepEqual(openCodeEffortOptions('anthropic/claude-haiku-4-5', '8000'), {
-    thinking: '8000',
+  assert.deepEqual(openCodeEffortBody('google-vertex/gemini-3.8-flash', 'low'), {
+    generationConfig: { thinkingConfig: { thinkingLevel: 'low' } },
+  })
+  assert.deepEqual(openCodeEffortBody('anthropic/claude-sonnet-5-5', 'high'), {
+    output_config: { effort: 'high' },
+  })
+  assert.deepEqual(openCodeEffortBody('openai/gpt-5.4-mini', 'high'), {
+    reasoning: { effort: 'high' },
+  })
+  assert.deepEqual(openCodeEffortBody('openrouter/google/gemini-3.8-flash', 'medium'), {
+    reasoning: { effort: 'medium' },
+  })
+  const thinking = { thinkingConfig: { thinkingLevel: 'low' } }
+  assert.deepEqual(openCodeEffortBody('vercel/google/gemini-3.8-flash', 'low'), {
+    providerOptions: { google: thinking, vertex: thinking },
   })
   assert.deepEqual(openCodeConfig({ model: 'openai/gpt-5.4-mini', effort: 'high' }).providers, {
     openai: {
       settings: { transport: 'http' },
-      models: { 'gpt-5.4-mini': { options: { reasoningEffort: 'high' } } },
+      models: { 'gpt-5.4-mini': { body: { reasoning: { effort: 'high' } } } },
     },
   })
-  assert.deepEqual(
-    openCodeConfig({ model: 'anthropic/claude-haiku-4-5', effort: '8000' }).providers,
-    {
-      anthropic: {
-        settings: { transport: 'http' },
-        models: { 'claude-haiku-4-5': { options: { thinking: '8000' } } },
-      },
-    },
+})
+
+test('twin: effort on a provider with no checked field is refused, not dropped', () => {
+  for (const model of ['vercel/anthropic/claude-haiku-4-5', 'mistral/large']) {
+    assert.equal(openCodeEffortBody(model, 'high'), undefined, model)
+  }
+  assert.throws(
+    () =>
+      createOpenCode({
+        auth: { AI_GATEWAY_API_KEY: 'k' },
+        model: 'vercel/anthropic/claude-haiku-4-5',
+        effort: 'high',
+      }),
+    /OpenCode's effort on vercel\/anthropic\/claude-haiku-4-5 goes in no field reeval has checked/,
+  )
+  assert.equal(
+    'models' in
+      (openCodeConfig({ model: 'vercel/anthropic/claude-haiku-4-5', effort: 'high' }).providers
+        ?.vercel ?? {}),
+    false,
   )
 })
 

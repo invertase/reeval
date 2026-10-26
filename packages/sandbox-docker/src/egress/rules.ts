@@ -77,6 +77,17 @@ const MIN_CREDENTIAL = 16
 const schemeAndToken = (value: string) => /^([A-Za-z][\w-]*) +(\S+)$/.exec(value)
 
 /**
+ * Whether a rule for `host` sets a credential: a header value long enough to be one, whether it
+ * replaces a placeholder the sandbox sent or adds a bearer the sandbox never had.
+ */
+export const setsCredential = (rules: readonly RequestTransformation[], host: string) =>
+  rules.some(
+    (r) =>
+      normaliseHost(r.match.host) === normaliseHost(host) &&
+      Object.values(r.transform.headers).some((v) => v.length >= MIN_CREDENTIAL),
+  )
+
+/**
  * The values credential rules for `host` set (rules keyed on a header the sandbox sends, such as
  * a placeholder key), each paired with what the sandbox sent in its place, for scrubbing from
  * responses. A value with a scheme (`Bearer <key>`) is paired as a whole and by its token too.

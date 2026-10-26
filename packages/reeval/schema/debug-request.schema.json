@@ -32,6 +32,10 @@
         "received": {
           "type": "number"
         },
+        "requestEffort": {
+          "description": "On a request the gateway sent the harness's key on, or a model call whose response it reads, the reasoning settings its JSON body carried, as `<path>=<value>` joined by spaces: `reasoning_effort=high`, `generationConfig.thinkingConfig.thinkingLevel=LOW`.",
+          "type": "string"
+        },
         "sent": {
           "type": "number"
         },

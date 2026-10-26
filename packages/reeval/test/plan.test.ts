@@ -5,7 +5,6 @@ import assert from 'node:assert/strict'
 import { readdirSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { describe, test } from 'node:test'
-import { VERCEL_GATEWAY } from '../src/gateway/vercel.ts'
 import { fakeConfig, project, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 import { matchFile, type PlanCase, planJson, renderPlan } from './support/plan.ts'
@@ -341,10 +340,7 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
           },
         ],
         ['goose:gemini-3.8-flash', { name: 'vercel', skipped: [] }],
-        [
-          'pi:gemini-3.8-flash',
-          { name: 'direct', skipped: [{ gateway: 'vercel', why: VERCEL_GATEWAY.refusals.pi }] },
-        ],
+        ['pi:gemini-3.8-flash', { name: 'vercel', skipped: [] }],
         ['grok-build:grok-4.6', { name: 'vercel', skipped: [] }],
       ],
     )
