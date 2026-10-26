@@ -33,18 +33,6 @@ evaluate(
 )
 ```
 
-For more information about every argument `c.serve` takes, see [`c.serve`](/reference/context#cserve).
-
-## Run a background command
-
-`c.exec` with `{ background: true }` starts a command the same way, without a port. It returns a handle with `kill()` only, so use a foreground `c.exec` for anything you assert on. After the server starts, in the `evals/sign-in.eval.ts` file, start a worker:
-
-```ts title="evals/sign-in.eval.ts"
-const worker = await c.exec('npm run worker', { background: true })
-// ...
-await worker.kill()
-```
-
 ## Check the running app
 
 `c.exec` runs in the sandbox, so a request to `localhost` on the server's port reaches the app. `c.serve` returns as soon as the command starts, so retry until the server answers. In the `evals/sign-in.eval.ts` file, check the page over HTTP:
@@ -61,9 +49,9 @@ await expect(
 
 ## Capture a page
 
-`c.capture` takes a `ServeHandle` or a port and opens a path on it in a headless browser on your machine through a tunnel to the sandbox. `c.capture` saves the image at the `artifacts/<name>.png` path in the attempt record. The sandbox image needs no browser, because reeval downloads one into its cache on the first capture.
+`c.capture` takes a `ServeHandle` or a port and opens a path on it in a headless browser on your machine through a tunnel to the sandbox. It waits until the server answers, then saves the image at the `artifacts/<name>.png` path in the attempt record. The sandbox image needs no browser, because reeval downloads one into its cache on the first capture.
 
-`path` defaults to `/`. For the `/login` path, `name` defaults to the `login.png` filename, and a name can't repeat in one attempt. `wait` defaults to `'load'`; use `'idle'` to wait until there are no pending network requests, or `{ ms: 500 }` to wait a fixed time.
+`path` defaults to `/`. `name` defaults to the path, so `/login` saves `login.png`, and a name can't repeat in one attempt. `wait` defaults to `'load'`; use `'idle'` to wait until there are no pending network requests, or `{ ms: 500 }` to wait a fixed time.
 
 In the `evals/sign-in.eval.ts` file, name a second capture:
 
@@ -74,17 +62,7 @@ const error = await c.capture(app, {
 })
 ```
 
-To interact with the page before the capture, pass `instructions` as goal strings, which a vision model from `capture.model` drives. For more information about every field, see [`c.capture`](/reference/context#ccapture).
-
-## Set the viewport and browser
-
-In the `evals/sign-in.eval.ts` file, set the capture width and height:
-
-```ts title="evals/sign-in.eval.ts"
-{ environment: nextApp, capture: { viewport: { width: 390, height: 844 } } },
-```
-
-For more information about every key, see [the `capture` option](/reference/options#capture).
+To interact with the page before the capture, pass `instructions` as goal strings, which a vision model from `capture.model` drives.
 
 ## Judge a capture
 
@@ -99,9 +77,29 @@ expect(await c.judge(q, { artifacts: true }), 'error state').toPass()
 
 For more information about the judge, its model, and its threshold, see [Judgments](/write/judgments).
 
-In a comparison, a question shows each side's own capture when `artifacts` names the captures, or is `true`, on the question or the `question` option, so the model sees the baseline's page beside the variant's. For more information about pairwise questions, see [Ask which did better](/results/compare/lift#ask-which-did-better).
+In a comparison, a question shows each side's own capture when `artifacts` names the captures, or is `true`, on the question or the `question` option, so the model sees the baseline's page beside the variant's. For more information about pairwise questions, see [Ask questions across attempts](/write/questions).
 
-For runnable projects, see [`with-capture`](https://github.com/invertase/reeval/tree/main/examples/with-capture), [`with-capture-journey`](https://github.com/invertase/reeval/tree/main/examples/with-capture-journey), and [`with-background-process`](https://github.com/invertase/reeval/tree/main/examples/with-background-process).
+## Set the viewport and browser
+
+The viewport defaults to 1280×720. In the `evals/sign-in.eval.ts` file, set the capture width and height:
+
+```ts title="evals/sign-in.eval.ts"
+{ environment: nextApp, capture: { viewport: { width: 390, height: 844 } } },
+```
+
+`viewport: 'full-page'` captures the whole page. `browser: false` stops reeval from using its browser on your machine, and `c.capture` then throws. For more information about every key, see [the `capture` option](/reference/options#capture).
+
+## Run a background command
+
+`c.exec` with `{ background: true }` starts a command the same way as `c.serve`, without a port. It returns a handle with `kill()` only, so use a foreground `c.exec` for anything you assert on. After the server starts, in the `evals/sign-in.eval.ts` file, start a worker:
+
+```ts title="evals/sign-in.eval.ts"
+const worker = await c.exec('npm run worker', { background: true })
+// ...
+await worker.kill()
+```
+
+reeval kills a background command the evaluation leaves running when the attempt ends. For runnable projects, see [`with-capture`](https://github.com/invertase/reeval/tree/main/examples/with-capture), [`with-capture-journey`](https://github.com/invertase/reeval/tree/main/examples/with-capture-journey), and [`with-background-process`](https://github.com/invertase/reeval/tree/main/examples/with-background-process).
 
 ## Reference
 
