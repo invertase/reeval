@@ -37,6 +37,7 @@ import {
 } from '../src/docker-cli.ts'
 import { contextFiles, dockerignoreMatcher } from '../src/dockerignore.ts'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
+import { requestedEffort } from '../src/egress/effort.ts'
 import { createMux, forwarderScript, link } from '../src/egress/mux.ts'
 import { createPolicyCheck, defaultAllowedHosts, hostAllowed } from '../src/egress/policy.ts'
 import {
@@ -286,6 +287,36 @@ describe('request transformations', () => {
     assert.ok(decrypts([cursorRule], 'API2.CURSOR.SH'))
     assert.equal(decrypts([cursorRule], 'agentn.global.api5.cursor.sh'), false)
     assert.equal(decrypts([], 'api2.cursor.sh'), false)
+  })
+})
+
+describe('requested effort', () => {
+  test("each API's reasoning setting, in the order read", () => {
+    const body = JSON.stringify({
+      generationConfig: { thinkingConfig: { thinkingLevel: 'LOW', includeThoughts: true } },
+      providerOptions: {
+        vertex: { thinkingConfig: { thinkingLevel: 'low' } },
+        google: { thinkingConfig: { thinkingLevel: 'low' } },
+      },
+      reasoning: { effort: 'high', enabled: true },
+      output_config: { effort: 'max' },
+      thinking: { type: 'adaptive' },
+    })
+    assert.equal(
+      requestedEffort(body),
+      'generationConfig.thinkingConfig.thinkingLevel=LOW ' +
+        'providerOptions.google.thinkingConfig.thinkingLevel=low ' +
+        'providerOptions.vertex.thinkingConfig.thinkingLevel=low ' +
+        'reasoning.effort=high reasoning.enabled=true output_config.effort=max thinking.type=adaptive',
+    )
+    assert.equal(requestedEffort('{"thinking":{"budget_tokens":2048}}'), 'thinking.budget_tokens=2048')
+  })
+
+  test('twin: none for a body with no setting, an object where a value goes, or not JSON', () => {
+    assert.equal(requestedEffort('{"model":"m","messages":[]}'), undefined)
+    assert.equal(requestedEffort('{"reasoning":{"effort":{"level":"high"}}}'), undefined)
+    assert.equal(requestedEffort('{"reasoning":["high"]}'), undefined)
+    assert.equal(requestedEffort('reasoning_effort=high'), undefined)
   })
 })
 

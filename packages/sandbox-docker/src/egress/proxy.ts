@@ -6,6 +6,7 @@ import { Duplex, type Readable, Transform } from 'node:stream'
 import tls from 'node:tls'
 import zlib from 'node:zlib'
 import { type CertificateAuthority, issueServerCertificate } from './cert.ts'
+import { requestedEffort } from './effort.ts'
 import { link } from './mux.ts'
 import { createPolicyCheck, hostAllowed, type Lookup, type NetworkPolicy } from './policy.ts'
 import {
@@ -124,6 +125,13 @@ export type EgressRequestEvent = {
   requestHeaders?: Headers
   /** As the sandbox got them, scrubbed. */
   responseHeaders?: Headers
+  /**
+   * The reasoning settings the request body carried, on a `modelResponses` endpoint or a host
+   * the gateway holds a harness credential for, as
+   * `<path>=<value>` joined by spaces: `reasoning_effort=high`, or
+   * `generationConfig.thinkingConfig.thinkingLevel=LOW`.
+   */
+  requestEffort?: string
   /** The model the response body says served it, on a `modelResponses` endpoint. */
   responseModel?: string
   /** The reasoning effort the response body says it ran at, on a `modelResponses` endpoint. */
@@ -179,6 +187,7 @@ type RequestTracker = {
         | 'responseHeaders'
         | 'status'
         | 'reason'
+        | 'requestEffort'
         | 'responseModel'
         | 'responseEffort'
         | 'responseProvider'
@@ -929,9 +938,11 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     headers: OutgoingHttpHeaders,
     own: Substitution[],
     t?: RequestTracker,
+    readsEffort = false,
   ): Readable | Transform {
     const counted = t ? req.pipe(counter(t.sent)) : req
     const encoded = String(headers['content-encoding'] ?? 'identity') !== 'identity'
+    if (readsEffort && t && !encoded) readEffort(counted, t)
     if (encoded || !own.some((s) => s.in.includes('body'))) return counted
     delete headers['content-length']
     return counted.pipe(bodySubstituter(own))
@@ -1089,6 +1100,24 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     up.on('data', onData)
   }
 
+  /** Most of a request body the gateway reads for its reasoning settings: a long session's. */
+  const EFFORT_LIMIT = 16 * 1024 * 1024
+
+  /** Records the reasoning settings in a model call's JSON body, read alongside its flow. */
+  function readEffort(body: Readable, t: RequestTracker) {
+    const chunks: Buffer[] = []
+    let size = 0
+    body.on('data', (chunk: Buffer) => {
+      size += chunk.length
+      if (size <= EFFORT_LIMIT) chunks.push(chunk)
+    })
+    body.once('end', () => {
+      if (size > EFFORT_LIMIT) return
+      const effort = requestedEffort(Buffer.concat(chunks).toString('utf8'))
+      if (effort) t.set({ requestEffort: effort })
+    })
+  }
+
   /** Most an exchange's response may be; it's a few hundred bytes of JSON. */
   const EXCHANGE_LIMIT = 1 << 20
 
@@ -1201,7 +1230,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     }
     delete headers.upgrade
     delete headers.connection
-    const body = requestBody(req as Readable, headers, own, t)
+    const readsEffort = !!readsModel || credentialValues(rules, target.host).length > 0
+    const body = requestBody(req as Readable, headers, own, t, readsEffort)
     const authority = authorityOf(target.host, target.port)
     const session = req.httpVersionMajor === 2 ? await upstreamSession(target) : null
     if (!session) {

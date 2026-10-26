@@ -2114,6 +2114,38 @@ describe('the model a response names, on a modelResponses endpoint', () => {
     }
   })
 
+  const effortBody = JSON.stringify({
+    model: 'google/gemini-3.8-flash',
+    messages: [{ role: 'user', content: 'x'.repeat(200_000) }],
+    providerOptions: { google: { thinkingConfig: { thinkingLevel: 'low' } } },
+    reasoning_effort: 'high',
+  })
+
+  test("the reasoning settings in the request's body, past its first chunk", async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, {
+      modelResponses: [{ host: HOST, path: { exact: '/chat/completions' } }],
+      onEvent: (e) => events.push(e),
+    })
+    try {
+      gw.proxy.addTransformations([brokered])
+      const r = await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path: '/chat/completions',
+        headers: { authorization: `Bearer ${PLACEHOLDER}` },
+        body: effortBody,
+      })
+      assert.equal(r.status, 200)
+      const e = await requestEvent(events)
+      assert.equal(
+        e?.type === 'request' && e.requestEffort,
+        'providerOptions.google.thinkingConfig.thinkingLevel=low reasoning_effort=high',
+      )
+    } finally {
+      gw.close()
+    }
+  })
+
   test('twin: off the endpoints, the response is neither read nor its encoding changed', async () => {
     const events: EgressEvent[] = []
     const gw = await startProxy(undefined, {
@@ -2126,12 +2158,18 @@ describe('the model a response names, on a modelResponses endpoint', () => {
       gw.proxy.addTransformations([
         { match: { host: HOST }, transform: { headers: { 'x-tag': 'a' } } },
       ])
-      const r = await responses(gw)
+      const r = await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path: '/responses',
+        headers: { authorization: `Bearer ${PLACEHOLDER}`, 'accept-encoding': 'gzip, br, zstd' },
+        body: effortBody,
+      })
       assert.equal(r.headers['x-accept-encoding'], 'gzip, br, zstd')
       const e = await requestEvent(events)
       assert.equal(e?.type, 'request')
       assert.equal(e?.type === 'request' && e.responseModel, undefined)
       assert.equal(e?.type === 'request' && e.responseProvider, undefined)
+      assert.equal(e?.type === 'request' && e.requestEffort, undefined)
     } finally {
       gw.close()
     }

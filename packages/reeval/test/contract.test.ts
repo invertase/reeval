@@ -9,8 +9,10 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { isRuntimeState } from '../src/attempt/context.ts'
+import { attemptDebugDir, parseAttemptKey } from '../src/debug/files.ts'
 import type { AttemptRecord, RunRecord } from '../src/history/types.ts'
 import type { PluginPart, TranscriptEvent } from '../src/types.ts'
+import type { DebugRequest } from '../src/view/debug.ts'
 import { parseTranscript, type TranscriptLine } from '../src/view/model.ts'
 import {
   BLOCKED_HOST,
@@ -77,6 +79,7 @@ const evalsNamed = (run: RunRecord, name: RegExp) => run.evals.filter((e) => nam
  */
 function tagsLeftOut(row: HarnessRow): string[] {
   const out = row.mcp === false ? ['mcp'] : []
+  if (!row.effort) out.push('effort')
   if (!row.plugin) return [...out, 'plugin']
   if (!row.plugin.parts.includes('hooks')) out.push('plugin-hooks')
   if (!row.plugin.parts.includes('agents')) out.push('plugin-agents')
@@ -87,6 +90,7 @@ function tagsLeftOut(row: HarnessRow): string[] {
 /** The evals (eval and canary) each tag a row can leave out has. */
 const TAGGED = {
   mcp: 2,
+  effort: 1,
   plugin: 10,
   'plugin-hooks': 2,
   'plugin-agents': 2,
@@ -186,6 +190,21 @@ const transcriptOf = (ran: Ran, a: AttemptRecord): TranscriptEvent[] => {
   )
 }
 
+/** The model calls an attempt sent the harness's key on, from its `.reeval/debug` requests.ndjson. */
+function modelCalls(ran: Ran, row: HarnessRow, a: AttemptRecord): DebugRequest[] {
+  const at = parseAttemptKey(a.key)
+  assert.ok(at, `${a.key} isn't an attempt key`)
+  const file = join(
+    attemptDebugDir(ran.project, ran.run.runId, at.evalId, at.cell, at.n),
+    'requests.ndjson',
+  )
+  return readFileSync(file, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as DebugRequest)
+    .filter((r) => r.method === 'POST' && r.host === row.apiHost && r.substituted.length > 0)
+}
+
 /** The environment of each eval whose file and command signals are checked. */
 const envOf: Record<string, string> = {
   'edit and run': 'notes',
@@ -194,7 +213,7 @@ const envOf: Record<string, string> = {
 }
 
 /** What one contract run starts: reeval.config.ts's budget.attempts, which reeval run enforces too. */
-const CONTRACT_ATTEMPTS = 22
+const CONTRACT_ATTEMPTS = 23
 
 export const behaviours: Behaviour[] = [
   {
@@ -357,6 +376,29 @@ export const behaviours: Behaviour[] = [
             `${a.key}: askedModels ${JSON.stringify(a.askedModels)}, expected one to match ${asked}`,
           )
       }
+    },
+  },
+  {
+    name: "effort sent as the model's own setting",
+    canary: false,
+    skips: (row) => (row.effort ? undefined : `the ${row.id} row has no effort to check`),
+    check(ran, row) {
+      const effort = row.effort
+      assert.ok(effort)
+      const e = evalNamed(ran.run, 'effort')
+      const a = e.attempts[0]
+      assert.ok(a, 'the effort eval has no attempt')
+      assert.equal(a.id, `${cellOf(row)}[effort=${effort.value}]/notes/docker#1`)
+      assert.equal(a.outcome, 'pass', `effort: ${detail(a)}`)
+      const calls = modelCalls(ran, row, a)
+      assert.ok(calls.length > 1, `effort: ${calls.length} model calls`)
+      for (const c of calls)
+        assert.match(c.requestEffort ?? '', effort.asked, `effort: ${c.url} → ${c.status}`)
+      // The twin: the same task without effort asked for something else, or nothing.
+      const plain = modelCalls(ran, row, attempt(ran, row, 'edit and run', 'notes'))
+      assert.ok(plain.length > 0, 'edit and run: no model calls')
+      for (const c of plain)
+        assert.doesNotMatch(c.requestEffort ?? '', effort.asked, `edit and run: ${c.url}`)
     },
   },
   {

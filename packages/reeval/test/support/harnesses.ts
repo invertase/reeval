@@ -34,6 +34,7 @@ export type HarnessRow = {
     | 'opencode-openai'
     | 'goose'
     | 'pi'
+    | 'pi-gateway'
     | 'codex'
     | 'grok-build'
     | 'fx'
@@ -139,6 +140,12 @@ export type HarnessRow = {
    * cost (`upstreams`, `reportedCostUsd`): true on OpenRouter, whose responses say both.
    */
   upstream?: true
+  /**
+   * The effort the effort eval runs with, and what every model call it makes must carry in its
+   * body (`requestEffort` in `.reeval/debug`'s requests.ndjson, as `<path>=<value>`), where the
+   * model takes it as its own setting. Unset, the row leaves the effort eval out.
+   */
+  effort?: { value: string; asked: RegExp }
 }
 
 export const harnesses: HarnessRow[] = [
@@ -296,6 +303,29 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
+    effort: { value: 'low', asked: /^generationConfig\.thinkingConfig\.thinkingLevel=LOW$/ },
+  },
+  {
+    // pi on Vercel AI Gateway through `gateway: [vercel()]`: a pi provider of reeval's on Vercel's
+    // Chat Completions API (a Bearer key), the model as google/<id>, and each thinking level as
+    // Gemini's own thinkingConfig under Vercel's providerOptions, never Vercel's shared effort.
+    id: 'pi-gateway',
+    harness: 'pi',
+    gateway: 'vercel',
+    model: 'gemini-3.8-flash',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /^google\/gemini-3\.8-flash$/,
+    wireModel: /^google\/gemini-3\.8-flash$/,
+    effort: {
+      value: 'low',
+      asked:
+        /^providerOptions\.google\.thinkingConfig\.thinkingLevel=low providerOptions\.vertex\.thinkingConfig\.thinkingLevel=low$/,
+    },
   },
   {
     id: 'codex',
@@ -685,6 +715,7 @@ export function rowEnv(row: HarnessRow): NodeJS.ProcessEnv {
     ...(row.id === 'fake' ? {} : { REEVAL_CONTRACT_HARNESS: harnessOf(row) }),
     ...(row.model ? { REEVAL_CONTRACT_MODEL: row.model } : {}),
     ...(row.gateway ? { REEVAL_CONTRACT_GATEWAY: row.gateway } : {}),
+    ...(row.effort ? { REEVAL_CONTRACT_EFFORT: row.effort.value } : {}),
     ...(row.plugin ? { REEVAL_CONTRACT_PLUGIN_PARTS: row.plugin.parts.join(',') } : {}),
     ...(row.key && key ? { [row.key.name]: key } : {}),
     ...Object.fromEntries(
