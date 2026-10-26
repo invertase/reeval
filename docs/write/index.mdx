@@ -87,6 +87,16 @@ A table below the `plan` line lists each evaluation by its file and name. If you
 
 To start the attempts, run the same command without `--dry-run`. For the runnable project, see [`with-existing-codebase`](https://github.com/invertase/reeval/tree/main/examples/with-existing-codebase).
 
+## Send the task
+
+The task is the prompt in `c.send()`. Each attempt sends it to the agent in a fresh sandbox, after the environment is in place.
+
+```ts title="evals/camelcase.eval.ts"
+await c.send('Add a separators option to camelCase: …')
+```
+
+For more information about a task over several prompts, see [Turns](/write/turns).
+
 ## Set a timeout
 
 The `timeout` option limits each attempt, and it defaults to `'15m'`. The clock starts after the setup commands finish. An attempt that reaches the timeout fails. In the `evals/camelcase.eval.ts` file, add `timeout` to the options:
