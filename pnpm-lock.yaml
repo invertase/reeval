@@ -520,6 +520,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/reeval
 
+  examples/with-vertex-gateway:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
   examples/with-web-matchers:
     dependencies:
       reeval:

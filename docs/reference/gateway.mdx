@@ -128,7 +128,7 @@ gateway: [vertex(), direct()],
 judge: { model: 'anthropic/claude-haiku-4-5-20251001' },
 ```
 
-A Claude model's Anthropic API id, ending in its date (`-20251001`), is sent to Vertex as Vertex's id (`@20251001`), for Claude Code and for reeval's own calls. So one model string works on `vertex()` and on the `direct()` it falls through to; Vertex's own id works too. `reeval doctor` checks each entry's project and where its credentials come from; with `--online` it mints a token, names its account and checks the Vertex AI API is enabled in the project.
+A Claude model's Anthropic API id, ending in its date (`-20251001`), is sent to Vertex as Vertex's id (`@20251001`), for Claude Code and for reeval's own calls. So one model string works on `vertex()` and on the `direct()` it falls through to; Vertex's own id works too. `reeval doctor` checks each entry's project and where its credentials come from; with `--online` it mints a token, names its account, checks the Vertex AI API is enabled in the project, and asks Vertex for a free token count on each model the config sends there. [Run on Vertex AI](/recipes/vertex) is the whole set-up.
 
 ## Fallback
 

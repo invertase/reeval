@@ -1,0 +1,96 @@
+---
+title: Run on Vertex AI
+description: Run an agent and its judge on your Google Cloud project, with a token from Application Default Credentials and no key.
+---
+
+**Goal:** run an agent and its judge on Vertex AI, billed to your Google Cloud project, with no API key on the machine or in the sandbox. The files are [`examples/with-vertex-gateway`](https://github.com/invertase/reeval/tree/main/examples/with-vertex-gateway).
+
+## Set up the project
+
+```bash
+gcloud auth application-default login
+gcloud services enable aiplatform.googleapis.com --project <project id>
+echo 'GOOGLE_CLOUD_PROJECT=<project id>' >> .env.local
+```
+
+Claude models also need enabling once per project in [Model Garden](https://console.cloud.google.com/vertex-ai/model-garden); Gemini models need nothing more. On a Google Cloud VM or in CI, the metadata server or a `GOOGLE_APPLICATION_CREDENTIALS` file stands in for the login.
+
+## The config
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { vertex } from '{{ pkg }}/gateway'
+import { claudeCode } from '{{ pkg }}/harness'
+import { docker } from '{{ pkg }}/sandbox'
+
+export default defineConfig({
+  harness: claudeCode({ model: 'claude-haiku-4-5-20251001' }),
+  sandbox: docker(),
+  judge: { model: 'anthropic/claude-haiku-4-5-20251001' },
+  gateway: [vertex()],
+})
+```
+
+With `vertex()` alone in the list, a harness or model Vertex can't serve stops the plan rather than falling back to a key. The Anthropic API's dated id goes to Vertex as `claude-haiku-4-5@20251001`, so the same string works on `direct()`.
+
+| `vertex()` option | Default |
+|---|---|
+| `project` | `GOOGLE_CLOUD_PROJECT` |
+| `location` | `global` |
+| `regions` | `location`, for every publisher; e.g. `{ anthropic: 'us-east5' }` |
+
+## Check it before a run
+
+```bash
+npx reeval doctor --online
+```
+
+Offline, doctor names the project and where tokens come from. This is the example's `vertex` profile, before the login:
+
+```text
+✓ gateway    gateway vertex in profile vertex: claude-code:claude-haiku-4-5-20251001 → vertex
+✓ vertex     vertex() in profile vertex: project my-project (from GOOGLE_CLOUD_PROJECT), global
+! vertex     no Application Default Credentials found (fine on a Google Cloud VM, whose metadata server serves them)
+             fix: run gcloud auth application-default login, or set GOOGLE_APPLICATION_CREDENTIALS
+```
+
+With `--online`, doctor also mints a token and names its account, and checks the Vertex AI API is enabled. Then it asks Vertex for a free token count on each model the config sends there: the harness's, the judge's and `analysis.model`. A model the project can't call in that region gets a warning with Vertex's own message, and the fix: enable it in Model Garden, or set `regions` to a region that serves it.
+
+## Run it
+
+```bash
+npx reeval image build
+npx reeval run
+```
+
+```text
+eval                                                           harnesses  variants  runs  attempts  notes
+with-vertex-gateway.eval.ts › adds a tested multiply function  1          —         1     1         gateway: claude-code:claude-haiku-4-5-20251001 → vertex
+```
+
+reeval mints the token on the host and the egress gateway adds it to the agent's model calls only, so it never enters the sandbox. Each judgement's `gateway` field in the record says `vertex`.
+
+<Warning>
+  Without a project in `GOOGLE_CLOUD_PROJECT` or `vertex({ project })`, the plan stops with exit 2: `vertex() has no project: set vertex({ project: '<id>' }) or GOOGLE_CLOUD_PROJECT`.
+</Warning>
+
+## Variations
+
+| Variation | How |
+|---|---|
+| Other agents on their own keys | `gateway: [vertex(), direct()]`: Claude Code on Vertex, and Cursor or Codex, which Vertex can't serve, on their keys |
+| A Gemini judge | `judge: { model: 'google/gemini-3.8-flash' }`, called on Vertex in `regions.google` |
+| A Gemini agent | `goose({ model: 'gemini-3.8-flash' })`, or Antigravity, OpenCode or pi, on the same list. Each calls Vertex in `regions.google` with a made-up service account reeval writes for it, and the real token stays on the host |
+| One profile on Vertex | Put `gateway: [vertex()]` in a profile, and run it with `--profile` |
+| Another project per profile | `vertex({ project: 'billing-b' })` in that profile's list |
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Gateways" icon="route" href="/reference/gateway">
+    Every gateway, fallback and pin.
+  </Card>
+  <Card title="reeval doctor" icon="stethoscope" href="/reference/cli/doctor">
+    Every check and what it needs.
+  </Card>
+</CardGroup>

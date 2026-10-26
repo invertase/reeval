@@ -282,6 +282,57 @@ export const VERTEX_ROUTES: Partial<
   opencode: gemini(['mcp.exa.ai'], () => [], openCodeVertexId),
 }
 
+/** The publisher whose models each harness on Vertex calls, as `reeval doctor` probes them. */
+const VERTEX_HARNESS_PUBLISHERS: Partial<Record<AgentKind, VertexPublisher>> = {
+  'claude-code': 'anthropic',
+  antigravity: 'google',
+  goose: 'google',
+  pi: 'google',
+  opencode: 'google',
+}
+
+/**
+ * The model a harness on Vertex calls, as `publisher/id`, or undefined for one reeval doesn't
+ * route there. Antigravity's `-low`/`-medium`/`-high` ids name an effort the CLI sends beside the
+ * model, so the id it calls has none.
+ */
+export function vertexHarnessModel(kind: AgentKind, model: string): string | undefined {
+  const publisher = VERTEX_HARNESS_PUBLISHERS[kind]
+  if (!publisher) return undefined
+  const id = model.replace(/^(?:google|google-vertex|anthropic)\//, '')
+  return `${publisher}/${kind === 'antigravity' ? id.replace(/-(?:low|medium|high)$/, '') : id}`
+}
+
+/**
+ * A free request that answers whether the project can call `model` (`anthropic/<id>` or
+ * `google/<id>`) in its publisher's region: Vertex's token count, which reaches the model the
+ * way a model call does and bills nothing.
+ */
+export function vertexModelProbe(
+  model: string,
+  settings: VertexSettings,
+): { id: string; region: string; url: string; body: unknown } {
+  const publisher = model.slice(0, model.indexOf('/')) as VertexPublisher
+  const region = vertexRegion(settings, publisher)
+  const base = `https://${vertexHost(region)}/v1/projects/${encodeURIComponent(settings.project)}/locations/${region}/publishers/${publisher}/models`
+  const id = model.slice(publisher.length + 1)
+  if (publisher === 'anthropic') {
+    const claude = vertexClaudeId(id)
+    return {
+      id: claude,
+      region,
+      url: `${base}/count-tokens:rawPredict`,
+      body: { model: claude, messages: [{ role: 'user', content: 'ping' }] },
+    }
+  }
+  return {
+    id,
+    region,
+    url: `${base}/${id}:countTokens`,
+    body: { contents: [{ role: 'user', parts: [{ text: 'ping' }] }] },
+  }
+}
+
 /** Why Vertex AI can't serve an agent, beyond the ones reeval doesn't route there yet. */
 export const VERTEX_REFUSALS: Partial<Record<AgentKind, string>> = {
   cursor: "Cursor's agent only calls Cursor's own API",

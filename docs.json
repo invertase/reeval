@@ -132,6 +132,7 @@
         { "title": "Compare agents", "href": "/recipes/compare-agents" },
         { "title": "Python, Flutter and more", "href": "/recipes/toolchains" },
         { "title": "Offline evals", "href": "/recipes/offline" },
+        { "title": "Run on Vertex AI", "href": "/recipes/vertex" },
         { "title": "Start from an existing codebase", "href": "/recipes/existing-codebase" },
         { "title": "Capturing UI", "href": "/recipes/capturing-ui" }
       ]
