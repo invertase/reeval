@@ -80,44 +80,39 @@
       "group": "Evaluation",
       "pages": [
         {
-          "group": "Evaluations",
-          "pages": [
-            {
-              "title": "Write an evaluation",
-              "href": "/write"
-            },
-            {
-              "title": "Assertions",
-              "href": "/write/assertions"
-            },
-            {
-              "title": "Judgments",
-              "href": "/write/judgments"
-            },
-            {
-              "title": "Questions",
-              "href": "/write/questions"
-            },
-            {
-              "title": "Turns",
-              "href": "/write/turns"
-            },
-            {
-              "title": "Apps",
-              "href": "/write/apps"
-            },
-            {
-              "title": "Cases",
-              "href": "/write/cases"
-            },
-            {
-              "title": "Groups",
-              "href": "/write/groups"
-            }
-          ]
+          "title": "Evaluation files",
+          "href": "/write"
         },
         {
-          "group": "Run it",
+          "title": "Assertions",
+          "href": "/write/assertions"
+        },
+        {
+          "title": "Judgments",
+          "href": "/write/judgments"
+        },
+        {
+          "title": "Questions",
+          "href": "/write/questions"
+        },
+        {
+          "title": "Turns",
+          "href": "/write/turns"
+        },
+        {
+          "title": "Apps",
+          "href": "/write/apps"
+        },
+        {
+          "title": "Cases",
+          "href": "/write/cases"
+        },
+        {
+          "title": "Groups",
+          "href": "/write/groups"
+        },
+        {
+          "group": "Runs",
           "pages": [
             {
               "title": "Running",
@@ -191,10 +186,6 @@
           "group": "Agent",
           "pages": [
             {
-              "title": "Agent",
-              "href": "/agents"
-            },
-            {
               "title": "Model",
               "href": "/agents/model"
             },
@@ -202,15 +193,12 @@
               "title": "Gateways",
               "href": "/agents/gateways"
             }
-          ]
+          ],
+          "href": "/agents"
         },
         {
           "group": "Environment",
           "pages": [
-            {
-              "title": "Environment",
-              "href": "/environments"
-            },
             {
               "title": "Files",
               "href": "/environments/files"
@@ -247,7 +235,8 @@
               "title": "Egress",
               "href": "/environments/egress"
             }
-          ]
+          ],
+          "href": "/environments"
         },
         {
           "group": "Integrations",
@@ -318,10 +307,6 @@
               "group": "Sandboxes",
               "pages": [
                 {
-                  "title": "Choose a sandbox",
-                  "href": "/integrations/sandboxes"
-                },
-                {
                   "title": "Docker",
                   "href": "/integrations/sandboxes/docker"
                 },
@@ -329,7 +314,8 @@
                   "title": "Podman",
                   "href": "/integrations/sandboxes/podman"
                 }
-              ]
+              ],
+              "href": "/integrations/sandboxes"
             }
           ]
         }
