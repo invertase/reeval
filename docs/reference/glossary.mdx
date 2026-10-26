@@ -1,11 +1,11 @@
 ---
 title: "Glossary of terms"
-description: "Look up each core noun, and the distinct terms that share a word."
+description: "Agents, attempts, assertions, judgments, lift, and the other terms in a reeval run."
 ---
 
 ## Agent
 
-An agent is a harness plus its model, named in the `harness` option, such as `claude-code:claude-sonnet-5`. For more information about an agent, see [Core concepts](/core-concepts#agent).
+An agent is a harness plus its model, named in the `harness` option, such as `claude-code:claude-sonnet-5`. For more information about an agent, see [Configuration](/core-concepts#configuration).
 
 ## Analysis
 
@@ -13,11 +13,11 @@ An analysis is what a language model writes about a run: answers and insights. `
 
 ## Answers
 
-Answers are what an evaluation's questions found, such as `won 3 of 4` for each side of a pairwise question. For more information about answers, see [Core concepts](/core-concepts#answers).
+Answers are what an evaluation's questions found, such as `won 3 of 4` for each side of a pairwise question. For more information about answers, see [Results](/core-concepts#results).
 
 ## Artifacts
 
-Artifacts are what the agent leaves in the workspace: the files it wrote, the diff, and screenshots from `c.capture()`. For more information about artifacts, see [Core concepts](/core-concepts#artifacts).
+Artifacts are what the agent leaves in the workspace: the files it wrote, the diff, and screenshots from `c.capture()`. For more information about artifacts, see [Evaluation](/core-concepts#evaluation).
 
 ## Assertion
 
@@ -25,7 +25,7 @@ An assertion is a named, deterministic pass or fail on what an attempt produced,
 
 ## Attempt
 
-An attempt is one execution of a cell in a fresh sandbox, and its outcome is pass, fail, infra error, or skipped. For more information about an attempt, see [Core concepts](/core-concepts#attempt).
+An attempt is one execution of a cell in a fresh sandbox, and its outcome is pass, fail, infra error, or skipped. For more information about an attempt, see [Configuration](/core-concepts#configuration).
 
 ## Baseline
 
@@ -33,7 +33,7 @@ The baseline is a comparison's environment without the change, and each variant 
 
 ## Cell
 
-A cell is one agent, one environment, and one sandbox of an evaluation. In a comparison, the baseline and each variant are separate cells. For more information about a cell, see [Core concepts](/core-concepts#cell).
+A cell is one agent, one environment, and one sandbox of an evaluation. In a comparison, the baseline and each variant are separate cells. For more information about a cell, see [Configuration](/core-concepts#configuration).
 
 ## Comparison
 
@@ -65,7 +65,7 @@ Lift is a variant against the baseline: the difference in pass rate on the same 
 
 ## Measures
 
-The measures are pass rate, tokens, tool calls, turns, cost, and time. For more information about each measure, see [Core concepts](/core-concepts#measures).
+The measures are pass rate, tokens, tool calls, turns, cost, and time. For more information about each measure, see [Results](/core-concepts#results).
 
 ## Past runs
 
@@ -77,7 +77,7 @@ A profile is a named preset that sizes a run, and the run's record stores the pr
 
 ## Question
 
-A question in `questions` reads across attempts after they end, and never changes an outcome. For more information about a question, see [Core concepts](/core-concepts#question).
+A question in `questions` reads across attempts after they end, and never changes an outcome. For more information about a question, see [Evaluation](/core-concepts#evaluation).
 
 ## Record
 
@@ -105,17 +105,17 @@ A turn is the agent's reply to one `c.send()` call. The turn holds the final mes
 
 ## Workspace
 
-The workspace is the directory in the sandbox where the agent works, and grading reads it. For more information about a workspace, see [Core concepts](/core-concepts#workspace).
+The workspace is the directory in the sandbox where the agent works, and grading reads it. For more information about a workspace, see [Evaluation](/core-concepts#evaluation).
 
 ## Shared words
 
 ### evaluation
 
-**Evaluation** is `evaluate()`. The **evaluation model** is a `typesafe-ai/*` judge model, which only scores yes or no, as the error strings name it. A **language model** writes text. reeval calling itself an evaluation harness is not a glossary term.
+**Evaluation** is `evaluate()`. The **evaluation model** is a `typesafe-ai/*` judge model, which only scores yes or no, as the error strings name it. A **language model** writes text.
 
 ### compare
 
-**Compare** is the `compare` option. The **run diff** is `reeval compare`, and the Run history `compare` tool, which diffs two runs. The `reeval/view` `compare` helper is not documented.
+**Compare** is the `compare` option. The **run diff** is `reeval compare`, and the Run history `compare` tool, which diffs two runs.
 
 ### effort
 

@@ -1,128 +1,41 @@
 ---
 title: "Core concepts"
-description: "Understand the nouns reeval uses to evaluate a coding agent."
+description: "A reeval run multiplies agents, environments, and attempts, then grades each sandbox and measures the result."
 ---
 
-## Agent
+## Configuration
 
-An agent is a harness plus its model, such as `claude-code:claude-sonnet-5`. The `harness` option lists the [agents](/harnesses) an evaluation runs on, and reeval starts each one in its own sandbox.
+```ts title="with-library-skill-lift.eval.ts"
+environment: page,
+compare: { variants: [withSkill] },
+harness: [
+  claudeCode({ model: 'claude-sonnet-5' }),
+  codex({ model: 'gpt-5.6-luna' }),
+],
+runs: 4,
+```
 
-## Environment
-
-An environment is what the agent gets in an attempt, such as skills, Model Context Protocol (MCP) servers, rules, files, setup commands, variables, and secrets. In a comparison, each [environment](/environments) is the baseline or a variant.
-
-## Attempt
-
-An attempt is one try by one agent in one environment, and it ends with an outcome of pass, fail, infra error, cancelled, or skipped. Agents are non-deterministic, so one attempt proves little, and the [`runs` option](/reference/options#runs) sets how many attempts each agent and environment get.
-
-## Sandbox
-
-A sandbox is the container one attempt runs in, so a run spawns agents × environments × attempts sandboxes. It holds the agent, the environment, the task, and the workspace, and the `sandbox` option picks the [sandbox](/sandboxes) runtime.
-
-## Task
-
-The task is what the agent is asked to do, sent with `c.send(prompt)` in the [evaluation](/evals/evaluate)'s body. One task can take several prompts.
-
-## Workspace
-
-The workspace is the directory in the sandbox where the agent works. It starts from the environment's files or [repository](/environments/workspaces), and grading reads it after the agent finishes.
-
-### Artifacts
-
-Artifacts are what the agent leaves in the workspace: the files it wrote, the diff, and any screenshots from `c.capture()`.
-
-### Transcript
-
-A transcript is every message and tool call of an attempt, in order, saved in the `transcript.jsonl` file with the run. When an attempt fails, the [transcript](/results/debugging#read-a-transcript) shows what the agent did.
-
-## Assertion
-
-An assertion is a deterministic check written with `expect`, on a file, a command's result, a string, or a tool call. An attempt passes when all of its [assertions](/evals/checks) pass.
-
-## Judgment
-
-A judgment is an LLM verdict from `c.judge()` on a yes or no question about the agent's work. Wrapped as `expect(await c.judge(…)).toPass()`, a [judgment](/evals/judges) counts toward the attempt's outcome like an assertion.
-
-## Question
-
-A question reads across attempts after they end, set in the [`questions` option](/reference/options#questions). A pairwise question asks which of two attempts did better. Questions never change an outcome or the exit code.
-
-## Measures
-
-Six measures describe how an agent did in an environment across its attempts. The effort table prints the medians of tool calls, time, and tokens.
-
-### Pass rate
-
-Pass rate is the attempts that passed out of those counted, printed as `3 of 4`.
-
-### Tokens
-
-Tokens are the input and output tokens the agent used, where its harness reports them.
-
-### Tool calls
-
-Tool calls are how many tools the agent called in an attempt, printed as `tools`.
-
-### Turns
-
-A turn is the agent's reply to one `c.send()`, and an attempt can have several [turns](/evals/turns). Each turn records its final message, token usage, the model that served it, and the workspace diff.
-
-### Cost
-
-Cost is what the attempts' model calls cost. `reeval run --dry-run` estimates it from model prices, and a gateway that reports cost has it recorded.
-
-### Time
-
-Time is how long the agent took on an attempt, printed as `time`.
-
-## Comparison
-
-A [comparison](/evals/compare) runs one evaluation, through the `compare` option, on a baseline without your change and one or more variants with it.
-
-### Lift
-
-Lift is a variant against the baseline: the difference in pass rate on the same agent. Each variant reads `helped` or `made it worse` when the difference is [clear of chance](/evals/statistics), and `can't tell yet` below four counted attempts a side or when it's too close to call.
-
-### Past runs
-
-Past runs compare this run against earlier ones. `reeval compare` diffs two recorded runs and names each evaluation that [regressed](/results/regressions) or was fixed.
-
-## Analysis
-
-Analysis is what a language model writes about a run. It needs an [analysis model](/results/analysis#set-an-analysis-model) and never changes an outcome or the exit code.
-
-### Answers
-
-Answers are what the questions found, such as `won 3 of 4` for each side of a pairwise question.
-
-### Insights
-
-Insights are what the agent did and why, not only whether it passed. Beside them, Remarks flag problems with the evaluations themselves.
+A [run](/reference/glossary#run) multiplies [agents](/reference/glossary#agent), [environments](/reference/glossary#environment), and [attempts](/reference/glossary#attempt) into [sandboxes](/reference/glossary#sandbox), one sandbox per attempt. The [`harness`](/reference/glossary#harness) option names the agents, and in a comparison the environments are the [baseline](/reference/glossary#baseline) and its variants. The [`runs`](/reference/options#runs) option sets the attempts.
 
 ## Evaluation
 
-An evaluation is one `evaluate()` call in a `*.eval.ts` file beside the skill, docs, or tool it tests. It gives the agent a task and grades the workspace with assertions and judgments.
+```ts title="with-library-skill-lift.eval.ts"
+await c.send(
+  "Give index.html Anthropic's look: write styles.css with Anthropic's " +
+    'brand colors and fonts, and link it from index.html.',
+)
 
-## Run
+await expect.soft(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
+```
 
-A run is one `reeval run` command and every attempt it starts, across every evaluation, agent, and environment. Each case repeats those attempts.
+Each [evaluation](/reference/glossary#evaluation) puts the agent, the environment, and the [task](/reference/glossary#task) in one sandbox. The [workspace](/reference/glossary#workspace) holds the [artifacts](/reference/glossary#artifacts) and the [transcript](/reference/glossary#transcript), and grading reads that workspace. [Assertions](/reference/glossary#assertion) and [judgments](/reference/glossary#judgment) grade one attempt, and [questions](/reference/glossary#question) read across attempts.
 
-## Harness
+## Results
 
-A harness is the coding agent's program, such as Claude Code or Codex. The `harness` option names it with a model, which makes an [agent](#agent).
+```text
+  effort           tools  time
+  math             1      1.0s
+  project-layout   1      <0.1s
+```
 
-## Cell
-
-A cell is one agent, environment, and sandbox of an evaluation, keyed like `claude-code:claude-sonnet-5/-/docker`, where `-` means no environment. Each cell's [gate](/reference/options#gate) turns its attempts into its outcome, so the baseline and each variant pass or fail separately.
-
-## Egress
-
-Egress is the hosts a sandbox can reach. A restricted policy leaves only the [gateway](/environments/egress).
-
-## Record
-
-A record is the saved result of a run, with every attempt's outcome, assertions, judgments, token usage, transcript, and diff. A scratch record lives in the `.reeval/runs/` directory, whereas [recording](/runs/recording) saves selected records beside the code they ran on.
-
-## Profile
-
-A profile is a named preset in the config's `profiles` that sizes a run. The `pr` and `nightly` [profiles](/runs/profiles) written by the `reeval init` command are examples, and each run records its selected profile.
+The run reports six [measures](/reference/glossary#measures): pass rate, tokens, tool calls, [turns](/reference/glossary#turn), cost, and time. A [comparison](/reference/glossary#comparison) reads [lift](/reference/glossary#lift) as the variant against the baseline, and [past runs](/reference/glossary#past-runs) as this run against earlier ones. [Analysis](/reference/glossary#analysis) reports the [answers](/reference/glossary#answers), then the [insights](/reference/glossary#insights).

@@ -67,7 +67,7 @@ evaluate(
 )
 ```
 
-The prompt doesn't name the brand's color or fonts, so `brand orange` and `brand fonts` pass only when the harness knows them. `runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect stays `can't tell yet`. For more information about how reeval reaches the effect, see [Comparison](/core-concepts#comparison).
+The prompt doesn't name the brand's color or fonts, so `brand orange` and `brand fonts` pass only when the harness knows them. `runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect stays `can't tell yet`. For more information about how reeval reaches the effect, see [Comparison](/reference/glossary#comparison).
 
 To also check that the variant loaded the skill, guard `toHaveCalledSkill` with `c.attempt.cell.role === 'variant'`, since the baseline has no skill to load ([Give the agent skills](/environments/skills#check-the-agent-used-the-skill)).
 
