@@ -53,7 +53,7 @@ For more information about that interval, see [How reeval decides a change helpe
 
 For the baseline and each variant, a pairwise question prints `won 3 of 4`. The outcome word does not change.
 
-## Read the assertion and effort tables
+## Read the assertion and `effort` tables
 
 The assertion table, headed `check`, has one column per cell and lists assertions that failed or did not run in some cell. Passed assertions print as `+N more passed`. `couldn't check` means the assertion raised an error.
 
@@ -68,9 +68,9 @@ The assertions in a comparison look like this:
   +1 more passed
 ```
 
-The `effort` table lists `tools` and `time`, plus `tokens` when a cell reported them. Each number is the median. The `effort` table prints when there are at least four counted attempts and either effort differs between cells or the evaluation failed.
+The `effort` table lists `tools` and `time`, plus `tokens` when a cell reported them. Each number is the median. The `effort` table prints when there are at least four counted attempts and either the tokens, tool calls, or time differ between cells or the evaluation failed.
 
-The effort rows look like this, for two arms that pass alike:
+The tool calls and time look like this, for two arms that pass alike:
 
 ```text
   effort           tools  time
