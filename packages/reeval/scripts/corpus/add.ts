@@ -3,8 +3,9 @@
 // against files that really have today's shape.
 //
 //   pnpm build && pnpm --filter reeval corpus:add <name> [--note "why"]
-//     records scripts/corpus/project (the fake harness: a compare, a pooled evaluate.each, judges, a failure, an infra
-//     error, todo and skipped evals, a budget-stopped run and a saved analysis) with this build
+//     records scripts/corpus/project (the fake harness: a compare with questions, a pooled evaluate.each, judges, a
+//     failure, an infra error, todo and skipped evals, and a saved analysis) with this build, one run of
+//     about 3,000 lines
 //
 //   pnpm --filter reeval corpus:add <name> --from <project> [--from <project>…] [<runId>…] [--note "why"]
 //     copies runs (every one, or those named), their artifacts and the evals they ran from other
@@ -86,11 +87,8 @@ function recordRecipe(): string {
   git(dir, 'init', '-q')
   git(dir, 'add', '-A')
   git(dir, 'commit', '-qm', 'corpus recipe')
-  reeval(dir, ['run', 'greet', 'skill', 'cases', '--record'])
+  reeval(dir, ['run', '--record'])
   const [first] = runsIn(dir)
-  git(dir, 'add', '-A')
-  git(dir, 'commit', '-qm', 'first run')
-  reeval(dir, ['run', 'slow', '--profile', 'budget', '--concurrency', '1', '--record'])
   reeval(dir, ['analyze', first as string, '--save'])
   return dir
 }

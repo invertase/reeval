@@ -1,4 +1,5 @@
 import { evaluate, expect } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
 
 evaluate('writes greet.js', async (c) => {
   const turn = await c.send('Write greet.js exporting greet(name).')
@@ -6,15 +7,20 @@ evaluate('writes greet.js', async (c) => {
   expect(await c.judge('Does greet.js export greet?')).toPass()
 })
 
-evaluate('fails its check', async (c) => {
+// A soft check that fails, then a judge that fails, in one attempt.
+evaluate('fails its check and its judge', async (c) => {
   await c.send('Write greet.js that greets in French.')
-  await expect(c.exec('grep -q Bonjour greet.js')).toSucceed()
-})
-
-evaluate('fails its judge', async (c) => {
-  await c.send('Write greet.js.')
+  await expect.soft(c.exec('grep -q Bonjour greet.js')).toSucceed()
   expect(await c.judge('Is greet.js perfect?', { threshold: 0.95 })).toPass()
 })
+
+evaluate(
+  'never starts',
+  { harness: fakeHarness({ id: 'broken', failWith: 'the fake sandbox fell over' }) },
+  async (c) => {
+    await c.send('Write greet.js.')
+  },
+)
 
 evaluate.skip('is skipped for now', async (c) => {
   await c.send('Write nothing.')
