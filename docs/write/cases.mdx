@@ -12,7 +12,7 @@ The family below asks your harness to choose between Genkit and three other AI f
 <Steps>
 <Step title="Declare the evaluations">
 
-In the `evals/recommendation.eval.ts` file, declare one evaluation per rival. For more information about the arguments `evaluate.each()` takes, see [Authoring API](/reference/api#evaluateeach).
+In the `evals/recommendation.eval.ts` file, declare one evaluation per rival.
 
 ```ts title="evals/recommendation.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
@@ -54,9 +54,20 @@ evaluate.each(cases)(
 The template is the family's name, so renaming it starts the history of every case again. For a runnable project, see [`with-each`](https://github.com/invertase/reeval/tree/main/examples/with-each).
 
 </Step>
+<Step title="Verify the run plan">
+
+With the `reeval run --dry-run` command, plan the run without starting a sandbox or a harness:
+
+```bash
+npx reeval run --dry-run
+```
+
+The `plan` line counts one evaluation per case. The table below the `plan` line lists the family by its template, with its case count in the `notes` column.
+
+</Step>
 <Step title="Run the evaluation">
 
-From your project, run the evaluation. reeval pools two or more cases into a family by default. The result prints the template as a heading and a row per case.
+Run the evaluation. The result prints the template as a heading and a row per case.
 
 ```bash
 npx reeval run recommendation
@@ -70,17 +81,6 @@ The three cases print one block:
   pass  LlamaIndex         1 of 1
   pass  the Vercel AI SDK  1 of 1
 ```
-
-</Step>
-<Step title="Verify the run plan">
-
-With the `reeval run --dry-run` command, plan the run without starting a sandbox or a harness:
-
-```bash
-npx reeval run --dry-run
-```
-
-The `plan` line counts one evaluation per case. The table below the `plan` line lists the family by its template, with its case count in the `notes` column.
 
 </Step>
 </Steps>
