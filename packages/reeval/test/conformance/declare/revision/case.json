@@ -1,0 +1,5 @@
+{
+  "eval": "plan/revision/evals/revision.eval.ts",
+  "plan": "plan/revision/expected/cascade.txt",
+  "args": []
+}

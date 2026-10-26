@@ -29,6 +29,7 @@ declareTree(
         },
       },
       body: 'b1',
+      source: { body: '0'.repeat(64) },
     },
   ] as never,
   () => async () => {},

@@ -132,6 +132,17 @@
             "type": "string"
           }
         },
+        "revision": {
+          "description": "The eval's `revision`, as the cascade resolved it; unset when no level sets one.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
         "sandbox": {
           "$ref": "#/$defs/SandboxDescriptor"
         },
@@ -162,6 +173,10 @@
           "description": "Why this attempt does not run, e.g. it already completed in a resumed run.",
           "type": "string"
         },
+        "source": {
+          "description": "Hashes of the eval's own source: what the `sources` fingerprint part covers but `revision`.",
+          "$ref": "#/$defs/EvalSource"
+        },
         "tags": {
           "type": "array",
           "items": {
@@ -187,6 +202,7 @@
         "sandbox",
         "secretVars",
         "setBy",
+        "source",
         "tags"
       ]
     },
@@ -699,6 +715,25 @@
         "warnings",
         "workspaces"
       ]
+    },
+    "EvalSource": {
+      "description": "An eval's own source as hashes: its body and case data as declared, and its options and its enclosing groups' in canonical form (`tags`, `revision` and `gate` aside).",
+      "type": "object",
+      "properties": {
+        "body": {
+          "description": "sha256 of the body function's source text.",
+          "type": "string"
+        },
+        "case": {
+          "description": "sha256 of the case's data; set on each case of an `evaluate.each`.",
+          "type": "string"
+        },
+        "options": {
+          "description": "sha256 of the canonical options.",
+          "type": "string"
+        }
+      },
+      "required": ["body", "options"]
     },
     "FakeHarnessDescriptor": {
       "description": "A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`.",

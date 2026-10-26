@@ -1,11 +1,12 @@
 """reeval's declare/ goldens: each `tests/declare/<case>.eval.py` mirrors one golden's TypeScript
-eval file, and loading it must record the golden's tree."""
+eval file, and loading it must record the golden's tree, with each body's source hash its own."""
 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -27,6 +28,11 @@ def _bodies(node: Any, found: list[str]) -> Any:
         if key == "body":
             found.append(str(value))  # pyright: ignore[reportUnknownArgumentType]
             out[key] = "<body>"
+        elif key == "source":
+            # The body's source text is each language's own; case data is canonical JSON.
+            source = cast(dict[str, Any], value)
+            assert re.fullmatch(r"[0-9a-f]{64}", source["body"])
+            out[key] = {**source, "body": "<sha256>"}
         elif key == "children":
             out[key] = _bodies(value, found)
         else:

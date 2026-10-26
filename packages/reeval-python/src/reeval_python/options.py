@@ -49,6 +49,9 @@ class EvalOptions(TypedDict, total=False):
     """Asked of each attempt, or between attempts with `across`; `[]` clears the group's."""
     runs: int
     sandbox: DockerSandbox | Mapping[str, Any]
+    revision: int | str
+    """The eval's version, in its fingerprint: bump it when a helper, a constant outside the body
+    or a fixture changes what it measures. A group's applies to evals inside that set none."""
     tags: Sequence[str]
     timeout: timedelta | float
     """Per attempt, in seconds or as a timedelta."""

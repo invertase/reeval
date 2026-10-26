@@ -20,6 +20,7 @@ import {
   declaredGroupSchema,
   declaredModeSchema,
   declaredNodeSchema,
+  declaredSourceSchema,
   declaredTodoSchema,
   evalOptionsDataSchema,
 } from './declaration.ts'
@@ -137,6 +138,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   DeclaredGroup: declaredGroupSchema,
   DeclaredEval: declaredEvalSchema,
   DeclaredFamily: declaredFamilySchema,
+  DeclaredSource: declaredSourceSchema,
   DeclaredTodo: declaredTodoSchema,
   DeclaredMode: declaredModeSchema,
   ReevalConfigData: reevalConfigDataSchema,

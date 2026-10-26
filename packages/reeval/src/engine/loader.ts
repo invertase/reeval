@@ -14,8 +14,12 @@ export class TsconfigError extends Error {
   override name = 'TsconfigError'
 }
 
-/** Each file jiti transformed: its source map, and how far jiti's wrapper shifts line 1. */
-const transformed = new Map<string, { map: DecodedMap; shift: number }>()
+/**
+ * Each file jiti transformed: its source map, how far jiti's wrapper shifts line 1, and the code
+ * before and after.
+ */
+type Transformed = { map: DecodedMap; shift: number; source: string; code: string }
+const transformed = new Map<string, Transformed>()
 
 const INLINE_MAP =
   /\/\/# sourceMappingURL=data:application\/json;(?:charset=utf-8;)?base64,([A-Za-z0-9+/=]+)\s*$/
@@ -36,7 +40,12 @@ export async function loadEvalFile(file: string, root: string): Promise<unknown>
         const shift =
           `(${opts.async ? 'async ' : ''}function (exports, require, module, __filename, __dirname, jitiImport, jitiESMResolve) { `
             .length
-        transformed.set(opts.filename, { map: new DecodedMap(map, opts.filename), shift })
+        transformed.set(opts.filename, {
+          map: new DecodedMap(map, opts.filename),
+          shift,
+          source: opts.source,
+          code,
+        })
       }
       return { code }
     },
@@ -92,6 +101,38 @@ export function originalStack(stack: string): string {
       return `${before}${file}:${original}:${callee(file, original, at.column as number) + 1}${after}`
     },
   )
+}
+
+/**
+ * A function's text as its file has it, from its `toString`, which is the transformed code: there
+ * Babel names each import's binding after the imports around it (`_helpers` is `_helpers2` once
+ * another `helpers` module is imported first). Looks in `file` first, then in every other
+ * transformed file; undefined when none holds the text.
+ */
+export function originalText(text: string, file?: string): string | undefined {
+  const preferred = file === undefined ? [] : [transformed.get(file)]
+  for (const loaded of [...preferred, ...transformed.values()]) {
+    const at = loaded?.code.indexOf(text) ?? -1
+    if (!loaded || at < 0) continue
+    // The source map marks where each token starts, and a token's text is copied as it was, so
+    // the last token ends as far past its start as it does in the code.
+    const last = at + text.length - 1
+    let tokenStart = last
+    const end = originalOffset(loaded, last)
+    while (tokenStart > at && originalOffset(loaded, tokenStart - 1) === end) tokenStart--
+    return loaded.source.slice(originalOffset(loaded, at), end + last - tokenStart + 1)
+  }
+  return undefined
+}
+
+/** The offset in the file's source of the token that the code at `index` belongs to. */
+function originalOffset(loaded: Transformed, index: number): number {
+  const lines = loaded.code.slice(0, index).split('\n')
+  const column = (lines.at(-1) as string).length
+  const at = getOriginalPosition(loaded.map, { line: lines.length, column })
+  /* c8 ignore next 2 -- Babel maps the first token of every line it emits from the source */
+  const sourceLines = loaded.source.split('\n').slice(0, (at?.line ?? 1) - 1)
+  return sourceLines.reduce((n, line) => n + line.length + 1, 0) + (at?.column ?? 0)
 }
 
 /**

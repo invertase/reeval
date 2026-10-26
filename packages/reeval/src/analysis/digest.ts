@@ -155,11 +155,13 @@ function evalChangedLift(): string {
   return 'not comparable: the eval changed'
 }
 
+/** What the eval's own source is keyed on: `source` and `revision`, else (older records) its files. */
 function sourcesKey(e: EvalEntry): string {
+  if (e.source) return JSON.stringify([e.source, e.revision ?? null])
   return JSON.stringify(e.sources.map((s) => [s.path, s.sha256]))
 }
 
-/** The eval's sources, or the sources part of its fingerprint, differ across the two runs. */
+/** The eval's own source, or the sources part of its fingerprint, differs across the two runs. */
 function evalSourcesChanged(base: EvalEntry, head: EvalEntry): boolean {
   if (sourcesKey(base) !== sourcesKey(head)) return true
   const prev = new Map(base.cells.map((c) => [c.key, c.fingerprintParts.sources]))

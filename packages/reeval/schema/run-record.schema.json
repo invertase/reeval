@@ -1434,12 +1434,27 @@
             }
           ]
         },
+        "revision": {
+          "description": "The eval's `revision`, part of the `sources` fingerprint part; unset when it sets none.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
         "slug": {
           "description": "Directory name inside the artifact directory, from `key`.",
           "type": "string"
         },
+        "source": {
+          "description": "Hashes of what the `sources` fingerprint part covers but `revision`: the eval's body, its case data and its options with its groups'. Unset on records from before it.",
+          "$ref": "#/$defs/EvalSource"
+        },
         "sources": {
-          "description": "The eval file and every local file it imports, directly or not, by content hash.",
+          "description": "The eval file, by content hash: where the eval lives. Records from before `source` also list the local files it imported, and were fingerprinted over them.",
           "type": "array",
           "items": {
             "type": "object",
@@ -1481,6 +1496,25 @@
         "tags",
         "todo"
       ]
+    },
+    "EvalSource": {
+      "description": "An eval's own source as hashes: its body and case data as declared, and its options and its enclosing groups' in canonical form (`tags`, `revision` and `gate` aside).",
+      "type": "object",
+      "properties": {
+        "body": {
+          "description": "sha256 of the body function's source text.",
+          "type": "string"
+        },
+        "case": {
+          "description": "sha256 of the case's data; set on each case of an `evaluate.each`.",
+          "type": "string"
+        },
+        "options": {
+          "description": "sha256 of the canonical options.",
+          "type": "string"
+        }
+      },
+      "required": ["body", "options"]
     },
     "ExecTry": {
       "description": "One run of a `c.exec` command that had `retries`.",
@@ -1810,7 +1844,7 @@
           "type": "string"
         },
         "sources": {
-          "description": "Over `EvalEntry.sources`.",
+          "description": "Over `EvalEntry.source` and `EvalEntry.revision`; on records from before them, over `EvalEntry.sources`.",
           "type": "string"
         }
       },

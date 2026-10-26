@@ -7,6 +7,7 @@ import type {
   DeclaredGroup,
   DeclaredMode,
   DeclaredNode,
+  DeclaredSource,
 } from './declaration.ts'
 import {
   collectingFile,
@@ -24,6 +25,7 @@ import {
   sandboxPaths,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
+import { bodyHash, caseHash } from './eval-source.ts'
 import { evalId } from './ids.ts'
 import { isObjectLike } from './object.ts'
 import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
@@ -237,6 +239,7 @@ function register(
   name: string,
   own: EvalOptions,
   fn: EvalFn,
+  source: DeclaredSource,
   hint = '',
   family?: DeclaredFamily,
 ): void {
@@ -245,13 +248,22 @@ function register(
   checkUnique(`evaluate("${[...groups, name].join(' › ')}")`, groups, name, hint, !!family)
   const body = `b${bodies.size + 1}`
   bodies.set(body, fn)
-  declare({ type: 'eval', name, mode, options: data(own), body, ...(family ? { family } : {}) })
+  declare({
+    type: 'eval',
+    name,
+    mode,
+    options: data(own),
+    body,
+    source,
+    ...(family ? { family } : {}),
+  })
   const { tests, harnesses } = planEval(
     {
       name,
       mode,
       groups: groupStack.map(({ name, options }) => ({ name, options })),
       options: own,
+      source,
       ...(family ? { family } : {}),
     },
     { ...getRunContext(), file: collectingFile(), order: registered },
@@ -271,11 +283,18 @@ function register(
 let registered = 0
 
 const defineEval =
-  (mode: DeclaredMode): EvaluateFn =>
+  (mode: DeclaredMode, declared?: DeclaredSource): EvaluateFn =>
   (name: string, a?: EvalOptions | EvalFn, b?: EvalOptions | EvalFn) => {
     checkOnly(mode, 'evaluate')
     const [own, fn] = splitArgs<EvalFn>('evaluate', name, a, b)
-    register(mode, name, withPaths(own, `evaluate("${name}")`), fn)
+    const where = `evaluate("${name}")`
+    register(
+      mode,
+      name,
+      withPaths(own, where),
+      fn,
+      declared ?? { body: bodyHash(fn, where, collectingFile()) },
+    )
   }
 
 /** `$key` is a property of the case, `%s` the case itself, `%#` its index. */
@@ -334,9 +353,12 @@ const evalEach =
     const own = withPaths(written, `evaluate.each("${name}")`)
     const hint = ` For evaluate.each, put $key, %s or %# in the name ("${name}") so each case's name differs.`
     const pooled = pool && cases.length >= 2
+    const file = collectingFile()
+    const body = bodyHash(fn, `evaluate.each("${name}")`, file)
     cases.forEach((item, i) => {
       const family = pooled ? { name, case: i, cases: cases.length } : undefined
-      register('run', formatName(name, item, i), own, (c) => fn(c, item), hint, family)
+      const source = { body, case: caseHash(item, `evaluate.each("${name}") case ${i}`, file) }
+      register('run', formatName(name, item, i), own, (c) => fn(c, item), source, hint, family)
     })
   }
 
@@ -381,9 +403,9 @@ function declareNodes(
     } else if (node.family) {
       const options = optionsFrom(node.options, `evaluate("${node.name}")`, base)
       checkOnly(node.mode, 'evaluate')
-      register(node.mode, node.name, options, bodyFor(node.body), '', node.family)
+      register(node.mode, node.name, options, bodyFor(node.body), node.source, '', node.family)
     } else
-      defineEval(node.mode)(
+      defineEval(node.mode, node.source)(
         node.name,
         optionsFrom(node.options, `evaluate("${node.name}")`, base),
         bodyFor(node.body),

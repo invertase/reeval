@@ -149,6 +149,7 @@ function relativeTree(): DeclarationTree['children'] {
     mode: 'run' as const,
     options,
     body: 'b1',
+    source: { body: '0'.repeat(64) },
     ...extra,
   })
   return [
@@ -252,7 +253,16 @@ test("a tree's missing Dockerfile is refused at its absolute path, naming the fi
   const sandbox = { kind: 'docker', dockerfile: './Dockerfile' }
   const env = { kind: 'environment', name: 'e', layers: [{ name: 'e', spec: { sandbox } }] }
   const node = (options: object) =>
-    [{ type: 'eval', name: 'e', mode: 'run', options, body: 'b1' }] as DeclarationTree['children']
+    [
+      {
+        type: 'eval',
+        name: 'e',
+        mode: 'run',
+        options,
+        body: 'b1',
+        source: { body: '0'.repeat(64) },
+      },
+    ] as DeclarationTree['children']
   const full = join(root, 'evals', 'Dockerfile')
   for (const [options, field] of [
     [{ sandbox }, 'sandbox.dockerfile'],
@@ -281,6 +291,7 @@ test('replaying a tree with compare: false is refused like evaluate', async () =
               mode: 'run',
               options: { compare: false } as never,
               body: 'b1',
+              source: { body: '0'.repeat(64) },
             },
           ],
           () => async () => {},
@@ -297,7 +308,14 @@ test('a malformed tree is refused before anything is declared', async () => {
       () =>
         declareTree(
           [
-            { type: 'eval', name: 'a', mode: 'run', options: {}, body: 'b1' },
+            {
+              type: 'eval',
+              name: 'a',
+              mode: 'run',
+              options: {},
+              body: 'b1',
+              source: { body: '0'.repeat(64) },
+            },
             { type: 'eval', name: 'b', mode: 'run', options: {}, bdy: 'b2' } as never,
           ],
           () => async () => {},
@@ -360,7 +378,15 @@ test('the tree and the collected tests fit their JSON Schemas in schema/plan/', 
   // The canary: a tree the schema rules out.
   assert.notDeepEqual(validate(schema('declaration'), { children: [{ type: 'eval' }] }), [])
   const family = { name: 'case', case: 0.5, cases: 2 }
-  const fractional = { type: 'eval', name: 'e', mode: 'run', options: {}, body: 'b', family }
+  const fractional = {
+    type: 'eval',
+    name: 'e',
+    mode: 'run',
+    options: {},
+    body: 'b',
+    source: { body: '0'.repeat(64) },
+    family,
+  }
   assert.deepEqual(validate(schema('declaration'), { children: [fractional] }), [
     'children[0].family.case: expected a whole number, got 0.5',
   ])

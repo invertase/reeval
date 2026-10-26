@@ -48,6 +48,10 @@
         }
       },
       "body": "b1",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "case": "982c2f9e71df354525a6c3c60fe5f63cbf624b59fb9539e267f5ad935c619613"
+      },
       "family": {
         "name": "pooled across %s",
         "case": 0,
@@ -102,6 +106,10 @@
         }
       },
       "body": "b2",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "case": "6ec8b2f67db1bc05685b30ff9764b89ac2833fe0eaf41eb6f2d06cd1fb064325"
+      },
       "family": {
         "name": "pooled across %s",
         "case": 1,
@@ -156,6 +164,10 @@
         }
       },
       "body": "b3",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "case": "a620174ad9fa7073e651f8796a96cc760e55fda95ce15565a053714be71f3732"
+      },
       "family": {
         "name": "pooled across %s",
         "case": 2,
@@ -208,7 +220,11 @@
           ]
         }
       },
-      "body": "b4"
+      "body": "b4",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "case": "8fa929a996ad5dbf44e72f10481e2806f0250540f8de5a3def8363ac8d0ee988"
+      }
     },
     {
       "type": "eval",
@@ -256,14 +272,22 @@
           ]
         }
       },
-      "body": "b5"
+      "body": "b5",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "case": "963c0c84a7d284287f17a4b304db1cd7051e5924681405936e5949fe8af9c7de"
+      }
     },
     {
       "type": "eval",
       "name": "one case is not a family: only",
       "mode": "run",
       "options": {},
-      "body": "b6"
+      "body": "b6",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "case": "c67679b3d00124ec167588721929982d2111cad05b1352fdb833058e9559a175"
+      }
     }
   ]
 }

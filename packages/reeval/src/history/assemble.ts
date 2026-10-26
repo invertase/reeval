@@ -11,6 +11,7 @@ import { resolveQuestionState } from '../compare/state.ts'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
 import { NO_ENVIRONMENT, profileSandbox } from '../environment.ts'
 import { isTimeout } from '../errors.ts'
+import { evalFile, sourcesPart } from '../eval-source.ts'
 import { harnessEffort, resolvedEffortOf, servedEffortOf } from '../harness/effort.ts'
 import { attemptId, attemptKey, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
@@ -49,7 +50,6 @@ import { checkVerdict } from '../view/contrasts.ts'
 import { cellOutcome, gatePart, passRateOf, worstOutcome } from '../view/gate.ts'
 import { checkTries } from '../view/judgements.ts'
 import { familiesOf } from './families.ts'
-import { type Source, traceSources } from './sources.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
   type AttemptFiles,
@@ -403,7 +403,7 @@ function judgeInputs(record: EvalRecord, diff: string | null, diffPath: string) 
 
 /** What the run's attempts have in common, gathered while their records are read. */
 class Seen {
-  readonly sources = new Map<string, Source[]>()
+  readonly sources = new Map<string, EvalEntry['sources']>()
   readonly byEval = new Map<string, EvalEntry>()
   readonly contexts = new Map<string, ContextFile>()
   readonly resolvedJudges = new Set<string>()
@@ -482,7 +482,11 @@ class Seen {
     this.resolvedHarnesses.set(cell.harness, resolved)
   }
 
-  entry(e: EngineEval, sources: Source[]): EvalEntry {
+  entry(
+    e: EngineEval,
+    sources: EvalEntry['sources'],
+    from: Pick<EvalEntry, 'source' | 'revision'>,
+  ): EvalEntry {
     let entry = this.byEval.get(e.id)
     if (!entry) {
       const key = e.id
@@ -498,6 +502,8 @@ class Seen {
         ...(e.attempt?.family ? { family: familyOf(e.attempt.family) } : {}),
         fingerprint: '',
         sources,
+        ...(from.source ? { source: from.source } : {}),
+        ...(from.revision !== undefined ? { revision: from.revision } : {}),
         outcome: 'skipped',
         todo: e.todo === true,
         passRate: null,
@@ -619,6 +625,7 @@ async function addPreviousAttempt(
       sandbox: kept.cell.split('/')[2]?.replace(/#\d+$/, '') ?? 'unknown',
     }
   const sources = before?.sources ?? []
+  const { source, revision } = e.attempt ?? before ?? {}
   const stub: EngineEval = {
     id: e.id,
     key: e.key,
@@ -634,7 +641,7 @@ async function addPreviousAttempt(
   }
   seen.add(null, cell, stub)
   seen.addKept(previous, kept, cell, beforeCell?.environmentDigest ?? null, e.attempt !== undefined)
-  const entry = seen.entry(stub, sources)
+  const entry = seen.entry(stub, sources, { source, revision })
   const created = !entry.cells.some((c) => c.key === cell.key)
   const cellRecord = cellOf(
     entry,
@@ -706,7 +713,7 @@ async function addPreviousAttempt(
     if (cellRecord.overrides.length === 0) cellRecord.overrides = [...beforeCell.overrides]
   } else {
     const parts: FingerprintParts = {
-      sources: sha256(JSON.stringify(sources)),
+      sources: sourcesPart(source, revision, sources),
       harness: sha256(JSON.stringify(e.attempt ? withoutCaps(e.attempt.harness) : null)),
       environment: cellRecord.environmentDigest,
       image: kept.imageId,
@@ -741,12 +748,14 @@ async function addAttempt(
   const record = await readRecord(join(ctx.stagingDir, 'evals', recordFileName(e.key)))
   const { outcome, error } = mergeOutcome(e, record)
   if (!seen.sources.has(e.file)) {
-    seen.sources.set(e.file, await traceSources(ctx.config.root, e.file))
+    seen.sources.set(e.file, await evalFile(ctx.config.root, e.file))
   }
   const sources = seen.sources.get(e.file) ?? []
+  const source = e.attempt?.source
+  const revision = e.attempt?.revision
   const context = record?.context ?? []
   seen.add(record, cell, e)
-  const entry = seen.entry(e, sources)
+  const entry = seen.entry(e, sources, { source, revision })
   // An attempt that ran now saw the files as they are; a kept one may have created the entry.
   if (record) entry.sources = sources
   const cellRecord = cellOf(
@@ -768,7 +777,7 @@ async function addAttempt(
   if (!cellRecord.fingerprint || record) {
     if (record) measured.add(cellRecord)
     const parts: FingerprintParts = {
-      sources: sha256(JSON.stringify(sources)),
+      sources: sourcesPart(source, revision, sources),
       harness: sha256(JSON.stringify(e.attempt ? withoutCaps(e.attempt.harness) : null)),
       environment: environment?.digest ?? null,
       image: record?.image?.id ?? null,

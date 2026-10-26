@@ -23,7 +23,7 @@ That's one cell of a real Cursor run. The cell's `fingerprint` is the hash of th
 
 | Part | Hashes | Changes when |
 |---|---|---|
-| `sources` | The eval file and, for a TypeScript eval, every local file it imports, directly or not | You edit the eval or a helper it imports |
+| `sources` | The eval's own body, its options and its groups', its `evaluate.each` case and its `revision` ([below](#what-sources-covers)) | You edit the eval's body or options, or bump `revision` |
 | `harness` | The harness's options, less `maxConcurrent` | You change the model or another harness option |
 | `environment` | The environment's digest: skills, MCP servers, files, rules, setup, variable and secret names, a restricted egress policy | You change what the agent is given |
 | `image` | The sandbox image's content-addressed id | The image is rebuilt with different contents |
@@ -33,7 +33,32 @@ That's one cell of a real Cursor run. The cell's `fingerprint` is the hash of th
 | `gateway` | The gateway the model calls went through; unset on `direct` | You add, change or drop a gateway |
 | `gate` | The cell's resolved gate, from the eval, the config or a profile's `defaults`; unset on `'all'` | You change `gate` or `compare.gate` |
 
-Only local imports are traced; packages are covered by the lockfile hashes the run records. Imports are traced in TypeScript eval files only: a Python or other-language eval's `sources` is the eval file alone, so editing a local helper module it imports doesn't change it. Records from before `cursor()` moved to the Cursor SDK list files its old CLI rewrote every session, such as `~/.cursor/cli-config.json`; reeval treats changes to those as noise, not drift.
+Records from before `cursor()` moved to the Cursor SDK list files its old CLI rewrote every session, such as `~/.cursor/cli-config.json`; reeval treats changes to those as noise, not drift.
+
+## What `sources` covers
+
+```ts
+evaluate('greets', { revision: 2, runs: 3 }, async (c) => {
+  await c.send(prompt) // `prompt` comes from ./helpers.ts
+})
+```
+
+The `sources` part is the same in TypeScript and Python. It hashes four things, and nothing else in the file:
+
+| Hashed | Read as |
+|---|---|
+| The eval's body | Its function's source text as the file has it: `fn.toString()` mapped back through the loader's source map in TypeScript, `inspect.getsource(fn)` from `def` on in Python |
+| Its options | Its own and its groups', keys sorted; each harness, sandbox, environment and judge model by its id. `tags`, `runs`, `timeout`, `gate` and `revision` are left out, since they don't change what an attempt measures or have their own part |
+| Its case | The `evaluate.each` case's data, as JSON with sorted keys; a function in it is its source |
+| `revision` | As written: `2` and `'2'` differ |
+
+Editing one eval leaves its siblings in the same file comparable. Helpers, constants outside the body, fixtures and data the eval reads aren't hashed, so editing `helpers.ts` above changes nothing. When such a change matters to what the eval measures, bump its `revision`, or a group's to cover every eval in it.
+
+<Warning>
+  A body or case reeval can't read is refused at plan time rather than fingerprinted less: a bound TypeScript function; in Python, a function made by `exec`, typed at a REPL, a `functools.partial` or a callable object; and a case holding something JSON can't see, such as a `RegExp`, `Map`, `Set` or `NaN`. A TypeScript body a helper returns hashes the returned function, so a change inside the helper needs a `revision` bump.
+</Warning>
+
+Python looks through decorators that keep `functools.wraps`, reads a bound method as its function and a lambda as its own text, and hashes the functions a body closes over with it, so a decorator without `functools.wraps` still sees edits to the body it wrapped. Packages are covered by the lockfile hashes the run records.
 
 ## Read a compare
 
@@ -58,7 +83,7 @@ The environment's doc changed between the runs, so the flip from pass to fail is
 | `fixed` | Same fingerprint, failed before, passes now |
 | `same` | Same fingerprint, same outcome; collapsed to `+N same` |
 | `gate changed` | Only the gate changed, and base's attempts scored under head's gate give head's outcome |
-| `can't compare` | The fingerprint changed; reeval names what, e.g. `evals/helpers.ts` or `agent CLI` |
+| `can't compare` | The fingerprint changed; reeval names what, e.g. `body`, `revision 2 → 3` or `agent CLI` |
 | `infra error` | Either side had an infra error |
 | `new`, `removed` | The eval is in only one of the runs |
 

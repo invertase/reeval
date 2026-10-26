@@ -67,6 +67,7 @@ import type {
   Question,
   QuestionOptions,
   ResolvedProfile,
+  Revision,
   SandboxDescriptor,
   SandboxWarning,
 } from './types.ts'
@@ -87,6 +88,7 @@ export const EVAL_OPTION_KEYS = [
   'questions',
   'timeout',
   'tags',
+  'revision',
   'pin',
 ] as const
 
@@ -106,6 +108,8 @@ const SUGGEST: Record<string, string> = {
   network: 'egress',
   networkPolicy: 'egress',
   tag: 'tags',
+  version: 'revision',
+  rev: 'revision',
   pins: 'pin',
   passRate: 'gate',
   threshold: 'gate',
@@ -213,6 +217,10 @@ export function refuseIllegalCompare(
   }
 }
 
+const isRevision = (value: unknown): value is Revision =>
+  (typeof value === 'number' && Number.isSafeInteger(value)) ||
+  (typeof value === 'string' && value.trim() !== '')
+
 /** Throws on keys that aren't options, and on values of the wrong shape, suggesting a fix. */
 export function checkOptions(options: object, where: string, allowed = KNOWN): void {
   for (const key of Object.keys(options)) {
@@ -239,6 +247,11 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   ) {
     throw new UsageError(
       `tags in ${where} must be a list of strings, e.g. tags: ['smoke'] (got ${JSON.stringify(o.tags)})`,
+    )
+  }
+  if (o.revision !== undefined && !isRevision(o.revision)) {
+    throw new UsageError(
+      `revision in ${where} must be a whole number or a non-empty string, e.g. revision: 2 (got ${JSON.stringify(o.revision)})`,
     )
   }
   if (o.env !== undefined) checkEnv(o.env, where, UsageError)
@@ -543,6 +556,8 @@ export type Resolved = {
   questions: PlannedQuestion[]
   timeout: Duration | undefined
   tags: string[]
+  /** The innermost level's `revision`, if any sets one. */
+  revision: Revision | undefined
   pin: PinnableKey[]
   /** Which level last set each option, e.g. `group("genkit")`; for the debug trace. */
   sources?: Partial<Record<keyof EvalOptions, string>>
@@ -582,6 +597,7 @@ function applyLevel(
   if (options.runs !== undefined) out.runs = options.runs
   if (options.gate !== undefined) out.gate = options.gate
   if (options.timeout !== undefined) out.timeout = options.timeout
+  if (options.revision !== undefined) out.revision = options.revision
   Object.assign(out.env, options.env)
   out.judge = mergeJudge(out.judge, options.judge)
   if (options.capture !== undefined) {

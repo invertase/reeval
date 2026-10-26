@@ -56,6 +56,7 @@ group(
 | [`compare`](#compare) |  |  | ✓ | ✓ |
 | [`questions`](#questions) |  |  | ✓ |  |
 | [`tags`](#tags) |  |  | ✓ |  |
+| [`revision`](#revision) |  |  | ✓ |  |
 | [`pin`](#pin) |  |  | ✓ |  |
 
 [//]: # (/generated:option-keys)
@@ -138,6 +139,10 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 
 <Property name="tags" type="string[]">
   Labels for `reeval run --tag`. **Union** of every level.
+</Property>
+
+<Property name="revision" type="number | string">
+  The eval's version, part of its [`sources` fingerprint](/concepts/fingerprints#what-sources-covers): a whole number or a non-empty string, compared exactly. **Replaces**. Bump it when a helper, a constant outside the body or a fixture changes what the eval measures, which the fingerprint doesn't read; `reeval compare` then says `changed  revision 2 → 3`. A group's applies to the evals inside it that set none. In Python, `{"revision": 2}`.
 </Property>
 
 <Property name="pin" type="Array<'harness' | 'runs' | 'compare'>">

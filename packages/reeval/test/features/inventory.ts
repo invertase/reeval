@@ -2013,7 +2013,7 @@ export const inventory: InventoryFeature[] = [
     name: '`reeval history`, `reeval show` and `reeval compare`, with `--json` and `--md`',
     tests: [
       'reeval/test/history.test.ts › reeval run writes scratch; reeval record promotes it',
-      'reeval/test/history.test.ts › an imported helper is part of the fingerprint',
+      history("an eval's fingerprint covers its body, options and revision"),
       unit('compare classifies an eval on the cells both runs have, and lists the rest'),
       'reeval/test/output.test.ts › a check not run on one side is not run',
       'reeval/test/output.test.ts › a check not run on both sides is no change',
@@ -2021,6 +2021,16 @@ export const inventory: InventoryFeature[] = [
       docker('two runs with the same agent context are comparable'),
     ],
     real: ['e2e › a second identical run', 'e2e › reeval history and reeval show'],
+  },
+  {
+    id: 'history.revision',
+    area: 'Records and studio',
+    name: "`revision` and the `sources` fingerprint part: an eval's body, options, case data and revision, named by `reeval compare`",
+    plan: ['revision/cascade'],
+    tests: [
+      history("an eval's fingerprint covers its body, options and revision"),
+      "reeval/test/results.test.ts › an eval's source",
+    ],
   },
   {
     id: 'compare.fail-on-regression',

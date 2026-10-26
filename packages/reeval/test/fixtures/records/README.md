@@ -33,6 +33,7 @@ config API like any other project.
 | `before-exec-retries` | The corpus project's fake-harness runs from before `evals[].attempts[].checks[].retries` and `checks[].tries` (each try of a `c.exec` with `retries`) |
 | `before-gate-part` | The corpus project's fake-harness runs from before `evals[].cells[].fingerprintParts.gate` (the cell's gate as a fingerprint part), whose compare controls' `gate: 'none'` compare reads from the cell |
 | `before-setup-processes` | The corpus project's runs from before `evals[].attempts[].setupProcesses` (processes the setup steps left running with a `to: 'checks'` secret without `hosts`) and the `setup-process-secret` remark |
+| `before-eval-source` | The corpus project's fake-harness runs from before `evals[].source` and `evals[].revision`, when the `sources` fingerprint part hashed the eval file and the local files it imported |
 | `fake-matrix` | The fake harness: a compare with lift, judges that pass and fail, a failed check, infra errors, todo and skipped evals, a budget-stopped run and a saved analysis |
 | `real-harnesses` | One tiny eval on each of the seven real harnesses in Docker (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi, Codex), with each one's transcript, tokens and served model |
 | `real-e2e-pairs` | The nightly `real.yml` run [36517569089](https://github.com/invertase/reeval/actions/runs/36517569089) (2026-09-29, pinned leg, at `ce1e797`): the e2e suite's two recorded runs of one eval on each of Cursor, Claude Code and Codex, with transcripts and diffs |

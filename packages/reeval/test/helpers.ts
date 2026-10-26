@@ -223,6 +223,8 @@ export function runCli(
     }
     if (opts.signal?.aborted) onAbort()
     else opts.signal?.addEventListener('abort', onAbort, { once: true })
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
     child.stdout.on('data', (d) => {
       stdout += d
       arm()

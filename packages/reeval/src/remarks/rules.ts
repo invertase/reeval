@@ -73,9 +73,18 @@ export function rankRemarks<T extends Pick<Remark, 'severity' | 'kind'>>(remarks
     .map(({ r }) => r)
 }
 
-/** sha256(kind, eval, the eval's sources[, what it's about]): one remark per kind per eval version. */
+/**
+ * sha256(kind, eval, the eval's version[, what it's about]): one remark per kind per eval version.
+ * The version is its `source` and `revision`, or its files on a record from before them.
+ */
 export function remarkId(kind: Remark['kind'], evalId: string, entry: EvalEntry, extra = '') {
-  const sources = sha256(JSON.stringify(entry.sources.map((s) => [s.path, s.sha256])))
+  const sources = sha256(
+    JSON.stringify(
+      entry.source
+        ? [entry.source, entry.revision ?? null]
+        : entry.sources.map((s) => [s.path, s.sha256]),
+    ),
+  )
   return sha256(JSON.stringify([kind, evalId, sources, ...(extra ? [extra] : [])]))
 }
 

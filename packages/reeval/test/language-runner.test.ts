@@ -149,7 +149,7 @@ test('an attempt that starts after its runner has gone fails at once', {
 const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n')
 send({ t: 'hello', protocol: ${RUNNER_PROTOCOL}, sdk: 'fake', version: '1', runtime: 'node' })
 const evals = ['first', 'second'].map((name, i) =>
-  ({ type: 'eval', name, mode: 'run', options: {}, body: 'b' + i }))
+  ({ type: 'eval', name, mode: 'run', options: {}, body: 'b' + i, source: { body: '0'.repeat(64) } }))
 require('node:readline').createInterface({ input: process.stdin }).on('line', (line) => {
   const m = JSON.parse(line)
   if (m.t === 'collect') send({ t: 'declared', file: m.file, tree: { children: evals } })

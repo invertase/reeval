@@ -559,6 +559,7 @@ class DeclaredEval(TypedDict):
     name: str
     # The eval's own options, before the cascade.
     options: EvalOptionsData
+    source: DeclaredSource
     type: Literal["eval"]
 
 
@@ -589,6 +590,16 @@ DeclaredMode: TypeAlias = "Literal[\"run\", \"skip\", \"only\"]"
 
 # One node of the tree: a group, an eval or a todo.
 DeclaredNode: TypeAlias = "DeclaredEval | DeclaredGroup | DeclaredTodo"
+
+
+# An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source
+# text, and of an `evaluate.each` case's data as canonical JSON (object keys sorted, no
+# whitespace, non-ASCII characters as themselves).
+class DeclaredSource(TypedDict):
+    # sha256 of the body function's source text.
+    body: str
+    # sha256 of the case's data; set on each case of an `evaluate.each`.
+    case: NotRequired[str]
 
 
 # `evaluate.todo` or `group.todo`.
@@ -757,6 +768,10 @@ class EvalOptionsDataCompare(TypedDict):
     # all end; one without is asked of each attempt as it ends. Replaces the inherited list, so
     # `[]` asks none.
     questions: NotRequired[list[Question]]
+    # The eval's version, part of its fingerprint: bump it when a change the eval file doesn't
+    # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
+    # the evals inside it that set none.
+    revision: NotRequired[float | str]
     # Attempts per cell.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
@@ -826,6 +841,10 @@ class EvalOptionsDataCompare2(TypedDict):
     # all end; one without is asked of each attempt as it ends. Replaces the inherited list, so
     # `[]` asks none.
     questions: NotRequired[list[Question]]
+    # The eval's version, part of its fingerprint: bump it when a change the eval file doesn't
+    # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
+    # the evals inside it that set none.
+    revision: NotRequired[float | str]
     # Attempts per cell.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
@@ -879,6 +898,10 @@ class EvalOptionsData3(TypedDict):
     # all end; one without is asked of each attempt as it ends. Replaces the inherited list, so
     # `[]` asks none.
     questions: NotRequired[list[Question]]
+    # The eval's version, part of its fingerprint: bump it when a change the eval file doesn't
+    # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
+    # the evals inside it that set none.
+    revision: NotRequired[float | str]
     # Attempts per cell.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like

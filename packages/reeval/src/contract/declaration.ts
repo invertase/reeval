@@ -9,6 +9,7 @@ import type {
   DeclaredGroup,
   DeclaredMode,
   DeclaredNode,
+  DeclaredSource,
   DeclaredTodo,
 } from '../declaration.ts'
 import type { EvalOptionsData } from '../types.ts'
@@ -36,6 +37,20 @@ export const declaredTodoSchema = z
   })
   .describe('`evaluate.todo` or `group.todo`.')
 
+const hash = () =>
+  z.string().regex(/^[0-9a-f]{64}$/, 'must be a sha256 hash: 64 lowercase hex digits')
+
+export const declaredSourceSchema = z
+  .strictObject({
+    body: hash().describe("sha256 of the body function's source text."),
+    case: hash()
+      .optional()
+      .describe("sha256 of the case's data; set on each case of an `evaluate.each`."),
+  })
+  .describe(
+    "An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source text, and of an `evaluate.each` case's data as canonical JSON (object keys sorted, no whitespace, non-ASCII characters as themselves).",
+  )
+
 export const declaredEvalSchema = z
   .strictObject({
     type: z.literal('eval'),
@@ -45,6 +60,7 @@ export const declaredEvalSchema = z
     mode: declaredModeSchema,
     options: evalOptionsDataSchema.describe("The eval's own options, before the cascade."),
     body: z.string().describe("Names the eval's body to whoever runs it."),
+    source: declaredSourceSchema,
     family: declaredFamilySchema
       .optional()
       .describe(
@@ -81,6 +97,7 @@ export const declarationTreeSchema = z
 export type _SameAsSchema = [
   Assert<Same<z.infer<typeof declaredModeSchema>, DeclaredMode>>,
   Assert<Same<z.infer<typeof declaredFamilySchema>, DeclaredFamily>>,
+  Assert<Same<z.infer<typeof declaredSourceSchema>, DeclaredSource>>,
   Assert<Same<z.infer<typeof declaredTodoSchema>, DeclaredTodo>>,
   Assert<Same<z.infer<typeof declaredEvalSchema>, DeclaredEval>>,
   Assert<Same<z.infer<typeof declaredGroupSchema>, DeclaredGroup>>,

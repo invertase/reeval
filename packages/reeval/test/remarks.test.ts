@@ -817,12 +817,17 @@ describe('model remarks', () => {
     const p = await modelProject('remarks-model-edit', KINDS_EVAL)
     const raised = await runCli(p.dir, ['run', '-v'])
     assert.match(remarksBlock(raised.stdout) ?? '', /answers kindly:/)
-    await writeFile(join(p.dir, 'evals/kinds.eval.ts'), `${KINDS_EVAL}// a comment\n`)
+    const edited = KINDS_EVAL.replace(
+      "'toggle added').toBe(true)\n",
+      "'toggle added').toBe(true)\n  // a comment\n",
+    )
+    assert.notEqual(edited, KINDS_EVAL)
+    await writeFile(join(p.dir, 'evals/kinds.eval.ts'), edited)
     const elsewhere = await runCli(p.dir, ['run', '-v'])
     assert.deepEqual(
       namedIn(remarksBlock(elsewhere.stdout)),
       ['adds dark mode'],
-      "a model remark's id is its quote; no-baseline's is the eval's sources, which changed",
+      "a model remark's id is its quote; no-baseline's is the eval's source, which changed",
     )
   })
 })
