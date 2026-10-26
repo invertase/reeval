@@ -3,9 +3,23 @@ title: "Grok Build harness"
 description: "The Grok Build harness runs xAI's Grok Build CLI in the sandbox on an xAI API key and records its events."
 ---
 
+`grokBuild()` runs xAI's Grok Build CLI (`grok agent stdio`) in the sandbox. For more information about the sandbox, see [Choose a sandbox](/integrations/sandboxes).
+
+## `XAI_API_KEY`
+
+`grokBuild()` reads `XAI_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
+
+reeval swaps it into the `Authorization: Bearer` header on Grok Build's requests to `api.x.ai`, `GET /v1/models`, `GET /v1/api-key`, `POST /v1/chat/completions`, and `POST /v1/responses`, and refuses it anywhere else. A restricted egress policy allows `api.x.ai`.
+
+When xAI refuses the key, Grok Build drops its `xai.api_key` sign-in, and the attempt error begins with `The API rejected XAI_API_KEY: set a valid key in the environment or .env.local`.
+
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
+
+For more information about the variable, see [`XAI_API_KEY`](/reference/env-vars#xaiapikey).
+
 ## `grokBuild()`
 
-`grokBuild()` is one harness factory. It runs Grok Build in the sandbox on an xAI API key. The factory comes from `{{ pkg }}/harness`, and its return value sets the `harness` option:
+The factory comes from `{{ pkg }}/harness`, and its return value sets the `harness` option:
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
@@ -44,17 +58,7 @@ In the sandbox, Grok Build runs with a private home, whose `config.toml` file pu
 
 For more information about choosing a harness, see [Choose an agent](/agents).
 
-For more information about model ids and effort values, see [Models and providers for each harness](/agents/model).
-
-## `XAI_API_KEY`
-
-`grokBuild()` reads `XAI_API_KEY` from the host. reeval swaps it into the `Authorization: Bearer` header on Grok Build's requests to `api.x.ai`, `GET /v1/models`, `GET /v1/api-key`, `POST /v1/chat/completions`, and `POST /v1/responses`, and refuses it anywhere else.
-
-When xAI refuses the key, Grok Build drops its `xai.api_key` sign-in, and reeval reports that the API rejected `XAI_API_KEY`.
-
-For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
-
-For more information about the variable, see [`XAI_API_KEY`](/reference/env-vars#xaiapikey).
+For more information about model ids and effort values, see [Set the agent's model](/agents/model).
 
 ## `rules`
 
@@ -96,6 +100,6 @@ For more information about the automatic hosts, see [Block non-automatic hosts](
 
 ## `web-fetch`
 
-The Grok Build harness records no `web-fetch` events.
+The Grok Build harness records no `web-fetch` events. Each turn's `unreported` list is empty, so `toHaveFetched()` fails on a Grok Build turn.
 
 For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).
