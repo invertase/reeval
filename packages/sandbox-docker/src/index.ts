@@ -68,6 +68,7 @@ export type {
   EgressEvent,
   EgressRequestEvent,
   EgressTraffic,
+  LocalResponse,
 } from './egress/proxy.ts'
 export {
   applyTransformations,

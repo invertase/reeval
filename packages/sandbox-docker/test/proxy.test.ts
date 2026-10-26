@@ -284,6 +284,7 @@ async function startProxy(
     | 'derivedTokens'
     | 'onEvent'
     | 'modelResponses'
+    | 'localResponses'
     | 'firstByteTimeout'
   > = {},
   /** Hand each connection over as a plain Duplex, as the gateway's mux streams are. */
@@ -2270,6 +2271,59 @@ describe('derived tokens through the proxy', () => {
         assert.equal(seen.at(-1)?.headers.authorization, `Bearer ${REAL}`, path)
         assert.equal(JSON.parse(r.body).auth, `Bearer ${key.placeholder}`, path)
       }
+    } finally {
+      gw.close()
+    }
+  })
+})
+
+describe('local responses', () => {
+  const localResponses = [
+    {
+      match: { host: HOST, path: { exact: '/token' }, method: ['POST'] },
+      status: 200,
+      body: '{"access_token":"placeholder"}',
+    },
+  ]
+  let h1: { port: number; close(): void }
+  let h2: { port: number; close(): void }
+  before(async () => {
+    h1 = await startUpstream(HOST, false)
+    h2 = await startUpstream(HOST, true)
+  })
+  after(() => {
+    h1.close()
+    h2.close()
+  })
+
+  test('the gateway answers a matching request itself, over HTTP/1.1 and HTTP/2', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, {
+      localResponses,
+      onEvent: (e) => {
+        events.push(e)
+      },
+    })
+    try {
+      seen.length = 0
+      const r = await viaProxy(gw, HOST, h1.port, { method: 'POST', path: '/token', body: 'x' })
+      assert.equal(r.status, 200)
+      assert.equal(r.body, '{"access_token":"placeholder"}')
+      assert.equal(r.headers['content-type'], 'application/json')
+      const r2 = await viaProxyH2(gw, HOST, h2.port, '/token')
+      assert.equal(r2.status, 200)
+      assert.equal(r2.body, '{"access_token":"placeholder"}')
+      assert.deepEqual(seen, [], 'nothing reached the upstream')
+      assert.ok(
+        events.some((e) => e.type === 'request' && e.url.endsWith('/token') && e.status === 200),
+      )
+      // Twin: any other request on the host still goes upstream.
+      const other = await viaProxy(gw, HOST, h1.port, { method: 'POST', path: '/other', body: 'x' })
+      assert.notEqual(other.body, '{"access_token":"placeholder"}')
+      assert.deepEqual(
+        seen.map((s) => s.path),
+        ['/other'],
+      )
     } finally {
       gw.close()
     }
