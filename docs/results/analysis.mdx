@@ -47,7 +47,7 @@ Set analysis.model in reeval.config.ts for answers to what each eval asks.
 
 For more information about the other `analysis` fields, see [the `analysis` option](/reference/options#analysis).
 
-## Read insights after a run
+## Read the answers
 
 Run the evaluation:
 
@@ -55,7 +55,11 @@ Run the evaluation:
 npx reeval run
 ```
 
-After the attempts finish, the analysis model's answer is the line under the evaluation name. A headline prints above the tally. Your sentences and counts can differ.
+After the attempts finish, the analysis model's answer is the line under the evaluation name. The answers to your own questions print in the same block. For more information about questions, see [Ask questions across attempts](/evals/questions).
+
+## Read insights
+
+Insights are what the agent did and why. A headline prints above the tally, and Remarks print under it. Your sentences and counts can differ.
 
 The block uses this format:
 
@@ -70,7 +74,7 @@ Every eval passed.
 
 This output comes from the scripted analysis model in [`with-analysis`](https://github.com/invertase/reeval/tree/main/examples/with-analysis), which has a runnable project.
 
-reeval fixes the outcome and exit code before the insights print. Remarks print under the tally.
+reeval fixes the outcome and exit code before the insights print.
 
 For more information about the outcome words and the tables, see [Output](/results/output).
 
