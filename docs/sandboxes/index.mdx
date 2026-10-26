@@ -3,7 +3,7 @@ title: "Choose a sandbox"
 description: "Run each attempt in a fresh container on your machine."
 ---
 
-A sandbox is the container an attempt runs in. reeval starts one container per attempt, runs the harness, the setup commands, and the assertions in it, and removes it when the attempt ends. Without a `sandbox` option, every attempt runs in `docker()`.
+A sandbox is the container an attempt runs in. Each attempt gets one sandbox. reeval starts one container per attempt, runs the harness, the setup commands, and the assertions in it, and removes it when the attempt ends. Without a `sandbox` option, every attempt runs in `docker()`.
 
 ## Choose Docker or Podman
 
