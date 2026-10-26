@@ -1,5 +1,5 @@
 # Keeps the repo's Actions cache (10 GB, least-recently-used eviction) to what main uses. Only main
-# writes the pnpm store, uv and sandbox-image caches, so after each ci run on main this deletes, for
+# writes the pnpm store, uv, Bun and sandbox-image caches, so after each ci run on main this deletes, for
 # each of those families, every entry but main's most recently used one, plus anything another ref
 # left in them. A family is a key without its trailing content hash. LEGACY prefixes are keys no
 # workflow writes, deleted outright.
@@ -28,7 +28,7 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          OWNED: '^(reeval-sandbox-registry|pnpm-store|setup-uv)-'
+          OWNED: '^(reeval-sandbox-registry|pnpm-store|setup-uv|bun)-'
           LEGACY: '^(reeval-sandbox-images|node-cache)-'
         run: |
           gh api --paginate "repos/$REPO/actions/caches?per_page=100" --jq '.actions_caches[]' |

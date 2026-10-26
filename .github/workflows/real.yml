@@ -147,4 +147,4 @@ jobs:
           path: packages/reeval/test/real-agents/.reeval/runs
           include-hidden-files: true
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: ${{ github.event_name == 'pull_request' && 1 || 14 }}
