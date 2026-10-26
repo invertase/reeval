@@ -14,6 +14,7 @@ import {
   PI_AI_GATEWAY,
   PI_CREDENTIAL_ENV,
   PI_MCP_FILE,
+  PI_OPENROUTER,
   type PiHarnessSettings,
   type PiMcpServer,
 } from '../src/pi-harness.ts'
@@ -182,6 +183,7 @@ async function oneTurn(
   mcpServers?: Record<string, PiMcpServer>,
   stdout?: string[],
   settings: Partial<PiHarnessSettings> = { auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' } },
+  model?: string,
 ) {
   const { sandbox, writes, spawned, envs } = recordingSandbox(stdout)
   const parts: HarnessV1StreamPart[] = []
@@ -198,6 +200,7 @@ async function oneTurn(
   } as never)
   const control = await session.doPromptTurn({
     prompt: 'hi',
+    ...(model ? { model } : {}),
     tools: [],
     skills: [],
     emit: (part: HarnessV1StreamPart) => parts.push(part),
@@ -265,6 +268,26 @@ test('on Vertex AI, pi runs its google-vertex provider on a credentials file, wi
     GOOGLE_APPLICATION_CREDENTIALS: '/reeval/adc.json',
     PI_OFFLINE: '1',
   })
+})
+
+test('on OpenRouter, pi runs its own openrouter provider on a placeholder key, with no models.json', async () => {
+  const { writes, spawned, envs } = await oneTurn(
+    undefined,
+    undefined,
+    { auth: { OPENROUTER_API_KEY: 'sk-or-k' }, gateway: PI_OPENROUTER, effort: 'low' },
+    'google/gemini-3.8-flash',
+  )
+  assert.match(
+    spawned[0] ?? '',
+    /^cd '\/w' && exec .* --provider 'openrouter' --model 'google\/gemini-3\.8-flash' --thinking 'low' /,
+  )
+  assert.equal(
+    writes.some((w) => w.path.endsWith('gateway-models.mjs') || w.path.endsWith('models.json')),
+    false,
+  )
+  assert.equal(envs[0]?.PI_OFFLINE, '1')
+  assert.notEqual(envs[0]?.OPENROUTER_API_KEY, 'sk-or-k')
+  assert.ok(envs[0]?.OPENROUTER_API_KEY)
 })
 
 test("with requireCredentialBrokering, a sandbox that can't broker never gets the key", async () => {

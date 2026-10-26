@@ -109,9 +109,10 @@ export const goose = (options: Options<GooseHarnessDescriptor>): GooseHarnessDes
 
 /**
  * pi, with a Gemini API key: `model` is a Gemini model id, which it runs on its `google` provider,
- * or on `vercel()` as `google/<model>` on Vercel's Chat Completions API with Vercel's key.
- * `effort` is pi's `--thinking` flag, sent as Gemini's own thinking level on either. `id` names
- * the cell; it defaults to `pi:<model>`, or `pi:<model>[effort=<value>]` when `effort` is set.
+ * or as `google/<model>` on `vercel()` (Vercel's Chat Completions API, with Vercel's key) or on
+ * `openrouter()` (pi's `openrouter` provider, with OpenRouter's key). `effort` is pi's `--thinking`
+ * flag, which reaches a Gemini model as its own thinking level on each. `id` names the cell; it
+ * defaults to `pi:<model>`, or `pi:<model>[effort=<value>]` when `effort` is set.
  */
 export const pi = (options: Options<PiHarnessDescriptor>): PiHarnessDescriptor =>
   make('pi', options)

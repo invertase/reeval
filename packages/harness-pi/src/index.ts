@@ -1,4 +1,4 @@
-// `@reeval/harness-pi`: pi on a Gemini API key, Vertex AI or Vercel AI Gateway, as an AI SDK harness, in the sandbox.
+// `@reeval/harness-pi`: pi on a Gemini API key, Vertex AI, Vercel AI Gateway or OpenRouter, as an AI SDK harness, in the sandbox.
 export {
   getPiBootstrap,
   PI_BOOTSTRAP_DIR,
@@ -22,6 +22,7 @@ export {
   PI_INSTRUCTIONS_FILE,
   PI_MCP_FILE,
   PI_MODELS_FILE,
+  PI_OPENROUTER,
   PI_VERTEX_PROVIDER,
   PI_WORKSPACE_SKILLS_DIR,
   type PiGateway,

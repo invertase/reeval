@@ -46,7 +46,7 @@
   "route: cursor on openrouter alone": "UsageError: evals/a.eval.ts › e on cursor:composer-2.5: no gateway in the list can serve it (openrouter: Cursor's agent only calls Cursor's own API). Add direct() to the end of gateway to use Cursor's own key.",
   "route: antigravity on openrouter alone": "UsageError: evals/a.eval.ts › e on antigravity:m: no gateway in the list can serve it (openrouter: Antigravity's CLI only calls Google's API, with a Gemini key, and OpenRouter has no Gemini API). Add direct() to the end of gateway to use Antigravity's own key.",
   "route: fx on openrouter alone": "UsageError: evals/a.eval.ts › e on fx:gpt-5.5: no gateway in the list can serve it (openrouter: fx reaches models only on Vercel AI Gateway or OpenAI's API, and no run has checked it on OpenRouter). Add direct() to the end of gateway to use fx's own key.",
-  "route: pi on openrouter alone": "UsageError: evals/a.eval.ts › e on pi:gemini-3.8-flash: no gateway in the list can serve it (openrouter: pi reaches a Gemini model on OpenRouter only through Chat Completions, which no run has checked behaves as it does on Gemini's API; reeval runs pi on its Gemini key). Add direct() to the end of gateway to use pi's own key.",
+  "route: pi with effort on a gemini model on openrouter": null,
   "route: claude code on openrouter": null,
   "route: opencode on openrouter": null,
   "route: codex with effort on openrouter": null,
