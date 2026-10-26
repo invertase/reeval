@@ -1,4 +1,5 @@
 profile off (--profile) · 3 evals · 8 cells · 8 attempts
+hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)
 evals/questions.eval.ts › one question                           a/base/docker     control          gated    ×1  compare off (profile off) · 1 pairwise question off (profile off)
                                                                  b/base/docker     control          gated    ×1
 evals/questions.eval.ts › two questions, one with its own model  a/base/docker     control          gated    ×1  compare off (profile off) · 1 pairwise question off (profile off) · 1 pairwise question narrowed (profile off)

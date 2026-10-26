@@ -1,4 +1,5 @@
 no profile · 4 evals · 5 cells · 5 attempts
+hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)
 evals/files.eval.ts › a whole directory            fake/whole/docker       control           gated    ×1  files README.md, lib/build/tool.ts, package.json, py/notes.py, src/gen/keep.ts, src/gen/out.ts, src/index.test.ts, src/index.ts
 evals/files.eval.ts › globs and into               fake/picked/docker      control           gated    ×1  files app/package.json, app/src/gen/keep.ts, app/src/index.ts
 evals/files.eval.ts › without the default ignores  fake/everything/docker  control           gated    ×1  files .vscode/settings.json, README.md, build/out.txt, lib/build/tool.ts, package.json, py/notes.py, src/gen/keep.ts, src/gen/out.ts, src/index.test.ts, src/index.ts

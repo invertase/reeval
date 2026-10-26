@@ -1,4 +1,5 @@
 no profile · 1 evals · 4 cells · 4 attempts
+hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)
 evals/independent.eval.ts › parent › baseline, not the inherited environment  a/base/docker  control       ungated  ×1
                                                                               a/peer/docker  variant peer  gated    ×1
                                                                               b/base/docker  control       ungated  ×1

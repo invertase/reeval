@@ -1476,9 +1476,15 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'effort.separation',
     area: 'Records and studio',
-    name: 'Effort separation per metric (`no overlap` at 3 vs 3 or more, directional in `reeval analyze`) and the plan hint below 4 runs a cell',
+    name: 'Effort separation per metric (`no overlap` at 3 vs 3 or more, directional in `reeval analyze`)',
     plan: ['compare/study'],
     unit: ['reeval/test/analysis.test.ts'],
+  },
+  {
+    id: 'plan.verdict-hints',
+    area: 'Records and studio',
+    name: "The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will say `can't tell yet` whatever happens",
+    plan: ['compare/verdicts', 'compare/each-pooled', 'compare/study'],
   },
   {
     id: 'contrasts',

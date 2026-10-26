@@ -1,5 +1,5 @@
 no profile · 6 evals · 24 cells · 28 attempts
-hint: 1 compare runs 2 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)
+hint: 6 compares run 1 or 2 times per cell; a verdict needs 4 runs a side, so their lift and effort will say can't tell yet (runs: 4)
 evals/questions-group.eval.ts › asked by the group › inherits the question   a/base/docker     control          ungated             ×1
                                                                              a/skilled/docker  variant skilled  gated               ×1
                                                                              b/base/docker     control          ungated             ×1

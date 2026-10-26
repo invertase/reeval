@@ -1,4 +1,5 @@
 no profile · 3 evals · 4 cells · 4 attempts
+hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)
 evals/y.eval.ts › inherits             a/base/fake     control          gated    ×1  files README.md
 evals/y.eval.ts › compared             a/base/fake     control          ungated  ×1  files README.md
                                        a/skilled/fake  variant skilled  gated    ×1

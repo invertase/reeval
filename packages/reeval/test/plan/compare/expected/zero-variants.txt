@@ -1,4 +1,5 @@
 profile none (--profile) · 3 evals · 10 cells · 10 attempts
+hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)
 evals/limited.eval.ts › two variants  a/base/docker     control          gated    ×1  variants 2 → 0 (profile none)
                                       b/base/docker     control          gated    ×1
 evals/limited.eval.ts › one variant   a/base/docker     control          gated    ×1  variants 1 → 0 (profile none)

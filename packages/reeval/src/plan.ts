@@ -8,6 +8,7 @@ import { fallbackHint } from './gateway/resolve.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
 import type { Prices } from './prices.ts'
+import { EFFECT_MIN_COUNTED, PAIRED_MIN } from './stats.ts'
 import { clip, formatDuration, plural } from './text.ts'
 import type {
   Budget,
@@ -26,7 +27,7 @@ import type {
   SandboxDescriptor,
   SandboxWarning,
 } from './types.ts'
-import { EFFORT_ALPHA, EFFORT_MIN_RUNS } from './view/effort.ts'
+import { EFFORT_MIN_RUNS } from './view/effort.ts'
 
 /**
  * With no history for a harness, an attempt is assumed to take this long. The fake agent takes
@@ -212,7 +213,8 @@ export async function buildPlan(options: {
     ),
     hints: [
       ...gateHint([...rows.values()].filter((r) => counted.get(r.id)?.gated)),
-      ...effortHint([...rows.values()]),
+      ...verdictHint([...rows.values()]),
+      ...familyHints([...rows.values()]),
       ...gatewayHints(planned),
     ],
     sandboxes: [...sandboxes.values()],
@@ -306,20 +308,47 @@ function gateHint(rows: PlanRow[]): string[] {
   ]
 }
 
-/** One line when compares run too few times per cell for effort's test to ever reach p < 0.05. */
-function effortHint(rows: PlanRow[]): string[] {
+/** The runs a side before both a compare's lift and its effort can get a verdict. */
+const VERDICT_MIN_RUNS = Math.max(EFFECT_MIN_COUNTED, EFFORT_MIN_RUNS)
+
+/**
+ * One line when compares outside a family run too few times per cell for any verdict: their lift
+ * and effort say `can't tell yet` however the attempts go.
+ */
+function verdictHint(rows: PlanRow[]): string[] {
   const few = rows.filter(
     (r) =>
       !r.plan.skip &&
+      !r.family &&
       (r.plan.variants?.run ?? 0) > 0 &&
-      r.plan.runs >= 2 &&
-      r.plan.runs < EFFORT_MIN_RUNS,
+      r.plan.runs < VERDICT_MIN_RUNS,
   )
   if (few.length === 0) return []
-  const runs = [...new Set(few.map((r) => r.plan.runs))].sort((a, b) => a - b).join(' or ')
+  const counts = [...new Set(few.map((r) => r.plan.runs))].sort((a, b) => a - b)
+  const runs = counts.length === 1 && counts[0] === 1 ? 'once' : `${counts.join(' or ')} times`
+  const one = few.length === 1
   return [
-    `${plural(few.length, 'compare')} ${few.length === 1 ? 'runs' : 'run'} ${runs} times per cell; effort can't reach p < ${EFFORT_ALPHA} below ${EFFORT_MIN_RUNS} vs ${EFFORT_MIN_RUNS} (runs: ${EFFORT_MIN_RUNS})`,
+    `${plural(few.length, 'compare')} ${one ? 'runs' : 'run'} ${runs} per cell; a verdict needs ${VERDICT_MIN_RUNS} runs a side, so ${one ? 'its' : 'their'} lift and effort will say can't tell yet (runs: ${VERDICT_MIN_RUNS})`,
   ]
+}
+
+/**
+ * One line per compared family with too few cases for its paired lift to get a verdict: one
+ * attempt a case can't give more discordant cases than there are cases, and several need as many
+ * cases, so more runs don't help.
+ */
+function familyHints(rows: PlanRow[]): string[] {
+  const cases = new Map<string, number>()
+  for (const r of rows) {
+    if (!r.family || r.plan.skip || (r.plan.variants?.run ?? 0) === 0) continue
+    cases.set(r.family.id, (cases.get(r.family.id) ?? 0) + 1)
+  }
+  return [...cases]
+    .filter(([, n]) => n < PAIRED_MIN)
+    .map(
+      ([id, n]) =>
+        `family ${clip(id, 64)} has ${plural(n, 'case')}; its lift needs ${PAIRED_MIN} for a verdict, so it will say can't tell yet whatever the runs (add cases)`,
+    )
 }
 
 /** One line per harness whose cells fell past the first entries of the `gateway` list. */
