@@ -207,27 +207,6 @@
       ]
     },
     {
-      "group": "Sandboxes",
-      "pages": [
-        {
-          "title": "Overview",
-          "href": "/sandboxes"
-        },
-        {
-          "title": "Toolchains",
-          "href": "/sandboxes/toolchains"
-        },
-        {
-          "title": "Docker",
-          "href": "/sandboxes/docker"
-        },
-        {
-          "title": "Podman",
-          "href": "/sandboxes/podman"
-        }
-      ]
-    },
-    {
       "group": "Recipes",
       "pages": [
         {
@@ -269,6 +248,90 @@
         {
           "title": "Judge an app",
           "href": "/recipes/app-check"
+        }
+      ]
+    },
+    {
+      "group": "Integrations",
+      "pages": [
+        {
+          "group": "Agents",
+          "pages": [
+            {
+              "title": "Cursor",
+              "href": "/harnesses/cursor"
+            },
+            {
+              "title": "Claude Code",
+              "href": "/harnesses/claude-code"
+            },
+            {
+              "title": "Codex",
+              "href": "/harnesses/codex"
+            },
+            {
+              "title": "Antigravity",
+              "href": "/harnesses/antigravity"
+            },
+            {
+              "title": "OpenCode",
+              "href": "/harnesses/opencode"
+            },
+            {
+              "title": "Goose",
+              "href": "/harnesses/goose"
+            },
+            {
+              "title": "pi",
+              "href": "/harnesses/pi"
+            },
+            {
+              "title": "Grok Build",
+              "href": "/harnesses/grok-build"
+            }
+          ]
+        },
+        {
+          "group": "Gateways",
+          "pages": [
+            {
+              "title": "Direct",
+              "href": "/gateways/direct"
+            },
+            {
+              "title": "Vercel AI Gateway",
+              "href": "/gateways/vercel"
+            },
+            {
+              "title": "OpenRouter",
+              "href": "/gateways/openrouter"
+            },
+            {
+              "title": "Vertex AI",
+              "href": "/gateways/vertex"
+            }
+          ]
+        },
+        {
+          "group": "Sandboxes",
+          "pages": [
+            {
+              "title": "Overview",
+              "href": "/sandboxes"
+            },
+            {
+              "title": "Toolchains",
+              "href": "/sandboxes/toolchains"
+            },
+            {
+              "title": "Docker",
+              "href": "/sandboxes/docker"
+            },
+            {
+              "title": "Podman",
+              "href": "/sandboxes/podman"
+            }
+          ]
         }
       ]
     },
@@ -328,64 +391,6 @@
             {
               "title": "Glossary",
               "href": "/reference/glossary"
-            },
-            {
-              "group": "Agents",
-              "pages": [
-                {
-                  "title": "Cursor",
-                  "href": "/harnesses/cursor"
-                },
-                {
-                  "title": "Claude Code",
-                  "href": "/harnesses/claude-code"
-                },
-                {
-                  "title": "Codex",
-                  "href": "/harnesses/codex"
-                },
-                {
-                  "title": "Antigravity",
-                  "href": "/harnesses/antigravity"
-                },
-                {
-                  "title": "OpenCode",
-                  "href": "/harnesses/opencode"
-                },
-                {
-                  "title": "Goose",
-                  "href": "/harnesses/goose"
-                },
-                {
-                  "title": "pi",
-                  "href": "/harnesses/pi"
-                },
-                {
-                  "title": "Grok Build",
-                  "href": "/harnesses/grok-build"
-                }
-              ]
-            },
-            {
-              "group": "Gateways",
-              "pages": [
-                {
-                  "title": "Direct",
-                  "href": "/gateways/direct"
-                },
-                {
-                  "title": "Vercel AI Gateway",
-                  "href": "/gateways/vercel"
-                },
-                {
-                  "title": "OpenRouter",
-                  "href": "/gateways/openrouter"
-                },
-                {
-                  "title": "Vertex AI",
-                  "href": "/gateways/vertex"
-                }
-              ]
             }
           ]
         }
