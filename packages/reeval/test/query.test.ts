@@ -331,24 +331,32 @@ evaluate('steady', { runs: 2 }, async (c) => {
     await query(p.dir, 'SELECT 1')
     assert.equal((await runCli(p.dir)).code, 0)
     const holder = new DatabaseSync(join(p.dir, '.reeval/history.db'))
+    // The waiting CLI holds a shared lock of its own, which COMMIT has to wait out on Windows.
+    holder.exec('PRAGMA busy_timeout = 10000')
     holder.exec('BEGIN IMMEDIATE')
     let held = true
-    const free = () => {
+    let commitError: unknown
+    const commit = () => {
       if (!held) return
       held = false
-      holder.exec('COMMIT')
-      holder.close()
+      try {
+        holder.exec('COMMIT')
+      } catch (err) {
+        commitError = err
+      }
     }
     const started = Date.now()
-    const release = setTimeout(free, 7000)
+    const release = setTimeout(commit, 7000)
     try {
       const r = await runCli(p.dir, ['query', 'SELECT COUNT(*) AS n FROM runs', '--json'])
       assert.equal(r.code, 0, r.stderr)
       assert.deepEqual(JSON.parse(r.stdout), [{ n: 2 }])
       assert.ok(Date.now() - started >= 7000, 'it waited for the lock')
+      assert.equal(commitError, undefined)
     } finally {
       clearTimeout(release)
-      free()
+      commit()
+      holder.close()
     }
   })
 
