@@ -18,7 +18,7 @@ By default, reeval requires an API key for each model provider.
 
 ## Using a gateway
 
-Please note, not all harnesses support gateways, and not all gateways are supported by all harnesses.
+Not all harnesses support gateways, and not all gateways are supported by all harnesses.
 
 | Harness | Vercel | OpenRouter | Vertex |
 | --- | --- | --- | --- |
@@ -34,7 +34,7 @@ Please note, not all harnesses support gateways, and not all gateways are suppor
 
 ## Setting up a gateway
 
-Multiple gateways can be used together, and the gateway selection is done on a per-model-provider basis. The order of the gateways defines which provider will be used, and fallback downwards:
+Multiple gateways can be used together, and the gateway selection is done on a per-model-provider basis. The order of the gateways defines which provider will be used, and fallback downward:
 
 ```ts
 import { defineConfig } from '{{ pkg }}'
