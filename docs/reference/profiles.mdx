@@ -65,7 +65,7 @@ For more information about `pin`, see [Options reference](/reference/options#pin
 ### `compare`
 
 <Property name="compare" type="false | { maxVariants: number }" optional>
-  `false` drops the variants and runs the control. `{ maxVariants: n }` keeps the first `n` variants. `n` is a whole number of at least 0.
+  `false` drops the variants and runs the baseline. `{ maxVariants: n }` keeps the first `n` variants. `n` is a whole number of at least 0.
 </Property>
 
 `limit.compare` applies when the evaluation sets `compare`. The plan notes `compare off (profile nightly)` or `variants 4 → 1 (profile nightly)`. With no variants left and questions set, it notes `questions off (profile nightly)`.

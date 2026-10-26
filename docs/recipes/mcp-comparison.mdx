@@ -3,7 +3,7 @@ title: "Measure MCP servers"
 description: "See whether an MCP server helped your harness."
 ---
 
-You measure an MCP server by running one task on a control with no server and a variant with the server. The effect reads `helped`, `made it worse`, or `can't tell yet`. For more information about adding MCP servers, see [Connect MCP servers](/environments/mcp).
+You measure an MCP server by running one task on a baseline with no server and a variant with the server. The effect reads `helped`, `made it worse`, or `can't tell yet`. For more information about adding MCP servers, see [Connect MCP servers](/environments/mcp).
 
 This page's server is `releases`, a stdio server that knows the latest `acme-cli` release.
 
@@ -67,15 +67,15 @@ The attempt's `transcript.jsonl` file, under `.reeval/runs/<run>/`, names the ca
 ```
 
 </Step>
-<Step title="Compare with a control">
+<Step title="Compare with a baseline">
 
-To measure what the server changed, run the same evaluation on a control without `mcp`, and the environment with the server as the variant ([Compare setups](/evals/compare)). Set `runs: 4`, because below four counted attempts a side the effect reads `can't tell yet`.
+To measure what the server changed, run the same evaluation on a baseline without `mcp`, and the environment with the server as the variant ([Measure lift against a baseline](/evals/compare)). Set `runs: 4`, because below four counted attempts a side the effect reads `can't tell yet`.
 
-The control has no server, so `toHaveCalledMcp` fails on every control attempt. Read the file assertion's row for the task. When the file assertion passes on both sides, the harness finds the version without the server, and this task can't show what the server changed. For more information about the rows, see [Read the results summary](/results/output).
+The baseline has no server, so `toHaveCalledMcp` fails on every baseline attempt. Read the file assertion's row for the task. When the file assertion passes on both sides, the harness finds the version without the server, and this task can't show what the server changed. For more information about the rows, see [Read the results summary](/results/output).
 
 </Step>
 </Steps>
 
 ## Next
 
-For more information about gates and extra variants, see [Compare setups](/evals/compare).
+For more information about gates and extra variants, see [Measure lift against a baseline](/evals/compare).

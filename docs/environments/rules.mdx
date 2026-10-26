@@ -5,11 +5,11 @@ description: "Give the harness project instructions it reads at the start of eve
 
 The `rules` field holds project instructions for the harness. reeval writes them into the file your harness reads at the start of every attempt, such as the `AGENTS.md` file. For more information about the file each harness reads, see [Harnesses](/harnesses#where-each-harness-reads-rules-and-skills).
 
-You extend the `plain` environment in the `evals/environments.ts` file with a variant, `with-rules`. A comparison between the control and the variant shows whether the rules helped.
+You extend the `plain` environment in the `evals/environments.ts` file with a variant, `with-rules`. A comparison between the baseline and the variant shows whether the rules helped.
 
 ## Write rules
 
-In the `evals/environments.ts` file, declare the control and set `rules` to the instructions as a string.
+In the `evals/environments.ts` file, declare the baseline and set `rules` to the instructions as a string.
 
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'

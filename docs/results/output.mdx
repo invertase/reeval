@@ -32,9 +32,9 @@ For more information about setting that model, see [Analyze a run with reeval an
 
 ## Read a comparison
 
-Rows for the control and each variant print under `arm`, `harness`, or `sandbox`. The `pass` column is passed attempts out of counted attempts. The effect word is `helped`, `made it worse`, or `can't tell yet`. Equal pass rates, with at least four counted attempts a side, print no effect word. For more information about how reeval chooses an effect word, see [Comparison](/core-concepts#comparison).
+Rows for the baseline and each variant print under `arm`, `harness`, or `sandbox`. The `pass` column is passed attempts out of counted attempts. The effect word is `helped`, `made it worse`, or `can't tell yet`. Equal pass rates, with at least four counted attempts a side, print no effect word. For more information about how reeval chooses an effect word, see [Comparison](/core-concepts#comparison).
 
-Here `page` is the control and `brand-guidelines` is the variant:
+Here `page` is the baseline and `brand-guidelines` is the variant:
 
 ```text
 pass             styles the page in Anthropic's brand
@@ -51,7 +51,7 @@ When the variant does not reach `compare.minLift`, the row reads like `helped, n
 
 For more information about that interval, see [How reeval decides a change helped](/evals/statistics).
 
-For the control and each variant, a pairwise question prints `won 3 of 4`. The outcome word does not change.
+For the baseline and each variant, a pairwise question prints `won 3 of 4`. The outcome word does not change.
 
 ## Read the assertion and effort tables
 

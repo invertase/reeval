@@ -3,14 +3,14 @@ title: "Measure a skill"
 description: "See whether a skill helped your harness."
 ---
 
-You measure a skill by running one task on a control with no skill and a variant with the skill. The effect reads `helped`, `made it worse`, or `can't tell yet`.
+You measure a skill by running one task on a baseline with no skill and a variant with the skill. The effect reads `helped`, `made it worse`, or `can't tell yet`.
 
 ## Run one task with and without the skill
 
 <Steps>
 <Step title="Write the evaluation">
 
-In the `evals/environments.ts` file, define the control `page` and the variant `withSkill`. The control holds the page the task styles. The variant extends `page` and adds Anthropic's `brand-guidelines` skill, pinned to a commit.
+In the `evals/environments.ts` file, define the baseline `page` and the variant `withSkill`. The baseline holds the page the task styles. The variant extends `page` and adds Anthropic's `brand-guidelines` skill, pinned to a commit.
 
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
@@ -69,7 +69,7 @@ evaluate(
 
 The prompt doesn't name the brand's color or fonts, so `brand orange` and `brand fonts` pass only when the harness knows them. `runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect stays `can't tell yet`. For more information about how reeval reaches the effect, see [Comparison](/core-concepts#comparison).
 
-To also check that the variant loaded the skill, guard `toHaveCalledSkill` with `c.attempt.cell.role === 'variant'`, since the control has no skill to load ([Give the agent skills](/environments/skills#check-the-agent-used-the-skill)).
+To also check that the variant loaded the skill, guard `toHaveCalledSkill` with `c.attempt.cell.role === 'variant'`, since the baseline has no skill to load ([Give the agent skills](/environments/skills#check-the-agent-used-the-skill)).
 
 </Step>
 <Step title="Require a minimum lift">
@@ -112,14 +112,14 @@ pass             styles the page in Anthropic's brand
 
 `brand orange` and `brand fonts` are the rows that separate the cells. `links styles.css` passed on both, so it prints under `+1 more passed`. When the brand assertions pass on both sides, the harness already knows the brand, and this task can't show the skill. For a runnable project, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
 
-For more information about the other gates, see [Compare setups](/evals/compare). For more information about asking which attempt did better, see [Ask which did better](/evals/compare#ask-which-did-better).
+For more information about the other gates, see [Measure lift against a baseline](/evals/compare). For more information about asking which attempt did better, see [Ask which did better](/evals/compare#ask-which-did-better).
 
 </Step>
 </Steps>
 
 ## Compare skill versions
 
-To measure a change to a skill, pin each commit on its own environment. This section uses Matt Pocock's `migrate-to-shoehorn` skill, which changed between two commits, on a `plain` environment that holds the `src/user.ts` file the task tests. The earlier commit is the control, and the later commit is the variant. In the `evals/environments.ts` file, add two environments:
+To measure a change to a skill, pin each commit on its own environment. This section uses Matt Pocock's `migrate-to-shoehorn` skill, which changed between two commits, on a `plain` environment that holds the `src/user.ts` file the task tests. The earlier commit is the baseline, and the later commit is the variant. In the `evals/environments.ts` file, add two environments:
 
 ```ts title="evals/environments.ts"
 export const earlier = plain.extendEnvironment('earlier', ({ skill }) => ({

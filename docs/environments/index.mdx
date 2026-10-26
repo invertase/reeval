@@ -25,7 +25,7 @@ For more information about each environment field, see [Workspaces](/environment
 </Step>
 <Step title="Extend an environment">
 
-In the `evals/environments.ts` file, call `.extendEnvironment()` on `page` to derive `brand-guidelines`. The child keeps the parent's fields and adds its own, so the control and the variant differ by one change.
+In the `evals/environments.ts` file, call `.extendEnvironment()` on `page` to derive `brand-guidelines`. The child keeps the parent's fields and adds its own, so the baseline and the variant differ by one change.
 
 ```ts title="evals/environments.ts"
 export const withSkill = page.extendEnvironment(

@@ -45,7 +45,7 @@ The `REEVAL_PROFILE` environment variable names a profile the same way. `--profi
 
 ## Limit a profile
 
-A profile's `limit` applies after every group and evaluation, and it only narrows. `runs` caps the attempts per cell, `compare: false` runs the control alone, `compare: { maxVariants: n }` keeps the first `n` variants, and `harness` lists the harness ids the run may use. In the `reeval.config.ts` file, restrict the `pr` profile to one harness:
+A profile's `limit` applies after every group and evaluation, and it only narrows. `runs` caps the attempts per cell, `compare: false` runs the baseline alone, `compare: { maxVariants: n }` keeps the first `n` variants, and `harness` lists the harness ids the run may use. In the `reeval.config.ts` file, restrict the `pr` profile to one harness:
 
 ```ts title="reeval.config.ts"
     pr: {

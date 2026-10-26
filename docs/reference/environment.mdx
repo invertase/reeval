@@ -299,7 +299,7 @@ Host lists for `hosts` on `secret()` and `secret.fromEnv()`.
 
 ## `extend()`
 
-`extend()` is `extendEnvironment()` on a `defineEnvironment()` parent. `compare` runs the control and each variant as its own environment, so shared fields are an `extend()` chain. Merging is described under Environment fields.
+`extend()` is `extendEnvironment()` on a `defineEnvironment()` parent. `compare` runs the baseline and each variant as its own environment, so shared fields are an `extend()` chain. Merging is described under Environment fields.
 
 <Property name="name" type="string" required>
   The cell-key name. It starts with a letter or a digit, then letters, digits, `.`, `_`, `@`, `+`, or `-`, and any other name stops the run with exit code 2.

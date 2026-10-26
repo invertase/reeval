@@ -7,7 +7,7 @@ description: "Evaluate how coding agents discover and use developer tools."
 
 **reeval** is an open-source evaluation runner built for developer tools—including SDKs, CLIs, MCP servers, skills, and documentation.
 
-It runs coding agents inside isolated sandboxes, then grades their output using assertions and LLM judges. Run identical prompted tasks across a baseline setup (the control) and a variant (your change) to compare whether it improves or regresses pass rates, token effort, and time.
+It runs coding agents inside isolated sandboxes, then grades their output using assertions and LLM judges. Run identical prompted tasks across a baseline and a variant (your change) to compare whether it improves or regresses pass rates, token effort, and time.
 
 The evaluation is code, committed alongside the tool, skill, or doc you are changing. The result is reproducible evidence you can share in pull requests, docs, or release notes.
 
@@ -40,7 +40,7 @@ Agents, environments, and attempts multiply into sandboxes, grading reads each w
 
 ## Run an evaluation
 
-This one asks for a page in Anthropic's brand, as a control without Anthropic's `brand-guidelines` skill and a variant with it, on both Claude Code and Codex:
+This one asks for a page in Anthropic's brand, as a baseline without Anthropic's `brand-guidelines` skill and a variant with it, on both Claude Code and Codex:
 
 ```ts title="with-library-skill-lift.eval.ts"
 // evals/with-library-skill-lift.eval.ts
@@ -115,7 +115,7 @@ pass             styles the page in Anthropic's brand
   +1 more passed
 ```
 
-The variant passed in 4 of 4 attempts and the control in none, so the skill `helped`. The judge verdict and the question's answer print alongside this per harness; they're trimmed here for space.
+The variant passed in 4 of 4 attempts and the baseline in none, so the skill `helped`. The judge verdict and the question's answer print alongside this per harness; they're trimmed here for space.
 
 ## What you can find out
 

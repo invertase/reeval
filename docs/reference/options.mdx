@@ -80,21 +80,21 @@ The default is:
 harness: cursor({ model: 'composer-2.5' })
 ```
 
-For more information about harness forms, see [Choose a harness](/harnesses#run-several-harnesses).
+For more information about harness forms, see [Run several agents](/harnesses#run-several-agents).
 
 ## `sandbox`
 
 `sandbox` is where an attempt runs when its environment names none.
 
 <Property name="sandbox" type="SandboxDescriptor" optional>
-  A descriptor from a sandbox factory, with `maxConcurrent` a whole number of at least 1. The default is `docker()`. An empty control in a comparison without a baseline or environment uses the first variant's sandbox when that variant sets one.
+  A descriptor from a sandbox factory, with `maxConcurrent` a whole number of at least 1. The default is `docker()`. An empty baseline in a comparison without `compare.baseline` or `environment` uses the first variant's sandbox when that variant sets one.
 </Property>
 
 For more information about sandbox factories, see [Choose a sandbox](/sandboxes).
 
 ## `environment`
 
-`environment` is what an evaluation runs in, and the control of a `compare` without `compare.baseline`.
+`environment` is what an evaluation runs in, and the baseline of a `compare` without `compare.baseline`.
 
 <Property name="environment" type="Environment" optional>
   One environment from `defineEnvironment()`. reeval refuses a list, and `environment` beside `compare.baseline`.
@@ -104,18 +104,18 @@ For more information about environments, see [Define an environment](/environmen
 
 ## `compare`
 
-`compare` runs the control and each variant with the same prompt and assertions.
+`compare` runs the baseline and each variant with the same prompt and assertions.
 
 <Property name="compare" type="CompareOptions | false | { maxVariants: number }" optional>
   A group or an evaluation refuses `false`. On a profile `limit`, `false` drops the variants and `{ maxVariants }` keeps the first that many, where `maxVariants` is a whole number of at least 0.
 </Property>
 
 <Property name="compare.baseline" type="Environment" optional>
-  The control. Without it, the cascaded `environment`, or an empty environment named `baseline`.
+  The baseline. Without it, the cascaded `environment`, or an empty environment named `baseline`.
 </Property>
 
 <Property name="compare.variants" type="Environment[]" required>
-  A non-empty list. reeval refuses two variants with one name, or one named like the control.
+  A non-empty list. reeval refuses two variants with one name, or one named like the baseline.
 </Property>
 
 <Property name="compare.gate" type="'variants' | 'all' | 'none'" optional>
@@ -127,10 +127,10 @@ For more information about environments, see [Define an environment](/environmen
 </Property>
 
 <Property name="compare.harness" type="Array<string | HarnessDescriptor>" optional>
-  The harnesses to compare on; the others run the control only. reeval refuses an id the evaluation does not run.
+  The harnesses to compare on; the others run the baseline only. reeval refuses an id the evaluation does not run.
 </Property>
 
-For more information about comparisons, see [Compare setups](/evals/compare).
+For more information about comparisons, see [Measure lift against a baseline](/evals/compare).
 
 ## `runs`
 
@@ -226,7 +226,7 @@ For more information about the automatic hosts, see [Egress](/environments/egres
   `c.exec` results, or a list of the commands to show. The default is `false`.
 </Property>
 
-For more information about judging, see [Score agent work](/evals/judges).
+For more information about judging, see [Judge agent work](/evals/judges).
 
 ## `capture`
 
@@ -318,7 +318,7 @@ For more information about screenshots, see [Check an app](/evals/servers#set-th
   The answers a question asked of each attempt picks from, with a short reason.
 </Property>
 
-For more information about pairwise questions, see [Compare setups](/evals/compare#ask-which-did-better).
+For more information about pairwise questions, see [Measure lift against a baseline](/evals/compare#ask-which-did-better).
 
 ## `timeout`
 
