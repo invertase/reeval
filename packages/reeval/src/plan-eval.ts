@@ -27,6 +27,7 @@ import { resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { resolveGateway } from './gateway/resolve.ts'
 import { vercelCredentialProblem } from './gateway/vercel.ts'
+import { type VertexSettings, vertexSettings } from './gateway/vertex.ts'
 import { refusedMcp, refusedPlugins } from './harness/agents.ts'
 import { attemptId, attemptKey, evalId, relativeFile } from './ids.ts'
 import {
@@ -165,6 +166,7 @@ function planTests(
   const gatewaySet = ctx.config.gatewaySet || ctx.profile?.gateway !== undefined
   const routes = new Map<string, ResolvedGateway>()
   const gatewayNotes: string[] = []
+  let vertex: VertexSettings | undefined
   // Each harness carries the gateway it resolved to, so the worker, egress and brokering read it
   // from the descriptor; direct leaves the descriptor as written.
   const routed = resolvedEval.skip
@@ -177,12 +179,26 @@ function planTests(
           gatewayNotes.push(`gateway: ${hid} → ${route.name}`)
         }
         if (route.name === 'direct') return harness
-        const problem =
-          harness.kind === 'fake' || route.name !== 'vercel' ? undefined : vercelCredentialProblem()
-        if (problem) throw new UsageError(`${where} on ${hid}: ${problem}`)
+        if (harness.kind !== 'fake') {
+          try {
+            if (route.name === 'vercel') {
+              const problem = vercelCredentialProblem()
+              if (problem) throw new UsageError(problem)
+            }
+            if (route.name === 'vertex') {
+              const entry = gateways.find((g) => g.kind === 'vertex')
+              vertex ??= vertexSettings(entry?.kind === 'vertex' ? entry : {})
+            }
+          } catch (error) {
+            if (error instanceof UsageError) {
+              throw new UsageError(`${where} on ${hid}: ${error.message}`)
+            }
+            throw error
+          }
+        }
         return { ...harness, gateway: route.name }
       })
-  const plannedAttempts = resolvedEval.skip ? [] : expand({ ...resolved, harness: routed })
+  const plannedAttempts = resolvedEval.skip ? [] : expand({ ...resolved, harness: routed }, vertex)
   let judge: AttemptMeta['judge']
   if (plannedAttempts.length) {
     try {

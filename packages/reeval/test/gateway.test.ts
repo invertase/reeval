@@ -13,12 +13,21 @@ import {
 } from '../src/gateway/openrouter.ts'
 import { openRouterBilling, openRouterFallbacks } from '../src/gateway/openrouter-models.ts'
 import { fallbackHint, resolveGateway } from '../src/gateway/resolve.ts'
+import { brokerToken, cachedTokenSource, RETRY_MS } from '../src/gateway/token.ts'
 import {
   jwtExpiry,
   VERCEL_GATEWAY,
   vercelCredential,
   vercelCredentialProblem,
 } from '../src/gateway/vercel.ts'
+import {
+  vertexDecisionModel,
+  vertexHost,
+  vertexLanguageModel,
+  vertexModelRefusal,
+  vertexRegion,
+  vertexSettings,
+} from '../src/gateway/vertex.ts'
 import { everyCallFailed } from '../src/harness/agent.ts'
 import {
   agentAuth,
@@ -715,5 +724,258 @@ describe('OpenRouter routes', () => {
     )
     assert.deepEqual(openRouterBilling({ openrouter: { provider: '' } }), {})
     assert.deepEqual(openRouterBilling(undefined), {})
+  })
+})
+
+describe('Vertex AI routes', () => {
+  const settings = vertexSettings({ project: 'reeval-512515', location: 'us-east5' }, {})
+  const onVertex = (h: HarnessDescriptor) =>
+    agentFor({ ...h, gateway: 'vertex' } as AgentHarnessDescriptor, settings)
+  const STREAM = '/v1/projects/reeval-512515/locations/us-east5/publishers/anthropic/models'
+
+  test('vertex() takes its project from the entry, else GOOGLE_CLOUD_PROJECT, else refuses', () => {
+    assert.deepEqual(vertexSettings({}, { GOOGLE_CLOUD_PROJECT: 'p' }), {
+      project: 'p',
+      location: 'global',
+      regions: {},
+    })
+    assert.equal(vertexSettings({ project: 'q' }, { GOOGLE_CLOUD_PROJECT: 'p' }).project, 'q')
+    assert.throws(() => vertexSettings({}, {}), /vertex\(\) has no project/)
+    assert.equal(vertexHost('global'), 'aiplatform.googleapis.com')
+    assert.equal(vertexHost('us-east5'), 'us-east5-aiplatform.googleapis.com')
+    const regional = vertexSettings({ project: 'p', regions: { anthropic: 'europe-west1' } }, {})
+    assert.equal(vertexRegion(regional, 'anthropic'), 'europe-west1')
+    assert.equal(vertexRegion(regional, 'google'), 'global')
+  })
+
+  test('Claude Code on Vertex is pointed at the project and brokered only on its model calls', () => {
+    const agent = onVertex({ kind: 'claude-code', model: 'claude-sonnet-4-5@20250929' } as never)
+    const host = 'us-east5-aiplatform.googleapis.com'
+    assert.equal(agent.credential, 'Google Cloud credentials')
+    assert.deepEqual(agent.hosts, [host])
+    assert.deepEqual(agent.routeEnv, {
+      CLAUDE_CODE_USE_VERTEX: '1',
+      CLAUDE_CODE_SKIP_VERTEX_AUTH: '1',
+      ANTHROPIC_VERTEX_PROJECT_ID: 'reeval-512515',
+      CLOUD_ML_REGION: 'us-east5',
+    })
+    assert.deepEqual(agentAuth(agent, {}), {}, 'no key from the environment')
+    assert.equal(agent.modelId?.('anthropic/claude-sonnet-4-5'), 'claude-sonnet-4-5')
+    const on = (method: string, h: string, path: string) =>
+      onEndpoint(agent.endpoints, { method, host: h, path, headers: {} })
+    assert.ok(on('POST', host, `${STREAM}/claude-sonnet-4-5@20250929:streamRawPredict`))
+    assert.ok(on('POST', host, `${STREAM}/claude-sonnet-4-5:rawPredict?alt=sse`))
+    assert.ok(!on('GET', host, `${STREAM}/claude-sonnet-4-5:streamRawPredict`))
+    assert.ok(!on('POST', 'aiplatform.googleapis.com', `${STREAM}/m:streamRawPredict`))
+    assert.ok(
+      !on('POST', host, `${STREAM.replace('reeval-512515', 'other')}/m:streamRawPredict`),
+      "another project's calls get no token",
+    )
+    assert.ok(!on('POST', host, `${STREAM.replace('anthropic', 'google')}/m:streamRawPredict`))
+    assert.equal(
+      agent.servedModel?.({
+        host,
+        path: `${STREAM}/claude-sonnet-4-5@1:streamRawPredict`,
+      } as never),
+      'claude-sonnet-4-5@1',
+    )
+    assert.equal(
+      agent.servedModel?.({ host, path: `${STREAM}/count-tokens:rawPredict` } as never),
+      undefined,
+    )
+    const rules = agent.token?.transformations('ya29.t') ?? []
+    assert.deepEqual(
+      rules.map((r) => r.match),
+      agent.endpoints,
+    )
+    assert.ok(rules.every((r) => r.transform.headers?.authorization === 'Bearer ya29.t'))
+    assert.equal(brokeringFor(pinned(claude, 'vertex'), settings)?.credential, agent.credential)
+  })
+
+  test('the gateway serves Claude Code on Vertex, not the agents it has no route for', () => {
+    assert.deepEqual(resolve(list('vertex', 'direct'), claude), { name: 'vertex', skipped: [] })
+    assert.equal(resolve(list('vertex', 'direct'), codex).name, 'direct')
+    assert.throws(
+      () => agentFor({ ...codex, gateway: 'vertex' } as AgentHarnessDescriptor, settings),
+      /doesn't run Codex on Vertex AI/,
+    )
+    assert.throws(
+      () => agentFor({ ...claude, gateway: 'vertex' } as AgentHarnessDescriptor),
+      /no vertex\(\) settings/,
+    )
+    const onVertex = { ...claude, gateway: 'vertex' } as AgentHarnessDescriptor
+    assert.doesNotThrow(() => expectedBlockedFor(onVertex, false, settings))
+    assert.throws(() => expectedBlockedFor(onVertex, false), /no vertex\(\) settings/)
+  })
+
+  test("reeval's own models on Vertex: google/* and anthropic/*, with the host's token", async () => {
+    const regional = vertexSettings(
+      { project: 'reeval-512515', regions: { anthropic: 'us-east5' } },
+      {},
+    )
+    assert.equal(vertexModelRefusal('google/gemini-3.8-flash'), undefined)
+    assert.equal(vertexModelRefusal('anthropic/claude-haiku-4-5'), undefined)
+    assert.match(vertexModelRefusal('openai/gpt-5.4') ?? '', /only google\/\* and anthropic\/\*/)
+    assert.equal(
+      resolveModelGateway(
+        'anthropic/m',
+        undefined,
+        { gateways: list('vertex') } as GatewayScope,
+        'judge model',
+      ),
+      'vertex',
+    )
+    assert.deepEqual(judgeRoute('google/m', {}, 'judge model', 'vertex'), { kind: 'vertex' })
+    assert.deepEqual(judgeCredentials('google/m', 'vertex'), [])
+    await assert.rejects(
+      vertexLanguageModel('openai/gpt-5.4', regional, async () => ({ token: 't', expiresAt: 0 })),
+      /only google\/\* and anthropic\/\*/,
+    )
+
+    const seen: { url: string; authorization: string | null }[] = []
+    const realFetch = globalThis.fetch
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      seen.push({
+        url: String(url),
+        authorization: new Headers(init?.headers).get('authorization'),
+      })
+      throw new Error('offline')
+    }) as typeof fetch
+    try {
+      const source = async () => ({ token: 'ya29.host', expiresAt: Date.now() + 3_600_000 })
+      for (const id of ['anthropic/claude-haiku-4-5@20251001', 'google/gemini-3.8-flash']) {
+        const model = await vertexDecisionModel(id, regional, source)
+        assert.equal(model.provider, 'google-vertex.decision')
+        const inner = await vertexLanguageModel(id, regional, source)
+        await inner
+          .doGenerate({ prompt: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }] })
+          .catch(() => undefined)
+      }
+    } finally {
+      globalThis.fetch = realFetch
+    }
+    assert.deepEqual(
+      seen.map((s) => [new URL(s.url).host, new URL(s.url).pathname, s.authorization]),
+      [
+        [
+          'us-east5-aiplatform.googleapis.com',
+          '/v1/projects/reeval-512515/locations/us-east5/publishers/anthropic/models/claude-haiku-4-5@20251001:rawPredict',
+          'Bearer ya29.host',
+        ],
+        [
+          'aiplatform.googleapis.com',
+          '/v1beta1/projects/reeval-512515/locations/global/publishers/google/models/gemini-3.8-flash:generateContent',
+          'Bearer ya29.host',
+        ],
+      ],
+    )
+  })
+})
+
+describe('brokered tokens', () => {
+  const clock = () => {
+    let t = 0
+    const timers: { at: number; run: () => void; cancelled: boolean }[] = []
+    return {
+      now: () => t,
+      schedule: (run: () => void, ms: number) => {
+        const timer = { at: t + ms, run, cancelled: false }
+        timers.push(timer)
+        return () => {
+          timer.cancelled = true
+        }
+      },
+      async advance(ms: number) {
+        t += ms
+        for (const timer of timers.splice(0)) {
+          if (timer.cancelled) continue
+          if (timer.at <= t) timer.run()
+          else timers.push(timer)
+        }
+        await new Promise((r) => setImmediate(r))
+      },
+      pending: () => timers.filter((x) => !x.cancelled).map((x) => x.at),
+    }
+  }
+  const MIN = 60_000
+
+  test('a cached source shares one mint and one token until near its expiry', async () => {
+    let t = 0
+    let mints = 0
+    const source = cachedTokenSource(
+      async () => {
+        mints += 1
+        return { token: `t${mints}`, expiresAt: t + 60 * MIN }
+      },
+      () => t,
+    )
+    const [a, b] = await Promise.all([source(), source()])
+    assert.equal(mints, 1)
+    assert.equal(a, b)
+    t = 54 * MIN
+    assert.equal((await source()).token, 't1')
+    t = 56 * MIN
+    assert.equal((await source()).token, 't2', 'within five minutes of expiry')
+  })
+
+  test('the session gets fresh rules before each token expires, and none after stop', async () => {
+    const c = clock()
+    let mints = 0
+    const added: string[] = []
+    const brokered = {
+      source: async () => {
+        mints += 1
+        return { token: `t${mints}`, expiresAt: c.now() + 60 * MIN }
+      },
+      transformations: (token: string) => [
+        { match: { host: 'h' }, transform: { headers: { authorization: token } } },
+      ],
+    }
+    const session = {
+      addRequestTransformations: async (rules: readonly { transform: unknown }[]) => {
+        added.push(...rules.map((r) => JSON.stringify(r.transform)))
+      },
+    }
+    const stop = await brokerToken(brokered, session as never, c)
+    assert.equal(added.length, 1)
+    assert.deepEqual(c.pending(), [55 * MIN])
+    await c.advance(55 * MIN)
+    assert.equal(added.length, 2)
+    assert.match(added[1] ?? '', /t2/)
+    assert.deepEqual(c.pending(), [110 * MIN])
+    stop()
+    await c.advance(60 * MIN)
+    assert.equal(added.length, 2)
+    assert.deepEqual(c.pending(), [])
+  })
+
+  test('a failed refresh is retried while the current token works; a failed first mint throws', async () => {
+    const c = clock()
+    let fail = false
+    const errors: unknown[] = []
+    const brokered = {
+      source: async () => {
+        if (fail) throw new Error('offline')
+        return { token: 't', expiresAt: c.now() + 6 * MIN }
+      },
+      transformations: () => [],
+    }
+    const session = { addRequestTransformations: async () => {} }
+    const stop = await brokerToken(brokered, session, {
+      ...c,
+      onError: (e) => errors.push(e),
+    })
+    assert.deepEqual(c.pending(), [MIN], 'never sooner than the 30 s floor, here a minute')
+    fail = true
+    await c.advance(MIN)
+    assert.equal(errors.length, 1)
+    assert.deepEqual(c.pending(), [MIN + RETRY_MS])
+    fail = false
+    await c.advance(RETRY_MS)
+    assert.deepEqual(c.pending(), [MIN + RETRY_MS + MIN])
+    stop()
+    fail = true
+    await assert.rejects(brokerToken(brokered, session, c), /offline/)
+    await assert.rejects(brokerToken(brokered, {}, c), /can't add request transformations/)
   })
 })

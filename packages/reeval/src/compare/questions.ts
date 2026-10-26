@@ -6,8 +6,9 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
-import { cannedModel, hostModel, isFake } from '../analysis/model.ts'
+import { cannedModel, type HostModelSettings, hostModel, isFake } from '../analysis/model.ts'
 import type { EngineEval } from '../engine/node.ts'
+import type { VertexSettings } from '../gateway/vertex.ts'
 import type { AttemptRecord, FileRef, RunRecord } from '../history/types.ts'
 import { recordFileName } from '../ids.ts'
 import { judgeDiff } from '../judge/patch.ts'
@@ -344,7 +345,7 @@ export function questionRequest(input: {
 async function ask(
   model: QuestionModel,
   gateway: GatewayName | undefined,
-  fallbacks: boolean,
+  settings: HostModelSettings,
   input: BlindInput,
   maxOutputTokens: number,
   signal?: AbortSignal,
@@ -352,7 +353,7 @@ async function ask(
   const result = await generateText({
     model: isFake(model)
       ? fakeAnswer(model, input.blind)
-      : await hostModel(model, gateway, 'question model', fallbacks),
+      : await hostModel(model, gateway, 'question model', settings),
     ...questionRequest(input),
     output: Output.object({ schema: voteSchema, name: 'vote' }),
     maxOutputTokens,
@@ -388,6 +389,8 @@ export type AnswerOptions = {
   gateway?: GatewayName
   /** On OpenRouter, whether it may fail the call over to another upstream provider. */
   fallbacks?: boolean
+  /** On vertex, the entry's project and regions. */
+  vertex?: VertexSettings
   pairs: Pair[]
   maxInputTokens: number
   maxOutputTokens: number
@@ -509,7 +512,7 @@ export async function answerQuestion(options: AnswerOptions): Promise<CompareAns
       const { pick, reason, resolvedModel } = await ask(
         model,
         options.gateway,
-        !!options.fallbacks,
+        { fallbacks: !!options.fallbacks, ...(options.vertex ? { vertex: options.vertex } : {}) },
         input,
         options.maxOutputTokens,
         options.signal,
@@ -625,6 +628,8 @@ export type AttemptAnswerOptions = {
   model: QuestionModel
   gateway?: GatewayName
   fallbacks?: boolean
+  /** On vertex, the entry's project and regions. */
+  vertex?: VertexSettings
   attempt: PairAttempt
   maxInputTokens: number
   maxOutputTokens: number
@@ -656,7 +661,10 @@ export async function answerAttempt(
     const result = await generateText({
       model: isFake(model)
         ? fakeAttemptAnswer(model, input.blind)
-        : await hostModel(model, options.gateway, 'question model', !!options.fallbacks),
+        : await hostModel(model, options.gateway, 'question model', {
+            fallbacks: !!options.fallbacks,
+            ...(options.vertex ? { vertex: options.vertex } : {}),
+          }),
       ...questionRequest(input),
       output: Output.object({ schema: answerSchema(choices), name: 'answer' }),
       maxOutputTokens: options.maxOutputTokens,
@@ -853,6 +861,8 @@ export type EvalQuestions = {
     gateway?: GatewayName
     /** On OpenRouter, whether it may fail the call over to another upstream provider. */
     fallbacks?: boolean
+    /** On vertex, the entry's project and regions. */
+    vertex?: VertexSettings
     /** Set on a pairwise question; without it, the question is asked of each attempt. */
     across?: PairFactor | PairFactor[]
     choices?: string[]
@@ -964,6 +974,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
               model: q.model,
               ...(q.gateway ? { gateway: q.gateway } : {}),
               ...(q.fallbacks ? { fallbacks: q.fallbacks } : {}),
+              ...(q.vertex ? { vertex: q.vertex } : {}),
               attempt,
               maxInputTokens: options.maxInputTokens,
               maxOutputTokens: options.maxOutputTokens,
@@ -1042,6 +1053,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
             model: q.model,
             ...(q.gateway ? { gateway: q.gateway } : {}),
             ...(q.fallbacks ? { fallbacks: q.fallbacks } : {}),
+            ...(q.vertex ? { vertex: q.vertex } : {}),
             pairs: pairsOf(staged, acrossOf(pairFactors(q.across))),
             maxInputTokens: options.maxInputTokens,
             maxOutputTokens: options.maxOutputTokens,

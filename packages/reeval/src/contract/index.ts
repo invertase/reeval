@@ -40,6 +40,7 @@ import {
   gatewayNameSchema,
   openrouterGatewaySchema,
   vercelGatewaySchema,
+  vertexGatewaySchema,
 } from './gateway.ts'
 import {
   antigravityHarnessSchema,
@@ -109,6 +110,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   DirectGatewayDescriptor: directGatewaySchema,
   VercelGatewayDescriptor: vercelGatewaySchema,
   OpenRouterGatewayDescriptor: openrouterGatewaySchema,
+  VertexGatewayDescriptor: vertexGatewaySchema,
   GatewayEntryData: gatewayEntryDataSchema,
   JudgeStateOptions: judgeStateSchema,
   Question: questionSchema,

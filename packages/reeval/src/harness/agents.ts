@@ -20,6 +20,7 @@ import {
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { OPENROUTER_KEY } from '../gateway/openrouter.ts'
 import { isRoutingGateway, ROUTING_GATEWAYS } from '../gateway/routes.ts'
+import type { BrokeredToken } from '../gateway/token.ts'
 import {
   FX_VERCEL_CALL,
   FX_VERCEL_ENDPOINTS,
@@ -28,6 +29,7 @@ import {
   VERCEL_HOST,
   VERCEL_KEY,
 } from '../gateway/vercel.ts'
+import { VERTEX_ROUTES, type VertexSettings } from '../gateway/vertex.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import { withoutBom } from '../text.ts'
 import type {
@@ -85,8 +87,19 @@ export type Agent = Layout & {
   name: string
   /** The `reeval/harness` factory, for messages. */
   factory: string
-  /** The host variable the harness authenticates with. It never enters the sandbox. */
+  /**
+   * The host variable the harness authenticates with. It never enters the sandbox. With `token`,
+   * what the token is minted from, for messages.
+   */
   credential: string
+  /**
+   * A short-lived token reeval mints on the host (Vertex AI's Google Cloud access token), which
+   * the egress gateway adds to the agent's requests and replaces before it expires, in place of
+   * `credential` from the environment.
+   */
+  token?: BrokeredToken
+  /** Variables the adapter sets for the agent on its gateway's route (Vertex's project and region). */
+  routeEnv?: Record<string, string>
   /** The variable the adapter takes the credential as, when not its own name (a gateway's key). */
   authAs?: string
   /** Variables the adapter takes beside the credential, such as the base URL a gateway sets. */
@@ -172,6 +185,8 @@ export type Agent = Layout & {
   adapter: (options: {
     mcpServers?: Record<string, unknown>
     auth: Record<string, string>
+    /** `routeEnv`, for the agent's environment. */
+    env?: Record<string, string>
     descriptor: AgentHarnessDescriptor
     /** The model id the agent asks for: `modelId` of the harness's own. */
     model: string
@@ -906,7 +921,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
       },
     ],
     mcpServers: claudeMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor }) =>
+    adapter: async ({ auth, env, mcpServers, descriptor }) =>
       (await import('@ai-sdk/harness-claude-code')).createClaudeCode({
         auth,
         ...(mcpServers ? { mcpServers } : {}),
@@ -920,6 +935,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
           // No telemetry, error reporting or feature-flag fetches: fewer endpoints for the key,
           // and flags that can't change between runs.
           CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+          ...env,
         },
       }),
   },
@@ -1377,9 +1393,18 @@ export function refusedPlugins(
   return undefined
 }
 
-/** A real agent's catalog entry, with what its model's provider decides. */
-export function agentFor(h: AgentHarnessDescriptor): Agent {
+/**
+ * A real agent's catalog entry, with what its model's provider decides, or its gateway's route:
+ * on Vertex, the attempt's `vertex()` settings decide the project and region.
+ */
+export function agentFor(h: AgentHarnessDescriptor, vertex?: VertexSettings): Agent {
   const agent = AGENTS[h.kind]
+  if (h.gateway === 'vertex') {
+    const route = VERTEX_ROUTES[h.kind]
+    if (!route) throw new InfraError(`reeval doesn't run ${agent.name} on Vertex AI`)
+    if (!vertex) throw new InfraError(`${agent.name} on Vertex AI has no vertex() settings`)
+    return { ...agent, ...route(vertex) }
+  }
   if (isRoutingGateway(h.gateway)) {
     const gateway = ROUTING_GATEWAYS[h.gateway]
     const route = gateway.routes[h.kind]
@@ -1391,11 +1416,15 @@ export function agentFor(h: AgentHarnessDescriptor): Agent {
 }
 
 /** The catalog entry for a harness's agent; undefined for the fake harness. */
-export const agentOf = (h: HarnessDescriptor): Agent | undefined =>
-  h.kind === 'fake' ? undefined : agentFor(h)
+export const agentOf = (h: HarnessDescriptor, vertex?: VertexSettings): Agent | undefined =>
+  h.kind === 'fake' ? undefined : agentFor(h, vertex)
 
-/** The host variable a harness authenticates with; undefined for the fake harness. */
-export const credentialOf = (h: HarnessDescriptor): string | undefined => agentOf(h)?.credential
+/**
+ * The host variable a harness authenticates with; undefined for the fake harness, and on Vertex,
+ * whose token comes from Application Default Credentials.
+ */
+export const credentialOf = (h: HarnessDescriptor): string | undefined =>
+  h.kind === 'fake' || h.gateway === 'vertex' ? undefined : agentFor(h).credential
 
 /** The fake agent's own layout. */
 const FAKE_LAYOUT: Layout = {
@@ -1413,15 +1442,16 @@ export function layoutOf(descriptor: HarnessDescriptor): Layout {
 
 /**
  * The hosts a harness's agent is known to try in a session with or without plugins; a fake agent
- * with `layout` expects that agent's.
+ * with `layout` expects that agent's. On Vertex, the attempt's `vertex()` settings pick the route.
  */
 export function expectedBlockedFor(
   descriptor: HarnessDescriptor,
   plugins: boolean,
+  vertex?: VertexSettings,
 ): ExpectedBlocked | undefined {
   const expected =
     descriptor.kind !== 'fake'
-      ? agentFor(descriptor).expectedBlocked
+      ? agentFor(descriptor, vertex).expectedBlocked
       : descriptor.layout
         ? AGENTS[descriptor.layout].expectedBlocked
         : undefined
@@ -1445,11 +1475,18 @@ const REFUSED_KEY =
  */
 export function authHint(agent: Agent, message: string, refused = false): string | undefined {
   if (!refused && !REFUSED_KEY.test(message)) return undefined
+  if (agent.token) {
+    return `The API rejected the access token reeval minted from ${agent.credential}: check gcloud auth application-default login (or GOOGLE_APPLICATION_CREDENTIALS) and the project's Vertex AI access`
+  }
   return `The API rejected ${agent.credential}: set a valid key in the environment or .env.local`
 }
 
-/** The agent's credential from the host, as the adapter's explicit `auth`. Fails closed. */
+/**
+ * The agent's credential from the host, as the adapter's explicit `auth`. Fails closed. Empty for
+ * a brokered token, which the adapter never sees.
+ */
 export function agentAuth(agent: Agent, env: NodeJS.ProcessEnv = process.env) {
+  if (agent.token) return {}
   const value = env[agent.credential]
   if (!value) {
     throw new InfraError(
@@ -1473,8 +1510,8 @@ export type Brokering = {
   upstream?: Upstream
 }
 
-export function brokeringFor(h: HarnessDescriptor): Brokering | undefined {
-  const agent = agentOf(h)
+export function brokeringFor(h: HarnessDescriptor, vertex?: VertexSettings): Brokering | undefined {
+  const agent = agentOf(h, vertex)
   if (!agent) return undefined
   const { credential, endpoints, tokens, servedModel, askedModel, modelResponses, upstream } = agent
   return {

@@ -107,7 +107,11 @@ export async function recordOom(
  */
 export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
   const traffic = sandbox?.traffic?.()
-  const expected = expectedBlockedFor(a.spec.harness, (a.env?.plugins.length ?? 0) > 0)
+  const expected = expectedBlockedFor(
+    a.spec.harness,
+    (a.env?.plugins.length ?? 0) > 0,
+    a.spec.vertex,
+  )
   const refused = traffic?.blocked ?? []
   const isExpected = (h: { host: string }) => !!expected?.hosts.includes(h.host)
   const expectedBlocked = refused.filter(isExpected)

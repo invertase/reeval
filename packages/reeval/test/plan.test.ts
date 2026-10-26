@@ -136,6 +136,7 @@ export const cases: PlanCase[] = [
     args: ['--config', 'reeval.openrouter.config.ts', '--profile', 'fallbacks'],
   },
   { dir: 'gateway', name: 'openrouter-yaml', args: ['--config', 'reeval.openrouter.yaml'] },
+  { dir: 'gateway', name: 'vertex-yaml', args: ['--config', 'reeval.vertex.yaml'] },
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
@@ -364,7 +365,7 @@ evaluate('unknown', async () => {})
       assert.equal(r.code, 2, r.stdout + r.stderr)
       assert.match(
         r.stderr,
-        /gateway\[0\] in reeval\.config\.ts is "vercell", which isn't a gateway reeval knows: 'direct' or 'vercel' or 'openrouter'\. Did you mean 'vercel'\?/,
+        /gateway\[0\] in reeval\.config\.ts is "vercell", which isn't a gateway reeval knows: 'direct' or 'vercel' or 'openrouter' or 'vertex'\. Did you mean 'vercel'\?/,
       )
     }
     assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')

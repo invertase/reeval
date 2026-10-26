@@ -664,7 +664,15 @@ for (const row of harnesses) {
           },
           timeoutMs: 25 * 60_000,
         })
-        const { run, dir } = readRun(p.dir)
+        let recorded: ReturnType<typeof readRun>
+        try {
+          recorded = readRun(p.dir)
+        } catch (error) {
+          throw new Error(
+            `${(error as Error).message}: reeval run exited ${cli.code}\n${cli.stdout}\n${cli.stderr}`,
+          )
+        }
+        const { run, dir } = recorded
         ran = { cli, run, runDir: dir, project: p.dir }
         spent.set(row.id, withTurns(run).length)
         // One set of captures per CLI: its row on another provider sends the same stream.

@@ -16,6 +16,7 @@ import type {
   ResolvedProfile,
 } from '../types.ts'
 import { gatewayHelper } from './resolve.ts'
+import { vertexModelRefusal } from './vertex.ts'
 
 const providerOf = (model: string) => model.slice(0, model.indexOf('/'))
 
@@ -29,6 +30,7 @@ const MODEL_GATEWAYS: Readonly<Record<GatewayName, (model: string) => string | u
           .join(', ')} models on their own keys`,
   vercel: () => undefined,
   openrouter: () => undefined,
+  vertex: vertexModelRefusal,
 }
 
 /** The run's gateway list: the profile's, else the config's (`[direct()]` when neither sets one). */

@@ -39,6 +39,7 @@ export type HarnessRow = {
     | 'fx'
     | 'fx-gateway'
     | 'claude-code-gateway'
+    | 'claude-code-vertex'
     | 'codex-gateway'
     | 'opencode-gateway'
     | 'goose-gateway'
@@ -54,7 +55,7 @@ export type HarnessRow = {
    */
   harness?: 'opencode' | 'fx' | 'claude-code' | 'codex' | 'goose' | 'pi' | 'grok-build'
   /** `REEVAL_CONTRACT_GATEWAY`: the config's `gateway` list is this gateway alone. */
-  gateway?: 'vercel' | 'openrouter'
+  gateway?: 'vercel' | 'openrouter' | 'vertex'
   /**
    * Why the row is skipped unless `REEVAL_CONTRACT_HARNESSES` names it, such as a key CI doesn't
    * have yet.
@@ -67,6 +68,11 @@ export type HarnessRow = {
    * (the first that's set). Null for the fake agent, which needs no key.
    */
   key: { name: string; from: string[] } | null
+  /**
+   * Host variables the run needs besides the key (`vertex()`'s project), passed through as they
+   * are: the tests start `reeval` from an allowlisted environment.
+   */
+  hostEnv?: string[]
   /** reeval's image for it, which the Docker tier needs built. */
   image: BakedHarness
   /** Where the placed contract skill shows up in the attempt's `context`. */
@@ -360,6 +366,25 @@ export const harnesses: HarnessRow[] = [
     wireModel: null,
   },
   {
+    // Claude Code on Vertex AI through `gateway: [vertex()]`, the project from GOOGLE_CLOUD_PROJECT:
+    // no key at all, a token minted from the host's Application Default Credentials that the
+    // gateway adds to its model calls. The row's "key" is the credentials file, which must stay
+    // out of the container like any key.
+    id: 'claude-code-vertex',
+    harness: 'claude-code',
+    gateway: 'vertex',
+    model: 'claude-haiku-4-5@20251001',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'claude-code',
+    skillContext: /^~\/\.claude\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: true,
+    servedModel: /claude-haiku-4-5/,
+    wireModel: /claude-haiku-4-5/,
+  },
+  {
     // Codex on Vercel AI Gateway: a Responses API provider on Vercel, the model as openai/<id>.
     id: 'codex-gateway',
     harness: 'codex',
@@ -572,7 +597,10 @@ export function skipRow(row: HarnessRow): string | false {
   return false
 }
 
-/** The host environment for `reeval run` on this row: the key under its own name, and the row's pick. */
+/**
+ * The host environment for `reeval run` on this row: the key under its own name, its `hostEnv`,
+ * and the row's pick.
+ */
 export function rowEnv(row: HarnessRow): NodeJS.ProcessEnv {
   const key = keyOf(row)
   return {
@@ -581,6 +609,9 @@ export function rowEnv(row: HarnessRow): NodeJS.ProcessEnv {
     ...(row.gateway ? { REEVAL_CONTRACT_GATEWAY: row.gateway } : {}),
     ...(row.plugin ? { REEVAL_CONTRACT_PLUGIN_PARTS: row.plugin.parts.join(',') } : {}),
     ...(row.key && key ? { [row.key.name]: key } : {}),
+    ...Object.fromEntries(
+      (row.hostEnv ?? []).flatMap((name) => (process.env[name] ? [[name, process.env[name]]] : [])),
+    ),
     ...(process.env.REEVAL_RAW_TRANSCRIPT
       ? { REEVAL_RAW_TRANSCRIPT: process.env.REEVAL_RAW_TRANSCRIPT }
       : {}),
@@ -625,6 +656,12 @@ export function reserveAttempts(row: HarnessRow, attempts: number, what: string)
   if (row.key && !keyOf(row)) {
     throw new Error(
       `${row.key.from.join(' or ')} isn't set, and REEVAL_TEST_REAL=1 asks for real ${row.id}: set it, or leave ${row.id} out of REEVAL_CONTRACT_HARNESSES`,
+    )
+  }
+  const unset = (row.hostEnv ?? []).filter((name) => !process.env[name])
+  if (unset.length) {
+    throw new Error(
+      `${unset.join(' and ')} isn't set, and REEVAL_TEST_REAL=1 asks for real ${row.id}: set it, or leave ${row.id} out of REEVAL_CONTRACT_HARNESSES`,
     )
   }
   const budget = Number(process.env.REEVAL_REAL_ATTEMPT_BUDGET)

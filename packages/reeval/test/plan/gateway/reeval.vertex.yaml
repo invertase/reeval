@@ -1,0 +1,8 @@
+# Vertex first with its settings: Claude Code runs there, in its Anthropic region; Codex falls
+# through to direct.
+harness:
+  - { kind: claude-code, model: claude-sonnet-4-5 }
+  - { kind: codex, model: gpt-5.4-mini }
+gateway:
+  - { vertex: { project: reeval-512515, location: global, regions: { anthropic: us-east5 } } }
+  - direct

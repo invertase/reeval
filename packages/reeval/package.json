@@ -87,6 +87,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.83",
     "@ai-sdk/google": "4.0.100",
+    "@ai-sdk/google-vertex": "5.0.116",
     "@ai-sdk/harness": "1.0.156",
     "@ai-sdk/harness-acp": "1.0.95",
     "@ai-sdk/openai": "4.0.97",
@@ -102,6 +103,7 @@
     "ai": "7.0.145",
     "commander": "15.0.0",
     "get-tsconfig": "4.14.3",
+    "google-auth-library": "^10.9.1",
     "hono": "4.13.13",
     "jiti": "2.7.0",
     "picomatch": "4.0.7",

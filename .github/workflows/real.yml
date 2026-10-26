@@ -79,6 +79,8 @@ jobs:
   pinned:
     name: contract (pinned)
     needs: gate
+    # contract.yml's Google workload identity federation.
+    permissions: { contents: read, id-token: write }
     uses: ./.github/workflows/contract.yml
     with:
       versions: pinned
@@ -88,6 +90,8 @@ jobs:
   latest:
     name: contract (latest)
     needs: [gate, pinned]
+    # contract.yml's Google workload identity federation.
+    permissions: { contents: read, id-token: write }
     # After the pinned leg, pass or fail, so the two never spend at once.
     if: >-
       !cancelled() && needs.gate.result == 'success' &&

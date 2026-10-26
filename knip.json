@@ -30,7 +30,6 @@
       "ignoreDependencies": [
         "@ai-sdk/harness-acp",
         "@ai-sdk/provider",
-        "@ai-sdk/provider-utils",
         "@balena/dockerignore",
         "studio-web"
       ]
