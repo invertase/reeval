@@ -9,6 +9,7 @@ import {
 } from '@reeval/harness-opencode/providers'
 import type { EndpointMatch } from '@reeval/sandbox-docker'
 import type { ModelSpecific } from '../harness/agents.ts'
+import { everyModel, notGemini } from './effort.ts'
 import type { GatewayRoute, RoutingGateway } from './routes.ts'
 
 export const VERCEL_HOST = 'ai-gateway.vercel.sh'
@@ -229,6 +230,8 @@ export const VERCEL_GATEWAY: RoutingGateway = {
     cursor: "Cursor's agent only calls Cursor's own API",
     antigravity: "Antigravity's CLI only calls Google's API, with a Gemini key",
   },
-  // Claude Code's effort goes as on Anthropic's API, and Codex's response names the effort it ran at.
-  unprovenEffort: ['goose', 'opencode', 'grok-build'],
+  // Claude Code's effort goes as on Anthropic's API, Codex's response names the effort it ran at,
+  // pi and OpenCode send a Gemini model's thinking level under providerOptions, and Grok Build
+  // sends reasoning_effort (an xAI model's own). Goose's vercel_ai_gateway provider sends none.
+  unprovenEffort: { goose: everyModel, opencode: notGemini },
 }

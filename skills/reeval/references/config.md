@@ -82,8 +82,8 @@ attempt and run (no prices).
 
 `gateway` (`reeval/gateway`) lists the routes model calls may take, in order: each harness, the
 judge and analysis take the first that can serve them. `gateway: [vercel(), direct()]` runs Claude
-Code, Codex, Goose, OpenCode, fx and Grok Build on Vercel AI Gateway with one `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`) (pi, and
-`effort` on Goose, OpenCode or Grok Build, fall through to `direct()`), and
+Code, Codex, Goose, pi, OpenCode, fx and Grok Build on Vercel AI Gateway with one `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`) (`effort`
+on Goose, or on OpenCode with a model other than Gemini, falls through to `direct()`), and
 everything else on its own key; the plan's hint says where each harness fell through. Pin one with
 the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. `vertex({ project })`
 (else `GOOGLE_CLOUD_PROJECT`) runs Claude Code, Antigravity, OpenCode, Goose and pi on Vertex AI

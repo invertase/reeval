@@ -127,7 +127,7 @@ export type EgressRequestEvent = {
   responseHeaders?: Headers
   /**
    * The reasoning settings the request body carried, on a `modelResponses` endpoint or a host
-   * the gateway holds a harness credential for, as
+   * the gateway holds a harness credential or token for, as
    * `<path>=<value>` joined by spaces: `reasoning_effort=high`, or
    * `generationConfig.thinkingConfig.thinkingLevel=LOW`.
    */
@@ -940,9 +940,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     t?: RequestTracker,
     readsEffort = false,
   ): Readable | Transform {
-    const counted = t ? req.pipe(counter(t.sent)) : req
     const encoded = String(headers['content-encoding'] ?? 'identity') !== 'identity'
-    if (readsEffort && t && !encoded) readEffort(counted, t)
+    const sent = t ? req.pipe(counter(t.sent)) : req
+    const counted = readsEffort && t && !encoded ? sent.pipe(effortReader(t)) : sent
     if (encoded || !own.some((s) => s.in.includes('body'))) return counted
     delete headers['content-length']
     return counted.pipe(bodySubstituter(own))
@@ -1103,18 +1103,27 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   /** Most of a request body the gateway reads for its reasoning settings: a long session's. */
   const EFFORT_LIMIT = 16 * 1024 * 1024
 
-  /** Records the reasoning settings in a model call's JSON body, read alongside its flow. */
-  function readEffort(body: Readable, t: RequestTracker) {
+  /**
+   * The body passed on as it flows, recording the reasoning settings its JSON carries once it
+   * ends. A transform, not a `data` listener: that would start the body flowing before the
+   * upstream request is there to take it.
+   */
+  function effortReader(t: RequestTracker): Transform {
     const chunks: Buffer[] = []
     let size = 0
-    body.on('data', (chunk: Buffer) => {
-      size += chunk.length
-      if (size <= EFFORT_LIMIT) chunks.push(chunk)
-    })
-    body.once('end', () => {
-      if (size > EFFORT_LIMIT) return
-      const effort = requestedEffort(Buffer.concat(chunks).toString('utf8'))
-      if (effort) t.set({ requestEffort: effort })
+    return new Transform({
+      transform(chunk: Buffer, _encoding, done) {
+        size += chunk.length
+        if (size <= EFFORT_LIMIT) chunks.push(chunk)
+        done(null, chunk)
+      },
+      flush(done) {
+        if (size <= EFFORT_LIMIT) {
+          const effort = requestedEffort(Buffer.concat(chunks).toString('utf8'))
+          if (effort) t.set({ requestEffort: effort })
+        }
+        done()
+      },
     })
   }
 
@@ -1230,7 +1239,11 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     }
     delete headers.upgrade
     delete headers.connection
-    const readsEffort = !!readsModel || credentialValues(rules, target.host).length > 0
+    const readsEffort =
+      !!readsModel ||
+      credentialValues(rules, target.host).length > 0 ||
+      substitutes(allSubs(), target.host) ||
+      hostAllowed(tokenHosts, target.host)
     const body = requestBody(req as Readable, headers, own, t, readsEffort)
     const authority = authorityOf(target.host, target.port)
     const session = req.httpVersionMajor === 2 ? await upstreamSession(target) : null

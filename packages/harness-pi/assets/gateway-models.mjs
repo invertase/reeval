@@ -21,9 +21,12 @@ const catalog = JSON.parse(
 )
 const id = model.replace(/^google\//, '')
 const entry = Object.values(catalog['google-generative-ai'] ?? {}).find((m) => m.id === id)
-if (!entry) fail(`pi's catalog has no Gemini model ${id}, so pi can't run ${model} on ${provider.name}`)
+if (!entry)
+  fail(`pi's catalog has no Gemini model ${id}, so pi can't run ${model} on ${provider.name}`)
 if (entry.reasoning && !entry.thinkingLevelMap) {
-  fail(`${id} takes a thinking budget, not a thinking level, so pi can't run it on ${provider.name}`)
+  fail(
+    `${id} takes a thinking budget, not a thinking level, so pi can't run it on ${provider.name}`,
+  )
 }
 
 const thinking = (level) => ({ thinkingConfig: { thinkingLevel: level, includeThoughts: true } })
@@ -46,7 +49,11 @@ const models = {
       apiKey: `$${provider.credentialEnv}`,
       // Each level goes as the native thinkingConfig above; the gateway's shared effort field
       // would map Gemini's levels onto its own.
-      compat: { supportsReasoningEffort: false, supportsStore: false, supportsDeveloperRole: false },
+      compat: {
+        supportsReasoningEffort: false,
+        supportsStore: false,
+        supportsDeveloperRole: false,
+      },
       models: [
         {
           id: model,

@@ -51,15 +51,32 @@ export const OPENCODE_DENIED_TOOLS = ['question', 'browser'] as const
  */
 export const OPENCODE_WEB_SEARCH = { provider: 'exa', host: 'mcp.exa.ai' } as const
 
+/** Gemini's own thinking level, as Gemini's API takes it. */
+const geminiThinking = (effort: string) => ({ thinkingConfig: { thinkingLevel: effort } })
+
 /**
- * Provider thinking option: Anthropic's `thinking`, everyone else's `reasoningEffort`, keyed on
- * the model's own provider, which follows `vercel/` for a model on Vercel AI Gateway (OpenCode
- * passes the options on under that provider's name).
+ * What OpenCode adds to the body of each call on `model` for `effort` (its config's per-model
+ * `body`; OpenCode 2 has no per-model provider options), in the API's own field: Gemini's
+ * `thinkingConfig` (Gemini's API and Vertex AI), Anthropic's `output_config.effort`, the Responses API's `reasoning.effort`,
+ * OpenRouter's `reasoning.effort` (which it sends a Gemini model as its thinking level), and a
+ * Gemini model's `thinkingConfig` under Vercel AI Gateway's `providerOptions` (Vercel's own effort
+ * field maps every Gemini 3 level but `low` to `high`). Undefined for a provider whose field no
+ * run has checked.
  */
-export function openCodeEffortOptions(model: string, effort: string) {
+export function openCodeEffortBody(
+  model: string,
+  effort: string,
+): Record<string, unknown> | undefined {
   const parts = splitModel(model)
-  const upstream = parts?.provider === 'vercel' ? splitModel(parts.model) : parts
-  return upstream?.provider === 'anthropic' ? { thinking: effort } : { reasoningEffort: effort }
+  if (parts?.provider === 'openrouter') return { reasoning: { effort } }
+  if (parts?.provider === 'google' || parts?.provider === OPENCODE_VERTEX_PROVIDER)
+    return { generationConfig: geminiThinking(effort) }
+  if (parts?.provider === 'anthropic') return { output_config: { effort } }
+  if (parts?.provider === 'openai') return { reasoning: { effort } }
+  if (parts?.provider === 'vercel' && splitModel(parts.model)?.provider === 'google') {
+    return { providerOptions: { google: geminiThinking(effort), vertex: geminiThinking(effort) } }
+  }
+  return undefined
 }
 
 /**
@@ -76,10 +93,8 @@ export function openCodeConfig(options: OpenCodeConfigOptions = {}) {
   const parts = options.model ? splitModel(options.model) : undefined
   const provider = parts?.provider
   const modelId = parts?.model
-  const effortOptions =
-    options.model && options.effort
-      ? openCodeEffortOptions(options.model, options.effort)
-      : undefined
+  const effortBody =
+    options.model && options.effort ? openCodeEffortBody(options.model, options.effort) : undefined
   return {
     update: 'disable',
     share: 'disabled',
@@ -95,9 +110,7 @@ export function openCodeConfig(options: OpenCodeConfigOptions = {}) {
           providers: {
             [provider]: {
               settings: { transport: 'http' },
-              ...(effortOptions && modelId
-                ? { models: { [modelId]: { options: effortOptions } } }
-                : {}),
+              ...(effortBody && modelId ? { models: { [modelId]: { body: effortBody } } } : {}),
             },
           },
         }
@@ -117,7 +130,7 @@ export function openCodeConfig(options: OpenCodeConfigOptions = {}) {
 export type OpenCodeConfigOptions = {
   model?: string
   mcpServers?: OpenCodeHarnessSettings['mcpServers']
-  /** Reasoning effort: `options.reasoningEffort` or Anthropic's `options.thinking`. */
+  /** Reasoning effort, in the request body's own field ({@link openCodeEffortBody}). */
   effort?: string
 }
 
@@ -166,8 +179,8 @@ export type OpenCodeHarnessSettings = {
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
   readonly requireCredentialBrokering?: boolean
   /**
-   * Reasoning effort for the model's provider: `options.reasoningEffort` (OpenAI) or
-   * `options.thinking` (Anthropic). Values are whatever that provider takes.
+   * Reasoning effort, in the field the model's provider takes it in ({@link openCodeEffortBody}).
+   * Values are whatever that field takes; a provider with no such field is refused.
    */
   readonly effort?: string
   /**
@@ -207,6 +220,11 @@ export const openCodeEndpoints = (model: string, env: Record<string, string | un
  */
 export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<OpenCodeBuiltinTools> {
   const route = settings.vertex ? vertexRoute(settings, settings.vertex) : keyRoute(settings)
+  if (settings.effort && !openCodeEffortBody(settings.model, settings.effort)) {
+    throw new Error(
+      `OpenCode's effort on ${settings.model} goes in no field reeval has checked the model reads; drop effort, or run a model on Google, Vertex AI, Anthropic, OpenAI or OpenRouter, or a Gemini model on Vercel AI Gateway`,
+    )
+  }
   const acp = createACP({
     version: 'v1',
     harnessId: OPENCODE_HARNESS_ID,

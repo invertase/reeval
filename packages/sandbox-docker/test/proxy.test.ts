@@ -393,7 +393,14 @@ async function viaProxy(
 }
 
 /** The same over HTTP/2, as the Cursor CLI's Connect clients can. */
-async function viaProxyH2(gw: Gw, host: string, port: number, path: string, auth = '') {
+async function viaProxyH2(
+  gw: Gw,
+  host: string,
+  port: number,
+  path: string,
+  auth = '',
+  sent = '{}',
+) {
   const tunnel = await connect(gw, host, port)
   if (!tunnel.ok) throw new Error(`refused: ${tunnel.status}`)
   const session = http2.connect(`https://${host}:${port}`, {
@@ -423,7 +430,7 @@ async function viaProxyH2(gw: Gw, host: string, port: number, path: string, auth
         })
         stream.on('end', () => resolve({ status, body, trailers }))
         stream.on('error', reject)
-        stream.end('{}')
+        stream.end(sent)
       },
     )
   } finally {
@@ -2146,6 +2153,24 @@ describe('the model a response names, on a modelResponses endpoint', () => {
     }
   })
 
+  test('over HTTP/2, the body reaches upstream whole while it is read', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, { onEvent: (e) => events.push(e) })
+    try {
+      gw.proxy.addTransformations([brokered])
+      const r = await viaProxyH2(gw, HOST, h2.port, '/echo', `Bearer ${PLACEHOLDER}`, effortBody)
+      assert.equal(r.status, 200)
+      assert.equal(JSON.parse(r.body).body, effortBody)
+      const e = await requestEvent(events)
+      assert.equal(
+        e?.type === 'request' && e.requestEffort,
+        'providerOptions.google.thinkingConfig.thinkingLevel=low reasoning_effort=high',
+      )
+    } finally {
+      gw.close()
+    }
+  })
+
   test('twin: off the endpoints, the response is neither read nor its encoding changed', async () => {
     const events: EgressEvent[] = []
     const gw = await startProxy(undefined, {
@@ -2275,6 +2300,28 @@ describe('derived tokens through the proxy', () => {
         /self-signed|unable to verify|certificate/i,
       )
       assert.equal(seen.length, 2)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a model call on a token host has its reasoning settings read', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, { derivedTokens, onEvent: (e) => events.push(e) })
+    try {
+      const { accessToken } = JSON.parse((await exchange(gw)).body) as { accessToken: string }
+      events.length = 0
+      await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path: '/v1/generate',
+        headers: { authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ generationConfig: { thinkingConfig: { thinkingLevel: 'low' } } }),
+      })
+      const e = events.find((e) => e.type === 'request')
+      assert.equal(
+        e?.type === 'request' && e.requestEffort,
+        'generationConfig.thinkingConfig.thinkingLevel=low',
+      )
     } finally {
       gw.close()
     }

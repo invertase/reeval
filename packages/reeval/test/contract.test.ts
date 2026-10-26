@@ -390,15 +390,22 @@ export const behaviours: Behaviour[] = [
       assert.ok(a, 'the effort eval has no attempt')
       assert.equal(a.id, `${cellOf(row)}[effort=${effort.value}]/notes/docker#1`)
       assert.equal(a.outcome, 'pass', `effort: ${detail(a)}`)
-      const calls = modelCalls(ran, row, a)
-      assert.ok(calls.length > 1, `effort: ${calls.length} model calls`)
+      // A CLI's own side calls (a session title) may set no reasoning, or turn it off and be
+      // refused (Goose's on OpenRouter); every answered call that sets any sets the effort.
+      const calls = modelCalls(ran, row, a).filter(
+        (c) => c.requestEffort && c.status !== undefined && c.status >= 200 && c.status < 300,
+      )
+      assert.ok(calls.length > 1, `effort: ${calls.length} answered model calls set reasoning`)
       for (const c of calls)
         assert.match(c.requestEffort ?? '', effort.asked, `effort: ${c.url} → ${c.status}`)
-      // The twin: the same task without effort asked for something else, or nothing.
+      // The twin: the same task without effort leaves it off some call. Not every one: OpenCode's
+      // session title on Gemini sets `low` of its own accord.
       const plain = modelCalls(ran, row, attempt(ran, row, 'edit and run', 'notes'))
       assert.ok(plain.length > 0, 'edit and run: no model calls')
-      for (const c of plain)
-        assert.doesNotMatch(c.requestEffort ?? '', effort.asked, `edit and run: ${c.url}`)
+      assert.ok(
+        plain.some((c) => !effort.asked.test(c.requestEffort ?? '')),
+        `edit and run: every model call asked for ${effort.asked}: ${JSON.stringify(plain.map((c) => c.requestEffort))}`,
+      )
     },
   },
   {

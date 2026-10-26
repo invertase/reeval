@@ -1635,7 +1635,7 @@ environment:
     ['route: claude code on vercel', route([VERCEL], claudeCode({ model: 'm' }))],
     ['route: pi on vercel alone', route([VERCEL], pi({ model: 'gemini-3.8-flash' }))],
     [
-      'route: pi falls through to direct',
+      'route: pi on vercel before direct',
       route([VERCEL, DIRECT], pi({ model: 'gemini-3.8-flash' })),
     ],
     [
@@ -1647,7 +1647,15 @@ environment:
       route([VERCEL], goose({ model: 'm', effort: 'high' })),
     ],
     [
-      'route: grok build with effort on vercel alone',
+      'route: opencode with effort on a gemini model on vercel',
+      route([VERCEL], opencode({ model: 'google/gemini-3.8-flash', effort: 'high' })),
+    ],
+    [
+      'route: pi with effort on vercel',
+      route([VERCEL], pi({ model: 'gemini-3.8-flash', effort: 'low' })),
+    ],
+    [
+      'route: grok build with effort on vercel',
       route([VERCEL], grokBuild({ model: 'm', effort: 'high' })),
     ],
     [
@@ -1690,8 +1698,20 @@ environment:
       route([OPENROUTER], claudeCode({ model: 'm', effort: 'high' })),
     ],
     [
-      'route: goose with effort falls through to direct',
+      'route: goose with effort on a gemini model on openrouter',
       route([OPENROUTER, DIRECT], goose({ model: 'gemini-3.8-flash', effort: 'high' })),
+    ],
+    [
+      'route: goose with effort on another model falls through to direct',
+      route([OPENROUTER, DIRECT], goose({ model: 'llama-4', effort: 'high' })),
+    ],
+    [
+      'route: opencode with effort on another model on openrouter alone',
+      route([OPENROUTER], opencode({ model: 'anthropic/m', effort: 'high' })),
+    ],
+    [
+      'route: grok build with effort on openrouter',
+      route([OPENROUTER], grokBuild({ model: 'm', effort: 'high' })),
     ],
     ['oidc: expired', oidc({ VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T00:00:00Z')) })],
     ['oidc: live', oidc({ VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T13:00:00Z')) })],

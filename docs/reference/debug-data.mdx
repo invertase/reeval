@@ -66,6 +66,10 @@ Written from an attempt's first gateway request, so only in the Docker sandbox. 
   The credentials and brokered secrets swapped in, by name, with where.
 </Property>
 
+<Property name="requestEffort" type="string" optional>
+  The reasoning settings a model call's JSON body carried, as `<path>=<value>` joined by spaces, such as `generationConfig.thinkingConfig.thinkingLevel=LOW` or `reasoning.effort=low`. Read on the harness's model calls only; absent when the body sets none.
+</Property>
+
 The other fields are `at`, `method`, `url`, `host`, `port`, `status` (when there was a response), `sent` and `received` (bytes) and `ms`.
 
 ## trace.ndjson

@@ -309,7 +309,10 @@ describe('requested effort', () => {
         'providerOptions.vertex.thinkingConfig.thinkingLevel=low ' +
         'reasoning.effort=high reasoning.enabled=true output_config.effort=max thinking.type=adaptive',
     )
-    assert.equal(requestedEffort('{"thinking":{"budget_tokens":2048}}'), 'thinking.budget_tokens=2048')
+    assert.equal(
+      requestedEffort('{"thinking":{"budget_tokens":2048}}'),
+      'thinking.budget_tokens=2048',
+    )
   })
 
   test('twin: none for a body with no setting, an object where a value goes, or not JSON', () => {

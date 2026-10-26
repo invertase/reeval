@@ -13,7 +13,7 @@ export {
   type OpenCodeMcpServer,
   type OpenCodeVertex,
   openCodeConfig,
-  openCodeEffortOptions,
+  openCodeEffortBody,
   openCodeEndpoints,
   openCodeEnv,
 } from './opencode-harness.ts'

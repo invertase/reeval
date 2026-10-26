@@ -25,7 +25,7 @@ export default defineConfig({
 </Property>
 
 <Property name="effort" type="string" optional>
-  Reasoning effort for that provider: `options.reasoningEffort` on OpenAI, `options.thinking` on Anthropic. Values are whatever that provider takes (`high`, or a token budget). It isn't the measured [effort](/concepts/lift#effort-next-to-lift).
+  Reasoning effort, added to each request's body in the provider's own field: Gemini's `thinkingConfig.thinkingLevel` (on Gemini's API or Vertex AI), Anthropic's `output_config.effort`, OpenAI's `reasoning.effort`, OpenRouter's `reasoning.effort`, or a Gemini model's `thinkingConfig` under Vercel's `providerOptions`. Values are whatever that field takes, such as `low` or `high`; another provider, or another model on Vercel, is refused. It isn't the measured [effort](/concepts/lift#effort-next-to-lift).
 </Property>
 
 <Property name="id" type="string" optional>
@@ -100,7 +100,7 @@ harness: opencode({ model: 'google/gemini-3.8-flash' }),
 gateway: [vercel(), direct()],
 ```
 
-With [`vercel()`](/reference/gateway#vercel-ai-gateway) in the config's `gateway`, OpenCode runs on its own `vercel` provider, as `vercel/<model>`, on `vercel()`'s key. Write the model as its provider's id: a `vercel/…` id would skip the gateway list, so it exits 2 at plan time. On Vercel any `<provider>/<model>` Vercel serves runs; the provider table below gates `direct()` only, where a provider reeval can't run stops the plan with exit 2. `effort` isn't taken on `vercel()` yet: nothing checks the model gets it, so such a cell falls through to the next gateway.
+With [`vercel()`](/reference/gateway#vercel-ai-gateway) in the config's `gateway`, OpenCode runs on its own `vercel` provider, as `vercel/<model>`, on `vercel()`'s key. Write the model as its provider's id: a `vercel/…` id would skip the gateway list, so it exits 2 at plan time. On Vercel any `<provider>/<model>` Vercel serves runs; the provider table below gates `direct()` only, where a provider reeval can't run stops the plan with exit 2. `effort` runs there on a Gemini model only, as its `thinkingConfig` under Vercel's `providerOptions`; with another model, such a cell falls through to the next gateway.
 
 ## On OpenRouter
 
@@ -109,7 +109,7 @@ harness: opencode({ model: 'google/gemini-3.8-flash' }),
 gateway: [openrouter(), direct()],
 ```
 
-With [`openrouter()`](/reference/gateway#openrouter) in the config's `gateway`, OpenCode runs on its own `openrouter` provider, as `openrouter/<model>`, on `OPENROUTER_API_KEY`, brokered on `POST openrouter.ai/api/v1/chat/completions`. Write the model as its provider's id: an `openrouter/…` id would skip the gateway list, so it exits 2 at plan time. Each call records the upstream provider OpenRouter says served it, and its cost. `effort` isn't taken on `openrouter()` yet, so such a cell falls through to the next gateway.
+With [`openrouter()`](/reference/gateway#openrouter) in the config's `gateway`, OpenCode runs on its own `openrouter` provider, as `openrouter/<model>`, on `OPENROUTER_API_KEY`, brokered on `POST openrouter.ai/api/v1/chat/completions`. Write the model as its provider's id: an `openrouter/…` id would skip the gateway list, so it exits 2 at plan time. Each call records the upstream provider OpenRouter says served it, and its cost. `effort` runs there on a Gemini model only, as OpenRouter's `reasoning.effort`; with another model, such a cell falls through to the next gateway.
 
 ## On Vertex AI
 

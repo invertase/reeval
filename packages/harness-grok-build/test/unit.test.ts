@@ -137,6 +137,14 @@ test("on Vercel AI Gateway, the model is a [model.<id>] table on Vercel's key", 
     /\n\[model\."xai\/grok-4\.6"\]\nmodel = "xai\/grok-4\.6"\nbase_url = "https:\/\/ai-gateway\.vercel\.sh\/v1"\nenv_key = "AI_GATEWAY_API_KEY"\napi_backend = "chat_completions"\n/,
   )
   assert.equal(grokConfig({ model: 'grok-4.6' }).content.includes('[model.'), false)
+  assert.match(
+    grokConfig({ model: 'xai/grok-4.6', provider: AI_GATEWAY_PROVIDER, effort: 'low' }).content,
+    /\napi_backend = "chat_completions"\nreasoning_efforts = \[\{ value = "low" \}\]\n/,
+  )
+  assert.equal(
+    grokConfig({ model: 'grok-4.6', effort: 'low' }).content.includes('reasoning_efforts'),
+    false,
+  )
   const bootstrap = (provider?: GrokProvider) =>
     createGrokBuild({
       auth: { [provider?.credentialEnv ?? GROK_CREDENTIAL_ENV]: 'k' },

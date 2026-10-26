@@ -173,6 +173,10 @@ export function grokConfig(
           `base_url = ${JSON.stringify(settings.provider.baseUrl)}`,
           `env_key = ${JSON.stringify(settings.provider.credentialEnv)}`,
           'api_backend = "chat_completions"',
+          // A model of reeval's own table offers no effort until it lists one.
+          ...(settings.effort
+            ? [`reasoning_efforts = [{ value = ${JSON.stringify(settings.effort)} }]`]
+            : []),
           '',
         ]
       : []),

@@ -302,7 +302,7 @@ describe('Vercel AI Gateway routes', () => {
     assert.deepEqual(agentAuth(goose), { AI_GATEWAY_API_KEY: 'vck_test' })
   })
 
-  test('Goose on Vercel gets its key and provider; pi stays on Gemini', async () => {
+  test('Goose on Vercel gets its key and provider; pi off it stays on Gemini', async () => {
     process.env.AI_GATEWAY_API_KEY = 'vck_test'
     const descriptor = { kind: 'goose', model: 'gemini-3-flash', gateway: 'vercel' } as never
     const agent = agentFor(descriptor)
@@ -313,9 +313,6 @@ describe('Vercel AI Gateway routes', () => {
       plugins: [],
     })) as { harnessId: string }
     assert.equal(adapter.harnessId, 'goose')
-    const pi = { kind: 'pi', model: 'gemini-3-flash' } as HarnessDescriptor
-    assert.throws(() => resolve(list('vercel'), pi), /pi reaches a Gemini model on Vercel/)
-    assert.deepEqual(resolve(list('vercel', 'direct'), pi).name, 'direct')
     process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'AIza-test'
     const direct = agentFor({ kind: 'pi', model: 'gemini-3-flash' } as never)
     assert.equal(direct.credential, 'GOOGLE_GENERATIVE_AI_API_KEY')
@@ -419,20 +416,28 @@ describe('Vercel AI Gateway routes', () => {
   })
 
   test('effort with a harness whose effort path on Vercel is unchecked is refused there', () => {
-    for (const kind of ['opencode', 'goose', 'grok-build'] as const) {
-      const model = kind === 'opencode' ? 'anthropic/claude-haiku-4-5' : 'gemini-3-flash'
+    for (const [kind, model] of [
+      ['goose', 'gemini-3-flash'],
+      ['opencode', 'anthropic/claude-haiku-4-5'],
+    ] as const) {
       const h = { kind, model, effort: 'high' } as HarnessDescriptor
       assert.throws(
         () => resolve(list('vercel'), h),
-        /doesn't send .*'s effort \("high"\) through Vercel AI Gateway yet/,
+        /doesn't send .*'s effort \("high"\) to .* through Vercel AI Gateway yet/,
       )
       assert.equal(resolve(list('vercel', 'direct'), h).name, 'direct', 'it falls through')
       assert.equal(resolve(list('vercel'), { ...h, effort: undefined }).name, 'vercel')
     }
-    const claudeHigh = { ...claude, effort: 'high' } as HarnessDescriptor
-    assert.equal(resolve(list('vercel'), claudeHigh).name, 'vercel')
-    const codexHigh = { ...codex, effort: 'high' } as HarnessDescriptor
-    assert.equal(resolve(list('vercel'), codexHigh).name, 'vercel')
+    for (const h of [
+      claude,
+      codex,
+      { kind: 'opencode', model: 'google/gemini-3.8-flash' },
+      { kind: 'pi', model: 'gemini-3.8-flash' },
+      { kind: 'grok-build', model: 'grok-4.6' },
+    ]) {
+      const high = { ...h, effort: 'high' } as HarnessDescriptor
+      assert.equal(resolve(list('vercel'), high).name, 'vercel', high.kind)
+    }
   })
 
   test("a brokered 401 gets the refused-key hint, whatever the CLI's message", () => {
@@ -456,19 +461,27 @@ describe('Vercel AI Gateway routes', () => {
     )
   })
 
-  test("OpenCode on Vercel: an Anthropic model's effort is Anthropic's thinking option", () => {
-    const direct = openCodeConfig({ model: 'anthropic/claude-sonnet-4.5', effort: 'high' })
-    const vercel = openCodeConfig({ model: 'vercel/anthropic/claude-sonnet-4.5', effort: 'high' })
-    assert.deepEqual(direct.providers?.anthropic?.models?.['claude-sonnet-4.5']?.options, {
-      thinking: 'high',
-    })
-    assert.deepEqual(vercel.providers?.vercel?.models?.['anthropic/claude-sonnet-4.5']?.options, {
-      thinking: 'high',
-    })
+  test('pi on Vercel: its own provider on Chat Completions, the model as google/<id>', () => {
+    process.env.AI_GATEWAY_API_KEY = 'vck_test'
+    const agent = onVercel({ kind: 'pi', model: 'gemini-3.8-flash' } as never)
+    assert.equal(agent.credential, 'AI_GATEWAY_API_KEY')
+    assert.deepEqual(agent.hosts, ['ai-gateway.vercel.sh'])
+    assert.deepEqual(
+      agent.endpoints.map((e) => [e.host, e.path, e.method]),
+      [['ai-gateway.vercel.sh', { exact: '/v1/chat/completions' }, ['POST']]],
+    )
+    assert.deepEqual(agent.modelResponses, agent.endpoints)
+    assert.equal(agent.modelId?.('gemini-3.8-flash'), 'google/gemini-3.8-flash')
+  })
+
+  test("OpenCode on Vercel: a Gemini model's effort is its thinking level under providerOptions", () => {
+    const thinking = { thinkingConfig: { thinkingLevel: 'high' } }
     const gemini = openCodeConfig({ model: 'vercel/google/gemini-3-flash', effort: 'high' })
-    assert.deepEqual(gemini.providers?.vercel?.models?.['google/gemini-3-flash']?.options, {
-      reasoningEffort: 'high',
+    assert.deepEqual(gemini.providers?.vercel?.models?.['google/gemini-3-flash']?.body, {
+      providerOptions: { google: thinking, vertex: thinking },
     })
+    const claude = openCodeConfig({ model: 'vercel/anthropic/claude-sonnet-4.5', effort: 'high' })
+    assert.equal(claude.providers?.vercel?.models, undefined)
   })
 
   test("the egress gateway swaps Vercel's key in only on Vercel's model paths", () => {
@@ -668,22 +681,26 @@ describe('OpenRouter routes', () => {
     assert.equal(brokeringFor(codex)?.upstream, undefined, 'off OpenRouter, nothing names one')
   })
 
-  test('effort is refused on OpenRouter for every harness but Codex', () => {
+  test("effort on OpenRouter: Claude Code's is refused, and the others' on a model no run checked", () => {
     for (const h of [
       { ...claude, effort: 'high' },
-      { kind: 'goose', model: 'gemini-3-flash', effort: 'high' },
-      { kind: 'grok-build', model: 'grok-4.6', effort: 'high' },
+      { kind: 'goose', model: 'llama-4', effort: 'high' },
       { kind: 'opencode', model: 'anthropic/claude-haiku-4-5', effort: 'high' },
     ] as HarnessDescriptor[]) {
       assert.throws(
         () => resolve(list('openrouter'), h),
-        /doesn't send .*'s effort \("high"\) through OpenRouter yet/,
+        /doesn't send .*'s effort \("high"\) to .* through OpenRouter yet/,
       )
     }
-    assert.equal(
-      resolve(list('openrouter'), { ...codex, effort: 'high' } as never).name,
-      'openrouter',
-    )
+    for (const h of [
+      codex,
+      { kind: 'goose', model: 'gemini-3.8-flash' },
+      { kind: 'opencode', model: 'google/gemini-3.8-flash' },
+      { kind: 'grok-build', model: 'grok-4.6' },
+    ]) {
+      const high = { ...h, effort: 'high' } as HarnessDescriptor
+      assert.equal(resolve(list('openrouter'), high).name, 'openrouter', high.kind)
+    }
   })
 
   test("reeval's own models take OpenRouter's key, its package, and fallbacks off by default", () => {

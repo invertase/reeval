@@ -26,8 +26,8 @@ export {
   PI_WORKSPACE_SKILLS_DIR,
   type PiGateway,
   type PiHarnessSettings,
-  piGatewayEndpoints,
   type PiMcpServer,
+  piGatewayEndpoints,
   type PiVertex,
 } from './pi-harness.ts'
 export { type PiEvent, PiStreamTranslator, type PiUsage, toUsage } from './pi-stream.ts'

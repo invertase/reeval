@@ -10,6 +10,7 @@ import {
 } from '@reeval/harness-opencode/providers'
 import type { EndpointMatch } from '@reeval/sandbox-docker'
 import type { ServedModel, Upstream } from '../harness/agents.ts'
+import { everyModel, notGemini } from './effort.ts'
 import type { GatewayRoute, RoutingGateway } from './routes.ts'
 
 export const OPENROUTER_HOST = 'openrouter.ai'
@@ -138,6 +139,9 @@ export const OPENROUTER_GATEWAY: RoutingGateway = {
     fx: "fx reaches models only on Vercel AI Gateway or OpenAI's API, and no run has checked it on OpenRouter",
     pi: "pi reaches a Gemini model on OpenRouter only through Chat Completions, which no run has checked behaves as it does on Gemini's API; reeval runs pi on its Gemini key",
   },
-  // Codex's response names the effort it ran at; the others' reach OpenRouter by a path no run has checked.
-  unprovenEffort: ['claude-code', 'goose', 'opencode', 'grok-build'],
+  // Codex's response names the effort it ran at; Goose and OpenCode send OpenRouter's
+  // reasoning.effort, which it sends a Gemini model as its thinking level, and Grok Build
+  // reasoning_effort (an xAI model's own). Claude Code sends Anthropic's adaptive thinking and effort, which
+  // OpenRouter turns into a thinking budget for a model that takes neither (Haiku 4.5).
+  unprovenEffort: { 'claude-code': everyModel, goose: notGemini, opencode: notGemini },
 }
