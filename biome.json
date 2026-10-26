@@ -9,5 +9,14 @@
   "markdown": { "formatter": { "enabled": false } },
   "yaml": { "formatter": { "enabled": false } },
   "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "asNeeded" } },
-  "linter": { "enabled": true, "rules": { "preset": "recommended" } }
+  "linter": { "enabled": true, "rules": { "preset": "recommended" } },
+  "overrides": [
+    {
+      "includes": [
+        "packages/harness-opencode/src/opencode-provider-table.ts",
+        "packages/sandbox-docker/docker/seccomp-default.json"
+      ],
+      "formatter": { "enabled": false }
+    }
+  ]
 }
