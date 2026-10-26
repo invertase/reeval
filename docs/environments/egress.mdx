@@ -45,6 +45,41 @@ egress: deny-all + auto: api.anthropic.com, *.anthropic.com
 
 An evaluation or group's `egress` option overrides the environment's, which overrides the one in the `reeval.config.ts` file or a profile. A blocked request never fails the attempt on its own. The agent gets a refusal, and your assertions decide what that means.
 
+## Read blocked requests
+
+Run the evaluation to create a record.
+
+```bash
+npx reeval run
+```
+
+Each attempt's record holds its policy, the hosts it contacted, and the hosts the gateway refused. Print the record of the latest run and pick out the `egress` field of each attempt:
+
+```bash
+npx reeval show --json | jq '.evals[].attempts[].egress'
+```
+
+A refused request names the host and why it was blocked:
+
+```json
+{
+  "policy": "deny-all",
+  "allowed": ["api.anthropic.com", "*.anthropic.com"],
+  "recorded": true,
+  "contacted": [
+    { "host": "api.anthropic.com", "port": 443, "connections": 3,
+      "sent": 180882, "received": 25526 }
+  ],
+  "blocked": [
+    { "host": "example.com", "port": 443, "connections": 1,
+      "reason": "example.com isn't in the allowlist" }
+  ],
+  "expectedBlocked": []
+}
+```
+
+The `allowed` list is every host the policy let through, the `allow` hosts and the automatic ones; it is `null` under `'proxy'` and `'allow-all'`. Hosts your harness's CLI always tries and never needs, such as its telemetry, are recorded in `expectedBlocked`; other refused requests remain in `blocked`. When you run `npx reeval run -v`, each blocked request also prints a `gateway` line as it happens. For more information, see [Debugging](/results/debugging).
+
 ## Allow a list of hosts
 
 To let the agent reach a site, list it. `DEFAULT_EGRESS_ALLOW` holds the package registries and GitHub, so the agent can still install packages. In an evaluation file, spread it into an allow list:
@@ -88,43 +123,9 @@ evaluate(
 
 Under `'allow-all'`, that traffic leaves the sandbox directly, unfiltered and unrecorded, and the record marks the attempt's egress `partial`. Set it on the evaluations that need it, not in the `reeval.config.ts` file.
 
-## Read blocked requests
-
-Run the evaluation to create a record.
-
-```bash
-npx reeval run
-```
-
-Each attempt's record holds its policy, the hosts it contacted, and the hosts the gateway refused. Print the record of the latest run and pick out the `egress` field of each attempt:
-
-```bash
-npx reeval show --json | jq '.evals[].attempts[].egress'
-```
-
-A refused request names the host and why it was blocked:
-
-```json
-{
-  "policy": "deny-all",
-  "allowed": ["api.anthropic.com", "*.anthropic.com"],
-  "recorded": true,
-  "contacted": [
-    { "host": "api.anthropic.com", "port": 443, "connections": 3,
-      "sent": 180882, "received": 25526 }
-  ],
-  "blocked": [
-    { "host": "example.com", "port": 443, "connections": 1,
-      "reason": "example.com isn't in the allowlist" }
-  ],
-  "expectedBlocked": []
-}
-```
-
-The `allowed` list is every host the policy let through, the `allow` hosts and the automatic ones; it is `null` under `'proxy'` and `'allow-all'`. Hosts your harness's CLI always tries and never needs, such as its telemetry, are recorded in `expectedBlocked`; other refused requests remain in `blocked`. When you run `npx reeval run -v`, each blocked request also prints a `gateway` line as it happens. For more information, see [Debugging](/results/debugging).
-
-For more information about egress enforcement, see [Core concepts](/core-concepts). For runnable projects, see [`with-egress-deny-all`](https://github.com/invertase/reeval/tree/main/examples/with-egress-deny-all), [`with-egress-allowlist`](https://github.com/invertase/reeval/tree/main/examples/with-egress-allowlist), and [`with-egress-allow-all`](https://github.com/invertase/reeval/tree/main/examples/with-egress-allow-all).
-
 ## Reference
 
 For more information about the `egress` option's shape and where it is accepted, see [Options](/reference/options#egress). For more information about the `egress` record's fields, see [Run record](/reference/record).
+
+For more information about egress enforcement, see [Core concepts](/core-concepts). For runnable projects, see [`with-egress-deny-all`](https://github.com/invertase/reeval/tree/main/examples/with-egress-deny-all), [`with-egress-allowlist`](https://github.com/invertase/reeval/tree/main/examples/with-egress-allowlist), and [`with-egress-allow-all`](https://github.com/invertase/reeval/tree/main/examples/with-egress-allow-all).
+
