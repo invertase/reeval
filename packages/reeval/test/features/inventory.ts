@@ -295,8 +295,9 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'gateway.vertex',
     area: 'Config and selection',
-    name: '`vertex({ project, location, regions })`: its shape and project checked at plan time, Claude Code on Vertex AI with a host-minted access token the egress gateway adds and refreshes, `google/*` and `anthropic/*` judge and analysis models called there with the same token, `reeval doctor`’s vertex check, and the other harnesses and models falling through it',
+    name: '`vertex({ project, location, regions })`: its shape and project checked at plan time, Claude Code, Antigravity, OpenCode, Goose, pi and Grok Build on Vertex AI with a host-minted access token the egress gateway adds and refreshes, `google/*` and `anthropic/*` judge and analysis models called there with the same token, `reeval doctor`’s vertex check, and the other harnesses and models falling through it',
     plan: ['gateway/vertex-yaml'],
+    unit: ['reeval/test/gateway.test.ts', 'harness-grok-build/test/unit.test.ts'],
     tests: [
       'reeval/test/gateway.test.ts › vertex() takes its project from the entry, else GOOGLE_CLOUD_PROJECT, else refuses',
       'reeval/test/gateway.test.ts › Claude Code on Vertex is pointed at the project and brokered only on its model calls',

@@ -45,7 +45,7 @@ export default defineConfig({
 | | |
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
-| Credential | `XAI_API_KEY` (an xAI API key), `vercel()`'s on Vercel AI Gateway, or `openrouter()`'s (`OPENROUTER_API_KEY`) on OpenRouter |
+| Credential | `XAI_API_KEY` (an xAI API key), `vercel()`'s on Vercel AI Gateway, `openrouter()`'s (`OPENROUTER_API_KEY`) on OpenRouter, or a Google Cloud access token on Vertex AI |
 | Adapter | `@reeval/harness-grok-build` 0.1.5 (over `@ai-sdk/harness-acp`), bundled with reeval |
 | CLI | Grok Build 1.0.70, from npm's `@xai-official/grok-linux-*`, checked against its sha512 |
 | Sandbox | `docker()` only |
@@ -73,6 +73,8 @@ The served model comes from each model call's response, which the gateway reads:
 On a [`gateway` list](/reference/gateway#vercel-ai-gateway) that resolves the harness to `vercel()`, the key is `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`). Grok's `config.toml` gets a `[model."xai/<model>"]` table on Vercel's Chat Completions API (`base_url = "https://ai-gateway.vercel.sh/v1"`, `env_key = "AI_GATEWAY_API_KEY"`), so Grok calls nothing on `api.x.ai`. The gateway brokers the key as a Bearer token on `POST /v1/chat/completions` at `ai-gateway.vercel.sh` only, and reads the served model from each response, in Vercel's name: `spacexai/grok-4.6` where direct records `grok-4.6`, so `reeval compare` across the two shows different served models. Grok also probes the gateway's root, which Vercel redirects to `vercel.com`; that block is expected. `effort` goes as `reasoning_effort` there.
 
 On [`openrouter()`](/reference/gateway#openrouter), the key is `OPENROUTER_API_KEY`, and Grok's `config.toml` gets a `[model."x-ai/<model>"]` table on OpenRouter's Chat Completions API (`base_url = "https://openrouter.ai/api/v1"`, `env_key = "OPENROUTER_API_KEY"`), so Grok calls nothing on `api.x.ai`. The gateway brokers the key as a Bearer token on `POST /api/v1/chat/completions` at `openrouter.ai` only, and reads the served model, the upstream provider and the cost from each response. `effort` goes as `reasoning_effort` there too.
+
+On [`vertex()`](/reference/gateway#vertex-ai) there's no key: Grok's `config.toml` gets a `[model."xai/<model>"]` table on Vertex's OpenAI-compatible Chat Completions API in the project and the `xai` region (`base_url = "https://aiplatform.googleapis.com/v1/projects/<project>/locations/global/endpoints/openapi"`, `env_key = "VERTEX_ACCESS_TOKEN"`), and `VERTEX_ACCESS_TOKEN` in the sandbox is a placeholder. The gateway adds a token minted from the host's Application Default Credentials as a Bearer token on `POST …/endpoints/openapi/chat/completions` only, and reads the served model from each response. The model must be enabled for the project in Model Garden. `effort` goes as `reasoning_effort`.
 
 ## Settings
 
