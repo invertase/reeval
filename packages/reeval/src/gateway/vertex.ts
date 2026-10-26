@@ -283,8 +283,24 @@ export const VERTEX_ROUTES: Partial<
 }
 
 /** The publisher whose models each harness on Vertex calls, as `reeval doctor` probes them. */
-export const VERTEX_HARNESS_PUBLISHERS: Partial<Record<AgentKind, VertexPublisher>> = {
+const VERTEX_HARNESS_PUBLISHERS: Partial<Record<AgentKind, VertexPublisher>> = {
   'claude-code': 'anthropic',
+  antigravity: 'google',
+  goose: 'google',
+  pi: 'google',
+  opencode: 'google',
+}
+
+/**
+ * The model a harness on Vertex calls, as `publisher/id`, or undefined for one reeval doesn't
+ * route there. Antigravity's `-low`/`-medium`/`-high` ids name an effort the CLI sends beside the
+ * model, so the id it calls has none.
+ */
+export function vertexHarnessModel(kind: AgentKind, model: string): string | undefined {
+  const publisher = VERTEX_HARNESS_PUBLISHERS[kind]
+  if (!publisher) return undefined
+  const id = model.replace(/^(?:google|google-vertex|anthropic)\//, '')
+  return `${publisher}/${kind === 'antigravity' ? id.replace(/-(?:low|medium|high)$/, '') : id}`
 }
 
 /**

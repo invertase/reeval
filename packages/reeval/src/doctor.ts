@@ -23,9 +23,9 @@ import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { resolveGateway, routedHarness } from './gateway/resolve.ts'
 import { VERCEL_KEY, vercelCredentialProblem } from './gateway/vercel.ts'
 import {
-  VERTEX_HARNESS_PUBLISHERS,
   VERTEX_PROJECT_ENV,
   type VertexSettings,
+  vertexHarnessModel,
   vertexModelProbe,
   vertexSettings,
   vertexSettingsIn,
@@ -1001,8 +1001,8 @@ function vertexModels(config: ResolvedConfig, env: NodeJS.ProcessEnv): VertexMod
   for (const use of configuredUses(config)) {
     const h = use.harness
     if (h.kind === 'fake' || h.gateway !== 'vertex' || !isAgentKind(h.kind)) continue
-    const publisher = VERTEX_HARNESS_PUBLISHERS[h.kind]
-    if (publisher) add(`${publisher}/${h.model}`, use.profile, h.kind)
+    const model = vertexHarnessModel(h.kind, h.model)
+    if (model) add(model, use.profile, h.kind)
   }
   const reevals = [
     { model: config.judge.model, pin: config.judge.gateway, profile: undefined, who: 'the judge' },

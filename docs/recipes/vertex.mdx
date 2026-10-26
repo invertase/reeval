@@ -1,6 +1,6 @@
 ---
 title: Run on Vertex AI
-description: Run Claude Code and its judge on your Google Cloud project, with a token from Application Default Credentials and no key.
+description: Run an agent and its judge on your Google Cloud project, with a token from Application Default Credentials and no key.
 ---
 
 **Goal:** run an agent and its judge on Vertex AI, billed to your Google Cloud project, with no API key on the machine or in the sandbox. The files are [`examples/with-vertex-gateway`](https://github.com/invertase/reeval/tree/main/examples/with-vertex-gateway).
@@ -13,7 +13,7 @@ gcloud services enable aiplatform.googleapis.com --project <project id>
 echo 'GOOGLE_CLOUD_PROJECT=<project id>' >> .env.local
 ```
 
-Claude models also need enabling once per project in [Model Garden](https://console.cloud.google.com/vertex-ai/model-garden). Gemini models need nothing more. On a Google Cloud VM or in CI, the metadata server or a `GOOGLE_APPLICATION_CREDENTIALS` file stands in for the login.
+Claude models also need enabling once per project in [Model Garden](https://console.cloud.google.com/vertex-ai/model-garden); Gemini models need nothing more. On a Google Cloud VM or in CI, the metadata server or a `GOOGLE_APPLICATION_CREDENTIALS` file stands in for the login.
 
 ## The config
 
@@ -80,6 +80,7 @@ reeval mints the token on the host and the egress gateway adds it to the agent's
 |---|---|
 | Other agents on their own keys | `gateway: [vertex(), direct()]`: Claude Code on Vertex, and Cursor or Codex, which Vertex can't serve, on their keys |
 | A Gemini judge | `judge: { model: 'google/gemini-3.8-flash' }`, called on Vertex in `regions.google` |
+| A Gemini agent | `goose({ model: 'gemini-3.8-flash' })`, or Antigravity, OpenCode or pi, on the same list. Each calls Vertex in `regions.google` with a made-up service account reeval writes for it, and the real token stays on the host |
 | One profile on Vertex | Put `gateway: [vertex()]` in a profile, and run it with `--profile` |
 | Another project per profile | `vertex({ project: 'billing-b' })` in that profile's list |
 

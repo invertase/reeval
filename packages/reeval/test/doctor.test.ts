@@ -62,7 +62,7 @@ async function configOf(name: string, body: string) {
   const p = await project(`doctor-${name}`, {
     'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { direct, vercel, vertex } from 'reeval/gateway'
-import { claudeCode, codex, cursor, fakeHarness, pi } from 'reeval/harness'
+import { antigravity, claudeCode, codex, cursor, fakeHarness, goose, opencode, pi } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
 import { docker, fakeSandbox, podman } from 'reeval/sandbox'
 export default defineConfig(${body})
@@ -887,6 +887,44 @@ evaluate('a', async () => {})
       status: 'ok',
       summary: 'gemini-3.8-flash for the judge, analysis.model (reeval-test, us-central1): served',
     })
+  })
+
+  test('vertex online: the Gemini harnesses are probed on the id they call', async () => {
+    const config = await configOf(
+      'gateway-vertex-harnesses',
+      `{ harness: cursor({ model: 'composer-2.5' }),
+         gateway: [vertex({ project: 'reeval-test' }), direct()],
+         profiles: {
+           agy: { defaults: { harness: antigravity({ model: 'gemini-3.8-flash-low' }) } },
+           oc: { defaults: { harness: opencode({ model: 'google-vertex/gemini-3.8-flash' }) } },
+           goose: { defaults: { harness: goose({ model: 'gemini-3.8-flash' }) } },
+           pi: { defaults: { harness: pi({ model: 'gemini-3.8-pro' }) } },
+         } }`,
+    )
+    const asked: string[] = []
+    const checks = await checkVertex(
+      config,
+      deps({
+        fetch: async (url) => {
+          if (String(url).includes('/publishers/')) asked.push(String(url))
+          return Response.json({ state: 'ENABLED', totalTokens: 1 })
+        },
+      }),
+      true,
+    )
+    const models =
+      'https://aiplatform.googleapis.com/v1/projects/reeval-test/locations/global/publishers/google/models'
+    assert.deepEqual(asked, [
+      `${models}/gemini-3.8-flash:countTokens`,
+      `${models}/gemini-3.8-pro:countTokens`,
+    ])
+    assert.deepEqual(
+      checks.slice(-2).map((c) => c.summary),
+      [
+        'gemini-3.8-flash for antigravity in profile agy, opencode in profile oc, goose in profile goose (reeval-test, global): served',
+        'gemini-3.8-pro for pi in profile pi (reeval-test, global): served',
+      ],
+    )
   })
 
   test('egress: the policy, and one the sandbox can’t enforce', async () => {
