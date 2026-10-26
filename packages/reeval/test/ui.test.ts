@@ -207,8 +207,8 @@ const interleaved: ReevalEvent[] = [
 ]
 
 const options = (overrides: Partial<OutputOptions> = {}): OutputOptions => ({
-  requested: 'plain',
   mode: 'plain',
+  statusLine: false,
   logOrder: 'grouped',
   logPrefix: 'task',
   outputLogs: 'full',
@@ -395,15 +395,15 @@ describe('plain renderer', () => {
     assert.doesNotMatch(render(interleaved, options({ logOrder: 'stream' })), / [✓✗] evals\//)
   })
 
-  test('live: one status line under the logs, rewritten in place, cleared before the result', () => {
-    const out = render(interleaved, options({ requested: 'live', outputLogs: 'none' }))
+  test('on a terminal: one status line under the logs, rewritten in place, cleared before the result', () => {
+    const out = render(interleaved, options({ statusLine: true, outputLogs: 'none' }))
     const clear = '\r\x1b[2K'
     assert.ok(out.includes(`${clear}2 evals · 0/2 tries`), out)
     assert.ok(out.includes(`${clear}2 evals · 1/2 tries`), out)
     assert.ok(out.includes(`${clear}2 evals · 2/2 tries${clear}\n`), out)
     assert.doesNotMatch(out, /running after/)
     assert.ok(out.endsWith(lines(...RESULT)))
-    const logs = render(interleaved, options({ requested: 'live', logOrder: 'stream' }))
+    const logs = render(interleaved, options({ statusLine: true, logOrder: 'stream' }))
     assert.ok(
       logs.includes(
         `${clear}[adds#1 cursor]  +1:09 stdout | seeding greet.js\n2 evals · 0/2 tries`,
@@ -499,11 +499,15 @@ describe('output mode', () => {
   const resolve = (env: NodeJS.ProcessEnv, isTTY = true, agent?: string, flags = {}) =>
     resolveOutput({ flags, env, isTTY, agent })
 
-  test('auto: agent, then plain in CI or when piped, then live (printed as plain for now)', () => {
-    assert.equal(resolve({}, true, 'cursor').mode, 'agent')
-    assert.equal(resolve({ CI: '1' }).requested, 'plain')
-    assert.equal(resolve({}, false).requested, 'plain')
-    assert.deepEqual([resolve({}).requested, resolve({}).mode], ['live', 'plain'])
+  test('auto: agent, else plain, with a status line on a terminal outside CI', () => {
+    const shape = (o: OutputOptions) => [o.mode, o.statusLine]
+    assert.deepEqual(shape(resolve({}, true, 'cursor')), ['agent', false])
+    assert.deepEqual(shape(resolve({ CI: '1' })), ['plain', false])
+    assert.deepEqual(shape(resolve({}, false)), ['plain', false])
+    assert.deepEqual(shape(resolve({})), ['plain', true])
+    assert.deepEqual(shape(resolve({}, true, undefined, { ui: 'plain' })), ['plain', false])
+    assert.deepEqual(shape(resolve({ REEVAL_UI: 'auto' })), ['plain', true])
+    assert.throws(() => resolve({}, true, undefined, { ui: 'live' }), /--ui is one of plain, agent, auto \(got live\)/)
     assert.equal(resolve({ REEVAL_UI: 'plain' }, true, 'cursor').mode, 'plain')
     assert.equal(resolve({ REEVAL_UI: 'plain' }, true, 'cursor', { ui: 'agent' }).mode, 'agent')
     assert.throws(

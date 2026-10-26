@@ -3,7 +3,7 @@
 import { UsageError } from '../config.ts'
 import { isOneOf } from '../object.ts'
 
-export type UiMode = 'live' | 'plain' | 'agent'
+export type UiMode = 'plain' | 'agent'
 /** `stream` prints every line as it happens; `grouped` prints each attempt as one block. */
 export type LogOrder = 'stream' | 'grouped'
 export type LogPrefix = 'task' | 'none'
@@ -11,8 +11,9 @@ export type LogPrefix = 'task' | 'none'
 export type OutputLogs = 'full' | 'errors-only' | 'none'
 
 export type OutputOptions = {
-  requested: UiMode
-  mode: Exclude<UiMode, 'live'>
+  mode: UiMode
+  /** A status line under the output: on a TTY outside CI, unless `--ui` named the mode. */
+  statusLine: boolean
   logOrder: LogOrder
   logPrefix: LogPrefix
   outputLogs: OutputLogs
@@ -86,10 +87,10 @@ export function resolveOutput(input: {
   const ci = isCI(env)
   const githubActions = set(env, 'GITHUB_ACTIONS')
 
-  const ui = pick('--ui', flags.ui ?? env.REEVAL_UI, ['live', 'plain', 'agent'] as const)
-  const requested: UiMode =
-    ui && ui !== 'auto' ? ui : input.agent ? 'agent' : ci || !input.isTTY ? 'plain' : 'live'
-  const mode = requested === 'live' ? 'plain' : requested
+  const ui = pick('--ui', flags.ui ?? env.REEVAL_UI, ['plain', 'agent'] as const)
+  const named = ui !== undefined && ui !== 'auto'
+  const mode: UiMode = named ? ui : input.agent ? 'agent' : 'plain'
+  const statusLine = !named && mode === 'plain' && !ci && input.isTTY
 
   const order = pick('--log-order', flags.logOrder ?? env.REEVAL_LOG_ORDER, [
     'stream',
@@ -124,8 +125,8 @@ export function resolveOutput(input: {
         : input.isTTY || githubActions
 
   return {
-    requested,
     mode,
+    statusLine,
     logOrder,
     logPrefix,
     outputLogs,

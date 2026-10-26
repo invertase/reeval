@@ -32,8 +32,8 @@ Usage:
                                 most one per CPU and GB of Docker memory; also REEVAL_CONCURRENCY)
     --tag <tag>                 Only evals with this tag; !tag excludes it; repeat to combine (AND)
     --record                    Also record the run into the history folder (see config.record)
-    --ui <mode>                 live, plain or agent (default: agent under a coding agent, plain
-                                in CI or when piped, else live; live prints plain for now)
+    --ui <mode>                 plain or agent (default: agent under a coding agent, else plain,
+                                with a status line on a terminal outside CI)
     --log-order <order>         stream (every line as it happens) or grouped (each attempt as one
                                 block when it ends); default grouped in CI, else stream
     --log-prefix <prefix>       task or none: the [eval#n harness] prefix on detail lines

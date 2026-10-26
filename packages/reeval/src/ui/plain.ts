@@ -105,7 +105,7 @@ export class PlainRenderer implements Renderer {
     this.#o = options
     this.#c = options.colors
     this.#now = options.now ?? Date.now
-    this.#live = options.output.requested === 'live'
+    this.#live = options.output.statusLine
     const { heartbeatMs } = options.output
     if (options.timers !== false && heartbeatMs > 0) {
       this.#timer = setInterval(() => this.tick(), Math.min(heartbeatMs, 5000))
