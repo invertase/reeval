@@ -67,6 +67,10 @@ A non-empty `REEVAL_NO_REPORT_HINT` hides the `reeval report` hint after a crash
 
 `REEVAL_BASE` is the build argument for a `dockerfile` sandbox, passed as the harness sandbox image. The `Dockerfile` file reads `ARG REEVAL_BASE`. A shell value is unused.
 
+## `REEVAL_PYTHON`
+
+`REEVAL_PYTHON` names the Python interpreter for `*.eval.py` when neither `uv run` nor `.venv` applies. Unset, reeval uses `python3`.
+
 ## `AI_GATEWAY_API_KEY`
 
 `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` calls Vercel AI Gateway for `judge.model` and `analysis.model`, and for harness models when `vercel()` is in the `gateway` list. The `provider/model` prefix selects the credential, and every prefix without a direct key set uses the gateway.
@@ -101,7 +105,7 @@ A `typesafe-ai/` `judge.model` uses `TYPESAFE_AI_API_KEY` directly when it is se
 
 ## `OPENAI_API_KEY`
 
-`OPENAI_API_KEY` is the credential for the `codex` harness, and for `opencode` on an `openai/` model.
+`OPENAI_API_KEY` is the credential for the `codex` harness, for `fx` on a bare OpenAI model id, and for `opencode` on an `openai/` model.
 
 ## `XAI_API_KEY`
 
