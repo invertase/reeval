@@ -142,7 +142,7 @@ export const withShoehorn = plain.extend('with-shoehorn', ({ skill }) => ({
 </Property>
 
 <Property name="spec" type="EnvironmentInput" required>
-  An `EnvironmentSpec` object, or a callback that receives `EnvironmentHelpers` and returns one synchronously, once, when the file loads. The documented helpers are `secret`, `skill`, `mcp`, `file`, `directory`, and `git`.
+  An `EnvironmentSpec` object, or a callback that receives `EnvironmentHelpers` and returns one synchronously, once, when the file loads. The documented helpers are `secret`, `skill`, `mcp`, `plugin`, `file`, `directory`, and `git`.
 </Property>
 
 Relative paths in `spec` resolve against the file that calls `defineEnvironment()`. A spec that omits `sandbox` runs in the cascaded `sandbox` option, else in the default sandbox. reeval refuses, with exit code 2, any other name and a callback that returns a `Promise`. For more information about the default sandbox, see [Sandboxes](/integrations/sandboxes).
