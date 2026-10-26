@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { EvalEntry, RunRecord } from '../src/history/types.ts'
+import { readRemarks } from '../src/remarks/files.ts'
 import { defaultBranch } from '../src/remarks/index.ts'
 import {
   type CheckWindow,
@@ -558,4 +560,36 @@ test('the eval rubric has one section per remark kind, and none for anything els
   const sections = [...source.matchAll(/^## `([a-z-]+)`\s*$/gm)].map((m) => m[1])
   assert.deepEqual([...sections].sort(), Object.keys(REMARK_KINDS).sort())
   assert.equal(new Set(sections).size, sections.length, 'one section each')
+})
+
+test('a remarks file from a newer reeval, or not JSON, is skipped with one warning', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'reeval-remarks-'))
+  const doc: RunRemarks = {
+    kind: 'reeval-remarks',
+    schemaVersion: 1,
+    runId: 'r1',
+    createdAt: '2026-10-26T00:00:00.000Z',
+    remarks: [],
+  }
+  const file = (name: string, text: string) => {
+    const path = join(dir, name)
+    return writeFile(path, text).then(() => path)
+  }
+  const warnings: string[] = []
+  const write = process.stderr.write
+  process.stderr.write = ((chunk: string) => warnings.push(String(chunk)) > 0) as typeof write
+  try {
+    assert.deepEqual(await readRemarks(await file('ok.json', JSON.stringify(doc))), doc)
+    assert.equal(await readRemarks(join(dir, 'missing.json')), null)
+    const newer = await file('newer.json', JSON.stringify({ ...doc, schemaVersion: 2 }))
+    assert.equal(await readRemarks(newer), null)
+    assert.equal(await readRemarks(newer), null)
+    const conflict = await file('conflict.json', '<<<<<<< HEAD\n{}')
+    assert.equal(await readRemarks(conflict), null)
+  } finally {
+    process.stderr.write = write
+  }
+  assert.equal(warnings.length, 2, warnings.join(''))
+  assert.match(warnings[0] ?? '', /newer\.json: .*written by a newer reeval/)
+  assert.match(warnings[1] ?? '', /conflict\.json: it isn't valid JSON/)
 })
