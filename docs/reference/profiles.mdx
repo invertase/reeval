@@ -7,8 +7,6 @@ description: "A profile is a named set of defaults, limits, judge, and budget th
 
 `profiles` in the `reeval.config.ts` file maps a name to `defaults`, `limit`, `judge`, `budget`, `record`, `tags`, and `gateway`. reeval exits with code 2 for an unknown key or a value of the wrong shape.
 
-A profile object sets every key.
-
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 
@@ -119,7 +117,7 @@ The timer starts when the first attempt starts. At the cap, running attempts fin
 `record` replaces the config `record`. An omitted `record` keeps the config value, whose default is `ci`.
 
 <Property name="record" type="'manual' | 'ci' | 'always'" optional>
-  `manual` does not copy the run when `reeval run` ends. `ci` copies it when `CI` is set to anything but `false`. `always` copies it.
+  Same values as [`record`](/reference/options#record).
 </Property>
 
 reeval exits with code 2 for any other `record` value.
@@ -133,7 +131,7 @@ For more information about copying a run later, see [reeval record](/reference/c
 `tags` selects evaluations. Every profile filter must hold, and every `--tag` flag must hold.
 
 <Property name="tags" type="string[]" optional>
-  A name includes that tag. A leading `!` excludes it, as in `!slow`. reeval omits an evaluation that fails a filter.
+  Tag filters for this profile, same shape as [`tags`](/reference/options#tags) / `--tag`. reeval omits an evaluation that fails a filter.
 </Property>
 
 reeval exits with code 2 when `tags` is not a list of strings.
