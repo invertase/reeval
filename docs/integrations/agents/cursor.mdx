@@ -3,9 +3,21 @@ title: "Cursor harness"
 description: "The Cursor harness runs Cursor's agent in the sandbox on a Cursor API key and records its events."
 ---
 
-## `cursor()`
+`cursor()` runs Cursor's agent in the sandbox through the Cursor TypeScript SDK's local runtime. For more information about the sandbox, see [Choose a sandbox](/integrations/sandboxes).
 
-`cursor()` is one harness factory. It reports each turn's tokens. For more information about supported sandboxes, see [Sandboxes](/integrations/sandboxes).
+## `CURSOR_API_KEY`
+
+`cursor()` reads `CURSOR_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
+
+reeval exchanges that key for `accessToken` and `refreshToken` at `api2.cursor.sh`, on `POST /auth/exchange_user_api_key`. Requests to `cursor.sh` and `*.cursor.sh` carry those tokens. A restricted egress policy allows `api2.cursor.sh` and `*.cursor.sh`.
+
+When the API rejects the key, the attempt error begins with `The API rejected CURSOR_API_KEY: set a valid key in the environment or .env.local`.
+
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
+
+For more information about the variable, see [`CURSOR_API_KEY`](/reference/env-vars#cursorapikey).
+
+## `cursor()`
 
 `cursor()` is exported from `{{ pkg }}/harness`. The following configuration passes it as the `harness` option:
 
@@ -47,19 +59,11 @@ export default defineConfig({
   How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
 </Property>
 
-Every harness factory takes `model`, `effort`, `id`, `maxConcurrent`, and `startTimeout`. `params` belongs to `cursor()`. With no `harness` option, reeval uses `cursor()` with its default model.
+`params` belongs to `cursor()` alone. With no `harness` option, reeval uses `cursor()` with its default model.
 
 For more information about choosing a harness, see [Choose an agent](/agents).
 
-For more information about model ids, effort values, and served models, see [Models and providers for each harness](/agents/model).
-
-## `CURSOR_API_KEY`
-
-`cursor()` reads `CURSOR_API_KEY` from the host. reeval exchanges that key for `accessToken` and `refreshToken` at `api2.cursor.sh`, on `POST /auth/exchange_user_api_key`. Requests to `cursor.sh` and `*.cursor.sh` carry those tokens.
-
-For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
-
-For more information about the variable, see [`CURSOR_API_KEY`](/reference/env-vars#cursorapikey).
+For more information about model ids, effort values, and served models, see [Set the agent's model](/agents/model).
 
 ## `rules`
 
@@ -75,7 +79,7 @@ For more information about placing skills, see [Give the agent skills](/environm
 
 ## `mcp`
 
-The Cursor harness accepts MCP servers on `stdio`, `http`, and `sse`. reeval passes a `stdio` server as `command`, `args`, and `env`, and an `http` or `sse` server as `url` and `headers`.
+The Cursor harness accepts MCP servers on `stdio`, `http`, and `sse`. reeval passes each server in the Cursor SDK's `McpServerConfig` shape: a `stdio` server is `{ type: 'stdio', command, args, env }`, and an `http` or `sse` server is `{ type, url, headers }`.
 
 For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
 
