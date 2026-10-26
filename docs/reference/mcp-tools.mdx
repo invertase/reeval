@@ -29,11 +29,11 @@ For more information about MCP servers an evaluation gives your harness, see [Co
 
 ## `failures`
 
-The `failures` tool returns `fail` and `infra_error` attempts for a run reference. `filter` matches an evaluation id, ignoring case. `limit` defaults to 10 (1 to 100), and `tail` defaults to 12 (0 to 100). Cells include `new`, `failingSince`, and `lastPass`. `note` is set when nothing failed, and `next` when something did.
+The `failures` tool returns `fail` and `infra_error` attempts for a run reference. `filter` keeps evaluations whose id contains the string, ignoring case. `limit` defaults to 10 (1 to 100), and `tail` defaults to 12 (0 to 100). Cells include `new`, `failingSince`, and `lastPass`. `note` is set when nothing failed, and `next` when something did.
 
 ## `history`
 
-The `history` tool, titled **Run history**, returns one row per evaluation, oldest run first. `filter` matches an evaluation id, ignoring case. `limit` defaults to 20 (1 to 500). `all` also includes scratch runs from the `.reeval/runs` directory. Otherwise runs come from the history directory (the `.history` directory by default), and when that directory has no run, scratch runs are returned and `note` is set. Rows have `id`, `outcomes` (`null` when the evaluation is absent), `drift`, `pass`, and `counted`, and `runs` omit `evals`.
+The `history` tool, titled **Run history**, returns one row per evaluation, oldest run first. `filter` keeps evaluations whose id contains the string, ignoring case. `limit` defaults to 20 (1 to 500). `all` also includes scratch runs from the `.reeval/runs` directory. Otherwise runs come from the history directory (the `.history` directory by default), and when that directory has no run, scratch runs are returned and `note` is set. Rows have `id`, `outcomes` (`null` when the evaluation is absent), `drift`, `pass`, and `counted`, and `runs` omit `evals`.
 
 ## `show`
 
@@ -74,6 +74,7 @@ Each view has its own tool:
 - `query_effort`
 - `query_contrasts`
 - `query_question_pairs`
+- `query_attempt_answers`
 - `query_factor_effects`
 - `query_skill_reads`
 - `query_context_use`
