@@ -1,58 +1,28 @@
 ---
-title: "vertex gateway"
-description: "Send model calls through Google Cloud's Vertex AI on Application Default Credentials."
+title: "Run models without Vertex AI"
+description: "reeval has no Vertex AI gateway: run Gemini and Claude models on a provider key or a routing gateway instead."
 ---
 
-`vertex()` sends the model calls of the harnesses it serves through Google Cloud's Vertex AI. It takes no key: reeval mints an access token on the host from Application Default Credentials, and the egress gateway adds it to the agent's model calls only, so the token never enters the sandbox.
+reeval has no gateway for Google Cloud's Vertex AI. `{{ pkg }}/gateway` exports `direct()`, `vercel()`, and `openrouter()`. Vertex takes a service account, not a key in a header, so the egress gateway can't keep the credential out of the sandbox.
 
-## Credentials
+## OpenCode on `google-vertex`
 
-```bash
-gcloud auth application-default login
+```text
+UsageError: … on opencode:gemini-3.8-flash: no gateway in the list can serve it (direct: reeval can't run OpenCode on Vertex (google-vertex): it takes a service account (Vertex refuses API keys for most models), not a key in a header, so the gateway can't keep its key out of the sandbox) …
 ```
 
-`vertex()` reads Application Default Credentials, from `gcloud auth application-default login` or a credentials file named in `GOOGLE_APPLICATION_CREDENTIALS`. reeval swaps in a fresh token five minutes before each one expires. An attempt whose first token cannot be minted fails as an infrastructure error.
+An OpenCode model on the `google-vertex` provider fails at plan time with exit code 2 on `direct()`. On `vercel()`, OpenCode takes any `<provider>/<model>` id, and the call goes to the Vercel AI Gateway on `AI_GATEWAY_API_KEY`, not to your Google Cloud project.
 
-`reeval doctor` checks each `vertex()` entry's project and where its credentials come from. With `--online`, it mints a token, checks that the Vertex AI API is on in the project, and asks Vertex for a token count on each model the config sends there.
+For more information about OpenCode's providers, see [OpenCode harness](/integrations/agents/opencode).
 
-## `vertex()`
+## Run the same models another way
 
-`vertex()` is exported from `{{ pkg }}/gateway`:
+| Models | Route | Key |
+| :--- | :--- | :--- |
+| Gemini on Antigravity | `direct()` | `GEMINI_API_KEY` |
+| Gemini on Goose, pi, or OpenCode's `google` provider | `direct()` | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| Claude on Claude Code or OpenCode's `anthropic` provider | `direct()` | `ANTHROPIC_API_KEY` |
+| A gateway id, such as `google/gemini-3.8-flash` | `vercel()` | `AI_GATEWAY_API_KEY` |
+| An OpenRouter model | `openrouter()` | `OPENROUTER_API_KEY` |
 
-```ts title="reeval.config.ts"
-import { defineConfig } from '{{ pkg }}'
-import { direct, vertex } from '{{ pkg }}/gateway'
-
-export default defineConfig({
-  gateway: [
-    vertex({ project: 'my-project', regions: { anthropic: 'us-east5' } }),
-    direct(),
-  ],
-})
-```
-
-<Property name="project" type="string" optional>
-  The Google Cloud project the calls are billed to. Defaults to `GOOGLE_CLOUD_PROJECT`. A run exits with code 2 when neither names a project.
-</Property>
-
-<Property name="location" type="string" optional>
-  The region the models are called in, such as `us-east5`. Defaults to `global`.
-</Property>
-
-<Property name="regions" type="{ anthropic?: string; google?: string; xai?: string }" optional>
-  A region per publisher, where it differs from `location`.
-</Property>
-
-A harness `vertex()` cannot serve takes the next gateway in the list.
-
-For more information about combining gateways, see [Gateways](/agents/gateways).
-
-## Harnesses
-
-| Serves | Falls through |
-| :--- | :--- |
-| Claude Code, Antigravity, OpenCode, Goose, pi | Cursor, Codex, fx, Grok Build |
-
-Cursor's agent calls only Cursor's API, and Codex calls only OpenAI's Responses API. A Claude model's Anthropic API id, such as `claude-haiku-4-5-20251001`, goes to Vertex as Vertex's id, `claude-haiku-4-5@20251001`, so one model string works on `vertex()` and on `direct()`.
-
-The judge, `analysis.model`, captures, and questions call `anthropic/*` and `google/*` models on `vertex()`, from the host with the same token, in the publisher's region. Other models take the next gateway.
+For more information about combining gateways, see [Route models through a gateway](/agents/gateways).
