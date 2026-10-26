@@ -1,6 +1,6 @@
 ---
 title: "Glossary of terms"
-description: "Agents, attempts, assertions, judgments, lift, and the other terms in a reeval run."
+description: "The words name the parts of a run and what a result reports."
 ---
 
 ## Agent
@@ -119,7 +119,7 @@ The workspace is the directory in the sandbox where the agent works, and grading
 
 ### effort
 
-**Reasoning effort** is the harness `effort` option, an input, recorded as `reasoning_effort`. **Effort** is the `effort` table of measured tool calls, agent time, and tokens, an output.
+**Reasoning effort** is the harness `effort` option, an input, recorded as `reasoning_effort`. The `effort` table prints tool calls, agent time, and tokens, an output.
 
 ### run
 
@@ -151,11 +151,11 @@ The **harness model** is `model`. Separate from it are `judge.model`, `capture.m
 
 ### verdict
 
-A **judge verdict** is `Verdict`, checked with `toPass()`. A **family verdict** is `FamilyVerdict`. An **effort verdict** is `EffortVerdict`. An **assertion verdict** is `CheckVerdict`. An **outcome** (`pass`, `fail`, infra error, or `skipped`) is never called a verdict.
+A **judge verdict** is `Verdict`, checked with `toPass()`. A **family verdict** is `FamilyVerdict`. A verdict on tool calls, time, or tokens is `EffortVerdict`. An **assertion verdict** is `CheckVerdict`. An **outcome** (`pass`, `fail`, infra error, or `skipped`) is never called a verdict.
 
 ### effect
 
-**Effect** is a variant against its baseline: `helped`, `made it worse`, `can't tell yet`, or blank. An **effort verdict** is `fewer`, `more`, `within noise`, or `too few attempts to test`. A **family verdict** is the family's paired lift.
+**Effect** is a variant against its baseline: `helped`, `made it worse`, `can't tell yet`, or blank. `EffortVerdict` is `fewer`, `more`, `within noise`, or `too few attempts to test`. A **family verdict** is the family's paired lift.
 
 ### MCP server
 
