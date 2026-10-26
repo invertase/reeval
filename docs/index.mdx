@@ -110,42 +110,54 @@ The variant passed in 4 of 4 attempts and the baseline in none, so the skill `he
 ## What you can find out
 
 <CardGroup cols={2}>
-  <Card title="Which tools agents choose" href="/recipes/recommendation">
-    Prompt for an outcome without naming a tool. See what agents discover and select.
+  <Card title="How each agent handles your tool" href="/recipes/agent-comparison">
+    Run the same task on each agent, a harness plus its model, and read each one's results.
   </Card>
   <Card title="Whether agents finish the task" href="/write/assertions">
-    Run tasks against a pinned codebase in an isolated sandbox and assert on the result.
+    Assert on the files, commands, and transcript each attempt leaves in its workspace.
+  </Card>
+  <Card title="Which tools agents choose" href="/recipes/recommendation">
+    Prompt for an outcome without naming a tool, and judge what the agent picks.
   </Card>
   <Card title="Whether a change helped" href="/results/compare/lift">
-    Run the same task with and without a change. Compare pass rate, tokens, tool calls, and time.
-  </Card>
-  <Card title="How each harness handles your tool" href="/recipes/agent-comparison">
-    Run the same task across different coding agents and see how each one does.
+    Read the lift of a variant against the baseline.
   </Card>
   <Card title="Regressions before release" href="/recipes/ci-gate">
-    Commit baselines to Git. Diff agent behavior on pull requests and in CI.
+    Fail a pull request when this run regresses against a past run.
+  </Card>
+  <Card title="What the agent did and why" href="/results/analyze">
+    Read the answers to your questions, then the insights.
   </Card>
 </CardGroup>
 
-## How it runs
-
-reeval runs on your machine, and each run leaves a record you can commit:
-
-| Part | What reeval does |
-|---|---|
-| [Sandbox](/integrations/sandboxes) | Starts a fresh container for each attempt |
-| [Secrets](/environments/secrets) | Keeps API keys on the host and adds them only on requests to their provider |
-| [Records](/runs/recording) | Writes each run as JSON beside your code, so a pull request can diff against it |
-
 ## Explore the docs
 
-<CardGroup cols={3}>
-  <Card title="Evaluations" href="/write">Tasks, assertions, judgments, and questions.</Card>
-  <Card title="Environments" href="/environments">Skills, MCP servers, rules, files, and secrets.</Card>
-  <Card title="Harnesses" href="/agents">The coding agents, with their models and effort.</Card>
-  <Card title="Runs" href="/runs/running">Plans, profiles, recording, and CI.</Card>
-  <Card title="Results" href="/results/output">Outcomes, transcripts, analysis, and queries.</Card>
-  <Card title="Recipes" href="/recipes/sdk">Test an SDK, a CLI, an MCP server, or your docs.</Card>
+### Configuration
+
+<CardGroup cols={2}>
+  <Card title="Agents" href="/agents">A harness plus its model.</Card>
+  <Card title="Environments" href="/environments">The baseline and its variants: files, skills, rules, MCP servers, and secrets.</Card>
+  <Card title="Attempts" href="/runs/running#set-the-attempts">The `runs` option sets the attempts for each agent and environment.</Card>
+  <Card title="Sandboxes" href="/integrations/sandboxes">A fresh container on your machine for each attempt.</Card>
+</CardGroup>
+
+### Evaluation
+
+<CardGroup cols={2}>
+  <Card title="Task" href="/write">The prompt each attempt sends to the agent.</Card>
+  <Card title="Workspace" href="/results/debugging#read-the-workspace-and-artifacts">The artifacts and the transcript grading reads.</Card>
+  <Card title="Assertions" href="/write/assertions">Deterministic checks.</Card>
+  <Card title="Judgments" href="/write/judgments">LLM verdicts.</Card>
+  <Card title="Questions" href="/write/questions">Across attempts.</Card>
+</CardGroup>
+
+### Results
+
+<CardGroup cols={2}>
+  <Card title="Measure" href="/results/measure">Pass rate, tokens, tool calls, turns, cost, and time.</Card>
+  <Card title="Lift" href="/results/compare/lift">Variant against baseline.</Card>
+  <Card title="Past runs" href="/results/compare/past-runs">This run against earlier ones.</Card>
+  <Card title="Analyze" href="/results/analyze">Answers, then insights.</Card>
 </CardGroup>
 
 ## Next steps
