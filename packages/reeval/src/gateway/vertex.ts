@@ -84,6 +84,14 @@ export type VertexRoute = ModelSpecific & {
   token: BrokeredToken
 }
 
+/**
+ * Vertex's id for a Claude model: an `anthropic/` prefix dropped, and the Anthropic API's dated
+ * id (`claude-haiku-4-5-20251001`) written as Vertex's (`claude-haiku-4-5@20251001`), so one
+ * model string works on both `vertex()` and `direct()`.
+ */
+export const vertexClaudeId = (model: string) =>
+  model.replace(/^anthropic\//, '').replace(/-(\d{8})$/, '@$1')
+
 const escapeRegex = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** A publisher's model calls in the project and region: `…/publishers/<publisher>/models/<id>:<method>`. */
@@ -128,7 +136,7 @@ function claudeCode(settings: VertexSettings, source = vertexTokens()): VertexRo
       const model = /\/publishers\/anthropic\/models\/([^/:]+):/.exec(path)?.[1]
       return model && model !== 'count-tokens' ? model : undefined
     },
-    modelId: (model) => model.replace(/^anthropic\//, ''),
+    modelId: vertexClaudeId,
     routeEnv: {
       CLAUDE_CODE_USE_VERTEX: '1',
       CLAUDE_CODE_SKIP_VERTEX_AUTH: '1',
@@ -182,7 +190,9 @@ export async function vertexLanguageModel(
   if (provider === 'anthropic') {
     const { createVertexAnthropic } = await import('@ai-sdk/google-vertex/anthropic')
     const location = vertexRegion(settings, 'anthropic')
-    return createVertexAnthropic({ project: settings.project, location, googleAuthOptions })(id)
+    return createVertexAnthropic({ project: settings.project, location, googleAuthOptions })(
+      vertexClaudeId(id),
+    )
   }
   const { createVertex } = await import('@ai-sdk/google-vertex')
   const location = vertexRegion(settings, 'google')
