@@ -3,7 +3,7 @@ title: "How statistics work"
 description: "Understand when reeval can tell whether a change helped."
 ---
 
-The thresholds on this page are fixed; you can't configure them.
+These statistical thresholds are fixed; you can't configure them.
 
 For more information about the run model, see [Core concepts](/core-concepts#comparison). For more information about configuring a comparison, see [Measure lift against a baseline](/evals/compare).
 
@@ -37,7 +37,7 @@ The 95% interval calls `helped`, `made it worse`, or `can't tell yet`, and below
 
 ## Tokens, tool calls and time
 
-Effort compares tool calls, agent time, and tokens by median and quartiles. An exact two-sided Mann-Whitney rank-sum test calls `fewer` when the variant ranks lower and `more` when it ranks higher, at a p below 0.05. Only effort lets a p below 0.05 decide.
+reeval compares tool calls, agent time, and tokens by median and quartiles. An exact two-sided Mann-Whitney rank-sum test calls `fewer` when the variant ranks lower and `more` when it ranks higher, at a p below 0.05. Only tokens, tool calls, and time let a p below 0.05 decide.
 
 Counts that cannot reach a p below 0.05 are `insufficient`, and counts that can, but do not, are `noise`. With no ties, four against four can reach 2/70, and three against three can reach 2/20. Ties raise that floor. reeval omits the token comparison when either side has no token samples.
 

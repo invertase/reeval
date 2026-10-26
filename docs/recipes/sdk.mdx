@@ -45,7 +45,7 @@ evaluate('uses the Acme SDK correctly', { environment: app }, async (c) => {
 
 `directory('./acme-sdk', { into: 'vendor/acme' })` copies the SDK and its `README.md` into the workspace. For more information about seeding files, see [Place files](/environments/files).
 
-`c.writeFile` adds `check-client.mjs` after the harness finishes, so the harness never sees it. The script runs `forecast()` against a stand-in API that answers `503` once. The judge asks the one question a command can't answer. For more information about judges, see [Judge agent work](/evals/judges).
+`c.writeFile` adds `check-client.mjs` after the harness finishes, so the harness never sees it. The script runs `forecast()` against a stand-in API that answers `503` once. The judge asks the one question a command can't answer. For more information about judgments, see [Judge agent work](/evals/judges).
 
 </Step>
 <Step title="Run the evaluation">

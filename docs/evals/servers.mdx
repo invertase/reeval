@@ -97,7 +97,7 @@ const q = 'Does the error page keep both fields and show one error message?'
 expect(await c.judge(q, { artifacts: true }), 'error state').toPass()
 ```
 
-For more information about the judge, its model, and its threshold, see [Judges](/evals/judges).
+For more information about the judge, its model, and its threshold, see [Judgments](/evals/judges).
 
 In a comparison, a question shows each side's own capture when `artifacts` names the captures, or is `true`, on the question or the `question` option, so the model sees the baseline's page beside the variant's. For more information about pairwise questions, see [Ask which did better](/evals/compare#ask-which-did-better).
 

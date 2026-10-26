@@ -119,7 +119,7 @@ For more information about the other gates, see [Measure lift against a baseline
 
 ## Compare skill versions
 
-To measure a change to a skill, pin each commit on its own environment. This section uses Matt Pocock's `migrate-to-shoehorn` skill, which changed between two commits, on a `plain` environment that holds the `src/user.ts` file the task tests. The earlier commit is the baseline, and the later commit is the variant. In the `evals/environments.ts` file, add two environments:
+To measure a change to a skill, pin each commit on its own environment. The example uses Matt Pocock's `migrate-to-shoehorn` skill, which changed between two commits, on a `plain` environment that holds the `src/user.ts` file the task tests. The earlier commit is the baseline, and the later commit is the variant. In the `evals/environments.ts` file, add two environments:
 
 ```ts title="evals/environments.ts"
 export const earlier = plain.extendEnvironment('earlier', ({ skill }) => ({

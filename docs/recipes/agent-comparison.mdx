@@ -1,6 +1,6 @@
 ---
 title: "Compare harnesses"
-description: "Run one task on each harness and read each one's pass rate and effort."
+description: "Run one task on each harness and read each one's pass rate, tokens, tool calls, and time."
 ---
 
 You compare harnesses by running one task on each harness in one run. Each harness is its own cell with the same prompt, assertions, and attempts, so the block reads side by side. For a runnable project, see [`with-many-harnesses`](https://github.com/invertase/reeval/tree/main/examples/with-many-harnesses). For more information about choosing a harness and its key, see [Harnesses](/harnesses).
@@ -76,7 +76,7 @@ Every harness cell is gated, so one harness that fails an attempt fails the eval
 </Step>
 <Step title="Read the effort per harness">
 
-Read each harness's effort from the `effort` view, because the block prints no effort for harness cells. The view holds each cell's median tool calls, agent seconds, and tokens. Select the last run's rows:
+Read each harness's tool calls, time, and tokens from the `effort` view, because the block prints none of them for harness cells. The view holds each cell's median tool calls, agent seconds, and tokens. Select the last run's rows:
 
 ```bash
 npx reeval query "SELECT harness, tools_median, agent_s_median
