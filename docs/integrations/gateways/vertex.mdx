@@ -5,7 +5,7 @@ description: "Send model calls through Google Cloud's Vertex AI on Application D
 
 `vertex()` sends the model calls of the harnesses it serves through Google Cloud's Vertex AI. It takes no key: reeval mints an access token on the host from Application Default Credentials, and the egress gateway adds it to the agent's model calls only, so the token never enters the sandbox.
 
-## Application Default Credentials
+## Credentials
 
 ```bash
 gcloud auth application-default login
