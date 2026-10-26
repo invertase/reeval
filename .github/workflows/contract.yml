@@ -64,7 +64,7 @@ jobs:
       # The *-openrouter rows and reeval's own OpenRouter calls, when REEVAL_CONTRACT_HARNESSES
       # names one.
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      # The gated *-vertex rows: vertex() takes the project from GOOGLE_CLOUD_PROJECT, and the
+      # The *-vertex rows, when REEVAL_CONTRACT_HARNESSES names them: vertex() takes the project from GOOGLE_CLOUD_PROJECT, and the
       # token from the credentials file the auth step writes.
       GOOGLE_CLOUD_PROJECT: ${{ vars.GOOGLE_CLOUD_PROJECT }}
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}

@@ -373,8 +373,6 @@ export const harnesses: HarnessRow[] = [
     id: 'claude-code-vertex',
     harness: 'claude-code',
     gateway: 'vertex',
-    gated:
-      'not yet passed on the real CLI; name claude-code-vertex in REEVAL_CONTRACT_HARNESSES to run it',
     model: 'claude-haiku-4-5@20251001',
     key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
     hostEnv: ['GOOGLE_CLOUD_PROJECT'],
