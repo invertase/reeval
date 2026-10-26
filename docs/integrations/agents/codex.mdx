@@ -3,11 +3,21 @@ title: "Codex harness"
 description: "The Codex harness runs OpenAI's Codex CLI in the sandbox on an OpenAI API key and records its events."
 ---
 
+`codex()` runs OpenAI's Codex CLI in the sandbox as one `codex exec --json` process for each turn, and a later turn resumes the same thread. The turn bypasses approval prompts. For more information about the sandbox, see [Choose a sandbox](/integrations/sandboxes).
+
+## `OPENAI_API_KEY`
+
+`codex()` reads `OPENAI_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
+
+reeval brokers that key on `POST https://api.openai.com/v1/responses` only, over HTTP. A restricted egress policy allows `api.openai.com`.
+
+When the API rejects the key, the attempt error begins with `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local`.
+
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
+
+For more information about the variable, see [`OPENAI_API_KEY`](/reference/env-vars#openaiapikey).
+
 ## `codex()`
-
-`codex()` is one harness factory. It runs OpenAI's Codex CLI as one `codex exec --json` process for each turn, and a later turn resumes the same thread. The turn bypasses approval prompts.
-
-`codex()` runs in the sandbox. For more information about supported sandboxes, see [Choose a sandbox](/integrations/sandboxes).
 
 `codex()` is exported from `{{ pkg }}/harness`. The `reeval.config.ts` file passes it as the `harness` option:
 
@@ -40,26 +50,18 @@ The prompt is a shell argument under 128 KiB.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>
-  The most Codex attempts at the same time, across the run.
+  The most Codex attempts that run at the same time, across the run. A whole number of at least 1.
 </Property>
 
 <Property name="startTimeout" type="Duration" optional>
-  How long the session may take to become ready before the attempt is an infra error, after one retry. Defaults to `90s`. A duration, such as `3m`.
+  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
 </Property>
+
+In the sandbox, Codex's `config.toml` file turns analytics off, and turns the plugin sync off unless the environment has plugins, so a turn without plugins contacts only `api.openai.com`.
 
 For more information about choosing a harness, see [Choose an agent](/agents).
 
 For more information about model ids and effort values, see [Set the agent's model](/agents/model).
-
-## `OPENAI_API_KEY`
-
-`codex()` reads `OPENAI_API_KEY` from the host. reeval brokers that key on `POST https://api.openai.com/v1/responses` only, over HTTP.
-
-A missing key, or a key with whitespace or a line break, stops the run with exit code 2 and names `OPENAI_API_KEY`. A rejected key names `OPENAI_API_KEY` on the turn error.
-
-For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
-
-For more information about the variable, see [`OPENAI_API_KEY`](/reference/env-vars#openaiapikey).
 
 ## `rules`
 
@@ -93,12 +95,12 @@ For more information about the attempt fields, see [`AttemptRecord`](/reference/
 
 ## `web-search`
 
-The Codex harness records `web-search` events. A search stores its text on `query`. Searches run on OpenAI's side, and the transcript keeps each event under a restricted egress policy.
+The Codex harness records `web-search` events. A search stores its text on `query`. The turn's `unreported` list stays empty, so `toHaveSearched()` reads those events. Searches run on OpenAI's side, and the transcript keeps each event under a restricted egress policy.
 
 For more information about a restricted egress policy, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts). For more information about the matcher, see [`toHaveSearched()`](/reference/matchers#tohavesearched).
 
 ## `web-fetch`
 
-The Codex harness records `web-fetch` events. An `open_page` or `find_in_page` action with a URL is `web-fetch`. Page opens run on OpenAI's side, and the transcript keeps each event under a restricted egress policy.
+The Codex harness records `web-fetch` events. An `open_page` or `find_in_page` action with a URL is `web-fetch`. The turn's `unreported` list stays empty, so `toHaveFetched()` reads those events. Page opens run on OpenAI's side, and the transcript keeps each event under a restricted egress policy.
 
 For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).
