@@ -339,10 +339,6 @@
             {
               "title": "Past runs",
               "href": "/results/compare/past-runs"
-            },
-            {
-              "title": "Statistics",
-              "href": "/results/compare/statistics"
             }
           ]
         },
@@ -421,6 +417,10 @@
             {
               "title": "History MCP server",
               "href": "/reference/mcp-tools"
+            },
+            {
+              "title": "Statistics",
+              "href": "/results/compare/statistics"
             },
             {
               "title": "Glossary",
