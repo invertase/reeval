@@ -1,13 +1,13 @@
 ---
-title: "Choose a harness"
+title: "Choose an agent"
 description: "Run an evaluation on one harness or several."
 ---
 
-A harness is the coding agent that runs an evaluation. Set the `harness` option to choose that agent.
+An agent is a harness plus its model. Set the `harness` option to a harness factory with a `model` to choose one.
 
 For more information about installing reeval, see [Quick start](/quickstart).
 
-## Choose a harness
+## Choose an agent
 
 In the `reeval.config.ts` file, pass one factory from the `{{ pkg }}/harness` module. With no `harness` option, the default harness is Cursor. Each harness is its own cell.
 
@@ -36,7 +36,7 @@ With `effort` set and `id` unset, reeval appends an effort suffix to the cell ID
 
 For more information about model ids, providers, and effort values, see [Models and providers for each harness](/harnesses/models).
 
-## Run several harnesses
+## Run several agents
 
 In the `reeval.config.ts` file, pass several factories so each evaluation runs on every harness. This excerpt puts three in a profile's `defaults`:
 
