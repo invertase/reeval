@@ -23,6 +23,7 @@ import {
 import {
   SANDBOX_ACCESS_TOKEN,
   vertexDecisionModel,
+  vertexHarnessModel,
   vertexHost,
   vertexLanguageModel,
   vertexModelRefusal,
@@ -889,6 +890,55 @@ describe('Vertex AI routes', () => {
     assert.equal(opencode.modelId?.('gemini-3.8-flash'), 'google-vertex/gemini-3.8-flash')
     const agy = onGlobal({ kind: 'antigravity', model: 'm' } as never)
     assert.ok(agy.localResponses?.some((r) => r.match.host === 'www.googleapis.com'))
+  })
+
+  test("fx on Vertex calls its Chat Completions endpoint, with the token there and Gemini's model", async () => {
+    const regional = vertexSettings({ project: 'reeval-512515', location: 'us-east5' }, {})
+    const fx = { kind: 'fx', model: 'gemini-3.8-flash', effort: 'low' } as const
+    const agent = agentFor({ ...fx, gateway: 'vertex' } as AgentHarnessDescriptor, regional)
+    const host = 'us-east5-aiplatform.googleapis.com'
+    const chat = (v: string) =>
+      `/${v}/projects/reeval-512515/locations/us-east5/endpoints/openapi/chat/completions`
+    assert.equal(agent.credential, 'Google Cloud credentials')
+    assert.deepEqual(agentAuth(agent, {}), {}, 'no key from the environment')
+    assert.deepEqual(agent.hosts, [host])
+    assert.equal(agent.adc, undefined, 'fx reads no service account')
+    const on = (h: string, path: string) =>
+      onEndpoint(agent.endpoints, { method: 'POST', host: h, path, headers: {} })
+    assert.ok(on(host, chat('v1')))
+    assert.ok(on(host, chat('v1beta1')))
+    assert.ok(!on(host, chat('v1').replace('reeval-512515', 'other')), 'only its own project')
+    assert.ok(!on('aiplatform.googleapis.com', chat('v1')), 'only its region')
+    assert.ok(
+      !on(host, '/v1/projects/reeval-512515/locations/us-east5/publishers/google/models/m:predict'),
+    )
+    assert.deepEqual(agent.modelResponses, agent.endpoints)
+    const token = await agent.token?.transformations('t')
+    assert.deepEqual(token?.[0]?.transform, { headers: { authorization: 'Bearer t' } })
+    assert.equal(
+      agent.servedModel?.({
+        method: 'POST',
+        host,
+        path: chat('v1'),
+        responseModel: 'google/gemini-3.8-flash',
+      }),
+      'gemini-3.8-flash',
+    )
+    assert.equal(agent.modelId?.('gemini-3.8-flash'), 'google/gemini-3.8-flash')
+    assert.equal(agent.modelId?.('google/gemini-3.8-flash'), 'google/gemini-3.8-flash')
+    const adapter = await agent.adapter({
+      auth: agentAuth(agent, {}),
+      ...(agent.routeEnv ? { env: agent.routeEnv } : {}),
+      descriptor: fx,
+      model: 'google/gemini-3.8-flash',
+      plugins: [],
+    })
+    assert.equal((adapter as { harnessId: string }).harnessId, 'fx')
+    assert.deepEqual(agent.routeEnv, {
+      FX_VERTEX_PROJECT: 'reeval-512515',
+      FX_VERTEX_LOCATION: 'us-east5',
+    })
+    assert.equal(vertexHarnessModel('fx', 'google/gemini-3.8-flash'), 'google/gemini-3.8-flash')
   })
 
   test('the gateway serves Claude Code on Vertex, not the agents it has no route for', () => {

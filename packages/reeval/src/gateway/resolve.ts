@@ -12,7 +12,7 @@ import type {
   ResolvedGateway,
 } from '../types.ts'
 import { ROUTING_GATEWAYS, type RoutingGatewayName } from './routes.ts'
-import { VERTEX_REFUSALS, VERTEX_ROUTES } from './vertex.ts'
+import { VERTEX_REFUSALS, VERTEX_ROUTES, vertexModelRefusalFor } from './vertex.ts'
 
 /** The config's list when it sets none: each provider's own key, as reeval has always run. */
 export const DEFAULT_GATEWAYS: GatewayDescriptor[] = [{ kind: 'direct' }]
@@ -26,6 +26,8 @@ export type GatewayEntry = {
 export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
   direct: {
     cantServe: (h) => {
+      const fxEffort = fxEffortRefusal(h, 'direct()')
+      if (fxEffort) return fxEffort
       if (h.kind === 'fx' && h.model.includes('/')) {
         return `fx runs a gateway id such as ${JSON.stringify(h.model)} only through Vercel AI Gateway`
       }
@@ -39,11 +41,24 @@ export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
   vercel: routingEntry('vercel'),
   openrouter: routingEntry('openrouter'),
   vertex: {
-    cantServe: (h) =>
-      h.kind === 'fake' || VERTEX_ROUTES[h.kind]
-        ? undefined
-        : (VERTEX_REFUSALS[h.kind] ?? `reeval doesn't run ${agentName(h)} on Vertex AI yet`),
+    cantServe: (h) => {
+      if (h.kind === 'fake') return undefined
+      if (!VERTEX_ROUTES[h.kind]) {
+        return VERTEX_REFUSALS[h.kind] ?? `reeval doesn't run ${agentName(h)} on Vertex AI yet`
+      }
+      return vertexModelRefusalFor(h)
+    },
   },
+}
+
+/**
+ * Why fx can't take `effort` on a gateway: fx sends none itself, and reeval adds it as
+ * `reasoning_effort` only to its calls on Vertex AI's Chat Completions endpoint.
+ */
+function fxEffortRefusal(h: HarnessDescriptor, gateway: string): string | undefined {
+  const effort = harnessEffort(h)
+  if (h.kind !== 'fx' || effort === undefined) return undefined
+  return `fx sends no effort of its own, and reeval adds fx's effort (${JSON.stringify(effort)}) only to its calls on Vertex AI, not on ${gateway}: drop effort or run fx on vertex()`
 }
 
 /** A routing gateway's entry: its route table decides whom it serves, and with what effort. */
@@ -52,6 +67,8 @@ function routingEntry(name: RoutingGatewayName): GatewayEntry {
   return {
     // A fake agent calls no model, so any gateway serves it.
     cantServe: (h) => {
+      const fxEffort = fxEffortRefusal(h, gateway.name)
+      if (fxEffort) return fxEffort
       if (h.kind !== 'fake' && !gateway.routes[h.kind]) {
         return (
           gateway.refusals[h.kind] ?? `reeval doesn't run ${agentName(h)} on ${gateway.name} yet`

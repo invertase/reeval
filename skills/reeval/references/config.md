@@ -60,7 +60,7 @@ Harnesses (`reeval/harness`), each with a required `model`; a list runs each as 
 | `goose({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id, e.g. `gemini-3.8-flash`; `effort` is `GOOSE_THINKING_EFFORT`. Records no tokens: its ACP usage is the last model call only |
 | `pi({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id; `effort` is `--thinking` |
 | `codex({ model, effort? })` | `OPENAI_API_KEY` | An OpenAI model id, e.g. `gpt-5.6-luna`; `effort` is `model_reasoning_effort` |
-| `fx({ model })` | `OPENAI_API_KEY` for a bare id, or `AI_GATEWAY_API_KEY` on `vercel()` | Vercel's fx over ACP: a gateway id (`anthropic/claude-sonnet-5`) runs only on `vercel()` in `gateway`, a bare OpenAI id (`gpt-5.5`) on OpenAI, which must accept function tools without `reasoning_effort` (not `gpt-5.6` or later). No `effort`. Its own web tools bypass the egress gateway, so `deny-all` blocks them |
+| `fx({ model, effort? })` | `OPENAI_API_KEY` for a bare id, `AI_GATEWAY_API_KEY` on `vercel()`, or none on `vertex()` | Vercel's fx over ACP: a gateway id (`anthropic/claude-sonnet-5`) runs only on `vercel()` in `gateway`, a bare OpenAI id (`gpt-5.5`) on OpenAI, which must accept function tools without `reasoning_effort` (not `gpt-5.6` or later), a Gemini id (`google/gemini-3.8-flash`) on `vertex()`. `effort` (`reasoning_effort`) only on `vertex()`. Its own web tools bypass the egress gateway, so `deny-all` blocks them |
 | `grokBuild({ model, effort? })` | `XAI_API_KEY` | xAI's Grok Build CLI; an xAI model id, e.g. `grok-4.6`; `effort` is `default_reasoning_effort`. It finds MCP tools with its `search_tool` before calling them |
 | `fakeHarness(…)` | None | See the fake trio in SKILL.md |
 
@@ -68,7 +68,7 @@ OpenCode, Goose, pi and Codex refuse `mcp.sse`. Cursor's `fast` defaults to `'fa
 price; `{ fast: 'true' }` costs several times more). Other unset Cursor params take Cursor's
 default, which the record shows (`composer-2.5[fast=false]`), so pin them for reproducible evals.
 
-`effort` is the same field on every factory but `fx()`, with whatever values that CLI takes (no shared
+`effort` is the same field on every factory (`fx()` takes it only on `vertex()`), with whatever values that CLI takes (no shared
 enum); Fast is not effort. The default harness id includes `[effort=<value>]` when it's set, and
 the record stores the requested effort as `effort` and the served one as `servedEffort`.
 
@@ -86,7 +86,7 @@ Code, Codex, Goose, pi, OpenCode, fx and Grok Build on Vercel AI Gateway with on
 on Goose, or on OpenCode with a model other than Gemini, falls through to `direct()`), and
 everything else on its own key; the plan's hint says where each harness fell through. Pin one with
 the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. `vertex({ project })`
-(else `GOOGLE_CLOUD_PROJECT`) runs Claude Code, Antigravity, OpenCode, Goose and pi on Vertex AI
+(else `GOOGLE_CLOUD_PROJECT`) runs Claude Code, Antigravity, OpenCode, Goose, pi and fx (Gemini only) on Vertex AI
 with no key: reeval mints a token from Application Default Credentials on the host and the egress
 gateway adds it (OpenCode's Gemini model runs as `google-vertex/<id>`). Claude ids work in
 either form (`claude-haiku-4-5-20251001` is sent as Vertex's `claude-haiku-4-5@20251001`), so one

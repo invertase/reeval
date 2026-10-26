@@ -93,6 +93,7 @@ export const fxHarnessSchema = z.strictObject({
   kind: z.literal('fx'),
   gateway: gatewayNameSchema.optional(),
   model: z.string().min(1),
+  effort: nonEmpty().optional(),
   id: nonEmpty().optional(),
   maxConcurrent: z.number().optional(),
   startTimeout: durationSchema.optional(),

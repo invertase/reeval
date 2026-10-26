@@ -1685,6 +1685,26 @@ environment:
     ],
     ['route: cursor on openrouter alone', route([OPENROUTER], cursor({ model: 'composer-2.5' }))],
     ['route: antigravity on openrouter alone', route([OPENROUTER], antigravity({ model: 'm' }))],
+    [
+      'route: fx with effort on direct alone',
+      route([DIRECT], fx({ model: 'gpt-5.5', effort: 'low' })),
+    ],
+    [
+      'route: fx with effort on vercel alone',
+      route([VERCEL], fx({ model: 'google/gemini-3.8-flash', effort: 'low' })),
+    ],
+    [
+      'route: fx with effort on vertex',
+      route([VERTEX], fx({ model: 'google/gemini-3.8-flash', effort: 'low' })),
+    ],
+    [
+      'route: fx with a claude model on vertex alone',
+      route([VERTEX], fx({ model: 'anthropic/claude-haiku-4-5' })),
+    ],
+    [
+      'route: fx with a claude model falls through vertex to vercel',
+      route([VERTEX, VERCEL], fx({ model: 'anthropic/claude-haiku-4-5' })),
+    ],
     ['route: fx on openrouter alone', route([OPENROUTER], fx({ model: 'gpt-5.5' }))],
     [
       'route: pi with effort on a gemini model on openrouter',

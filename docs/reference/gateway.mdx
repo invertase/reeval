@@ -28,8 +28,13 @@ The default is `[direct()]`: every harness calls its own provider with its own k
 |---|---|---|---|
 | `direct()` from `'{{ pkg }}/gateway'` | `direct` or `{ direct: {} }` | every harness; judge and analysis models whose provider reeval calls directly (`anthropic/*`, `google/*`, `openai/*`, `typesafe-ai/*`) | each harness's or provider's own, such as `CURSOR_API_KEY` |
 | `vercel()` from `'{{ pkg }}/gateway'` | `vercel` or `{ vercel: {} }` | Claude Code, Codex, Goose, OpenCode, fx, Grok Build, pi; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe-ai/jev-1.14.0` | `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN` |
+<<<<<<< HEAD
 | `openrouter({ fallbacks })` from `'{{ pkg }}/gateway'` | `openrouter` or `{ openrouter: { fallbacks: true } }` | Claude Code, Codex, Goose, OpenCode, Grok Build, pi; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe/jev-1.14` | `OPENROUTER_API_KEY` |
 | `vertex({ project?, location?, regions? })` from `'{{ pkg }}/gateway'` | `vertex` or `{ vertex: { project: p } }` | Claude Code, Antigravity, OpenCode, Goose and pi ([below](#vertex-ai)); `google/*` and `anthropic/*` judge and analysis models | Application Default Credentials |
+=======
+| `openrouter({ fallbacks })` from `'{{ pkg }}/gateway'` | `openrouter` or `{ openrouter: { fallbacks: true } }` | Claude Code, Codex, Goose, OpenCode, Grok Build; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe/jev-1.14` | `OPENROUTER_API_KEY` |
+| `vertex({ project?, location?, regions? })` from `'{{ pkg }}/gateway'` | `vertex` or `{ vertex: { project: p } }` | Claude Code, Antigravity, OpenCode, Goose, pi and fx ([below](#vertex-ai)); `google/*` and `anthropic/*` judge and analysis models | Application Default Credentials |
+>>>>>>> 99c04225 (feat(gateway): run fx on Vertex AI)
 
 ## Vercel AI Gateway
 
@@ -133,8 +138,11 @@ There's no key. reeval mints a Google Cloud access token on the host from Applic
 | OpenCode | its `google-vertex` provider, with `GOOGLE_CLOUD_PROJECT` and `GOOGLE_VERTEX_LOCATION` | `POST /v1beta1/…/publishers/google/models/<id>:streamGenerateContent` | `google/<id>` or `<id>`, run as `google-vertex/<id>` | from each call's path |
 | Goose | its `gcp_vertex_ai` provider, with `GCP_PROJECT_ID` and `GCP_LOCATION` | `POST /v1beta1/…/publishers/google/models/<id>:streamGenerateContent` | Gemini's, e.g. `gemini-3.8-flash`; a `google/` prefix is dropped | from each call's path |
 | pi | `--provider google-vertex`, with `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` | `POST /v1/…/publishers/google/models/<id>:streamGenerateContent` | Gemini's, e.g. `gemini-3.8-flash`; a `google/` prefix is dropped | from each call's path |
+| fx | a configured provider on Vertex's OpenAI-compatible Chat Completions endpoint, with no auth of its own | `POST /v1/…/endpoints/openapi/chat/completions` | Gemini's, with or without `google/`, run as `google/<id>`; no Claude | from each response, which names it |
 
 The Gemini CLIs call Vertex in the `google` region (`regions.google`, else `location`) and authenticate with Application Default Credentials of their own, so reeval writes them a service account beside the workspace with a key made up for the attempt, in `GOOGLE_APPLICATION_CREDENTIALS`. The egress gateway answers its token exchange (`POST oauth2.googleapis.com/token`) itself with a placeholder token, and Antigravity's account lookup (`GET www.googleapis.com/oauth2/v2/userinfo`) too, so neither reaches Google. It adds the real token to the model calls as it does for Claude Code. A restricted policy allows those hosts automatically.
+
+fx speaks only Chat Completions to a provider of your own, so it runs on Vertex's OpenAI-compatible endpoint, which serves Gemini but not Claude: an `anthropic/…` model falls through to the next gateway. It needs no service account; the gateway adds the token to its calls. Its relay in the sandbox puts back the thought signature Gemini needs on each tool call fx returns, and adds fx's `effort` as `reasoning_effort`, the only gateway where fx takes one. See [fx on Vertex AI](/reference/harness/fx#vertex-ai).
 
 Every other harness falls through to the next gateway in the list, and the plan's hint says so. Cursor and Codex never can: Cursor's agent calls only Cursor's API, and Codex only OpenAI's Responses API.
 

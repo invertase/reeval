@@ -756,10 +756,17 @@ export type FxHarnessDescriptor = {
   /**
    * A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with
    * `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on
-   * OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.
+   * OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `vertex()`, a Gemini
+   * model id, with or without `google/`, run on Vertex AI's Chat Completions endpoint, e.g.
+   * `google/gemini-3.8-flash`.
    */
   model: string
-  /** Cell id; defaults to `fx:<model>`. */
+  /**
+   * Reasoning effort, sent as `reasoning_effort` on each model call; only on `vertex()`, since fx
+   * sends none itself. Values are what the model takes there, e.g. `low`, `medium` or `high`.
+   */
+  effort?: string
+  /** Cell id; defaults to `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set. */
   id?: string
   /** The most fx attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number

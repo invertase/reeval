@@ -5,7 +5,12 @@ import { generateKeyPairSync } from 'node:crypto'
 import type { EndpointMatch, LocalResponse, RequestTransformation } from '@reeval/sandbox-docker'
 import { UsageError } from '../errors.ts'
 import type { AgentKind, ModelSpecific } from '../harness/agents.ts'
-import type { GatewayDescriptor, VertexGatewayDescriptor, VertexPublisher } from '../types.ts'
+import type {
+  AgentHarnessDescriptor,
+  GatewayDescriptor,
+  VertexGatewayDescriptor,
+  VertexPublisher,
+} from '../types.ts'
 import { type BrokeredToken, cachedTokenSource, type TokenSource } from './token.ts'
 
 /** The host variable `vertex()` takes its project from when it names none. */
@@ -266,6 +271,40 @@ const antigravityUserinfo = (settings: VertexSettings): LocalResponse[] => [
 export const openCodeVertexId = (model: string) =>
   `google-vertex/${model.replace(/^(?:google|google-vertex)\//, '')}`
 
+/** fx's id for a Gemini model on Vertex AI's Chat Completions endpoint: `google/<model>`. */
+export const fxVertexId = (model: string) => `google/${model.replace(/^google\//, '')}`
+
+/**
+ * fx's configured provider on Vertex AI's OpenAI-compatible Chat Completions endpoint
+ * (`…/endpoints/openapi/chat/completions`, its only protocol besides AI Gateway's), with no
+ * credential of its own: the gateway adds the bearer there, and reads the served model from each
+ * response, which names it as `google/<id>`.
+ */
+function fx(settings: VertexSettings, source = vertexTokens()): VertexRoute {
+  const region = vertexRegion(settings, 'google')
+  const host = vertexHost(region)
+  const endpoints: EndpointMatch[] = [
+    {
+      host,
+      path: {
+        regex: `^/(?:v1|v1beta1)/projects/${escapeRegex(settings.project)}/locations/${escapeRegex(region)}/endpoints/openapi/chat/completions(?:\\?.*)?$`,
+      },
+      method: ['POST'],
+    },
+  ]
+  return {
+    credential: 'Google Cloud credentials',
+    endpoints,
+    modelResponses: endpoints,
+    hosts: [host],
+    servedModel: (request) =>
+      request.host === host ? request.responseModel?.replace(/^google\//, '') : undefined,
+    modelId: fxVertexId,
+    routeEnv: { FX_VERTEX_PROJECT: settings.project, FX_VERTEX_LOCATION: region },
+    token: { source, transformations: bearerOn(endpoints) },
+  }
+}
+
 /** The harnesses reeval runs on Vertex, and what each needs there. */
 export const VERTEX_ROUTES: Partial<
   Record<AgentKind, (settings: VertexSettings, source?: TokenSource) => VertexRoute>
@@ -280,6 +319,7 @@ export const VERTEX_ROUTES: Partial<
   // google-vertex: `/v1beta1/…:streamGenerateContent`, the session's title on the same model, and
   // web search on Exa's keyless MCP server.
   opencode: gemini(['mcp.exa.ai'], () => [], openCodeVertexId),
+  fx,
 }
 
 /** The publisher whose models each harness on Vertex calls, as `reeval doctor` probes them. */
@@ -289,6 +329,7 @@ const VERTEX_HARNESS_PUBLISHERS: Partial<Record<AgentKind, VertexPublisher>> = {
   goose: 'google',
   pi: 'google',
   opencode: 'google',
+  fx: 'google',
 }
 
 /**
@@ -331,6 +372,17 @@ export function vertexModelProbe(
     url: `${base}/${id}:countTokens`,
     body: { contents: [{ role: 'user', parts: [{ text: 'ping' }] }] },
   }
+}
+
+/**
+ * Why Vertex AI can't serve a routed harness's model, or undefined when it can: fx's Chat
+ * Completions endpoint serves Google's models, and Claude only over Anthropic's own API there.
+ */
+export function vertexModelRefusalFor(h: AgentHarnessDescriptor): string | undefined {
+  if (h.kind !== 'fx') return undefined
+  const provider = /^([^/]+)\//.exec(h.model)?.[1]
+  if (!provider || provider === 'google') return undefined
+  return `fx reaches Vertex AI only on its Chat Completions endpoint, which serves Google's models, not ${JSON.stringify(h.model)}: use a Gemini model, such as google/gemini-3.8-flash`
 }
 
 /** Why Vertex AI can't serve an agent, beyond the ones reeval doesn't route there yet. */

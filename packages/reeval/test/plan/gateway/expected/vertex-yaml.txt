@@ -1,12 +1,15 @@
-no profile · 2 evals · 3 cells · 3 attempts
+no profile · 2 evals · 4 cells · 4 attempts
 hint: gateway: codex:gpt-5.4-mini → direct (vertex can't serve it: Codex only calls OpenAI's Responses API, which Vertex AI doesn't serve)
-evals/g.eval.ts › greets  claude-code:claude-sonnet-4-5/-/docker  control  gated  ×1  gateway: claude-code:claude-sonnet-4-5 → vertex · gateway: codex:gpt-5.4-mini → direct
-                          codex:gpt-5.4-mini/-/docker             control  gated  ×1
-evals/g.eval.ts › pinned  b/-/docker                              control  gated  ×1  gateway: b → direct
+evals/g.eval.ts › greets  claude-code:claude-sonnet-4-5/-/docker    control  gated  ×1  gateway: claude-code:claude-sonnet-4-5 → vertex · gateway: codex:gpt-5.4-mini → direct · gateway: fx:gemini-3.8-flash[effort=low] → vertex
+                          codex:gpt-5.4-mini/-/docker               control  gated  ×1
+                          fx:gemini-3.8-flash[effort=low]/-/docker  control  gated  ×1
+evals/g.eval.ts › pinned  b/-/docker                                control  gated  ×1  gateway: b → direct
 excluded: —
 image docker · claude-code · 1 evals
   base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (reeval's image: built when missing or when its base changed)
 image docker · codex · 1 evals
   base  reeval-sandbox:codex-0.1.9  (reeval's image: built when missing or when its base changed)
+image docker · fx · 1 evals
+  base  reeval-sandbox:fx-0.1.1  (reeval's image: built when missing or when its base changed)
 image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
