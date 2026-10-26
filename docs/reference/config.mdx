@@ -5,7 +5,7 @@ description: "defineConfig sets a project's defaults, reeval finds reeval.config
 
 ## `defineConfig()`
 
-`{{ pkg }}` exports the `defineConfig()` function. The function returns the project defaults under the `reeval.config.ts` file:
+`defineConfig(config)` returns its argument unchanged. Put the project defaults in `reeval.config.ts`:
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
@@ -64,9 +64,9 @@ export default defineConfig(({ secret, ci, profile }) => ({
 }))
 ```
 
-`ConfigHelpers` holds the environment helpers `secret`, `skill`, `mcp`, `file`, `directory`, and `git`. Relative paths resolve against the config file's directory.
+`ConfigHelpers` holds the environment helpers `secret`, `skill`, `mcp`, `plugin`, `file`, `directory`, and `git`. Relative paths resolve against the config file's directory.
 
-For more information about the signatures of `secret`, `skill`, `mcp`, `file`, `directory`, and `git`, see [Environment helpers reference](/reference/environment).
+For more information about the signatures of `secret`, `skill`, `mcp`, `plugin`, `file`, `directory`, and `git`, see [Environment helpers reference](/reference/environment).
 
 ## `ci`
 
@@ -89,7 +89,7 @@ For more information about the signatures of `secret`, `skill`, `mcp`, `file`, `
 ## `profile`
 
 <Property name="profile" type="string | undefined" required>
-  The directly requested profile name, or `undefined`.
+  The profile from `--profile` or `REEVAL_PROFILE`, or `undefined`. `defaultProfile` does not set this.
 </Property>
 
 For more information about how a profile is chosen, see [Profiles reference](/reference/profiles#defaultprofile).
