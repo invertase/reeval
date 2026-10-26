@@ -9,7 +9,7 @@ def versioned():
     def overrides(c): ...
 
 
-group("versioned", {"revision": 2}, versioned)
+group("versioned", {"revision": 2, "runs": 2, "timeout": 120}, versioned)
 
 
 @evaluate("unversioned")

@@ -5,7 +5,9 @@
       "name": "versioned",
       "mode": "run",
       "options": {
-        "revision": 2
+        "revision": 2,
+        "runs": 2,
+        "timeout": "2m"
       },
       "children": [
         {
