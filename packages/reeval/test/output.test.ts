@@ -214,10 +214,7 @@ describe('every layout', () => {
     const g = GOLDENS.find((x) => x.name === 'suite')
     assert.ok(g)
     const plain = render(goldenSuite(g), null, { color: false, verbose: false })
-    assert.deepEqual(
-      render(goldenSuite(g), null, { color: false, verbose: false }),
-      plain,
-    )
+    assert.deepEqual(render(goldenSuite(g), null, { color: false, verbose: false }), plain)
     const painted = render(goldenSuite(g), null, { color: true, verbose: false })
     assert.ok(painted.some((l) => l.includes('\x1b[')))
     assert.deepEqual(painted.map(stripAnsi), plain)

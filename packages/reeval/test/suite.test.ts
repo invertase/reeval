@@ -279,8 +279,7 @@ describe('outcomes the record alone has', () => {
   const raw = layouts?.runs.at(-1)?.raw as Record<string, unknown>
   const evalOf = (s: SuiteResult, name: string) =>
     s.files.flatMap((f) => f.evals).find((e) => e.name === name || e.template === name)
-  const text = (s: SuiteResult) =>
-    render(s, null, { color: false, verbose: false }).join('\n')
+  const text = (s: SuiteResult) => render(s, null, { color: false, verbose: false }).join('\n')
 
   /** An interrupted run, its `writes greet.js` attempt cancelled mid-turn. */
   function interrupted(): RunRecord {

@@ -5,7 +5,7 @@
 // and how base would score under head's, and isn't collapsed. Pure and deterministic, from the two
 // runs' SuiteResults and compare rows; statistics print only with `verbose`.
 import type { HistoryCell, RunRecord } from '../history/types.ts'
-import { fenced } from '../text.ts'
+import { fenced, plural } from '../text.ts'
 import {
   type CompareCell,
   type CompareFamilyLift,
@@ -35,7 +35,6 @@ import {
   HEAD,
   type Item,
   labeller,
-  plural,
   renderBlocks,
   show,
   type Text,

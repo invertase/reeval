@@ -3,7 +3,7 @@ import { diffSinceSnapshot } from '../diff.ts'
 import type { HarnessResult, HarnessSession } from '../harness/types.ts'
 import { redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
-import { clip, formatDuration } from '../text.ts'
+import { clip, formatDuration, plural } from '../text.ts'
 import type { Diff, ExecResult, ExecRetry, Turn, TurnData, TurnRecord } from '../types.ts'
 import {
   type McpStartupLog,
@@ -202,7 +202,6 @@ export function turnSender(
         ? { error: clip(redactSecrets(failure.message.trim()), 300) }
         : {}),
     })
-    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
     debugLog(
       'harness',
       `turn ${turnNumber} ${result.status} in ${formatDuration(result.durationMs)} · ${plural(count('tool', 'web-search', 'web-fetch'), 'tool call')} · ${plural(count('file-edit'), 'file edit')}${failure && 'message' in failure ? ` · error: ${clip(redactSecrets(String(failure.message)), 200)}` : ''}${result.model ? ` · model ${result.model}` : ''}`,

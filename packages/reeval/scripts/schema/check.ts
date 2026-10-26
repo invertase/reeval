@@ -9,8 +9,8 @@ import {
   MIGRATIONS,
   READ_DEFAULTS,
   readableAnalysis,
-  readableRemarks,
   readableRecord,
+  readableRemarks,
   readableTranscriptLine,
 } from '../../src/view/record.ts'
 import { type Change, checkDefaults, compare } from './compat.ts'

@@ -2,7 +2,7 @@
 // eval, a pooled family being one, laid out by what the eval's cells compare, then the tally.
 // Pure and deterministic: the same SuiteResult and remarks always print the same lines. Counts
 // read `N of M` and effects are words; statistics print only with `verbose`.
-import { clip } from '../text.ts'
+import { clip, plural } from '../text.ts'
 import { formatTokens } from '../usage.ts'
 import { formatCount, formatSeconds } from '../view/effort.ts'
 import type { RunRemarks } from '../view/remarks.ts'
@@ -134,8 +134,6 @@ function verdict(c: Colors, e: Pick<EvalResult, 'outcome' | 'todo' | 'cells'>): 
   if (e.outcome === 'pass' && isStudy(e.cells ?? [])) return t('not gated', c.dim)
   return t(VERDICT[e.outcome], paintOutcome(c, e.outcome))
 }
-
-export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /**
  * `3 of 4`, with the attempts that didn't count named: `2 of 3 · 1 infra error · 1 skipped`. A
@@ -381,12 +379,7 @@ function measureBody(c: Colors, cells: CellResult[], indent: number, o: BodyOpti
 }
 
 /** A row per cell (harness, or sandbox), the ones that didn't pass outright with their evidence. */
-function cellRows(
-  c: Colors,
-  cells: CellResult[],
-  heading: string,
-  indent: number,
-): string[] {
+function cellRows(c: Colors, cells: CellResult[], heading: string, indent: number): string[] {
   const label = labeller(cells, heading === 'harness' ? ['harness', 'sandbox'] : ['sandbox'])
   const items: Item[] = [{ indent, cells: [heading, t('pass', c.dim)] }]
   for (const cell of cells) {
@@ -528,12 +521,7 @@ function pooledStats(p: PooledArm, label: string) {
  * with more, the case is outer and its cells inner, laid out as a single eval's are, and a
  * pooled `all cases` row sums each cell's counts with its variant's pooled effect.
  */
-function familyBlock(
-  c: Colors,
-  e: EvalResult,
-  kind: Layout['kind'],
-  verbose: boolean,
-): string[] {
+function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: boolean): string[] {
   const cases = e.cases ?? []
   const columns = [
     ...new Map(cases.flatMap((k) => k.cells).map((cell) => [cell.key, cell])).values(),

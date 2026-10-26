@@ -1,13 +1,11 @@
 // `reeval report`'s bundle as text: the terminal summary, report.md, and the shorter issue body.
 import type { DoctorReport } from '../doctor.ts'
 import { isObjectLike } from '../object.ts'
-import { fenced } from '../text.ts'
+import { fenced, plural } from '../text.ts'
 import type { ReportBundle } from './types.ts'
 
 const isDoctor = (value: unknown): value is DoctorReport =>
   isObjectLike(value) && Array.isArray(value.checks)
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export function versionsLine(b: ReportBundle): string {
   const pm = b.packageManager

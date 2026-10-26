@@ -657,8 +657,9 @@ async function executeRun(
     }),
   ) as typeof ctx
   const { runEngine } = await import('./engine/node.ts')
-  const { buildPlan, checkAttemptBudget, planDocument, planLine, planTable } =
-    await import('./plan.ts')
+  const { buildPlan, checkAttemptBudget, planDocument, planLine, planTable } = await import(
+    './plan.ts'
+  )
   let plan: RunPlan | undefined
   let sandboxVersions: SandboxVersions = { images: [] }
   let preflightStop: Error | undefined

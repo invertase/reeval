@@ -228,16 +228,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --json                      Rows as JSON; --schema every table and column; --rebuild from scratch`,
   },
   analyze: {
-    flags: [
-      'vs',
-      'eval',
-      'json',
-      'md',
-      'save',
-      'context',
-      'dry-run',
-      'no-cache',
-    ],
+    flags: ['vs', 'eval', 'json', 'md', 'save', 'context', 'dry-run', 'no-cache'],
     positionals: 1,
     help: `
   reeval analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its

@@ -30,7 +30,6 @@ import { missingGitignoreEntries } from './init.ts'
 import {
   judgeCredentials,
   modelKeyOptions,
-  RECOMMENDED_ANALYSIS_MODEL,
   RECOMMENDED_JUDGE_MODEL,
   setGatewayKey,
 } from './judge/index.ts'
@@ -38,6 +37,7 @@ import { harnessId, sandboxId } from './options.ts'
 import { badCharacterAt, redactSecrets, SECRET_NAME } from './redact.ts'
 import { PACKAGE_DIR } from './root.ts'
 import type { ImageTarget, ImageUse } from './sandbox/images.ts'
+import { plural } from './text.ts'
 import type {
   EgressPolicy,
   FakeJudgeModel,
@@ -1065,15 +1065,14 @@ export function renderReport(report: DoctorReport, color: boolean): string[] {
     lines.push(`${mark[c.status]} ${c.id.padEnd(width)}  ${text}`)
     if (c.fix) lines.push(`  ${' '.repeat(width)}  ${dim(`fix: ${c.fix}`)}`)
   }
-  const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
   lines.push(
     '',
     report.problems
       ? red(
-          `${count(report.problems, 'problem')}, ${count(report.warnings, 'warning')}. Fix ${report.problems === 1 ? 'it' : 'them'} and run reeval doctor again.`,
+          `${plural(report.problems, 'problem')}, ${plural(report.warnings, 'warning')}. Fix ${report.problems === 1 ? 'it' : 'them'} and run reeval doctor again.`,
         )
       : report.warnings
-        ? yellow(`No problems, ${count(report.warnings, 'warning')}.`)
+        ? yellow(`No problems, ${plural(report.warnings, 'warning')}.`)
         : green('No problems.'),
   )
   return lines

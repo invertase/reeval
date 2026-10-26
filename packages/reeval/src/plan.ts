@@ -8,7 +8,7 @@ import { fallbackHint } from './gateway/resolve.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
 import type { Prices } from './prices.ts'
-import { clip, formatDuration } from './text.ts'
+import { clip, formatDuration, plural } from './text.ts'
 import type {
   Budget,
   Cell,
@@ -20,7 +20,6 @@ import type {
   PairFactor,
   PlannedEgress,
   PlannedQuestion,
-  ResolvedConfig,
   ResolvedGateway,
   ResolvedProfile,
   Revision,
@@ -332,8 +331,6 @@ function gatewayHints(planned: PlannedItem[]): string[] {
   }
   return [...hints]
 }
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /**
  * `plan  profile pr (auto: CI is set) · 3 evals · 4 cells · 12 attempts · ~9m serial · …`, led by

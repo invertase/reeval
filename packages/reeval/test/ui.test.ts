@@ -507,7 +507,10 @@ describe('output mode', () => {
     assert.deepEqual(shape(resolve({})), ['plain', true])
     assert.deepEqual(shape(resolve({}, true, undefined, { ui: 'plain' })), ['plain', false])
     assert.deepEqual(shape(resolve({ REEVAL_UI: 'auto' })), ['plain', true])
-    assert.throws(() => resolve({}, true, undefined, { ui: 'live' }), /--ui is one of plain, agent, auto \(got live\)/)
+    assert.throws(
+      () => resolve({}, true, undefined, { ui: 'live' }),
+      /--ui is one of plain, agent, auto \(got live\)/,
+    )
     assert.equal(resolve({ REEVAL_UI: 'plain' }, true, 'cursor').mode, 'plain')
     assert.equal(resolve({ REEVAL_UI: 'plain' }, true, 'cursor', { ui: 'agent' }).mode, 'agent')
     assert.throws(

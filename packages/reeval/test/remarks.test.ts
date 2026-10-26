@@ -320,7 +320,11 @@ describe('remarks in reeval run', () => {
       .map((r) => r.printed)
     assert.deepEqual(marks, [true, true, true, false])
     assert.deepEqual(
-      [tftOf(quiet)?.printed, tftOf(remarksOf(p.dir, 1))?.printed, tftOf(remarksOf(p.dir))?.printed],
+      [
+        tftOf(quiet)?.printed,
+        tftOf(remarksOf(p.dir, 1))?.printed,
+        tftOf(remarksOf(p.dir))?.printed,
+      ],
       [false, true, false],
     )
     assert.equal(tftOf(remarksOf(p.dir, 1))?.firstSeenRun, tftOf(remarksOf(p.dir))?.firstSeenRun)

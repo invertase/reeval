@@ -4,8 +4,8 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runDir, scratchDir } from '../history/files.ts'
 import { fromCwd } from '../ids.ts'
-import { REMARKS_FILE, type RunRemarks } from '../view/remarks.ts'
 import { NewerSchemaError, readableRemarks } from '../view/record.ts'
+import { REMARKS_FILE, type RunRemarks } from '../view/remarks.ts'
 
 export const remarksFile = (historyDir: string, runId: string) =>
   join(runDir(historyDir, runId), REMARKS_FILE)

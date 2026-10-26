@@ -1539,10 +1539,7 @@ describe('records from before a field existed', () => {
     assert.equal('runtime' in r.stack || 'language' in r.stack, false)
     assert.equal(runtimeLabel(r.stack), `node ${r.stack.node}`)
     assert.equal(languageLabel(r.stack), null)
-    assert.match(
-      renderSummary(r),
-      new RegExp(`\\| reeval \\| \\S+ · node ${r.stack.node} · \\w+/`),
-    )
+    assert.match(renderSummary(r), new RegExp(`\\| reeval \\| \\S+ · node ${r.stack.node} · \\w+/`))
   })
 
   test('the runtime and language labels', () => {

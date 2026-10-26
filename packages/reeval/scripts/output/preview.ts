@@ -10,13 +10,7 @@ import { render } from '../../src/ui/layout.ts'
 import { readableRecord } from '../../src/view/record.ts'
 import { suiteResult } from '../../src/view/suite.ts'
 import { corpusEntries } from '../schema/corpus.ts'
-import {
-  COMPARE_GOLDENS,
-  compareInput,
-  GOLDENS,
-  goldenCompare,
-  goldenRender,
-} from './goldens.ts'
+import { COMPARE_GOLDENS, compareInput, GOLDENS, goldenCompare, goldenRender } from './goldens.ts'
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,

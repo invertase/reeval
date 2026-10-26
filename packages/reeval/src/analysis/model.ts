@@ -6,14 +6,7 @@ import { analysisModelOf } from '../config.ts'
 import { UsageError } from '../errors.ts'
 import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
 import { openRouterFallbacks, openRouterLanguageModel } from '../gateway/openrouter-models.ts'
-import {
-  checkModelString,
-  isFakeJudge,
-  judgeCredentials,
-  judgeRoute,
-  modelKeyOptions,
-  unusedGatewayKey,
-} from '../judge/index.ts'
+import { isFakeJudge, judgeRoute } from '../judge/index.ts'
 import type { FakeAnalysisModel, GatewayName, JudgeModel, ResolvedConfig } from '../types.ts'
 import type { Digest } from './digest.ts'
 import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'

@@ -16,9 +16,8 @@ import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID } from '../root.ts'
 import type { QuestionInput } from '../types.ts'
 import { runHeader } from '../view/header.ts'
-import { REMARKS_FILE, type RunRemarks } from '../view/remarks.ts'
 import { NewerSchemaError, readableRecord, readableRemarks } from '../view/record.ts'
-import { suiteResult } from '../view/suite.ts'
+import { REMARKS_FILE, type RunRemarks } from '../view/remarks.ts'
 import {
   ensureHistoryGitignore,
   historyGitignorePath,

@@ -52,7 +52,8 @@ export const SHAPES: PersistedShape[] = [
     name: 'remarks',
     file: 'src/view/remarks.ts',
     type: 'RunRemarks',
-    where: "A run's remarks from reeval run: <run>/remarks.json in the history folder or .reeval/runs",
+    where:
+      "A run's remarks from reeval run: <run>/remarks.json in the history folder or .reeval/runs",
     versionField: 'schemaVersion',
   },
   {

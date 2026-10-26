@@ -7,6 +7,7 @@ import type {
   HistoryEntry,
   RunRecord,
 } from '../history/types.ts'
+import { plural } from '../text.ts'
 import type { Outcome, TokenUsage, TranscriptEvent, TurnStatus } from '../types.ts'
 import { formatTokens, promptTokens } from '../usage.ts'
 import {
@@ -163,7 +164,6 @@ export const shortSha = (sha: string | null | undefined) => (sha ? sha.slice(0, 
  * Edit calls become one file edit per file they change, so they're counted apart, never summed.
  */
 export function activityLabel(a: Pick<AttemptRecord['activity'], 'tools' | 'fileEdits'>): string {
-  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
   return `${plural(a.tools, 'tool call')} · ${plural(a.fileEdits, 'file edit')}`
 }
 

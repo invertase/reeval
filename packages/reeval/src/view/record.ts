@@ -8,8 +8,8 @@ import { SCHEMA_VERSION } from '../history/types.ts'
 import type { CliInvocation } from '../report/types.ts'
 import type { AnalysisDoc, AnalysisNote } from './analysis.ts'
 import type { DebugRequest } from './debug.ts'
-import type { RunRemarks } from './remarks.ts'
 import type { TranscriptLine } from './model.ts'
+import type { RunRemarks } from './remarks.ts'
 
 /** Each shape reeval persists and reads back; `schema/<name>.schema.json` is its snapshot. */
 export type ShapeName =
