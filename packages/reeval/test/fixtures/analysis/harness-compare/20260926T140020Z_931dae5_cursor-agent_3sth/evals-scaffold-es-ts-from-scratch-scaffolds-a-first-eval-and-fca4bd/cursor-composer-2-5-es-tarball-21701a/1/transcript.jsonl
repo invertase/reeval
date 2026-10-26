@@ -1,11 +1,11 @@
-{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to create hello.txt containing \"hello\" and checks that file with a deterministic assertion. Finish when `npx es run` passes."}
+{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to …"}
 {"turn":0,"type":"reasoning"}
-{"turn":0,"type":"text","text":"I'll set up ES from the local tarball and explore its config and eval format so we can add `hello.es.ts` and get `npx es run` passing.\n"}
+{"turn":0,"type":"text","text":"I'll set up ES from the local tarball and explore its config and eval format so we can add `hello.es.ts` and get `npx es…"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"ls -la . && ls -la /opt/es/ 2>/dev/null; tar -tzf /opt/es/invertase-foobar.tgz | head -50"},"ok":true,"durationMs":201}
 {"turn":0,"type":"tool","tool":"glob","input":{"pattern":"**/*"},"ok":true,"durationMs":81}
 {"turn":0,"type":"reasoning"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cd . && npm init -y && npm install /opt/es/invertase-foobar.tgz"},"ok":true,"durationMs":5448}
-{"turn":0,"type":"tool","tool":"bash","input":{"command":"tar -xzf /opt/es/invertase-foobar.tgz -C /tmp package/package.json package/README.md 2>/dev/null; cat /tmp/package/README.md 2>/dev/null | head -200; echo \"---\"; cat /tmp/package/package.json 2>/dev/null"},"ok":true,"durationMs":63}
+{"turn":0,"type":"tool","tool":"bash","input":{"command":"tar -xzf /opt/es/invertase-foobar.tgz -C /tmp package/package.json package/README.md 2>/dev/null; cat /tmp/package/README.md 2>/dev/null | head -200; echo \"---\"…"},"ok":true,"durationMs":63}
 {"turn":0,"type":"reasoning"}
 {"turn":0,"type":"tool","tool":"grep","input":{"path":"node_modules/@invertase/foobar","pattern":"es\\.config"},"ok":true,"durationMs":48}
 {"turn":0,"type":"tool","tool":"glob","input":{"pattern":"**/*"},"ok":true,"durationMs":146}
@@ -69,5 +69,5 @@
 {"turn":0,"type":"reasoning"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cd . && npx es run"},"ok":true,"durationMs":1477}
 {"turn":0,"type":"reasoning"}
-{"turn":0,"type":"text","text":"ES is set up and `npx es run` passes.\n\n**`es.config.ts`** — fake harness, sandbox, and judge (no Docker or API keys):\n\n```1:13:/es/workspace/es.config.ts\nimport { defineConfig } from '@invertase/fooba…"}
+{"turn":0,"type":"text","text":"ES is set up and `npx es run` passes.\n\n**`es.config.ts`** — fake harness, sandbox, and judge (no Docker or API keys):\n\n`…"}
 {"turn":0,"type":"turn-end"}

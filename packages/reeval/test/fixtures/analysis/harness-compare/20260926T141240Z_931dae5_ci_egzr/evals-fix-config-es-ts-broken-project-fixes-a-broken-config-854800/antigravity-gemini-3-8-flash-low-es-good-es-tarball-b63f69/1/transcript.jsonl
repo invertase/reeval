@@ -16,5 +16,5 @@
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"rm -rf .es && npx es run --dry-run"},"ok":true,"durationMs":2930}
 {"turn":0,"type":"tool","tool":"read","input":{"file_path":"es.config.ts"},"ok":true,"durationMs":1465}
 {"turn":0,"type":"tool","tool":"read","input":{"file_path":"evals/docs.es.ts"},"ok":true,"durationMs":1884}
-{"turn":0,"type":"text","text":"The configuration and eval files in [es.config.ts](file:///es/workspace/es.config.ts) and [evals/docs.es.ts](file:///es/workspace/evals/docs.es.ts) have been updated so that running `npx es run --dry-…"}
+{"turn":0,"type":"text","text":"The configuration and eval files in [es.config.ts](file:///es/workspace/es.config.ts) and [evals/docs.es.ts](file:///es/…"}
 {"turn":0,"type":"turn-end"}

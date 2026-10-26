@@ -39,5 +39,5 @@
 {"turn":0,"type":"reasoning"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cd . && npx es run --dry-run --json 2>&1 | tail -n +5"},"ok":true,"durationMs":943}
 {"turn":0,"type":"reasoning"}
-{"turn":0,"type":"text","text":"`npx es run --dry-run` passes. The plan is 1 eval, 2 cells (`fake/-/fake` control vs `fake/with-docs/fake` variant), 3 runs each, 6 attempts on the fake harness/sandbox.\n\n**Mistakes fixed (one line ea…"}
+{"turn":0,"type":"text","text":"`npx es run --dry-run` passes. The plan is 1 eval, 2 cells (`fake/-/fake` control vs `fake/with-docs/fake` variant), 3 r…"}
 {"turn":0,"type":"turn-end"}

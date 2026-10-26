@@ -1,7 +1,7 @@
-{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to create hello.txt containing \"hello\" and checks that file with a deterministic assertion. Finish when `npx es run` passes."}
+{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to …"}
 {"turn":0,"type":"tool","tool":"read","input":{"file_path":"/root/.gemini/config/skills/es-weak/SKILL.md"},"ok":true,"durationMs":1537}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npm init -y && npm install /opt/es/invertase-foobar.tgz"},"ok":true,"durationMs":7419}
-{"turn":0,"type":"text","text":"I have started installing the package from `/opt/es/invertase-foobar.tgz` and initializing the project. I will proceed once the installation completes.\n"}
+{"turn":0,"type":"text","text":"I have started installing the package from `/opt/es/invertase-foobar.tgz` and initializing the project. I will proceed o…"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npx es --help"},"ok":true,"durationMs":1342}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"ls -la node_modules/@invertase/foobar"},"ok":true,"durationMs":884}
 {"turn":0,"type":"tool","tool":"read","input":{"file_path":"node_modules/@invertase/foobar/package.json"},"ok":true,"durationMs":1062}
@@ -48,5 +48,5 @@
 {"turn":0,"type":"tool","tool":"read","input":{"file_path":"es.config.ts"},"ok":true,"durationMs":938}
 {"turn":0,"type":"tool","tool":"read","input":{"file_path":"evals/hello.es.ts"},"ok":true,"durationMs":1921}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npx es run"},"ok":true,"durationMs":3584}
-{"turn":0,"type":"text","text":"ES has been installed and configured using the fake harness, fake sandbox, and fake judge.\n\n### Summary of Changes\n\n1. **Installed `@invertase/foobar`**: Installed the package from [/opt/es/invertase-…"}
+{"turn":0,"type":"text","text":"ES has been installed and configured using the fake harness, fake sandbox, and fake judge.\n\n### Summary of Changes\n\n1. *…"}
 {"turn":0,"type":"turn-end"}

@@ -552,7 +552,8 @@ jobs:
           name: package
           path: ${{ runner.temp }}/package/*.tgz
           if-no-files-found: error
-          retention-days: 7
+          # release.yml publishes it from its own run; nothing else reads it.
+          retention-days: ${{ github.workflow == 'release' && 7 || 1 }}
       # Besides npm, the pack test installs with the runner's Yarn 1 and with strict pnpm, which
       # install no peers.
       - working-directory: packages/reeval

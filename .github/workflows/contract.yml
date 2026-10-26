@@ -145,4 +145,5 @@ jobs:
             ${{ runner.temp }}/reeval-tests/**/evals/.history
           include-hidden-files: true
           if-no-files-found: ignore
-          retention-days: 14
+          # A nightly run's artifact feeds the corpus's real entries; a PR's only its own review.
+          retention-days: ${{ github.event_name == 'pull_request' && 1 || 14 }}

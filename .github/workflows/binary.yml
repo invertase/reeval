@@ -85,6 +85,8 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
+          # Only main writes caches (cache-cleanup.yml deletes the rest).
+          no-cache: ${{ github.event_name == 'pull_request' }}
       - run: pnpm build
       - id: version
         run: echo "version=$(node -p "require('./packages/reeval/package.json').version")" >> "$GITHUB_OUTPUT"
@@ -118,7 +120,8 @@ jobs:
           name: reeval-${{ steps.version.outputs.version }}-binaries
           path: out/
           if-no-files-found: error
-          retention-days: 14
+          # 14 days for a release, which uploads them later in its run; a day for anything else.
+          retention-days: ${{ github.workflow == 'release' && 14 || 1 }}
       # reeval-python as release.yml publishes it: the sdist and the pure wheel, both recording the
       # binaries' hashes, at the binaries' version. A release's commit must already have it
       # (python-wheels.py check refuses any other); a PR run sets it. The platform wheels, each
@@ -155,14 +158,16 @@ jobs:
           name: reeval-python-dist
           path: python-dist/
           if-no-files-found: error
-          retention-days: 14
+          # 14 days for a release, which uploads them later in its run; a day for anything else.
+          retention-days: ${{ github.workflow == 'release' && 14 || 1 }}
       - if: steps.python.outputs.built == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reeval-python-platform-wheels
           path: platform-wheels/
           if-no-files-found: error
-          retention-days: 14
+          # 14 days for a release, which uploads them later in its run; a day for anything else.
+          retention-days: ${{ github.workflow == 'release' && 14 || 1 }}
 
   # No pnpm install and no build: the runner's preinstalled Node drives the binary.
   smoke:

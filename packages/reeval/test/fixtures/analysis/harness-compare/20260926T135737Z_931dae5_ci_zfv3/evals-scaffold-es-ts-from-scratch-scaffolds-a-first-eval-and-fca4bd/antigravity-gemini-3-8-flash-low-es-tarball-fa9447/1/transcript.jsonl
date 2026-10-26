@@ -1,4 +1,4 @@
-{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to create hello.txt containing \"hello\" and checks that file with a deterministic assertion. Finish when `npx es run` passes."}
+{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to …"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"ls -la /opt/es && pwd && ls -la"},"ok":true,"durationMs":938}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"tar -ztvf /opt/es/invertase-foobar.tgz | head -n 40"},"ok":true,"durationMs":1010}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"tar -ztvf /opt/es/invertase-foobar.tgz | grep -E \"fake|config|judge|sandbox|harness\""},"ok":true,"durationMs":1088}
@@ -40,5 +40,5 @@
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npx es run"},"ok":true,"durationMs":2554}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"git status 2>&1 || true"},"ok":true,"durationMs":1013}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"ls -la"},"ok":true,"durationMs":1858}
-{"turn":0,"type":"text","text":"ES has been set up and verified:\n\n1. **Package Installation**: Installed `@invertase/foobar` directly from the local tarball `/opt/es/invertase-foobar.tgz`.\n2. **Configuration** ([`es.config.ts`](file…"}
+{"turn":0,"type":"text","text":"ES has been set up and verified:\n\n1. **Package Installation**: Installed `@invertase/foobar` directly from the local tar…"}
 {"turn":0,"type":"turn-end"}
