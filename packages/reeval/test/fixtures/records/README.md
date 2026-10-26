@@ -18,7 +18,7 @@ config API like any other project.
 | `before-baseline-from` | The corpus project's fake-harness runs from before `evals[].compare.from` (a compare whose control came from the cascade because `baseline` was omitted) |
 | `with-oom` | The fake harness in Docker: one attempt whose process the kernel killed at its 128m memory limit, an infra error with `error.resource` |
 | `with-named-checks` | The corpus project's fake-harness runs with `evals[].attempts[].assertions` and `evals[].cells[].checks`: labelled and default-labelled checks, a soft one, a compare whose variant's checks have verdicts, and cells with no counted attempts |
-| `before-families` | The corpus project's fake-harness runs from before `evals[].family` and `families` (a pooled `evaluate.each`), `evals[].attempts[].assertions` and `evals[].cells[].checks` (each `expect`'s result, and each cell's tally of them), and `evals[].attempts[].error.resource` (an OOM kill during an attempt, as an infra error) and `attempts.oom_kills` |
+| `before-families` | The corpus project's fake-harness runs from before `evals[].family` and `families` (a pooled `evaluate.each`); `evals[].attempts[].assertions` and `evals[].cells[].checks` (each `expect`'s result, and each cell's tally of them); and `evals[].attempts[].error.resource` and `attempts.oom_kills` (an OOM kill during an attempt, as an infra error) |
 | `with-families` | The corpus project's fake-harness runs with `families`: a pooled `evaluate.each` compare with per-cell rates, a paired lift that fails its `minLift`, and an unpooled `evaluate.each` |
 | `before-judge-state` | The corpus project's fake-harness runs from before `stack.judge.state` (the config's default of what the judge is given) |
 | `before-question-state` | The corpus project's fake-harness runs from before `evals[].answers[].stateOptions`, `answers[].artifacts` and `votes[].artifacts` (what each side of a compare question shows) |
@@ -57,7 +57,7 @@ What reads them:
 
 Add one whenever you change a persisted shape, recorded by the reeval before your change (check out
 your base, build, record, then switch back), so the change is tested against the old shape. Changes
-that share a base share one entry: a second recording by the same reeval is the same shape again, so
+that share a base share one entry: a second recording of the corpus project by the same reeval is the same shape again, so
 name the fields the existing entry predates in its row instead:
 
 ```bash
