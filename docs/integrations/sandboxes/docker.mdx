@@ -3,9 +3,17 @@ title: "Configure Docker sandboxes"
 description: "Run evaluation attempts in containers with controlled images, resources, and privileges."
 ---
 
+`docker()` returns a sandbox that runs each attempt in one Docker container on your machine.
+
+## Requirements
+
+`docker()` needs a running Docker engine that runs Linux containers: Docker Engine or Docker Desktop on Linux, Docker Desktop or another engine such as OrbStack or Colima on macOS, and Docker Desktop with the WSL 2 backend on Windows. `reeval doctor` reports it on a `docker` line. Before a run, reeval exits with code 2 when Docker is missing or not running, naming the fix.
+
+For more information about the `reeval doctor` line, see [Verify with reeval doctor](/integrations/sandboxes#verify-with-reeval-doctor).
+
 ## `docker()`
 
-`docker()` returns a sandbox that runs each attempt in one Docker container on your machine. The `{{ pkg }}/sandbox` subpath exports `docker()` for the `sandbox` option:
+The `{{ pkg }}/sandbox` subpath exports `docker()` for the `sandbox` option:
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
@@ -27,7 +35,7 @@ For more information about the `egress` option and its automatic hosts, see [Res
 ## `id`
 
 <Property name="id" type="string" optional>
-  The last segment of the cell key. Defaults to `docker`, or `docker:<image>` when `image` or `from` names another image, plus a hash of `install`.
+  The last segment of the cell key. Defaults to `docker`, `docker:<image>` when `image` or `from` names another image, or `docker:<name>` for a `dockerfile`, where the name is the file's, or its directory's for a file named `Dockerfile`. A hash of `install` follows.
 </Property>
 
 ## `maxConcurrent`
