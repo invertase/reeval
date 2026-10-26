@@ -351,16 +351,21 @@
           "href": "/results/analyze"
         },
         {
-          "title": "Debugging",
-          "href": "/results/debugging"
-        },
-        {
-          "title": "Studio",
-          "href": "/results/studio"
-        },
-        {
-          "title": "Queries",
-          "href": "/results/queries"
+          "group": "Inspection",
+          "pages": [
+            {
+              "title": "Studio",
+              "href": "/results/studio"
+            },
+            {
+              "title": "Debugging",
+              "href": "/results/debugging"
+            },
+            {
+              "title": "Queries",
+              "href": "/results/queries"
+            }
+          ]
         }
       ]
     },
