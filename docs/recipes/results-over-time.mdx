@@ -96,7 +96,7 @@ npx reeval query flaky_cells
 
 The `flaky_cells` view prints one row per cell and comparable fingerprint that both passed and failed, or `(no rows)`. The view reads the same runs as the `eval_trend` view. `verdict` is `flaky` or `insufficient`.
 
-reeval sets `cause` to the first match in the order `infra`, `judge`, `check`, and `agent`. `infra` means the pooled cells include an infrastructure error. `judge` means a failing attempt has a failing judgement whose score is at most 0.1 from its threshold.
+reeval sets `cause` to the first match in the order `infra`, `judge`, `check`, and `agent`. `infra` means the pooled cells include an infrastructure error. `judge` means a failing attempt has a failing judgment whose score is at most 0.1 from its threshold.
 
 `check` means the same change both passed and failed its assertions. `agent` means none of the earlier causes matched.
 

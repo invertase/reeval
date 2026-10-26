@@ -57,7 +57,7 @@ A non-empty `REEVAL_DEBUG` prints worker output, image-prepare lines, egress-gat
 
 ## `REEVAL_RAW_TRANSCRIPT`
 
-A non-empty `REEVAL_RAW_TRANSCRIPT` stores each turn's unnormalised stream parts. With no value, the attempt omits them.
+A non-empty `REEVAL_RAW_TRANSCRIPT` stores each turn's unnormalized stream parts. With no value, the attempt omits them.
 
 ## `REEVAL_NO_REPORT_HINT`
 
@@ -119,7 +119,7 @@ A non-empty value other than `false` or `0` on `BUILD_ID`, `BUILD_NUMBER`, `CI`,
 
 ## `GITHUB_ACTIONS`
 
-`GITHUB_ACTIONS` with a non-empty value other than `false` or `0` wraps logs in `::group::` blocks, writes an `::error::` annotation on failure, and keeps colour on without a terminal.
+`GITHUB_ACTIONS` with a non-empty value other than `false` or `0` wraps logs in `::group::` blocks, writes an `::error::` annotation on failure, and keeps color on without a terminal.
 
 On a CI run, `GITHUB_ACTIONS` records the provider `github`. `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY`, and `GITHUB_RUN_ID` build the run URL. `GITHUB_RUN_ATTEMPT` is the attempt. `GITHUB_REF` and `GITHUB_BASE_REF` fill the pull request. The branch is `GITHUB_HEAD_REF`, then `GITHUB_REF_NAME`. `GITHUB_BASE_REF` is also the default branch with no `origin` HEAD and no local `main` or `master`.
 
@@ -137,11 +137,11 @@ When `GITHUB_STEP_SUMMARY` names a file, `reeval run` appends the run id, then t
 
 ## `NO_COLOR`
 
-A non-empty `NO_COLOR` turns colour off, ahead of `FORCE_COLOR`.
+A non-empty `NO_COLOR` turns color off, ahead of `FORCE_COLOR`.
 
 ## `FORCE_COLOR`
 
-A non-empty `FORCE_COLOR` other than `false` or `0` turns colour on. `false` and `0` turn it off. With no value, colour stays off in `agent` mode, and otherwise colour stays on for a terminal or for a non-empty `GITHUB_ACTIONS` value other than `false` or `0`.
+A non-empty `FORCE_COLOR` other than `false` or `0` turns color on. `false` and `0` turn it off. With no value, color stays off in `agent` mode, and otherwise color stays on for a terminal or for a non-empty `GITHUB_ACTIONS` value other than `false` or `0`.
 
 ## `XDG_CACHE_HOME`
 

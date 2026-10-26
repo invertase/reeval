@@ -81,7 +81,7 @@ evaluate(
     // Send a prompt to a harness in this run
     await c.send(
       "Give index.html Anthropic's look: write styles.css with Anthropic's " +
-        'brand colours and fonts, and link it from index.html.',
+        'brand colors and fonts, and link it from index.html.',
     )
 
     await expect.soft(c, 'links styles.css').toHaveFile('index.html', /href="styles\.css"/)
@@ -100,7 +100,7 @@ evaluate(
 )
 ```
 
-The prompt never names the colour or the fonts, so those assertions pass only when the agent knows them. `reeval run` prints the outcome for each side:
+The prompt never names the color or the fonts, so those assertions pass only when the agent knows them. `reeval run` prints the outcome for each side:
 
 ```text
 pass             styles the page in Anthropic's brand
@@ -133,7 +133,7 @@ The variant passed in 4 of 4 attempts and the control in none, so the skill `hel
     Run the same task across different coding agents and see how each one does.
   </Card>
   <Card title="Regressions before release" href="/recipes/ci-gate">
-    Commit baselines to Git. Diff agent behaviour on pull requests and in CI.
+    Commit baselines to Git. Diff agent behavior on pull requests and in CI.
   </Card>
 </CardGroup>
 

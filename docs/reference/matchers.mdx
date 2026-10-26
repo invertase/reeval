@@ -166,7 +166,7 @@ The failure message lists every shell command the agent ran.
 </Property>
 
 <Property name="input" type="string | RegExp | Record<string, unknown>" optional>
-  Text the call's input contains, a regular expression it matches, or an object. For an object, each expected key matches the corresponding input value. A string equals or is contained in the value, a regular expression tests it, and anything else compares as JSON. Text matching serialises a non-string input as JSON.
+  Text the call's input contains, a regular expression it matches, or an object. For an object, each expected key matches the corresponding input value. A string equals or is contained in the value, a regular expression tests it, and anything else compares as JSON. Text matching serializes a non-string input as JSON.
 </Property>
 
 The failure message lists every tool call, with its input when `input` is given.

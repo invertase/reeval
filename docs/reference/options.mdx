@@ -362,10 +362,10 @@ For more information about pairwise questions, see [Compare setups](/evals/compa
 
 ## `history`
 
-`history` is the history directory and which evaluations keep artefacts there.
+`history` is the history directory and which evaluations keep artifacts there.
 
 <Property name="history" type="{ dir?: string, artifacts?: 'all' | 'failures' | 'none' }" optional>
-  `dir` defaults to the `.history` directory under the directory the `include` patterns share. `artifacts` is `'all'` (the default), `'failures'`, or `'none'`; `'failures'` keeps every attempt's artefacts for an evaluation whose outcome is `fail` or `infra_error`.
+  `dir` defaults to the `.history` directory under the directory the `include` patterns share. `artifacts` is `'all'` (the default), `'failures'`, or `'none'`; `'failures'` keeps every attempt's artifacts for an evaluation whose outcome is `fail` or `infra_error`.
 </Property>
 
 ## `budget`
@@ -444,4 +444,4 @@ For more information about brokering a secret, see [Secrets](/environments/secre
   The most tokens in an answer, a whole number of at least 500. The default is 8000.
 </Property>
 
-For more information about analysis, see [Analyse a run](/results/analysis#set-an-analysis-model).
+For more information about analysis, see [Analyze a run](/results/analysis#set-an-analysis-model).

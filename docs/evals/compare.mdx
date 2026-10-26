@@ -23,7 +23,7 @@ evaluate(
   async (c) => {
     await c.send(
       "Give index.html Anthropic's look: write styles.css with Anthropic's " +
-        'brand colours and fonts, and link it from index.html.',
+        'brand colors and fonts, and link it from index.html.',
     )
 
     await expect
@@ -117,7 +117,7 @@ questions: [
 ],
 ```
 
-`across: 'environment'` pairs the control with each variant on the same harness, and `across: 'harness'` pairs harnesses in the same environment. After the run, the block prints each side's wins as `won W of N`. reeval asks about each pair in both orders with the sides unlabelled. `npx reeval query question_pairs` lists the wins, ties, and splits ([Query views](/reference/query)). For more information about the model that answers a question, see [`question`](/reference/options#question).
+`across: 'environment'` pairs the control with each variant on the same harness, and `across: 'harness'` pairs harnesses in the same environment. After the run, the block prints each side's wins as `won W of N`. reeval asks about each pair in both orders with the sides unlabeled. `npx reeval query question_pairs` lists the wins, ties, and splits ([Query views](/reference/query)). For more information about the model that answers a question, see [`question`](/reference/options#question).
 
 Questions never gate. They don't change an outcome or the exit code. For a runnable project, see [`with-compare-questions`](https://github.com/invertase/reeval/tree/main/examples/with-compare-questions).
 

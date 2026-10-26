@@ -41,7 +41,7 @@ Without `--config`, reeval searches the current directory and then each parent d
 
 The `--config` path resolves against the current directory. The config file's directory is the project root, and relative paths in the config resolve against that directory. When `--config` names a path that does not exist, `reeval doctor` fails its config check and exits with code 1, and `reeval report` records the missing file and exits with code 0. Every command that loads a config, apart from `reeval doctor` and `reeval report`, exits with code 2.
 
-`reeval run` and `reeval image build` require a config file. When the search finds none, either command exits with code 2, and the message lists every recognised filename and `reeval init`. `reeval doctor` fails its config check and exits with code 1. `reeval init` does not load a project config. `reeval report` loads a file the search finds, and records the miss when it finds none. When the search finds none, a command that loads a config without requiring one takes the default for every key, and the current directory is the project root.
+`reeval run` and `reeval image build` require a config file. When the search finds none, either command exits with code 2, and the message lists every recognized filename and `reeval init`. `reeval doctor` fails its config check and exits with code 1. `reeval init` does not load a project config. `reeval report` loads a file the search finds, and records the miss when it finds none. When the search finds none, a command that loads a config without requiring one takes the default for every key, and the current directory is the project root.
 
 For more information about the `--config` flag on each command, see [CLI](/reference/cli).
 

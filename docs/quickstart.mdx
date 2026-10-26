@@ -100,7 +100,7 @@ export const withSkill = page.extendEnvironment(
 )
 ```
 
-The prompt doesn't name the brand's colour or fonts, so those assertions pass only when the harness knows them. Create the evaluation:
+The prompt doesn't name the brand's color or fonts, so those assertions pass only when the harness knows them. Create the evaluation:
 
 ```ts title="evals/brand.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
@@ -117,7 +117,7 @@ evaluate(
   async (c) => {
     await c.send(
       "Give index.html Anthropic's look: write styles.css with Anthropic's " +
-        'brand colours and fonts, and link it from index.html.',
+        'brand colors and fonts, and link it from index.html.',
     )
 
     await expect

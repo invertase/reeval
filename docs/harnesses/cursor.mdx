@@ -28,11 +28,11 @@ export default defineConfig({
 </Property>
 
 <Property name="params" type="Record<string, string>" optional>
-  Parameter ids mapped to string values, such as `{ fast: 'true' }`. An unset parameter takes the default variant in Cursor's model catalogue, which reeval sends on the request. `fast` is `'false'` when the model accepts it and `params` leaves it unset.
+  Parameter ids mapped to string values, such as `{ fast: 'true' }`. An unset parameter takes the default variant in Cursor's model catalog, which reeval sends on the request. `fast` is `'false'` when the model accepts it and `params` leaves it unset.
 </Property>
 
 <Property name="effort" type="string" optional>
-  Reasoning effort, mapped onto the catalogue parameter this model names, `reasoning_effort` or `effort`. A model with no such parameter refuses `effort`. Fast is `params.fast`.
+  Reasoning effort, mapped onto the catalog parameter this model names, `reasoning_effort` or `effort`. A model with no such parameter refuses `effort`. Fast is `params.fast`.
 </Property>
 
 <Property name="id" type="string" optional>
