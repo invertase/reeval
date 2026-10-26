@@ -30,57 +30,50 @@ export default defineConfig({
 </Step>
 <Step title="Require a minimum lift">
 
-Set `compare.gate` and `compare.minLift` in the `evals/shoehorn.eval.ts` file.
+The `evals/shoehorn.eval.ts` file compares a baseline `plain` with a variant `withShoehorn`, as in [Measure a skill](/recipes/skill-comparison). Set `compare.minLift` on its comparison:
 
 ```ts title="evals/shoehorn.eval.ts"
 -  { runs: 4, compare: { baseline: plain, variants: [withShoehorn] } },
 +  {
 +    runs: 4,
-+    compare: {
-+      baseline: plain,
-+      variants: [withShoehorn],
-+      gate: 'variants',
-+      minLift: 0.25,
-+    },
++    compare: { baseline: plain, variants: [withShoehorn], minLift: 0.25 },
 +  },
 ```
 
-`compare.minLift` is the smallest lift you accept, from -1 to 1. `compare.gate` at `'variants'` is the default, so a variant's failure fails the evaluation. A baseline that fails its assertions does not fail the run, so `reeval run` can exit 0.
+`compare.minLift` is the smallest lift you accept, from -1 to 1. The variant fails when the low end of its lift interval is below `0.25`, and its row adds `not by minLift 25`, even when the effect reads `helped`. `reeval run` then exits 1, and the job fails.
 
-For more information about the comparison and the other `compare.gate` values, see [Measure lift against a baseline](/results/compare/lift).
-
-With `compare.gate` at `'variants'`, the variant fails when the low end of its lift interval is below `0.25`. The variant's row adds `not by minLift 25`. The effect can still read `helped`.
-
-`reeval run` exits 1, and the job fails. For more information about exit codes, see [Exit codes](/reference/cli#exit-codes).
+Only the variant's cells decide the outcome by default, so a baseline that fails its assertions does not fail the run. For more information about the other `compare.gate` values, see [Gate on lift](/results/compare/lift#gate-on-lift).
 
 </Step>
 <Step title="Add the workflow">
 
-Add the workflow that runs the `pr` profile. For more information about the workflow file and the API key, see [CI](/runs/ci).
-
-</Step>
-<Step title="Print the summary">
-
-Print the summary the job shows.
-
-```bash
-npx reeval show --md
-```
-
-The `reeval run` command appends that summary to the job summary. For more information about the command, see [Show one run](/results/output#show-one-run).
+Add the workflow that runs the `pr` profile, records each run, and commits the history directory. For more information about the workflow file, the API key, and the record step, see [CI](/runs/ci).
 
 </Step>
 <Step title="Fail on a regression">
 
-Run the regression check in the job after the run is recorded.
+In the workflow, run the regression check after the run is recorded:
 
 ```bash
 npx reeval compare --fail-on-regression
 ```
 
-`reeval compare --fail-on-regression` exits 1 when an evaluation `regressed`. For more information about the other results that exit 1, see [Compare with past runs](/results/compare/past-runs).
+`reeval compare` diffs the run against the newest recorded run on an ancestor commit, so it needs the history directory the record step commits. It exits 1 when an evaluation `regressed`. For more information about the other results that exit 1, see [Compare with past runs](/results/compare/past-runs).
+
+</Step>
+<Step title="Read the job summary">
+
+When the run finishes, `reeval run` appends the run's `summary.md` file to the job summary, so the variant's row and its `not by minLift 25` show on the pull request's checks. To print the same summary on your machine, run:
+
+```bash
+npx reeval show --md
+```
+
+For more information about the command, see [Show one run](/results/output#show-one-run).
 
 </Step>
 </Steps>
+
+## Next
 
 For more information about tracking recorded runs, see [Track past runs](/recipes/results-over-time).
