@@ -28,7 +28,7 @@ await c.send(
 await expect.soft(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
 ```
 
-Each [evaluation](/reference/glossary#evaluation) puts the agent, the environment, and the [task](/reference/glossary#task) in one sandbox. The [workspace](/reference/glossary#workspace) holds the [artifacts](/reference/glossary#artifacts) and the [transcript](/reference/glossary#transcript), and grading reads that workspace. [Assertions](/reference/glossary#assertion) and [judgments](/reference/glossary#judgment) grade one attempt, and [questions](/reference/glossary#question) read across attempts.
+Each attempt of an [evaluation](/reference/glossary#evaluation) puts the agent, the environment, and the [task](/reference/glossary#task) in one sandbox. The [workspace](/reference/glossary#workspace) holds the [artifacts](/reference/glossary#artifacts) and the [transcript](/reference/glossary#transcript), and grading reads that workspace. [Assertions](/reference/glossary#assertion) and [judgments](/reference/glossary#judgment) grade one attempt, and [questions](/reference/glossary#question) read across attempts.
 
 ## Results
 
