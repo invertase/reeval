@@ -3,9 +3,25 @@ title: "Goose harness"
 description: "The Goose harness runs Goose in the sandbox on a Gemini API key and records its events."
 ---
 
-## `goose()`
+`goose()` runs Goose (`goose acp`) in the sandbox. For more information about the sandbox, see [Choose a sandbox](/integrations/sandboxes).
 
-`goose()` is the Goose harness factory. For more information about supported sandboxes, see [Sandboxes](/integrations/sandboxes).
+## `GOOGLE_GENERATIVE_AI_API_KEY`
+
+`goose()` reads `GOOGLE_GENERATIVE_AI_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
+
+Goose reads that value as `GOOGLE_API_KEY`. The gateway brokers the key in the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` and `GET /v1beta/models` at `generativelanguage.googleapis.com`. A restricted egress policy allows `generativelanguage.googleapis.com`.
+
+When the API rejects the key, the attempt error begins with `The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key in the environment or .env.local`.
+
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
+
+For more information about the variable, see [`GOOGLE_GENERATIVE_AI_API_KEY`](/reference/env-vars#googlegenerativeaiapikey).
+
+Goose requests `models.dev` in every session to refresh its model catalog, and no setting turns that request off. A restricted egress policy refuses `models.dev` and records it on `egress.expectedBlocked`.
+
+For more information about blocked requests, see [Read blocked requests](/environments/egress#read-blocked-requests).
+
+## `goose()`
 
 `goose()` is exported from `{{ pkg }}/harness`. The following configuration passes it as the `harness` option:
 
@@ -43,23 +59,11 @@ export default defineConfig({
   How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
 </Property>
 
+In the sandbox, Goose runs with a private home, with telemetry, the keyring, and session naming off.
+
 For more information about choosing a harness, see [Choose an agent](/agents).
 
-For more information about model ids, effort values, and served models, see [Models and providers for each harness](/agents/model).
-
-## `GOOGLE_GENERATIVE_AI_API_KEY`
-
-`goose()` reads `GOOGLE_GENERATIVE_AI_API_KEY` from the host. Goose reads that value as `GOOGLE_API_KEY`. The gateway brokers the key in the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` and `GET /v1beta/models` at `generativelanguage.googleapis.com`.
-
-A missing `GOOGLE_GENERATIVE_AI_API_KEY` stops the run with exit code 2 before any attempt starts. When the API rejects the key, the attempt fails and the message names `GOOGLE_GENERATIVE_AI_API_KEY`.
-
-For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
-
-For more information about the variable, see [`GOOGLE_GENERATIVE_AI_API_KEY`](/reference/env-vars#googlegenerativeaiapikey).
-
-Goose requests `models.dev` in every session to refresh its model catalog, and no setting turns that request off. A restricted egress policy refuses `models.dev` and records it on `egress.expectedBlocked`.
-
-For more information about blocked requests, see [Read blocked requests](/environments/egress#read-blocked-requests).
+For more information about model ids, effort values, and served models, see [Set the agent's model](/agents/model).
 
 ## `rules`
 
