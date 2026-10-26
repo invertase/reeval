@@ -1,9 +1,8 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DOCKER_SECCOMP_PROFILE } from './seccomp-profile.ts'
 
 /**
  * The container CLI a sandbox runs on. Podman takes Docker's commands, so one core drives both;
@@ -32,6 +31,13 @@ export type EngineSpec = {
   createsWorkdir: boolean
 }
 
+/**
+ * Docker's default seccomp profile, copied unmodified from moby/profiles (Apache-2.0),
+ * seccomp/default.json at 6fe7deb1b9fb7c0397a4593480d7d22b9ee8caef. Podman gets it on every
+ * container, so a sandbox there refuses the same syscalls (unshare, mount, keyctl…) as on Docker.
+ */
+const DOCKER_SECCOMP_PROFILE = new URL('../docker/seccomp-default.json', import.meta.url)
+
 let seccompFile: string | undefined
 /**
  * Docker's default seccomp profile as a file Podman can read, written once per content under the
@@ -39,7 +45,7 @@ let seccompFile: string | undefined
  */
 export function dockerSeccompFile(): string {
   if (seccompFile && existsSync(seccompFile)) return seccompFile
-  const json = JSON.stringify(DOCKER_SECCOMP_PROFILE)
+  const json = readFileSync(DOCKER_SECCOMP_PROFILE, 'utf8')
   const hash = createHash('sha256').update(json).digest('hex').slice(0, 16)
   const path = join(tmpdir(), `reeval-seccomp-${hash}.json`)
   if (!existsSync(path)) {

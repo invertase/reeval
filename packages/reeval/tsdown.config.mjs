@@ -288,8 +288,8 @@ export default defineConfig({
             ),
             source:
               'https://github.com/moby/profiles/blob/6fe7deb1b9fb7c0397a4593480d7d22b9ee8caef/seccomp/default.json',
-            files: ['packages/sandbox-docker/src/seccomp-profile.ts'],
-            into: "reeval's bundle (`dist/`), as data",
+            files: ['packages/sandbox-docker/docker/seccomp-default.json'],
+            into: 'reeval, which ships it as `docker/seccomp-default.json`',
             modified: false,
           },
         ]),
