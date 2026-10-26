@@ -51,7 +51,7 @@ reeval init [dir]             Scaffold a project in dir (default: here): reeval.
 
 ## `reeval doctor`
 
-The `reeval doctor` command reports one line per check. It checks Node, not npm. With `--online`, each harness, judge, and analysis credential check authenticates supported credentials. The supported variables are `CURSOR_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, and `OPENAI_API_KEY`; a variable reused by separate checks may be requested more than once, and any other credential is reported as set without an authentication request.
+The `reeval doctor` command reports one line per check. It checks Node, not npm. With `--online`, each harness, judge, and analysis credential check authenticates supported credentials. The supported variables are `CURSOR_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, and `OPENROUTER_API_KEY`; a variable reused by separate checks may be requested more than once, and any other credential is reported as set without an authentication request.
 
 [//]: # (generated:cli-help:doctor)
 
@@ -110,29 +110,6 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
 ```
 
 [//]: # (/generated:cli-help:run)
-
-## `reeval image build`
-
-The `reeval image build` command builds the sandbox images a plan needs.
-
-[//]: # (generated:cli-help:image-build)
-
-```text
-reeval image build [filter...]
-                              Build every image the evals' Docker sandboxes need, per harness: reeval's
-                              image (bakes in its CLI), from and dockerfile images, install layers.
-                              Builds what's missing or stale (a from tag that moved upstream), three
-                              at a time, and reports every failure; exit 3 if any image failed
-  --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does, so its
-                              harness, sandbox and tags pick the images (also REEVAL_PROFILE)
-  --force                     Rebuild every image, pulling each base again
-  --dry-run                   List the images, how each is made and how each stands, building
-                              nothing (a from tag is looked up in its registry, not pulled)
-```
-
-[//]: # (/generated:cli-help:image-build)
-
-Filters match file paths, evaluation names, and cell keys as `reeval run` filters do. `reeval image` without `build` exits 2.
 
 ## `reeval clean`
 
@@ -333,9 +310,30 @@ reeval report [run]           Collect a bug report: versions, reeval doctor, the
 
 [//]: # (/generated:cli-help:report)
 
-## Exit codes
+## `reeval image build`
 
-Every command exits with one of these codes.
+The `reeval image build` command builds the sandbox images a plan needs.
+
+[//]: # (generated:cli-help:image-build)
+
+```text
+reeval image build [filter...]
+                              Build every image the evals' Docker sandboxes need, per harness: reeval's
+                              image (bakes in its CLI), from and dockerfile images, install layers.
+                              Builds what's missing or stale (a from tag that moved upstream), three
+                              at a time, and reports every failure; exit 3 if any image failed
+  --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does, so its
+                              harness, sandbox and tags pick the images (also REEVAL_PROFILE)
+  --force                     Rebuild every image, pulling each base again
+  --dry-run                   List the images, how each is made and how each stands, building
+                              nothing (a from tag is looked up in its registry, not pulled)
+```
+
+[//]: # (/generated:cli-help:image-build)
+
+Filters match file paths, evaluation names, and cell keys as `reeval run` filters do. `reeval image` without `build` exits 2.
+
+## Exit codes
 
 [//]: # (generated:exit-codes)
 
