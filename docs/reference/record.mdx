@@ -982,7 +982,7 @@ On a CI run, `RunRecord.runner` has `kind` `ci` and `provider` `github`, `gitlab
 
 ## `PrepareFailureRecord`
 
-`AttemptError.prepare` records a sandbox preparation that failed. `class` is `config`, `transient` after the retries, or `resource`. `stage` is `image`, `from`, `dockerfile`, `harness`, `install`, or `workspace`. `ref` is what was prepared, `repo#ref:path` for a Git workspace. `cause` is `enospc`, `oom`, or null. `log` is the build log or null, and `setBy` names the levels that set the sandbox.
+`AttemptError.prepare` records a sandbox preparation that failed. `class` is `config`, `transient` after the retries, or `resource`. `stage` is `image`, `from`, `dockerfile`, `harness`, `install`, `plugin`, or `workspace`. `ref` is what was prepared, `repo#ref:path` for a Git workspace. `cause` is `enospc`, `oom`, or null. `log` is the build log or null, and `setBy` names the levels that set the sandbox.
 
 ## `ResourceFailureRecord`
 
