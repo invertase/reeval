@@ -803,6 +803,9 @@ describe('Vertex AI routes', () => {
       () => agentFor({ ...claude, gateway: 'vertex' } as AgentHarnessDescriptor),
       /no vertex\(\) settings/,
     )
+    const onVertex = { ...claude, gateway: 'vertex' } as AgentHarnessDescriptor
+    assert.doesNotThrow(() => expectedBlockedFor(onVertex, false, settings))
+    assert.throws(() => expectedBlockedFor(onVertex, false), /no vertex\(\) settings/)
   })
 
   test("reeval's own models on Vertex: google/* and anthropic/*, with the host's token", async () => {

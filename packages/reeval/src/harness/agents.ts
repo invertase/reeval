@@ -1442,15 +1442,16 @@ export function layoutOf(descriptor: HarnessDescriptor): Layout {
 
 /**
  * The hosts a harness's agent is known to try in a session with or without plugins; a fake agent
- * with `layout` expects that agent's.
+ * with `layout` expects that agent's. On Vertex, the attempt's `vertex()` settings pick the route.
  */
 export function expectedBlockedFor(
   descriptor: HarnessDescriptor,
   plugins: boolean,
+  vertex?: VertexSettings,
 ): ExpectedBlocked | undefined {
   const expected =
     descriptor.kind !== 'fake'
-      ? agentFor(descriptor).expectedBlocked
+      ? agentFor(descriptor, vertex).expectedBlocked
       : descriptor.layout
         ? AGENTS[descriptor.layout].expectedBlocked
         : undefined
