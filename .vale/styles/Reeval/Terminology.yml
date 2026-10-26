@@ -1,0 +1,23 @@
+extends: substitution
+message: "Use '%s' instead of '%s'."
+level: warning
+ignorecase: false
+nonword: true
+# Code identifiers (`compare.baseline`, `c.judge()`, the 'control' cell role,
+# the `effort` option and query view) sit in code spans or fences, which Vale
+# skips. In an HTML block (a <Property> body or attribute) they reach the rule
+# as plain text, so each pattern refuses a neighbouring quote, backtick, slash,
+# bracket, dash or equals sign. The other lookarounds keep the verb senses and
+# reasoning effort quiet.
+swap:
+  # The comparison side without the change is the baseline. "a baseline (the
+  # control)" glosses the code word on purpose.
+  '(?<![\x60"''/\[=-])(?<!(?:[Aa]ccess|[Ee]gress|[Nn]etwork|[Vv]ersion|[Ss]ource|[Ff]low|effort\x60) )(?<!\([Tt]he )(?<!SDK(?:'')?s? \S{1,12} )\b[Cc]ontrols?\b(?![\x60"''\]=-])(?! (?:sandbox|egress|what|which|how|whether|the|its|their|access|characters?)\b)': baseline
+  # A deterministic check written with expect is an assertion.
+  '(?<=\b(?:[Tt]he|[Ii]ts|[Tt]heir|[Tt]hese|[Tt]hose|[Aa]ll|[Ee]very|[Yy]our|[Ff]ile|[Cc]ommand|[Hh]idden|[Ff]ailed|[Ff]ailing|[Pp]assing|[Ss]oft) )checks\b(?![\x60"''=-])': assertions
+  '(?<![\x60"''/\[=-])\bchecks(?= (?:pass|fail|passed|failed)\b)': assertions
+  # The LLM judge's verdicts are judgments.
+  '(?<![\x60"''/\[=.-])\b[Jj]udges\b(?![\x60"''\]=(-])(?! (?:the|a|an|each|every|whether|it|its|that|this|your|one)\b)': judgments
+  '(?<![\x60"''/\[=.-])\b[Jj]udge(?= (?:inputs?|results?|steps?|verdicts?|outputs?)\b)': judgment
+  # Tokens, tool calls and time are the measures; effort is reasoning effort.
+  '(?<![\x60"''/\[=_-])(?<!(?:[Rr]easoning|an|sets?|[Tt]hinking|[Rr]esolved|[Rr]eported|[Rr]equested|models?) )(?<!models? and )\b[Ee]ffort\b(?![\x60"''\]=_-])(?! (?:values?|levels?|suffix(?:es)?|parameter)\b)': tokens, tool calls, or time

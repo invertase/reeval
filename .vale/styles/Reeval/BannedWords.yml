@@ -1,0 +1,24 @@
+extends: existence
+message: "Cut '%s'."
+level: error
+ignorecase: true
+nonword: true
+tokens:
+  - \bplease\b
+  - \be\.g\.
+  - \bi\.e\.
+  - \betc\.
+  - \band so on\b
+  - \butili[sz](?:e|es|ed|ing)\b
+  - \bleverag(?:e|es|ed|ing)\b
+  - \bcommenc(?:e|es|ed|ing)\b
+  - \bsimply\b
+  - \beasy\b
+  - \beasily\b
+  - \bsimple\b
+  - \bquick(?! start)\b
+  - \bquickly\b
+  - \bseamless(?:ly)?\b
+  - \brobust\b
+  - \bdelv(?:e|es|ed|ing)\b
+  - \btl;dr\b
