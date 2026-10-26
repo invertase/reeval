@@ -63,7 +63,7 @@
   },
   "sidebar": [
     {
-      "group": "Configuration",
+      "group": "Getting started",
       "pages": [
         {
           "title": "reeval",
@@ -76,152 +76,6 @@
         {
           "title": "Core concepts",
           "href": "/core-concepts"
-        },
-        {
-          "group": "Choose an agent",
-          "pages": [
-            {
-              "title": "Choose an agent",
-              "href": "/agents"
-            },
-            {
-              "title": "Model",
-              "href": "/agents/model"
-            },
-            {
-              "title": "Gateways",
-              "href": "/agents/gateways"
-            }
-          ]
-        },
-        {
-          "group": "Set the environment",
-          "pages": [
-            {
-              "title": "Define an environment",
-              "href": "/environments"
-            },
-            {
-              "title": "Files",
-              "href": "/environments/files"
-            },
-            {
-              "title": "Repositories",
-              "href": "/environments/repositories"
-            },
-            {
-              "title": "Skills",
-              "href": "/environments/skills"
-            },
-            {
-              "title": "Rules",
-              "href": "/environments/rules"
-            },
-            {
-              "title": "MCP servers",
-              "href": "/environments/mcp"
-            },
-            {
-              "title": "Toolchains",
-              "href": "/environments/toolchains"
-            },
-            {
-              "title": "Setup commands",
-              "href": "/environments/setup"
-            },
-            {
-              "title": "Secrets",
-              "href": "/environments/secrets"
-            },
-            {
-              "title": "Egress",
-              "href": "/environments/egress"
-            }
-          ]
-        },
-        {
-          "group": "Integrations",
-          "pages": [
-            {
-              "group": "Agents",
-              "pages": [
-                {
-                  "title": "Cursor",
-                  "href": "/integrations/agents/cursor"
-                },
-                {
-                  "title": "Claude Code",
-                  "href": "/integrations/agents/claude-code"
-                },
-                {
-                  "title": "Codex",
-                  "href": "/integrations/agents/codex"
-                },
-                {
-                  "title": "Antigravity",
-                  "href": "/integrations/agents/antigravity"
-                },
-                {
-                  "title": "OpenCode",
-                  "href": "/integrations/agents/opencode"
-                },
-                {
-                  "title": "Goose",
-                  "href": "/integrations/agents/goose"
-                },
-                {
-                  "title": "pi",
-                  "href": "/integrations/agents/pi"
-                },
-                {
-                  "title": "fx",
-                  "href": "/integrations/agents/fx"
-                },
-                {
-                  "title": "Grok Build",
-                  "href": "/integrations/agents/grok-build"
-                }
-              ]
-            },
-            {
-              "group": "Gateways",
-              "pages": [
-                {
-                  "title": "Direct",
-                  "href": "/integrations/gateways/direct"
-                },
-                {
-                  "title": "Vercel AI Gateway",
-                  "href": "/integrations/gateways/vercel"
-                },
-                {
-                  "title": "OpenRouter",
-                  "href": "/integrations/gateways/openrouter"
-                },
-                {
-                  "title": "Vertex AI",
-                  "href": "/integrations/gateways/vertex"
-                }
-              ]
-            },
-            {
-              "group": "Sandboxes",
-              "pages": [
-                {
-                  "title": "Choose a sandbox",
-                  "href": "/integrations/sandboxes"
-                },
-                {
-                  "title": "Docker",
-                  "href": "/integrations/sandboxes/docker"
-                },
-                {
-                  "title": "Podman",
-                  "href": "/integrations/sandboxes/podman"
-                }
-              ]
-            }
-          ]
         }
       ]
     },
@@ -229,7 +83,7 @@
       "group": "Evaluation",
       "pages": [
         {
-          "group": "Write an evaluation",
+          "group": "Evaluations",
           "pages": [
             {
               "title": "Write an evaluation",
@@ -334,6 +188,73 @@
       ]
     },
     {
+      "group": "Configuration",
+      "pages": [
+        {
+          "group": "Choose an agent",
+          "pages": [
+            {
+              "title": "Choose an agent",
+              "href": "/agents"
+            },
+            {
+              "title": "Model",
+              "href": "/agents/model"
+            },
+            {
+              "title": "Gateways",
+              "href": "/agents/gateways"
+            }
+          ]
+        },
+        {
+          "group": "Set the environment",
+          "pages": [
+            {
+              "title": "Define an environment",
+              "href": "/environments"
+            },
+            {
+              "title": "Files",
+              "href": "/environments/files"
+            },
+            {
+              "title": "Repositories",
+              "href": "/environments/repositories"
+            },
+            {
+              "title": "Skills",
+              "href": "/environments/skills"
+            },
+            {
+              "title": "Rules",
+              "href": "/environments/rules"
+            },
+            {
+              "title": "MCP servers",
+              "href": "/environments/mcp"
+            },
+            {
+              "title": "Toolchains",
+              "href": "/environments/toolchains"
+            },
+            {
+              "title": "Setup commands",
+              "href": "/environments/setup"
+            },
+            {
+              "title": "Secrets",
+              "href": "/environments/secrets"
+            },
+            {
+              "title": "Egress",
+              "href": "/environments/egress"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "group": "Results",
       "pages": [
         {
@@ -376,6 +297,90 @@
         {
           "title": "Queries",
           "href": "/results/queries"
+        }
+      ]
+    },
+    {
+      "group": "Integrations",
+      "pages": [
+        {
+          "group": "Agents",
+          "pages": [
+            {
+              "title": "Cursor",
+              "href": "/integrations/agents/cursor"
+            },
+            {
+              "title": "Claude Code",
+              "href": "/integrations/agents/claude-code"
+            },
+            {
+              "title": "Codex",
+              "href": "/integrations/agents/codex"
+            },
+            {
+              "title": "Antigravity",
+              "href": "/integrations/agents/antigravity"
+            },
+            {
+              "title": "OpenCode",
+              "href": "/integrations/agents/opencode"
+            },
+            {
+              "title": "Goose",
+              "href": "/integrations/agents/goose"
+            },
+            {
+              "title": "pi",
+              "href": "/integrations/agents/pi"
+            },
+            {
+              "title": "fx",
+              "href": "/integrations/agents/fx"
+            },
+            {
+              "title": "Grok Build",
+              "href": "/integrations/agents/grok-build"
+            }
+          ]
+        },
+        {
+          "group": "Gateways",
+          "pages": [
+            {
+              "title": "Direct",
+              "href": "/integrations/gateways/direct"
+            },
+            {
+              "title": "Vercel AI Gateway",
+              "href": "/integrations/gateways/vercel"
+            },
+            {
+              "title": "OpenRouter",
+              "href": "/integrations/gateways/openrouter"
+            },
+            {
+              "title": "Vertex AI",
+              "href": "/integrations/gateways/vertex"
+            }
+          ]
+        },
+        {
+          "group": "Sandboxes",
+          "pages": [
+            {
+              "title": "Choose a sandbox",
+              "href": "/integrations/sandboxes"
+            },
+            {
+              "title": "Docker",
+              "href": "/integrations/sandboxes/docker"
+            },
+            {
+              "title": "Podman",
+              "href": "/integrations/sandboxes/podman"
+            }
+          ]
         }
       ]
     },
