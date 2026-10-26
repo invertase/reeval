@@ -1,20 +1,43 @@
 ---
 title: "openrouter gateway"
-description: "Use the OpenRouter for an LLM model."
+description: "Send model calls through OpenRouter on one key."
 ---
 
-Using an OpenRouter gateway means that LLM calls will go through the OpenRouter, and requires that an OpenRouter API key is provided.
+`openrouter()` sends the model calls of the harnesses it serves through OpenRouter, on one key. The egress gateway swaps the key in only on OpenRouter's model paths at `openrouter.ai`, so the key never enters the sandbox.
 
-```ts
+## `OPENROUTER_API_KEY`
+
+`openrouter()` reads `OPENROUTER_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset and a planned harness or model takes `openrouter()`.
+
+For more information about the variable, see [`OPENROUTER_API_KEY`](/reference/env-vars#openrouterapikey).
+
+## `openrouter()`
+
+`openrouter()` is exported from `{{ pkg }}/gateway`:
+
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
-import { openrouter } from '{{ pkg }}/gateway'
-import { claudeCode, codex, cursor, opencode } from '{{ pkg }}/harness'
+import { direct, openrouter } from '{{ pkg }}/gateway'
 
 export default defineConfig({
-  gateway: [
-    openrouter()
-  ]
+  gateway: [openrouter(), direct()],
 })
 ```
 
-The environment variable `OPENROUTER_API_KEY` must be set to the API key for the OpenRouter.
+<Property name="fallbacks" type="boolean" optional>
+  Lets reeval's own calls, the judge, analysis, questions, and captures, fail over to another upstream provider when the first one fails. Defaults to `false`. The harnesses' calls take OpenRouter's own routing either way.
+</Property>
+
+A harness `openrouter()` cannot serve takes the next gateway in the list. Each call records the upstream provider that served it, on the attempt's `upstreams` and the judgement's `upstream`.
+
+For more information about combining gateways, see [Gateways](/agents/gateways).
+
+## Harnesses
+
+| Serves | Falls through |
+| :--- | :--- |
+| Claude Code, Codex, Goose, OpenCode, Grok Build, pi | Cursor, Antigravity, fx |
+
+Cursor's agent calls only Cursor's API, Antigravity's CLI calls only Google's, and fx reaches models only on the Vercel AI Gateway or OpenAI's API. A Claude Code harness with `effort` set, or a Goose or OpenCode harness with `effort` on a model other than Gemini, also takes the next gateway.
+
+On `openrouter()`, a judge must be a decision model that OpenRouter answers on its Decisions API, such as `typesafe/jev-1.14`, and each call to any other judge model fails.
