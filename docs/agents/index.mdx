@@ -80,6 +80,7 @@ This table lists what each harness supports. For more information about each har
 | [Goose](/integrations/agents/goose) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ | `docker()` |
 | [pi](/integrations/agents/pi) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
 | [Codex](/integrations/agents/codex) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [fx](/integrations/agents/fx) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
 | [Grok Build](/integrations/agents/grok-build) | `XAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | `docker()` |
 
 - **Cursor**: The gateway also swaps the session tokens the Cursor SDK exchanges its key for (`accessToken` and `refreshToken`) on `cursor.sh` and `*.cursor.sh`. Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null. Its SDK leaves web search and fetch calls out of the stream; reeval recovers them from the stored conversation, and a turn it can't recover is marked `unreported` so web matchers refuse it.
@@ -108,6 +109,7 @@ Each harness reads the environment's rules and skills from these paths.
 | Goose | `AGENTS.md` | `.goose/skills` | `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills` |
 | pi | `AGENTS.md` | `.pi/skills` | `~/.pi/agent/skills` |
 | Codex | `AGENTS.md` | `.agents/skills` | `~/.agents/skills` |
+| fx | `AGENTS.md` | `.fx/skills` | `~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills` |
 | Grok Build | `AGENTS.md` | `.grok/skills` | `~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/skills` |
 
 [//]: # (/generated:harness-layout)

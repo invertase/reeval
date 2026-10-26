@@ -62,7 +62,7 @@ const list = (items) =>
 const code = (s) => `\`${s}\``
 
 /** Harnesses the docs leave out: no page, no matrix or layout row. Their code checks still run. */
-const EXCLUDED_KINDS = ['fx']
+const EXCLUDED_KINDS = []
 
 /** Each note is said only while its fact holds. */
 const NOTES = [

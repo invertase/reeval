@@ -1,0 +1,110 @@
+---
+title: "fx harness"
+description: "The fx harness runs Vercel's fx agent in the sandbox on Vercel AI Gateway or an OpenAI API key and records its events."
+---
+
+`fx()` runs Vercel's fx agent (`fx acp`) in the sandbox, on Vercel AI Gateway or on OpenAI's Chat Completions API, picked by the model id. The turn runs in fx's `full-access` mode, so no reviewer model checks each action. For more information about the sandbox, see [Choose a sandbox](/integrations/sandboxes).
+
+## `AI_GATEWAY_API_KEY` or `OPENAI_API_KEY`
+
+The model id picks the key:
+
+| `model` | Key | Gateway |
+| :--- | :--- | :--- |
+| A gateway id, such as `anthropic/claude-sonnet-5` | `AI_GATEWAY_API_KEY` | `vercel()` only |
+| A bare OpenAI id, such as `gpt-5.5` | `OPENAI_API_KEY` | `direct()`, or `vercel()` as `openai/<id>` |
+
+`fx()` reads the key from the environment or the `.env.local` file. A run exits with code 2 when the key is unset, or when the value contains whitespace or a line break. A gateway id with no `vercel()` in the config's `gateway` list fails at plan time with exit code 2.
+
+On OpenAI, reeval brokers the key on `POST https://api.openai.com/v1/chat/completions` only, and a restricted egress policy allows `api.openai.com`. On Vercel AI Gateway, reeval brokers it on fx's model list and language-model calls at `ai-gateway.vercel.sh`, which a restricted egress policy allows.
+
+fx ignores `HTTPS_PROXY`, so it sends its model calls to a relay on `127.0.0.1:47823` in the sandbox, which sends them on through the egress gateway.
+
+When the API rejects the key, the attempt error begins with `The API rejected <KEY>: set a valid key in the environment or .env.local`.
+
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
+
+For more information about the variables, see [`AI_GATEWAY_API_KEY`](/reference/env-vars#aigatewayapikey) and [`OPENAI_API_KEY`](/reference/env-vars#openaiapikey).
+
+## `fx()`
+
+`fx()` is exported from `{{ pkg }}/harness`. The `reeval.config.ts` file passes it as the `harness` option:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { direct, vercel } from '{{ pkg }}/gateway'
+import { fx } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  gateway: [vercel(), direct()],
+  harness: fx({ model: 'anthropic/claude-sonnet-5' }),
+})
+```
+
+`model` is required. The other fields are optional. `fx()` takes no `effort`, and an unknown option fails at plan time with exit code 2.
+
+<Property name="model" type="string" required>
+  A Vercel AI Gateway id, `<provider>/<model>`, or a bare OpenAI model id. A missing or empty id fails at plan time with exit code 2.
+</Property>
+
+<Property name="id" type="string" optional>
+  Cell id. Defaults to `fx:<model>`. The id uses letters, digits, and `._:@+-=[]`.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most fx attempts that run at the same time, across the run. A whole number of at least 1.
+</Property>
+
+<Property name="startTimeout" type="Duration" optional>
+  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
+</Property>
+
+In the sandbox, fx runs with a private home, whose `settings.json` file turns session titles off, so the run's model is the only one called. Auto-upgrade and sound are off.
+
+For more information about choosing a harness, see [Choose an agent](/agents).
+
+For more information about model ids, see [Set the agent's model](/agents/model).
+
+## `rules`
+
+The fx harness reads rules from the `AGENTS.md` file in the workspace.
+
+For more information about writing rules, see [Add project rules](/environments/rules).
+
+## `skills`
+
+The fx harness reads skills from the workspace's `.fx/skills` directory and from the private home's `.fx/skills` directory under the `~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home` path. A plugin's skills join the home skills, since fx has no plugins of its own.
+
+For more information about placing skills, see [Give the agent skills](/environments/skills).
+
+## `mcp`
+
+The fx harness accepts MCP servers on `stdio`, `http`, and `sse`. reeval passes them on the ACP `session/new` call: a `stdio` server as `command`, `args`, and `env`, and an `http` or `sse` server as `type`, `url`, and `headers`. fx's `http` and `sse` servers, like its web tools, don't go through the relay.
+
+fx names an MCP call `mcp_<server>_<tool>`, which the transcript renames `mcp__<server>__<tool>`, so [`toHaveCalledMcp()`](/reference/matchers#tohavecalledmcp) matches it.
+
+For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
+
+## `usage`
+
+The fx harness records tokens on each turn's `usage`, summed over the turn's model calls. `reasoning` is part of `output`. `usage` is null when fx reports none.
+
+For more information about the token fields, see [`TokenUsage`](/reference/record#tokenusage).
+
+## `servedModels`
+
+fx names no model over ACP, so the egress gateway reads the served model from each response, such as the dated snapshot OpenAI answers `gpt-5.5` with. On Vercel AI Gateway, a stream that names no model, such as Gemini's, leaves `servedModels` null and records the model each call asked for in `askedModels`.
+
+For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
+
+## `web-search`
+
+The fx harness records `web-search` events from fx's `web_search` tool. A search stores its text on `query`.
+
+For more information about the matcher, see [`toHaveSearched()`](/reference/matchers#tohavesearched).
+
+## `web-fetch`
+
+The fx harness records `web-fetch` events from fx's `web_fetch` tool.
+
+For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).
