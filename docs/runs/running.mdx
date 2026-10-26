@@ -15,7 +15,7 @@ Run every evaluation the config includes:
 npx reeval run
 ```
 
-By default, reeval includes every `.eval.ts` file under the `evals/` directory. The command writes the record in the `.reeval/runs` directory.
+By default, reeval includes every `.eval.ts` and `.eval.py` file under the `evals/` directory, and the [`include` option](/reference/options#include) changes that. The command writes the record in the `.reeval/runs` directory.
 
 ## Filter evaluations
 
@@ -76,6 +76,16 @@ npx reeval run --runs 4
 
 A comparison needs at least four counted attempts a side before it calls an effect. For more information, see [Four-attempt minimum](/results/compare/statistics#four-attempt-minimum).
 
+## Set concurrency
+
+Pass `--concurrency` to set how many attempts reeval starts together:
+
+```bash
+npx reeval run --concurrency 4
+```
+
+The `--concurrency` flag overrides `REEVAL_CONCURRENCY`, which overrides `concurrency` in the `reeval.config.ts` file. If you set none of those three, reeval uses 8, capped at one attempt per CPU and per gigabyte of memory where the sandboxes run.
+
 ## Choose the output
 
 reeval chooses the output from where you run the command. These flags set the mode, the line order, the prefix, and which attempts print detail lines:
@@ -95,19 +105,7 @@ Set plain output for a log without the status line:
 npx reeval run --ui plain
 ```
 
-`REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, and `REEVAL_OUTPUT_LOGS` take the same values. A flag overrides the variable. `auto` selects the default.
-
-Set `REEVAL_HEARTBEAT` to a duration such as `30s`, or to `0` to turn the heartbeat off. The default is `60s`. In `plain` mode, silence for that duration prints a count of the attempts in progress. `live` mode uses the status line. `agent` mode leaves the heartbeat off.
-
-## Set concurrency
-
-Pass `--concurrency` to set how many attempts reeval starts together:
-
-```bash
-npx reeval run --concurrency 4
-```
-
-The `--concurrency` flag overrides `REEVAL_CONCURRENCY`, which overrides `concurrency` in the `reeval.config.ts` file. If you set none of those three, reeval uses 8, capped at one attempt per CPU and per gigabyte of memory where the sandboxes run.
+Each flag has a variable, such as `REEVAL_UI`, and a flag overrides its variable. In `plain` mode, a quiet minute prints a count of the attempts in progress, and `REEVAL_HEARTBEAT` changes that wait. For more information, see [Environment variables](/reference/env-vars).
 
 ## Resume a run
 
