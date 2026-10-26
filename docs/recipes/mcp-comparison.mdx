@@ -69,7 +69,7 @@ The attempt's `transcript.jsonl` file, under `.reeval/runs/<run>/`, names the ca
 </Step>
 <Step title="Compare with a baseline">
 
-To measure what the server changed, run the same evaluation on a baseline without `mcp`, and the environment with the server as the variant ([Measure lift against a baseline](/evals/compare)). Set `runs: 4`, because below four counted attempts a side the effect reads `can't tell yet`.
+To measure what the server changed, run the same evaluation on a baseline without `mcp`, and the environment with the server as the variant ([Measure lift against a baseline](/results/compare/lift)). Set `runs: 4`, because below four counted attempts a side the effect reads `can't tell yet`.
 
 The baseline has no server, so `toHaveCalledMcp` fails on every baseline attempt. Read the file assertion's row for the task. When the file assertion passes on both sides, the harness finds the version without the server, and this task can't show what the server changed. For more information about the rows, see [Read the results summary](/results/output).
 
@@ -78,4 +78,4 @@ The baseline has no server, so `toHaveCalledMcp` fails on every baseline attempt
 
 ## Next
 
-For more information about gates and extra variants, see [Measure lift against a baseline](/evals/compare).
+For more information about gates and extra variants, see [Measure lift against a baseline](/results/compare/lift).

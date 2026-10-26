@@ -9,7 +9,7 @@ An agent is a harness plus its model, named in the `harness` option, such as `cl
 
 ## Analysis
 
-An analysis is what a language model writes about a run: answers and insights. `reeval analyze` writes the analysis from the run's digest. For more information about analysis, see [Analysis](/results/analysis).
+An analysis is what a language model writes about a run: answers and insights. `reeval analyze` writes the analysis from the run's digest. For more information about analysis, see [Analysis](/results/analyze).
 
 ## Answers
 
@@ -21,7 +21,7 @@ Artifacts are what the agent leaves in the workspace: the files it wrote, the di
 
 ## Assertion
 
-An assertion is a named, deterministic pass or fail on what an attempt produced, written with `expect`. For more information about assertions, see [Assertions](/evals/checks).
+An assertion is a named, deterministic pass or fail on what an attempt produced, written with `expect`. For more information about assertions, see [Assertions](/write/assertions).
 
 ## Attempt
 
@@ -29,7 +29,7 @@ An attempt is one execution of a cell in a fresh sandbox, and its outcome is pas
 
 ## Baseline
 
-The baseline is a comparison's environment without the change, and each variant is measured against it. `compare.baseline` optionally names it; the record's cell role calls it `'control'`. For more information about a baseline, see [Compare setups](/evals/compare).
+The baseline is a comparison's environment without the change, and each variant is measured against it. `compare.baseline` optionally names it; the record's cell role calls it `'control'`. For more information about a baseline, see [Compare setups](/results/compare/lift).
 
 ## Cell
 
@@ -37,7 +37,7 @@ A cell is one agent, one environment, and one sandbox of an evaluation. In a com
 
 ## Comparison
 
-A comparison runs its baseline and each variant as separate cells. It measures a variant against the baseline only when the cells share an agent and sandbox, and reports `helped`, `made it worse`, or `can't tell yet`. For more information about a comparison, see [Compare setups](/evals/compare).
+A comparison runs its baseline and each variant as separate cells. It measures a variant against the baseline only when the cells share an agent and sandbox, and reports `helped`, `made it worse`, or `can't tell yet`. For more information about a comparison, see [Compare setups](/results/compare/lift).
 
 ## Environment
 
@@ -45,23 +45,23 @@ An environment is what the agent receives in an attempt, such as skills, MCP ser
 
 ## Evaluation
 
-An evaluation is one task for the agent and the assertions and judgments on its result, declared with `evaluate()` or as one case of `evaluate.each()` in a `*.eval.ts` file. The evaluation fails when a cell that counts toward it fails. For more information about an evaluation, see [Write an evaluation](/evals/evaluate).
+An evaluation is one task for the agent and the assertions and judgments on its result, declared with `evaluate()` or as one case of `evaluate.each()` in a `*.eval.ts` file. The evaluation fails when a cell that counts toward it fails. For more information about an evaluation, see [Write an evaluation](/write).
 
 ## Harness
 
-A harness is the coding agent's program, such as Claude Code or Codex, and with a model it makes an agent. For more information about a harness, see [Choose a harness](/harnesses).
+A harness is the coding agent's program, such as Claude Code or Codex, and with a model it makes an agent. For more information about a harness, see [Choose a harness](/agents).
 
 ## Insights
 
-Insights are what an analysis model says the agent did and why, not only whether it passed. For more information about insights, see [Analysis](/results/analysis#read-insights-after-a-run).
+Insights are what an analysis model says the agent did and why, not only whether it passed. For more information about insights, see [Analysis](/results/analyze#read-insights-after-a-run).
 
 ## Judgment
 
-A judgment is an LLM verdict from `c.judge()` on a yes or no question about the agent's work. `toPass()` turns it into a pass or fail; the record stores it in `judgements`. For more information about a judgment, see [Score agent work](/evals/judges).
+A judgment is an LLM verdict from `c.judge()` on a yes or no question about the agent's work. `toPass()` turns it into a pass or fail; the record stores it in `judgements`. For more information about a judgment, see [Score agent work](/write/judgments).
 
 ## Lift
 
-Lift is a variant against the baseline: the difference in pass rate on the same agent and sandbox. For more information about lift, see [How reeval decides a change helped](/evals/statistics).
+Lift is a variant against the baseline: the difference in pass rate on the same agent and sandbox. For more information about lift, see [How reeval decides a change helped](/results/compare/statistics).
 
 ## Measures
 
@@ -69,7 +69,7 @@ The measures are pass rate, tokens, tool calls, turns, cost, and time. For more 
 
 ## Past runs
 
-Past runs are earlier recorded runs, and `reeval compare` diffs this run against one. For more information about past runs, see [Find run regressions](/results/regressions).
+Past runs are earlier recorded runs, and `reeval compare` diffs this run against one. For more information about past runs, see [Find run regressions](/results/compare/past-runs).
 
 ## Profile
 
@@ -89,11 +89,11 @@ A run is one `reeval run` command and every attempt that command starts, and ree
 
 ## Sandbox
 
-A sandbox is the container an attempt runs in, and every request that leaves it goes through that attempt's egress gateway. For more information about a sandbox, see [Choose a sandbox](/sandboxes).
+A sandbox is the container an attempt runs in, and every request that leaves it goes through that attempt's egress gateway. For more information about a sandbox, see [Choose a sandbox](/integrations/sandboxes).
 
 ## Task
 
-The task is what the agent is asked to do, sent with `c.send()`. For more information about a task, see [Write an evaluation](/evals/evaluate).
+The task is what the agent is asked to do, sent with `c.send()`. For more information about a task, see [Write an evaluation](/write).
 
 ## Transcript
 
@@ -101,7 +101,7 @@ A transcript records every message and tool call of an attempt as one JSON objec
 
 ## Turn
 
-A turn is the agent's reply to one `c.send()` call. The turn holds the final message, transcript events, token usage, the served model, and the workspace diff. For more information about a turn, see [Turns](/evals/turns).
+A turn is the agent's reply to one `c.send()` call. The turn holds the final message, transcript events, token usage, the served model, and the workspace diff. For more information about a turn, see [Turns](/write/turns).
 
 ## Workspace
 

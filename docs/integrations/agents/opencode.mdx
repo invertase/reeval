@@ -1,0 +1,313 @@
+---
+title: "OpenCode harness"
+description: "The OpenCode harness runs OpenCode in the sandbox on the key of the provider its model id names and records its events."
+---
+
+## `opencode()`
+
+`opencode()` is one harness factory. It runs OpenCode in the sandbox on the provider the model id names, with that provider's key.
+
+`opencode()` is exported from `{{ pkg }}/harness`. The following configuration passes it as the `harness` option:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { opencode } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: opencode({
+    model: 'google/gemini-3.8-flash',
+  }),
+})
+```
+
+`model` is required. The other fields are optional.
+
+<Property name="model" type="string" required>
+  OpenCode's model id, `<provider>/<model>`. The part before the first `/` picks the provider and its key. reeval refuses a bare id, an unknown provider, or a provider whose key it cannot broker at plan time with exit code 2.
+</Property>
+
+<Property name="effort" type="string" optional>
+  Reasoning effort, as a value the provider takes. reeval sets it as `options.thinking` on an `anthropic/` model and as `options.reasoningEffort` on every other provider.
+</Property>
+
+<Property name="id" type="string" optional>
+  Cell id. Defaults to `opencode:` followed by the part of `model` after its last `/`, in the form `opencode:<model>`, or `opencode:<model>[effort=high]` with `effort` set to `high`. The id uses letters, digits, and `._:@+-=[]`.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most OpenCode attempts that run at the same time, across the run. A whole number of at least 1.
+</Property>
+
+<Property name="startTimeout" type="Duration" optional>
+  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
+</Property>
+
+In the sandbox, OpenCode runs with its `question` and browser tools off, self-update and share links off, and its model calls over HTTP. That configuration overrides the workspace's own `opencode.json` file where both set a key.
+
+For more information about choosing a harness, see [Choose an agent](/agents).
+
+For more information about model ids and effort values, see [Models and providers for each harness](/agents/model).
+
+## `provider/model`
+
+The harness runs on any provider whose key OpenCode sends in a header on known hosts. The table lists each provider's model id prefix, key variable, header, and hosts.
+
+`opencode()` reads the provider's key from the host, under the variable in the `Key` column. reeval swaps it into the `Header` on each request to the `Hosts`, and refuses it anywhere else. A host with a `{NAME}` placeholder takes that variable from the host too, or the provider's default.
+
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
+
+For more information about every provider variable, see [Environment variables](/reference/env-vars).
+
+[//]: # (generated:opencode-providers)
+
+| Provider | Model ids | Key | Header | Hosts |
+|---|---|---|---|---|
+| 302.AI | `302ai/…` | `302AI_API_KEY` | `Authorization: Bearer` | `api.302.ai` |
+| Abacus | `abacus/…` | `ABACUS_API_KEY` | `Authorization: Bearer` | `routellm.abacus.ai` |
+| abliteration.ai | `abliteration-ai/…` | `ABLIT_KEY` | `Authorization: Bearer` | `api.abliteration.ai` |
+| above.dev | `above/…` | `ABOVE_API_KEY` | `Authorization: Bearer` | `api.above.dev` |
+| AgentRouter | `agentrouter/…` | `AGENTROUTER_API_KEY` | `Authorization: Bearer`, `x-api-key` | `agentrouter.org` |
+| Agnes AI | `agnes/…` | `AGNES_API_KEY` | `Authorization: Bearer` | `apihub.agnes-ai.com` |
+| AI-ROUTER | `ai-router/…` | `AI_ROUTER_API_KEY` | `Authorization: Bearer` | `api.ai-router.dev` |
+| AI21 Labs | `ai21/…` | `AI21_API_KEY` | `Authorization: Bearer` | `api.ai21.com` |
+| ai& | `aiand/…` | `AIAND_API_KEY` | `Authorization: Bearer` | `api.aiand.com` |
+| AI/ML API | `aimlapi/…` | `AIMLAPI_API_KEY` | `Authorization: Bearer` | `api.aimlapi.com` |
+| ainetcafe | `ainetcafe/…` | `AINETCAFE_API_KEY` | `Authorization: Bearer` | `microquickjs.com` |
+| Aixy | `aixy/…` | `AIXY_API_KEY` | `Authorization: Bearer`, `x-api-key` | `api.aixy-gateway.com` |
+| AKI.IO | `aki-io/…` | `AKI_IO_API_KEY` | `Authorization: Bearer` | `aki.io` |
+| Alibaba | `alibaba/…` | `DASHSCOPE_API_KEY` | `Authorization: Bearer` | `dashscope-intl.aliyuncs.com` |
+| Alibaba (China) | `alibaba-cn/…` | `DASHSCOPE_API_KEY` | `Authorization: Bearer` | `dashscope.aliyuncs.com` |
+| Alibaba Coding Plan | `alibaba-coding-plan/…` | `ALIBABA_CODING_PLAN_API_KEY` | `Authorization: Bearer` | `coding-intl.dashscope.aliyuncs.com` |
+| Alibaba Coding Plan (China) | `alibaba-coding-plan-cn/…` | `ALIBABA_CODING_PLAN_API_KEY` | `Authorization: Bearer` | `coding.dashscope.aliyuncs.com` |
+| Alibaba Token Plan | `alibaba-token-plan/…` | `ALIBABA_TOKEN_PLAN_API_KEY` | `Authorization: Bearer` | `token-plan.ap-southeast-1.maas.aliyuncs.com` |
+| Alibaba Token Plan (China) | `alibaba-token-plan-cn/…` | `ALIBABA_TOKEN_PLAN_API_KEY` | `Authorization: Bearer` | `token-plan.cn-beijing.maas.aliyuncs.com` |
+| Amazon Bedrock | `amazon-bedrock/…` | `AWS_BEARER_TOKEN_BEDROCK` | `Authorization: Bearer` | `bedrock-mantle.{AWS_REGION}.api.aws`, `bedrock-runtime.{AWS_REGION}.amazonaws.com` |
+| Ambient | `ambient/…` | `AMBIENT_API_KEY` | `Authorization: Bearer` | `api.ambient.xyz` |
+| AMD | `amd/…` | `AMD_API_KEY` | `Authorization: Bearer` | `developer.amd.com.cn` |
+| Anthropic | `anthropic/…` | `ANTHROPIC_API_KEY` | `x-api-key` | `api.anthropic.com` |
+| AnyAPI | `anyapi/…` | `ANYAPI_API_KEY` | `Authorization: Bearer` | `api.anyapi.ai` |
+| Arcee | `arcee/…` | `ARCEE_API_KEY` | `Authorization: Bearer` | `api.arcee.ai` |
+| Auriko | `auriko/…` | `AURIKO_API_KEY` | `Authorization: Bearer` | `api.auriko.ai` |
+| Bailing | `bailing/…` | `BAILING_API_TOKEN` | `Authorization: Bearer` | `api.tbox.cn` |
+| Baseten | `baseten/…` | `BASETEN_API_KEY` | `Authorization: Bearer` | `inference.baseten.co` |
+| Bee by HEOSSI | `bee/…` | `BEE_API_KEY` | `Authorization: Bearer` | `api.bee.heossi.com` |
+| Berget.AI | `berget/…` | `BERGET_API_KEY` | `Authorization: Bearer` | `api.berget.ai` |
+| Blue Claw | `blueclaw/…` | `BLUECLAW_API_KEY` | `Authorization: Bearer` | `openai.blueclaw.network` |
+| Bothub | `bothub/…` | `BOTHUB_API_KEY` | `Authorization: Bearer` | `openai.bothub.ru` |
+| Boundless | `boundless/…` | `BOUNDLESS_API_KEY` | `Authorization: Bearer` | `api.inference.boundless.network` |
+| Cerebras | `cerebras/…` | `CEREBRAS_API_KEY` | `Authorization: Bearer` | `api.cerebras.ai` |
+| Chutes | `chutes/…` | `CHUTES_API_KEY` | `Authorization: Bearer` | `llm.chutes.ai` |
+| Clarifai | `clarifai/…` | `CLARIFAI_PAT` | `Authorization: Bearer` | `api.clarifai.com` |
+| Claudinio | `claudinio/…` | `CLAUDINIO_API_KEY` | `Authorization: Bearer` | `api.claudin.io` |
+| ClinePass | `cline-pass/…` | `CLINE_API_KEY` | `Authorization: Bearer` | `api.cline.bot` |
+| CloudFerro Sherlock | `cloudferro-sherlock/…` | `CLOUDFERRO_SHERLOCK_API_KEY` | `Authorization: Bearer` | `api-sherlock.cloudferro.com` |
+| Cohere | `cohere/…` | `COHERE_API_KEY` | `Authorization: Bearer` | `api.cohere.ai`, `api.cohere.com` |
+| CommandCode | `commandcode/…` | `CMD_API_KEY` | `Authorization: Bearer`, `x-api-key` | `api.commandcode.ai` |
+| CoralBricks | `coralbricks/…` | `CORAL_API_KEY` | `Authorization: Bearer` | `inference.coralbricks.ai` |
+| Cortecs | `cortecs/…` | `CORTECS_API_KEY` | `Authorization: Bearer` | `api.cortecs.ai` |
+| CrossModel | `crossmodel/…` | `CROSSMODEL_API_KEY` | `Authorization: Bearer` | `api.crossmodel.ai` |
+| Crusoe | `crusoe/…` | `CRUSOE_API_KEY` | `Authorization: Bearer` | `api.inference.crusoecloud.com` |
+| DaoXE | `daoxe/…` | `DAOXE_API_KEY` | `Authorization: Bearer` | `daoxe.com` |
+| Deep Infra | `deepinfra/…` | `DEEPINFRA_API_KEY` | `Authorization: Bearer` | `api.deepinfra.com` |
+| DeepSeek | `deepseek/…` | `DEEPSEEK_API_KEY` | `Authorization: Bearer` | `api.deepseek.com` |
+| DigitalOcean | `digitalocean/…` | `DIGITALOCEAN_ACCESS_TOKEN` | `Authorization: Bearer` | `inference.do-ai.run` |
+| DInference | `dinference/…` | `DINFERENCE_API_KEY` | `Authorization: Bearer` | `api.dinference.com` |
+| D.Run (China) | `drun/…` | `DRUN_API_KEY` | `Authorization: Bearer` | `chat.d.run` |
+| EBCloud | `ebcloud/…` | `EBCLOUD_API_KEY` | `Authorization: Bearer` | `maas-api.ebcloud.com` |
+| Echo | `echo/…` | `ECHO_API_KEY` | `Authorization: Bearer` | `echo.tracerml.ai` |
+| Eden AI | `edenai/…` | `EDENAI_API_KEY` | `Authorization: Bearer` | `api.edenai.run` |
+| EmpirioLabs AI | `empiriolabs/…` | `EMPIRIOLABS_API_KEY` | `Authorization: Bearer` | `api.empiriolabs.ai` |
+| engy | `engy/…` | `ENGY_API_KEY` | `Authorization: Bearer` | `api.engy.ai` |
+| evroc | `evroc/…` | `EVROC_API_KEY` | `Authorization: Bearer` | `models.think.evroc.com` |
+| FastRouter | `fastrouter/…` | `FASTROUTER_API_KEY` | `Authorization: Bearer` | `go.fastrouter.ai` |
+| Fireworks AI | `fireworks-ai/…` | `FIREWORKS_API_KEY` | `Authorization: Bearer` | `api.fireworks.ai` |
+| FreeModel | `freemodel/…` | `FREEMODEL_API_KEY` | `x-api-key`, `Authorization: Bearer` | `api.freemodel.dev`, `cc.freemodel.dev` |
+| Friendli | `friendli/…` | `FRIENDLI_TOKEN` | `Authorization: Bearer` | `api.friendli.ai` |
+| FrogBot | `frogbot/…` | `FROGBOT_API_KEY` | `Authorization: Bearer` | `app.frogbot.ai` |
+| GMI Cloud | `gmicloud/…` | `GMICLOUD_API_KEY` | `Authorization: Bearer` | `api.gmi-serving.com` |
+| Google | `google/…` | `GOOGLE_GENERATIVE_AI_API_KEY` | `x-goog-api-key` | `generativelanguage.googleapis.com` |
+| GreenPT | `greenpt/…` | `GREENPT_API_KEY` | `Authorization: Bearer` | `api.greenpt.ai` |
+| Groq | `groq/…` | `GROQ_API_KEY` | `Authorization: Bearer` | `api.groq.com` |
+| Helicone | `helicone/…` | `HELICONE_API_KEY` | `Authorization: Bearer` | `ai-gateway.helicone.ai` |
+| Hetzner | `hetzner/…` | `HETZNER_API_KEY` | `Authorization: Bearer` | `inference.hetzner.com` |
+| HPC-AI | `hpc-ai/…` | `HPC_AI_API_KEY` | `Authorization: Bearer` | `api.hpc-ai.com` |
+| Hugging Face | `huggingface/…` | `HF_TOKEN` | `Authorization: Bearer` | `router.huggingface.co` |
+| Charm Hyper | `hyper/…` | `HYPER_API_KEY` | `Authorization: Bearer` | `hyper.charm.land` |
+| Impossibl | `impossibl/…` | `IMPOSSIBL_API_KEY` | `Authorization: Bearer` | `api.impossibl.com` |
+| Inception | `inception/…` | `INCEPTION_API_KEY` | `Authorization: Bearer` | `api.inceptionlabs.ai` |
+| Inceptron | `inceptron/…` | `INCEPTRON_API_KEY` | `Authorization: Bearer` | `api.inceptron.io` |
+| Inco | `inco/…` | `INCO_API_KEY` | `Authorization: Bearer` | `api.inco.ai` |
+| Infer by Flow7 | `infer/…` | `INFER_API_KEY` | `Authorization: Bearer` | `infer.flow7.org` |
+| Inference | `inference/…` | `INFERENCE_API_KEY` | `Authorization: Bearer` | `inference.net` |
+| InferX | `inferx/…` | `INFERX_API_KEY` | `Authorization: Bearer` | `model.inferx.net` |
+| IO.NET | `io-net/…` | `IOINTELLIGENCE_API_KEY` | `Authorization: Bearer` | `api.intelligence.io.solutions` |
+| IteraCompute | `iteracompute/…` | `ITERACOMPUTE_API_KEY` | `Authorization: Bearer` | `api.iteracompute.com` |
+| Jalapeno Cloud | `jalapeno/…` | `JALAPENO_API_KEY` | `Authorization: Bearer` | `api.jalapeno-cloud.ai` |
+| Jiekou.AI | `jiekou/…` | `JIEKOU_API_KEY` | `Authorization: Bearer` | `api.jiekou.ai` |
+| Kenari | `kenari/…` | `KENARI_API_KEY` | `Authorization: Bearer` | `kenari.id` |
+| Kilo Gateway | `kilo/…` | `KILO_API_KEY` | `Authorization: Bearer` | `api.kilo.ai` |
+| Kimi For Coding (kimi.com) | `kimi-code-plan-cn/…` | `KIMI_API_KEY` | `Authorization: Bearer` | `api.kimi.com` |
+| Kimi For Coding (kimi.ai) | `kimi-code-plan-global/…` | `KIMI_API_KEY` | `Authorization: Bearer` | `api.kimi.ai` |
+| klokintegration.se | `klokintegration/…` | `KLOKINTEGRATION_API_KEY` | `Authorization: Bearer` | `api-gw.klok.ipaas.se` |
+| Kosmik Compute | `kosmik/…` | `KOSMIK_API_KEY` | `Authorization: Bearer` | `api.koscompute.com` |
+| KUAE Cloud Coding Plan | `kuae-cloud-coding-plan/…` | `KUAE_API_KEY` | `Authorization: Bearer` | `coding-plan-endpoint.kuaecloud.net` |
+| Liquid Inference | `liquid/…` | `LIQUID_API_KEY` | `Authorization: Bearer` | `router.inference.ai.exchange` |
+| DevPass (LLM Gateway) | `llmgateway/…` | `LLMGATEWAY_API_KEY` | `Authorization: Bearer` | `api.llmgateway.io` |
+| LLM Gateway | `llmgateway-providers/…` | `LLMGATEWAY_API_KEY` | `Authorization: Bearer` | `api.llmgateway.io` |
+| LLM Tech | `llmtech/…` | `LLMTECH_API_KEY` | `Authorization: Bearer` | `api.llmtech.eu` |
+| LLMTR | `llmtr/…` | `LLMTR_API_KEY` | `Authorization: Bearer` | `llmtr.com` |
+| LongCat | `longcat/…` | `LONGCAT_API_KEY` | `Authorization: Bearer` | `api.longcat.chat` |
+| LowRouter | `lowrouter/…` | `LOWROUTER_API_KEY` | `Authorization: Bearer` | `api.lowrouter.ai` |
+| LucidQuery | `lucidquery/…` | `LUCIDQUERY_API_KEY` | `Authorization: Bearer` | `api.lucidquery.com` |
+| Meganova | `meganova/…` | `MEGANOVA_API_KEY` | `Authorization: Bearer` | `api.meganova.ai` |
+| Melious | `melious/…` | `MELIOUS_API_KEY` | `Authorization: Bearer` | `api.melious.ai` |
+| Meta | `meta/…` | `META_MODEL_API_KEY` | `Authorization: Bearer` | `api.meta.ai` |
+| MiniMax (minimax.io) | `minimax/…` | `MINIMAX_API_KEY` | `Authorization: Bearer` | `api.minimax.io` |
+| MiniMax (minimax.cn) | `minimax-cn/…` | `MINIMAX_API_KEY` | `Authorization: Bearer` | `api.minimax.cn` |
+| MiniMax Token Plan (minimax.cn) | `minimax-cn-coding-plan/…` | `MINIMAX_API_KEY` | `Authorization: Bearer` | `api.minimax.cn` |
+| MiniMax Token Plan (minimax.io) | `minimax-coding-plan/…` | `MINIMAX_API_KEY` | `Authorization: Bearer` | `api.minimax.io` |
+| Mistral | `mistral/…` | `MISTRAL_API_KEY` | `Authorization: Bearer` | `api.mistral.ai` |
+| Mixlayer | `mixlayer/…` | `MIXLAYER_API_KEY` | `Authorization: Bearer` | `models.mixlayer.ai` |
+| Moark | `moark/…` | `MOARK_API_KEY` | `Authorization: Bearer` | `moark.com` |
+| Modal | `modal/…` | `MODAL_PROXY_TOKEN` | `Authorization: Bearer` | `inference.us-west.modal.direct` |
+| Model Oracle AI | `model-oracle-ai/…` | `MODEL_ORACLE_API_KEY` | `Authorization: Bearer` | `api.modeloracle.com` |
+| Modelis | `modelis/…` | `MODELIS_API_KEY` | `Authorization: Bearer` | `modelishub.com` |
+| ModelScope | `modelscope/…` | `MODELSCOPE_API_KEY` | `Authorization: Bearer` | `api-inference.modelscope.cn` |
+| Moonshot AI | `moonshotai/…` | `MOONSHOT_API_KEY` | `Authorization: Bearer` | `api.moonshot.ai` |
+| Moonshot AI (China) | `moonshotai-cn/…` | `MOONSHOT_API_KEY` | `Authorization: Bearer` | `api.moonshot.cn` |
+| NaN | `nan/…` | `NAN_API_KEY` | `Authorization: Bearer` | `api.nan.builders` |
+| NanoGPT | `nano-gpt/…` | `NANO_GPT_API_KEY` | `Authorization: Bearer` | `nano-gpt.com` |
+| NEAR AI Cloud | `nearai/…` | `NEARAI_API_KEY` | `Authorization: Bearer` | `cloud-api.near.ai` |
+| Nebius Token Factory | `nebius/…` | `NEBIUS_API_KEY` | `Authorization: Bearer` | `api.tokenfactory.nebius.com` |
+| NeoSmith | `neosmith/…` | `NEOSMITH_API_KEY` | `Authorization: Bearer` | `router.neosmith.ai` |
+| Neuralwatt | `neuralwatt/…` | `NEURALWATT_API_KEY` | `Authorization: Bearer` | `api.neuralwatt.com` |
+| Nova | `nova/…` | `NOVA_API_KEY` | `Authorization: Bearer` | `api.nova.amazon.com` |
+| Novita AI | `novita-ai/…` | `NOVITA_API_KEY` | `Authorization: Bearer` | `api.novita.ai` |
+| Nvidia | `nvidia/…` | `NVIDIA_API_KEY` | `Authorization: Bearer` | `integrate.api.nvidia.com` |
+| OCI Generative AI | `oci/…` | `OCI_GENAI_API_KEY` | `Authorization: Bearer` | `inference.generativeai.us-chicago-1.oci.oraclecloud.com` |
+| Ofox | `ofox/…` | `OFOX_API_KEY` | `Authorization: Bearer`, `x-goog-api-key`, `x-api-key` | `api.ofox.ai` |
+| Ollama Cloud | `ollama-cloud/…` | `OLLAMA_API_KEY` | `Authorization: Bearer` | `ollama.com` |
+| OpenAI | `openai/…` | `OPENAI_API_KEY` | `Authorization: Bearer` | `api.openai.com` |
+| OpenCode Console | `opencode/…` | `OPENCODE_API_KEY` | `Authorization: Bearer`, `x-goog-api-key`, `x-api-key` | `opencode.ai` |
+| OpenCode Go | `opencode-go/…` | `OPENCODE_API_KEY` | `Authorization: Bearer`, `x-goog-api-key`, `x-api-key` | `opencode.ai` |
+| OpenReason | `openreason/…` | `OPENREASON_API_KEY` | `Authorization: Bearer` | `api.openreason.app` |
+| OpenRouter | `openrouter/…` | `OPENROUTER_API_KEY` | `Authorization: Bearer` | `openrouter.ai` |
+| Opper | `opper/…` | `OPPER_API_KEY` | `Authorization: Bearer` | `api.opper.ai` |
+| OrcaRouter | `orcarouter/…` | `ORCAROUTER_API_KEY` | `Authorization: Bearer` | `api.orcarouter.ai` |
+| OVHcloud AI Endpoints | `ovhcloud/…` | `OVHCLOUD_API_KEY` | `Authorization: Bearer` | `oai.endpoints.kepler.ai.cloud.ovh.net` |
+| Pareto Inference | `pareto/…` | `PARETO_API_KEY` | `Authorization: Bearer` | `api.paretoinference.com` |
+| Pendra | `pendra/…` | `PENDRA_API_KEY` | `Authorization: Bearer` | `api.pendra.ai` |
+| Perplexity Agent | `perplexity-agent/…` | `PERPLEXITY_API_KEY` | `Authorization: Bearer` | `api.perplexity.ai` |
+| Pioneer | `pioneer/…` | `PIONEER_API_KEY` | `Authorization: Bearer` | `api.fastino.ai` |
+| Poe | `poe/…` | `POE_API_KEY` | `Authorization: Bearer` | `api.poe.com` |
+| Poolside | `poolside/…` | `POOLSIDE_API_KEY` | `Authorization: Bearer` | `inference.poolside.ai` |
+| Prime Inference | `prime/…` | `PRIME_API_KEY` | `Authorization: Bearer` | `api.pinference.ai` |
+| QiHang | `qihang-ai/…` | `QIHANG_API_KEY` | `Authorization: Bearer` | `api.qhaigc.net` |
+| Qiniu | `qiniu-ai/…` | `QINIU_API_KEY` | `Authorization: Bearer` | `api.qnaigc.com` |
+| Reflection | `reflection/…` | `REFLECTION_API_KEY` | `Authorization: Bearer` | `api.reflection.ai` |
+| Regolo AI | `regolo-ai/…` | `REGOLO_API_KEY` | `Authorization: Bearer` | `api.regolo.ai` |
+| Requesty | `requesty/…` | `REQUESTY_API_KEY` | `Authorization: Bearer` | `router.requesty.ai` |
+| routing.run | `routing-run/…` | `ROUTING_RUN_API_KEY` | `Authorization: Bearer` | `api.routing.run` |
+| RunInfra | `runinfra/…` | `RUNINFRA_GATEWAY_KEY` | `Authorization: Bearer` | `api.runinfra.ai` |
+| Sakana AI | `sakana/…` | `SAKANA_API_KEY` | `Authorization: Bearer` | `api.sakana.ai` |
+| SambaNova | `sambanova/…` | `SAMBANOVA_API_KEY` | `Authorization: Bearer` | `api.sambanova.ai` |
+| Sarvam AI | `sarvam/…` | `SARVAM_API_KEY` | `Authorization: Bearer` | `api.sarvam.ai` |
+| Scaleway | `scaleway/…` | `SCALEWAY_API_KEY` | `Authorization: Bearer` | `api.scaleway.ai` |
+| SCNet Token Plan | `scnet-token-plan/…` | `SCNET_API_KEY` | `Authorization: Bearer` | `api.scnet.cn` |
+| SCX.ai | `scx-ai/…` | `SCX_API_KEY` | `Authorization: Bearer` | `api.scx.ai` |
+| SenseNova (China) | `sensenova/…` | `SENSENOVA_API_KEY` | `Authorization: Bearer` | `token.sensenova.cn` |
+| SiliconFlow | `siliconflow/…` | `SILICONFLOW_API_KEY` | `Authorization: Bearer` | `api.siliconflow.com` |
+| SiliconFlow (China) | `siliconflow-cn/…` | `SILICONFLOW_CN_API_KEY` | `Authorization: Bearer` | `api.siliconflow.cn` |
+| STACKIT | `stackit/…` | `STACKIT_API_KEY` | `Authorization: Bearer` | `api.openai-compat.model-serving.eu01.onstackit.cloud` |
+| Standard Compute | `standardcompute/…` | `STANDARDCOMPUTE_API_KEY` | `Authorization: Bearer` | `api.stdcmpt.com` |
+| StepFun (China) | `stepfun/…` | `STEPFUN_API_KEY` | `Authorization: Bearer` | `api.stepfun.com` |
+| StepFun (Global) | `stepfun-ai/…` | `STEPFUN_API_KEY` | `Authorization: Bearer` | `api.stepfun.ai` |
+| StepFun Step Plan (Global) | `stepfun-ai-step-plan/…` | `STEPFUN_API_KEY` | `Authorization: Bearer` | `api.stepfun.ai` |
+| StepFun Step Plan (China) | `stepfun-step-plan/…` | `STEPFUN_API_KEY` | `Authorization: Bearer` | `api.stepfun.com` |
+| Subconscious | `subconscious/…` | `SUBCONSCIOUS_API_KEY` | `x-api-key` | `api.subconscious.dev` |
+| submodel | `submodel/…` | `SUBMODEL_INSTAGEN_ACCESS_KEY` | `Authorization: Bearer` | `llm.submodel.ai` |
+| Synthetic | `synthetic/…` | `SYNTHETIC_API_KEY` | `Authorization: Bearer` | `api.synthetic.new` |
+| Tempr Gateway | `tempr/…` | `TEMPR_API_KEY` | `Authorization: Bearer` | `api.temprhq.io` |
+| Tencent Coding Plan (China) | `tencent-coding-plan/…` | `TENCENT_CODING_PLAN_API_KEY` | `Authorization: Bearer` | `api.lkeap.cloud.tencent.com` |
+| Tencent Token Plan | `tencent-token-plan/…` | `TENCENT_TOKEN_PLAN_API_KEY` | `Authorization: Bearer` | `api.lkeap.cloud.tencent.com` |
+| Tencent TokenHub | `tencent-tokenhub/…` | `TENCENT_TOKENHUB_API_KEY` | `Authorization: Bearer` | `tokenhub.tencentmaas.com` |
+| TensorX | `tensorx/…` | `TENSORX_API_KEY` | `Authorization: Bearer` | `api.tensorx.ai` |
+| The Grid AI | `the-grid-ai/…` | `THEGRID_API_KEY` | `Authorization: Bearer` | `api.thegrid.ai` |
+| Thinking Machines | `thinkingmachines/…` | `TINKER_API_KEY` | `x-api-key` | `tinker.thinkingmachines.dev` |
+| Tinfoil | `tinfoil/…` | `TINFOIL_API_KEY` | `Authorization: Bearer` | `inference.tinfoil.sh` |
+| Together AI | `togetherai/…` | `TOGETHER_API_KEY` | `Authorization: Bearer` | `api.together.xyz` |
+| TokenGo | `tokengo/…` | `TOKENGO_API_KEY` | `Authorization: Bearer` | `api.tokengo.com` |
+| TokenRouter | `tokenrouter/…` | `TOKENROUTER_API_KEY` | `Authorization: Bearer` | `api.tokenrouter.com` |
+| TrustedRouter | `trustedrouter/…` | `TRUSTEDROUTER_API_KEY` | `Authorization: Bearer` | `api.trustedrouter.com` |
+| Umans AI | `umans-ai/…` | `UMANS_AI_API_KEY` | `Authorization: Bearer` | `api.code.umans.ai` |
+| Umans AI Coding Plan | `umans-ai-coding-plan/…` | `UMANS_AI_CODING_PLAN_API_KEY` | `Authorization: Bearer` | `api.code.umans.ai` |
+| UnoRouter | `unorouter/…` | `UNOROUTER_API_KEY` | `Authorization: Bearer` | `api.unorouter.com` |
+| Upstage | `upstage/…` | `UPSTAGE_API_KEY` | `Authorization: Bearer` | `api.upstage.ai` |
+| Vancine | `vancine/…` | `VANCINE_API_KEY` | `Authorization: Bearer` | `vancine.com` |
+| Venice AI | `venice/…` | `VENICE_API_KEY` | `Authorization: Bearer` | `api.venice.ai` |
+| Vercel AI Gateway | `vercel/…` | `AI_GATEWAY_API_KEY` | `Authorization: Bearer` | `ai-gateway.vercel.sh` |
+| Vispark | `vispark/…` | `VISPARK_LAB_API_KEY` | `Authorization: Bearer` | `api.lab.vispark.in` |
+| Vivgrid | `vivgrid/…` | `VIVGRID_API_KEY` | `x-api-key`, `Authorization: Bearer` | `api.vivgrid.com` |
+| Volcengine Ark | `volcengine/…` | `ARK_API_KEY` | `Authorization: Bearer` | `ark.cn-beijing.volces.com` |
+| Volcengine Ark Coding Plan | `volcengine-coding-plan/…` | `ARK_CODING_PLAN_API_KEY` | `Authorization: Bearer` | `ark.cn-beijing.volces.com` |
+| Vultr | `vultr/…` | `VULTR_API_KEY` | `Authorization: Bearer` | `api.vultrinference.com` |
+| Wafer | `wafer.ai/…` | `WAFER_API_KEY` | `Authorization: Bearer` | `pass.wafer.ai` |
+| Wallaby | `wallaby/…` | `WALLABY_API_KEY` | `Authorization: Bearer` | `api.wallabytoken.com` |
+| CoreWeave | `wandb/…` | `WANDB_API_KEY` | `Authorization: Bearer` | `api.inference.wandb.ai` |
+| xAI | `xai/…` | `XAI_API_KEY` | `Authorization: Bearer` | `api.x.ai` |
+| Xiaomi | `xiaomi/…` | `XIAOMI_API_KEY` | `Authorization: Bearer` | `api.xiaomimimo.com` |
+| Xiaomi Token Plan (Europe) | `xiaomi-token-plan-ams/…` | `XIAOMI_API_KEY` | `Authorization: Bearer` | `token-plan-ams.xiaomimimo.com` |
+| Xiaomi Token Plan (China) | `xiaomi-token-plan-cn/…` | `XIAOMI_API_KEY` | `Authorization: Bearer` | `token-plan-cn.xiaomimimo.com` |
+| Xiaomi Token Plan (Singapore) | `xiaomi-token-plan-sgp/…` | `XIAOMI_API_KEY` | `Authorization: Bearer` | `token-plan-sgp.xiaomimimo.com` |
+| Xpersona | `xpersona/…` | `XPERSONA_API_KEY` | `Authorization: Bearer` | `www.xpersona.co` |
+| Z.AI | `zai/…` | `ZHIPU_API_KEY` | `Authorization: Bearer` | `api.z.ai` |
+| Z.AI Coding Plan | `zai-coding-plan/…` | `ZHIPU_API_KEY` | `Authorization: Bearer` | `api.z.ai` |
+| Zeldoc | `zeldoc/…` | `ZELDOC_API_KEY` | `Authorization: Bearer` | `api.zeldoc.ai` |
+| Zenifra | `zenifra/…` | `ZENIFRA_AI_KEY` | `Authorization: Bearer` | `ai.zenifra.com` |
+| ZenMux | `zenmux/…` | `ZENMUX_API_KEY` | `x-api-key`, `Authorization: Bearer` | `zenmux.ai` |
+| Zhipu AI | `zhipuai/…` | `ZHIPU_API_KEY` | `Authorization: Bearer` | `open.bigmodel.cn` |
+| Zhipu AI Coding Plan | `zhipuai-coding-plan/…` | `ZHIPU_API_KEY` | `Authorization: Bearer` | `open.bigmodel.cn` |
+
+[//]: # (/generated:opencode-providers)
+
+## `rules`
+
+The OpenCode harness reads rules from the `AGENTS.md` file in the workspace.
+
+For more information about writing rules, see [Add project rules](/environments/rules).
+
+## `skills`
+
+The OpenCode harness reads skills from the `.opencode/skills` directory in the workspace and from the `~/.config/opencode/skills` directory in the home directory, and also from the `.agents/skills` and `.claude/skills` directories in both places.
+
+For more information about placing skills, see [Give the agent skills](/environments/skills).
+
+## `mcp`
+
+The OpenCode harness accepts MCP servers on `stdio` and `http`. reeval refuses an `sse` server at plan time with exit code 2. The servers go in OpenCode's configuration with Code Mode off, so the agent calls their tools directly, and the first prompt waits until every server has connected.
+
+For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
+
+## `usage`
+
+The OpenCode harness records tokens on each turn's `usage`, as one total for the whole turn. `usage` is null when OpenCode reports none.
+
+For more information about the token fields, see [`TokenUsage`](/reference/record#tokenusage).
+
+## `servedModels`
+
+OpenCode's stream names no model, so each turn's `model` is the model on the turn's last brokered request. The attempt's `servedModels` comes from the request URL on a `google/` model and from the response body on every other provider, with `[effort=<value>]` when the response names an effort.
+
+For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
+
+## `web-search`
+
+The OpenCode harness records `web-search` events. A web search runs on a hosted MCP server at `mcp.exa.ai`, which needs no key and is one of the harness's automatic egress hosts.
+
+For more information about the automatic hosts, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts). For more information about the matcher, see [`toHaveSearched()`](/reference/matchers#tohavesearched).
+
+## `web-fetch`
+
+The OpenCode harness records `web-fetch` events.
+
+For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).

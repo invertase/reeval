@@ -3,9 +3,9 @@ title: "Compare harnesses"
 description: "Run one task on each harness and read each one's pass rate, tokens, tool calls, and time."
 ---
 
-You compare harnesses by running one task on each harness in one run. Each harness is its own cell with the same prompt, assertions, and attempts, so the block reads side by side. For a runnable project, see [`with-many-harnesses`](https://github.com/invertase/reeval/tree/main/examples/with-many-harnesses). For more information about choosing a harness and its key, see [Harnesses](/harnesses).
+You compare harnesses by running one task on each harness in one run. Each harness is its own cell with the same prompt, assertions, and attempts, so the block reads side by side. For a runnable project, see [`with-many-harnesses`](https://github.com/invertase/reeval/tree/main/examples/with-many-harnesses). For more information about choosing a harness and its key, see [Harnesses](/agents).
 
-To measure a change on each harness instead, add `compare` ([Compare harnesses](/evals/compare#compare-harnesses)).
+To measure a change on each harness instead, add `compare` ([Compare harnesses](/results/compare/lift#compare-harnesses)).
 
 ## Run one task on each harness
 
@@ -42,7 +42,7 @@ evaluate(
 )
 ```
 
-A list in `harness` replaces the harnesses the evaluation inherits from the `reeval.config.ts` file. Each harness reads its API key from the `.env.local` file. For more information about the `add`, `only`, and function forms, see [the `harness` option](/reference/options#harness). For more information about model ids per harness, see [Models](/harnesses/models).
+A list in `harness` replaces the harnesses the evaluation inherits from the `reeval.config.ts` file. Each harness reads its API key from the `.env.local` file. For more information about the `add`, `only`, and function forms, see [the `harness` option](/reference/options#harness). For more information about model ids per harness, see [Models](/agents/model).
 
 </Step>
 <Step title="Run the evaluation">

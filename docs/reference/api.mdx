@@ -76,7 +76,7 @@ evaluate.each(handlers)(
 
 The returned function has no `skip`, `only`, or `todo`. reeval refuses, with exit code 2, a `cases` value that is not an array, and two cases with the same name.
 
-For more information about families and the `all cases` row, see [Evaluate many cases](/evals/cases).
+For more information about families and the `all cases` row, see [Evaluate many cases](/write/cases).
 
 ## `EvalFn`
 
@@ -145,7 +145,7 @@ export const withShoehorn = plain.extend('with-shoehorn', ({ skill }) => ({
   An `EnvironmentSpec` object, or a callback that receives `EnvironmentHelpers` and returns one synchronously, once, when the file loads. The documented helpers are `secret`, `skill`, `mcp`, `file`, `directory`, and `git`.
 </Property>
 
-Relative paths in `spec` resolve against the file that calls `defineEnvironment()`. A spec that omits `sandbox` runs in the cascaded `sandbox` option, else in the default sandbox. reeval refuses, with exit code 2, any other name and a callback that returns a `Promise`. For more information about the default sandbox, see [Sandboxes](/sandboxes).
+Relative paths in `spec` resolve against the file that calls `defineEnvironment()`. A spec that omits `sandbox` runs in the cascaded `sandbox` option, else in the default sandbox. reeval refuses, with exit code 2, any other name and a callback that returns a `Promise`. For more information about the default sandbox, see [Sandboxes](/integrations/sandboxes).
 
 The returned `Environment` is a frozen object with the following fields.
 

@@ -1,0 +1,58 @@
+---
+title: "gateways"
+description: "Route LLM calls via different gateway services."
+---
+
+reeval supports using gateways as a mechanism to route LLM calls via different services. This enables you and your team to use many different LLM providers via a single service, rather than having to mint 
+new API keys for each provider.
+
+## Supported gateways
+
+reeval supports the following gateway services:
+
+- [Vercel AI Gateway](/integrations/gateways/vercel)
+- [Google Vertex AI](/integrations/gateways/vertex)
+- [OpenRouter](/integrations/gateways/openrouter)
+
+By default, reeval requires an API key for each model provider.
+
+## Using a gateway
+
+Not all harnesses support gateways, and not all gateways are supported by all harnesses.
+
+| Harness | Vercel | OpenRouter | Vertex |
+| --- | --- | --- | --- |
+| Cursor | ❌ | ❌ | ❌ |
+| Claude Code | ✅ | ⚠️ | ✅ |
+| Codex | ✅ | ✅ | ❌ |
+| Antigravity | ❌ | ❌ | ✅ |
+| OpenCode | ⚠️ | ⚠️ | ✅ |
+| Goose | ⚠️ | ⚠️ | ✅ |
+| pi | ❌ | ❌ | ✅ |
+| fx | ✅ | ❌ | ❌ |
+| Grok Build | ⚠️ | ⚠️ | ❌ |
+
+## Setting up a gateway
+
+Multiple gateways can be used together, and the gateway selection is done on a per-model-provider basis. The order of the gateways defines which provider will be used, and fallback downward:
+
+```ts
+import { defineConfig } from '{{ pkg }}'
+import { direct, vercel } from '{{ pkg }}/gateway'
+import { claudeCode, codex, cursor, opencode } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  gateway: [
+    vercel(),
+    direct()
+  ],
+  harness: [
+    claudeCode({ model: 'claude-sonnet-4-5' }), // Uses Vercel AI Gateway
+    opencode({ model: 'openai/gpt-5.4-mini' }), // Uses Vercel AI Gateway
+    codex({ model: 'gpt-5.4-mini' }), // Uses direct provider
+    cursor({ model: 'composer-2.5' }), // Uses direct provider
+  ],
+})
+```
+
+In the above example, both `claudeCode` and `opencode` will use the Vercel AI Gateway, while `codex` and `cursor` will use the direct provider (as they don't support gateways). reeval will throw an error if a harness does not support a listed gateway provider.

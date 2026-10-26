@@ -123,10 +123,10 @@ The variant passed in 4 of 4 attempts and the baseline in none, so the skill `he
   <Card title="Which tools agents choose" href="/recipes/recommendation">
     Prompt for an outcome without naming a tool. See what agents discover and select.
   </Card>
-  <Card title="Whether agents finish the task" href="/evals/checks">
+  <Card title="Whether agents finish the task" href="/write/assertions">
     Run tasks against a pinned codebase in an isolated sandbox and assert on the result.
   </Card>
-  <Card title="Whether a change helped" href="/evals/compare">
+  <Card title="Whether a change helped" href="/results/compare/lift">
     Run the same task with and without a change. Compare pass rate, tokens, tool calls, and time.
   </Card>
   <Card title="How each harness handles your tool" href="/recipes/agent-comparison">
@@ -143,16 +143,16 @@ reeval runs on your machine, and each run leaves a record you can commit:
 
 | Part | What reeval does |
 |---|---|
-| [Sandbox](/sandboxes) | Starts a fresh container for each attempt |
+| [Sandbox](/integrations/sandboxes) | Starts a fresh container for each attempt |
 | [Secrets](/environments/secrets) | Keeps API keys on the host and adds them only on requests to their provider |
 | [Records](/runs/recording) | Writes each run as JSON beside your code, so a pull request can diff against it |
 
 ## Explore the docs
 
 <CardGroup cols={3}>
-  <Card title="Evaluations" href="/evals/evaluate">Tasks, assertions, judgments, and questions.</Card>
+  <Card title="Evaluations" href="/write">Tasks, assertions, judgments, and questions.</Card>
   <Card title="Environments" href="/environments">Skills, MCP servers, rules, files, and secrets.</Card>
-  <Card title="Harnesses" href="/harnesses">The coding agents, with their models and effort.</Card>
+  <Card title="Harnesses" href="/agents">The coding agents, with their models and effort.</Card>
   <Card title="Runs" href="/runs/running">Plans, profiles, recording, and CI.</Card>
   <Card title="Results" href="/results/output">Outcomes, transcripts, analysis, and queries.</Card>
   <Card title="Recipes" href="/recipes/sdk">Test an SDK, a CLI, an MCP server, or your docs.</Card>

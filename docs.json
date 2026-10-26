@@ -26,6 +26,40 @@
       "href": "https://www.npmjs.com/package/reeval"
     }
   ],
+  "redirects": {
+    "/evals/evaluate": "/write",
+    "/evals/turns": "/write/turns",
+    "/evals/checks": "/write/assertions",
+    "/evals/judges": "/write/judgments",
+    "/evals/questions": "/write/questions",
+    "/evals/groups": "/write/groups",
+    "/evals/cases": "/write/cases",
+    "/evals/servers": "/write/apps",
+    "/harnesses": "/agents",
+    "/harnesses/models": "/agents/model",
+    "/gateways": "/agents/gateways",
+    "/environments/workspaces": "/environments/repositories",
+    "/evals/compare": "/results/compare/lift",
+    "/results/regressions": "/results/compare/past-runs",
+    "/evals/statistics": "/results/compare/statistics",
+    "/results/analysis": "/results/analyze",
+    "/sandboxes": "/integrations/sandboxes",
+    "/sandboxes/toolchains": "/integrations/sandboxes/toolchains",
+    "/sandboxes/docker": "/integrations/sandboxes/docker",
+    "/sandboxes/podman": "/integrations/sandboxes/podman",
+    "/harnesses/cursor": "/integrations/agents/cursor",
+    "/harnesses/claude-code": "/integrations/agents/claude-code",
+    "/harnesses/codex": "/integrations/agents/codex",
+    "/harnesses/antigravity": "/integrations/agents/antigravity",
+    "/harnesses/opencode": "/integrations/agents/opencode",
+    "/harnesses/goose": "/integrations/agents/goose",
+    "/harnesses/pi": "/integrations/agents/pi",
+    "/harnesses/grok-build": "/integrations/agents/grok-build",
+    "/gateways/direct": "/integrations/gateways/direct",
+    "/gateways/vercel": "/integrations/gateways/vercel",
+    "/gateways/openrouter": "/integrations/gateways/openrouter",
+    "/gateways/vertex": "/integrations/gateways/vertex"
+  },
   "sidebar": [
     {
       "group": "Getting started",
@@ -49,35 +83,35 @@
       "pages": [
         {
           "title": "Overview",
-          "href": "/evals/evaluate"
+          "href": "/write"
         },
         {
           "title": "Turns",
-          "href": "/evals/turns"
+          "href": "/write/turns"
         },
         {
           "title": "Assertions",
-          "href": "/evals/checks"
+          "href": "/write/assertions"
         },
         {
           "title": "Judgments",
-          "href": "/evals/judges"
+          "href": "/write/judgments"
         },
         {
           "title": "Questions",
-          "href": "/evals/questions"
+          "href": "/write/questions"
         },
         {
           "title": "Groups",
-          "href": "/evals/groups"
+          "href": "/write/groups"
         },
         {
           "title": "Cases",
-          "href": "/evals/cases"
+          "href": "/write/cases"
         },
         {
           "title": "Apps",
-          "href": "/evals/servers"
+          "href": "/write/apps"
         }
       ]
     },
@@ -86,15 +120,15 @@
       "pages": [
         {
           "title": "Overview",
-          "href": "/harnesses"
+          "href": "/agents"
         },
         {
           "title": "Model",
-          "href": "/harnesses/models"
+          "href": "/agents/model"
         },
         {
           "title": "Gateways",
-          "href": "/gateways"
+          "href": "/agents/gateways"
         }
       ]
     },
@@ -107,7 +141,7 @@
         },
         {
           "title": "Repositories",
-          "href": "/environments/workspaces"
+          "href": "/environments/repositories"
         },
         {
           "title": "Files",
@@ -172,21 +206,21 @@
           "pages": [
             {
               "title": "Lift",
-              "href": "/evals/compare"
+              "href": "/results/compare/lift"
             },
             {
               "title": "Past runs",
-              "href": "/results/regressions"
+              "href": "/results/compare/past-runs"
             },
             {
               "title": "Statistics",
-              "href": "/evals/statistics"
+              "href": "/results/compare/statistics"
             }
           ]
         },
         {
           "title": "Analyze",
-          "href": "/results/analysis"
+          "href": "/results/analyze"
         },
         {
           "title": "Output",
@@ -259,35 +293,35 @@
           "pages": [
             {
               "title": "Cursor",
-              "href": "/harnesses/cursor"
+              "href": "/integrations/agents/cursor"
             },
             {
               "title": "Claude Code",
-              "href": "/harnesses/claude-code"
+              "href": "/integrations/agents/claude-code"
             },
             {
               "title": "Codex",
-              "href": "/harnesses/codex"
+              "href": "/integrations/agents/codex"
             },
             {
               "title": "Antigravity",
-              "href": "/harnesses/antigravity"
+              "href": "/integrations/agents/antigravity"
             },
             {
               "title": "OpenCode",
-              "href": "/harnesses/opencode"
+              "href": "/integrations/agents/opencode"
             },
             {
               "title": "Goose",
-              "href": "/harnesses/goose"
+              "href": "/integrations/agents/goose"
             },
             {
               "title": "pi",
-              "href": "/harnesses/pi"
+              "href": "/integrations/agents/pi"
             },
             {
               "title": "Grok Build",
-              "href": "/harnesses/grok-build"
+              "href": "/integrations/agents/grok-build"
             }
           ]
         },
@@ -296,19 +330,19 @@
           "pages": [
             {
               "title": "Direct",
-              "href": "/gateways/direct"
+              "href": "/integrations/gateways/direct"
             },
             {
               "title": "Vercel AI Gateway",
-              "href": "/gateways/vercel"
+              "href": "/integrations/gateways/vercel"
             },
             {
               "title": "OpenRouter",
-              "href": "/gateways/openrouter"
+              "href": "/integrations/gateways/openrouter"
             },
             {
               "title": "Vertex AI",
-              "href": "/gateways/vertex"
+              "href": "/integrations/gateways/vertex"
             }
           ]
         },
@@ -317,19 +351,19 @@
           "pages": [
             {
               "title": "Overview",
-              "href": "/sandboxes"
+              "href": "/integrations/sandboxes"
             },
             {
               "title": "Toolchains",
-              "href": "/sandboxes/toolchains"
+              "href": "/integrations/sandboxes/toolchains"
             },
             {
               "title": "Docker",
-              "href": "/sandboxes/docker"
+              "href": "/integrations/sandboxes/docker"
             },
             {
               "title": "Podman",
-              "href": "/sandboxes/podman"
+              "href": "/integrations/sandboxes/podman"
             }
           ]
         }

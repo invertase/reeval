@@ -5,7 +5,7 @@ description: "See whether your harness runs a CLI and its result works."
 
 You test a CLI by installing it on the sandbox image, giving your harness a task that uses it, and checking the result. The sample uses `jq`. For a runnable project, see [`with-docker-install`](https://github.com/invertase/reeval/tree/main/examples/with-docker-install).
 
-Before any attempt starts, reeval prepares the sandbox image and builds this `install` layer if it is missing. For more information about adding a tool to the image, see [Add toolchains](/sandboxes/toolchains).
+Before any attempt starts, reeval prepares the sandbox image and builds this `install` layer if it is missing. For more information about adding a tool to the image, see [Add toolchains](/integrations/sandboxes/toolchains).
 
 ## Install and check the CLI
 
@@ -52,9 +52,9 @@ evaluate('counts the large orders with jq', {
 })
 ```
 
-`c.exec` runs a command in the sandbox after `c.send` returns. The first assertion confirms the image has `jq`; `toSucceed` passes when `exitCode` is 0. The second runs the harness's script and compares what it prints with the expected count. For more information about `c.exec` and `toSucceed`, see [Assertions](/evals/checks).
+`c.exec` runs a command in the sandbox after `c.send` returns. The first assertion confirms the image has `jq`; `toSucceed` passes when `exitCode` is 0. The second runs the harness's script and compares what it prints with the expected count. For more information about `c.exec` and `toSucceed`, see [Assertions](/write/assertions).
 
-To check the commands the harness ran during the turn, use `toHaveRun`. For more information, see [Check what the agent did](/evals/checks#check-what-the-agent-did).
+To check the commands the harness ran during the turn, use `toHaveRun`. For more information, see [Check what the agent did](/write/assertions#check-what-the-agent-did).
 
 </Step>
 <Step title="Run the evaluation">

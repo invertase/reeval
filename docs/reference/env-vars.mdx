@@ -9,7 +9,7 @@ Where a flag and a variable set the same thing, the flag takes precedence. `REEV
 
 Whitespace or a control character in a harness, judge, or `question` credential stops the run. A missing credential for a harness, a judge, or a `question` stops the run. A missing `analysis.model` credential skips insights.
 
-For more information about config keys, see [Options](/reference/options). For more information about harnesses, see [Choose an agent](/harnesses).
+For more information about config keys, see [Options](/reference/options). For more information about harnesses, see [Choose an agent](/agents).
 
 ## `REEVAL_PROFILE`
 
@@ -109,7 +109,7 @@ A `typesafe-ai/` `judge.model` uses `TYPESAFE_AI_API_KEY` directly when it is se
 
 ## `AWS_REGION`
 
-`AWS_REGION` fills the hosts of an `opencode` model on `amazon-bedrock/`. With no value, the region is `us-east-1`. Any other `opencode` provider reads the variable in the [`provider/model` table](/harnesses/opencode#providermodel).
+`AWS_REGION` fills the hosts of an `opencode` model on `amazon-bedrock/`. With no value, the region is `us-east-1`. Any other `opencode` provider reads the variable in the [`provider/model` table](/integrations/agents/opencode#providermodel).
 
 ## `CI`
 

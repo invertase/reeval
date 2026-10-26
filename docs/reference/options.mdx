@@ -46,7 +46,7 @@ reeval applies the `reeval.config.ts` file, then the selected profile's `default
 
 A later level replaces most keys, `compare` whole. `env` merges by name, `judge` and `question` field by field with `state` key by key, `capture` shallowly, and `tags` and `pin` keep every value.
 
-For more information about overriding an option, see [Group evaluations](/evals/groups#see-how-options-cascade).
+For more information about overriding an option, see [Group evaluations](/write/groups#see-how-options-cascade).
 
 ## `include`
 
@@ -64,7 +64,7 @@ For more information about overriding an option, see [Group evaluations](/evals/
   Helpers from `{{ pkg }}/gateway`: `direct()` is each provider's own key, `vercel()` is Vercel AI Gateway, and `openrouter()` is OpenRouter. The default is `[direct()]`. Each harness and judge model takes the first gateway that can serve it. reeval refuses a gateway listed twice, and a plan where no listed gateway can serve a model.
 </Property>
 
-A harness or a judge that names its own `gateway` skips the list's fallback. For more information about models, see [Models](/harnesses/models#route-models-through-a-gateway).
+A harness or a judge that names its own `gateway` skips the list's fallback. For more information about models, see [Models](/agents/model#route-models-through-a-gateway).
 
 ## `harness`
 
@@ -80,7 +80,7 @@ The default is:
 harness: cursor({ model: 'composer-2.5' })
 ```
 
-For more information about harness forms, see [Run several agents](/harnesses#run-several-agents).
+For more information about harness forms, see [Run several agents](/agents#run-several-agents).
 
 ## `sandbox`
 
@@ -90,7 +90,7 @@ For more information about harness forms, see [Run several agents](/harnesses#ru
   A descriptor from a sandbox factory, with `maxConcurrent` a whole number of at least 1. The default is `docker()`. An empty baseline in a comparison without `compare.baseline` or `environment` uses the first variant's sandbox when that variant sets one.
 </Property>
 
-For more information about sandbox factories, see [Choose a sandbox](/sandboxes).
+For more information about sandbox factories, see [Choose a sandbox](/integrations/sandboxes).
 
 ## `environment`
 
@@ -130,7 +130,7 @@ For more information about environments, see [Define an environment](/environmen
   The harnesses to compare on; the others run the baseline only. reeval refuses an id the evaluation does not run.
 </Property>
 
-For more information about comparisons, see [Measure lift against a baseline](/evals/compare).
+For more information about comparisons, see [Measure lift against a baseline](/results/compare/lift).
 
 ## `runs`
 
@@ -226,7 +226,7 @@ For more information about the automatic hosts, see [Egress](/environments/egres
   `c.exec` results, or a list of the commands to show. The default is `false`.
 </Property>
 
-For more information about judging, see [Judge agent work](/evals/judges).
+For more information about judging, see [Judge agent work](/write/judgments).
 
 ## `capture`
 
@@ -252,7 +252,7 @@ For more information about judging, see [Judge agent work](/evals/judges).
   The `'provider/model'` string behind `instructions`, or `analysis.model`, then a judge language model. reeval refuses an evaluation model.
 </Property>
 
-For more information about screenshots, see [Check an app](/evals/servers#set-the-viewport-and-browser).
+For more information about screenshots, see [Check an app](/write/apps#set-the-viewport-and-browser).
 
 ## `question`
 
@@ -318,7 +318,7 @@ For more information about screenshots, see [Check an app](/evals/servers#set-th
   The answers a question asked of each attempt picks from, with a short reason.
 </Property>
 
-For more information about questions, see [Ask questions across attempts](/evals/questions).
+For more information about questions, see [Ask questions across attempts](/write/questions).
 
 ## `timeout`
 
@@ -444,4 +444,4 @@ For more information about brokering a secret, see [Secrets](/environments/secre
   The most tokens in an answer, a whole number of at least 500. The default is 8000.
 </Property>
 
-For more information about analysis, see [Analyze a run](/results/analysis#set-an-analysis-model).
+For more information about analysis, see [Analyze a run](/results/analyze#set-an-analysis-model).

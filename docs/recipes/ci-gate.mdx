@@ -47,7 +47,7 @@ Set `compare.gate` and `compare.minLift` in the `evals/shoehorn.eval.ts` file.
 
 `compare.minLift` is the smallest lift you accept, from -1 to 1. `compare.gate` at `'variants'` is the default, so a variant's failure fails the evaluation. A baseline that fails its assertions does not fail the run, so `reeval run` can exit 0.
 
-For more information about the comparison and the other `compare.gate` values, see [Measure lift against a baseline](/evals/compare).
+For more information about the comparison and the other `compare.gate` values, see [Measure lift against a baseline](/results/compare/lift).
 
 With `compare.gate` at `'variants'`, the variant fails when the low end of its lift interval is below `0.25`. The variant's row adds `not by minLift 25`. The effect can still read `helped`.
 
@@ -78,7 +78,7 @@ Run the regression check in the job after the run is recorded.
 npx reeval compare --fail-on-regression
 ```
 
-`reeval compare --fail-on-regression` exits 1 when an evaluation `regressed`. For more information about the other results that exit 1, see [Compare with past runs](/results/regressions).
+`reeval compare --fail-on-regression` exits 1 when an evaluation `regressed`. For more information about the other results that exit 1, see [Compare with past runs](/results/compare/past-runs).
 
 </Step>
 </Steps>

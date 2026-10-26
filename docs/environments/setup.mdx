@@ -3,7 +3,7 @@ title: "Run setup commands"
 description: "Install dependencies or seed data in the sandbox before the agent starts."
 ---
 
-The `setup` field lists shell commands that run in the sandbox before the agent's first turn, such as installing dependencies or seeding a database. For a tool that every attempt needs and that never changes, install it in the image instead. For more information about installing tools in an image, see [Toolchains](/sandboxes/toolchains).
+The `setup` field lists shell commands that run in the sandbox before the agent's first turn, such as installing dependencies or seeding a database. For a tool that every attempt needs and that never changes, install it in the image instead. For more information about installing tools in an image, see [Toolchains](/integrations/sandboxes/toolchains).
 
 ## Run a setup command
 
@@ -56,9 +56,9 @@ Use the symptom to choose what to check and what to do next:
 | Symptom | Check | Next action |
 | :--- | :--- | :--- |
 | `setup step 1/1 "pnpm install --frozen-lockfile" in environment chatbot exited 1 after 38s (see setup.log)` | Open the attempt's `setup.log` file in the recorded run, or the attempt's trace in the `.reeval/debug` directory | Fix the command for the pinned ref it runs against. For more information about attempt traces, see [Debugging](/results/debugging). |
-| `command not found` in the message's last lines | The sandbox image lacks the tool | Add an install layer or a Dockerfile. For more information about installing tools, see [Toolchains](/sandboxes/toolchains). |
+| `command not found` in the message's last lines | The sandbox image lacks the tool | Add an install layer or a Dockerfile. For more information about installing tools, see [Toolchains](/integrations/sandboxes/toolchains). |
 | `… timed out after 5m (see setup.log)` | The command needs longer than its timeout | Raise `timeout` on that command, or move the slow install into the image |
 
 ## Reference
 
-For more information about the `setup` field's shape and the other environment fields, see [Environment fields](/reference/environment#environmentspec). For more information about installs that belong in the image, see [Toolchains](/sandboxes/toolchains).
+For more information about the `setup` field's shape and the other environment fields, see [Environment fields](/reference/environment#environmentspec). For more information about installs that belong in the image, see [Toolchains](/integrations/sandboxes/toolchains).

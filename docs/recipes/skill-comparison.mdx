@@ -81,7 +81,7 @@ In the `evals/brand.eval.ts` file, set `minLift` on the comparison. `compare.min
 +    compare: { variants: [withSkill], minLift: 0.25 },
 ```
 
-A variant whose lift may be below `0.25` fails. Its row then reads `helped, not by minLift 25`. For more information about this gate, see [Gate on lift](/evals/compare#gate-on-lift).
+A variant whose lift may be below `0.25` fails. Its row then reads `helped, not by minLift 25`. For more information about this gate, see [Gate on lift](/results/compare/lift#gate-on-lift).
 
 </Step>
 <Step title="Run the comparison">
@@ -112,7 +112,7 @@ pass             styles the page in Anthropic's brand
 
 `brand orange` and `brand fonts` are the rows that separate the cells. `links styles.css` passed on both, so it prints under `+1 more passed`. When the brand assertions pass on both sides, the harness already knows the brand, and this task can't show the skill. For a runnable project, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
 
-For more information about the other gates, see [Measure lift against a baseline](/evals/compare). For more information about asking which attempt did better, see [Ask which did better](/evals/compare#ask-which-did-better).
+For more information about the other gates, see [Measure lift against a baseline](/results/compare/lift). For more information about asking which attempt did better, see [Ask which did better](/results/compare/lift#ask-which-did-better).
 
 </Step>
 </Steps>

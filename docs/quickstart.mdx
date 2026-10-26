@@ -17,9 +17,9 @@ This example uses Docker for its sandbox. You need these:
 | Docker or Podman | the sandbox |
 | API keys for the agent harnesses | the harnesses |
 
-For more information about other harnesses and their keys, see [Harnesses](/harnesses).
+For more information about other harnesses and their keys, see [Harnesses](/agents).
 
-For more information about Podman or Docker on macOS or Windows, see [Sandboxes](/sandboxes).
+For more information about Podman or Docker on macOS or Windows, see [Sandboxes](/integrations/sandboxes).
 
 ## 1. Set up reeval
 
@@ -47,7 +47,7 @@ Build the image your harness runs in:
 npx reeval image build
 ```
 
-For more information about image builds, see [Toolchains](/sandboxes/toolchains).
+For more information about image builds, see [Toolchains](/integrations/sandboxes/toolchains).
 
 Check Node, Docker, the image, and your key with the `reeval doctor` command:
 
@@ -132,7 +132,7 @@ evaluate(
 )
 ```
 
-The variant passes when at least 3 of its 4 attempts pass. For more information about why this evaluation uses four attempts, see [Statistics](/evals/statistics#four-attempt-minimum).
+The variant passes when at least 3 of its 4 attempts pass. For more information about why this evaluation uses four attempts, see [Statistics](/results/compare/statistics#four-attempt-minimum).
 
 ## 3. Run the comparison
 
@@ -159,4 +159,4 @@ The variant passed both brand assertions in 4 of 4 attempts and the baseline in 
 
 ## Next steps
 
-For more information about adding variants or gates, see [Measure lift against a baseline](/evals/compare).
+For more information about adding variants or gates, see [Measure lift against a baseline](/results/compare/lift).

@@ -40,7 +40,7 @@ evaluate.each(['LangChain', 'LlamaIndex', 'the Vercel AI SDK'])(
 )
 ```
 
-The open question names no library, so a pass means the harness reached for yours. `evaluate.each` declares one evaluation per rival and pools them into a family. For more information about families, see [Evaluate many cases](/evals/cases). For more information about the judge question, the model and the threshold, see [Judge agent work](/evals/judges).
+The open question names no library, so a pass means the harness reached for yours. `evaluate.each` declares one evaluation per rival and pools them into a family. For more information about families, see [Evaluate many cases](/write/cases). For more information about the judge question, the model and the threshold, see [Judge agent work](/write/judgments).
 
 </Step>
 <Step title="Configure each harness">
@@ -58,7 +58,7 @@ Set `harness` to a list in the `reeval.config.ts` file. Set `judge.model` in the
 +  judge: { model: 'typesafe-ai/jev-1.14.0' },
 ```
 
-For more information about each harness and its key, see [Choose an agent](/harnesses). For more information about the judge model, see [Set the model and threshold](/evals/judges#set-the-model-and-threshold).
+For more information about each harness and its key, see [Choose an agent](/agents). For more information about the judge model, see [Set the model and threshold](/write/judgments#set-the-model-and-threshold).
 
 </Step>
 <Step title="Add the API keys">

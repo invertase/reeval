@@ -17,7 +17,7 @@ const turn = await c.send('Add a Vitest test for getUserId.')
   The prompt for this turn.
 </Property>
 
-For more information about the returned turn's fields, see [`Turn`](#turn). For more information about reading turns, see [Turns](/evals/turns).
+For more information about the returned turn's fields, see [`Turn`](#turn). For more information about reading turns, see [Turns](/write/turns).
 
 ## `c.exec()`
 
@@ -56,7 +56,7 @@ The `BackgroundHandle` has this method:
   Stops the process and its children, as the end of the attempt does.
 </Property>
 
-For more information about asserting on a command, see [Assertions](/evals/checks).
+For more information about asserting on a command, see [Assertions](/write/assertions).
 
 ## `c.serve()`
 
@@ -128,7 +128,7 @@ The `Capture` echoes the resolved `name`, `port`, `path`, and `viewport`, and ha
   The PNG's `artifacts/<name>.png` path under the attempt directory, digest, and size.
 </Property>
 
-For more information about the cascaded defaults, see [the `capture` option](/reference/options#capture). For more information about serving and capturing an app, see [Apps](/evals/servers).
+For more information about the cascaded defaults, see [the `capture` option](/reference/options#capture). For more information about serving and capturing an app, see [Apps](/write/apps).
 
 ## `c.judge()`
 
@@ -236,7 +236,7 @@ A `JudgeFailure` has `verdict` `'error'` and `score` `null`.
   The provider's message on a `JudgeFailure`, after any retries.
 </Property>
 
-For more information about the cascaded defaults, see [the `judge` option](/reference/options#judge). For more information about scoring, see [Judge agent work](/evals/judges).
+For more information about the cascaded defaults, see [the `judge` option](/reference/options#judge). For more information about scoring, see [Judge agent work](/write/judgments).
 
 ## `c.readFile()`
 

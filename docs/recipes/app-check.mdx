@@ -5,7 +5,7 @@ description: "See whether the app the harness built renders what you asked for."
 
 A file assertion tells you the harness wrote a page. It can't tell you the page renders. You start the app the harness built, capture one page, and ask the judge what the picture shows. For a runnable project that captures a page after a model drives it, see [`with-capture-journey`](https://github.com/invertase/reeval/tree/main/examples/with-capture-journey).
 
-The example uses the `nextApp` environment, whose workspace holds a Next.js app on the Vercel AI SDK with `build` and `start` scripts. For more information about putting an app in the workspace, see [Workspaces](/environments/workspaces).
+The example uses the `nextApp` environment, whose workspace holds a Next.js app on the Vercel AI SDK with `build` and `start` scripts. For more information about putting an app in the workspace, see [Workspaces](/environments/repositories).
 
 ## Start, capture, and judge the app
 
@@ -40,7 +40,7 @@ Start the built app with `c.serve`. In the `evals/chat.eval.ts` file, add the se
 +    const app = await c.serve('npm start')
 ```
 
-`c.serve` runs the command in the background, allocates a free port, and sets it as `PORT`. `next start` listens on `PORT`, so the app listens where reeval expects it. The attempt stops the server when the body finishes. For more information about `c.serve` and background commands, see [Apps](/evals/servers).
+`c.serve` runs the command in the background, allocates a free port, and sets it as `PORT`. `next start` listens on `PORT`, so the app listens where reeval expects it. The attempt stops the server when the body finishes. For more information about `c.serve` and background commands, see [Apps](/write/apps).
 
 </Step>
 <Step title="Capture and judge it">
@@ -56,7 +56,7 @@ Capture the page and send the picture to the judge. In the `evals/chat.eval.ts` 
 
 `c.capture` polls the port until the server answers, opens the `/chat` path in a headless browser on your machine, and saves the `artifacts/chat.png` file in the attempt record. `wait: 'idle'` waits until the page has at most two network requests in flight for 500 ms before taking the shot.
 
-`artifacts: [shot]` sends that picture to the judge as an image. Ask about facts in the picture, such as an input or a button, not whether the page looks good. For more information about sending captures to the judge, see [Apps](/evals/servers#judge-a-capture). For more information about the judge's model, threshold, and key, see [Judgments](/evals/judges).
+`artifacts: [shot]` sends that picture to the judge as an image. Ask about facts in the picture, such as an input or a button, not whether the page looks good. For more information about sending captures to the judge, see [Apps](/write/apps#judge-a-capture). For more information about the judge's model, threshold, and key, see [Judgments](/write/judgments).
 
 </Step>
 <Step title="Read the outcome">
@@ -86,4 +86,4 @@ A score below the threshold fails the `renders` assertion, and the block prints 
 
 ## Next
 
-For more information about driving the page before the capture, see [Apps](/evals/servers#capture-a-page).
+For more information about driving the page before the capture, see [Apps](/write/apps#capture-a-page).
