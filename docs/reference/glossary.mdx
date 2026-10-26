@@ -33,11 +33,11 @@ The baseline is a comparison's environment without the change, and each variant 
 
 ## Cell
 
-A cell is one agent, one environment, and one sandbox of an evaluation. In a comparison, the baseline and each variant are separate cells. For more information about a cell, see [Configuration](/core-concepts#configuration).
+A cell is one agent, one environment, and one `sandbox` option of an evaluation, and each of its attempts gets a fresh sandbox. In a comparison, the baseline and each variant are separate cells. For more information about a cell, see [Configuration](/core-concepts#configuration).
 
 ## Comparison
 
-A comparison runs its baseline and each variant as separate cells. It measures a variant against the baseline only when the cells share an agent and sandbox, and reports `helped`, `made it worse`, or `can't tell yet`. For more information about a comparison, see [Compare setups](/results/compare/lift).
+A comparison runs its baseline and each variant as separate cells. It measures a variant against the baseline only when the cells share an agent and `sandbox` option, and reports `helped`, `made it worse`, or `can't tell yet`. For more information about a comparison, see [Compare setups](/results/compare/lift).
 
 ## Environment
 
@@ -53,7 +53,7 @@ A harness is the coding agent's program, such as Claude Code or Codex, and with 
 
 ## Insights
 
-Insights are what an analysis model says the agent did and why, not only whether it passed. For more information about insights, see [Analysis](/results/analyze#read-insights-after-a-run).
+Insights are what an analysis model says the agent did and why, not only whether it passed. For more information about insights, see [Analysis](/results/analyze#read-insights).
 
 ## Judgment
 
@@ -61,7 +61,7 @@ A judgment is an LLM verdict from `c.judge()` on a yes or no question about the 
 
 ## Lift
 
-Lift is a variant against the baseline: the difference in pass rate on the same agent and sandbox. For more information about lift, see [How reeval decides a change helped](/results/compare/statistics).
+Lift is a variant against the baseline: the difference in pass rate on the same agent and `sandbox` option. For more information about lift, see [How reeval decides a change helped](/results/compare/statistics).
 
 ## Measures
 
