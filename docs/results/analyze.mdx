@@ -5,13 +5,11 @@ description: "Explain a run's results with an analysis model."
 
 Set an analysis model when you want a language model to explain a run. Insights print at the end of `reeval run`. `reeval analyze` writes a fuller analysis of one run.
 
-For more information about setting up a project, see [Quick start](/quickstart).
-
 For more information about what insights and Remarks are, see [Analysis](/reference/glossary#analysis).
 
 ## Set an analysis model
 
-In the `reeval.config.ts` file, set `analysis.model` to a language model. `reeval init` writes this value. An evaluation model scores questions as yes or no, so `reeval analyze` refuses it.
+In the `reeval.config.ts` file, set `analysis.model` to a language model. `reeval init` writes this value. reeval refuses an evaluation model, which only scores yes-or-no questions.
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
@@ -36,13 +34,7 @@ For more information about other model prefixes, see [`AI_GATEWAY_API_KEY`](/ref
 When the key is missing, the run keeps its outcome and prints this line:
 
 ```text
-insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY in .env.local, or analysis: { insights: false }
-```
-
-When you do not set `analysis.model`, the run prints this line under the tally:
-
-```text
-Set analysis.model in reeval.config.ts for answers to what each eval asks.
+insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY, or analysis: { insights: false }
 ```
 
 For more information about the other `analysis` fields, see [the `analysis` option](/reference/options#analysis).
@@ -59,7 +51,7 @@ After the attempts finish, the analysis model's answer is the line under the eva
 
 ## Read insights
 
-Insights are what the agent did and why. A headline prints above the tally, and Remarks print under it. Your sentences and counts can differ.
+Insights are what the agent did and why. A sentence prints under a comparison row or a failure, and a headline prints above the tally. Your sentences and counts can differ.
 
 The block uses this format:
 
@@ -76,13 +68,13 @@ This output comes from the scripted analysis model in [`with-analysis`](https://
 
 reeval fixes the outcome and exit code before the insights print.
 
-For more information about the outcome words and the tables, see [Output](/results/output).
+For more information about the outcome words, the tables, and the `Remarks:` that can follow the tally, see [Read the results summary](/results/output).
 
-Set `analysis.insights` to `false` to skip insights on every run.
+Set `analysis.insights` to `false` to skip insights on every run, or pass `--no-insights` to skip them on one.
 
 ## Analyze a run
 
-`reeval analyze` makes one language model call over a digest of the most recent run's facts. When a recorded run on an ancestor commit exists, the digest includes that run.
+`reeval analyze` makes one language model call over a digest of the most recent run's facts. When a recorded run on an ancestor commit exists, the digest includes that run. To analyze another run, pass its id, and to choose the run it compares with, pass `--vs`.
 
 In the `reeval.config.ts` file, set `analysis.instructions` to the question you want `reeval analyze` to answer:
 
