@@ -63,5 +63,5 @@ Match the message to a fix:
 | Symptom | Check | Next action |
 |---|---|---|
 | `MCP server releases didn't answer initialize within 60s` | The stdio command never answered `initialize`. The attempt stops. | Run the command in the sandbox and read why it exits. |
-| `MCP server releases took 4s to start.` | A stdio server took at least 2 seconds to answer `initialize`. | Install the package in the image. For more information about install layers, see [Add install layers](/integrations/sandboxes/toolchains#add-install-layers). |
+| `MCP server releases took 4s to start.` | A stdio server took at least 2 seconds to answer `initialize`. | Install the package in the image. For more information about install layers, see [Add install layers](/environments/toolchains#add-install-layers). |
 | `expected MCP calls matching releases/latest_version, got none` | The transcript has no matching MCP call. | Pass the server name from `mcp` and the tool name the server advertises. |

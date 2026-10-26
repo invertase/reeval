@@ -18,7 +18,7 @@ export default defineConfig({
 
 Every option is optional. `podman()` takes the same options; see [Podman sandbox](/integrations/sandboxes/podman). For more information about the `sandbox` option, see [Choose a sandbox](/integrations/sandboxes).
 
-A recipe names the image the container starts from. `docker()` takes at most one of `image`, `from`, and `dockerfile`; without one, the container runs reeval's own sandbox image for your harness. For more information, see [Bake the tools](/integrations/sandboxes/toolchains).
+A recipe names the image the container starts from. `docker()` takes at most one of `image`, `from`, and `dockerfile`; without one, the container runs reeval's own sandbox image for your harness. For more information, see [Bake the tools](/environments/toolchains).
 
 Each limit applies to one container. reeval passes the limits to `docker run` as `--memory`, `--memory-swap`, `--cpus`, and `--pids-limit`.
 

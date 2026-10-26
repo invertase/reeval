@@ -44,7 +44,7 @@
     "/evals/statistics": "/results/compare/statistics",
     "/results/analysis": "/results/analyze",
     "/sandboxes": "/integrations/sandboxes",
-    "/sandboxes/toolchains": "/integrations/sandboxes/toolchains",
+    "/sandboxes/toolchains": "/environments/toolchains",
     "/sandboxes/docker": "/integrations/sandboxes/docker",
     "/sandboxes/podman": "/integrations/sandboxes/podman",
     "/harnesses/cursor": "/integrations/agents/cursor",
@@ -58,7 +58,8 @@
     "/gateways/direct": "/integrations/gateways/direct",
     "/gateways/vercel": "/integrations/gateways/vercel",
     "/gateways/openrouter": "/integrations/gateways/openrouter",
-    "/gateways/vertex": "/integrations/gateways/vertex"
+    "/gateways/vertex": "/integrations/gateways/vertex",
+    "/integrations/sandboxes/toolchains": "/environments/toolchains"
   },
   "sidebar": [
     {
@@ -86,10 +87,6 @@
           "href": "/write"
         },
         {
-          "title": "Turns",
-          "href": "/write/turns"
-        },
-        {
           "title": "Assertions",
           "href": "/write/assertions"
         },
@@ -102,16 +99,20 @@
           "href": "/write/questions"
         },
         {
-          "title": "Groups",
-          "href": "/write/groups"
+          "title": "Turns",
+          "href": "/write/turns"
+        },
+        {
+          "title": "Apps",
+          "href": "/write/apps"
         },
         {
           "title": "Cases",
           "href": "/write/cases"
         },
         {
-          "title": "Apps",
-          "href": "/write/apps"
+          "title": "Groups",
+          "href": "/write/groups"
         }
       ]
     },
@@ -140,28 +141,32 @@
           "href": "/environments"
         },
         {
-          "title": "Repositories",
-          "href": "/environments/repositories"
-        },
-        {
           "title": "Files",
           "href": "/environments/files"
         },
         {
-          "title": "Rules",
-          "href": "/environments/rules"
-        },
-        {
-          "title": "Setup commands",
-          "href": "/environments/setup"
+          "title": "Repositories",
+          "href": "/environments/repositories"
         },
         {
           "title": "Skills",
           "href": "/environments/skills"
         },
         {
+          "title": "Rules",
+          "href": "/environments/rules"
+        },
+        {
           "title": "MCP servers",
           "href": "/environments/mcp"
+        },
+        {
+          "title": "Toolchains",
+          "href": "/environments/toolchains"
+        },
+        {
+          "title": "Setup commands",
+          "href": "/environments/setup"
         },
         {
           "title": "Secrets",
@@ -198,6 +203,10 @@
       "group": "Read the results",
       "pages": [
         {
+          "title": "Output",
+          "href": "/results/output"
+        },
+        {
           "title": "Measure",
           "href": "/results/measure"
         },
@@ -223,16 +232,12 @@
           "href": "/results/analyze"
         },
         {
-          "title": "Output",
-          "href": "/results/output"
+          "title": "Studio",
+          "href": "/results/studio"
         },
         {
           "title": "Debugging",
           "href": "/results/debugging"
-        },
-        {
-          "title": "Studio",
-          "href": "/results/studio"
         },
         {
           "title": "Queries",
@@ -256,16 +261,20 @@
           "href": "/recipes/mcp-comparison"
         },
         {
-          "title": "Test recommendations",
-          "href": "/recipes/recommendation"
-        },
-        {
           "title": "Test an SDK",
           "href": "/recipes/sdk"
         },
         {
           "title": "Test a CLI",
           "href": "/recipes/cli"
+        },
+        {
+          "title": "Test recommendations",
+          "href": "/recipes/recommendation"
+        },
+        {
+          "title": "Judge an app",
+          "href": "/recipes/app-check"
         },
         {
           "title": "Compare harnesses",
@@ -278,10 +287,6 @@
         {
           "title": "Track past runs",
           "href": "/recipes/results-over-time"
-        },
-        {
-          "title": "Judge an app",
-          "href": "/recipes/app-check"
         }
       ]
     },
@@ -354,10 +359,6 @@
               "href": "/integrations/sandboxes"
             },
             {
-              "title": "Toolchains",
-              "href": "/integrations/sandboxes/toolchains"
-            },
-            {
               "title": "Docker",
               "href": "/integrations/sandboxes/docker"
             },
@@ -375,22 +376,6 @@
           "group": "Reference",
           "pages": [
             {
-              "title": "CLI",
-              "href": "/reference/cli"
-            },
-            {
-              "title": "Configuration",
-              "href": "/reference/config"
-            },
-            {
-              "title": "Options",
-              "href": "/reference/options"
-            },
-            {
-              "title": "Profiles",
-              "href": "/reference/profiles"
-            },
-            {
               "title": "Authoring API",
               "href": "/reference/api"
             },
@@ -399,12 +384,32 @@
               "href": "/reference/context"
             },
             {
+              "title": "Matchers",
+              "href": "/reference/matchers"
+            },
+            {
+              "title": "Options",
+              "href": "/reference/options"
+            },
+            {
               "title": "Environment helpers",
               "href": "/reference/environment"
             },
             {
-              "title": "Matchers",
-              "href": "/reference/matchers"
+              "title": "Configuration",
+              "href": "/reference/config"
+            },
+            {
+              "title": "Profiles",
+              "href": "/reference/profiles"
+            },
+            {
+              "title": "CLI",
+              "href": "/reference/cli"
+            },
+            {
+              "title": "Environment variables",
+              "href": "/reference/env-vars"
             },
             {
               "title": "Run record",
@@ -417,10 +422,6 @@
             {
               "title": "History MCP server",
               "href": "/reference/mcp-tools"
-            },
-            {
-              "title": "Environment variables",
-              "href": "/reference/env-vars"
             },
             {
               "title": "Glossary",
