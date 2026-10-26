@@ -204,9 +204,8 @@ export default defineConfig({
   })
 
   test("attempts whose checks failed are left out of the pairs, a verdict the eval didn't assert or not", async () => {
-    for (const judged of [false, true]) {
-      const p = await project('questions-failed-checks', {
-        'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+    const p = await project('questions-failed-checks', {
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
@@ -217,25 +216,30 @@ export default defineConfig({
   analysis: { model: fakeAnalysis({ vote: () => 'A' }) },
 })
 `,
-        ...asks(PAIRWISE),
-        'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
+      ...asks(PAIRWISE),
+      'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-evaluate('asks', { compare: { baseline: base, variants: [skilled] }, questions: ${PAIRWISE} }, async (c) => {
-  await c.send('go')
-  ${judged ? `await c.judge('Is it nice?')` : ''}
-  await expect(c.exec('exit 1'), 'tests pass').toSucceed()
-})
+for (const judged of [false, true]) {
+  evaluate(judged ? 'judged' : 'unjudged', { compare: { baseline: base, variants: [skilled] }, questions: ${PAIRWISE} }, async (c) => {
+    await c.send('go')
+    if (judged) await c.judge('Is it nice?')
+    await expect(c.exec('exit 1'), 'tests pass').toSucceed()
+  })
+}
 `,
-      })
-      const r = await runCli(p.dir)
-      assert.equal(r.code, 1, r.stdout + r.stderr)
-      const [e] = readRun(p.dir).evals
-      assert.deepEqual(
-        e?.answers?.map((a) => [a.question, a.votes.length]),
-        [['Which is cleaner?', 0]],
-        `judged: ${judged}`,
-      )
-    }
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.deepEqual(
+      readRun(p.dir).evals.map((e) => [
+        e.name,
+        e.answers?.map((a) => [a.question, a.votes.length]),
+      ]),
+      [
+        ['unjudged', [['Which is cleaner?', 0]]],
+        ['judged', [['Which is cleaner?', 0]]],
+      ],
+    )
   })
 
   test('a vote reason is recorded, shown and left out of pass or fail', async () => {
@@ -367,15 +371,23 @@ export default defineConfig({
 `
   const extra = `analysis: { model: fakeAnalysis({ vote: (p) => (p.a.diff?.includes('extra.txt') ? 'A' : p.b.diff?.includes('extra.txt') ? 'B' : 'tie') }) },`
 
-  test('votes are recorded after the attempts, and the outcome and exit code are the checks', async () => {
+  test('votes are recorded after the attempts, and the outcome and exit code are the checks; across: environment records only environment pairs', async () => {
     const asked = await project('questions-votes', {
       'reeval.config.ts': threeHarnesses(extra),
-      ...asks(`[{ question: 'Which is cleaner?', across: ['environment', 'harness'] }]`),
+      ...asks(
+        `[{ question: 'Which is cleaner?', across: ['environment', 'harness'] }, { question: 'Which is tidier?', across: 'environment' }]`,
+      ),
     })
     const plain = await project('questions-votes-none', {
       'reeval.config.ts': threeHarnesses(extra),
       ...asks(`undefined`),
     })
+    const dry = await runCli(asked.dir, ['run', '--dry-run'])
+    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+    assert.match(
+      dry.stdout,
+      /^ {2}question 2\/2 {2}Which is tidier\? · after the run · shows task, diff · environment · 6 pairs · fake$/m,
+    )
     const r = await runCli(asked.dir)
     const without = await runCli(plain.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
@@ -415,6 +427,14 @@ export default defineConfig({
         { cut: 'across', name: 'two', wins: 8, n: 8 },
       ],
     )
+    const [environmentOnly] = e.answers?.slice(1) ?? []
+    assert.equal(environmentOnly?.votes.length, 8)
+    assert.ok(environmentOnly?.votes.every((v) => v.cut === 'within'))
+    assert.ok(!environmentOnly?.rates.some((x) => x.cut === 'across'))
+    assert.match(
+      r.stdout,
+      /^ {2}question {2}Which is tidier\?\n {4}base {11}won 2 of 4\n {4}skilled {8}won 2 of 4$/m,
+    )
     const wins =
       /^ {2}question {2}Which is cleaner\?\n {4}base \(within\) {5}won 2 of 4\n {4}skilled \(within\) {2}won 2 of 4\n {4}one \(across\) {6}won 0 of 8\n {4}two \(across\) {6}won 8 of 8$/m
     assert.match(r.stdout, wins)
@@ -448,30 +468,6 @@ export default defineConfig({
     const none = readRun(asked.dir, { history: 'evals/.history', back: 1 })
     assert.equal(none.run.runId, run.run.runId)
     assert.equal(none.evals[0]?.answers?.[0]?.input, undefined)
-  })
-
-  test('a question with across: environment records only environment pairs', async () => {
-    const p = await project('questions-across-environment', {
-      'reeval.config.ts': threeHarnesses(extra),
-      ...asks(`[{ question: 'Which is cleaner?', across: 'environment' }]`),
-    })
-    const dry = await runCli(p.dir, ['run', '--dry-run'])
-    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
-    assert.match(
-      dry.stdout,
-      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · shows task, diff · environment · 6 pairs · fake$/m,
-    )
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 1, r.stdout + r.stderr)
-    const [answer] = readRun(p.dir).evals[0]?.answers ?? []
-    assert.ok(answer)
-    assert.equal(answer.votes.length, 8)
-    assert.ok(answer.votes.every((v) => v.cut === 'within'))
-    assert.ok(!answer.rates.some((x) => x.cut === 'across'))
-    assert.match(
-      r.stdout,
-      /^ {2}question {2}Which is cleaner\?\n {4}base {11}won 2 of 4\n {4}skilled {8}won 2 of 4$/m,
-    )
   })
 
   // Each attempt that ran to a pass or a fail is asked once as it ends: bad's failed attempts too.
@@ -566,15 +562,34 @@ export default defineConfig({
       assert.equal(a.answers?.[0]?.error, 'the model is over quota')
       assert.equal(a.answers?.[0]?.text, '')
     }
-    const text = await project('questions-attempts-answers', {
+  })
+
+  // One run: a free-text question the model answers, and one whose state.checks names a command
+  // no attempt ran, which is answered with that error before any model call.
+  test('free-text answers are shown, and a per-attempt question naming a command no attempt ran is warned about once', async () => {
+    const p = await project('questions-attempts-answers', {
       'reeval.config.ts': threeHarnesses(
         perAttempt(`(q) => \`saw \${q.attempt.diff?.includes('ok.txt') ? 'ok' : 'no'}.txt\``),
       ),
-      ...asks(`['What did it write?']`),
+      ...asks(
+        `['What did it write?', { question: 'What did it run?', state: { checks: ['npm tset'] } }]`,
+      ),
     })
-    const t = await runCli(text.dir)
-    assert.equal(t.code, 1, t.stdout + t.stderr)
-    assert.match(t.stdout, /^ {2}question {2}What did it write\?\n {4}\S+ +saw (ok|no)\.txt$/m)
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /^ {2}question {2}What did it write\?\n {4}\S+ +saw (ok|no)\.txt$/m)
+    const error =
+      'question "What did it run?" state.checks names a command no attempt ran: "npm tset"'
+    const notices = r.stdout.split('\n').filter((l) => l.includes('names a command no attempt ran'))
+    assert.deepEqual(notices, [
+      `${error} on evals/q.eval.ts › asks, so each attempt's answer is that error. Outcomes are unchanged.`,
+      `    12 of 12 not answered: ${error}`,
+    ])
+    for (const a of readRun(p.dir).run.evals[0]?.attempts ?? []) {
+      const answer = (q: string) => a.answers?.find((x) => x.question === q)
+      assert.match(answer('What did it write?')?.text ?? '', /^saw (ok|no)\.txt$/)
+      assert.equal(answer('What did it run?')?.error, error)
+    }
   })
 
   test("an attempt that passed or failed is asked; an infra error's isn't", async () => {
@@ -614,25 +629,6 @@ evaluate('broken agent', { questions, harness: fakeHarness({ failWith: 'agent CL
         ['broken agent', 'infra_error', undefined],
       ],
     )
-  })
-
-  test('a per-attempt question naming a command no attempt ran is warned about once', async () => {
-    const p = await project('questions-attempts-unshown', {
-      'reeval.config.ts': threeHarnesses(perAttempt(`'asked'`)),
-      ...asks(`[{ question: 'What did it run?', state: { checks: ['npm tset'] } }]`),
-    })
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 1, r.stdout + r.stderr)
-    const error =
-      'question "What did it run?" state.checks names a command no attempt ran: "npm tset"'
-    const notices = r.stdout.split('\n').filter((l) => l.includes('names a command no attempt ran'))
-    assert.deepEqual(notices, [
-      `${error} on evals/q.eval.ts › asks, so each attempt's answer is that error. Outcomes are unchanged.`,
-      `    12 of 12 not answered: ${error}`,
-    ])
-    for (const a of readRun(p.dir).run.evals[0]?.attempts ?? []) {
-      assert.equal(a.answers?.[0]?.error, error)
-    }
   })
 
   test('Ctrl-C while questions are answered stops the run and records each unanswered one', {
