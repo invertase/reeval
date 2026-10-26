@@ -62,6 +62,16 @@ The `requests.ndjson` file records one JSON object for each request the egress g
 
 For more information, see [the studio's **Debug** tab](/results/studio).
 
+## Read the workspace and artifacts
+
+The workspace goes when the sandbox stops. reeval keeps what the agent left in it in the attempt's `.reeval/runs/<run id>/<evaluation>/<cell>/<n>/` directory:
+
+| File | Holds |
+| :--- | :--- |
+| `diff.patch` | The workspace diff, from the snapshot after setup to the end of the attempt |
+| `artifacts/<name>.png` | Screenshots from `c.capture()` |
+| `judge-input.json` | What each `c.judge()` call received |
+
 ## Read a transcript
 
 The `transcript.jsonl` file lists every message and tool call of an attempt, in order. reeval writes that file for an attempt with a turn, at the `.reeval/runs/<run id>/<evaluation>/<cell>/<n>/transcript.jsonl` path.
