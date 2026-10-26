@@ -16,6 +16,7 @@ import {
   type EndpointMatch,
   onEndpoint,
   type RequestTransformation,
+  setsCredential,
 } from './rules.ts'
 import {
   bodySubstituter,
@@ -1241,7 +1242,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     delete headers.connection
     const readsEffort =
       !!readsModel ||
-      credentialValues(rules, target.host).length > 0 ||
+      setsCredential(rules, target.host) ||
       substitutes(allSubs(), target.host) ||
       hostAllowed(tokenHosts, target.host)
     const body = requestBody(req as Readable, headers, own, t, readsEffort)

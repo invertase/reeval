@@ -2171,6 +2171,32 @@ describe('the model a response names, on a modelResponses endpoint', () => {
     }
   })
 
+  test('a bearer the gateway adds, with nothing the sandbox sent to match, has its call read', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, { onEvent: (e) => events.push(e) })
+    try {
+      gw.proxy.addTransformations([
+        {
+          match: { host: HOST, path: { exact: '/v1/generate' } },
+          transform: { headers: { authorization: 'Bearer gateway-minted-token-value' } },
+        },
+      ])
+      const r = await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path: '/v1/generate',
+        body: effortBody,
+      })
+      assert.equal(r.status, 200)
+      const e = await requestEvent(events)
+      assert.equal(
+        e?.type === 'request' && e.requestEffort,
+        'providerOptions.google.thinkingConfig.thinkingLevel=low reasoning_effort=high',
+      )
+    } finally {
+      gw.close()
+    }
+  })
+
   test('twin: off the endpoints, the response is neither read nor its encoding changed', async () => {
     const events: EgressEvent[] = []
     const gw = await startProxy(undefined, {
