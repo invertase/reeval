@@ -79,11 +79,24 @@ export type EgressProxyOptions = {
    * `responseCost`.
    */
   modelResponses?: readonly EndpointMatch[]
+  /**
+   * Requests the gateway answers itself, never sending them upstream: e.g. a token exchange whose
+   * answer is a placeholder the gateway then swaps for a real token on the model calls.
+   */
+  localResponses?: readonly LocalResponse[]
   /** Every DNS decision and, once each is done, every request and tunnel: for debug logs. */
   onEvent?: (event: EgressEvent) => void
 }
 
 type Headers = Record<string, string | string[]>
+
+/** A request the gateway answers itself, with this status, these headers and this body. */
+export type LocalResponse = {
+  match: EndpointMatch
+  status: number
+  headers?: Record<string, string>
+  body: string
+}
 
 /** One request through the gateway, or one tunnel it passed through without reading. */
 export type EgressRequestEvent = {
@@ -276,6 +289,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const allSubs = () => (tokens.length ? [...subs, ...tokens] : subs)
   const derived = options.derivedTokens ?? []
   const tokenHosts = derived.flatMap((d) => [d.endpoint.host, ...d.hosts])
+  const locals = options.localResponses ?? []
+  const localHosts = locals.map((l) => l.match.host)
   let policyCheck = createPolicyCheck(options.policy, options)
   const check = async (host: string) => {
     const verdict = await policyCheck(host)
@@ -445,7 +460,12 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       }
       contact(socket, host, port)
       const target = { host, port, address: verdict.address }
-      if (decrypts(rules, host) || substitutes(allSubs(), host) || hostAllowed(tokenHosts, host)) {
+      if (
+        decrypts(rules, host) ||
+        substitutes(allSubs(), host) ||
+        hostAllowed(tokenHosts, host) ||
+        hostAllowed(localHosts, host)
+      ) {
         log(`reeval:egress CONNECT ${host}:${port} decrypt`)
         socket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
         if (head.length) socket.unshift(head)
@@ -1168,6 +1188,16 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       return res
         .writeHead(refused.status, { 'content-type': 'text/plain' })
         .end(`${refused.reason}\n`)
+    }
+    const local = locals.find((l) =>
+      onEndpoint([l.match], { host: target.host, method, path: asked, headers: {} }),
+    )
+    if (local) {
+      log(`reeval:egress ${method} ${url} answered by the gateway (${local.status})`)
+      req.resume()
+      const out = { 'content-type': 'application/json', ...local.headers }
+      t.set({ status: local.status, responseHeaders: out })
+      return res.writeHead(local.status, out).end(local.body)
     }
     delete headers.upgrade
     delete headers.connection

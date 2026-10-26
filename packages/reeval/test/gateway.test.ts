@@ -21,6 +21,7 @@ import {
   vercelCredentialProblem,
 } from '../src/gateway/vercel.ts'
 import {
+  SANDBOX_ACCESS_TOKEN,
   vertexDecisionModel,
   vertexHost,
   vertexLanguageModel,
@@ -796,6 +797,75 @@ describe('Vertex AI routes', () => {
     )
     assert.ok(rules.every((r) => r.transform.headers?.authorization === 'Bearer ya29.t'))
     assert.equal(brokeringFor(pinned(claude, 'vertex'), settings)?.credential, agent.credential)
+  })
+
+  test('the Gemini CLIs on Vertex read a made-up service account and get the token on their model calls', async () => {
+    const global = vertexSettings({ project: 'reeval-512515' }, {})
+    const onGlobal = (h: HarnessDescriptor) =>
+      agentFor({ ...h, gateway: 'vertex' } as AgentHarnessDescriptor, global)
+    const host = 'aiplatform.googleapis.com'
+    const google = (v: string) =>
+      `/${v}/projects/reeval-512515/locations/global/publishers/google/models`
+    for (const kind of ['antigravity', 'goose', 'pi', 'opencode'] as const) {
+      const agent = onGlobal({ kind, model: 'gemini-3.8-flash' } as never)
+      assert.equal(agent.credential, 'Google Cloud credentials', kind)
+      assert.deepEqual(agentAuth(agent, {}), {}, `${kind}: no key from the environment`)
+      assert.ok(agent.hosts?.includes(host) && agent.hosts.includes('oauth2.googleapis.com'), kind)
+      const on = (method: string, h: string, path: string) =>
+        onEndpoint(agent.endpoints, { method, host: h, path, headers: {} })
+      assert.ok(on('POST', host, `${google('v1')}/gemini-3.8-flash:streamGenerateContent?alt=sse`))
+      assert.ok(on('POST', host, `${google('v1beta1')}/gemini-3.8-flash:generateContent`))
+      assert.ok(!on('POST', host, `${google('v1beta')}/gemini-3.8-flash:generateContent`))
+      assert.ok(
+        !on(
+          'POST',
+          host,
+          `${google('v1')}/claude-x@default:rawPredict`.replace('google', 'anthropic'),
+        ),
+        `${kind}: no token on another publisher's calls`,
+      )
+      assert.equal(
+        agent.servedModel?.({
+          host,
+          path: `${google('v1')}/gemini-3.8-flash:streamGenerateContent`,
+        } as never),
+        'gemini-3.8-flash',
+      )
+      const adc = JSON.parse(agent.adc?.content ?? '{}')
+      assert.equal(adc.type, 'service_account', kind)
+      assert.equal(adc.project_id, 'reeval-512515', kind)
+      assert.equal(adc.token_uri, 'https://oauth2.googleapis.com/token', kind)
+      assert.match(adc.private_key, /^-----BEGIN PRIVATE KEY-----/)
+      assert.deepEqual(
+        { project: agent.adc?.project, location: agent.adc?.location },
+        { project: 'reeval-512515', location: 'global' },
+      )
+      const token = agent.localResponses?.find((r) => r.match.host === 'oauth2.googleapis.com')
+      assert.equal(JSON.parse(token?.body ?? '{}').access_token, SANDBOX_ACCESS_TOKEN, kind)
+      assert.deepEqual(
+        brokeringFor({ kind, model: 'gemini-3.8-flash', gateway: 'vertex' } as never, global)
+          ?.localResponses,
+        agent.localResponses,
+      )
+      const vertex = { project: 'reeval-512515', location: 'global', credentialsFile: '/r/a.json' }
+      const adapter = await agent.adapter({
+        auth: agentAuth(agent, {}),
+        descriptor: { kind, model: 'gemini-3.8-flash' } as never,
+        model: agent.modelId?.('gemini-3.8-flash') ?? 'gemini-3.8-flash',
+        plugins: [],
+        vertex,
+      })
+      assert.equal((adapter as { harnessId: string }).harnessId, kind)
+    }
+    assert.equal(
+      onGlobal({ kind: 'pi', model: 'm' } as never).modelId?.('google/gemini-3.8-flash'),
+      'gemini-3.8-flash',
+    )
+    const opencode = onGlobal({ kind: 'opencode', model: 'm' } as never)
+    assert.equal(opencode.modelId?.('google/gemini-3.8-flash'), 'google-vertex/gemini-3.8-flash')
+    assert.equal(opencode.modelId?.('gemini-3.8-flash'), 'google-vertex/gemini-3.8-flash')
+    const agy = onGlobal({ kind: 'antigravity', model: 'm' } as never)
+    assert.ok(agy.localResponses?.some((r) => r.match.host === 'www.googleapis.com'))
   })
 
   test('the gateway serves Claude Code on Vertex, not the agents it has no route for', () => {

@@ -56,7 +56,7 @@ Harnesses (`reeval/harness`), each with a required `model`; a list runs each as 
 | `cursor({ model, params?, effort? })` | `CURSOR_API_KEY` | Cursor's agent through the Cursor SDK. `params` such as `{ fast: 'true' }` pick the variant; `effort` maps onto the parameter `Cursor.models.list()` names for that model |
 | `claudeCode({ model, effort? })` | `ANTHROPIC_API_KEY` | `effort` is the Agent SDK's `/effort` |
 | `antigravity({ model, effort? })` | `GEMINI_API_KEY` (a Gemini API key) | e.g. `gemini-3.8-flash-medium`; `effort` is `agy --effort` |
-| `opencode({ model, effort? })` | That provider's key, e.g. `ANTHROPIC_API_KEY` | OpenCode 2; the model is `<provider>/<model>`, e.g. `google/gemini-3.8-flash`. `amazon-bedrock/…` takes `AWS_BEARER_TOKEN_BEDROCK` and an optional `AWS_REGION`; Vertex, Azure, Copilot and local providers are refused at plan time. Web search via Exa, whose host it allows; it also reads `.claude/skills` and `.agents/skills` |
+| `opencode({ model, effort? })` | That provider's key, e.g. `ANTHROPIC_API_KEY` | OpenCode 2; the model is `<provider>/<model>`, e.g. `google/gemini-3.8-flash`. `amazon-bedrock/…` takes `AWS_BEARER_TOKEN_BEDROCK` and an optional `AWS_REGION`; Vertex (on `direct()`; it runs through `vertex()`), Azure, Copilot and local providers are refused at plan time. Web search via Exa, whose host it allows; it also reads `.claude/skills` and `.agents/skills` |
 | `goose({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id, e.g. `gemini-3.8-flash`; `effort` is `GOOSE_THINKING_EFFORT`. Records no tokens: its ACP usage is the last model call only |
 | `pi({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id; `effort` is `--thinking` |
 | `codex({ model, effort? })` | `OPENAI_API_KEY` | An OpenAI model id, e.g. `gpt-5.6-luna`; `effort` is `model_reasoning_effort` |
@@ -86,8 +86,9 @@ Code, Codex, Goose, OpenCode, fx and Grok Build on Vercel AI Gateway with one `A
 `effort` on Goose, OpenCode or Grok Build, fall through to `direct()`), and
 everything else on its own key; the plan's hint says where each harness fell through. Pin one with
 the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. `vertex({ project })`
-(else `GOOGLE_CLOUD_PROJECT`) runs Claude Code on Vertex AI with no key: reeval mints a token from
-Application Default Credentials on the host and the egress gateway adds it. Claude ids work in
+(else `GOOGLE_CLOUD_PROJECT`) runs Claude Code, Antigravity, OpenCode, Goose and pi on Vertex AI
+with no key: reeval mints a token from Application Default Credentials on the host and the egress
+gateway adds it (OpenCode's Gemini model runs as `google-vertex/<id>`). Claude ids work in
 either form (`claude-haiku-4-5-20251001` is sent as Vertex's `claude-haiku-4-5@20251001`), so one
 string works through `[vertex(), direct()]`; `google/*` and `anthropic/*` judge and analysis models run there
 too. `reeval doctor --online` checks the token and the project's Vertex AI API. Default `[direct()]`:

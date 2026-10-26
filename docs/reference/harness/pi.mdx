@@ -83,6 +83,8 @@ pi doesn't run on [`vercel()`](/reference/gateway#vercel-ai-gateway). pi's route
 
 Nor on [`openrouter()`](/reference/gateway#openrouter): pi reaches a Gemini model there only through Chat Completions, which no run has checked behaves as it does on Gemini's API, so the plan resolves pi past it too.
 
+On [`vertex()`](/reference/gateway#vertex-ai), pi runs `--provider google-vertex` with `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION`, and no key: it reads a service account reeval writes for it, and the gateway adds an access token from your Application Default Credentials to its `POST /v1/…/publishers/google/models/<model>:streamGenerateContent` calls.
+
 ## Tokens
 
 | pi reports, per model call | The turn records |

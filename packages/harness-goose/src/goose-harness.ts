@@ -137,15 +137,39 @@ export type GooseHarnessSettings = {
    * Reasoning effort as `GOOSE_THINKING_EFFORT` (`off`, `low`, `medium`, `high`, `max`, …).
    */
   readonly effort?: string
+  /**
+   * Vertex AI instead of `provider`: Goose's `gcp_vertex_ai` provider on this project and
+   * region, reading the service-account file at `credentialsFile` in the sandbox. No key is read
+   * (`auth` may be empty); whoever runs the sandbox supplies the file and the token the calls
+   * carry.
+   */
+  readonly vertex?: GooseVertex
 }
 
+export type GooseVertex = {
+  readonly project: string
+  readonly location: string
+  readonly credentialsFile: string
+}
+
+/** Goose's provider for Vertex AI, which authenticates from Application Default Credentials. */
+export const GOOSE_VERTEX_PROVIDER_ID = 'gcp_vertex_ai'
+
 /** Goose's process env: quiet flags, the provider and model, and thinking effort when set. */
-export function gooseEnv(settings: Pick<GooseHarnessSettings, 'model' | 'effort' | 'provider'>) {
+export function gooseEnv(
+  settings: Pick<GooseHarnessSettings, 'model' | 'effort' | 'provider' | 'vertex'>,
+) {
+  const { vertex } = settings
   return {
     ...GOOSE_QUIET_ENV,
-    GOOSE_PROVIDER: (settings.provider ?? GEMINI_PROVIDER).id,
+    GOOSE_PROVIDER: vertex ? GOOSE_VERTEX_PROVIDER_ID : (settings.provider ?? GEMINI_PROVIDER).id,
     GOOSE_MODEL: settings.model,
     ...(settings.effort ? { GOOSE_THINKING_EFFORT: settings.effort } : {}),
+    // Set, if empty, on every provider: the bootstrap is keyed on these names, so the image's
+    // bootstrap serves Vertex AI too.
+    GCP_PROJECT_ID: vertex?.project ?? '',
+    GCP_LOCATION: vertex?.location ?? '',
+    GOOGLE_APPLICATION_CREDENTIALS: vertex?.credentialsFile ?? '',
   }
 }
 
@@ -160,7 +184,10 @@ export function gooseEnv(settings: Pick<GooseHarnessSettings, 'model' | 'effort'
 export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuiltinTools> {
   const provider = settings.provider ?? GEMINI_PROVIDER
   const credential = provider.credentialEnv
-  if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[credential]) {
+  if (
+    !isHarnessAuthenticationEnvironment(settings.auth) ||
+    (!settings.vertex && !settings.auth[credential])
+  ) {
     throw new Error(
       `Goose auth must be an environment object with ${credential} (${/^[AEIOU]/.test(provider.name) ? 'an' : 'a'} ${provider.name} key)`,
     )
@@ -186,7 +213,7 @@ export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuil
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[credential]
       const placeholder = sandboxEnv?.[credential]
-      if (!key || !placeholder) return []
+      if (settings.vertex || !key || !placeholder) return []
       return [
         createCredentialRequestTransformation({
           matchUrl: provider.baseUrl,
@@ -205,6 +232,7 @@ export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuil
     doStart: async (options) => {
       const sandbox = options.sandboxSession as { addRequestTransformations?: unknown }
       if (
+        !settings.vertex &&
         settings.requireCredentialBrokering &&
         typeof sandbox.addRequestTransformations !== 'function'
       ) {

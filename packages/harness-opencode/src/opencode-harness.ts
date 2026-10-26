@@ -19,7 +19,6 @@ import {
   OPENCODE_PNPM_WORKSPACE,
 } from './opencode-install.ts'
 import {
-  type OpenCodeProvider,
   openCodeProvider,
   providerEndpoints,
   providerTransformations,
@@ -171,7 +170,23 @@ export type OpenCodeHarnessSettings = {
    * `options.thinking` (Anthropic). Values are whatever that provider takes.
    */
   readonly effort?: string
+  /**
+   * Vertex AI instead of a key: OpenCode's `google-vertex` provider on this project and region,
+   * reading the service-account file at `credentialsFile` in the sandbox, for a
+   * `google-vertex/<model>` id. No key is read (`auth` may be empty); whoever runs the sandbox
+   * supplies the file and the token the calls carry.
+   */
+  readonly vertex?: OpenCodeVertex
 }
+
+export type OpenCodeVertex = {
+  readonly project: string
+  readonly location: string
+  readonly credentialsFile: string
+}
+
+/** OpenCode's provider for Vertex AI, which authenticates from Application Default Credentials. */
+export const OPENCODE_VERTEX_PROVIDER = 'google-vertex'
 
 /**
  * The requests OpenCode sends the model's provider's key on (see
@@ -191,14 +206,7 @@ export const openCodeEndpoints = (model: string, env: Record<string, string | un
  * (see {@link OpenCodeStreamTranslator}).
  */
 export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<OpenCodeBuiltinTools> {
-  const resolved = resolveOpenCodeProvider(settings.model, settings.vars ?? {})
-  if ('error' in resolved) throw new Error(resolved.error)
-  const { provider, vars } = resolved
-  if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[provider.env]) {
-    throw new Error(
-      `OpenCode auth must be an environment object with ${provider.env} (the ${provider.name} key for ${settings.model})`,
-    )
-  }
+  const route = settings.vertex ? vertexRoute(settings, settings.vertex) : keyRoute(settings)
   const acp = createACP({
     version: 'v1',
     harnessId: OPENCODE_HARNESS_ID,
@@ -213,7 +221,58 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
     executable: OPENCODE_GATE_EXECUTABLE,
     args: [],
     auth: settings.auth,
-    env: { ...openCodeEnv(settings), ...vars },
+    env: { ...openCodeEnv(settings), ...route.env },
+    ...(route.credentialBrokering
+      ? { credentialEnv: route.credentialEnv, credentialBrokering: route.credentialBrokering }
+      : {}),
+    modelMapping: { type: 'session-config-option', path: 'model' },
+    skillsDirectory: OPENCODE_HOME_SKILLS_DIR,
+  })
+  return {
+    ...acp,
+    doStart: async (options) => {
+      const sandbox = options.sandboxSession as { addRequestTransformations?: unknown }
+      if (
+        route.credentialEnv.length > 0 &&
+        settings.requireCredentialBrokering &&
+        typeof sandbox.addRequestTransformations !== 'function'
+      ) {
+        throw new Error(
+          `The sandbox can't broker ${route.credentialEnv.join(', ')} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
+        )
+      }
+      const session = await acp.doStart(options)
+      // After the bootstrap, which installs OpenCode's bin directory; the first turn runs it.
+      await writeGate(options.sandboxSession, options.abortSignal)
+      return translated(session, route, Object.keys(settings.mcpServers ?? {}))
+    },
+  }
+}
+
+/** Where OpenCode's model calls go, and the key (if any) the sandbox gets for them. */
+type Route = {
+  readonly id: string
+  readonly name: string
+  readonly env: Record<string, string>
+  readonly credentialEnv: string[]
+  readonly credentialBrokering?: Parameters<typeof createACP>[0]['credentialBrokering']
+  /** Why this route can't run a turn's model, or undefined when it can. */
+  readonly refuses: (model: string) => string | undefined
+}
+
+function keyRoute(settings: OpenCodeHarnessSettings): Route {
+  const resolved = resolveOpenCodeProvider(settings.model, settings.vars ?? {})
+  if ('error' in resolved) throw new Error(resolved.error)
+  const { provider, vars } = resolved
+  if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[provider.env]) {
+    throw new Error(
+      `OpenCode auth must be an environment object with ${provider.env} (the ${provider.name} key for ${settings.model})`,
+    )
+  }
+  return {
+    id: provider.id,
+    name: provider.name,
+    env: vars,
     credentialEnv: [provider.env],
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[provider.env]
@@ -225,26 +284,31 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
         ...(headers ? { headers } : {}),
       }).map(createCredentialRequestTransformation)
     },
-    modelMapping: { type: 'session-config-option', path: 'model' },
-    skillsDirectory: OPENCODE_HOME_SKILLS_DIR,
-  })
+    refuses: (model) =>
+      openCodeProvider(model).id === provider.id
+        ? undefined
+        : `OpenCode was started with ${provider.name}'s key, so it can't run ${model}`,
+  }
+}
+
+function vertexRoute(settings: OpenCodeHarnessSettings, vertex: OpenCodeVertex): Route {
+  const onVertex = (model: string) => splitModel(model)?.provider === OPENCODE_VERTEX_PROVIDER
+  if (!onVertex(settings.model)) {
+    throw new Error(
+      `OpenCode on Vertex AI runs a ${OPENCODE_VERTEX_PROVIDER}/<model> id, such as '${OPENCODE_VERTEX_PROVIDER}/gemini-3.8-flash' (got ${JSON.stringify(settings.model)})`,
+    )
+  }
   return {
-    ...acp,
-    doStart: async (options) => {
-      const sandbox = options.sandboxSession as { addRequestTransformations?: unknown }
-      if (
-        settings.requireCredentialBrokering &&
-        typeof sandbox.addRequestTransformations !== 'function'
-      ) {
-        throw new Error(
-          `The sandbox can't broker ${provider.env} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
-        )
-      }
-      const session = await acp.doStart(options)
-      // After the bootstrap, which installs OpenCode's bin directory; the first turn runs it.
-      await writeGate(options.sandboxSession, options.abortSignal)
-      return translated(session, provider, Object.keys(settings.mcpServers ?? {}))
+    id: OPENCODE_VERTEX_PROVIDER,
+    name: 'Vertex AI',
+    env: {
+      GOOGLE_CLOUD_PROJECT: vertex.project,
+      GOOGLE_VERTEX_LOCATION: vertex.location,
+      GOOGLE_APPLICATION_CREDENTIALS: vertex.credentialsFile,
     },
+    credentialEnv: [],
+    refuses: (model) =>
+      onVertex(model) ? undefined : `OpenCode was started on Vertex AI, so it can't run ${model}`,
   }
 }
 
@@ -268,17 +332,10 @@ type Emit = (part: { type: string; [key: string]: unknown }) => void
  * The session, with each turn's model checked against the provider whose key it has, and its
  * parts through a fresh {@link OpenCodeStreamTranslator}.
  */
-function translated(
-  session: Session,
-  provider: OpenCodeProvider,
-  mcpServers: readonly string[],
-): Session {
+function translated(session: Session, route: Route, mcpServers: readonly string[]): Session {
   const turn = (run: (options: never) => unknown) => (options: { emit: Emit; model?: string }) => {
-    if (options.model && openCodeProvider(options.model).id !== provider.id) {
-      throw new Error(
-        `OpenCode was started with ${provider.name}'s key, so it can't run ${options.model}`,
-      )
-    }
+    const refused = options.model ? route.refuses(options.model) : undefined
+    if (refused) throw new Error(refused)
     const translator = new OpenCodeStreamTranslator({ mcpServers })
     return run({
       ...options,

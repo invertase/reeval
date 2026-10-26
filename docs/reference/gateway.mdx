@@ -29,7 +29,7 @@ The default is `[direct()]`: every harness calls its own provider with its own k
 | `direct()` from `'{{ pkg }}/gateway'` | `direct` or `{ direct: {} }` | every harness; judge and analysis models whose provider reeval calls directly (`anthropic/*`, `google/*`, `openai/*`, `typesafe-ai/*`) | each harness's or provider's own, such as `CURSOR_API_KEY` |
 | `vercel()` from `'{{ pkg }}/gateway'` | `vercel` or `{ vercel: {} }` | Claude Code, Codex, Goose, OpenCode, fx, Grok Build; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe-ai/jev-1.14.0` | `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN` |
 | `openrouter({ fallbacks })` from `'{{ pkg }}/gateway'` | `openrouter` or `{ openrouter: { fallbacks: true } }` | Claude Code, Codex, Goose, OpenCode, Grok Build; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe/jev-1.14` | `OPENROUTER_API_KEY` |
-| `vertex({ project?, location?, regions? })` from `'{{ pkg }}/gateway'` | `vertex` or `{ vertex: { project: p } }` | Claude Code ([below](#vertex-ai)); `google/*` and `anthropic/*` judge and analysis models | Application Default Credentials |
+| `vertex({ project?, location?, regions? })` from `'{{ pkg }}/gateway'` | `vertex` or `{ vertex: { project: p } }` | Claude Code, Antigravity, OpenCode, Goose and pi ([below](#vertex-ai)); `google/*` and `anthropic/*` judge and analysis models | Application Default Credentials |
 
 ## Vercel AI Gateway
 
@@ -112,6 +112,12 @@ There's no key. reeval mints a Google Cloud access token on the host from Applic
 | Harness | How it reaches Vertex | Brokered on | Model ids | Served model |
 |---|---|---|---|---|
 | Claude Code | `CLAUDE_CODE_USE_VERTEX`, with `ANTHROPIC_VERTEX_PROJECT_ID` and `CLOUD_ML_REGION` from the entry, and `CLAUDE_CODE_SKIP_VERTEX_AUTH` | `POST /v1/projects/<project>/locations/<region>/publishers/anthropic/models/<id>:streamRawPredict` (and `:rawPredict`) on the region's host | Vertex's, e.g. `claude-haiku-4-5@20251001`, or the Anthropic API's (`claude-haiku-4-5-20251001`), sent as Vertex's; an `anthropic/` prefix is dropped | from each call's path |
+| Antigravity | `AGY_ADC_AUTH`, with `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` | `POST /v1/…/publishers/google/models/<id>:streamGenerateContent` | its own, e.g. `gemini-3.8-flash-low` | from each call's path |
+| OpenCode | its `google-vertex` provider, with `GOOGLE_CLOUD_PROJECT` and `GOOGLE_VERTEX_LOCATION` | `POST /v1beta1/…/publishers/google/models/<id>:streamGenerateContent` | `google/<id>` or `<id>`, run as `google-vertex/<id>` | from each call's path |
+| Goose | its `gcp_vertex_ai` provider, with `GCP_PROJECT_ID` and `GCP_LOCATION` | `POST /v1beta1/…/publishers/google/models/<id>:streamGenerateContent` | Gemini's, e.g. `gemini-3.8-flash`; a `google/` prefix is dropped | from each call's path |
+| pi | `--provider google-vertex`, with `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` | `POST /v1/…/publishers/google/models/<id>:streamGenerateContent` | Gemini's, e.g. `gemini-3.8-flash`; a `google/` prefix is dropped | from each call's path |
+
+The Gemini CLIs call Vertex in the `google` region (`regions.google`, else `location`) and authenticate with Application Default Credentials of their own, so reeval writes them a service account beside the workspace with a key made up for the attempt, in `GOOGLE_APPLICATION_CREDENTIALS`. The egress gateway answers its token exchange (`POST oauth2.googleapis.com/token`) itself with a placeholder token, and Antigravity's account lookup (`GET www.googleapis.com/oauth2/v2/userinfo`) too, so neither reaches Google. It adds the real token to the model calls as it does for Claude Code. A restricted policy allows those hosts automatically.
 
 Every other harness falls through to the next gateway in the list, and the plan's hint says so. Cursor and Codex never can: Cursor's agent calls only Cursor's API, and Codex only OpenAI's Responses API.
 

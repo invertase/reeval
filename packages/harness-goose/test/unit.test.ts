@@ -51,14 +51,18 @@ test("with requireCredentialBrokering, a sandbox that can't broker never gets th
   )
 })
 
+const OFF_VERTEX = { GCP_PROJECT_ID: '', GCP_LOCATION: '', GOOGLE_APPLICATION_CREDENTIALS: '' }
+
 test('effort is GOOSE_THINKING_EFFORT', () => {
   assert.deepEqual(gooseEnv({ model: 'gemini-3.8-flash' }), {
     ...GOOSE_QUIET_ENV,
+    ...OFF_VERTEX,
     GOOSE_PROVIDER: 'google',
     GOOSE_MODEL: 'gemini-3.8-flash',
   })
   assert.deepEqual(gooseEnv({ model: 'gemini-3.8-flash', effort: 'high' }), {
     ...GOOSE_QUIET_ENV,
+    ...OFF_VERTEX,
     GOOSE_PROVIDER: 'google',
     GOOSE_MODEL: 'gemini-3.8-flash',
     GOOSE_THINKING_EFFORT: 'high',
@@ -68,6 +72,7 @@ test('effort is GOOSE_THINKING_EFFORT', () => {
 test("on Vercel AI Gateway, Goose runs its vercel_ai_gateway provider on Vercel's key", () => {
   assert.deepEqual(gooseEnv({ model: 'google/gemini-3-flash', provider: AI_GATEWAY_PROVIDER }), {
     ...GOOSE_QUIET_ENV,
+    ...OFF_VERTEX,
     GOOSE_PROVIDER: 'vercel_ai_gateway',
     GOOSE_MODEL: 'google/gemini-3-flash',
   })
@@ -91,6 +96,7 @@ test("on Vercel AI Gateway, Goose runs its vercel_ai_gateway provider on Vercel'
 test("on OpenRouter, Goose runs its openrouter provider on OpenRouter's key", () => {
   assert.deepEqual(gooseEnv({ model: 'google/gemini-3-flash', provider: OPENROUTER_PROVIDER }), {
     ...GOOSE_QUIET_ENV,
+    ...OFF_VERTEX,
     GOOSE_PROVIDER: 'openrouter',
     GOOSE_MODEL: 'google/gemini-3-flash',
   })
@@ -99,6 +105,21 @@ test("on OpenRouter, Goose runs its openrouter provider on OpenRouter's key", ()
       createGoose({ auth: { AI_GATEWAY_API_KEY: 'k' }, provider: OPENROUTER_PROVIDER, model: 'm' }),
     /with OPENROUTER_API_KEY \(an OpenRouter key\)/,
   )
+})
+
+test('on Vertex AI, Goose runs its gcp_vertex_ai provider on a credentials file, with no key', () => {
+  const vertex = { project: 'p', location: 'global', credentialsFile: '/reeval/adc.json' }
+  assert.deepEqual(gooseEnv({ model: 'gemini-3.8-flash', vertex }), {
+    ...GOOSE_QUIET_ENV,
+    ...OFF_VERTEX,
+    GOOSE_PROVIDER: 'gcp_vertex_ai',
+    GOOSE_MODEL: 'gemini-3.8-flash',
+    GCP_PROJECT_ID: 'p',
+    GCP_LOCATION: 'global',
+    GOOGLE_APPLICATION_CREDENTIALS: '/reeval/adc.json',
+  })
+  const harness = createGoose({ auth: {}, model: 'gemini-3.8-flash', vertex })
+  assert.equal(harness.harnessId, 'goose')
 })
 
 test('the image bakes one bootstrap for every provider and model', async () => {
@@ -115,6 +136,12 @@ test('the image bakes one bootstrap for every provider and model', async () => {
   })
   assert.deepEqual(await vercel.getBootstrap?.({}), await gemini.getBootstrap?.({}))
   assert.deepEqual(await openrouter.getBootstrap?.({}), await gemini.getBootstrap?.({}))
+  const vertex = createGoose({
+    auth: {},
+    model: 'gemini-3.8-flash',
+    vertex: { project: 'p', location: 'global', credentialsFile: '/reeval/adc.json' },
+  })
+  assert.deepEqual(await vertex.getBootstrap?.({}), await gemini.getBootstrap?.({}))
 })
 
 test("MCP servers are enabled extensions in Goose's config.yaml", () => {
