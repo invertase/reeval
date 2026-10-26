@@ -22,8 +22,15 @@ import { environmentSandbox, profileSandbox } from './environment.ts'
 import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { resolveGateway, routedHarness } from './gateway/resolve.ts'
 import { VERCEL_KEY, vercelCredentialProblem } from './gateway/vercel.ts'
-import { VERTEX_PROJECT_ENV, vertexSettings } from './gateway/vertex.ts'
-import { credentialOf } from './harness/agents.ts'
+import {
+  VERTEX_HARNESS_PUBLISHERS,
+  VERTEX_PROJECT_ENV,
+  type VertexSettings,
+  vertexModelProbe,
+  vertexSettings,
+  vertexSettingsIn,
+} from './gateway/vertex.ts'
+import { credentialOf, isAgentKind } from './harness/agents.ts'
 import { runtimeInfo } from './history/provenance.ts'
 import type { Stack } from './history/types.ts'
 import { fromCwd, newRunId, relativeFile } from './ids.ts'
@@ -851,7 +858,8 @@ export function adcSource(deps: Pick<DoctorDeps, 'env' | 'platform'>): {
 
 /**
  * Each `vertex()` entry's project, and where its access tokens come from. Online, it mints one
- * and names whose it is: a token the host can't mint fails every attempt on Vertex AI.
+ * and names whose it is (a token the host can't mint fails every attempt on Vertex AI), then asks
+ * Vertex whether it serves each model the config sends there to the project in that region.
  */
 export async function checkVertex(
   config: ResolvedConfig,
@@ -960,7 +968,108 @@ export async function checkVertex(
             },
     )
   }
+  for (const probe of vertexModels(config, deps.env)) {
+    checks.push(await probeVertexModel(probe, token, deps.fetch))
+  }
   return checks
+}
+
+type VertexModel = { model: string; settings: VertexSettings; who: string[] }
+
+/**
+ * Every model the config and its profiles send to Vertex AI (each harness's, the judge's and
+ * analysis's) as `publisher/id`, with the settings of the list it's in. One per model, project
+ * and region, naming everything that calls it.
+ */
+function vertexModels(config: ResolvedConfig, env: NodeJS.ProcessEnv): VertexModel[] {
+  const found = new Map<string, VertexModel>()
+  const add = (model: string, profile: string | undefined, who: string) => {
+    const p = profile === undefined ? undefined : config.profiles[profile]
+    let settings: VertexSettings
+    try {
+      settings = vertexSettingsIn(gatewayScope(config, p).gateways, env)
+    } catch {
+      return
+    }
+    const named = profile ? `${who} in profile ${profile}` : who
+    const { id, region } = vertexModelProbe(model, settings)
+    const key = `${model.slice(0, model.indexOf('/'))}/${id} ${settings.project} ${region}`
+    const entry = found.get(key)
+    if (!entry) found.set(key, { model, settings, who: [named] })
+    else if (!entry.who.includes(named)) entry.who.push(named)
+  }
+  for (const use of configuredUses(config)) {
+    const h = use.harness
+    if (h.kind === 'fake' || h.gateway !== 'vertex' || !isAgentKind(h.kind)) continue
+    const publisher = VERTEX_HARNESS_PUBLISHERS[h.kind]
+    if (publisher) add(`${publisher}/${h.model}`, use.profile, h.kind)
+  }
+  const reevals = [
+    { model: config.judge.model, pin: config.judge.gateway, profile: undefined, who: 'the judge' },
+    ...Object.entries(config.profiles).map(([name, p]) => ({
+      model: p.defaults?.judge?.model ?? p.judge?.model,
+      pin: p.defaults?.judge?.gateway ?? p.judge?.gateway ?? config.judge.gateway,
+      profile: name,
+      who: 'the judge',
+    })),
+    { model: config.analysis.model, pin: undefined, profile: undefined, who: 'analysis.model' },
+  ]
+  for (const { model, pin, profile, who } of reevals) {
+    if (typeof model !== 'string') continue
+    const p = profile === undefined ? undefined : config.profiles[profile]
+    try {
+      if (resolveModelGateway(model, pin, gatewayScope(config, p), who) !== 'vertex') continue
+    } catch {
+      continue
+    }
+    add(model, profile, who)
+  }
+  return [...found.values()]
+}
+
+/** Whether Vertex serves the model to the project in its region, from its free token count. */
+async function probeVertexModel(
+  { model, settings, who }: VertexModel,
+  token: string,
+  fetchImpl: typeof fetch,
+): Promise<Check> {
+  const { id, region, url, body } = vertexModelProbe(model, settings)
+  const publisher = model.slice(0, model.indexOf('/'))
+  const what = `${id} for ${who.join(', ')} (${settings.project}, ${region})`
+  const response = await fetchImpl(url, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
+  }).catch((error: Error) => error)
+  if (response instanceof Error) {
+    return {
+      id: 'vertex',
+      status: 'warn',
+      summary: `${what}: couldn't reach Vertex AI (${redactSecrets(response.message)}), so it's unchecked`,
+    }
+  }
+  if (response.ok) return { id: 'vertex', status: 'ok', summary: `${what}: served` }
+  const text = await response.text().catch(() => '')
+  let message = text
+  try {
+    message = (JSON.parse(text) as { error?: { message?: string } }).error?.message ?? text
+  } catch {}
+  const reason = redactSecrets(message.split('\n')[0] ?? '').slice(0, 200)
+  const elsewhere = `vertex({ regions: { ${publisher}: '<region>' } }) to a region that serves it`
+  return {
+    id: 'vertex',
+    status: 'warn',
+    summary: `${what}: Vertex AI answered HTTP ${response.status}${reason ? ` (${reason})` : ''}, so its calls may fail`,
+    ...(response.status === 403 || response.status === 404
+      ? {
+          fix:
+            publisher === 'anthropic'
+              ? `enable ${id} for ${settings.project} in Model Garden (https://console.cloud.google.com/vertex-ai/model-garden), or set ${elsewhere}`
+              : `check the model id, or set ${elsewhere}`,
+        }
+      : {}),
+  }
 }
 
 // ---- Egress and git ------------------------------------------------------------------------

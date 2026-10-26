@@ -772,6 +772,7 @@ evaluate('a', async () => {})
     assert.match(missing.at(-1)?.summary ?? '', /nope\.json, which doesn't exist/)
 
     const asked: string[] = []
+    const bodies: unknown[] = []
     const online = await checkVertex(
       config,
       deps({
@@ -782,6 +783,21 @@ evaluate('a', async () => {})
             return Response.json({ email: 'ci@reeval-test.iam.gserviceaccount.com' })
           const authorization = new Headers(init?.headers).get('authorization')
           assert.equal(authorization, `Bearer ${SECRET}`)
+          if (String(url).startsWith('https://aiplatform.googleapis.com/')) {
+            const body = JSON.parse(String(init?.body)) as { model: string }
+            bodies.push(body)
+            return body.model === 'claude-haiku-4-5'
+              ? Response.json(
+                  {
+                    error: {
+                      code: 404,
+                      message: `Publisher Model claude-haiku-4-5 was not found or your project does not have access to it. ${SECRET}`,
+                    },
+                  },
+                  { status: 404 },
+                )
+              : Response.json({ input_tokens: 8 })
+          }
           return String(url).includes('/projects/reeval-test/')
             ? Response.json({ state: 'ENABLED' })
             : Response.json({ state: 'DISABLED' })
@@ -798,13 +814,29 @@ evaluate('a', async () => {})
         ],
         ['ok', 'Vertex AI API enabled in reeval-test'],
         ['fail', 'Vertex AI API not enabled in from-env'],
+        ['ok', 'claude-haiku-4-5@20251001 for claude-code (reeval-test, global): served'],
+        [
+          'warn',
+          'claude-haiku-4-5 for the judge (reeval-test, global): Vertex AI answered HTTP 404 (Publisher Model claude-haiku-4-5 was not found or your project does not have access to it. [REDACTED]), so its calls may fail',
+        ],
       ],
     )
     assert.equal(
-      online.at(-1)?.fix,
+      online.at(-3)?.fix,
       'run gcloud services enable aiplatform.googleapis.com --project from-env',
     )
-    assert.equal(asked.length, 3)
+    assert.equal(
+      online.at(-1)?.fix,
+      "enable claude-haiku-4-5 for reeval-test in Model Garden (https://console.cloud.google.com/vertex-ai/model-garden), or set vertex({ regions: { anthropic: '<region>' } }) to a region that serves it",
+    )
+    assert.deepEqual(asked.slice(3), [
+      'https://aiplatform.googleapis.com/v1/projects/reeval-test/locations/global/publishers/anthropic/models/count-tokens:rawPredict',
+      'https://aiplatform.googleapis.com/v1/projects/reeval-test/locations/global/publishers/anthropic/models/count-tokens:rawPredict',
+    ])
+    assert.deepEqual(bodies[0], {
+      model: 'claude-haiku-4-5@20251001',
+      messages: [{ role: 'user', content: 'ping' }],
+    })
     noSecret(online)
     const refused = await checkVertex(
       config,
@@ -820,6 +852,41 @@ evaluate('a', async () => {})
     assert.match(refused.at(-1)?.summary ?? '', /gave no access token: invalid_grant/)
     const unset = await configOf('vertex-unset', "{ harness: cursor({ model: 'composer-2.5' }) }")
     assert.deepEqual(await checkVertex(unset, deps(), true), [])
+  })
+
+  test('vertex online: a Gemini model is probed in the google region, once for every caller', async () => {
+    const config = await configOf(
+      'gateway-vertex-gemini',
+      `{ harness: cursor({ model: 'composer-2.5' }),
+         judge: { model: 'google/gemini-3.8-flash' },
+         analysis: { model: 'google/gemini-3.8-flash' },
+         gateway: [vertex({ project: 'reeval-test', regions: { google: 'us-central1' } }), direct()] }`,
+    )
+    const asked: Array<[string, unknown]> = []
+    const checks = await checkVertex(
+      config,
+      deps({
+        fetch: async (url, init) => {
+          if (String(url).includes('/publishers/')) {
+            asked.push([String(url), JSON.parse(String(init?.body))])
+            return Response.json({ totalTokens: 1 })
+          }
+          return Response.json({ state: 'ENABLED' })
+        },
+      }),
+      true,
+    )
+    assert.deepEqual(asked, [
+      [
+        'https://us-central1-aiplatform.googleapis.com/v1/projects/reeval-test/locations/us-central1/publishers/google/models/gemini-3.8-flash:countTokens',
+        { contents: [{ role: 'user', parts: [{ text: 'ping' }] }] },
+      ],
+    ])
+    assert.deepEqual(checks.at(-1), {
+      id: 'vertex',
+      status: 'ok',
+      summary: 'gemini-3.8-flash for the judge, analysis.model (reeval-test, us-central1): served',
+    })
   })
 
   test('egress: the policy, and one the sandbox can’t enforce', async () => {

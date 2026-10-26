@@ -91,7 +91,7 @@ with no key: reeval mints a token from Application Default Credentials on the ho
 gateway adds it (OpenCode's Gemini model runs as `google-vertex/<id>`). Claude ids work in
 either form (`claude-haiku-4-5-20251001` is sent as Vertex's `claude-haiku-4-5@20251001`), so one
 string works through `[vertex(), direct()]`; `google/*` and `anthropic/*` judge and analysis models run there
-too. `reeval doctor --online` checks the token and the project's Vertex AI API. Default `[direct()]`:
+too. `reeval doctor --online` checks the token, the project's Vertex AI API and that Vertex serves each model the config sends there (Claude needs enabling in Model Garden). Default `[direct()]`:
 no gateway, so the judge, analysis and captures take only their provider's own key.
 `gateway: [openrouter(), direct()]` runs Claude Code, Codex, Goose, OpenCode and Grok Build on
 OpenRouter with one `OPENROUTER_API_KEY` (Cursor, Antigravity, fx, pi, and `effort` on any but
