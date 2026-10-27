@@ -669,6 +669,20 @@ for (const name of ['docker', 'podman']) {
   }
 }
 
+// A harness page is a short tutorial: the key, one factory example and the plugins. The factory's
+// field definitions live on reference/options#harness-factory-options.
+for (const file of readdirSync(join(docsDir, 'integrations/agents')).filter((f) =>
+  f.endsWith('.mdx'),
+)) {
+  const href = `integrations/agents/${file.replace(/\.mdx$/, '')}`
+  const text = page(href).replace(/^```[\s\S]*?^```/gm, '')
+  if (/<Property\b/.test(text)) {
+    problems.push(
+      `${href} has <Property> entries: factory fields live on reference/options#harness-factory-options`,
+    )
+  }
+}
+
 // The landing's option entries moved to reference/options#docker; the Docker task page no longer
 // lists them, so a link back there for them is a stale promise.
 {

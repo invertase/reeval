@@ -41,13 +41,9 @@ export default defineConfig({
 })
 ```
 
-`model` is required. The other fields are optional. `fx()` takes no `effort`, and an unknown option fails at plan time with exit code 2.
+`model` is required, `fx()` takes no `effort`, and an unknown option fails at plan time with exit code 2. For what `model` takes, see [Harness factory options](/reference/options#harness-factory-options).
 
-<Property name="model" type="string" required>
-  A Vercel AI Gateway id, `<provider>/<model>`, or a bare OpenAI model id. A missing or empty id fails at plan time with exit code 2.
-</Property>
 
-For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 In the sandbox, fx runs with a private home, whose `settings.json` file turns session titles off, so the run's model is the only one called. Auto-upgrade and sound are off.
 

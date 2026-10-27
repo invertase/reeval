@@ -40,17 +40,9 @@ export default defineConfig({
 })
 ```
 
-`model` is required. reeval exits with code 2 for a missing `model`, an `effort` outside the allowed values, or an unknown option.
+`model` is required. reeval exits with code 2 for a missing `model`, an `effort` outside the allowed values, or an unknown option. For what each field takes, see [Harness factory options](/reference/options#harness-factory-options).
 
-<Property name="model" type="string" required>
-  A model id or alias the `claude` CLI accepts.
-</Property>
 
-<Property name="effort" type="'low' | 'medium' | 'high' | 'xhigh' | 'max'" optional>
-  Reasoning effort for the Agent SDK `/effort` control. The Claude Code UI labels `xhigh` as **Extra**.
-</Property>
-
-For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 reeval turns `askUserQuestions` off, so Claude Code asks in its reply. reeval sets `IS_SANDBOX` to `1`, so Claude Code skips permission prompts as root. The adapter also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` to `1`, so a turn sends no telemetry, error reports, or feature-flag requests.
 

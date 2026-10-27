@@ -82,9 +82,29 @@ harness: cursor({ model: 'composer-2.5' })
 
 For more information about harness forms, see [Choose an agent](/agents).
 
+### Harness factory options
+
+Every factory requires `model`. All but `fx()` take an optional `effort`. reeval refuses a missing `model`, an `effort` the harness doesn't take, or an unknown option at plan time with exit code 2. For `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
+
+| Factory | `model` | `effort` |
+|---|---|---|
+| `cursor()` | A model id `Cursor.models.list()` returns for the key. | Mapped onto the catalog parameter the model names, `reasoning_effort` or `effort`. A model with no such parameter refuses it. |
+| `claudeCode()` | A model id or alias the `claude` CLI accepts. | `low`, `medium`, `high`, `xhigh`, or `max`, for the Agent SDK `/effort` control. The Claude Code UI labels `xhigh` as Extra. reeval refuses any other value. |
+| `antigravity()` | A slug `agy models` lists for the key, such as `<model>-medium`. A `-low`, `-medium`, or `-high` suffix sets effort in the slug. | Passed as `agy --effort`, such as `low`, `medium`, `high`, or `max`. The cell's `effort` field copies it. |
+| `codex()` | An OpenAI model id with no provider prefix, passed as `--model`. | Written as `model_reasoning_effort` in `~/.codex/config.toml`: `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`. |
+| `goose()` | A model id with no provider prefix, run on Goose's `google` provider, using letters, digits, `_`, `.`, and `-`. | Passed as `GOOSE_THINKING_EFFORT`: `off`, `low`, `medium`, `high`, or `max`. |
+| `grokBuild()` | An xAI model id with no provider prefix, using letters, digits, and `._-`. | For a model that takes one, such as `low`, `medium`, or `high`. Set as `default_reasoning_effort` in Grok Build's `config.toml` file. |
+| `opencode()` | `<provider>/<model>`. The part before the first `/` picks the provider and its key. reeval refuses a bare id, an unknown provider, or a provider whose key it can't broker. | A value the provider takes. Set as `options.thinking` on an `anthropic/` model and as `options.reasoningEffort` on every other provider. |
+| `pi()` | A Gemini model id with no provider prefix, which pi runs on its `google` provider. | Passed as pi's `--thinking` flag: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. |
+| `fx()` | A Vercel AI Gateway id, `<provider>/<model>`, or a bare OpenAI model id. | Not accepted. |
+
+<Property name="params" type="Record<string, string>" optional>
+  `cursor()` only. Parameter ids mapped to string values, such as `{ fast: 'true' }`. An unset parameter takes the default variant in Cursor's model catalog, which reeval sends on the request. `fast` is `'false'` when the model accepts it and `params` leaves it unset.
+</Property>
+
 ## Harness behavior
 
-Each harness reads the environment's rules, skills, and MCP servers from its own places and records its own events. The harness pages hold each one's key, options, and plugins.
+Each harness reads the environment's rules, skills, and MCP servers from its own places and records its own events. The harness pages hold each one's key and plugins.
 
 ### Support by harness
 

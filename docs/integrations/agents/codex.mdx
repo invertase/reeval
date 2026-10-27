@@ -35,17 +35,9 @@ export default defineConfig({
 
 The prompt is a shell argument under 128 KiB.
 
-`model` is required. The other fields are optional.
+`model` is required. For what each field takes, see [Harness factory options](/reference/options#harness-factory-options).
 
-<Property name="model" type="string" required>
-  An OpenAI model id with no provider prefix, passed as `--model`. A missing id, or a provider prefix, fails at plan time with exit code 2.
-</Property>
 
-<Property name="effort" type="string" optional>
-  Reasoning effort, written as `model_reasoning_effort` in the `~/.codex/config.toml` file. Values include `low`, `medium`, `high`, `xhigh`, `max`, and `ultra`.
-</Property>
-
-For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 In the sandbox, Codex's `config.toml` file turns analytics off.
 

@@ -30,21 +30,14 @@ import { pi } from '{{ pkg }}/harness'
 export default defineConfig({
   harness: pi({
     model: 'gemini-3.8-flash',
+    effort: 'high',
   }),
 })
 ```
 
-`model` is required. The other fields are optional.
+`model` is required. For what each field takes, see [Harness factory options](/reference/options#harness-factory-options).
 
-<Property name="model" type="string" required>
-  A Gemini model id with no provider prefix, which pi runs on its `google` provider. reeval refuses an id with a provider prefix at plan time with exit code 2.
-</Property>
 
-<Property name="effort" type="string" optional>
-  Reasoning effort, passed as pi's `--thinking` flag. The value is one that flag takes, such as `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.
-</Property>
-
-For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 In the sandbox, pi runs in print mode with the project trusted, its startup network operations off, and no extensions loaded besides its built-in `mcp` one for the environment's MCP servers.
 

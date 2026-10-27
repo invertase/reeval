@@ -37,17 +37,9 @@ export default defineConfig({
 })
 ```
 
-`model` is required. The other fields are optional.
+`model` is required. For what each field takes, see [Harness factory options](/reference/options#harness-factory-options).
 
-<Property name="model" type="string" required>
-  A model id with no provider prefix, run on Goose's `google` provider. The value uses letters, digits, `_`, `.`, and `-`. reeval refuses any other `model` at plan time with exit code 2.
-</Property>
 
-<Property name="effort" type="string" optional>
-  Reasoning effort passed as `GOOSE_THINKING_EFFORT`, such as `off`, `low`, `medium`, `high`, or `max`.
-</Property>
-
-For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 In the sandbox, Goose runs with a private home, with telemetry, the keyring, and session naming off.
 

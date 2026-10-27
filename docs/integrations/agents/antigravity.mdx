@@ -37,17 +37,9 @@ export default defineConfig({
 })
 ```
 
-`model` is required. The other fields are optional.
+`model` is required. For what each field takes, see [Harness factory options](/reference/options#harness-factory-options).
 
-<Property name="model" type="string" required>
-  A model slug `agy models` lists for the key, such as `<model>-medium`. A `-low`, `-medium`, or `-high` suffix sets effort in the slug. reeval refuses a missing `model` at plan time with exit code 2.
-</Property>
 
-<Property name="effort" type="string" optional>
-  Reasoning effort passed as `agy --effort`, such as `low`, `medium`, `high`, or `max`. The cell's `effort` field copies this option.
-</Property>
-
-For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 For more information about model ids and effort values, see [Set the agent's model](/agents/model). For rules, skills, MCP servers, usage, served models, and web events, see [Harness behavior](/reference/options#harness-behavior).
 

@@ -32,17 +32,9 @@ export default defineConfig({
 })
 ```
 
-`model` is required. The other fields are optional.
+`model` is required. For what each field takes, see [Harness factory options](/reference/options#harness-factory-options).
 
-<Property name="model" type="string" required>
-  An xAI model id, with no provider prefix, using letters, digits, and `._-`. reeval refuses a missing or other id at plan time with exit code 2.
-</Property>
 
-<Property name="effort" type="string" optional>
-  Reasoning effort, for a model that takes one, such as `low`, `medium`, or `high`. reeval sets it as `default_reasoning_effort` in Grok Build's `config.toml` file.
-</Property>
-
-For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 In the sandbox, Grok Build runs with a private home, whose `config.toml` file puts the session and its title on the run's model and turns off telemetry, self-update, and the summary, recap, and title-refresh calls, so a turn contacts only `api.x.ai`.
 

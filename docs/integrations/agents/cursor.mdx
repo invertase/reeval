@@ -27,29 +27,15 @@ import { cursor } from '{{ pkg }}/harness'
 
 export default defineConfig({
   harness: cursor({
-    model: 'composer-2.5',
-    params: { fast: 'true' },
+    model: '<model>',
+    effort: 'high',
   }),
 })
 ```
 
-`model` is required. The other fields are optional.
+`model` is required, and `cursor()` also takes `params`, such as `{ fast: 'true' }`. For what each field takes, see [Harness factory options](/reference/options#harness-factory-options).
 
-<Property name="model" type="string" required>
-  A model id `Cursor.models.list()` returns for the key. reeval refuses a missing `model` at plan time with exit code 2.
-</Property>
-
-<Property name="params" type="Record<string, string>" optional>
-  Parameter ids mapped to string values, such as `{ fast: 'true' }`. An unset parameter takes the default variant in Cursor's model catalog, which reeval sends on the request. `fast` is `'false'` when the model accepts it and `params` leaves it unset.
-</Property>
-
-<Property name="effort" type="string" optional>
-  Reasoning effort, mapped onto the catalog parameter this model names, `reasoning_effort` or `effort`. A model with no such parameter refuses `effort`. Fast is `params.fast`.
-</Property>
-
-For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
-
-`params` belongs to `cursor()` alone. With no `harness` option, reeval uses `cursor()` with its default model.
+With no `harness` option, reeval uses `cursor()` with its default model.
 
 For more information about model ids and effort values, see [Set the agent's model](/agents/model). For rules, skills, MCP servers, usage, served models, and web events, see [Harness behavior](/reference/options#harness-behavior).
 

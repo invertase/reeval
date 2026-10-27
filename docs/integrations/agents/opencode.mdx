@@ -28,21 +28,14 @@ import { opencode } from '{{ pkg }}/harness'
 export default defineConfig({
   harness: opencode({
     model: 'google/gemini-3.8-flash',
+    effort: 'high',
   }),
 })
 ```
 
-`model` is required. The other fields are optional.
+`model` is required. For what each field takes, see [Harness factory options](/reference/options#harness-factory-options).
 
-<Property name="model" type="string" required>
-  OpenCode's model id, `<provider>/<model>`. The part before the first `/` picks the provider and its key. reeval refuses a bare id, an unknown provider, or a provider whose key it cannot broker at plan time with exit code 2.
-</Property>
-
-<Property name="effort" type="string" optional>
-  Reasoning effort, as a value the provider takes. reeval sets it as `options.thinking` on an `anthropic/` model and as `options.reasoningEffort` on every other provider.
-</Property>
-
-For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options). The cell id is `opencode:` followed by the part of `model` after its last `/`.
+The cell id is `opencode:` followed by the part of `model` after its last `/`.
 
 In the sandbox, OpenCode runs with its `question` and browser tools off, self-update, share links, and the model-catalog fetch off, session titles on the run's model, and its model calls over HTTP. That configuration overrides the workspace's own `opencode.json` file where both set a key.
 
