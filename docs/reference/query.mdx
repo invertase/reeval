@@ -188,7 +188,7 @@ reeval query "SELECT eval_key, outcome, pass_at_1 FROM eval_trend"
 
 ## `verdict_flips`
 
-`verdict_flips` lists one row where a judge question's `pass_rate` on a cell differs from `prev_pass_rate`.
+`verdict_flips` lists one row where a judgment's `pass_rate` on a cell differs from `prev_pass_rate`.
 
 ```bash title="Query"
 reeval query "SELECT question, prev_pass_rate, pass_rate FROM verdict_flips"
