@@ -506,6 +506,27 @@ for (const name of reevalVariables()) {
     problems.push(`${name} is read in src/ but not on reference/env-vars`)
 }
 
+/** The values `reeval` exports from its root: the names a user imports from the package. */
+function rootValueExports() {
+  const text = read(join(src, 'index.ts')).replace(/\/\/.*$/gm, '')
+  const names = []
+  for (const m of text.matchAll(/^export\s*(?!type\b)\{([^}]*)\}/gm)) {
+    for (const item of m[1].split(',')) {
+      const name = item.trim()
+      if (name && !name.startsWith('type ')) names.push(name.split(/\s+as\s+/).pop())
+    }
+  }
+  return names
+}
+
+const apiPage = page('reference/api')
+for (const name of rootValueExports()) {
+  const heading = new RegExp(`^#{2,3} \`${name.replace(/\W/g, '\\$&')}(\\(\\))?\`$`, 'm')
+  if (!heading.test(apiPage)) {
+    problems.push(`${name} is exported from src/index.ts but has no entry on reference/api`)
+  }
+}
+
 const cliPage = page('reference/cli')
 for (const { code } of exitCodes()) {
   if (!new RegExp(`\\| ${code} \\|`).test(cliPage))

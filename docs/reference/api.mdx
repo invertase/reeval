@@ -171,6 +171,28 @@ The returned `Environment` is a frozen object with the following fields.
 
 For more information about `EnvironmentSpec`, `EnvironmentHelpers`, each field's type, and how `extendEnvironment()` merges each field, see [Environment fields](/reference/environment#environmentspec) and [extend](/reference/environment#extend).
 
+## `defineConfig()`
+
+`defineConfig(config)` returns its argument unchanged, so `reeval.config.ts` is type-checked. For more information about the config keys and the callback form, see [Configuration reference](/reference/config#defineconfig).
+
+## `expect()`
+
+`expect(actual, label?)` checks `actual` and records an assertion. For more information about its matchers, `expect.soft()`, and `expect.poll()`, see [Matchers reference](/reference/matchers#expect).
+
+## `DEFAULT_EGRESS_ALLOW`
+
+`DEFAULT_EGRESS_ALLOW` is a `readonly string[]` of the package registries and GitHub: `registry.npmjs.org`, `registry.yarnpkg.com`, `github.com`, `*.github.com`, `*.githubusercontent.com`, `pypi.org`, and `files.pythonhosted.org`. Spread it into an `egress.allow` list that still installs packages, as in `egress: { allow: [...DEFAULT_EGRESS_ALLOW, 'example.com'] }`.
+
+For more information about egress policies, see [Egress](/environments/egress#allow-a-list-of-hosts).
+
+## `DEFAULT_DIRECTORY_IGNORES`
+
+`DEFAULT_DIRECTORY_IGNORES` is a `readonly string[]` of the `glob` patterns `directory()` skips unless `defaultIgnores` is `false`. For more information about `directory()`, see [Environment fields](/reference/environment#directory).
+
+## `DEFAULT_SKILL_EXCLUDE`
+
+`DEFAULT_SKILL_EXCLUDE` is a `readonly string[]` of the path patterns each skill leaves out unless `exclude` replaces them: `/evals/`, `.history/`, and `*.eval.ts`. For more information about skills, see [Environment fields](/reference/environment#skilllocal).
+
 ## `HarnessCapabilityError`
 
 `HarnessCapabilityError` is the error `toHaveSearched()` and `toHaveFetched()` throw when the turn's `unreported` list holds `web-search` or `web-fetch`. The following assertion catches it:
