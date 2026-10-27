@@ -628,6 +628,47 @@ for (const { file, text } of gatewayPages) {
   })
 }
 
+// ---- Claims that must match the code ----------------------------------------------------------
+
+/** A `ts` block titled with an `examples/` path is that file, so the page can't drift from it; the package-name check below leaves these blocks out, as an example keeps its own imports. */
+const exampleBlock = /```ts title="(examples\/[^"\n]+)"\n([\s\S]*?)\n```/g
+for (const file of mdxFiles()) {
+  for (const [, path, body] of read(file).matchAll(exampleBlock)) {
+    const full = join(root, path)
+    if (!existsSync(full)) {
+      problems.push(`${relative(root, file)}: the snippet titled ${path} names no such file`)
+    } else if (read(full).trimEnd() !== body.trimEnd()) {
+      problems.push(`${relative(root, file)}: the snippet titled ${path} differs from that file`)
+    }
+  }
+}
+
+const resultsPages = mdxFiles(join(docsDir, 'results'))
+
+/** `reeval history` prints one legend line, so a Results page that prints it prints all of it. */
+const historyLegend = /'(✓ pass {2}✗ fail[^'\n]*)'/.exec(read(join(src, 'history/views.ts')))?.[1]
+if (!historyLegend) problems.push('history/views.ts no longer holds the history legend line')
+for (const file of resultsPages) {
+  for (const line of read(file).split('\n')) {
+    if (historyLegend && line.startsWith('✓ pass') && line.trimEnd() !== historyLegend) {
+      problems.push(
+        `${relative(root, file)}: the printed history legend differs from history/views.ts: "${historyLegend}"`,
+      )
+    }
+  }
+}
+
+/** `reeval query` syncs changed records; only `--rebuild` rebuilds the database (src/query.ts). */
+const queriesPage = join(docsDir, 'results/queries.mdx')
+if (
+  existsSync(queriesPage) &&
+  /rebuilds? the database[^.\n]*every query/i.test(read(queriesPage))
+) {
+  problems.push(
+    'results/queries.mdx says the database rebuilds on every query; only --rebuild rebuilds it',
+  )
+}
+
 // ---- Navigation and the package name --------------------------------------------------------
 
 const config = JSON.parse(read(join(root, 'docs.json')))
@@ -654,7 +695,7 @@ const pkgSpecifier = new RegExp(
 )
 for (const file of mdxFiles()) {
   if (!linked.has(file)) problems.push(`${relative(root, file)} isn't in the docs.json sidebar`)
-  if (pkgSpecifier.test(read(file))) {
+  if (pkgSpecifier.test(read(file).replace(exampleBlock, ''))) {
     problems.push(
       `${relative(root, file)} installs or imports ${pkg} by name: use {{ pkg }} so it lives in docs.json`,
     )
