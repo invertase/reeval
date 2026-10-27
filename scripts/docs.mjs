@@ -500,6 +500,22 @@ for (const key of [
   }
 }
 
+// limit.compare's plan notes are the ones src/options.ts pushes: "<n> pairwise question(s) off" and
+// "<n> pairwise question(s) narrowed", never "questions off".
+const limitCompare =
+  page('reference/profiles').match(/^### `compare`\n([\s\S]*?)(?=^#{1,3} )/m)?.[1] ?? ''
+if (!limitCompare) {
+  problems.push('docs.mjs cannot find the "### `compare`" section on reference/profiles')
+} else if (/(?<!pairwise )questions off \(profile/.test(limitCompare)) {
+  problems.push(
+    'reference/profiles limit.compare notes "questions off (profile": the plan notes "<n> pairwise question(s) off (profile <name>)" (src/options.ts)',
+  )
+} else if (!limitCompare.includes('pairwise question') || !limitCompare.includes('narrowed')) {
+  problems.push(
+    'reference/profiles limit.compare omits the "<n> pairwise question(s) narrowed (profile <name>)" note (src/options.ts)',
+  )
+}
+
 const envPage = page('reference/env-vars')
 for (const name of reevalVariables()) {
   if (!mentions(envPage, `\`${name}\``))

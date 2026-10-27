@@ -66,7 +66,9 @@ For more information about `pin`, see [Options reference](/reference/options#pin
   `false` drops the variants and runs the baseline. `{ maxVariants: n }` keeps the first `n` variants. `n` is a whole number of at least 0.
 </Property>
 
-`limit.compare` applies when the evaluation sets `compare`. The plan notes `compare off (profile nightly)` or `variants 4 → 1 (profile nightly)`. With no variants left and questions set, it notes `questions off (profile nightly)`.
+`limit.compare` applies when the evaluation sets `compare`. The plan notes `compare off (profile nightly)` or `variants 4 → 1 (profile nightly)`.
+
+A pairwise question needs two attempts that differ in a factor it varies. When the limit leaves none of its factors varying, the plan notes `1 pairwise question off (profile nightly)`, or `2 pairwise questions off (profile nightly)` for two. When it leaves some, the question keeps those and the plan notes `1 pairwise question narrowed (profile nightly)`, or `2 pairwise questions narrowed (profile nightly)` for two.
 
 ### `harness`
 
