@@ -1465,7 +1465,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'query.noise',
     area: 'Records and studio',
-    name: '`flaky_cells` pooled over comparable runs with a minimum n, and `drift` with changed paths and a `noise` flag',
+    name: '`flaky_cells` pooled over comparable runs, `flaky` from a minimum n and `mixed` below it, and `drift` with changed paths and a `noise` flag',
     unit: ['reeval/test/analysis.test.ts', 'reeval/test/query.test.ts'],
   },
   {
