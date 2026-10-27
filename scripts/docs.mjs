@@ -1061,6 +1061,81 @@ for (const [i, a] of tsBlocks.entries()) {
 }
 problems.push(...copied)
 
+// ---- Glossary terms are defined once ---------------------------------------------------------
+
+// The Glossary is the home for definitions: a page outside docs/reference/ links the entry and
+// says what the reader does with the term. A page fails when it repeats the first sentence of an
+// entry, or defines a term with a `## ` heading there in a sentence that opens "A/An/The <term>
+// is". Only a definition counts: the predicate starts with an article, "one", "what", "how",
+// "each" or "every", so "A cell is flaky when" and "The lift is paired by case" pass.
+const ABOUT_THE_EXAMPLE = new Set(['docs/quickstart.mdx: The baseline is an unstyled page.'])
+
+const plainMarkdown = (text) =>
+  text
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+/** Each `## ` term of the Glossary with the first sentence of its entry, as plain text. */
+function glossaryTerms(text) {
+  return text
+    .split(/^## /m)
+    .slice(1)
+    .map((section) => {
+      const [heading, ...rest] = section.split('\n')
+      const first =
+        rest
+          .join('\n')
+          .trim()
+          .split(/\n\s*\n/)[0] ?? ''
+      const sentence = /^[\s\S]*?[.!?](?=\s|$)/.exec(plainMarkdown(first))?.[0] ?? ''
+      return { term: heading.replace(/`/g, '').trim(), sentence }
+    })
+}
+
+const glossaryAnchor = (term) => `/reference/glossary#${term.toLowerCase().replace(/\s+/g, '-')}`
+
+function glossaryRepeatProblems(glossary, pages) {
+  const terms = glossaryTerms(glossary).map((entry) => ({
+    ...entry,
+    start: new RegExp(
+      `^(?:A|An|The) ${entry.term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} is\\s+(?:a|an|the|one|what|how|each|every)\\b`,
+      'i',
+    ),
+  }))
+  const problems = []
+  for (const [name, source] of pages) {
+    const prose = source.replace(/^---\n[\s\S]*?\n---\n/, '').replace(/^```[\s\S]*?^```/gm, '')
+    const sentences = prose
+      .split(/\n\s*\n|\n(?=#|\s*[-*\d]+[.)]?\s)/)
+      .filter((block) => !block.startsWith('#'))
+      .flatMap((block) => plainMarkdown(block).split(/(?<=[.!?])\s+/))
+      .map((sentence) => sentence.replace(/^[-*]\s+/, ''))
+    for (const { term, sentence, start } of terms) {
+      const repeated = sentence && sentences.includes(sentence)
+      const defined = sentences.find(
+        (candidate) => start.test(candidate) && !ABOUT_THE_EXAMPLE.has(`${name}: ${candidate}`),
+      )
+      if (repeated || defined) {
+        problems.push(
+          `${name} defines "${term}" in its own words ("${repeated ? sentence : defined}"): the Glossary owns the definition, so link ${glossaryAnchor(term)} and say what the reader does with it`,
+        )
+      }
+    }
+  }
+  return problems
+}
+
+problems.push(
+  ...glossaryRepeatProblems(
+    read(join(docsDir, 'reference/glossary.mdx')),
+    mdxFiles()
+      .filter((file) => !relative(docsDir, file).startsWith('reference/'))
+      .map((file) => [relative(root, file), read(file)]),
+  ),
+)
+
 // ---- docs/runs against the code -----------------------------------------------------------------
 
 problems.push(...docsRunsProblems(root))

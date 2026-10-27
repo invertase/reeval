@@ -3,7 +3,7 @@ title: "Evaluations"
 description: "Declare an evaluation that gives an agent one task and checks the outcome."
 ---
 
-An evaluation is one `evaluate()` call that gives an agent a task and checks the outcome. For more information about how an evaluation fits into a run, see [Evaluation](/reference/glossary#evaluation).
+Declare each evaluation with `evaluate()`: a task for the agent and the assertions that check the outcome. For the definition, see [Evaluation](/reference/glossary#evaluation).
 
 reeval loads every `*.eval.ts` file under the `evals/` folder. The example evaluation adds a feature to `sindresorhus/camelcase`, a real npm package, checked out at a release tag.
 
@@ -87,7 +87,7 @@ To start the attempts, run the same command without `--dry-run`. For the runnabl
 
 ## Send the task
 
-The task is the prompt in `c.send()`. Each attempt sends it to the agent in a fresh sandbox, after the environment is in place.
+The prompt in `c.send()` is what each attempt sends to the agent, in a fresh sandbox, after the environment is in place. For the definition, see [Task](/reference/glossary#task).
 
 ```ts title="evals/camelcase.eval.ts"
 await c.send('Add a separators option to camelCase: …')
