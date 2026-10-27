@@ -183,7 +183,7 @@ For more information about `EnvironmentSpec`, `EnvironmentHelpers`, each field's
 
 `DEFAULT_EGRESS_ALLOW` is a `readonly string[]` of the package registries and GitHub: `registry.npmjs.org`, `registry.yarnpkg.com`, `github.com`, `*.github.com`, `*.githubusercontent.com`, `pypi.org`, and `files.pythonhosted.org`. Spread it into an `egress.allow` list that still installs packages, as in `egress: { allow: [...DEFAULT_EGRESS_ALLOW, 'example.com'] }`.
 
-For more information about egress policies, see [Egress](/environments/egress#allow-a-list-of-hosts).
+For more information about egress policies, see [`egress`](/reference/options#egress).
 
 ## `DEFAULT_DIRECTORY_IGNORES`
 

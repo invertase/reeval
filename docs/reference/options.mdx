@@ -513,11 +513,11 @@ For more information about sandbox factories, see [Choose a sandbox](/integratio
 </Property>
 
 <Property name="docker.dockerfile" type="string | URL" optional>
-  A Dockerfile, relative to the file that calls `docker()`, absolute, or a `file:` URL. reeval builds it from its directory with `REEVAL_BASE` set to its sandbox image and caches the result by content hash. A Dockerfile that starts from another Debian or Ubuntu image gets the harness baked on, as for `from`.
+  A Dockerfile, relative to the file that calls `docker()`, absolute, or a `file:` URL. reeval builds it from its directory with `REEVAL_BASE` set to its sandbox image and caches the result by content hash. To layer on that image, start the Dockerfile with `ARG REEVAL_BASE` and `FROM ${REEVAL_BASE}`. A Dockerfile that starts from another Debian or Ubuntu image gets the harness baked on, as for `from`.
 </Property>
 
 <Property name="docker.install" type="(string | { run: string; timeout?: Duration })[]" optional>
-  Shell commands baked onto the base image in one cached layer. They run as root from `/`, in order, and see neither secrets nor the workspace. `install` does not combine with `dockerfile`.
+  Shell commands baked onto the base image in one cached layer. They run as root from `/`, in order, and see neither secrets nor the workspace. `install` combines with `from`, not with `dockerfile`: put those commands in the Dockerfile as `RUN` lines.
 </Property>
 
 <Property name="docker.memory" type="string | number" optional>
@@ -577,6 +577,10 @@ For more information about environments, see [Define an environment](/environmen
 <Property name="egress" type="'proxy' | 'allow-all' | 'deny-all' | { allow: string[] }" optional>
   `'proxy'` (the default) allows any host over HTTP and HTTPS through the egress gateway, `'allow-all'` also allows raw TCP and UDP around the gateway, `'deny-all'` blocks all but the automatic hosts, and `{ allow }` adds hosts to them. A group or an evaluation overrides the environment, which overrides the inherited policy.
 </Property>
+
+A plain `allow` entry matches that host only. A `*.` entry matches every subdomain, not the apex domain itself, and never an IP address. The gateway carries HTTP and HTTPS only, so SSH and database clients get no network under every policy but `'allow-all'`. Under `'allow-all'`, raw traffic leaves the sandbox directly, unfiltered and unrecorded, and the record marks the attempt's egress `partial`.
+
+`DEFAULT_EGRESS_ALLOW` holds the package registries and GitHub, so an `allow` list that spreads it still installs packages.
 
 For more information about the automatic hosts, see [Egress](/environments/egress).
 

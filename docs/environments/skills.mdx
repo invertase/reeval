@@ -22,34 +22,9 @@ Pass `math` as an evaluation's `environment`, as [Environments](/environments#de
 
 A skill directory holds a `SKILL.md` file. The frontmatter `name` is kebab-case, and `description` is required. When the frontmatter omits `name`, reeval uses the directory name. A `name` other than kebab-case, or a missing `description`, fails the attempt. Quote a frontmatter value that contains `": "`.
 
-## Use other skill sources
+## Use another source
 
-`skill.local` is one of five sources. This excerpt places one skill from each of three others:
-
-```ts title="with-skill-sources.eval.ts"
-skills: [
-  skill.git('github:anthropics/skills', {
-    ref: anthropicSkills,
-    only: ['brand-guidelines'],
-  }),
-  skill.registry('anthropics/skills@doc-coauthoring', {
-    version: anthropicSkills,
-  }),
-  skill.npm('reeval@0.13.0', { only: ['eval-rubric'] }),
-],
-```
-
-`skill.inline` writes a skill from a name, a description, and its content. For a runnable project, see [`with-skill-sources`](https://github.com/invertase/reeval/tree/main/examples/with-skill-sources). For more information about each source and placement, see [Environment helpers](/reference/environment#skilllocal).
-
-## Read skills from a repository
-
-The `skill.git` repository is `github:owner/repo`, an `https://` URL, an SSH URL, or a GitHub `/tree/<ref>/<path>` URL. Without `ref`, reeval reads the default branch and warns that results aren't comparable over time. Pin `ref` to a commit or a tag to keep them comparable.
-
-Pass `path` as the directory to read. It can be one skill directory or a directory whose immediate subdirectories are skills. Without `path`, reeval reads the `skills/` directory when the repository has that directory and no root `SKILL.md` file. Otherwise reeval reads the repository root.
-
-`only` keeps the listed skill names. When `only` names a skill that is absent, the attempt fails and the message lists the skills that are there.
-
-reeval leaves out the `/evals/` directory, the `.history/` directory, and `*.eval.ts` files. reeval always leaves the `.git` directory out. Pass `exclude` to replace that list. To keep those paths out, repeat the three patterns in `exclude`.
+Place a skill from a repository with [`skill.git`](/reference/environment#skillgit), from skills.sh with [`skill.registry`](/reference/environment#skillregistry), from an npm package with [`skill.npm`](/reference/environment#skillnpm), or from a name, a description, and its content with [`skill.inline`](/reference/environment#skillinline). For a runnable project, see [`with-skill-sources`](https://github.com/invertase/reeval/tree/main/examples/with-skill-sources).
 
 ## Check the agent used the skill
 

@@ -22,45 +22,10 @@ The image needs `apt-get` and glibc. The `id` names the cell in results. Without
 
 For a runnable project, see [`with-python-image`](https://github.com/invertase/reeval/tree/main/examples/with-python-image).
 
-## Build from a Dockerfile
+## Choose another setup
 
-To copy files into the image, write a Dockerfile that starts `FROM ${REEVAL_BASE}`. reeval sets `REEVAL_BASE` to its sandbox image for the harness, builds the Dockerfile from the Dockerfile's own directory, and tags the result by content hash:
-
-```dockerfile title="docker/sqlite/Dockerfile"
-ARG REEVAL_BASE
-FROM ${REEVAL_BASE}
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends sqlite3 \
-  && rm -rf /var/lib/apt/lists/*
-
-COPY seed.sql /opt/seed.sql
-```
-
-The `dockerfile` path is relative to the file that calls `docker()`. Replace `from` with it:
-
-```ts title="evals/environments.ts"
-  sandbox: docker({ dockerfile: '../docker/sqlite/Dockerfile' }),
-```
-
-A Dockerfile that starts from another Debian or Ubuntu image works too. reeval installs the harness on that result, as it does for `from`.
-
-For a runnable project, see [`with-dockerfile`](https://github.com/invertase/reeval/tree/main/examples/with-dockerfile).
-
-## Add install layers
-
-To add packages to the same image, list shell commands in `install` on that `docker()` call. reeval runs the commands as root, in order, with no secrets and no workspace, and caches the layer by the command list:
-
-```ts title="evals/environments.ts"
-    install: [
-      'apt-get update',
-      { run: 'apt-get install -y --no-install-recommends jq', timeout: '10m' },
-    ],
-```
-
-A command is a string, or an object with `run` and a `timeout`. `install` combines with `from`. It does not combine with `dockerfile`, so put those commands in the Dockerfile as `RUN` lines.
-
-For a runnable project, see [`with-docker-install`](https://github.com/invertase/reeval/tree/main/examples/with-docker-install).
+- To copy files into the image, build it from a Dockerfile that starts `FROM ${REEVAL_BASE}` with [`dockerfile`](/reference/options#docker). For a runnable project, see [`with-dockerfile`](https://github.com/invertase/reeval/tree/main/examples/with-dockerfile).
+- To add packages to the image, list shell commands in [`install`](/reference/options#docker), which combines with `from`. For a runnable project, see [`with-docker-install`](https://github.com/invertase/reeval/tree/main/examples/with-docker-install).
 
 ## Prebuild images
 
