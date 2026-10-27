@@ -1,9 +1,9 @@
 ---
 title: "Add toolchains"
-description: "Give every attempt the toolchain your agent needs."
+description: "Give every attempt the toolchain the agent needs."
 ---
 
-reeval's sandbox image has Node, Git, and your harness. When your agent needs another toolchain, add it to the image so every attempt starts with it installed. For more information about commands that run before each attempt, see [Setup commands](/environments/setup).
+reeval's sandbox image has Node, Git, and the harness. When the agent needs another toolchain, add it to the image so every attempt starts with it installed. For more information about commands that run before each attempt, see [Setup commands](/environments/setup).
 
 ## Start from a base image
 
@@ -24,7 +24,7 @@ For a runnable project, see [`with-python-image`](https://github.com/invertase/r
 
 ## Build from a Dockerfile
 
-To copy files into the image, write a Dockerfile that starts `FROM ${REEVAL_BASE}`. reeval sets `REEVAL_BASE` to its sandbox image for your harness, builds the Dockerfile from the Dockerfile's own directory, and tags the result by content hash:
+To copy files into the image, write a Dockerfile that starts `FROM ${REEVAL_BASE}`. reeval sets `REEVAL_BASE` to its sandbox image for the harness, builds the Dockerfile from the Dockerfile's own directory, and tags the result by content hash:
 
 ```dockerfile title="docker/sqlite/Dockerfile"
 ARG REEVAL_BASE
@@ -99,4 +99,4 @@ An image that fails to build fails every attempt on it with an infrastructure er
 | :--- | :--- | :--- |
 | `reeval needs a Debian or Ubuntu based image (glibc and apt-get)` | The `from` image, or the Dockerfile's `FROM`, has no `apt-get` | Start from a Debian or Ubuntu variant, such as `python:3.12-slim` |
 | `Building docker/sqlite/Dockerfile failed: a RUN step exited 1` | The `RUN` line's output, in the message's last lines | Fix the line, then run `npx reeval image build` again |
-| `✗ from … (missing: doesn't resolve: …)` in the `--dry-run` listing | The tag exists, and the registry allows the pull | Fix the tag, or log in to the registry with your container CLI |
+| `✗ from … (missing: doesn't resolve: …)` in the `--dry-run` listing | The tag exists, and the registry allows the pull | Fix the tag, or log in to the registry with the container CLI |
