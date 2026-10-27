@@ -464,6 +464,10 @@ const changed = turn.diff.files.map((file) => file.path)
   Wall time until the result, or `null` when the harness did not report the end.
 </Property>
 
+<Property name="stalled" type="boolean" optional>
+  `true` when a shell-like tool or an edit ran for at least two minutes.
+</Property>
+
 ### `web-fetch`
 
 <Property name="url" type="string" required>
@@ -480,6 +484,10 @@ const changed = turn.diff.files.map((file) => file.path)
 
 <Property name="durationMs" type="number | null" required>
   Wall time until the result, or `null` when the harness did not report the end.
+</Property>
+
+<Property name="stalled" type="boolean" optional>
+  `true` when a shell-like tool or an edit ran for at least two minutes.
 </Property>
 
 ### `tool`
