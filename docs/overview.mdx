@@ -11,6 +11,14 @@ It runs coding agents inside isolated sandboxes, then grades their output using 
 
 The evaluation is code, committed alongside the tool, skill, or doc you are changing. The result is reproducible evidence you can share in pull requests, docs, or release notes.
 
+Ask a coding agent to set reeval up with the setup skill:
+
+```bash
+npx skills add https://github.com/invertase/reeval --skill setup
+```
+
+To set it up by hand, install reeval:
+
 ```bash
 npm install -D reeval
 ```
