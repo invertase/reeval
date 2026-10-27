@@ -5,13 +5,13 @@ description: "Send model calls through OpenRouter on one key."
 
 `openrouter()` sends the model calls of the harnesses it serves through OpenRouter, on one key. The egress gateway swaps the key in only on OpenRouter's model paths at `openrouter.ai`, so the key never enters the sandbox.
 
-## `OPENROUTER_API_KEY`
+## Credential
 
 `openrouter()` reads `OPENROUTER_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset and a planned harness or model takes `openrouter()`.
 
 For more information about the variable, see [`OPENROUTER_API_KEY`](/reference/env-vars#openrouterapikey).
 
-## `openrouter()`
+## Helper
 
 `openrouter()` is exported from `{{ pkg }}/gateway`:
 
@@ -32,12 +32,8 @@ A harness `openrouter()` cannot serve takes the next gateway in the list. Each c
 
 For more information about combining gateways, see [Gateways](/agents/gateways).
 
-## Harnesses
+## Harnesses and models
 
-| Serves | Falls through |
-| :--- | :--- |
-| Claude Code, Codex, Goose, OpenCode, Grok Build | Cursor, Antigravity, fx, pi |
-
-Cursor's agent calls only Cursor's API, Antigravity's CLI calls only Google's, and fx reaches models only on the Vercel AI Gateway or OpenAI's API. reeval runs pi on its Gemini key. A Claude Code, Goose, OpenCode, or Grok Build harness with `effort` set also takes the next gateway.
+For the harnesses `openrouter()` serves, and the ones that fall through to the next gateway, see [Harness support](/agents/gateways#harness-support).
 
 On `openrouter()`, a judge must be a decision model that OpenRouter answers on its Decisions API, such as `typesafe/jev-1.14`, and each call to any other judge model fails.
