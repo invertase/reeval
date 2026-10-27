@@ -27,7 +27,7 @@ The `.gitignore` entry writes that string to the workspace. For a runnable proje
 
 ## Copy a host file
 
-When the content already exists on your machine, pass a host path to `file`, as the `data/people.csv` entry does. A relative path resolves from the file that calls `file`. reeval uses an absolute path as given.
+When the content already exists on the host, pass a host path to `file`, as the `data/people.csv` entry does. A relative path resolves from the file that calls `file`. reeval uses an absolute path as given.
 
 reeval reads the host bytes when the attempt starts. A host file with its executable bit set stays executable in the sandbox. A destination that starts with `~/` goes in the home directory, outside the workspace and its diff:
 
