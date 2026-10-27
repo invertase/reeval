@@ -1,15 +1,21 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import type { HarnessV1StreamPart } from '@ai-sdk/harness'
-import { getPiBootstrap, PI_CLI_VERSION } from '../src/pi-bootstrap.ts'
+import { getPiBootstrap, PI_CLI_VERSION, piGatewayModelsScript } from '../src/pi-bootstrap.ts'
 import {
   buildPiCommand,
   buildPiMcpConfig,
   createPi,
   escapePiConfigValue,
+  PI_AI_GATEWAY,
   PI_CREDENTIAL_ENV,
   PI_MCP_FILE,
+  PI_OPENROUTER,
+  type PiHarnessSettings,
   type PiMcpServer,
 } from '../src/pi-harness.ts'
 import { VERSION } from '../src/version.ts'
@@ -47,7 +53,7 @@ test('each turn runs pi in print mode on one session id, the prompt from its fil
   })
   assert.equal(
     command,
-    `cd '/reeval/workspace' && exec '/h/pi' --mode json -p --offline --approve --no-extensions --provider google --model 'gemini-3.8-flash' --session-id 'abc' --session-dir '/h/.pi/agent/sessions' -- "$(cat '/d/prompt-1.txt')"`,
+    `cd '/reeval/workspace' && exec '/h/pi' --mode json -p --offline --approve --no-extensions --provider 'google' --model 'gemini-3.8-flash' --session-id 'abc' --session-dir '/h/.pi/agent/sessions' -- "$(cat '/d/prompt-1.txt')"`,
   )
 })
 
@@ -61,7 +67,7 @@ test("with MCP servers, the turn loads pi's built-in mcp extension and no other"
     sessionDir: '/s',
     mcp: true,
   })
-  assert.match(command, / --approve --no-extensions -e builtin:mcp --provider google /)
+  assert.match(command, / --approve --no-extensions -e builtin:mcp --provider 'google' /)
 })
 
 test('effort is --thinking', () => {
@@ -144,6 +150,7 @@ test('mcp.json declares every server directly, with literal env and headers, and
 function recordingSandbox(stdout: string[] = []) {
   const writes: Array<{ path: string; content: string }> = []
   const spawned: string[] = []
+  const envs: Array<Record<string, string>> = []
   const stream = (lines: string[] = []) =>
     new ReadableStream<Uint8Array>({
       start: (c) => {
@@ -158,8 +165,9 @@ function recordingSandbox(stdout: string[] = []) {
     writeTextFile: async (o: { path: string; content: string }) => {
       writes.push({ path: o.path, content: o.content })
     },
-    spawn: async (o: { command: string }) => {
+    spawn: async (o: { command: string; env: Record<string, string> }) => {
       spawned.push(o.command)
+      envs.push(o.env)
       return {
         stdout: stream(stdout),
         stderr: stream(),
@@ -168,14 +176,20 @@ function recordingSandbox(stdout: string[] = []) {
       }
     },
   }
-  return { sandbox, writes, spawned }
+  return { sandbox, writes, spawned, envs }
 }
 
-async function oneTurn(mcpServers?: Record<string, PiMcpServer>, stdout?: string[]) {
-  const { sandbox, writes, spawned } = recordingSandbox(stdout)
+async function oneTurn(
+  mcpServers?: Record<string, PiMcpServer>,
+  stdout?: string[],
+  settings: Partial<PiHarnessSettings> = { auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' } },
+  model?: string,
+) {
+  const { sandbox, writes, spawned, envs } = recordingSandbox(stdout)
   const parts: HarnessV1StreamPart[] = []
   const harness = createPi({
-    auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' },
+    auth: {},
+    ...settings,
     ...(mcpServers ? { mcpServers } : {}),
     requireCredentialBrokering: true,
   })
@@ -186,12 +200,13 @@ async function oneTurn(mcpServers?: Record<string, PiMcpServer>, stdout?: string
   } as never)
   const control = await session.doPromptTurn({
     prompt: 'hi',
+    ...(model ? { model } : {}),
     tools: [],
     skills: [],
     emit: (part: HarnessV1StreamPart) => parts.push(part),
   } as never)
   await control.done
-  return { writes, spawned, parts }
+  return { writes, spawned, envs, parts }
 }
 
 test('a session with MCP servers writes mcp.json under the home and loads the mcp extension', async () => {
@@ -211,6 +226,7 @@ test("a dashed server's tools are named with its configured name, not pi's mcp__
         toolCall: { id: 'c1', name: 'mcp__my_docs__latest_version', arguments: {} },
       },
     }),
+    JSON.stringify({ type: 'message_end', message: { role: 'assistant', stopReason: 'toolUse' } }),
     JSON.stringify({
       type: 'tool_execution_end',
       toolCallId: 'c1',
@@ -242,6 +258,38 @@ test('auth is an environment with the Gemini key, or it throws', () => {
   assert.equal(createPi({ auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' } }).harnessId, 'pi')
 })
 
+test('on Vertex AI, pi runs its google-vertex provider on a credentials file, with no key', async () => {
+  const vertex = { project: 'p', location: 'global', credentialsFile: '/reeval/adc.json' }
+  const { spawned, envs } = await oneTurn(undefined, undefined, { auth: {}, vertex })
+  assert.match(spawned[0] ?? '', / --provider 'google-vertex' /)
+  assert.deepEqual(envs[0], {
+    GOOGLE_CLOUD_PROJECT: 'p',
+    GOOGLE_CLOUD_LOCATION: 'global',
+    GOOGLE_APPLICATION_CREDENTIALS: '/reeval/adc.json',
+    PI_OFFLINE: '1',
+  })
+})
+
+test('on OpenRouter, pi runs its own openrouter provider on a placeholder key, with no models.json', async () => {
+  const { writes, spawned, envs } = await oneTurn(
+    undefined,
+    undefined,
+    { auth: { OPENROUTER_API_KEY: 'sk-or-k' }, gateway: PI_OPENROUTER, effort: 'low' },
+    'google/gemini-3.8-flash',
+  )
+  assert.match(
+    spawned[0] ?? '',
+    /^cd '\/w' && exec .* --provider 'openrouter' --model 'google\/gemini-3\.8-flash' --thinking 'low' /,
+  )
+  assert.equal(
+    writes.some((w) => w.path.endsWith('gateway-models.mjs') || w.path.endsWith('models.json')),
+    false,
+  )
+  assert.equal(envs[0]?.PI_OFFLINE, '1')
+  assert.notEqual(envs[0]?.OPENROUTER_API_KEY, 'sk-or-k')
+  assert.ok(envs[0]?.OPENROUTER_API_KEY)
+})
+
 test("with requireCredentialBrokering, a sandbox that can't broker never gets the key", async () => {
   const harness = createPi({
     auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' },
@@ -251,4 +299,94 @@ test("with requireCredentialBrokering, a sandbox that can't broker never gets th
     harness.doStart({ sandboxSession: { run: async () => ({}) } } as never),
     /The sandbox can't broker GEMINI_API_KEY .* so the key stays out of it/,
   )
+})
+
+test('on a gateway, a turn writes models.json first and runs on its provider', () => {
+  const command = buildPiCommand({
+    cli: '/h/pi',
+    workDir: '/w',
+    promptFile: '/d/p.txt',
+    model: 'google/gemini-3.8-flash',
+    sessionId: 'abc',
+    sessionDir: '/s',
+    provider: 'reeval-ai-gateway',
+    before: "node '/d/gateway-models.mjs'",
+  })
+  assert.match(
+    command,
+    /^cd '\/w' && node '\/d\/gateway-models\.mjs' && exec '\/h\/pi' .* --provider 'reeval-ai-gateway' --model 'google\/gemini-3\.8-flash' /,
+  )
+})
+
+/** A bootstrap directory laid out as pnpm installs pi: pi-ai beside pi-coding-agent. */
+function fakeBootstrap(models: Record<string, unknown>) {
+  const root = mkdtempSync(join(tmpdir(), 'pi-gateway-'))
+  const store = join(root, 'node_modules/.pnpm/pi/node_modules/@earendil-works')
+  mkdirSync(join(store, 'pi-coding-agent'), { recursive: true })
+  mkdirSync(join(store, 'pi-ai/dist/providers/data'), { recursive: true })
+  writeFileSync(
+    join(store, 'pi-ai/dist/providers/data/google.json'),
+    JSON.stringify({ 'google-generative-ai': models }),
+  )
+  mkdirSync(join(root, 'bootstrap/node_modules/@earendil-works'), { recursive: true })
+  const link = join(root, 'bootstrap/node_modules/@earendil-works/pi-coding-agent')
+  // A junction on Windows, where a plain symlink needs Developer Mode or admin.
+  symlinkSync(join(store, 'pi-coding-agent'), link, 'junction')
+  return { root, bootstrap: join(root, 'bootstrap') }
+}
+
+async function gatewayModels(bootstrap: string, out: string, model: string) {
+  const script = join(bootstrap, 'gateway-models.mjs')
+  writeFileSync(script, await piGatewayModelsScript())
+  return spawnSync(
+    process.execPath,
+    [script, bootstrap, out, JSON.stringify(PI_AI_GATEWAY), model],
+    {
+      encoding: 'utf8',
+    },
+  )
+}
+
+test("models.json: pi's catalog entry, each thinking level as Gemini's own under providerOptions", async () => {
+  const { root, bootstrap } = fakeBootstrap({
+    'gemini-3.8-flash': {
+      id: 'gemini-3.8-flash',
+      name: 'Gemini 3.8 Flash',
+      reasoning: true,
+      thinkingLevelMap: { off: null, minimal: null, low: 'LOW', medium: 'MEDIUM', high: 'HIGH' },
+      input: ['text'],
+      cost: { input: 1, output: 2 },
+      contextWindow: 1000,
+      maxTokens: 100,
+    },
+  })
+  const out = join(root, 'agent/models.json')
+  const r = await gatewayModels(bootstrap, out, 'google/gemini-3.8-flash')
+  assert.equal(r.status, 0, r.stderr)
+  const provider = JSON.parse(readFileSync(out, 'utf8')).providers['reeval-ai-gateway']
+  assert.equal(provider.baseUrl, 'https://ai-gateway.vercel.sh/v1')
+  assert.equal(provider.api, 'openai-completions')
+  assert.equal(provider.apiKey, '$AI_GATEWAY_API_KEY')
+  assert.equal(provider.compat.supportsReasoningEffort, false)
+  const [model] = provider.models
+  assert.equal(model.id, 'google/gemini-3.8-flash')
+  assert.equal(model.maxTokens, 100)
+  const low = { thinkingConfig: { thinkingLevel: 'low', includeThoughts: true } }
+  assert.deepEqual(Object.keys(model.samplingParamsByThinkingLevel), ['low', 'medium', 'high'])
+  assert.deepEqual(model.samplingParamsByThinkingLevel.low, {
+    providerOptions: { google: low, vertex: low },
+  })
+})
+
+test('twin: a model missing from the catalog, or on a thinking budget, is refused', async () => {
+  const { root, bootstrap } = fakeBootstrap({
+    'gemini-2.5-pro': { id: 'gemini-2.5-pro', reasoning: true },
+  })
+  const out = join(root, 'agent/models.json')
+  const missing = await gatewayModels(bootstrap, out, 'google/gemini-9')
+  assert.equal(missing.status, 1)
+  assert.match(missing.stderr, /pi's catalog has no Gemini model gemini-9/)
+  const budget = await gatewayModels(bootstrap, out, 'gemini-2.5-pro')
+  assert.equal(budget.status, 1)
+  assert.match(budget.stderr, /gemini-2\.5-pro takes a thinking budget, not a thinking level/)
 })

@@ -1,10 +1,11 @@
 // The `Remarks:` section under the tally: what's wrong with the evals themselves, each with its
 // fix. Concerns only and at most `REMARK_CAP` of them; `verbose` adds the rest and the
 // suggestions. A remark prints until a run has printed it, so once you've seen it a run on the
-// same source prints nothing, except a slow MCP start or a connection that never reached the
-// egress gateway, which print in every run they happen. With none to print there's no heading.
+// same source prints nothing, except a slow MCP start, a connection that never reached the egress
+// gateway or a setup process holding a checks secret, which print in every run they happen. With
+// none to print there's no heading.
 import { clip } from '../text.ts'
-import type { Remark, RunInsights } from '../view/insights.ts'
+import type { Remark, RunRemarks } from '../view/remarks.ts'
 import type { SuiteResult } from '../view/suite.ts'
 import type { Colors } from './colors.ts'
 
@@ -12,7 +13,11 @@ import type { Colors } from './colors.ts'
 export const REMARK_CAP = 3
 
 /** Kinds about what happened in this run, not the eval's source: they print in every run they happen. */
-const EVERY_RUN: readonly Remark['kind'][] = ['slow-mcp-start', 'proxy-only-egress']
+const EVERY_RUN: readonly Remark['kind'][] = [
+  'slow-mcp-start',
+  'proxy-only-egress',
+  'setup-process-secret',
+]
 
 /** Whether a remark may print in this run: no earlier run printed it, or it's one of `EVERY_RUN`. */
 export const printsIn = (r: Remark, runId: string) =>
@@ -38,10 +43,10 @@ const location = (at: string) => at.replace(/^source:/, '').replace(/#L(\d+)$/, 
 export function remarkLines(
   c: Colors,
   suite: SuiteResult,
-  insights: RunInsights | null,
+  remarks: RunRemarks | null,
   verbose: boolean,
 ): string[] {
-  const { shown, hidden } = shownRemarks(insights?.remarks ?? [], suite.runId, verbose)
+  const { shown, hidden } = shownRemarks(remarks?.remarks ?? [], suite.runId, verbose)
   if (!shown.length) return []
   const names = new Map(
     suite.files.flatMap((f) =>

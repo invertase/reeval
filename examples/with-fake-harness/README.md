@@ -45,7 +45,7 @@ one profile you need.
 |---|---|
 | `files`, `text` | Writes these files and replies with this message on every turn |
 | `failWith` | Throws before the first turn, as an infra error (exit 3) |
-| `delayMs` | Waits this long per turn, honouring timeouts and Ctrl-C |
+| `delayMs` | Waits this long per turn, honoring timeouts and Ctrl-C |
 | `flakeRate` | Writes nothing in this share of attempts |
 | `{ mcp: 'server/tool' }`, `{ error }` | More script steps: call a stdio MCP server's tool, end the turn with an error |
 

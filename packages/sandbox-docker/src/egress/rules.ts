@@ -13,7 +13,7 @@ export type OutboundRequest = {
   headers: Record<string, string | string[] | undefined>
 }
 
-const normaliseHost = (host: string) => host.toLowerCase().replace(/\.$/, '')
+const normalizeHost = (host: string) => host.toLowerCase().replace(/\.$/, '')
 
 function matchPart(matcher: PartMatcher, value: string, ignoreCase = false): boolean {
   const v = ignoreCase ? value.toLowerCase() : value
@@ -43,7 +43,7 @@ const headerPairs = (headers: OutboundRequest['headers']): [string, string][] =>
 
 export function matches(rule: RequestTransformation, request: OutboundRequest): boolean {
   const { match } = rule
-  if (normaliseHost(match.host) !== normaliseHost(request.host)) return false
+  if (normalizeHost(match.host) !== normalizeHost(request.host)) return false
   const url = new URL(request.path, 'https://placeholder.invalid')
   if (match.path && !matchPart(match.path, url.pathname)) return false
   if (match.method && !match.method.some((m) => m.toUpperCase() === request.method.toUpperCase())) {
@@ -67,7 +67,7 @@ export const onEndpoint = (endpoints: readonly EndpointMatch[], request: Outboun
 
 /** Whether the gateway must decrypt connections to `host`: some rule could apply there. */
 export const decrypts = (rules: readonly RequestTransformation[], host: string) =>
-  rules.some((r) => normaliseHost(r.match.host) === normaliseHost(host))
+  rules.some((r) => normalizeHost(r.match.host) === normalizeHost(host))
 
 /** What a credential the sandbox never sent comes back as. */
 const REDACTED = 'reeval_redacted_credential'
@@ -75,6 +75,17 @@ const REDACTED = 'reeval_redacted_credential'
 const MIN_CREDENTIAL = 16
 
 const schemeAndToken = (value: string) => /^([A-Za-z][\w-]*) +(\S+)$/.exec(value)
+
+/**
+ * Whether a rule for `host` sets a credential: a header value long enough to be one, whether it
+ * replaces a placeholder the sandbox sent or adds a bearer the sandbox never had.
+ */
+export const setsCredential = (rules: readonly RequestTransformation[], host: string) =>
+  rules.some(
+    (r) =>
+      normalizeHost(r.match.host) === normalizeHost(host) &&
+      Object.values(r.transform.headers).some((v) => v.length >= MIN_CREDENTIAL),
+  )
 
 /**
  * The values credential rules for `host` set (rules keyed on a header the sandbox sends, such as
@@ -93,7 +104,7 @@ export function credentialValues(
   }
   for (const rule of rules) {
     const keyed = rule.match.headers ?? []
-    if (!keyed.length || normaliseHost(rule.match.host) !== normaliseHost(host)) continue
+    if (!keyed.length || normalizeHost(rule.match.host) !== normalizeHost(host)) continue
     for (const [name, value] of Object.entries(rule.transform.headers)) {
       const sent = keyed.find(
         (m) => m.key && 'exact' in m.key && m.key.exact.toLowerCase() === name.toLowerCase(),

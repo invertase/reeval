@@ -9,6 +9,6 @@ evaluate('adds a sign-up button', { environment: site }, async (c) => {
   // The page as a browser shows it: server.js serves index.html on $PORT.
   const app = await c.serve('node server.js')
   const home = await c.capture(app, { name: 'home' })
-  const q = 'Does the screenshot show a button labelled "Sign up" under the intro paragraph?'
+  const q = 'Does the screenshot show a button labeled "Sign up" under the intro paragraph?'
   expect(await c.judge(q, { artifacts: [home] })).toPass()
 })

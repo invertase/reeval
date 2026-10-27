@@ -2,12 +2,13 @@
 // until its record lands. Only the local server reads these; a static build never has them.
 
 import { existsSync } from 'node:fs'
-import { readdir, readFile, realpath } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { hostname } from 'node:os'
-import { join, sep } from 'node:path'
+import { join } from 'node:path'
 import { recordFile, scratchDir } from '../history/files.ts'
 import { recordFileName } from '../ids.ts'
-import { redactSecrets } from '../redact.ts'
+import { redactJsonText } from '../redact.ts'
+import { isCompletedAttempt, loadPrevious, previousAttempt } from '../resume.ts'
 import type { EvalRecord } from '../types.ts'
 import {
   isFinished,
@@ -17,7 +18,7 @@ import {
   readableLiveProgress,
 } from '../view/live.ts'
 import { RUN_ID } from '../view/paths.ts'
-import type { StudioSource } from './source.ts'
+import { fileInside, type StudioSource } from './source.ts'
 
 /** A live run whose heartbeat is older than this is shown as stopped. */
 export const STALE_MS = 15_000
@@ -38,8 +39,9 @@ function exited(progress: LiveProgress): boolean {
 }
 
 async function readProgress(root: string, runId: string): Promise<LiveProgress | null> {
-  const text = await readFile(join(stagingRoot(root), runId, LIVE_FILE), 'utf8').catch(() => null)
-  if (text === null) return null
+  const file = await fileInside(stagingRoot(root), [runId], [LIVE_FILE])
+  const text = file && (await readFile(file, 'utf8').catch(() => null))
+  if (!text) return null
   try {
     const progress = readableLiveProgress(JSON.parse(text))
     return progress?.runId === runId ? progress : null
@@ -78,8 +80,23 @@ export async function listLive(
 }
 
 /**
- * A finished attempt's transcript, as `transcript.jsonl` has it, from the record its worker staged;
- * null for an attempt that isn't live and finished, or a file outside the run's staging directory.
+ * The transcript a resume's previous assemble filed for an attempt it kept, or undefined when it
+ * kept none there. The staged record a resume writes for a kept attempt has no turns.
+ */
+async function keptTranscript(root: string, runId: string, key: string) {
+  const { record } = await loadPrevious(join(stagingRoot(root), runId))
+  const kept = previousAttempt(record, key)
+  const ref = kept && isCompletedAttempt(kept.outcome, kept.error) ? kept.files.transcript : null
+  if (!ref) return undefined
+  const path = ['previous-artifacts', ...ref.path.split('/')]
+  const file = await fileInside(stagingRoot(root), [runId], path)
+  return file ? redactJsonText(await readFile(file, 'utf8')) : undefined
+}
+
+/**
+ * A finished attempt's transcript, as `transcript.jsonl` has it, from the record its worker staged
+ * (or, for one a resume kept, the transcript filed for it before); null for an attempt that isn't
+ * live and finished, or a file outside the run's staging directory.
  */
 export async function liveTranscript(
   source: StudioSource,
@@ -90,16 +107,14 @@ export async function liveTranscript(
   const progress = await readProgress(source.root, runId)
   const attempt = progress?.attempts.find((a) => a.key === key)
   if (!attempt || !isFinished(attempt.status)) return null
-  const base = join(stagingRoot(source.root), runId)
   try {
-    const [realBase, real] = await Promise.all([
-      realpath(base),
-      realpath(join(base, 'evals', recordFileName(key))),
-    ])
-    if (!real.startsWith(realBase + sep)) return null
-    const record = JSON.parse(await readFile(real, 'utf8')) as EvalRecord
+    const kept = await keptTranscript(source.root, runId, key)
+    if (kept !== undefined) return kept
+    const file = await fileInside(stagingRoot(source.root), [runId], ['evals', recordFileName(key)])
+    if (!file) return null
+    const record = JSON.parse(await readFile(file, 'utf8')) as EvalRecord
     const { transcriptLines } = await import('../history/assemble.ts')
-    return redactSecrets(transcriptLines(record))
+    return redactJsonText(transcriptLines(record))
   } catch {
     return null
   }

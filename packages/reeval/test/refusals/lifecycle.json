@@ -4,7 +4,7 @@
   "start with a cell typo": "UsageError: The attempt start's attempt.cell has an unknown key \"rol\". Did you mean \"role\"?",
   "start with an unknown role": "UsageError: The attempt start's attempt.cell.role is 'control' or 'variant' (got \"arm\")",
   "start with an empty body": "UsageError: The attempt start's body must not be empty (got \"\")",
-  "abort with an unknown reason": "UsageError: The attempt abort's reason is 'timeout' or 'cancelled' (got \"oom\")",
+  "abort with an unknown reason": "UsageError: The attempt abort's reason is 'timeout' or 'canceled' (got \"oom\")",
   "abort without a message": "UsageError: The attempt abort's message is missing: it must be a string",
   "done with a string error": "UsageError: The attempt done's error must be an object (got \"boom\")",
   "done with an error without a message": "UsageError: The attempt done's error.message is missing: it must be a string",

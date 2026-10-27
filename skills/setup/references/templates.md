@@ -35,7 +35,7 @@ const migration = 'migrations/001_invoices.sql'
 
 evaluate(
   'stores invoice totals in cents with the billing skill',
-  { compare: { baseline: plain, variants: [withSkill] }, runs: 2 },
+  { compare: { baseline: plain, variants: [withSkill] } },
   async (c) => {
     await c.send(
       `Write ${migration}: a Postgres migration creating an invoices table ` +
@@ -89,7 +89,7 @@ import { cursor, fakeHarness } from 'reeval/harness'
     },
 ```
 
-`npx reeval run --profile canary --no-insights invoice` and `--profile oracle` run them in the
+`npx reeval run --profile canary invoice` and `--profile oracle` run them in the
 real Docker sandbox with no keys (after `npx reeval image build`): the canary must exit 1 and
 the oracle 0. Name the eval (`invoice` matches its name): the fake agent writes these files for
 every eval, so with a second eval, give it its own `canary-<name>` and `oracle-<name>`. One of
@@ -174,7 +174,7 @@ import { repo, withRules } from './environments.ts'
 
 evaluate(
   'follows AGENTS.md on a user-facing CLI change',
-  { compare: { baseline: repo, variants: [withRules] }, runs: 2 },
+  { compare: { baseline: repo, variants: [withRules] } },
   async (c) => {
     await c.send('`acme deploy` should stop with a clear error when no region is set.')
     expect.soft(c, 'a CHANGELOG.md entry').toHaveChanged('CHANGELOG.md')
@@ -211,7 +211,7 @@ description: Zod 4 APIs. Use when writing or changing code that uses zod.
 # Zod 4
 
 - String formats are top-level: `z.email()`, `z.url()`, `z.uuid()`, not `z.string().email()`.
-- Error customisation is one `error` param: `z.string({ error: 'Required' })`.
+- Error customization is one `error` param: `z.string({ error: 'Required' })`.
 ```
 
 ```ts
@@ -241,7 +241,7 @@ const accepts = `node -e "import('./user.js').then(({ User }) => {
 
 evaluate(
   "uses Zod 4's top-level email format",
-  { compare: { baseline: zod, variants: [withZodSkill] }, runs: 2 },
+  { compare: { baseline: zod, variants: [withZodSkill] } },
   async (c) => {
     await c.send('Create user.js exporting a zod schema User with a required email field.')
     await expect.soft(c.exec(accepts), 'validates emails').toSucceed()
@@ -254,5 +254,5 @@ evaluate(
 - Pin the version you researched (`zod@4.1.12`), in the setup step and in what you tell the user.
 - Write the facts down as a skill only if the user wants to know what docs or a skill would
   change. Otherwise drop the compare and keep `environment: zod`.
-- Check behaviour (`validates emails`) and the specific API (`uses z.email()`) as two labelled
+- Check behavior (`validates emails`) and the specific API (`uses z.email()`) as two labeled
   checks, so the result says which one an agent missed.

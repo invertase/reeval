@@ -18,7 +18,7 @@
 {"turn":0,"type":"tool","tool":"read","input":{"path":"docs/api.md"},"ok":true,"durationMs":63}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cd . && npx es run --dry-run --json 2>&1 | head -100"},"ok":true,"durationMs":527}
 {"turn":0,"type":"reasoning"}
-{"turn":0,"type":"text","text":"Fixing config and eval mistakes: moving `compare` off `es.config.ts`, replacing invalid `baseline`/`repeat` usage, and setting `runs: 3`.\n"}
+{"turn":0,"type":"text","text":"Fixing config and eval mistakes: moving `compare` off `es.config.ts`, replacing invalid `baseline`/`repeat` usage, and s…"}
 {"turn":0,"type":"file-edit"}
 {"turn":0,"type":"file-edit"}
 {"turn":0,"type":"reasoning"}
@@ -26,5 +26,5 @@
 {"turn":0,"type":"reasoning"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cd . && npx es run --dry-run --json 2>&1 | tail -80"},"ok":true,"durationMs":1345}
 {"turn":0,"type":"reasoning"}
-{"turn":0,"type":"text","text":"Fixed. `npx es run --dry-run` now exits 0 with the intended plan: 1 eval, 2 cells (empty control vs `with-docs`), 3 runs each, 6 attempts on the fake harness/sandbox.\n\n**Mistakes fixed (one line each)…"}
+{"turn":0,"type":"text","text":"Fixed. `npx es run --dry-run` now exits 0 with the intended plan: 1 eval, 2 cells (empty control vs `with-docs`), 3 runs…"}
 {"turn":0,"type":"turn-end"}

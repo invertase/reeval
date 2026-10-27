@@ -48,6 +48,7 @@ Every example takes the real agents in [`profiles.ts`](./profiles.ts) by name: `
 | [`with-harness-edits`](./with-harness-edits) | An eval adding to the harness list it inherits |
 | [`with-reasoning-effort`](./with-reasoning-effort) | One agent at two reasoning efforts |
 | [`with-vercel-gateway`](./with-vercel-gateway) | Model calls through Vercel AI Gateway, on one key |
+| [`with-vertex-gateway`](./with-vertex-gateway) | Claude Code and its judge on Vertex AI, with no key |
 | [`with-fake-harness`](./with-fake-harness) | A scripted agent for building and testing evals |
 | [`with-oracle-canary`](./with-oracle-canary) | Proving an eval with an oracle and a canary |
 
@@ -127,7 +128,7 @@ Every example takes the real agents in [`profiles.ts`](./profiles.ts) by name: `
 |---|---|
 | [`with-query`](./with-query) | SQL over your runs with `reeval query` |
 | [`with-studio`](./with-studio) | Browsing runs in the studio |
-| [`with-analysis`](./with-analysis) | Insights and `reeval analyze` |
+| [`with-analysis`](./with-analysis) | `reeval analyze` |
 | [`with-reeval-mcp`](./with-reeval-mcp) | Your coding agent reading reeval history |
 
 ## Real-world tasks
@@ -135,7 +136,7 @@ Every example takes the real agents in [`profiles.ts`](./profiles.ts) by name: `
 | Example | Shows |
 |---|---|
 | [`with-bug-fix`](./with-bug-fix) | Fixing a seeded bug without touching the tests |
-| [`with-refactor`](./with-refactor) | A refactor that keeps behaviour |
+| [`with-refactor`](./with-refactor) | A refactor that keeps behavior |
 | [`with-test-writing`](./with-test-writing) | Grading tests by whether they catch a bug |
 | [`with-framework-migration`](./with-framework-migration) | CommonJS to ES modules |
 | [`with-dependency-upgrade`](./with-dependency-upgrade) | Bumping a dependency across a breaking change |

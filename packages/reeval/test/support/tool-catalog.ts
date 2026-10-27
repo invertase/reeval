@@ -1,5 +1,5 @@
 // Each harness's tool catalog (its adapter's `builtinTools`) as the contract and the replays check
-// it: every tool a CLI calls must be one its adapter knows, and a contract behaviour's file edit,
+// it: every tool a CLI calls must be one its adapter knows, and a contract behavior's file edit,
 // file read or command must land on a tool of that kind. A tool outside the catalog reaches the
 // transcript under its native name, so a renamed tool (agy 1.4.3's `view_file` → `read_file`)
 // would otherwise drop the edit out of the transcript while every other check still passes.
@@ -85,7 +85,7 @@ export function unmappedNativeTools(catalog: Catalog, names: readonly string[]):
 const text = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v ?? ''))
 
 /**
- * A file or command signal of one contract behaviour, and the kinds it must land on: an edit is a
+ * A file or command signal of one contract behavior, and the kinds it must land on: an edit is a
  * file-edit event (or a command naming the file, when the agent edits from the shell), a read a
  * readonly tool or a command, a command a command.
  */
@@ -95,7 +95,7 @@ type Signal = { what: string } & (
   | { output: string; kinds: readonly ToolKind[] }
 )
 
-/** Each captured behaviour's file and command signals, by eval name. */
+/** Each captured behavior's file and command signals, by eval name. */
 export const SIGNALS: Record<string, readonly Signal[]> = {
   'edit and run': [
     { what: 'the edit of notes.txt', edit: 'notes.txt' },
@@ -109,12 +109,12 @@ export const SIGNALS: Record<string, readonly Signal[]> = {
 }
 
 /**
- * The signals of `behaviour` that didn't land on their kind, each as a sentence naming the
+ * The signals of `behavior` that didn't land on their kind, each as a sentence naming the
  * harness and the tools that carried it instead; empty when every signal did.
  */
 export function misfiled(
   catalog: Catalog,
-  behaviour: string,
+  behavior: string,
   events: readonly TranscriptEvent[],
 ): string[] {
   const tools = events.flatMap((e) => (e.type === 'tool' ? [e] : []))
@@ -122,7 +122,7 @@ export function misfiled(
   const describe = (t: { tool: string }) =>
     `${t.tool} (${catalog.tools.has(t.tool) ? (kindOf(t.tool) ?? 'no kind') : 'not in the catalog'})`
   const failures: string[] = []
-  for (const s of SIGNALS[behaviour] ?? []) {
+  for (const s of SIGNALS[behavior] ?? []) {
     let carriers: typeof tools
     let landed: boolean
     if ('edit' in s) {

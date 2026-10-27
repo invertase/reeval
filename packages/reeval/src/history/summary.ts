@@ -2,8 +2,7 @@ import { clip, fenced, formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { colors } from '../ui/colors.ts'
 import { render, tallyLine } from '../ui/layout.ts'
-import type { RunInsights } from '../view/insights.ts'
-import { checkLabels, checkTries, commandLine, labelledJudgements } from '../view/judgements.ts'
+import { checkLabels, checkTries, commandLine, labeledJudgments } from '../view/judgments.ts'
 import {
   evalMarkOutcome,
   harnessLabel,
@@ -12,6 +11,7 @@ import {
   languageLabel,
   runtimeLabel,
 } from '../view/model.ts'
+import type { RunRemarks } from '../view/remarks.ts'
 import { suiteResult } from '../view/suite.ts'
 import { warnings } from './state.ts'
 import type { AttemptRecord, RunRecord } from './types.ts'
@@ -112,10 +112,7 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
 }
 
 /** Markdown for people and agents landing on a run cold. Links are relative to the artifact dir. */
-export function renderSummary(
-  run: RunRecord,
-  opts: { hint: boolean; insights?: RunInsights | null },
-): string {
+export function renderSummary(run: RunRecord, opts: { remarks?: RunRemarks | null } = {}): string {
   const lines = [
     `# reeval run ${run.runId}`,
     '',
@@ -127,11 +124,7 @@ export function renderSummary(
     '## Results',
     '',
     ...fenced(
-      render(suiteResult(run), opts.insights ?? null, {
-        color: false,
-        verbose: false,
-        hint: opts.hint,
-      }),
+      render(suiteResult(run), opts.remarks ?? null, { color: false, verbose: false }),
       'text',
     ),
     '',
@@ -203,12 +196,12 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
   lines.push(
     `- Agent: ${act.fileEdits} file edits · ${act.tools} other tool calls · ${web(act.webSearches, 'web searches')} · ${web(act.webFetches, 'fetches')} · ${formatDuration(act.reasoningMs)} reasoning${act.stalledTools ? ` · ${act.stalledTools} stalled tool${act.stalledTools === 1 ? '' : 's'} (≥2m)${act.maxToolMs ? `, longest ${formatDuration(act.maxToolMs)}` : ''}` : ''}`,
   )
-  for (const { judgement: j, label, labelled } of labelledJudgements(a)) {
+  for (const { judgment: j, label, labelled: labeled } of labeledJudgments(a)) {
     const retried = j.retries?.length
       ? `, after ${j.retries.length} ${j.retries.length === 1 ? 'retry' : 'retries'}`
       : ''
     lines.push(
-      `- Judge${labelled ? ` ${cell(label)}` : ''} **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}${retried}): ${j.question}`,
+      `- Judge${labeled ? ` ${cell(label)}` : ''} **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}${retried}): ${j.question}`,
     )
   }
   for (const q of a.answers ?? []) {

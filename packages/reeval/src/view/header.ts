@@ -44,6 +44,8 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
       slug: e.slug,
       fingerprint: e.fingerprint,
       sources: e.sources,
+      ...(e.source ? { source: e.source } : {}),
+      ...(e.revision !== undefined ? { revision: e.revision } : {}),
       outcome: e.outcome,
       passRate: e.passRate,
       cells: e.cells.map((c) => ({
@@ -65,7 +67,7 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
         passRate: c.passRate,
         outcome: c.outcome,
         effort: cellEffort(e, c.key),
-        ...cancelledIn(e, c.key),
+        ...canceledIn(e, c.key),
         ...(c.lift
           ? {
               lift: {
@@ -81,12 +83,22 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
     })),
     ...(record.families?.length
       ? {
-          families: record.families.map(({ id, name, cases, ran, outcome }) => ({
+          families: record.families.map(({ id, name, cases, ran, outcome, lifts }) => ({
             id,
             name,
             cases,
             ran,
             outcome,
+            caseIds: record.evals.filter((e) => e.family?.id === id).map((e) => e.id),
+            lifts: lifts.map((l) => ({
+              variant: l.variant,
+              vs: l.vs,
+              points: l.points,
+              lo: l.interval.lo,
+              hi: l.interval.hi,
+              ...(l.minLift !== undefined ? { minLift: l.minLift } : {}),
+              outcome: l.outcome,
+            })),
           })),
         }
       : {}),
@@ -94,10 +106,10 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
   }
 }
 
-/** A cell's failed attempts that the run's interrupt cancelled, when it has any. */
-function cancelledIn(e: RunRecord['evals'][number], cell: string): { cancelled?: number } {
+/** A cell's failed attempts that the run's interrupt canceled, when it has any. */
+function canceledIn(e: RunRecord['evals'][number], cell: string): { canceled?: number } {
   const n = e.attempts.filter(
     (a) => a.cell === cell && a.outcome === 'fail' && a.error?.kind === 'aborted',
   ).length
-  return n ? { cancelled: n } : {}
+  return n ? { canceled: n } : {}
 }

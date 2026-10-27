@@ -43,6 +43,7 @@ import {
   GROK_ENDPOINTS,
   GROK_HOME_SKILLS_DIR,
   GROK_WORKSPACE_SKILLS_DIR,
+  GrokBuildStreamTranslator,
 } from '@reeval/harness-grok-build'
 import {
   OPENCODE_HOME_SKILLS_DIR,
@@ -68,19 +69,17 @@ import {
   antigravityMcpServers,
   brokeringFor,
   claudeMcpServers,
-  claudePluginFiles,
   cursorHookMatcher,
   cursorMcpServers,
   gooseMcpServers,
   LAYOUTS,
   layoutOf,
-  opencodeFrontmatter,
   opencodeVars,
   type ServedModel,
 } from '../src/harness/agents.ts'
 import { effortFromModelLabel, harnessEffort, servedEffortOf } from '../src/harness/effort.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
-import { normaliseStream, type StampedPart } from '../src/harness/transcript.ts'
+import { normalizeStream, type StampedPart } from '../src/harness/transcript.ts'
 import {
   antigravity,
   claudeCode,
@@ -98,6 +97,117 @@ import { imageHarness } from '../src/sandbox/prepare.ts'
 import type { AgentHarnessDescriptor, TranscriptEvent } from '../src/types.ts'
 import { promptTokens, sumUsage, totalTokens } from '../src/usage.ts'
 import { formatUsage } from '../src/view/model.ts'
+
+describe('where each harness reads what the environment gives it', () => {
+  test('rules, repo skills and home skills go where each CLI reads them, in its own image', () => {
+    const home = (kind: string, dir: string) =>
+      `.ai-sdk-harness/.harness-bootstrap/${kind}/implementation/home/${dir}`
+    type Row = [
+      h: AgentHarnessDescriptor,
+      rules: string,
+      repo: string,
+      home: string,
+      plugins: string,
+    ]
+    // `plugins` is the placement, then each plugin directory unpacked into the workspace.
+    const expected: Record<AgentKind, Row> = {
+      cursor: [
+        cursor({ model: 'm' }),
+        CURSOR_SDK_WORKSPACE_RULES_FILE,
+        CURSOR_SDK_WORKSPACE_SKILLS_DIR,
+        CURSOR_SDK_HOME_SKILLS_DIR,
+        'flat rules=.cursor/rules agents=.cursor/agents commands=.cursor/commands',
+      ],
+      'claude-code': [
+        claudeCode({ model: 'opus' }),
+        'CLAUDE.md',
+        '.claude/skills',
+        '.claude/skills',
+        'namespaced',
+      ],
+      antigravity: [
+        antigravity({ model: 'm' }),
+        ANTIGRAVITY_WORKSPACE_RULES_FILE,
+        ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
+        ANTIGRAVITY_HOME_SKILLS_DIR,
+        'namespaced',
+      ],
+      opencode: [
+        opencode({ model: 'google/m' }),
+        'AGENTS.md',
+        OPENCODE_WORKSPACE_SKILLS_DIR,
+        OPENCODE_HOME_SKILLS_DIR,
+        'flat agents=.opencode/agents commands=.opencode/commands',
+      ],
+      goose: [
+        goose({ model: 'm' }),
+        'AGENTS.md',
+        GOOSE_WORKSPACE_SKILLS_DIR,
+        home('goose', GOOSE_HOME_SKILLS_DIR),
+        'flat',
+      ],
+      fx: [
+        fx({ model: 'm' }),
+        'AGENTS.md',
+        FX_WORKSPACE_SKILLS_DIR,
+        home('fx', FX_HOME_SKILLS_DIR),
+        'flat',
+      ],
+      'grok-build': [
+        grokBuild({ model: 'm' }),
+        'AGENTS.md',
+        GROK_WORKSPACE_SKILLS_DIR,
+        home('grok-build', GROK_HOME_SKILLS_DIR),
+        'namespaced',
+      ],
+      pi: [
+        pi({ model: 'm' }),
+        'AGENTS.md',
+        PI_WORKSPACE_SKILLS_DIR,
+        PI_HOME_SKILLS_DIR,
+        'flat commands=.pi/prompts',
+      ],
+      codex: [
+        codex({ model: 'm' }),
+        'AGENTS.md',
+        CODEX_WORKSPACE_SKILLS_DIR,
+        CODEX_HOME_SKILLS_DIR,
+        'namespaced',
+      ],
+    }
+    for (const [kind, [h, ...want]] of Object.entries(expected)) {
+      const layout = layoutOf(h)
+      const unpacked = Object.entries(layout.pluginUnpack ?? {})
+        .filter(([, dir]) => typeof dir === 'string')
+        .map(([part, dir]) => `${part}=${dir}`)
+      assert.deepEqual(
+        [
+          layout.rulesFile,
+          layout.workspaceSkillDir,
+          layout.harnessSkillDir,
+          [layout.pluginPlacement, ...unpacked].join(' '),
+        ],
+        want,
+        kind,
+      )
+      assert.equal(workspaceSkillDir(h), layout.workspaceSkillDir, kind)
+      assert.equal(imageHarness(h), kind)
+    }
+    assert.equal(workspaceSkillDir(fakeHarness()), '.agents/skills')
+    assert.equal(imageHarness(fakeHarness()), 'cursor')
+  })
+
+  test("the catalog's endpoints are each adapter's", () => {
+    assert.deepEqual(AGENTS.cursor.endpoints, cursorSdkEndpoints())
+    assert.deepEqual(
+      brokeringFor(opencode({ model: 'google/m' }))?.endpoints,
+      openCodeEndpoints('google/m'),
+    )
+    assert.deepEqual(AGENTS.goose.endpoints, GOOSE_ENDPOINTS)
+    assert.deepEqual(AGENTS['grok-build'].endpoints, GROK_ENDPOINTS)
+    assert.deepEqual(AGENTS.pi.endpoints, PI_ENDPOINTS)
+  })
+})
 
 describe('the Claude Code harness', () => {
   test('is plain data with its own cell id, and needs a model', () => {
@@ -160,23 +270,6 @@ describe('the Claude Code harness', () => {
       'CURSOR_API_KEY (character 1)',
     ])
     assert.deepEqual(malformedCredentials(config, {}), [], 'unset is missingCredentials')
-  })
-
-  test('reads rules from CLAUDE.md and repo skills from .claude/skills, in its own image', () => {
-    const h = claudeCode({ model: 'claude-opus-5-5' })
-    assert.deepEqual(layoutOf(h), {
-      rulesFile: 'CLAUDE.md',
-      workspaceSkillDir: '.claude/skills',
-      harnessSkillDir: '.claude/skills',
-      pluginPlacement: 'namespaced',
-      pluginFiles: claudePluginFiles,
-    })
-    assert.equal(layoutOf(cursor({ model: 'composer-2.5' })).rulesFile, 'AGENTS.md')
-    assert.equal(workspaceSkillDir(cursor({ model: 'composer-2.5' })), '.cursor/skills')
-    assert.equal(workspaceSkillDir(fakeHarness()), '.agents/skills')
-    assert.equal(imageHarness(h), 'claude-code')
-    assert.equal(imageHarness(cursor({ model: 'composer-2.5' })), 'cursor')
-    assert.equal(imageHarness(fakeHarness()), 'cursor')
   })
 
   test("a fake agent with a layout is placed exactly like that agent, in that agent's image", () => {
@@ -296,18 +389,6 @@ describe('the Antigravity harness', () => {
       'GEMINI_API_KEY',
     ])
     assert.deepEqual(missingCredentials(config, { GEMINI_API_KEY: 'x' }), [])
-  })
-
-  test('reads rules from AGENTS.md, repo skills from .agents/skills and home skills from ~/.gemini/config/skills', () => {
-    const h = antigravity({ model: 'm' })
-    assert.deepEqual(layoutOf(h), {
-      rulesFile: 'AGENTS.md',
-      workspaceSkillDir: '.agents/skills',
-      harnessSkillDir: '.gemini/config/skills',
-      pluginPlacement: 'namespaced',
-      pluginHookEvents: ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
-    })
-    assert.equal(imageHarness(h), 'antigravity')
   })
 
   test("gets MCP servers in the CLI's mcp_config.json shape (serverUrl, not url)", () => {
@@ -465,23 +546,6 @@ describe('the OpenCode harness', () => {
     assert.deepEqual(hosts('cerebras/m'), ['api.cerebras.ai', 'mcp.exa.ai'])
   })
 
-  test('OpenCode reads rules from AGENTS.md, repo skills from .opencode/skills', () => {
-    const h = opencode({ model: 'google/m' })
-    assert.deepEqual(layoutOf(h), {
-      rulesFile: 'AGENTS.md',
-      workspaceSkillDir: OPENCODE_WORKSPACE_SKILLS_DIR,
-      harnessSkillDir: OPENCODE_HOME_SKILLS_DIR,
-      pluginPlacement: 'flat',
-      pluginUnpack: {
-        agents: '.opencode/agents',
-        commands: '.opencode/commands',
-        frontmatter: opencodeFrontmatter,
-      },
-    })
-    assert.equal(imageHarness(h), 'opencode')
-    assert.deepEqual(brokeringFor(h)?.endpoints, openCodeEndpoints('google/m'))
-  })
-
   test("gets MCP servers in its config's shape, and refuses SSE", () => {
     assert.deepEqual(
       AGENTS.opencode.mcpServers({
@@ -510,6 +574,60 @@ describe('the OpenCode harness', () => {
         }),
       /^InfraError: OpenCode has no SSE MCP transport, so it can't use the old server \(mcp\.sse\)/,
     )
+  })
+
+  test('refuses an MCP value OpenCode would substitute, naming the server and field', () => {
+    const refused = (server: Parameters<typeof AGENTS.opencode.mcpServers>[0][string]) => {
+      try {
+        AGENTS.opencode.mcpServers({ 'review:events': server })
+        return undefined
+      } catch (error) {
+        return /wouldn't get (.+) as written/.exec((error as Error).message)?.[1]
+      }
+    }
+    const stdio = (args: string[], env: Record<string, string> = {}) =>
+      ({ transport: 'stdio', command: 'node', args, env }) as const
+    assert.equal(refused(stdio(['a', '{file:/tmp/x}'])), 'mcp["review:events"].args[1]')
+    assert.equal(
+      refused(stdio([], { GREETING: 'Hello {env:USER}' })),
+      'mcp["review:events"].env.GREETING',
+    )
+    assert.equal(refused(stdio(['{env:'])), 'mcp["review:events"].args[0]')
+    assert.equal(
+      refused({ transport: 'http', url: 'https://x.example/mcp', headers: { 'X-Key': '{env:K}' } }),
+      'mcp["review:events"].headers["X-Key"]',
+    )
+    assert.equal(refused(stdio(['{env:}', '{file:}', '{ENV:X}', '{ env:X}'])), undefined)
+  })
+
+  test('refuses an MCP server, env or header name OpenCode would substitute, naming no value', () => {
+    const refusal = (servers: Parameters<typeof AGENTS.opencode.mcpServers>[0]) => {
+      try {
+        AGENTS.opencode.mcpServers(servers)
+        return undefined
+      } catch (error) {
+        return (error as Error).message
+      }
+    }
+    const field = (servers: Parameters<typeof AGENTS.opencode.mcpServers>[0]) =>
+      /wouldn't get (.+) as written/.exec(refusal(servers) ?? '')?.[1]
+    const stdio = (env: Record<string, string> = {}) =>
+      ({ transport: 'stdio', command: 'node', args: [], env }) as const
+    assert.equal(field({ 'a{file:/etc/hostname}': stdio() }), 'its name')
+    assert.equal(field({ 'p:{env:USER}': stdio() }), 'its name')
+    assert.equal(
+      field({ docs: stdio({ '{env:USER}': 'sk-live-1234' }) }),
+      'the env name {env:USER} in mcp.docs.env',
+    )
+    assert.equal(field({ docs: stdio({ '{env:': 'X}' }) }), 'the env name {env: in mcp.docs.env')
+    assert.equal(
+      field({
+        docs: { transport: 'http', url: 'https://x.example/mcp', headers: { 'X-{env:USER}': 's' } },
+      }),
+      'the header name X-{env:USER} in mcp.docs.headers',
+    )
+    assert.doesNotMatch(refusal({ docs: stdio({ '{env:USER}': 'sk-live-1234' }) }) ?? '', /sk-live/)
+    assert.equal(field({ docs: stdio({ '{env:}': 'a', 'X_{file:}': 'b' }) }), undefined)
   })
 
   test('its brokered requests name the served model, as Antigravity’s do', () => {
@@ -573,18 +691,6 @@ describe('the Goose harness', () => {
     assert.deepEqual(missingCredentials(config, { GOOGLE_GENERATIVE_AI_API_KEY: 'x' }), [])
   })
 
-  test('Goose reads rules from AGENTS.md, repo skills from .goose/skills, home skills in its own home', () => {
-    const h = goose({ model: 'm' })
-    assert.deepEqual(layoutOf(h), {
-      rulesFile: 'AGENTS.md',
-      workspaceSkillDir: GOOSE_WORKSPACE_SKILLS_DIR,
-      harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/${GOOSE_HOME_SKILLS_DIR}`,
-      pluginPlacement: 'flat',
-    })
-    assert.equal(imageHarness(h), 'goose')
-    assert.deepEqual(AGENTS.goose.endpoints, GOOSE_ENDPOINTS)
-  })
-
   test('gets MCP servers as Goose extensions (stdio and streamable_http), and refuses SSE', () => {
     assert.deepEqual(
       gooseMcpServers({
@@ -634,17 +740,6 @@ describe('the fx harness', () => {
     assert.deepEqual(missingCredentials(openai, { OPENAI_API_KEY: 'x' }), [])
   })
 
-  test('reads rules from AGENTS.md, repo skills from .fx/skills, home skills in its own home', () => {
-    const h = fx({ model: 'm' })
-    assert.deepEqual(layoutOf(h), {
-      rulesFile: 'AGENTS.md',
-      workspaceSkillDir: FX_WORKSPACE_SKILLS_DIR,
-      harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/${FX_HOME_SKILLS_DIR}`,
-      pluginPlacement: 'flat',
-    })
-    assert.equal(imageHarness(h), 'fx')
-  })
-
   test("gets MCP servers in ACP's shape, a bare stdio command through env's PATH lookup", () => {
     assert.deepEqual(
       acpMcpServers({
@@ -691,18 +786,6 @@ describe('the Grok Build harness', () => {
     const config = resolveConfig({ harness: [grokBuild({ model: 'm' })] }, '/p')
     assert.deepEqual(missingCredentials(config, {}), ['XAI_API_KEY'])
     assert.deepEqual(missingCredentials(config, { XAI_API_KEY: 'x' }), [])
-  })
-
-  test('Grok reads rules from AGENTS.md, repo skills from .grok/skills, home skills in its own home', () => {
-    const h = grokBuild({ model: 'm' })
-    assert.deepEqual(layoutOf(h), {
-      rulesFile: 'AGENTS.md',
-      workspaceSkillDir: GROK_WORKSPACE_SKILLS_DIR,
-      harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/${GROK_HOME_SKILLS_DIR}`,
-      pluginPlacement: 'namespaced',
-    })
-    assert.equal(imageHarness(h), 'grok-build')
-    assert.deepEqual(AGENTS['grok-build'].endpoints, GROK_ENDPOINTS)
   })
 
   test("gets MCP servers in ACP's McpServer shape, as fx does", () => {
@@ -781,18 +864,8 @@ describe('the pi harness', () => {
     )
   })
 
-  test('pi reads rules from AGENTS.md, repo skills from .pi/skills and home skills from ~/.pi/agent/skills', () => {
-    const h = pi({ model: 'm' })
-    assert.deepEqual(layoutOf(h), {
-      rulesFile: 'AGENTS.md',
-      workspaceSkillDir: PI_WORKSPACE_SKILLS_DIR,
-      harnessSkillDir: PI_HOME_SKILLS_DIR,
-      pluginPlacement: 'flat',
-      pluginUnpack: { commands: '.pi/prompts' },
-    })
-    assert.equal(imageHarness(h), 'pi')
-    assert.deepEqual(AGENTS.pi.endpoints, PI_ENDPOINTS)
-    const config = resolveConfig({ harness: [h] }, '/p')
+  test('needs GOOGLE_GENERATIVE_AI_API_KEY, not GEMINI_API_KEY', () => {
+    const config = resolveConfig({ harness: [pi({ model: 'm' })] }, '/p')
     assert.deepEqual(missingCredentials(config, { GEMINI_API_KEY: 'x' }), [
       'GOOGLE_GENERATIVE_AI_API_KEY',
     ])
@@ -823,7 +896,7 @@ describe('the pi harness', () => {
   })
 
   test("pi's edit results are file edits with the patch's line counts", () => {
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         {
           ms: 1,
@@ -853,6 +926,37 @@ describe('the pi harness', () => {
       [['b.txt', 'modify', 2, 1]],
     )
   })
+
+  test("pi's edit counts lines that start with -- or ++, and not the patch's file headers", () => {
+    const edit = (patch: string) =>
+      normalizeStream(
+        [
+          {
+            ms: 1,
+            part: {
+              type: 'tool-call',
+              toolCallId: 'e',
+              toolName: 'edit',
+              input: { path: 'q.sql' },
+            },
+          },
+          {
+            ms: 2,
+            part: {
+              type: 'tool-result',
+              toolCallId: 'e',
+              output: { output: 'ok', details: { patch } },
+            },
+          },
+        ],
+        0,
+      ).map((e) => (e.type === 'file-edit' ? [e.added, e.removed] : e.type))
+    assert.deepEqual(
+      edit('--- q.sql\n+++ q.sql\n@@ -1,2 +1,2 @@\n--- old\n+++counter;\n select 1;\n'),
+      [[1, 1]],
+    )
+    assert.deepEqual(edit('--- a.md\n+++ a.md\n@@ -1,3 +1,2 @@\n title\n----\n body\n'), [[0, 1]])
+  })
 })
 
 describe('the Codex harness', () => {
@@ -866,16 +970,8 @@ describe('the Codex harness', () => {
     )
   })
 
-  test('Codex reads rules from AGENTS.md and skills from .agents/skills and ~/.agents/skills', () => {
-    const h = codex({ model: 'm' })
-    assert.deepEqual(layoutOf(h), {
-      rulesFile: 'AGENTS.md',
-      workspaceSkillDir: CODEX_WORKSPACE_SKILLS_DIR,
-      harnessSkillDir: CODEX_HOME_SKILLS_DIR,
-      pluginPlacement: 'namespaced',
-    })
-    assert.equal(imageHarness(h), 'codex')
-    const config = resolveConfig({ harness: [h] }, '/p')
+  test('needs OPENAI_API_KEY', () => {
+    const config = resolveConfig({ harness: [codex({ model: 'm' })] }, '/p')
     assert.deepEqual(missingCredentials(config, {}), ['OPENAI_API_KEY'])
     assert.deepEqual(missingCredentials(config, { OPENAI_API_KEY: 'x' }), [])
   })
@@ -919,7 +1015,7 @@ describe('the Codex harness', () => {
       { ms: 1, part: { type: 'tool-call', toolCallId: id, toolName, input: { path } } },
       { ms: 2, part: { type: 'tool-result', toolCallId: id, output: { kind } } },
     ]
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         ...change('a', 'write', 'new.txt', 'add'),
         ...change('u', 'edit', 'notes.txt', 'update'),
@@ -1022,34 +1118,21 @@ describe('the Cursor harness', () => {
     assert.deepEqual(resolveConfig({}, '/p').harness, [cursor({ model: 'composer-2.5' })])
   })
 
-  test("reads AGENTS.md, .cursor/skills and ~/.agents/skills; the catalog matches the adapter's", () => {
-    const h = cursor({ model: 'm' })
-    assert.deepEqual(layoutOf(h), {
-      rulesFile: CURSOR_SDK_WORKSPACE_RULES_FILE,
-      workspaceSkillDir: CURSOR_SDK_WORKSPACE_SKILLS_DIR,
-      harnessSkillDir: CURSOR_SDK_HOME_SKILLS_DIR,
-      pluginPlacement: 'flat',
-      pluginUnpack: LAYOUTS.cursor.pluginUnpack,
-      pluginHookEvents: [
-        'SessionStart',
-        'SessionEnd',
-        'UserPromptSubmit',
-        'PreToolUse',
-        'PostToolUse',
-        'SubagentStop',
-        'PreCompact',
-        'Stop',
-      ],
-    })
+  test("unpacks a plugin's hooks into .cursor/hooks.json, for every event the SDK runs", () => {
     const unpack = LAYOUTS.cursor.pluginUnpack
-    assert.deepEqual(
-      [unpack?.rules, unpack?.agents, unpack?.commands, unpack?.hooks?.file],
-      ['.cursor/rules', '.cursor/agents', '.cursor/commands', '.cursor/hooks.json'],
-    )
+    assert.equal(unpack?.hooks?.file, '.cursor/hooks.json')
     assert.equal(unpack?.hooks?.matcher, cursorHookMatcher)
+    assert.deepEqual(LAYOUTS.cursor.pluginHookEvents, [
+      'SessionStart',
+      'SessionEnd',
+      'UserPromptSubmit',
+      'PreToolUse',
+      'PostToolUse',
+      'SubagentStop',
+      'PreCompact',
+      'Stop',
+    ])
     assert.deepEqual(Object.keys(unpack?.hooks?.events ?? {}), LAYOUTS.cursor.pluginHookEvents)
-    assert.equal(imageHarness(h), 'cursor')
-    assert.deepEqual(AGENTS.cursor.endpoints, cursorSdkEndpoints())
   })
 
   test("gets MCP servers in the SDK's McpServerConfig shape", () => {
@@ -1070,7 +1153,7 @@ describe('the Cursor harness', () => {
     )
   })
 
-  test('a real turn normalises: relative edits, mcp__ names, timed tools', () => {
+  test('a real turn normalizes: relative edits, mcp__ names, timed tools', () => {
     const t = new CursorSdkStreamTranslator({ workDir: '/reeval/workspace' })
     const ndjson = readFileSync(
       new URL('../../harness-cursor-sdk/test/fixtures/tools-mcp-skills.ndjson', import.meta.url),
@@ -1088,7 +1171,7 @@ describe('the Cursor harness', () => {
               : part,
       })),
     )
-    const events = normaliseStream(parts as never, Date.parse('2026-09-26T12:00:00.000Z'))
+    const events = normalizeStream(parts as never, Date.parse('2026-09-26T12:00:00.000Z'))
     const shape = events
       .filter((e) => e.type !== 'reasoning' && e.type !== 'text')
       .map((e) =>
@@ -1163,6 +1246,7 @@ const HOST_CREDENTIALS = [
   'GOOGLE_API_KEY',
   'GOOGLE_GEMINI_BASE_URL',
   'GOOGLE_GENERATIVE_AI_API_KEY',
+  'OPENAI_API_KEY',
   'XAI_API_KEY',
 ]
 
@@ -1203,76 +1287,279 @@ async function withHostEnv<T>(env: Record<string, string>, fn: () => Promise<T>)
 }
 
 describe('credential brokering per agent', () => {
-  const REAL = 'sk-ant-real-key-for-tests'
   const everything = {
-    ANTHROPIC_API_KEY: REAL,
+    ANTHROPIC_API_KEY: 'sk-ant-real-key-for-tests',
     ANTHROPIC_AUTH_TOKEN: 'host-token',
     ANTHROPIC_BASE_URL: 'https://proxy.example',
     CLAUDE_CODE_OAUTH_TOKEN: 'host-oauth',
     AI_GATEWAY_API_KEY: 'host-gateway',
   }
+  const gemini = 'generativelanguage.googleapis.com'
+  const placeholderOf = (rule: HarnessV1RequestTransformation | undefined) =>
+    String(rule?.match.headers?.[0]?.value?.exact ?? 'missing')
 
-  test("Claude Code's adapter brokers only the API key to Anthropic, whatever else the host has", async () => {
-    const rules = await adapterRules('claude-code', everything)
-    assert.equal(rules.length, 1)
-    assert.equal(rules[0]?.match.host, 'api.anthropic.com', 'never the AI Gateway')
-    assert.deepEqual(rules[0]?.transform.headers, { 'x-api-key': REAL })
-  })
-
-  test("the key is swapped in on Claude Code's endpoints only; anything else is refused", async () => {
-    const brokering = brokeringFor(claudeCode({ model: 'opus' }))
-    assert.equal(brokering?.credential, 'ANTHROPIC_API_KEY')
-    const rules = await adapterRules('claude-code', { ANTHROPIC_API_KEY: REAL })
-    const placeholder = String(rules[0]?.match.headers?.[0]?.value?.exact ?? 'missing')
-    assert.match(placeholder, /^aisdkhc_/)
-    const send = (method: string, path: string) =>
-      applyTransformations(
-        rules,
-        { host: 'api.anthropic.com', method, path, headers: { 'x-api-key': placeholder } },
-        brokering?.endpoints,
-      )
-    for (const [method, path] of [
-      ['POST', '/v1/messages?beta=true'],
-      ['POST', '/v1/messages/count_tokens'],
-      ['GET', '/api/claude_code/settings'],
-      ['GET', '/api/claude_code/policy_limits'],
-    ] as const) {
-      assert.equal(send(method, path).headers['x-api-key'], REAL, `${method} ${path}`)
-    }
-    for (const [method, path] of [
-      ['GET', '/v1/models'],
-      ['POST', '/v1/files'],
-      ['POST', '/v1/messages/batches'],
-      ['GET', '/v1/messages'],
-      ['POST', '/api/event_logging/v2/batch'],
-      ['GET', '/api/claude_cli/bootstrap'],
-      ['POST', '/api/eval/sdk-zAZezfDKGoZuXXKe'],
-    ] as const) {
-      const r = send(method, path)
-      assert.equal(r.refused, true, `${method} ${path}`)
-      assert.equal(r.headers['x-api-key'], placeholder, `${method} ${path}`)
-    }
-  })
-
-  test("Cursor's adapter rule is on its one endpoint, whatever else the host has", async () => {
-    const rules = await adapterRules('cursor', { ...everything, CURSOR_API_KEY: 'crsr_real' })
-    assert.equal(rules.length, 1)
-    const { endpoints } = brokeringFor(cursor({ model: 'composer-2.5' })) ?? { endpoints: [] }
-    const auth = String(rules[0]?.match.headers?.[0]?.value?.exact ?? '')
-    const exchange = applyTransformations(
-      rules,
-      {
-        host: 'api2.cursor.sh',
-        method: 'POST',
-        path: '/auth/exchange_user_api_key',
-        headers: { authorization: auth },
+  // Each adapter, with every other credential the host might have set, asks for one rule per host:
+  // its own key, in its own header, to its own API (never a host proxy or the AI Gateway).
+  const ONLY: {
+    name: string
+    kind: AgentKind
+    model?: string
+    env: Record<string, string>
+    credential: string
+    rules: [host: string, headers: Record<string, string>][]
+  }[] = [
+    {
+      name: 'Claude Code: the API key to Anthropic',
+      kind: 'claude-code',
+      env: everything,
+      credential: 'ANTHROPIC_API_KEY',
+      rules: [['api.anthropic.com', { 'x-api-key': 'sk-ant-real-key-for-tests' }]],
+    },
+    {
+      name: 'Cursor: the API key to its exchange',
+      kind: 'cursor',
+      env: { ...everything, CURSOR_API_KEY: 'crsr_real' },
+      credential: 'CURSOR_API_KEY',
+      rules: [['api2.cursor.sh', { Authorization: 'Bearer crsr_real' }]],
+    },
+    {
+      name: 'Antigravity: GEMINI_API_KEY to the Gemini API',
+      kind: 'antigravity',
+      env: {
+        ...everything,
+        GEMINI_API_KEY: 'AIza-real',
+        GOOGLE_API_KEY: 'host-google',
+        GOOGLE_GENERATIVE_AI_API_KEY: 'host-judge',
+        GOOGLE_GEMINI_BASE_URL: 'https://proxy.example',
       },
-      endpoints,
-    )
-    assert.equal(exchange.headers.authorization, 'Bearer crsr_real')
-  })
+      credential: 'GEMINI_API_KEY',
+      rules: [[gemini, { 'x-goog-api-key': 'AIza-real' }]],
+    },
+    {
+      name: "OpenCode: the model's provider's key, Google's",
+      kind: 'opencode',
+      model: 'google/gemini-3.8-flash',
+      env: {
+        ...everything,
+        GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real',
+        GEMINI_API_KEY: 'host-gemini',
+        GOOGLE_API_KEY: 'host-google',
+      },
+      credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
+      rules: [[gemini, { 'x-goog-api-key': 'AIza-real' }]],
+    },
+    {
+      name: "OpenCode: the model's provider's key, Anthropic's",
+      kind: 'opencode',
+      model: 'anthropic/claude-haiku-4-5',
+      env: { ...everything, ANTHROPIC_API_KEY: 'sk-ant-real' },
+      credential: 'ANTHROPIC_API_KEY',
+      rules: [['api.anthropic.com', { 'x-api-key': 'sk-ant-real' }]],
+    },
+    {
+      name: "OpenCode: the model's provider's key, OpenAI's, as a Bearer token",
+      kind: 'opencode',
+      model: 'openai/gpt-5.4-mini',
+      env: { ...everything, OPENAI_API_KEY: 'sk-real' },
+      credential: 'OPENAI_API_KEY',
+      rules: [['api.openai.com', { authorization: 'Bearer sk-real' }]],
+    },
+    {
+      name: "OpenCode: Bedrock's key to AWS_REGION's hosts",
+      kind: 'opencode',
+      model: 'amazon-bedrock/global.anthropic.claude-haiku-4-5',
+      env: { ...everything, AWS_BEARER_TOKEN_BEDROCK: 'ABSK-real', AWS_REGION: 'eu-west-1' },
+      credential: 'AWS_BEARER_TOKEN_BEDROCK',
+      rules: [
+        ['bedrock-mantle.eu-west-1.api.aws', { authorization: 'Bearer ABSK-real' }],
+        ['bedrock-runtime.eu-west-1.amazonaws.com', { authorization: 'Bearer ABSK-real' }],
+      ],
+    },
+    {
+      name: 'Goose: the Gemini key, as GOOGLE_API_KEY, to the Gemini API',
+      kind: 'goose',
+      env: {
+        ...everything,
+        GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real',
+        GOOGLE_API_KEY: 'host-google',
+        GEMINI_API_KEY: 'host-gemini',
+      },
+      credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
+      rules: [[gemini, { 'x-goog-api-key': 'AIza-real' }]],
+    },
+    {
+      name: 'fx: a bare id’s OpenAI key, as a Bearer token, to OpenAI',
+      kind: 'fx',
+      model: 'gpt-4.1-mini',
+      env: { ...everything, OPENAI_API_KEY: 'sk-real' },
+      credential: 'OPENAI_API_KEY',
+      rules: [['api.openai.com', { Authorization: 'Bearer sk-real' }]],
+    },
+    {
+      name: 'fx: a gateway id’s AI Gateway key, as a Bearer token, to the AI Gateway',
+      kind: 'fx',
+      model: 'anthropic/claude-sonnet-5',
+      env: { ...everything, OPENAI_API_KEY: 'sk-real', AI_GATEWAY_API_KEY: 'vck-real' },
+      credential: 'AI_GATEWAY_API_KEY',
+      rules: [['ai-gateway.vercel.sh', { Authorization: 'Bearer vck-real' }]],
+    },
+    {
+      name: 'Grok Build: the xAI key, on Authorization, to the xAI API',
+      kind: 'grok-build',
+      env: { ...everything, XAI_API_KEY: 'xai-real' },
+      credential: 'XAI_API_KEY',
+      rules: [['api.x.ai', { Authorization: 'Bearer xai-real' }]],
+    },
+    {
+      name: 'pi: the Gemini key, as GEMINI_API_KEY, to the Gemini API',
+      kind: 'pi',
+      env: {
+        ...everything,
+        GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real',
+        GEMINI_API_KEY: 'host-gemini',
+      },
+      credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
+      rules: [[gemini, { 'x-goog-api-key': 'AIza-real' }]],
+    },
+  ]
+  for (const row of ONLY) {
+    test(`each adapter brokers only its key, whatever else the host has: ${row.name}`, async () => {
+      const descriptor = { kind: row.kind, model: row.model ?? 'm' } as AgentHarnessDescriptor
+      assert.equal(brokeringFor(descriptor)?.credential, row.credential)
+      const rules = await adapterRules(row.kind, row.env, descriptor.model)
+      assert.deepEqual(
+        rules.map((r) => [r.match.host, r.transform.headers]),
+        row.rules,
+      )
+      for (const rule of rules) assert.match(placeholderOf(rule), /^(Bearer )?aisdkhc_/)
+    })
+  }
 
-  test("Cursor's session tokens are tokenised at its exchange and swapped back on its hosts only", () => {
+  // The real key goes in only on the requests the agent makes with it, on the catalog's endpoints;
+  // any other request with the placeholder keeps the placeholder.
+  const ENDPOINTS: {
+    name: string
+    kind: AgentKind
+    model?: string
+    env: Record<string, string>
+    header: string
+    real: string
+    host: string
+    swapped: [method: string, path: string][]
+    refused: [method: string, path: string, host?: string][]
+  }[] = [
+    {
+      name: 'Claude Code',
+      kind: 'claude-code',
+      model: 'opus',
+      env: { ANTHROPIC_API_KEY: 'sk-ant-real' },
+      header: 'x-api-key',
+      real: 'sk-ant-real',
+      host: 'api.anthropic.com',
+      swapped: [
+        ['POST', '/v1/messages?beta=true'],
+        ['POST', '/v1/messages/count_tokens'],
+        ['GET', '/api/claude_code/settings'],
+        ['GET', '/api/claude_code/policy_limits'],
+      ],
+      refused: [
+        ['GET', '/v1/models'],
+        ['POST', '/v1/files'],
+        ['POST', '/v1/messages/batches'],
+        ['GET', '/v1/messages'],
+        ['POST', '/api/event_logging/v2/batch'],
+        ['GET', '/api/claude_cli/bootstrap'],
+        ['POST', '/api/eval/sdk-zAZezfDKGoZuXXKe'],
+      ],
+    },
+    {
+      name: 'Antigravity',
+      kind: 'antigravity',
+      env: { GEMINI_API_KEY: 'AIza-real' },
+      header: 'x-goog-api-key',
+      real: 'AIza-real',
+      host: gemini,
+      swapped: [
+        ['POST', '/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse'],
+        ['POST', '/v1beta/models/gemini-3.1-flash-lite-preview:streamGenerateContent?alt=sse'],
+      ],
+      refused: [
+        ['GET', '/v1beta/models'],
+        ['GET', '/v1beta/models/gemini-3.8-flash:streamGenerateContent'],
+        ['POST', '/v1beta/models/gemini-3.8-flash:generateContent'],
+        ['POST', '/v1beta/files'],
+        ['POST', '/upload/v1beta/files'],
+        ['POST', '/v1beta/cachedContents'],
+      ],
+    },
+    {
+      name: 'OpenCode',
+      kind: 'opencode',
+      model: 'google/m',
+      env: { GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' },
+      header: 'x-goog-api-key',
+      real: 'AIza-real',
+      host: gemini,
+      swapped: [['POST', '/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse']],
+      refused: [
+        ['GET', '/v1beta/models'],
+        ['POST', '/v1beta/models/gemini-3.8-flash:generateContent'],
+        ['POST', '/v1beta/files'],
+      ],
+    },
+    {
+      name: 'Cursor',
+      kind: 'cursor',
+      env: { CURSOR_API_KEY: 'crsr_real' },
+      header: 'authorization',
+      real: 'Bearer crsr_real',
+      host: 'api2.cursor.sh',
+      swapped: [['POST', '/auth/exchange_user_api_key']],
+      refused: [],
+    },
+    {
+      name: 'Grok Build',
+      kind: 'grok-build',
+      env: { XAI_API_KEY: 'xai-real' },
+      header: 'authorization',
+      real: 'Bearer xai-real',
+      host: 'api.x.ai',
+      swapped: [
+        ['GET', '/v1/models'],
+        ['GET', '/v1/api-key'],
+        ['POST', '/v1/chat/completions'],
+        ['POST', '/v1/responses'],
+      ],
+      refused: [
+        ['POST', '/v1/models'],
+        ['GET', '/v1/files'],
+        ['POST', '/v1/chat/completions', 'evil.example'],
+      ],
+    },
+  ]
+  for (const row of ENDPOINTS) {
+    test(`the key is swapped in on the agent's endpoints only: ${row.name}`, async () => {
+      const descriptor = { kind: row.kind, model: row.model ?? 'm' } as AgentHarnessDescriptor
+      const rules = await adapterRules(row.kind, row.env, descriptor.model)
+      const placeholder = placeholderOf(rules[0])
+      const send = (method: string, path: string, host = row.host) =>
+        applyTransformations(
+          rules,
+          { host, method, path, headers: { [row.header]: placeholder } },
+          brokeringFor(descriptor)?.endpoints,
+        )
+      for (const [method, path] of row.swapped) {
+        assert.equal(send(method, path).headers[row.header], row.real, `${method} ${path}`)
+      }
+      for (const [method, path, host] of row.refused) {
+        const r = send(method, path, host)
+        assert.equal(r.headers[row.header], placeholder, `${method} ${host ?? row.host}${path}`)
+        if (!host) assert.equal(r.refused, true, `${method} ${path}`)
+      }
+    })
+  }
+
+  test("Cursor's session tokens are tokenized at its exchange and swapped back on its hosts only", () => {
     const tokens = brokeringFor(cursor({ model: 'composer-2.5' }))?.tokens
     assert.equal(tokens?.name, 'CURSOR_API_KEY')
     assert.deepEqual(tokens?.fields, ['accessToken', 'refreshToken'])
@@ -1294,363 +1581,49 @@ describe('credential brokering per agent', () => {
     assert.equal(brokeringFor(claudeCode({ model: 'opus' }))?.tokens, undefined)
   })
 
-  test("Antigravity's adapter brokers only GEMINI_API_KEY to the Gemini API, whatever else the host has", async () => {
-    const rules = await adapterRules('antigravity', {
-      ...everything,
-      GEMINI_API_KEY: 'AIza-real',
-      GOOGLE_API_KEY: 'host-google',
-      GOOGLE_GENERATIVE_AI_API_KEY: 'host-judge',
-      GOOGLE_GEMINI_BASE_URL: 'https://proxy.example',
-    })
-    assert.equal(rules.length, 1)
-    assert.equal(rules[0]?.match.host, 'generativelanguage.googleapis.com', 'never the host proxy')
-    assert.deepEqual(rules[0]?.transform.headers, { 'x-goog-api-key': 'AIza-real' })
-  })
-
-  test("the key is swapped in on Antigravity's model endpoint only; anything else is refused", async () => {
-    const brokering = brokeringFor(antigravity({ model: 'm' }))
-    assert.equal(brokering?.credential, 'GEMINI_API_KEY')
-    const rules = await adapterRules('antigravity', { GEMINI_API_KEY: 'AIza-real' })
-    const placeholder = String(rules[0]?.match.headers?.[0]?.value?.exact ?? 'missing')
-    assert.match(placeholder, /^aisdkhc_/)
-    const send = (method: string, path: string) =>
-      applyTransformations(
-        rules,
-        {
-          host: 'generativelanguage.googleapis.com',
-          method,
-          path,
-          headers: { 'x-goog-api-key': placeholder },
-        },
-        brokering?.endpoints,
-      )
-    for (const path of [
-      '/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse',
-      '/v1beta/models/gemini-3.1-flash-lite-preview:streamGenerateContent?alt=sse',
-    ]) {
-      assert.equal(send('POST', path).headers['x-goog-api-key'], 'AIza-real', path)
-    }
-    for (const [method, path] of [
-      ['GET', '/v1beta/models'],
-      ['GET', '/v1beta/models/gemini-3.8-flash:streamGenerateContent'],
-      ['POST', '/v1beta/models/gemini-3.8-flash:generateContent'],
-      ['POST', '/v1beta/files'],
-      ['POST', '/upload/v1beta/files'],
-      ['POST', '/v1beta/cachedContents'],
-    ] as const) {
-      const r = send(method, path)
-      assert.equal(r.refused, true, `${method} ${path}`)
-      assert.equal(r.headers['x-goog-api-key'], placeholder, `${method} ${path}`)
-    }
-  })
-
-  test("Antigravity fails closed on a sandbox that can't broker: the key never goes in", async () => {
-    await withHostEnv({ GEMINI_API_KEY: 'AIza-real' }, async () => {
-      const agent = AGENTS.antigravity
-      const adapter = await agent.adapter({
-        auth: agentAuth(agent),
-        descriptor: antigravity({ model: 'm' }),
-        model: 'm',
-        plugins: [],
-      })
-      const { session } = recordingSession()
-      const { addRequestTransformations: _, ...plain } = session
-      let spawned = false
-      await assert.rejects(
-        adapter.doStart({
-          sessionId: 's',
-          sandboxSession: {
-            ...plain,
-            spawn: async () => {
-              spawned = true
-              throw new Error('spawned')
-            },
-          },
-        }),
-        /can't broker GEMINI_API_KEY/,
-      )
-      assert.equal(spawned, false)
-    })
-  })
-
-  test("OpenCode's adapter brokers only the model's provider's key, to its API, whatever else the host has", async () => {
-    const google = await adapterRules(
-      'opencode',
-      {
-        ...everything,
-        GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real',
-        GEMINI_API_KEY: 'host-gemini',
-        GOOGLE_API_KEY: 'host-google',
-      },
-      'google/gemini-3.8-flash',
-    )
-    assert.equal(google.length, 1)
-    assert.equal(google[0]?.match.host, 'generativelanguage.googleapis.com')
-    assert.deepEqual(google[0]?.transform.headers, { 'x-goog-api-key': 'AIza-real' })
-    const anthropic = await adapterRules(
-      'opencode',
-      { ...everything, ANTHROPIC_API_KEY: 'sk-ant-real' },
-      'anthropic/claude-haiku-4-5',
-    )
-    assert.equal(anthropic.length, 1)
-    assert.equal(anthropic[0]?.match.host, 'api.anthropic.com')
-    assert.deepEqual(anthropic[0]?.transform.headers, { 'x-api-key': 'sk-ant-real' })
-    const openai = await adapterRules(
-      'opencode',
-      { ...everything, OPENAI_API_KEY: 'sk-real' },
-      'openai/gpt-5.4-mini',
-    )
-    assert.equal(openai.length, 1)
-    assert.equal(openai[0]?.match.host, 'api.openai.com')
-    assert.match(String(openai[0]?.match.headers?.[0]?.value?.exact), /^Bearer aisdkhc_/)
-    assert.deepEqual(openai[0]?.transform.headers, { authorization: 'Bearer sk-real' })
-    const bedrock = await adapterRules(
-      'opencode',
-      { ...everything, AWS_BEARER_TOKEN_BEDROCK: 'ABSK-real', AWS_REGION: 'eu-west-1' },
-      'amazon-bedrock/global.anthropic.claude-haiku-4-5',
-    )
-    assert.deepEqual(
-      bedrock.map((r) => [r.match.host, r.transform.headers]),
+  // Each adapter pins its own refusal; this pins that reeval asks every one of them for it.
+  test("every adapter reeval starts fails closed on a sandbox that can't broker: the key never goes in", async () => {
+    const FAIL_CLOSED: [AgentHarnessDescriptor, Record<string, string>, string][] = [
+      [cursor({ model: 'm' }), { CURSOR_API_KEY: 'crsr_real' }, 'CURSOR_API_KEY'],
+      [antigravity({ model: 'm' }), { GEMINI_API_KEY: 'AIza-real' }, 'GEMINI_API_KEY'],
       [
-        ['bedrock-mantle.eu-west-1.api.aws', { authorization: 'Bearer ABSK-real' }],
-        ['bedrock-runtime.eu-west-1.amazonaws.com', { authorization: 'Bearer ABSK-real' }],
+        opencode({ model: 'google/m' }),
+        { GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' },
+        'GOOGLE_GENERATIVE_AI_API_KEY',
       ],
-    )
-  })
-
-  test("the key is swapped in on OpenCode's model endpoint only; anything else is refused", async () => {
-    const brokering = brokeringFor(opencode({ model: 'google/m' }))
-    assert.equal(brokering?.credential, 'GOOGLE_GENERATIVE_AI_API_KEY')
-    const rules = await adapterRules(
-      'opencode',
-      { GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' },
-      'google/m',
-    )
-    const placeholder = String(rules[0]?.match.headers?.[0]?.value?.exact ?? 'missing')
-    assert.match(placeholder, /^aisdkhc_/)
-    const send = (method: string, path: string) =>
-      applyTransformations(
-        rules,
-        {
-          host: 'generativelanguage.googleapis.com',
-          method,
-          path,
-          headers: { 'x-goog-api-key': placeholder },
-        },
-        brokering?.endpoints,
-      )
-    assert.equal(
-      send('POST', '/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse').headers[
-        'x-goog-api-key'
-      ],
-      'AIza-real',
-    )
-    for (const [method, path] of [
-      ['GET', '/v1beta/models'],
-      ['POST', '/v1beta/models/gemini-3.8-flash:generateContent'],
-      ['POST', '/v1beta/files'],
-    ] as const) {
-      const r = send(method, path)
-      assert.equal(r.refused, true, `${method} ${path}`)
-      assert.equal(r.headers['x-goog-api-key'], placeholder, `${method} ${path}`)
+      [goose({ model: 'm' }), { GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, 'GOOGLE_API_KEY'],
+      [pi({ model: 'm' }), { GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, 'GEMINI_API_KEY'],
+      [codex({ model: 'm' }), { OPENAI_API_KEY: 'sk-real' }, 'OPENAI_API_KEY'],
+      [fx({ model: 'gpt-4.1-mini' }), { OPENAI_API_KEY: 'sk-real' }, 'OPENAI_API_KEY'],
+      [grokBuild({ model: 'm' }), { XAI_API_KEY: 'xai-real' }, 'XAI_API_KEY'],
+    ]
+    for (const [descriptor, env, credential] of FAIL_CLOSED) {
+      await withHostEnv(env, async () => {
+        const agent = agentFor(descriptor)
+        const adapter = await agent.adapter({
+          auth: agentAuth(agent),
+          descriptor,
+          model: descriptor.model,
+          plugins: [],
+        })
+        const { session } = recordingSession()
+        const { addRequestTransformations: _, ...plain } = session
+        let started = false
+        const start = async () => {
+          started = true
+          throw new Error('started')
+        }
+        await assert.rejects(
+          adapter.doStart({
+            sessionId: 's',
+            sandboxSession: { ...plain, run: start, spawn: start },
+          }),
+          new RegExp(`can't broker ${credential}`),
+          descriptor.kind,
+        )
+        assert.equal(started, false, descriptor.kind)
+      })
     }
-  })
-
-  test("OpenCode fails closed on a sandbox that can't broker: the key never goes in", async () => {
-    await withHostEnv({ GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, async () => {
-      const descriptor = opencode({ model: 'google/m' })
-      const agent = agentFor(descriptor)
-      const adapter = await agent.adapter({
-        auth: agentAuth(agent),
-        descriptor,
-        model: descriptor.model,
-        plugins: [],
-      })
-      const { session } = recordingSession()
-      const { addRequestTransformations: _, ...plain } = session
-      let ran = false
-      await assert.rejects(
-        adapter.doStart({
-          sessionId: 's',
-          sandboxSession: {
-            ...plain,
-            run: async () => {
-              ran = true
-              throw new Error('ran')
-            },
-          },
-        }),
-        /can't broker GOOGLE_GENERATIVE_AI_API_KEY/,
-      )
-      assert.equal(ran, false)
-    })
-  })
-
-  test("Goose's adapter brokers only the Gemini key, as GOOGLE_API_KEY, to the Gemini API", async () => {
-    const rules = await adapterRules('goose', {
-      ...everything,
-      GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real',
-      GOOGLE_API_KEY: 'host-google',
-      GEMINI_API_KEY: 'host-gemini',
-    })
-    assert.equal(rules.length, 1)
-    assert.equal(rules[0]?.match.host, 'generativelanguage.googleapis.com')
-    assert.deepEqual(rules[0]?.transform.headers, { 'x-goog-api-key': 'AIza-real' })
-    assert.equal(brokeringFor(goose({ model: 'm' }))?.credential, 'GOOGLE_GENERATIVE_AI_API_KEY')
-  })
-
-  test("Goose fails closed on a sandbox that can't broker: the key never goes in", async () => {
-    await withHostEnv({ GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, async () => {
-      const agent = AGENTS.goose
-      const adapter = await agent.adapter({
-        auth: agentAuth(agent),
-        descriptor: goose({ model: 'm' }),
-        model: 'm',
-        plugins: [],
-      })
-      const { session } = recordingSession()
-      const { addRequestTransformations: _, ...plain } = session
-      let ran = false
-      await assert.rejects(
-        adapter.doStart({
-          sessionId: 's',
-          sandboxSession: {
-            ...plain,
-            run: async () => {
-              ran = true
-              throw new Error('ran')
-            },
-          },
-        }),
-        /can't broker GOOGLE_API_KEY/,
-      )
-      assert.equal(ran, false)
-    })
-  })
-
-  test("fx's adapter brokers only its provider's key, as a Bearer token, to that provider", async () => {
-    const openai = await adapterRules(
-      'fx',
-      { ...everything, OPENAI_API_KEY: 'sk-real' },
-      'gpt-4.1-mini',
-    )
-    assert.equal(openai.length, 1)
-    assert.equal(openai[0]?.match.host, 'api.openai.com', 'never the AI Gateway')
-    assert.deepEqual(openai[0]?.transform.headers, { Authorization: 'Bearer sk-real' })
-    assert.equal(brokeringFor(fx({ model: 'gpt-4.1-mini' }))?.credential, 'OPENAI_API_KEY')
-    const gateway = await adapterRules(
-      'fx',
-      { ...everything, OPENAI_API_KEY: 'sk-real', AI_GATEWAY_API_KEY: 'vck-real' },
-      'anthropic/claude-sonnet-5',
-    )
-    assert.equal(gateway.length, 1)
-    assert.equal(gateway[0]?.match.host, 'ai-gateway.vercel.sh')
-    assert.deepEqual(gateway[0]?.transform.headers, { Authorization: 'Bearer vck-real' })
-    assert.equal(
-      brokeringFor(fx({ model: 'anthropic/claude-sonnet-5' }))?.credential,
-      'AI_GATEWAY_API_KEY',
-    )
-  })
-
-  test("fx fails closed on a sandbox that can't broker: the key never goes in", async () => {
-    await withHostEnv({ OPENAI_API_KEY: 'sk-real' }, async () => {
-      const descriptor = fx({ model: 'gpt-4.1-mini' })
-      const agent = agentFor(descriptor)
-      const adapter = await agent.adapter({
-        auth: agentAuth(agent),
-        descriptor,
-        model: descriptor.model,
-        plugins: [],
-      })
-      const { session } = recordingSession()
-      const { addRequestTransformations: _, ...plain } = session
-      let ran = false
-      await assert.rejects(
-        adapter.doStart({
-          sessionId: 's',
-          sandboxSession: {
-            ...plain,
-            run: async () => {
-              ran = true
-              throw new Error('ran')
-            },
-          },
-        }),
-        /can't broker OPENAI_API_KEY/,
-      )
-      assert.equal(ran, false)
-    })
-  })
-
-  test("Grok Build's adapter brokers only the xAI key, on Authorization, to the xAI API's endpoints", async () => {
-    const rules = await adapterRules('grok-build', { ...everything, XAI_API_KEY: 'xai-real' })
-    assert.equal(rules.length, 1)
-    const placeholder = String(rules[0]?.match.headers?.[0]?.value?.exact ?? 'missing')
-    assert.match(placeholder, /^Bearer aisdkhc_/)
-    assert.deepEqual(rules[0]?.transform.headers, { Authorization: 'Bearer xai-real' })
-    const endpoints = brokeringFor(grokBuild({ model: 'm' }))?.endpoints
-    const send = (method: string, host: string, path: string) =>
-      applyTransformations(
-        rules,
-        { host, method, path, headers: { authorization: placeholder } },
-        endpoints,
-      )
-    for (const [method, path] of [
-      ['GET', '/v1/models'],
-      ['GET', '/v1/api-key'],
-      ['POST', '/v1/chat/completions'],
-      ['POST', '/v1/responses'],
-    ] as const) {
-      assert.equal(send(method, 'api.x.ai', path).headers.authorization, 'Bearer xai-real', path)
-    }
-    for (const [method, host, path] of [
-      ['POST', 'api.x.ai', '/v1/models'],
-      ['GET', 'api.x.ai', '/v1/files'],
-      ['POST', 'evil.example', '/v1/chat/completions'],
-    ] as const) {
-      const r = send(method, host, path)
-      assert.notEqual(r.headers.authorization, 'Bearer xai-real', `${method} ${host}${path}`)
-    }
-  })
-
-  test("Grok Build fails closed on a sandbox that can't broker: the key never goes in", async () => {
-    await withHostEnv({ XAI_API_KEY: 'xai-real' }, async () => {
-      const agent = AGENTS['grok-build']
-      const adapter = await agent.adapter({
-        auth: agentAuth(agent),
-        descriptor: grokBuild({ model: 'm' }),
-        model: 'm',
-        plugins: [],
-      })
-      const { session } = recordingSession()
-      const { addRequestTransformations: _, ...plain } = session
-      let ran = false
-      await assert.rejects(
-        adapter.doStart({
-          sessionId: 's',
-          sandboxSession: {
-            ...plain,
-            run: async () => {
-              ran = true
-              throw new Error('ran')
-            },
-          },
-        }),
-        /can't broker XAI_API_KEY/,
-      )
-      assert.equal(ran, false)
-    })
-  })
-
-  test("pi's adapter brokers only the Gemini key, as GEMINI_API_KEY, to the Gemini API", async () => {
-    const rules = await adapterRules('pi', {
-      ...everything,
-      GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real',
-      GEMINI_API_KEY: 'host-gemini',
-    })
-    assert.equal(rules.length, 1)
-    assert.equal(rules[0]?.match.host, 'generativelanguage.googleapis.com')
-    assert.deepEqual(rules[0]?.transform.headers, { 'x-goog-api-key': 'AIza-real' })
   })
 
   test('with no credential set, the harness fails closed before the adapter starts', async () => {
@@ -1676,7 +1649,7 @@ describe('OpenCode transcripts', () => {
       part: { type: 'tool-result', toolCallId: id, output },
     })
     // OpenCode's outputs: its content's text, with its ACP rawOutput's metadata.
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         call('w', 'write', { path: '/reeval/workspace/b.txt', content: 'bee\nsting\n' }),
         result('w', { output: 'Created file successfully: b.txt', metadata: {} }),
@@ -1706,6 +1679,78 @@ describe('OpenCode transcripts', () => {
   })
 })
 
+describe('writes that say nothing of the file before', () => {
+  test('a write is a write, counting its content; an edit stays a modify', () => {
+    const call = (id: string, toolName: string, input: unknown) => ({
+      ms: 10,
+      part: { type: 'tool-call', toolCallId: id, toolName, input },
+    })
+    const result = (id: string, output: unknown) => ({
+      ms: 20,
+      part: { type: 'tool-result', toolCallId: id, output },
+    })
+    const events = normalizeStream(
+      [
+        call('p', 'write', { path: 'a.txt', content: 'one\ntwo\n' }),
+        result('p', 'Successfully wrote to a.txt'),
+        call('g', 'write', { path: 'b.txt' }),
+        result('g', ''),
+        call('e', 'edit', { path: 'c.txt', old_string: 'x', new_string: 'y' }),
+        result('e', [{ type: 'content', content: { type: 'text', text: 'edited c.txt' } }]),
+      ],
+      0,
+    )
+    assert.deepEqual(
+      events.map((e) => (e.type === 'file-edit' ? [e.path, e.kind, e.added, e.removed] : e.type)),
+      [
+        ['a.txt', 'write', 2, null],
+        ['b.txt', 'write', null, null],
+        ['c.txt', 'modify', null, null],
+      ],
+    )
+  })
+
+  test("Grok Build's write, named from its x.ai/tool metadata, is a write counting its content", () => {
+    const t = new GrokBuildStreamTranslator()
+    const rawInput = { file_path: '/reeval/workspace/a.txt', content: 'x\n' }
+    const parts = [
+      {
+        type: 'raw',
+        rawValue: {
+          sessionUpdate: 'tool_call',
+          toolCallId: 'w',
+          title: 'write',
+          rawInput,
+          _meta: { 'x.ai/tool': { name: 'write', namespace: 'grok_build' } },
+        },
+      },
+      {
+        type: 'tool-call',
+        toolCallId: 'w',
+        toolName: 'acp_tool_w',
+        input: JSON.stringify(rawInput),
+      },
+      { type: 'tool-result', toolCallId: 'w', toolName: 'acp_tool_w', output: 'File written' },
+    ].map((p) => t.push(p))
+    const call = parts.find((p) => p.type === 'tool-call')
+    assert.equal(call?.toolName, 'write')
+    const events = normalizeStream(
+      parts
+        .filter((p) => p.type !== 'raw')
+        .map((part, i) => ({
+          ms: 10 * (i + 1),
+          part:
+            part.type === 'tool-call' ? { ...part, input: JSON.parse(String(part.input)) } : part,
+        })),
+      0,
+    )
+    assert.deepEqual(
+      events.map((e) => (e.type === 'file-edit' ? [e.path, e.kind, e.added, e.removed] : e.type)),
+      [['/reeval/workspace/a.txt', 'write', 1, null]],
+    )
+  })
+})
+
 describe('Claude Code transcripts', () => {
   test('its Edit and Write tools are file edits, keyed by file_path', () => {
     const call = (id: string, toolName: string, input: unknown) => ({
@@ -1716,7 +1761,7 @@ describe('Claude Code transcripts', () => {
       ms: 20,
       part: { type: 'tool-result', toolCallId: id, output },
     })
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         call('w', 'write', { file_path: '/reeval/workspace/greet.js', content: 'hi\n' }),
         result('w', 'ok'),
@@ -1755,7 +1800,7 @@ describe('Claude Code transcripts', () => {
   test('its Write and Edit results say what changed and by how many lines', () => {
     const greet =
       'function greet(name) {\n  return "Hello, " + name;\n}\n\nmodule.exports = { greet };\n'
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         call('w', 'write', { file_path: 'greet.js', content: greet }),
         result('w', {
@@ -1819,7 +1864,7 @@ describe('Claude Code transcripts', () => {
   })
 
   test("its WebSearch and WebFetch calls become web events, like Cursor's", () => {
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         call('s', 'webSearch', { query: 'node test runner' }),
         result('s', {
@@ -1836,7 +1881,7 @@ describe('Claude Code transcripts', () => {
           ],
           durationSeconds: 1.2,
         }),
-        call('f', 'WebFetch', { url: 'https://nodejs.org/api/test.html', prompt: 'summarise' }),
+        call('f', 'WebFetch', { url: 'https://nodejs.org/api/test.html', prompt: 'summarize' }),
         result('f', {
           bytes: 10,
           code: 200,
@@ -1845,7 +1890,7 @@ describe('Claude Code transcripts', () => {
           durationMs: 5,
           url: 'https://nodejs.org/api/test.html',
         }),
-        call('m', 'WebFetch', { url: 'https://example.com/missing', prompt: 'summarise' }),
+        call('m', 'WebFetch', { url: 'https://example.com/missing', prompt: 'summarize' }),
         result('m', { code: 404, codeText: 'Not Found', url: 'https://example.com/missing' }),
         call('c', 'webSearch', { searchTerm: 'cursor search' }),
         result('c', { referenceCount: 3 }),
@@ -1880,8 +1925,8 @@ describe('Antigravity transcripts', () => {
     part: { type: 'tool-result', toolCallId: id, output },
   })
 
-  test("its native tool shapes normalise like the other agents' (CLI 1.2.11)", () => {
-    const events = normaliseStream(
+  test("its native tool shapes normalize like the other agents' (CLI 1.2.11)", () => {
+    const events = normalizeStream(
       [
         call('w', 'write', {
           TargetFile: '/reeval/workspace/a.txt',
@@ -1920,7 +1965,7 @@ describe('Antigravity transcripts', () => {
                 : [e.type],
       ),
       [
-        ['file-edit', '/reeval/workspace/a.txt', 'modify'],
+        ['file-edit', '/reeval/workspace/a.txt', 'write'],
         ['file-edit', '/reeval/workspace/a.txt', 'modify'],
         ['tool', 'bash', 'hi\nthere\n', true],
         ['web-search', 'antigravity cli', true],
@@ -1934,7 +1979,7 @@ describe('Antigravity transcripts', () => {
 describe('Cursor tool wall time when completed_at_ms is early', () => {
   test('durationMs follows the stream until the tool result, and marks long shells stalled', () => {
     const startedAt = Date.parse('2026-10-18T12:00:00.000Z')
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         { ms: 100, part: { type: 'tool-call', toolCallId: 'b', toolName: 'bash', input: {} } },
         {
@@ -1969,7 +2014,7 @@ describe('Cursor tool wall time when completed_at_ms is early', () => {
 
 describe('a failed tool call keeps its error', () => {
   const failed = (error: unknown) =>
-    normaliseStream(
+    normalizeStream(
       [
         { ms: 10, part: { type: 'tool-call', toolCallId: 'w', toolName: 'write', input: {} } },
         { ms: 20, part: { type: 'tool-error', toolCallId: 'w', error } },
@@ -2004,18 +2049,18 @@ describe('a refused webSearch is a web-search event', () => {
     ms: 20,
     part: { type: 'tool-error' as const, toolCallId: id, error },
   })
-  const activity = (events: ReturnType<typeof normaliseStream>) => ({
+  const activity = (events: ReturnType<typeof normalizeStream>) => ({
     tools: events.filter((e) => e.type === 'tool').length,
     webSearches: events.filter((e) => e.type === 'web-search').length,
     webFetches: events.filter((e) => e.type === 'web-fetch').length,
   })
-  const turnOf = (events: ReturnType<typeof normaliseStream>) => ({
+  const turnOf = (events: ReturnType<typeof normalizeStream>) => ({
     transcript: events,
     unreported: [] as Array<'web-search' | 'web-fetch'>,
   })
 
   test('a tool-error search is web-search with ok: false, not a generic tool', () => {
-    const events = normaliseStream(
+    const events = normalizeStream(
       [call('s', 'webSearch', { query: 'firebase ui web' }), err('s', '403 Forbidden')],
       0,
     )
@@ -2037,7 +2082,7 @@ describe('a refused webSearch is a web-search event', () => {
   })
 
   test('a tool-error fetch stays web-fetch with ok: false', () => {
-    const events = normaliseStream(
+    const events = normalizeStream(
       [call('f', 'webFetch', { url: 'https://example.com' }), err('f', '403 Forbidden')],
       0,
     )
@@ -2049,7 +2094,7 @@ describe('a refused webSearch is a web-search event', () => {
   })
 
   test('a successful search still has ok: true and its references', () => {
-    const events = normaliseStream(
+    const events = normalizeStream(
       [call('s', 'webSearch', { query: 'firebase ui web' }), ok('s', { referenceCount: 2 })],
       0,
     )
@@ -2060,7 +2105,7 @@ describe('a refused webSearch is a web-search event', () => {
   })
 
   test('a pending search (no result) is web-search with ok: false', () => {
-    const events = normaliseStream([call('s', 'webSearch', { query: 'firebase ui web' })], 0)
+    const events = normalizeStream([call('s', 'webSearch', { query: 'firebase ui web' })], 0)
     assert.deepEqual(
       events.flatMap((e) => (e.type === 'web-search' ? [[e.query, e.references, e.ok]] : [])),
       [['firebase ui web', null, false]],
@@ -2070,7 +2115,7 @@ describe('a refused webSearch is a web-search event', () => {
   })
 
   test('a pending fetch is web-fetch with ok: false', () => {
-    const events = normaliseStream([call('f', 'webFetch', { url: 'https://example.com' })], 0)
+    const events = normalizeStream([call('f', 'webFetch', { url: 'https://example.com' })], 0)
     assert.deepEqual(
       events.flatMap((e) => (e.type === 'web-fetch' ? [[e.url, e.ok]] : [])),
       [['https://example.com', false]],
@@ -2107,7 +2152,7 @@ describe('a refused webSearch is a web-search event', () => {
     ]
     const { stream } = await turnThrough(parts, ANTIGRAVITY_BUILTIN_TOOLS)
     assert.ok(stream.some((s) => s.part.type === 'tool-error'))
-    const events = normaliseStream(stream, 0)
+    const events = normalizeStream(stream, 0)
     assert.deepEqual(
       events.flatMap((e) =>
         e.type === 'web-search' ? [[e.query, e.ok]] : e.type === 'tool' ? [[e.tool, e.ok]] : [],
@@ -2121,7 +2166,7 @@ describe('a refused webSearch is a web-search event', () => {
 
 /**
  * A harness that emits `parts` for every turn, through a real HarnessAgent, as reeval drives it.
- * `stream` is the agent's `fullStream`, stamped as reeval stamps it for `normaliseStream`.
+ * `stream` is the agent's `fullStream`, stamped as reeval stamps it for `normalizeStream`.
  */
 async function turnThrough(
   parts: HarnessV1StreamPart[],
@@ -2242,7 +2287,7 @@ describe('tools that wait on a person are off', () => {
   })
 })
 
-describe("agy's retried model calls, through HarnessAgent and the normaliser", () => {
+describe("agy's retried model calls, through HarnessAgent and the normalizer", () => {
   /** A captured agy 1.2.11 turn through today's translator, with `edit` made to its NDJSON first. */
   const agyParts = (name: string, edit = (ndjson: string) => ndjson) => {
     const ndjson = readFileSync(
@@ -2268,7 +2313,7 @@ describe("agy's retried model calls, through HarnessAgent and the normaliser", (
     )
     const { text, stream } = await turnThrough(parts)
     assert.equal(text, 'FINAL-ATTEMPT reply, whole.\n')
-    const events = normaliseStream(stream, 0)
+    const events = normalizeStream(stream, 0)
     assert.deepEqual(
       of(events, 'text').map((e) => e.text),
       ['FINAL-ATTEMPT reply, whole.\n'],
@@ -2284,7 +2329,7 @@ describe("agy's retried model calls, through HarnessAgent and the normaliser", (
   test("every call dropped mid-reply: eight retries and agy's error, no partial reply", async () => {
     const { text, stream } = await turnThrough(agyParts('provider-dropped-mid-stream.ndjson'))
     assert.equal(text, null)
-    const events = normaliseStream(stream, 0)
+    const events = normalizeStream(stream, 0)
     assert.deepEqual(of(events, 'text'), [])
     assert.equal(of(events, 'retry').length, 8)
     // The turn's error is still agy's, the first and only error event.
@@ -2295,7 +2340,7 @@ describe("agy's retried model calls, through HarnessAgent and the normaliser", (
   })
 
   test("a call refused once (400) and not retried: the provider's error alone, no retry", async () => {
-    const events = normaliseStream((await turnThrough(agyParts('provider-400.ndjson'))).stream, 0)
+    const events = normalizeStream((await turnThrough(agyParts('provider-400.ndjson'))).stream, 0)
     assert.deepEqual(of(events, 'retry'), [])
     assert.deepEqual(
       of(events, 'error').map((e) => e.message),
@@ -2306,7 +2351,7 @@ describe("agy's retried model calls, through HarnessAgent and the normaliser", (
   })
 })
 
-describe('Cursor web tools at every layer: SDK, adapter, HarnessAgent, normaliser', () => {
+describe('Cursor web tools at every layer: SDK, adapter, HarnessAgent, normalizer', () => {
   const WEB = new Set(['webSearch', 'webFetch'])
   const fixture = (name: string) =>
     readFileSync(new URL(`../../harness-cursor-sdk/test/fixtures/${name}`, import.meta.url), 'utf8')
@@ -2329,13 +2374,13 @@ describe('Cursor web tools at every layer: SDK, adapter, HarnessAgent, normalise
     const adapter = webCalls(parts)
     const { stream } = await turnThrough(parts, CURSOR_SDK_BUILTIN_TOOLS)
     const agent = webCalls(stream.map((s) => s.part as { type: string; toolName?: string }))
-    const events = normaliseStream(stream, startedAt).filter(
+    const events = normalizeStream(stream, startedAt).filter(
       (e) => e.type === 'web-search' || e.type === 'web-fetch',
     )
     return { sdk, adapter, agent, events }
   }
 
-  test('web calls the runner recovers survive the adapter, HarnessAgent and the normaliser', async () => {
+  test('web calls the runner recovers survive the adapter, HarnessAgent and the normalizer', async () => {
     const startedAt = 1790444242000
     const { sdk, adapter, agent, events } = await layers('web-recovered.ndjson', startedAt)
     assert.deepEqual(sdk, ['webFetch', 'webSearch'])

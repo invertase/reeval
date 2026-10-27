@@ -80,9 +80,10 @@ Submodules and LFS files aren't fetched.
 ## Skills and composition
 
 Skills: `skill.local | git | npm | registry | inline` (pin git refs; `placement: 'workspace'`
-writes them into the repo's skill directory). `extendEnvironment` is the only composition; the
-child wins on shared keys and **replaces** `sandbox` entirely when it sets one (install is not
-merged onto the parent image).
+writes them into the repo's skill directory). A git, npm or plugin source URL with a password or
+token in it is refused: reeval fetches on the host with its own git and npm credentials.
+`extendEnvironment` is the only composition; the child wins on shared keys and **replaces**
+`sandbox` entirely when it sets one (install is not merged onto the parent image).
 
 A skill is a directory whose `SKILL.md` has YAML frontmatter
 (`name`, `description`; quote values containing `: `). Baking (`from`, `install`, `dockerfile`)
@@ -168,7 +169,11 @@ defineEnvironment('gemini', ({ secret }) => ({
 ```
 
 With `hosts`, the sandbox only sees a placeholder and reeval's gateway swaps in the real value on
-HTTPS requests to those hosts. `{ to: 'checks' }` keeps it from the agent.
+HTTPS requests to those hosts. `{ to: 'checks' }` keeps it out of the agent's own environment
+(only `c.exec` and setup steps get it). Without `hosts`, a process a setup step leaves running (a
+server the checks call) holds the real value while the agent works, where the agent, as the same
+user, can read it: broker it with `hosts`, or start the process from `c.exec` after the turn. The
+`setup-process-secret` remark flags it.
 
 `egress: 'proxy' | 'allow-all' | 'deny-all' | { allow: [hosts] }` limits where the sandbox may
 connect (the harness's API, brokered hosts and MCP hosts are always allowed; `DEFAULT_EGRESS_ALLOW`

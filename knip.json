@@ -31,7 +31,7 @@
       "ignoreDependencies": [
         "@ai-sdk/harness-acp",
         "@ai-sdk/provider",
-        "@ai-sdk/provider-utils",
+        "@balena/dockerignore",
         "studio-web"
       ]
     },
@@ -55,7 +55,7 @@
       "ignoreDependencies": ["@ai-sdk/provider"]
     },
     "packages/harness-pi": {
-      "entry": ["test/**/*.ts"],
+      "entry": ["test/**/*.ts", "assets/*.mjs"],
       "ignoreDependencies": ["@ai-sdk/provider"]
     },
     "packages/harness-opencode": {

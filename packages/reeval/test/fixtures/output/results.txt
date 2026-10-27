@@ -21,4 +21,3 @@ skipped          greets in Welsh
 todo             greets in Klingon
 
 3 fail · 1 pass · 1 infra error · 2 skipped
-Set analysis.model in reeval.config.ts for answers to what each eval asks.

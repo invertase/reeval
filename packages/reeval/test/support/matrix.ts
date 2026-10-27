@@ -8,13 +8,16 @@ export type Tier = (typeof TIERS)[number]
 const FIXTURE_TIERS: readonly string[] = ['fake', 'docker', 'podman', 'real']
 
 export type Sources = {
-  /** The rows of features.test.ts, and whether each directory has a canary. */
-  fixtures: { dir: string; tiers: readonly string[]; canary: boolean }[]
+  /**
+   * The rows of features.test.ts, and whether each directory has a canary. A parameterized
+   * fixture's rows are named `<dir>:<harness>`, with `of` their directory.
+   */
+  fixtures: { dir: string; of?: string; tiers: readonly string[]; canary: boolean }[]
   /** plan.test.ts's cases, as `dir/name`. */
   planCases: string[]
   /** A test file's source, by its path under packages/; null when it doesn't exist. */
   testSource: (path: string) => string | null
-  /** contract.test.ts's behaviours, and whether each has a canary. */
+  /** contract.test.ts's behaviors, and whether each has a canary. */
   contract: { name: string; canary: boolean }[]
   /** Top-level eval/group keys from src/options.ts EVAL_OPTION_KEYS. */
   evalOptionKeys: readonly string[]
@@ -98,7 +101,8 @@ export function checkEvalOptionCoverage(
 
 export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Matrix {
   const problems: string[] = []
-  const fixtures = new Map(sources.fixtures.map((f) => [f.dir, f]))
+  /** The rows an inventory name covers: one row, or every row of a parameterized directory. */
+  const rowsOf = (name: string) => sources.fixtures.filter((f) => f.dir === name || f.of === name)
   const planCases = new Set(sources.planCases)
   const ids = new Set<string>()
   const rows = inventory.map((feature): MatrixRow => {
@@ -110,48 +114,43 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
       Cell
     >
     for (const dir of feature.fixtures ?? []) {
-      const f = fixtures.get(dir)
-      if (!f) {
-        problems.push(`${at}: fixture ${dir} isn't in features.test.ts`)
-        continue
-      }
-      for (const tier of f.tiers) {
-        if (!FIXTURE_TIERS.includes(tier)) {
-          problems.push(`${at}: fixture ${dir} lists tier ${tier}, which the matrix doesn't know`)
-          continue
+      const rows = rowsOf(dir)
+      if (!rows.length) problems.push(`${at}: fixture ${dir} isn't in features.test.ts`)
+      for (const f of rows) {
+        for (const tier of f.tiers) {
+          if (!FIXTURE_TIERS.includes(tier)) {
+            problems.push(`${at}: fixture ${dir} lists tier ${tier}, which the matrix doesn't know`)
+            continue
+          }
+          cells[tier as Tier].count++
+          if (f.canary) cells[tier as Tier].canaries++
         }
-        cells[tier as Tier].count++
-        if (f.canary) cells[tier as Tier].canaries++
       }
     }
     for (const c of feature.plan ?? []) {
       if (planCases.has(c)) cells.plan.count++
       else problems.push(`${at}: plan case ${c} isn't in plan.test.ts`)
     }
-    for (const ref of feature.tests ?? []) {
-      const [file, title, ...rest] = ref.split(' › ')
-      const source = file ? sources.testSource(file) : null
-      if (!file || !title || rest.length) problems.push(`${at}: "${ref}" isn't "<file> › <title>"`)
-      else if (source === null) problems.push(`${at}: ${file} doesn't exist`)
-      else if (!testTitles(source).some((t) => t.includes(title)))
-        problems.push(`${at}: ${file} has no test "${title}"`)
+    for (const file of feature.unit ?? []) {
+      if (!/\.test\.ts$/.test(file)) problems.push(`${at}: "${file}" isn't a test file`)
+      else if (sources.testSource(file) === null) problems.push(`${at}: ${file} doesn't exist`)
       else cells.unit.count++
     }
     for (const ref of feature.real ?? []) {
       const [suite, title, ...rest] = ref.split(' › ')
-      const behaviour = sources.contract.find((b) => b.name === title)
+      const behavior = sources.contract.find((b) => b.name === title)
       const file = suite ? REAL_SUITES[suite] : undefined
       if (rest.length || !title || (suite !== 'contract' && !file))
         problems.push(
-          `${at}: "${ref}" isn't "contract › <behaviour>", "e2e › <title>", "questions › <title>" or "openrouter › <title>"`,
+          `${at}: "${ref}" isn't "contract › <behavior>", "e2e › <title>", "questions › <title>" or "openrouter › <title>"`,
         )
-      else if (suite === 'contract' && !behaviour)
-        problems.push(`${at}: contract.test.ts has no behaviour "${title}"`)
+      else if (suite === 'contract' && !behavior)
+        problems.push(`${at}: contract.test.ts has no behavior "${title}"`)
       else if (file && !testTitles(sources.testSource(file) ?? '').some((t) => t.includes(title)))
         problems.push(`${at}: ${file.split('/').at(-1)} has no test "${title}"`)
       else {
         cells.real.count++
-        if (behaviour?.canary) cells.real.canaries++
+        if (behavior?.canary) cells.real.canaries++
       }
     }
     const row = { feature, cells }
@@ -161,19 +160,19 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
       problems.push(`${at}: it's covered now, so it's no longer a gap: remove its gap`)
     if (!covered(row) && !feature.gap)
       problems.push(
-        `${at}: nothing covers it on any tier. Add a fixture, plan case or test, or mark it a known gap with the reason`,
+        `${at}: nothing covers it on any tier. Add a fixture, plan case or test file, or mark it a known gap with the reason`,
       )
     return row
   })
   const claimed = (key: 'fixtures' | 'plan', name: string) =>
     inventory.some((f) => f[key]?.includes(name))
   for (const f of sources.fixtures)
-    if (!claimed('fixtures', f.dir))
+    if (!claimed('fixtures', f.dir) && !(f.of && claimed('fixtures', f.of)))
       problems.push(`fixture ${f.dir} covers no feature: add it to an entry in inventory.ts`)
   for (const b of sources.contract)
     if (!inventory.some((f) => f.real?.includes(`contract › ${b.name}`)))
       problems.push(
-        `contract behaviour "${b.name}" covers no feature: add it to an entry in inventory.ts`,
+        `contract behavior "${b.name}" covers no feature: add it to an entry in inventory.ts`,
       )
   for (const c of sources.planCases)
     if (!claimed('plan', c))
@@ -199,11 +198,11 @@ export function renderMarkdown({ rows }: Matrix): string {
     '',
     `${rows.length} features: ${rows.length - gaps.length} covered on at least one tier, ${gaps.length} known gaps. Features per tier: ${perTier.join(', ')}.`,
     '',
-    '- **unit**: plain `node:test` cases, including runner-level tests through the CLI',
+    '- **unit**: test files with plain `node:test` cases, including runner-level tests through the CLI',
     '- **plan**: `reeval run --dry-run --json` snapshots in `plan.test.ts`',
     '- **fake**, **docker**, **podman**: feature fixtures in `features.test.ts` on the fake sandbox, in Docker and in rootless Podman',
     '- **real**: real-tier fixtures in `features.test.ts` (real Cursor), and the harness contract (`contract.test.ts`) and CLI end to end (`e2e-real.test.ts`) on every real harness',
-    '- `● n`: n fixtures or contract behaviours, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n cases or tests · `—`: nothing',
+    '- `● n`: n fixtures or contract behaviors, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n plan cases or test files · `—`: nothing',
     '',
   ]
   for (const area of AREAS) {

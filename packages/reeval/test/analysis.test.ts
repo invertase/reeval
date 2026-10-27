@@ -19,6 +19,8 @@ import { type Digest as AnalysisDigest, RULES } from '../src/analysis/digest.ts'
 import { analysisSchema, SYSTEM_PROMPT } from '../src/analysis/schema.ts'
 import { capConfidence, validateAnalysis } from '../src/analysis/validate.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
+import { fingerprintOf } from '../src/history/assemble.ts'
+import type { FingerprintParts } from '../src/history/types.ts'
 import { EFFECT_MIN_COUNTED, mannWhitney, minimumP } from '../src/stats.ts'
 import { createStudioApp } from '../src/studio/server.ts'
 import { formatTokens } from '../src/usage.ts'
@@ -193,14 +195,14 @@ describe('facts on the dogfood history (2 runs, 36 real Cursor attempts)', () =>
     )
   })
 
-  test('flaky: one failure in 4 comparable attempts is insufficient, not flaky', async () => {
+  test('flaky: one failure in 4 comparable attempts is mixed, not flaky', async () => {
     const p = await historyProject('facts-flaky', 'dogfood')
     const old = await query(p.dir, 'SELECT eval_key, key FROM cells WHERE pass > 0 AND fail > 0')
     assert.equal(old.length, 1, 'one mixed cell is in cells')
     const flaky = await query(p.dir, 'SELECT * FROM flaky_cells')
     assert.deepEqual(
       flaky.map((f) => [f.cell_key, f.runs, f.pass, f.counted, f.verdict, f.cause]),
-      [['cursor:composer-2.5/broken-project/es-tarball', 2, 3, 4, 'insufficient', 'agent']],
+      [['cursor:composer-2.5/broken-project/es-tarball', 2, 3, 4, 'mixed', 'agent']],
       'pooled over both runs, which are comparable once runtime state is left out; a 0.10 verdict is the agent, not the judge',
     )
     assert.deepEqual([flaky[0]?.lo, flaky[0]?.hi], [0.301, 0.954])
@@ -298,6 +300,122 @@ describe('canaries: the verdicts flip when the data does', () => {
     assert.ok(drift.length > 0 && drift.every((d) => d.noise === 0 && d.real_changed === 'context'))
   })
 
+  test('a gateway-only change is drift with an observed fact, as compare names it', async () => {
+    type C = { key: string; fingerprint: string; fingerprintParts: FingerprintParts }
+    const gatewayProject = async (name: string, gateways: Record<string, string>) => {
+      const p = await historyProject(name, 'dogfood')
+      const context = new Map<string, string>()
+      edit(p.dir, (record) => {
+        const run = String(record.runId).includes('041aef3') ? 'head' : 'base'
+        for (const e of record.evals as Array<{ key: string; cells: C[] }>) {
+          for (const c of e.cells) {
+            const id = `${e.key}\0${c.key}`
+            if (run === 'base') context.set(id, c.fingerprintParts.context)
+            else c.fingerprintParts.context = context.get(id) as string
+            c.fingerprintParts.gateway = gateways[run]
+            c.fingerprint = fingerprintOf(c.fingerprintParts)
+          }
+        }
+      })
+      return p
+    }
+    const observed = (rows: Row[]) =>
+      rows.filter((r) => r.tier === 'observed').map((r) => [r.factor, r.note])
+
+    const p = await gatewayProject('canary-gateway', { head: 'vercel' })
+    const drift = await query(
+      p.dir,
+      'SELECT changed, changed_paths, noise, real_changed FROM drift',
+    )
+    assert.equal(drift.length, 9, 'every cell drifted')
+    for (const d of drift) {
+      assert.deepEqual(d, {
+        changed: 'gateway',
+        changed_paths: null,
+        noise: 0,
+        real_changed: 'gateway',
+      })
+    }
+    assert.deepEqual(
+      observed(await query(p.dir, 'factor_effects')),
+      Array(9).fill(['gateway', null]),
+      'one observed gateway fact per cell',
+    )
+    const cells = await query(p.dir, 'SELECT DISTINCT fp_gateway FROM cells ORDER BY fp_gateway')
+    assert.deepEqual(
+      cells.map((c) => c.fp_gateway),
+      [null, 'vercel'],
+    )
+    const runs = (await query(p.dir, 'SELECT run_id FROM runs ORDER BY run_id')).map((r) =>
+      String(r.run_id),
+    )
+    const compared = await runCli(p.dir, ['compare', ...runs, '--json'])
+    assert.equal(compared.code, 0, compared.stderr)
+    const rows = JSON.parse(compared.stdout).rows as Array<{ status: string; changes?: string[] }>
+    assert.ok(
+      rows.length > 0 &&
+        rows.every((r) => r.status === 'drift' && r.changes?.join() === 'gateway changed'),
+      'compare names the same part',
+    )
+
+    const removed = await gatewayProject('canary-gateway-removed', { base: 'vercel' })
+    assert.deepEqual(
+      [...new Set((await query(removed.dir, 'drift')).map((d) => d.real_changed))],
+      ['gateway'],
+      'a gateway dropped back to direct is drift too',
+    )
+
+    const same = await gatewayProject('canary-gateway-same', { base: 'vercel', head: 'vercel' })
+    assert.deepEqual(await query(same.dir, 'drift'), [], 'twin: the same gateway is no drift')
+    assert.deepEqual(observed(await query(same.dir, 'factor_effects')), [])
+  })
+
+  test('a config gate change is drift on the gate: a policy change, not noise or an effect', async () => {
+    type C = { fingerprint: string; fingerprintParts: FingerprintParts }
+    const config = (gate: string) => fakeConfig({ extra: `runs: 2, gate: ${gate},` })
+    const p = await project('canary-gate', {
+      'reeval.config.ts': config('{ passRate: 0.5 }'),
+      'evals/g.eval.ts': `import { evaluate } from 'reeval'
+evaluate('half', async (c) => {
+  await c.send('go')
+  if (c.attempt.n === 2) throw new Error('the second attempt fails')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    assert.equal((await runCli(p.dir)).code, 0)
+    assert.deepEqual(await query(p.dir, 'drift'), [], 'twin: the same gate is no drift')
+    edit(p.dir, (record) => {
+      for (const c of record.evals.flatMap((e) => e.cells as C[])) {
+        delete c.fingerprintParts.gate
+        c.fingerprint = fingerprintOf(c.fingerprintParts)
+      }
+    })
+    assert.deepEqual(
+      await query(p.dir, 'drift'),
+      [],
+      'a record from before the gate was a part, with the same gate, is no drift either',
+    )
+
+    writeFileSync(join(p.dir, 'reeval.config.ts'), config("'all'"))
+    assert.equal((await runCli(p.dir)).code, 1)
+    const drift = await query(p.dir, 'SELECT changed, noise, real_changed FROM drift')
+    assert.deepEqual(drift, [{ changed: 'gate', noise: 0, real_changed: 'gate' }])
+    assert.deepEqual(
+      (await query(p.dir, 'SELECT fp_gate FROM cells ORDER BY run_id')).map((c) => c.fp_gate),
+      [null, 'passRate 0.5', null],
+    )
+    assert.deepEqual(
+      await query(p.dir, "SELECT factor FROM factor_effects WHERE tier = 'observed'"),
+      [],
+      'the gate scores the same attempts, so it has no effect to observe',
+    )
+    const flaky = await query(p.dir, 'SELECT counted FROM flaky_cells')
+    assert.deepEqual(flaky, [{ counted: 6 }], 'attempts pool across the gate change')
+    const { text } = await digestOf(p.dir, ['--vs', 'latest~1'])
+    assert.match(text, /policy change: the gate scores the same attempts differently/)
+  })
+
   test('mixed outcomes over enough comparable attempts are flaky, caused by the agent', async () => {
     const p = await project('canary-flaky', {
       'reeval.config.ts': fakeConfig(),
@@ -311,6 +429,21 @@ evaluate('flips', { runs: 6, gate: { passRate: 0.5 } }, async (c) => {
     assert.equal((await runCli(p.dir)).code, 0)
     const [flaky] = await query(p.dir, 'SELECT pass, counted, verdict, cause FROM flaky_cells')
     assert.deepEqual(flaky, { pass: 3, counted: 6, verdict: 'flaky', cause: 'agent' })
+  })
+
+  test('mixed outcomes one attempt short of the minimum are mixed, not flaky', async () => {
+    const p = await project('canary-mixed', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/f.eval.ts': `import { evaluate } from 'reeval'
+evaluate('flips', { runs: 5, gate: { passRate: 0.4 } }, async (c) => {
+  await c.send('go')
+  if (c.attempt.n % 2 === 0) throw new Error('every other attempt fails')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const [flaky] = await query(p.dir, 'SELECT pass, counted, verdict FROM flaky_cells')
+    assert.deepEqual(flaky, { pass: 3, counted: 5, verdict: 'mixed' })
   })
 
   test('the same change passing and failing its check is caused by the check', async () => {
@@ -1298,6 +1431,15 @@ evaluate('greets', { runs: 1 }, async (c) => {
         (c) => c.lift,
       )
       assert.deepEqual({ lift: variant?.lift, verdict: variant?.verdict }, { lift, verdict })
+      const effort = digest.facts.find((f) => f.kind === 'effort')
+      assert.deepEqual(
+        (effort?.cells as Row[] | undefined)?.map((c) => [c.medianToolCalls, c.medianCallsByClass]),
+        [
+          [0, undefined],
+          [0, undefined],
+        ],
+        'no tool calls: no class breakdown',
+      )
       const [row] = await query(
         p.dir,
         "SELECT pass_verdict FROM factor_effects WHERE tier = 'controlled'",

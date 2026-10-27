@@ -24,13 +24,14 @@ profile's: `--profile <name>` changes the judge, not the agents.
 one profile you need.
 
 **What to look at:** the plan, `pnpm eval --dry-run`, which needs no keys or Docker. It has three
-cells, not four: Codex runs the control alone, and the question has one harness pair:
+cells, not four: Codex runs the control alone. The compare sets no `runs`, so each cell runs four
+times, and the question pairs Claude Code's attempts with Codex's run by run:
 
 ```text
-plan  run … · 1 eval · 3 cells · 3 attempts · ~9m 00s serial (~3m 00s at concurrency 4)
+plan  run … · 1 eval · 3 cells · 12 attempts · ~36m 00s serial (~9m 00s at concurrency 4)
 eval                                                       harnesses  variants  runs  attempts  notes
-with-compare-harness.eval.ts › documents the new function  2          1         1     3
-  question 1/1  Which multiply() is easier to read? · after the run · shows task, diff · harness · 1 pair · anthropic/claude-sonnet-5
+with-compare-harness.eval.ts › documents the new function  2          1         4     12        runs 4 (compare default)
+  question 1/1  Which multiply() is easier to read? · after the run · shows task, diff · harness · 4 pairs · anthropic/claude-sonnet-5
 ```
 
 `pnpm reeval run --dry-run --json` lists the cells: `claude-code:claude-sonnet-5/math/docker`

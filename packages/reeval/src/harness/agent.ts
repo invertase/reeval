@@ -2,12 +2,21 @@ import type { HarnessV1, HarnessV1Session, HarnessV1StreamPart } from '@ai-sdk/h
 import { HarnessAgent } from '@ai-sdk/harness/agent'
 import { WORKSPACE_DIR } from '@reeval/sandbox-docker'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
+import { brokerToken } from '../gateway/token.ts'
+import type { SandboxAdc, VertexSettings } from '../gateway/vertex.ts'
 import { isDockerSandbox } from '../sandbox/docker.ts'
-import { InfraError } from '../sandbox/types.ts'
+import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type { AgentHarnessDescriptor, TokenUsage, TranscriptEvent, TurnStatus } from '../types.ts'
 import { addUsage } from '../usage.ts'
-import { agentAuth, agentFor, agentMcp, authHint, writePluginFiles } from './agents.ts'
-import { errorText, normaliseStream, type StampedPart } from './transcript.ts'
+import {
+  type AdapterVertex,
+  agentAuth,
+  agentFor,
+  agentMcp,
+  authHint,
+  writePluginFiles,
+} from './agents.ts'
+import { errorText, normalizeStream, type StampedPart } from './transcript.ts'
 import type { Harness } from './types.ts'
 
 /** A stream part into the attempt's trace, and each tool call as a `-v` line as it happens. */
@@ -120,9 +129,20 @@ export function everyCallFailed(name: string, statuses: readonly number[]): stri
   return `every ${name} model call in the turn failed (HTTP ${[...new Set(statuses)].join(', ')})`
 }
 
+/** The route's service account, written beside the workspace, as the adapter takes it. */
+async function writeAdc(sandbox: Sandbox, adc: SandboxAdc): Promise<AdapterVertex> {
+  await sandbox.writeFile(`../${adc.file}`, adc.content)
+  const credentialsFile = `${sandbox.workdir.replace(/[\\/][^\\/]*$/, '')}/${adc.file}`
+  debugLog('env', `Vertex AI service account → ${credentialsFile}`)
+  return { project: adc.project, location: adc.location, credentialsFile }
+}
+
 /** A real agent through its AI SDK harness adapter, in the Docker sandbox's container. */
-export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness {
-  const catalog = agentFor(descriptor)
+export function createAgentHarness(
+  descriptor: AgentHarnessDescriptor,
+  vertex?: VertexSettings,
+): Harness {
+  const catalog = agentFor(descriptor, vertex)
   return {
     async start(sandbox, signal, { skills, mcp, plugins }) {
       const auth = agentAuth(catalog)
@@ -130,8 +150,12 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
       let finishMetadata: unknown
       const servers = agentMcp(catalog, mcp, plugins)
       const model = catalog.modelId?.(descriptor.model) ?? descriptor.model
+      const vertex = catalog.adc ? await writeAdc(sandbox, catalog.adc) : undefined
       const adapter = await catalog.adapter({
         auth,
+        ...(catalog.routeEnv ? { env: catalog.routeEnv } : {}),
+        ...(vertex ? { vertex } : {}),
+        ...(catalog.vertexChat ? { vertexChat: catalog.vertexChat } : {}),
         descriptor,
         model,
         plugins,
@@ -159,6 +183,25 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
       }
       const refusedSince = (from: number) =>
         (sandbox.brokeredStatuses?.() ?? []).slice(from).includes(401)
+      let stopToken = () => {}
+      if (catalog.token) {
+        try {
+          stopToken = await brokerToken(catalog.token, sandbox.network, {
+            onRefresh: (t) =>
+              debugLog(
+                'broker',
+                `access token refreshed, valid until ${new Date(t.expiresAt).toISOString()}`,
+              ),
+            onError: (error) =>
+              debugLog('broker', `access token refresh failed, retrying: ${errorText(error)}`),
+          })
+        } catch (error) {
+          throw new InfraError(
+            `Couldn't mint an access token from ${catalog.credential} for ${catalog.name}: ${errorText(error)}. Run gcloud auth application-default login, or set GOOGLE_APPLICATION_CREDENTIALS.`,
+          )
+        }
+        debugLog('broker', `gateway adds an access token from ${catalog.credential}`)
+      }
       let session: Awaited<ReturnType<typeof agent.createSession>>
       try {
         session = await agent.createSession({
@@ -166,6 +209,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
           abortSignal: signal,
         })
       } catch (error) {
+        stopToken()
         if (signal.aborted) throw error
         const message = (error as Error).message
         const hint = authHint(catalog, message, refusedSince(0))
@@ -190,7 +234,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
           ) => {
             const statuses = sandbox.brokeredStatuses?.().slice(brokeredBefore) ?? []
             const refused = statuses.includes(401)
-            const events = [...normaliseStream(parts, startedAt), ...extra]
+            const events = [...normalizeStream(parts, startedAt), ...extra]
             const failed = everyCallFailed(catalog.name, statuses)
             // A CLI can end a turn as if it worked when its API refused every call (fx does).
             if (status === 'completed' && failed && !events.some((e) => e.type === 'error')) {
@@ -259,7 +303,10 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
             )
           }
         },
-        close: () => session.destroy().catch(() => {}),
+        close: () => {
+          stopToken()
+          return session.destroy().catch(() => {})
+        },
       }
     },
   }

@@ -34,11 +34,19 @@ export type HarnessRow = {
     | 'opencode-openai'
     | 'goose'
     | 'pi'
+    | 'pi-gateway'
     | 'codex'
     | 'grok-build'
     | 'fx'
     | 'fx-gateway'
     | 'claude-code-gateway'
+    | 'claude-code-vertex'
+    | 'antigravity-vertex'
+    | 'opencode-vertex'
+    | 'goose-vertex'
+    | 'pi-vertex'
+    | 'fx-vertex'
+    | 'grok-build-vertex'
     | 'codex-gateway'
     | 'opencode-gateway'
     | 'goose-gateway'
@@ -47,14 +55,24 @@ export type HarnessRow = {
     | 'codex-openrouter'
     | 'opencode-openrouter'
     | 'goose-openrouter'
+    | 'pi-openrouter'
     | 'grok-build-openrouter'
+    | 'fx-openrouter'
   /**
    * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
    * providers than Google's, and the rows on AI Gateway and OpenRouter.
    */
-  harness?: 'opencode' | 'fx' | 'claude-code' | 'codex' | 'goose' | 'pi' | 'grok-build'
+  harness?:
+    | 'antigravity'
+    | 'opencode'
+    | 'fx'
+    | 'claude-code'
+    | 'codex'
+    | 'goose'
+    | 'pi'
+    | 'grok-build'
   /** `REEVAL_CONTRACT_GATEWAY`: the config's `gateway` list is this gateway alone. */
-  gateway?: 'vercel' | 'openrouter'
+  gateway?: 'vercel' | 'openrouter' | 'vertex'
   /**
    * Why the row is skipped unless `REEVAL_CONTRACT_HARNESSES` names it, such as a key CI doesn't
    * have yet.
@@ -67,6 +85,11 @@ export type HarnessRow = {
    * (the first that's set). Null for the fake agent, which needs no key.
    */
   key: { name: string; from: string[] } | null
+  /**
+   * Host variables the run needs besides the key (`vertex()`'s project), passed through as they
+   * are: the tests start `reeval` from an allowlisted environment.
+   */
+  hostEnv?: string[]
   /** reeval's image for it, which the Docker tier needs built. */
   image: BakedHarness
   /** Where the placed contract skill shows up in the attempt's `context`. */
@@ -121,6 +144,13 @@ export type HarnessRow = {
    * cost (`upstreams`, `reportedCostUsd`): true on OpenRouter, whose responses say both.
    */
   upstream?: true
+  /**
+   * The effort the effort eval runs with, and what every answered model call it makes that sets
+   * any reasoning must carry in its body (`requestEffort` in `.reeval/debug`'s requests.ndjson, as
+   * `<path>=<value>`), where the model takes it as its own setting. Unset, the row leaves the
+   * effort eval out.
+   */
+  effort?: { value: string; asked: RegExp }
 }
 
 export const harnesses: HarnessRow[] = [
@@ -205,6 +235,7 @@ export const harnesses: HarnessRow[] = [
     // Its ACP server names no model; the turn records the one the gateway saw it request.
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
+    effort: { value: 'low', asked: /^generationConfig\.thinkingConfig\.thinkingLevel=low$/ },
   },
   {
     // OpenCode on another provider: Anthropic's key, in x-api-key, and its served model from the
@@ -220,6 +251,7 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /^claude-sonnet-5-5/,
     wireModel: /^claude-sonnet-5-5/,
+    effort: { value: 'high', asked: /^output_config\.effort=high thinking\.type=adaptive$/ },
   },
   {
     // And OpenAI's: a Bearer key, the Responses API over HTTP (not OpenCode's WebSocket), and
@@ -235,6 +267,7 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /^gpt-5\.4-mini-\d{4}-\d{2}-\d{2}\[effort=\w+\]$/,
     wireModel: /^gpt-5\.4-mini-\d{4}-\d{2}-\d{2}\[effort=\w+\]$/,
+    effort: { value: 'high', asked: /^reasoning\.effort=high$/ },
   },
   {
     id: 'goose',
@@ -259,6 +292,7 @@ export const harnesses: HarnessRow[] = [
     // Its ACP server names no model; the turn records the one the gateway saw it request.
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
+    effort: { value: 'low', asked: /^generationConfig\.thinkingConfig\.thinkingLevel=low$/ },
   },
   {
     id: 'pi',
@@ -278,6 +312,29 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
+    effort: { value: 'low', asked: /^generationConfig\.thinkingConfig\.thinkingLevel=LOW$/ },
+  },
+  {
+    // pi on Vercel AI Gateway through `gateway: [vercel()]`: a pi provider of reeval's on Vercel's
+    // Chat Completions API (a Bearer key), the model as google/<id>, and each thinking level as
+    // Gemini's own thinkingConfig under Vercel's providerOptions, never Vercel's shared effort.
+    id: 'pi-gateway',
+    harness: 'pi',
+    gateway: 'vercel',
+    model: 'gemini-3.8-flash',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /^google\/gemini-3\.8-flash$/,
+    wireModel: /^google\/gemini-3\.8-flash$/,
+    effort: {
+      value: 'low',
+      asked:
+        /^providerOptions\.google\.thinkingConfig\.thinkingLevel=low providerOptions\.vertex\.thinkingConfig\.thinkingLevel=low$/,
+    },
   },
   {
     id: 'codex',
@@ -344,6 +401,26 @@ export const harnesses: HarnessRow[] = [
     askedModel: /^google\/gemini-3\.8-flash$/,
   },
   {
+    // And on Vertex AI through `gateway: [vertex()]`: a configured provider on Vertex's
+    // OpenAI-compatible Chat Completions endpoint with no auth of fx's own; the gateway adds the
+    // host's token. fx's relay gives Gemini back its thought signatures and adds the effort.
+    id: 'fx-vertex',
+    harness: 'fx',
+    gateway: 'vertex',
+    model: 'google/gemini-3.8-flash',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'fx',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: true,
+    servedModel: /^gemini-3\.8-flash$/,
+    wireModel: /^gemini-3\.8-flash$/,
+    effort: { value: 'low', asked: /^reasoning_effort=low$/ },
+  },
+  {
     // Claude Code on Vercel AI Gateway through `gateway: [vercel()]`: its base URL on Vercel, and
     // AI_GATEWAY_API_KEY brokered on Vercel's copies of Anthropic's paths.
     id: 'claude-code-gateway',
@@ -358,6 +435,112 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /claude-haiku-4-5/,
     wireModel: null,
+  },
+  {
+    // Claude Code on Vertex AI through `gateway: [vertex()]`, the project from GOOGLE_CLOUD_PROJECT:
+    // no key at all, a token minted from the host's Application Default Credentials that the
+    // gateway adds to its model calls. The row's "key" is the credentials file, which must stay
+    // out of the container like any key.
+    id: 'claude-code-vertex',
+    harness: 'claude-code',
+    gateway: 'vertex',
+    model: 'claude-haiku-4-5@20251001',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'claude-code',
+    skillContext: /^~\/\.claude\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: true,
+    servedModel: /claude-haiku-4-5/,
+    wireModel: /claude-haiku-4-5/,
+  },
+  {
+    // The Gemini CLIs on Vertex AI through `gateway: [vertex()]`: each reads a service account
+    // reeval makes up for the sandbox, trades it for a placeholder token the gateway answers
+    // itself, and the gateway adds the host's real token to its model calls.
+    id: 'antigravity-vertex',
+    harness: 'antigravity',
+    gateway: 'vertex',
+    model: 'gemini-3.8-flash-low',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'antigravity',
+    skillContext: /^~\/\.gemini\/config\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com', 'oauth2.googleapis.com', 'www.googleapis.com'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: true,
+    servedModel: /^gemini-3\.8-flash/,
+    wireModel: /^gemini-3\.8-flash$/,
+  },
+  {
+    id: 'opencode-vertex',
+    harness: 'opencode',
+    gateway: 'vertex',
+    model: 'google/gemini-3.8-flash',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'opencode',
+    skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com', 'oauth2.googleapis.com', 'mcp.exa.ai'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: true,
+    servedModel: /^gemini-3\.8-flash$/,
+    wireModel: /^gemini-3\.8-flash$/,
+    effort: { value: 'low', asked: /^generationConfig\.thinkingConfig\.thinkingLevel=low$/ },
+  },
+  {
+    id: 'goose-vertex',
+    harness: 'goose',
+    gateway: 'vertex',
+    model: 'gemini-3.8-flash',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'goose',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com', 'oauth2.googleapis.com'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: false,
+    tokensWhy:
+      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    servedModel: /^gemini-3\.8-flash$/,
+    wireModel: /^gemini-3\.8-flash$/,
+  },
+  {
+    id: 'pi-vertex',
+    harness: 'pi',
+    gateway: 'vertex',
+    model: 'gemini-3.8-flash',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com', 'oauth2.googleapis.com'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: true,
+    servedModel: /^gemini-3\.8-flash$/,
+    wireModel: /^gemini-3\.8-flash$/,
+  },
+  {
+    // Grok Build on Vertex AI: the model as a [model."xai/<id>"] table on Vertex's
+    // OpenAI-compatible Chat Completions API, its env_key a placeholder the gateway replaces with
+    // the host's token, so nothing reaches xAI's API.
+    id: 'grok-build-vertex',
+    harness: 'grok-build',
+    gateway: 'vertex',
+    model: 'grok-4.6',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'grok-build',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: true,
+    servedModel: /grok-4\.6/,
+    wireModel: /grok-4\.6/,
+    effort: { value: 'low', asked: /^reasoning_effort=low$/ },
   },
   {
     // Codex on Vercel AI Gateway: a Responses API provider on Vercel, the model as openai/<id>.
@@ -388,6 +571,12 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /gemini-3\.8-flash/,
     wireModel: /gemini-3\.8-flash/,
+    // OpenCode's session-title call also sets Anthropic's effort, at a level of its own.
+    effort: {
+      value: 'low',
+      asked:
+        /^providerOptions\.google\.thinkingConfig\.thinkingLevel=low providerOptions\.vertex\.thinkingConfig\.thinkingLevel=low( |$)/,
+    },
   },
   {
     // Goose on Vercel AI Gateway: its vercel_ai_gateway provider (OpenAI-compatible, a Bearer
@@ -422,6 +611,7 @@ export const harnesses: HarnessRow[] = [
     // Its ACP server names no model; the turn records the one xAI's Responses API answered with.
     servedModel: /^grok-4\.6/,
     wireModel: /^grok-4\.6/,
+    effort: { value: 'low', asked: /^reasoning\.effort=low$/ },
   },
   {
     // Grok Build on Vercel AI Gateway: the model as a [model."xai/<id>"] table on Vercel's Chat
@@ -439,6 +629,7 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /grok-4\.6/,
     wireModel: /grok-4\.6/,
+    effort: { value: 'low', asked: /^reasoning_effort=low$/ },
   },
   {
     // Claude Code on OpenRouter through `gateway: [openrouter()]`: its base URL at OpenRouter's
@@ -488,6 +679,7 @@ export const harnesses: HarnessRow[] = [
     servedModel: /gemini-3\.8-flash/,
     wireModel: /gemini-3\.8-flash/,
     upstream: true,
+    effort: { value: 'low', asked: /^reasoning\.effort=low$/ },
   },
   {
     // Goose on OpenRouter: its openrouter provider (Chat Completions, a Bearer key), the Gemini
@@ -508,6 +700,25 @@ export const harnesses: HarnessRow[] = [
     servedModel: /gemini-3\.8-flash/,
     wireModel: /gemini-3\.8-flash/,
     upstream: true,
+    effort: { value: 'low', asked: /^reasoning\.effort=low$/ },
+  },
+  {
+    // pi on OpenRouter: pi's own openrouter provider (Chat Completions, a Bearer key), the model
+    // as google/<id> from pi's catalog for OpenRouter, each thinking level as reasoning.effort.
+    id: 'pi-openrouter',
+    harness: 'pi',
+    gateway: 'openrouter',
+    model: 'gemini-3.8-flash',
+    key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['openrouter.ai'],
+    apiHost: 'openrouter.ai',
+    tokens: true,
+    servedModel: /^google\/gemini-3\.8-flash$/,
+    wireModel: /^google\/gemini-3\.8-flash$/,
+    upstream: true,
+    effort: { value: 'low', asked: /^reasoning\.effort=low$/ },
   },
   {
     // Grok Build on OpenRouter: the model as a [model."x-ai/<id>"] table on OpenRouter's Chat
@@ -525,6 +736,25 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /grok-4\.6/,
     wireModel: /grok-4\.6/,
+    upstream: true,
+    effort: { value: 'low', asked: /^reasoning_effort=low$/ },
+  },
+  {
+    // fx on OpenRouter: its Chat Completions API as the configured provider `openrouter`, through
+    // the relay, the OpenAI id as openai/<id>.
+    id: 'fx-openrouter',
+    harness: 'fx',
+    gateway: 'openrouter',
+    model: 'gpt-5.5',
+    key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
+    image: 'fx',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['openrouter.ai'],
+    apiHost: 'openrouter.ai',
+    tokens: true,
+    servedModel: /^openai\/gpt-5\.5$/,
+    wireModel: /^openai\/gpt-5\.5$/,
     upstream: true,
   },
 ]
@@ -572,15 +802,22 @@ export function skipRow(row: HarnessRow): string | false {
   return false
 }
 
-/** The host environment for `reeval run` on this row: the key under its own name, and the row's pick. */
+/**
+ * The host environment for `reeval run` on this row: the key under its own name, its `hostEnv`,
+ * and the row's pick.
+ */
 export function rowEnv(row: HarnessRow): NodeJS.ProcessEnv {
   const key = keyOf(row)
   return {
     ...(row.id === 'fake' ? {} : { REEVAL_CONTRACT_HARNESS: harnessOf(row) }),
     ...(row.model ? { REEVAL_CONTRACT_MODEL: row.model } : {}),
     ...(row.gateway ? { REEVAL_CONTRACT_GATEWAY: row.gateway } : {}),
+    ...(row.effort ? { REEVAL_CONTRACT_EFFORT: row.effort.value } : {}),
     ...(row.plugin ? { REEVAL_CONTRACT_PLUGIN_PARTS: row.plugin.parts.join(',') } : {}),
     ...(row.key && key ? { [row.key.name]: key } : {}),
+    ...Object.fromEntries(
+      (row.hostEnv ?? []).flatMap((name) => (process.env[name] ? [[name, process.env[name]]] : [])),
+    ),
     ...(process.env.REEVAL_RAW_TRANSCRIPT
       ? { REEVAL_RAW_TRANSCRIPT: process.env.REEVAL_RAW_TRANSCRIPT }
       : {}),
@@ -625,6 +862,12 @@ export function reserveAttempts(row: HarnessRow, attempts: number, what: string)
   if (row.key && !keyOf(row)) {
     throw new Error(
       `${row.key.from.join(' or ')} isn't set, and REEVAL_TEST_REAL=1 asks for real ${row.id}: set it, or leave ${row.id} out of REEVAL_CONTRACT_HARNESSES`,
+    )
+  }
+  const unset = (row.hostEnv ?? []).filter((name) => !process.env[name])
+  if (unset.length) {
+    throw new Error(
+      `${unset.join(' and ')} isn't set, and REEVAL_TEST_REAL=1 asks for real ${row.id}: set it, or leave ${row.id} out of REEVAL_CONTRACT_HARNESSES`,
     )
   }
   const budget = Number(process.env.REEVAL_REAL_ATTEMPT_BUDGET)

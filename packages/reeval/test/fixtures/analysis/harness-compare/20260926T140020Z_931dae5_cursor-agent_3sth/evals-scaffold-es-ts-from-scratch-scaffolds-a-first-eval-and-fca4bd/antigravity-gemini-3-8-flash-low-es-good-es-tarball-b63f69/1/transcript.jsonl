@@ -1,4 +1,4 @@
-{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to create hello.txt containing \"hello\" and checks that file with a deterministic assertion. Finish when `npx es run` passes."}
+{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to …"}
 {"turn":0,"type":"tool","tool":"read","input":{"file_path":"/root/.gemini/config/skills/es-good/SKILL.md"},"ok":true,"durationMs":1567}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"ls -la && ls -la /opt/es"},"ok":true,"durationMs":1213}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npm init -y && npm i -D /opt/es/invertase-foobar.tgz"},"ok":true,"durationMs":9781}
@@ -20,5 +20,5 @@
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"ls -la"},"ok":true,"durationMs":1084}
 {"turn":0,"type":"file-edit"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npx es run"},"ok":true,"durationMs":3194}
-{"turn":0,"type":"text","text":"ES (Eval Suite) has been set up and verified:\n\n1. **Installed `@invertase/foobar`**: Initialized [`package.json`](file:///es/workspace/package.json) and installed the package from `/opt/es/invertase-f…"}
+{"turn":0,"type":"text","text":"ES (Eval Suite) has been set up and verified:\n\n1. **Installed `@invertase/foobar`**: Initialized [`package.json`](file:/…"}
 {"turn":0,"type":"turn-end"}

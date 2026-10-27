@@ -1,5 +1,5 @@
 import { Gavel } from 'lucide-react'
-import type { AttemptRecord, JudgementRecord, RunRecord } from 'reeval/view'
+import type { AttemptRecord, JudgmentRecord, RunRecord } from 'reeval/view'
 import { Artifact } from '@/components/artifact'
 import { EmptyState } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
@@ -54,7 +54,7 @@ function ScoreBar({ score, threshold, pass }: { score: number; threshold: number
   )
 }
 
-function Verdict({ j }: { j: JudgementRecord }) {
+function Verdict({ j }: { j: JudgmentRecord }) {
   const pass = j.verdict === 'pass'
   return (
     <div className="rounded-lg border bg-card p-4">

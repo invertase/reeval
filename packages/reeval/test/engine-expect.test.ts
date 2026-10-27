@@ -2,7 +2,7 @@
 // attempt that asserts, with reeval's shims for the runner state @vitest/expect expects.
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
-import { assertionRecords, softFailure } from '../src/attempt/assertions.ts'
+import { assertionRecords, checkFailure } from '../src/attempt/assertions.ts'
 import {
   attemptExpectError,
   attemptRecordings,
@@ -100,7 +100,7 @@ describe('standalone expect', () => {
     assert.equal(own.soft(1).toBe(2), undefined)
     own.soft(3).toBe(3)
     assert.equal(attemptExpectError(own), undefined, 'a soft failure is not a count error')
-    const error = softFailure(rawAssertions(t))
+    const error = checkFailure(rawAssertions(t))
     assert.ok(error instanceof Error)
     assert.equal(error.name, 'AssertionError')
     assert.match(error.message, /expected 1 to be 2/)
@@ -117,6 +117,18 @@ describe('standalone expect', () => {
     await createExpect()
       .poll(async () => 'ready')
       .not.toBe('waiting')
+  })
+
+  test('expect.poll refuses a timeout or interval longer than a timer can be', () => {
+    for (const key of ['timeout', 'interval']) {
+      fails(
+        () => createExpect().poll(() => 1, { [key]: 2 ** 31 }),
+        new RegExp(
+          `expect\\.poll's ${key} is at most 596h \\(2147483647ms\\), the longest timer Node can set \\(got 2147483648\\)$`,
+        ),
+      )
+      createExpect().poll(() => 1, { [key]: 2 ** 31 - 1 })
+    }
   })
 
   test('expect.poll fails with the last error at its timeout, pointing at the call', async () => {
@@ -252,7 +264,7 @@ describe('assertions recorded on the attempt', () => {
     const soft = rawAssertions(t).filter((x) => x.status === 'fail')
     assert.equal(soft.length, 3)
     assert.ok(soft.every((x) => x.error instanceof Error))
-    assert.match(softFailure(rawAssertions(t))?.message ?? '', /first: expected 1 to be 2/)
+    assert.match(checkFailure(rawAssertions(t))?.message ?? '', /first: expected 1 to be 2/)
   })
 
   test("a matcher that can't answer is an error, not a failure; a thrown non-Error keeps its text", () => {
@@ -365,6 +377,63 @@ describe('assertions recorded on the attempt', () => {
     )
     assert.ok((records(t)[0]?.durationMs ?? -1) >= 0)
   })
+
+  test("a check in expect.poll's function counts on the try the poll ends on, not the ones it retried", async () => {
+    const t = task()
+    const own = createExpect(t)
+    let n = 0
+    await own
+      .poll(
+        () => {
+          n++
+          own.soft(n, 'soft inner').toBeGreaterThan(1)
+          own(n, 'inner').toBeGreaterThan(2)
+          return n
+        },
+        { interval: 5, timeout: 1000 },
+      )
+      .toBe(3)
+    let m = 0
+    const outer = async () => {
+      m++
+      await own.poll(() => m, { interval: 5, timeout: 1000, message: 'nested' }).toBeGreaterThan(0)
+      return m
+    }
+    await own.poll(outer, { interval: 5, timeout: 1000 }).toBe(2)
+    const inner = () =>
+      own.poll(() => 'no', { interval: 5, timeout: 20, message: 'inner gave up' }).toBe('yes')
+    await assert.rejects(
+      () =>
+        own
+          .poll(inner, { interval: 5, timeout: 30, message: 'outer gave up' })
+          .toBe(undefined) as never,
+    )
+    await assert.rejects(
+      () =>
+        own
+          .poll(
+            () => {
+              own('no', 'last').toBe('yes')
+            },
+            { interval: 5, timeout: 30, message: 'gave up' },
+          )
+          .toBe(1) as never,
+    )
+    assert.deepEqual(
+      records(t).map((x) => [x.label, x.status]),
+      [
+        ['poll.toBe 3', 'pass'],
+        ['soft inner', 'pass'],
+        ['inner', 'pass'],
+        ['poll.toBe 2', 'pass'],
+        ['nested', 'pass'],
+        ['outer gave up', 'fail'],
+        ['inner gave up', 'fail'],
+        ['gave up', 'fail'],
+        ['last', 'fail'],
+      ],
+    )
+  })
 })
 
 describe('expect routed to the attempt', () => {
@@ -391,7 +460,7 @@ describe('expect routed to the attempt', () => {
         ['expect.poll(…).toBe()', false],
       ],
     )
-    assert.match(softFailure(rawAssertions(t))?.message ?? '', /expected 1 to be 2/)
+    assert.match(checkFailure(rawAssertions(t))?.message ?? '', /expected 1 to be 2/)
     // Outside any attempt, nothing is tracked and the worker's expect counts.
     const before = pending.length
     void expect(Promise.resolve(1)).resolves.toBe(1)

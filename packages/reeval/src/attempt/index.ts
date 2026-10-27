@@ -6,16 +6,17 @@ import { attemptDebugDir } from '../debug/files.ts'
 import { getRunContext, type TestHandle } from '../engine/runtime.ts'
 import { TimeoutError } from '../errors.ts'
 import { attemptId, evalId, evalSlug, relativeFile } from '../ids.ts'
+import { redactSecrets } from '../redact.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { AttemptContext, EvalFn } from '../types.ts'
-import { assertionRecords, softFailure } from './assertions.ts'
+import { assertionRecords, checkFailure } from './assertions.ts'
 import { capturePage, serveCommand } from './capture.ts'
 import { createChecks } from './checks.ts'
 import { contextTaker } from './context.ts'
 import { tracePlan } from './debug.ts'
 import { prepareEnvironment } from './environment.ts'
 import { judgeCaller } from './judge.ts'
-import { recordEgress, recordFailure, recordOom, writeRecord } from './record.ts'
+import { attemptError, recordEgress, recordFailure, recordOom, writeRecord } from './record.ts'
 import { startSession } from './session.ts'
 import { type AttemptSpec, createAttempt, evalTimer } from './state.ts'
 import { turnSender } from './turns.ts'
@@ -99,18 +100,22 @@ async function attemptBody(
     })
     // A body that ignores the signal can still return normally after a timeout or cancel.
     a.signal.throwIfAborted()
-    const missed = (await unawaited()) ?? softFailure(assertions()) ?? expectError()
+    const missed = (await unawaited()) ?? checkFailure(assertions()) ?? expectError()
     // A start that failed under a caught call or `expect.soft` still fails the attempt as itself.
     if (a.startFailure) throw a.startFailure.error
     if (missed) throw missed
-    const [only, ...more] = a.judgeErrors
+    const judgeErrors = a.judgeErrors.toSorted((x, y) => x.call - y.call).map((e) => e.message)
+    const [only, ...more] = judgeErrors
     if (only) {
-      throw new Error(
-        more.length ? `${more.length + 1} judge calls failed:\n${a.judgeErrors.join('\n')}` : only,
-      )
+      const message = more.length
+        ? `${more.length + 1} judge calls failed:\n${judgeErrors.join('\n')}`
+        : only
+      a.judgeThrown.add(message)
+      throw new Error(message)
     }
-  } catch (error) {
-    recordFailure(a, error, timedOut())
+  } catch (thrown) {
+    const error = attemptError(a, thrown, assertions())
+    recordFailure(a, error, timedOut(), assertions())
     failure = {
       error: timedOut()
         ? new TimeoutError(`Eval timed out after ${spec.timeoutMs / 1000}s`)
@@ -143,7 +148,7 @@ async function attemptBody(
     const checked = assertionRecords(assertions())
     if (checked.length) record.assertions = checked
     for (const x of checked) {
-      const why = x.message ? ` · ${clip(x.message.split('\n')[0] ?? '', 160)}` : ''
+      const why = x.message ? ` · ${clip(redactSecrets(x.message.split('\n')[0] ?? ''), 160)}` : ''
       debug.log(
         'check',
         `assert ${x.status === 'pass' ? '✓' : '✗'} ${x.label} (${x.matcher}, ${x.status})${why}`,

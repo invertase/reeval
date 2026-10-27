@@ -33,6 +33,16 @@ const events = [
   },
   {
     ...at,
+    type: 'file-edit',
+    toolCallId: 't5',
+    path: 'notes.txt',
+    kind: 'write',
+    added: 2,
+    removed: null,
+    durationMs: null,
+  },
+  {
+    ...at,
     type: 'web-fetch',
     toolCallId: 't3',
     url: 'https://example.com/a',
@@ -57,6 +67,7 @@ test('the transcript renders one compact entry per event, by mode', () => {
     [
       'tool shell: npm test → ok · 2s',
       'edit src/auth.ts (modify, +31 −4)',
+      'edit notes.txt (write, +2)',
       'fetch https://example.com/a → failed',
       'search "firebase auth" → ok',
       'error: rate limited',
@@ -94,7 +105,7 @@ test('state resolves every key to its default, and merges key by key', () => {
   assert.deepEqual(mergeJudge({ threshold: 0.7 }, { threshold: 0.9 }), { threshold: 0.9 })
 })
 
-test('judge options name an unknown key, a misspelt state key and a bad value', () => {
+test('judge options name an unknown key, a misspelled state key and a bad value', () => {
   const loc = { at: 'options', where: 'evals/a.eval.ts › lands' } as const
   assert.equal(
     judgeProblem({ diff: ['src/'] }, loc),

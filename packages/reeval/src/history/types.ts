@@ -9,6 +9,7 @@ import type {
   EgressRecord,
   EnvironmentRecord,
   EvalCompareMeta,
+  EvalSource,
   ExecTry,
   FileChange,
   JudgeArtifactRef,
@@ -16,7 +17,9 @@ import type {
   Outcome,
   PhaseTimings,
   ResolvedJudgeStateOptions,
+  Revision,
   SandboxWarning,
+  SetupProcess,
   StartRetry,
   TokenUsage,
   TurnStatus,
@@ -92,7 +95,7 @@ export type RunnerInfo =
 /** One failed judge try that was retried, and the backoff before the next. */
 export type JudgeRetry = { error: string; delayMs: number }
 
-export type JudgementRecord = {
+export type JudgmentRecord = {
   question: string
   verdict: 'pass' | 'fail'
   score: number
@@ -108,7 +111,9 @@ export type JudgementRecord = {
   costUsd?: number
   /**
    * `<index>:<sha256(question) prefix>`: the same question at the same place in the evaluation, so a
-   * verdict can be followed across runs (and an edited question starts a new series).
+   * verdict can be followed across runs (and an edited question starts a new series). `<index>`
+   * is the call's place among the attempt's `c.judge()` calls, counting calls that failed,
+   * whichever finishes first.
    */
   key: string
   /** Transient provider errors retried before this verdict, with the backoff before each retry. */
@@ -121,7 +126,7 @@ export type AttemptFiles = {
   /** Each environment setup step's command, exit code, duration, and output. */
   setupLog?: FileRef
   transcript?: FileRef
-  /** Unnormalised harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`. */
+  /** Unnormalized harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`. */
   rawTranscript?: FileRef
   diff?: FileRef
   judgeInput?: FileRef
@@ -237,9 +242,18 @@ export type AttemptRecord = {
     /** Longest tool `durationMs` in the transcript; null when none reported a duration. */
     maxToolMs: number | null
   }
-  judgements: JudgementRecord[]
+  judgements: JudgmentRecord[]
   /** Harness session starts that didn't become ready within `startTimeout` and were started again (at most one). */
   startRetries?: StartRetry[]
+  /**
+   * Processes the setup steps left running in a Docker sandbox with a `to: 'checks'` secret
+   * without `hosts` in their environment, so they hold its real value while the agent works and
+   * the agent, as the same user, can read it from them. Found by the secret's variable name, so a
+   * copy under another name or in a command's arguments isn't. At most 20, each
+   * `{ command, secrets }`: its command line, masked and cut at 200 characters, and those secrets'
+   * names. Absent when there were none.
+   */
+  setupProcesses?: SetupProcess[]
   /**
    * Each foreground `c.exec`: its last try's exit code, and `durationMs` over all its tries. With
    * `retries`, `tries` has each try's `{ exitCode, durationMs }` and the log each try's output.
@@ -280,8 +294,18 @@ export type EvalEntry = {
   name: string
   /** Results are comparable only when fingerprints match. */
   fingerprint: string
-  /** The evaluation file and every local file it imports, directly or not, by content hash. */
+  /**
+   * The evaluation file, by content hash: where the evaluation lives. Records from before `source`
+   * also list the local files it imported, and were fingerprinted over them.
+   */
   sources: Array<{ path: string; sha256: string }>
+  /**
+   * Hashes of what the `sources` fingerprint part covers but `revision`: the eval's body, its
+   * case data and its options with its groups'. Unset on records from before it.
+   */
+  source?: EvalSource
+  /** The eval's `revision`, part of the `sources` fingerprint part; unset when it sets none. */
+  revision?: Revision
   tags: string[]
   /** The baseline environment, when the evaluation uses `compare`. */
   compare?: EvalCompareMeta
@@ -433,7 +457,7 @@ export type Lift = {
 
 /** Each input of a cell fingerprint, hashed on its own, so a change can be named. */
 export type FingerprintParts = {
-  /** Over `EvalEntry.sources`. */
+  /** Over `EvalEntry.source` and `EvalEntry.revision`; on records from before them, over `EvalEntry.sources`. */
   sources: string
   /** Over the harness descriptor, less concurrency caps. */
   harness: string
@@ -446,6 +470,11 @@ export type FingerprintParts = {
   context: string
   /** The gateway its model calls went through; unset on `direct`, each provider's own key. */
   gateway?: string
+  /**
+   * The cell's gate (`none`, `passRate 0.5`); unset on the default `all`. Compare reads a change
+   * in it as a policy change, not a reason the runs can't be compared.
+   */
+  gate?: string
 }
 
 /** One harness and environment of an evaluation, and how its attempts went. */
@@ -453,7 +482,10 @@ export type CellRecord = Cell & {
   /** `sha256` of `fingerprintParts`; results are comparable only when it matches. */
   fingerprint: string
   fingerprintParts: FingerprintParts
-  /** The environment's digest: the join key into `RunRecord.environments`; null for none. */
+  /**
+   * The environment's digest; null for none. With `environment`, the key into
+   * `RunRecord.environments`: environments with the same contents share a digest.
+   */
   environmentDigest: string | null
   harnessKind: string
   /**
@@ -590,6 +622,7 @@ export type RunRecord = {
   config: {
     sandbox: string
     environment: string | null
+    /** The config's `runs`; 1 when it sets none, though a compare's cells then run 4 each. */
     runs: number
     judgeModel: string | null
     threshold: number
@@ -721,8 +754,16 @@ export type HistoryCell = Pick<
   lift?: { vs: string; points: number; lo: number; hi: number; withinNoise: boolean }
   /** Median tool calls, agent time and tokens over the counted attempts; null when none counted. */
   effort: CellEffort | null
-  /** Of `fail`, the attempts the run's interrupt cancelled (`error.kind: 'aborted'`); unset when none. */
-  cancelled?: number
+  /** Of `fail`, the attempts the run's interrupt canceled (`error.kind: 'aborted'`); unset when none. */
+  canceled?: number
+}
+
+/** A family's pooled lift as the history listing keeps it: enough to compare its gate. */
+export type FamilyLiftSummary = Pick<FamilyLift, 'variant' | 'vs' | 'points' | 'outcome'> & {
+  lo: number
+  hi: number
+  /** Unset when the compare has no `minLift`, so the lift can't fail. */
+  minLift?: number
 }
 
 /**
@@ -755,12 +796,20 @@ export type HistoryEntry = {
     slug: string
     fingerprint: string
     sources: EvalEntry['sources']
+    source?: EvalEntry['source']
+    revision?: EvalEntry['revision']
     outcome: Outcome
     passRate: number | null
     cells: HistoryCell[]
   }>
   /** The run's pooled families; unset when none ran. */
-  families?: Array<Pick<FamilyRecord, 'id' | 'name' | 'cases' | 'ran' | 'outcome'>>
+  families?: Array<
+    Pick<FamilyRecord, 'id' | 'name' | 'cases' | 'ran' | 'outcome'> & {
+      /** The eval ids of its cases in this run. */
+      caseIds: string[]
+      lifts: FamilyLiftSummary[]
+    }
+  >
   /** The run's errors outside any attempt; unset when there were none. */
   errors?: string[]
 }

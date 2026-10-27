@@ -1,6 +1,5 @@
-// What `reeval run` prints when it ends, in every mode: the result blocks with their insights
-// (errors outside any eval first), why there are none when the run tried, the run's time and
-// where its results are, then the tally, the hint and the remarks.
+// What `reeval run` prints when it ends, in every mode: the result blocks (errors outside any eval
+// first), the run's time and where its results are, then the tally and the remarks.
 import { formatDuration } from '../text.ts'
 import { formatUsage } from '../view/model.ts'
 import { suiteResult } from '../view/suite.ts'
@@ -18,7 +17,7 @@ export function resultLines(c: Colors, e: RunEnd, verbose: boolean): string[] {
       ? [c.yellow('Budget reached: attempts that hadn’t started were skipped')]
       : []),
     ...(record.status === 'interrupted'
-      ? [c.yellow('Interrupted: attempts that hadn’t finished were cancelled')]
+      ? [c.yellow('Interrupted: attempts that hadn’t finished were canceled')]
       : []),
     c.dim(
       [formatDuration(record.durationMs), tokens, `results ${e.summaryPath}`]
@@ -26,10 +25,9 @@ export function resultLines(c: Colors, e: RunEnd, verbose: boolean): string[] {
         .join(' · '),
     ),
   ]
-  return render(suiteResult(record), e.insights ?? null, {
+  return render(suiteResult(record), e.remarks ?? null, {
     color: c.enabled,
     verbose,
-    notes: [...(e.insightLines ?? []).map((l) => c.yellow(l)), ...notes],
-    hint: e.hint,
+    notes,
   })
 }

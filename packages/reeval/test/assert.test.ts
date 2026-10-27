@@ -1,5 +1,5 @@
 // Transcript matchers: pass, fail, .not, and every replay skill capture through
-// today's normaliser.
+// today's normalizer.
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -15,7 +15,7 @@ import {
   searched,
 } from '../src/assert.ts'
 import { expect, extendExpect } from '../src/engine/expect.ts'
-import { normaliseStream } from '../src/harness/transcript.ts'
+import { normalizeStream } from '../src/harness/transcript.ts'
 import { toolCalls } from '../src/history/db.ts'
 import { toolTarget } from '../src/history/tool-target.ts'
 import { matchers } from '../src/matchers.ts'
@@ -345,14 +345,14 @@ const replay = (harness: string, file: string) => {
     .filter(Boolean)
     .map((l) => JSON.parse(l) as { ms: number; part: { type: string; [k: string]: unknown } })
   return turnOf(
-    normaliseStream(
+    normalizeStream(
       lines.map((l) => ({ ms: l.ms, part: l.part as never })),
       0,
     ),
   )
 }
 
-describe('replay captures through normaliseStream', () => {
+describe('replay captures through normalizeStream', () => {
   test('there are skill and mcp captures for each harness', () => {
     assert.deepEqual(harnesses, ['antigravity', 'codex', 'cursor', 'fx', 'goose', 'opencode', 'pi'])
   })

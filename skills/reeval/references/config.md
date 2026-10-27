@@ -56,11 +56,11 @@ Harnesses (`reeval/harness`), each with a required `model`; a list runs each as 
 | `cursor({ model, params?, effort? })` | `CURSOR_API_KEY` | Cursor's agent through the Cursor SDK. `params` such as `{ fast: 'true' }` pick the variant; `effort` maps onto the parameter `Cursor.models.list()` names for that model |
 | `claudeCode({ model, effort? })` | `ANTHROPIC_API_KEY` | `effort` is the Agent SDK's `/effort` |
 | `antigravity({ model, effort? })` | `GEMINI_API_KEY` (a Gemini API key) | e.g. `gemini-3.8-flash-medium`; `effort` is `agy --effort` |
-| `opencode({ model, effort? })` | That provider's key, e.g. `ANTHROPIC_API_KEY` | OpenCode 2; the model is `<provider>/<model>`, e.g. `google/gemini-3.8-flash`. `amazon-bedrock/…` takes `AWS_BEARER_TOKEN_BEDROCK` and an optional `AWS_REGION`; Vertex, Azure, Copilot and local providers are refused at plan time. Web search via Exa, whose host it allows; it also reads `.claude/skills` and `.agents/skills` |
+| `opencode({ model, effort? })` | That provider's key, e.g. `ANTHROPIC_API_KEY` | OpenCode 2; the model is `<provider>/<model>`, e.g. `google/gemini-3.8-flash`. `amazon-bedrock/…` takes `AWS_BEARER_TOKEN_BEDROCK` and an optional `AWS_REGION`; Vertex (on `direct()`; it runs through `vertex()`), Azure, Copilot and local providers are refused at plan time. Web search via Exa, whose host it allows; it also reads `.claude/skills` and `.agents/skills` |
 | `goose({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id, e.g. `gemini-3.8-flash`; `effort` is `GOOSE_THINKING_EFFORT`. Records no tokens: its ACP usage is the last model call only |
 | `pi({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id; `effort` is `--thinking` |
 | `codex({ model, effort? })` | `OPENAI_API_KEY` | An OpenAI model id, e.g. `gpt-5.6-luna`; `effort` is `model_reasoning_effort` |
-| `fx({ model })` | `OPENAI_API_KEY` for a bare id, or `AI_GATEWAY_API_KEY` on `vercel()` | Vercel's fx over ACP: a gateway id (`anthropic/claude-sonnet-5`) runs only on `vercel()` in `gateway`, a bare OpenAI id (`gpt-5.5`) on OpenAI, which must accept function tools without `reasoning_effort` (not `gpt-5.6` or later). No `effort`. Its own web tools bypass the egress gateway, so `deny-all` blocks them |
+| `fx({ model, effort? })` | `OPENAI_API_KEY` for a bare id, `AI_GATEWAY_API_KEY` on `vercel()`, `OPENROUTER_API_KEY` on `openrouter()`, or none on `vertex()` | Vercel's fx over ACP: a gateway id (`anthropic/claude-sonnet-5`) runs only on `vercel()` or `openrouter()` in `gateway`, a bare OpenAI id (`gpt-5.5`) on OpenAI, which must accept function tools without `reasoning_effort` (not `gpt-5.6` or later), a Gemini id (`google/gemini-3.8-flash`) on `vertex()`. `effort` (`reasoning_effort`) only on `vertex()`. Its own web tools bypass the egress gateway, so `deny-all` blocks them |
 | `grokBuild({ model, effort? })` | `XAI_API_KEY` | xAI's Grok Build CLI; an xAI model id, e.g. `grok-4.6`; `effort` is `default_reasoning_effort`. It finds MCP tools with its `search_tool` before calling them |
 | `fakeHarness(…)` | None | See the fake trio in SKILL.md |
 
@@ -68,7 +68,7 @@ OpenCode, Goose, pi and Codex refuse `mcp.sse`. Cursor's `fast` defaults to `'fa
 price; `{ fast: 'true' }` costs several times more). Other unset Cursor params take Cursor's
 default, which the record shows (`composer-2.5[fast=false]`), so pin them for reproducible evals.
 
-`effort` is the same field on every factory but `fx()`, with whatever values that CLI takes (no shared
+`effort` is the same field on every factory (`fx()` takes it only on `vertex()`), with whatever values that CLI takes (no shared
 enum); Fast is not effort. The default harness id includes `[effort=<value>]` when it's set, and
 the record stores the requested effort as `effort` and the served one as `servedEffort`.
 
@@ -81,16 +81,25 @@ harness's own endpoints. Every harness but Goose reports tokens, which reeval re
 attempt and run (no prices).
 
 `gateway` (`reeval/gateway`) lists the routes model calls may take, in order: each harness, the
-judge and analysis take the first that can serve them. `gateway: [vercel(), direct()]` runs Claude
-Code, Codex, Goose, OpenCode, fx and Grok Build on Vercel AI Gateway with one `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`) (pi, and
-`effort` on Goose, OpenCode or Grok Build, fall through to `direct()`), and
-everything else on its own key; the plan's hint says where each harness fell through. Pin one with
-the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. Default `[direct()]`:
+judge and analysis take the first that can serve them. Every list ends with `direct()` (each
+provider's own key), so don't write it at the end: list it only to move it (`[direct(), vercel()]`
+tries own keys first), or write `direct({ enabled: false })` for strict routing, where a cell no
+entry serves stops the plan (never both). `gateway: [vercel()]` runs Claude
+Code, Codex, Goose, pi, OpenCode, fx and Grok Build on Vercel AI Gateway with one `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`) (`effort`
+on Goose, or on OpenCode with a model other than Gemini, falls back to `direct()`), and
+everything else on its own key; the plan's hint says which cells fell back. Pin one with
+the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. `vertex({ project })`
+(else `GOOGLE_CLOUD_PROJECT`) runs Claude Code, Antigravity, OpenCode, Goose, pi, Grok Build and fx (Gemini only) on Vertex AI
+with no key: reeval mints a token from Application Default Credentials on the host and the egress
+gateway adds it (OpenCode's Gemini model runs as `google-vertex/<id>`, Grok Build's xAI model as `xai/<id>` on Vertex's Chat Completions API). Claude ids work in
+either form (`claude-haiku-4-5-20251001` is sent as Vertex's `claude-haiku-4-5@20251001`), so one
+string works through `[vertex()]` and its `direct()` fallback; `google/*` and `anthropic/*` judge and analysis models run there
+too. `reeval doctor --online` checks the token, the project's Vertex AI API and that Vertex serves each model the config sends there (Claude needs enabling in Model Garden). Default `[direct()]`:
 no gateway, so the judge, analysis and captures take only their provider's own key.
-`gateway: [openrouter(), direct()]` runs Claude Code, Codex, Goose, OpenCode and Grok Build on
-OpenRouter with one `OPENROUTER_API_KEY` (Cursor, Antigravity, fx, pi, and `effort` on any but
-Codex, fall through). Every OpenRouter call records its upstream provider and cost
-(`attempts[].upstreams`, `reportedCostUsd`; a judgement's `upstream`, `costUsd`).
+`gateway: [openrouter()]` runs Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi on
+OpenRouter with one `OPENROUTER_API_KEY` (Cursor, Antigravity, and `effort` on fx, on Claude Code or
+on Goose or OpenCode with a model other than Gemini, fall through). Every OpenRouter call records its upstream provider and cost
+(`attempts[].upstreams`, `reportedCostUsd`; a judgment's `upstream`, `costUsd`).
 `openrouter({ fallbacks: true })` lets reeval's own calls (judge, analysis, captures) fail over
 between upstreams; the agents' calls take OpenRouter's routing whatever it says. Write OpenCode
 ids as `anthropic/…`, never `openrouter/…` or `vercel/…`.
@@ -126,7 +135,7 @@ ids as `anthropic/…`, never `openrouter/…` or `vercel/…`.
 | `env` | Merged by name |
 | `judge` | Merged by field |
 | `capture` | Shallow-merged camera defaults (`viewport`, `timeout`, `browser`, `model`, the vision model); `viewport` replaces the value, and the port is not an option |
-| `runs`, `gate`, `egress`, `timeout` | Replaced |
+| `runs`, `gate`, `egress`, `timeout` | Replaced (`runs` unset everywhere: 4 for a compare with variants, else 1) |
 | `tags`, `pin` | Unioned |
 | `compare` | Groups and evals only |
 

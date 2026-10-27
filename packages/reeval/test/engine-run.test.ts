@@ -167,14 +167,14 @@ describe('runTests', () => {
   })
 
   test('after a cancel nothing starts, and the budget marker skips attempts that got a lease', async () => {
-    const cancelled = new AbortController()
-    cancelled.abort()
+    const canceled = new AbortController()
+    canceled.abort()
     const collected = await tests(['x', { gate: gate(5) }, async () => assert.fail('ran')])
     const a = recorder()
     await runTests(collected, new Set([0]), {
       file: '/f',
       stagingDir: stagingDir(),
-      signal: cancelled.signal,
+      signal: canceled.signal,
       reporter: a.reporter,
       onReady: () => {},
     })

@@ -1,6 +1,7 @@
+import type { DeclaredSource } from './declaration.ts'
 import type { ArtifactLevel, FileRef, JudgeRetry, RecordMode } from './history/types.ts'
-import type { ModelHeadlineInput, ModelInsightInput } from './insights/input.ts'
 
+/** More than zero and at most 596h: `90s`, `15m`, `1h`, or a number of milliseconds. */
 export type Duration = number | `${number}${'ms' | 's' | 'm' | 'h'}`
 
 /** When an event started: wall clock, and ms since its turn started. */
@@ -10,14 +11,18 @@ export type FileEditEvent = {
   type: 'file-edit'
   toolCallId: string
   path: string
-  kind: 'create' | 'modify' | 'delete'
+  /**
+   * `write` is a whole-file write whose result doesn't say whether the file existed before
+   * (Antigravity's, fx's, Goose's, Grok Build's and pi's write tools, for example).
+   */
+  kind: 'create' | 'modify' | 'write' | 'delete'
   /** Line counts, or null when the harness didn't send the content (e.g. deletes). */
   added: number | null
   removed: number | null
 }
 
 /**
- * Normalised agent events. Each tool call is one event, merged with its result; `durationMs`
+ * Normalized agent events. Each tool call is one event, merged with its result; `durationMs`
  * is wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null
  * when the harness never reported the end. Long shell or edit calls set `stalled: true`.
  */
@@ -168,6 +173,7 @@ export type Capture = {
  * default `name` is derived from the path. `wait` and `instructions` are call-only.
  */
 export type CaptureCall = {
+  /** The `artifacts/<name>.png` file name: 1 to 100 of `a-z`, `0-9`, `_` and `-`, starting with a letter or digit. Unique within the attempt. */
   name?: string
   path?: string
   viewport?: Viewport
@@ -464,7 +470,7 @@ export type FakeHarnessDescriptor = {
   files?: Record<string, string>
   /** The fake agent's final message on every turn; default `Done.`. */
   text?: string
-  /** Simulated turn length, honours the abort signal. */
+  /** Simulated turn length, honors the abort signal. */
   delayMs?: number
   /** Sits out `delayMs` even after an abort, like an agent that doesn't stop when it's told to. */
   ignoreAbort?: boolean
@@ -738,7 +744,7 @@ export type CodexHarnessDescriptor = {
 }
 /**
  * fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or
- * OpenAI's API by the model id, and reports each turn's tokens.
+ * OpenAI's API by the model id, or on OpenRouter or Vertex AI, and reports each turn's tokens.
  */
 export type FxHarnessDescriptor = {
   kind: 'fx'
@@ -750,10 +756,18 @@ export type FxHarnessDescriptor = {
   /**
    * A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with
    * `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on
-   * OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.
+   * OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `openrouter()`, either
+   * runs on OpenRouter's Chat Completions API with `OPENROUTER_API_KEY`, a bare id as `openai/<id>`.
+   * On `vertex()`, a Gemini model id, `google/<id>` or a bare `gemini-…` id, run on Vertex AI's
+   * Chat Completions endpoint, e.g. `google/gemini-3.8-flash`.
    */
   model: string
-  /** Cell id; defaults to `fx:<model>`. */
+  /**
+   * Reasoning effort, sent as `reasoning_effort` on each model call; only on `vertex()`, since fx
+   * sends none itself. Values are what the model takes there, e.g. `low`, `medium` or `high`.
+   */
+  effort?: string
+  /** Cell id; defaults to `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set. */
   id?: string
   /** The most fx attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
@@ -793,18 +807,27 @@ export type GrokBuildHarnessDescriptor = {
 }
 /**
  * A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`;
- * `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter.
+ * `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter; `vertex` is
+ * Google Cloud's Vertex AI.
  */
-export type GatewayName = 'direct' | 'vercel' | 'openrouter'
+export type GatewayName = 'direct' | 'vercel' | 'openrouter' | 'vertex'
 
-/** Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`. */
+/**
+ * Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends with
+ * it unless it's listed elsewhere, where it's tried in that place.
+ */
 export type DirectGatewayDescriptor = {
   kind: 'direct'
+  /**
+   * `false` turns off the fallback to each provider's own key, so a cell no other gateway in the
+   * list serves is refused at plan time. Default `true`.
+   */
+  enabled?: boolean
 }
 
 /**
  * Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
- * `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode, fx and Grok Build.
+ * `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.
  */
 export type VercelGatewayDescriptor = {
   kind: 'vercel'
@@ -812,7 +835,7 @@ export type VercelGatewayDescriptor = {
 
 /**
  * OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves
- * Claude Code, Codex, Goose, OpenCode and Grok Build.
+ * Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi.
  */
 export type OpenRouterGatewayDescriptor = {
   kind: 'openrouter'
@@ -825,11 +848,29 @@ export type OpenRouterGatewayDescriptor = {
   fallbacks?: boolean
 }
 
+/** A model publisher on Vertex AI, which may serve its models in a region of its own. */
+export type VertexPublisher = 'anthropic' | 'google' | 'xai'
+
+/**
+ * Google Cloud's Vertex AI, on Application Default Credentials: made by `vertex()` in
+ * `reeval/gateway`.
+ */
+export type VertexGatewayDescriptor = {
+  kind: 'vertex'
+  /** The Google Cloud project the calls are billed to; defaults to `GOOGLE_CLOUD_PROJECT`. */
+  project?: string
+  /** The region the models are called in, e.g. `us-east5`; defaults to `global`. */
+  location?: string
+  /** A region per publisher, where it differs from `location`, e.g. `{ anthropic: 'us-east5' }`. */
+  regions?: Partial<Record<VertexPublisher, string>>
+}
+
 /** One entry of the config's `gateway` list. */
 export type GatewayDescriptor =
   | DirectGatewayDescriptor
   | VercelGatewayDescriptor
   | OpenRouterGatewayDescriptor
+  | VertexGatewayDescriptor
 
 /**
  * A `gateway` entry as data (`reeval.yaml`): its name, a one-key map from its name to its
@@ -840,6 +881,7 @@ export type GatewayEntryData =
   | { direct: Omit<DirectGatewayDescriptor, 'kind'> }
   | { vercel: Omit<VercelGatewayDescriptor, 'kind'> }
   | { openrouter: Omit<OpenRouterGatewayDescriptor, 'kind'> }
+  | { vertex: Omit<VertexGatewayDescriptor, 'kind'> }
   | GatewayDescriptor
 
 /** A real coding agent, driven through its AI SDK harness adapter. */
@@ -1478,7 +1520,7 @@ export type PairFactor = 'environment' | 'harness'
 /** Which pairs a vote is over: two environments on one harness, or two harnesses on one environment. */
 export type CompareCut = 'within' | 'across'
 
-/** One judgement of one pair of attempts, in one order. */
+/** One judgment of one pair of attempts, in one order. */
 export type PairVote = {
   question: string
   cut: CompareCut
@@ -1626,7 +1668,11 @@ type EvalOptionFields = {
    * Not an environment: it does not invent skills, files or a name.
    */
   sandbox?: SandboxDescriptor
-  /** Attempts per cell. */
+  /**
+   * Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
+   * whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
+   * included.
+   */
   runs?: number
   /** How each cell's attempts decide its outcome; default `'all'`. */
   gate?: GatePolicy
@@ -1654,8 +1700,26 @@ type EvalOptionFields = {
   timeout?: Duration
   /** Labels for `--tag` and profiles to select by; a group's are added to its evals'. */
   tags?: string[]
+  /**
+   * The eval's version, part of its fingerprint: bump it when a change the eval file doesn't show
+   * (a helper, a fixture, data it reads) changes what it measures. A group's applies to the evals
+   * inside it that set none.
+   */
+  revision?: Revision
   /** Keys a profile's `limit` may not narrow for this group or eval. */
   pin?: PinnableKey[]
+}
+
+/** An eval's `revision`: a whole number or a non-empty string, compared exactly. */
+export type Revision = number | string
+
+/**
+ * An eval's own source as hashes: its body and case data as declared, and its options and its
+ * enclosing groups' in canonical form (`tags`, `revision` and `gate` aside).
+ */
+export type EvalSource = DeclaredSource & {
+  /** sha256 of the canonical options. */
+  options: string
 }
 
 /**
@@ -1710,7 +1774,7 @@ export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & {
 export type HistoryConfig = {
   /** Committed history folder (default: `.history` in the directory the evals live in). */
   dir?: string
-  /** Artifacts recorded next to each run: every eval's, failing evals' only, or none. */
+  /** Artifacts recorded next to each run: every attempt's, failed attempts' only, or none. */
   artifacts?: ArtifactLevel
 }
 
@@ -1792,52 +1856,6 @@ export type FakeAnalysisModel = {
    * Default the first of the question's `choices`, with the text `fake answer`.
    */
   answer?: FakeAnswer | ((attempt: BlindAttempt) => FakeAnswer) | { error: string }
-  /**
-   * What insights get back, in `reeval run` and `reeval analyze --insights`: fixed insights, a
-   * function of each call's input (`input.call` is `classify` or `insights`, once each per eval,
-   * or `headline` once; it may return a promise), or `{ error }` to fail every call. It counts a
-   * token per 4 characters of each call's input and answer, so `analysis.maxTokens` applies.
-   */
-  insights?:
-    | FakeInsights
-    | ((input: FakeInsightsInput) => FakeInsights | Promise<FakeInsights>)
-    | { error: string }
-}
-
-/** What a fake insights function is given: one eval's scoped facts, or the run's evals for the headline. */
-export type FakeInsightsInput = ModelInsightInput | ModelHeadlineInput
-
-/**
- * A fake insight answer. Each call takes its part: `intent` the classification, `answer`,
- * `findings`, `rows`, `namedTools` and `remarks` the eval's, `headline` the run's. Whatever's
- * left out is empty, and the intent defaults to `job: 'other'`.
- */
-export type FakeInsights = {
-  intent?: {
-    job: 'choose' | 'finish' | 'other'
-    question?: string
-    subject?: { tool?: string; change?: string }
-    name?: 'states-intent' | 'no-intent' | 'contradicts'
-    /** `low` falls back to `job: 'other'`, as a real classification does. */
-    confidence?: 'high' | 'medium' | 'low'
-  }
-  answer?: { text: string; cites: string[] } | null
-  findings?: Array<{ text: string; cites: string[] }>
-  rows?: Array<{ row: string; text: string; cites: string[] }>
-  namedTools?: Array<{ attempt: string; tools: string[] }>
-  /**
-   * The eval's remarks, as the model's JSON would have them: `source.at` and `fix.at` are
-   * `L<n>` lines of the eval's source, `evidence` fact ids (`F1`) or attempt lines (`A1#L3`).
-   * They go through the same gates as a model's, so one missing a part is dropped.
-   */
-  remarks?: Array<{
-    kind: string
-    text: string
-    source?: { at: string; quote: string } | null
-    evidence?: string[]
-    fix?: { at: string; edit: string } | null
-  }>
-  headline?: { text: string; cites: string[] } | null
 }
 
 /** A blinded label's pick: the attempt shown first (`A`), second (`B`), or neither. */
@@ -1881,30 +1899,19 @@ export type BlindSide = BlindTurn & {
         notRun: true
       }
   >
-  /** Its captures, in the order sent, labelled by position; a name it lacks is `missing`. */
+  /** Its captures, in the order sent, labeled by position; a name it lacks is `missing`. */
   artifacts?: Array<
     { label: string; mediaType: 'image/png'; bytes: number } | { label: string; missing: true }
   >
 }
 
-/** Insights and `reeval analyze`: a language model (not an evaluation model) and what matters in this project. */
+/** `reeval analyze`: a language model (not an evaluation model) and what matters in this project. */
 export type AnalysisConfig = {
   /**
-   * `'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze`
-   * and questions fall back to the judge's when it's a language model.
+   * `'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Unset, `reeval analyze` and questions
+   * fall back to the judge's when it's a language model.
    */
   model?: string | FakeAnalysisModel
-  /**
-   * `reeval run` classifies each eval and explains its result with `model` once the attempts
-   * finish (default true when `model` is set; `--no-insights` turns it off for one run).
-   */
-  insights?: boolean
-  /**
-   * Tokens (in and out) that one run's insights may use, over every classification, insight and
-   * headline call (default 250000). Past it, the evals left print without insights; the run's
-   * outcome and exit code never change.
-   */
-  maxTokens?: number
   /** Added to the prompt, e.g. "Fewer tool calls count as a win. The skill under test is reeval-good." */
   instructions?: string
   /** The digest's cap; evidence is dropped, lowest priority first, to fit (default 20000). */
@@ -1925,7 +1932,7 @@ export type ReevalConfig = {
   sandbox?: SandboxDescriptor
   /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
   environment?: Environment
-  /** Attempts per cell; default 1. */
+  /** Attempts per cell; unset, a compare with variants runs 4 a side and anything else once. */
   runs?: number
   /** How each cell's attempts decide its outcome; default `'all'`. */
   gate?: GatePolicy
@@ -1956,18 +1963,19 @@ export type ReevalConfig = {
   profiles?: Record<string, Profile>
   /** The profile when neither `--profile` nor `REEVAL_PROFILE` names one: `ci` when `CI` is set. */
   defaultProfile?: { ci?: string; local?: string }
-  /** `unbrokered: 'error'` refuses Docker secrets without `hosts` instead of warning (default `'warn'`). */
+  /** `unbrokered: 'error'` refuses Docker secrets without `hosts`, and credential-like MCP headers written as plain strings, instead of warning (default `'warn'`). */
   secrets?: { unbrokered?: 'warn' | 'error' }
   /**
    * Local debug data in `.reeval/debug`: how many runs to keep (default 20), and how many MB of raw
    * trace each attempt buffers for trace.ndjson (default 8; the oldest entries go first).
    */
   debug?: { keep?: number; traceBufferMb?: number }
-  /** Insights during `reeval run`, `reeval analyze`, and questions without a model. */
+  /** `reeval analyze`, and questions without a model of their own. */
   analysis?: AnalysisConfig
   /**
    * The gateways model calls may go through, in the order you prefer them: each harness takes
-   * the first that can serve it. Default `[direct()]`, each provider's own key.
+   * the first that can serve it. `direct()`, each provider's own key, ends the list unless it's listed
+   * in another place or turned off with `direct({ enabled: false })`. Default `[direct()]`.
    */
   gateway?: GatewayDescriptor[]
 }
@@ -1999,8 +2007,8 @@ export type FakeAnalysisData = {
 /** `AnalysisConfig` as data: the model by name, or a fake analysis. */
 export type AnalysisConfigData = Omit<AnalysisConfig, 'model'> & {
   /**
-   * `'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze`
-   * and questions fall back to the judge's when it's a language model.
+   * `'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Unset, `reeval analyze` and questions
+   * fall back to the judge's when it's a language model.
    */
   model?: string | FakeAnalysisData
 }
@@ -2038,11 +2046,12 @@ export type ReevalConfigData = Omit<
   judge?: ConfigJudgeData
   /** Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. */
   profiles?: Record<string, ProfileData>
-  /** Insights during `reeval run`, `reeval analyze`, and questions without a model. */
+  /** `reeval analyze`, and questions without a model of their own. */
   analysis?: AnalysisConfigData
   /**
    * The gateways model calls may go through, in the order you prefer them: each harness takes
-   * the first that can serve it. Default `[direct]`, each provider's own key.
+   * the first that can serve it. `direct`, each provider's own key, ends the list unless it's listed
+   * in another place or turned off with `{ direct: { enabled: false } }`. Default `[direct]`.
    */
   gateway?: GatewayEntryData[]
 }
@@ -2089,7 +2098,8 @@ export type ResolvedConfig = {
    */
   sandbox: SandboxDescriptor
   environment: Environment | undefined
-  runs: number
+  /** Unset leaves each eval its default: 4 for a compare with variants, otherwise 1. */
+  runs: number | undefined
   /** Unset means `'all'`; kept unset so the plan can hint when `runs > 1`. */
   gate: GatePolicy | undefined
   env: EnvVars
@@ -2110,10 +2120,11 @@ export type ResolvedConfig = {
   analysis: AnalysisConfig & {
     maxInputTokens: number
     maxOutputTokens: number
-    insights: boolean
-    maxTokens: number
   }
-  /** The `gateway` list, in preference order; `[direct()]` when the config sets none. */
+  /**
+   * The `gateway` list, in preference order, with `direct()` at the end unless it's listed
+   * elsewhere or turned off; `[direct()]` when the config sets none.
+   */
   gateway: GatewayDescriptor[]
   /** Whether the config sets `gateway`, so the plan shows where each cell resolved. */
   gatewaySet: boolean
@@ -2286,8 +2297,16 @@ export type EnvironmentRecord = {
   plugins?: PluginRecord[]
   files: Array<{ path: string; sha256: string }>
   vars: string[]
+  /**
+   * Every secret, by the variable it's set as in the sandbox; an MCP header's (`secret.fromEnv`,
+   * `secret.template`, a plugin's `${VAR}`) by each host variable it reads.
+   */
   secrets: string[]
-  /** Secrets the sandbox only had placeholders for, swapped in by the egress gateway. */
+  /**
+   * Secrets the sandbox only had placeholders for, swapped in by the egress gateway, named as in
+   * `secrets`. A variable it also got as its real value somewhere (an `http://` header, an env
+   * secret without `hosts`) isn't listed.
+   */
   brokered: string[]
   /** Optional secrets whose host variable was unset, so they weren't injected. */
   unset: string[]
@@ -2380,6 +2399,17 @@ export type StartRetry = {
   waitedMs: number
 }
 
+/**
+ * A process the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without
+ * `hosts` in its environment: it holds the real value while the agent works.
+ */
+export type SetupProcess = {
+  /** Its command line, cut at 200 characters. */
+  command: string
+  /** The `to: 'checks'` secrets without `hosts` in its environment, by name. */
+  secrets: string[]
+}
+
 /** One `expect` or `expect.soft` matcher call an attempt made. */
 export type AssertionRecord = {
   /**
@@ -2420,8 +2450,12 @@ export type EvalRecord = {
   >
   /** Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none. */
   assertions?: AssertionRecord[]
-  /** With `retries` when transient provider errors were retried on the way to the verdict. */
-  judgements: Array<Verdict & { retries?: JudgeRetry[] }>
+  /**
+   * In call order, with `retries` when transient provider errors were retried on the way to the
+   * verdict. `call` is the call's place among the attempt's `c.judge()` calls, failed ones
+   * included, which its judgment key is numbered by.
+   */
+  judgements: Array<Verdict & { retries?: JudgeRetry[]; call?: number }>
   /** Session starts that didn't become ready in time and were started again. */
   startRetries?: StartRetry[]
   timings: PhaseTimings
@@ -2435,6 +2469,8 @@ export type EvalRecord = {
   env?: { vars: string[]; secrets: string[]; brokered: string[] }
   /** The environment's setup steps as they ran, output redacted later. */
   setup?: Array<{ run: string; exitCode: number | null; durationMs: number; output: string }>
+  /** See `AttemptRecord.setupProcesses`. */
+  setupProcesses?: SetupProcess[]
   egress?: EgressRecord
   /** See `AttemptRecord.servedModels`. */
   servedModels?: string[] | null
@@ -2551,6 +2587,10 @@ export type AttemptMeta = {
   name: string
   groups: string[]
   tags: string[]
+  /** The eval's `revision`, as the cascade resolved it; unset when no level sets one. */
+  revision?: Revision
+  /** Hashes of the eval's own source: what the `sources` fingerprint part covers but `revision`. */
+  source: EvalSource
   cell: Cell
   n: number
   /** The harness, then the role (with `compare`), plus `#n` when it has several runs. */
@@ -2586,6 +2626,12 @@ export type AttemptMeta = {
   family?: FamilyMeta
   /** The gateway its harness resolved to; unset when no config, profile or pin names one. */
   gateway?: ResolvedGateway
+  /**
+   * Its judge's `'provider/model'`, as the config, profile, groups and eval set it, and the
+   * gateway its calls go through, so the run checks the judge's key before any attempt starts.
+   * Unset for a fake judge, a model object, or none.
+   */
+  judge?: { model: string; gateway?: GatewayName }
 }
 
 /** Where a cell's harness resolved in the `gateway` list, and the entries before it that couldn't serve it. */

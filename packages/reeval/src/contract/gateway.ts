@@ -1,4 +1,4 @@
-// The gateways' plain-data contract: what `direct()`, `vercel()` and `openrouter()` in
+// The gateways' plain-data contract: what `direct()`, `vercel()`, `openrouter()` and `vertex()` in
 // `reeval/gateway` return, the names a harness pins, and a `gateway` entry as `reeval.yaml` writes
 // it. The types in types.ts are held to them by `_SameAsSchema`.
 import { z } from 'zod'
@@ -9,65 +9,72 @@ import type {
   GatewayName,
   OpenRouterGatewayDescriptor,
   VercelGatewayDescriptor,
+  VertexGatewayDescriptor,
+  VertexPublisher,
 } from '../types.ts'
 import type { Assert, Same } from './shared.ts'
 
-export const GATEWAY_NAMES = ['direct', 'vercel', 'openrouter'] as const
+export const GATEWAY_NAMES = ['direct', 'vercel', 'openrouter', 'vertex'] as const
 
-export const gatewayNameSchema = z
-  .enum(GATEWAY_NAMES)
-  .describe(
-    "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter.",
-  )
+export const gatewayNameSchema = z.enum(GATEWAY_NAMES)
 
-export const directGatewaySchema = z
-  .strictObject({ kind: z.literal('direct') })
-  .describe(
-    "Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.",
-  )
-
-export const vercelGatewaySchema = z
-  .strictObject({ kind: z.literal('vercel') })
-  .describe(
-    'Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode, fx and Grok Build.',
-  )
-
-const openrouterSettings = {
-  fallbacks: z
-    .boolean()
-    .optional()
-    .describe(
-      "Let OpenRouter fail over to another upstream provider when the one it picked can't serve a call. Off by default, so reeval's own calls (the judge, analysis, compare questions and captures) send `allow_fallbacks: false`. The harnesses' calls take OpenRouter's own routing either way.",
-    ),
+const directSettings = {
+  enabled: z.boolean().optional(),
 }
 
-export const openrouterGatewaySchema = z
-  .strictObject({ kind: z.literal('openrouter'), ...openrouterSettings })
-  .describe(
-    'OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode and Grok Build.',
-  )
+export const directGatewaySchema = z.strictObject({ kind: z.literal('direct'), ...directSettings })
 
-export const gatewayDescriptorSchema = z
-  .discriminatedUnion('kind', [directGatewaySchema, vercelGatewaySchema, openrouterGatewaySchema])
-  .describe("One entry of the config's `gateway` list.")
+/** Why `direct({ enabled: false })` can't be a pin: it turns a list's fallback off, not a route on. */
+export const directOffPin = (on: string): string =>
+  `${on} pins direct({ enabled: false }), which turns the fallback to each provider's own key off rather than naming a gateway. Pin direct(), or put direct({ enabled: false }) in the config's gateway list.`
 
-export const gatewayEntryDataSchema = z
-  .union([
-    gatewayNameSchema,
-    z.strictObject({ direct: z.strictObject({}) }),
-    z.strictObject({ vercel: z.strictObject({}) }),
-    z.strictObject({ openrouter: z.strictObject(openrouterSettings) }),
-    gatewayDescriptorSchema,
-  ])
-  .describe(
-    'A `gateway` entry as data (`reeval.yaml`): its name, a one-key map from its name to its settings, or the descriptor itself.',
-  )
+export const vercelGatewaySchema = z.strictObject({ kind: z.literal('vercel') })
+
+const openrouterSettings = {
+  fallbacks: z.boolean().optional(),
+}
+
+export const openrouterGatewaySchema = z.strictObject({
+  kind: z.literal('openrouter'),
+  ...openrouterSettings,
+})
+
+export const VERTEX_PUBLISHERS = ['anthropic', 'google', 'xai'] as const
+
+export const vertexPublisherSchema = z.enum(VERTEX_PUBLISHERS)
+
+const region = z.string().regex(/^[a-z][a-z0-9-]*$/, 'a region such as us-east5 or global')
+
+export const vertexGatewaySchema = z.strictObject({
+  kind: z.literal('vertex'),
+  project: z.string().min(1).optional(),
+  location: region.optional(),
+  regions: z.partialRecord(vertexPublisherSchema, region).optional(),
+})
+
+export const gatewayDescriptorSchema = z.discriminatedUnion('kind', [
+  directGatewaySchema,
+  vercelGatewaySchema,
+  openrouterGatewaySchema,
+  vertexGatewaySchema,
+])
+
+export const gatewayEntryDataSchema = z.union([
+  gatewayNameSchema,
+  z.strictObject({ direct: z.strictObject(directSettings) }),
+  z.strictObject({ vercel: z.strictObject({}) }),
+  z.strictObject({ openrouter: z.strictObject(openrouterSettings) }),
+  z.strictObject({ vertex: vertexGatewaySchema.omit({ kind: true }) }),
+  gatewayDescriptorSchema,
+])
 
 export type _SameAsSchema = [
   Assert<Same<z.infer<typeof gatewayNameSchema>, GatewayName>>,
   Assert<Same<z.infer<typeof directGatewaySchema>, DirectGatewayDescriptor>>,
   Assert<Same<z.infer<typeof vercelGatewaySchema>, VercelGatewayDescriptor>>,
   Assert<Same<z.infer<typeof openrouterGatewaySchema>, OpenRouterGatewayDescriptor>>,
+  Assert<Same<z.infer<typeof vertexPublisherSchema>, VertexPublisher>>,
+  Assert<Same<z.infer<typeof vertexGatewaySchema>, VertexGatewayDescriptor>>,
   Assert<Same<z.infer<typeof gatewayDescriptorSchema>, GatewayDescriptor>>,
   Assert<Same<z.infer<typeof gatewayEntryDataSchema>, GatewayEntryData>>,
 ]

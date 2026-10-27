@@ -21,4 +21,3 @@
     with-skill     4 of 4  can't tell yet
 
 4 pass
-Set analysis.model in reeval.config.ts for answers to what each eval asks.

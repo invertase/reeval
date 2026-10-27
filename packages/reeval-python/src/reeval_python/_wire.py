@@ -73,8 +73,8 @@ class AssertionRecord(TypedDict):
 class AttemptAbort(TypedDict):
     # reeval's sentence, e.g. `Eval timed out after 600s`.
     message: str
-    # `timeout`: the eval's `timeout` ran out. `cancelled`: the run was stopped.
-    reason: Literal["timeout", "cancelled"]
+    # `timeout`: the eval's `timeout` ran out. `canceled`: the run was stopped.
+    reason: Literal["timeout", "canceled"]
     type: Literal["abort"]
 
 
@@ -389,6 +389,8 @@ class CaptureCallData(TypedDict):
     instructions: NotRequired[list[CaptureInstruction]]
     # Overrides cascaded `capture.model` for this call.
     model: NotRequired[str]
+    # The `artifacts/<name>.png` file name: 1 to 100 of `a-z`, `0-9`, `_` and `-`, starting with
+    # a letter or digit. Unique within the attempt.
     name: NotRequired[str]
     path: NotRequired[str]
     timeout: NotRequired[Duration]
@@ -507,7 +509,7 @@ class CodexHarnessDescriptor(TypedDict):
 class ConfigJudgeOptions(TypedDict):
     # The gateway the judge's calls go through, by name or by its helper. It skips the config's
     # `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.
-    gateway: NotRequired[DirectGatewayDescriptor | OpenRouterGatewayDescriptor | VercelGatewayDescriptor | Literal["direct", "openrouter", "vercel"]]
+    gateway: NotRequired[DirectGatewayDescriptor | OpenRouterGatewayDescriptor | VercelGatewayDescriptor | VertexGatewayDescriptor | Literal["direct", "openrouter", "vercel", "vertex"]]
     # The most judge calls to this model's provider at once, across the run.
     maxConcurrent: NotRequired[float]
     # `'provider/model'`, or a fake judge.
@@ -564,6 +566,7 @@ class DeclaredEval(TypedDict):
     name: str
     # The eval's own options, before the cascade.
     options: EvalOptionsData
+    source: DeclaredSource
     type: Literal["eval"]
 
 
@@ -596,6 +599,16 @@ DeclaredMode: TypeAlias = "Literal[\"run\", \"skip\", \"only\"]"
 DeclaredNode: TypeAlias = "DeclaredEval | DeclaredGroup | DeclaredTodo"
 
 
+# An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source
+# text, and of an `evaluate.each` case's data as canonical JSON (object keys sorted, no
+# whitespace, non-ASCII characters as themselves).
+class DeclaredSource(TypedDict):
+    # sha256 of the body function's source text.
+    body: str
+    # sha256 of the case's data; set on each case of an `evaluate.each`.
+    case: NotRequired[str]
+
+
 # `evaluate.todo` or `group.todo`.
 class DeclaredTodo(TypedDict):
     # The name passed to `.todo`.
@@ -608,8 +621,12 @@ class Diff(TypedDict):
     patch: str
 
 
-# Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.
+# Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends
+# with it unless it's listed elsewhere, where it's tried in that place.
 class DirectGatewayDescriptor(TypedDict):
+    # `false` turns off the fallback to each provider's own key, so a cell no other gateway in
+    # the list serves is refused at plan time. Default `true`.
+    enabled: NotRequired[bool]
     kind: Literal["direct"]
 
 
@@ -635,7 +652,7 @@ DockerSandboxDescriptor = TypedDict(
 )
 
 
-# More than zero: `90s`, `15m`, `1h`, or a number of milliseconds.
+# More than zero and at most 596h: `90s`, `15m`, `1h`, or a number of milliseconds.
 Duration: TypeAlias = "float | str"
 
 
@@ -762,7 +779,13 @@ class EvalOptionsDataCompare(TypedDict):
     # all end; one without is asked of each attempt as it ends. Replaces the inherited list, so
     # `[]` asks none.
     questions: NotRequired[list[Question]]
-    # Attempts per cell.
+    # The eval's version, part of its fingerprint: bump it when a change the eval file doesn't
+    # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
+    # the evals inside it that set none.
+    revision: NotRequired[float | str]
+    # Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
+    # whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
+    # included.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
@@ -831,7 +854,13 @@ class EvalOptionsDataCompare2(TypedDict):
     # all end; one without is asked of each attempt as it ends. Replaces the inherited list, so
     # `[]` asks none.
     questions: NotRequired[list[Question]]
-    # Attempts per cell.
+    # The eval's version, part of its fingerprint: bump it when a change the eval file doesn't
+    # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
+    # the evals inside it that set none.
+    revision: NotRequired[float | str]
+    # Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
+    # whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
+    # included.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
@@ -884,7 +913,13 @@ class EvalOptionsData3(TypedDict):
     # all end; one without is asked of each attempt as it ends. Replaces the inherited list, so
     # `[]` asks none.
     questions: NotRequired[list[Question]]
-    # Attempts per cell.
+    # The eval's version, part of its fingerprint: bump it when a change the eval file doesn't
+    # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
+    # the evals inside it that set none.
+    revision: NotRequired[float | str]
+    # Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
+    # whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
+    # included.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
@@ -922,7 +957,7 @@ class FakeHarnessDescriptorWithSkill(TypedDict):
 
 # A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`.
 class FakeHarnessDescriptor(TypedDict):
-    # Simulated turn length, honours the abort signal.
+    # Simulated turn length, honors the abort signal.
     delayMs: NotRequired[float]
     # Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what
     # the turn reports (`fake-1[effort=medium]`). Fast is not this.
@@ -1033,20 +1068,27 @@ class FileChange(TypedDict):
 
 
 # fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or
-# OpenAI's API by the model id, and reports each turn's tokens.
+# OpenAI's API by the model id, or on OpenRouter or Vertex AI, and reports each turn's tokens.
 class FxHarnessDescriptor(TypedDict):
+    # Reasoning effort, sent as `reasoning_effort` on each model call; only on `vertex()`, since
+    # fx sends none itself. Values are what the model takes there, e.g. `low`, `medium` or
+    # `high`.
+    effort: NotRequired[str]
     # The gateway this harness's model calls go through, by name. It skips the config's
     # `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this
     # harness.
     gateway: NotRequired[GatewayName]
-    # Cell id; defaults to `fx:<model>`.
+    # Cell id; defaults to `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set.
     id: NotRequired[str]
     kind: Literal["fx"]
     # The most fx attempts at once, across the run, e.g. for the key's rate limits.
     maxConcurrent: NotRequired[float]
     # A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with
     # `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on
-    # OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.
+    # OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `openrouter()`,
+    # either runs on OpenRouter's Chat Completions API with `OPENROUTER_API_KEY`, a bare id as
+    # `openai/<id>`. On `vertex()`, a Gemini model id, `google/<id>` or a bare `gemini-…` id,
+    # run on Vertex AI's Chat Completions endpoint, e.g. `google/gemini-3.8-flash`.
     model: str
     # How long the harness's session may take to become ready (its bootstrap and first session)
     # before the attempt is an infra error, after one retry; default 90s.
@@ -1054,8 +1096,9 @@ class FxHarnessDescriptor(TypedDict):
 
 
 # A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`;
-# `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter.
-GatewayName: TypeAlias = "Literal[\"direct\", \"vercel\", \"openrouter\"]"
+# `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter; `vertex` is Google Cloud's Vertex
+# AI.
+GatewayName: TypeAlias = "Literal[\"direct\", \"vercel\", \"openrouter\", \"vertex\"]"
 
 
 # A git repository (or one directory of it) the workspace starts as, from the `git` helper.
@@ -1156,19 +1199,23 @@ class JudgeArtifactRef(TypedDict):
     sha256: str
 
 
-# Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.
+# Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends
+# with it unless it's listed elsewhere, where it's tried in that place.
 class JudgeCallDataGatewayDirect(TypedDict):
+    # `false` turns off the fallback to each provider's own key, so a cell no other gateway in
+    # the list serves is refused at plan time. Default `true`.
+    enabled: NotRequired[bool]
     kind: Literal["direct"]
 
 
 # Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
-# `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode, fx and Grok Build.
+# `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.
 class JudgeCallDataGatewayVercel(TypedDict):
     kind: Literal["vercel"]
 
 
 # OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves
-# Claude Code, Codex, Goose, OpenCode and Grok Build.
+# Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi.
 class JudgeCallDataGatewayOpenrouter(TypedDict):
     # Let OpenRouter fail over to another upstream provider when the one it picked can't serve a
     # call. Off by default, so reeval's own calls (the judge, analysis, compare questions and
@@ -1176,6 +1223,19 @@ class JudgeCallDataGatewayOpenrouter(TypedDict):
     # routing either way.
     fallbacks: NotRequired[bool]
     kind: Literal["openrouter"]
+
+
+# Google Cloud's Vertex AI, on Application Default Credentials: made by `vertex()` in
+# `reeval/gateway`.
+class JudgeCallDataGatewayVertex(TypedDict):
+    kind: Literal["vertex"]
+    # The region the models are called in, e.g. `us-east5`; defaults to `global`.
+    location: NotRequired[str]
+    # The Google Cloud project the calls are billed to; defaults to `GOOGLE_CLOUD_PROJECT`.
+    project: NotRequired[str]
+    # A region per publisher, where it differs from `location`, e.g. `{ anthropic: 'us-east5'
+    # }`.
+    regions: NotRequired[dict[str, str]]
 
 
 class JudgeCallDataOnTurn(TypedDict):
@@ -1197,7 +1257,7 @@ class JudgeCallData(TypedDict):
     artifacts: NotRequired[Literal[True] | list[str | Capture]]
     # The gateway the judge's calls go through, by name or by its helper. It skips the config's
     # `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.
-    gateway: NotRequired[Literal["direct", "vercel", "openrouter"] | JudgeCallDataGatewayDirect | JudgeCallDataGatewayVercel | JudgeCallDataGatewayOpenrouter]
+    gateway: NotRequired[Literal["direct", "vercel", "openrouter", "vertex"] | JudgeCallDataGatewayDirect | JudgeCallDataGatewayVercel | JudgeCallDataGatewayOpenrouter | JudgeCallDataGatewayVertex]
     # The most judge calls to this model's provider at once, across the run.
     maxConcurrent: NotRequired[int]
     # `'provider/model'`, or a fake judge with a numeric score.
@@ -1221,7 +1281,7 @@ class JudgeFailure(TypedDict):
     artifacts: NotRequired[list[JudgeArtifactRef]]
     error: str
     # The gateway from the config's `gateway` list the call went through; unset without one.
-    gateway: NotRequired[Literal["direct", "vercel", "openrouter"]]
+    gateway: NotRequired[Literal["direct", "vercel", "openrouter", "vertex"]]
     model: str
     question: str
     score: None
@@ -1345,7 +1405,7 @@ class OpenCodeHarnessDescriptor(TypedDict):
 
 
 # OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves
-# Claude Code, Codex, Goose, OpenCode and Grok Build.
+# Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi.
 class OpenRouterGatewayDescriptor(TypedDict):
     # Let OpenRouter fail over to another upstream provider when the one it picked can't serve a
     # call. Off by default, so reeval's own calls (the judge, analysis, compare questions and
@@ -1708,7 +1768,9 @@ class TranscriptEventFileEdit(TypedDict):
     added: float | None
     atMs: float
     durationMs: float | None
-    kind: Literal["create", "modify", "delete"]
+    # `write` is a whole-file write whose result doesn't say whether the file existed before
+    # (Antigravity's, fx's, Goose's, Grok Build's and pi's write tools, for example).
+    kind: Literal["create", "modify", "write", "delete"]
     path: str
     removed: float | None
     # True when a shell-like tool or edit ran at least two minutes.
@@ -1773,7 +1835,7 @@ class TranscriptEventRetry(TypedDict):
     type: Literal["retry"]
 
 
-# Normalised agent events. Each tool call is one event, merged with its result; `durationMs` is
+# Normalized agent events. Each tool call is one event, merged with its result; `durationMs` is
 # wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null when
 # the harness never reported the end. Long shell or edit calls set `stalled: true`.
 TranscriptEvent: TypeAlias = "TranscriptEvent1 | TranscriptEventFileEdit | TranscriptEventWebSearch | TranscriptEventWebFetch | TranscriptEventTool | TranscriptEventError | TranscriptEventRetry"
@@ -1807,7 +1869,7 @@ TurnStatus: TypeAlias = "Literal[\"completed\", \"aborted\", \"error\"]"
 
 
 # Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
-# `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode, fx and Grok Build.
+# `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.
 class VercelGatewayDescriptor(TypedDict):
     kind: Literal["vercel"]
 
@@ -1819,7 +1881,7 @@ class Verdict(TypedDict):
     # it names none.
     costUsd: NotRequired[float]
     # The gateway from the config's `gateway` list the call went through; unset without one.
-    gateway: NotRequired[Literal["direct", "vercel", "openrouter"]]
+    gateway: NotRequired[Literal["direct", "vercel", "openrouter", "vertex"]]
     model: str
     question: str
     # The model id the provider says served the call, when it reports one.
@@ -1831,6 +1893,19 @@ class Verdict(TypedDict):
     # none.
     upstream: NotRequired[str]
     verdict: Literal["pass", "fail"]
+
+
+# Google Cloud's Vertex AI, on Application Default Credentials: made by `vertex()` in
+# `reeval/gateway`.
+class VertexGatewayDescriptor(TypedDict):
+    kind: Literal["vertex"]
+    # The region the models are called in, e.g. `us-east5`; defaults to `global`.
+    location: NotRequired[str]
+    # The Google Cloud project the calls are billed to; defaults to `GOOGLE_CLOUD_PROJECT`.
+    project: NotRequired[str]
+    # A region per publisher, where it differs from `location`, e.g. `{ anthropic: 'us-east5'
+    # }`.
+    regions: NotRequired[dict[str, str]]
 
 
 class WaitMs(TypedDict):
@@ -1886,6 +1961,7 @@ RECORD_FIELDS: frozenset[str] = frozenset(
         "mcp",
         "params",
         "providerOptions",
+        "regions",
         "score",
         "untested",
         "value",

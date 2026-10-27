@@ -200,7 +200,7 @@ function variants(id: string) {
 }
 
 const clean = (text: string) =>
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI colours
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI colors
   text.replace(/\u001b\[[0-9;]*m/g, '').trim()
 
 const all = await integrations()

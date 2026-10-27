@@ -6,6 +6,7 @@
 import type { RunRecord } from './history/types.ts'
 import type { ModelsDev, Price, Prices } from './prices.ts'
 import { quantile } from './stats.ts'
+import { plural } from './text.ts'
 import type { Cell, HarnessDescriptor, TokenUsage } from './types.ts'
 import { totalTokens } from './usage.ts'
 
@@ -329,8 +330,6 @@ export function formatTokenRange({ low, high }: Range): string {
   if (Number(lo) === 0) return `up to ${hi}${unit} tokens`
   return lo === hi ? `about ${hi}${unit} tokens` : `${lo}–${hi}${unit} tokens`
 }
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /**
  * `models.dev list prices`, `models.dev list prices of 2026-10-20 (offline)` from an old copy

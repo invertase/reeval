@@ -4,6 +4,9 @@
   "an unknown node type": "UsageError: The declaration tree's children[0].type is one of 'eval', 'group' or 'todo' (got \"test\")",
   "a node without a type": "UsageError: The declaration tree's children[0].type is one of 'eval', 'group' or 'todo' (got undefined)",
   "an eval without a body": "UsageError: The declaration tree's children[0].body is missing: it must be a string",
+  "an eval without its source": "UsageError: The declaration tree's children[0].source is missing: it must be an object",
+  "an eval whose body hash is not sha256": "UsageError: The declaration tree's children[0].source.body must be a sha256 hash: 64 lowercase hex digits (got \"abc\")",
+  "an eval whose source has an unknown key": "UsageError: The declaration tree's children[0].source has an unknown key \"file\"",
   "an eval with a bad mode": "UsageError: The declaration tree's children[0].mode is one of 'run', 'skip' or 'only' (got \"focus\")",
   "an eval with an unknown key": "UsageError: The declaration tree's children[0] has an unknown key \"timeout\"",
   "an eval whose options are a list": "UsageError: The declaration tree's children[0].options must be an object (got [])",
@@ -13,5 +16,14 @@
   "a nested eval with a typo": "UsageError: The declaration tree's children[0].children[1] has an unknown key \"bdy\". Did you mean \"body\"?",
   "a group without children": "UsageError: The declaration tree's children[0].children is missing: it must be a list",
   "a todo with options": "UsageError: The declaration tree's children[0] has an unknown key \"options\"",
-  "good": null
+  "good": null,
+  "declared: two evals with the same name": "UsageError: evaluate(\"e\") is declared twice in this file. Each eval needs its own name, or its attempts are merged into one eval.",
+  "declared: an eval named like a grouped eval": "UsageError: evaluate(\"g › e\") is declared twice in this file. Each eval needs its own name, or its attempts are merged into one eval. \" › \" joins the group and eval names in an eval's id, so a name containing it can be a grouped eval's id.",
+  "declared: two families with the same template": "UsageError: evaluate.each(\"c %#\") is declared twice in this file. Each pooled evaluate.each needs its own name, or their cases are pooled into one family. Give each its own name template, or pass evaluate.each(cases, { pool: false }) to keep the cases apart.",
+  "declared: a family case declared twice": "UsageError: evaluate.each(\"c %#\") is declared twice in this file. Each pooled evaluate.each needs its own name, or their cases are pooled into one family. Give each its own name template, or pass evaluate.each(cases, { pool: false }) to keep the cases apart.",
+  "declared: a family named like a grouped family": "UsageError: evaluate.each(\"g › c %#\") is declared twice in this file. Each pooled evaluate.each needs its own name, or their cases are pooled into one family. Give each its own name template, or pass evaluate.each(cases, { pool: false }) to keep the cases apart. \" › \" joins the group and eval names in an eval's id, so a name containing it can be a grouped eval's id.",
+  "declared: an eval named like a later family": "UsageError: evaluate(\"c %#\") has the same id as the pooled evaluate.each(\"c %#\") in this file: a family's id is its name template. Give the eval or the template another name.",
+  "declared: an eval named like an earlier family": "UsageError: evaluate(\"c %#\") has the same id as the pooled evaluate.each(\"c %#\") in this file: a family's id is its name template. Give the eval or the template another name.",
+  "declared: a family's case named like its template": null,
+  "declared: one template in two groups, and unpooled": null
 }

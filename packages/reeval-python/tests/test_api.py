@@ -68,7 +68,7 @@ def test_a_duration_is_seconds_or_a_timedelta(given: Any, wire: str) -> None:
     assert sandbox == {"sandbox": {"kind": "docker", "startTimeout": wire}}
 
 
-@pytest.mark.parametrize("given", ["1s", True, None])
+@pytest.mark.parametrize("given", ["1s", True, None, float("nan"), float("inf")])
 def test_a_duration_refuses_anything_but_seconds(given: Any) -> None:
     with pytest.raises(TypeError, match="timeout takes seconds or a timedelta"):
         options_to_wire({"timeout": given})
@@ -183,6 +183,63 @@ def test_an_eval_declared_twice_is_refused_where_it_is_declared() -> None:
     with pytest.raises(ValueError, match=r"evaluate\('a'\) is declared twice") as raised:
         collect_module_tree_sync(load)
     assert "evaluate_each" not in str(raised.value)
+
+
+def test_two_pooled_families_with_one_template_are_refused() -> None:
+    def load() -> None:
+        @evaluate_each([{"n": 1}, {"n": 2}], "case $n")
+        def _(c: Any, case: Any) -> None: ...
+
+        @evaluate_each([{"n": 3}, {"n": 4}, {"n": 5}], "case $n")
+        def _(c: Any, case: Any) -> None: ...
+
+    with pytest.raises(
+        ValueError, match=r"evaluate_each\('case \$n'\) is declared twice.*pool=False"
+    ):
+        collect_module_tree_sync(load)
+
+
+def test_one_template_in_two_groups_and_unpooled_is_accepted() -> None:
+    def load() -> None:
+        def body(c: Any, case: Any) -> None: ...
+
+        group("g", lambda: evaluate_each([1, 2], "c %s")(body))
+        group("h", lambda: evaluate_each([1, 2], "c %s")(body))
+        evaluate_each([1, 2], "c %s", pool=False)(body)
+        evaluate_each([3, 4], "c %s", pool=False)(body)
+
+    tree = collect_module_tree_sync(load)
+    assert len(tree["children"]) == 6
+
+
+def test_a_name_holding_the_id_separator_is_refused_beside_a_grouped_eval() -> None:
+    def load() -> None:
+        def body(c: Any) -> None: ...
+
+        group("g", lambda: evaluate("e", body))
+        evaluate("g › e", body)
+
+    with pytest.raises(ValueError, match=r"declared twice.*\" › \" joins the group and eval names"):
+        collect_module_tree_sync(load)
+
+
+@pytest.mark.parametrize("eval_first", [True, False])
+def test_an_eval_named_like_a_pooled_template_is_refused(eval_first: bool) -> None:
+    def load() -> None:
+        def body(c: Any) -> None: ...
+
+        def each(c: Any, case: Any) -> None: ...
+
+        if eval_first:
+            evaluate("case $n", body)
+        evaluate_each([{"n": 1}, {"n": 2}], "case $n")(each)
+        if not eval_first:
+            evaluate("case $n", body)
+
+    with pytest.raises(
+        ValueError, match=r"has the same id as the pooled evaluate_each\('case \$n'\)"
+    ):
+        collect_module_tree_sync(load)
 
 
 @pytest.mark.parametrize("kind", ["def", "async def"])

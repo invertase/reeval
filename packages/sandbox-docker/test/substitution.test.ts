@@ -10,7 +10,7 @@ import {
   substitutes,
   unsubstituted,
 } from '../src/egress/substitution.ts'
-import { type DerivedTokens, tokeniseResponse, tokenPlaceholder } from '../src/egress/tokens.ts'
+import { type DerivedTokens, tokenizeResponse, tokenPlaceholder } from '../src/egress/tokens.ts'
 
 const SECRET = 'real-value-0123456789'
 const HOLDER = `reeval_secret_${'Z'.repeat(32)}`
@@ -163,7 +163,7 @@ describe('derived tokens', () => {
   })
 
   test('each token field gets a header-only substitution on the token hosts, kept out of bodies', () => {
-    const { body, added, fields } = tokeniseResponse(
+    const { body, added, fields } = tokenizeResponse(
       derived,
       JSON.stringify({ accessToken: 'a.b.c', refreshToken: 'opaque', n: 1 }),
       [],
@@ -184,12 +184,12 @@ describe('derived tokens', () => {
   })
 
   test('a token seen before keeps its placeholder; missing fields and non-objects', () => {
-    const first = tokeniseResponse(derived, '{"accessToken":"a.b.c"}', [])
-    const again = tokeniseResponse(derived, '{"accessToken":"a.b.c"}', first.added)
+    const first = tokenizeResponse(derived, '{"accessToken":"a.b.c"}', [])
+    const again = tokenizeResponse(derived, '{"accessToken":"a.b.c"}', first.added)
     assert.deepEqual(again.added, [])
     assert.equal(JSON.parse(again.body).accessToken, first.added[0]?.placeholder)
-    assert.deepEqual(tokeniseResponse(derived, '{"other":1}', []).fields, [])
-    assert.throws(() => tokeniseResponse(derived, '[1]', []), /not a JSON object/)
-    assert.throws(() => tokeniseResponse(derived, 'oops', []), SyntaxError)
+    assert.deepEqual(tokenizeResponse(derived, '{"other":1}', []).fields, [])
+    assert.throws(() => tokenizeResponse(derived, '[1]', []), /not a JSON object/)
+    assert.throws(() => tokenizeResponse(derived, 'oops', []), SyntaxError)
   })
 })

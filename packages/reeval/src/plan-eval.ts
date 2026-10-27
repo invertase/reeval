@@ -3,8 +3,8 @@
 // plugins: whoever declared the eval (an eval file's `evaluate`, or a declaration tree) registers
 // what it returns.
 import { type AttemptSpec, setupAllowance } from './attempt/index.ts'
-import type { DeclaredFamily } from './declaration.ts'
-import { parseDuration } from './duration.ts'
+import type { DeclaredFamily, DeclaredSource } from './declaration.ts'
+import { MAX_TIMER_MS, parseDuration } from './duration.ts'
 import { allowedHosts, unenforceable } from './egress.ts'
 import type { Gate, TestMode } from './engine/runtime.ts'
 import {
@@ -22,14 +22,17 @@ import {
 } from './environment/plugins.ts'
 import { filesOf, workspaceOf } from './environment.ts'
 import { UsageError } from './errors.ts'
-import { resolveModelGateway } from './gateway/models.ts'
+import { optionsHash } from './eval-source.ts'
+import { fellBackToDirect, resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { resolveGateway } from './gateway/resolve.ts'
 import { vercelCredentialProblem } from './gateway/vercel.ts'
+import { type VertexSettings, vertexSettings } from './gateway/vertex.ts'
 import { refusedMcp, refusedPlugins } from './harness/agents.ts'
 import { attemptId, attemptKey, evalId, relativeFile } from './ids.ts'
 import {
   brokeredIn,
+  type Cascading,
   cascade,
   checkOptions,
   evalPlan,
@@ -38,7 +41,9 @@ import {
   type Level,
   matchesTags,
   type PlannedAttempt,
-  type Resolved,
+  plainHeaderError,
+  plainHeaders,
+  type ResolvedEval,
   sandboxProvider,
   sandboxSetBy,
   secretVarsIn,
@@ -64,6 +69,8 @@ export type EvalDeclaration = {
   mode: TestMode
   groups: { name: string; options: GroupOptions }[]
   options: EvalOptions
+  /** Hashes of its body and case data, from whoever declared it. */
+  source: DeclaredSource
   /** Set on each case of a pooled `evaluate.each`. */
   family?: DeclaredFamily
 }
@@ -92,7 +99,7 @@ export type PlannedTest = {
   spec?: AttemptSpec
 }
 
-function configLevel(config: ResolvedConfig): Resolved {
+function configLevel(config: ResolvedConfig): Cascading {
   return {
     harness: config.harness,
     sandbox: config.sandbox,
@@ -108,19 +115,23 @@ function configLevel(config: ResolvedConfig): Resolved {
     questions: [],
     timeout: undefined,
     tags: [],
+    revision: undefined,
     pin: [],
     sources: {},
   }
 }
 
-/**
- * The tests an eval registers, or `null` when the run's tags leave it out (it isn't counted in
- * `order`). Throws a UsageError for options the plan refuses.
- */
-export function planEval(declaration: EvalDeclaration, ctx: PlanContext): PlannedTest[] | null {
-  const { name, mode, groups: enclosing, options: own } = declaration
-  const groups = enclosing.map((g) => g.name)
-  const where = `evaluate("${[...groups, name].join(' › ')}")`
+/** An eval's plan: its tests, and the harness ids it runs on before a profile's limit. */
+export type PlannedEval = {
+  /** `null` when the run's tags leave the eval out (it isn't counted in `order`). */
+  tests: PlannedTest[] | null
+  harnesses: string[]
+}
+
+/** The tests an eval registers. Throws a UsageError for options the plan refuses. */
+export function planEval(declaration: EvalDeclaration, ctx: PlanContext): PlannedEval {
+  const { name, groups: enclosing, options: own } = declaration
+  const where = `evaluate("${[...enclosing.map((g) => g.name), name].join(' › ')}")`
   checkOptions(own, where)
   const levels: Level[] = [
     ...enclosing.map((g) => ({ options: g.options, where: `group("${g.name}")` })),
@@ -129,16 +140,34 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
   const resolvedEval = cascade(configLevel(ctx.config), levels, where, {
     profile: ctx.profile,
     runs: ctx.runs,
-    skipped: mode === 'skip' || mode === 'todo',
+    skipped: declaration.mode === 'skip' || declaration.mode === 'todo',
+    pooled: declaration.family !== undefined,
   })
+  const { harnesses } = resolvedEval
+  if (!matchesTags(resolvedEval.resolved.tags, ctx.tags)) return { tests: null, harnesses }
+  return { tests: planTests(declaration, ctx, where, resolvedEval), harnesses }
+}
+
+function planTests(
+  declaration: EvalDeclaration,
+  ctx: PlanContext,
+  where: string,
+  resolvedEval: ResolvedEval,
+): PlannedTest[] {
+  const { name, mode, groups: enclosing } = declaration
+  const groups = enclosing.map((g) => g.name)
   const { resolved } = resolvedEval
-  if (!matchesTags(resolved.tags, ctx.tags)) return null
+  const source = {
+    ...declaration.source,
+    options: optionsHash([...enclosing.map((g) => g.options), declaration.options]),
+  }
   const timeoutMs =
     resolved.timeout === undefined ? ctx.config.timeoutMs : parseDuration(resolved.timeout)
   const gateways = ctx.profile?.gateway ?? ctx.config.gateway
   const gatewaySet = ctx.config.gatewaySet || ctx.profile?.gateway !== undefined
   const routes = new Map<string, ResolvedGateway>()
   const gatewayNotes: string[] = []
+  let vertex: VertexSettings | undefined
   // Each harness carries the gateway it resolved to, so the worker, egress and brokering read it
   // from the descriptor; direct leaves the descriptor as written.
   const routed = resolvedEval.skip
@@ -148,23 +177,45 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
         const hid = harnessId(harness)
         if (gatewaySet || harness.gateway !== undefined) {
           routes.set(hid, route)
-          gatewayNotes.push(`gateway: ${hid} → ${route.name}`)
+          gatewayNotes.push(
+            `gateway: ${hid} → ${route.name}${route.name === 'direct' && route.skipped.length ? ' (fallback)' : ''}`,
+          )
         }
         if (route.name === 'direct') return harness
-        const problem =
-          harness.kind === 'fake' || route.name !== 'vercel' ? undefined : vercelCredentialProblem()
-        if (problem) throw new UsageError(`${where} on ${hid}: ${problem}`)
+        if (harness.kind !== 'fake') {
+          try {
+            if (route.name === 'vercel') {
+              const problem = vercelCredentialProblem()
+              if (problem) throw new UsageError(problem)
+            }
+            if (route.name === 'vertex') {
+              const entry = gateways.find((g) => g.kind === 'vertex')
+              vertex ??= vertexSettings(entry?.kind === 'vertex' ? entry : {})
+            }
+          } catch (error) {
+            if (error instanceof UsageError) {
+              throw new UsageError(`${where} on ${hid}: ${error.message}`)
+            }
+            throw error
+          }
+        }
         return { ...harness, gateway: route.name }
       })
-  const plannedAttempts = resolvedEval.skip ? [] : expand({ ...resolved, harness: routed })
+  const plannedAttempts = resolvedEval.skip ? [] : expand({ ...resolved, harness: routed }, vertex)
+  let judge: AttemptMeta['judge']
   if (plannedAttempts.length) {
     try {
-      resolveModelGateway(
+      const gateway = resolveModelGateway(
         resolved.judge.model,
         resolved.judge.gateway,
         { gateways },
         'the judge model',
       )
+      const { model } = resolved.judge
+      if (typeof model === 'string') judge = { model, ...(gateway ? { gateway } : {}) }
+      if (gatewaySet && fellBackToDirect(gateway, resolved.judge.gateway, { gateways })) {
+        gatewayNotes.push(`gateway: judge ${model} → direct (fallback)`)
+      }
     } catch (error) {
       if (error instanceof UsageError) throw new UsageError(`${where}: ${error.message}`)
       throw error
@@ -173,6 +224,8 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
   if (ctx.config.secrets.unbrokered === 'error') {
     const [first] = unbrokered(resolved.env, plannedAttempts)
     if (first) throw new UsageError(unbrokeredError(first, where, ctx.config.file))
+    const [plain] = plainHeaders(plannedAttempts)
+    if (plain) throw new UsageError(plainHeaderError(plain, where, ctx.config.file))
   }
   const pluginNotes: string[] = []
   const pluginLabels = new Map<PlannedAttempt, string[]>()
@@ -213,6 +266,8 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       name,
       groups,
       tags: resolved.tags,
+      ...(resolved.revision !== undefined ? { revision: resolved.revision } : {}),
+      source,
       cell: first.cell,
       n: 1,
       label: '',
@@ -248,6 +303,8 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       name,
       groups,
       tags: resolved.tags,
+      ...(resolved.revision !== undefined ? { revision: resolved.revision } : {}),
+      source,
       cell: planned.cell,
       n: planned.n,
       label: planned.label,
@@ -269,12 +326,16 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       ...(routes.has(harnessId(planned.harness))
         ? { gateway: routes.get(harnessId(planned.harness)) }
         : {}),
+      ...(judge ? { judge } : {}),
     }
     return {
       name: `${name} [${attemptId(planned.cell.key, planned.n)}]`,
       mode: skip ? 'skip' : mode,
       attempt,
-      timeout: skip ? undefined : timeoutMs + setupAllowance(planned) + GRACE_MS,
+      timeout: skip
+        ? undefined
+        : // A longer backstop would fire at once.
+          Math.min(timeoutMs + setupAllowance(planned) + GRACE_MS, MAX_TIMER_MS),
       gate: skip
         ? undefined
         : {

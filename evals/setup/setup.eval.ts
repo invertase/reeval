@@ -63,7 +63,7 @@ group('sets up reeval', () => {
   })
 
   evaluate(
-    'where reeval is set up already, without re-initialising',
+    'where reeval is set up already, without re-initializing',
     target('firebase-set-up'),
     async (c) => {
       const before = names(await evalList(c))

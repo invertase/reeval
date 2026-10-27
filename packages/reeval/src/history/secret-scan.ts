@@ -1,4 +1,5 @@
-import { findSecrets, maskedMatch, type SecretMatch } from '../redact.ts'
+import { findSecrets, findSecretsInJson, maskedMatch, type SecretMatch } from '../redact.ts'
+import { patchPath } from '../view/patch.ts'
 
 /** Findings shown per file; the rest are counted. */
 const SHOWN = 5
@@ -8,13 +9,12 @@ export type Finding = {
   file: string | null
   /** 1-based: in the patched file for a patch, else in the scanned file. Null outside a hunk. */
   line: number | null
-  /** The rule, and for a credential shape its first and last four characters. */
+  /** The rule, and for a credential shape with no known part its first and last four characters. */
   what: string
   /** The rule alone, with nothing of the value: safe to record. */
   rule: string
 }
 
-const DIFF_HEADER = /^diff --git a\/(.*) b\/(.*)$/
 const HUNK = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/
 
 /** Where line `lineIndex` of a `git diff` falls: the file it changes, and its line in the new version. */
@@ -23,9 +23,10 @@ function inPatch(lines: string[], lineIndex: number): { file: string | null; lin
   let next: number | null = null
   for (let i = 0; i <= lineIndex; i++) {
     const text = lines[i] as string
-    const header = DIFF_HEADER.exec(text)
-    if (header) {
-      file = header[2] as string
+    if (text.startsWith('diff --git ')) {
+      let end = i + 1
+      while (end < lines.length && !/^(@@|diff --git )/.test(lines[end] as string)) end++
+      file = patchPath(lines.slice(i, end).join('\n'))
       next = null
       continue
     }
@@ -41,9 +42,14 @@ function inPatch(lines: string[], lineIndex: number): { file: string | null; lin
   return { file, line: null }
 }
 
-/** Every secret-looking stretch of `text`, placed: by file and line inside a patch, else by line. */
+const JSON_FILE = /\.(?:json|jsonl|ndjson)$/
+
+/**
+ * Every secret-looking stretch of `text`, placed: by file and line inside a patch, else by line.
+ * In a JSON file, only what redaction masks: its strings.
+ */
 export function scanText(path: string, text: string): Finding[] {
-  const matches = findSecrets(text)
+  const matches = JSON_FILE.test(path) ? findSecretsInJson(text) : findSecrets(text)
   if (matches.length === 0) return []
   const lines = text.split('\n')
   const starts: number[] = []

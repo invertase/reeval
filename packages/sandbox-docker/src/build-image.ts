@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync } from 'node:fs'
-import { basename, dirname, join, relative } from 'node:path'
+import { lstatSync, readFileSync, readlinkSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHarnessSandboxTemplate, type HarnessAgentAdapter } from '@ai-sdk/harness/agent'
 import {
@@ -13,6 +13,7 @@ import {
   parseBuildOutput,
 } from './build-failure.ts'
 import { docker, dockerOk, imageInfo } from './docker-cli.ts'
+import { contextFiles } from './dockerignore.ts'
 import { type Engine, engineSpec } from './engine.ts'
 import {
   BASE_IMAGE,
@@ -396,7 +397,7 @@ export async function buildImage(
   },
 ): Promise<{ image: string; agentVersion: string }> {
   const { harness, from, signal, engine } = options
-  // Built on the digest `from` names now, and labelled with it, so a moved tag is visible.
+  // Built on the digest `from` names now, and labeled with it, so a moved tag is visible.
   const resolved = from ? await resolveFrom(from, signal, engine) : null
   const digest = resolved && 'digest' in resolved ? resolved.digest : null
   const pinned =
@@ -759,72 +760,6 @@ export async function buildPluginLayer(
 
 /** The build arg a Dockerfile can start `FROM` to layer on reeval's sandbox image. */
 export const REEVAL_BASE_ARG = 'REEVAL_BASE'
-
-/**
- * `.dockerignore` rules as Docker reads them: paths from the context root, `*`, `?` and `**`
- * globs, a pattern that matches a directory excludes what's in it, `!` re-includes, and the last
- * matching rule wins.
- */
-export function dockerignoreMatcher(text: string): (path: string) => boolean {
-  const rules = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'))
-    .map((line) => {
-      const negate = line.startsWith('!')
-      const body = (negate ? line.slice(1) : line)
-        .trim()
-        .replace(/^(?:\.?\/)+/, '')
-        .replace(/\/+$/, '')
-      let re = ''
-      for (let i = 0; i < body.length; i++) {
-        const c = body[i] as string
-        if (c === '*' && body[i + 1] === '*') {
-          i++
-          if (body[i + 1] === '/') {
-            i++
-            re += '(?:.*/)?'
-          } else re += '.*'
-        } else if (c === '*') re += '[^/]*'
-        else if (c === '?') re += '[^/]'
-        else re += c.replace(/[.+^${}()|[\]\\]/g, '\\$&')
-      }
-      return { negate, re: new RegExp(`^${re}$`) }
-    })
-  return (path) => {
-    const parts = path.split('/')
-    const prefixes = parts.map((_, i) => parts.slice(0, i + 1).join('/'))
-    let excluded = false
-    for (const rule of rules) {
-      if (prefixes.some((p) => rule.re.test(p))) excluded = !rule.negate
-    }
-    return excluded
-  }
-}
-
-/**
- * Files in the build context that `docker build` would send, sorted, relative to `context`. A
- * Dockerfile read from stdin (`dockerfile` null) has no `<Dockerfile>.dockerignore` of its own.
- */
-export function contextFiles(context: string, dockerfile: string | null): string[] {
-  const own = [
-    ...(dockerfile ? [`${dockerfile}.dockerignore`] : []),
-    join(context, '.dockerignore'),
-  ].find(existsSync)
-  const ignored = dockerignoreMatcher(own ? readFileSync(own, 'utf8') : '')
-  const always = new Set([...(dockerfile ? [relative(context, dockerfile)] : []), '.dockerignore'])
-  const files: string[] = []
-  const walk = (rel: string) => {
-    for (const entry of readdirSync(join(context, rel), { withFileTypes: true })) {
-      const path = rel ? `${rel}/${entry.name}` : entry.name
-      if (ignored(path) && !always.has(path)) continue
-      if (entry.isDirectory()) walk(path)
-      else files.push(path)
-    }
-  }
-  walk('')
-  return files.sort()
-}
 
 /** Whether the Dockerfile starts from reeval's sandbox image, which then has to exist first. */
 export const usesReevalBase = (dockerfile: string) =>

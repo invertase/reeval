@@ -37,6 +37,9 @@ reeval doctor            Docker, keys and images, with fixes (--json, --online)
   verdict LIKE 'both-%'"` finds checks that don't tell a variant from its control, and
   `reeval query "SELECT cell_key, role, rate FROM check_rates WHERE label = 'flow works'"` is one
   check's pass rate per cell (`pass / (pass + fail)`; errors and not-run left out).
+- `reeval query flaky_cells` lists cells that both passed and failed over comparable runs:
+  `verdict` is `flaky` from 6 counted attempts, else `mixed` (too few to call it flaky; raise
+  `runs` or record more runs before treating it as flaky).
 - `reeval query skill_files` says which declared files (`SKILL.md`, references, rules) each
   attempt opened, and `context_use` counts its tool calls as `context`, `dependency`
   (`node_modules`, `--help`), `web`, `verify` or `workspace`: a heuristic, read it as counts.
@@ -58,33 +61,25 @@ Anomalies are number-checked, and a cited judge score that disagrees is dropped.
 When every cell is `gate: 'none'`, it reads the run as a study: how the arms differ, check by
 check, so label your expects. `analysis.instructions` is the question it answers.
 
-With `analysis.model` set, `reeval run` writes the run's insights at its end (`insights.json`
-beside the run; `reeval record` keeps it): each eval's job (`choose`, `finish` or `other`, read
-from its name first, so name evals for what they ask), its answer, and a sentence under each
-failing row, every one citing the facts. They never change a verdict or exit code.
-`analysis.maxTokens` (default 250000) caps their tokens, failing evals first;
-they run to the end (Ctrl-C skips the rest, keeping the exit code); `--no-insights` skips them.
-`reeval analyze <run> --insights` writes them for a run that has none, or finishes
-the evals a stopped, failed or over-budget run left out. Insights use
-`analysis.model` only, never the judge's model; `reeval init` sets it to
-`google/gemini-3.8-flash` (`GOOGLE_GENERATIVE_AI_API_KEY`; `AI_GATEWAY_API_KEY` only with
-`gateway: [vercel()]`). Without the key the plan warns up front, naming it, and the run prints
-`insights skipped: set <its key>, or analysis: { insights: false }` and its facts; `analysis.insights: false` turns them off.
-A sentence that cites no fact, or a count, quote or effect word its facts don't hold, is dropped
-before it prints (`-v` lists each with its reason), and a run headline prints above the tally.
+`analysis.model` is the model `reeval analyze` uses (else the judge's, when it's a language
+model), and the one questions without their own model use. `reeval init` sets it to `google/gemini-3.8-flash` (`GOOGLE_GENERATIVE_AI_API_KEY`;
+`AI_GATEWAY_API_KEY` only with `gateway: [vercel()]`).
 
 `reeval run` ends with `Remarks:` when an eval itself needs work, with no model: `flaky-check`,
-`slow-mcp-start` and `proxy-only-egress` (concerns, at most three), and with `-v` `too-few-tries`
-and `check-never-fails` (suggestions). Each names the source line to change (`fix  <file:line>`).
+`slow-mcp-start`, `proxy-only-egress` and `setup-process-secret` (concerns, at most three), and
+with `-v` `too-few-tries` and `check-never-fails` (suggestions). They go in `remarks.json` beside
+the run, which `reeval record` copies into the history folder. Each names the source line to change (`fix  <file:line>`).
 Act on them: raise `runs`, tighten or remove the check, bake the MCP server's dependencies into
 the image, or set `egress: 'allow-all'` on an eval that needs raw TCP. Each prints once per eval
-version (`slow-mcp-start` and `proxy-only-egress` every run); an edit re-arms it.
+version (`slow-mcp-start`, `proxy-only-egress` and `setup-process-secret` every run); an edit
+re-arms it.
 One the cap or a run without `-v` hid isn't spent: the next `reeval run -v` prints it.
 
 ## Config discovery, filters and exit codes
 
-Filters: a part naming an eval file picks files; any other part picks evals by name or cell key
-(`reeval run skill antigravity`).
+Filters: a part that is a path on disk (`evals/a.eval.ts`, `evals/slow/`) picks only the files it
+names; one that names a file but isn't on disk (`skill`) also matches by name and cell key; any
+other part picks evals by name or cell key (`reeval run skill antigravity`).
 
 Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or
 above (paths resolve from its directory), or `--config <path>`. `reeval run` and `reeval image
@@ -123,7 +118,12 @@ regressed        greets in the house style
 ```
 
 A check head never reached reads `not run`, not a failure. `can't compare` names what changed
-(`changed  environment`, `evals/helpers.ts`): that flip isn't a regression. An eval Ctrl-C
-cancelled is `can't compare` with that side `cancelled`. `--fail-on-regression` exits 1 on a
-regressed eval, or on a new or can't-compare eval that fails, unless head was cancelled. `-v` adds each cell's
+(`changed  environment`, `evals/helpers.ts`): that flip isn't a regression. A changed gate
+(eval, config or profile `defaults`) keeps the eval comparable: base's attempts are re-scored
+under head's gate, so a flip the gate alone explains is `gate changed`, not a regression, and
+one base would still have passed under the new gate is `regressed`. An eval Ctrl-C
+canceled is `can't compare` with that side `canceled`. A pooled family with a `minLift` gets
+its own `<template> (all cases)` row for its pooled gate, which can regress while every case passes
+(`kind: "family"` in `--json`). `--fail-on-regression` exits 1 on a regressed eval or family gate,
+or on a new or can't-compare one that fails, unless head was canceled. `-v` adds each cell's
 lift and effort, base → head.

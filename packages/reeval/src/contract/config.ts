@@ -37,322 +37,120 @@ import {
 
 const count = () => z.number().int().min(1)
 
-export const captureWindowSchema = z
-  .strictObject({
-    width: count().describe('In CSS pixels.'),
-    height: count().describe('In CSS pixels.'),
-  })
-  .describe(
-    'Live tab size for `c.capture()`. Default 1280×720 when the call and cascade omit `viewport`.',
-  )
+export const captureWindowSchema = z.strictObject({
+  width: count(),
+  height: count(),
+})
 
-export const captureOptionsSchema = z
-  .strictObject({
-    viewport: z
-      .union([captureWindowSchema, z.literal('full-page')])
-      .optional()
-      .describe("The window and saved PNG size, or `'full-page'`. Default 1280×720."),
-    timeout: durationSchema
-      .optional()
-      .describe("How long to poll before failing. Default `'60s'`."),
-    browser: z
-      .boolean()
-      .optional()
-      .describe(
-        '`false` refuses the host `chrome-headless-shell` binary. `c.capture()` then throws.',
-      ),
-    model: z
-      .string()
-      .includes('/')
-      .optional()
-      .describe(
-        "Vision model for `instructions`. Cascades like `question`. Default is `analysis.model`, else the attempt's judge model, whichever is first a language model; never Jev.",
-      ),
-  })
-  .describe(
-    'Camera defaults for `c.capture()`. Cascades config → profile defaults → group → eval, shallow-merged. `viewport` on a level replaces the whole value. `port` is not an option: pass it as the first argument to `c.capture`.',
-  )
+export const captureOptionsSchema = z.strictObject({
+  viewport: z.union([captureWindowSchema, z.literal('full-page')]).optional(),
+  timeout: durationSchema.optional(),
+  browser: z.boolean().optional(),
+  model: z.string().includes('/').optional(),
+})
 
 const harnessList = z.union([harnessDescriptorSchema, z.array(harnessDescriptorSchema).min(1)])
 
-export const budgetSchema = z
-  .strictObject({
-    attempts: count().optional().describe('The most attempts the plan may have.'),
-    duration: durationSchema
-      .optional()
-      .describe("How long the run may go on, from the first attempt's start."),
-  })
-  .describe('Run-level caps. `attempts` is checked against the plan; `duration` while running.')
+export const budgetSchema = z.strictObject({
+  attempts: count().optional(),
+  duration: durationSchema.optional(),
+})
 
 export const historyConfigSchema = z.strictObject({
-  dir: z
-    .string()
-    .optional()
-    .describe('Committed history folder (default: `.history` in the directory the evals live in).'),
-  artifacts: z
-    .enum(['all', 'failures', 'none'])
-    .optional()
-    .describe("Artifacts recorded next to each run: every eval's, failing evals' only, or none."),
+  dir: z.string().optional(),
+  artifacts: z.enum(['all', 'failures', 'none']).optional(),
 })
 
 const recordMode = z.enum(['manual', 'ci', 'always'])
 
-export const profileDefaultsDataSchema = z
-  .strictObject({
-    harness: harnessList
-      .optional()
-      .describe('The agents every eval runs on, unless a group or eval replaces them.'),
-    sandbox: sandboxDescriptorSchema
-      .optional()
-      .describe('The default machine when the resolved environment omits `sandbox`.'),
-    environment: environmentDataSchema
-      .optional()
-      .describe('What every eval runs in when it names no environment.'),
-    runs: count().optional().describe('Attempts per cell.'),
-    gate: gatePolicySchema.optional().describe("How each cell's attempts decide its outcome."),
-    env: envVarsSchema
-      .optional()
-      .describe("Variables and secrets for the sandbox, merged by name over the config's."),
-    egress: egressPolicySchema
-      .optional()
-      .describe("Where the sandbox may connect; replaces the config's policy."),
-    judge: configJudgeDataSchema
-      .optional()
-      .describe("Defaults for `c.judge()`, merged field by field over the config's."),
-    timeout: durationSchema.optional().describe('Per attempt.'),
-    capture: captureOptionsSchema
-      .optional()
-      .describe("Screenshot defaults for `c.capture()`, shallow-merged over the config's."),
-    question: questionOptionsSchema
-      .optional()
-      .describe("Defaults for every question, merged over the config's."),
-  })
-  .describe('`ProfileDefaults` as data: the environment without `extend`, and the judge as data.')
+export const profileDefaultsDataSchema = z.strictObject({
+  harness: harnessList.optional(),
+  sandbox: sandboxDescriptorSchema.optional(),
+  environment: environmentDataSchema.optional(),
+  runs: count().optional(),
+  gate: gatePolicySchema.optional(),
+  env: envVarsSchema.optional(),
+  egress: egressPolicySchema.optional(),
+  judge: configJudgeDataSchema.optional(),
+  timeout: durationSchema.optional(),
+  capture: captureOptionsSchema.optional(),
+  question: questionOptionsSchema.optional(),
+})
 
-export const profileLimitSchema = z
-  .strictObject({
-    runs: count().optional().describe('The most runs per cell.'),
-    compare: z
-      .union([z.literal(false), z.strictObject({ maxVariants: z.number().int().min(0) })])
-      .optional()
-      .describe('`false` runs the control only; `{ maxVariants }` keeps the first n variants.'),
-    harness: z
-      .array(z.string())
-      .optional()
-      .describe('Harness ids to allow; evals left with none are skipped.'),
-  })
-  .describe('Over every eval, and it can only narrow; `pin` on a group or eval skips it.')
+export const profileLimitSchema = z.strictObject({
+  runs: count().optional(),
+  compare: z
+    .union([z.literal(false), z.strictObject({ maxVariants: z.number().int().min(0) })])
+    .optional(),
+  harness: z.array(z.string()).optional(),
+})
 
-export const profileDataSchema = z
-  .strictObject({
-    defaults: profileDefaultsDataSchema
-      .optional()
-      .describe("What evals get when they don't say otherwise: under groups and evals."),
-    limit: profileLimitSchema
-      .optional()
-      .describe('Caps over every eval, which only narrow; `pin` on a group or eval skips them.'),
-    judge: configJudgeDataSchema
-      .optional()
-      .describe(
-        'Judge settings for this profile, the same as `defaults.judge`, which wins field by field.',
-      ),
-    budget: budgetSchema.optional().describe("Merged over the config's `budget`."),
-    record: recordMode
-      .optional()
-      .describe("When this profile's runs are copied into the history folder."),
-    tags: z
-      .array(z.string())
-      .optional()
-      .describe("Tag filters for this profile, like `--tag` (`'!slow'` excludes)."),
-    gateway: z
-      .array(gatewayEntryDataSchema)
-      .min(1)
-      .optional()
-      .describe("Replaces the config's `gateway` list for this profile's runs."),
-  })
-  .describe('`Profile` as data: its defaults and judge as data.')
+export const profileDataSchema = z.strictObject({
+  defaults: profileDefaultsDataSchema.optional(),
+  limit: profileLimitSchema.optional(),
+  judge: configJudgeDataSchema.optional(),
+  budget: budgetSchema.optional(),
+  record: recordMode.optional(),
+  tags: z.array(z.string()).optional(),
+  gateway: z.array(gatewayEntryDataSchema).min(1).optional(),
+})
 
 const fakeVote = z.enum(['A', 'B', 'tie'])
 const failure = z.strictObject({ error: z.string() })
 
-export const fakeAnalysisDataSchema = z
-  .strictObject({
-    kind: z.literal('fake-analysis'),
-    output: z.unknown().optional().describe("The model's structured answer."),
-    vote: z
-      .union([
-        fakeVote,
-        z.strictObject({ winner: fakeVote, reason: z.string().optional() }),
-        failure,
-      ])
-      .optional()
-      .describe(
-        'How it answers pairwise questions: a fixed pick, or `{ error }` to fail every call.',
-      ),
-    answer: z
-      .union([
-        z.string(),
-        z.strictObject({ choice: z.string().optional(), text: z.string().optional() }),
-        failure,
-      ])
-      .optional()
-      .describe(
-        'How it answers questions asked of each attempt: a fixed answer, or `{ error }` to fail every call.',
-      ),
-  })
-  .describe(
-    '`fakeAnalysis()` as data: canned answers, without the functions of the digest or pair.',
-  )
+export const fakeAnalysisDataSchema = z.strictObject({
+  kind: z.literal('fake-analysis'),
+  output: z.unknown().optional(),
+  vote: z
+    .union([fakeVote, z.strictObject({ winner: fakeVote, reason: z.string().optional() }), failure])
+    .optional(),
+  answer: z
+    .union([
+      z.string(),
+      z.strictObject({ choice: z.string().optional(), text: z.string().optional() }),
+      failure,
+    ])
+    .optional(),
+})
 
-export const analysisConfigDataSchema = z
-  .strictObject({
-    model: z
-      .union([z.string(), fakeAnalysisDataSchema])
-      .optional()
-      .describe(
-        "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and questions fall back to the judge's when it's a language model.",
-      ),
-    insights: z
-      .boolean()
-      .optional()
-      .describe(
-        '`reeval run` classifies each eval and explains its result with `model` once the attempts finish (default true when `model` is set; `--no-insights` turns it off for one run).',
-      ),
-    maxTokens: z
-      .number()
-      .int()
-      .min(1)
-      .optional()
-      .describe(
-        "Tokens (in and out) that one run's insights may use, over every classification, insight and headline call (default 250000). Past it, the evals left print without insights; the run's outcome and exit code never change.",
-      ),
-    instructions: z
-      .string()
-      .optional()
-      .describe(
-        'Added to the prompt, e.g. "Fewer tool calls count as a win. The skill under test is reeval-good."',
-      ),
-    maxInputTokens: z
-      .number()
-      .int()
-      .min(1000)
-      .optional()
-      .describe(
-        "The digest's cap; evidence is dropped, lowest priority first, to fit (default 20000).",
-      ),
-    maxOutputTokens: z
-      .number()
-      .int()
-      .min(500)
-      .optional()
-      .describe(
-        'The most tokens the model may answer with (default 8000). reeval has no prices, so tokens are the cap.',
-      ),
-  })
-  .describe('`AnalysisConfig` as data: the model by name, or a fake analysis.')
+export const analysisConfigDataSchema = z.strictObject({
+  model: z.union([z.string(), fakeAnalysisDataSchema]).optional(),
+  instructions: z.string().optional(),
+  maxInputTokens: z.number().int().min(1000).optional(),
+  maxOutputTokens: z.number().int().min(500).optional(),
+})
 
-export const reevalConfigDataSchema = z
-  .strictObject({
-    include: z
-      .array(z.string())
-      .optional()
-      .describe(
-        "Globs of eval files, relative to the config's directory; default every `.eval.ts` under `evals`.",
-      ),
-    harness: harnessList
-      .optional()
-      .describe(
-        'The agents every eval runs on, unless a group or eval replaces them; default Cursor.',
-      ),
-    sandbox: sandboxDescriptorSchema
-      .optional()
-      .describe(
-        'The default machine when the resolved environment omits `sandbox`. Not an environment: it does not invent skills, files or a name. Implicit `docker()` when nobody sets one.',
-      ),
-    environment: environmentDataSchema
-      .optional()
-      .describe(
-        "What every eval runs in when it names no environment, and a baseline-less compare's control.",
-      ),
-    runs: count().optional().describe('Attempts per cell; default 1.'),
-    gate: gatePolicySchema
-      .optional()
-      .describe("How each cell's attempts decide its outcome; default `'all'`."),
-    env: envVarsSchema
-      .optional()
-      .describe('Variables and secrets for the sandbox, merged by name down the cascade.'),
-    egress: egressPolicySchema
-      .optional()
-      .describe("Where the sandbox may connect; default `'proxy'`."),
-    judge: configJudgeDataSchema
-      .optional()
-      .describe('Defaults for `c.judge()`, merged field by field down the cascade.'),
-    timeout: durationSchema.optional().describe("Per attempt; default `'15m'`."),
-    capture: captureOptionsSchema
-      .optional()
-      .describe(
-        'Screenshot defaults for `c.capture()`. `REEVAL_CAPTURE_BROWSER=0` refuses the host binary when `c.capture()` runs; it does not change this object.',
-      ),
-    question: questionOptionsSchema
-      .optional()
-      .describe(
-        "Defaults for every question: the model that answers it and what it's shown of each attempt. Merged down the cascade.",
-      ),
-    concurrency: count()
-      .optional()
-      .describe(
-        'How many attempts run at once. `--concurrency` and `REEVAL_CONCURRENCY` override it.',
-      ),
-    record: recordMode
-      .optional()
-      .describe(
-        'When runs are copied into the history folder: `reeval record` only, in CI, or on every run.',
-      ),
-    history: historyConfigSchema
-      .optional()
-      .describe('The history folder, and which attempts keep their artifacts there.'),
-    budget: budgetSchema
-      .optional()
-      .describe("Caps on a run; a profile's `budget` is merged over it."),
-    profiles: z
-      .record(z.string(), profileDataSchema)
-      .optional()
-      .describe('Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`.'),
-    defaultProfile: z
-      .strictObject({ ci: z.string().optional(), local: z.string().optional() })
-      .optional()
-      .describe(
-        'The profile when neither `--profile` nor `REEVAL_PROFILE` names one: `ci` when `CI` is set.',
-      ),
-    secrets: z
-      .strictObject({ unbrokered: z.enum(['warn', 'error']).optional() })
-      .optional()
-      .describe(
-        "`unbrokered: 'error'` refuses Docker secrets without `hosts` instead of warning (default `'warn'`).",
-      ),
-    debug: z
-      .strictObject({
-        keep: count().optional(),
-        traceBufferMb: z.number().positive().optional(),
-      })
-      .optional()
-      .describe(
-        'Local debug data in `.reeval/debug`: how many runs to keep (default 20), and how many MB of raw trace each attempt buffers for trace.ndjson (default 8; the oldest entries go first).',
-      ),
-    analysis: analysisConfigDataSchema
-      .optional()
-      .describe('Insights during `reeval run`, `reeval analyze`, and questions without a model.'),
-    gateway: z
-      .array(gatewayEntryDataSchema)
-      .min(1)
-      .optional()
-      .describe(
-        "The gateways model calls may go through, in the order you prefer them: each harness takes the first that can serve it. Default `[direct]`, each provider's own key.",
-      ),
-  })
-  .describe(
-    '`ReevalConfig` in its data forms, as `reeval.yaml` or another language carries it: the environment without `extend`, judge and analysis models by name or as fakes with fixed answers, and profiles the same way. AI SDK model objects and fake score functions are TypeScript only.',
-  )
+export const reevalConfigDataSchema = z.strictObject({
+  include: z.array(z.string()).optional(),
+  harness: harnessList.optional(),
+  sandbox: sandboxDescriptorSchema.optional(),
+  environment: environmentDataSchema.optional(),
+  runs: count().optional(),
+  gate: gatePolicySchema.optional(),
+  env: envVarsSchema.optional(),
+  egress: egressPolicySchema.optional(),
+  judge: configJudgeDataSchema.optional(),
+  timeout: durationSchema.optional(),
+  capture: captureOptionsSchema.optional(),
+  question: questionOptionsSchema.optional(),
+  concurrency: count().optional(),
+  record: recordMode.optional(),
+  history: historyConfigSchema.optional(),
+  budget: budgetSchema.optional(),
+  profiles: z.record(z.string(), profileDataSchema).optional(),
+  defaultProfile: z
+    .strictObject({ ci: z.string().optional(), local: z.string().optional() })
+    .optional(),
+  secrets: z.strictObject({ unbrokered: z.enum(['warn', 'error']).optional() }).optional(),
+  debug: z
+    .strictObject({
+      keep: count().optional(),
+      traceBufferMb: z.number().positive().optional(),
+    })
+    .optional(),
+  analysis: analysisConfigDataSchema.optional(),
+  gateway: z.array(gatewayEntryDataSchema).min(1).optional(),
+})
 
 export type _SameAsSchema = [
   Assert<Same<z.infer<typeof captureWindowSchema>, CaptureWindow>>,

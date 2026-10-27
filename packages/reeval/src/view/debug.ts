@@ -56,6 +56,13 @@ export type DebugRequest = {
   /** Brokered secrets and the harness credential swapped in, by name. */
   substituted: string[]
   ms: number
+  /**
+   * On a request the gateway sent the harness's key on, or a model call whose response it reads,
+   * the reasoning settings its JSON body carried, as
+   * `<path>=<value>` joined by spaces: `reasoning_effort=high`,
+   * `generationConfig.thinkingConfig.thinkingLevel=LOW`.
+   */
+  requestEffort?: string
 }
 
 /** What the studio's Debug tab shows for one attempt. */
@@ -130,6 +137,7 @@ export function requestLine(r: Omit<DebugRequest, 'at'>): string {
     `↑${formatBytes(r.sent)} ↓${formatBytes(r.received)}`,
     `${r.ms}ms`,
     r.substituted.length ? `substituted ${r.substituted.join(', ')}` : 'no key substituted',
+    ...(r.requestEffort ? [`asked ${r.requestEffort}`] : []),
     ...(r.allowed && r.reason ? [`error: ${r.reason}`] : []),
   ].join(' · ')
 }

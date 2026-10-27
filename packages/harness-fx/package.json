@@ -1,6 +1,6 @@
 {
   "name": "@reeval/harness-fx",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "private": true,
   "description": "An AI SDK harness adapter for fx on Vercel AI Gateway or OpenAI's API, over its ACP server (fx acp)",
   "license": "Apache-2.0",

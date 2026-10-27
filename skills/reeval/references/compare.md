@@ -5,7 +5,7 @@
 - What `compare` runs
 - Gates and lift
 - Effort and contrasts
-- Labelled checks that discriminate
+- Labeled checks that discriminate
 - `questions`
 
 ## What `compare` runs
@@ -18,7 +18,12 @@ Each variant runs as that environment on its own, with the same prompt and check
 does not layer, inherit or extend. Share setup first (the example is in SKILL.md).
 
 - Attempts = evals × harnesses × (1 control + variants) × runs. The example is 1 eval, 2 cells
-  (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 4 attempts.
+  (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 8 attempts.
+- With `runs` unset at every level, a compare with variants runs 4 a cell, the fewest tries a
+  side a lift verdict needs (the plan notes `runs 4 (compare default)`); anything else runs once.
+  Any level that sets `runs`, `runs: 1` and `--runs` included, replaces it, and a profile's
+  `limit.runs` caps it. A pooled `evaluate.each` case runs once: its lift pools over the cases.
+  Don't set `runs: 1` in the config unless you mean every compare to run once.
 - `parent.extendEnvironment(name, spec)` appends the child's spec as a new layer. The child wins
   on shared keys; `setup` concatenates. Call it before `compare`. Two stacks that should not
   share are two `defineEnvironment` calls, then `{ baseline, variants }`.
@@ -57,7 +62,7 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   `effort  tools  time  tokens` / `plain  54  1m 39s  2,890k` / `with-house-greeting  3  6.6s  57k`.
   A cell without usage (Goose) is left out of the token sample only; if either side then
   has none, the token metric is omitted, not `insufficient`. Effort's rank test needs
-  `runs: 4` a cell (3 vs 3 can't reach p < 0.05; the plan hints so); `reeval query effort` has
+  `runs: 4` a cell, as lift does (below it both read `can't tell yet`; the plan hints so, at `runs: 1` too); `reeval query effort` has
   its p-values, verdicts and whether the ranges are `separated`.
 - With two variants or more, `reeval query contrasts` sets every pair of arms side by side,
   variant against variant too.
@@ -65,11 +70,11 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   attempt opened, and `context_use` counts its tool calls as `context`, `dependency`
   (`node_modules`, `--help`), `web`, `verify` or `workspace`: a heuristic, read it as counts.
 
-## Labelled checks that discriminate
+## Labeled checks that discriminate
 
 - **Label each requirement** with `expect`'s second argument:
   `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`. Every matcher call
-  is recorded (`evals[].attempts[].assertions`; unlabelled ones get `<matcher> <first arg>`).
+  is recorded (`evals[].attempts[].assertions`; unlabeled ones get `<matcher> <first arg>`).
   In a compare, prefer `expect.soft` for independent requirements: a hard failure ends the
   attempt, and the checks after it count as not run: a side that never reached a check reads
   `not run` and the check gets no verdict, so it can't say which arm met it. The result block's
@@ -145,7 +150,7 @@ evaluate('greets in the house style', {
   end. Attempts that failed their checks (a judge failure doesn't count) are
   left out of the pairs: a pairwise question on a compare whose baseline is
   expected to fail gets no pairs, so ask it of each attempt instead. Each pair
-  goes to the model twice, order swapped, labelled A and B; the record's
+  goes to the model twice, order swapped, labeled A and B; the record's
   `evals[].answers` has every vote and each side's `wins`/`n` over decided
   votes, per pair kind. A model error is stored on the answer as `error` and
   warned about; it never changes an outcome. To see what a question was shown,

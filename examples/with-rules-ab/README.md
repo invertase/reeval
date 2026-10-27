@@ -33,16 +33,16 @@ apart:
 ```text
 pass             records the change in the changelog
   arm              pass
-  short-rules      0 of 1
-  detailed-rules   1 of 1  can't tell yet
+  short-rules      0 of 4
+  detailed-rules   4 of 4  helped
   check            short-rules  detailed-rules
-  changelog entry  0 of 1       1 of 1
+  changelog entry  0 of 4       4 of 4
     expected CHANGELOG.md to match /## Unreleased\s+- feat: /
   +1 more passed
 ```
 
-One try a side can't give a verdict; `pnpm eval --runs 4` gives each arm four tries, enough for
-one.
+The eval sets no `runs`, so the compare runs each arm four times, the fewest for a verdict.
+`pnpm eval --runs 1` is a cheaper smoke run that reads `can't tell yet`.
 
 | File | What it is |
 |---|---|

@@ -88,6 +88,19 @@
         "harness": {
           "$ref": "#/$defs/HarnessDescriptor"
         },
+        "judge": {
+          "description": "Its judge's `'provider/model'`, as the config, profile, groups and eval set it, and the gateway its calls go through, so the run checks the judge's key before any attempt starts. Unset for a fake judge, a model object, or none.",
+          "type": "object",
+          "properties": {
+            "gateway": {
+              "enum": ["direct", "openrouter", "vercel", "vertex"]
+            },
+            "model": {
+              "type": "string"
+            }
+          },
+          "required": ["model"]
+        },
         "label": {
           "description": "The harness, then the role (with `compare`), plus `#n` when it has several runs.",
           "type": "string"
@@ -119,6 +132,17 @@
             "type": "string"
           }
         },
+        "revision": {
+          "description": "The eval's `revision`, as the cascade resolved it; unset when no level sets one.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
         "sandbox": {
           "$ref": "#/$defs/SandboxDescriptor"
         },
@@ -149,6 +173,10 @@
           "description": "Why this attempt does not run, e.g. it already completed in a resumed run.",
           "type": "string"
         },
+        "source": {
+          "description": "Hashes of the eval's own source: what the `sources` fingerprint part covers but `revision`.",
+          "$ref": "#/$defs/EvalSource"
+        },
         "tags": {
           "type": "array",
           "items": {
@@ -174,6 +202,7 @@
         "sandbox",
         "secretVars",
         "setBy",
+        "source",
         "tags"
       ]
     },
@@ -508,11 +537,12 @@
       "additionalProperties": false
     },
     "Duration": {
-      "description": "More than zero: `90s`, `15m`, `1h`, or a number of milliseconds.",
+      "description": "More than zero and at most 596h: `90s`, `15m`, `1h`, or a number of milliseconds.",
       "anyOf": [
         {
           "type": "number",
-          "exclusiveMinimum": 0
+          "exclusiveMinimum": 0,
+          "maximum": 2147483647
         },
         {
           "type": "string",
@@ -689,13 +719,33 @@
         "workspaces"
       ]
     },
+    "EvalSource": {
+      "description": "An eval's own source as hashes: its body and case data as declared, and its options and its enclosing groups' in canonical form (`tags`, `revision` and `gate` aside).",
+      "type": "object",
+      "properties": {
+        "body": {
+          "description": "sha256 of the body function's source text.",
+          "type": "string"
+        },
+        "case": {
+          "description": "sha256 of the case's data; set on each case of an `evaluate.each`.",
+          "type": "string"
+        },
+        "options": {
+          "description": "sha256 of the canonical options.",
+          "type": "string"
+        }
+      },
+      "required": ["body", "options"]
+    },
     "FakeHarnessDescriptor": {
       "description": "A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`.",
       "type": "object",
       "properties": {
         "delayMs": {
-          "description": "Simulated turn length, honours the abort signal.",
-          "type": "number"
+          "description": "Simulated turn length, honors the abort signal.",
+          "type": "number",
+          "maximum": 2147483647
         },
         "effort": {
           "description": "Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what the turn reports (`fake-1[effort=medium]`). Fast is not this.",
@@ -948,15 +998,20 @@
       "required": ["case", "cases", "id", "name"]
     },
     "FxHarnessDescriptor": {
-      "description": "fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or OpenAI's API by the model id, and reports each turn's tokens.",
+      "description": "fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or OpenAI's API by the model id, or on OpenRouter or Vertex AI, and reports each turn's tokens.",
       "type": "object",
       "properties": {
+        "effort": {
+          "description": "Reasoning effort, sent as `reasoning_effort` on each model call; only on `vertex()`, since fx sends none itself. Values are what the model takes there, e.g. `low`, `medium` or `high`.",
+          "type": "string",
+          "pattern": "\\S"
+        },
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
           "$ref": "#/$defs/GatewayName"
         },
         "id": {
-          "description": "Cell id; defaults to `fx:<model>`.",
+          "description": "Cell id; defaults to `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
           "pattern": "\\S"
         },
@@ -969,7 +1024,7 @@
           "type": "number"
         },
         "model": {
-          "description": "A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.",
+          "description": "A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `openrouter()`, either runs on OpenRouter's Chat Completions API with `OPENROUTER_API_KEY`, a bare id as `openai/<id>`. On `vertex()`, a Gemini model id, `google/<id>` or a bare `gemini-…` id, run on Vertex AI's Chat Completions endpoint, e.g. `google/gemini-3.8-flash`.",
           "type": "string",
           "minLength": 1
         },
@@ -982,9 +1037,9 @@
       "additionalProperties": false
     },
     "GatewayName": {
-      "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter.",
+      "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter; `vertex` is Google Cloud's Vertex AI.",
       "type": "string",
-      "enum": ["direct", "vercel", "openrouter"]
+      "enum": ["direct", "vercel", "openrouter", "vertex"]
     },
     "GitWorkspace": {
       "description": "A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url` is what reeval fetches: the clone URL, or an absolute path for a local repository.",

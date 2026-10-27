@@ -9,6 +9,7 @@ import {
 } from '@reeval/harness-opencode/providers'
 import type { EndpointMatch } from '@reeval/sandbox-docker'
 import type { ModelSpecific } from '../harness/agents.ts'
+import { everyModel, notGemini } from './effort.ts'
 import type { GatewayRoute, RoutingGateway } from './routes.ts'
 
 export const VERCEL_HOST = 'ai-gateway.vercel.sh'
@@ -154,6 +155,24 @@ function goose(env: NodeJS.ProcessEnv): GatewayRoute {
 }
 
 /**
+ * pi on a provider of its own on Vercel's Chat Completions API, a Bearer key: a Gemini model from
+ * pi's catalog, each thinking level sent as Gemini's own `thinkingConfig` under Vercel's
+ * `providerOptions` (Vercel's `reasoning_effort` maps every Gemini 3 level but `low` to `high`).
+ */
+function pi(env: NodeJS.ProcessEnv): GatewayRoute {
+  const endpoints = [onVercel('/v1/chat/completions', 'POST')]
+  return {
+    credential: vercelCredential(env),
+    authAs: VERCEL_KEY,
+    endpoints,
+    modelResponses: endpoints,
+    servedModel: servedOnVercel,
+    hosts: [VERCEL_HOST],
+    modelId: googleId,
+  }
+}
+
+/**
  * OpenCode on its own `vercel` provider, with the model as `vercel/<id>`: the requests the pinned
  * CLI sends that provider's key on (harness-opencode's provider table), plus Exa's host for web
  * search.
@@ -205,12 +224,14 @@ export const VERCEL_GATEWAY: RoutingGateway = {
     opencode,
     fx,
     'grok-build': grokBuild,
+    pi,
   },
   refusals: {
     cursor: "Cursor's agent only calls Cursor's own API",
     antigravity: "Antigravity's CLI only calls Google's API, with a Gemini key",
-    pi: "pi reaches a Gemini model on Vercel AI Gateway only through Anthropic's Messages API, with Anthropic's thinking budget for Gemini's own thinking level, and doesn't behave as it does on Gemini's API; reeval runs pi on its Gemini key",
   },
-  // Claude Code's effort goes as on Anthropic's API, and Codex's response names the effort it ran at.
-  unprovenEffort: ['goose', 'opencode', 'grok-build'],
+  // Claude Code's effort goes as on Anthropic's API, Codex's response names the effort it ran at,
+  // pi and OpenCode send a Gemini model's thinking level under providerOptions, and Grok Build
+  // sends reasoning_effort (an xAI model's own). Goose's vercel_ai_gateway provider sends none.
+  unprovenEffort: { goose: everyModel, opencode: notGemini },
 }

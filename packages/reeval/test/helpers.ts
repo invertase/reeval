@@ -209,7 +209,7 @@ export function runCli(
       const pid = child.pid
       kill = setTimeout(() => killTree(pid), opts.graceMs ?? 20_000)
     }
-    const onAbort = () => stop('the test was cancelled (it timed out, or a sibling failed)')
+    const onAbort = () => stop('the test was canceled (it timed out, or a sibling failed)')
     const arm = () => {
       clearTimeout(idle)
       if (stopped === null) {
@@ -223,6 +223,8 @@ export function runCli(
     }
     if (opts.signal?.aborted) onAbort()
     else opts.signal?.addEventListener('abort', onAbort, { once: true })
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
     child.stdout.on('data', (d) => {
       stdout += d
       arm()

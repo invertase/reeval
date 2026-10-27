@@ -1,4 +1,4 @@
-# ci.yml's full-run legs, which PRs skip unless labelled ci:full: Windows and macOS through
+# ci.yml's full-run legs, which PRs skip unless labeled ci:full: Windows and macOS through
 # scripts/ci-os.sh, and (when `floor` is true) the unit and plan files on the engines floor
 # (Node 22.13). ci.yml calls this on main, nightly, on demand, on release and for ci:full, and
 # its `ci` check fails when any of these fails. No concurrency group: the caller's applies.
@@ -105,7 +105,8 @@ jobs:
   macos:
     name: macos (${{ matrix.part }})
     runs-on: macos-latest
-    timeout-minutes: 25
+    # The unit files run in one job here, unsharded, and take up to about 25 minutes.
+    timeout-minutes: ${{ matrix.part == 'unit' && 40 || 25 }}
     strategy:
       fail-fast: false
       matrix:

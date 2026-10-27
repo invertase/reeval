@@ -1,4 +1,12 @@
 {
+  "unbrokered 'error': a plain MCP header named like a credential": "UsageError: mcp.docs.headers.Authorization in evaluate(\"e\") is a plain string, and secrets.unbrokered is 'error' in reeval.config.ts. To broker it, read it from a host variable with secret.template, e.g. secret.template('Bearer ${VAR}').",
+  "unbrokered 'error': a plain MCP header with a token's shape, on http://": "UsageError: mcp.docs.headers.X-Trace in evaluate(\"e\") is a plain string, and secrets.unbrokered is 'error' in reeval.config.ts. To broker it, read it from a host variable with secret.template, e.g. secret.template('Bearer ${VAR}') and give the MCP server an https:// URL.",
+  "unbrokered 'error': a plain MCP header from a declaration tree": "UsageError: mcp.docs.headers.x-session-token in evaluate(\"e\") is a plain string, and secrets.unbrokered is 'error' in reeval.config.ts. To broker it, read it from a host variable with secret.template, e.g. secret.template('Bearer ${VAR}').",
+  "unbrokered 'error': a neutral plain MCP header": null,
+  "unbrokered 'error': a secret.template MCP header on https://": null,
+  "unbrokered 'error': an http:// MCP server's header secret that sets hosts": "UsageError: mcp.docs.headers.Authorization in evaluate(\"e\") isn't brokered, and secrets.unbrokered is 'error' in reeval.config.ts. To broker it, give the MCP server an https:// URL (reeval brokers its header secrets over HTTPS only, to its own host unless they set hosts).",
+  "unbrokered 'error': an https:// MCP server's header secret that sets hosts": null,
+  "unbrokered 'error': an http:// MCP server's header secret that sets hosts, from a declaration tree": "UsageError: mcp.docs.headers.Authorization in evaluate(\"e\") isn't brokered, and secrets.unbrokered is 'error' in reeval.config.ts. To broker it, give the MCP server an https:// URL (reeval brokers its header secrets over HTTPS only, to its own host unless they set hosts).",
   "yaml: empty": null,
   "yaml: not YAML": "UsageError: reeval.yaml isn't valid YAML: Flow sequence in block collection must be sufficiently indented and end with a ] at line 2, column 1:\n\nharness: [a\n\n^",
   "yaml: a repeated key": "UsageError: reeval.yaml isn't valid YAML: Map keys must be unique at line 2, column 1:\n\nruns: 1\nruns: 2\n^",
@@ -36,8 +44,7 @@
   "yaml: a profile null": "UsageError: profiles.pr in reeval.yaml must be an object of profile settings, e.g. { limit: { runs: 1 } } (got null)",
   "yaml: defaultProfile not in profiles": "UsageError: defaultProfile.ci in reeval.yaml names \"pr\", which isn't a profile (it defines none). Add it under profiles, or name one that's there.",
   "yaml: analysis fake with a typo": "UsageError: Unknown option \"votes\" in analysis.model in reeval.yaml. Did you mean \"vote\"?",
-  "yaml: analysis agent": "UsageError: Unknown option \"agent\" in analysis in reeval.yaml. Use model, insights, maxTokens, instructions, maxInputTokens, maxOutputTokens.",
-  "yaml: analysis maxTokens 0": "UsageError: analysis.maxTokens in reeval.yaml must be a whole number of tokens of at least 1, e.g. 250000 (got 0)",
+  "yaml: analysis agent": "UsageError: Unknown option \"agent\" in analysis in reeval.yaml. Use model, instructions, maxInputTokens, maxOutputTokens.",
   "yaml: capture viewport not whole": "UsageError: capture.viewport in reeval.yaml is { width, height } or 'full-page' (got {\"width\":10.5,\"height\":10})",
   "yaml: a budget with a typo": "UsageError: Unknown option \"attempt\" in budget in reeval.yaml. Did you mean \"attempts\"?",
   "yaml: question with a model": null,
@@ -56,5 +63,12 @@
   "ts: a relative dockerfile as data": null,
   "ts: a missing relative dockerfile as data": "UsageError: sandbox.dockerfile in reeval.config.ts: <dir>/nope/Dockerfile doesn't exist. Paths in reeval.config.ts are relative to its directory.",
   "ts: a missing dockerfile as data in a profile": "UsageError: profiles.big.defaults.sandbox.dockerfile in reeval.config.ts: <dir>/big/Dockerfile doesn't exist. Paths in reeval.config.ts are relative to its directory.",
-  "ts: a relative fake dir as data": null
+  "ts: a relative fake dir as data": null,
+  "collected: a limit.harness id no eval runs on": "UsageError: profiles.pr.limit.harness in reeval.config.ts lists \"cursor\", which no eval runs on. Harness ids the evals run on: cursor:composer-2.5, pi:gemini-3.8-flash.",
+  "collected: two limit.harness ids, one no eval runs on": "UsageError: profiles.pr.limit.harness in reeval.config.ts lists \"codex\", which no eval runs on. Harness ids the evals run on: cursor:composer-2.5.",
+  "collected: every limit.harness id matches": null,
+  "collected: an empty limit.harness": null,
+  "collected: a limit.harness id with no harnesses collected": "UsageError: profiles.pr.limit.harness in reeval.config.ts lists \"a\", which no eval runs on. Harness ids the evals run on: none.",
+  "collected: a path filter, one limit.harness id matches": null,
+  "collected: a path filter, no limit.harness id matches": "UsageError: profiles.pr.limit.harness in reeval.config.ts lists \"b\", which no eval in the selected files runs on. Harness ids the evals in the selected files run on: a."
 }

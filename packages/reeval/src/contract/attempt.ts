@@ -3,8 +3,10 @@
 // send them to reeval, and reeval's replies. Today an eval's body runs in reeval's own worker, so
 // no call crosses a process boundary yet; the schemas are the spec such a runner codes against,
 // with their JSON Schema in schema/protocol/. Results reuse the attempt's own types (`TurnData`,
-// `ExecResult`, `AssertionRecord`), held to them at compile time and by their TSDoc.
+// `ExecResult`, `AssertionRecord`), held to them at compile time and described by their TSDoc;
+// a `.describe()` here is the protocol's own wording, for what no hand-written type documents.
 import { z } from 'zod'
+import { MAX_TIMER_MS, TIMER_LIMIT } from '../duration.ts'
 import type {
   AssertionRecord,
   Capture,
@@ -38,17 +40,13 @@ import { type Assert, dataProblem, durationSchema, jsonValueSchema, type Same } 
 
 const nullableNumber = z.number().nullable()
 
-export const tokenUsageSchema = z
-  .strictObject({
-    input: z.number(),
-    output: z.number(),
-    cacheRead: z.number(),
-    cacheWrite: z.number(),
-    reasoning: nullableNumber,
-  })
-  .describe(
-    'The tokens one turn used, as its harness reported them. `input` excludes cache reads and writes (so the prompt was `input + cacheRead + cacheWrite`); `reasoning` is part of `output`.',
-  )
+export const tokenUsageSchema = z.strictObject({
+  input: z.number(),
+  output: z.number(),
+  cacheRead: z.number(),
+  cacheWrite: z.number(),
+  reasoning: nullableNumber,
+})
 
 export const fileChangeSchema = z.strictObject({
   path: z.string(),
@@ -62,113 +60,74 @@ export const diffSchema = z.strictObject({
 
 export const turnStatusSchema = z.enum(['completed', 'aborted', 'error'])
 
-export const webEventTypeSchema = z
-  .enum(['web-search', 'web-fetch'])
-  .describe('The transcript events a harness may be unable to report.')
+export const webEventTypeSchema = z.enum(['web-search', 'web-fetch'])
 
 const at = { ts: z.string(), atMs: z.number() }
 
-export const transcriptEventSchema = z
-  .discriminatedUnion('type', [
-    z.strictObject({
-      ...at,
-      type: z.enum(['text', 'reasoning']),
-      text: z.string(),
-      durationMs: nullableNumber,
-    }),
-    z.strictObject({
-      ...at,
-      type: z.literal('file-edit'),
-      toolCallId: z.string(),
-      path: z.string(),
-      kind: z.enum(['create', 'modify', 'delete']),
-      added: nullableNumber.describe(
-        "Line counts, or null when the harness didn't send the content (e.g. deletes).",
-      ),
-      removed: nullableNumber,
-      durationMs: nullableNumber,
-      stalled: z
-        .boolean()
-        .optional()
-        .describe('True when a shell-like tool or edit ran at least two minutes.'),
-    }),
-    z.strictObject({
-      ...at,
-      type: z.literal('web-search'),
-      toolCallId: z.string(),
-      query: z.string(),
-      references: nullableNumber.describe(
-        'How many sources the harness says it used; Cursor sends no URLs or titles.',
-      ),
-      ok: z.boolean().optional().describe('Whether the search succeeded. Absent means it did.'),
-      durationMs: nullableNumber,
-      stalled: z
-        .boolean()
-        .optional()
-        .describe('True when a shell-like tool or edit ran at least two minutes.'),
-    }),
-    z.strictObject({
-      ...at,
-      type: z.literal('web-fetch'),
-      toolCallId: z.string(),
-      url: z.string(),
-      ok: z.boolean(),
-      durationMs: nullableNumber,
-      stalled: z
-        .boolean()
-        .optional()
-        .describe('True when a shell-like tool or edit ran at least two minutes.'),
-    }),
-    z.strictObject({
-      ...at,
-      type: z.literal('tool'),
-      toolCallId: z.string(),
-      tool: z.string(),
-      input: z.unknown(),
-      output: z.unknown(),
-      ok: z.boolean(),
-      durationMs: nullableNumber,
-      stalled: z
-        .boolean()
-        .optional()
-        .describe('True when a shell-like tool or edit ran at least two minutes.'),
-    }),
-    z.strictObject({ ...at, type: z.literal('error'), message: z.string() }),
-    z.strictObject({ ...at, type: z.literal('retry'), message: z.string() }),
-  ])
-  .describe(
-    "Normalised agent events. Each tool call is one event, merged with its result; `durationMs` is wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null when the harness never reported the end. Long shell or edit calls set `stalled: true`.",
-  )
+export const transcriptEventSchema = z.discriminatedUnion('type', [
+  z.strictObject({
+    ...at,
+    type: z.enum(['text', 'reasoning']),
+    text: z.string(),
+    durationMs: nullableNumber,
+  }),
+  z.strictObject({
+    ...at,
+    type: z.literal('file-edit'),
+    toolCallId: z.string(),
+    path: z.string(),
+    kind: z.enum(['create', 'modify', 'write', 'delete']),
+    added: nullableNumber,
+    removed: nullableNumber,
+    durationMs: nullableNumber,
+    stalled: z.boolean().optional(),
+  }),
+  z.strictObject({
+    ...at,
+    type: z.literal('web-search'),
+    toolCallId: z.string(),
+    query: z.string(),
+    references: nullableNumber,
+    ok: z.boolean().optional(),
+    durationMs: nullableNumber,
+    stalled: z.boolean().optional(),
+  }),
+  z.strictObject({
+    ...at,
+    type: z.literal('web-fetch'),
+    toolCallId: z.string(),
+    url: z.string(),
+    ok: z.boolean(),
+    durationMs: nullableNumber,
+    stalled: z.boolean().optional(),
+  }),
+  z.strictObject({
+    ...at,
+    type: z.literal('tool'),
+    toolCallId: z.string(),
+    tool: z.string(),
+    input: z.unknown(),
+    output: z.unknown(),
+    ok: z.boolean(),
+    durationMs: nullableNumber,
+    stalled: z.boolean().optional(),
+  }),
+  z.strictObject({ ...at, type: z.literal('error'), message: z.string() }),
+  z.strictObject({ ...at, type: z.literal('retry'), message: z.string() }),
+])
 
-export const turnDataSchema = z
-  .strictObject({
-    prompt: z.string(),
-    text: z.string().describe("The agent's final message for this turn."),
-    status: turnStatusSchema,
-    startedAt: z.string(),
-    durationMs: z.number(),
-    transcript: z.array(transcriptEventSchema),
-    usage: tokenUsageSchema
-      .nullable()
-      .describe('Tokens the turn used; null when the harness reports none.'),
-    model: z
-      .string()
-      .nullable()
-      .describe(
-        'The model the harness says served the turn, e.g. `composer-2.5[fast=false]`; null when it reports none. It can differ from the requested one (an alias, or parameters it filled in).',
-      ),
-    unreported: z
-      .array(webEventTypeSchema)
-      .describe(
-        "Event types the harness couldn't report for this turn: the agent may have searched or fetched with no event in `transcript`. `toHaveSearched()` and `toHaveFetched()` refuse such a turn. Usually `[]`; a Cursor turn whose web calls the adapter couldn't recover (its SDK drops them from the stream) is `['web-search', 'web-fetch']`.",
-      ),
-    diff: diffSchema.describe(
-      'Workspace changes since the eval started, as of the end of this turn.',
-    ),
-  })
-  .describe(
-    "A turn as data, as a record or another language's runner carries it: `Turn` without its methods.",
-  )
+export const turnDataSchema = z.strictObject({
+  prompt: z.string(),
+  text: z.string(),
+  status: turnStatusSchema,
+  startedAt: z.string(),
+  durationMs: z.number(),
+  transcript: z.array(transcriptEventSchema),
+  usage: tokenUsageSchema.nullable(),
+  model: z.string().nullable(),
+  unreported: z.array(webEventTypeSchema),
+  diff: diffSchema,
+})
 
 export const execResultSchema = z.strictObject({
   exitCode: z.number().int(),
@@ -176,23 +135,18 @@ export const execResultSchema = z.strictObject({
   stderr: z.string(),
 })
 
-export const execRetrySchema = z
-  .strictObject({
-    retries: z
-      .number()
-      .int('must be a whole number, from 0')
-      .min(0, 'must be a whole number, from 0')
-      .optional()
-      .describe('Extra tries after a non-zero exit, a whole number from 0. Default 0.'),
-    interval: z
-      .number()
-      .min(0, 'must be 0 or more milliseconds')
-      .optional()
-      .describe('Milliseconds to wait before each extra try. Default 1000.'),
-  })
-  .describe(
-    'How `c.exec` reruns a command that exits non-zero, for a check that can fail on a transient.',
-  )
+export const execRetrySchema = z.strictObject({
+  retries: z
+    .number()
+    .int('must be a whole number, from 0')
+    .min(0, 'must be a whole number, from 0')
+    .optional(),
+  interval: z
+    .number()
+    .min(0, 'must be 0 or more milliseconds')
+    .max(MAX_TIMER_MS, `must be ${TIMER_LIMIT}`)
+    .optional(),
+})
 
 /** A background command has no exit for `retries` to wait on. */
 const noBackgroundRetry = (
@@ -219,28 +173,15 @@ export const execOptionsSchema = z
 export const execOptionsProblem = (value: unknown): string | undefined =>
   dataProblem(execOptionsSchema, value, 'c.exec()', () => Object.keys(execOptionsSchema.shape))
 
-export const assertionRecordSchema = z
-  .strictObject({
-    label: z
-      .string()
-      .describe(
-        '`label` is the supplied `expect` label. Without one, it is the matcher plus its first argument or named subject, cut at 60 characters. Repeats get ` #2`, ` #3`, and later suffixes.',
-      ),
-    labelled: z.boolean().describe('The eval gave the label.'),
-    matcher: z.string().describe('`toHaveFile`, `not.toBe`, `resolves.toBe`, `poll.toBe`.'),
-    status: z
-      .enum(['pass', 'fail', 'error'])
-      .describe(
-        "`error`: the matcher couldn't answer (a subject it can't read, an event the harness doesn't report).",
-      ),
-    soft: z.boolean(),
-    message: z.string().optional().describe("Why it failed or couldn't answer, cut at 1 KB."),
-    durationMs: z
-      .number()
-      .optional()
-      .describe('Async matchers only (`toHaveFile`, `toSucceed`, `.resolves`, `expect.poll`).'),
-  })
-  .describe('One `expect` or `expect.soft` matcher call an attempt made.')
+export const assertionRecordSchema = z.strictObject({
+  label: z.string(),
+  labelled: z.boolean(),
+  matcher: z.string(),
+  status: z.enum(['pass', 'fail', 'error']),
+  soft: z.boolean(),
+  message: z.string().optional(),
+  durationMs: z.number().optional(),
+})
 
 const turnIndex = z
   .number()
@@ -248,79 +189,45 @@ const turnIndex = z
   .min(0, 'must be a turn index, from 0')
   .describe("The turn's index, from 0.")
 
-export const captureSchema = z
-  .strictObject({
-    name: z.string(),
-    port: z.number().describe('Container port that was tunneled.'),
-    path: z.string().describe('Path on the app, as passed in.'),
-    viewport: z
-      .union([captureWindowSchema, z.literal('full-page')])
-      .describe("What the author asked, including `'full-page'`."),
-    file: z
-      .strictObject({ path: z.string(), sha256: z.string(), bytes: z.number() })
-      .describe('`artifacts/<name>.png` under the attempt directory.'),
-  })
-  .describe('What `c.capture()` returns: the PNG is also in the attempt record under `artifacts/`.')
+export const captureSchema = z.strictObject({
+  name: z.string(),
+  port: z.number(),
+  path: z.string(),
+  viewport: z.union([captureWindowSchema, z.literal('full-page')]),
+  file: z.strictObject({ path: z.string(), sha256: z.string(), bytes: z.number() }),
+})
 
-export const judgeArtifactRefSchema = z
-  .strictObject({
-    name: z.string(),
-    path: z.string().describe('The `artifacts/<name>.png` path under the attempt directory.'),
-    sha256: z.string(),
-    bytes: z.number(),
-    mediaType: z.literal('image/png'),
-  })
-  .describe(
-    'A capture this judge call sent as a file part. Bytes live in the `artifacts/<name>.png` file.',
-  )
+export const judgeArtifactRefSchema = z.strictObject({
+  name: z.string(),
+  path: z.string(),
+  sha256: z.string(),
+  bytes: z.number(),
+  mediaType: z.literal('image/png'),
+})
 
 const verdictFields = {
   threshold: z.number(),
   question: z.string(),
   model: z.string(),
-  gateway: gatewayNameSchema
-    .optional()
-    .describe(
-      "The gateway from the config's `gateway` list the call went through; unset without one.",
-    ),
-  artifacts: z
-    .array(judgeArtifactRefSchema)
-    .optional()
-    .describe('Captures this call sent the judge as file parts, when any.'),
+  gateway: gatewayNameSchema.optional(),
+  artifacts: z.array(judgeArtifactRefSchema).optional(),
 }
 
 export const verdictSchema = z.strictObject({
   verdict: z.enum(['pass', 'fail']),
-  score: z.number().describe("The judge's probability that the answer is yes, from 0 to 1."),
+  score: z.number(),
   ...verdictFields,
-  resolvedModel: z
-    .string()
-    .optional()
-    .describe('The model id the provider says served the call, when it reports one.'),
-  upstream: z
-    .string()
-    .optional()
-    .describe(
-      "The upstream provider the gateway says served the call (OpenRouter's); unset when it names none.",
-    ),
-  costUsd: z
-    .number()
-    .optional()
-    .describe(
-      "What the gateway says the call cost, in US dollars (OpenRouter's `usage.cost`); unset when it names none.",
-    ),
+  resolvedModel: z.string().optional(),
+  upstream: z.string().optional(),
+  costUsd: z.number().optional(),
 })
 
-export const judgeFailureSchema = z
-  .strictObject({
-    verdict: z.literal('error'),
-    score: z.null(),
-    ...verdictFields,
-    error: z.string(),
-  })
-  .describe(
-    "What `c.judge()` returns when the call failed (the provider's error, after any retries): the attempt fails as a judge error once the eval's body has finished, so the judges and checks after it still run.",
-  )
+export const judgeFailureSchema = z.strictObject({
+  verdict: z.literal('error'),
+  score: z.null(),
+  ...verdictFields,
+  error: z.string(),
+})
 
 export type _SameAsSchema = [
   Assert<Same<z.infer<typeof captureWaitSchema>, CaptureWait>>,
@@ -422,39 +329,43 @@ export const matcherSubjectSchema = z
 
 const nonEmpty = z.string().regex(/\S/, 'must not be empty')
 
+/**
+ * A capture's name is the `<name>.png` segment of its artifact path, so it stays within what
+ * the studio serves as a path segment (`src/view/paths.ts`): a leading letter or digit, and
+ * short enough to leave room for `.png`.
+ */
+export const CAPTURE_NAME_MAX = 100
+export const CAPTURE_NAME = new RegExp(`^[a-z0-9][a-z0-9_-]{0,${CAPTURE_NAME_MAX - 1}}$`)
+export const CAPTURE_NAME_RULE = `must be 1 to ${CAPTURE_NAME_MAX} of a-z, 0-9, _ and -, starting with a letter or digit`
+
 const portSchema = z
   .number()
   .int()
   .min(1, 'a port from 1 to 65535')
   .max(65535, 'a port from 1 to 65535')
-const millisSchema = z.number().positive('more than zero milliseconds')
+const millisSchema = z
+  .number()
+  .positive('more than zero milliseconds')
+  .max(MAX_TIMER_MS, TIMER_LIMIT)
 
-export const captureWaitSchema = z
-  .enum(['load', 'idle'])
-  .describe(
-    "Chromium look-ready events. `'load'` is `window` load (`Page.loadEventFired`). `'idle'` is `Page.lifecycleEvent` `networkAlmostIdle`.",
-  )
+export const captureWaitSchema = z.enum(['load', 'idle'])
 
-export const waitSchema = z
-  .union([captureWaitSchema, z.strictObject({ ms: millisSchema })])
-  .describe('Same shape at top-level `wait` and `{ wait }` between instructions.')
+export const waitSchema = z.union([captureWaitSchema, z.strictObject({ ms: millisSchema })])
 
 export const captureInstructionSchema = z.union([nonEmpty, z.strictObject({ wait: waitSchema })])
 
 export const captureCallDataSchema = z
   .strictObject({
-    name: nonEmpty.optional(),
+    name: z.string().regex(CAPTURE_NAME, CAPTURE_NAME_RULE).optional(),
     path: z.string().optional(),
     viewport: z.union([captureWindowSchema, z.literal('full-page')]).optional(),
     timeout: durationSchema.optional(),
-    wait: waitSchema
-      .optional()
-      .describe("Look-ready once, before the first model shot or the saved PNG. Default `'load'`."),
+    wait: waitSchema.optional(),
     instructions: z
       .array(captureInstructionSchema)
       .optional()
       .describe('Journey: goal strings and `{ wait }` beats, run by the vision model.'),
-    model: z.string().optional().describe('Overrides cascaded `capture.model` for this call.'),
+    model: z.string().optional(),
   })
   .describe(
     "`c.capture()`'s camera and path as data. Default `path` is `/`; default `name` is derived from the path. A test's `fakeInstructions` journey is TypeScript-only.",
@@ -742,32 +653,14 @@ export const attemptReplySchema = z
 
 export const cellRoleSchema = z.enum(['control', 'variant'])
 
-export const cellSchema = z
-  .strictObject({
-    key: z
-      .string()
-      .describe('The harness id, the environment name, and the sandbox id, joined with `/`.'),
-    harness: z
-      .string()
-      .describe(
-        'The harness id: `id` when set, otherwise `<kind>:<model>` (`<kind>` alone without a model), with `[effort=<value>]` appended whenever `effort` is set.',
-      ),
-    environment: z
-      .string()
-      .describe(
-        "The environment's own name, also on a variant cell (`with-skill`, with no prefix).",
-      ),
-    sandbox: z
-      .string()
-      .describe(
-        'The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts with the engine (`docker` by default). It adds `:` and the sanitised final component of `image` or `from`, or for `dockerfile` the sanitised filename (the parent directory name when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps append `+` and an eight-character hash.',
-      ),
-    role: cellRoleSchema,
-    variant: z.string().optional().describe("The variant's name, for variant cells."),
-  })
-  .describe(
-    "A cell of an evaluation combines a harness, an environment (`-` when none is set), and that environment's sandbox id. With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.",
-  )
+export const cellSchema = z.strictObject({
+  key: z.string(),
+  harness: z.string(),
+  environment: z.string(),
+  sandbox: z.string(),
+  role: cellRoleSchema,
+  variant: z.string().optional(),
+})
 
 export const attemptStartSchema = z
   .strictObject({
@@ -790,8 +683,8 @@ export const attemptAbortSchema = z
   .strictObject({
     type: z.literal('abort'),
     reason: z
-      .enum(['timeout', 'cancelled'])
-      .describe("`timeout`: the eval's `timeout` ran out. `cancelled`: the run was stopped."),
+      .enum(['timeout', 'canceled'])
+      .describe("`timeout`: the eval's `timeout` ran out. `canceled`: the run was stopped."),
     message: z.string().describe("reeval's sentence, e.g. `Eval timed out after 600s`."),
   })
   .describe(

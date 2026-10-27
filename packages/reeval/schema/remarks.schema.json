@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from RunRemarks in src/view/remarks.ts by `pnpm schema:update`; don't edit. A run's remarks from reeval run: <run>/remarks.json in the history folder or .reeval/runs.",
+  "title": "RunRemarks",
+  "$ref": "#/$defs/RunRemarks",
+  "$defs": {
+    "Remark": {
+      "description": "A remark about the eval's quality, not about the agent.",
+      "type": "object",
+      "properties": {
+        "evalId": {
+          "type": "string"
+        },
+        "evidence": {
+          "description": "Facts from this run (or history facts) showing it mattered now.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "firstSeenRun": {
+          "description": "The first run that printed this `id`, or this run when none has: it prints only in that run, except the kinds about the environment, which print in every run they happen.",
+          "type": "string"
+        },
+        "fix": {
+          "description": "An edit at a source location (`source:<file>#L<n>`) in the eval.",
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "string"
+            },
+            "edit": {
+              "type": "string"
+            }
+          },
+          "required": ["at", "edit"]
+        },
+        "id": {
+          "description": "sha256(kind, evalId, the eval's sources hash, and for `slow-mcp-start` the server): one remark per kind (and server) per eval version.",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "check-never-fails",
+            "flaky-check",
+            "proxy-only-egress",
+            "setup-process-secret",
+            "slow-mcp-start",
+            "too-few-tries"
+          ]
+        },
+        "printed": {
+          "description": "Whether this run's `reeval run` output printed it: false when an earlier run printed it, or when the cap or a run without `-v` left it out, so a later run prints it.",
+          "type": "boolean"
+        },
+        "severity": {
+          "description": "Fixed by kind (`REMARK_KINDS`).",
+          "enum": ["concern", "suggestion"]
+        },
+        "text": {
+          "description": "One plain sentence: what's wrong.",
+          "type": "string"
+        }
+      },
+      "required": ["evalId", "evidence", "firstSeenRun", "fix", "id", "kind", "severity", "text"]
+    },
+    "RunRemarks": {
+      "description": "A run's remarks, `<history>/<run>/remarks.json`. Written only when the run raised one.",
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "reeval-remarks"
+        },
+        "remarks": {
+          "description": "Every remark this run raised, ranked, including those an earlier run printed first (`firstSeenRun`), which don't print again.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Remark"
+          }
+        },
+        "runId": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1
+        }
+      },
+      "required": ["createdAt", "kind", "remarks", "runId", "schemaVersion"]
+    }
+  },
+  "x-schemaVersion": 1
+}

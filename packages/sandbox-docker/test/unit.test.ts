@@ -16,9 +16,7 @@ import { Duplex, PassThrough } from 'node:stream'
 import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
-  contextFiles,
   dockerfileTag,
-  dockerignoreMatcher,
   harnessImageFor,
   installLayerTag,
   installScript,
@@ -37,7 +35,9 @@ import {
   removeContainerDetached,
   retryConnection,
 } from '../src/docker-cli.ts'
+import { contextFiles, dockerignoreMatcher } from '../src/dockerignore.ts'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
+import { requestedEffort } from '../src/egress/effort.ts'
 import { createMux, forwarderScript, link } from '../src/egress/mux.ts'
 import { createPolicyCheck, defaultAllowedHosts, hostAllowed } from '../src/egress/policy.ts'
 import {
@@ -287,6 +287,39 @@ describe('request transformations', () => {
     assert.ok(decrypts([cursorRule], 'API2.CURSOR.SH'))
     assert.equal(decrypts([cursorRule], 'agentn.global.api5.cursor.sh'), false)
     assert.equal(decrypts([], 'api2.cursor.sh'), false)
+  })
+})
+
+describe('requested effort', () => {
+  test("each API's reasoning setting, in the order read", () => {
+    const body = JSON.stringify({
+      generationConfig: { thinkingConfig: { thinkingLevel: 'LOW', includeThoughts: true } },
+      providerOptions: {
+        vertex: { thinkingConfig: { thinkingLevel: 'low' } },
+        google: { thinkingConfig: { thinkingLevel: 'low' } },
+      },
+      reasoning: { effort: 'high', enabled: true },
+      output_config: { effort: 'max' },
+      thinking: { type: 'adaptive' },
+    })
+    assert.equal(
+      requestedEffort(body),
+      'generationConfig.thinkingConfig.thinkingLevel=LOW ' +
+        'providerOptions.google.thinkingConfig.thinkingLevel=low ' +
+        'providerOptions.vertex.thinkingConfig.thinkingLevel=low ' +
+        'reasoning.effort=high reasoning.enabled=true output_config.effort=max thinking.type=adaptive',
+    )
+    assert.equal(
+      requestedEffort('{"thinking":{"budget_tokens":2048}}'),
+      'thinking.budget_tokens=2048',
+    )
+  })
+
+  test('twin: none for a body with no setting, an object where a value goes, or not JSON', () => {
+    assert.equal(requestedEffort('{"model":"m","messages":[]}'), undefined)
+    assert.equal(requestedEffort('{"reasoning":{"effort":{"level":"high"}}}'), undefined)
+    assert.equal(requestedEffort('{"reasoning":["high"]}'), undefined)
+    assert.equal(requestedEffort('reasoning_effort=high'), undefined)
   })
 })
 
@@ -1029,13 +1062,13 @@ describe('package boundary', () => {
       e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)],
     )
 
-  test('imports only Node built-ins, @ai-sdk harness packages and its own files', () => {
+  test('imports only Node built-ins, @ai-sdk harness packages, @balena/dockerignore and its own files', () => {
     for (const file of files(join(root, 'src'))) {
       const source = readFileSync(file, 'utf8')
       for (const [, spec] of source.matchAll(/from '([^']+)'/g)) {
         assert.match(
           spec ?? '',
-          /^(node:|\.\.?\/|@ai-sdk\/harness(-cursor|-claude-code)?(\/|$))/,
+          /^(node:|\.\.?\/|@ai-sdk\/harness(-cursor|-claude-code)?(\/|$)|@balena\/dockerignore$)/,
           `${file} imports ${spec}`,
         )
       }
@@ -1054,7 +1087,7 @@ describe('package boundary', () => {
     }
   })
 
-  test('each harness has its own image, tagged and labelled with its adapter version', () => {
+  test('each harness has its own image, tagged and labeled with its adapter version', () => {
     const { cursor, 'claude-code': claude } = HARNESS_PACKAGES
     assert.equal(imageFor('cursor'), `reeval-sandbox:cursor-${cursor.version}`)
     assert.equal(
@@ -1311,5 +1344,53 @@ describe('docker command traces', () => {
       ],
       'nothing once the listener is gone',
     )
+  })
+
+  test('a secret across the clip is masked whole, in every stream, argument and error', () => {
+    const secret = 'correct-horse-battery-staple'
+    const seen: DockerCommand[] = []
+    onDockerCommand(
+      (c) => seen.push(c),
+      (text) => text.replaceAll(secret, '[REDACTED]'),
+    )
+    const across = (max: number) => `${'.'.repeat(max - 4)}${secret}`
+    try {
+      const at = Date.now()
+      traceDocker(['exec', across(300)], at, {
+        exitCode: 1,
+        stdout: Buffer.from(across(4096)),
+        stderr: across(4096),
+      })
+      traceDocker(['exec', across(300)], at, { stdout: across(4096), exitCode: 0 })
+      traceDocker(['ps'], at, { error: new Error(`failed: ${secret}`) })
+    } finally {
+      onDockerCommand(undefined)
+    }
+    const traced = JSON.stringify(seen)
+    assert.doesNotMatch(traced, /\.corr/)
+    assert.equal(traced.match(/\[RED/g)?.length, 6)
+  })
+
+  test('a large stream is masked only as far past the clip as a secret reaches, and counted whole', () => {
+    const secret = 'correct-horse-battery-staple'
+    const seen: DockerCommand[] = []
+    let longest = 0
+    onDockerCommand(
+      (c) => seen.push(c),
+      (text) => {
+        longest = Math.max(longest, text.length)
+        return text.replaceAll(secret, '[REDACTED]')
+      },
+    )
+    try {
+      const big = `${'.'.repeat(4092)}${secret}${'y'.repeat(10_000_000)}`
+      traceDocker(['exec'], Date.now(), { exitCode: 0, stdout: big, stderr: 'z'.repeat(5000) })
+    } finally {
+      onDockerCommand(undefined)
+    }
+    assert.ok(longest <= 4096 + 16 * 1024, `masked ${longest} characters`)
+    const [c] = seen
+    assert.equal(c?.stdout, `${'.'.repeat(4092)}[RED… (${10_000_000 + 6} more)`)
+    assert.equal(c?.stderr, `${'z'.repeat(4096)}… (904 more)`)
   })
 })

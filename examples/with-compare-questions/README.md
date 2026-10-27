@@ -29,16 +29,16 @@ Code, and `--profile <name>` on any other agent in [`examples/profiles.ts`](../p
 one profile you need.
 
 **What to look at:** each side's wins under the question. Each pair is asked twice, in both
-orders, so one pair is two votes:
+orders, so one pair is two votes, and four runs a side make four pairs:
 
 ```text
 pass             rejects division by zero
   arm              pass
-  math             1 of 1
-  errors           1 of 1  can't tell yet
+  math             4 of 4
+  errors           4 of 4
   question  Which divide() says more clearly what went wrong when b is 0?
-    math           won 0 of 2
-    errors         won 2 of 2
+    math           won 0 of 8
+    errors         won 8 of 8
 ```
 
 After a run, the `question_pairs` view has each pair head to head, with the splits (a pair whose

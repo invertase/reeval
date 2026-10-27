@@ -5,9 +5,11 @@ import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'n
 import { basename, isAbsolute, join, posix, relative, sep, win32 } from 'node:path'
 import { hostAllowed } from '@reeval/sandbox-docker'
 import { parse as parseYaml } from 'yaml'
+import { credentialsIn } from '../contract/plain.ts'
 import { closest } from '../contract/shared.ts'
 import { sha256 } from '../ids.ts'
 import { stripCredentials } from '../redact.ts'
+import { withoutBom } from '../text.ts'
 import type {
   EnvironmentLayer,
   EnvVars,
@@ -21,6 +23,8 @@ import type {
   SecretTemplate,
   SkillSource,
 } from '../types.ts'
+
+const readText = (path: string) => withoutBom(readFileSync(path, 'utf8'))
 
 export const PLUGIN_PARTS: readonly PluginPart[] = [
   'skills',
@@ -57,7 +61,7 @@ export const OTHER_MANIFESTS = [
 function agentPluginsSchema(dir: string): boolean {
   try {
     const file = join(dir, 'plugin.json')
-    const schema = (JSON.parse(readFileSync(file, 'utf8')) as { $schema?: unknown }).$schema
+    const schema = (JSON.parse(readText(file)) as { $schema?: unknown }).$schema
     return typeof schema === 'string' && schema.startsWith('https://agent-plugins.org/schemas/')
   } catch {
     return false
@@ -168,12 +172,6 @@ const githubRepo = (s: string) => /^\w[\w.-]*\/[\w.-]+$/.test(s)
 const gitUrl = (s: string) =>
   /^(?:https?|ssh|git|file):\/\/\S+$/i.test(s) || /^\w[\w.-]*@[\w.-]+:[^\s-]\S*$/.test(s)
 
-const hasCredentials = (url: string) => {
-  if (!URL.canParse(url)) return false
-  const u = new URL(url)
-  return u.password !== '' || (u.username !== '' && /^https?:$/.test(u.protocol))
-}
-
 /** A registry package name: an entry's `package` may not be a path, URL or git spec. */
 const NPM_NAME = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/i
 const NPM_VERSION = /^[\w.^~<>=|*+][\w.^~<>=|*+ -]*$/
@@ -181,7 +179,7 @@ const NPM_VERSION = /^[\w.^~<>=|*+][\w.^~<>=|*+ -]*$/
 /** A source name Claude Code resolves under `metadata.pluginRoot`. */
 const BARE_SOURCE = /^[A-Za-z0-9][-A-Za-z0-9._]*$/
 
-/** `metadata.pluginRoot` as Claude Code normalises it (`.` for the root), or undefined when it ignores it. */
+/** `metadata.pluginRoot` as Claude Code normalizes it (`.` for the root), or undefined when it ignores it. */
 function pluginRootOf(metadata: unknown): string | undefined {
   const root = isRecord(metadata) ? metadata.pluginRoot : undefined
   if (typeof root !== 'string' || !root || root.startsWith('/') || /[\\:]/.test(root)) {
@@ -192,7 +190,7 @@ function pluginRootOf(metadata: unknown): string | undefined {
   return clean.split('/').some((s) => s === '' || s === '.' || s === '..') ? undefined : clean
 }
 
-/** A path in the marketplace's source, normalised, or undefined when it leaves it. */
+/** A path in the marketplace's source, normalized, or undefined when it leaves it. */
 function insideRoot(path: string): string | undefined {
   const clean = posix.normalize(path).replace(/\/+$/, '')
   if (posix.isAbsolute(clean) || clean === '..' || clean.startsWith('../')) return undefined
@@ -297,7 +295,7 @@ export function readMarketplace(
     case 'git-subdir': {
       const written = str('url')
       if (!written) throw unfetchable()
-      if (hasCredentials(written)) {
+      if (credentialsIn(written)) {
         throw new PluginProblem(
           `${what} has a password or token in its url, which reeval would record: reeval fetches git sources with your own git credentials (a credential helper, gh auth setup-git or an SSH key), so the marketplace mustn't carry one`,
         )
@@ -379,7 +377,7 @@ export type PluginContents = {
 
 const readJson = (path: string, what: string): unknown => {
   try {
-    return JSON.parse(readFileSync(path, 'utf8'))
+    return JSON.parse(readText(path))
   } catch (error) {
     throw new PluginProblem(`${what} isn't valid JSON (${(error as Error).message.split('\n')[0]})`)
   }
@@ -400,7 +398,7 @@ const filesIn = (dir: string, test: (name: string) => boolean) =>
 
 /** A skill's name from its `SKILL.md` frontmatter, else its directory's; `loadSkills` checks it. */
 function skillName(dir: string): string {
-  const text = readFileSync(join(dir, 'SKILL.md'), 'utf8')
+  const text = readText(join(dir, 'SKILL.md'))
   const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)
   try {
     const front = match ? parseYaml(match[1] ?? '') : undefined
@@ -600,7 +598,7 @@ export function readPlugin(
     rootSchema: agentPluginsSchema(dir),
     manifest:
       kept.includes('mcp') || manifest.mcpServers === undefined
-        ? readFileSync(manifestPath, 'utf8')
+        ? readText(manifestPath)
         : `${JSON.stringify(rest, null, 2)}\n`,
   }
 }

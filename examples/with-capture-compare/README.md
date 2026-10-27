@@ -35,11 +35,11 @@ one profile you need.
 ```text
 pass             adds a sign-up button
   arm              pass
-  site             1 of 1
-  brand            1 of 1  can't tell yet
+  site             4 of 4
+  brand            4 of 4
   question  Which Sign up button is blue with white text and rounded corners?
-    site           won 0 of 2
-    brand          won 2 of 2
+    site           won 0 of 8
+    brand          won 8 of 8
 ```
 
 Each pair is asked twice, with the sides swapped. With `analysis.model: 'anthropic/claude-sonnet-5'`

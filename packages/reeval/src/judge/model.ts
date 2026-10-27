@@ -1,6 +1,7 @@
 import { experimental_decide as decide } from 'ai'
 import { debugTrace } from '../debug/attempt.ts'
 import { openRouterBilling, openRouterDecisionModel } from '../gateway/openrouter-models.ts'
+import { type VertexSettings, vertexDecisionModel, vertexSettings } from '../gateway/vertex.ts'
 import type { GatewayName, JudgeModel, JudgeOptions } from '../types.ts'
 import {
   DIRECT_PROVIDERS,
@@ -14,17 +15,19 @@ type DecisionModel = Parameters<typeof decide>[0]['model']
 
 /**
  * See `judgeRoute`: the provider's own package on direct, the AI Gateway on vercel, OpenRouter's
- * Decisions API on openrouter.
+ * Decisions API on openrouter, Vertex AI on vertex.
  */
 async function resolveModel(
   model: Exclude<JudgeModel, { kind: 'fake-judge' }>,
   gateway: GatewayName | undefined,
   fallbacks: boolean,
+  vertex: VertexSettings | undefined,
 ): Promise<DecisionModel> {
   if (typeof model !== 'string') return model as DecisionModel
   const route = judgeRoute(model, process.env, 'judge model', gateway)
   if (route.kind === 'gateway') return model
   if (route.kind === 'openrouter') return openRouterDecisionModel(model, fallbacks)
+  if (route.kind === 'vertex') return vertexDecisionModel(model, vertex ?? vertexSettings())
   const id = model.slice(route.provider.length + 1)
   switch (route.provider) {
     case 'anthropic':
@@ -91,13 +94,14 @@ export async function scoreWithModel(
   signal: AbortSignal,
   gateway?: GatewayName,
   fallbacks = false,
+  vertex?: VertexSettings,
 ): Promise<{
   score: number
   resolvedModel: string | undefined
   upstream?: string
   costUsd?: number
 }> {
-  const resolved = await resolveModel(model, gateway, fallbacks)
+  const resolved = await resolveModel(model, gateway, fallbacks, vertex)
   const result = await decide({
     model: resolved,
     state,

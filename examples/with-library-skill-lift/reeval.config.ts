@@ -10,17 +10,17 @@ const fakeAgent = (path: string) =>
 export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's page into the workspace with plain/'s guessed
-  // colours, or skill/'s brand ones when it has the skill, so the compare shows a lift without
+  // colors, or skill/'s brand ones when it has the skill, so the compare shows a lift without
   // keys or Docker.
   harness: fakeHarness({
     files: { 'index.html': fakeAgent('index.html'), 'styles.css': fakeAgent('plain/styles.css') },
-    text: 'styles.css gives the page warm colours and serif body text.',
+    text: 'styles.css gives the page warm colors and serif body text.',
     withSkill: {
       files: {
         'index.html': fakeAgent('index.html'),
         'styles.css': fakeAgent('skill/styles.css'),
       },
-      text: "styles.css uses Anthropic's brand colours, Poppins headings and Lora body text.",
+      text: "styles.css uses Anthropic's brand colors, Poppins headings and Lora body text.",
     },
   }),
   sandbox: fakeSandbox(),

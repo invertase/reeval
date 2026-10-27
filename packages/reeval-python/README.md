@@ -62,6 +62,35 @@ a retry loop can assert; one the escaping error carries (each failure in a `Task
 for quick checks. Keep `expect` for reeval matchers (`to_have_file`, `to_succeed`, soft checks,
 labels) — Playwright-style.
 
+#### What a caught failure counts as
+
+A failed `expect` is a check the moment it fails: reeval records it before
+`ReevalAssertionError` reaches the body. One the body catches still fails the attempt when the
+body ends, as `expect.soft` does, and its error says the eval caught it. A plain `assert` the body
+catches records nothing, as in Python.
+
+| The body catches | Recorded | Fails the attempt |
+|---|---|---|
+| a failed `expect(…)` | a failed check | yes, when the body ends |
+| a failed `assert` | nothing | no |
+| neither (it escapes) | a failed check | yes |
+
+So retry with `expect.poll`, which retries the matcher and records only its final outcome, or with
+a plain `assert` or `if` in the loop, never `expect` in `try`/`except`:
+
+```python
+# Retries the command until it succeeds, for up to 10 seconds: one check.
+expect.poll(lambda: c.exec("curl -sf localhost:3000"), timeout=10).to_succeed()
+
+# A plain assert in a retry loop: only the try that held is recorded.
+for _ in range(3):
+    try:
+        assert c.exec("test -f ready.txt").ok
+        break
+    except AssertionError:
+        time.sleep(1)
+```
+
 Matchers that take a pattern (`to_have_file`, `to_have_run`, `to_have_searched`, `to_have_fetched`,
 `to_have_called_tool`, `to_have_edited`, `to_have_changed`) take a `str` or a compiled `re.Pattern`,
 `str` or `bytes`, with any flags. Python matches it with `pattern.search`, so anything `re` accepts
@@ -77,7 +106,7 @@ Use snake_case on the context (`read_file`, `write_file`, `file`) and on matcher
 `to_pass`, `to_equal`, `to_contain`, …). Matcher failures raise `ReevalAssertionError`.
 
 Options are typed (`EvalOptions`, and `JudgeOptions` for `c.judge(…)`), so pyright refuses a
-misspelt key such as `runz`. They take reeval's keys in snake_case at any depth (`min_lift`,
+misspelled key such as `runz`. They take reeval's keys in snake_case at any depth (`min_lift`,
 `delay_ms`); the keys of `env`, `headers` and the other maps of your own keep their spelling. Every
 duration is seconds or a `timedelta`: `{"timeout": 90}`, `docker(start_timeout=timedelta(minutes=2))`,
 `expect.poll(…, timeout=10)`. `docker()`, `fake_harness()`, `fake_judge()` and `plugin.*` return

@@ -28,7 +28,7 @@ one profile you need.
 output stands in for the agent's final message, as `output`; the task, files and diff stay.
 
 ```text
-    "question": "Does it say there are 3 orders totalling 50?",
+    "question": "Does it say there are 3 orders totaling 50?",
     …
     "state": {
       "task": "Write summary.js. It prints how many orders orders.csv has, and their total.",

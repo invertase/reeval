@@ -35,7 +35,7 @@ reeval studio · with-studio · .history/
 Ctrl-C to stop.
 ```
 
-Unrecorded runs from `.reeval/runs/` show there too, labelled scratch. A static build takes only
+Unrecorded runs from `.reeval/runs/` show there too, labeled scratch. A static build takes only
 recorded runs, unless you add `--scratch`:
 
 ```text

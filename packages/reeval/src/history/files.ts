@@ -10,14 +10,14 @@ import {
   unlink,
   writeFile,
 } from 'node:fs/promises'
+import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
-import { factsHash } from '../insights/hash.ts'
 import { BUILD_ID } from '../root.ts'
+import type { QuestionInput } from '../types.ts'
 import { runHeader } from '../view/header.ts'
-import { fromModel, INSIGHTS_FILE, type RunInsights } from '../view/insights.ts'
-import { NewerSchemaError, readableInsights, readableRecord } from '../view/record.ts'
-import { suiteResult } from '../view/suite.ts'
+import { NewerSchemaError, readableRecord, readableRemarks } from '../view/record.ts'
+import { REMARKS_FILE, type RunRemarks } from '../view/remarks.ts'
 import {
   ensureHistoryGitignore,
   historyGitignorePath,
@@ -26,7 +26,7 @@ import {
 } from './ignore.ts'
 import { type Finding, findingLines, findingSummary, scanText } from './secret-scan.ts'
 import { renderSummary } from './summary.ts'
-import type { ArtifactLevel, EvalEntry, FileRef, HistoryEntry, RunRecord } from './types.ts'
+import type { ArtifactLevel, AttemptRecord, FileRef, HistoryEntry, RunRecord } from './types.ts'
 
 export class HistoryError extends Error {
   override name = 'HistoryError'
@@ -205,44 +205,171 @@ async function writeCache(root: string, cache: Cache): Promise<void> {
 export type WrittenRun = { recordPath: string; artifactDir: string | null; created: boolean }
 
 /**
- * Writes `<dir>/<runId>/` (artifacts), then `<dir>/<runId>.json` (the record). The record lands
- * last and create-only, so a reader never sees a half-written run, and a run is never rewritten.
+ * `<dir>/.tmp-<runId>.claim`: whoever creates it owns `<dir>/<runId>/` and `<dir>/<runId>.json`
+ * until it's removed. It holds `<pid>\n<host>\n<token>\n`, linked into place whole.
+ */
+const claimFile = (dir: string, runId: string) => join(dir, `.tmp-${runId}.claim`)
+
+const busy = (runId: string, file: string) =>
+  new HistoryError(
+    `${runId} is being recorded by another process right now. Try again once it finishes; if no reeval is running, delete ${fromCwd(file)}.`,
+  )
+
+/** A claim whose process is gone on this host. Another host's can't be probed, so it holds. */
+function claimGone(held: string): boolean {
+  const [pidLine, host] = held.split('\n')
+  const pid = Number(pidLine)
+  if (!Number.isInteger(pid) || pid <= 0 || !host) return true
+  if (host !== hostname()) return false
+  try {
+    process.kill(pid, 0)
+    return false
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ESRCH'
+  }
+}
+
+/**
+ * Removes the stale claim `held`, and only it. Breakers of one claim take
+ * `<claim>.<hash of held>.break` first, so only one at a time may unlink it; while `held` is in
+ * place nobody else can remove or replace it, so reading it then unlinking it is safe.
+ */
+async function breakClaim(file: string, held: string, runId: string): Promise<void> {
+  const lock = `${file}.${sha256(held).slice(0, 12)}.break`
+  try {
+    await writeFile(lock, '', { flag: 'wx' })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST' || inFlux(error)) {
+      throw busy(runId, file)
+    }
+    throw error
+  }
+  try {
+    let now: string | null
+    try {
+      now = await readFile(file, 'utf8')
+    } catch (error) {
+      if (isMissing(error)) return
+      if (inFlux(error)) throw busy(runId, file)
+      throw error
+    }
+    if (now === held) await unlink(file)
+  } finally {
+    await unlink(lock).catch(() => {})
+  }
+}
+
+/** Takes `runId`'s claim in `dir`, breaking one a dead process left; returns its release. */
+async function claimRun(dir: string, runId: string): Promise<() => Promise<void>> {
+  const file = claimFile(dir, runId)
+  const body = `${process.pid}\n${hostname()}\n${randomBytes(6).toString('hex')}\n`
+  const tmp = `${file}.${tmpName()}`
+  await writeFile(tmp, body)
+  try {
+    for (let tries = 0; tries < 3; tries++) {
+      try {
+        await link(tmp, file)
+        return async () => {
+          if ((await readFile(file, 'utf8').catch(() => null)) === body) {
+            await unlink(file).catch(() => {})
+          }
+        }
+      } catch (error) {
+        // Windows reserves a name another process is still deleting: EPERM, not EEXIST.
+        if (!['EEXIST', 'EPERM', 'EBUSY'].includes((error as NodeJS.ErrnoException).code ?? '')) {
+          throw error
+        }
+      }
+      let held: string
+      try {
+        held = await readFile(file, 'utf8')
+      } catch (error) {
+        if (isMissing(error)) continue
+        if (inFlux(error)) throw busy(runId, file)
+        throw error
+      }
+      if (!claimGone(held)) throw busy(runId, file)
+      await breakClaim(file, held, runId)
+    }
+    throw busy(runId, file)
+  } finally {
+    await unlink(tmp).catch(() => {})
+  }
+}
+
+/** A record a resumed run replaces: the run stopped before it finished. */
+const unfinished = (bytes: Buffer, where: string) => {
+  try {
+    const status = parseRecord(bytes, where).status
+    return status === 'interrupted' || status === 'budget'
+  } catch {
+    return false
+  }
+}
+
+const readIfThere = (path: string) =>
+  readFile(path).catch((error) => {
+    if (isMissing(error)) return null
+    throw error
+  })
+
+/**
+ * Claims the run, then writes `<dir>/<runId>/` (artifacts), then `<dir>/<runId>.json` (the
+ * record). The record lands last and create-only, so a reader never sees a half-written run, and
+ * a run is never rewritten, except an interrupted or budget-stopped one by its resumed run.
  */
 export async function writeRun(
   dir: string,
   record: RunRecord,
   artifacts: Map<string, Uint8Array>,
 ): Promise<WrittenRun> {
-  const recordPath = join(dir, `${record.runId}.json`)
-  const artifactDir = artifacts.size > 0 ? join(dir, record.runId) : null
+  const recordPath = recordFile(dir, record.runId)
+  const artifactDir = artifacts.size > 0 ? runDir(dir, record.runId) : null
   const bytes = encodeRecord(record)
-  let existing: Buffer | null = null
-  try {
-    existing = await readFile(recordPath)
-  } catch (error) {
-    if (!isMissing(error)) throw error
-  }
-  if (existing) {
-    if (existing.equals(bytes)) return { recordPath, artifactDir, created: false }
-    throw new HistoryError(
-      `${record.runId} is already recorded with different content (another --artifacts level?). Recorded runs are never rewritten.`,
-    )
+  // A landed record is only ever removed by a writer replacing an unfinished one, so an equal
+  // one needs no claim.
+  if ((await readIfThere(recordPath))?.equals(bytes)) {
+    return { recordPath, artifactDir, created: false }
   }
   await mkdir(dir, { recursive: true })
-  // An artifact dir without a record is left over from an interrupted write.
-  await rm(join(dir, record.runId), { recursive: true, force: true })
-  if (artifactDir) {
-    const staging = join(dir, `.tmp-${tmpName()}`)
-    try {
+  const release = await claimRun(dir, record.runId)
+  try {
+    return await writeClaimed(dir, record.runId, bytes, artifacts)
+  } finally {
+    await release()
+  }
+}
+
+async function writeClaimed(
+  dir: string,
+  runId: string,
+  bytes: Buffer,
+  artifacts: Map<string, Uint8Array>,
+): Promise<WrittenRun> {
+  const recordPath = recordFile(dir, runId)
+  const artifactDir = artifacts.size > 0 ? runDir(dir, runId) : null
+  const existing = await readIfThere(recordPath)
+  if (existing?.equals(bytes)) return { recordPath, artifactDir, created: false }
+  if (existing && !unfinished(existing, recordPath)) {
+    throw new HistoryError(
+      `${runId} is already recorded with different content (another --artifacts level?). Recorded runs are never rewritten.`,
+    )
+  }
+  const staging = artifactDir ? join(dir, `.tmp-${tmpName()}`) : null
+  try {
+    if (staging) {
       for (const [path, content] of artifacts) {
         const file = join(staging, ...path.split('/'))
         await mkdir(dirname(file), { recursive: true })
         await writeFile(file, content)
       }
-      await rename(staging, artifactDir)
-    } finally {
-      await rm(staging, { recursive: true, force: true })
     }
+    if (existing) await rm(recordPath, { force: true })
+    // An artifact dir without a record is left over from an interrupted write.
+    await rm(runDir(dir, runId), { recursive: true, force: true })
+    if (staging && artifactDir) await rename(staging, artifactDir)
+  } finally {
+    if (staging) await rm(staging, { recursive: true, force: true })
   }
   const tmp = join(dir, `.tmp-${tmpName()}.json`)
   await writeFile(tmp, bytes)
@@ -259,17 +386,16 @@ export async function writeRun(
   return { recordPath, artifactDir, created: true }
 }
 
-const keeps = (e: EvalEntry, level: ArtifactLevel) =>
-  level === 'all' || (level === 'failures' && (e.outcome === 'fail' || e.outcome === 'infra_error'))
+const failed = (x: { outcome: string }) => x.outcome === 'fail' || x.outcome === 'infra_error'
 
-const refsOf = (e: EvalEntry): FileRef[] =>
-  e.attempts
-    .flatMap((a) => [
-      ...Object.values(a.files).flatMap((v) => (Array.isArray(v) ? v : v ? [v] : [])),
-      ...a.checks.flatMap((c) => (c.log ? [c.log] : [])),
-      ...(a.answers ?? []).flatMap((q) => (q.input ? [q.input] : [])),
-    ])
-    .concat((e.answers ?? []).flatMap((q) => (q.input ? [q.input] : [])))
+const keeps = (x: { outcome: string }, level: ArtifactLevel) =>
+  level === 'all' || (level === 'failures' && failed(x))
+
+const attemptRefs = (a: AttemptRecord): FileRef[] => [
+  ...Object.values(a.files).flatMap((v) => (Array.isArray(v) ? v : v ? [v] : [])),
+  ...a.checks.flatMap((c) => (c.log ? [c.log] : [])),
+  ...(a.answers ?? []).flatMap((q) => (q.input ? [q.input] : [])),
+]
 
 export type RecordOptions = {
   root: string
@@ -279,8 +405,6 @@ export type RecordOptions = {
   allowIncomplete?: boolean
   /** Skip the last-chance secret scan, for false positives checked by hand. */
   skipSecretScan?: boolean
-  /** summary.md ends with the hint to set an analysis model: none resolves. */
-  hint: boolean
 }
 
 export type RecordResult = WrittenRun & {
@@ -314,23 +438,52 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
   const record: RunRecord = structuredClone(scratch)
   record.artifacts = level
   const files = new Map<string, Uint8Array>()
-  for (const e of record.evals) {
-    if (level !== 'none' && keeps(e, level)) {
-      for (const ref of refsOf(e)) {
-        const bytes = await readFile(join(source, runId, ...ref.path.split('/')))
-        if (sha256(bytes) !== ref.sha256) {
-          throw new HistoryError(`${runId}/${ref.path} changed since the run wrote it`)
-        }
-        files.set(ref.path, bytes)
-      }
-      continue
+  const keep = async (ref: FileRef) => {
+    const bytes = await readFile(join(source, runId, ...ref.path.split('/')))
+    if (sha256(bytes) !== ref.sha256) {
+      throw new HistoryError(`${runId}/${ref.path} changed since the run wrote it`)
     }
+    files.set(ref.path, bytes)
+    return bytes
+  }
+  for (const e of record.evals) {
+    // A pairwise input goes with its eval, and so do the screenshots it names: the sides it
+    // compares passed, so their attempts don't keep them.
+    const shown = new Set<string>()
+    for (const q of e.answers ?? []) {
+      if (!q.input) continue
+      if (level === 'none' || !keeps(e, level)) {
+        delete q.input
+        continue
+      }
+      const input = JSON.parse(Buffer.from(await keep(q.input)).toString()) as QuestionInput
+      for (const s of input.calls.flatMap((c) => c.screenshots ?? [])) {
+        if ('path' in s && s.path) shown.add(s.path)
+      }
+    }
+    // A cell or eval that failed with no failed attempt (a `minLift` gate) keeps every attempt's
+    // files, as the only evidence of it.
+    const whole = failed(e) && !e.attempts.some(failed)
     for (const a of e.attempts) {
-      a.files = {}
+      const cellFailed = e.attempts.some((b) => b.cell === a.cell && failed(b))
+      const cell = e.cells.find((c) => c.key === a.cell)
+      const all = whole || (cell !== undefined && failed(cell) && !cellFailed)
+      if (level !== 'none' && (all || keeps(a, level))) {
+        for (const ref of attemptRefs(a)) await keep(ref)
+        continue
+      }
+      // Kept beside a failed attempt in its cell: `flaky_cells` tells the checks varying from the
+      // agent by whether a failed attempt's diff matches a passing one's.
+      const diff = level !== 'none' && cellFailed ? a.files.diff : undefined
+      const screenshots = (a.files.artifacts ?? []).filter((r) => shown.has(r.path))
+      a.files = {
+        ...(diff ? { diff } : {}),
+        ...(screenshots.length ? { artifacts: screenshots } : {}),
+      }
+      for (const ref of [...(diff ? [diff] : []), ...screenshots]) await keep(ref)
       for (const c of a.checks) delete c.log
       for (const q of a.answers ?? []) delete q.input
     }
-    for (const q of e.answers ?? []) delete q.input
   }
   const patch = record.git?.worktreePatch
   let droppedPatch: string[] = []
@@ -352,27 +505,16 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     record.git.worktreePatch = null
     record.git.worktreePatchNote = "not kept: recorded with artifacts 'none'"
   }
-  // The run's insights go with it whatever the artifact level: they're its answers, not evidence.
-  // Remarks-only ones are restamped with the recorded record's facts, which can drop artifacts; a
-  // model's keep their hash, so ones written for other facts are still left out with a note.
-  const insightBytes = await readFile(join(source, runId, INSIGHTS_FILE)).catch(() => null)
-  let insights: RunInsights | null = null
-  if (insightBytes) {
+  // The run's remarks go with it whatever the artifact level: they're about the evals, not evidence.
+  const remarkBytes = await readFile(join(source, runId, REMARKS_FILE)).catch(() => null)
+  let remarks: RunRemarks | null = null
+  if (remarkBytes) {
     try {
-      const read = readableInsights(JSON.parse(insightBytes.toString()), INSIGHTS_FILE)
-      if (fromModel(read)) {
-        insights = read
-        files.set(INSIGHTS_FILE, insightBytes)
-      } else {
-        insights = { ...read, factsHash: factsHash(suiteResult(record)) }
-        files.set(INSIGHTS_FILE, Buffer.from(`${JSON.stringify(insights, null, 2)}\n`))
-      }
+      remarks = readableRemarks(JSON.parse(remarkBytes.toString()), REMARKS_FILE)
+      files.set(REMARKS_FILE, remarkBytes)
     } catch {}
   }
-  if (level !== 'none') {
-    const hint = options.hint && !(insights && fromModel(insights))
-    files.set('summary.md', Buffer.from(renderSummary(record, { hint, insights })))
-  }
+  if (level !== 'none') files.set('summary.md', Buffer.from(renderSummary(record, { remarks })))
 
   if (!options.skipSecretScan) {
     const scanned: Array<[string, Finding[]]> = [
@@ -393,14 +535,6 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     }
   }
   await ensureHistoryGitignore(options.historyDir)
-  const dest = recordFile(options.historyDir, runId)
-  try {
-    const old = await readRecord(dest)
-    if (old.status === 'interrupted' || old.status === 'budget') {
-      await rm(dest, { force: true })
-      await rm(runDir(options.historyDir, runId), { recursive: true, force: true })
-    }
-  } catch {}
   const written = await writeRun(options.historyDir, record, files)
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)
   if (!written.created) return { ...written, files: files.size, bytes, droppedPatch, ignored: [] }

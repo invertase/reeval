@@ -111,7 +111,11 @@ export async function harnessFacts() {
   for (const row of harnesses) {
     if (row.id !== 'fake' && !AGENTS[row.harness ?? row.id])
       problems.push(`contract row ${row.id} isn't in AGENTS`)
-    if (row.harness) {
+    if (row.gateway === 'vertex') {
+      // Vertex mints a token from Application Default Credentials: the row's key is their file.
+      if (row.key?.name !== 'GOOGLE_APPLICATION_CREDENTIALS')
+        problems.push(`${row.id}: a Vertex row's key is GOOGLE_APPLICATION_CREDENTIALS`)
+    } else if (row.harness) {
       const credential = agentFor({
         kind: row.harness,
         model: row.model,

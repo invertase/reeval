@@ -3,14 +3,14 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { allRuns, compareView, historyView, showRecord } from '../commands.ts'
-import { hasAnalysisModel } from '../config.ts'
 import { openHistoryDb, VIEW_NAMES } from '../history/db.ts'
+import { FLAKY_MIN_ATTEMPTS } from '../history/facts.ts'
 import { readRecord } from '../history/files.ts'
 import { renderSummary } from '../history/summary.ts'
 import type { RunRecord } from '../history/types.ts'
 import { resolveRun } from '../history/views.ts'
 import { statementCount } from '../query.ts'
-import { redactSecrets } from '../redact.ts'
+import { redactJson, redactSecrets } from '../redact.ts'
 import { resolveFile } from '../studio/source.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { sortAnalyses } from '../view/analysis.ts'
@@ -36,8 +36,7 @@ const VIEW_ROWS: Record<string, string> = {
     'factor contrast (environment, harness, model) by evidence tier, with pass@1 and effort verdicts',
   skill_reads:
     'attempt and skill its environment placed: the transcript line of its first read (a path under skills/<name>/, or a skill / load_skill call), and how many',
-  flaky_cells:
-    'cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict and a likely cause',
+  flaky_cells: `cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict (flaky from ${FLAKY_MIN_ATTEMPTS} counted attempts, else mixed: too few to call it flaky) and a likely cause`,
   drift:
     'run where a cell’s fingerprint changed from its previous run, what changed, and noise = 1 when only agent runtime state did',
   failing_attempts:
@@ -66,13 +65,8 @@ type Json = Record<string, unknown>
 
 /** A tool's answer: the JSON as text and as structured content, masked like everything reeval writes. */
 function result(value: Json) {
-  const text = redactSecrets(JSON.stringify(value, null, 2))
-  let structured: Json
-  try {
-    structured = JSON.parse(text) as Json
-  } catch {
-    structured = { text }
-  }
+  const text = redactJson(value, 2)
+  const structured = JSON.parse(text) as Json
   return { content: [{ type: 'text' as const, text }], structuredContent: structured }
 }
 
@@ -239,7 +233,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
         return format === 'md'
           ? {
               runId: record.runId,
-              markdown: renderSummary(record, { hint: !hasAnalysisModel(config) }).trimEnd(),
+              markdown: renderSummary(record).trimEnd(),
             }
           : (record as Json)
       }),
@@ -250,7 +244,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Compare two runs',
         description:
-          "Diffs two reeval runs eval by eval to find a regression (reeval compare --json): each changed row's base and head outcome and status (regressed, fixed, drift = not comparable, added, removed, infra), per-cell lift and effort, and what changed in the stack; same counts the unchanged evals, which all: true lists too. With only head, the base is head's nearest recorded ancestor.",
+          "Diffs two reeval runs eval by eval to find a regression (reeval compare --json): each changed row's base and head outcome and status (regressed, fixed, drift = not comparable, added, removed, infra), per-cell lift and effort, a row per pooled family with a minLift gate (kind: family), and what changed in the stack; same counts the unchanged evals, which all: true lists too. With only head, the base is head's nearest recorded ancestor.",
         inputSchema: z.object({
           base: z.string().optional().describe(`${RUN_REF}; needs head too`),
           head: z.string().optional().describe(RUN_REF),
@@ -272,7 +266,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Saved analyses of a run',
         description:
-          "The analyses reeval analyze saved for a run (in its history folder) and cached ones anchored on it, newest first: claims with citations, anomalies and suggested actions. Never calls a model; empty when the run hasn't been analysed.",
+          "The analyses reeval analyze saved for a run (in its history folder) and cached ones anchored on it, newest first: claims with citations, anomalies and suggested actions. Never calls a model; empty when the run hasn't been analyzed.",
         inputSchema: z.object({ run: z.string().optional().describe(RUN_REF) }),
         annotations: READ_ONLY,
       },
@@ -403,7 +397,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
             {
               uri: uri.href,
               mimeType: 'application/json',
-              text: redactSecrets(JSON.stringify(record, null, 2)),
+              text: redactJson(record, 2),
             },
           ],
         }
@@ -429,7 +423,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
             {
               uri: uri.href,
               mimeType: 'application/jsonl',
-              text: redactSecrets(read.lines.map((l) => JSON.stringify(l)).join('\n')),
+              text: read.lines.map((l) => redactJson(l)).join('\n'),
             },
           ],
         }

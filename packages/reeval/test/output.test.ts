@@ -12,17 +12,14 @@ import {
   type CompareGolden,
   GOLDENS,
   goldenCompare,
-  goldenInsights,
   goldenRender,
   goldenSuite,
   OUTPUT_DIR,
 } from '../scripts/output/goldens.ts'
 import { corpusEntries } from '../scripts/schema/corpus.ts'
-import { hasAnalysisModel } from '../src/config.ts'
 import { renderSummary } from '../src/history/summary.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { fenced } from '../src/text.ts'
-import type { ResolvedConfig } from '../src/types.ts'
 import { colors, stripAnsi } from '../src/ui/colors.ts'
 import {
   type CompareInput,
@@ -30,7 +27,7 @@ import {
   renderCompare,
   renderCompareMarkdown,
 } from '../src/ui/compare-layout.ts'
-import { layout, NO_MODEL_HINT, render, tallyLine } from '../src/ui/layout.ts'
+import { layout, render, tallyLine } from '../src/ui/layout.ts'
 import { readableRecord } from '../src/view/record.ts'
 import type { SuiteTally } from '../src/view/suite.ts'
 
@@ -78,74 +75,21 @@ describe('every layout', () => {
       ['harness', 'harnesses'],
       ['both', 'both'],
     ] as const) {
-      assert.deepEqual(layout('other', across, false, false), { kind, family: false })
-      assert.deepEqual(layout('other', across, true, false), { kind, family: true })
+      assert.deepEqual(layout(across, false, false), { kind, family: false })
+      assert.deepEqual(layout(across, true, false), { kind, family: true })
     }
   })
 
-  test('ends with the tally and the hint, and counts read N of M, never a percentage', () => {
+  test('ends with the tally, and counts read N of M, never a percentage', () => {
     for (const g of GOLDENS) {
       const lines = rendered(g.name)
-      if (!g.insights) assert.equal(lines.pop(), NO_MODEL_HINT, g.name)
       assert.match(
         lines.at(-1) ?? '',
-        /^(\d+ (run errors?|fail|pass|infra errors?|cancelled|skipped)( · )?)+$/,
+        /^(\d+ (run errors?|fail|pass|infra errors?|canceled|skipped)( · )?)+$/,
         g.name,
       )
       if (!g.verbose) assert.doesNotMatch(lines.join('\n'), /\d%|pass@1|interval/, g.name)
     }
-  })
-
-  test('the hint prints only while analysis.model is unset; with it, the tally ends the run', () => {
-    const g = GOLDENS.find((x) => x.name === 'suite')
-    assert.ok(g)
-    const without = render(goldenSuite(g), null, { color: false, verbose: false, hint: true })
-    const withModel = render(goldenSuite(g), null, { color: false, verbose: false, hint: false })
-    assert.equal(without.at(-1), NO_MODEL_HINT)
-    assert.ok(!withModel.includes(NO_MODEL_HINT))
-    assert.match(
-      withModel.at(-1) ?? '',
-      /^(\d+ (run errors?|fail|pass|infra errors?|cancelled|skipped)( · )?)+$/,
-    )
-    assert.deepEqual(withModel, without.slice(0, -1))
-  })
-
-  test('insights add only their sentences: every fact row prints as it does without them', () => {
-    // A choose eval's layout is its own (the subject's count on each row), so it's left out here,
-    // and so is the budget golden, whose skip line is a note, not a fact.
-    for (const g of GOLDENS.filter(
-      (x) => x.insights && x.name !== 'insights-choose' && !x.budgetSkips,
-    )) {
-      const suite = goldenSuite(g)
-      const stored = goldenInsights(g, suite)
-      assert.ok(stored, g.name)
-      const insights = { ...stored, evals: stored.evals.filter((e) => e.intent.job !== 'choose') }
-      const sentences = new Set(
-        [
-          insights.headline,
-          ...insights.evals.flatMap((e) => [e.answer, ...e.findings, ...(e.rows ?? [])]),
-        ].flatMap((s) => (s ? [s.text] : [])),
-      )
-      const filled = render(suite, insights, { color: false, verbose: false, hint: false })
-      const bare = render(suite, null, { color: false, verbose: false, hint: false })
-      const facts = filled.filter((l) => !sentences.has(l.trim()))
-      assert.ok(facts.length < filled.length, `${g.name}: some sentence prints`)
-      assert.deepEqual(facts, bare, g.name)
-    }
-  })
-
-  test('an analysis model is analysis.model only, never the judge', () => {
-    const config = (analysis: unknown, judge: unknown) =>
-      ({ analysis: { model: analysis }, judge: { model: judge } }) as unknown as ResolvedConfig
-    assert.equal(hasAnalysisModel(config(undefined, undefined)), false)
-    assert.equal(hasAnalysisModel(config(undefined, 'typesafe-ai/jev-1.14.0')), false)
-    assert.equal(hasAnalysisModel(config(undefined, { kind: 'fake' })), false)
-    assert.equal(hasAnalysisModel(config(undefined, 'google/gemini-3.8-flash')), false)
-    assert.equal(
-      hasAnalysisModel(config('google/gemini-3.8-flash', 'typesafe-ai/jev-1.14.0')),
-      true,
-    )
-    assert.equal(hasAnalysisModel(config({ kind: 'fake-analysis' }, undefined)), true)
   })
 
   test('statistics only with -v', () => {
@@ -172,7 +116,7 @@ describe('every layout', () => {
     const g = GOLDENS.find((x) => x.name === 'results')
     assert.ok(g)
     const suite = goldenSuite(g)
-    const bare = render(suite, null, { color: false, verbose: false, hint: true }).join('\n')
+    const bare = render(suite, null, { color: false, verbose: false }).join('\n')
     assert.doesNotMatch(bare, /served by/, 'canary: no upstream, no line')
     const e = suite.files[0]?.evals.find((x) => x.cells?.length)
     const cell = e?.cells?.[0]
@@ -182,7 +126,7 @@ describe('every layout', () => {
       { provider: 'Amazon Bedrock', calls: 3 },
     ]
     cell.judgeUpstreams = [{ provider: 'Typesafe', calls: 2 }]
-    const text = render(suite, null, { color: false, verbose: false, hint: true }).join('\n')
+    const text = render(suite, null, { color: false, verbose: false }).join('\n')
     assert.match(
       text,
       new RegExp(
@@ -199,7 +143,7 @@ describe('every layout', () => {
     const e = suite.files[0]?.evals[0]
     assert.ok(e)
     e.questions = [{ question: 'Which reads better?', votes: 4, rates: [], error: null }]
-    const text = render(suite, null, { color: false, verbose: false, hint: true }).join('\n')
+    const text = render(suite, null, { color: false, verbose: false }).join('\n')
     assert.match(text, /^ {2}question {2}Which reads better\?\n {4}4 votes, every one a tie$/m)
   })
 
@@ -217,12 +161,12 @@ describe('every layout', () => {
         cell.failed = 1
       }
     }
-    const text = render(suite, null, { color: false, verbose: false, hint: true }).join('\n')
+    const text = render(suite, null, { color: false, verbose: false }).join('\n')
     assert.match(text, /^ {2}not gated {2}\S.* +0 of 1$/m)
     assert.doesNotMatch(text, /^ {2}pass {2}\S.* +0 of 1$/m)
   })
 
-  test('cancelled and skipped tries are named beside the count, never counted as fails', () => {
+  test('canceled and skipped tries are named beside the count, never counted as fails', () => {
     const g = GOLDENS.find((x) => x.name === 'results')
     assert.ok(g)
     const suite = goldenSuite(g)
@@ -234,10 +178,10 @@ describe('every layout', () => {
     cell.attempts = 4
     cell.failed = 2
     cell.skipped = 1
-    cell.errors.push({ kind: 'aborted', message: 'The run was cancelled', attempts: 1 })
-    const text = render(suite, null, { color: false, verbose: false, hint: true }).join('\n')
-    assert.match(text, /^ {2}4 tries +1 of 2 · 1 cancelled · 1 skipped$/m)
-    assert.doesNotMatch(text, /^ {2}4 tries +1 of 3/m, 'canary: a cancelled try is not a fail')
+    cell.errors.push({ kind: 'aborted', message: 'The run was canceled', attempts: 1 })
+    const text = render(suite, null, { color: false, verbose: false }).join('\n')
+    assert.match(text, /^ {2}4 tries +1 of 2 · 1 canceled · 1 skipped$/m)
+    assert.doesNotMatch(text, /^ {2}4 tries +1 of 3/m, 'canary: a canceled try is not a fail')
   })
 
   test('the tally puts fail first, leaves zeros out and counts infra errors and skips apart', () => {
@@ -248,7 +192,7 @@ describe('every layout', () => {
       notGated: 0,
       fail: 0,
       infraError: 0,
-      cancelled: 0,
+      canceled: 0,
       skipped: 0,
       ...t,
     })
@@ -258,23 +202,20 @@ describe('every layout', () => {
       '1 pass · 2 infra errors · 1 skipped',
     )
     assert.equal(
-      tallyLine(c, tally({ fail: 1, pass: 2, cancelled: 3 })),
-      '1 fail · 2 pass · 3 cancelled',
+      tallyLine(c, tally({ fail: 1, pass: 2, canceled: 3 })),
+      '1 fail · 2 pass · 3 canceled',
     )
     assert.equal(tallyLine(c, tally({ errors: 1, pass: 2 })), '1 run error · 2 pass')
     assert.equal(tallyLine(c, tally({ pass: 1, notGated: 4 })), '1 pass · 4 not gated')
     assert.equal(tallyLine(c, tally({})), 'no evals ran')
   })
 
-  test('render is pure, and colour is the only difference colour makes', () => {
+  test('render is pure, and color is the only difference color makes', () => {
     const g = GOLDENS.find((x) => x.name === 'suite')
     assert.ok(g)
-    const plain = render(goldenSuite(g), null, { color: false, verbose: false, hint: true })
-    assert.deepEqual(
-      render(goldenSuite(g), null, { color: false, verbose: false, hint: true }),
-      plain,
-    )
-    const painted = render(goldenSuite(g), null, { color: true, verbose: false, hint: true })
+    const plain = render(goldenSuite(g), null, { color: false, verbose: false })
+    assert.deepEqual(render(goldenSuite(g), null, { color: false, verbose: false }), plain)
+    const painted = render(goldenSuite(g), null, { color: true, verbose: false })
     assert.ok(painted.some((l) => l.includes('\x1b[')))
     assert.deepEqual(painted.map(stripAnsi), plain)
   })
@@ -407,7 +348,7 @@ describe('catch regressions (reeval compare)', () => {
   test('a run that did not finish is noted above the tally', () => {
     const g = compareGolden('compare')
     for (const [status, note] of [
-      ['interrupted', /^head \S+ was interrupted, so some of its evals were cancelled/m],
+      ['interrupted', /^head \S+ was interrupted, so some of its evals were canceled/m],
       ['budget', /^head \S+ stopped at its duration budget, so some of its evals never ran$/m],
     ] as const) {
       const input = goldenCompare(g)
@@ -434,17 +375,17 @@ describe('catch regressions (reeval compare)', () => {
     assert.match(last, /^8 new evals \(\d fail · 1 infra error · \d pass\)$/)
   })
 
-  test('a side the interrupt cancelled reads cancelled, not fail', () => {
+  test('a side the interrupt canceled reads canceled, not fail', () => {
     const g = compareGolden('compare')
     const input = goldenCompare(g)
     const [first, ...rest] = input.rows
     assert.ok(first)
     const row = { ...first, status: 'drift' as const, base: 'pass' as const, head: 'fail' as const }
-    input.rows = [{ ...row, cancelled: ['head'] }, ...rest]
+    input.rows = [{ ...row, canceled: ['head'] }, ...rest]
     const text = comparedText(g, input).join('\n')
     assert.match(
       text,
-      /^can't compare {4}.+\n( {2}changed .+\n)? {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}cancelled$/m,
+      /^can't compare {4}.+\n( {2}changed .+\n)? {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}canceled$/m,
     )
     input.rows = [row, ...rest]
     assert.match(
@@ -456,12 +397,12 @@ describe('catch regressions (reeval compare)', () => {
     const none = goldenCompare(compareGolden('compare-no-baseline'))
     const [added, ...others] = none.rows
     assert.ok(added)
-    none.rows = [{ ...added, head: 'fail', cancelled: ['head'] }, ...others]
+    none.rows = [{ ...added, head: 'fail', canceled: ['head'] }, ...others]
     const last = renderCompare(none, { color: false, verbose: false }).at(-1) ?? ''
-    assert.match(last, /^8 new evals \((\d fail · )?1 cancelled · \d pass\)$/)
+    assert.match(last, /^8 new evals \((\d fail · )?1 canceled · \d pass\)$/)
   })
 
-  test('colour is the only difference colour makes', () => {
+  test('color is the only difference color makes', () => {
     const input = goldenCompare(compareGolden('compare'))
     const plain = renderCompare(input, { color: false, verbose: false })
     const painted = renderCompare(input, { color: true, verbose: false })
@@ -505,7 +446,7 @@ describe('summary.md code blocks', () => {
     const r = run()
     const error = failed(r)
     error.message = 'expected output to match\n```ts\nconst a = 1\n```\nand ```` four'
-    const blocks = codeBlocks(renderSummary(r, { hint: false }))
+    const blocks = codeBlocks(renderSummary(r))
     const block = blocks.find((b) => b.body.includes('```ts'))
     assert.ok(block, 'the message is inside a block')
     assert.equal(block.fence, '`````')
@@ -513,7 +454,7 @@ describe('summary.md code blocks', () => {
   })
 
   test('canary: ordinary output keeps three backticks', () => {
-    const md = renderSummary(run(), { hint: false })
+    const md = renderSummary(run())
     const blocks = codeBlocks(md)
     assert.ok(blocks.length > 1, 'the results and a failure message')
     assert.deepEqual(new Set(blocks.map((b) => b.fence)), new Set(['```']))

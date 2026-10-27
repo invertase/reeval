@@ -2,17 +2,17 @@ import { formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { render } from '../ui/layout.ts'
 import { cellsChanged } from '../view/compare.ts'
-import type { RunInsights } from '../view/insights.ts'
 import { isNotGatedPass } from '../view/model.ts'
+import type { RunRemarks } from '../view/remarks.ts'
 import { suiteResult } from '../view/suite.ts'
 import { warnings } from './state.ts'
 import { OUTCOME_MARK, runTally, stateRows } from './summary.ts'
 import type { HistoryEntry, RunRecord } from './types.ts'
 
 export {
-  addedRow,
   type CompareRow,
   compare,
+  newRows,
   stackChanges,
 } from '../view/compare.ts'
 
@@ -97,8 +97,9 @@ export type HistoryRow = {
 }
 
 /**
- * Commits reachable from HEAD, or null when git can't say (not a repo, shallow clone). Runs whose
- * commit isn't in here were rebased or dropped: still shown and compared, but flagged.
+ * Commits reachable from HEAD, holding every run commit a view asks about that is, or null when git
+ * can't say (not a repo, shallow clone). Runs whose commit isn't in here were rebased or dropped:
+ * still shown and compared, but flagged.
  */
 export type Reachability = Set<string> | null
 
@@ -171,10 +172,7 @@ export function formatHistory({ runs, rows, orphaned }: ReturnType<typeof histor
 }
 
 /** `reeval show`: the run's header and state, then the result blocks `reeval run` ended with. */
-export function formatShow(
-  run: RunRecord,
-  opts: { hint: boolean; insights?: RunInsights | null },
-): string {
+export function formatShow(run: RunRecord, opts: { remarks?: RunRemarks | null } = {}): string {
   const rows = stateRows(run)
   const width = Math.max(...rows.map(([k]) => k.length))
   return [
@@ -184,10 +182,6 @@ export function formatShow(
     ...rows.map(([k, v]) => `  ${k.padEnd(width)}  ${v}`),
     ...warnings(run).map((w) => `  ! ${w}`),
     '',
-    ...render(suiteResult(run), opts.insights ?? null, {
-      color: false,
-      verbose: false,
-      hint: opts.hint,
-    }),
+    ...render(suiteResult(run), opts.remarks ?? null, { color: false, verbose: false }),
   ].join('\n')
 }

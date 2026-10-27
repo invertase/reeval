@@ -8,10 +8,6 @@
       "description": "`AnalysisConfig` as data: the model by name, or a fake analysis.",
       "type": "object",
       "properties": {
-        "insights": {
-          "description": "`reeval run` classifies each eval and explains its result with `model` once the attempts finish (default true when `model` is set; `--no-insights` turns it off for one run).",
-          "type": "boolean"
-        },
         "instructions": {
           "description": "Added to the prompt, e.g. \"Fewer tool calls count as a win. The skill under test is reeval-good.\"",
           "type": "string"
@@ -28,14 +24,8 @@
           "minimum": 500,
           "maximum": 9007199254740991
         },
-        "maxTokens": {
-          "description": "Tokens (in and out) that one run's insights may use, over every classification, insight and headline call (default 250000). Past it, the evals left print without insights; the run's outcome and exit code never change.",
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9007199254740991
-        },
         "model": {
-          "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and questions fall back to the judge's when it's a language model.",
+          "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Unset, `reeval analyze` and questions fall back to the judge's when it's a language model.",
           "anyOf": [
             {
               "type": "string"
@@ -346,9 +336,13 @@
       "additionalProperties": false
     },
     "DirectGatewayDescriptor": {
-      "description": "Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.",
+      "description": "Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends with it unless it's listed elsewhere, where it's tried in that place.",
       "type": "object",
       "properties": {
+        "enabled": {
+          "description": "`false` turns off the fallback to each provider's own key, so a cell no other gateway in the list serves is refused at plan time. Default `true`.",
+          "type": "boolean"
+        },
         "kind": {
           "type": "string",
           "const": "direct"
@@ -458,11 +452,12 @@
       "additionalProperties": false
     },
     "Duration": {
-      "description": "More than zero: `90s`, `15m`, `1h`, or a number of milliseconds.",
+      "description": "More than zero and at most 596h: `90s`, `15m`, `1h`, or a number of milliseconds.",
       "anyOf": [
         {
           "type": "number",
-          "exclusiveMinimum": 0
+          "exclusiveMinimum": 0,
+          "maximum": 2147483647
         },
         {
           "type": "string",
@@ -729,8 +724,9 @@
       "type": "object",
       "properties": {
         "delayMs": {
-          "description": "Simulated turn length, honours the abort signal.",
-          "type": "number"
+          "description": "Simulated turn length, honors the abort signal.",
+          "type": "number",
+          "maximum": 2147483647
         },
         "effort": {
           "description": "Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what the turn reports (`fake-1[effort=medium]`). Fast is not this.",
@@ -982,15 +978,20 @@
       "enum": ["A", "B", "tie"]
     },
     "FxHarnessDescriptor": {
-      "description": "fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or OpenAI's API by the model id, and reports each turn's tokens.",
+      "description": "fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or OpenAI's API by the model id, or on OpenRouter or Vertex AI, and reports each turn's tokens.",
       "type": "object",
       "properties": {
+        "effort": {
+          "description": "Reasoning effort, sent as `reasoning_effort` on each model call; only on `vertex()`, since fx sends none itself. Values are what the model takes there, e.g. `low`, `medium` or `high`.",
+          "type": "string",
+          "pattern": "\\S"
+        },
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
           "$ref": "#/$defs/GatewayName"
         },
         "id": {
-          "description": "Cell id; defaults to `fx:<model>`.",
+          "description": "Cell id; defaults to `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
           "pattern": "\\S"
         },
@@ -1003,7 +1004,7 @@
           "type": "number"
         },
         "model": {
-          "description": "A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.",
+          "description": "A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `openrouter()`, either runs on OpenRouter's Chat Completions API with `OPENROUTER_API_KEY`, a bare id as `openai/<id>`. On `vertex()`, a Gemini model id, `google/<id>` or a bare `gemini-…` id, run on Vertex AI's Chat Completions endpoint, e.g. `google/gemini-3.8-flash`.",
           "type": "string",
           "minLength": 1
         },
@@ -1047,6 +1048,9 @@
         },
         {
           "$ref": "#/$defs/OpenRouterGatewayDescriptor"
+        },
+        {
+          "$ref": "#/$defs/VertexGatewayDescriptor"
         }
       ]
     },
@@ -1061,7 +1065,12 @@
           "properties": {
             "direct": {
               "type": "object",
-              "properties": {},
+              "properties": {
+                "enabled": {
+                  "description": "`false` turns off the fallback to each provider's own key, so a cell no other gateway in the list serves is refused at plan time. Default `true`.",
+                  "type": "boolean"
+                }
+              },
               "additionalProperties": false
             }
           },
@@ -1098,14 +1107,49 @@
           "additionalProperties": false
         },
         {
+          "type": "object",
+          "properties": {
+            "vertex": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "description": "The region the models are called in, e.g. `us-east5`; defaults to `global`.",
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*$"
+                },
+                "project": {
+                  "description": "The Google Cloud project the calls are billed to; defaults to `GOOGLE_CLOUD_PROJECT`.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "regions": {
+                  "description": "A region per publisher, where it differs from `location`, e.g. `{ anthropic: 'us-east5' }`.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "enum": ["anthropic", "google", "xai"]
+                  },
+                  "additionalProperties": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]*$"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": ["vertex"],
+          "additionalProperties": false
+        },
+        {
           "$ref": "#/$defs/GatewayDescriptor"
         }
       ]
     },
     "GatewayName": {
-      "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter.",
+      "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter; `vertex` is Google Cloud's Vertex AI.",
       "type": "string",
-      "enum": ["direct", "vercel", "openrouter"]
+      "enum": ["direct", "vercel", "openrouter", "vertex"]
     },
     "GitWorkspace": {
       "description": "A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url` is what reeval fetches: the clone URL, or an absolute path for a local repository.",
@@ -1262,7 +1306,7 @@
       "type": "object",
       "properties": {
         "artifacts": {
-          "description": "Artifacts recorded next to each run: every eval's, failing evals' only, or none.",
+          "description": "Artifacts recorded next to each run: every attempt's, failed attempts' only, or none.",
           "type": "string",
           "enum": ["all", "failures", "none"]
         },
@@ -1535,7 +1579,7 @@
       "additionalProperties": false
     },
     "OpenRouterGatewayDescriptor": {
-      "description": "OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode and Grok Build.",
+      "description": "OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi.",
       "type": "object",
       "properties": {
         "fallbacks": {
@@ -2220,7 +2264,7 @@
       "type": "object",
       "properties": {
         "analysis": {
-          "description": "Insights during `reeval run`, `reeval analyze`, and questions without a model.",
+          "description": "`reeval analyze`, and questions without a model of their own.",
           "$ref": "#/$defs/AnalysisConfigData"
         },
         "budget": {
@@ -2283,7 +2327,7 @@
           "$ref": "#/$defs/GatePolicy"
         },
         "gateway": {
-          "description": "The gateways model calls may go through, in the order you prefer them: each harness takes the first that can serve it. Default `[direct]`, each provider's own key.",
+          "description": "The gateways model calls may go through, in the order you prefer them: each harness takes the first that can serve it. `direct`, each provider's own key, ends the list unless it's listed in another place or turned off with `{ direct: { enabled: false } }`. Default `[direct]`.",
           "minItems": 1,
           "type": "array",
           "items": {
@@ -2340,7 +2384,7 @@
           "enum": ["manual", "ci", "always"]
         },
         "runs": {
-          "description": "Attempts per cell; default 1.",
+          "description": "Attempts per cell; unset, a compare with variants runs 4 a side and anything else once.",
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
@@ -2350,7 +2394,7 @@
           "$ref": "#/$defs/SandboxDescriptor"
         },
         "secrets": {
-          "description": "`unbrokered: 'error'` refuses Docker secrets without `hosts` instead of warning (default `'warn'`).",
+          "description": "`unbrokered: 'error'` refuses Docker secrets without `hosts`, and credential-like MCP headers written as plain strings, instead of warning (default `'warn'`).",
           "type": "object",
           "properties": {
             "unbrokered": {
@@ -2671,12 +2715,46 @@
       "enum": ["header", "query", "body"]
     },
     "VercelGatewayDescriptor": {
-      "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode, fx and Grok Build.",
+      "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.",
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
           "const": "vercel"
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
+    },
+    "VertexGatewayDescriptor": {
+      "description": "Google Cloud's Vertex AI, on Application Default Credentials: made by `vertex()` in `reeval/gateway`.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "vertex"
+        },
+        "location": {
+          "description": "The region the models are called in, e.g. `us-east5`; defaults to `global`.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "project": {
+          "description": "The Google Cloud project the calls are billed to; defaults to `GOOGLE_CLOUD_PROJECT`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "regions": {
+          "description": "A region per publisher, where it differs from `location`, e.g. `{ anthropic: 'us-east5' }`.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "enum": ["anthropic", "google", "xai"]
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          }
         }
       },
       "required": ["kind"],

@@ -429,7 +429,7 @@ describe('studio in a browser', () => {
       const r = JSON.parse(readFileSync(join(history, name as string), 'utf8'))
       withUnknownFields(schema, r, () => ({ by: 'a newer reeval' }))
       r.status = 'paused'
-      r.evals[0].attempts[0].outcome = 'cancelled'
+      r.evals[0].attempts[0].outcome = 'canceled'
       r.evals[0].attempts[0].error = { kind: 'quota', message: 'a kind this reeval does not know' }
       r.evals[0].attempts[1].turns[0].status = 'paused'
       writeFileSync(join(history, name as string), JSON.stringify(r, null, 2))

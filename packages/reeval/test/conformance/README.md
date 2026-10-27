@@ -33,11 +33,12 @@ Each line is one JSON object:
 | `{"case", "about", "options"}` | The header: the eval's name, what it covers and its options |
 | `{"reeval": …}` | reeval to the runner: `attempt-start`, `attempt-abort` or a reply (`attempt-reply`) |
 | `{"runner": …}` | The runner to reeval: a request (`attempt-request`) or `attempt-done` |
-| `{"record": …}` | The attempt's record afterwards: outcome, error, assertions, judgements and checks |
+| `{"record": …}` | The attempt's record afterwards: outcome, error, assertions, judgments and checks, and `graded`: each judge call's question with the task and output it graded (`judge-input.json`'s `state`) |
 
 The shapes are in `src/contract/attempt.ts`, with JSON Schemas in `schema/protocol/`. The test runs
-every script as one eval of a fake-harness, fake-sandbox project: `runner.ts` makes each request on
-the attempt's `c` and writes down what came back. Timestamps are `2026-01-01T00:00:00.000Z` and
+every script as one eval of a fake-harness, fake-sandbox project: `runner.ts` hands each request to
+reeval's attempt host on the attempt's `c`, as another language's requests reach it, and writes
+down what came back. Timestamps are `2026-01-01T00:00:00.000Z` and
 durations `0`.
 
 An SDK uses a script as a fake reeval: send each `reeval` line in order, and check that the body

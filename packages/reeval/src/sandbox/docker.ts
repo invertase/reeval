@@ -26,8 +26,8 @@ import type { SandboxOptions } from './index.ts'
 import { InfraError, type Sandbox } from './types.ts'
 
 /**
- * Removes every container still labelled with the run: a worker killed by the signal that
- * cancelled the run (SIGTERM to the process group) never destroys its sandboxes.
+ * Removes every container still labeled with the run: a worker killed by the signal that
+ * canceled the run (SIGTERM to the process group) never destroys its sandboxes.
  */
 export async function removeRunContainers(
   runId: string,
@@ -49,7 +49,7 @@ export const isDockerSandbox = (s: Sandbox): s is DockerSandbox => 'network' in 
 
 /**
  * The gateway's events as debug lines: one per request, with DNS decisions and headers traced.
- * Refused requests to the harness's expected hosts are traced only; teardown summarises them.
+ * Refused requests to the harness's expected hosts are traced only; teardown summarizes them.
  */
 function gatewayEvents(
   debug: AttemptDebug | undefined,
@@ -170,6 +170,7 @@ export async function createDockerSandbox(
         endpoints: brokering.endpoints,
         ...(brokering.modelResponses ? { modelResponses: brokering.modelResponses } : {}),
         ...(brokering.tokens ? { derivedTokens: [brokering.tokens] } : {}),
+        ...(brokering.localResponses ? { localResponses: brokering.localResponses } : {}),
         onRefused: ({ method, url }) =>
           console.warn(
             `warning: the egress gateway refused ${method} ${url}: it carries ${brokering.credential}'s placeholder and isn't one of the endpoints reeval brokers it for`,

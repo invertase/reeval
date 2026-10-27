@@ -22,11 +22,9 @@ export default defineConfig({
   }),
   sandbox: fakeSandbox(),
   // The model that answers the questions. This fake votes for the side whose diff names
-  // the argument; set a real one, such as 'anthropic/claude-sonnet-5', for real votes. It
-  // writes no insights, so they're off.
+  // the argument; set a real one, such as 'anthropic/claude-sonnet-5', for real votes.
   analysis: {
     model: fakeAnalysis({ vote: (pair) => (pair.a.diff?.includes('b must') ? 'A' : 'B') }),
-    insights: false,
   },
   // The real agents: `--profile claude-code`, or any other in ../profiles.ts. An example's own
   // profiles go beside them.

@@ -82,19 +82,11 @@ describe('reeval init', () => {
     assert.match(p.read('evals/greet.eval.ts'), /import \{ greeter \} from '\.\/environments\.ts'/)
     assert.match(p.read('evals/greet.eval.ts'), /\{ environment: greeter \}/)
     assert.match(
-      init.stdout,
-      /^Insights: google\/gemini-3\.8-flash explains each eval after a run, with GOOGLE_GENERATIVE_AI_API_KEY; analysis\.insights: false or --no-insights turns them off$/m,
-    )
-    assert.match(
       p.read('reeval.config.ts'),
       /^ {2}analysis: \{ model: 'google\/gemini-3\.8-flash' \},$/m,
     )
     const dry = await runCli(p.dir, ['run', '--dry-run'])
     assert.equal(dry.code, 0, dry.stderr)
-    assert.match(dry.stdout, /^insights {2}google\/gemini-3\.8-flash · up to 250k tokens$/m)
-    const off = await runCli(p.dir, ['run', '--dry-run', '--no-insights'])
-    // Canary: --no-insights must drop the line the generated config adds.
-    assert.doesNotMatch(off.stdout, /^insights /m)
     const cell = (await planOf(p.dir)).evals[0]?.cells[0]
     assert.equal(cell?.environment, 'greeter')
     assert.deepEqual(cell?.files, ['package.json'])
@@ -113,27 +105,6 @@ describe('reeval init', () => {
     const run = await runCli(p.dir, ['run', '--config', 'fake.config.ts'])
     assert.equal(run.code, 0, run.stdout + run.stderr)
     assert.match(run.stdout, /^pass {13}creates greet\.js$/m)
-  })
-
-  test('without the analysis key, a run prints one short line naming it, and keeps its exit code', async () => {
-    const p = await empty('init-no-key')
-    await runCli(p.dir, ['init', '--yes'])
-    const model = /^ {2}analysis: .*$/m.exec(p.read('reeval.config.ts'))?.[0] ?? ''
-    assert.ok(model, 'reeval init sets analysis.model')
-    await writeFile(
-      join(p.dir, 'fake.config.ts'),
-      fakeConfig.replace('  sandbox: fakeSandbox(),', `  sandbox: fakeSandbox(),\n${model}`),
-    )
-    const run = await runCli(p.dir, ['run', '--config', 'fake.config.ts'])
-    const skipped = (run.stdout + run.stderr).split('\n').filter((l) => /insights/.test(l))
-    assert.deepEqual(skipped, [
-      'warning: insights will be skipped: set GOOGLE_GENERATIVE_AI_API_KEY (for direct()) for analysis.model, "google/gemini-3.8-flash", in .env.local, or analysis: { insights: false }',
-      'insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY, or analysis: { insights: false }',
-    ])
-    assert.ok((skipped[1] ?? '').length <= 110, 'the closing line fits 110 columns, whole')
-    const off = await runCli(p.dir, ['run', '--config', 'fake.config.ts', '--no-insights'])
-    assert.equal(run.code, off.code)
-    assert.equal(run.code, 0, run.stdout + run.stderr)
   })
 
   test('--bare writes only the config and its essentials', async () => {
@@ -162,7 +133,6 @@ describe('reeval init', () => {
         doc.evals[0]?.cells[0]?.harness
       const plan = await planOf(p.dir)
       assert.equal(cell(plan), `${h.kind}:${h.model.split('/').at(-1)}`)
-      assert.equal(plan.insights?.model, 'google/gemini-3.8-flash')
       const pr = await planOf(p.dir, ['--profile', 'pr'])
       assert.equal(pr.profile?.name ?? pr.profile, 'pr')
       assert.equal(pr.images[0]?.harness, h.kind)
@@ -380,6 +350,16 @@ describe('reeval init', () => {
     const kept = await runCli(own.dir, ['init', '--yes'])
     assert.match(kept.stdout, /skip +package\.json +has reeval; kept its eval script \(vitest\)/)
     assert.equal(own.read('package.json'), mine)
+
+    // npm reads a package.json that starts with a byte-order mark, and the mark stays.
+    const marked = await empty('init-package-bom')
+    await writeFile(join(marked.dir, 'package.json'), '\uFEFF{ "name": "mine" }')
+    const bom = await runCli(marked.dir, ['init', '--yes'])
+    assert.equal(bom.code, 0, bom.stderr)
+    assert.equal(
+      marked.read('package.json'),
+      `\uFEFF{ "name": "mine", "scripts": { "eval": "reeval run" }, "devDependencies": { "${pkg}": "^${version}" } }`,
+    )
 
     await writeFile(join(own.dir, 'package.json'), '{ nope')
     const bad = await runCli(own.dir, ['init', '--yes', '--force'])

@@ -24,7 +24,7 @@ export const patchOf = (base: string, head: string, exclude: string[]) =>
 /**
  * The files branch `ref` changes, as its change leaves them on top of commit `at`: its diff from
  * where it left HEAD's history, applied to `at`'s copies. The diff has no context lines, so it
- * applies to an older file whose neighbouring lines have since been rewrapped.
+ * applies to an older file whose neighboring lines have since been rewrapped.
  */
 export function changedOnto(at: string, ref: string): Record<string, string> {
   const base = git('merge-base', ref, 'HEAD').trim()

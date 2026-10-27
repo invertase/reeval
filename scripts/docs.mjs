@@ -284,7 +284,7 @@ const RECORD_TYPES = [
   'AttemptRecord',
   'AttemptFiles',
   'ArtifactRef',
-  'JudgementRecord',
+  'JudgmentRecord',
   'JudgeArtifactRef',
   'JudgeRetry',
   'FileRef',

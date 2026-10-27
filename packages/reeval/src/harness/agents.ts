@@ -8,7 +8,12 @@ import {
   resolveOpenCodeProvider,
 } from '@reeval/harness-opencode/providers'
 import type { PiMcpServer } from '@reeval/harness-pi'
-import type { BakedHarness, DerivedTokens, EndpointMatch } from '@reeval/sandbox-docker'
+import type {
+  BakedHarness,
+  DerivedTokens,
+  EndpointMatch,
+  LocalResponse,
+} from '@reeval/sandbox-docker'
 import {
   PART_PATHS,
   PLUGIN_DIR,
@@ -20,6 +25,7 @@ import {
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { OPENROUTER_KEY } from '../gateway/openrouter.ts'
 import { isRoutingGateway, ROUTING_GATEWAYS } from '../gateway/routes.ts'
+import type { BrokeredToken } from '../gateway/token.ts'
 import {
   FX_VERCEL_CALL,
   FX_VERCEL_ENDPOINTS,
@@ -28,13 +34,23 @@ import {
   VERCEL_HOST,
   VERCEL_KEY,
 } from '../gateway/vercel.ts'
+import {
+  SANDBOX_ACCESS_TOKEN,
+  type SandboxAdc,
+  VERTEX_ROUTES,
+  type VertexChat,
+  type VertexSettings,
+} from '../gateway/vertex.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
+import { withoutBom } from '../text.ts'
 import type {
   AgentHarnessDescriptor,
   EnvironmentLayer,
   HarnessDescriptor,
   McpServer,
   PluginPart,
+  Secret,
+  SecretTemplate,
   WebEventType,
 } from '../types.ts'
 import type { PlacedPlugin } from './types.ts'
@@ -82,8 +98,25 @@ export type Agent = Layout & {
   name: string
   /** The `reeval/harness` factory, for messages. */
   factory: string
-  /** The host variable the harness authenticates with. It never enters the sandbox. */
+  /**
+   * The host variable the harness authenticates with. It never enters the sandbox. With `token`,
+   * what the token is minted from, for messages.
+   */
   credential: string
+  /**
+   * A short-lived token reeval mints on the host (Vertex AI's Google Cloud access token), which
+   * the egress gateway adds to the agent's requests and replaces before it expires, in place of
+   * `credential` from the environment.
+   */
+  token?: BrokeredToken
+  /** Variables the adapter sets for the agent on its gateway's route (Vertex's project and region). */
+  routeEnv?: Record<string, string>
+  /** The service account the agent's CLI reads on Vertex, written beside the workspace. */
+  adc?: SandboxAdc
+  /** Requests the egress gateway answers itself on the agent's route (Vertex's token exchange). */
+  localResponses?: readonly LocalResponse[]
+  /** Where Vertex's Chat Completions API is, for an agent that calls it on Vertex (Grok Build). */
+  vertexChat?: VertexChat
   /** The variable the adapter takes the credential as, when not its own name (a gateway's key). */
   authAs?: string
   /** Variables the adapter takes beside the credential, such as the base URL a gateway sets. */
@@ -103,7 +136,7 @@ export type Agent = Layout & {
   /**
    * Hosts the agent's CLI always tries and nothing needs, which no setting turns off. A
    * restricted policy still refuses them, but reeval records them apart from the real blocks and
-   * `-v` summarises them once instead of a line per request.
+   * `-v` summarizes them once instead of a line per request.
    */
   expectedBlocked?: ExpectedBlocked
   /**
@@ -169,12 +202,21 @@ export type Agent = Layout & {
   adapter: (options: {
     mcpServers?: Record<string, unknown>
     auth: Record<string, string>
+    /** `routeEnv`, for the agent's environment. */
+    env?: Record<string, string>
+    /** On Vertex through `adc`: the project, region and where the service account was written. */
+    vertex?: AdapterVertex
+    /** `vertexChat`, for the agent's provider. */
+    vertexChat?: VertexChat
     descriptor: AgentHarnessDescriptor
     /** The model id the agent asks for: `modelId` of the harness's own. */
     model: string
     plugins: readonly PlacedPlugin[]
   }) => Promise<HarnessAgentAdapter>
 }
+
+/** What a Gemini CLI's adapter takes to run on Vertex AI from Application Default Credentials. */
+export type AdapterVertex = { project: string; location: string; credentialsFile: string }
 
 /** The part of an agent's catalog entry its model's provider decides. */
 export type ModelSpecific = Pick<
@@ -377,8 +419,43 @@ export function antigravityMcpServers(
 }
 
 /**
+ * A `{env:…}` or `{file:…}` OpenCode would substitute. It runs `\{env:[^}]+\}`, then
+ * `\{file:[^}]+\}`, over its whole config text with no escape, so a reference left open at the end
+ * of a value runs on into the JSON after it, and only `{env:}` and `{file:}` are left alone.
+ */
+const OPENCODE_REFERENCE = /\{(?:env|file):(?!\})/
+
+const fieldKey = (key: string) =>
+  /^[A-Za-z_$][\w$]*$/.test(key) ? `.${key}` : `[${JSON.stringify(key)}]`
+
+/**
+ * The first part of a server OpenCode would substitute, as what the server wouldn't get: its name,
+ * a value as `mcp.<name>.<field>`, or an env or header name. Names are in the same config text as
+ * values, so they're substituted too; a secret's value is never named.
+ */
+function openCodeReference(name: string, s: ResolvedMcpServer): string | undefined {
+  if (OPENCODE_REFERENCE.test(name)) return 'its name'
+  const server = `mcp${fieldKey(name)}`
+  const [map, kind, values]: [string, string, Record<string, string>] =
+    s.transport === 'stdio' ? ['env', 'env', s.env ?? {}] : ['headers', 'header', s.headers ?? {}]
+  const fields: [string, string][] = [
+    ...(s.transport === 'stdio'
+      ? [
+          [`${server}.command`, s.command] as [string, string],
+          ...s.args.map((a, i): [string, string] => [`${server}.args[${i}]`, a]),
+        ]
+      : [[`${server}.url`, s.url] as [string, string]]),
+    ...Object.entries(values).flatMap(([k, v]): [string, string][] => [
+      [`the ${kind} name ${k} in ${server}.${map}`, k],
+      [`${server}.${map}${fieldKey(k)}`, v],
+    ]),
+  ]
+  return fields.find(([, text]) => OPENCODE_REFERENCE.test(text))?.[0]
+}
+
+/**
  * OpenCode's config shape (its `mcp.servers`), which the adapter sets `codemode: false` on.
- * OpenCode has no SSE transport.
+ * OpenCode has no SSE transport, and refuses a value it would substitute.
  */
 export function opencodeMcpServers(
   servers: Record<string, ResolvedMcpServer>,
@@ -388,6 +465,12 @@ export function opencodeMcpServers(
       if (s.transport === 'sse') {
         throw new InfraError(
           `OpenCode has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
+        )
+      }
+      const field = openCodeReference(name, s)
+      if (field) {
+        throw new InfraError(
+          `OpenCode substitutes {env:…} and {file:…} anywhere in its config, with no escape, so the ${name} server wouldn't get ${field} as written: take the reference out, or leave OpenCode out of this cell`,
         )
       }
       return s.transport === 'stdio'
@@ -688,7 +771,7 @@ export async function writePluginFiles(
     if (existing?.trim()) {
       let base: unknown
       try {
-        base = JSON.parse(existing)
+        base = JSON.parse(withoutBom(existing))
       } catch {}
       if (!isObject(base)) {
         throw new InfraError(
@@ -862,7 +945,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
       },
     ],
     mcpServers: claudeMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor }) =>
+    adapter: async ({ auth, env, mcpServers, descriptor }) =>
       (await import('@ai-sdk/harness-claude-code')).createClaudeCode({
         auth,
         ...(mcpServers ? { mcpServers } : {}),
@@ -876,6 +959,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
           // No telemetry, error reporting or feature-flag fetches: fewer endpoints for the key,
           // and flags that can't change between runs.
           CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+          ...env,
         },
       }),
   },
@@ -905,9 +989,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // The CLI's `-low`/`-high` ids name an effort; the URL names the model that served it.
     servedModel: geminiServedModel,
     mcpServers: antigravityMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor, plugins }) =>
+    adapter: async ({ auth, mcpServers, descriptor, plugins, vertex }) =>
       (await import('@reeval/harness-antigravity')).createAntigravity({
         auth,
+        ...(vertex ? { vertex } : {}),
         ...(mcpServers ? { mcpServers } : {}),
         ...(plugins.length ? { plugins: plugins.map(({ name, dir }) => ({ name, dir })) } : {}),
         ...(descriptor.kind === 'antigravity' && descriptor.effort
@@ -931,11 +1016,11 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // titles), probed per provider (harness-opencode's opencode-provider-table.ts).
     forModel: opencodeForModel,
     mcpServers: opencodeMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor, model }) =>
+    adapter: async ({ auth, mcpServers, descriptor, model, vertex }) =>
       (await import('@reeval/harness-opencode')).createOpenCode({
         auth,
         model,
-        vars: opencodeVars(model),
+        ...(vertex ? { vertex } : { vars: opencodeVars(model) }),
         ...(descriptor.kind === 'opencode' && descriptor.effort
           ? { effort: descriptor.effort }
           : {}),
@@ -960,8 +1045,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
     },
     servedModel: geminiServedModel,
     mcpServers: gooseMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor, model }) =>
+    adapter: async ({ auth, mcpServers, descriptor, model, vertex }) =>
       (await import('@reeval/harness-goose')).createGoose({
+        ...(vertex ? { vertex } : {}),
         ...(auth[VERCEL_KEY]
           ? { auth, provider: (await import('@reeval/harness-goose')).AI_GATEWAY_PROVIDER }
           : auth[OPENROUTER_KEY]
@@ -987,10 +1073,17 @@ export const AGENTS: Record<AgentKind, Agent> = {
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
     mcpServers: piMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor }) =>
+    adapter: async ({ auth, mcpServers, descriptor, vertex }) =>
       (await import('@reeval/harness-pi')).createPi({
-        // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
-        auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
+        ...(auth[VERCEL_KEY]
+          ? { auth, gateway: (await import('@reeval/harness-pi')).PI_AI_GATEWAY }
+          : auth[OPENROUTER_KEY]
+            ? { auth, gateway: (await import('@reeval/harness-pi')).PI_OPENROUTER }
+            : {
+                // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
+                auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
+                ...(vertex ? { vertex } : {}),
+              }),
         ...(descriptor.kind === 'pi' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers ? { mcpServers: mcpServers as Record<string, PiMcpServer> } : {}),
         requireCredentialBrokering: true,
@@ -1049,10 +1142,16 @@ export const AGENTS: Record<AgentKind, Agent> = {
     ...fxForModel('provider/model'),
     forModel: fxForModel,
     mcpServers: acpMcpServers,
-    adapter: async ({ auth, mcpServers, model }) =>
+    adapter: async ({ auth, env, mcpServers, model, descriptor }) =>
       (await import('@reeval/harness-fx')).createFx({
         auth,
         model,
+        ...(auth[OPENROUTER_KEY] ? { provider: 'openrouter' as const } : {}),
+        // On Vertex AI, the route's project and region.
+        ...(env?.FX_VERTEX_PROJECT
+          ? { vertex: { project: env.FX_VERTEX_PROJECT, location: env.FX_VERTEX_LOCATION ?? '' } }
+          : {}),
+        ...(descriptor.kind === 'fx' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),
@@ -1071,14 +1170,23 @@ export const AGENTS: Record<AgentKind, Agent> = {
     modelResponses: XAI_MODEL_RESPONSES,
     servedModel: xaiServedModel,
     mcpServers: acpMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor, plugins, model }) =>
-      (await import('@reeval/harness-grok-build')).createGrokBuild({
-        auth,
-        ...(auth[VERCEL_KEY]
-          ? { provider: (await import('@reeval/harness-grok-build')).AI_GATEWAY_PROVIDER }
-          : auth[OPENROUTER_KEY]
-            ? { provider: (await import('@reeval/harness-grok-build')).OPENROUTER_PROVIDER }
-            : {}),
+    adapter: async ({ auth, mcpServers, descriptor, plugins, model, vertexChat }) => {
+      const grok = await import('@reeval/harness-grok-build')
+      return grok.createGrokBuild({
+        // On Vertex the gateway adds the token, so Grok's env_key holds a placeholder.
+        ...(vertexChat
+          ? {
+              auth: { [grok.VERTEX_TOKEN_ENV]: SANDBOX_ACCESS_TOKEN },
+              provider: grok.vertexProvider(vertexChat.project, vertexChat.region),
+            }
+          : {
+              auth,
+              ...(auth[VERCEL_KEY]
+                ? { provider: grok.AI_GATEWAY_PROVIDER }
+                : auth[OPENROUTER_KEY]
+                  ? { provider: grok.OPENROUTER_PROVIDER }
+                  : {}),
+            }),
         model,
         ...(plugins.length
           ? {
@@ -1095,7 +1203,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),
         requireCredentialBrokering: true,
-      }),
+      })
+    },
   },
 }
 
@@ -1108,9 +1217,26 @@ export const isAgentKind = (kind: unknown): kind is AgentKind =>
   typeof kind === 'string' && Object.hasOwn(AGENTS, kind)
 
 /**
+ * A server as the plan knows it: its names, literal values and each `secret.template`'s text. A
+ * host secret's value is read when the attempt starts, so the plan has it as `''`.
+ */
+function plannedMcpServer(s: McpServer): ResolvedMcpServer {
+  const literal = (values: Record<string, string | Secret | SecretTemplate>) =>
+    Object.fromEntries(
+      Object.entries(values).map(([k, v]): [string, string] => [
+        k,
+        typeof v === 'string' ? v : v.kind === 'secret-template' ? v.template : '',
+      ]),
+    )
+  return s.transport === 'stdio'
+    ? { transport: 'stdio', command: s.command, args: s.args, env: literal(s.env) }
+    : { transport: s.transport, url: s.url, headers: literal(s.headers) }
+}
+
+/**
  * Why a harness's agent can't take the environment's MCP servers (Goose, OpenCode, pi and Codex
- * take no `mcp.sse`), in the agent's own words, so the plan refuses them before any attempt
- * starts; undefined when it can.
+ * take no `mcp.sse`; OpenCode would substitute a `{env:…}` or `{file:…}` in a name or value), in the
+ * agent's own words, so the plan refuses them before any attempt starts; undefined when it can.
  */
 export function refusedMcp(
   harness: HarnessDescriptor,
@@ -1120,10 +1246,7 @@ export function refusedMcp(
   const servers = new Map<string, ResolvedMcpServer>()
   for (const { spec } of layers) {
     for (const [name, server] of Object.entries(spec.mcp ?? {})) {
-      servers.set(
-        name,
-        server.transport === 'stdio' ? { ...server, env: {} } : { ...server, headers: {} },
-      )
+      servers.set(name, plannedMcpServer(server))
     }
   }
   if (servers.size === 0) return undefined
@@ -1216,7 +1339,7 @@ export function refusedPlugins(
     plugins.flatMap((p) =>
       Object.entries(p.mcp).map(([server, s]): [string, ResolvedMcpServer] => [
         pluginServerName(p.name, server),
-        s.transport === 'stdio' ? { ...s, env: {} } : { ...s, headers: {} },
+        plannedMcpServer(s),
       ]),
     ),
   )
@@ -1319,9 +1442,18 @@ export function refusedPlugins(
   return undefined
 }
 
-/** A real agent's catalog entry, with what its model's provider decides. */
-export function agentFor(h: AgentHarnessDescriptor): Agent {
+/**
+ * A real agent's catalog entry, with what its model's provider decides, or its gateway's route:
+ * on Vertex, the attempt's `vertex()` settings decide the project and region.
+ */
+export function agentFor(h: AgentHarnessDescriptor, vertex?: VertexSettings): Agent {
   const agent = AGENTS[h.kind]
+  if (h.gateway === 'vertex') {
+    const route = VERTEX_ROUTES[h.kind]
+    if (!route) throw new InfraError(`reeval doesn't run ${agent.name} on Vertex AI`)
+    if (!vertex) throw new InfraError(`${agent.name} on Vertex AI has no vertex() settings`)
+    return { ...agent, ...route(vertex) }
+  }
   if (isRoutingGateway(h.gateway)) {
     const gateway = ROUTING_GATEWAYS[h.gateway]
     const route = gateway.routes[h.kind]
@@ -1333,11 +1465,15 @@ export function agentFor(h: AgentHarnessDescriptor): Agent {
 }
 
 /** The catalog entry for a harness's agent; undefined for the fake harness. */
-export const agentOf = (h: HarnessDescriptor): Agent | undefined =>
-  h.kind === 'fake' ? undefined : agentFor(h)
+export const agentOf = (h: HarnessDescriptor, vertex?: VertexSettings): Agent | undefined =>
+  h.kind === 'fake' ? undefined : agentFor(h, vertex)
 
-/** The host variable a harness authenticates with; undefined for the fake harness. */
-export const credentialOf = (h: HarnessDescriptor): string | undefined => agentOf(h)?.credential
+/**
+ * The host variable a harness authenticates with; undefined for the fake harness, and on Vertex,
+ * whose token comes from Application Default Credentials.
+ */
+export const credentialOf = (h: HarnessDescriptor): string | undefined =>
+  h.kind === 'fake' || h.gateway === 'vertex' ? undefined : agentFor(h).credential
 
 /** The fake agent's own layout. */
 const FAKE_LAYOUT: Layout = {
@@ -1355,15 +1491,16 @@ export function layoutOf(descriptor: HarnessDescriptor): Layout {
 
 /**
  * The hosts a harness's agent is known to try in a session with or without plugins; a fake agent
- * with `layout` expects that agent's.
+ * with `layout` expects that agent's. On Vertex, the attempt's `vertex()` settings pick the route.
  */
 export function expectedBlockedFor(
   descriptor: HarnessDescriptor,
   plugins: boolean,
+  vertex?: VertexSettings,
 ): ExpectedBlocked | undefined {
   const expected =
     descriptor.kind !== 'fake'
-      ? agentFor(descriptor).expectedBlocked
+      ? agentFor(descriptor, vertex).expectedBlocked
       : descriptor.layout
         ? AGENTS[descriptor.layout].expectedBlocked
         : undefined
@@ -1387,11 +1524,18 @@ const REFUSED_KEY =
  */
 export function authHint(agent: Agent, message: string, refused = false): string | undefined {
   if (!refused && !REFUSED_KEY.test(message)) return undefined
+  if (agent.token) {
+    return `The API rejected the access token reeval minted from ${agent.credential}: check gcloud auth application-default login (or GOOGLE_APPLICATION_CREDENTIALS) and the project's Vertex AI access`
+  }
   return `The API rejected ${agent.credential}: set a valid key in the environment or .env.local`
 }
 
-/** The agent's credential from the host, as the adapter's explicit `auth`. Fails closed. */
+/**
+ * The agent's credential from the host, as the adapter's explicit `auth`. Fails closed. Empty for
+ * a brokered token, which the adapter never sees.
+ */
 export function agentAuth(agent: Agent, env: NodeJS.ProcessEnv = process.env) {
+  if (agent.token) return {}
   const value = env[agent.credential]
   if (!value) {
     throw new InfraError(
@@ -1413,12 +1557,14 @@ export type Brokering = {
   askedModel?: ServedModel
   modelResponses?: readonly EndpointMatch[]
   upstream?: Upstream
+  localResponses?: readonly LocalResponse[]
 }
 
-export function brokeringFor(h: HarnessDescriptor): Brokering | undefined {
-  const agent = agentOf(h)
+export function brokeringFor(h: HarnessDescriptor, vertex?: VertexSettings): Brokering | undefined {
+  const agent = agentOf(h, vertex)
   if (!agent) return undefined
   const { credential, endpoints, tokens, servedModel, askedModel, modelResponses, upstream } = agent
+  const { localResponses } = agent
   return {
     credential,
     endpoints,
@@ -1427,5 +1573,6 @@ export function brokeringFor(h: HarnessDescriptor): Brokering | undefined {
     ...(askedModel ? { askedModel } : {}),
     ...(modelResponses ? { modelResponses } : {}),
     ...(upstream ? { upstream } : {}),
+    ...(localResponses?.length ? { localResponses } : {}),
   }
 }

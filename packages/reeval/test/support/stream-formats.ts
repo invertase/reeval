@@ -25,7 +25,7 @@ type Format = {
   /**
    * Keys and events the CLI's protocol defines for one outcome only, by signature (`<kind> .<key>`),
    * for the same reason: a provider's refusal (pi's `errorMessage`, agy's `error_message` steps) or
-   * a cancelled turn shows them, whatever the CLI's version.
+   * a canceled turn shows them, whatever the CLI's version.
    */
   optional?: readonly string[]
   /**
@@ -85,9 +85,11 @@ const PI_DEFINED = Object.fromEntries(
     kind === 'message_start/assistant' ? ['pending', ...PI_STOP] : PI_STOP,
   ]),
 )
+// A compaction pi couldn't finish has its `errorMessage` (and no `result`).
 const PI_OPTIONAL = [
   ...PI_MESSAGES.map((kind) => `${kind} .message.errorMessage`),
   'message_start/assistant .message.thinkingLevel',
+  'compaction_end .errorMessage',
 ]
 
 // The Cursor runner's lines, as CursorSdkRunnerLine types them, and the SDK's (1.0.32) own values:

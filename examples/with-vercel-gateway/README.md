@@ -24,7 +24,7 @@ Code through Vercel, and `--profile <name>` runs any agent in
 [`profiles.ts`](../profiles.ts) into the example and import it from `./profiles.ts`, or inline the
 one profile you need.
 
-**What to look at:** the plan's note, then the judgement in the run's record. This run had
+**What to look at:** the plan's note, then the judgment in the run's record. This run had
 `ANTHROPIC_API_KEY` and `TYPESAFE_AI_API_KEY` unset:
 
 ```text
@@ -47,9 +47,9 @@ pass             adds a tested multiply function
               "gateway": "vercel",
 ```
 
-Vercel serves Claude Code, Codex, Goose, OpenCode, fx and Grok Build; add `direct()` after
-`vercel()` to send the others (Cursor, pi, Antigravity) on their own keys. Of the judge models
-there, only Jev answers.
+Vercel serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build; the others (Cursor,
+Antigravity) fall back to their own keys with `direct()`, which ends every list, unless you turn
+it off with `direct({ enabled: false })`. Of the judge models there, only Jev answers.
 
 | File | What it is |
 |---|---|

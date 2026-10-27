@@ -15,6 +15,7 @@ import type {
 } from '../history/types.ts'
 import { resolveRun } from '../history/views.ts'
 import type { ResolvedConfig } from '../types.ts'
+import { gateLabel } from '../view/gate.ts'
 import type { TranscriptLine } from '../view/model.ts'
 import { fileTail, transcriptLines } from './files.ts'
 
@@ -75,8 +76,14 @@ function transcriptTail(lines: TranscriptLine[], tail: number) {
 
 const failedHere = (c: Pick<HistoryCell, 'fail' | 'infraError'>) => c.fail > 0 || c.infraError > 0
 
-const changedParts = (a: FingerprintParts, b: FingerprintParts) =>
-  (Object.keys(a) as Array<keyof FingerprintParts>).filter((k) => a[k] !== b[k])
+/** The parts that differ; the gate from the cells, since a record from before it was a part has none. */
+const changedParts = (a: Pick<HistoryCell, 'gate' | 'fingerprintParts'>, b: typeof a) => {
+  const { fingerprintParts: x } = a
+  const { fingerprintParts: y } = b
+  const keys = [...new Set([...Object.keys(x), ...Object.keys(y)])] as Array<keyof FingerprintParts>
+  const parts = keys.filter((k) => k !== 'gate' && x[k] !== y[k])
+  return gateLabel(a.gate) === gateLabel(b.gate) ? parts : [...parts, 'gate' as const]
+}
 
 function changedSources(
   now: EvalEntry['sources'],
@@ -123,7 +130,7 @@ function cellHistory(entries: HistoryEntry[], run: RunRecord, e: EvalEntry, cell
     lastPass: clean
       ? {
           ...runRef(clean.entry),
-          changed: changedParts(cell.fingerprintParts, clean.cell.fingerprintParts),
+          changed: changedParts(cell, clean.cell),
           changedSources: changedSources(e.sources, clean.eval.sources),
         }
       : null,
@@ -182,7 +189,7 @@ async function describeAttempt(
       ? { kind: a.error.kind, message: repeated ? null : clip(a.error.message, 1500) }
       : null,
     failedAssertions,
-    failedJudgements: a.judgements
+    failedJudgments: a.judgements
       .filter((j) => j.verdict === 'fail')
       .map((j) => ({ question: j.question, score: j.score, threshold: j.threshold })),
     failedChecks,

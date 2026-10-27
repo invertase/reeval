@@ -1,6 +1,6 @@
-// The harness contract: every real harness passes the same behaviours against a real agent, in
+// The harness contract: every real harness passes the same behaviors against a real agent, in
 // Docker, from one reeval project (test/contract/) run once per harness. The rows are in
-// support/harnesses.ts, the behaviours below; each behaviour is its eval's outcome, its canary's
+// support/harnesses.ts, the behaviors below; each behavior is its eval's outcome, its canary's
 // failure, and a host-side check of the record. The fake row runs the same suite key-free, so the
 // suite's own checks are proven on every PR's Docker job. See test/contract/README.md.
 import assert from 'node:assert/strict'
@@ -9,8 +9,10 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { isRuntimeState } from '../src/attempt/context.ts'
+import { attemptDebugDir, parseAttemptKey } from '../src/debug/files.ts'
 import type { AttemptRecord, RunRecord } from '../src/history/types.ts'
 import type { PluginPart, TranscriptEvent } from '../src/types.ts'
+import type { DebugRequest } from '../src/view/debug.ts'
 import { parseTranscript, type TranscriptLine } from '../src/view/model.ts'
 import {
   BLOCKED_HOST,
@@ -51,13 +53,13 @@ import {
 } from './support/tool-catalog.ts'
 
 type Ran = { cli: CliRun; run: RunRecord; runDir: string; project: string }
-/** Returns 'n/a' when the behaviour doesn't apply to the row. */
+/** Returns 'n/a' when the behavior doesn't apply to the row. */
 type Check = (ran: Ran, row: HarnessRow) => void | 'n/a' | Promise<void>
 /**
  * `canary`: whether the check includes a canary that must fail (a record-only check has none).
- * `skips`: why the row skips the behaviour (its evals weren't in its run), or undefined.
+ * `skips`: why the row skips the behavior (its evals weren't in its run), or undefined.
  */
-type Behaviour = {
+type Behavior = {
   name: string
   canary: boolean
   check: Check
@@ -77,6 +79,7 @@ const evalsNamed = (run: RunRecord, name: RegExp) => run.evals.filter((e) => nam
  */
 function tagsLeftOut(row: HarnessRow): string[] {
   const out = row.mcp === false ? ['mcp'] : []
+  if (!row.effort) out.push('effort')
   if (!row.plugin) return [...out, 'plugin']
   if (!row.plugin.parts.includes('hooks')) out.push('plugin-hooks')
   if (!row.plugin.parts.includes('agents')) out.push('plugin-agents')
@@ -87,6 +90,7 @@ function tagsLeftOut(row: HarnessRow): string[] {
 /** The evals (eval and canary) each tag a row can leave out has. */
 const TAGGED = {
   mcp: 2,
+  effort: 1,
   plugin: 10,
   'plugin-hooks': 2,
   'plugin-agents': 2,
@@ -98,13 +102,13 @@ const attemptsFor = (row: HarnessRow) =>
   CONTRACT_ATTEMPTS -
   tagsLeftOut(row).reduce((sum, tag) => sum + TAGGED[tag as keyof typeof TAGGED], 0)
 
-/** Why a row skips the plugin behaviours: it has no plugin field, as another row covers its harness's. */
+/** Why a row skips the plugin behaviors: it has no plugin field, as another row covers its harness's. */
 const noPlugins = (row: HarnessRow) =>
   row.plugin
     ? undefined
     : `the ${row.id} row places no plugins; another ${harnessOf(row)} row checks them`
 
-/** Why a row skips a plugin behaviour for a part its harness doesn't load. */
+/** Why a row skips a plugin behavior for a part its harness doesn't load. */
 const withoutPart = (part: PluginPart, what: string) => (row: HarnessRow) =>
   noPlugins(row) ??
   (row.plugin?.parts.includes(part) ? undefined : `${harnessOf(row)} loads no plugin ${what}`)
@@ -177,13 +181,28 @@ type TurnRecord = AttemptRecord['turns'][number] & {
   model?: string | null
 }
 
-/** The attempt's normalised transcript, from its `transcript.jsonl`. */
+/** The attempt's normalized transcript, from its `transcript.jsonl`. */
 const transcriptOf = (ran: Ran, a: AttemptRecord): TranscriptEvent[] => {
   const file = a.files.transcript?.path
   assert.ok(file, `${a.key} has no transcript`)
   return parseTranscript(readFileSync(join(ran.runDir, file), 'utf8')).filter(
     (l): l is TranscriptLine & TranscriptEvent => l.type !== 'prompt' && l.type !== 'turn-end',
   )
+}
+
+/** The model calls an attempt sent the harness's key on, from its `.reeval/debug` requests.ndjson. */
+function modelCalls(ran: Ran, row: HarnessRow, a: AttemptRecord): DebugRequest[] {
+  const at = parseAttemptKey(a.key)
+  assert.ok(at, `${a.key} isn't an attempt key`)
+  const file = join(
+    attemptDebugDir(ran.project, ran.run.runId, at.evalId, at.cell, at.n),
+    'requests.ndjson',
+  )
+  return readFileSync(file, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as DebugRequest)
+    .filter((r) => r.method === 'POST' && r.host === row.apiHost && r.substituted.length > 0)
 }
 
 /** The environment of each eval whose file and command signals are checked. */
@@ -194,9 +213,9 @@ const envOf: Record<string, string> = {
 }
 
 /** What one contract run starts: reeval.config.ts's budget.attempts, which reeval run enforces too. */
-const CONTRACT_ATTEMPTS = 22
+const CONTRACT_ATTEMPTS = 23
 
-export const behaviours: Behaviour[] = [
+export const behaviors: Behavior[] = [
   {
     name: 'skill placed where the agent reads it, and used',
     canary: true,
@@ -337,7 +356,7 @@ export const behaviours: Behaviour[] = [
           const reported = t.model ?? null
           if (row.servedModel) assert.match(reported ?? '', row.servedModel, `${a.key}: turn model`)
           else assert.equal(reported, null, `${row.id} reports no model`)
-          const stack = ran.run.stack.harnesses.find((h) => h.id === cellOf(row))
+          const stack = ran.run.stack.harnesses.find((h) => a.id.startsWith(`${h.id}/`))
           if (reported) assert.ok(stack?.resolvedModels.includes(reported), `stack: ${reported}`)
         }
         const wire = row.wireModel
@@ -357,6 +376,36 @@ export const behaviours: Behaviour[] = [
             `${a.key}: askedModels ${JSON.stringify(a.askedModels)}, expected one to match ${asked}`,
           )
       }
+    },
+  },
+  {
+    name: "effort sent as the model's own setting",
+    canary: false,
+    skips: (row) => (row.effort ? undefined : `the ${row.id} row has no effort to check`),
+    check(ran, row) {
+      const effort = row.effort
+      assert.ok(effort)
+      const e = evalNamed(ran.run, 'effort')
+      const a = e.attempts[0]
+      assert.ok(a, 'the effort eval has no attempt')
+      assert.equal(a.id, `${cellOf(row)}[effort=${effort.value}]/notes/docker#1`)
+      assert.equal(a.outcome, 'pass', `effort: ${detail(a)}`)
+      // A CLI's own side calls (a session title) may set no reasoning, or turn it off and be
+      // refused (Goose's on OpenRouter); every answered call that sets any sets the effort.
+      const calls = modelCalls(ran, row, a).filter(
+        (c) => c.requestEffort && c.status !== undefined && c.status >= 200 && c.status < 300,
+      )
+      assert.ok(calls.length > 1, `effort: ${calls.length} answered model calls set reasoning`)
+      for (const c of calls)
+        assert.match(c.requestEffort ?? '', effort.asked, `effort: ${c.url} → ${c.status}`)
+      // The twin: the same task without effort leaves it off some call. Not every one: OpenCode's
+      // session title on Gemini sets `low` of its own accord.
+      const plain = modelCalls(ran, row, attempt(ran, row, 'edit and run', 'notes'))
+      assert.ok(plain.length > 0, 'edit and run: no model calls')
+      assert.ok(
+        plain.some((c) => !effort.asked.test(c.requestEffort ?? '')),
+        `edit and run: every model call asked for ${effort.asked}: ${JSON.stringify(plain.map((c) => c.requestEffort))}`,
+      )
     },
   },
   {
@@ -414,7 +463,7 @@ export const behaviours: Behaviour[] = [
     },
   },
   {
-    name: 'file edits, reads and commands normalised',
+    name: 'file edits, reads and commands normalized',
     canary: false,
     async check(ran, row) {
       const catalog = await catalogOf(row)
@@ -635,12 +684,12 @@ function capture(ran: Ran, row: HarnessRow) {
   }
 }
 
-/** Each row's result per behaviour, for the summary table. */
+/** Each row's result per behavior, for the summary table. */
 const results = new Map<string, Map<string, string>>()
 const spent = new Map<string, number>()
-const mark = (row: HarnessRow, behaviour: string, result: string) => {
+const mark = (row: HarnessRow, behavior: string, result: string) => {
   const r = results.get(row.id) ?? new Map<string, string>()
-  r.set(behaviour, result)
+  r.set(behavior, result)
   results.set(row.id, r)
 }
 
@@ -664,7 +713,15 @@ for (const row of harnesses) {
           },
           timeoutMs: 25 * 60_000,
         })
-        const { run, dir } = readRun(p.dir)
+        let recorded: ReturnType<typeof readRun>
+        try {
+          recorded = readRun(p.dir)
+        } catch (error) {
+          throw new Error(
+            `${(error as Error).message}: reeval run exited ${cli.code}\n${cli.stdout}\n${cli.stderr}`,
+          )
+        }
+        const { run, dir } = recorded
         ran = { cli, run, runDir: dir, project: p.dir }
         spent.set(row.id, withTurns(run).length)
         // One set of captures per CLI: its row on another provider sends the same stream.
@@ -679,7 +736,7 @@ for (const row of harnesses) {
       assert.equal(ran.run.evals.length, attemptsFor(row), out)
       assert.equal(ran.cli.code, 1, out)
     })
-    for (const b of behaviours) {
+    for (const b of behaviors) {
       const skipped = b.skips?.(row)
       if (skipped) {
         test(b.name, { skip: skipped }, () => {})
@@ -697,16 +754,16 @@ for (const row of harnesses) {
       })
     }
   })
-  if (skip) for (const b of behaviours) mark(row, b.name, `skip: ${skip}`)
+  if (skip) for (const b of behaviors) mark(row, b.name, `skip: ${skip}`)
 }
 
 /** The contract table, printed and appended to `REEVAL_CONTRACT_SUMMARY` (CI's job summary). */
 after(() => {
   const rows = harnesses.map((h) => h.id)
   const lines = [
-    `| behaviour | ${rows.join(' | ')} |`,
+    `| behavior | ${rows.join(' | ')} |`,
     `|---|${rows.map(() => '---').join('|')}|`,
-    ...behaviours.map(
+    ...behaviors.map(
       (b) =>
         `| ${b.name} | ${rows.map((r) => results.get(r)?.get(b.name) ?? 'not run').join(' | ')} |`,
     ),

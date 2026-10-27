@@ -1,5 +1,5 @@
 // Variables a provider needs besides its key, which aren't secret and go into the sandbox as they
-// are. The probe sets each to `probe`, so a host built from it is recognisable, and the table has
+// are. The probe sets each to `probe`, so a host built from it is recognizable, and the table has
 // the host with `{NAME}` in its place, filled in from the host's value (or `default`) at run time.
 
 export type ProviderVar = {

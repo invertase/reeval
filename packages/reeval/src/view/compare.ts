@@ -1,15 +1,39 @@
-import type { FingerprintParts, HistoryCell, HistoryEntry, StackSummary } from '../history/types.ts'
+import type {
+  FamilyLiftSummary,
+  FingerprintParts,
+  HistoryCell,
+  HistoryEntry,
+  StackSummary,
+} from '../history/types.ts'
 import type { Outcome } from '../types.ts'
+import { gateLabel, rescore } from './gate.ts'
 
-export type CompareStatus = 'regressed' | 'fixed' | 'same' | 'drift' | 'added' | 'removed' | 'infra'
+export type CompareStatus =
+  | 'regressed'
+  | 'fixed'
+  | 'same'
+  | 'gate'
+  | 'drift'
+  | 'added'
+  | 'removed'
+  | 'infra'
 
 export type CompareRow = {
   id: string
   status: CompareStatus
   base: Outcome | null
   head: Outcome | null
-  /** For `drift`: what changed, e.g. `evals/helpers.ts changed` or `harness config changed`. */
+  /**
+   * For `drift`: what changed, e.g. `body changed`, `revision 2 → 3` or `harness config changed`. On
+   * any other row, `gate changed` when the cells' gate did.
+   */
   changes?: string[]
+  /**
+   * When the cells' gate changed but nothing else did: each side's gate, and base's outcome with
+   * its recorded attempts scored under head's gate. `status` compares that with head, so a flip
+   * the gate alone explains is `gate`, not `regressed` or `fixed`.
+   */
+  gate?: { base: string; head: string; rescored: Outcome }
   /**
    * When the runs ran different cells of the eval: the cells only head or only base has. Then
    * `status`, `base` and `head` are over the cells both have.
@@ -18,10 +42,25 @@ export type CompareRow = {
   /** Cells in both runs, with each side's lift (variants) and effort. */
   perCell?: CompareCell[]
   /**
-   * The sides whose `fail` is only attempts the run's interrupt cancelled, which `reeval show`
-   * reads as `cancelled`. Such an eval is never `regressed` or `fixed`: it's `drift`.
+   * The sides whose `fail` is only attempts the run's interrupt canceled, which `reeval show`
+   * reads as `canceled`. Such an eval is never `regressed` or `fixed`: it's `drift`.
    */
-  cancelled?: Array<'base' | 'head'>
+  canceled?: Array<'base' | 'head'>
+  /**
+   * `family`: a pooled `evaluate.each`'s gate, its `id` the family's. `base` and `head` are its
+   * pooled outcome (`fail` when a lift is below its `minLift`); its cases have rows of their own.
+   * For such a row, `cells` are the variants whose pooled lift only one run has.
+   */
+  kind?: 'family'
+  /** On a family row: each variant's pooled lift on each side, null where that run has none. */
+  lifts?: CompareFamilyLift[]
+}
+
+export type CompareFamilyLift = {
+  key: string
+  vs: string
+  base: Omit<FamilyLiftSummary, 'variant' | 'vs'> | null
+  head: Omit<FamilyLiftSummary, 'variant' | 'vs'> | null
 }
 
 export type CompareCell = {
@@ -135,10 +174,12 @@ export function cellsChanged(
 
 type ComparableEval = Pick<
   HistoryEntry['evals'][number],
-  'id' | 'fingerprint' | 'outcome' | 'sources' | 'cells'
+  'id' | 'fingerprint' | 'outcome' | 'sources' | 'source' | 'revision' | 'cells'
 >
 
-type Comparable = Pick<HistoryEntry, 'stack'> & { evals: ComparableEval[] }
+type ComparableFamily = NonNullable<HistoryEntry['families']>[number]
+
+type Comparable = Pick<HistoryEntry, 'stack' | 'families'> & { evals: ComparableEval[] }
 
 /** Which source files were added, removed or changed. */
 export function sourceChanges(
@@ -154,7 +195,7 @@ export function sourceChanges(
   })
 }
 
-const PART_LABELS: Record<Exclude<keyof FingerprintParts, 'sources'>, string> = {
+const PART_LABELS: Record<Exclude<keyof FingerprintParts, 'sources' | 'gate'>, string> = {
   harness: 'harness config',
   environment: 'environment',
   image: 'image',
@@ -164,9 +205,33 @@ const PART_LABELS: Record<Exclude<keyof FingerprintParts, 'sources'>, string> = 
   gateway: 'gateway',
 }
 
-/** Why two runs of an eval aren't comparable: the source files and fingerprint parts that differ. */
+const showRevision = (r: ComparableEval['revision']) =>
+  r === undefined ? 'unset' : JSON.stringify(r)
+
+const SOURCE_LABELS = { body: 'body', options: 'options', case: 'case data' } as const
+
+/** What in the eval's own source differs: its body, options, case data and revision. */
+function sourceChanged(base: ComparableEval, head: ComparableEval): string[] {
+  const out: string[] = []
+  if (base.source && head.source) {
+    for (const key of Object.keys(SOURCE_LABELS) as Array<keyof typeof SOURCE_LABELS>) {
+      if (base.source[key] !== head.source[key]) out.push(`${SOURCE_LABELS[key]} changed`)
+    }
+  } else if (base.source || head.source) out.push('fingerprint scheme changed')
+  else out.push(...sourceChanges(base.sources, head.sources))
+  if (base.revision !== head.revision) {
+    out.push(`revision ${showRevision(base.revision)} → ${showRevision(head.revision)}`)
+  }
+  return out
+}
+
+/**
+ * Why two runs of an eval aren't comparable: what in its source differs (`body`, `options`,
+ * `case data`, `revision 2 → 3`; a record from before `source`, its files), then the fingerprint
+ * parts that differ. Each reason but the revision ends in ` changed`.
+ */
 export function whyChanged(base: ComparableEval, head: ComparableEval): string[] {
-  const out = sourceChanges(base.sources, head.sources)
+  const out = sourceChanged(base, head)
   const keys = [...new Set([...base.cells, ...head.cells].map((c) => c.key))]
   const parts = new Set<string>()
   for (const key of keys) {
@@ -179,8 +244,54 @@ export function whyChanged(base: ComparableEval, head: ComparableEval): string[]
     for (const part of Object.keys(PART_LABELS) as Array<keyof typeof PART_LABELS>) {
       if (b.fingerprintParts[part] !== h.fingerprintParts[part]) parts.add(PART_LABELS[part])
     }
+    if (gateLabel(b.gate) !== gateLabel(h.gate)) parts.add('gate')
   }
   return [...out, ...[...parts].map((p) => `${p} changed`)]
+}
+
+const withoutGate = ({ gate: _, ...parts }: FingerprintParts) => JSON.stringify(parts)
+
+type FingerprintedCell = Pick<HistoryCell, 'fingerprint' | 'fingerprintParts'>
+
+/**
+ * Whether two runs of a cell are comparable: the same fingerprint, the gate aside. A record from
+ * before the gate was a part has none, so its parts are compared without it.
+ */
+const sameCell = (b: FingerprintedCell, h: FingerprintedCell) =>
+  b.fingerprint === h.fingerprint ||
+  ((b.fingerprintParts.gate !== undefined || h.fingerprintParts.gate !== undefined) &&
+    withoutGate(b.fingerprintParts) === withoutGate(h.fingerprintParts))
+
+/** Whether two runs of an eval ran the same cells, each comparable. */
+function sameEval(b: ComparableEval, h: ComparableEval): boolean {
+  if (b.fingerprint === h.fingerprint) return true
+  if (b.cells.length !== h.cells.length) return false
+  const before = new Map(b.cells.map((c) => [c.key, c]))
+  return h.cells.every((c) => {
+    const was = before.get(c.key)
+    return was !== undefined && sameCell(was, c)
+  })
+}
+
+/**
+ * When the gate of a cell both sides ran changed: each side's gates, and base's outcome over
+ * those cells with each one's attempts scored under head's gate.
+ */
+function gateChange(base: Cells, head: Cells): CompareRow['gate'] | undefined {
+  const before = new Map(base.map((c) => [c.key, c]))
+  const pairs = head.flatMap((h): Array<[Cells[number], Cells[number]]> => {
+    const b = before.get(h.key)
+    return b ? [[b, h]] : []
+  })
+  const changed = pairs.filter(([b, h]) => gateLabel(b.gate) !== gateLabel(h.gate))
+  if (!changed.length) return undefined
+  const labels = (side: 0 | 1) =>
+    [...new Set(changed.map((p) => gateLabel(p[side].gate)))].join(', ')
+  return {
+    base: labels(0),
+    head: labels(1),
+    rescored: outcomeOf(pairs.map(([b, h]) => ({ gate: h.gate, outcome: rescore(b, h.gate) }))),
+  }
 }
 
 /** An eval's outcome from some of its cells, as the run rolls it up: ungated failures pass. */
@@ -196,24 +307,24 @@ function outcomeOf(cells: ReadonlyArray<Pick<HistoryCell, 'gate' | 'outcome'>>):
 type Cells = ComparableEval['cells']
 
 /**
- * Whether a failing eval failed only on attempts the run's interrupt cancelled: every failed
- * attempt in a gated cell was cut short, so the agent didn't fail it (`reeval show`'s `cancelled`).
+ * Whether a failing eval failed only on attempts the run's interrupt canceled: every failed
+ * attempt in a gated cell was cut short, so the agent didn't fail it (`reeval show`'s `canceled`).
  */
-const cancelledOn = (outcome: Outcome | null, cells: Cells) => {
+const canceledOn = (outcome: Outcome | null, cells: Cells) => {
   const gated = cells.filter((c) => c.gate !== 'none')
   return (
     outcome === 'fail' &&
     gated.some((c) => c.fail > 0) &&
-    gated.every((c) => c.fail === (c.cancelled ?? 0))
+    gated.every((c) => c.fail === (c.canceled ?? 0))
   )
 }
 
-function cancelledSides(
+function canceledSides(
   outcomes: Pick<CompareRow, 'base' | 'head'>,
   cells: { base?: Cells; head?: Cells },
-): Pick<CompareRow, 'cancelled'> {
-  const sides = (['base', 'head'] as const).filter((s) => cancelledOn(outcomes[s], cells[s] ?? []))
-  return sides.length ? { cancelled: sides } : {}
+): Pick<CompareRow, 'canceled'> {
+  const sides = (['base', 'head'] as const).filter((s) => canceledOn(outcomes[s], cells[s] ?? []))
+  return sides.length ? { canceled: sides } : {}
 }
 
 /** An eval only head has. */
@@ -222,7 +333,7 @@ export const addedRow = (h: ComparableEval): CompareRow => ({
   base: null,
   head: h.outcome,
   status: 'added',
-  ...cancelledSides({ base: null, head: h.outcome }, { head: h.cells }),
+  ...canceledSides({ base: null, head: h.outcome }, { head: h.cells }),
 })
 
 /**
@@ -233,9 +344,7 @@ export const addedRow = (h: ComparableEval): CompareRow => ({
 function sharedScope(b: ComparableEval, h: ComparableEval) {
   const before = new Map(b.cells.map((c) => [c.key, c]))
   const shared = h.cells.filter((c) => before.has(c.key))
-  if (!shared.length || shared.some((c) => before.get(c.key)?.fingerprint !== c.fingerprint)) {
-    return null
-  }
+  if (!shared.length || shared.some((c) => !sameCell(before.get(c.key) ?? c, c))) return null
   const keys = new Set(h.cells.map((c) => c.key))
   const baseCells = shared.map((c) => before.get(c.key) ?? c)
   return {
@@ -264,8 +373,142 @@ function compareCells(base: ComparableEval, head: ComparableEval): CompareCell[]
   })
 }
 
+/** A family with a gate: some pooled lift has a `minLift`. One without can't fail, so has no row. */
+const gated = (f: ComparableFamily | undefined) => !!f?.lifts.some((l) => l.minLift !== undefined)
+
+const liftSide = ({ variant: _, vs: __, ...side }: FamilyLiftSummary) => side
+
+/** Each variant's pooled lift on both sides, head's order first. */
+function familyLifts(b: ComparableFamily | null, h: ComparableFamily | null): CompareFamilyLift[] {
+  const out = new Map<string, CompareFamilyLift>()
+  for (const [side, f] of [
+    ['head', h],
+    ['base', b],
+  ] as const) {
+    for (const l of f?.lifts ?? []) {
+      const row = out.get(l.variant) ?? { key: l.variant, vs: l.vs, base: null, head: null }
+      row[side] = liftSide(l)
+      out.set(l.variant, row)
+    }
+  }
+  return [...out.values()]
+}
+
+const liftsOutcome = (lifts: ReadonlyArray<{ outcome: 'pass' | 'fail' }>): Outcome =>
+  lifts.some((l) => l.outcome === 'fail') ? 'fail' : 'pass'
+
+/** A gated family only head has. */
+const addedFamilyRow = (h: ComparableFamily): CompareRow => ({
+  id: h.id,
+  kind: 'family',
+  base: null,
+  head: h.outcome,
+  status: 'added',
+  lifts: familyLifts(null, h),
+})
+
+/** The rows of a run with nothing to compare it with: every eval and gated family is new. */
+export const newRows = (head: Comparable): CompareRow[] => [
+  ...head.evals.map(addedRow),
+  ...(head.families ?? []).filter(gated).map(addedFamilyRow),
+]
+
+/** What a family's row reads besides the two families: its cases' rows and attempts. */
+type FamilyContext = {
+  rows: ReadonlyMap<string, CompareRow>
+  graderChanged: boolean
+  /** Whether the run's interrupt canceled an attempt of any of these cases on that side. */
+  canceledIn: (side: 'base' | 'head', caseIds: readonly string[]) => boolean
+}
+
+/**
+ * A gated family's row. Its pooled outcome is comparable only when both runs ran the same cases
+ * and every case is: a case that changed or hit an infrastructure error makes the family `drift`
+ * or `infra` as it does the case, and a failing side with a canceled attempt in any case reads
+ * `canceled`, since the pooled lift counts it. With different variants, it's over the lifts both
+ * have, and with none in common it can't compare them.
+ */
+function familyRow(
+  id: string,
+  b: ComparableFamily | undefined,
+  h: ComparableFamily | undefined,
+  ctx: FamilyContext,
+): CompareRow {
+  if (!b) return addedFamilyRow(h as ComparableFamily)
+  const lifts = familyLifts(b, h ?? null)
+  if (!h) return { id, kind: 'family', base: b.outcome, head: null, status: 'removed', lifts }
+  const shared = lifts.flatMap((l) => (l.base && l.head ? [{ base: l.base, head: l.head }] : []))
+  const scoped = shared.length > 0 && shared.length < lifts.length
+  const disjoint = !shared.length && b.lifts.length > 0 && h.lifts.length > 0
+  const row: Omit<CompareRow, 'status'> = {
+    id,
+    kind: 'family',
+    base: scoped ? liftsOutcome(shared.map((l) => l.base)) : b.outcome,
+    head: scoped ? liftsOutcome(shared.map((l) => l.head)) : h.outcome,
+    lifts,
+    ...(scoped || disjoint
+      ? {
+          cells: {
+            added: lifts.filter((l) => !l.base).map((l) => l.key),
+            removed: lifts.filter((l) => !l.head).map((l) => l.key),
+          },
+        }
+      : {}),
+  }
+  const prefix = id.slice(0, id.lastIndexOf(' › ') + 3)
+  const name = (caseId: string) =>
+    caseId.startsWith(prefix) ? caseId.slice(prefix.length) : caseId
+  const before = new Set(b.caseIds)
+  const after = new Set(h.caseIds)
+  const caseRows = [...new Set([...h.caseIds, ...b.caseIds])].flatMap((c) => ctx.rows.get(c) ?? [])
+  const changes = [
+    ...new Set([
+      ...h.caseIds.filter((c) => !before.has(c)).map((c) => `case ${name(c)} added`),
+      ...b.caseIds.filter((c) => !after.has(c)).map((c) => `case ${name(c)} removed`),
+      ...caseRows.flatMap((r) => (r.status === 'drift' ? (r.changes ?? []) : [])),
+    ]),
+  ]
+  const canceled = (['base', 'head'] as const).filter(
+    (s) => row[s] === 'fail' && ctx.canceledIn(s, s === 'base' ? b.caseIds : h.caseIds),
+  )
+  if (canceled.length) row.canceled = canceled
+  if (caseRows.some((r) => r.status === 'infra')) return { ...row, status: 'infra' }
+  if (changes.length) return { ...row, status: 'drift', changes }
+  if (disjoint || row.canceled || caseRows.some((r) => r.status === 'drift')) {
+    return { ...row, status: 'drift' }
+  }
+  if (ctx.graderChanged && row.base !== row.head) return { ...row, status: 'drift' }
+  if (row.base === 'pass' && row.head === 'fail') return { ...row, status: 'regressed' }
+  if (row.base === 'fail' && row.head === 'pass') return { ...row, status: 'fixed' }
+  return { ...row, status: 'same' }
+}
+
+/** Each eval's row, then each family's that either run gated. */
 export function compare(base: Comparable, head: Comparable): CompareRow[] {
   const graderChanged = stackChanges(base, head).some((c) => c.outsideFingerprint)
+  const rows = evalRows(base, head, graderChanged)
+  const before = new Map((base.families ?? []).map((f) => [f.id, f]))
+  const after = new Map((head.families ?? []).map((f) => [f.id, f]))
+  const families = [...new Set([...after.keys(), ...before.keys()])].filter(
+    (id) => gated(before.get(id)) || gated(after.get(id)),
+  )
+  const runs = { base, head }
+  const ctx: FamilyContext = {
+    rows: new Map(rows.map((r) => [r.id, r])),
+    graderChanged,
+    canceledIn: (side, caseIds) =>
+      runs[side].evals.some(
+        (e) => caseIds.includes(e.id) && e.cells.some((c) => (c.canceled ?? 0) > 0),
+      ),
+  }
+  return [...rows, ...families.map((id) => familyRow(id, before.get(id), after.get(id), ctx))]
+}
+
+/** The key that tells a family's row from an eval's, whose ids can coincide. */
+export const rowKey = (row: Pick<CompareRow, 'id' | 'kind'>) =>
+  row.kind === 'family' ? `family\0${row.id}` : row.id
+
+function evalRows(base: Comparable, head: Comparable, graderChanged: boolean): CompareRow[] {
   const ids = [...new Set([...head.evals.map((e) => e.id), ...base.evals.map((e) => e.id)])]
   return ids.map((id) => {
     const b = base.evals.find((e) => e.id === id)
@@ -277,10 +520,11 @@ export function compare(base: Comparable, head: Comparable): CompareRow[] {
         base: b.outcome,
         head: null,
         status: 'removed',
-        ...cancelledSides({ base: b.outcome, head: null }, { base: b.cells }),
+        ...canceledSides({ base: b.outcome, head: null }, { base: b.cells }),
       }
     }
-    const scoped = b.fingerprint === h.fingerprint ? null : sharedScope(b, h)
+    const comparable = sameEval(b, h)
+    const scoped = comparable ? null : sharedScope(b, h)
     const outcomes = scoped
       ? { base: scoped.base, head: scoped.head }
       : { base: b.outcome, head: h.outcome }
@@ -288,18 +532,20 @@ export function compare(base: Comparable, head: Comparable): CompareRow[] {
       id,
       ...outcomes,
       ...(scoped ? { cells: scoped.cells } : {}),
-      ...cancelledSides(outcomes, scoped?.over ?? { base: b.cells, head: h.cells }),
+      ...canceledSides(outcomes, scoped?.over ?? { base: b.cells, head: h.cells }),
     }
     const perCell = compareCells(b, h)
     if (perCell.length) row.perCell = perCell
     if (row.base === 'infra_error' || row.head === 'infra_error') return { ...row, status: 'infra' }
-    if (b.fingerprint !== h.fingerprint && !scoped) {
-      return { ...row, status: 'drift', changes: whyChanged(b, h) }
-    }
-    if (row.cancelled) return { ...row, status: 'drift' }
-    if (graderChanged && row.base !== row.head) return { ...row, status: 'drift' }
-    if (row.base === 'pass' && row.head === 'fail') return { ...row, status: 'regressed' }
-    if (row.base === 'fail' && row.head === 'pass') return { ...row, status: 'fixed' }
-    return { ...row, status: 'same' }
+    if (!comparable && !scoped) return { ...row, status: 'drift', changes: whyChanged(b, h) }
+    const over = scoped?.over ?? { base: b.cells ?? [], head: h.cells ?? [] }
+    const gate = gateChange(over.base, over.head)
+    if (gate) Object.assign(row, { changes: ['gate changed'], gate })
+    const from = gate?.rescored ?? row.base
+    if (row.canceled) return { ...row, status: 'drift' }
+    if (graderChanged && from !== row.head) return { ...row, status: 'drift' }
+    if (from === 'pass' && row.head === 'fail') return { ...row, status: 'regressed' }
+    if (from === 'fail' && row.head === 'pass') return { ...row, status: 'fixed' }
+    return { ...row, status: row.base === row.head ? 'same' : 'gate' }
   })
 }

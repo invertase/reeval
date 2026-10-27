@@ -7,23 +7,96 @@ export const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i
 export const badCharacterAt = (value: string) =>
   [...value].findIndex((c) => /[\s\p{Cc}]/u.test(c)) + 1
 
-/** Well-known credential shapes, masked even when they aren't in this process's environment. */
-const TOKEN_PATTERNS: Array<{ rule: string; pattern: RegExp }> = [
-  { rule: 'Google API key', pattern: /AIza[0-9A-Za-z_-]{35}/g },
-  { rule: 'OpenAI or Anthropic key', pattern: /\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}/g },
-  { rule: 'GitHub token', pattern: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}/g },
-  { rule: 'GitHub token', pattern: /\bgithub_pat_[A-Za-z0-9_]{22,}/g },
-  { rule: 'AWS access key', pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g },
-  { rule: 'Slack token', pattern: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g },
+/**
+ * Well-known credential shapes, masked even when they aren't in this process's environment.
+ * Distinctive prefixes match after any character (`TOKEN_ghp_…`, `key%3Dghp_…`). A prefix that
+ * ordinary words share (`task-…`, `ASIAN…`) has `word`, the characters it may not follow.
+ */
+const TOKEN_SHAPES: Array<{ rule: string; prefix: string; rest: string; word?: string }> = [
+  { rule: 'Google API key', prefix: 'AIza', rest: '[0-9A-Za-z_-]{35}' },
+  {
+    rule: 'OpenAI or Anthropic key',
+    prefix: 'sk-',
+    rest: '(?:ant-|proj-)?[A-Za-z0-9_-]{20,}',
+    word: 'A-Za-z0-9',
+  },
+  { rule: 'GitHub token', prefix: '(?:ghp|gho|ghu|ghs|ghr)_', rest: '[A-Za-z0-9]{36,}' },
+  { rule: 'GitHub token', prefix: 'github_pat_', rest: '[A-Za-z0-9_]{22,}' },
+  {
+    rule: 'AWS access key',
+    prefix: '(?:AKIA|ASIA)',
+    rest: '[0-9A-Z]{16}(?![0-9A-Za-z])',
+    word: '0-9A-Z',
+  },
+  { rule: 'Slack token', prefix: 'xox[abprs]-', rest: '[A-Za-z0-9-]{10,}' },
+  { rule: 'Slack token', prefix: 'xapp-', rest: '\\d-[A-Za-z0-9-]{40,}' },
+  { rule: 'xAI API key', prefix: 'xai-', rest: '[A-Za-z0-9_]{40,}', word: 'A-Za-z0-9' },
+  { rule: 'Vercel token', prefix: 'vc[kpiar]_', rest: '[A-Za-z0-9]{24,}', word: 'A-Za-z0-9' },
+  { rule: 'Groq API key', prefix: 'gsk_', rest: '[A-Za-z0-9]{40,}', word: 'A-Za-z0-9' },
+  { rule: 'Perplexity API key', prefix: 'pplx-', rest: '[A-Za-z0-9]{32,}', word: 'A-Za-z0-9' },
+  { rule: 'Hugging Face token', prefix: 'hf_', rest: '[A-Za-z0-9]{34,}', word: 'A-Za-z0-9' },
+  {
+    rule: 'GitLab token',
+    prefix: 'glpat-',
+    rest: '[A-Za-z0-9_-]{20,}(?:(?:\\.[0-9a-z]{2})?\\.[0-9a-z]{9})?',
+  },
+  {
+    rule: 'Stripe key',
+    prefix: '[rs]k_(?:live|test)_',
+    rest: '[A-Za-z0-9]{24,}',
+    word: 'A-Za-z0-9',
+  },
+  { rule: 'npm token', prefix: 'npm_', rest: '[A-Za-z0-9]{36,}', word: 'A-Za-z0-9' },
+  {
+    rule: 'PyPI token',
+    prefix: 'pypi-AgE(?:IcHlwaS5vcmc|NdGVzdC5weXBpLm9yZw)',
+    rest: '[A-Za-z0-9_-]{50,}',
+  },
+  // `ya29.c.` and `ya29.d.` tokens have more dots after the prefix; the last character isn't
+  // one, so a full stop after a token stays.
+  {
+    rule: 'Google OAuth token',
+    prefix: 'ya29\\.',
+    rest: '[A-Za-z0-9_.-]{30,}(?<!\\.)',
+  },
+  { rule: 'Google OAuth client secret', prefix: 'GOCSPX-', rest: '[A-Za-z0-9_-]{28,}' },
   {
     rule: 'JWT',
-    pattern: /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
+    prefix: 'eyJ',
+    rest: '[A-Za-z0-9_-]{10,}\\.eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}',
+
+    // Base64 of JSON holds `eyJ` wherever a `{"` lines up: unguarded, each one would scan to the
+    // end of the run.
+    word: 'A-Za-z0-9',
   },
   {
     rule: 'private key',
-    pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+    prefix: '-----BEGIN ',
+    rest: '[A-Z ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY-----',
   },
 ]
+
+/**
+ * After `prefix`, so the search still scans for the prefix first: it follows none of `word`'s
+ * characters, or follows an escape that may stand for any character (`%3D`, `\n`, `\u003d`).
+ */
+const follows = (prefix: string, word: string) =>
+  `(?<=(?:^|[^${word}]|%[0-9A-Fa-f]{2}|\\\\[nrtbf]|\\\\u[0-9A-Fa-f]{4})${prefix})`
+
+const TOKEN_PATTERNS = TOKEN_SHAPES.map(({ rule, prefix, rest, word }) => ({
+  rule,
+  pattern: new RegExp(`${prefix}${word ? follows(prefix, word) : ''}${rest}`, 'g'),
+}))
+
+/** The guarded token shapes, matched exactly where they're asked to start, whatever is before. */
+const TOKEN_AFTER = TOKEN_SHAPES.filter(({ word }) => word).map(({ rule, prefix, rest }) => ({
+  rule,
+  pattern: new RegExp(`${prefix}${rest}`, 'y'),
+}))
+
+/** Whether a value holds a well-known credential shape. */
+export const hasTokenShape = (value: string) =>
+  TOKEN_PATTERNS.some(({ pattern }) => value.search(pattern) !== -1)
 
 /** Values declared with `secret()`, masked whatever their variable is called. */
 const declared = new Set<string>()
@@ -74,8 +147,8 @@ const jsonEscaped = (s: string) => JSON.stringify(s).slice(1, -1)
 
 const formsCache = new Map<string, string[]>()
 /**
- * The value and its encoded forms, each also as it reads inside a JSON string: redaction runs on
- * serialised records, where a JSON-escaped form the agent printed is escaped a second time.
+ * The value and its encoded forms, each also as it reads inside a JSON string: secret scans and
+ * plain-text redaction read serialized JSON, and a JSON string can hold JSON the agent printed.
  */
 const formsOf = (value: string) => {
   let forms = formsCache.get(value)
@@ -106,13 +179,20 @@ const tokenLike = (value: string) =>
 const WORDISH = /^(?:[a-z]+|[A-Z]+|\d+)$/
 /**
  * Windows with quotes, backslashes, commas, brackets or whitespace aren't masked alone: they can
- * match the structure of serialised JSON (`","sha256":"`) and break the record around them.
+ * match the structure of serialized JSON (`","sha256":"`) and break the record around them.
  */
 const STRUCTURAL = /["'\\,:{}[\]\s]/
 
 type Secrets = {
   /** Whole values and their encoded forms, longest first. */
   forms: string[]
+  /**
+   * The forms masked in a JSON key that reads as a field name: those of `MIN_FRAGMENT` or more
+   * characters, so a short declared secret (`error`, `text`) can't rename a record's fields.
+   */
+  keyForms: string[]
+  /** Text shorter than this can't hold any form, window or token shape. */
+  shortest: number
   /** Each form's rule: the value of which variable, or a declared secret. */
   formRules: Map<string, string>
   /** Every `MIN_FRAGMENT`-character window of the values whose fragments are masked, and its rule. */
@@ -155,7 +235,9 @@ function envSecrets(env: NodeJS.ProcessEnv): Secrets {
       starts[pairHash(value, i)] = 1
     }
   }
-  const secrets = { forms, formRules, windows, starts }
+  const keyForms = forms.filter((f) => f.length >= MIN_FRAGMENT)
+  const shortest = Math.min(MIN_FRAGMENT, ...forms.map((f) => f.length))
+  const secrets = { forms, keyForms, shortest, formRules, windows, starts }
   cached = { key, secrets }
   return secrets
 }
@@ -178,31 +260,201 @@ function fragmentRanges(
   return ranges
 }
 
-function maskFragments(text: string, secrets: Secrets): string {
-  const ranges = fragmentRanges(text, secrets)
+type Range = { start: number; end: number; rule: string; known: boolean }
+
+/**
+ * Every stretch of `text` to mask, in order, with overlapping ones merged: each of `forms`, each
+ * stretch of fragments and each token shape, all found in `text` as it is. Masking one before
+ * looking for the others would cut into them: a fragment of one key inside a second key that
+ * shares its `sk-ant-api03-` breaks the second's shape, and a token running on into a password
+ * leaves the rest of the password. A token shape may also start right where a known stretch
+ * ends, word boundary or not, as it would once that stretch reads `[REDACTED]`. A merged stretch
+ * is `known` when any part is, and takes the rule of the stretch starting first (the longer on a
+ * tie, else the known one).
+ */
+function secretRanges(text: string, secrets: Secrets, forms = secrets.forms): Range[] {
+  if (text.length < secrets.shortest) return []
+  const found: Range[] = []
+  for (const form of forms) {
+    const rule = secrets.formRules.get(form) as string
+    for (let at = text.indexOf(form); at !== -1; at = text.indexOf(form, at + form.length)) {
+      found.push({ start: at, end: at + form.length, rule, known: true })
+    }
+  }
+  for (const [start, end, rule] of fragmentRanges(text, secrets)) {
+    found.push({ start, end, rule, known: true })
+  }
+  const ends = new Set(found.map((r) => r.end))
+  for (const { rule, pattern } of TOKEN_PATTERNS) {
+    // A token can start inside the one before it and run past its end (`ghp_…ghp_…`, whose first
+    // match takes the second's `ghp`), so each search after a match starts one character into it.
+    // One that ends no later than the match ends the search there, which keeps the scan linear.
+    let last = -1
+    pattern.lastIndex = 0
+    for (let m = pattern.exec(text); m; m = pattern.exec(text)) {
+      const end = m.index + m[0].length
+      if (end <= last) {
+        pattern.lastIndex = last
+        continue
+      }
+      found.push({ start: m.index, end, rule, known: false })
+      last = end
+      pattern.lastIndex = m.index + 1
+    }
+  }
+  for (const end of ends) {
+    for (const { rule, pattern } of TOKEN_AFTER) {
+      pattern.lastIndex = end
+      const m = pattern.exec(text)
+      if (m) found.push({ start: end, end: end + m[0].length, rule, known: false })
+    }
+  }
+  found.sort((a, b) => a.start - b.start || b.end - a.end || Number(b.known) - Number(a.known))
+  const merged: Range[] = []
+  for (const range of found) {
+    const last = merged.at(-1)
+    if (last && range.start < last.end) {
+      last.end = Math.max(last.end, range.end)
+      last.known ||= range.known
+    } else merged.push({ ...range })
+  }
+  return merged
+}
+
+/**
+ * Masks well-known token shapes, the values of secret-looking environment variables and declared
+ * secrets, raw or JSON-, URL- or base64-encoded, and any stretch of `MIN_FRAGMENT` or more of
+ * their characters, anywhere in `text`.
+ */
+export const redactSecrets = (text: string, env: NodeJS.ProcessEnv = process.env): string =>
+  redactWith(text, envSecrets(env))
+
+function redactWith(text: string, secrets: Secrets, forms = secrets.forms): string {
+  const ranges = secretRanges(text, secrets, forms)
   if (ranges.length === 0) return text
   let out = ''
   let at = 0
-  for (const [start, end] of ranges) {
+  for (const { start, end } of ranges) {
     out += `${text.slice(at, start)}${REDACTED}`
     at = end
   }
   return out + text.slice(at)
 }
 
-/**
- * Masks the values of secret-looking environment variables and declared secrets, raw or
- * JSON-, URL- or base64-encoded, any stretch of `MIN_FRAGMENT` or more of their characters, and
- * well-known token shapes, anywhere in `text`.
- */
-export function redactSecrets(text: string, env: NodeJS.ProcessEnv = process.env): string {
-  const secrets = envSecrets(env)
-  let out = text
-  for (const secret of secrets.forms) out = out.replaceAll(secret, REDACTED)
-  out = maskFragments(out, secrets)
-  for (const { pattern } of TOKEN_PATTERNS) out = out.replace(pattern, REDACTED)
+/** A JSON string literal: `[start, end)` with its quotes, and whether it's an object's key. */
+type Literal = { start: number; end: number; key: boolean }
+
+/** The string literals of valid JSON text, in order. */
+function literals(json: string): Literal[] {
+  const out: Literal[] = []
+  for (let i = json.indexOf('"'); i !== -1; i = json.indexOf('"', i)) {
+    let j = i + 1
+    while (json[j] !== '"') j += json[j] === '\\' ? 2 : 1
+    let next = j + 1
+    while (next < json.length && ' \t\r\n'.includes(json[next] as string)) next++
+    out.push({ start: i, end: j + 1, key: json[next] === ':' })
+    i = j + 1
+  }
   return out
 }
+
+const isJson = (text: string) => {
+  try {
+    JSON.parse(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
+type Chunk = { at: number; text: string; json: boolean }
+
+/**
+ * `text` after any byte-order mark, as JSON documents: the whole of it when it parses, else each
+ * line (JSON Lines), with each run of lines that aren't JSON kept together, so a pattern spanning
+ * them (a private key) is still whole. Blank lines count as JSON: they have no literals. Joined
+ * with newlines, the chunks' texts are `text` after the mark.
+ */
+function jsonChunks(text: string): Chunk[] {
+  const bom = text.startsWith('\uFEFF') ? 1 : 0
+  const body = text.slice(bom)
+  if (isJson(body)) return [{ at: bom, text: body, json: true }]
+  const chunks: Chunk[] = []
+  let at = bom
+  for (const line of body.split('\n')) {
+    const json = !line.trim() || isJson(line)
+    const last = chunks.at(-1)
+    if (!json && last && !last.json) last.text += `\n${line}`
+    else chunks.push({ at, text: line, json })
+    at += line.length + 1
+  }
+  return chunks
+}
+
+/** Maps valid JSON's string literals, re-escaping the ones `map` changes. */
+function mapLiterals(json: string, map: (value: string, key: boolean) => string): string {
+  let out = ''
+  let at = 0
+  for (const { start, end, key } of literals(json)) {
+    const raw = json.slice(start, end)
+    const value: string = raw.includes('\\') ? JSON.parse(raw) : raw.slice(1, -1)
+    const mapped = map(value, key)
+    if (mapped === value) continue
+    out += `${json.slice(at, start)}${JSON.stringify(mapped)}`
+    at = end
+  }
+  return out + json.slice(at)
+}
+
+/**
+ * Serialized JSON or JSON Lines with every string literal (object keys included) passed through
+ * `map`, and the text kept byte for byte outside the ones it changes, so `null`, numbers and
+ * booleans stay as they are. A line that isn't JSON goes through `map` whole, as a value.
+ */
+export function mapJsonStrings(text: string, map: (value: string, key: boolean) => string): string {
+  const chunks = jsonChunks(text)
+  const mapped = chunks.map((c) => (c.json ? mapLiterals(c.text, map) : map(c.text, false)))
+  return text.slice(0, chunks[0]?.at ?? 0) + mapped.join('\n')
+}
+
+const FIELD_NAME = /^[A-Za-z_$][\w$]*$/
+
+const redactLiteral = (secrets: Secrets) => (value: string, key: boolean) =>
+  redactWith(value, secrets, key && FIELD_NAME.test(value) ? secrets.keyForms : secrets.forms)
+
+/**
+ * `value` serialized (`JSON.stringify(value, null, space)`), with secrets masked as
+ * `redactSecrets` masks them but only inside its strings: the result is valid JSON of the same
+ * shape, and `null`, numbers and booleans stay as they are whatever the secrets are, so a secret
+ * held as a number isn't masked. In a key that reads as a field name (`durationMs`), only forms
+ * of `MIN_FRAGMENT` or more characters are masked; other keys (paths, header names) are masked as
+ * values are.
+ */
+export function redactJson(
+  value: unknown,
+  space?: number,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return mapLiterals(JSON.stringify(value, null, space), redactLiteral(envSecrets(env)))
+}
+
+/**
+ * `value` with its strings masked as `redactJson` masks them, as a JSON value again: what a model
+ * is sent, so it reads as the record of it will once that's written.
+ */
+export const redactValue = <T>(value: T, env: NodeJS.ProcessEnv = process.env): T =>
+  JSON.parse(redactJson(value, undefined, env))
+
+/**
+ * Serialized JSON or JSON Lines, masked as `redactJson` masks a value, with the text kept byte
+ * for byte outside the strings it masks. A line that isn't JSON is masked as plain text.
+ */
+export const redactJsonText = (text: string, env: NodeJS.ProcessEnv = process.env): string =>
+  mapJsonStrings(text, redactLiteral(envSecrets(env)))
+
+/** A JSON object key masked as `redactJson` masks one. */
+export const redactKey = (key: string, env: NodeJS.ProcessEnv = process.env): string =>
+  redactLiteral(envSecrets(env))(key, true)
 
 /** One stretch `redactSecrets` would mask: where it is in the text, and why. */
 export type SecretMatch = {
@@ -210,35 +462,207 @@ export type SecretMatch = {
   end: number
   /** `the value of NAME`, `a declared secret`, or a credential shape such as `Google API key`. */
   rule: string
-  /** Whether `rule` names a variable or a declared secret, so no part of the value may be shown. */
+  /**
+   * Whether some part of the stretch is a variable's value, a declared secret or a fragment of
+   * one, so no part of it may be shown. `rule` may still name a credential shape, when the known
+   * part is inside one.
+   */
   known: boolean
 }
 
 /** What `redactSecrets` would mask, in order. Used as a last check before anything leaves the machine. */
-export function findSecrets(text: string, env: NodeJS.ProcessEnv = process.env): SecretMatch[] {
-  const secrets = envSecrets(env)
-  const found: SecretMatch[] = []
-  let rest = text
-  for (const secret of secrets.forms) {
-    let at = rest.indexOf(secret)
-    if (at === -1) continue
-    const rule = secrets.formRules.get(secret) as string
-    while (at !== -1) {
-      found.push({ start: at, end: at + secret.length, rule, known: true })
-      at = rest.indexOf(secret, at + secret.length)
+export const findSecrets = (text: string, env: NodeJS.ProcessEnv = process.env): SecretMatch[] =>
+  secretRanges(text, envSecrets(env))
+
+/**
+ * The end of a cut at or before `end` that goes through no stretch `findSecrets` finds, for text
+ * that's kept unmasked but masked later: a cut through a secret would keep a part the later mask
+ * can't match.
+ */
+export function cutOutsideSecrets(
+  text: string,
+  end: number,
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  let at = end
+  for (const m of findSecrets(text, env).reverse()) if (m.start < at && m.end > at) at = m.start
+  return at
+}
+
+/**
+ * What `redactJsonText` would mask in serialized JSON or JSON Lines: `findSecrets`' matches inside
+ * the string literals it would change, and every match in lines that aren't JSON.
+ */
+export function findSecretsInJson(
+  text: string,
+  env: NodeJS.ProcessEnv = process.env,
+): SecretMatch[] {
+  const found = findSecrets(text, env)
+  if (found.length === 0) return found
+  const redact = redactLiteral(envSecrets(env))
+  type Span = { start: number; end: number; masked: () => boolean }
+  const spans: Span[] = jsonChunks(text).flatMap((c): Span[] =>
+    c.json
+      ? literals(c.text).map(({ start, end, key }) => {
+          let masked: boolean | undefined
+          return {
+            start: c.at + start + 1,
+            end: c.at + end - 1,
+            masked: () => {
+              if (masked === undefined) {
+                const value: string = JSON.parse(c.text.slice(start, end))
+                masked = redact(value, key) !== value
+              }
+              return masked
+            },
+          }
+        })
+      : [{ start: c.at, end: c.at + c.text.length, masked: () => true }],
+  )
+  return found.filter((m) => {
+    let lo = 0
+    let hi = spans.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if ((spans[mid] as Span).start <= m.start) lo = mid
+      else hi = mid - 1
     }
-    // Same length, so later matches keep their offsets; no window or pattern spans a NUL.
-    rest = rest.replaceAll(secret, '\0'.repeat(secret.length))
+    const span = spans[lo]
+    return span !== undefined && span.start <= m.start && m.end <= span.end && span.masked()
+  })
+}
+
+type Leaf = { line: number; path: (string | number)[]; value: string }
+
+/** Every string value of `value` (not its keys), with its path. */
+function leaves(value: unknown, line: number, path: (string | number)[], out: Leaf[]): void {
+  if (typeof value === 'string') out.push({ line, path, value })
+  else if (Array.isArray(value)) {
+    for (const [i, v] of value.entries()) leaves(v, line, [...path, i], out)
+  } else if (value && typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) leaves(v, line, [...path, k], out)
   }
-  for (const [start, end, rule] of fragmentRanges(rest, secrets)) {
-    found.push({ start, end, rule, known: true })
+}
+
+/** A `[start, end)` stretch of one leaf to mask; `lead` reads `[REDACTED]`, the rest go. */
+type Cut = { start: number; end: number; lead: boolean }
+
+function cutLeaf(value: string, cuts: Cut[]): string {
+  const sorted = [...cuts].sort((a, b) => a.start - b.start)
+  const merged: Cut[] = []
+  for (const c of sorted) {
+    const last = merged.at(-1)
+    if (last && c.start <= last.end) {
+      last.end = Math.max(last.end, c.end)
+      last.lead ||= c.lead
+    } else merged.push({ ...c })
   }
-  for (const { rule, pattern } of TOKEN_PATTERNS) {
-    for (const m of rest.matchAll(pattern)) {
-      found.push({ start: m.index, end: m.index + m[0].length, rule, known: false })
+  let out = ''
+  let at = 0
+  for (const c of merged) {
+    out += `${value.slice(at, c.start)}${c.lead ? REDACTED : ''}`
+    at = c.end
+  }
+  return out + value.slice(at)
+}
+
+/**
+ * The fields that tell one stream from another at the same path: an AI SDK part's block `id`, and
+ * an ACP update's `messageId` and `sessionUpdate` (a thought chunk beside a message chunk).
+ */
+const STREAM_IDS = ['id', 'messageId', 'sessionUpdate'] as const
+
+/**
+ * JSON Lines with each secret that only shows once strings on several lines are joined masked: a
+ * reply streamed as short deltas, one stream part per line, where no single string holds enough
+ * of the secret for `redactJsonText` to catch it. The strings at one path (`part.text`,
+ * `rawValue.content.text`) are joined in line order, also per the `type` beside them, and also
+ * per the `STREAM_IDS` above them, so interleaved text and reasoning, two text blocks, or thought
+ * and message chunks still join; a match spanning two or more strings has its first piece read
+ * `[REDACTED]` and its other pieces emptied. Lines that aren't JSON, and lines with nothing to
+ * mask, are kept byte for byte.
+ */
+export function redactSplitSecrets(
+  lines: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const parsed = lines.map((line) => {
+    try {
+      return { ok: true as const, value: JSON.parse(line) as unknown }
+    } catch {
+      return { ok: false as const }
+    }
+  })
+  const all: Leaf[] = []
+  parsed.forEach((p, i) => {
+    if (p.ok) leaves(p.value, i, [], all)
+  })
+  const groups = new Map<string, Leaf[]>()
+  const join = (key: string, leaf: Leaf) => {
+    const group = groups.get(key)
+    if (group) group.push(leaf)
+    else groups.set(key, [leaf])
+  }
+  type Node = Record<string | number, unknown>
+  /** The objects and arrays above `leaf`, from its line's value down to its parent. */
+  const ancestors = (leaf: Leaf): Node[] => {
+    let node = (parsed[leaf.line] as { value: unknown }).value as Node
+    const out: Node[] = []
+    for (const k of leaf.path) {
+      out.push(node)
+      node = node[k] as Node
+    }
+    return out
+  }
+  const parentOf = (leaf: Leaf): Node => ancestors(leaf).at(-1) as Node
+  for (const leaf of all) {
+    const path = JSON.stringify(leaf.path.map((k) => (typeof k === 'number' ? '#' : k)))
+    join(`${path}\0`, leaf)
+    const above = ancestors(leaf)
+    const type = above.at(-1)?.type
+    if (typeof type === 'string') join(`${path}\0${type}`, leaf)
+    const stream = above.flatMap((node) =>
+      STREAM_IDS.flatMap((k) => (typeof node[k] === 'string' ? [`${k}=${node[k]}`] : [])),
+    )
+    if (stream.length > 0) join(`${path}\0${type}\0${stream.join('\0')}`, leaf)
+  }
+  const cuts = new Map<Leaf, Cut[]>()
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    const starts: number[] = []
+    let text = ''
+    for (const leaf of group) {
+      starts.push(text.length)
+      text += leaf.value
+    }
+    for (const m of findSecrets(text, env)) {
+      const spanned = group.flatMap((leaf, i) => {
+        const from = starts[i] as number
+        const start = Math.max(m.start, from)
+        const end = Math.min(m.end, from + leaf.value.length)
+        return start < end ? [{ leaf, start: start - from, end: end - from }] : []
+      })
+      if (spanned.length < 2) continue
+      spanned.forEach(({ leaf, start, end }, i) => {
+        const list = cuts.get(leaf)
+        const cut = { start, end, lead: i === 0 }
+        if (list) list.push(cut)
+        else cuts.set(leaf, [cut])
+      })
     }
   }
-  return found.sort((a, b) => a.start - b.start)
+  if (cuts.size === 0) return [...lines]
+  const out = [...lines]
+  const changed = new Set<number>()
+  for (const [leaf, list] of cuts) {
+    const masked = cutLeaf(leaf.value, list)
+    const last = leaf.path.at(-1)
+    if (last === undefined) parsed[leaf.line] = { ok: true, value: masked }
+    else parentOf(leaf)[last] = masked
+    changed.add(leaf.line)
+  }
+  for (const i of changed) out[i] = JSON.stringify((parsed[i] as { value: unknown }).value)
+  return out
 }
 
 /** How many stretches `redactSecrets` would mask. */
@@ -247,7 +671,7 @@ export const countSecrets = (text: string, env: NodeJS.ProcessEnv = process.env)
 
 /**
  * A found secret as it can be shown: a variable's value never, a credential shape by its first
- * and last four characters.
+ * and last four characters unless it holds a known part.
  */
 export function maskedMatch(text: string, match: SecretMatch): string {
   if (match.known) return match.rule

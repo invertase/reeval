@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -8,7 +8,6 @@ import { join, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
 import { defaultIncludeGlobs } from '../src/language-runner/adapter.ts'
-import { NO_MODEL_HINT } from '../src/ui/layout.ts'
 import {
   fakeConfig,
   liveSandboxes,
@@ -128,6 +127,30 @@ export default defineConfig({
     )
   })
 
+  test('a directory named like a cell keeps that cell in the other files', async () => {
+    const p = await project('dir-named-like-cell', {
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  harness: [fakeHarness({ id: 'left' }), fakeHarness({ id: 'right' })],
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+})
+`,
+      'evals/right/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('alpha', async () => {})\n`,
+      'evals/b.eval.ts': `import { evaluate } from 'reeval'\nevaluate('beta', async () => {})\n`,
+    })
+    const r = await runCli(p.dir, ['run', 'right', '--ui', 'plain'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.deepEqual(
+      readRun(p.dir).evals.map((e) => [e.id, e.cells.map((c) => c.key)]),
+      [
+        ['evals/b.eval.ts › beta', ['right/fake/fake']],
+        ['evals/right/a.eval.ts › alpha', ['left/fake/fake', 'right/fake/fake']],
+      ],
+    )
+  })
+
   test('eval files that declare no evals exit 2 instead of writing an empty run', async () => {
     const p = await project('no-evals', {
       'reeval.config.ts': fakeConfig(),
@@ -176,7 +199,7 @@ export default defineConfig({
       r.stderr,
       /2 eval files failed to load:\nevals\/a\.eval\.ts, evals\/b\.eval\.ts: [\s\S]*Failed to load tsconfig '\.\.\/\.\.\/tsconfig\.base\.json'/,
     )
-    assert.equal(r.stderr.includes('\u001b['), false, 'no terminal colours')
+    assert.equal(r.stderr.includes('\u001b['), false, 'no terminal colors')
   })
 
   test('groups nest, cascade options and appear in ids and result.json', async () => {
@@ -323,7 +346,7 @@ group('area', () => {
     assert.match(read('summary.md'), /^todo {13}someday$/m)
   })
 
-  test('.env.local wins over .env, the shell wins over both, and evals see them', async () => {
+  test('.env.local wins over .env, the shell wins over both, and evals see them, past a byte-order mark', async () => {
     const p = await project('dotenv', {
       'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
@@ -335,7 +358,7 @@ export default defineConfig({
 })
 `,
       '.env': 'REEVAL_T_BOTH=from-env\nREEVAL_T_ENV=only-env\nREEVAL_T_SHELL=from-env\n',
-      '.env.local': 'REEVAL_T_BOTH=from-local\nREEVAL_T_SHELL=from-local\n',
+      '.env.local': '\uFEFFREEVAL_T_BOTH=from-local\nREEVAL_T_SHELL=from-local\n',
       'evals/sees.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('sees', async () => expect(process.env.REEVAL_T_BOTH).toBe('from-local'))
 `,
@@ -610,6 +633,41 @@ evaluate('killed', async (c) => {
         ['evals/dies.eval.ts › killed', 'fail'],
         ['evals/lives.eval.ts › math', 'pass'],
       ],
+    )
+  })
+
+  test('a file that loads for the plan but not for its run fails its attempts with the load error', async () => {
+    const flaky = `import { existsSync, writeFileSync } from 'node:fs'
+import { evaluate } from 'reeval'
+const marker = new URL('../loaded-once', import.meta.url)
+if (existsSync(marker)) throw new Error('fixture service unavailable')
+writeFileSync(marker, '')
+evaluate('flaky load', async () => {})
+`
+    const p = await project('run-pass-load-error', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/flaky.eval.ts': flaky,
+      'evals/lives.eval.ts': math(1),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /^error: evals\/flaky\.eval\.ts: fixture service unavailable$/m)
+    const record = readRun(p.dir)
+    assert.deepEqual(
+      record.evals.map((e) => [e.id, e.outcome, e.attempts[0]?.error?.message ?? null]),
+      [
+        ['evals/flaky.eval.ts › flaky load', 'fail', 'fixture service unavailable'],
+        ['evals/lives.eval.ts › math', 'pass', null],
+      ],
+    )
+    // On its own, the file is still its failed attempt, not "No evals matched".
+    rmSync(join(p.dir, 'loaded-once'))
+    const alone = await runCli(p.dir, ['run', 'evals/flaky.eval.ts'])
+    assert.equal(alone.code, 1, alone.stdout + alone.stderr)
+    assert.doesNotMatch(alone.stdout + alone.stderr, /No evals matched/)
+    assert.deepEqual(
+      readRun(p.dir).evals.map((e) => [e.id, e.outcome]),
+      [['evals/flaky.eval.ts › flaky load', 'fail']],
     )
   })
 
@@ -989,50 +1047,7 @@ evaluate('fails', async (c) => {
     assert.match(bad.stderr, /--log-order is one of stream, grouped, auto \(got sideways\)/)
   })
 
-  test('with an analysis model the run, summary.md and reeval show end at the tally, no hint', async () => {
-    const p = await project('analysis-model-no-hint', {
-      'reeval.config.ts': fakeConfig({ extra: 'analysis: { model: fakeAnalysis({}) },' }).replace(
-        'import { fakeJudge }',
-        'import { fakeAnalysis, fakeJudge }',
-      ),
-      'evals/agent.eval.ts': `${agentEval('')}`,
-    })
-    const r = await runCli(p.dir, ['run'], {
-      env: { REEVAL_UI: 'agent', NO_COLOR: '', FORCE_COLOR: '' },
-    })
-    assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.equal(r.stdout.trimEnd().split('\n').at(-1), '1 pass')
-    assert.ok(!r.stdout.includes(NO_MODEL_HINT), 'canary: the hint is gone when a model resolves')
-    const summary = (r.stdout.match(/results (\S+summary\.md)/) ?? [])[1] ?? ''
-    assert.ok(!readFileSync(join(p.dir, summary), 'utf8').includes(NO_MODEL_HINT))
-    const show = await runCli(p.dir, ['show'])
-    assert.equal(show.stdout.trimEnd().split('\n').at(-1), '1 pass')
-  })
-
-  test('a language-model judge without analysis.model still ends with the hint', async () => {
-    const p = await project('judge-model-hint', {
-      'reeval.config.ts': fakeConfig({ judge: "{ model: 'google/gemini-3.8-flash' }" }),
-      'evals/agent.eval.ts': `${agentEval('')}`,
-    })
-    const r = await runCli(p.dir, ['run'], {
-      env: {
-        REEVAL_UI: 'agent',
-        NO_COLOR: '',
-        FORCE_COLOR: '',
-        GOOGLE_GENERATIVE_AI_API_KEY: 'test-key',
-      },
-    })
-    assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.equal(r.stdout.trimEnd().split('\n').at(-1), NO_MODEL_HINT)
-    const summary = (r.stdout.match(/results (\S+summary\.md)/) ?? [])[1] ?? ''
-    assert.ok(readFileSync(join(p.dir, summary), 'utf8').includes(NO_MODEL_HINT))
-    const show = await runCli(p.dir, ['show'], {
-      env: { GOOGLE_GENERATIVE_AI_API_KEY: 'test-key' },
-    })
-    assert.equal(show.stdout.trimEnd().split('\n').at(-1), NO_MODEL_HINT)
-  })
-
-  test('agent mode prints the plan and the result blocks only, with no colour', async () => {
+  test('agent mode prints the plan and the result blocks only, with no color', async () => {
     const p = await project('agent-mode', {
       'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
       'evals/agent.eval.ts': `${agentEval(`expect(await c.judge('ok?')).toPass()`)}
@@ -1056,7 +1071,7 @@ evaluate('passes', async () => {})
       '',
     ])
     assert.match(out[8] ?? '', /^\d+m?s · results \.reeval\/runs\/[^/]+\/summary\.md$/)
-    assert.deepEqual(out.slice(9), ['1 fail · 1 pass', NO_MODEL_HINT])
+    assert.deepEqual(out.slice(9), ['1 fail · 1 pass'])
     assert.ok(existsSync(join(p.dir, (out[8] ?? '').replace(/^.* · results /, ''))))
     assert.ok(!r.stdout.includes('\x1b['))
   })
@@ -1211,6 +1226,49 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     assert.equal(inputs[1]?.error, undefined)
   })
 
+  test("judgment keys and judge inputs follow the calls' order, whichever finishes first or fails", async () => {
+    const p = await project('judge-call-order', {
+      'reeval.config.ts': fakeConfig({ harness: `{ files: { 'a.txt': 'hi\\n' } }` }),
+      'evals/agent.eval.ts': agentEval(`
+  await c.judge('foreign?', { on: { exec() {} } as never }).catch(() => {})
+  await c.judge('failed?', { model: 'no-provider' })
+  const [style, greets] = await Promise.all([
+    c.judge('style?', { state: { contents: ['a.txt'] } }),
+    c.judge('greets?'),
+  ])
+  expect.soft(style).toPass()
+  expect.soft(greets).toPass()
+  await Promise.all([
+    c.judge('late?', { model: 'no-provider', state: { contents: ['a.txt'] } }),
+    c.judge('early?', { model: 'no-provider' }),
+  ])
+`),
+    })
+    await runCli(p.dir)
+    const [e] = readRun(p.dir).evals
+    assert.deepEqual(
+      e?.trial.judgements.map((j) => [j.question, j.key.split(':')[0]]),
+      [
+        ['style?', '2'],
+        ['greets?', '3'],
+      ],
+    )
+    assert.deepEqual(
+      judgeInputs(e).map((i) => i.question),
+      ['failed?', 'style?', 'greets?', 'late?', 'early?'],
+    )
+    assert.deepEqual(
+      [...(e?.error?.message ?? '').matchAll(/c\.judge\("(\w+\?)"\) failed/g)].map((m) => m[1]),
+      ['failed?', 'late?', 'early?'],
+      'the failures are listed in call order',
+    )
+    assert.equal(
+      'call' in (judgeInputs(e)[0] ?? {}),
+      false,
+      "the call's place stays out of the judge input",
+    )
+  })
+
   test('a judge failure the eval never asserts on still fails the attempt, after its body', async () => {
     const p = await project('judge-unasserted', {
       'reeval.config.ts': fakeConfig(),
@@ -1230,6 +1288,102 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
       e?.trial.checks.map((c) => c.command),
       ['echo after'],
     )
+  })
+
+  test("a check that fails after a failing verdict the eval didn't assert is the check's error", async () => {
+    const p = await project('judge-informational', {
+      'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.2 }) }' }),
+      'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('unasserted', async (c) => {
+  await c.send('go')
+  await c.judge('nice?')
+  await expect(c.exec('exit 3'), 'tests pass').toSucceed()
+})
+evaluate('asserted not', async (c) => {
+  await c.send('go')
+  expect(await c.judge('nice?')).not.toPass()
+  await expect.soft(c.exec('exit 3'), 'tests pass').toSucceed()
+})
+evaluate('judge first', async (c) => {
+  await c.send('go')
+  expect.soft(await c.judge('nice?')).toPass()
+  await expect.soft(c.exec('exit 3'), 'tests pass').toSucceed()
+})
+evaluate('canary', async (c) => {
+  await c.send('go')
+  await expect(c.exec('exit 0'), 'tests pass').toSucceed()
+  expect.soft(await c.judge('nice?')).toPass()
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const run = readRun(p.dir)
+    const byName = Object.fromEntries(run.evals.map((e) => [e.name, e]))
+    for (const name of ['unasserted', 'asserted not', 'judge first']) {
+      const e = byName[name]
+      assert.equal(e?.trial.judgements[0]?.verdict, 'fail', name)
+      assert.equal(e?.error?.kind, 'assertion', name)
+      assert.match(e?.error?.message ?? '', /^tests pass: expected command to succeed/, name)
+    }
+    assert.equal(byName.canary?.error?.kind, 'judge', 'a failed toPass is the judge’s')
+    const summary = run.read('summary.md')
+    const attempts = summary.slice(summary.indexOf('## Attempts'))
+    assert.equal(
+      attempts.match(/tests pass: expected command to succeed/g)?.length,
+      3,
+      'each check failure is shown',
+    )
+  })
+
+  test('a failed check fails the attempt as itself beside a failed toPass, in either order', async () => {
+    const p = await project('judge-beside-check', {
+      'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.2 }) }' }),
+      'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('check then judge', async (c) => {
+  await c.send('go')
+  await expect.soft(c.exec('exit 3'), 'tests pass').toSucceed()
+  expect(await c.judge('nice?')).toPass()
+})
+evaluate('judge then erroring check', async (c) => {
+  await c.send('go')
+  expect.soft(await c.judge('nice?')).toPass()
+  await expect.soft(42 as never, 'tests pass').toSucceed()
+})
+evaluate('caught check', async (c) => {
+  await c.send('go')
+  try {
+    await expect(c.exec('exit 3'), 'optional').toSucceed()
+  } catch {}
+  expect(await c.judge('nice?')).toPass()
+})
+evaluate('caught check alone', async (c) => {
+  await c.send('go')
+  try {
+    await expect(c.exec('exit 3'), 'optional').toSucceed()
+  } catch {}
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const byName = Object.fromEntries(readRun(p.dir).evals.map((e) => [e.name, e]))
+    const alone = byName['caught check alone']
+    assert.equal(alone?.outcome, 'fail', 'a body that returns after a caught check fails')
+    assert.equal(alone?.error?.kind, 'assertion')
+    const check = byName['check then judge']?.error
+    assert.equal(check?.kind, 'assertion')
+    assert.match(check?.message ?? '', /^tests pass: expected command to succeed/)
+    const erroring = byName['judge then erroring check']?.error
+    assert.equal(erroring?.kind, 'assertion', 'a check that errored didn’t hold either')
+    assert.match(erroring?.message ?? '', /toSucceed\(\) expects/)
+    const caught = byName['caught check']?.error
+    assert.equal(caught?.kind, 'assertion', 'a caught check still fails the attempt, as itself')
+    assert.match(
+      caught?.message ?? '',
+      /^optional: expected command to succeed[\s\S]*\(the eval caught this failed check, which still fails the attempt; to wait or retry, use expect\.poll\)$/,
+    )
+    assert.match(r.stdout, /Error: tests pass: expected command to succeed/)
   })
 
   test('judge state cascades key by key from the config to the call; build output is dropped', async () => {
@@ -1878,7 +2032,7 @@ evaluate('fine', async () => {})
 
   for (const [why, stop] of [
     ['its deadline passes', { deadlineMs: 10_000 }],
-    ['its test is cancelled', { abortOnTurn: true }],
+    ['its test is canceled', { abortOnTurn: true }],
   ] as const) {
     test(`runCli stops a stuck run when ${why}: SIGTERM, then nothing is left`, {
       skip: noSignals,
@@ -1907,11 +2061,11 @@ evaluate('fine', async () => {})
         error.message,
         'deadlineMs' in stop
           ? /^reeval run --output-logs full was stopped because it was still running after 10000ms; it exited \(exit 143\)/
-          : /^reeval run --output-logs full was stopped because the test was cancelled .*; it exited \(exit 143\)/,
+          : /^reeval run --output-logs full was stopped because the test was canceled .*; it exited \(exit 143\)/,
       )
       // The canary: the agent was mid-turn, with a sandbox, when it was stopped.
       assert.match(error.message, /turn 1 started/)
-      assert.match(error.message, /Cancelling: stopping agents and destroying sandboxes/)
+      assert.match(error.message, /Canceling: stopping agents and destroying sandboxes/)
       assert.throws(() => process.kill(-pid, 0), { code: 'ESRCH' }, 'its process group is gone')
       assert.deepEqual(liveSandboxes(p), [])
       assert.equal(readRun(p.dir).run.status, 'interrupted')
@@ -1954,9 +2108,9 @@ evaluate('fine', async () => {})
       assert.equal(run.status, 'interrupted')
       assert.equal(evals[0]?.outcome, 'fail')
       assert.equal(evals[0]?.error?.kind, 'aborted')
-      assert.match(r.stdout, /^cancelled {8}agent eval\n {2}cancelled {8}The run was cancelled$/m)
-      assert.match(r.stdout, /^Interrupted: attempts that hadn’t finished were cancelled$/m)
-      assert.match(r.stdout, /^1 cancelled$/m, 'a cancelled attempt is not a fail')
+      assert.match(r.stdout, /^canceled {9}agent eval\n {2}canceled {9}The run was canceled$/m)
+      assert.match(r.stdout, /^Interrupted: attempts that hadn’t finished were canceled$/m)
+      assert.match(r.stdout, /^1 canceled$/m, 'a canceled attempt is not a fail')
       assert.deepEqual(liveSandboxes(p), [])
     })
   }
@@ -2062,4 +2216,43 @@ evaluate('agent eval', async (c) => {
     assert.equal(readRun(p.dir).run.status, 'interrupted')
     assert.deepEqual(liveSandboxes(p), [])
   })
+
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    test(`${signal} while a file is still loading leaves no worker behind`, {
+      skip: noSignals,
+    }, async () => {
+      // The worker is the CLI's child: the file signals the CLI itself, mid-load, then never
+      // finishes loading.
+      const p = await project('signal-loading', {
+        'reeval.config.ts': fakeConfig(),
+        'evals/hang.eval.ts': `import { writeFileSync } from 'node:fs'
+import { evaluate } from 'reeval'
+writeFileSync(new URL('../worker.pid', import.meta.url), String(process.pid))
+setInterval(() => {}, 1000)
+process.kill(process.ppid, '${signal}')
+await new Promise(() => {})
+evaluate('never', async () => {})
+`,
+      })
+      const r = await runCli(p.dir, ['run'], { timeoutMs: 20_000 })
+      assert.notEqual(r.code, 0, r.stdout + r.stderr)
+      const worker = Number(readFileSync(join(p.dir, 'worker.pid'), 'utf8'))
+      const alive = () => {
+        try {
+          process.kill(worker, 0)
+          return true
+        } catch {
+          return false
+        }
+      }
+      try {
+        const deadline = Date.now() + 10_000
+        while (alive() && Date.now() < deadline)
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        assert.equal(alive(), false, 'the worker exited')
+      } finally {
+        if (alive()) process.kill(worker, 'SIGKILL')
+      }
+    })
+  }
 })

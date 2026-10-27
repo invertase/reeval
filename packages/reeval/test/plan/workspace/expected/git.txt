@@ -1,9 +1,10 @@
-no profile · 4 evals · 5 cells · 5 attempts
+no profile · 4 evals · 5 cells · 11 attempts
 warning: workspace git(github:acme/template) uses no ref (the default branch): results aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either way).
+hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
 evals/workspace.eval.ts › a pinned subdirectory              fake/pinned/docker  control       gated    ×1  workspace https://github.com/acme/app#v2.3.0:examples/basic
 evals/workspace.eval.ts › the default branch warns           fake/moving/docker  control       gated    ×1  workspace github:acme/template
-evals/workspace.eval.ts › a variant swaps the starting code  fake/pinned/docker  control       ungated  ×1  workspace https://github.com/acme/app#v2.3.0:examples/basic
-                                                             fake/next/docker    variant next  gated    ×1  workspace https://github.com/acme/app#v3.0.0:examples/basic
+evals/workspace.eval.ts › a variant swaps the starting code  fake/pinned/docker  control       ungated  ×4  runs 4 (compare default) · workspace https://github.com/acme/app#v2.3.0:examples/basic
+                                                             fake/next/docker    variant next  gated    ×4  workspace https://github.com/acme/app#v3.0.0:examples/basic
 evals/workspace.eval.ts › no workspace                       fake/-/docker       control       gated    ×1
 excluded: —
 image docker · cursor · 4 evals

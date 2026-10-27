@@ -9,7 +9,7 @@ export function missingReason(
   if (record.artifacts === 'none')
     return 'This run was recorded with --artifacts none, so no files were kept.'
   if (record.artifacts === 'failures')
-    return 'This run kept files for failing evals only (--artifacts failures).'
+    return 'This run kept files for failing attempts only (--artifacts failures).'
   if (recordedPath) return 'recorded, but not on disk (often a `*.log` gitignore)'
   return "The run didn't write this file."
 }

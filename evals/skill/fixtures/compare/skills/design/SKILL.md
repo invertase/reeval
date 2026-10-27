@@ -5,6 +5,6 @@ description: Acme's design guidelines for web pages. Use when building or stylin
 
 # Acme design
 
-- One accent colour, `#5b3cc4`, on a white background.
+- One accent color, `#5b3cc4`, on a white background.
 - Headings in a serif face; body text in the system sans-serif stack.
 - Every page ends with a footer reading `© Acme`.

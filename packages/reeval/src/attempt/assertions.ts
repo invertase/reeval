@@ -2,12 +2,17 @@
 // TypeScript `expect` or the attempt protocol's `expect` call): the one place a record's label,
 // its ` #n` and its message are decided, so the same calls make the same history keys.
 import type { RawAssertion } from '../engine/runtime.ts'
+import { redactSecrets } from '../redact.ts'
 import type { AssertionRecord } from '../types.ts'
 
 const MESSAGE_LIMIT = 1024
 const LABEL_LIMIT = 60
 
-const clipped = (s: string, limit: number) => (s.length > limit ? `${s.slice(0, limit)}…` : s)
+/** Masked first, so a secret the limit would cut through is masked whole. */
+const clipped = (text: string, limit: number) => {
+  const s = redactSecrets(text)
+  return s.length > limit ? `${s.slice(0, limit)}…` : s
+}
 
 const text = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
@@ -26,18 +31,27 @@ const shownSubject = (subject: unknown) =>
 
 /**
  * The records of an attempt's matcher calls, in call order. Without a label, one is
- * `<matcher> <first argument>` (or what the subject names); repeats get ` #2`, ` #3`.
+ * `<matcher> <first argument>` (or what the subject names); repeats get ` #2`, ` #3`, skipping
+ * any label already recorded, so each record's label is unique (a given `build #2` after two
+ * `build`s is `build #2 #2`).
  */
 export function assertionRecords(raw: readonly RawAssertion[]): AssertionRecord[] {
   const seen = new Map<string, number>()
+  const used = new Set<string>()
   return raw.map((r) => {
     const named = r.args.length ? shown(r.args[0]) : shownSubject(r.subject)
     const base =
       r.label ?? clipped(named === undefined ? r.matcher : `${r.matcher} ${named}`, LABEL_LIMIT)
-    const n = (seen.get(base) ?? 0) + 1
+    let n = seen.get(base) ?? 0
+    let label: string
+    do {
+      n += 1
+      label = n > 1 ? `${base} #${n}` : base
+    } while (used.has(label))
     seen.set(base, n)
+    used.add(label)
     return {
-      label: n > 1 ? `${base} #${n}` : base,
+      label,
       labelled: r.label !== undefined,
       matcher: r.matcher,
       status: r.status,
@@ -48,9 +62,25 @@ export function assertionRecords(raw: readonly RawAssertion[]): AssertionRecord[
   })
 }
 
-/** What fails the attempt at its end for its `expect.soft` calls: the first that didn't pass. */
-export function softFailure(raw: readonly RawAssertion[]): Error | undefined {
-  const failed = raw.find((r) => r.soft && r.status !== 'pass')
+export const CAUGHT_HINT =
+  '(the eval caught this failed check, which still fails the attempt; to wait or retry, use expect.poll)'
+
+/**
+ * What fails the attempt at its end for the checks that failed without ending the body: the first
+ * that didn't pass, an `expect.soft` as what it threw, a hard check the eval caught with
+ * `CAUGHT_HINT` after its message.
+ */
+export function checkFailure(raw: readonly RawAssertion[]): Error | undefined {
+  const failed = raw.find((r) => r.status !== 'pass')
   if (!failed) return undefined
-  return failed.error instanceof Error ? failed.error : new Error(text(failed.error))
+  const error = failed.error instanceof Error ? failed.error : new Error(text(failed.error))
+  if (failed.soft) return error
+  const caught = Object.setPrototypeOf(
+    Object.assign(new Error(), error),
+    Object.getPrototypeOf(error),
+  )
+  caught.name = error.name
+  caught.message = `${error.message} ${CAUGHT_HINT}`
+  caught.stack = error.stack?.replace(error.message, caught.message)
+  return caught
 }

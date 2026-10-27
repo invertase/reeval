@@ -6,7 +6,7 @@ const withHouseGreeting = defineEnvironment('with-house-greeting', ({ skill }) =
 }))
 
 // A pooled family: only the variant greets with Ahoy, so every case is a discordant pair and the
-// record has a family with rates and a paired lift; one more pooled off has no family.
+// record has a family with rates and a paired lift.
 evaluate.each(['Ada', 'Grace'])(
   'greets %s',
   { compare: { baseline: plain, variants: [withHouseGreeting], minLift: 0.2 } },
@@ -15,8 +15,3 @@ evaluate.each(['Ada', 'Grace'])(
     await expect(c.exec('grep -q Ahoy greet.js')).toSucceed()
   },
 )
-
-evaluate.each(['Ada', 'Grace'], { pool: false })('writes greet.js for %s', async (c, name) => {
-  await c.send(`Write greet.js that greets ${name}.`)
-  await expect(c).toHaveFile('greet.js')
-})

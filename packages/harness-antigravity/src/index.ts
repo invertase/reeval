@@ -37,6 +37,7 @@ export {
   ANTIGRAVITY_WORKSPACE_RULES_FILE,
   ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
   type AntigravityHarnessSettings,
+  type AntigravityVertex,
   createAntigravity,
 } from './antigravity-harness.ts'
 export {

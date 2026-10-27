@@ -1,5 +1,5 @@
 no profile · 1 evals · 6 cells · 18 attempts
-hint: 1 compare runs 3 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)
+hint: 1 compare runs 3 times per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)
 evals/study.eval.ts › a study: every cell ungated, three runs a cell  a/base/docker     control          ungated  ×3
                                                                       a/skilled/docker  variant skilled  ungated  ×3
                                                                       a/terse/docker    variant terse    ungated  ×3

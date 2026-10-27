@@ -4,13 +4,13 @@
 // upstream provider and the cost), never the model's wording, and never retries. Skipped unless
 // REEVAL_TEST_REAL=1; asked for, it fails naming OPENROUTER_API_KEY when that isn't set.
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import type { ShapeSchema } from '../scripts/schema/generate.ts'
 import { validate } from '../scripts/schema/validate.ts'
 import { OPENROUTER_JUDGE_MODEL } from '../src/judge/index.ts'
-import { readableInsights } from '../src/view/record.ts'
+import type { AnalysisDoc } from '../src/view/analysis.ts'
 import { pkgRoot, project, readRun, runCli } from './helpers.ts'
 
 const ANALYSIS_MODEL = 'google/gemini-3.8-flash'
@@ -58,24 +58,31 @@ evaluate('writes a greet(name) function', async (c) => {
   ) as ShapeSchema
   assert.deepEqual(validate(schema, run), [], 'the record fits its schema')
 
-  const judgement = run.evals[0]?.attempts[0]?.judgements?.[0]
-  assert.ok(judgement, `no judgement recorded\n${r.stdout}\n${r.stderr}`)
+  const judgment = run.evals[0]?.attempts[0]?.judgements?.[0]
+  assert.ok(judgment, `no judgment recorded\n${r.stdout}\n${r.stderr}`)
   t.diagnostic(
-    `${judgement.resolvedModel} on ${judgement.upstream} · $${judgement.costUsd} · score ${judgement.score}`,
+    `${judgment.resolvedModel} on ${judgment.upstream} · $${judgment.costUsd} · score ${judgment.score}`,
   )
-  assert.equal(judgement.model, OPENROUTER_JUDGE_MODEL)
-  assert.equal(judgement.gateway, 'openrouter')
-  assert.ok(judgement.resolvedModel, 'OpenRouter names the model that served the judge')
-  assert.ok(judgement.upstream, 'OpenRouter names the upstream provider that served the judge')
+  assert.equal(judgment.model, OPENROUTER_JUDGE_MODEL)
+  assert.equal(judgment.gateway, 'openrouter')
+  assert.ok(judgment.resolvedModel, 'OpenRouter names the model that served the judge')
+  assert.ok(judgment.upstream, 'OpenRouter names the upstream provider that served the judge')
   assert.ok(
-    typeof judgement.costUsd === 'number' && judgement.costUsd >= 0,
-    `the judge's cost: ${judgement.costUsd}`,
+    typeof judgment.costUsd === 'number' && judgment.costUsd >= 0,
+    `the judge's cost: ${judgment.costUsd}`,
   )
   assert.match(r.stdout, /judge served by \S/, "the output names the judge's upstream")
 
-  const insights = join(p.dir, '.reeval/runs', run.runId, 'insights.json')
-  assert.ok(existsSync(insights), `no insights written\n${r.stdout}\n${r.stderr}`)
-  const doc = readableInsights(JSON.parse(readFileSync(insights, 'utf8')))
-  assert.equal(doc?.model, ANALYSIS_MODEL)
-  assert.ok(doc && doc.usage.inputTokens > 0 && doc.usage.outputTokens > 0, 'the analysis call ran')
+  const analyze = await runCli(p.dir, ['analyze', run.runId, '--json'], {
+    env: { OPENROUTER_API_KEY: key },
+    timeoutMs: 120_000,
+  })
+  assert.equal(analyze.code, 0, `reeval analyze\n${analyze.stdout}\n${analyze.stderr}`)
+  const doc = JSON.parse(analyze.stdout) as AnalysisDoc
+  assert.equal(doc.model, ANALYSIS_MODEL)
+  assert.equal(doc.route, 'openrouter')
+  assert.ok(
+    (doc.usage.inputTokens ?? 0) > 0 && (doc.usage.outputTokens ?? 0) > 0,
+    'the analysis call ran',
+  )
 })

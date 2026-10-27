@@ -209,7 +209,7 @@
           "type": "string"
         },
         "cited": {
-          "description": "Each cited fact or evidence id, summarised in one line.",
+          "description": "Each cited fact or evidence id, summarized in one line.",
           "type": "object",
           "properties": {},
           "required": [],
@@ -274,7 +274,7 @@
           ]
         },
         "route": {
-          "enum": ["direct", "fake", "gateway", "openrouter"]
+          "enum": ["direct", "fake", "gateway", "openrouter", "vertex"]
         },
         "schemaVersion": {
           "const": 1
@@ -336,7 +336,7 @@
       "type": "object",
       "properties": {
         "base": {
-          "description": "Resolved once, so a nearer ancestor recorded later doesn't change what this analysed.",
+          "description": "Resolved once, so a nearer ancestor recorded later doesn't change what this analyzed.",
           "anyOf": [
             {
               "type": "null"

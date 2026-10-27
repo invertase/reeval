@@ -22,4 +22,3 @@
       with-skill: 4 paired cases, 95% interval +31…+100
 
 4 pass
-Set analysis.model in reeval.config.ts for answers to what each eval asks.

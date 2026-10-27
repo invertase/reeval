@@ -94,7 +94,7 @@ export const CODEX_ENDPOINTS = [
 /**
  * Codex's defaults but for what it sends besides model requests: its analytics (to
  * `ab.chatgpt.com`), and the plugin sync (the curated list from
- * `github.com`, the remote catalogue from `chatgpt.com`), which an eval doesn't use. A session
+ * `github.com`, the remote catalog from `chatgpt.com`), which an eval doesn't use. A session
  * given plugins turns plugins on, and with them the sync, which nothing else stops.
  */
 export const CODEX_QUIET_CONFIG = {

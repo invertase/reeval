@@ -19,7 +19,6 @@ import {
   OPENCODE_PNPM_WORKSPACE,
 } from './opencode-install.ts'
 import {
-  type OpenCodeProvider,
   openCodeProvider,
   providerEndpoints,
   providerTransformations,
@@ -52,15 +51,32 @@ export const OPENCODE_DENIED_TOOLS = ['question', 'browser'] as const
  */
 export const OPENCODE_WEB_SEARCH = { provider: 'exa', host: 'mcp.exa.ai' } as const
 
+/** Gemini's own thinking level, as Gemini's API takes it. */
+const geminiThinking = (effort: string) => ({ thinkingConfig: { thinkingLevel: effort } })
+
 /**
- * Provider thinking option: Anthropic's `thinking`, everyone else's `reasoningEffort`, keyed on
- * the model's own provider, which follows `vercel/` for a model on Vercel AI Gateway (OpenCode
- * passes the options on under that provider's name).
+ * What OpenCode adds to the body of each call on `model` for `effort` (its config's per-model
+ * `body`; OpenCode 2 has no per-model provider options), in the API's own field: Gemini's
+ * `thinkingConfig` (Gemini's API and Vertex AI), Anthropic's `output_config.effort`, the Responses API's `reasoning.effort`,
+ * OpenRouter's `reasoning.effort` (which it sends a Gemini model as its thinking level), and a
+ * Gemini model's `thinkingConfig` under Vercel AI Gateway's `providerOptions` (Vercel's own effort
+ * field maps every Gemini 3 level but `low` to `high`). Undefined for a provider whose field no
+ * run has checked.
  */
-export function openCodeEffortOptions(model: string, effort: string) {
+export function openCodeEffortBody(
+  model: string,
+  effort: string,
+): Record<string, unknown> | undefined {
   const parts = splitModel(model)
-  const upstream = parts?.provider === 'vercel' ? splitModel(parts.model) : parts
-  return upstream?.provider === 'anthropic' ? { thinking: effort } : { reasoningEffort: effort }
+  if (parts?.provider === 'openrouter') return { reasoning: { effort } }
+  if (parts?.provider === 'google' || parts?.provider === OPENCODE_VERTEX_PROVIDER)
+    return { generationConfig: geminiThinking(effort) }
+  if (parts?.provider === 'anthropic') return { output_config: { effort } }
+  if (parts?.provider === 'openai') return { reasoning: { effort } }
+  if (parts?.provider === 'vercel' && splitModel(parts.model)?.provider === 'google') {
+    return { providerOptions: { google: geminiThinking(effort), vertex: geminiThinking(effort) } }
+  }
+  return undefined
 }
 
 /**
@@ -77,10 +93,8 @@ export function openCodeConfig(options: OpenCodeConfigOptions = {}) {
   const parts = options.model ? splitModel(options.model) : undefined
   const provider = parts?.provider
   const modelId = parts?.model
-  const effortOptions =
-    options.model && options.effort
-      ? openCodeEffortOptions(options.model, options.effort)
-      : undefined
+  const effortBody =
+    options.model && options.effort ? openCodeEffortBody(options.model, options.effort) : undefined
   return {
     update: 'disable',
     share: 'disabled',
@@ -96,9 +110,7 @@ export function openCodeConfig(options: OpenCodeConfigOptions = {}) {
           providers: {
             [provider]: {
               settings: { transport: 'http' },
-              ...(effortOptions && modelId
-                ? { models: { [modelId]: { options: effortOptions } } }
-                : {}),
+              ...(effortBody && modelId ? { models: { [modelId]: { body: effortBody } } } : {}),
             },
           },
         }
@@ -118,7 +130,7 @@ export function openCodeConfig(options: OpenCodeConfigOptions = {}) {
 export type OpenCodeConfigOptions = {
   model?: string
   mcpServers?: OpenCodeHarnessSettings['mcpServers']
-  /** Reasoning effort: `options.reasoningEffort` or Anthropic's `options.thinking`. */
+  /** Reasoning effort, in the request body's own field ({@link openCodeEffortBody}). */
   effort?: string
 }
 
@@ -167,11 +179,27 @@ export type OpenCodeHarnessSettings = {
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
   readonly requireCredentialBrokering?: boolean
   /**
-   * Reasoning effort for the model's provider: `options.reasoningEffort` (OpenAI) or
-   * `options.thinking` (Anthropic). Values are whatever that provider takes.
+   * Reasoning effort, in the field the model's provider takes it in ({@link openCodeEffortBody}).
+   * Values are whatever that field takes; a provider with no such field is refused.
    */
   readonly effort?: string
+  /**
+   * Vertex AI instead of a key: OpenCode's `google-vertex` provider on this project and region,
+   * reading the service-account file at `credentialsFile` in the sandbox, for a
+   * `google-vertex/<model>` id. No key is read (`auth` may be empty); whoever runs the sandbox
+   * supplies the file and the token the calls carry.
+   */
+  readonly vertex?: OpenCodeVertex
 }
+
+export type OpenCodeVertex = {
+  readonly project: string
+  readonly location: string
+  readonly credentialsFile: string
+}
+
+/** OpenCode's provider for Vertex AI, which authenticates from Application Default Credentials. */
+export const OPENCODE_VERTEX_PROVIDER = 'google-vertex'
 
 /**
  * The requests OpenCode sends the model's provider's key on (see
@@ -191,12 +219,10 @@ export const openCodeEndpoints = (model: string, env: Record<string, string | un
  * (see {@link OpenCodeStreamTranslator}).
  */
 export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<OpenCodeBuiltinTools> {
-  const resolved = resolveOpenCodeProvider(settings.model, settings.vars ?? {})
-  if ('error' in resolved) throw new Error(resolved.error)
-  const { provider, vars } = resolved
-  if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[provider.env]) {
+  const route = settings.vertex ? vertexRoute(settings, settings.vertex) : keyRoute(settings)
+  if (settings.effort && !openCodeEffortBody(settings.model, settings.effort)) {
     throw new Error(
-      `OpenCode auth must be an environment object with ${provider.env} (the ${provider.name} key for ${settings.model})`,
+      `OpenCode's effort on ${settings.model} goes in no field reeval has checked the model reads; drop effort, or run a model on Google, Vertex AI, Anthropic, OpenAI or OpenRouter, or a Gemini model on Vercel AI Gateway`,
     )
   }
   const acp = createACP({
@@ -213,7 +239,58 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
     executable: OPENCODE_GATE_EXECUTABLE,
     args: [],
     auth: settings.auth,
-    env: { ...openCodeEnv(settings), ...vars },
+    env: { ...openCodeEnv(settings), ...route.env },
+    ...(route.credentialBrokering
+      ? { credentialEnv: route.credentialEnv, credentialBrokering: route.credentialBrokering }
+      : {}),
+    modelMapping: { type: 'session-config-option', path: 'model' },
+    skillsDirectory: OPENCODE_HOME_SKILLS_DIR,
+  })
+  return {
+    ...acp,
+    doStart: async (options) => {
+      const sandbox = options.sandboxSession as { addRequestTransformations?: unknown }
+      if (
+        route.credentialEnv.length > 0 &&
+        settings.requireCredentialBrokering &&
+        typeof sandbox.addRequestTransformations !== 'function'
+      ) {
+        throw new Error(
+          `The sandbox can't broker ${route.credentialEnv.join(', ')} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
+        )
+      }
+      const session = await acp.doStart(options)
+      // After the bootstrap, which installs OpenCode's bin directory; the first turn runs it.
+      await writeGate(options.sandboxSession, options.abortSignal)
+      return translated(session, route, Object.keys(settings.mcpServers ?? {}))
+    },
+  }
+}
+
+/** Where OpenCode's model calls go, and the key (if any) the sandbox gets for them. */
+type Route = {
+  readonly id: string
+  readonly name: string
+  readonly env: Record<string, string>
+  readonly credentialEnv: string[]
+  readonly credentialBrokering?: Parameters<typeof createACP>[0]['credentialBrokering']
+  /** Why this route can't run a turn's model, or undefined when it can. */
+  readonly refuses: (model: string) => string | undefined
+}
+
+function keyRoute(settings: OpenCodeHarnessSettings): Route {
+  const resolved = resolveOpenCodeProvider(settings.model, settings.vars ?? {})
+  if ('error' in resolved) throw new Error(resolved.error)
+  const { provider, vars } = resolved
+  if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[provider.env]) {
+    throw new Error(
+      `OpenCode auth must be an environment object with ${provider.env} (the ${provider.name} key for ${settings.model})`,
+    )
+  }
+  return {
+    id: provider.id,
+    name: provider.name,
+    env: vars,
     credentialEnv: [provider.env],
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[provider.env]
@@ -225,26 +302,31 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
         ...(headers ? { headers } : {}),
       }).map(createCredentialRequestTransformation)
     },
-    modelMapping: { type: 'session-config-option', path: 'model' },
-    skillsDirectory: OPENCODE_HOME_SKILLS_DIR,
-  })
+    refuses: (model) =>
+      openCodeProvider(model).id === provider.id
+        ? undefined
+        : `OpenCode was started with ${provider.name}'s key, so it can't run ${model}`,
+  }
+}
+
+function vertexRoute(settings: OpenCodeHarnessSettings, vertex: OpenCodeVertex): Route {
+  const onVertex = (model: string) => splitModel(model)?.provider === OPENCODE_VERTEX_PROVIDER
+  if (!onVertex(settings.model)) {
+    throw new Error(
+      `OpenCode on Vertex AI runs a ${OPENCODE_VERTEX_PROVIDER}/<model> id, such as '${OPENCODE_VERTEX_PROVIDER}/gemini-3.8-flash' (got ${JSON.stringify(settings.model)})`,
+    )
+  }
   return {
-    ...acp,
-    doStart: async (options) => {
-      const sandbox = options.sandboxSession as { addRequestTransformations?: unknown }
-      if (
-        settings.requireCredentialBrokering &&
-        typeof sandbox.addRequestTransformations !== 'function'
-      ) {
-        throw new Error(
-          `The sandbox can't broker ${provider.env} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
-        )
-      }
-      const session = await acp.doStart(options)
-      // After the bootstrap, which installs OpenCode's bin directory; the first turn runs it.
-      await writeGate(options.sandboxSession, options.abortSignal)
-      return translated(session, provider, Object.keys(settings.mcpServers ?? {}))
+    id: OPENCODE_VERTEX_PROVIDER,
+    name: 'Vertex AI',
+    env: {
+      GOOGLE_CLOUD_PROJECT: vertex.project,
+      GOOGLE_VERTEX_LOCATION: vertex.location,
+      GOOGLE_APPLICATION_CREDENTIALS: vertex.credentialsFile,
     },
+    credentialEnv: [],
+    refuses: (model) =>
+      onVertex(model) ? undefined : `OpenCode was started on Vertex AI, so it can't run ${model}`,
   }
 }
 
@@ -268,17 +350,10 @@ type Emit = (part: { type: string; [key: string]: unknown }) => void
  * The session, with each turn's model checked against the provider whose key it has, and its
  * parts through a fresh {@link OpenCodeStreamTranslator}.
  */
-function translated(
-  session: Session,
-  provider: OpenCodeProvider,
-  mcpServers: readonly string[],
-): Session {
+function translated(session: Session, route: Route, mcpServers: readonly string[]): Session {
   const turn = (run: (options: never) => unknown) => (options: { emit: Emit; model?: string }) => {
-    if (options.model && openCodeProvider(options.model).id !== provider.id) {
-      throw new Error(
-        `OpenCode was started with ${provider.name}'s key, so it can't run ${options.model}`,
-      )
-    }
+    const refused = options.model ? route.refuses(options.model) : undefined
+    if (refused) throw new Error(refused)
     const translator = new OpenCodeStreamTranslator({ mcpServers })
     return run({
       ...options,

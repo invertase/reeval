@@ -5,7 +5,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { createWriteStream, mkdirSync, type WriteStream } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { redactSecrets } from '../redact.ts'
+import { redactJson, redactJsonText, redactSecrets, redactSplitSecrets } from '../redact.ts'
 import {
   DEBUG_LOG,
   type DebugLine,
@@ -50,7 +50,7 @@ const json = (value: unknown) => {
             : v,
     )
   } catch (error) {
-    return JSON.stringify({ unserialisable: (error as Error).message })
+    return JSON.stringify({ unserializable: (error as Error).message })
   }
 }
 
@@ -104,7 +104,7 @@ export class AttemptDebug {
       data,
     })
     if (entry.length > MAX_ENTRY) {
-      const head = json(data).slice(0, ENTRY_HEAD)
+      const head = redactJsonText(json(data)).slice(0, ENTRY_HEAD)
       entry = json({
         at: new Date(at).toISOString(),
         ms: at - this.#startedAt,
@@ -115,7 +115,7 @@ export class AttemptDebug {
     }
     this.#push(entry)
     if (this.verbosity < 2 || show === false) return
-    const payload = json(data)
+    const payload = redactJsonText(json(data) ?? '')
     this.#emit?.({
       at,
       level: 2,
@@ -124,11 +124,10 @@ export class AttemptDebug {
       ...(typeof show === 'string' && data === undefined
         ? {}
         : {
-            detail: redactSecrets(
+            detail:
               payload.length > MAX_SCREEN
                 ? `${payload.slice(0, MAX_SCREEN)}… (${payload.length - MAX_SCREEN} more)`
                 : payload,
-            ),
           }),
     })
   }
@@ -161,7 +160,7 @@ export class AttemptDebug {
       this.#requests = createWriteStream(join(this.dir, REQUESTS_FILE), { flags: 'a' })
       this.#requests.on('error', () => {})
     }
-    this.#requests.write(`${redactSecrets(JSON.stringify(r))}\n`)
+    this.#requests.write(`${redactJson(r)}\n`)
     if (expected) this.traceLine('gateway', 'request', r, requestLine(r))
     else this.log('gateway', requestLine(r))
     if (headers) this.trace('gateway', 'headers', { url: r.url, ...headers }, `headers ${r.url}`)
@@ -196,8 +195,8 @@ export class AttemptDebug {
         limitBytes: this.#limit,
         dropped: this.#dropped,
       })
-      const body = this.#trace.slice(this.#head).join('\n')
-      await writeFile(join(this.dir, TRACE_FILE), redactSecrets(`${head}\n${body}\n`)).catch(
+      const body = redactSplitSecrets(this.#trace.slice(this.#head)).join('\n')
+      await writeFile(join(this.dir, TRACE_FILE), redactJsonText(`${head}\n${body}\n`)).catch(
         () => {},
       )
     }

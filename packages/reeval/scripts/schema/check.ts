@@ -9,8 +9,8 @@ import {
   MIGRATIONS,
   READ_DEFAULTS,
   readableAnalysis,
-  readableInsights,
   readableRecord,
+  readableRemarks,
   readableTranscriptLine,
 } from '../../src/view/record.ts'
 import { type Change, checkDefaults, compare } from './compat.ts'
@@ -156,7 +156,7 @@ export function checkCorpus(current: Map<string, ShapeSchema>): string[] {
           .join('\n')}`,
       )
   }
-  const { records, transcripts, analyses, insights } = corpus()
+  const { records, transcripts, analyses, remarks } = corpus()
   const shape = (name: string) => current.get(name) as ShapeSchema
   for (const r of records) {
     report(r.file, validate(shape('run-record'), readableRecord(structuredClone(r.value) as never)))
@@ -173,8 +173,8 @@ export function checkCorpus(current: Map<string, ShapeSchema>): string[] {
   for (const a of analyses) {
     report(a.file, validate(shape('analysis'), readableAnalysis(structuredClone(a.value) as never)))
   }
-  for (const i of insights) {
-    report(i.file, validate(shape('insights'), readableInsights(structuredClone(i.value) as never)))
+  for (const r of remarks) {
+    report(r.file, validate(shape('remarks'), readableRemarks(structuredClone(r.value) as never)))
   }
   if (!problems.length) return []
   return [

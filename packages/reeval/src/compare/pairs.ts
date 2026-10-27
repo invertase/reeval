@@ -5,9 +5,11 @@ import { clip } from '../text.ts'
 import type {
   CompareAnswer,
   CompareCut,
+  ErrorKind,
   ExecResult,
   FakeVote,
   FileChange,
+  Outcome,
   PairFactor,
   PairVote,
   TranscriptEvent,
@@ -83,6 +85,14 @@ export const pairFactors = (across?: PairFactor | readonly PairFactor[]): PairFa
 export const acrossOf = (across: PairFactor | readonly PairFactor[]): CompareCut[] => {
   const factors = pairFactors(across)
   return ALL_CUTS.filter((cut) => factors.includes(cut === 'within' ? 'environment' : 'harness'))
+}
+
+/**
+ * Whether an attempt's deterministic checks held, so a pair can include it: it passed, or a
+ * judge's call or verdict failed it (`error.kind` is `judge` only then).
+ */
+export function checksHeld(outcome: Outcome, error: { kind: ErrorKind } | null): boolean {
+  return outcome === 'pass' || (outcome === 'fail' && error?.kind === 'judge')
 }
 
 /**
@@ -204,7 +214,7 @@ export function voteOf(
 
 /**
  * Each side's wins over the decided votes it was in, per cut. A tie decides nothing, so it counts
- * for neither side; both orders of a pair count, since each is its own judgement.
+ * for neither side; both orders of a pair count, since each is its own judgment.
  */
 export function ratesOf(votes: PairVote[]): CompareAnswer['rates'] {
   const rates = new Map<string, CompareAnswer['rates'][number]>()

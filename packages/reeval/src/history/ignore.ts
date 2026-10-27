@@ -5,7 +5,8 @@ import { fromCwd, relativeFile } from '../ids.ts'
 
 /**
  * Un-ignores recorded artifacts. A parent `*.log` would otherwise drop `setup.log` and
- * `checks/<n>.log` when someone `git add`s the history folder.
+ * `checks/<n>.log` when someone `git add`s the history folder. Ignores the `.tmp-*` files a
+ * write keeps there while it runs, such as a claim a crashed write left.
  */
 export const HISTORY_GITIGNORE = `# Un-ignore recorded files. A parent *.log drops setup.log and checks/*.log.
 !*.json
@@ -13,6 +14,8 @@ export const HISTORY_GITIGNORE = `# Un-ignore recorded files. A parent *.log dro
 !*.md
 !*.patch
 !*.log
+# A write in progress, or one cut short: never part of history.
+.tmp-*
 `
 
 export const historyGitignorePath = (historyDir: string) => join(historyDir, '.gitignore')

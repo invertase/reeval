@@ -27,6 +27,8 @@ import {
   environmentDataProblem,
   isEnvironment,
   isMovingRef,
+  type PlainCredentialHeader,
+  plainCredentialHeaders,
   plannedSecrets,
   sameWorkspaceOnly,
   sandboxOf,
@@ -36,11 +38,13 @@ import {
   workspaceOf,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
+import type { VertexSettings } from './gateway/vertex.ts'
 import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
 import { mergeJudge } from './judge/state-options.ts'
 import { isObjectLike } from './object.ts'
+import { EFFECT_MIN_COUNTED } from './stats.ts'
 import type {
   CaptureOptions,
   Cell,
@@ -65,6 +69,7 @@ import type {
   Question,
   QuestionOptions,
   ResolvedProfile,
+  Revision,
   SandboxDescriptor,
   SandboxWarning,
 } from './types.ts'
@@ -85,6 +90,7 @@ export const EVAL_OPTION_KEYS = [
   'questions',
   'timeout',
   'tags',
+  'revision',
   'pin',
 ] as const
 
@@ -104,6 +110,8 @@ const SUGGEST: Record<string, string> = {
   network: 'egress',
   networkPolicy: 'egress',
   tag: 'tags',
+  version: 'revision',
+  rev: 'revision',
   pins: 'pin',
   passRate: 'gate',
   threshold: 'gate',
@@ -211,6 +219,10 @@ export function refuseIllegalCompare(
   }
 }
 
+const isRevision = (value: unknown): value is Revision =>
+  (typeof value === 'number' && Number.isSafeInteger(value)) ||
+  (typeof value === 'string' && value.trim() !== '')
+
 /** Throws on keys that aren't options, and on values of the wrong shape, suggesting a fix. */
 export function checkOptions(options: object, where: string, allowed = KNOWN): void {
   for (const key of Object.keys(options)) {
@@ -237,6 +249,11 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   ) {
     throw new UsageError(
       `tags in ${where} must be a list of strings, e.g. tags: ['smoke'] (got ${JSON.stringify(o.tags)})`,
+    )
+  }
+  if (o.revision !== undefined && !isRevision(o.revision)) {
+    throw new UsageError(
+      `revision in ${where} must be a whole number or a non-empty string, e.g. revision: 2 (got ${JSON.stringify(o.revision)})`,
     )
   }
   if (o.env !== undefined) checkEnv(o.env, where, UsageError)
@@ -510,12 +527,12 @@ const plannedQuestions = (value: Question[]): PlannedQuestion[] =>
   )
 
 /** Whether the eval's matrix varies each factor a pairwise question can vary. */
-const variesBy = (r: Resolved): Record<PairFactor, boolean> => ({
+const variesBy = (r: Pick<Resolved, 'compare' | 'harness'>): Record<PairFactor, boolean> => ({
   environment: (r.compare?.variants.length ?? 0) > 0,
   harness: r.harness.length > 1,
 })
 
-const FACTOR_FIX: Record<PairFactor, (r: Resolved, where: string) => string> = {
+const FACTOR_FIX: Record<PairFactor, (r: Pick<Resolved, 'harness'>, where: string) => string> = {
   environment: (_, where) =>
     `varies the environment (across: 'environment'), but ${where} runs one environment, so it has no pairs to ask. Add compare: { variants: [...] }`,
   harness: (r, where) =>
@@ -541,6 +558,8 @@ export type Resolved = {
   questions: PlannedQuestion[]
   timeout: Duration | undefined
   tags: string[]
+  /** The innermost level's `revision`, if any sets one. */
+  revision: Revision | undefined
   pin: PinnableKey[]
   /** Which level last set each option, e.g. `group("genkit")`; for the debug trace. */
   sources?: Partial<Record<keyof EvalOptions, string>>
@@ -563,8 +582,18 @@ function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | un
   }
 }
 
+/** Resolved but for `runs`, which stays unset until the cascade picks its default. */
+export type Cascading = Omit<Resolved, 'runs'> & { runs: number | undefined }
+
+/**
+ * Runs per cell when no level sets `runs`: a compare with variants runs `EFFECT_MIN_COUNTED` a
+ * side, the fewest whose lift can reach a verdict; anything else, a pooled family's cases
+ * included, runs once.
+ */
+export const COMPARE_DEFAULT_RUNS = EFFECT_MIN_COUNTED
+
 function applyLevel(
-  out: Resolved,
+  out: Cascading,
   options: EvalOptions,
   where: string,
   egress: 'inherited' | 'own' = 'own',
@@ -580,6 +609,7 @@ function applyLevel(
   if (options.runs !== undefined) out.runs = options.runs
   if (options.gate !== undefined) out.gate = options.gate
   if (options.timeout !== undefined) out.timeout = options.timeout
+  if (options.revision !== undefined) out.revision = options.revision
   Object.assign(out.env, options.env)
   out.judge = mergeJudge(out.judge, options.judge)
   if (options.capture !== undefined) {
@@ -603,6 +633,8 @@ export type ResolvedEval = {
   notes: string[]
   /** Set when a profile's limit leaves the eval nothing to run. */
   skip?: string
+  /** The ids of the harnesses the eval runs on before a profile's limit narrows them. */
+  harnesses: string[]
 }
 
 /**
@@ -610,12 +642,18 @@ export type ResolvedEval = {
  * profile's limit (narrowing only, except pinned keys); then `--runs`.
  */
 export function cascade(
-  base: Resolved,
+  base: Cascading,
   levels: Level[],
   where: string,
-  options: { profile?: ResolvedProfile | null; runs?: number; skipped?: boolean } = {},
+  options: {
+    profile?: ResolvedProfile | null
+    runs?: number
+    skipped?: boolean
+    /** A case of a pooled `evaluate.each`, whose lift pools over the cases, not the runs. */
+    pooled?: boolean
+  } = {},
 ): ResolvedEval {
-  const out: Resolved = {
+  const out: Cascading = {
     ...base,
     env: { ...base.env },
     egress: { ...base.egress },
@@ -703,20 +741,12 @@ export function cascade(
     )
 
   let skip: string | undefined
+  const harnesses = out.harness.map(harnessId)
   const limit = profile?.limit
   if (profile && limit) {
     const tag = `profile ${profile.name}`
     const pinned = (key: PinnableKey) => out.pin.includes(key)
-    // --runs replaces the runs outright, so the profile's limit doesn't apply.
-    if (
-      limit.runs !== undefined &&
-      options.runs === undefined &&
-      !pinned('runs') &&
-      out.runs > limit.runs
-    ) {
-      notes.push(`runs ${out.runs} → ${limit.runs} (${tag})`)
-      out.runs = limit.runs
-    }
+    let comparedLeft = true
     if (limit.harness && !pinned('harness')) {
       const kept = out.harness.filter((h) => limit.harness?.includes(harnessId(h)))
       if (kept.length === 0) {
@@ -724,9 +754,21 @@ export function cascade(
       } else if (kept.length < out.harness.length) {
         notes.push(`harnesses ${out.harness.length} → ${kept.length} (${tag})`)
         out.harness = kept
+        // With every harness compare.harness names gone, no harness runs a variant, so the
+        // compare is off and its controls gate as limit.compare: false leaves them.
+        const scope = out.compare?.harness
+        if (
+          out.compare?.variants.length &&
+          scope &&
+          !kept.some((h) => scope.includes(harnessId(h)))
+        ) {
+          notes.push(`compare off: no compared harness left (${tag})`)
+          out.compare = { ...out.compare, variants: [] }
+          comparedLeft = false
+        }
       }
     }
-    if (out.compare && limit.compare !== undefined && !pinned('compare')) {
+    if (out.compare && comparedLeft && limit.compare !== undefined && !pinned('compare')) {
       if (limit.compare === false) {
         notes.push(`compare off (${tag})`)
         out.compare = { ...out.compare, variants: [] }
@@ -740,8 +782,23 @@ export function cascade(
         }
       }
     }
+    // After the compare's narrowing, so a compare the limit turns off defaults to one run.
+    defaultRuns(out, notes, options)
+    // --runs replaces the runs outright, so the profile's limit doesn't apply.
+    if (
+      limit.runs !== undefined &&
+      options.runs === undefined &&
+      !pinned('runs') &&
+      (out.runs ?? 1) > limit.runs
+    ) {
+      notes.push(`runs ${out.runs} → ${limit.runs} (${tag})`)
+      out.runs = limit.runs
+      out.sources = { ...out.sources, runs: `profiles.${profile.name}.limit` }
+    }
     const pins = out.pin.filter((k) =>
-      k === 'compare' ? limit.compare !== undefined && out.compare : limit[k] !== undefined,
+      k === 'compare'
+        ? limit.compare !== undefined && out.compare && comparedLeft
+        : limit[k] !== undefined,
     )
     if (pins.length) notes.push(`pinned: ${pins.join(', ')}`)
   }
@@ -765,8 +822,50 @@ export function cascade(
     if (narrowed) notes.push(`${plural(narrowed)} narrowed (profile ${profile.name})`)
     out.questions = kept
   }
-  if (options.runs !== undefined) out.runs = options.runs
-  return { resolved: out, notes, ...(skip ? { skip } : {}) }
+  defaultRuns(out, notes, options)
+  const resolved: Resolved = { ...out, runs: options.runs ?? out.runs ?? 1 }
+  return { resolved, notes, harnesses, ...(skip ? { skip } : {}) }
+}
+
+/** Gives `out` its default runs when no level set them and `--runs` doesn't replace them. */
+function defaultRuns(
+  out: Cascading,
+  notes: string[],
+  options: { runs?: number; pooled?: boolean },
+): void {
+  if (out.runs !== undefined || options.runs !== undefined) return
+  if (!out.compare?.variants.length || options.pooled) {
+    out.runs = 1
+    return
+  }
+  out.runs = COMPARE_DEFAULT_RUNS
+  out.sources = { ...out.sources, runs: `compare default: ${COMPARE_DEFAULT_RUNS} a side` }
+  notes.push(`runs ${COMPARE_DEFAULT_RUNS} (compare default)`)
+}
+
+/**
+ * Refuses a profile's `limit.harness` id that no collected eval runs on: it keeps nothing, and a
+ * limit that keeps nothing skips every eval. `harnesses` are the ids every eval in the loaded
+ * files runs on before the limit, whatever the tag and name filters pick. When a path filter
+ * loaded only some files (`partial`), an id may name a harness of the others, so only a limit
+ * none of whose ids match is refused.
+ */
+export function checkLimitHarness(
+  profile: ResolvedProfile | null | undefined,
+  configFile: string,
+  collected: { harnesses: readonly string[]; partial: boolean },
+): void {
+  const ids = profile?.limit.harness
+  if (!profile || !ids?.length) return
+  const unknown = ids.filter((id) => !collected.harnesses.includes(id))
+  if (!unknown.length || (collected.partial && unknown.length < ids.length)) return
+  const listed = unknown.map((id) => JSON.stringify(id)).join(', ')
+  const have = [...collected.harnesses].sort()
+  const evals = collected.partial ? 'eval in the selected files' : 'eval'
+  const the = collected.partial ? 'the evals in the selected files' : 'the evals'
+  throw new UsageError(
+    `profiles.${profile.name}.limit.harness in ${configFile} lists ${listed}, which no ${evals} runs on. Harness ids ${the} run on: ${have.join(', ') || 'none'}.`,
+  )
 }
 
 export type PlannedAttempt = {
@@ -779,6 +878,8 @@ export type PlannedAttempt = {
   minLift?: number
   n: number
   label: string
+  /** The `vertex()` settings its harness runs on, when it resolved to Vertex AI. */
+  vertex?: VertexSettings
 }
 
 /**
@@ -833,8 +934,11 @@ export function sandboxSetBy(
   return resolved.sources?.environment ?? configFile
 }
 
-/** Per harness: the control, then each variant it compares on; then run numbers. */
-export function expand(resolved: Resolved): PlannedAttempt[] {
+/**
+ * Per harness: the control, then each variant it compares on; then run numbers. `vertex` is the
+ * run's `vertex()` settings, for each harness that resolved to Vertex AI.
+ */
+export function expand(resolved: Resolved, vertex?: VertexSettings): PlannedAttempt[] {
   const { compare } = resolved
   // A compare's control is its baseline, which `cascade` resolved when it was omitted. An
   // environment from another level is not applied beside it.
@@ -844,6 +948,7 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
   const attempts: PlannedAttempt[] = []
   for (const harness of resolved.harness) {
     const hid = harnessId(harness)
+    const onVertex = harness.gateway === 'vertex' && harness.kind !== 'fake' ? vertex : undefined
     const cells: Array<{
       env: AppliedEnvironment
       sandbox: SandboxDescriptor
@@ -901,13 +1006,14 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
           harness,
           sandbox,
           environment: env,
-          egress: plannedEgress(resolved.egress, harness, resolved.env, env.layers),
+          egress: plannedEgress(resolved.egress, harness, resolved.env, env.layers, onVertex),
           gate,
           ...(cell.role === 'variant' && compare?.minLift !== undefined
             ? { minLift: compare.minLift }
             : {}),
           n,
           label,
+          ...(onVertex ? { vertex: onVertex } : {}),
         })
       }
     }
@@ -986,16 +1092,34 @@ export const secretVarsIn = (env: EnvVars, attempt: PlannedAttempt): string[] =>
 
 const brokerHint = (s: UnbrokeredSecret) =>
   /^mcp\.[^.]+\.headers\./.test(s.label)
-    ? 'give the MCP server an https:// URL (reeval brokers its header secrets to its own host, over HTTPS only)'
+    ? 'give the MCP server an https:// URL (reeval brokers its header secrets over HTTPS only, to its own host unless they set hosts)'
     : `add the hosts it's sent to, e.g. secret.fromEnv('${s.from}', { hosts: ['api.example.com'] })`
 
 export const unbrokeredWarning = (s: UnbrokeredSecret) =>
   s.checksOnly
-    ? `${s.label} reaches the checks (c.exec, setup steps) as its real value; the agent never gets it. To give the checks only a placeholder, ${brokerHint(s)}.`
+    ? `${s.label} reaches the checks (c.exec, setup steps) as its real value. It's never in the agent's own environment, but a process a setup step leaves running holds it while the agent works. To give the checks only a placeholder, ${brokerHint(s)}.`
     : `${s.label} is in the sandbox as its real value. To give the agent only a placeholder, ${brokerHint(s)}.`
 
 export const unbrokeredError = (s: UnbrokeredSecret, where: string, configFile: string) =>
   `${s.label} in ${where} isn't brokered, and secrets.unbrokered is 'error' in ${configFile}. To broker it, ${brokerHint(s)}.`
+
+/** The attempts' MCP headers written as plain strings that look like credentials, once each. */
+export function plainHeaders(attempts: PlannedAttempt[]): PlainCredentialHeader[] {
+  const out = new Map<string, PlainCredentialHeader>()
+  for (const a of attempts) {
+    for (const h of plainCredentialHeaders(a.environment.layers)) out.set(h.label, h)
+  }
+  return [...out.values()]
+}
+
+const templateHint = (h: PlainCredentialHeader) =>
+  `read it from a host variable with secret.template, e.g. secret.template('Bearer \${VAR}')${h.https ? '' : ' and give the MCP server an https:// URL'}`
+
+export const plainHeaderWarning = (h: PlainCredentialHeader) =>
+  `${h.label} is a plain string, so it's in the sandbox as its real value. To give the agent only a placeholder, ${templateHint(h)}.`
+
+export const plainHeaderError = (h: PlainCredentialHeader, where: string, configFile: string) =>
+  `${h.label} in ${where} is a plain string, and secrets.unbrokered is 'error' in ${configFile}. To broker it, ${templateHint(h)}.`
 
 export const levelOf = (where: string): SandboxWarning['level'] =>
   where.startsWith('evaluate(')
@@ -1086,6 +1210,7 @@ export function evalPlan(
       ...environmentWarnings(attempts),
       ...(skip ? [] : questionWarnings(resolved)),
       ...unbrokered(r.resolved.env, attempts).filter(reachesSandbox).map(unbrokeredWarning),
+      ...plainHeaders(attempts).map(plainHeaderWarning),
     ],
     sandboxWarnings: skip ? [] : sandboxWarnings(attempts, resolved, origin),
     brokered: [...new Set(attempts.flatMap((a) => brokeredIn(r.resolved.env, a)))],

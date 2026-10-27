@@ -2,14 +2,12 @@
 // hold a hand-written type to its schema, and the helpers that turn Zod's issues into reeval's
 // one sentence per refusal.
 import { z } from 'zod'
-import { parseDuration } from '../duration.ts'
+import { MAX_TIMER_MS, parseDuration, TIMER_LIMIT } from '../duration.ts'
 import type { Duration, JSONValue } from '../types.ts'
 
 /** A string with something other than whitespace in it. */
 export const nonEmpty = () => z.string().regex(/\S/, 'must not be empty')
 
-// Described through the registry, not `.describe()`: a described copy would leave the recursion
-// pointing at an unnamed schema in the JSON Schema.
 export const jsonValueSchema: z.ZodType<JSONValue> = z.lazy(() =>
   z.union([
     z.string(),
@@ -20,21 +18,19 @@ export const jsonValueSchema: z.ZodType<JSONValue> = z.lazy(() =>
     z.record(z.string(), jsonValueSchema),
   ]),
 )
-z.globalRegistry.add(jsonValueSchema, { description: 'Any JSON value.' })
-
 // More than zero, so at least one non-zero digit.
 const DURATION = /^(?=.*[1-9])\d+(\.\d+)?(ms|s|m|h)$/
 
-export const durationSchema = z
-  .union([
-    z.number().positive(),
-    // The template literal gives `Duration`'s type; its own JSON Schema pattern allows `-5s`.
-    z
-      .templateLiteral([z.number(), z.enum(['ms', 's', 'm', 'h'])])
-      .check(z.regex(DURATION))
-      .meta({ pattern: DURATION.source }),
-  ])
-  .describe('More than zero: `90s`, `15m`, `1h`, or a number of milliseconds.')
+export const durationSchema = z.union([
+  z.number().positive().max(MAX_TIMER_MS, TIMER_LIMIT),
+  // The template literal gives `Duration`'s type; its own JSON Schema pattern allows `-5s`.
+  // A pattern can't bound the value, so the refinement holds the string to `MAX_TIMER_MS`.
+  z
+    .templateLiteral([z.number(), z.enum(['ms', 's', 'm', 'h'])])
+    .check(z.regex(DURATION))
+    .refine((value) => !DURATION.test(value) || durationProblem(value) === undefined, TIMER_LIMIT)
+    .meta({ pattern: DURATION.source }),
+])
 
 /** `parseDuration`'s sentence for a value that isn't a duration, or undefined when it is one. */
 export function durationProblem(value: unknown): string | undefined {
@@ -209,7 +205,7 @@ export function closest(key: string, keys: readonly string[]): string | undefine
   return best && best.distance <= allowed ? best.key : undefined
 }
 
-/** Edits from `a` to `b`: insertions, deletions, substitutions and swaps of neighbours. */
+/** Edits from `a` to `b`: insertions, deletions, substitutions and swaps of neighbors. */
 function editDistance(a: string, b: string): number {
   const d = Array.from({ length: a.length + 1 }, (_, i) =>
     Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),

@@ -7,6 +7,7 @@ import type {
   HistoryEntry,
   RunRecord,
 } from '../history/types.ts'
+import { plural } from '../text.ts'
 import type { Outcome, TokenUsage, TranscriptEvent, TurnStatus } from '../types.ts'
 import { formatTokens, promptTokens } from '../usage.ts'
 import {
@@ -19,7 +20,7 @@ import {
   stackChanges,
 } from './compare.ts'
 import { type CellEffort, cellContrast, cellEffort, type EffortContrast } from './effort.ts'
-import { cellJudgeRates, cellUsage, type JudgeKeyRate, uniqueJudgeLabels } from './judgements.ts'
+import { cellJudgeRates, cellUsage, type JudgeKeyRate, uniqueJudgeLabels } from './judgments.ts'
 import { manifestPath, shardOf, shardPath } from './paths.ts'
 import { readableTranscriptLine } from './record.ts'
 
@@ -163,7 +164,6 @@ export const shortSha = (sha: string | null | undefined) => (sha ? sha.slice(0, 
  * Edit calls become one file edit per file they change, so they're counted apart, never summed.
  */
 export function activityLabel(a: Pick<AttemptRecord['activity'], 'tools' | 'fileEdits'>): string {
-  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
   return `${plural(a.tools, 'tool call')} · ${plural(a.fileEdits, 'file edit')}`
 }
 
@@ -564,11 +564,15 @@ export type CompareViewRow = {
   /** See `CompareRow`: then pass@1 is over the cells both runs have too. */
   cells?: CompareRow['cells']
   changes?: string[]
-  /** Mean judge score per run; null without judgements or without the record. */
+  gate?: CompareRow['gate']
+  /** Mean judge score per run; null without judgments or without the record. */
   baseScore: number | null
   headScore: number | null
   /** Cells in both runs, with lift and effort on each side. */
   perCell: CompareCell[]
+  /** See `CompareRow`: a pooled family's gate, with no slug, pass@1 or score of its own. */
+  kind?: 'family'
+  lifts?: CompareRow['lifts']
 }
 
 const meanScore = (e: EvalEntry | undefined) => {
@@ -580,6 +584,7 @@ export const COMPARE_ORDER: CompareStatus[] = [
   'regressed',
   'fixed',
   'drift',
+  'gate',
   'infra',
   'added',
   'removed',
@@ -640,8 +645,10 @@ export function compareView(
   records: { base?: RunRecord; head?: RunRecord } = {},
 ) {
   const rows: CompareViewRow[] = compare(base, head).map((row) => {
-    const b = base.evals.find((e) => e.id === row.id)
-    const h = head.evals.find((e) => e.id === row.id)
+    const evalOf = (run: HistoryEntry) =>
+      row.kind === 'family' ? undefined : run.evals.find((e) => e.id === row.id)
+    const b = evalOf(base)
+    const h = evalOf(head)
     const baseKeys = new Set(b?.cells.map((c) => c.key))
     const shared =
       row.cells && new Set(h?.cells.filter((c) => baseKeys.has(c.key)).map((c) => c.key))
@@ -654,8 +661,8 @@ export function compareView(
       slug: h?.slug ?? b?.slug ?? null,
       basePassAt1: passAt1(b),
       headPassAt1: passAt1(h),
-      baseScore: meanScore(records.base?.evals.find((e) => e.id === row.id)),
-      headScore: meanScore(records.head?.evals.find((e) => e.id === row.id)),
+      baseScore: b ? meanScore(records.base?.evals.find((e) => e.id === row.id)) : null,
+      headScore: h ? meanScore(records.head?.evals.find((e) => e.id === row.id)) : null,
       perCell: row.perCell ?? [],
     }
   })
@@ -708,46 +715,6 @@ export function transcriptItems(lines: TranscriptLine[]): TranscriptItem[] {
     }
     return { kind: 'event', turn: line.turn, event: line }
   })
-}
-
-// ── Diffs ────────────────────────────────────────────────────────────────────────────────────
-
-export type PatchFile = {
-  path: string
-  status: 'added' | 'deleted' | 'modified' | 'renamed' | 'binary'
-  added: number
-  removed: number
-  text: string
-}
-
-const HEADER = /^diff --git a\/(.+?) b\/(.+)$/m
-
-/** Splits a git patch into one entry per file, with line counts. */
-export function splitPatch(patch: string): PatchFile[] {
-  if (!patch.trim()) return []
-  return patch
-    .split(/(?=^diff --git )/m)
-    .filter((part) => part.startsWith('diff --git '))
-    .map((text) => {
-      const header = HEADER.exec(text)
-      const path = header?.[2] ?? header?.[1] ?? 'unknown'
-      let added = 0
-      let removed = 0
-      for (const line of text.split('\n')) {
-        if (line.startsWith('+') && !line.startsWith('+++ ')) added++
-        else if (line.startsWith('-') && !line.startsWith('--- ')) removed++
-      }
-      const status: PatchFile['status'] = /^new file mode/m.test(text)
-        ? 'added'
-        : /^deleted file mode/m.test(text)
-          ? 'deleted'
-          : /^rename from/m.test(text)
-            ? 'renamed'
-            : /^(Binary files|GIT binary patch)/m.test(text)
-              ? 'binary'
-              : 'modified'
-      return { path, status, added, removed, text }
-    })
 }
 
 // ── Lookups ──────────────────────────────────────────────────────────────────────────────────

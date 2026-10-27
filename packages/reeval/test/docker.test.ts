@@ -1249,7 +1249,7 @@ evaluate('installs', { environment: tarballEnv, timeout: '6m' }, async (c) => {
   })
 
   test(
-    "-v summarises a harness's expected blocked hosts once, and -vv still lists each request",
+    "-v summarizes a harness's expected blocked hosts once, and -vv still lists each request",
     docker,
     async () => {
       const curl = [

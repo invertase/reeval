@@ -41,5 +41,5 @@
 {"turn":0,"type":"tool","tool":"read","input":{"file_path":"evals/docs.es.ts"},"ok":true,"durationMs":1388}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"git status"},"ok":true,"durationMs":907}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npx es run"},"ok":true,"durationMs":2996}
-{"turn":0,"type":"text","text":"Fixes applied to [es.config.ts](file:///es/workspace/es.config.ts) and [evals/docs.es.ts](file:///es/workspace/evals/docs.es.ts):\n\n- Removed `compare: [withDocs]` from [es.config.ts](file:///es/worksp…"}
+{"turn":0,"type":"text","text":"Fixes applied to [es.config.ts](file:///es/workspace/es.config.ts) and [evals/docs.es.ts](file:///es/workspace/evals/doc…"}
 {"turn":0,"type":"turn-end"}

@@ -211,7 +211,10 @@
               "$ref": "#/$defs/VercelGatewayDescriptor"
             },
             {
-              "enum": ["direct", "openrouter", "vercel"]
+              "$ref": "#/$defs/VertexGatewayDescriptor"
+            },
+            {
+              "enum": ["direct", "openrouter", "vercel", "vertex"]
             }
           ]
         },
@@ -305,9 +308,13 @@
       "additionalProperties": false
     },
     "DirectGatewayDescriptor": {
-      "description": "Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.",
+      "description": "Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends with it unless it's listed elsewhere, where it's tried in that place.",
       "type": "object",
       "properties": {
+        "enabled": {
+          "description": "`false` turns off the fallback to each provider's own key, so a cell no other gateway in the list serves is refused at plan time. Default `true`.",
+          "type": "boolean"
+        },
         "kind": {
           "type": "string",
           "const": "direct"
@@ -417,11 +424,12 @@
       "additionalProperties": false
     },
     "Duration": {
-      "description": "More than zero: `90s`, `15m`, `1h`, or a number of milliseconds.",
+      "description": "More than zero and at most 596h: `90s`, `15m`, `1h`, or a number of milliseconds.",
       "anyOf": [
         {
           "type": "number",
-          "exclusiveMinimum": 0
+          "exclusiveMinimum": 0,
+          "maximum": 2147483647
         },
         {
           "type": "string",
@@ -651,28 +659,6 @@
             }
           ]
         },
-        "insights": {
-          "description": "What insights get back, in `reeval run` and `reeval analyze --insights`: fixed insights, a function of each call's input (`input.call` is `classify` or `insights`, once each per eval, or `headline` once; it may return a promise), or `{ error }` to fail every call. It counts a token per 4 characters of each call's input and answer, so `analysis.maxTokens` applies.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/FakeInsights"
-            },
-            {
-              "type": "object",
-              "properties": {
-                "error": {
-                  "type": "string"
-                }
-              },
-              "required": ["error"]
-            },
-            {
-              "type": "object",
-              "properties": {},
-              "required": []
-            }
-          ]
-        },
         "kind": {
           "const": "fake-analysis"
         },
@@ -721,8 +707,9 @@
       "type": "object",
       "properties": {
         "delayMs": {
-          "description": "Simulated turn length, honours the abort signal.",
-          "type": "number"
+          "description": "Simulated turn length, honors the abort signal.",
+          "type": "number",
+          "maximum": 2147483647
         },
         "effort": {
           "description": "Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what the turn reports (`fake-1[effort=medium]`). Fast is not this.",
@@ -863,205 +850,6 @@
       "required": ["kind"],
       "additionalProperties": false
     },
-    "FakeInsights": {
-      "description": "A fake insight answer. Each call takes its part: `intent` the classification, `answer`, `findings`, `rows`, `namedTools` and `remarks` the eval's, `headline` the run's. Whatever's left out is empty, and the intent defaults to `job: 'other'`.",
-      "type": "object",
-      "properties": {
-        "answer": {
-          "anyOf": [
-            {
-              "type": "null"
-            },
-            {
-              "type": "object",
-              "properties": {
-                "cites": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "text": {
-                  "type": "string"
-                }
-              },
-              "required": ["cites", "text"]
-            }
-          ]
-        },
-        "findings": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "cites": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "text": {
-                "type": "string"
-              }
-            },
-            "required": ["cites", "text"]
-          }
-        },
-        "headline": {
-          "anyOf": [
-            {
-              "type": "null"
-            },
-            {
-              "type": "object",
-              "properties": {
-                "cites": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "text": {
-                  "type": "string"
-                }
-              },
-              "required": ["cites", "text"]
-            }
-          ]
-        },
-        "intent": {
-          "type": "object",
-          "properties": {
-            "confidence": {
-              "description": "`low` falls back to `job: 'other'`, as a real classification does.",
-              "enum": ["high", "low", "medium"]
-            },
-            "job": {
-              "enum": ["choose", "finish", "other"]
-            },
-            "name": {
-              "enum": ["contradicts", "no-intent", "states-intent"]
-            },
-            "question": {
-              "type": "string"
-            },
-            "subject": {
-              "type": "object",
-              "properties": {
-                "change": {
-                  "type": "string"
-                },
-                "tool": {
-                  "type": "string"
-                }
-              },
-              "required": []
-            }
-          },
-          "required": ["job"]
-        },
-        "namedTools": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "attempt": {
-                "type": "string"
-              },
-              "tools": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "required": ["attempt", "tools"]
-          }
-        },
-        "remarks": {
-          "description": "The eval's remarks, as the model's JSON would have them: `source.at` and `fix.at` are `L<n>` lines of the eval's source, `evidence` fact ids (`F1`) or attempt lines (`A1#L3`). They go through the same gates as a model's, so one missing a part is dropped.",
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "evidence": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "fix": {
-                "anyOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "at": {
-                        "type": "string"
-                      },
-                      "edit": {
-                        "type": "string"
-                      }
-                    },
-                    "required": ["at", "edit"]
-                  }
-                ]
-              },
-              "kind": {
-                "type": "string"
-              },
-              "source": {
-                "anyOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "at": {
-                        "type": "string"
-                      },
-                      "quote": {
-                        "type": "string"
-                      }
-                    },
-                    "required": ["at", "quote"]
-                  }
-                ]
-              },
-              "text": {
-                "type": "string"
-              }
-            },
-            "required": ["kind", "text"]
-          }
-        },
-        "rows": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "cites": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "row": {
-                "type": "string"
-              },
-              "text": {
-                "type": "string"
-              }
-            },
-            "required": ["cites", "row", "text"]
-          }
-        }
-      },
-      "required": []
-    },
     "FakeJudgeModel": {
       "description": "A canned judge for tests and dry runs; see `fakeJudge()` in `reeval/judge`. `score` as a function of the state the judge would see works per group, eval or call, not in the config.",
       "type": "object",
@@ -1178,15 +966,20 @@
       "enum": ["A", "B", "tie"]
     },
     "FxHarnessDescriptor": {
-      "description": "fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or OpenAI's API by the model id, and reports each turn's tokens.",
+      "description": "fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or OpenAI's API by the model id, or on OpenRouter or Vertex AI, and reports each turn's tokens.",
       "type": "object",
       "properties": {
+        "effort": {
+          "description": "Reasoning effort, sent as `reasoning_effort` on each model call; only on `vertex()`, since fx sends none itself. Values are what the model takes there, e.g. `low`, `medium` or `high`.",
+          "type": "string",
+          "pattern": "\\S"
+        },
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
           "$ref": "#/$defs/GatewayName"
         },
         "id": {
-          "description": "Cell id; defaults to `fx:<model>`.",
+          "description": "Cell id; defaults to `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
           "pattern": "\\S"
         },
@@ -1199,7 +992,7 @@
           "type": "number"
         },
         "model": {
-          "description": "A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.",
+          "description": "A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `openrouter()`, either runs on OpenRouter's Chat Completions API with `OPENROUTER_API_KEY`, a bare id as `openai/<id>`. On `vertex()`, a Gemini model id, `google/<id>` or a bare `gemini-…` id, run on Vertex AI's Chat Completions endpoint, e.g. `google/gemini-3.8-flash`.",
           "type": "string",
           "minLength": 1
         },
@@ -1222,13 +1015,16 @@
         },
         {
           "$ref": "#/$defs/OpenRouterGatewayDescriptor"
+        },
+        {
+          "$ref": "#/$defs/VertexGatewayDescriptor"
         }
       ]
     },
     "GatewayName": {
-      "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter.",
+      "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter; `vertex` is Google Cloud's Vertex AI.",
       "type": "string",
-      "enum": ["direct", "vercel", "openrouter"]
+      "enum": ["direct", "vercel", "openrouter", "vertex"]
     },
     "GitWorkspace": {
       "description": "A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url` is what reeval fetches: the clone URL, or an absolute path for a local repository.",
@@ -1643,7 +1439,7 @@
       "additionalProperties": false
     },
     "OpenRouterGatewayDescriptor": {
-      "description": "OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode and Grok Build.",
+      "description": "OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi.",
       "type": "object",
       "properties": {
         "fallbacks": {
@@ -2406,10 +2202,6 @@
         "analysis": {
           "type": "object",
           "properties": {
-            "insights": {
-              "description": "`reeval run` classifies each eval and explains its result with `model` once the attempts finish (default true when `model` is set; `--no-insights` turns it off for one run).",
-              "type": "boolean"
-            },
             "instructions": {
               "description": "Added to the prompt, e.g. \"Fewer tool calls count as a win. The skill under test is reeval-good.\"",
               "type": "string"
@@ -2422,12 +2214,8 @@
               "description": "The most tokens the model may answer with (default 8000). reeval has no prices, so tokens are the cap.",
               "type": "number"
             },
-            "maxTokens": {
-              "description": "Tokens (in and out) that one run's insights may use, over every classification, insight and headline call (default 250000). Past it, the evals left print without insights; the run's outcome and exit code never change.",
-              "type": "number"
-            },
             "model": {
-              "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and questions fall back to the judge's when it's a language model.",
+              "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Unset, `reeval analyze` and questions fall back to the judge's when it's a language model.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/FakeAnalysisModel"
@@ -2438,7 +2226,7 @@
               ]
             }
           },
-          "required": ["insights", "maxInputTokens", "maxOutputTokens", "maxTokens"]
+          "required": ["maxInputTokens", "maxOutputTokens"]
         },
         "budget": {
           "$ref": "#/$defs/Budget"
@@ -2521,7 +2309,7 @@
           ]
         },
         "gateway": {
-          "description": "The `gateway` list, in preference order; `[direct()]` when the config sets none.",
+          "description": "The `gateway` list, in preference order, with `direct()` at the end unless it's listed elsewhere or turned off; `[direct()]` when the config sets none.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/GatewayDescriptor"
@@ -2571,7 +2359,10 @@
                   "$ref": "#/$defs/VercelGatewayDescriptor"
                 },
                 {
-                  "enum": ["direct", "openrouter", "vercel"]
+                  "$ref": "#/$defs/VertexGatewayDescriptor"
+                },
+                {
+                  "enum": ["direct", "openrouter", "vercel", "vertex"]
                 }
               ]
             },
@@ -2640,6 +2431,7 @@
           "type": "string"
         },
         "runs": {
+          "description": "Unset leaves each eval its default: 4 for a compare with variants, otherwise 1.",
           "type": "number"
         },
         "sandbox": {
@@ -3141,12 +2933,46 @@
       ]
     },
     "VercelGatewayDescriptor": {
-      "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode, fx and Grok Build.",
+      "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.",
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
           "const": "vercel"
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
+    },
+    "VertexGatewayDescriptor": {
+      "description": "Google Cloud's Vertex AI, on Application Default Credentials: made by `vertex()` in `reeval/gateway`.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "vertex"
+        },
+        "location": {
+          "description": "The region the models are called in, e.g. `us-east5`; defaults to `global`.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "project": {
+          "description": "The Google Cloud project the calls are billed to; defaults to `GOOGLE_CLOUD_PROJECT`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "regions": {
+          "description": "A region per publisher, where it differs from `location`, e.g. `{ anthropic: 'us-east5' }`.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "enum": ["anthropic", "google", "xai"]
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          }
         }
       },
       "required": ["kind"],

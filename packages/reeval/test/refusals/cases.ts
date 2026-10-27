@@ -4,7 +4,12 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseYamlConfig, resolveConfig, resolveConfigData } from '../../src/config.ts'
+import {
+  checkGateways,
+  parseYamlConfig,
+  resolveConfig,
+  resolveConfigData,
+} from '../../src/config.ts'
 import {
   attemptAbortProblem,
   attemptDoneProblem,
@@ -13,12 +18,18 @@ import {
   execOptionsProblem,
 } from '../../src/contract/attempt.ts'
 import { declarationProblem } from '../../src/contract/declaration.ts'
+import type { DeclaredNode } from '../../src/declaration.ts'
+import { useEngine } from '../../src/engine/runtime.ts'
 import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
+import { bodyHash, caseHash } from '../../src/eval-source.ts'
+import { declareTree } from '../../src/evaluate.ts'
 import { resolveModelGateway } from '../../src/gateway/models.ts'
 import { resolveGateway } from '../../src/gateway/resolve.ts'
 import { vercelCredentialProblem } from '../../src/gateway/vercel.ts'
+import { vertexSettings } from '../../src/gateway/vertex.ts'
+import { refusedMcp } from '../../src/harness/agents.ts'
 import {
   antigravity,
   claudeCode,
@@ -31,7 +42,8 @@ import {
   opencode,
   pi,
 } from '../../src/harness.ts'
-import { checkHarnesses, checkOptions } from '../../src/options.ts'
+import { checkHarnesses, checkLimitHarness, checkOptions } from '../../src/options.ts'
+import { planEval } from '../../src/plan-eval.ts'
 import { docker, fakeSandbox, podman } from '../../src/sandbox.ts'
 import type {
   EnvironmentHelpers,
@@ -39,6 +51,8 @@ import type {
   GatewayName,
   HarnessDescriptor,
   PluginSource,
+  ResolvedProfile,
+  RunContext,
   SandboxDescriptor,
 } from '../../src/types.ts'
 
@@ -56,6 +70,18 @@ const yaml = (text: string) => () =>
 const configIn = (c: unknown) => () => resolveConfig(c as never, DIR, 'reeval.config.ts')
 const yamlIn = (text: string) => () =>
   resolveConfigData(parseYamlConfig(text, 'reeval.yaml'), DIR, 'reeval.yaml')
+/** A `pr` profile's `limit.harness` against the harness ids the collected evals run on. */
+const limitHarness =
+  (ids: string[], harnesses: string[], partial = false) =>
+  () =>
+    checkLimitHarness(
+      { name: 'pr', limit: { harness: ids } } as ResolvedProfile,
+      'reeval.config.ts',
+      {
+        harnesses,
+        partial,
+      },
+    )
 const env = (spec: unknown) => () => defineEnvironment('e', spec as never)
 const helpers = (use: (h: EnvironmentHelpers) => unknown) => () =>
   defineEnvironment('e', (h) => ({ files: { 'a.txt': 'a' }, ...(use(h) as object) }))
@@ -70,20 +96,35 @@ const any =
     () =>
       f(...args)
 
-/** Which gateway a harness resolves to in a list, with reeval's own gateways. */
+/** What the plan says of an environment's MCP servers on a harness. */
+const mcpOn = (harness: HarnessDescriptor, use: (h: EnvironmentHelpers) => object) => () => {
+  const refusal = refusedMcp(harness, defineEnvironment('e', use).layers)
+  if (refusal) throw new UsageError(refusal)
+}
+const OPENCODE = opencode({ model: 'google/gemini-3.8-flash' })
+
+/** A config's `gateway` list as the plan walks it: `direct()` at the end unless placed or off. */
+const listed = (gateways: GatewayDescriptor[]) =>
+  checkGateways(gateways, 'gateway', 'reeval.config.ts')
+/** Which gateway a harness resolves to in a config's list, with reeval's own gateways. */
 const route = (gateways: GatewayDescriptor[], harness: HarnessDescriptor) => () =>
-  resolveGateway(gateways, harness, WHERE)
-/** Which gateway a model reeval calls itself (the judge's) resolves to in a list. */
+  resolveGateway(listed(gateways), harness, WHERE)
+/** Which gateway a model reeval calls itself (the judge's) resolves to in a config's list. */
 const model = (name: string, pin: GatewayName | undefined, gateways: GatewayDescriptor[]) => () =>
-  resolveModelGateway(name, pin, { gateways }, 'the judge model')
+  resolveModelGateway(name, pin, { gateways: listed(gateways) }, 'the judge model')
 const VERCEL: GatewayDescriptor = { kind: 'vercel' }
 const DIRECT: GatewayDescriptor = { kind: 'direct' }
+const OFF: GatewayDescriptor = { kind: 'direct', enabled: false }
 const OPENROUTER: GatewayDescriptor = { kind: 'openrouter' }
+const VERTEX: GatewayDescriptor = { kind: 'vertex' }
 /** What the plan says of Vercel's credentials, at noon on 1 January 2026. */
 const oidc = (env: NodeJS.ProcessEnv) => () => {
   const problem = vercelCredentialProblem(env, new Date('2026-01-01T12:00:00Z'))
   if (problem) throw new UsageError(problem)
 }
+/** What the plan takes from a `vertex()` entry, with these host variables. */
+const vertexEntry = (entry: { project?: string }, env: NodeJS.ProcessEnv) => () =>
+  vertexSettings(entry, env)
 const jwt = (expiresMs: number) =>
   `e30.${Buffer.from(JSON.stringify({ exp: expiresMs / 1000 })).toString('base64url')}.sig`
 
@@ -107,17 +148,72 @@ const hostEntry = () => {
   return dir
 }
 
+/** What planning an eval with `options` refuses under `secrets: { unbrokered: 'error' }`. */
+const strict = (o: unknown) => () => {
+  const config = resolveConfig(
+    { harness: fakeHarness(), sandbox: fakeSandbox(), secrets: { unbrokered: 'error' } },
+    DIR,
+    'reeval.config.ts',
+  )
+  planEval(
+    { name: 'e', mode: 'run', groups: [], options: o as never, source: { body: '0'.repeat(64) } },
+    { config, profile: null, tags: [], concurrency: 1, file: undefined, order: 0 },
+  )
+}
+/** An environment with one MCP server on `url` that sends `headers`. */
+const mcpHeaders = (url: string, headers: Record<string, unknown>) =>
+  defineEnvironment('e', ({ mcp }) => ({ mcp: { docs: mcp.http(url, { headers } as never) } }))
+
+/** An environment with one MCP server on `url` whose Authorization secret sets `hosts`. */
+const hostsHeader = (url: string) =>
+  defineEnvironment('e', ({ mcp, secret }) => ({
+    mcp: {
+      docs: mcp.http(url, {
+        headers: { Authorization: secret.fromEnv('MCP_TOKEN', { hosts: ['mcp.internal'] }) },
+      }),
+    },
+  }))
+
 /** What `declareTree` checks before it declares anything. */
 const tree = (children: unknown) => () => {
   const problem = declarationProblem(children)
   if (problem) throw new UsageError(problem)
 }
+/** What declaring a tree refuses as it declares it, each in an eval file of its own. */
+let declaredFiles = 0
+const declares = (children: unknown[]) => () => {
+  const file = join(DIR, `evals/d${++declaredFiles}.eval.ts`)
+  const run: RunContext = {
+    runId: 'r',
+    stagingDir: DIR,
+    config: resolveConfig({ harness: fakeHarness() }, DIR),
+    tags: [],
+    concurrency: 1,
+    profile: null,
+  }
+  useEngine({
+    registerTest: () => {},
+    registerGroup: (_name, _mode, body) => body(),
+    getRunContext: () => run,
+    collectingFile: () => file,
+    declareHarnesses: () => {},
+  })
+  declareTree(children as DeclaredNode[], () => async () => {})
+}
+const group = (name: string, children: unknown[]) => ({
+  type: 'group',
+  name,
+  mode: 'run',
+  options: {},
+  children,
+})
 const evalNode = (o: object = {}) => ({
   type: 'eval',
   name: 'e',
   mode: 'run',
   options: {},
   body: 'b1',
+  source: { body: '0'.repeat(64) },
   ...o,
 })
 
@@ -176,6 +272,13 @@ export const CASES: Record<string, Case[]> = {
     ['duration: setup timeout 0s', env({ setup: [{ run: 'ls', timeout: '0s' }] })],
     ['duration: setup timeout -5s', env({ setup: [{ run: 'ls', timeout: '-5s' }] })],
     ['duration: setup timeout 1.5m', env({ setup: [{ run: 'ls', timeout: '1.5m' }] })],
+    ['duration: setup timeout 596h', env({ setup: [{ run: 'ls', timeout: '596h' }] })],
+    ['duration: setup timeout 597h', env({ setup: [{ run: 'ls', timeout: '597h' }] })],
+    ['duration: setup timeout 2^31 ms', env({ setup: [{ run: 'ls', timeout: 2 ** 31 }] })],
+    ['duration: config timeout 1000h', config({ timeout: '1000h' })],
+    ['duration: budget duration 1000h', config({ budget: { duration: '1000h' } })],
+    ['duration: yaml budget duration 1000h', yaml('budget: { duration: 1000h }\n')],
+    ['duration: harness startTimeout 1000h', harnesses(fakeHarness({ startTimeout: '1000h' }))],
     [
       'duration: harness startTimeout soon',
       harnesses(fakeHarness({ startTimeout: 'soon' as never })),
@@ -204,9 +307,10 @@ export const CASES: Record<string, Case[]> = {
     ['a bad install timeout', any(docker, { install: [{ run: 'x', timeout: 'soon' }] })],
     ['a zero install timeout', any(docker, { install: [{ run: 'ls', timeout: 0 }] })],
     ['a negative install timeout', any(docker, { install: [{ run: 'ls', timeout: '-5s' }] })],
+    ['an install timeout over 596h', any(docker, { install: [{ run: 'ls', timeout: '1000h' }] })],
     ['steps instead of install', any(docker, { steps: ['x'] })],
     ['user instead of root', any(docker, { user: 'root' })],
-    ['an unknown key without a hint', any(docker, { colour: 'blue' })],
+    ['an unknown key without a hint', any(docker, { color: 'blue' })],
     ['root that is not a boolean', any(docker, { root: 'yes' })],
     ['a capability that is not a name', any(docker, { capabilities: 'NET_RAW' })],
     ['a lower-case capability', any(docker, { capabilities: ['net_raw'] })],
@@ -229,7 +333,7 @@ export const CASES: Record<string, Case[]> = {
     ['two bad values', any(docker, { pids: 0, root: 'yes' })],
     ['a good one', any(docker, { from: 'node:24', memory: '4g', swap: 0, install: ['ls'] })],
     ['podman: a memory size podman does not take', any(podman, { memory: '4GB' })],
-    ['podman: an unknown key', any(podman, { colour: 'blue' })],
+    ['podman: an unknown key', any(podman, { color: 'blue' })],
     ['podman: a good one', any(podman, { from: 'node:24', memory: '4g', install: ['ls'] })],
     ['data: not docker() or fakeSandbox()', options({ sandbox: { kind: 'vm' } })],
     [
@@ -301,16 +405,96 @@ export const CASES: Record<string, Case[]> = {
     ['fakeHarness effort empty', any(fakeHarness, { effort: '' })],
     ['fakeHarness with a typo', any(fakeHarness, { txt: 'x' })],
     ['fakeHarness text a number', any(fakeHarness, { text: 3 })],
+    ['fakeHarness delayMs over 596h', any(fakeHarness, { delayMs: 2 ** 31 })],
     ['fakeHarness files not strings', any(fakeHarness, { files: { 'a.txt': 1 } })],
     [
       'fakeHarness a tool with an extra key',
       any(fakeHarness, { tools: [{ tool: 't', input: 1, output: 2, okay: true }] }),
     ],
     ['cursor with an empty id', any(cursor, { model: 'm', id: '' })],
-    ['codex with a typo far from any option', any(codex, { model: 'gpt', colour: 'red' })],
+    ['codex with a typo far from any option', any(codex, { model: 'gpt', color: 'red' })],
     [
       'fakeHarness good',
       any(fakeHarness, { script: [[{ exec: 'ls' }, { mcp: 's/t' }]], layout: 'pi' }),
+    ],
+    [
+      'opencode mcp: {file:} in an arg',
+      mcpOn(OPENCODE, ({ mcp }) => ({
+        mcp: { docs: mcp.stdio('node', ['--token', '{file:~/token.txt}']) },
+      })),
+    ],
+    [
+      'opencode mcp: {env:} in an env value',
+      mcpOn(OPENCODE, ({ mcp }) => ({
+        mcp: { docs: mcp.stdio('node', ['srv.js'], { env: { GREETING: 'Hello {env:USER}' } }) },
+      })),
+    ],
+    [
+      'opencode mcp: {env:} in the command',
+      mcpOn(OPENCODE, ({ mcp }) => ({ mcp: { docs: mcp.stdio('{env:HOME}/srv') } })),
+    ],
+    [
+      'opencode mcp: {env:} in a header',
+      mcpOn(OPENCODE, ({ mcp }) => ({
+        mcp: { docs: mcp.http('https://x.com/mcp', { headers: { 'X-Token': '{env:TOKEN}' } }) },
+      })),
+    ],
+    [
+      'opencode mcp: {file:} in a secret.template',
+      mcpOn(OPENCODE, ({ mcp, secret }) => ({
+        mcp: {
+          docs: mcp.http('https://x.com/mcp', {
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+            headers: { a: secret.template('{file:/run/t} ${T}') },
+          }),
+        },
+      })),
+    ],
+    [
+      'opencode mcp: {env:} in the url',
+      mcpOn(OPENCODE, ({ mcp }) => ({ mcp: { docs: mcp.http('https://x.com/{env:P}/mcp') } })),
+    ],
+    [
+      'opencode mcp: {env: left open at the end of an arg',
+      mcpOn(OPENCODE, ({ mcp }) => ({ mcp: { docs: mcp.stdio('node', ['{env:', 'X}']) } })),
+    ],
+    [
+      'opencode mcp: a server name that is not an identifier',
+      mcpOn(OPENCODE, ({ mcp }) => ({ mcp: { 'my-docs': mcp.stdio('node', ['{file:a}']) } })),
+    ],
+    [
+      'opencode mcp: {file:} in a server name',
+      mcpOn(OPENCODE, ({ mcp }) => ({ mcp: { 'a{file:/etc/hostname}': mcp.stdio('node') } })),
+    ],
+    [
+      'opencode mcp: {env:} in the env name of a host secret',
+      mcpOn(OPENCODE, ({ mcp, secret }) => ({
+        mcp: { docs: mcp.stdio('node', [], { env: { '{env:USER}': secret.fromEnv('TOKEN') } }) },
+      })),
+    ],
+    [
+      'opencode mcp: {env:} in a header name',
+      mcpOn(OPENCODE, ({ mcp }) => ({
+        mcp: { docs: mcp.http('https://x.com/mcp', { headers: { 'X-{env:USER}': 'a' } }) },
+      })),
+    ],
+    [
+      'opencode mcp: good, with nothing OpenCode substitutes',
+      mcpOn(OPENCODE, ({ mcp, secret }) => ({
+        mcp: {
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: a shell variable, left as written
+          files: mcp.stdio('node', ['{env:}', '{file:}', '{ENV:X}', 'env:X', '${HOME}'], {
+            env: { TOKEN: secret.fromEnv('HOST_TOKEN') },
+          }),
+          docs: mcp.http('https://x.com/mcp', { headers: { a: secret({ hosts: ['x.com'] }) } }),
+        },
+      })),
+    ],
+    [
+      'claude code mcp: {env:} and {file:} left as written',
+      mcpOn(claudeCode({ model: 'sonnet' }), ({ mcp }) => ({
+        mcp: { docs: mcp.stdio('node', ['{file:a}'], { env: { A: '{env:B}' } }) },
+      })),
     ],
     ['data: not a harness', harnesses({ kind: 'vim' })],
     ['data: a list item that is a string', harnesses('cursor')],
@@ -507,6 +691,14 @@ export const CASES: Record<string, Case[]> = {
     ['gate passRate above 1', options({ gate: { passRate: 1.2 } })],
     ['gate with an extra key', options({ gate: { passRate: 0.5, min: 1 } })],
     ['gate good', options({ gate: { passRate: 0.8 } })],
+    ['revision a fraction', options({ revision: 1.5 })],
+    ['revision empty', options({ revision: ' ' })],
+    ['revision a boolean', options({ revision: true })],
+    ['revision a typo', options({ version: 2 })],
+    ['revision a number', options({ revision: 2 })],
+    ['revision a string', options({ revision: '2026-10-25' })],
+    ['a bound body', () => bodyHash((async () => {}).bind(null), 'evaluate("e")')],
+    ['a case that is not JSON data', () => caseHash({ want: /hi/ }, 'evaluate.each("e") case 0')],
     ['egress a list', options({ egress: ['api.example.com'] })],
     ['egress a string', options({ egress: 'none' })],
     ['egress deny key', options({ egress: { deny: ['x.com'] } })],
@@ -597,6 +789,46 @@ export const CASES: Record<string, Case[]> = {
     ],
     ['skill.git without a repo', helpers(({ skill }) => ({ skills: [skill.git('')] }))],
     [
+      'skill.git with credentials',
+      helpers(({ skill }) => ({
+        skills: [skill.git('https://deploy:secret@github.com/acme/skills.git')],
+      })),
+    ],
+    [
+      'skill.git with a token as the username',
+      helpers(({ skill }) => ({ skills: [skill.git('https://token@github.com/acme/skills')] })),
+    ],
+    [
+      'skill.npm tarball URL with credentials',
+      helpers(({ skill }) => ({
+        skills: [skill.npm('https://ci:token@npm.example.com/skills-1.0.0.tgz')],
+      })),
+    ],
+    [
+      'skill.npm git+https with a token',
+      helpers(({ skill }) => ({
+        skills: [skill.npm('git+https://token@github.com/acme/skills.git#v1')],
+      })),
+    ],
+    [
+      'skill.npm git+ssh with a password',
+      helpers(({ skill }) => ({
+        skills: [skill.npm('git+ssh://git:secret@github.com/acme/skills.git#v1')],
+      })),
+    ],
+    [
+      'skill.npm URL specs without credentials',
+      helpers(({ skill }) => ({
+        skills: [
+          skill.npm('git+ssh://git@github.com/acme/skills.git#v1'),
+          skill.npm('git+https://github.com/acme/skills.git#v1'),
+          skill.npm('https://npm.example.com/skills-1.0.0.tgz'),
+          skill.npm('github:acme/skills#v1'),
+          skill.npm('npm:@acme/skills@1.0.0'),
+        ],
+      })),
+    ],
+    [
       'skill.registry a bad id',
       helpers(({ skill }) => ({ skills: [skill.registry('owner/repo')] })),
     ],
@@ -619,6 +851,33 @@ export const CASES: Record<string, Case[]> = {
     [
       'data: skill with an unknown source',
       env({ skills: [{ kind: 'skill', source: 'ftp', placement: 'harness' }] }),
+    ],
+    [
+      'data: skill.git with credentials',
+      env({
+        skills: [
+          {
+            kind: 'skill',
+            source: 'git',
+            repo: 'https://deploy:secret@github.com/acme/skills.git',
+            placement: 'harness',
+          },
+        ],
+      }),
+    ],
+    [
+      'data: skill.npm with credentials',
+      env({
+        skills: [
+          {
+            kind: 'skill',
+            source: 'npm',
+            spec: 'git+https://token@github.com/acme/skills.git#v1',
+            path: 'skills',
+            placement: 'harness',
+          },
+        ],
+      }),
     ],
     [
       'plugin only an unknown part',
@@ -648,6 +907,24 @@ export const CASES: Record<string, Case[]> = {
       })),
     ],
     ['plugin.npm without a spec', helpers(({ plugin }) => ({ plugins: [plugin.npm('')] }))],
+    [
+      'plugin.npm URL with credentials',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.npm('https://ci:token@npm.example.com/review-1.0.0.tgz')],
+      })),
+    ],
+    [
+      'plugin.npm git+https with a token',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.npm('git+https://token@github.com/acme/review.git#v1')],
+      })),
+    ],
+    [
+      'plugin.marketplace npm URL with credentials',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@npm:https://ci:token@npm.example.com/tools.tgz')],
+      })),
+    ],
     [
       'plugin.marketplace without a name',
       helpers(({ plugin }) => ({ plugins: [plugin.marketplace('github:acme/agent-plugins')] })),
@@ -717,6 +994,46 @@ export const CASES: Record<string, Case[]> = {
     [
       'data: plugin with an unknown source',
       env({ plugins: [{ kind: 'plugin', source: 'zip', name: 'x' }] }),
+    ],
+    [
+      'data: plugin.git with credentials',
+      env({
+        plugins: [{ kind: 'plugin', source: 'git', repo: 'https://user:token@github.com/o/r' }],
+      }),
+    ],
+    [
+      'data: plugin.npm with credentials',
+      env({
+        plugins: [
+          { kind: 'plugin', source: 'npm', spec: 'https://ci:token@npm.example.com/r.tgz' },
+        ],
+      }),
+    ],
+    [
+      'data: plugin.marketplace with credentials',
+      env({
+        plugins: [
+          {
+            kind: 'plugin',
+            source: 'marketplace',
+            name: 'lint',
+            marketplace: { source: 'git', repo: 'https://user:token@github.com/acme/tools' },
+          },
+        ],
+      }),
+    ],
+    [
+      'data: plugin.marketplace npm with credentials',
+      env({
+        plugins: [
+          {
+            kind: 'plugin',
+            source: 'marketplace',
+            name: 'lint',
+            marketplace: { source: 'npm', spec: 'https://ci:token@npm.example.com/tools.tgz' },
+          },
+        ],
+      }),
     ],
     [
       'data: plugin marketplace without its source',
@@ -908,6 +1225,16 @@ export const CASES: Record<string, Case[]> = {
       env({ workspace: { kind: 'git', repo: 'r', url: 'r', token: 'ghp_abc-123' } }),
     ],
     ['data: workspace good', env({ workspace: { kind: 'git', repo: 'r', url: 'r', ref: 'v1' } })],
+    [
+      'data: workspace with credentials',
+      env({
+        workspace: {
+          kind: 'git',
+          repo: 'github:o/r',
+          url: 'https://x-access-token:secret@github.com/o/r.git',
+        },
+      }),
+    ],
   ],
   environment: [
     ['a bad name', any(defineEnvironment, 'a b', {})],
@@ -917,7 +1244,7 @@ export const CASES: Record<string, Case[]> = {
     ['an image field with steps', env({ image: ['npm i'] })],
     ['install beside the sandbox', env({ install: ['x'] })],
     ['steps instead of setup', env({ steps: ['x'] })],
-    ['an unknown field', env({ colour: 'blue' })],
+    ['an unknown field', env({ color: 'blue' })],
     ['a sandbox that is not one', env({ sandbox: 'docker' })],
     ['a sandbox maxConcurrent 0', env({ sandbox: { kind: 'fake', maxConcurrent: 0 } })],
     [
@@ -934,7 +1261,7 @@ export const CASES: Record<string, Case[]> = {
     ['a setup step cwd empty', env({ setup: [{ run: 'x', cwd: '' }] })],
     ['a setup step that is a number', env({ setup: [3] })],
     ['extend a bad name', () => e1.extend('a b', {})],
-    ['extend an unknown field', () => e1.extend('c', { colour: 'blue' } as never)],
+    ['extend an unknown field', () => e1.extend('c', { color: 'blue' } as never)],
     [
       'good',
       env({
@@ -949,6 +1276,21 @@ export const CASES: Record<string, Case[]> = {
     ['data: a typo in a layer', options({ environment: envData({ setpu: [] }) })],
     ['data: a bad setup step', options({ environment: envData({ setup: [{ run: '' }] }) })],
     [
+      'data: a skill URL with a token in a layer',
+      options({
+        environment: envData({
+          skills: [
+            {
+              kind: 'skill',
+              source: 'git',
+              repo: 'https://token@github.com/acme/skills.git',
+              placement: 'harness',
+            },
+          ],
+        }),
+      }),
+    ],
+    [
       'data: a layer without a spec',
       options({ environment: { kind: 'environment', name: 'x', layers: [{ name: 'x' }] } }),
     ],
@@ -959,6 +1301,96 @@ export const CASES: Record<string, Case[]> = {
     ['data: good', options({ environment: envData({ setup: ['ls'], files: { 'a.txt': 'a' } }) })],
   ],
   config: [
+    [
+      "unbrokered 'error': a plain MCP header named like a credential",
+      strict({
+        environment: mcpHeaders('https://mcp.example.com', { Authorization: 'Bearer abc123' }),
+      }),
+    ],
+    [
+      "unbrokered 'error': a plain MCP header with a token's shape, on http://",
+      strict({
+        environment: mcpHeaders('http://localhost:4000', {
+          'X-Trace': 'ghp_0123456789abcdefghijABCDEFGHIJ0123456789',
+        }),
+      }),
+    ],
+    [
+      "unbrokered 'error': a plain MCP header from a declaration tree",
+      strict({
+        environment: {
+          kind: 'environment',
+          name: 'e',
+          layers: [
+            {
+              name: 'e',
+              spec: {
+                mcp: {
+                  docs: {
+                    kind: 'mcp',
+                    transport: 'http',
+                    url: 'https://mcp.example.com',
+                    headers: { 'x-session-token': 'abc123' },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      }),
+    ],
+    [
+      "unbrokered 'error': a neutral plain MCP header",
+      strict({ environment: mcpHeaders('https://mcp.example.com', { 'X-Request-Source': 'ci' }) }),
+    ],
+    [
+      "unbrokered 'error': a secret.template MCP header on https://",
+      strict({
+        environment: defineEnvironment('e', ({ mcp, secret }) => ({
+          mcp: {
+            docs: mcp.http('https://mcp.example.com', {
+              // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+              headers: { Authorization: secret.template('Bearer ${MCP_TOKEN}') },
+            }),
+          },
+        })),
+      }),
+    ],
+    [
+      "unbrokered 'error': an http:// MCP server's header secret that sets hosts",
+      strict({ sandbox: docker(), environment: hostsHeader('http://mcp.internal/mcp') }),
+    ],
+    [
+      "unbrokered 'error': an https:// MCP server's header secret that sets hosts",
+      strict({ sandbox: docker(), environment: hostsHeader('https://mcp.internal/mcp') }),
+    ],
+    [
+      "unbrokered 'error': an http:// MCP server's header secret that sets hosts, from a declaration tree",
+      strict({
+        sandbox: docker(),
+        environment: {
+          kind: 'environment',
+          name: 'e',
+          layers: [
+            {
+              name: 'e',
+              spec: {
+                mcp: {
+                  docs: {
+                    kind: 'mcp',
+                    transport: 'sse',
+                    url: 'http://mcp.internal/events',
+                    headers: {
+                      Authorization: { kind: 'secret', from: 'MCP_TOKEN', hosts: ['mcp.internal'] },
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      }),
+    ],
     ['yaml: empty', yaml('')],
     ['yaml: not YAML', yaml('harness: [a\n')],
     ['yaml: a repeated key', yaml('runs: 1\nruns: 2\n')],
@@ -1033,7 +1465,6 @@ export const CASES: Record<string, Case[]> = {
       yaml('analysis:\n  model: { kind: fake-analysis, votes: tie }\n'),
     ],
     ['yaml: analysis agent', yaml('analysis:\n  agent: true\n')],
-    ['yaml: analysis maxTokens 0', yaml('analysis:\n  maxTokens: 0\n')],
     [
       'yaml: capture viewport not whole',
       yaml('capture:\n  viewport: { width: 10.5, height: 10 }\n'),
@@ -1070,8 +1501,6 @@ secrets: { unbrokered: error }
 debug: { keep: 5, traceBufferMb: 2 }
 analysis:
   model: { kind: fake-analysis, vote: { winner: A, reason: shorter } }
-  insights: true
-  maxTokens: 100000
   maxInputTokens: 4000
 profiles:
   pr:
@@ -1159,6 +1588,22 @@ environment:
       }),
     ],
     ['ts: a relative fake dir as data', configIn({ sandbox: { kind: 'fake', dir: './tmp' } })],
+    [
+      'collected: a limit.harness id no eval runs on',
+      limitHarness(['cursor'], ['cursor:composer-2.5', 'pi:gemini-3.8-flash']),
+    ],
+    [
+      'collected: two limit.harness ids, one no eval runs on',
+      limitHarness(['cursor:composer-2.5', 'codex'], ['cursor:composer-2.5']),
+    ],
+    ['collected: every limit.harness id matches', limitHarness(['a', 'b'], ['b', 'a', 'c'])],
+    ['collected: an empty limit.harness', limitHarness([], ['a'])],
+    ['collected: a limit.harness id with no harnesses collected', limitHarness(['a'], [])],
+    [
+      'collected: a path filter, one limit.harness id matches',
+      limitHarness(['a', 'b'], ['a'], true),
+    ],
+    ['collected: a path filter, no limit.harness id matches', limitHarness(['b'], ['a'], true)],
   ],
   gateway: [
     ['ts: an empty list', config({ gateway: [] })],
@@ -1169,6 +1614,21 @@ environment:
     ['ts: direct with a typo', config({ gateway: [{ kind: 'direct', apiKey: 'x' }] })],
     ['ts: a profile with an empty list', config({ profiles: { pr: { gateway: [] } } })],
     ['ts: good', config({ gateway: [{ kind: 'direct' }] })],
+    ['ts: direct placed first', config({ gateway: [{ kind: 'direct' }, { kind: 'vercel' }] })],
+    [
+      'ts: direct off',
+      config({ gateway: [{ kind: 'vercel' }, { kind: 'direct', enabled: false }] }),
+    ],
+    [
+      'ts: direct and direct off',
+      config({
+        gateway: [{ kind: 'direct' }, { kind: 'vercel' }, { kind: 'direct', enabled: false }],
+      }),
+    ],
+    ['ts: direct off alone', config({ gateway: [{ kind: 'direct', enabled: false }] })],
+    ['ts: direct enabled not a boolean', config({ gateway: [{ kind: 'direct', enabled: 'no' }] })],
+    ['ts: a profile with direct off alone', config({ profiles: { pr: { gateway: [OFF] } } })],
+    ['yaml: direct off', yaml('gateway: [vercel, { direct: { enabled: false } }]\n')],
     ['yaml: an unknown name', yaml('gateway: [vercell]\n')],
     ['yaml: a map with two keys', yaml('gateway: [{ direct: {}, vercel: {} }]\n')],
     ['yaml: direct with options', yaml('gateway: [{ direct: { apiKey: x } }]\n')],
@@ -1177,12 +1637,27 @@ environment:
     ['harness: a pin not a name', any(fakeHarness, { gateway: 'vercell' })],
     ['harness: a pin a number', any(cursor, { model: 'm', gateway: 3 })],
     ['harness: a helper pin', any(fakeHarness, { gateway: { kind: 'direct' } })],
+    [
+      'harness: a pin to direct off',
+      any(cursor, { model: 'm', gateway: { kind: 'direct', enabled: false } }),
+    ],
     ['ts: vercel with a typo', config({ gateway: [{ kind: 'vercel', apikey: 'x' }] })],
     ['ts: vercel then direct', config({ gateway: [{ kind: 'vercel' }, { kind: 'direct' }] })],
     ['yaml: vercel with options', yaml('gateway: [{ vercel: { apikey: x } }]\n')],
     ['yaml: vercel then direct', yaml('gateway: [vercel, direct]\n')],
-    ['route: cursor on vercel alone', route([VERCEL], cursor({ model: 'composer-2.5' }))],
-    ['route: antigravity on vercel alone', route([VERCEL], antigravity({ model: 'm' }))],
+    [
+      'route: cursor on vercel falls back to direct',
+      route([VERCEL], cursor({ model: 'composer-2.5' })),
+    ],
+    [
+      'route: cursor pinned to direct, direct off',
+      route([VERCEL, OFF], cursor({ model: 'composer-2.5', gateway: 'direct' })),
+    ],
+    [
+      'route: cursor on vercel, direct off',
+      route([VERCEL, OFF], cursor({ model: 'composer-2.5' })),
+    ],
+    ['route: antigravity on vercel, direct off', route([VERCEL, OFF], antigravity({ model: 'm' }))],
     ['route: grok build on vercel', route([VERCEL], grokBuild({ model: 'm' }))],
     ['route: opencode on vercel', route([VERCEL], opencode({ model: 'anthropic/m' }))],
     ['route: an fx gateway id on direct alone', route([DIRECT], fx({ model: 'google/m' }))],
@@ -1197,21 +1672,29 @@ environment:
     ['route: a pin not in the list', route([DIRECT], codex({ model: 'm', gateway: 'vercel' }))],
     ['route: codex on vercel', route([VERCEL, DIRECT], codex({ model: 'm' }))],
     ['route: claude code on vercel', route([VERCEL], claudeCode({ model: 'm' }))],
-    ['route: pi on vercel alone', route([VERCEL], pi({ model: 'gemini-3.8-flash' }))],
+    ['route: pi on vercel, direct off', route([VERCEL, OFF], pi({ model: 'gemini-3.8-flash' }))],
     [
-      'route: pi falls through to direct',
+      'route: pi on vercel before direct',
       route([VERCEL, DIRECT], pi({ model: 'gemini-3.8-flash' })),
     ],
     [
-      'route: opencode with effort on vercel alone',
-      route([VERCEL], opencode({ model: 'anthropic/m', effort: 'high' })),
+      'route: opencode with effort on vercel, direct off',
+      route([VERCEL, OFF], opencode({ model: 'anthropic/m', effort: 'high' })),
     ],
     [
-      'route: goose with effort on vercel alone',
-      route([VERCEL], goose({ model: 'm', effort: 'high' })),
+      'route: goose with effort on vercel, direct off',
+      route([VERCEL, OFF], goose({ model: 'm', effort: 'high' })),
     ],
     [
-      'route: grok build with effort on vercel alone',
+      'route: opencode with effort on a gemini model on vercel',
+      route([VERCEL], opencode({ model: 'google/gemini-3.8-flash', effort: 'high' })),
+    ],
+    [
+      'route: pi with effort on vercel',
+      route([VERCEL], pi({ model: 'gemini-3.8-flash', effort: 'low' })),
+    ],
+    [
+      'route: grok build with effort on vercel',
       route([VERCEL], grokBuild({ model: 'm', effort: 'high' })),
     ],
     [
@@ -1239,10 +1722,48 @@ environment:
       'yaml: openrouter with fallbacks',
       yaml('gateway: [{ openrouter: { fallbacks: true } }, direct]\n'),
     ],
-    ['route: cursor on openrouter alone', route([OPENROUTER], cursor({ model: 'composer-2.5' }))],
-    ['route: antigravity on openrouter alone', route([OPENROUTER], antigravity({ model: 'm' }))],
-    ['route: fx on openrouter alone', route([OPENROUTER], fx({ model: 'gpt-5.5' }))],
-    ['route: pi on openrouter alone', route([OPENROUTER], pi({ model: 'gemini-3.8-flash' }))],
+    [
+      'route: cursor on openrouter, direct off',
+      route([OPENROUTER, OFF], cursor({ model: 'composer-2.5' })),
+    ],
+    [
+      'route: antigravity on openrouter, direct off',
+      route([OPENROUTER, OFF], antigravity({ model: 'm' })),
+    ],
+    ['route: fx with effort on direct', route([DIRECT], fx({ model: 'gpt-5.5', effort: 'low' }))],
+    [
+      'route: fx with effort on vercel',
+      route([VERCEL], fx({ model: 'google/gemini-3.8-flash', effort: 'low' })),
+    ],
+    [
+      'route: fx with effort on vertex',
+      route([VERTEX], fx({ model: 'google/gemini-3.8-flash', effort: 'low' })),
+    ],
+    [
+      'route: fx with a claude model on vertex, direct off',
+      route([VERTEX, OFF], fx({ model: 'anthropic/claude-haiku-4-5' })),
+    ],
+    [
+      'route: fx with a claude model falls through vertex to vercel',
+      route([VERTEX, VERCEL], fx({ model: 'anthropic/claude-haiku-4-5' })),
+    ],
+    [
+      'route: fx with a bare openai id on vertex, direct off',
+      route([VERTEX, OFF], fx({ model: 'gpt-5.5' })),
+    ],
+    [
+      'route: fx with a bare openai id falls through vertex to direct',
+      route([VERTEX], fx({ model: 'gpt-5.5' })),
+    ],
+    ['route: fx on openrouter, direct off', route([OPENROUTER, OFF], fx({ model: 'gpt-5.5' }))],
+    [
+      'route: fx with effort on openrouter',
+      route([OPENROUTER], fx({ model: 'gpt-5.5', effort: 'low' })),
+    ],
+    [
+      'route: pi with effort on a gemini model on openrouter',
+      route([OPENROUTER], pi({ model: 'gemini-3.8-flash', effort: 'low' })),
+    ],
     ['route: claude code on openrouter', route([OPENROUTER], claudeCode({ model: 'm' }))],
     ['route: opencode on openrouter', route([OPENROUTER], opencode({ model: 'anthropic/m' }))],
     [
@@ -1250,12 +1771,24 @@ environment:
       route([OPENROUTER], codex({ model: 'm', effort: 'high' })),
     ],
     [
-      'route: claude code with effort on openrouter alone',
-      route([OPENROUTER], claudeCode({ model: 'm', effort: 'high' })),
+      'route: claude code with effort on openrouter, direct off',
+      route([OPENROUTER, OFF], claudeCode({ model: 'm', effort: 'high' })),
     ],
     [
-      'route: goose with effort falls through to direct',
+      'route: goose with effort on a gemini model on openrouter',
       route([OPENROUTER, DIRECT], goose({ model: 'gemini-3.8-flash', effort: 'high' })),
+    ],
+    [
+      'route: goose with effort on another model falls through to direct',
+      route([OPENROUTER, DIRECT], goose({ model: 'llama-4', effort: 'high' })),
+    ],
+    [
+      'route: opencode with effort on another model on openrouter, direct off',
+      route([OPENROUTER, OFF], opencode({ model: 'anthropic/m', effort: 'high' })),
+    ],
+    [
+      'route: grok build with effort on openrouter',
+      route([OPENROUTER], grokBuild({ model: 'm', effort: 'high' })),
     ],
     ['oidc: expired', oidc({ VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T00:00:00Z')) })],
     ['oidc: live', oidc({ VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T13:00:00Z')) })],
@@ -1270,10 +1803,66 @@ environment:
       config({ judge: { model: 'anthropic/m', gateway: { kind: 'vercel' } }, gateway: [VERCEL] }),
     ],
     ['judge: an eval pin not a name', options({ judge: { gateway: 3 } })],
+    ['model: openai on vertex falls back to direct', model('openai/m', undefined, [VERTEX])],
+    ['model: pinned to direct, direct off', model('anthropic/m', 'direct', [VERCEL, OFF])],
+    [
+      'judge: a pin to direct off',
+      () =>
+        resolveModelGateway('anthropic/m', OFF, { gateways: listed([VERCEL]) }, 'the judge model'),
+    ],
     ['model: mistral on direct alone', model('mistral/large', undefined, [DIRECT])],
     ['model: mistral on vercel then direct', model('mistral/large', undefined, [VERCEL, DIRECT])],
     ['model: pinned to vercel, not listed', model('anthropic/m', 'vercel', [DIRECT])],
     ['model: mistral pinned to direct', model('mistral/large', 'direct', [VERCEL, DIRECT])],
+    [
+      'ts: vertex with settings',
+      config({
+        gateway: [
+          {
+            kind: 'vertex',
+            project: 'p',
+            location: 'us-east5',
+            regions: { anthropic: 'us-east5' },
+          },
+        ],
+      }),
+    ],
+    ['ts: vertex with a typo', config({ gateway: [{ kind: 'vertex', projet: 'p' }] })],
+    [
+      'ts: vertex with an unknown publisher',
+      config({ gateway: [{ kind: 'vertex', regions: { openai: 'us-east5' } }] }),
+    ],
+    [
+      'ts: vertex with a region not one',
+      config({ gateway: [{ kind: 'vertex', location: 'US East' }] }),
+    ],
+    [
+      'yaml: vertex with settings',
+      yaml('gateway: [{ vertex: { project: p, regions: { anthropic: us-east5 } } }, direct]\n'),
+    ],
+    ['route: codex on vertex, direct off', route([VERTEX, OFF], codex({ model: 'm' }))],
+    [
+      'route: cursor on vertex, direct off',
+      route([VERTEX, OFF], cursor({ model: 'composer-2.5' })),
+    ],
+    ['route: claude code on vertex, direct off', route([VERTEX, OFF], claudeCode({ model: 'm' }))],
+    [
+      'route: goose on vertex, direct off',
+      route([VERTEX, OFF], goose({ model: 'gemini-3.8-flash' })),
+    ],
+    ['route: grok build on vertex, direct off', route([VERTEX, OFF], grokBuild({ model: 'm' }))],
+    ['vertex: no project', vertexEntry({}, {})],
+    [
+      'vertex: the project from GOOGLE_CLOUD_PROJECT',
+      vertexEntry({}, { GOOGLE_CLOUD_PROJECT: 'p' }),
+    ],
+    [
+      'route: claude code on vertex then direct',
+      route([VERTEX, DIRECT], claudeCode({ model: 'm' })),
+    ],
+    ['model: anthropic on vertex, direct off', model('anthropic/m', undefined, [VERTEX, OFF])],
+    ['model: google on vertex, direct off', model('google/m', undefined, [VERTEX, OFF])],
+    ['model: openai on vertex, direct off', model('openai/m', undefined, [VERTEX, OFF])],
   ],
   declaration: [
     ['not a list', tree({ type: 'eval' })],
@@ -1281,6 +1870,15 @@ environment:
     ['an unknown node type', tree([evalNode({ type: 'test' })])],
     ['a node without a type', tree([{ name: 'e' }])],
     ['an eval without a body', tree([{ type: 'eval', name: 'e', mode: 'run', options: {} }])],
+    [
+      'an eval without its source',
+      tree([{ type: 'eval', name: 'e', mode: 'run', options: {}, body: 'b1' }]),
+    ],
+    ['an eval whose body hash is not sha256', tree([evalNode({ source: { body: 'abc' } })])],
+    [
+      'an eval whose source has an unknown key',
+      tree([evalNode({ source: { body: '0'.repeat(64), file: '0'.repeat(64) } })]),
+    ],
     ['an eval with a bad mode', tree([evalNode({ mode: 'focus' })])],
     ['an eval with an unknown key', tree([evalNode({ timeout: '1m' })])],
     ['an eval whose options are a list', tree([evalNode({ options: [] })])],
@@ -1310,6 +1908,87 @@ environment:
         { type: 'group', name: 'g', mode: 'skip', options: { runs: 2 }, children: [evalNode()] },
         evalNode({ family: { name: 'case %#', case: 1, cases: 2 } }),
         { type: 'todo', name: 'later' },
+      ]),
+    ],
+    ['declared: two evals with the same name', declares([evalNode(), evalNode({ body: 'b2' })])],
+    [
+      'declared: an eval named like a grouped eval',
+      declares([group('g', [evalNode()]), evalNode({ name: 'g › e', body: 'b2' })]),
+    ],
+    [
+      'declared: two families with the same template',
+      declares([
+        ...[0, 1].map((i) =>
+          evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+        ),
+        ...[0, 1, 2].map((i) =>
+          evalNode({ name: `d${i}`, body: `d${i}`, family: { name: 'c %#', case: i, cases: 3 } }),
+        ),
+      ]),
+    ],
+    [
+      'declared: a family case declared twice',
+      declares(
+        [0, 1, 1].map((i, n) =>
+          evalNode({ name: `c${n}`, body: `b${n}`, family: { name: 'c %#', case: i, cases: 3 } }),
+        ),
+      ),
+    ],
+    [
+      'declared: a family named like a grouped family',
+      declares([
+        group(
+          'g',
+          [0, 1].map((i) =>
+            evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+          ),
+        ),
+        evalNode({ name: 'd0', body: 'd0', family: { name: 'g › c %#', case: 0, cases: 2 } }),
+      ]),
+    ],
+    [
+      'declared: an eval named like a later family',
+      declares([
+        evalNode({ name: 'c %#' }),
+        ...[0, 1].map((i) =>
+          evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+        ),
+      ]),
+    ],
+    [
+      'declared: an eval named like an earlier family',
+      declares([
+        ...[0, 1].map((i) =>
+          evalNode({ name: `c${i}`, body: `b${i}`, family: { name: 'c %#', case: i, cases: 2 } }),
+        ),
+        evalNode({ name: 'c %#', body: 'u0' }),
+      ]),
+    ],
+    [
+      "declared: a family's case named like its template",
+      declares(
+        ['c 1', 'c $n'].map((name, i) =>
+          evalNode({ name, body: `b${i}`, family: { name: 'c $n', case: i, cases: 2 } }),
+        ),
+      ),
+    ],
+    [
+      'declared: one template in two groups, and unpooled',
+      declares([
+        ...['g', 'h'].map((g) =>
+          group(
+            g,
+            [0, 1].map((i) =>
+              evalNode({
+                name: `c${i}`,
+                body: `b${i}`,
+                family: { name: 'c %#', case: i, cases: 2 },
+              }),
+            ),
+          ),
+        ),
+        evalNode({ name: 'c 0', body: 'u0' }),
+        evalNode({ name: 'c 1', body: 'u1' }),
       ]),
     ],
   ],
@@ -1492,6 +2171,7 @@ environment:
     ['c.exec with fractional retries', execOptions({ retries: 0.5 })],
     ['c.exec with infinite retries', execOptions({ retries: Number.POSITIVE_INFINITY })],
     ['c.exec with an interval as a duration string', execOptions({ interval: '1s' })],
+    ['c.exec with an interval over 596h', execOptions({ retries: 1, interval: 2 ** 31 })],
     ['c.exec with a retry typo', execOptions({ retry: 2 })],
     ['c.exec with retries in the background', execOptions({ background: true, retries: 1 })],
     ['good: c.exec with retries', execOptions({ retries: 3, interval: 250 })],
@@ -1527,10 +2207,40 @@ environment:
       request({ op: 'capture', target: { port: 3000 }, options: { wait: { ms: -1 } } }),
     ],
     [
+      'capture with a name starting with an underscore',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: '_home' } }),
+    ],
+    [
+      'capture with a name starting with a hyphen',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: '-home' } }),
+    ],
+    [
+      'capture with a name of 101 characters',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: 'a'.repeat(101) } }),
+    ],
+    [
+      'capture with an upper-case name',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: 'Home' } }),
+    ],
+    [
+      'good: capture with a name of 100 characters',
+      request({ op: 'capture', target: { port: 3000 }, options: { name: 'a'.repeat(100) } }),
+    ],
+    [
       'poll on a value',
       request(expectCall({ subject: { value: 1 }, matcher: 'toBe', args: [1], poll: {} })),
     ],
     ['poll with a zero interval', request(expectCall({ poll: { interval: 0 } }))],
+    ['poll with a timeout over 596h', request(expectCall({ poll: { timeout: 2 ** 31 } }))],
+    ['poll with an interval over 596h', request(expectCall({ poll: { interval: 2 ** 31 } }))],
+    [
+      'capture with a wait over 596h',
+      request({ op: 'capture', target: { port: 3000 }, options: { wait: { ms: 2 ** 31 } } }),
+    ],
+    [
+      'capture with a timeout over 596h',
+      request({ op: 'capture', target: { port: 3000 }, options: { timeout: '1000h' } }),
+    ],
     ['poll with a typo', request(expectCall({ poll: { timout: 5000 } }))],
     ['good: send', request({ op: 'send', prompt: 'Write greet.js.' })],
     ['good: judge', request({ op: 'judge', question: 'Does greet.js export greet?' })],

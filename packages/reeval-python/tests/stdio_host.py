@@ -57,7 +57,9 @@ def reply_to(call: dict[str, Any]) -> dict[str, Any]:
 
 
 class Host:
-    def __init__(self, root: Path, source: str, *, answer: bool = True) -> None:
+    def __init__(
+        self, root: Path, source: str, *, answer: bool = True, collect: bool = True
+    ) -> None:
         (root / "evals").mkdir(exist_ok=True)
         (root / "evals" / "x.eval.py").write_text(source)
         env = {
@@ -77,14 +79,18 @@ class Host:
         )
         self.answer = answer
         self.seen: list[dict[str, Any]] = []
+        self.raw: list[str] = []
         self.bad: list[bytes] = []
         self.closed = False
         self._stderr: list[bytes] = []
         self._cond = threading.Condition()
         self._write = threading.Lock()
         threading.Thread(target=self._pump, daemon=True).start()
-        threading.Thread(target=self._drain, daemon=True).start()
+        self._drainer = threading.Thread(target=self._drain, daemon=True)
+        self._drainer.start()
         self.hello = self.wait(lambda m: m.get("t") == "hello")
+        if not collect:
+            return
         self.send({"t": "collect", "file": "evals/x.eval.py"})
         declared = self.wait(lambda m: m.get("t") in ("declared", "load-error"))
         assert declared["t"] == "declared", declared
@@ -93,6 +99,7 @@ class Host:
     def _pump(self) -> None:
         assert self.proc.stdout is not None
         for line in self.proc.stdout:
+            self.raw.append(line.decode(errors="replace"))
             try:
                 msg = json.loads(line)
             except ValueError:
@@ -163,7 +170,10 @@ class Host:
         """Closes stdin as reeval does when it exits, and waits for the runner to end."""
         assert self.proc.stdin is not None
         self.proc.stdin.close()
-        return self.proc.wait(timeout=timeout)
+        code = self.proc.wait(timeout=timeout)
+        # The process can exit before the drain thread has read its last stderr.
+        self._drainer.join(timeout)
+        return code
 
     def kill(self) -> None:
         if self.proc.poll() is None:

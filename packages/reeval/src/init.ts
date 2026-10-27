@@ -14,6 +14,7 @@ import { type AgentKind, agentFor } from './harness/agents.ts'
 import { RECOMMENDED_ANALYSIS_MODEL } from './judge/index.ts'
 import { harnessId } from './options.ts'
 import { PACKAGE_DIR } from './root.ts'
+import { withoutBom } from './text.ts'
 import type { AgentHarnessDescriptor } from './types.ts'
 
 /** The agents `reeval init` offers, in the order it lists them, with the model it pins. */
@@ -89,16 +90,15 @@ export default defineConfig({
   harness: ${h.factory}({ model: '${h.model}' }), // needs ${keyOf(h)}
   timeout: '15m',
   // For c.judge, add a judge, e.g. judge: { model: '${RECOMMENDED_ANALYSIS_MODEL}' }.
-  // Insights explain each eval after a run, with ${ANALYSIS_KEY};
-  // insights: false turns them off.
+  // reeval analyze explains a run, with ${ANALYSIS_KEY}.
   analysis: { model: '${RECOMMENDED_ANALYSIS_MODEL}' },
   defaultProfile: { ci: 'pr' },
   profiles: {
     // PR runs in CI: one attempt per cell, no variants.
     pr: { limit: { runs: 1, compare: false }, budget: { attempts: 20 } },
-    // Thorough: three attempts per cell, recorded every time.
+    // Thorough: four attempts per cell, the fewest a compare's lift needs, recorded every time.
     nightly: {
-      defaults: { runs: 3 },
+      defaults: { runs: 4 },
       record: 'always',
       budget: { attempts: 80, duration: '2h' },
     },
@@ -309,7 +309,7 @@ function packageJson(dir: string, pkg: string, version: string): InitAction {
   }
   let manifest: Record<string, unknown>
   try {
-    manifest = JSON.parse(existing)
+    manifest = JSON.parse(withoutBom(existing))
   } catch (error) {
     throw new UsageError(`package.json isn't valid JSON: ${(error as Error).message}`)
   }
@@ -432,7 +432,7 @@ export function planInit(options: {
     config(
       dir,
       configSource(pkg, choice),
-      `harness ${cellOf(h)}; insights ${RECOMMENDED_ANALYSIS_MODEL}; profiles pr, nightly`,
+      `harness ${cellOf(h)}; analysis ${RECOMMENDED_ANALYSIS_MODEL}; profiles pr, nightly`,
       force,
       conflicts,
     ),
@@ -557,9 +557,6 @@ export async function initCommand(flags: Flags, args: string[], io: InitIO): Pro
       writeFileSync(path, a.content)
     }
   }
-  io.out(
-    `Insights: ${RECOMMENDED_ANALYSIS_MODEL} explains each eval after a run, with ${ANALYSIS_KEY}; analysis.insights: false or --no-insights turns them off`,
-  )
   const pm = packageManager(dir)
   const h = harnessOf(choice)
   const build = `${pm.exec} image build`

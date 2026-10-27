@@ -6,6 +6,7 @@ import { Duplex, type Readable, Transform } from 'node:stream'
 import tls from 'node:tls'
 import zlib from 'node:zlib'
 import { type CertificateAuthority, issueServerCertificate } from './cert.ts'
+import { requestedEffort } from './effort.ts'
 import { link } from './mux.ts'
 import { createPolicyCheck, hostAllowed, type Lookup, type NetworkPolicy } from './policy.ts'
 import {
@@ -15,6 +16,7 @@ import {
   type EndpointMatch,
   onEndpoint,
   type RequestTransformation,
+  setsCredential,
 } from './rules.ts'
 import {
   bodySubstituter,
@@ -29,7 +31,7 @@ import {
   substitutionsFor,
   unsubstituted,
 } from './substitution.ts'
-import { type DerivedTokens, tokeniseResponse } from './tokens.ts'
+import { type DerivedTokens, tokenizeResponse } from './tokens.ts'
 import { webSocketScrubber } from './websocket.ts'
 
 export type EgressProxyOptions = {
@@ -44,6 +46,8 @@ export type EgressProxyOptions = {
   allowLoopback?: boolean
   /** `false` sends responses from brokered hosts back unscrubbed. For tests only. */
   scrubResponses?: boolean
+  /** How long a decrypted CONNECT waits for its client's first byte, in ms. For tests only. */
+  firstByteTimeout?: number
   /**
    * The only requests a credential may be swapped into. A request a transformation matches that
    * isn't one of them gets a 403 from the gateway, not the placeholder sent upstream.
@@ -77,11 +81,24 @@ export type EgressProxyOptions = {
    * `responseCost`.
    */
   modelResponses?: readonly EndpointMatch[]
+  /**
+   * Requests the gateway answers itself, never sending them upstream: e.g. a token exchange whose
+   * answer is a placeholder the gateway then swaps for a real token on the model calls.
+   */
+  localResponses?: readonly LocalResponse[]
   /** Every DNS decision and, once each is done, every request and tunnel: for debug logs. */
   onEvent?: (event: EgressEvent) => void
 }
 
 type Headers = Record<string, string | string[]>
+
+/** A request the gateway answers itself, with this status, these headers and this body. */
+export type LocalResponse = {
+  match: EndpointMatch
+  status: number
+  headers?: Record<string, string>
+  body: string
+}
 
 /** One request through the gateway, or one tunnel it passed through without reading. */
 export type EgressRequestEvent = {
@@ -109,6 +126,13 @@ export type EgressRequestEvent = {
   requestHeaders?: Headers
   /** As the sandbox got them, scrubbed. */
   responseHeaders?: Headers
+  /**
+   * The reasoning settings the request body carried, on a `modelResponses` endpoint or a host
+   * the gateway holds a harness credential or token for, as
+   * `<path>=<value>` joined by spaces: `reasoning_effort=high`, or
+   * `generationConfig.thinkingConfig.thinkingLevel=LOW`.
+   */
+  requestEffort?: string
   /** The model the response body says served it, on a `modelResponses` endpoint. */
   responseModel?: string
   /** The reasoning effort the response body says it ran at, on a `modelResponses` endpoint. */
@@ -164,6 +188,7 @@ type RequestTracker = {
         | 'responseHeaders'
         | 'status'
         | 'reason'
+        | 'requestEffort'
         | 'responseModel'
         | 'responseEffort'
         | 'responseProvider'
@@ -176,6 +201,12 @@ type RequestTracker = {
 }
 /** HTTP/1.1 and HTTP/2 compatibility responses share this surface. */
 type Response = http.ServerResponse
+
+/** A TLS record's first byte when it carries a handshake, as a ClientHello does. */
+const TLS_HANDSHAKE = 0x16
+
+/** How long a decrypted CONNECT waits for its client's first byte: Node's TLS handshake timeout. */
+const FIRST_BYTE_TIMEOUT_MS = 120_000
 
 const HOP_BY_HOP = new Set([
   'connection',
@@ -203,6 +234,9 @@ function parseAuthority(authority: string, defaultPort: number): { host: string;
   const m = /^\[([^\]]+)\](?::(\d+))?$/.exec(authority) ?? /^([^:]+)(?::(\d+))?$/.exec(authority)
   return { host: (m?.[1] ?? authority).toLowerCase(), port: Number(m?.[2] ?? defaultPort) }
 }
+
+/** Whether a parsed port names a TCP port; `net.connect` and `tls.connect` throw above 65535. */
+const isPort = (port: number) => Number.isInteger(port) && port >= 1 && port <= 65535
 
 /** `host` or `host:port` for a Host header or URL, IPv6 in brackets. */
 const authorityOf = (host: string, port: number) => {
@@ -252,6 +286,7 @@ const plainHeaders = (headers: IncomingHttpHeaders | OutgoingHttpHeaders): Heade
 
 export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const log = options.log ?? (() => {})
+  const firstByteTimeout = options.firstByteTimeout ?? FIRST_BYTE_TIMEOUT_MS
   const emit = (event: EgressEvent) => {
     try {
       options.onEvent?.(event)
@@ -264,6 +299,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const allSubs = () => (tokens.length ? [...subs, ...tokens] : subs)
   const derived = options.derivedTokens ?? []
   const tokenHosts = derived.flatMap((d) => [d.endpoint.host, ...d.hosts])
+  const locals = options.localResponses ?? []
+  const localHosts = locals.map((l) => l.match.host)
   let policyCheck = createPolicyCheck(options.policy, options)
   const check = async (host: string) => {
     const verdict = await policyCheck(host)
@@ -396,6 +433,10 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const front = http.createServer()
   front.on('connect', (req: http.IncomingMessage, socket: Duplex, head: Buffer) => {
     const { host, port } = parseAuthority(req.url ?? '', 443)
+    if (!isPort(port)) {
+      log(`reeval:egress CONNECT ${req.url} refused (invalid port)`)
+      return reply(socket, 400, `reeval egress gateway: invalid port ${port} in CONNECT ${req.url}`)
+    }
     const startedAt = Date.now()
     const tunnel = {
       type: 'request' as const,
@@ -429,11 +470,31 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       }
       contact(socket, host, port)
       const target = { host, port, address: verdict.address }
-      if (decrypts(rules, host) || substitutes(allSubs(), host) || hostAllowed(tokenHosts, host)) {
+      if (
+        decrypts(rules, host) ||
+        substitutes(allSubs(), host) ||
+        hostAllowed(tokenHosts, host) ||
+        hostAllowed(localHosts, host)
+      ) {
         log(`reeval:egress CONNECT ${host}:${port} decrypt`)
         socket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
         if (head.length) socket.unshift(head)
-        return decrypt(socket, target)
+        return firstByte(
+          socket,
+          (byte) =>
+            byte === TLS_HANDSHAKE ? decrypt(socket, target) : plainInTunnel(socket, target),
+          (reason) => {
+            log(`reeval:egress CONNECT ${host}:${port} closed (${reason})`)
+            emit({
+              ...tunnel,
+              allowed: true,
+              reason,
+              sent: 0,
+              received: 0,
+              ms: Date.now() - startedAt,
+            })
+          },
+        )
       }
       log(`reeval:egress CONNECT ${host}:${port} tunnel`)
       let status = 200
@@ -483,6 +544,12 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         .end(`reeval egress gateway: expected an http:// or https:// URL, not ${url.protocol}\n`)
     const secure = url.protocol === 'https:'
     const { host, port } = parseAuthority(url.host, secure ? 443 : 80)
+    if (!isPort(port)) {
+      log(`reeval:egress ${req.method} ${url.protocol}//${url.host} refused (invalid port)`)
+      return res
+        .writeHead(400)
+        .end(`reeval egress gateway: invalid port ${port} in ${url.origin}\n`)
+    }
     const shown = secure ? `https://${host}` : `http://${host}:${port}`
     const done = requestEvent(res, {
       method: req.method ?? 'GET',
@@ -492,6 +559,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       via: secure ? 'decrypted' : 'http',
       requestHeaders: plainHeaders(req.headers),
     })
+    const path = url.pathname + url.search
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
         log(`reeval:egress ${req.method} ${shown} denied (${verdict.reason})`)
@@ -502,31 +570,225 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
           .end(`blocked by the reeval egress policy: ${verdict.reason}\n`)
       }
       contact(req.socket, host, port)
+      const target = { host, port, address: verdict.address }
       if (secure) {
         // The request line's authority wins over Host (RFC 9112 §3.2.2): clients send the proxy's.
         const headers = { ...req.headers, host: url.host }
-        const target = { host, port, address: verdict.address }
-        return void onDecrypted(target, req, res, url.pathname + url.search, headers, done)
+        return void onDecrypted(target, req, res, path, headers, done)
       }
-      log(`reeval:egress ${req.method} http://${host}:${port}${url.pathname}`)
-      const upstream = http.request({
-        host: verdict.address,
-        port,
-        method: req.method,
-        path: url.pathname + url.search,
-        headers: { ...endToEnd(req.headers), host: url.host },
-      })
-      forwardHttp1(req.pipe(counter(done.sent)), res, upstream, {
-        own: [],
-        creds: [],
-        url: `${shown}${url.pathname}`,
-        t: done,
-      })
+      onPlain(target, req, res, path, url.host, done)
     })
   })
   front.on('upgrade', (_req: http.IncomingMessage, socket: Duplex) => {
     reply(socket, 501, 'reeval egress gateway: use CONNECT for websockets')
   })
+
+  /**
+   * Sends a plain-HTTP request upstream as the sandbox sent it: never given credentials or
+   * substitutions, so a placeholder sent over plain HTTP goes out as the placeholder.
+   */
+  function onPlain(
+    target: Target,
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    path: string,
+    host: string,
+    done: RequestTracker,
+  ) {
+    const url = `http://${target.host}:${target.port}${pathOnly(path)}`
+    log(`reeval:egress ${req.method} ${url}`)
+    const upstream = http.request({
+      host: target.address,
+      port: target.port,
+      method: req.method,
+      path,
+      headers: { ...endToEnd(req.headers), host },
+    })
+    forwardHttp1(req.pipe(counter(done.sent)), res, upstream, { own: [], creds: [], url, t: done })
+  }
+
+  /**
+   * Calls `then` with the connection's first byte once it arrives, left unread for the next
+   * reader, or `idle` with why there's none: the client closed it first, or it waited
+   * `firstByteTimeout` and closed it.
+   */
+  function firstByte(socket: Duplex, then: (byte: number) => void, idle: (why: string) => void) {
+    const timer = setTimeout(() => {
+      stop()
+      socket.destroy()
+      idle(`the client sent nothing within ${firstByteTimeout / 1000}s`)
+    }, firstByteTimeout)
+    const onReadable = () => {
+      const chunk = socket.read() as Buffer | null
+      if (!chunk?.length) return
+      stop()
+      socket.unshift(chunk)
+      then(chunk[0] as number)
+    }
+    const onClose = () => {
+      stop()
+      idle('the client closed the connection without sending anything')
+    }
+    const stop = () => {
+      clearTimeout(timer)
+      socket.off('readable', onReadable)
+      socket.off('close', onClose)
+    }
+    socket.on('readable', onReadable)
+    socket.once('close', onClose)
+  }
+
+  /**
+   * The path a request in a plain tunnel asks for, or why it's refused: its Host or absolute-form
+   * URL names a host other than the CONNECT target, which a server sharing the target's address
+   * could route it to.
+   */
+  function inTunnel(target: Target, req: http.IncomingMessage): { path: string; refused?: string } {
+    const asked = req.url ?? '/'
+    const absolute = asked.startsWith('/') ? undefined : URL.parse(asked)
+    const path = absolute ? absolute.pathname + absolute.search : asked
+    for (const named of [absolute?.host, req.headers.host]) {
+      if (!named) continue
+      const host = parseAuthority(named, target.port).host
+      if (host === target.host) continue
+      const shown = `http://${authorityOf(target.host, target.port)}${pathOnly(path)}`
+      log(`reeval:egress ${req.method} ${shown} refused (Host ${host})`)
+      return {
+        path,
+        refused: `reeval egress gateway: the request names ${host}, but the connection is to ${target.host}; send it on a connection to ${host}.`,
+      }
+    }
+    return { path }
+  }
+
+  /**
+   * Serves a CONNECT to a decrypted host whose client speaks plain HTTP/1.1 in the tunnel, as a
+   * Node client sends an `http://` request through a proxy: each request goes upstream as an
+   * absolute-form `http://` one does, with no credentials or substitutions.
+   */
+  function plainInTunnel(socket: Duplex, target: Target) {
+    const authority = authorityOf(target.host, target.port)
+    const refuse = (s: Duplex, reason: string) => {
+      emit({
+        type: 'request',
+        method: 'CONNECT',
+        url: authority,
+        host: target.host,
+        port: target.port,
+        via: 'http',
+        allowed: false,
+        status: 400,
+        reason,
+        sent: 0,
+        received: 0,
+        substituted: [],
+        credentials: [],
+        ms: 0,
+      })
+      reply(s, 400, reason)
+    }
+    const server = http.createServer((req, res) => {
+      const { path, refused } = inTunnel(target, req)
+      const done = requestEvent(res, {
+        method: req.method ?? 'GET',
+        url: `http://${authority}${pathOnly(path)}`,
+        host: target.host,
+        port: target.port,
+        via: 'http',
+        requestHeaders: plainHeaders(req.headers),
+      })
+      if (refused) {
+        done.refuse(refused)
+        req.resume()
+        return res.writeHead(421, { 'content-type': 'text/plain' }).end(`${refused}\n`)
+      }
+      onPlain(target, req, res, path, req.headers.host ?? authority, done)
+    })
+    server.on('upgrade', (req: http.IncomingMessage, s: Duplex, head: Buffer) =>
+      onPlainUpgrade(target, req, track(s), head),
+    )
+    server.on('connect', (req: http.IncomingMessage, s: Duplex) => {
+      log(`reeval:egress CONNECT ${authority} refused (CONNECT ${req.url} inside it)`)
+      refuse(
+        s,
+        `reeval egress gateway: CONNECT ${req.url} came inside the tunnel to ${authority}; send it to the gateway on a connection of its own.`,
+      )
+    })
+    server.on('clientError', (error: NodeJS.ErrnoException, s: Duplex) => {
+      // Node reports the socket's own errors (a reset) and a client hanging up mid-request here
+      // too; only a parse error is the client's.
+      if (!error.code?.startsWith('HPE_') || error.code === 'HPE_INVALID_EOF_STATE') {
+        return s.destroy()
+      }
+      log(`reeval:egress CONNECT ${authority} refused (neither TLS nor HTTP/1.1)`)
+      refuse(
+        s,
+        `reeval egress gateway: the connection to ${authority} carries neither a TLS handshake nor an HTTP/1.1 request. reeval reads every connection to a host with a brokered secret.`,
+      )
+    })
+    server.emit('connection', socket)
+  }
+
+  /** A plain-HTTP upgrade (a `ws://` WebSocket) in a tunnel, passed upstream as it is. */
+  function onPlainUpgrade(target: Target, req: http.IncomingMessage, socket: Duplex, head: Buffer) {
+    const method = req.method ?? 'GET'
+    const startedAt = Date.now()
+    const authority = authorityOf(target.host, target.port)
+    const { path, refused } = inTunnel(target, req)
+    const upgraded = (fields: Partial<EgressRequestEvent>) =>
+      emit({
+        type: 'request',
+        method,
+        url: `http://${authority}${pathOnly(path)}`,
+        host: target.host,
+        port: target.port,
+        via: 'http',
+        allowed: true,
+        sent: 0,
+        received: 0,
+        substituted: [],
+        credentials: [],
+        requestHeaders: plainHeaders(req.headers),
+        ...fields,
+        ms: Date.now() - startedAt,
+      })
+    if (refused) {
+      upgraded({ allowed: false, status: 421, reason: refused })
+      return reply(socket, 421, refused)
+    }
+    log(`reeval:egress ${method} http://${authority}${pathOnly(path)} (upgrade)`)
+    const upstream = http.request({
+      host: target.address,
+      port: target.port,
+      method,
+      path,
+      headers: {
+        ...endToEnd(req.headers, ['upgrade', 'connection']),
+        host: req.headers.host ?? authority,
+      },
+    })
+    upstream.once('upgrade', (up, upSocket: Duplex, upHead: Buffer) => {
+      upgraded({ status: up.statusCode, responseHeaders: plainHeaders(up.headers) })
+      const lines = [`HTTP/1.1 ${up.statusCode} ${up.statusMessage}`]
+      for (let i = 0; i < up.rawHeaders.length; i += 2) {
+        lines.push(`${up.rawHeaders[i]}: ${up.rawHeaders[i + 1] ?? ''}`)
+      }
+      socket.write(`${lines.join('\r\n')}\r\n\r\n`)
+      if (head.length) upSocket.write(head)
+      if (upHead.length) socket.write(upHead)
+      link(socket, track(upSocket))
+    })
+    upstream.once('response', (up) => {
+      upgraded({ status: up.statusCode })
+      reply(socket, up.statusCode ?? 502, `upstream refused the upgrade (${up.statusCode})`)
+      up.resume()
+    })
+    upstream.once('error', (error) => {
+      upgraded({ status: 502, reason: error.message })
+      reply(socket, 502, `reeval egress gateway: ${error.message}`)
+    })
+    upstream.end()
+  }
 
   /**
    * Terminates TLS with a certificate for the CONNECT host. One server per connection, since the
@@ -569,7 +831,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     /** Whether its response names the model that served it. */
     readsModel?: boolean
   } {
-    // An absolute-form target names its own host, which the upstream honours over Host.
+    // An absolute-form target names its own host, which the upstream honors over Host.
     if (!path.startsWith('/') && !(method === 'OPTIONS' && path === '*')) {
       const reason = `reeval egress gateway: expected a path in the request line on a connection to ${target.host}, not an absolute URL.`
       log(`reeval:egress ${method} https://${target.host} refused (absolute-form target)`)
@@ -640,7 +902,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       path,
       headers: {},
     })
-    // Uncompressed responses, so the scrubber, the tokeniser and the model reader see them.
+    // Uncompressed responses, so the scrubber, the tokenizer and the model reader see them.
     if (
       scrubbedInBodies(own).length ||
       credentialValues(rules, target.host).length ||
@@ -677,9 +939,11 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     headers: OutgoingHttpHeaders,
     own: Substitution[],
     t?: RequestTracker,
+    readsEffort = false,
   ): Readable | Transform {
-    const counted = t ? req.pipe(counter(t.sent)) : req
     const encoded = String(headers['content-encoding'] ?? 'identity') !== 'identity'
+    const sent = t ? req.pipe(counter(t.sent)) : req
+    const counted = readsEffort && t && !encoded ? sent.pipe(effortReader(t)) : sent
     if (encoded || !own.some((s) => s.in.includes('body'))) return counted
     delete headers['content-length']
     return counted.pipe(bodySubstituter(own))
@@ -837,6 +1101,33 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     up.on('data', onData)
   }
 
+  /** Most of a request body the gateway reads for its reasoning settings: a long session's. */
+  const EFFORT_LIMIT = 16 * 1024 * 1024
+
+  /**
+   * The body passed on as it flows, recording the reasoning settings its JSON carries once it
+   * ends. A transform, not a `data` listener: that would start the body flowing before the
+   * upstream request is there to take it.
+   */
+  function effortReader(t: RequestTracker): Transform {
+    const chunks: Buffer[] = []
+    let size = 0
+    return new Transform({
+      transform(chunk: Buffer, _encoding, done) {
+        size += chunk.length
+        if (size <= EFFORT_LIMIT) chunks.push(chunk)
+        done(null, chunk)
+      },
+      flush(done) {
+        if (size <= EFFORT_LIMIT) {
+          const effort = requestedEffort(Buffer.concat(chunks).toString('utf8'))
+          if (effort) t.set({ requestEffort: effort })
+        }
+        done()
+      },
+    })
+  }
+
   /** Most an exchange's response may be; it's a few hundred bytes of JSON. */
   const EXCHANGE_LIMIT = 1 << 20
 
@@ -844,7 +1135,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
    * A token exchange's response, read whole, with each token replaced by a placeholder. A success
    * that can't be read (compressed, too big, not JSON) is a 502: the real tokens never go through.
    */
-  function tokenised(
+  function tokenized(
     exchange: DerivedTokens,
     url: string,
     status: number,
@@ -882,19 +1173,19 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       const out = responseHeaders(headers, own, creds, plan)
       t?.set({ responseHeaders: plainHeaders(out) })
       if (status < 200 || status >= 300) return res.writeHead(status, out).end(body)
-      // Fails closed even when decoded: the tokeniser reads only what the upstream sent as is.
+      // Fails closed even when decoded: the tokenizer reads only what the upstream sent as is.
       const encoding = String(headers['content-encoding'] ?? 'identity')
       if (encoding !== 'identity') return refuse(`the response is ${encoding}-encoded`)
       if (size > EXCHANGE_LIMIT) return refuse(`the response is over ${EXCHANGE_LIMIT} bytes`)
-      let result: ReturnType<typeof tokeniseResponse>
+      let result: ReturnType<typeof tokenizeResponse>
       try {
-        result = tokeniseResponse(exchange, body.toString('utf8'), tokens)
+        result = tokenizeResponse(exchange, body.toString('utf8'), tokens)
       } catch (error) {
         return refuse((error as Error).message)
       }
       tokens = [...tokens, ...result.added]
       log(
-        `reeval:egress ${url} tokenised ${result.fields.join(', ') || 'nothing'} (${exchange.name})`,
+        `reeval:egress ${url} tokenized ${result.fields.join(', ') || 'nothing'} (${exchange.name})`,
       )
       const text = Buffer.from(result.body)
       delete out['content-encoding']
@@ -937,9 +1228,24 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         .writeHead(refused.status, { 'content-type': 'text/plain' })
         .end(`${refused.reason}\n`)
     }
+    const local = locals.find((l) =>
+      onEndpoint([l.match], { host: target.host, method, path: asked, headers: {} }),
+    )
+    if (local) {
+      log(`reeval:egress ${method} ${url} answered by the gateway (${local.status})`)
+      req.resume()
+      const out = { 'content-type': 'application/json', ...local.headers }
+      t.set({ status: local.status, responseHeaders: out })
+      return res.writeHead(local.status, out).end(local.body)
+    }
     delete headers.upgrade
     delete headers.connection
-    const body = requestBody(req as Readable, headers, own, t)
+    const readsEffort =
+      !!readsModel ||
+      setsCredential(rules, target.host) ||
+      substitutes(allSubs(), target.host) ||
+      hostAllowed(tokenHosts, target.host)
+    const body = requestBody(req as Readable, headers, own, t, readsEffort)
     const authority = authorityOf(target.host, target.port)
     const session = req.httpVersionMajor === 2 ? await upstreamSession(target) : null
     if (!session) {
@@ -977,7 +1283,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const creds = credentialScrubs(target.host)
     stream.once('response', (h) => {
       const status = Number(h[':status'])
-      if (exchange) return tokenised(exchange, url, status, h, stream, res, own, creds, t)
+      if (exchange) return tokenized(exchange, url, status, h, stream, res, own, creds, t)
       if (!respond(status, h, stream, res, own, creds, url, t, readsModel)) return
       stream.once('trailers', (trailers) =>
         res.addTrailers(scrubbedHeaders(trailers, [...own, ...creds]) as Record<string, string>),
@@ -1032,7 +1338,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const { own, creds, url, exchange, t } = to
     upstream.once('response', (up) => {
       const status = up.statusCode ?? 502
-      if (exchange) return tokenised(exchange, url, status, up.headers, up, res, own, creds, t)
+      if (exchange) return tokenized(exchange, url, status, up.headers, up, res, own, creds, t)
       if (!respond(status, up.headers, up, res, own, creds, url, t, to.readsModel)) return
       up.once('end', () => {
         if (Object.keys(up.trailers).length) {

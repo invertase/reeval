@@ -134,6 +134,54 @@ test('the manifest’s mcpServers, inline or a path, stand in for .mcp.json', ()
   assert.equal(readPlugin(pointed, 'x').mcp.api?.transport, 'http')
 })
 
+test('a plugin whose JSON and SKILL.md start with a byte-order mark reads, and places its manifest without it', async () => {
+  const bom = '\uFEFF'
+  const dir = write(review(), {
+    '.claude-plugin/plugin.json': `${bom}${JSON.stringify({ name: 'review', version: '1.0.0' })}`,
+    '.claude-plugin/marketplace.json': `${bom}${JSON.stringify({
+      name: 'acme-tools',
+      plugins: [{ name: 'review', source: './' }],
+    })}`,
+    'plugin.json': `${bom}{ "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json" }`,
+    'skills/lint/SKILL.md': `${bom}${skillMd('review-lint')}`,
+    'hooks/hooks.json': `${bom}${JSON.stringify({
+      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'start' }] }] },
+    })}`,
+    '.mcp.json': `${bom}${JSON.stringify({ mcpServers: { docs: { command: 'node' } } })}`,
+  })
+  const p = readPlugin(dir, 'x')
+  assert.equal(p.name, 'review')
+  assert.deepEqual(p.skills, [{ dir: 'lint', name: 'review-lint' }])
+  assert.deepEqual(p.hooks.commands, ['start'])
+  assert.deepEqual(Object.keys(p.mcp), ['docs'])
+  assert.equal(p.rootSchema, true)
+  assert.equal(readMarketplace(dir, 'x', 'label', 'review').marketplace, 'acme-tools')
+  const manifest = pluginFiles(p).find((f) => f.path === '.claude-plugin/plugin.json')
+  assert.equal(Buffer.from(manifest?.content ?? []).toString('utf8')[0], '{')
+
+  const placed = { name: p.name, dir: '/home/reeval/.reeval/plugins/review', parts: p.kept }
+  const unpack = LAYOUTS.cursor.pluginUnpack
+  assert.ok(unpack)
+  const own = `${bom}${JSON.stringify({ hooks: { stop: [{ type: 'command', command: 'own' }] } })}`
+  const hooks = unpackPlugins([{ ...placed, files: pluginFiles(p) }], unpack, own).find(
+    (f) => f.path === '.cursor/hooks.json',
+  )
+  assert.deepEqual(Object.keys(JSON.parse(hooks?.content ?? '').hooks).sort(), [
+    'sessionStart',
+    'stop',
+  ])
+
+  const files = new Map([['~/.claude/settings.json', `${bom}{ "env": { "A": "1" } }`]])
+  const box = {
+    readFile: async (path: string) => files.get(path) ?? null,
+    writeFile: async (path: string, content: string | Uint8Array) => {
+      files.set(path, String(content))
+    },
+  } as never
+  await writePluginFiles(box, LAYOUTS['claude-code'], [{ ...placed, parts: [], servers: [] }])
+  assert.deepEqual(JSON.parse(files.get('~/.claude/settings.json') ?? '').env, { A: '1' })
+})
+
 test('only keeps the parts it names, and the files it drops stay out of the sandbox', () => {
   const p = readPlugin(review(), 'x', ['skills'])
   assert.deepEqual(p.kept, ['skills'])
@@ -927,6 +975,11 @@ test('resolving places each plugin, records it, and lists its skills and MCP ser
   )
   assert.deepEqual(r.record.mcp, ['review:docs', 'review:search'])
   assert.deepEqual(
+    [r.record.secrets, r.record.brokered],
+    [['DOCS_TOKEN', 'SEARCH_KEY'], ['SEARCH_KEY']],
+    "a plugin header's host variable is a secret the record names, brokered to the server's host",
+  )
+  assert.deepEqual(
     r.skills.map((s) => s.name),
     ['own', 'review-lint'],
     'the fake agent takes plugin items flat, so its skills are harness skills',
@@ -1146,7 +1199,7 @@ test('a marketplace reeval can’t read, or an entry it doesn’t list or can’
   assert.match(problem(listed, 'private'), /names its own npm registry/)
 })
 
-test('a bare entry source resolves under pluginRoot as Claude Code normalises it, and nowhere else', () => {
+test('a bare entry source resolves under pluginRoot as Claude Code normalizes it, and nowhere else', () => {
   const entries = [
     { name: 'bare', source: 'format' },
     { name: 'nested', source: 'tools/format' },

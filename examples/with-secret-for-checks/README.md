@@ -2,9 +2,10 @@
 
 **Shows:** a secret only the checks get. The environment sets `E2E_TOKEN` with
 `secret.fromEnv('E2E_TOKEN', { to: 'checks', optional: true })`: `c.exec` and setup steps get it,
-the agent never does, and without `E2E_TOKEN` on the host the eval runs with the variable left
-out. The agent saves its environment to `env.txt`, and the eval checks the token isn't in it but
-reaches a check.
+the agent's own environment never does, and without `E2E_TOKEN` on the host the eval runs with the
+variable left out. A process a setup step leaves running keeps it while the agent works; broker it
+with `hosts` instead when one needs it. The agent saves its environment to `env.txt`, and the eval
+checks the token isn't in it but reaches a check.
 
 **Needs:** Docker, even for the fake agent; in this repo, run `pnpm install && pnpm build` at the
 root first. `E2E_TOKEN` is optional. A real agent also needs its key in `.env.local`
@@ -28,7 +29,7 @@ one profile you need.
 **What to look at:** with the token set, the plan says where it goes:
 
 ```text
-warning: E2E_TOKEN reaches the checks (c.exec, setup steps) as its real value; the agent never gets it. To give the checks only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('E2E_TOKEN', { hosts: ['api.example.com'] }).
+warning: E2E_TOKEN reaches the checks (c.exec, setup steps) as its real value. It's never in the agent's own environment, but a process a setup step leaves running holds it while the agent works. To give the checks only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('E2E_TOKEN', { hosts: ['api.example.com'] }).
 …
 pass             keeps the test token from the agent
 ```

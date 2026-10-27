@@ -15,7 +15,8 @@ import {
   isHostFile,
   isSecret,
   isSecretTemplate,
-  mcpHosts,
+  maskedHeaderValue,
+  mcpHeaderHosts,
   parseGitRepo,
   stepCommand,
   workspaceLabel,
@@ -24,6 +25,7 @@ import { layoutOf, refusedPlugins } from '../harness/agents.ts'
 import { sha256 } from '../ids.ts'
 import { badCharacterAt, registerSecret } from '../redact.ts'
 import { InfraError } from '../sandbox/types.ts'
+import { withoutBom } from '../text.ts'
 import type {
   EgressPolicy,
   EnvironmentRecord,
@@ -133,7 +135,14 @@ export type BrokeredSecret = Substitution & { phase: 'agent' | 'checks' }
 const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const DEFAULT_SETUP_TIMEOUT = '5m'
 
-type Secrets = { names: string[]; checks: string[]; unset: string[]; brokered: BrokeredSecret[] }
+type Secrets = {
+  names: string[]
+  checks: string[]
+  unset: string[]
+  brokered: BrokeredSecret[]
+  /** Names some value went into the sandbox as itself, so the record can't call them brokered. */
+  real: string[]
+}
 
 function broker(
   secrets: Secrets,
@@ -154,19 +163,23 @@ function broker(
   return sub.placeholder
 }
 
-/** The host value, or its placeholder when it's brokered to `secret.hosts` (else `hosts`). */
+/**
+ * The host value, or its placeholder when it's brokered to `hosts`. The record names it `as`: the
+ * variable it's set as in the sandbox, or for a header the host variable.
+ */
 function hostValue(
   name: string,
   secret: Secret,
   where: string,
   secrets: Secrets,
-  hosts: readonly string[] | undefined = secret.hosts,
+  hosts: readonly string[] | undefined,
+  as = name,
 ) {
   const from = secret.from ?? name
   const value = process.env[from]
   if (!value) {
     if (secret.optional) {
-      secrets.unset.push(name)
+      secrets.unset.push(as)
       return undefined
     }
     const source = from === name ? name : `${name} (from ${from})`
@@ -175,13 +188,19 @@ function hostValue(
     )
   }
   registerSecret(value)
-  if (secret.to === 'checks') secrets.checks.push(name)
-  else secrets.names.push(name)
-  if (!hosts) return value
-  return broker(secrets, name, value, hosts, secret.in, secret.to === 'checks' ? 'checks' : 'agent')
+  if (secret.to === 'checks') secrets.checks.push(as)
+  else secrets.names.push(as)
+  if (!hosts) {
+    secrets.real.push(as)
+    return value
+  }
+  return broker(secrets, as, value, hosts, secret.in, secret.to === 'checks' ? 'checks' : 'agent')
 }
 
-/** Each host variable in the template, or with `hosts` one placeholder per variable. */
+/**
+ * Each host variable in the template, or with `hosts` one placeholder per variable. The record
+ * names each by its host variable, as `hostValue` names a header's secret.
+ */
 function template(
   value: SecretTemplate,
   where: string,
@@ -196,7 +215,11 @@ function template(
         `secret.template for ${where} needs ${name}, which isn't set. Set it in the environment or .env.local.`,
       )
     registerSecret(v)
-    if (!hosts) return v
+    secrets.names.push(name)
+    if (!hosts) {
+      secrets.real.push(name)
+      return v
+    }
     const p = placeholders.get(name) ?? broker(secrets, name, v, hosts)
     placeholders.set(name, p)
     return p
@@ -208,7 +231,7 @@ export function parseSkillMd(
   text: string,
   where: string,
 ): { name?: string; description?: string; body: string } {
-  const match = /^---\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)([\s\S]*)$/.exec(text)
+  const match = /^---\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)([\s\S]*)$/.exec(withoutBom(text))
   if (!match) return { body: text }
   let front: unknown
   try {
@@ -541,20 +564,20 @@ async function entrySourceDir(
  * A marketplace entry's is its marketplace's for a `./` entry, else the entry's own source.
  */
 export async function pluginSourceDir(root: string, p: PluginSource): Promise<SourceDir> {
-  const labelled = { source: pluginSourceLabel(p, root), marketplace: null }
+  const labeled = { source: pluginSourceLabel(p, root), marketplace: null }
   switch (p.source) {
     case 'local':
-      return { context: p.path, path: '.', commit: null, ...labelled }
+      return { context: p.path, path: '.', commit: null, ...labeled }
     case 'git': {
       const clone = await cloneSkills(root, parseGitRepo(p.repo).url, p.ref)
-      return { context: clone.dir, path: p.path ?? '.', commit: clone.commit, ...labelled }
+      return { context: clone.dir, path: p.path ?? '.', commit: clone.commit, ...labeled }
     }
     case 'npm':
       return {
         context: await unpackNpm(root, p.spec),
         path: p.path ?? '.',
         commit: null,
-        ...labelled,
+        ...labeled,
       }
     case 'marketplace':
       return entrySourceDir(root, p)
@@ -756,7 +779,7 @@ export async function resolveEnvironment(
     })
   }
 
-  const secrets: Secrets = { names: [], checks: [], unset: [], brokered: [] }
+  const secrets: Secrets = { names: [], checks: [], unset: [], brokered: [], real: [] }
   const vars: Record<string, string> = {}
   const checkVars: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) {
@@ -764,7 +787,7 @@ export async function resolveEnvironment(
       vars[name] = value
       continue
     }
-    const resolved = hostValue(name, value, envWhere, secrets)
+    const resolved = hostValue(name, value, envWhere, secrets, value.hosts)
     if (resolved === undefined) continue
     if (value.to === 'checks') checkVars[name] = resolved
     else vars[name] = resolved
@@ -772,26 +795,28 @@ export async function resolveEnvironment(
   const secretOf = (
     value: string | Secret | SecretTemplate,
     key: string,
-    hosts?: readonly string[],
+    header: boolean,
+    hosts: readonly string[] | undefined,
   ): string | undefined => {
     if (typeof value === 'string') return value
     if (isSecretTemplate(value)) return template(value, envWhere, secrets, hosts)
-    return hostValue(key, value, envWhere, secrets, value.hosts ?? hosts)
+    const as = header ? (value.from ?? key) : key
+    return hostValue(key, value, envWhere, secrets, hosts, as)
   }
   const resolvedMcp: Record<string, ResolvedMcpServer> = {}
   for (const [name, s] of mcp) {
     if (s.transport === 'stdio') {
       const e: Record<string, string> = {}
       for (const [k, v] of Object.entries(s.env)) {
-        const r = secretOf(v, k)
+        const r = secretOf(v, k, false, isSecret(v) ? v.hosts : undefined)
         if (r !== undefined) e[k] = r
       }
       resolvedMcp[name] = { transport: 'stdio', command: s.command, args: s.args, env: e }
     } else {
       const h: Record<string, string> = {}
-      const hosts = mcpHosts(s.url)
       for (const [k, v] of Object.entries(s.headers)) {
-        const r = secretOf(v, k, hosts)
+        if (typeof v === 'string' && maskedHeaderValue(k, v)) registerSecret(v)
+        const r = secretOf(v, k, true, typeof v === 'string' ? undefined : mcpHeaderHosts(v, s.url))
         if (r !== undefined) h[k] = r
       }
       resolvedMcp[name] = { transport: s.transport, url: s.url, headers: h }
@@ -839,9 +864,11 @@ export async function resolveEnvironment(
   const brokered = secrets.brokered
     .map((b) => JSON.stringify([b.name, b.hosts, b.in, b.phase]))
     .sort()
-  const brokeredNames = [...new Set(secrets.brokered.map((b) => b.name))].sort()
+  const brokeredNames = [...new Set(secrets.brokered.map((b) => b.name))]
+    .filter((n) => !secrets.real.includes(n))
+    .sort()
   const varNames = Object.keys(vars)
-    .filter((n) => !secrets.names.includes(n))
+    .filter((n) => !isSecret(env[n]))
     .sort()
   const literalVars = Object.fromEntries(varNames.map((n) => [n, vars[n]]))
   const mcpShape = Object.fromEntries(

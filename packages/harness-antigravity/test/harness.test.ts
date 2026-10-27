@@ -86,6 +86,32 @@ describe('createAntigravity', () => {
     assert.match(warnings.join('\n'), /credential brokering does not work/)
   })
 
+  test('on Vertex: ADC mode on the project and region, no key read or brokered', async () => {
+    const sandbox = fakeSandbox({ turns: [{ stdout: result('c') }] })
+    const session = await createAntigravity({
+      auth: {},
+      vertex: { project: 'p-1', location: 'global', credentialsFile: '/reeval/adc.json' },
+    }).doStart({
+      sessionId: 's1',
+      sandboxSession: sandbox as never,
+      sessionWorkDir: '/reeval/workspace',
+      permissionMode: 'allow-all',
+    })
+    await runTurn(session, 'go')
+    const env = sandbox.spawned[0]?.env ?? {}
+    assert.equal(env.AGY_ADC_AUTH, '1')
+    assert.equal(env.GOOGLE_CLOUD_PROJECT, 'p-1')
+    assert.equal(env.GOOGLE_CLOUD_LOCATION, 'global')
+    assert.equal(env.GOOGLE_APPLICATION_CREDENTIALS, '/reeval/adc.json')
+    assert.equal(env.GEMINI_API_KEY, undefined)
+    assert.equal(sandbox.transformations.length, 0)
+    // The CLI refuses ADC mode while settings.json names the Gemini provider.
+    assert.deepEqual(
+      JSON.parse(sandbox.files.get('/root/.gemini/antigravity-cli/settings.json') ?? ''),
+      { enableTelemetry: false },
+    )
+  })
+
   test('settings pin the Gemini provider and turn telemetry off; MCP servers get their own file', async () => {
     const sandbox = fakeSandbox({})
     await start(sandbox, {
@@ -110,7 +136,11 @@ describe('createAntigravity', () => {
         ],
       },
     }
-    sandbox.files.set('/root/.reeval/plugins/house/hooks/hooks.json', JSON.stringify(claude))
+    // A byte-order mark, as editors on Windows may save it, is no part of the JSON.
+    sandbox.files.set(
+      '/root/.reeval/plugins/house/hooks/hooks.json',
+      `\uFEFF${JSON.stringify(claude)}`,
+    )
     await start(sandbox, {
       plugins: [
         { name: 'house', dir: '/root/.reeval/plugins/house' },

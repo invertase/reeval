@@ -2,12 +2,14 @@
 // and usage errors, filters, leases across workers, events, cancel and workers that die.
 import assert from 'node:assert/strict'
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { availableParallelism } from 'node:os'
 import { basename, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { runEngine } from '../src/engine/node.ts'
 import type { Exit, Spawn, WorkerProcess } from '../src/engine/pool.ts'
 import { type FromWorker, PROTOCOL, type ToWorker, type WireTest } from '../src/engine/protocol.ts'
 import type { CollectedPlan, EngineOptions } from '../src/engine/types.ts'
+import { FAILURE_CAP } from '../src/text.ts'
 import type { AttemptMeta, RunContext } from '../src/types.ts'
 import type { ReevalEvent } from '../src/ui/events.ts'
 import { tempDir } from './helpers.ts'
@@ -83,6 +85,8 @@ const attempt = (name: string, extra: Partial<AttemptMeta> = {}) =>
     ...extra,
   }) as unknown as AttemptMeta
 
+const cell = (key: string) => ({ cell: { key } }) as Partial<AttemptMeta>
+
 function project(files: string[]) {
   const root = tempDir('node')
   for (const f of files) {
@@ -109,7 +113,7 @@ const passing =
   (tests: Record<string, WireTest[]>, extra?: (ctl: Ctl) => void): Script =>
   (ctl) => {
     const list = tests[basename(ctl.init.file)] ?? []
-    ctl.emit({ t: 'collected', tests: list })
+    ctl.emit({ t: 'collected', tests: list, harnesses: [] })
     if (ctl.init.select) {
       extra?.(ctl)
       for (const t of list) {
@@ -186,6 +190,32 @@ describe('runEngine: collecting and the plan', () => {
       { id: 'evals/b.eval.ts › g › later', mode: 'todo' },
     ])
     assert.deepEqual([plan?.matched, plan?.unmatched], [6, []])
+  })
+
+  test("the plan has every collected file's harness ids, and whether a path filter left files out", async () => {
+    const { run, root } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
+    const harnesses: Record<string, string[]> = { 'a.eval.ts': ['a', 'b'], 'b.eval.ts': ['b', 'c'] }
+    const collectWith = (filters: string[]) => {
+      let plan: CollectedPlan | undefined
+      const { spawn } = fakeSpawn((ctl) => {
+        const file = basename(ctl.init.file)
+        ctl.emit({ t: 'collected', tests: [test0(0, 'x')], harnesses: harnesses[file] ?? [] })
+        ctl.emit({ t: 'done' })
+        ctl.exit()
+      })
+      const onPlan = async (p: CollectedPlan) => {
+        plan = p
+        return false
+      }
+      return engine({ run, filters, onPlan }, spawn).then(() => plan)
+    }
+    const all = await collectWith([])
+    assert.deepEqual([all?.harnesses.sort(), all?.partial], [['a', 'b', 'c'], false])
+    const one = await collectWith([join(root, 'evals/a.eval.ts')])
+    assert.deepEqual([one?.harnesses, one?.partial], [['a', 'b'], true])
+    // Not a path from the current directory, so it may match names in every file, which are collected.
+    const loose = await collectWith(['evals/a.eval.ts'])
+    assert.deepEqual([loose?.harnesses.sort(), loose?.partial], [['a', 'b', 'c'], false])
   })
 })
 
@@ -374,13 +404,86 @@ describe('runEngine: running', () => {
     assert.equal(none.noFiles, true)
   })
 
+  test('a part that names a file also matches as a name or cell part in the other files', async () => {
+    const { run } = project(['evals/fake/a.eval.ts', 'evals/b.eval.ts', 'evals/c.eval.ts'])
+    const tests = {
+      'a.eval.ts': [test0(0, 'alpha [left#1]', { attempt: attempt('alpha', cell('left')) })],
+      'b.eval.ts': [
+        test0(0, 'beta [left#1]', { attempt: attempt('beta', cell('left')) }),
+        test0(1, 'beta [fake#1]', { attempt: attempt('beta', cell('fake')) }),
+      ],
+      'c.eval.ts': [test0(0, 'gamma [left#1]', { attempt: attempt('gamma', cell('left')) })],
+    }
+    const { spawn, spawned } = fakeSpawn(passing(tests))
+    const r = await engine({ run, filters: ['fake'] }, spawn)
+    assert.deepEqual(spawned.sort(), [
+      'a.eval.ts:0',
+      'a.eval.ts:collect',
+      'b.eval.ts:1',
+      'b.eval.ts:collect',
+      'c.eval.ts:collect',
+    ])
+    assert.deepEqual(
+      r.evals.map((e) => e.key),
+      ['evals/b.eval.ts › beta # fake#1', 'evals/fake/a.eval.ts › alpha # left#1'],
+    )
+
+    const narrowed = await engine(
+      { run, filters: ['fake', 'beta'] },
+      fakeSpawn(passing(tests)).spawn,
+    )
+    assert.deepEqual(
+      narrowed.evals.map((e) => e.key),
+      ['evals/b.eval.ts › beta # fake#1'],
+      'a name part still narrows what a path part picks',
+    )
+  })
+
+  test('a path on disk is only a path: it collects only the files it names', async () => {
+    const { root, run } = project(['evals/fake/a.eval.ts', 'evals/b.eval.ts', 'evals/c.eval.ts'])
+    const tests = {
+      'a.eval.ts': [test0(0, 'alpha [left#1]', { attempt: attempt('alpha', cell('left')) })],
+      'b.eval.ts': [test0(0, 'beta [fake#1]', { attempt: attempt('beta', cell('fake')) })],
+    }
+    for (const filter of [join(root, 'evals/b.eval.ts'), join(root, 'evals/fake')]) {
+      const { spawn, spawned } = fakeSpawn(passing(tests))
+      const r = await engine({ run, filters: [filter] }, spawn)
+      const file = filter.endsWith('fake') ? 'a.eval.ts' : 'b.eval.ts'
+      assert.deepEqual(spawned.sort(), [`${file}:0`, `${file}:collect`], filter)
+      assert.deepEqual(r.evals.length, 1, filter)
+    }
+  })
+
+  test('a file fails the run when it fails to load under a part that may match it by name', async () => {
+    const { root, run } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
+    const script: Script = (ctl) => {
+      if (basename(ctl.init.file) !== 'b.eval.ts')
+        return passing({ 'a.eval.ts': [test0(0, 'one')] })(ctl)
+      ctl.emit({ t: 'load-error', error: { name: 'Error', message: 'boom' } })
+      ctl.exit()
+    }
+    await assert.rejects(
+      engine({ run, filters: ['a.eval'] }, fakeSpawn(script).spawn),
+      /An eval file failed to load:\nevals\/b\.eval\.ts: boom/,
+    )
+    const r = await engine(
+      { run, filters: [join(root, 'evals/a.eval.ts')] },
+      fakeSpawn(script).spawn,
+    )
+    assert.deepEqual(
+      r.evals.map((e) => [e.id, e.state]),
+      [['evals/a.eval.ts › one', 'passed']],
+      'an exact path never loads the file it does not name',
+    )
+  })
+
   test('leases: the first round gathers before any grant, then workers get grants and release', async () => {
     const { run } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
     const order: string[] = []
     const tests = { 'a.eval.ts': [test0(0, 'a')], 'b.eval.ts': [test0(0, 'b')] }
     const { spawn } = fakeSpawn((ctl) => {
       const name = basename(ctl.init.file) as 'a.eval.ts'
-      ctl.emit({ t: 'collected', tests: tests[name] })
+      ctl.emit({ t: 'collected', tests: tests[name], harnesses: [] })
       if (!ctl.init.select) {
         ctl.emit({ t: 'done' })
         ctl.exit()
@@ -417,10 +520,38 @@ describe('runEngine: running', () => {
     )
   })
 
+  test('workers: up to concurrency files at once, even above the CPU count', async () => {
+    const n = availableParallelism() + 2
+    const names = Array.from({ length: n }, (_, i) => `f${i}.eval.ts`)
+    const { run } = project(names.map((f) => `evals/${f}`))
+    const tests = Object.fromEntries(names.map((f) => [f, [test0(0, f)]]))
+    for (const concurrency of [n, n - 1, n + 5]) {
+      const live = { collect: 0, run: 0 }
+      const peak = { collect: 0, run: 0 }
+      const { spawn } = fakeSpawn((ctl) => {
+        const pass = ctl.init.select ? 'run' : 'collect'
+        peak[pass] = Math.max(peak[pass], ++live[pass])
+        const exit = ctl.exit
+        ctl.exit = (e) =>
+          setTimeout(() => {
+            live[pass]--
+            exit(e)
+          }, 20)
+        passing(tests)(ctl)
+      })
+      const r = await engine({ run: { ...run, concurrency } }, spawn)
+      assert.equal(r.evals.length, n)
+      assert.deepEqual(peak, {
+        collect: Math.min(concurrency, n),
+        run: Math.min(concurrency, n),
+      })
+    }
+  })
+
   test('a failed result keeps the error name so assemble can classify without sniffing', async () => {
     const { run } = project(['evals/a.eval.ts'])
     const { spawn } = fakeSpawn((ctl) => {
-      ctl.emit({ t: 'collected', tests: [test0(0, 'a')] })
+      ctl.emit({ t: 'collected', tests: [test0(0, 'a')], harnesses: [] })
       if (ctl.init.select) {
         ctl.emit({
           t: 'result',
@@ -441,6 +572,33 @@ describe('runEngine: running', () => {
     assert.equal(r.evals[0]?.errors[0], 'Eval timed out after 1s')
   })
 
+  test('a long error is masked before its middle is cut, so a secret across the cut goes whole', async () => {
+    const { run } = project(['evals/a.eval.ts'])
+    const secret = 'correct-horse-battery-staple'
+    process.env.REEVAL_TEST_CUT_PASSWORD = secret
+    const head = Math.floor(FAILURE_CAP * 0.75)
+    const message = `${'x'.repeat(head - 14)} password=${secret} ${'y'.repeat(FAILURE_CAP)}`
+    const { spawn } = fakeSpawn((ctl) => {
+      ctl.emit({ t: 'collected', tests: [test0(0, 'a')] })
+      if (ctl.init.select) {
+        const errors = [{ name: 'Error', message }]
+        ctl.emit({ t: 'result', index: 0, result: { state: 'failed', errors, durationMs: 1 } })
+        ctl.emit({ t: 'ready' })
+      }
+      ctl.emit({ t: 'done' })
+      ctl.exit()
+    })
+    try {
+      const r = await engine({ run }, spawn)
+      assert.match(r.evals[0]?.errors[0] ?? '', /password=\[RED\n\[… \d+ characters cut/)
+      for (const text of [r.evals[0]?.errors[0], r.evals[0]?.formattedErrors[0]]) {
+        assert.doesNotMatch(text ?? '', /=corr/)
+      }
+    } finally {
+      delete process.env.REEVAL_TEST_CUT_PASSWORD
+    }
+  })
+
   test('a cancel reaches running workers, and files not started never start', async () => {
     const { run } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
     const one = { ...run, concurrency: 1 }
@@ -448,7 +606,7 @@ describe('runEngine: running', () => {
     const tests = { 'a.eval.ts': [test0(0, 'a')], 'b.eval.ts': [test0(0, 'b')] }
     const { spawn, spawned } = fakeSpawn((ctl) => {
       const name = basename(ctl.init.file) as 'a.eval.ts'
-      ctl.emit({ t: 'collected', tests: tests[name] })
+      ctl.emit({ t: 'collected', tests: tests[name], harnesses: [] })
       if (!ctl.init.select) {
         ctl.emit({ t: 'done' })
         ctl.exit()
@@ -473,8 +631,8 @@ describe('runEngine: running', () => {
         ctl.exit()
       }, 2)
     })
-    const r = await engine({ run: one, onCancellable: (c) => (cancel = c) }, spawn)
-    assert.equal(r.cancelled, true)
+    const r = await engine({ run: one, onCancelable: (c) => (cancel = c) }, spawn)
+    assert.equal(r.canceled, true)
     assert.deepEqual(
       spawned.filter((s) => !s.endsWith('collect')),
       ['a.eval.ts:0'],
@@ -490,8 +648,8 @@ describe('runEngine: running', () => {
   test('a cancel before any worker starts starts none', async () => {
     const { run } = project(['evals/a.eval.ts'])
     const { spawn, spawned } = fakeSpawn(passing({ 'a.eval.ts': [test0(0, 'a')] }))
-    const r = await engine({ run, onCancellable: (cancel) => cancel() }, spawn)
-    assert.equal(r.cancelled, true)
+    const r = await engine({ run, onCancelable: (cancel) => cancel() }, spawn)
+    assert.equal(r.canceled, true)
     assert.deepEqual(spawned, ['a.eval.ts:collect'])
     assert.deepEqual(r.evals, [])
   })
@@ -500,7 +658,7 @@ describe('runEngine: running', () => {
     const { run } = project(['evals/a.eval.ts'])
     const { spawn } = fakeSpawn(
       (ctl) => {
-        ctl.emit({ t: 'collected', tests: [test0(0, 'a')] })
+        ctl.emit({ t: 'collected', tests: [test0(0, 'a')], harnesses: [] })
         if (!ctl.init.select) {
           ctl.emit({ t: 'done' })
           ctl.exit()
@@ -522,8 +680,8 @@ describe('runEngine: running', () => {
       },
       { helloAfter: (n) => (n === 1 ? 0 : 30) },
     )
-    const r = await engine({ run, onCancellable: (cancel) => setTimeout(cancel, 10) }, spawn)
-    assert.equal(r.cancelled, true)
+    const r = await engine({ run, onCancelable: (cancel) => setTimeout(cancel, 10) }, spawn)
+    assert.equal(r.canceled, true)
     assert.deepEqual(
       r.evals.map((e) => e.state),
       ['skipped'],
@@ -540,7 +698,7 @@ describe('runEngine: running', () => {
     ]
     const events: ReevalEvent[] = []
     const { spawn } = fakeSpawn((ctl) => {
-      ctl.emit({ t: 'collected', tests })
+      ctl.emit({ t: 'collected', tests, harnesses: [] })
       if (!ctl.init.select) {
         ctl.emit({ t: 'done' })
         ctl.exit()
@@ -566,18 +724,82 @@ describe('runEngine: running', () => {
     assert.equal(events.filter((e) => e.type === 'eval-end').length, 2)
   })
 
-  test('a file that fails to load on its second pass, or a worker that fails its handshake, is reported', async () => {
+  test('a file that fails to load on its second pass fails its selected attempts with the load error', async () => {
+    const { run } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
+    const tests = [test0(0, 'one'), test0(1, 'skipped', { mode: 'skip' }), test0(2, 'filtered out')]
+    const events: ReevalEvent[] = []
+    const pass = passing({ 'a.eval.ts': tests, 'b.eval.ts': tests })
+    const { spawn } = fakeSpawn((ctl) => {
+      if (!ctl.init.select || !ctl.init.file.endsWith('a.eval.ts')) return pass(ctl)
+      ctl.emit({ t: 'load-error', error: { message: '\x1b[31mchanged on disk\x1b[39m ' } })
+      ctl.emit({ t: 'done' })
+      ctl.exit()
+    })
+    const r = await engine(
+      { run, filters: ['one', 'skipped'], onEvent: (e) => events.push(e) },
+      spawn,
+    )
+    assert.deepEqual(r.unhandledErrors, ['evals/a.eval.ts: changed on disk'])
+    assert.deepEqual(
+      r.evals.map((e) => [e.id, e.state, e.errors]),
+      [
+        ['evals/a.eval.ts › one', 'failed', ['changed on disk']],
+        ['evals/a.eval.ts › skipped', 'skipped', []],
+        ['evals/b.eval.ts › one', 'passed', []],
+        ['evals/b.eval.ts › skipped', 'skipped', []],
+      ],
+    )
+    const seen = events.filter((e) => e.type === 'collected').map((e) => e.file)
+    assert.deepEqual(seen.sort(), ['evals/a.eval.ts', 'evals/b.eval.ts'])
+  })
+
+  test('a worker that dies before its second pass collects fails the selected attempts', async () => {
     const { run } = project(['evals/a.eval.ts'])
     const { spawn } = fakeSpawn((ctl) => {
-      if (!ctl.init.select) ctl.emit({ t: 'collected', tests: [test0(0, 'a')] })
-      else ctl.emit({ t: 'load-error', error: { message: 'changed on disk' } })
+      if (ctl.init.select) return ctl.exit({ code: null, signal: 'SIGKILL' })
+      ctl.emit({ t: 'collected', tests: [test0(0, 'a')], harnesses: [] })
       ctl.emit({ t: 'done' })
       ctl.exit()
     })
     const r = await engine({ run }, spawn)
-    assert.deepEqual(r.unhandledErrors, ['evals/a.eval.ts: changed on disk'])
-    assert.deepEqual(r.evals, [])
+    const why = 'The worker running evals/a.eval.ts exited unexpectedly (signal SIGKILL)'
+    assert.deepEqual(r.unhandledErrors, [why])
+    assert.deepEqual(
+      r.evals.map((e) => [e.id, e.state, e.errors]),
+      [['evals/a.eval.ts › a', 'failed', [why]]],
+    )
+  })
 
+  test("a resume's completed attempts stay skipped when the file fails to load on its second pass", async () => {
+    const { run } = project(['evals/a.eval.ts'])
+    run.completed = ['evals/a.eval.ts › done']
+    const events: ReevalEvent[] = []
+    const { spawn } = fakeSpawn((ctl) => {
+      if (ctl.init.select) ctl.emit({ t: 'load-error', error: { message: 'changed on disk' } })
+      else ctl.emit({ t: 'collected', tests: [test0(0, 'done'), test0(1, 'leftover')] })
+      ctl.emit({ t: 'done' })
+      ctl.exit()
+    })
+    const r = await engine({ run, onEvent: (e) => events.push(e) }, spawn)
+    assert.deepEqual(
+      r.evals.map((e) => [e.id, e.state, e.errors]),
+      [
+        ['evals/a.eval.ts › done', 'skipped', []],
+        ['evals/a.eval.ts › leftover', 'failed', ['changed on disk']],
+      ],
+    )
+    const collected = events.find((e) => e.type === 'collected')
+    assert.deepEqual(
+      collected?.type === 'collected' && collected.evals.map((e) => [e.name, e.skipped]),
+      [
+        ['done', true],
+        ['leftover', false],
+      ],
+    )
+  })
+
+  test('a worker that fails its handshake fails the run', async () => {
+    const { run } = project(['evals/a.eval.ts'])
     let spawns = 0
     const flaky: Spawn = (entry, cwd) => {
       const pass = ++spawns

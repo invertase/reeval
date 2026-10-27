@@ -8,7 +8,8 @@ import { fallbackHint } from './gateway/resolve.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
 import type { Prices } from './prices.ts'
-import { clip, formatDuration } from './text.ts'
+import { EFFECT_MIN_COUNTED, PAIRED_MIN } from './stats.ts'
+import { clip, formatDuration, plural } from './text.ts'
 import type {
   Budget,
   Cell,
@@ -20,13 +21,13 @@ import type {
   PairFactor,
   PlannedEgress,
   PlannedQuestion,
-  ResolvedConfig,
   ResolvedGateway,
   ResolvedProfile,
+  Revision,
   SandboxDescriptor,
   SandboxWarning,
 } from './types.ts'
-import { EFFORT_ALPHA, EFFORT_MIN_RUNS } from './view/effort.ts'
+import { EFFORT_MIN_RUNS } from './view/effort.ts'
 
 /**
  * With no history for a harness, an attempt is assumed to take this long. The fake agent takes
@@ -72,8 +73,6 @@ export type RunPlan = {
   harnesses: string[]
   /** The model that answers a question naming none; null when there's no language model. */
   questionModel: string | null
-  /** The insights `reeval run` asks for after its attempts; null when it asks for none. */
-  insights: PlanInsights | null
   /** The run this plan belongs to, minted or resumed before collect. */
   runId?: string
   /** Set when this plan continues a stopped, interrupted or budget-stopped run. */
@@ -123,7 +122,6 @@ export async function buildPlan(options: {
   root: string
   historyDir: string
   questionModel?: string | null
-  insights?: PlanInsights | null
   /** The run's judge model, `fake` for a fake judge; null or unset when there's none. */
   judgeModel?: string | null
   /** Prices for the cost estimate, which only `--dry-run` shows; unset leaves it out. */
@@ -143,7 +141,14 @@ export async function buildPlan(options: {
   // A filter can leave out some of an eval's cells: each row counts what it actually plans.
   const counted = new Map<
     string,
-    { harnesses: Set<string>; variants: Set<string>; n: number; gated: boolean }
+    {
+      harnesses: Set<string>
+      variants: Set<string>
+      n: number
+      gated: boolean
+      controls: Set<string>
+      variantSides: Set<string>
+    }
   >()
   let attempts = 0
   let estimateMs = 0
@@ -174,10 +179,15 @@ export async function buildPlan(options: {
       variants: new Set(),
       n: 0,
       gated: false,
+      controls: new Set(),
+      variantSides: new Set(),
     }
     row.harnesses.add(attempt.cell.harness)
     if (attempt.gate !== 'none') row.gated = true
     if (attempt.cell.variant !== undefined) row.variants.add(attempt.cell.variant)
+    const side = `${attempt.cell.harness}\0${attempt.cell.sandbox}`
+    if (attempt.cell.role === 'control') row.controls.add(side)
+    else if (attempt.cell.role === 'variant') row.variantSides.add(side)
     row.n++
     counted.set(id, row)
   }
@@ -197,6 +207,11 @@ export async function buildPlan(options: {
         .map((p) => p.attempt),
     )
   }
+  // A lift needs a variant and the control on its harness and sandbox in the same run.
+  const lifted = (r: PlanRow) => {
+    const c = counted.get(r.id)
+    return !r.plan.skip && !!c && [...c.variantSides].some((s) => c.controls.has(s))
+  }
   return {
     profile: options.profile,
     rows: [...rows.values()],
@@ -215,31 +230,14 @@ export async function buildPlan(options: {
     ),
     hints: [
       ...gateHint([...rows.values()].filter((r) => counted.get(r.id)?.gated)),
-      ...effortHint([...rows.values()]),
+      ...verdictHint([...rows.values()].filter(lifted)),
+      ...familyHints([...rows.values()].filter(lifted)),
       ...gatewayHints(planned),
     ],
     sandboxes: [...sandboxes.values()],
     harnessDescriptors: [...descriptors.values()],
     harnesses: [...harnesses],
     questionModel: options.questionModel ?? null,
-    insights: options.insights ?? null,
-  }
-}
-
-/** `analysis.model` and `analysis.maxTokens`, as the run uses them. */
-export type PlanInsights = { model: string; maxTokens: number }
-
-/** The plan's insights: null without `analysis.model`, with `analysis.insights: false` or `--no-insights`. */
-export async function planInsights(
-  config: ResolvedConfig,
-  flag: boolean,
-): Promise<PlanInsights | null> {
-  const { wantsInsights } = await import('./insights/run.ts')
-  if (!wantsInsights(config, flag)) return null
-  const { questionModelLabel } = await import('./analysis/model.ts')
-  return {
-    model: questionModelLabel(config) ?? 'fake',
-    maxTokens: config.analysis.maxTokens,
   }
 }
 
@@ -327,20 +325,53 @@ function gateHint(rows: PlanRow[]): string[] {
   ]
 }
 
-/** One line when compares run too few times per cell for effort's test to ever reach p < 0.05. */
-function effortHint(rows: PlanRow[]): string[] {
-  const few = rows.filter(
-    (r) =>
-      !r.plan.skip &&
-      (r.plan.variants?.run ?? 0) > 0 &&
-      r.plan.runs >= 2 &&
-      r.plan.runs < EFFORT_MIN_RUNS,
-  )
+/** The runs a side before both a compare's lift and its effort can get a verdict. */
+const VERDICT_MIN_RUNS = Math.max(EFFECT_MIN_COUNTED, EFFORT_MIN_RUNS)
+
+/**
+ * One line when compares outside a family run too few times per cell for any verdict: their lift
+ * and effort say `can't tell yet` however the attempts go. `rows` are those that plan a lift.
+ */
+function verdictHint(rows: PlanRow[]): string[] {
+  const few = rows.filter((r) => !r.family && r.plan.runs < VERDICT_MIN_RUNS)
   if (few.length === 0) return []
-  const runs = [...new Set(few.map((r) => r.plan.runs))].sort((a, b) => a - b).join(' or ')
+  const counts = [...new Set(few.map((r) => r.plan.runs))].sort((a, b) => a - b)
+  const runs = counts.length === 1 && counts[0] === 1 ? 'once' : `${counts.join(' or ')} times`
+  const one = few.length === 1
+  const capped = new Set(few.map((r) => r.plan.notes.map(cappedBy).find(Boolean)))
+  const [profile] = capped
+  const fix =
+    capped.size === 1 && profile
+      ? `profile ${profile}'s limit.runs caps ${one ? 'it' : 'them'}; --runs ${VERDICT_MIN_RUNS} replaces it`
+      : `runs: ${VERDICT_MIN_RUNS}`
   return [
-    `${plural(few.length, 'compare')} ${few.length === 1 ? 'runs' : 'run'} ${runs} times per cell; effort can't reach p < ${EFFORT_ALPHA} below ${EFFORT_MIN_RUNS} vs ${EFFORT_MIN_RUNS} (runs: ${EFFORT_MIN_RUNS})`,
+    `${plural(few.length, 'compare')} ${one ? 'runs' : 'run'} ${runs} per cell; a verdict needs ${VERDICT_MIN_RUNS} runs a side, so ${one ? 'its' : 'their'} lift and effort will say can't tell yet (${fix})`,
   ]
+}
+
+/** The profile whose `limit.runs` cut a row's runs, from its `runs a → b (profile name)` note. */
+const cappedBy = (note: string): string | undefined =>
+  /^runs \d+ → \d+ \(profile (.+)\)$/.exec(note)?.[1]
+
+/**
+ * One line per compared family with too few cases for its paired lift to get a verdict: one
+ * attempt a case can't give more discordant cases than there are cases, and several need as many
+ * cases, so more runs don't help. `rows` are those that plan a lift.
+ */
+function familyHints(rows: PlanRow[]): string[] {
+  const cases = new Map<string, { n: number; of: number }>()
+  for (const r of rows) {
+    if (!r.family) continue
+    const c = cases.get(r.family.id) ?? { n: 0, of: r.family.cases }
+    cases.set(r.family.id, { ...c, n: c.n + 1 })
+  }
+  return [...cases]
+    .filter(([, { n }]) => n < PAIRED_MIN)
+    .map(([id, { n, of }]) => {
+      const has = n === of ? `has ${plural(n, 'case')}` : `runs ${n} of its ${of} cases`
+      const fix = of >= PAIRED_MIN ? 'run all its cases' : 'add cases'
+      return `family ${clip(id, 64)} ${has}; its lift needs ${PAIRED_MIN} for a verdict, so it will say can't tell yet whatever the runs (${fix})`
+    })
 }
 
 /** One line per harness whose cells fell past the first entries of the `gateway` list. */
@@ -352,8 +383,6 @@ function gatewayHints(planned: PlannedItem[]): string[] {
   }
   return [...hints]
 }
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /**
  * `plan  profile pr (auto: CI is set) · 3 evals · 4 cells · 12 attempts · ~9m serial · …`, led by
@@ -471,6 +500,8 @@ export type PlanEval = {
   groups: string[]
   name: string
   tags: string[]
+  /** Its `revision`; unset when no level sets one. */
+  revision?: Revision
   /** Why the eval doesn't run at all, else null. */
   skip: string | null
   notes: string[]
@@ -507,8 +538,6 @@ export type PlanDocument = {
   /** Sandboxes that run as root or with capabilities added back, one per level that set them. */
   sandboxWarnings: SandboxWarning[]
   hints: string[]
-  /** The insights the run asks for after its attempts; null when none. */
-  insights: PlanInsights | null
   evals: PlanEval[]
   excluded: ExcludedEval[]
   images: PlanImage[]
@@ -536,6 +565,7 @@ export function planDocument(
         groups: attempt.groups,
         name: attempt.name,
         tags: attempt.tags,
+        ...(attempt.revision !== undefined ? { revision: attempt.revision } : {}),
         skip: attempt.plan.skip ?? null,
         notes: attempt.plan.notes,
         cells: [],
@@ -590,7 +620,6 @@ export function planDocument(
     warnings: plan.warnings,
     sandboxWarnings: plan.sandboxWarnings,
     hints: plan.hints,
-    insights: plan.insights,
     evals: [...evals.values()],
     excluded,
     images,

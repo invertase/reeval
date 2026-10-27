@@ -10,11 +10,11 @@ import {
   configLabel,
   configPathFor,
   findConfig,
-  hasAnalysisModel,
   hostCapacity,
   loadConfig,
   malformedCredentials,
   missingCredentials,
+  type PlannedJudge,
   parseDuration,
   requireConfig,
   resolveConcurrency,
@@ -29,12 +29,13 @@ import { inCI, loadEnvFiles } from './env.ts'
 import { environmentSandbox, profileSandbox, workspaceLabel } from './environment.ts'
 import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
+import { vertexSettingsIn } from './gateway/vertex.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
-import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
-import { harnessId, plannedSandboxes } from './options.ts'
+import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
+import { checkLimitHarness, harnessId, plannedSandboxes } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
 import { redactSecrets, registerSecret } from './redact.ts'
@@ -43,6 +44,7 @@ import { commandOf, redactArgv } from './report/scrub.ts'
 import type { CliInvocation } from './report/types.ts'
 import {
   completedKeysFor,
+  keptAttempts,
   loadPrevious,
   prepareResume,
   resolveResume,
@@ -53,7 +55,6 @@ import { clip } from './text.ts'
 import type { RunContext } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
-import type { RunInsights } from './view/insights.ts'
 import { runOutcome } from './view/model.ts'
 
 const HISTORY_COMMANDS = {
@@ -86,18 +87,13 @@ const invocation: { flags?: Flags; runId: string | null; unhandledErrors: string
 
 /** Set by the first Ctrl-C or SIGTERM of `reeval run`. */
 let interrupted = false
-/** The last signal that cancelled the run: 130 after SIGINT, 143 after SIGTERM. */
+/** The last signal that canceled the run: 130 after SIGINT, 143 after SIGTERM. */
 let stopCode: number = EXIT.interrupted
 /**
  * Set once the attempts and questions are done and whether the run stopped is decided, as
- * live.json turns `finishing`: a signal then cancels nothing, and only means insights don't start.
+ * live.json turns `finishing`: a signal then has nothing left to cancel.
  */
 let finishing = false
-/**
- * Set while insights run, after the attempts and the exit code: Ctrl-C or SIGTERM then stops the
- * insights instead of cancelling the run, which has nothing left to cancel.
- */
-let onInsightsSignal: ((signal: 'SIGINT' | 'SIGTERM') => void) | null = null
 
 async function run(argv: string[]): Promise<number> {
   const { values, positionals } = parseCli(argv)
@@ -361,7 +357,7 @@ async function runCommand(
   const engines = [
     ...new Set(plan?.sandboxes.flatMap((s) => (s.kind === 'docker' ? [s.engine ?? 'docker'] : []))),
   ]
-  if ((interrupted || engineRun.cancelled) && engines.length) {
+  if ((interrupted || engineRun.canceled) && engines.length) {
     const { removeRunContainers } = await import('./sandbox/docker.ts')
     await removeRunContainers(ctx.runId, engines)
   }
@@ -371,8 +367,8 @@ async function runCommand(
     return EXIT.ok
   }
 
-  let stopped = cutShort || engineRun.cancelled
-  // A cancelled run keeps the per-attempt answers that came back before it stopped, and asks
+  let stopped = cutShort || engineRun.canceled
+  // A canceled run keeps the per-attempt answers that came back before it stopped, and asks
   // no pairwise question.
   if (stopped) questions?.cancel()
   let answers = stopped ? await questions?.answered() : await questions?.settle()
@@ -415,7 +411,6 @@ async function runCommand(
     () => live?.stop(),
   )
   const { record } = run
-  // Fixed from the facts before any insight call starts: nothing a model writes changes it.
   // `--json`'s outcome, the studio and `reeval show` read the same outcome from the record.
   const outcome = runOutcome(record)
   const code = stopped
@@ -425,51 +420,6 @@ async function runCommand(
       : outcome === 'infra_error'
         ? EXIT.infra
         : EXIT.ok
-  let insights: RunInsights | null = run.insights
-  let insightLines: string[] = []
-  const { runInsights, wantsInsights } = await import('./insights/run.ts')
-  // A signal while the record is written finds nothing left to cancel; it still means stop,
-  // so insights don't start.
-  const wanted = !stopped && wantsInsights(ctx.config, !flags['no-insights'])
-  if (wanted && interrupted) {
-    insightLines = [
-      `insights skipped (${stopCode === EXIT.terminated ? 'SIGTERM' : 'Ctrl-C'}): reeval analyze ${record.runId} --insights to write them`,
-    ]
-  } else if (wanted) {
-    const { scratchDir } = await import('./history/files.ts')
-    const stop = new AbortController()
-    let stopSignal: 'SIGINT' | 'SIGTERM' = 'SIGINT'
-    // A second signal while the calls in flight stop leaves at once, with the run's own code.
-    onInsightsSignal = (signal) => {
-      if (stop.signal.aborted) {
-        renderer.close()
-        process.exit(code)
-      }
-      stopSignal = signal
-      stop.abort(new Error(signal === 'SIGTERM' ? 'SIGTERM' : 'Ctrl-C'))
-    }
-    try {
-      const done = await runInsights({
-        config: ctx.config,
-        record,
-        runDir: run.artifactDir ?? join(scratchDir(ctx.config.root), record.runId),
-        remarks: run.insights,
-        verbose: (ctx.verbosity ?? 0) > 0,
-        signal: stop.signal,
-        stopSignal: () => stopSignal,
-        onStart: (text) => {
-          renderer.onEvent({ type: 'notice', at: Date.now(), level: 'info', text })
-        },
-        onProgress: (n, total) => {
-          renderer.onEvent({ type: 'insights-progress', at: Date.now(), done: n, total })
-        },
-      })
-      insights = done.insights ?? insights
-      insightLines = done.lines
-    } finally {
-      onInsightsSignal = null
-    }
-  }
   const { pruneDebug } = await import('./debug/files.ts')
   await pruneDebug(ctx.config.root, ctx.config.debug.keep).catch(() => {})
   const summary = run.artifactDir ? join(run.artifactDir, 'summary.md') : run.recordPath
@@ -479,9 +429,7 @@ async function runCommand(
     record,
     summaryPath: fromCwd(summary),
     results: engineRun.evals,
-    hint: !hasAnalysisModel(ctx.config),
-    insights,
-    insightLines,
+    remarks: run.remarks,
   })
   renderer.close()
   const stepSummary = process.env.GITHUB_STEP_SUMMARY
@@ -560,8 +508,6 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
     dryRun: !!flags['dry-run'],
     json: !!flags.json,
     force: !!flags.force,
-    /** `--no-insights` turns them off for this run. */
-    insights: !flags['no-insights'],
     verbosity: verbosityOf(flags),
     configFile: configLabel(path),
     /** Named in the plan line when the project root isn't the current directory. */
@@ -712,8 +658,9 @@ async function executeRun(
     }),
   ) as typeof ctx
   const { runEngine } = await import('./engine/node.ts')
-  const { buildPlan, checkAttemptBudget, planDocument, planInsights, planLine, planTable } =
-    await import('./plan.ts')
+  const { buildPlan, checkAttemptBudget, planDocument, planLine, planTable } = await import(
+    './plan.ts'
+  )
   let plan: RunPlan | undefined
   let sandboxVersions: SandboxVersions = { images: [] }
   let preflightStop: Error | undefined
@@ -721,10 +668,13 @@ async function executeRun(
   let budgetTimer: NodeJS.Timeout | undefined
   let toRun: PlannedItem[] = []
   let live: LiveProgressWriter | undefined
+  let kept = new Map<string, LiveKept>()
   let questions: QuestionRunner | undefined
-  const onPlan = async ({ planned, excluded, matched, unmatched }: CollectedPlan) => {
+  const onPlan = async (collected: CollectedPlan) => {
+    const { planned, excluded, matched, unmatched } = collected
     if (unmatched.length) throw unmatchedFilter(config, unmatched)
     if (matched === 0) throw noMatch(config, filters, tags)
+    checkLimitHarness(profile, config.file, collected)
     const completed = completedKeysFor(planned, stagingDir, ctx.previous)
     const skipped = planned.map((p) =>
       completed.has(p.key)
@@ -753,16 +703,10 @@ async function executeRun(
       root: config.root,
       historyDir: config.history.dir,
       questionModel: models?.questionModelLabel(config, judge) ?? null,
-      insights: await planInsights(config, setup.insights),
       judgeModel,
       ...(setup.dryRun ? { prices: await dryRunPrices(skipped, judgeModel) } : {}),
     })
     plan.runId = runId
-    if (plan.insights) {
-      const { analysisKeyProblem } = await import('./analysis/model.ts')
-      const problem = analysisKeyProblem(config)
-      if (problem) plan.warnings.push(`insights will be skipped: ${problem}`)
-    }
     const cloud = ciRunner(process.env)
     const direct = cloud
       ? [
@@ -781,6 +725,7 @@ async function executeRun(
     }
     if (completed.size) plan.resume = { runId, completed: completed.size }
     run.completed = [...completed]
+    kept = keptAttempts(completed, stagingDir, ctx.previous)
     const { imageStages, imageTargets } = await import('./sandbox/images.ts')
     const targets = imageTargets(
       skipped
@@ -824,12 +769,6 @@ async function executeRun(
       const cost = plan.cost && costLine(plan.cost)
       if (cost) lines.push(cost)
     }
-    if (setup.dryRun && plan.insights) {
-      const { formatTokens } = await import('./usage.ts')
-      lines.push(
-        `insights  ${plan.insights.model} · up to ${formatTokens(plan.insights.maxTokens)} tokens`,
-      )
-    }
     lines.push(...plan.warnings.map((w) => `warning: ${w}`))
     lines.push(...plan.hints.map((h) => `hint: ${h}`))
     renderer.onEvent({
@@ -856,6 +795,7 @@ async function executeRun(
           ...(gateway === 'openrouter' && openRouterFallbacks(scope.gateways)
             ? { fallbacks: true }
             : {}),
+          ...(gateway === 'vertex' ? { vertex: vertexSettingsIn(scope.gateways) } : {}),
           ...(q.across !== undefined ? { across: q.across } : {}),
           ...(q.choices ? { choices: q.choices } : {}),
           ...(q.state ? { state: q.state } : {}),
@@ -865,10 +805,16 @@ async function executeRun(
       for (const q of questions) if (typeof q.model === 'string') questionModels.add(q.model)
       if (questions.length) asked.push({ row, questions })
     }
+    const judges = new Map<string, PlannedJudge>()
+    for (const p of skipped) {
+      const j = p.attempt.judge
+      if (j && !p.attempt.plan.skip) judges.set(`${j.model}\0${j.gateway ?? ''}`, j)
+    }
     const missing = missingCredentials(config, process.env, {
       harnesses: plan.harnessDescriptors,
       profile,
       questionModels: [...questionModels],
+      judges: [...judges.values()],
     })
     if (missing.length) {
       const hint = missing.some((m) => m.includes('(for direct())'))
@@ -882,6 +828,7 @@ async function executeRun(
       harnesses: plan.harnessDescriptors,
       profile,
       questionModels: [...questionModels],
+      judges: [...judges.values()],
     })
     if (malformed.length) {
       throw new UsageError(
@@ -894,6 +841,11 @@ async function executeRun(
       questions = questionRunner({
         evals: asked,
         stagingDir,
+        resumed: {
+          completed: new Set(run.completed),
+          previous: ctx.previous,
+          artifacts: ctx.previousArtifacts,
+        },
         maxInputTokens: config.analysis.maxInputTokens,
         maxOutputTokens: config.analysis.maxOutputTokens,
         onAnswer: (id, answer) => {
@@ -1028,6 +980,7 @@ async function executeRun(
           runId,
           startedAt: ctx.startedAt,
           planned: toRun,
+          kept,
         })
         renderer.onEvent({
           type: 'run-start',
@@ -1057,9 +1010,8 @@ async function executeRun(
         renderer.onEvent(e)
       },
       // SIGTERM (docker stop, a CI runner's cancel) cancels like Ctrl-C.
-      onCancellable: (cancel) => {
+      onCancelable: (cancel) => {
         const onSignal = (signal: NodeJS.Signals) => {
-          if (onInsightsSignal) return onInsightsSignal(signal === 'SIGTERM' ? 'SIGTERM' : 'SIGINT')
           stopCode = signal === 'SIGTERM' ? EXIT.terminated : EXIT.interrupted
           if (interrupted) {
             renderer.close()
@@ -1073,7 +1025,7 @@ async function executeRun(
             type: 'notice',
             at: Date.now(),
             level: 'warn',
-            text: 'Cancelling: stopping agents and destroying sandboxes (Ctrl-C again to force)',
+            text: 'Canceling: stopping agents and destroying sandboxes (Ctrl-C again to force)',
           })
           cancel()
         }

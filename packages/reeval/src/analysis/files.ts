@@ -7,7 +7,8 @@ import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { HistoryError, runDir } from '../history/files.ts'
 import { fromCwd } from '../ids.ts'
-import { countSecrets } from '../redact.ts'
+import { countSecrets, findSecretsInJson } from '../redact.ts'
+import { fileInside } from '../studio/source.ts'
 import type { AnalysisDoc, AnalysisEntry, AnalysisNote } from '../view/analysis.ts'
 import { NewerSchemaError, readableAnalysis, readableAnalysisNote } from '../view/record.ts'
 
@@ -72,7 +73,7 @@ export async function saveAnalysis(
   markdown: string,
 ): Promise<string[]> {
   const json = `${JSON.stringify(doc, null, 2)}\n`
-  if (countSecrets(json) > 0 || countSecrets(markdown) > 0) {
+  if (findSecretsInJson(json).length > 0 || countSecrets(markdown) > 0) {
     throw new HistoryError(
       'Refusing to save the analysis: it looks like it contains a secret. Check it with reeval analyze --json.',
     )
@@ -98,7 +99,10 @@ export async function saveAnalysis(
   return written
 }
 
-/** Saved analyses of a run (newest first by name), and cached ones anchored on it when asked. */
+/**
+ * Saved analyses of a run (newest first by name), and cached ones anchored on it when asked. A
+ * saved one is read only from inside the run's own folder, so a symlinked run folder lists none.
+ */
 export async function listAnalyses(
   root: string,
   historyDirs: string[],
@@ -113,7 +117,9 @@ export async function listAnalyses(
     )
     for (const name of names.sort().reverse()) {
       const file = join(folder, name)
-      const doc = parse(await readFile(file, 'utf8').catch(() => ''), file)
+      const real = await fileInside(dir, [runId, 'analysis'], [name])
+      if (!real) continue
+      const doc = parse(await readFile(real, 'utf8').catch(() => ''), file)
       if (doc) entries.push({ file: `analysis/${name}`, source: 'saved', doc })
     }
     if (entries.length) break
@@ -131,15 +137,20 @@ export async function listAnalyses(
   return entries
 }
 
-/** A run's notes, by file name; files that aren't notes are skipped, newer ones with a warning. */
+/**
+ * A run's notes, by file name; files that aren't notes, or that resolve outside the run's notes
+ * folder, are skipped, newer ones with a warning.
+ */
 export async function listNotes(root: string, runId: string): Promise<AnalysisNote[]> {
   const dir = notesDir(root, runId)
   const names = (await readdir(dir).catch((): string[] => [])).filter((n) => n.endsWith('.json'))
   const notes: AnalysisNote[] = []
   for (const name of names.sort()) {
     const file = join(dir, name)
+    const real = await fileInside(analysisCacheDir(root), [runId, 'notes'], [name])
+    if (!real) continue
     try {
-      const note = JSON.parse(await readFile(file, 'utf8')) as AnalysisNote
+      const note = JSON.parse(await readFile(real, 'utf8')) as AnalysisNote
       if (note?.kind === 'reeval-analysis-note') notes.push(readableAnalysisNote(note, file))
     } catch (error) {
       if (error instanceof NewerSchemaError && !warned.has(file)) {

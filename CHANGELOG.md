@@ -1,5 +1,102 @@
 # Changelog
 
+## [0.15.1](https://github.com/invertase/reeval/compare/v0.15.0...v0.15.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **pi:** link the fake bootstrap with a junction so the gateway tests run on Windows ([#691](https://github.com/invertase/reeval/issues/691)) ([055574b](https://github.com/invertase/reeval/commit/055574b41b25b21971302ef303b7f540963ed337))
+
+## [0.15.0](https://github.com/invertase/reeval/compare/v0.14.0...v0.15.0) (2026-10-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **plan:** run a compare 4 times a side when runs is unset ([#687](https://github.com/invertase/reeval/issues/687))
+* **gateway:** end every gateway list with direct(), with direct({ enabled: false }) for strict routing ([#676](https://github.com/invertase/reeval/issues/676))
+* **expect:** fail the attempt on a caught failed expect ([#684](https://github.com/invertase/reeval/issues/684))
+* spring clean: remove insights, single-source option docs and trim slow or duplicate tests ([#667](https://github.com/invertase/reeval/issues/667))
+* **history:** fingerprint an eval's body, options, cases and revision ([#664](https://github.com/invertase/reeval/issues/664))
+
+### Features
+
+* **doctor:** check vertex() models online, with a Vertex example and recipe ([#674](https://github.com/invertase/reeval/issues/674)) ([bc75f37](https://github.com/invertase/reeval/commit/bc75f371c787e7dee72ad844aedd532d3680b032))
+* **gateway:** accept the Anthropic API's dated Claude ids on Vertex AI ([#672](https://github.com/invertase/reeval/issues/672)) ([47958ee](https://github.com/invertase/reeval/commit/47958ee424c2d1e4f5631bead0d630b918ca0b77))
+* **gateway:** add openrouter() routing gateway ([#547](https://github.com/invertase/reeval/issues/547)) ([0778bbc](https://github.com/invertase/reeval/commit/0778bbc43343c41d0a506df7721c09530aa1eefa))
+* **gateway:** end every gateway list with direct(), with direct({ enabled: false }) for strict routing ([#676](https://github.com/invertase/reeval/issues/676)) ([be3c673](https://github.com/invertase/reeval/commit/be3c67300cc3cd5e88425d1b9f1bd8266d7cd3e5))
+* **gateway:** run Antigravity, OpenCode, Goose and pi on Vertex AI ([#673](https://github.com/invertase/reeval/issues/673)) ([4d0e7c9](https://github.com/invertase/reeval/commit/4d0e7c9823fa49b9ce667a0ac22d88cbfce7ec1e))
+* **gateway:** run fx on openrouter() ([#680](https://github.com/invertase/reeval/issues/680)) ([9c3b3b6](https://github.com/invertase/reeval/commit/9c3b3b6a7b3cce784f071752f77d34fa569ff6d2))
+* **gateway:** run fx on Vertex AI ([#686](https://github.com/invertase/reeval/issues/686)) ([238abff](https://github.com/invertase/reeval/commit/238abff73c4e140b1cdd64f0bba813dbf1bd67af))
+* **gateway:** run Grok Build on Vertex AI ([#675](https://github.com/invertase/reeval/issues/675)) ([31a8cd2](https://github.com/invertase/reeval/commit/31a8cd22085ab08260e9b1c1783248cc2f2c2484))
+* **gateway:** run pi on openrouter() ([#679](https://github.com/invertase/reeval/issues/679)) ([1830a9b](https://github.com/invertase/reeval/commit/1830a9b1509fb31271d6d9ba8c627adad2d09412))
+* **gateway:** run pi on vercel() and send effort through gateways where the model reads it ([#671](https://github.com/invertase/reeval/issues/671)) ([52280a5](https://github.com/invertase/reeval/commit/52280a5d983e9e9e7944c2914d54d1adee037434))
+* **gateway:** vertex(), with Claude Code, judges and analysis on Vertex AI ([#505](https://github.com/invertase/reeval/issues/505)) ([b0c3690](https://github.com/invertase/reeval/commit/b0c3690f1e1f8881b63f63d2e0ce2600afc345de))
+* **history:** fingerprint an eval's body, options, cases and revision ([#664](https://github.com/invertase/reeval/issues/664)) ([fdb040b](https://github.com/invertase/reeval/commit/fdb040b90c9b6aeceb6f961e094e9e3ba4cfa6dc))
+* **plan:** hint the compares and families that can't get a verdict ([#685](https://github.com/invertase/reeval/issues/685)) ([b478ba9](https://github.com/invertase/reeval/commit/b478ba9acada151f23a8c6782df2c0e91b148fea))
+* **plan:** run a compare 4 times a side when runs is unset ([#687](https://github.com/invertase/reeval/issues/687)) ([74df7c8](https://github.com/invertase/reeval/commit/74df7c834982c451ce5ffb1191f822a2289db4e5))
+* **query:** name a mixed cell below the flaky minimum mixed ([#681](https://github.com/invertase/reeval/issues/681)) ([d3a1e78](https://github.com/invertase/reeval/commit/d3a1e78850da7a757e4ffb0cf10ed5d6614740c5))
+
+
+### Bug Fixes
+
+* accept files saved with a UTF-8 BOM wherever reeval reads user JSON, frontmatter or .env ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **attempt:** keep assertion labels unique when a given label looks numbered ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **attempt:** record a judge error only when a judge caused the failure ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **capture:** accept only capture names the studio can serve ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **cli:** check the keys of group and eval judges before the run ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **cli:** switch out of cancel mode as live.json turns finishing ([#548](https://github.com/invertase/reeval/issues/548)) ([e84168a](https://github.com/invertase/reeval/commit/e84168a1d41959337e0a61f4e2f85a3944f3b0cc))
+* **diff:** keep changed paths as written and count hunk lines that start with -- or ++ ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **engine:** exit a worker at once when the CLI goes while its file is loading ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **engine:** fail a file's attempts when it fails to load in the run pass ([af665de](https://github.com/invertase/reeval/commit/af665deea97ab74c52c0b6eb28e90216e60280ff))
+* **engine:** let a filter part that names a file also match names and cells ([6f763ad](https://github.com/invertase/reeval/commit/6f763adafde05847afe5359770d2a1186e224b8c))
+* **engine:** run up to concurrency eval files at once, not one per cpu ([6f763ad](https://github.com/invertase/reeval/commit/6f763adafde05847afe5359770d2a1186e224b8c))
+* **engine:** skip .only evals inside a skipped group in the plan ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **environment:** refuse a password or token in skill and npm source URLs ([af665de](https://github.com/invertase/reeval/commit/af665deea97ab74c52c0b6eb28e90216e60280ff))
+* **evaluate:** refuse evals and pooled families that would share an id ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **expect:** fail the attempt on a caught failed expect ([#684](https://github.com/invertase/reeval/issues/684)) ([68c3447](https://github.com/invertase/reeval/commit/68c344752a0800598d3240cd93c7a0911d4fd25f))
+* **harness:** record writes of unknown origin as write, not modify ([6f763ad](https://github.com/invertase/reeval/commit/6f763adafde05847afe5359770d2a1186e224b8c))
+* **harness:** refuse MCP names and values opencode would substitute ([6f763ad](https://github.com/invertase/reeval/commit/6f763adafde05847afe5359770d2a1186e224b8c))
+* **history:** claim a run before writeRun touches its artifact directory ([#559](https://github.com/invertase/reeval/issues/559)) ([4514416](https://github.com/invertase/reeval/commit/4514416f1ad4ef91a2d0e873cde7bc34b4f0e2e3))
+* **history:** compare pooled-family gates and fail on their regressions ([#562](https://github.com/invertase/reeval/issues/562)) ([d229233](https://github.com/invertase/reeval/commit/d229233e7b33d6845e2f704701a1aa785cc98594))
+* **history:** count attempts with no tool calls in effort's per-class medians ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **history:** count gateway changes as drift, not noise ([#560](https://github.com/invertase/reeval/issues/560)) ([bd7a243](https://github.com/invertase/reeval/commit/bd7a24316d50d7d65cd024c2826956eefa223211))
+* **history:** keep each failed attempt's artifacts with artifacts 'failures' ([#561](https://github.com/invertase/reeval/issues/561)) ([6c4ce39](https://github.com/invertase/reeval/commit/6c4ce39241603ef7e1e64e873845e7c6c699d7a5))
+* **history:** keep minLift, provenance and pairwise answers on resume ([#563](https://github.com/invertase/reeval/issues/563)) ([00b74e8](https://github.com/invertase/reeval/commit/00b74e8f7ff27b561d88a0be3f6fd9c9754d55d9))
+* **history:** key environments and env_skills on name and digest ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **history:** name a gate change in compare instead of calling it a regression ([#565](https://github.com/invertase/reeval/issues/565)) ([6239b12](https://github.com/invertase/reeval/commit/6239b121620b125afbaf76136f38fe4cd8308b4e))
+* **history:** settle run commits past rev-list's 20,000 with merge-base ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **judge:** grade a language runner's judge on value as the value itself ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **judge:** mask the judge's input before it's sent ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **judge:** number judgement keys by call order, not completion order ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **pi:** carry a turn on through the run pi continues after compacting ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **pi:** keep a turn pi recovered by auto-retry ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **profiles:** refuse a limit.harness id no eval runs on ([6f763ad](https://github.com/invertase/reeval/commit/6f763adafde05847afe5359770d2a1186e224b8c))
+* **profiles:** turn compare off when limit.harness drops every compared harness ([6f763ad](https://github.com/invertase/reeval/commit/6f763adafde05847afe5359770d2a1186e224b8c))
+* **python:** fail a call that passes NaN or Infinity instead of hanging reeval ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **python:** read REEVAL_VERSION in pep 440 spelling as reeval's version ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **python:** register each eval file's module in sys.modules while it loads ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **redact:** mask a second key of the same provider whole ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **redact:** mask a secret that spans several stream chunks in the trace and raw transcript ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **redact:** mask a token that follows a letter, digit or underscore ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **redact:** mask only JSON strings so records stay valid ([#564](https://github.com/invertase/reeval/issues/564)) ([6226b29](https://github.com/invertase/reeval/commit/6226b29ace255e7b736e9df50f051fb58227a259))
+* **redact:** mask text before it's shortened ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **redact:** mask xai-, vck_ and other distinctive credential prefixes ([6f763ad](https://github.com/invertase/reeval/commit/6f763adafde05847afe5359770d2a1186e224b8c))
+* refuse durations above 596h, the longest timer Node can set ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **sandbox:** answer 400 to a gateway request with a port outside 1-65535 ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **sandbox:** hash every file a .dockerignore re-include sends ([#624](https://github.com/invertase/reeval/issues/624)) ([668bc0d](https://github.com/invertase/reeval/commit/668bc0dc10416ca9759e338557644a2657d4f445))
+* **sandbox:** note processes setup leaves running with a checks-only secret ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **sandbox:** substitute placeholders in websocket control frames ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **secrets:** don't broker http:// MCP header secrets, and serve plain HTTP in a CONNECT to a brokered host ([af665de](https://github.com/invertase/reeval/commit/af665deea97ab74c52c0b6eb28e90216e60280ff))
+* **secrets:** record secret.template variables and name header secrets by host variable ([af665de](https://github.com/invertase/reeval/commit/af665deea97ab74c52c0b6eb28e90216e60280ff))
+* **secrets:** warn on credential-like MCP headers written as plain strings ([af665de](https://github.com/invertase/reeval/commit/af665deea97ab74c52c0b6eb28e90216e60280ff))
+* **studio:** serve nothing through a symlinked run directory ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+* **studio:** show a resumed run's kept attempts with their outcome in live progress ([aefe0c6](https://github.com/invertase/reeval/commit/aefe0c645aeffff7e64e1c5c05f42f11666b5277))
+
+
+### Code Refactoring
+
+* spring clean: remove insights, single-source option docs and trim slow or duplicate tests ([#667](https://github.com/invertase/reeval/issues/667)) ([46a5000](https://github.com/invertase/reeval/commit/46a5000cc3f1037897cec89366177eade9876a3f))
+
 ## [0.14.0](https://github.com/invertase/reeval/compare/v0.13.0...v0.14.0) (2026-10-24)
 
 

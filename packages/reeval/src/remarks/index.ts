@@ -1,8 +1,6 @@
-// A run's remarks, at the end of `reeval run`: the rules over its record and the history, then,
-// with model insights, the model's gated remarks and `no-baseline` on its classification. Each is
-// settled against earlier runs' insights, which give the first run that printed it. Without a
-// model they go in a remarks-only insights.json beside the scratch run, which `reeval record`
-// carries into the history.
+// A run's remarks, at the end of `reeval run`: the rules over its record and the history, each
+// settled against earlier runs' remarks, which give the first run that printed it. They go in a
+// remarks.json beside the scratch run, which `reeval record` carries into the history.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { inCI } from '../env.ts'
@@ -11,17 +9,15 @@ import { comparableFingerprint, type HistoryDb, openHistoryDb } from '../history
 import { recordNames, scratchDir } from '../history/files.ts'
 import type { EvalEntry, RunRecord } from '../history/types.ts'
 import { RUN_ID } from '../ids.ts'
-import { insightsFile, readInsights } from '../insights/files.ts'
-import { factsHash } from '../insights/hash.ts'
 import type { ResolvedConfig } from '../types.ts'
-import { NO_MODEL, REMARK_KINDS, type Remark, type RunInsights } from '../view/insights.ts'
+import { REMARK_KINDS, type Remark, type RunRemarks } from '../view/remarks.ts'
 import { suiteResult } from '../view/suite.ts'
+import { readRemarks, remarksFile } from './files.ts'
 import {
   type Candidate,
   type CheckWindow,
   deterministicRemarks,
   FLAKY_WINDOW,
-  noBaseline,
   type RemarkContext,
   rankRemarks,
 } from './rules.ts'
@@ -62,13 +58,13 @@ async function otherRuns(config: ResolvedConfig, runId: string) {
   return out
 }
 
-type RunRemarks = { runId: string; remarks: Remark[] }
+type Raised = { runId: string; remarks: Remark[] }
 
-/** Each run's remarks, from its insights.json; a run without one has none. */
-async function remarksIn(runs: Array<{ dir: string; runId: string }>): Promise<RunRemarks[]> {
-  const out: RunRemarks[] = []
+/** Each run's remarks, from its remarks.json; a run without one has none. */
+async function remarksIn(runs: Array<{ dir: string; runId: string }>): Promise<Raised[]> {
+  const out: Raised[] = []
   for (const run of runs) {
-    const doc = await readInsights(insightsFile(run.dir, run.runId)).catch(() => null)
+    const doc = await readRemarks(remarksFile(run.dir, run.runId)).catch(() => null)
     if (doc?.remarks.length) out.push({ runId: run.runId, remarks: doc.remarks })
   }
   return out
@@ -79,7 +75,7 @@ async function remarksIn(runs: Array<{ dir: string; runId: string }>): Promise<R
  * run that printed it, unless that run is itself and `printed` is false: the cap or a run without
  * `-v` hid it.
  */
-function printedBefore(runs: RunRemarks[]) {
+function printedBefore(runs: Raised[]) {
   const first = new Map<string, string>()
   for (const run of runs) {
     for (const r of run.remarks) {
@@ -93,7 +89,7 @@ function printedBefore(runs: RunRemarks[]) {
 
 /** A remark as raised, before it's settled: its kind's severity, and no run-specific marks. */
 function candidateOf(r: Remark): Candidate {
-  const { firstSeenRun: _, printed: __, actedOn: ___, ...rest } = r
+  const { firstSeenRun: _, printed: __, ...rest } = r
   return { ...rest, severity: REMARK_KINDS[r.kind].severity }
 }
 
@@ -222,13 +218,17 @@ function locator(root: string) {
   }
 }
 
-/** What the rules may look up in an eval's source: its name, check labels and MCP servers. */
+/**
+ * What the rules may look up in an eval's source: its name, check labels, MCP servers and the
+ * secrets setup's processes hold.
+ */
 function needlesOf(entry: EvalEntry): Array<string | null> {
   const labels = entry.cells.flatMap((c) => (c.checks ?? []).map((k) => k.label))
   const servers = entry.attempts.flatMap((a) =>
     a.turns.flatMap((t) => (t.mcpStartup ?? []).map((m) => m.server.split(':')[0] as string)),
   )
-  return [null, ...new Set([...labels, ...servers])]
+  const secrets = entry.attempts.flatMap((a) => (a.setupProcesses ?? []).flatMap((p) => p.secrets))
+  return [null, ...new Set([...labels, ...servers, ...secrets])]
 }
 
 /** The run's remarks, each with the run that first printed it. History-based kinds need an earlier run. */
@@ -253,43 +253,13 @@ export async function remarksOf(config: ResolvedConfig, record: RunRecord): Prom
   }
 }
 
-/**
- * The run's remarks once model insights are written: the deterministic ones it already raised
- * (`earlier`), the model's gated remarks and `no-baseline` on the classification, settled together,
- * so the cap and the ranking cover them all.
- */
-export async function withModelRemarks(
-  config: ResolvedConfig,
-  record: RunRecord,
-  insights: RunInsights,
-  earlier: Remark[],
-): Promise<Remark[]> {
-  const loc = locator(config.root)
-  for (const entry of record.evals) await loc.prepare(entry, [null])
-  const ctx: RemarkContext = { history: null, comparable: () => '', locate: loc.locate }
-  const classified = noBaseline(suiteResult(record), record, insights.evals, ctx)
-  const keep = (r: Remark) => r.kind !== 'no-baseline'
-  return settleRemarks(config, record, [
-    ...earlier.filter((r) => keep(r) && r.origin === 'deterministic').map(candidateOf),
-    ...insights.remarks.filter((r) => keep(r) && r.origin === 'model').map(candidateOf),
-    ...classified,
-  ])
-}
-
-/** Insights written without an analysis model, for the run's remarks. */
-export function remarksOnly(record: RunRecord, remarks: Remark[]): RunInsights {
+/** The run's remarks document. */
+export function remarksDoc(record: RunRecord, remarks: Remark[]): RunRemarks {
   return {
-    kind: 'reeval-insights',
+    kind: 'reeval-remarks',
     schemaVersion: 1,
     runId: record.runId,
-    model: NO_MODEL,
-    promptVersion: NO_MODEL,
-    factsHash: factsHash(suiteResult(record)),
     createdAt: new Date().toISOString(),
-    usage: { inputTokens: 0, outputTokens: 0, costUsd: null },
-    headline: null,
-    evals: [],
     remarks,
-    validation: { dropped: 0, regenerated: 0 },
   }
 }

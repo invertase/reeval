@@ -8,7 +8,7 @@
       "enum": ["all", "failures", "none"]
     },
     "ArtifactRef": {
-      "description": "A generic attempt file from `c.capture()`.",
+      "description": "A generic attempt file from `c.capture()` (and later video).",
       "type": "object",
       "properties": {
         "bytes": {
@@ -87,7 +87,7 @@
           "type": "number"
         },
         "label": {
-          "description": "`label` is the supplied `expect` label. Without one, it is the matcher plus its first argument or named subject, cut at 60 characters. Repeats get ` #2`, ` #3`, and later suffixes.",
+          "description": "`expect`'s second argument, or `<matcher> <first argument>` (or the command `c.exec` ran, or the judge's question), cut at 60 characters; ` #2`, ` #3` on repeats within the attempt.",
           "type": "string"
         },
         "labelled": {
@@ -194,7 +194,7 @@
       "type": "object",
       "properties": {
         "artifacts": {
-          "description": "PNGs from `c.capture()`, under the `artifacts/<name>.png` path.",
+          "description": "PNGs from `c.capture()`, under `artifacts/<name>.png`.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ArtifactRef"
@@ -207,11 +207,11 @@
           "$ref": "#/$defs/FileRef"
         },
         "rawTranscript": {
-          "description": "Unnormalised harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`.",
+          "description": "Unnormalized harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`.",
           "$ref": "#/$defs/FileRef"
         },
         "setupLog": {
-          "description": "Each environment setup step's command, exit code, duration, and output.",
+          "description": "Each environment setup step's command, exit code, duration and output.",
           "$ref": "#/$defs/FileRef"
         },
         "transcript": {
@@ -224,7 +224,7 @@
       "type": "object",
       "properties": {
         "activity": {
-          "description": "Counts from the transcript, so the attempt's activity is available without reading the transcript. `webSearches` includes refused searches.",
+          "description": "Counts from the transcript, so a run's shape is visible without reading it. `webSearches` includes refused searches.",
           "type": "object",
           "properties": {
             "fileEdits": {
@@ -305,7 +305,7 @@
           }
         },
         "captureUse": {
-          "description": "Tokens the capture vision loop used. Infrastructure only: never included in `usage`, effort, compare, or lift.",
+          "description": "Tokens the capture vision loop used. Infrastructure only: never folded into `usage`, effort, compare or lift.",
           "type": "object",
           "properties": {
             "model": {
@@ -332,7 +332,7 @@
           "type": "string"
         },
         "changedFiles": {
-          "description": "Files under a dependency directory, such as the `node_modules/` directory or `.venv/` directory, collapse to one entry with `count`.",
+          "description": "Files under a dependency directory (node_modules/, .venv/, …) collapse to one entry with `count`.",
           "type": "array",
           "items": {
             "type": "object",
@@ -384,7 +384,7 @@
           }
         },
         "context": {
-          "description": "Skills, rules, and MCP config visible to the agent in its sandbox, by content hash.",
+          "description": "Skills, rules and MCP config visible to the agent in its sandbox, by content hash.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ContextFile"
@@ -454,11 +454,11 @@
           "$ref": "#/$defs/AttemptFiles"
         },
         "id": {
-          "description": "`<cell key>#<n>`: unique in its evaluation.",
+          "description": "`<cell key>#<n>`: unique in its eval.",
           "type": "string"
         },
         "imageId": {
-          "description": "The image the container started from, in `stack.images`; null when the sandbox doesn't start from an image.",
+          "description": "The image the container started from, in `stack.images`; null for the fake sandbox.",
           "anyOf": [
             {
               "type": "null"
@@ -471,7 +471,7 @@
         "judgements": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/JudgementRecord"
+            "$ref": "#/$defs/JudgmentRecord"
           }
         },
         "key": {
@@ -501,7 +501,7 @@
           ]
         },
         "servedEffort": {
-          "description": "The reasoning effort the harness's API said it ran at, from `servedModels` or each turn's `model` (`medium` from `gpt-5.6-luna[effort=medium]`); null when those labels name none. Fast (`[fast=true]`) is not this.",
+          "description": "The reasoning effort the harness's API said it ran at, from `servedModels` / each turn's `model` (`medium` from `gpt-5.6-luna[effort=medium]`); null when those labels name none. Fast (`[fast=true]`) is not this.",
           "anyOf": [
             {
               "type": "null"
@@ -512,7 +512,7 @@
           ]
         },
         "servedModels": {
-          "description": "The models served by the harness's API calls, as observed by the egress gateway. Values may come from requests or responses and include reported effort; null when no model was named or recorded. The gateway reads the request URL for Antigravity, Goose, pi, and OpenCode on a `google/` model, so a request for `<model>-low` records `<model>`, and the API response for Codex, Grok Build, and OpenCode on another provider. Null for Cursor and Claude Code, whose API requests name no model.",
+          "description": "The models the harness's own API calls were served by, as the egress gateway saw them: named in the request (e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent uses on the side) or, for Codex, in the response, with its effort (`gpt-5.6-luna[effort=medium]`); null when neither names one (Cursor) or nothing recorded them.",
           "anyOf": [
             {
               "type": "array",
@@ -524,6 +524,13 @@
               "type": "null"
             }
           ]
+        },
+        "setupProcesses": {
+          "description": "Processes the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in their environment, so they hold its real value while the agent works and the agent, as the same user, can read it from them. Found by the secret's variable name, so a copy under another name or in a command's arguments isn't. At most 20, each `{ command, secrets }`: its command line, masked and cut at 200 characters, and those secrets' names. Absent when there were none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SetupProcess"
+          }
         },
         "startedAt": {
           "anyOf": [
@@ -546,7 +553,7 @@
           "$ref": "#/$defs/PhaseTimings"
         },
         "turns": {
-          "description": "`text` is the agent's final message, cut at 8 KB; the whole of it is in the `transcript.jsonl` file. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`).",
+          "description": "`text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`).",
           "type": "array",
           "items": {
             "type": "object",
@@ -674,7 +681,7 @@
       ]
     },
     "CellCheck": {
-      "description": "One check over a cell's counted attempts. `verdict` (variant cells) is `discriminates` when every answered instance passes on one side and fails on the other, `both-pass` when every answered instance passes on both sides, `both-fail` when every answered instance fails on both sides, or `mixed` otherwise. It is absent when either side has no pass or fail.",
+      "description": "One check over a cell's counted attempts. `verdict` (variant cells), over the attempts that reached the check: `discriminates` when it passes on every one of one side and none of the other; `both-pass` or `both-fail` when it does the same on both sides, so it can't tell them apart; `mixed` otherwise. No verdict when a side never reached it: not run is not a fail.",
       "type": "object",
       "properties": {
         "control": {
@@ -719,11 +726,11 @@
       ]
     },
     "CellRecord": {
-      "description": "One harness and environment of an evaluation, and how its attempts went.",
+      "description": "One harness and environment of an eval, and how its attempts went.",
       "type": "object",
       "properties": {
         "checks": {
-          "description": "Each assertion, by label, seen in any attempt of the evaluation, over this cell's counted attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.",
+          "description": "Each check (assertion label) seen in any attempt of the eval, over this cell's counted attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/CellCheck"
@@ -741,11 +748,11 @@
           ]
         },
         "environment": {
-          "description": "The environment's own name, also on a variant cell (`with-skill`, with no prefix).",
+          "description": "The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix).",
           "type": "string"
         },
         "environmentDigest": {
-          "description": "The environment's digest: the join key into `RunRecord.environments`; null for none.",
+          "description": "The environment's digest; null for none. With `environment`, the key into `RunRecord.environments`: environments with the same contents share a digest.",
           "anyOf": [
             {
               "type": "null"
@@ -766,7 +773,7 @@
           "$ref": "#/$defs/FingerprintParts"
         },
         "gate": {
-          "description": "How the attempts decide the cell's outcome; `'none'` when it doesn't fail the evaluation.",
+          "description": "How the attempts decide the cell's outcome; `'none'` when it doesn't fail the eval.",
           "$ref": "#/$defs/CellGate"
         },
         "gateway": {
@@ -774,7 +781,6 @@
           "type": "string"
         },
         "harness": {
-          "description": "The harness id: `id` when set, otherwise `<kind>:<model>` (`<kind>` alone without a model), with `[effort=<value>]` appended whenever `effort` is set.",
           "type": "string"
         },
         "harnessKind": {
@@ -784,7 +790,6 @@
           "type": "number"
         },
         "key": {
-          "description": "The harness id, the environment name, and the sandbox id, joined with `/`.",
           "type": "string"
         },
         "lift": {
@@ -833,7 +838,6 @@
           "type": "number"
         },
         "sandbox": {
-          "description": "The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts with the engine (`docker` by default). It adds `:` and the sanitised final component of `image` or `from`, or for `dockerfile` the sanitised filename (the parent directory name when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps append `+` and an eight-character hash.",
           "type": "string"
         },
         "skipped": {
@@ -1040,7 +1044,7 @@
       ]
     },
     "EgressRecord": {
-      "description": "An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked` contains only unexpected refusals.",
+      "description": "An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked` so a real block stands out.",
       "type": "object",
       "properties": {
         "allowed": {
@@ -1140,14 +1144,14 @@
       "type": "object",
       "properties": {
         "brokered": {
-          "description": "Secrets the sandbox only had placeholders for, swapped in by the egress gateway.",
+          "description": "Secrets the sandbox only had placeholders for, swapped in by the egress gateway, named as in `secrets`. A variable it also got as its real value somewhere (an `http://` header, an env secret without `hosts`) isn't listed.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "digest": {
-          "description": "Covers every field but the rules file's path; secret names are included; values never are. The image is the sandbox's.",
+          "description": "Covers every field but the rules file's path; secret names are included, values never are. The image is the sandbox's.",
           "type": "string"
         },
         "egress": {
@@ -1170,7 +1174,7 @@
           }
         },
         "mcp": {
-          "description": "The names of the MCP servers the agent was given.",
+          "description": "Every MCP server, a plugin's as `<plugin>:<server>`.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1180,7 +1184,7 @@
           "type": "string"
         },
         "overrides": {
-          "description": "Keys a later layer replaced, for example `env.KEY`, `skills.typescript`, `mcp.docs`, or `rules`.",
+          "description": "Keys a later layer replaced, e.g. `env.KEY`, `skills.genkit`, `mcp.docs`, `rules`.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1205,6 +1209,7 @@
           }
         },
         "secrets": {
+          "description": "Every secret, by the variable it's set as in the sandbox; an MCP header's (`secret.fromEnv`, `secret.template`, a plugin's `${VAR}`) by each host variable it reads.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1272,7 +1277,7 @@
           }
         },
         "workspace": {
-          "description": "This records the Git repository the workspace started as: the repo as written (a local one relative to the project root), the ref and path asked for (null when unset), the commit the ref resolved to, and the hash of the tree that was copied in, which is in the digest.",
+          "description": "The git repository the workspace started as: the repo as written (a local one relative to the project root), the ref and path asked for (null when unset), the commit the ref resolved to and the hash of the tree that was copied in, which is in the digest.",
           "type": "object",
           "properties": {
             "commit": {
@@ -1349,7 +1354,7 @@
       "type": "object",
       "properties": {
         "answers": {
-          "description": "The eval's pairwise questions (those with `across`), answered after its attempts by votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, and a sample of reasons). Each answer's `input` is the `<eval-slug>/questions/<n>.json` file: every call its model was sent, per pair and order, with secrets masked and screenshots as refs; unset where the evaluation's files weren't kept.",
+          "description": "The eval's pairwise questions (those with `across`), answered after its attempts by votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, a sample of reasons). Each answer's `input` is `<eval-slug>/questions/<n>.json`: every call its model was sent, per pair and order, secrets masked and screenshots as refs; unset where the eval's files weren't kept.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/CompareAnswer"
@@ -1368,7 +1373,7 @@
           }
         },
         "compare": {
-          "description": "The baseline environment, when the evaluation uses `compare`.",
+          "description": "The baseline environment, when the eval uses `compare`.",
           "$ref": "#/$defs/EvalCompareMeta"
         },
         "family": {
@@ -1408,14 +1413,14 @@
           "type": "string"
         },
         "key": {
-          "description": "Used to match an evaluation across runs; equal to `id`.",
+          "description": "What the eval is matched on across runs; currently the same as `id`.",
           "type": "string"
         },
         "name": {
           "type": "string"
         },
         "outcome": {
-          "description": "Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation.",
+          "description": "Over gated cells: `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the eval.",
           "$ref": "#/$defs/Outcome"
         },
         "passRate": {
@@ -1429,12 +1434,27 @@
             }
           ]
         },
+        "revision": {
+          "description": "The eval's `revision`, part of the `sources` fingerprint part; unset when it sets none.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
         "slug": {
-          "description": "Directory name inside the artefact directory, from `key`.",
+          "description": "Directory name inside the artifact directory, from `key`.",
           "type": "string"
         },
+        "source": {
+          "description": "Hashes of what the `sources` fingerprint part covers but `revision`: the eval's body, its case data and its options with its groups'. Unset on records from before it.",
+          "$ref": "#/$defs/EvalSource"
+        },
         "sources": {
-          "description": "The evaluation file and every local file it imports, directly or not, by content hash.",
+          "description": "The eval file, by content hash: where the eval lives. Records from before `source` also list the local files it imported, and were fingerprinted over them.",
           "type": "array",
           "items": {
             "type": "object",
@@ -1476,6 +1496,25 @@
         "tags",
         "todo"
       ]
+    },
+    "EvalSource": {
+      "description": "An eval's own source as hashes: its body and case data as declared, and its options and its enclosing groups' in canonical form (`tags`, `revision` and `gate` aside).",
+      "type": "object",
+      "properties": {
+        "body": {
+          "description": "sha256 of the body function's source text.",
+          "type": "string"
+        },
+        "case": {
+          "description": "sha256 of the case's data; set on each case of an `evaluate.each`.",
+          "type": "string"
+        },
+        "options": {
+          "description": "sha256 of the canonical options.",
+          "type": "string"
+        }
+      },
+      "required": ["body", "options"]
     },
     "ExecTry": {
       "description": "One run of a `c.exec` command that had `retries`.",
@@ -1558,7 +1597,7 @@
           "type": "number"
         },
         "method": {
-          "description": "`wilson` or `newcombe-paired`: one counted attempt a case and side, so each case is one Bernoulli trial (or pair). `t-cases`: several, so a t interval over the cases' pass@1, with attempts within a case never counted as independent.",
+          "description": "`wilson` / `newcombe-paired`: one counted attempt a case and side, so each case is one Bernoulli trial (or pair). `t-cases`: several, so a t interval over the cases' pass@1, with attempts within a case never counted as independent.",
           "enum": ["newcombe-paired", "t-cases", "wilson"]
         }
       },
@@ -1681,7 +1720,7 @@
       "required": ["cases", "cell", "counted", "interval", "pass", "rate"]
     },
     "FamilyRecord": {
-      "description": "A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an evaluation.",
+      "description": "A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an eval.",
       "type": "object",
       "properties": {
         "cases": {
@@ -1709,7 +1748,7 @@
           }
         },
         "name": {
-          "description": "The name template, for example `fixes $id`.",
+          "description": "The name template, e.g. `fixes $id`.",
           "type": "string"
         },
         "outcome": {
@@ -1717,7 +1756,7 @@
           "enum": ["fail", "pass"]
         },
         "ran": {
-          "description": "Cases with an evaluation in this run; fewer when a filter or tag left some out.",
+          "description": "Cases with an eval in this run; fewer when a filter or tag left some out.",
           "type": "number"
         },
         "rates": {
@@ -1735,7 +1774,7 @@
       "enum": ["drop", "insufficient", "lift", "noise"]
     },
     "FileRef": {
-      "description": "`path` is relative to the run's artefact directory; `sha256` is of the bytes on disk.",
+      "description": "`path` is relative to the run's artifact directory; `sha256` is of the bytes on disk.",
       "type": "object",
       "properties": {
         "bytes": {
@@ -1778,6 +1817,10 @@
             }
           ]
         },
+        "gate": {
+          "description": "The cell's gate (`none`, `passRate 0.5`); unset on the default `all`. Compare reads a change in it as a policy change, not a reason the runs can't be compared.",
+          "type": "string"
+        },
         "gateway": {
           "description": "The gateway its model calls went through; unset on `direct`, each provider's own key.",
           "type": "string"
@@ -1797,11 +1840,11 @@
           ]
         },
         "judge": {
-          "description": "Over the judge's model, threshold, and version, and the config's `state` when it sets one.",
+          "description": "Over the judge's model, threshold and version, and the config's `state` when it sets one.",
           "type": "string"
         },
         "sources": {
-          "description": "Over `EvalEntry.sources`.",
+          "description": "Over `EvalEntry.source` and `EvalEntry.revision`; on records from before them, over `EvalEntry.sources`.",
           "type": "string"
         }
       },
@@ -1835,7 +1878,7 @@
           ]
         },
         "dirty": {
-          "description": "Uncommitted changes, outside the `.reeval/` directory and the history folder, when the run started.",
+          "description": "Uncommitted changes, outside `.reeval/` and the history folder, when the run started.",
           "type": "boolean"
         },
         "remote": {
@@ -1857,7 +1900,7 @@
           "type": "boolean"
         },
         "worktreePatch": {
-          "description": "Those changes are stored as the `worktree.patch` file in the artefact directory. Applying it to `sha` reproduces the workspace.",
+          "description": "Those changes as `worktree.patch` in the artifact dir; apply on `sha` to reproduce.",
           "anyOf": [
             {
               "$ref": "#/$defs/FileRef"
@@ -1868,7 +1911,7 @@
           ]
         },
         "worktreePatchNote": {
-          "description": "This explains why a dirty run has no `worktree.patch` file: it was too large, `artifacts` was `'none'`, or it looked like it held a secret (then where, and which rule, never the value).",
+          "description": "Why a dirty run has no `worktree.patch`: too large, artifacts: 'none', or it looked like it held a secret (then where, and which rule, never the value).",
           "anyOf": [
             {
               "type": "null"
@@ -1892,7 +1935,7 @@
       ]
     },
     "JudgeArtifactRef": {
-      "description": "A capture this judge call sent as a file part. Bytes live in the `artifacts/<name>.png` file.",
+      "description": "A capture this judge call sent as a file part. Bytes live in `artifacts/<name>.png`.",
       "type": "object",
       "properties": {
         "bytes": {
@@ -1905,7 +1948,7 @@
           "type": "string"
         },
         "path": {
-          "description": "The `artifacts/<name>.png` path under the attempt directory.",
+          "description": "`artifacts/<name>.png` under the attempt directory.",
           "type": "string"
         },
         "sha256": {
@@ -1914,7 +1957,20 @@
       },
       "required": ["bytes", "mediaType", "name", "path", "sha256"]
     },
-    "JudgementRecord": {
+    "JudgeRetry": {
+      "description": "One failed judge try that was retried, and the backoff before the next.",
+      "type": "object",
+      "properties": {
+        "delayMs": {
+          "type": "number"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": ["delayMs", "error"]
+    },
+    "JudgmentRecord": {
       "type": "object",
       "properties": {
         "artifacts": {
@@ -1933,7 +1989,7 @@
           "type": "string"
         },
         "key": {
-          "description": "`<index>:<sha256(question) prefix>`: the same question at the same place in the evaluation, so a verdict can be followed across runs (and an edited question starts a new series).",
+          "description": "`<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a verdict can be followed across runs (and an edited question starts a new series). `<index>` is the call's place among the attempt's `c.judge()` calls, counting calls that failed, whichever finishes first.",
           "type": "string"
         },
         "model": {
@@ -1968,19 +2024,6 @@
         }
       },
       "required": ["key", "model", "question", "score", "threshold", "verdict"]
-    },
-    "JudgeRetry": {
-      "description": "One failed judge try that was retried, and the backoff before the next.",
-      "type": "object",
-      "properties": {
-        "delayMs": {
-          "type": "number"
-        },
-        "error": {
-          "type": "string"
-        }
-      },
-      "required": ["delayMs", "error"]
     },
     "Lift": {
       "description": "A variant cell's pass@1 against the control's, on the same harness and sandbox.",
@@ -2050,7 +2093,7 @@
       "required": ["control", "interval", "points", "variant", "vs", "withinNoise"]
     },
     "McpStartup": {
-      "description": "One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start order), timed by reeval's MCP timer, which every stdio server runs through. An agent CLI that starts one process per turn starts its servers on every turn; a CLI that keeps a session starts them on the first turn only. A server that doesn't answer within 60s fails the attempt as an infra error naming it; one whose client closes it first doesn't. `mcpStartup` is absent when the environment has no stdio MCP server, or the sandbox has no `node` to run the timer.",
+      "description": "One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start order), timed by reeval's MCP timer, which every stdio server runs through. An agent CLI that runs a process per turn (Antigravity, pi, Codex) starts its servers on every turn; one that keeps a session starts them once, on the first. A server that doesn't answer within 60s fails the attempt as an infra error naming it; one whose client closes it first doesn't. `mcpStartup` is absent when the environment has no stdio MCP server, or the sandbox has no `node` to run the timer.",
       "type": "object",
       "properties": {
         "ms": {
@@ -2075,7 +2118,7 @@
       "enum": ["fail", "infra_error", "pass", "skipped"]
     },
     "PairVote": {
-      "description": "One judgement of one pair of attempts, in one order.",
+      "description": "One judgment of one pair of attempts, in one order.",
       "type": "object",
       "properties": {
         "a": {
@@ -2138,7 +2181,7 @@
       "required": ["a", "b", "cut", "question", "run", "swapped", "winner"]
     },
     "PhaseTimings": {
-      "description": "The duration of each evaluation phase, in ms. `agentMs` is the harness turns; `diffMs` reading changes.",
+      "description": "Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` reading changes.",
       "type": "object",
       "properties": {
         "agentMs": {
@@ -2534,7 +2577,7 @@
       "type": "object",
       "properties": {
         "artifacts": {
-          "description": "Which artefacts sit next to this record. Refs to files that weren't kept are removed.",
+          "description": "Which artifacts sit next to this record. Refs to files that weren't kept are removed.",
           "$ref": "#/$defs/ArtifactLevel"
         },
         "author": {
@@ -2598,6 +2641,7 @@
               ]
             },
             "runs": {
+              "description": "The config's `runs`; 1 when it sets none, though a compare's cells then run 4 each.",
               "type": "number"
             },
             "sandbox": {
@@ -2660,7 +2704,7 @@
           }
         },
         "errors": {
-          "description": "These are redacted errors outside any attempt: an evaluation file that didn't load, a rejection or throw no attempt awaited, or a worker that died. Any one fails the run. Unset when there were none.",
+          "description": "Errors outside any attempt, redacted: an eval file that didn't load, a rejection or throw no attempt awaited, a worker that died. Any one fails the run. Unset when there were none.",
           "type": "array",
           "items": {
             "type": "string"
@@ -2894,7 +2938,7 @@
       "required": ["attempts", "evals", "fail", "infraError", "notGated", "pass", "skipped"]
     },
     "SandboxWarning": {
-      "description": "A `SandboxWarning` describes a sandbox with more privilege than the default `reeval` user: `docker({ root: true })` or `docker({ capabilities })`. One per level that set such a sandbox, however many evaluations inherit it.",
+      "description": "A sandbox with more privilege than the default `reeval` user: `docker({ root: true })`, or `docker({ capabilities })`. One per level that set such a sandbox, however many evals inherit it.",
       "type": "object",
       "properties": {
         "capabilities": {
@@ -2905,7 +2949,7 @@
           }
         },
         "file": {
-          "description": "The evaluation file that sets it, for a group or evaluation; null for the config or a profile.",
+          "description": "The eval file that sets it, for a group or eval; null for the config or a profile.",
           "anyOf": [
             {
               "type": "null"
@@ -2927,18 +2971,36 @@
           "type": "string"
         },
         "where": {
-          "description": "The value is the level as reeval names it: the `reeval.config.ts` file, `profiles.pr.defaults`, `group(\"net\")`, or `evaluate(\"installs deps\")`.",
+          "description": "That level as reeval names it: `reeval.config.ts`, `profiles.pr.defaults`, `group(\"net\")` or `evaluate(\"installs deps\")`.",
           "type": "string"
         }
       },
       "required": ["file", "kind", "level", "message", "where"]
+    },
+    "SetupProcess": {
+      "description": "A process the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in its environment: it holds the real value while the agent works.",
+      "type": "object",
+      "properties": {
+        "command": {
+          "description": "Its command line, cut at 200 characters.",
+          "type": "string"
+        },
+        "secrets": {
+          "description": "The `to: 'checks'` secrets without `hosts` in its environment, by name.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["command", "secrets"]
     },
     "SkillPlacement": {
       "description": "`harness` (default): the agent's own skills, via its adapter. `workspace`: its repo skill dir.",
       "enum": ["harness", "workspace"]
     },
     "Stack": {
-      "description": "These fields describe what ran and graded the agents: the machine, images, harnesses, and judge.",
+      "description": "What ran and graded the agents: the machine, images, harnesses and judge.",
       "type": "object",
       "properties": {
         "arch": {
@@ -2952,14 +3014,14 @@
           }
         },
         "fingerprintScope": {
-          "description": "What evaluation fingerprints hash; fingerprints from different scopes aren't comparable.",
+          "description": "What eval fingerprints hash; fingerprints from different scopes aren't comparable.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "harnesses": {
-          "description": "For each harness, the record includes its configured `model` and requested `effort`, `resolvedModels` (what it reported serving, with the variant it resolved), and `resolvedEffort` (reasoning-effort suffixes those labels named). Fast (`[fast=true]`) is not `resolvedEffort`.",
+          "description": "Each harness: its configured `model` and requested `effort`, `resolvedModels` (what it reported serving, with the variant it resolved), and `resolvedEffort` (reasoning-effort suffixes those labels named). Fast (`[fast=true]`) is not `resolvedEffort`.",
           "type": "array",
           "items": {
             "type": "object",
@@ -3011,7 +3073,7 @@
           }
         },
         "images": {
-          "description": "Every image an attempt started from. `id` is content-addressed; `repoDigests` exist only after the image is pushed.",
+          "description": "Every image an attempt started from. `id` is content-addressed; `repoDigests` only exist once pushed.",
           "type": "array",
           "items": {
             "type": "object",
@@ -3027,7 +3089,7 @@
                 ]
               },
               "base": {
-                "description": "The harness image the `install` layers were baked onto: `ref` itself without any.",
+                "description": "The harness image `install` and plugin builds were baked onto: `ref` itself without either.",
                 "type": "string"
               },
               "dockerfile": {
@@ -3131,7 +3193,7 @@
           "required": ["model", "resolvedModels", "threshold", "version"]
         },
         "language": {
-          "description": "The evaluation language, `typescript` for `*.eval.ts` files, and the version of its toolchain when the runner reports one.",
+          "description": "The language the evals are written in, `typescript` for `*.eval.ts`, and the version of its toolchain when the runner reports one. Absent in runs recorded before it.",
           "type": "object",
           "properties": {
             "name": {
@@ -3144,7 +3206,7 @@
           "required": ["name"]
         },
         "node": {
-          "description": "`process.versions.node`, or the compatible Node version reported by another runtime.",
+          "description": "`process.versions.node`: under Bun or Deno, the Node version they're compatible with.",
           "type": "string"
         },
         "os": {
@@ -3164,7 +3226,7 @@
           "type": "string"
         },
         "runtime": {
-          "description": "The runtime reeval ran on, `node`, `bun`, `deno`, or another, and its version.",
+          "description": "The runtime reeval ran on, `node`, `bun`, `deno` or another, and its own version. Absent in runs recorded before it, which ran on Node.",
           "type": "object",
           "properties": {
             "name": {

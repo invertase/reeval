@@ -10,6 +10,7 @@ import {
 } from '@reeval/harness-opencode/providers'
 import type { EndpointMatch } from '@reeval/sandbox-docker'
 import type { ServedModel, Upstream } from '../harness/agents.ts'
+import { everyModel, notGemini } from './effort.ts'
 import type { GatewayRoute, RoutingGateway } from './routes.ts'
 
 export const OPENROUTER_HOST = 'openrouter.ai'
@@ -113,12 +114,31 @@ function opencode(): GatewayRoute {
 }
 
 /**
+ * pi on its own `openrouter` provider: Chat Completions, a Bearer key, a model from pi's catalog
+ * for OpenRouter, each thinking level sent as OpenRouter's `reasoning.effort`. `--offline` skips
+ * the model list pi would fetch to fit that catalog to the key.
+ */
+function pi(): GatewayRoute {
+  const calls = [onOpenRouter('/api/v1/chat/completions')]
+  return { ...route(calls, calls), modelId: under('google') }
+}
+
+/**
  * Grok Build with the model as a `[model.<id>]` table on OpenRouter's Chat Completions API, keyed
  * by `env_key`; it then calls nothing on xAI's API.
  */
 function grokBuild(): GatewayRoute {
   const calls = [onOpenRouter('/api/v1/chat/completions')]
   return { ...route(calls, calls), modelId: under('x-ai') }
+}
+
+/**
+ * fx with OpenRouter's Chat Completions API as its configured provider `openrouter`, through the
+ * relay, and an OpenAI id as `openai/<id>`. fx sends no `reasoning_effort` to a configured provider.
+ */
+function fx(): GatewayRoute {
+  const calls = [onOpenRouter('/api/v1/chat/completions')]
+  return { ...route(calls, calls), modelId: under('openai') }
 }
 
 /** OpenRouter: the harnesses reeval runs there, and why it doesn't run the rest. */
@@ -129,15 +149,18 @@ export const OPENROUTER_GATEWAY: RoutingGateway = {
     codex,
     goose,
     opencode,
+    fx,
     'grok-build': grokBuild,
+    pi,
   },
   refusals: {
     cursor: "Cursor's agent only calls Cursor's own API",
     antigravity:
       "Antigravity's CLI only calls Google's API, with a Gemini key, and OpenRouter has no Gemini API",
-    fx: "fx reaches models only on Vercel AI Gateway or OpenAI's API, and no run has checked it on OpenRouter",
-    pi: "pi reaches a Gemini model on OpenRouter only through Chat Completions, which no run has checked behaves as it does on Gemini's API; reeval runs pi on its Gemini key",
   },
-  // Codex's response names the effort it ran at; the others' reach OpenRouter by a path no run has checked.
-  unprovenEffort: ['claude-code', 'goose', 'opencode', 'grok-build'],
+  // Codex's response names the effort it ran at; Goose, OpenCode and pi send OpenRouter's
+  // reasoning.effort, which it sends a Gemini model as its thinking level, and Grok Build
+  // reasoning_effort (an xAI model's own). Claude Code sends Anthropic's adaptive thinking and effort, which
+  // OpenRouter turns into a thinking budget for a model that takes neither (Haiku 4.5).
+  unprovenEffort: { 'claude-code': everyModel, goose: notGemini, opencode: notGemini },
 }

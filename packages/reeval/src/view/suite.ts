@@ -16,8 +16,8 @@ import { EFFECT_MIN_COUNTED, liftInterval, round3 } from '../stats.ts'
 import type { ErrorKind, Outcome } from '../types.ts'
 import { cellEffort, cellSamples, contrastEffort, type EffortVerdict } from './effort.ts'
 import { caseLabel } from './family.ts'
-import { checksByLabel, checkTries, labelledJudgements } from './judgements.ts'
-import { isNotGatedPass, runOutcome } from './model.ts'
+import { checksByLabel, checkTries, labeledJudgments } from './judgments.ts'
+import { attemptAnswerRows, isNotGatedPass, runOutcome } from './model.ts'
 
 /**
  * A variant against its baseline: `better` or `worse` when the stored 95% interval on the
@@ -35,8 +35,7 @@ export type Across = 'none' | 'change' | 'harness' | 'both'
 export { EFFECT_MIN_COUNTED }
 
 /**
- * One finished run's facts. Every node has a `path`, a stable id to cite it by, and `paths`
- * lists them all in the order the nodes appear.
+ * One finished run's facts. Every node has a `path`, a stable id that remarks cite it by.
  *
  * A path is `/`-separated segments, each with `%`, `/` and `+` percent-encoded:
  *
@@ -45,7 +44,6 @@ export { EFFECT_MIN_COUNTED }
  * - `<eval>/<case>`: a family case, by its label (`GH-101` for `fixes GH-101`);
  * - `<eval>[/<case>]/<harness>+<environment>+<sandbox>`: a cell;
  * - `<cell>/checks/<label>`: a check, by its assertion label;
- * - `<cell>/effort`: the cell's effort, only when it was tested;
  * - `<eval>/<harness>+<environment>+<sandbox>`: on a family, a variant's pooled effect.
  *
  * A case segment never has a raw `+` and a cell segment always has two, so the two can't be
@@ -73,8 +71,6 @@ export type SuiteResult = {
   tally: SuiteTally
   /** Sorted by path. */
   files: ResultFile[]
-  /** Every node's `path`, in the order they appear. */
-  paths: string[]
 }
 
 export type SuiteTally = {
@@ -83,15 +79,15 @@ export type SuiteTally = {
   notGated: number
   fail: number
   infraError: number
-  cancelled: number
+  canceled: number
   skipped: number
 }
 
 /**
- * An eval's or a family case's outcome: the record's, except `cancelled` where its only failed
- * gated attempts are ones the run's interrupt cancelled, since the agent didn't fail those.
+ * An eval's or a family case's outcome: the record's, except `canceled` where its only failed
+ * gated attempts are ones the run's interrupt canceled, since the agent didn't fail those.
  */
-export type ResultOutcome = Outcome | 'cancelled'
+export type ResultOutcome = Outcome | 'canceled'
 
 export type ResultFile = {
   path: string
@@ -233,13 +229,13 @@ function tallyUpstreams(counts: Iterable<UpstreamCount>): UpstreamCount[] {
   return [...by].map(([provider, calls]) => ({ provider, calls }))
 }
 
-/** A cell's attempts the run's interrupt cancelled: recorded as fails, but not the agent's. */
-export const cancelledOf = (cell: CellResult) =>
+/** A cell's attempts the run's interrupt canceled: recorded as fails, but not the agent's. */
+export const canceledOf = (cell: CellResult) =>
   cell.errors.filter((err) => err.kind === 'aborted').reduce((n, err) => n + err.attempts, 0)
 
-/** A cell's counted tries: its passes and fails, less the ones the interrupt cancelled. */
+/** A cell's counted tries: its passes and fails, less the ones the interrupt canceled. */
 export const countedOf = (cell: CellResult) =>
-  Math.max(0, cell.passed + cell.failed - cancelledOf(cell))
+  Math.max(0, cell.passed + cell.failed - canceledOf(cell))
 
 export type CheckResult = {
   path: string
@@ -426,9 +422,9 @@ function checksOf(
         })
       : undefined
     const judged = attempts.flatMap((a) =>
-      labelledJudgements(a)
+      labeledJudgments(a)
         .filter((j) => j.check === k.label)
-        .map((j) => j.judgement),
+        .map((j) => j.judgment),
     )
     const first = judged[0]
     const notes = attempts.flatMap((a) => {
@@ -527,31 +523,21 @@ function questionsOf(e: EvalEntry): Array<QuestionResult | AttemptQuestionResult
       error: a.error ?? null,
     }),
   )
-  const each = new Map<string, AttemptQuestionResult>()
-  for (const a of e.attempts) {
-    for (const q of a.answers ?? []) {
-      const r = each.get(q.question) ?? {
-        kind: 'attempts' as const,
-        question: q.question,
-        asked: 0,
-        choices: q.choices ? q.choices.map((choice) => ({ choice, n: 0 })) : null,
-        answers: [],
-        failed: 0,
-        error: null,
-      }
-      each.set(q.question, r)
-      r.asked++
-      if (q.error !== undefined) {
-        r.failed++
-        r.error ??= q.error
-        continue
-      }
-      const picked = r.choices?.find((c) => c.choice === q.choice)
-      if (picked) picked.n++
-      r.answers.push({ attempt: a.id, choice: q.choice ?? null, text: q.text })
+  const each = attemptAnswerRows(e).map((row): AttemptQuestionResult => {
+    const failed = row.answers.filter((a) => a.error !== null)
+    return {
+      kind: 'attempts',
+      question: row.question,
+      asked: row.answers.length,
+      choices: row.choices,
+      answers: row.answers
+        .filter((a) => a.error === null)
+        .map((a) => ({ attempt: a.attempt, choice: a.choice, text: a.text })),
+      failed: failed.length,
+      error: failed[0]?.error ?? null,
     }
-  }
-  return [...pairs, ...each.values()]
+  })
+  return [...pairs, ...each]
 }
 
 function effortOf(e: EvalEntry, cell: CellRecord): EffortCounters | null {
@@ -641,11 +627,11 @@ function pooledEffect(lift: FamilyLift): Effect {
   return 'unclear'
 }
 
-/** Fail beats infra error, which beats cancelled, which beats pass; skipped only when every one was. */
+/** Fail beats infra error, which beats canceled, which beats pass; skipped only when every one was. */
 function worst(outcomes: ResultOutcome[]): ResultOutcome {
   if (outcomes.includes('fail')) return 'fail'
   if (outcomes.includes('infra_error')) return 'infra_error'
-  if (outcomes.includes('cancelled')) return 'cancelled'
+  if (outcomes.includes('canceled')) return 'canceled'
   if (outcomes.length && outcomes.every((o) => o === 'skipped')) return 'skipped'
   return 'pass'
 }
@@ -668,12 +654,12 @@ export const isNotGatedResult = (
       (e.pooled ?? []).every((p) => p.minLift === null)
     : isStudy(e.cells ?? []))
 
-/** The record's outcome, or `cancelled` when every gated attempt that failed was cancelled. */
+/** The record's outcome, or `canceled` when every gated attempt that failed was canceled. */
 function outcomeOf(e: EvalEntry): ResultOutcome {
   if (e.outcome !== 'fail') return e.outcome
   const gated = new Set(e.cells.filter((c) => c.gate !== 'none').map((c) => c.key))
   const failed = e.attempts.filter((a) => a.outcome === 'fail' && gated.has(a.cell))
-  return failed.length && failed.every((a) => a.error?.kind === 'aborted') ? 'cancelled' : 'fail'
+  return failed.length && failed.every((a) => a.error?.kind === 'aborted') ? 'canceled' : 'fail'
 }
 
 /** Each question any case asked, in first-asked order, with its votes or answers summed over the cases. */
@@ -798,27 +784,6 @@ function evalResult(record: RunRecord, e: EvalEntry, order: number): EvalResult 
   }
 }
 
-function pathsOf(files: ResultFile[]): string[] {
-  const out: string[] = []
-  const cell = (c: CellResult) => {
-    out.push(c.path)
-    for (const k of c.checks) out.push(k.path)
-    if (c.effort) out.push(`${c.path}/effort`)
-  }
-  for (const file of files) {
-    for (const e of file.evals) {
-      out.push(e.path)
-      for (const c of e.cells ?? []) cell(c)
-      for (const k of e.cases ?? []) {
-        out.push(k.path)
-        for (const c of k.cells) cell(c)
-      }
-      for (const p of e.pooled ?? []) out.push(p.path)
-    }
-  }
-  return out
-}
-
 /** The facts of a run, from its record. Pure: the same record always gives the same result. */
 export function suiteResult(record: RunRecord): SuiteResult {
   const families = new Map((record.families ?? []).map((f) => [f.id, f]))
@@ -831,7 +796,7 @@ export function suiteResult(record: RunRecord): SuiteResult {
     notGated: 0,
     fail: 0,
     infraError: 0,
-    cancelled: 0,
+    canceled: 0,
     skipped: 0,
   }
   const count = (e: EvalEntry) => {
@@ -865,6 +830,5 @@ export function suiteResult(record: RunRecord): SuiteResult {
     errors,
     tally,
     files,
-    paths: pathsOf(files),
   }
 }

@@ -1,5 +1,5 @@
 // The derived facts behind `reeval query effort`, `factor_effects`, `flaky_cells` and `drift`: computed
-// in TypeScript after each sync (SQLite has no rank test or Newcombe interval) and materialised in
+// in TypeScript after each sync (SQLite has no rank test or Newcombe interval) and materialized in
 // `*_m` tables that those views select from. Every verdict here is a fixed rule over the lift
 // interval, `within_noise` and an exact rank test, so the analysis step is told, not asked.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
@@ -14,11 +14,15 @@ import {
   type EffortVerdict,
   effortOf,
 } from '../view/effort.ts'
+import { gateLabel } from '../view/gate.ts'
 import { rowsOf } from './rows.ts'
 import { TOOL_CLASSES } from './tool-class.ts'
-import type { CheckTally } from './types.ts'
+import type { CheckTally, FingerprintParts } from './types.ts'
 
-/** Counted attempts, pooled over comparable runs, before a cell with mixed outcomes is `flaky`. */
+/**
+ * Counted attempts, pooled over comparable runs, before a cell with mixed outcomes is `flaky`;
+ * below it the cell is `mixed`: it passed and failed, too few times to call it flaky.
+ */
 export const FLAKY_MIN_ATTEMPTS = 6
 /** A failing verdict this close to its threshold points at the judge, not the agent. */
 export const JUDGE_MARGIN = 0.1
@@ -113,6 +117,8 @@ type Cell = {
   model: string | null
   environment: string
   sandbox: string
+  gate: 'all' | 'none' | 'passRate'
+  gate_pass_rate: number | null
   fingerprint: string
   comparable: string
   lift_vs: string | null
@@ -138,15 +144,22 @@ type Attempt = {
   reasoning_tokens: number | null
 }
 
-const PARTS = [
-  ['sources', 'fp_sources'],
-  ['harness', 'fp_harness'],
-  ['environment', 'fp_environment'],
-  ['image', 'fp_image'],
-  ['agent_cli', 'fp_agent_cli'],
-  ['judge', 'fp_judge'],
-  ['context', 'fp_context'],
-] as const
+/** Each fingerprint part's name in `drift.changed` and its `cells` column; every part has one. */
+export const PART_COLUMNS = {
+  sources: ['sources', 'fp_sources'],
+  harness: ['harness', 'fp_harness'],
+  environment: ['environment', 'fp_environment'],
+  image: ['image', 'fp_image'],
+  agentCli: ['agent_cli', 'fp_agent_cli'],
+  judge: ['judge', 'fp_judge'],
+  context: ['context', 'fp_context'],
+  gateway: ['gateway', 'fp_gateway'],
+  gate: ['gate', 'fp_gate'],
+} as const satisfies Record<keyof FingerprintParts, readonly [string, `fp_${string}`]>
+const PARTS = Object.values(PART_COLUMNS)
+
+const gateOf = (c: Cell) =>
+  c.gate === 'passRate' ? gateLabel({ passRate: c.gate_pass_rate ?? 1 }) : c.gate
 
 const r4 = (x: number | null) => (x === null ? null : Math.round(x * 10_000) / 10_000)
 const s1 = (ms: number) => Math.round(ms / 100) / 10
@@ -359,8 +372,10 @@ export function deriveFacts(db: DatabaseSync): void {
   const find = (run: string, evalKey: string, key: string) =>
     cells.find((c) => c.run_id === run && c.eval_key === evalKey && c.key === key)
 
-  // Tool calls by class per counted attempt, for each cell's per-class medians; null for a
-  // cell none of whose attempts had a transcript to read calls from.
+  // Tool calls by class per counted attempt, for each cell's per-class medians. An attempt counts
+  // when its calls were read from its transcript or its record says it made none (a turnless one
+  // has no transcript), with 0 for each class it made no calls in; one whose record has calls but
+  // whose transcript couldn't be read stays out. Null for a cell with no attempt that counts.
   const classCounts = new Map<string, Map<string, number>>()
   for (const r of rowsOf<{ run_id: string; attempt_key: string; class: string; n: number }>(
     db.prepare(
@@ -378,7 +393,7 @@ export function deriveFacts(db: DatabaseSync): void {
     )
     const known = counted.flatMap((a) => {
       const m = classCounts.get(`${a.run_id}\0${a.key}`)
-      return m ? [m] : []
+      return m ? [m] : a.tools === 0 ? [new Map<string, number>()] : []
     })
     return Object.fromEntries(
       TOOL_CLASSES.map((k) => [
@@ -694,7 +709,11 @@ export function deriveFacts(db: DatabaseSync): void {
       const prev = list[i - 1] as Cell
       const cur = list[i] as Cell
       if (prev.fingerprint === cur.fingerprint) continue
-      const changed = PARTS.filter(([, col]) => prev[col] !== cur[col]).map(([name]) => name)
+      // A record from before the gate was a part has none, whatever its gate: the cells' own say.
+      const changed = PARTS.filter(([name, col]) =>
+        name === 'gate' ? gateOf(prev) !== gateOf(cur) : prev[col] !== cur[col],
+      ).map(([name]) => name)
+      if (!changed.length && prev.fp_gate !== cur.fp_gate) continue
       let paths: string[] = []
       if (changed.includes('context')) {
         const a = cellContext(prev)
@@ -713,14 +732,16 @@ export function deriveFacts(db: DatabaseSync): void {
         noise: real.length === 0 ? 1 : 0,
         real_changed: real.join(' ') || null,
       })
-      if (real.length === 0) continue
+      // The gate scores the attempts but doesn't change them: a policy change, not an effect.
+      const effects = real.filter((part) => part !== 'gate')
+      if (effects.length === 0) continue
       // Observed over time: what changed between two runs of the same cell.
-      const judgeOnly = real.length === 1 && real[0] === 'judge'
-      const sourcesChanged = real.includes('sources')
+      const judgeOnly = effects.length === 1 && effects[0] === 'judge'
+      const sourcesChanged = effects.includes('sources')
       const cols = passCols(side(cur), side(prev))
       if (sourcesChanged) cols.pass_verdict = 'not_comparable'
       factorRows.push({
-        factor: real.length === 1 ? (real[0] as string) : 'confounded',
+        factor: effects.length === 1 ? (effects[0] as string) : 'confounded',
         level: cur.run_id,
         baseline: prev.run_id,
         context: `${cur.eval_key} # ${cur.key}`,
@@ -735,8 +756,8 @@ export function deriveFacts(db: DatabaseSync): void {
           ? 'the eval changed: not comparable, not an effect of the thing under test'
           : judgeOnly
             ? 'the judge changed: a measurement change, not an effect of the thing under test'
-            : real.length > 1
-              ? `confounded: ${real.join(', ')} changed together`
+            : effects.length > 1
+              ? `confounded: ${effects.join(', ')} changed together`
               : null,
       })
     }
@@ -821,7 +842,7 @@ export function deriveFacts(db: DatabaseSync): void {
       pass_at_1: round3(pass / (pass + fail)),
       lo: round3(w.low),
       hi: round3(w.high),
-      verdict: pass + fail >= FLAKY_MIN_ATTEMPTS ? 'flaky' : 'insufficient',
+      verdict: pass + fail >= FLAKY_MIN_ATTEMPTS ? 'flaky' : 'mixed',
       cause,
       min_attempts: FLAKY_MIN_ATTEMPTS,
     })

@@ -21,15 +21,17 @@ export type RoutingGateway = {
   /** Why it can't serve an agent it has no route for, for the plan's messages. */
   refusals: Partial<Record<AgentKind, string>>
   /**
-   * The harnesses whose `effort` reaches the model there by a path no real run has checked: the
-   * plan refuses `effort` with them on this gateway.
+   * The harnesses whose `effort` reaches the model there by a path no real run has checked, each
+   * with the models (as the eval names them) that holds for: the plan refuses `effort` with them
+   * on this gateway.
    */
-  unprovenEffort: readonly AgentKind[]
+  unprovenEffort: Partial<Record<AgentKind, (model: string) => boolean>>
 }
 
-export type RoutingGatewayName = Exclude<GatewayName, 'direct'>
+/** Vertex AI takes a minted token, not a brokered key, so it has a catalog of its own. */
+export type RoutingGatewayName = Exclude<GatewayName, 'direct' | 'vertex'>
 
-/** Every gateway but `direct`, by name. */
+/** Every gateway that brokers a key, by name. */
 export const ROUTING_GATEWAYS: Readonly<Record<RoutingGatewayName, RoutingGateway>> = {
   vercel: VERCEL_GATEWAY,
   openrouter: OPENROUTER_GATEWAY,

@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+import ast
+import dataclasses
+import functools
+import hashlib
 import importlib.util
 import inspect
+import itertools
+import json
+import linecache
 import re
+import sys
+import textwrap
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast, overload
 
 from reeval_python import _wire as w
 from reeval_python.checks import ASSERT_HOOK, check, compile_eval
+from reeval_python.environment import Environment
 from reeval_python.options import EvalOptions
 from reeval_python.wire import options_to_wire
 
@@ -37,6 +47,7 @@ class DeclaredEval:
     mode: Mode
     options: dict[str, Any]
     body: str
+    source: w.DeclaredSource
     family: DeclaredFamily | None = None
 
     def as_json(self) -> w.DeclaredEval:
@@ -46,6 +57,7 @@ class DeclaredEval:
             "mode": self.mode,
             "options": cast(w.EvalOptionsData, self.options),
             "body": self.body,
+            "source": self.source,
         }
         if self.family is not None:
             out["family"] = self.family.as_json()
@@ -101,16 +113,38 @@ _tree_children: list[DeclNode] | None = None
 _group_stack: list[_GroupFrame] = []
 _suites: list[_Suite] = []
 _bodies: dict[str, Callable[..., Any]] = {}
-_names: set[tuple[str, ...]] = set()
+# By id (the names joined with " › "): each eval's name path and whether it is a family's case.
+_names: dict[str, tuple[tuple[str, ...], bool]] = {}
+# Each pooled evaluate_each's name path, by its id.
+_families: dict[str, tuple[str, ...]] = {}
 
 
 def reset_collector() -> None:
-    global _tree_children, _group_stack, _suites, _bodies, _names
+    global _tree_children, _group_stack, _suites, _bodies, _names, _families
     _tree_children = []
     _group_stack = []
     _suites = [_Suite()]
     _bodies = {}
-    _names = set()
+    _names = {}
+    _families = {}
+
+
+def _separator_hint(path: tuple[str, ...], earlier: tuple[str, ...]) -> str:
+    """Two name paths with one id differ only where a name holds the " › " joining them."""
+    if len(path) == len(earlier):
+        return ""
+    return (
+        """ " › " joins the group and eval names in an eval's id, so a name containing it can be """
+        "a grouped eval's id."
+    )
+
+
+def _named_like_family(path: tuple[str, ...], family: tuple[str, ...]) -> ValueError:
+    return ValueError(
+        f"evaluate({' › '.join(path)!r}) has the same id as the pooled "
+        f"evaluate_each({' › '.join(family)!r}) in this file: a family's id is its name "
+        f"template. Give the eval or the template another name.{_separator_hint(path, family)}"
+    )
 
 
 def _next_body(fn: Callable[..., Any]) -> str:
@@ -197,16 +231,16 @@ def evaluate(
     mode: Mode = "run",
 ) -> Any:
     if callable(arg) and arg2 is None:
-        _register_eval(name, mode, {}, arg, None)
+        _register_eval(name, mode, {}, arg, None, None)
         return arg
     if isinstance(arg, dict) and callable(arg2):
-        _register_eval(name, mode, dict[str, Any](cast(dict[str, Any], arg)), arg2, None)
+        _register_eval(name, mode, dict[str, Any](cast(dict[str, Any], arg)), arg2, None, None)
         return arg2
 
     opts = dict[str, Any](cast(dict[str, Any], arg)) if isinstance(arg, dict) else {}
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
-        _register_eval(name, mode, opts, fn, None)
+        _register_eval(name, mode, opts, fn, None, None)
         return fn
 
     return decorator
@@ -230,6 +264,141 @@ def _case_name(template: str, case: Any, index: int) -> str:
         return str(fields[key]) if key in fields else m.group(0)
 
     return _PLACEHOLDER.sub(fill, template)
+
+
+def body_hash(fn: Callable[..., Any], where: str) -> str:
+    """sha256 of a body's source text, from `def` on: decorators (`@evaluate(…)` among them) are
+    left out, a bound method is its function, and a decorator that keeps `functools.wraps` is
+    looked through. A lambda is its own text, not its line's. Functions the body closes over
+    (what a decorator without `functools.wraps` wrapped) are hashed with it. Raises when there's
+    no source to read, rather than fingerprint less."""
+    target: Any = getattr(fn, "__func__", fn)
+    try:
+        target = inspect.unwrap(target)
+    except ValueError:
+        pass
+    if isinstance(target, functools.partial):
+        raise TypeError(
+            f"{where}: the body is a functools.partial, whose source reeval can't read to "
+            "fingerprint the eval. Write a def that calls it, and bump revision when what it "
+            "calls changes"
+        )
+    try:
+        text = _source(target)
+    except (OSError, TypeError) as exc:
+        raise TypeError(
+            f"{where}: reeval can't read the body's source to fingerprint the eval ({exc}). "
+            "Declare it with def or async def in the .eval.py file: a body made by exec, typed "
+            "at a REPL or a callable object has none"
+        ) from None
+    seen = {id(target)}
+    for captured in _captured(target, seen):
+        try:
+            text += "\n" + _source(captured)
+        except (OSError, TypeError):
+            continue
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _source(fn: Any) -> str:
+    if getattr(fn, "__name__", None) == "<lambda>":
+        own = _lambda_source(fn)
+        if own is not None:
+            return own
+    text = textwrap.dedent(inspect.getsource(fn))
+    try:
+        node = ast.parse(text).body[0]
+    except (SyntaxError, IndexError):
+        node = None
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        text = "".join(text.splitlines(keepends=True)[node.lineno - 1 :])
+    return text
+
+
+def _lambda_source(fn: Any) -> str | None:
+    """A lambda's own text: `inspect.getsource` gives its whole line, which may hold others. The
+    lambda is the innermost one around every position its code reports."""
+    code = fn.__code__
+    spans = [
+        ((line, col), (end_line, end_col))
+        for line, end_line, col, end_col in code.co_positions()
+        if line
+        and end_line
+        and col is not None
+        and end_col is not None
+        and (end_line, end_col) > (line, col)
+    ]
+    linecache.checkcache(code.co_filename)
+    lines = linecache.getlines(code.co_filename)
+    if not spans or not lines:
+        return None
+    source = "".join(lines)
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return None
+    first = min(start for start, _ in spans)
+    last = max(end for _, end in spans)
+    around = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Lambda)
+        and node.end_lineno is not None
+        and node.end_col_offset is not None
+        and (node.lineno, node.col_offset) <= first
+        and last <= (node.end_lineno, node.end_col_offset)
+    ]
+    if not around:
+        return None
+    innermost = max(around, key=lambda node: (node.lineno, node.col_offset))
+    return ast.get_source_segment(source, innermost)
+
+
+def _captured(fn: Any, seen: set[int]) -> list[Any]:
+    """The functions `fn` closes over, and theirs, each once."""
+    out: list[Any] = []
+    for cell in getattr(fn, "__closure__", None) or ():
+        try:
+            value = cell.cell_contents
+        except ValueError:
+            continue
+        value = getattr(value, "__func__", value)
+        if inspect.isfunction(value) and id(value) not in seen:
+            seen.add(id(value))
+            out.append(value)
+            out.extend(_captured(value, seen))
+    return out
+
+
+def _case_default(value: Any) -> Any:
+    if isinstance(value, Environment):
+        return {"environment": value.name}
+    to_wire = getattr(value, "_to_wire", None)
+    if callable(to_wire):
+        return to_wire()
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return dataclasses.asdict(value)
+    raise TypeError(f"{type(value).__name__} isn't JSON data")
+
+
+def case_hash(case: Any, where: str) -> str:
+    """sha256 of a case's data as canonical JSON: keys sorted, no whitespace. A dataclass is its
+    fields and an environment its name; anything else that isn't JSON is refused."""
+    try:
+        text = json.dumps(
+            case,
+            default=_case_default,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+    except (TypeError, ValueError) as exc:
+        raise TypeError(
+            f"{where}: reeval fingerprints each case as JSON data, and this one isn't ({exc}). "
+            "Pass dicts, lists, strings, numbers, booleans, None or dataclasses"
+        ) from None
+    return hashlib.sha256(text.encode()).hexdigest()
 
 
 def is_async(fn: Callable[..., Any]) -> bool:
@@ -326,12 +495,33 @@ def evaluate_each(
             ) from None
         except ValueError:
             pass
+        each = f"evaluate_each({name_template!r})"
+        body = body_hash(fn, each)
+        pooled = pool and len(cases) > 1
+        if pooled:
+            path = (*(frame.name for frame in _group_stack), name_template)
+            key = " › ".join(path)
+            if key in _families:
+                raise ValueError(
+                    f"evaluate_each({key!r}) is declared twice in this file. Each pooled "
+                    "evaluate_each needs its own name, or their cases are pooled into one family. "
+                    "Give each its own name template, or pass pool=False to keep the cases apart."
+                    f"{_separator_hint(path, _families[key])}"
+                )
+            plain = _names.get(key)
+            if plain is not None and not plain[1]:
+                raise _named_like_family(plain[0], path)
+            _families[key] = path
         for index, case in enumerate(cases):
             family = None
-            if pool and len(cases) > 1:
+            if pooled:
                 family = DeclaredFamily(name=name_template, case=index, cases=len(cases))
             name = _case_name(name_template, case, index)
-            _register_eval(name, "run", opts, _with_case(fn, case), family, hint)
+            source: w.DeclaredSource = {
+                "body": body,
+                "case": case_hash(case, f"{each} case {index}"),
+            }
+            _register_eval(name, "run", opts, _with_case(fn, case), source, family, hint)
 
     return _Each(decorator)
 
@@ -346,18 +536,25 @@ def _register_eval(
     mode: Mode,
     options: dict[str, Any],
     fn: Callable[..., Any],
+    source: w.DeclaredSource | None,
     family: DeclaredFamily | None,
     hint: str = "",
 ) -> None:
     path = (*(frame.name for frame in _group_stack), name)
     where = f"evaluate({' › '.join(path)!r})"
     _refuse_generator(fn, where)
-    if path in _names:
+    if source is None:
+        source = {"body": body_hash(fn, where)}
+    key = " › ".join(path)
+    earlier = _names.get(key)
+    if earlier is not None:
         raise ValueError(
             f"{where} is declared twice in this file. Each eval needs its own name, or its "
-            f"attempts are merged into one eval.{hint}"
+            f"attempts are merged into one eval.{hint}{_separator_hint(path, earlier[0])}"
         )
-    _names.add(path)
+    if family is None and key in _families:
+        raise _named_like_family(path, _families[key])
+    _names[key] = (path, family is not None)
     body = _next_body(fn)
     _declare(
         DeclaredEval(
@@ -365,6 +562,7 @@ def _register_eval(
             mode=mode,
             options=_wire_options(options),
             body=body,
+            source=source,
             family=family,
         )
     )
@@ -395,16 +593,27 @@ def get_body(body_id: str) -> Callable[..., Any]:
     return _bodies[body_id]
 
 
+_module_ids = itertools.count(1)
+
+
 def collect_eval_file(path: Path) -> w.DeclarationTree:
     """Import one *.eval.py file and return its declaration tree JSON."""
 
     def loader() -> None:
-        spec = importlib.util.spec_from_file_location("reeval_eval", path)
+        # dataclasses, typing.get_type_hints and pickle find a class's module in sys.modules,
+        # so the file stays registered there, under a name no other file shares.
+        name = f"reeval_eval_{next(_module_ids)}"
+        spec = importlib.util.spec_from_file_location(name, path)
         if spec is None:
             raise ImportError(f"can't load {path}")
         module = importlib.util.module_from_spec(spec)
         module.__dict__[ASSERT_HOOK] = check
         source = importlib.util.decode_source(path.read_bytes())
-        exec(compile_eval(source, str(path)), module.__dict__)  # noqa: S102
+        sys.modules[name] = module
+        try:
+            exec(compile_eval(source, str(path)), module.__dict__)  # noqa: S102
+        except BaseException:
+            sys.modules.pop(name, None)
+            raise
 
     return collect_module_tree_sync(loader)

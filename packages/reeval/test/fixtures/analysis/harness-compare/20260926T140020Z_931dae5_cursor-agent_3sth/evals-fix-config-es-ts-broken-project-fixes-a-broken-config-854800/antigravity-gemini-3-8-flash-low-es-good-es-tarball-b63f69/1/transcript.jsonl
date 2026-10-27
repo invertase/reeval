@@ -15,5 +15,5 @@
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cat .gitignore 2>/dev/null || echo \"No .gitignore\""},"ok":true,"durationMs":943}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"rm -rf .es"},"ok":true,"durationMs":862}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"npx es run --dry-run"},"ok":true,"durationMs":4073}
-{"turn":0,"type":"text","text":"`npx es run --dry-run` now succeeds with the intended plan (1 eval, 2 cells: control with no environment vs. `with-docs` variant, 3 runs per cell on the fake harness, 6 attempts total).\n\n### Mistakes …"}
+{"turn":0,"type":"text","text":"`npx es run --dry-run` now succeeds with the intended plan (1 eval, 2 cells: control with no environment vs. `with-docs`…"}
 {"turn":0,"type":"turn-end"}

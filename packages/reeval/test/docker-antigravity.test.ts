@@ -97,7 +97,7 @@ evaluate('hi', async (c) => {
       assert.match(out, /reeval:egress /)
       assert.doesNotMatch(out, /refused/, 'the key goes only to its endpoint')
       // The CLI fetches feature flags (antigravity-unleash.goog) and logs to
-      // play.googleapis.com, even with enableTelemetry off; both are tunnelled, never given the key.
+      // play.googleapis.com, even with enableTelemetry off; both are tunneled, never given the key.
       assert.doesNotMatch(
         out,
         /proxy\.invalid|cloudcode-pa|oauth2|accounts\.google|auto-updater/,
@@ -180,7 +180,7 @@ evaluate('real', { environment: house }, async (c) => {
       assert.doesNotMatch(out, /refused/, 'no request needed the key off its endpoint')
       const { run, dir } = readRun(p.dir)
       assert.equal(liveContainers(run.runId), '')
-      // The CLI's token counts reach the record, per turn and totalled, and never go negative.
+      // The CLI's token counts reach the record, per turn and totaled, and never go negative.
       const turns = run.evals[0]?.attempts[0]?.turns ?? []
       for (const t of turns) {
         assert.ok(t.usage && t.usage.input > 0 && t.usage.output > 0, JSON.stringify(t.usage))

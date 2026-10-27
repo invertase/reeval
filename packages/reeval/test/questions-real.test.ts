@@ -1,8 +1,7 @@
 // Questions and the analyst on a real model, nightly (real.yml's `real agents (Cursor)` job,
 // never on PRs): test/real-agents' `questions` profile, under reeval.analysis.config.ts, runs 4 real
-// attempts on Cursor and pi; google/gemini-3.8-flash answers its questions and writes the run's
-// insights. Checks structure only, never the model's wording,
-// and never retries. Skipped unless REEVAL_TEST_REAL=1.
+// attempts on Cursor and pi, and google/gemini-3.8-flash answers its questions. Checks structure
+// only, never the model's wording, and never retries. Skipped unless REEVAL_TEST_REAL=1.
 import assert from 'node:assert/strict'
 import { cpSync, readFileSync } from 'node:fs'
 import { mkdir, symlink } from 'node:fs/promises'
@@ -14,7 +13,6 @@ import { ratesOf } from '../src/compare/pairs.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import type { PairVote } from '../src/types.ts'
 import { answerRows, recordPath } from '../src/view/index.ts'
-import type { RunInsights } from '../src/view/insights.ts'
 import { pkgRoot, readRun, runCli, tempDir } from './helpers.ts'
 import { harnesses, reserveAttempts } from './support/harnesses.ts'
 
@@ -28,7 +26,7 @@ const skip =
 /** A pair's identity, the same for its two votes. */
 const pairKey = (v: PairVote) => [v.cut, v.harness ?? v.arm, v.run, v.a, v.b].join('\0')
 
-test('test/real-agents --profile questions: every pair is voted in both orders; insights are written', {
+test('test/real-agents --profile questions: every pair is voted in both orders', {
   skip,
   timeout: 1_800_000,
 }, async (t) => {
@@ -115,22 +113,6 @@ test('test/real-agents --profile questions: every pair is voted in both orders; 
     )
   }
 
-  // Insights: the run's one eval classified and explained by analysis.model at the end of the run.
-  const insights = JSON.parse(
-    readFileSync(join(dir, '.reeval/runs', run.runId, 'insights.json'), 'utf8'),
-  ) as RunInsights
-  assert.deepEqual(validate(schema('insights'), insights), [], 'insights.json fits its schema')
-  assert.equal(insights.model, 'google/gemini-3.8-flash')
-  assert.equal(insights.evals.length, 1, 'one insight for the one eval')
-  const [insight] = insights.evals as [RunInsights['evals'][number]]
-  t.diagnostic(`classified ${insight.intent.job}: ${insight.intent.question}`)
-  assert.ok(insights.usage.inputTokens > 0, 'insights record their tokens')
-  assert.equal(insights.budget?.skipped.length ?? 0, 0, 'nothing skipped for the budget')
-  assert.match(
-    r.stdout + r.stderr,
-    /insights: 1 eval with /,
-    'reeval run says insights are running',
-  )
   // The studio's run page reads the same answer from a static build (the run isn't recorded, so
   // --scratch): one row, its rates per cut.
   const out = join(dir, 'site')

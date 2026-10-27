@@ -170,7 +170,7 @@ const mcpLabel = (tool: string) => {
   return m ? `${m[1]}/${m[2]}` : tool
 }
 
-/** `type: 'tool'` named `mcp__<server>__<tool>` after adapters and the normaliser. */
+/** `type: 'tool'` named `mcp__<server>__<tool>` after adapters and the normalizer. */
 export function calledMcp(
   actual: unknown,
   server: string,

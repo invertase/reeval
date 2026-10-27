@@ -1,6 +1,6 @@
 # with-refactor
 
-**Shows:** a refactor that keeps behaviour. Two modules parse records with the same loop, and the
+**Shows:** a refactor that keeps behavior. Two modules parse records with the same loop, and the
 agent moves it into `src/parse.js`. The tests must stay green and unchanged
 (`not.toHaveChanged`), and a judge reads only the diff under `src/` (`state: { diff: ['src/**'] }`)
 to say whether the duplication is gone.

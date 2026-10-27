@@ -32,7 +32,7 @@ main process                                  worker: reeval __worker, cwd = pro
 
 ```jsonc
 // worker → main, before anything else
-{"t":"hello","protocol":3}
+{"t":"hello","protocol":4}
 // main → worker, once the protocol matches
 {"t":"init","run":{…RunContext},"file":"/abs/evals/greet.eval.ts","select":null}
 ```
@@ -45,7 +45,7 @@ run.
 ## Collecting and running
 
 ```jsonc
-{"t":"collected","tests":[{"index":0,"name":"greets [cursor/-/docker#1]","groups":[],"mode":"run","attempt":{…}}]}
+{"t":"collected","tests":[{"index":0,"name":"greets [cursor/-/docker#1]","groups":[],"mode":"run","attempt":{…}}],"harnesses":["cursor:composer-2.5"]}
 {"t":"request","id":"l1","limits":{"attempts":4},"rank":{"eval":"…","file":"…","order":0,"n":1,"cell":0}}
 {"t":"grant","id":"l1"}
 {"t":"start","index":0,"at":1790000000000}
@@ -56,6 +56,9 @@ run.
 ```
 
 - Collecting, the worker loads the file and sends `collected` (or `load-error`) and `done`.
+  `collected.harnesses` lists the ids of the harnesses the file's evals run on before a
+  profile's limit narrows them, those the run's tags leave out included, so the main process can
+  refuse a `limit.harness` id no eval runs on.
   Running, it collects again, asks for each selected attempt's lease with `request`, sends
   `ready` once every one has asked (or finished without one), and runs each when it gets its
   `grant`.
@@ -103,7 +106,7 @@ have their own schemas in `src/contract/attempt.ts`, with JSON Schemas in
 so none of them crosses this channel; a runner in another language would send them, numbered by
 `id`, and read reeval's replies. Around them, reeval sends `attempt-start` (`c.attempt`, and the
 file and body to run) and, if the attempt is aborted, `attempt-abort` (as `c.signal` aborts, on
-a timeout or a cancelled run); the runner answers with `attempt-done`, carrying what the body
+a timeout or a canceled run); the runner answers with `attempt-done`, carrying what the body
 threw, if anything. Nothing starts with `attempt-start`: the sandbox and the agent session start
 on the body's first call that needs them (`send`, `exec`, `readFile`, `writeFile`, `serve` or
 `capture`), so the body's own code runs first. Calls sent at once share that one start; if it
@@ -126,3 +129,4 @@ to a message shows up in review with its snapshot.
 | 1 | Node's structured-clone (`advanced`) serialization |
 | 2 | JSON serialization; every message JSON-clean |
 | 3 | The main process closes the channel after `done`, and the worker exits when it closes |
+| 4 | `collected` carries `harnesses` |

@@ -31,10 +31,15 @@ import { GOOSE_CLI_VERSION } from '@reeval/harness-goose'
 import { GROK_CLI_VERSION } from '@reeval/harness-grok-build'
 import { OPENCODE_CLI_VERSION } from '@reeval/harness-opencode'
 import { PI_CLI_VERSION } from '@reeval/harness-pi'
-import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@reeval/sandbox-docker'
+import {
+  BAKED_HARNESSES,
+  type BakedHarness,
+  DEFAULT_IMAGE,
+  imageFor,
+  LABEL,
+} from '@reeval/sandbox-docker'
 import { pngSize, stubPng } from '../src/capture/stub.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import { NO_MODEL_HINT } from '../src/ui/layout.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
@@ -109,8 +114,13 @@ type Feature = {
   /** reeval's image the Docker and Podman tiers need, when it isn't Cursor's (a fake agent with `layout`). */
   image?: BakedHarness
   /**
+   * The harness a parameterized fixture's fake agent mimics, as REEVAL_FIXTURE_LAYOUT: the
+   * directory has one row per harness, named `<dir>:<layout>` (see {@link perHarness}).
+   */
+  layout?: BakedHarness
+  /**
    * The harness the real tier runs it on, with that contract row's model and key, when it isn't
-   * Cursor: a harness-specific behaviour only that agent has.
+   * Cursor: a harness-specific behavior only that agent has.
    */
   realHarness?: HarnessRow['id']
   /**
@@ -132,6 +142,7 @@ function blockOf(stdout: string, name: string): string {
 }
 
 const TOKEN = 'reeval-fixture-token-7c1d9a0b52e4'
+const AGENT_VALUE = 'reeval-fixture-agent-3f8e61b2a9d0'
 /** With characters each encoding changes: space, `/`, `+`, `"`, `&`, `?` and `=`. */
 const LEAKY = 'reeval leak/7c+1d"9a&b?0=e4f2'
 
@@ -348,6 +359,40 @@ const answerOf = (run: RunRecord, name: string) => {
 /** What each vote was shown, as the fixture's fake vote reports it in its reason; equal orders once. */
 const shownOf = (answer: NonNullable<RunRecord['evals'][number]['answers']>[number]) =>
   [...new Set(answer.votes.map((v) => v.reason ?? ''))].map((r) => JSON.parse(r))
+
+/** A row's name: its directory, and for a parameterized fixture the harness it runs as. */
+export const rowName = (f: Pick<Feature, 'dir' | 'layout'>) =>
+  f.layout ? `${f.dir}:${f.layout}` : f.dir
+
+/**
+ * One row per harness for a fixture whose `reeval.config.ts` reads REEVAL_FIXTURE_LAYOUT: the fake
+ * agent takes each harness's layout and runs in its image, so each harness has its own check and
+ * its own failing canary.
+ */
+const perHarness = (
+  layouts: readonly BakedHarness[],
+  row: (layout: BakedHarness) => Omit<Feature, 'layout' | 'image'>,
+): Feature[] => layouts.map((layout) => ({ ...row(layout), layout, image: layout }))
+
+const BUT_CURSOR = BAKED_HARNESSES.filter((h) => h !== 'cursor')
+/** A regex for exactly `text`. */
+const literally = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+/** The `agentCli` a Dockerfile built on each harness's image records. */
+const AGENT_CLI: Partial<Record<BakedHarness, RegExp>> = {
+  antigravity: new RegExp(`^${literally(ANTIGRAVITY_CLI_VERSION)}$`),
+  'claude-code': /\(Claude Code\)$/,
+  codex: new RegExp(`^codex-cli ${literally(CODEX_CLI_VERSION)}$`),
+  fx: new RegExp(`${literally(FX_CLI_VERSION)}$`),
+  goose: new RegExp(`${literally(GOOSE_CLI_VERSION)}$`),
+  'grok-build': new RegExp(`^grok ${literally(GROK_CLI_VERSION)}\\b`),
+  opencode: new RegExp(`^opencode v${literally(OPENCODE_CLI_VERSION)}$`),
+  pi: new RegExp(`^${literally(PI_CLI_VERSION)}$`),
+}
+/** Where a plugin kept whole must not be placed: the harness's own home skills. */
+const OWN_SKILLS: Partial<Record<BakedHarness, string>> = {
+  codex: '~/.agents/skills/house-style/SKILL.md',
+  'grok-build': '/.grok/skills/house-style/',
+}
 
 export const features: Feature[] = [
   {
@@ -882,6 +927,19 @@ export const features: Feature[] = [
     record: ({ runDir }) => assert.equal(filesContaining(runDir, TOKEN), ''),
   },
   {
+    dir: 'secrets/judge-sees-redacted',
+    tiers: ['fake', 'docker'],
+    env: 'tokens',
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN, REEVAL_FIXTURE_AGENT_VALUE: AGENT_VALUE },
+    canary: /expected '\[REDACTED\]' to be '\[REDACTED\]'/,
+    record: ({ run, project, runDir }) => {
+      const sent = JSON.parse(readFileSync(join(project, 'judge-saw-lands.json'), 'utf8'))
+      assert.deepEqual(judgeInputOf(run, runDir).state, sent, 'judge-input.json is what was sent')
+      assert.equal(filesContaining(runDir, TOKEN), '')
+      assert.equal(filesContaining(runDir, AGENT_VALUE), '')
+    },
+  },
+  {
     dir: 'secrets/brokered-agent-sees-placeholder',
     tiers: ['fake', 'docker', 'podman'],
     env: 'keys',
@@ -907,6 +965,44 @@ export const features: Feature[] = [
       })
       assert.equal(filesContaining(runDir, TOKEN), '')
       assert.notEqual(filesContaining(runDir, 'CHECK_TOKEN'), '', 'twin: the search finds the name')
+    },
+  },
+  {
+    dir: 'secrets/checks-setup-background',
+    tiers: ['docker'],
+    env: 'unbrokered',
+    canaryEnv: 'brokered',
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
+    canary: /expected 'placeholder' to be 'value'/,
+    record: ({ run, runDir, stdout }) => {
+      const byCommand = (a: { command: string }, b: { command: string }) =>
+        a.command.localeCompare(b.command)
+      assert.deepEqual(landed(run)?.setupProcesses?.toSorted(byCommand), [
+        { command: 'sh -c sleep 601; : one two', secrets: ['CHECK_TOKEN'] },
+        { command: 'sleep 600', secrets: ['CHECK_TOKEN'] },
+        { command: 'sleep 601', secrets: ['CHECK_TOKEN'] },
+      ])
+      assert.match(
+        stdout,
+        /Setup left "[^"]+" \(and 2 more\) running with CHECK_TOKEN, a to: 'checks' secret without hosts, in their environment, so the agent can read the real value from those processes\./,
+      )
+      // Twin: brokered with hosts, the same process holds a placeholder and nothing is recorded.
+      const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]
+      assert.ok(canary)
+      assert.equal(canary.setupProcesses, undefined)
+      assert.equal(filesContaining(runDir, TOKEN), '')
+    },
+  },
+  {
+    dir: 'secrets/checks-setup-finishes',
+    tiers: ['docker'],
+    env: 'finishes',
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
+    canary: /expected '' to be 'value'/,
+    record: ({ run, stdout }) => {
+      assert.ok(landed(run)?.files.setupLog, 'the setup step ran')
+      assert.equal(landed(run)?.setupProcesses, undefined)
+      assert.doesNotMatch(stdout, /Setup left/)
     },
   },
   {
@@ -949,6 +1045,30 @@ export const features: Feature[] = [
         const masked = paths.map((p) => filesContaining(p, '[REDACTED]')).join('')
         assert.notEqual(masked, '', `${where} has no [REDACTED]`)
       }
+    },
+  },
+  {
+    dir: 'secrets/short-declared-secrets',
+    tiers: ['fake', 'docker'],
+    env: 'pins',
+    hostEnv: { REEVAL_FIXTURE_PIN: '1234', REEVAL_FIXTURE_PLACEHOLDER: 'null' },
+    canary: /expected '\[REDACTED\]\\n\[REDACTED\]\\n' to be '\[REDACTED\]\\n'/,
+    // Recorded as it runs, so the history's secret scan has the declared secrets to look for.
+    args: ['--record'],
+    record({ run, project, runDir }) {
+      const attempt = landed(run)
+      assert.equal(attempt?.error, null)
+      const lines = readFileSync(join(runDir, attempt?.files.transcript?.path ?? ''), 'utf8')
+        .trim()
+        .split('\n')
+        .map((l) => JSON.parse(l))
+      const edit = lines.find((e) => e.type === 'file-edit' && e.path.endsWith('pins.txt'))
+      assert.equal(edit?.added, 1234)
+      const shell = lines.find((e) => e.type === 'tool' && e.tool === 'shell')
+      assert.equal(shell?.output, '[REDACTED]\n[REDACTED]\n')
+      // The history's secret scan reads `null` and 1234 outside strings as JSON, not leaks.
+      const history = join(project, 'evals', '.history')
+      assert.ok(existsSync(join(history, `${run.runId}.json`)), 'the run was recorded')
     },
   },
   {
@@ -1327,6 +1447,44 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'history/artifacts-failures',
+    tiers: ['fake'],
+    env: 'marked',
+    cells: ['plain', 'marked'],
+    lands: {
+      outcome: 'pass',
+      error: { kind: 'assertion', message: /has the marker: expected file marker\.txt to exist/ },
+    },
+    landsPass: ['marked'],
+    canaryCells: ['marked', 'plain'],
+    canary: /has the marker: expected file marker\.txt to exist/,
+    canaryPass: ['marked'],
+    record: ({ project }) => {
+      const history = readRun(project, { history: 'evals/.history' })
+      assert.equal(history.run.artifacts, 'failures')
+      const kept = history.run.evals.flatMap((e) =>
+        e.attempts.map((a) => {
+          const refs = [
+            ...Object.values(a.files).flatMap((v) => (Array.isArray(v) ? v : v ? [v] : [])),
+            ...a.checks.flatMap((c) => (c.log ? [c.log] : [])),
+          ]
+          for (const ref of refs) assert.ok(existsSync(join(history.dir, ref.path)), ref.path)
+          return [e.name, e.cells.find((c) => c.key === a.cell)?.role, a.outcome, refs.length > 0]
+        }),
+      )
+      assert.deepEqual(
+        kept,
+        [
+          ['canary', 'control', 'pass', false],
+          ['canary', 'variant', 'fail', true],
+          ['lands', 'control', 'fail', true],
+          ['lands', 'variant', 'pass', false],
+        ],
+        'each failed attempt keeps its files, whatever its eval did',
+      )
+    },
+  },
+  {
     dir: 'compare/check-not-run',
     tiers: ['fake'],
     env: 'marked',
@@ -1612,28 +1770,66 @@ export const features: Feature[] = [
     env: 'house-rules',
     canary: /expected null to be 'Always write tests\.'/,
   },
-  {
-    dir: 'harness/claude-code-rules',
-    tiers: ['fake', 'docker'],
-    image: 'claude-code',
-    env: 'house-rules',
-    canary: /expected null to be 'Always write tests\.'/,
-    record: ({ run }) => assert.deepEqual(envFiles(run), ['CLAUDE.md']),
-  },
-  {
-    dir: 'harness/cursor-rules',
+  ...perHarness(BAKED_HARNESSES, (layout) => ({
+    dir: 'harness/rules',
     tiers: ['fake', 'docker'],
     env: 'house-rules',
     canary: /expected null to be 'Always write tests\.'/,
-    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
-  },
-  {
-    dir: 'harness/claude-code-workspace-skills',
+    record: ({ run }) =>
+      assert.deepEqual(envFiles(run), [layout === 'claude-code' ? 'CLAUDE.md' : 'AGENTS.md']),
+  })),
+  ...perHarness(BAKED_HARNESSES, () => ({
+    dir: 'harness/workspace-skills',
     tiers: ['fake', 'docker'],
-    image: 'claude-code',
     env: 'greeting',
     canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
-  },
+  })),
+  ...perHarness(BUT_CURSOR, (layout) => ({
+    dir: 'harness/home-skills',
+    tiers: ['fake', 'docker'],
+    env: 'greeting',
+    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.placement]),
+        [['house-greeting', 'harness']],
+      )
+      if (tier === 'fake' || layout !== 'claude-code') return
+      const seen = landed(run)?.context ?? []
+      assert.ok(
+        seen.some((c) => c.path === '~/.claude/skills/house-greeting/SKILL.md'),
+        JSON.stringify(seen),
+      )
+    },
+  })),
+  ...perHarness(BUT_CURSOR, (layout) => ({
+    dir: 'harness/dockerfile',
+    tiers: ['docker'],
+    env: 'plain',
+    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
+    record: ({ run }) => {
+      const [image] = run.stack.images
+      // Not baked again: the Dockerfile's base carries the harness's label.
+      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.match(image?.agentCli ?? '', AGENT_CLI[layout] ?? /^$/)
+    },
+  })),
+  ...perHarness(['codex', 'grok-build'], (layout) => ({
+    dir: 'harness/plugin-kept-whole',
+    tiers: ['fake', 'docker'],
+    env: 'house',
+    canary: /expected 'Loaded plugins: house \(skills, mcp\)' to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes('~/.reeval/plugins/house/skills/house-style/SKILL.md'),
+        JSON.stringify(seen),
+      )
+      const own = OWN_SKILLS[layout] ?? ''
+      assert.ok(!seen.some((p) => p.includes(own)), JSON.stringify(seen))
+    },
+  })),
   {
     dir: 'harness/cursor-rules-reach-agent',
     tiers: ['real'],
@@ -1717,21 +1913,6 @@ export const features: Feature[] = [
     },
   },
   {
-    dir: 'harness/claude-code-harness-skills',
-    tiers: ['fake', 'docker'],
-    image: 'claude-code',
-    env: 'greeting',
-    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
-    record: ({ run, tier }) => {
-      if (tier === 'fake') return
-      const seen = landed(run)?.context ?? []
-      assert.ok(
-        seen.some((c) => c.path === '~/.claude/skills/house-greeting/SKILL.md'),
-        JSON.stringify(seen),
-      )
-    },
-  },
-  {
     dir: 'harness/claude-code-plugin',
     tiers: ['fake', 'docker'],
     image: 'claude-code',
@@ -1751,22 +1932,6 @@ export const features: Feature[] = [
       ]) {
         assert.ok(seen.includes(path), `${path} in ${JSON.stringify(seen)}`)
       }
-    },
-  },
-  {
-    dir: 'harness/grok-build-plugin',
-    tiers: ['fake', 'docker'],
-    image: 'grok-build',
-    env: 'house',
-    canary: /expected 'Loaded plugins: house \(skills, mcp\)' to contain 'mcp: house:docs'/,
-    record: ({ run, tier }) => {
-      if (tier === 'fake') return
-      const seen = (landed(run)?.context ?? []).map((c) => c.path)
-      assert.ok(
-        seen.includes('~/.reeval/plugins/house/skills/house-style/SKILL.md'),
-        JSON.stringify(seen),
-      )
-      assert.ok(!seen.some((p) => p.includes('/.grok/skills/house-style/')), JSON.stringify(seen))
     },
   },
   {
@@ -1904,22 +2069,6 @@ export const features: Feature[] = [
     canary: /expected '---\\ndescription: Reviews a change\. T…' to contain 'BUILT-58'/,
   },
   {
-    dir: 'harness/codex-plugin',
-    tiers: ['fake', 'docker'],
-    image: 'codex',
-    env: 'house',
-    canary: /expected 'Loaded plugins: house \(skills, mcp\)' to contain 'mcp: house:docs'/,
-    record: ({ run, tier }) => {
-      if (tier === 'fake') return
-      const seen = (landed(run)?.context ?? []).map((c) => c.path)
-      assert.ok(
-        seen.includes('~/.reeval/plugins/house/skills/house-style/SKILL.md'),
-        JSON.stringify(seen),
-      )
-      assert.ok(!seen.includes('~/.agents/skills/house-style/SKILL.md'), JSON.stringify(seen))
-    },
-  },
-  {
     dir: 'harness/goose-plugin',
     tiers: ['fake', 'docker'],
     image: 'goose',
@@ -1938,304 +2087,6 @@ export const features: Feature[] = [
         ),
         JSON.stringify(seen),
       )
-    },
-  },
-  {
-    dir: 'harness/antigravity-rules',
-    tiers: ['fake', 'docker'],
-    image: 'antigravity',
-    env: 'house-rules',
-    canary: /expected null to be 'Always write tests\.'/,
-    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
-  },
-  {
-    dir: 'harness/antigravity-workspace-skills',
-    tiers: ['fake', 'docker'],
-    image: 'antigravity',
-    env: 'greeting',
-    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
-  },
-  {
-    dir: 'harness/antigravity-home-skills',
-    tiers: ['fake', 'docker'],
-    image: 'antigravity',
-    env: 'greeting',
-    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
-    record: ({ run }) =>
-      assert.deepEqual(
-        skills(run).map((s) => [s.name, s.placement]),
-        [['house-greeting', 'harness']],
-      ),
-  },
-  {
-    dir: 'harness/opencode-rules',
-    tiers: ['fake', 'docker'],
-    image: 'opencode',
-    env: 'house-rules',
-    canary: /expected null to be 'Always write tests\.'/,
-    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
-  },
-  {
-    dir: 'harness/opencode-workspace-skills',
-    tiers: ['fake', 'docker'],
-    image: 'opencode',
-    env: 'greeting',
-    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
-  },
-  {
-    dir: 'harness/opencode-home-skills',
-    tiers: ['fake', 'docker'],
-    image: 'opencode',
-    env: 'greeting',
-    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
-    record: ({ run }) =>
-      assert.deepEqual(
-        skills(run).map((s) => [s.name, s.placement]),
-        [['house-greeting', 'harness']],
-      ),
-  },
-  {
-    dir: 'harness/goose-rules',
-    tiers: ['fake', 'docker'],
-    image: 'goose',
-    env: 'house-rules',
-    canary: /expected null to be 'Always write tests\.'/,
-    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
-  },
-  {
-    dir: 'harness/goose-workspace-skills',
-    tiers: ['fake', 'docker'],
-    image: 'goose',
-    env: 'greeting',
-    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
-  },
-  {
-    dir: 'harness/goose-home-skills',
-    tiers: ['fake', 'docker'],
-    image: 'goose',
-    env: 'greeting',
-    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
-    record: ({ run }) =>
-      assert.deepEqual(
-        skills(run).map((s) => [s.name, s.placement]),
-        [['house-greeting', 'harness']],
-      ),
-  },
-  {
-    dir: 'harness/fx-rules',
-    tiers: ['fake', 'docker'],
-    image: 'fx',
-    env: 'house-rules',
-    canary: /expected null to be 'Always write tests\.'/,
-    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
-  },
-  {
-    dir: 'harness/fx-workspace-skills',
-    tiers: ['fake', 'docker'],
-    image: 'fx',
-    env: 'greeting',
-    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
-  },
-  {
-    dir: 'harness/fx-home-skills',
-    tiers: ['fake', 'docker'],
-    image: 'fx',
-    env: 'greeting',
-    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
-    record: ({ run }) =>
-      assert.deepEqual(
-        skills(run).map((s) => [s.name, s.placement]),
-        [['house-greeting', 'harness']],
-      ),
-  },
-  {
-    dir: 'harness/grok-build-rules',
-    tiers: ['fake', 'docker'],
-    image: 'grok-build',
-    env: 'house-rules',
-    canary: /expected null to be 'Always write tests\.'/,
-    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
-  },
-  {
-    dir: 'harness/grok-build-workspace-skills',
-    tiers: ['fake', 'docker'],
-    image: 'grok-build',
-    env: 'greeting',
-    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
-  },
-  {
-    dir: 'harness/grok-build-home-skills',
-    tiers: ['fake', 'docker'],
-    image: 'grok-build',
-    env: 'greeting',
-    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
-    record: ({ run }) =>
-      assert.deepEqual(
-        skills(run).map((s) => [s.name, s.placement]),
-        [['house-greeting', 'harness']],
-      ),
-  },
-  {
-    dir: 'harness/pi-rules',
-    tiers: ['fake', 'docker'],
-    image: 'pi',
-    env: 'house-rules',
-    canary: /expected null to be 'Always write tests\.'/,
-    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
-  },
-  {
-    dir: 'harness/pi-workspace-skills',
-    tiers: ['fake', 'docker'],
-    image: 'pi',
-    env: 'greeting',
-    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
-  },
-  {
-    dir: 'harness/pi-home-skills',
-    tiers: ['fake', 'docker'],
-    image: 'pi',
-    env: 'greeting',
-    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
-    record: ({ run }) =>
-      assert.deepEqual(
-        skills(run).map((s) => [s.name, s.placement]),
-        [['house-greeting', 'harness']],
-      ),
-  },
-  {
-    dir: 'harness/codex-rules',
-    tiers: ['fake', 'docker'],
-    image: 'codex',
-    env: 'house-rules',
-    canary: /expected null to be 'Always write tests\.'/,
-    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
-  },
-  {
-    dir: 'harness/codex-workspace-skills',
-    tiers: ['fake', 'docker'],
-    image: 'codex',
-    env: 'greeting',
-    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
-  },
-  {
-    dir: 'harness/codex-home-skills',
-    tiers: ['fake', 'docker'],
-    image: 'codex',
-    env: 'greeting',
-    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
-    record: ({ run }) =>
-      assert.deepEqual(
-        skills(run).map((s) => [s.name, s.placement]),
-        [['house-greeting', 'harness']],
-      ),
-  },
-  {
-    dir: 'harness/cursor-workspace-skills',
-    tiers: ['fake', 'docker'],
-    env: 'greeting',
-    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
-  },
-  {
-    dir: 'harness/claude-code-dockerfile',
-    tiers: ['docker'],
-    image: 'claude-code',
-    env: 'plain',
-    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
-    record: ({ run }) => {
-      const [image] = run.stack.images
-      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
-      assert.match(image?.agentCli ?? '', /\(Claude Code\)$/)
-    },
-  },
-  {
-    dir: 'harness/antigravity-dockerfile',
-    tiers: ['docker'],
-    image: 'antigravity',
-    env: 'plain',
-    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
-    record: ({ run }) => {
-      const [image] = run.stack.images
-      // Not baked again: the Dockerfile's base carries Antigravity's harness label.
-      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
-      assert.equal(image?.agentCli, ANTIGRAVITY_CLI_VERSION)
-    },
-  },
-  {
-    dir: 'harness/opencode-dockerfile',
-    tiers: ['docker'],
-    image: 'opencode',
-    env: 'plain',
-    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
-    record: ({ run }) => {
-      const [image] = run.stack.images
-      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
-      assert.equal(image?.agentCli, `opencode v${OPENCODE_CLI_VERSION}`)
-    },
-  },
-  {
-    dir: 'harness/goose-dockerfile',
-    tiers: ['docker'],
-    image: 'goose',
-    env: 'plain',
-    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
-    record: ({ run }) => {
-      const [image] = run.stack.images
-      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
-      assert.match(
-        image?.agentCli ?? '',
-        new RegExp(`${GOOSE_CLI_VERSION.replaceAll('.', '\\.')}$`),
-      )
-    },
-  },
-  {
-    dir: 'harness/fx-dockerfile',
-    tiers: ['docker'],
-    image: 'fx',
-    env: 'plain',
-    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
-    record: ({ run }) => {
-      const [image] = run.stack.images
-      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
-      assert.match(image?.agentCli ?? '', new RegExp(`${FX_CLI_VERSION.replaceAll('.', '\\.')}$`))
-    },
-  },
-  {
-    dir: 'harness/grok-build-dockerfile',
-    tiers: ['docker'],
-    image: 'grok-build',
-    env: 'plain',
-    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
-    record: ({ run }) => {
-      const [image] = run.stack.images
-      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
-      assert.match(
-        image?.agentCli ?? '',
-        new RegExp(`^grok ${GROK_CLI_VERSION.replaceAll('.', '\\.')}\\b`),
-      )
-    },
-  },
-  {
-    dir: 'harness/pi-dockerfile',
-    tiers: ['docker'],
-    image: 'pi',
-    env: 'plain',
-    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
-    record: ({ run }) => {
-      const [image] = run.stack.images
-      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
-      assert.equal(image?.agentCli, PI_CLI_VERSION)
-    },
-  },
-  {
-    dir: 'harness/codex-dockerfile',
-    tiers: ['docker'],
-    image: 'codex',
-    env: 'plain',
-    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
-    record: ({ run }) => {
-      const [image] = run.stack.images
-      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
-      assert.equal(image?.agentCli, `codex-cli ${CODEX_CLI_VERSION}`)
     },
   },
   {
@@ -2389,7 +2240,7 @@ export const features: Feature[] = [
     record: ({ run }) => assert.deepEqual(run.stack.judge.state?.diff, ['src/']),
   },
   {
-    dir: 'assert/labelled',
+    dir: 'assert/labeled',
     tiers: ['fake', 'docker'],
     env: 'plain',
     canary: /writes the marker: expected marker\.txt to match \/nope\//,
@@ -2481,6 +2332,14 @@ export const features: Feature[] = [
     tiers: ['fake', 'docker'],
     env: 'seeded',
     canary: /expected no changes to test\/\*\*, got \["test\/greet\.test\.js" \(modified\)\]/,
+  },
+  {
+    dir: 'assert/changed-quoted-path',
+    tiers: ['fake', 'docker'],
+    env: 'notes',
+    canary: /expected no changes to notes\/café\.txt, got \["notes\/café\.txt" \(added\)\]/,
+    record: ({ run }) =>
+      assert.deepEqual(landed(run)?.changedFiles, [{ path: 'notes/café.txt', status: 'added' }]),
   },
   {
     dir: 'judge/state-contents',
@@ -2794,8 +2653,7 @@ export const features: Feature[] = [
         blockOf(stdout, 'canary'),
         'fail             canary\n  second try       failed\n    expected 1 to be 2 // Object.is equality',
       )
-      assert.match(stdout, /\n1 fail · 1 pass\n/)
-      assert.ok(stdout.endsWith(`\n${NO_MODEL_HINT}\n`), stdout)
+      assert.ok(stdout.endsWith('\n1 fail · 1 pass\n'), stdout)
     },
   },
   {
@@ -3032,7 +2890,7 @@ export const features: Feature[] = [
     record: ({ run, stdout }) => {
       const [lands] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
       assert.deepEqual(
-        lands?.assertions?.map(({ label, labelled }) => [label, labelled]),
+        lands?.assertions?.map(({ label, labelled: labeled }) => [label, labeled]),
         [
           ['assert c.exec("test -f greet.py").ok', false],
           ['assert node_check.ok', false],
@@ -3087,6 +2945,46 @@ export const features: Feature[] = [
       )
       const [timedOut] = run.evals.find((e) => e.name === 'times out')?.attempts ?? []
       assert.deepEqual(timedOut?.checks, [], 'nor in its own, which reeval already ended')
+    },
+  },
+  {
+    dir: 'python-sdk/caught-checks',
+    tiers: ['fake'],
+    env: '-',
+    canary: /missing file: expected.*to succeed/i,
+    evals: {
+      'caught expect': {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: {
+          kind: 'assertion',
+          message:
+            /^missing file: expected.*to succeed[\s\S]*\(the eval caught this failed check, which still fails the attempt; to wait or retry, use expect\.poll\)$/,
+        },
+      },
+      'assert retries': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      canary: {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: { kind: 'assertion', message: /missing file: expected.*to succeed/i },
+      },
+    },
+    prepare: (dir) => syncPythonFixtureProject(dir),
+    record: ({ run }) => {
+      const assertions = (name: string) =>
+        run.evals
+          .find((e) => e.name === name)
+          ?.attempts[0]?.assertions?.map(({ label, status }) => [label, status])
+      assert.deepEqual(
+        assertions('caught expect'),
+        [['missing file', 'fail']],
+        'a failed expect the body catches is a failed check, recorded with its own message',
+      )
+      assert.deepEqual(
+        assertions('assert retries'),
+        [['assert c.exec("test -f ready.txt").ok', 'pass']],
+        'a plain assert the body catches records nothing',
+      )
     },
   },
   {
@@ -3224,13 +3122,13 @@ function fixtureTests(tiers: Tier[]) {
       const timeout =
         f.timeoutMs?.[tier] ??
         { fake: FAKE_TIMEOUT_MS, docker: 240_000, podman: 240_000, real: 600_000 }[tier]
-      test(`${f.dir} [${tier}]`, {
+      test(`${rowName(f)} [${tier}]`, {
         skip: skipTier(tier, f.image, f.posixModes),
         timeout,
       }, async (t) => {
         const row = realRowOf(f)
         if (tier === 'real') {
-          reserveAttempts(row, 2, `fixture ${f.dir}`)
+          reserveAttempts(row, 2, `fixture ${rowName(f)}`)
         }
         const p = await fixture(`features/${f.dir}`)
         f.prepare?.(p.dir)
@@ -3242,6 +3140,7 @@ function fixtureTests(tiers: Tier[]) {
             env: {
               ...(typeof f.hostEnv === 'function' ? f.hostEnv(p.dir) : f.hostEnv),
               REEVAL_FIXTURE_SANDBOX: tier === 'real' ? 'docker' : tier,
+              ...(f.layout ? { REEVAL_FIXTURE_LAYOUT: f.layout } : {}),
               ...(tier === 'real'
                 ? {
                     REEVAL_FIXTURE_HARNESS: harnessOf(row),
@@ -3252,7 +3151,7 @@ function fixtureTests(tiers: Tier[]) {
             },
             timeoutMs: timeout - FIXTURE_STOP_MS[tier],
             // Stopped inside the test's timeout, so the failure has the run's output and the run
-            // has cancelled, and removed its containers, before the next test starts.
+            // has canceled, and removed its containers, before the next test starts.
             deadlineMs: timeout - FIXTURE_STOP_MS[tier],
             graceMs: FIXTURE_GRACE_MS[tier],
             signal: t.signal,
@@ -3306,7 +3205,9 @@ test('every feature fixture is in the table, with one check and a canary', () =>
         .map((d) => `${group.name}/${d.name}`),
     )
     .sort()
-  assert.deepEqual(dirs, features.map((f) => f.dir).sort())
+  assert.deepEqual(dirs, [...new Set(features.map((f) => f.dir))].sort())
+  const names = features.map(rowName)
+  assert.deepEqual(names, [...new Set(names)], 'every row has its own name')
   for (const dir of dirs) {
     const evals = readdirSync(join(root, dir, 'evals')).filter((f) => /\.eval\.(ts|py)$/.test(f))
     const ext = evals.some((f) => f.endsWith('.eval.py')) ? '.eval.py' : '.eval.ts'

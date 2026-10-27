@@ -142,10 +142,10 @@ function claudeEdit(toolCallId: string, output: Record<string, unknown>): FileEd
 function fileEdits(
   toolCallId: string,
   output: unknown,
-  deleted: boolean,
+  tool: 'edit' | 'write' | 'delete',
   input: Record<string, unknown>,
 ): FileEditEvent[] {
-  if (deleted) {
+  if (tool === 'delete') {
     return [
       {
         type: 'file-edit',
@@ -162,7 +162,10 @@ function fileEdits(
   // pi's edit reports a unified `patch` in its `details`.
   const patch = str(record(result.details).patch)
   if (patch) {
-    const body = lines(patch).filter((l) => !l.startsWith('+++') && !l.startsWith('---'))
+    // Only the `---` and `+++` before the first `@@` are headers: in a hunk, `--- x` removes `-- x`.
+    const all = lines(patch)
+    const hunks = all.findIndex((l) => l.startsWith('@@'))
+    const body = hunks < 0 ? [] : all.slice(hunks + 1)
     return [
       {
         type: 'file-edit',
@@ -230,6 +233,21 @@ function fileEdits(
       },
     ]
   }
+  // A whole-file write whose result doesn't say whether the file existed (Antigravity's, fx's,
+  // Goose's, Grok Build's and pi's, for example): the content, when the input has it, is every
+  // line written.
+  if (tool === 'write') {
+    return [
+      {
+        type: 'file-edit',
+        toolCallId,
+        path: editPath(input),
+        kind: 'write',
+        added: typeof input.content === 'string' ? lines(input.content).length : null,
+        removed: null,
+      },
+    ]
+  }
   return [
     {
       type: 'file-edit',
@@ -265,12 +283,12 @@ function toolInput(part: StampedPart['part']): unknown {
 
 /**
  * Turns an AI SDK harness stream into reeval transcript events: text and reasoning blocks joined,
- * each tool call merged with its result, edits normalised to `file-edit`, web tools given their
+ * each tool call merged with its result, edits normalized to `file-edit`, web tools given their
  * query or URL, and the harness's duplicate `fileChange` events dropped. Cursor's tool durations
  * come from its runner's own `tool_call` events, because tool results are only flushed at the
  * end of a step.
  */
-export function normaliseStream(parts: StampedPart[], startedAt: number): TranscriptEvent[] {
+export function normalizeStream(parts: StampedPart[], startedAt: number): TranscriptEvent[] {
   const timing = new Map<string, Timing>()
   for (const { ms, part } of parts) {
     if (part.type !== 'raw') continue
@@ -309,7 +327,7 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
     const output = name === 'bash' && typeof raw === 'string' ? raw.replace(/\r\n/g, '\n') : raw
     const base = { ...stamp(call.ms), durationMs, ...stallFlags(name, durationMs) }
     if ((name === 'edit' || name === 'write' || name === 'delete') && !failed) {
-      for (const edit of fileEdits(id, output, name === 'delete', input)) {
+      for (const edit of fileEdits(id, output, name, input)) {
         out.push({ at: call.ms, event: { ...base, ...edit, ...stallFlags(name, durationMs) } })
       }
       return

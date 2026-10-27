@@ -1,20 +1,22 @@
 // Every reader against every run in the record corpus (test/fixtures/records/), so a record reeval
-// wrote at any point since keeps loading in the CLI. The studio's browser test opens the same runs.
+// wrote at any point since keeps loading in the CLI. Every entry's runs go into one history: the
+// commands that read all of it (history, query, studio build) run once, through the CLI, and the
+// per-run ones (show, compare, analyze) run in this process for every run, since a CLI start each
+// would be most of the suite's time. The studio's browser test opens the same runs.
 import assert from 'node:assert/strict'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { cpSync, existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, test } from 'node:test'
+import { analyzeCommand } from '../src/analysis/command.ts'
+import { compareCommand, showCommand } from '../src/commands.ts'
+import { loadConfig } from '../src/config.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import { factsHash } from '../src/insights/hash.ts'
 import { queryCommand } from '../src/query.ts'
 import { countSecrets } from '../src/redact.ts'
 import type { ResolvedConfig } from '../src/types.ts'
-import { fromModel, type RunInsights } from '../src/view/insights.ts'
 import { readableRecord } from '../src/view/record.ts'
-import { suiteResult } from '../src/view/suite.ts'
-import { runCli } from './helpers.ts'
+import { project, runCli } from './helpers.ts'
 import { CORPUS_DIR, corpusEntries, HISTORY_DIR } from './support/corpus.ts'
-import { fixture } from './support/fixture.ts'
 import { REAL_HARNESSES, realAttempts } from './support/real-runs.ts'
 
 const entries = corpusEntries()
@@ -31,7 +33,6 @@ const REQUIRED = [
   'todo',
   'status budget',
   'saved analysis',
-  'run insights',
   'transcript',
   'diff',
   'tokens',
@@ -46,12 +47,7 @@ const REQUIRED = [
   'before the reeval sandbox user',
 ]
 
-function covers(
-  record: RunRecord,
-  raw: Record<string, unknown>,
-  hasAnalysis: boolean,
-  hasInsights: boolean,
-): string[] {
+function covers(record: RunRecord, raw: Record<string, unknown>, hasAnalysis: boolean): string[] {
   const out = new Set<string>()
   const attempts = record.evals.flatMap((e) => e.attempts)
   if (record.evals.some((e) => e.cells.some((c) => c.lift))) out.add('compare with lift')
@@ -70,23 +66,125 @@ function covers(
   out.add(`status ${record.status}`)
   for (const h of record.stack.harnesses) out.add(`harness ${h.kind}`)
   if (hasAnalysis) out.add('saved analysis')
-  if (hasInsights) out.add('run insights')
   if (!('sandboxWarnings' in (raw.plan as object))) out.add('before plan.sandboxWarnings')
   if (JSON.stringify(raw).includes('/es/workspace/')) out.add('before the reeval sandbox user')
   return [...out]
 }
+
+const ALL_IDS = entries.flatMap((e) => e.runs.map((r) => r.runId)).sort()
+
+/** Rows `reeval show` prints for every run, whatever reeval wrote it. */
+const STATE_ROWS = [
+  'Executed at',
+  'Lockfiles',
+  'Images',
+  'Harnesses',
+  'Environments',
+  'Judge',
+  'Context',
+  'Packages',
+  'reeval',
+  'Runner',
+]
+
+type QuerySchema = Array<{ name: string; type: 'table' | 'view' }>
+type Out = (s: string) => void
+const statement = (s: QuerySchema[number]) =>
+  s.type === 'view' ? s.name : `select * from ${s.name}`
+
+/** Output no reader may print, whatever the record's age. */
+function clean(where: string, stdout: string, stderr: string) {
+  assert.doesNotMatch(stderr, /warning: skipped|TypeError|Cannot read prop/, `${where}\n${stderr}`)
+  assert.doesNotMatch(
+    stdout,
+    /\bundefined\b|\bNaN\b|\[object Object\]|Invalid Date/,
+    `${where}\n${stdout}`,
+  )
+}
+
+/**
+ * Runs a command in this process and returns its stdout, after checking it printed nothing odd.
+ * The readers that skip an unreadable file warn on `process.stderr`, not on `err`, so that's
+ * captured too.
+ */
+async function capture(
+  command: (out: Out, err: Out) => Promise<number>,
+  where = 'reeval',
+  codes = [0],
+): Promise<string> {
+  let stdout = ''
+  let stderr = ''
+  const write = process.stderr.write
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    stderr += String(chunk)
+    return true
+  }) as typeof process.stderr.write
+  let code: number
+  try {
+    code = await command(
+      (text) => (stdout += `${text}\n`),
+      (text) => (stderr += `${text}\n`),
+    )
+  } finally {
+    process.stderr.write = write
+  }
+  clean(where, stdout, stderr)
+  assert.ok(codes.includes(code), `${where} exited ${code}\n${stdout}${stderr}`)
+  return stdout
+}
+
+/**
+ * One project whose history holds every entry's runs, so each reader that reads the whole history
+ * (`history`, `query`, `studio build`) reads every run at once, across every reeval that wrote one.
+ */
+async function mergedProject(name: string) {
+  const p = await project(name, { 'reeval.config.ts': CONFIG })
+  for (const e of entries)
+    cpSync(join(e.dir, HISTORY_DIR), join(p.dir, HISTORY_DIR), { recursive: true })
+  return p
+}
+
+/**
+ * The merged history for the readers this process runs. It's a copy of its own: this process's
+ * build id differs from dist's, and the history cache each keeps is keyed on it.
+ */
+let shared: Promise<{ config: ResolvedConfig }> | undefined
+const inProcess = () =>
+  (shared ??= mergedProject('corpus-in-process').then(async (p) => ({
+    config: await loadConfig(join(p.dir, 'reeval.config.ts'), 'show'),
+  })))
+
+/** The corpus's own config: the fake harness, and an analysis model for `reeval analyze`. */
+const CONFIG = `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+
+export default defineConfig({
+  harness: fakeHarness(),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  analysis: {
+    model: fakeAnalysis({
+      output: () => ({
+        tldr: 'corpus',
+        whatHappened: [],
+        results: [],
+        why: [],
+        anomalies: [],
+        actions: [],
+        confidence: { overall: 'low', why: 'corpus' },
+      }),
+    }),
+  },
+})
+`
 
 describe('the record corpus', { concurrency: 4 }, () => {
   test('holds every kind of run the record can describe', () => {
     const found = new Set(
       entries.flatMap((e) =>
         e.runs.flatMap((r) =>
-          covers(
-            readableRecord(structuredClone(r.raw) as never),
-            r.raw,
-            r.analyses > 0,
-            r.insights,
-          ),
+          covers(readableRecord(structuredClone(r.raw) as never), r.raw, r.analyses > 0),
         ),
       ),
     )
@@ -135,113 +233,123 @@ describe('the record corpus', { concurrency: 4 }, () => {
     }
   })
 
-  for (const entry of entries) {
-    test(`${entry.name}: every CLI reader reads every run`, async () => {
-      const p = await fixture(`fixtures/records/${entry.name}`)
-      const ok = async (args: string[], codes = [0]) => {
-        const r = await runCli(p.dir, args, { timeoutMs: 120_000 })
-        const where = `reeval ${args.join(' ')} in ${entry.name}\n${r.stdout}${r.stderr}`
-        assert.ok(codes.includes(r.code as number), where)
-        assert.doesNotMatch(r.stderr, /warning: skipped|TypeError|Cannot read prop/, where)
-        assert.doesNotMatch(r.stdout, /\bundefined\b|\bNaN\b|\[object Object\]|Invalid Date/, where)
-        return r.stdout
-      }
-      const STATE_ROWS = [
-        'Executed at',
-        'Lockfiles',
-        'Images',
-        'Harnesses',
-        'Environments',
-        'Judge',
-        'Context',
-        'Packages',
-        'reeval',
-        'Runner',
-      ]
-      const ids = entry.runs.map((r) => r.runId)
-      const listed = JSON.parse(await ok(['history', '--json', '--all'])) as {
-        runs: Array<{ runId: string }>
-      }
-      assert.deepEqual(
-        listed.runs.map((r) => r.runId).sort(),
-        ids,
-        'reeval history lists every run',
+  test('every CLI command reads the merged history', async () => {
+    const p = await mergedProject('corpus-cli')
+    const ok = async (args: string[], codes = [0]) => {
+      const r = await runCli(p.dir, args, { timeoutMs: 120_000 })
+      clean(`reeval ${args.join(' ')}`, r.stdout, r.stderr)
+      assert.ok(
+        codes.includes(r.code as number),
+        `reeval ${args.join(' ')}\n${r.stdout}${r.stderr}`,
       )
-      await ok(['history'])
-      for (const run of entry.runs) {
-        const text = await ok(['show', run.runId])
-        for (const row of STATE_ROWS)
-          assert.match(text, new RegExp(`\\n {2}${row} +\\S`), `${entry.name} ${run.runId}: ${row}`)
-        if (run.insights) {
-          const written = JSON.parse(
-            readFileSync(join(p.dir, HISTORY_DIR, run.runId, 'insights.json'), 'utf8'),
-          ) as RunInsights
-          const { headline } = written
-          assert.doesNotMatch(text, /insights failed/)
-          // A later change to `SuiteResult` moves the facts' hash, so an older file is left out.
-          // Remarks-only insights have no model text to leave out, so they never get the note.
-          const suite = suiteResult(readableRecord(structuredClone(run.raw) as never))
-          if (!fromModel(written)) {
-            assert.doesNotMatch(text, /insights left out/)
-          } else if (written.factsHash !== factsHash(suite)) {
-            assert.match(text, /insights left out: insights\.json was written for other facts/)
-          } else if (headline) {
-            assert.ok(text.includes(headline.text), `${run.runId}: the headline`)
-            assert.doesNotMatch(text, /insights left out/)
-          }
-        }
-        await ok(['show', run.runId, '--md'])
-        const shown = JSON.parse(await ok(['show', run.runId, '--json']))
-        assert.deepEqual(shown, readableRecord(structuredClone(run.raw) as never))
-        await ok(['compare', run.runId], [0, 1])
-        await ok(['analyze', run.runId, '--dry-run'])
-        if (run.analyses)
-          assert.match(await ok(['analyze', run.runId, '--json']), /"kind": "reeval-analysis"/)
-      }
-      for (const [i, id] of ids.entries()) {
-        if (i === 0) continue
-        for (const flag of [[], ['--json'], ['--md']]) {
-          await ok(['compare', ids[i - 1] as string, id, ...flag], [0, 1])
-        }
-      }
-      const schema = JSON.parse(await ok(['query', '--schema', '--json'])) as Array<{
-        name: string
-        type: 'table' | 'view'
-      }>
-      const statement = (s: (typeof schema)[number]) =>
-        s.type === 'view' ? s.name : `select * from ${s.name}`
-      for (const type of ['view', 'table']) {
-        const q = statement(schema.find((s) => s.type === type) as (typeof schema)[number])
-        await ok(['query', q])
-        await ok(['query', q, '--json'])
-      }
-      await ok(['query', '--rebuild', 'select count(*) as n from runs'])
-      const site = join(p.dir, 'site')
-      await ok(['studio', 'build', '--out', site])
-      for (const id of ids) readFileSync(join(site, 'data/runs', `${id}.json`))
-      // Every view and table in both formats, through the command `reeval query` runs, in this
-      // process: a CLI start per query would be most of the suite's time. Last, since this
-      // process's build id differs from dist's, so its first query rebuilds history.db.
-      const config = { root: p.dir, history: { dir: HISTORY_DIR } } as ResolvedConfig
+      return r.stdout
+    }
+    const listed = JSON.parse(
+      await ok(['history', '--json', '--all', '--limit', String(ALL_IDS.length)]),
+    ) as {
+      runs: Array<{ runId: string }>
+    }
+    assert.deepEqual(
+      listed.runs.map((r) => r.runId).sort(),
+      ALL_IDS,
+      'reeval history lists every run',
+    )
+    await ok(['history'])
+    // The per-run readers run in this process below; here each runs once through the CLI, on the
+    // oldest run and on the newest.
+    for (const id of [ALL_IDS[0], ALL_IDS.at(-1)] as string[]) {
+      await ok(['show', id])
+      await ok(['show', id, '--md'])
+      await ok(['show', id, '--json'])
+      await ok(['compare', id], [0, 1])
+      await ok(['analyze', id, '--dry-run'])
+    }
+    await ok(['compare', ALL_IDS[0] as string, ALL_IDS.at(-1) as string, '--md'], [0, 1])
+    const schema = JSON.parse(await ok(['query', '--schema', '--json'])) as QuerySchema
+    for (const type of ['view', 'table']) {
+      const q = statement(schema.find((s) => s.type === type) as QuerySchema[number])
+      await ok(['query', q])
+      await ok(['query', q, '--json'])
+    }
+    await ok(['query', '--rebuild', 'select count(*) as n from runs'])
+    const site = join(p.dir, 'site')
+    await ok(['studio', 'build', '--out', site])
+    for (const id of ALL_IDS) readFileSync(join(site, 'data/runs', `${id}.json`))
+  })
+
+  // One at a time: a history sync holds SQLite's write lock across awaits, and a second sync in
+  // the same process waits for it synchronously, so the first never gets to finish.
+  describe('in this process', { concurrency: 1 }, () => {
+    test('every view and table of reeval query, in both formats, over the merged history', async () => {
+      const { config } = await inProcess()
+      const schema = JSON.parse(
+        await capture((out, err) =>
+          queryCommand({ config, flags: { schema: true, json: true }, out, err }, []),
+        ),
+      ) as QuerySchema
       for (const s of schema) {
         for (const json of [false, true]) {
-          let stdout = ''
-          let stderr = ''
-          const code = await queryCommand(
-            {
-              config,
-              flags: { json },
-              out: (text) => (stdout += `${text}\n`),
-              err: (text) => (stderr += `${text}\n`),
-            },
-            [statement(s)],
+          await capture(
+            (out, err) => queryCommand({ config, flags: { json }, out, err }, [statement(s)]),
+            `reeval query ${statement(s)}${json ? ' --json' : ''}`,
           )
-          const where = `reeval query ${statement(s)}${json ? ' --json' : ''} in ${entry.name}\n${stdout}${stderr}`
-          assert.equal(code, 0, where)
-          assert.doesNotMatch(stderr, /warning: skipped|TypeError|Cannot read prop/, where)
-          assert.doesNotMatch(stdout, /\bundefined\b|\bNaN\b|\[object Object\]|Invalid Date/, where)
         }
       }
     })
-  }
+
+    for (const entry of entries) {
+      test(`${entry.name}: every reader reads every run`, async () => {
+        const { config } = await inProcess()
+        const ids = entry.runs.map((r) => r.runId)
+        const run = (
+          where: string,
+          command: (out: Out, err: Out) => Promise<number>,
+          codes?: number[],
+        ) => capture(command, `${where} in ${entry.name}`, codes)
+        for (const [i, r] of entry.runs.entries()) {
+          const id = r.runId
+          const vs = ids[i - 1] ?? 'none'
+          const text = await run(`reeval show ${id}`, (out) =>
+            showCommand({ config, flags: {}, out }, [id]),
+          )
+          for (const row of STATE_ROWS)
+            assert.match(text, new RegExp(`\\n {2}${row} +\\S`), `${entry.name} ${id}: ${row}`)
+          await run(`reeval show ${id} --md`, (out) =>
+            showCommand({ config, flags: { md: true }, out }, [id]),
+          )
+          const shown = JSON.parse(
+            await run(`reeval show ${id} --json`, (out) =>
+              showCommand({ config, flags: { json: true }, out }, [id]),
+            ),
+          )
+          assert.deepEqual(shown, readableRecord(structuredClone(r.raw) as never))
+          await run(
+            `reeval compare ${id}`,
+            (out) => compareCommand({ config, flags: {}, out }, [id]),
+            [0, 1],
+          )
+          await run(`reeval analyze ${id} --dry-run --vs ${vs}`, (out, err) =>
+            analyzeCommand({ config, flags: { 'dry-run': true, vs }, out, err }, [id]),
+          )
+          if (r.analyses)
+            assert.match(
+              await run(`reeval analyze ${id} --json --vs ${vs}`, (out, err) =>
+                analyzeCommand({ config, flags: { json: true, vs }, out, err }, [id]),
+              ),
+              /"kind": "reeval-analysis"/,
+            )
+        }
+        for (const [i, id] of ids.entries()) {
+          if (i === 0) continue
+          for (const flags of [{}, { json: true }, { md: true }]) {
+            await run(
+              `reeval compare ${ids[i - 1]} ${id} ${JSON.stringify(flags)}`,
+              (out) => compareCommand({ config, flags, out }, [ids[i - 1] as string, id]),
+              [0, 1],
+            )
+          }
+        }
+      })
+    }
+  })
 })

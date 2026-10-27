@@ -28,7 +28,7 @@ compare a skill, fix a config, read a failure. Read a reference file when the ta
 | [references/config.md](references/config.md) | Harness factories and their keys, `effort`, judge models, `reeval.yaml`, path rules, where the sandbox comes from, imports, the options cascade |
 | [references/evals.md](references/evals.md) | `evaluate.each` and families, `c.serve`, `c.writeFile` hidden tests, judge `state`, the judge's input size, judge errors, every matcher |
 | [references/capture.md](references/capture.md) | Web UIs: `c.capture()` screenshots, `instructions` journeys, `artifacts` on judges and questions |
-| [references/compare.md](references/compare.md) | `compare` beyond the example below: baselines, gates, lift and effort, labelled checks, `questions`, `skill_files` |
+| [references/compare.md](references/compare.md) | `compare` beyond the example below: baselines, gates, lift and effort, labeled checks, `questions`, `skill_files` |
 | [references/environments.md](references/environments.md) | Environments: skills, files, rules, MCP servers, `git()` workspaces, `directory()`, Docker sandboxes, secrets, egress |
 | [references/cli.md](references/cli.md) | The CLI beyond `run`: `query` views, `analyze`, `show`, `compare`, `record`, `studio`, `mcp`, filters, exit codes |
 | [references/mistakes.md](references/mistakes.md) | An error message from reeval you need to map to its fix (the full table) |
@@ -60,7 +60,7 @@ npx reeval run
    Node 22.13 or later; npm, pnpm or Yarn.
 2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|codex|fx|grok-build>`
    (it only asks in a terminal) writes `reeval.config.ts` (the agent, `analysis.model:
-   'google/gemini-3.8-flash'` for insights, and `pr` and `nightly` profiles), `evals/environments.ts` (one `defineEnvironment`), `evals/greet.eval.ts` (an eval
+   'google/gemini-3.8-flash'` for `reeval analyze`, and `pr` and `nightly` profiles), `evals/environments.ts` (one `defineEnvironment`), `evals/greet.eval.ts` (an eval
    in that environment), the `.gitignore` entries (`.reeval/`, `.env*`), an `eval` script and a
    `tsconfig.json` that allows the evals' `.ts` imports, then says whether Docker is running.
    `--bare` writes only the config, `.gitignore` and `package.json`. Where a config exists it
@@ -97,7 +97,7 @@ export default defineConfig({
   harness: cursor({ model: 'composer-2.5' }), // model required; CURSOR_API_KEY
   // no default judge model; pin versions
   judge: { model: 'typesafe-ai/jev-1.14.0', threshold: 0.8 },
-  runs: 1,                                    // attempts per cell
+  // runs: attempts per cell; unset, 1, or 4 for a compare with variants
   timeout: '15m',                             // per attempt
 })
 ```
@@ -105,8 +105,8 @@ export default defineConfig({
 - Harnesses (`reeval/harness`), each with a required `model`; a list runs each as its own cell:
   `cursor` (`CURSOR_API_KEY`), `claudeCode` (`ANTHROPIC_API_KEY`), `antigravity`
   (`GEMINI_API_KEY`), `opencode` (the provider's key; model `<provider>/<model>`), `goose` and
-  `pi` (`GOOGLE_GENERATIVE_AI_API_KEY`), `codex` (`OPENAI_API_KEY`), `fx` (`OPENAI_API_KEY` for a bare id, or
-  `AI_GATEWAY_API_KEY` with `vercel()` in `gateway`), `grokBuild` (`XAI_API_KEY`), `fakeHarness`. Details
+  `pi` (`GOOGLE_GENERATIVE_AI_API_KEY`), `codex` (`OPENAI_API_KEY`), `fx` (`OPENAI_API_KEY` for a bare id,
+  `AI_GATEWAY_API_KEY` with `vercel()` or `OPENROUTER_API_KEY` with `openrouter()` in `gateway`), `grokBuild` (`XAI_API_KEY`), `fakeHarness`. Details
   and `effort` in [references/config.md](references/config.md).
 - Judge models: `'typesafe-ai/jev-1.14.0'` (`TYPESAFE_AI_API_KEY`, recommended),
   `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), `anthropic/*` (`ANTHROPIC_API_KEY`)
@@ -116,7 +116,9 @@ export default defineConfig({
   `gateway: 'vercel'` pin, listed there), `OPENROUTER_API_KEY` only with `openrouter()`. As a
   judge, `vercel()` serves decision models only (Jev, `openai/gpt-6-luna-decisions`), and
   `openrouter()` only those on its Decisions API (`typesafe/jev-1.14`), never a language model:
-  pin a language-model judge to `gateway: 'direct'`. Always a provider prefix.
+  pin a language-model judge to `gateway: 'direct'`. Always a provider prefix. Every `gateway`
+  list ends with `direct()`, so a cell no listed gateway serves falls back to its own key (the
+  plan's hint says so); `direct({ enabled: false })` refuses it instead.
 - Imports: `reeval` (`defineConfig`, `defineEnvironment`, `group`, `evaluate`,
   `expect`, `DEFAULT_EGRESS_ALLOW`, `DEFAULT_SKILL_EXCLUDE`, types), `/harness`, `/sandbox`
   (`docker`, `fakeSandbox`), `/judge` (`fakeJudge`, `RECOMMENDED_JUDGE_MODEL`,
@@ -125,6 +127,10 @@ export default defineConfig({
   `environment`, `env`, `judge`, `runs`, `gate`, `timeout`, `tags`, …) and inner levels win;
   `compare` is for groups and evals only. Options are plain objects, never functions. Unknown
   keys are errors with a hint (`repeat` → "Did you mean runs?").
+- An eval's fingerprint reads its own body, options, `evaluate.each` case and `revision`, not
+  helpers, constants outside the body or fixtures. After changing one of those in a way that
+  changes what the eval measures, bump `revision` (`{ revision: 2 }`, on the eval or its group)
+  so `reeval compare` says `can't compare … revision 1 → 2` instead of `regressed`.
 
 ### Without Docker or API keys: the fake trio
 
@@ -177,8 +183,8 @@ group('hello', () => {
   `%s`, `%#` in the name; cases pool into one family, see
   [references/evals.md](references/evals.md)). The eval id is `file › group › name`; renaming an
   eval restarts its history. Name the eval after the question it answers
-  (`recommends Genkit for a production AI feature`, not `genkit test 2`): insights read the name
-  first to tell what it checks.
+  (`recommends Genkit for a production AI feature`, not `genkit test 2`), so the results and
+  `reeval analyze` read in those terms.
 - `await c.send(prompt)` runs one agent turn and returns a `Turn` (`text`, `status`, `diff`,
   `transcript`). Call it again for multi-turn; `c.judge(q, { on: firstTurn })` grades an earlier one.
 - `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`. A check that can fail on a
@@ -207,7 +213,7 @@ group('hello', () => {
   [references/evals.md](references/evals.md#trustworthy-evals). Not `fakeSandbox()`.
   Keep grading out of the agent's reach: place hidden tests after the turn with `c.writeFile`, and guard seeded files
   with `expect(await c.readFile(path)).toBe(original)` or `expect(c).not.toHaveChanged(['test/**'])`.
-  When the behaviour is the outcome, judge the program's output, not the diff:
+  When the behavior is the outcome, judge the program's output, not the diff:
   `c.judge(q, { on: (await c.exec('node app.js')).stdout })`.
 - Give the environment a `.gitignore` in `files` (the project's isn't copied in): an agent that
   runs a build otherwise fills the judge's diff with its output.
@@ -219,6 +225,11 @@ group('hello', () => {
   `toHaveFetched(url?)`. `expect(c).not.toHaveChanged(globs)` guards files (it reads the diff;
   `toHaveEdited` reads the transcript, so don't use it as a guard). Label requirements with
   `expect`'s second argument: `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`.
+- A failed `expect` fails the attempt even when the eval catches it (TypeScript `try`/`catch`,
+  Python `try`/`except`), at the end like `expect.soft`. To wait for something, use
+  `expect.poll(() => c.exec(cmd), { timeout: 10_000 }).toSucceed()` (Python
+  `expect.poll(lambda: c.exec(cmd), timeout=10).to_succeed()`), never `expect` in a retry loop. A
+  caught plain Python `assert` records nothing, so `assert` or `if` in a loop also works.
 
 ## Environments and compare
 
@@ -238,7 +249,7 @@ const houseStyle = plain.extendEnvironment('house-style', ({ skill }) => ({
 
 group(
   'greetings',
-  { compare: { baseline: plain, variants: [houseStyle] }, runs: 2 },
+  { compare: { baseline: plain, variants: [houseStyle] } },
   () => {
     evaluate('greets in the house style', async (c) => {
       await c.send('Create greet.js exporting greet(name) in our house style.')
@@ -255,7 +266,9 @@ group(
   `setup: [{ run: 'npm ci', timeout: '5m' }]`. More in
   [references/environments.md](references/environments.md).
 - Attempts = evals × harnesses × (1 control + variants) × runs. The example is 1 eval, 2 cells
-  (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 4 attempts.
+  (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 8 attempts:
+  without `runs`, a compare runs 4 a cell, the fewest for a lift verdict. A `runs` below 4 reads
+  `can't tell yet`; `runs: 1` at any level or a profile's `limit.runs: 1` keeps a smoke run cheap.
 - Each variant runs as that environment on its own; `compare` does not layer, inherit or
   extend. Share setup with `parent.extendEnvironment(name, spec)` before `compare`. Without
   `baseline`, the cascaded `environment` is the control.
@@ -293,14 +306,11 @@ arm, per harness, or both), counts as `N of M`, a variant's effect as `helped`, 
 or `can't tell yet`, and failed checks with their messages; `-v` adds intervals. Then the tally
 (`1 fail · 2 pass`; an `error:` outside any eval, such as a stray rejection in an eval file, is
 `1 run error` and fails the run; a study, every cell `gate: 'none'`, is `1 not gated`, never a pass,
-so read its arm rows for what passed), and a `Set analysis.model…` hint while `analysis.model` is unset (the judge's
-model never stands in). With `analysis.model` set, each block gets cited sentences (insights)
-and a headline prints above the tally; they explain the facts and never change a verdict or the
-exit code. `Remarks:` after the tally names evals that need work (a flaky check, too few tries,
-a loose judge, a prompt that names the answer), with the line to fix; the eval rubric
-([../eval-rubric/SKILL.md](../eval-rubric/SKILL.md)) explains each kind. `summary.md` and
-`reeval show` print the same blocks; `reeval analyze <run> --insights` writes or finishes a run's
-insights.
+so read its arm rows for what passed). `Remarks:` after the tally names evals that need work
+(a flaky check, too few tries, a slow MCP server), with the line to fix, from fixed rules with no
+model; they never change a verdict or the exit code, and go in `remarks.json` beside the run. The
+eval rubric ([../eval-rubric/SKILL.md](../eval-rubric/SKILL.md)) explains each kind. `summary.md`
+and `reeval show` print the same blocks.
 
 Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or
 above, or `--config <path>`. Runs land in `.reeval/runs/`. All views, `analyze` and the MCP

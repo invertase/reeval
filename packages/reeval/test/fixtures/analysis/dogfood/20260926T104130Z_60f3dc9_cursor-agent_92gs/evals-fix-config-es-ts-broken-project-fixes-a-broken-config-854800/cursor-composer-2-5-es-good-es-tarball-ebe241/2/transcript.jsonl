@@ -25,5 +25,5 @@
 {"turn":0,"type":"reasoning"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cd . && npx es run --dry-run --json 2>/dev/null | head -100"},"ok":true,"durationMs":1410}
 {"turn":0,"type":"reasoning"}
-{"turn":0,"type":"text","text":"`npx es run --dry-run` now passes. The plan is 1 eval, 2 cells (empty control vs `with-docs`), 3 runs each, 6 attempts on the fake harness/sandbox.\n\n**Mistakes fixed:**\n\n1. **`compare: [withDocs]` in …"}
+{"turn":0,"type":"text","text":"`npx es run --dry-run` now passes. The plan is 1 eval, 2 cells (empty control vs `with-docs`), 3 runs each, 6 attempts o…"}
 {"turn":0,"type":"turn-end"}

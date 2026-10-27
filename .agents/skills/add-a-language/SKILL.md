@@ -32,7 +32,7 @@ lifecycle stay shared.
   takes a function that reads or runs something (`expect.poll(lambda: c.read_file(p))`), which the
   SDK calls once to learn the subject for reeval to re-read.
 - **TypeScript stays in-process.** Never send `.eval.ts` through the runner transport; records,
-  stacks and matcher behaviour must stay unchanged.
+  stacks and matcher behavior must stay unchanged.
 - **No per-language branches in the engine.** The worker calls `loadEvalModule()` only; do not
   fork plan/matrix logic or special-case languages in `engine/worker.ts`.
 - **Update goldens in the same PR** when declaration or attempt-protocol shapes change
@@ -96,7 +96,7 @@ see [Prior art](#prior-art-dart-spike) below):
 | Module | Role |
 |---|---|
 | `protocol.ts` | `RUNNER_PROTOCOL = 3`. Session messages use `t` (`hello`, `collect`, `declared`, `log`). Attempt traffic uses shapes from `src/contract/attempt.ts` (`start`, `abort`, `done`, `{id, call}`, replies), each with the `key` reeval gave the body in its `start` — no `t` on attempt lines. `key` is unique per started body; `attempt.id` isn't (two evals on one cell share it), so never multiplex on it. |
-| `transport.ts` | Spawns the runner; one JSON message a line on its stdin (to it) and stdout (from it). A stdout line that isn't a message is shown on stderr |
+| `transport.ts` | Spawns the runner; one JSON message a line on its stdin (to it) and stdout (from it). A stdout line that isn't a message is shown on stderr; one that starts with `{` but isn't JSON (a bare `NaN`) ends the session with an error |
 | `attempt-host.ts` | Maps protocol ops to real `AttemptContext` (`expect` → `match.ts`) |
 | `remote.ts` | `collectLanguageFile`: collect tree, `declareTree`, run remote bodies |
 
@@ -107,7 +107,9 @@ SDK runner responsibilities:
    child process nor the body's own input can write into a message or read one. A forked child
    shares those copies but not the runner's lock: send its output to stderr. reeval takes a
    stdout line as a message only when it has a message's shape (`isFromRunner`), so print
-   nothing else there that could pass for one. Send
+   nothing else there that could pass for one. Write strict JSON: a value with NaN or Infinity
+   in it fails the eval's call that passed it (Python's `allow_nan=False`), since reeval ends the
+   session on a line that starts with `{` but doesn't parse. Send
    `{ t: 'hello', protocol: 3, sdk, version, runtime }`. reeval sets `REEVAL_RUNNER=stdio` and
    `REEVAL_RUNNER_PROTOCOL`; a runner started without them, or on another protocol, exits
    non-zero with a sentence naming both versions instead of saying hello.
@@ -149,7 +151,7 @@ own test runner.
    (Python's `runners/python.ts` is the reference) and a row in `ci.yml`'s `launchers` matrix; see
    its [README](../../../packages/reeval/test/conformance/launcher/README.md).
 
-When TypeScript changes declaration or protocol behaviour, run
+When TypeScript changes declaration or protocol behavior, run
 `REEVAL_UPDATE_SNAPSHOTS=1` on `conformance.test.ts`, review the diff, and update every SDK mirror
 in the **same PR**. Do not duplicate the full `test/features/` corpus per language — one **smoke
 fixture** per adapter plus declare/context conformance is enough.

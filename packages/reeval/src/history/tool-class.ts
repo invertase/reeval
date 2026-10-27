@@ -114,7 +114,7 @@ function readWords(words: string[]): string[] {
 }
 
 /** `/home/<user>/x` and `/root/x` as `~/x`; `./x` as `x`. */
-const normalise = (p: string) =>
+const normalize = (p: string) =>
   p
     .replace(/^\/home\/[^/]+\//, '~/')
     .replace(/^\/root\//, '~/')
@@ -161,7 +161,7 @@ function globRegex(glob: string): RegExp {
 
 /** The declared files one word names: the file itself, one of a glob's matches, or a directory's. */
 function filesOf(word: string, files: string[]): { files: string[]; dir: boolean } {
-  const w = normalise(word).replace(/\/+$/, '')
+  const w = normalize(word).replace(/\/+$/, '')
   if (!w) return { files: [], dir: false }
   // A relative word may be relative to home (`.agents/skills/…`) or the workspace.
   const forms = (f: string) => (f.startsWith('~/') ? [f, f.slice(2)] : [f])
@@ -210,14 +210,14 @@ export function classifyCall(
     if (hit.files.length || hit.dir) context = true
     if (
       ctx.skills.some(
-        (s) => normalise(w).includes(`skills/${s}/`) || normalise(w).endsWith(`skills/${s}`),
+        (s) => normalize(w).includes(`skills/${s}/`) || normalize(w).endsWith(`skills/${s}`),
       )
     ) {
       context = true
     }
   }
   if (context) return { class: 'context', files: [...files] }
-  if (words.some((w) => DEPENDENCY.test(normalise(w))) || (shell && words.includes('--help'))) {
+  if (words.some((w) => DEPENDENCY.test(normalize(w))) || (shell && words.includes('--help'))) {
     return { class: 'dependency', files: [] }
   }
   if (!shell && WEB_TOOL.test(tool)) return { class: 'web', files: [] }

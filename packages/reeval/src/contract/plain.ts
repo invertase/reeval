@@ -38,6 +38,31 @@ import {
 /** A host environment variable's name. */
 export const VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
 
+/**
+ * A URL with its password (or a username on http(s) or git+http(s), which is where tokens go)
+ * masked, or undefined when it has neither or isn't a URL. An SSH username (`git@`) is no secret.
+ */
+export function credentialsIn(url: string): string | undefined {
+  if (!URL.canParse(url)) return undefined
+  const u = new URL(url)
+  if (!u.password && !(u.username && /^(?:git\+)?https?:$/.test(u.protocol))) return undefined
+  u.username = u.username && '***'
+  u.password = u.password && '***'
+  return u.href
+}
+
+/** A source reeval fetches on the host: a URL in it may not carry a password or token. */
+const fetched = () =>
+  nonEmpty().superRefine((url, ctx) => {
+    const masked = credentialsIn(url)
+    if (masked) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `${JSON.stringify(masked)} has a password or token in it, which reeval would record. reeval fetches it on the host with your own git and npm credentials; remove it from the URL.`,
+      })
+    }
+  })
+
 /** A host name, or `*.` and a domain for its subdomains. */
 const HOST = /^(?:\*\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/i
 
@@ -67,61 +92,28 @@ const host = z.string().superRefine((value, ctx) => {
   if (bad) ctx.addIssue({ code: 'custom', message: bad })
 })
 
-export const gatePolicySchema = z
-  .union([z.literal('all'), z.strictObject({ passRate: z.number().gt(0).max(1) })])
-  .describe(
-    "How a cell's attempts decide its outcome: `'all'` (the default) passes only when every attempt passes (pass^k); `{ passRate }` passes when its pass@1 (passes over passes and fails) is at least that share.",
-  )
+export const gatePolicySchema = z.union([
+  z.literal('all'),
+  z.strictObject({ passRate: z.number().gt(0).max(1) }),
+])
 
-export const egressPolicySchema = z
-  .union([
-    z.literal('proxy'),
-    z.literal('allow-all'),
-    z.literal('deny-all'),
-    z.strictObject({ allow: z.array(host).readonly() }),
-  ])
-  .describe(
-    "Where the sandbox may connect: any host over HTTP(S) through the egress gateway (`'proxy'`, the default), anywhere including raw TCP and UDP around the gateway (`'allow-all'`), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
-  )
+export const egressPolicySchema = z.union([
+  z.literal('proxy'),
+  z.literal('allow-all'),
+  z.literal('deny-all'),
+  z.strictObject({ allow: z.array(host).readonly() }),
+])
 
-export const substituteInSchema = z
-  .enum(['header', 'query', 'body'])
-  .describe('`header` values, the `query` string, or the request `body`.')
+export const substituteInSchema = z.enum(['header', 'query', 'body'])
 
 export const secretSchema = z
   .strictObject({
     kind: z.literal('secret'),
-    from: z
-      .string()
-      .regex(VAR, 'needs a host variable name')
-      .optional()
-      .describe("The host variable; defaults to the key it's set under."),
-    optional: z
-      .boolean()
-      .optional()
-      .describe(
-        'When the host variable is unset, skip it (the record says so) instead of failing.',
-      ),
-    to: z
-      .enum(['agent', 'checks'])
-      .optional()
-      .describe(
-        "`agent` (default): the container's environment. `checks`: only `c.exec` and `setup` steps.",
-      ),
-    hosts: z
-      .array(host)
-      .min(1)
-      .optional()
-      .describe(
-        'Brokers the secret: the sandbox gets a per-attempt placeholder, and the Docker egress gateway swaps in the real value only on HTTPS requests to these hosts (`*.example.com` for subdomains).',
-      ),
-    in: z
-      .array(substituteInSchema)
-      .min(1)
-      .optional()
-      .describe(
-        "Where in a request to those hosts the gateway substitutes; defaults to `['header']`.",
-      ),
+    from: z.string().regex(VAR, 'needs a host variable name').optional(),
+    optional: z.boolean().optional(),
+    to: z.enum(['agent', 'checks']).optional(),
+    hosts: z.array(host).min(1).optional(),
+    in: z.array(substituteInSchema).min(1).optional(),
   })
   .superRefine((secret, ctx) => {
     if (secret.in && !secret.hosts) {
@@ -132,48 +124,23 @@ export const secretSchema = z
       })
     }
   })
-  .describe(
-    'A host environment variable, redacted everywhere reeval writes and recorded by name only. Made by the `secret` helper of `defineEnvironment` and `defineConfig` callbacks.',
-  )
 
-export const secretTemplateSchema = z
-  .strictObject({
-    kind: z.literal('secret-template'),
-    template: z
-      .string()
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
-      .describe('The string, with `${NAME}` for each host variable to substitute.'),
-  })
-  .describe(
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
-    "`secret.template('Bearer ${TOKEN}')`: host variables substituted into a string, for MCP headers.",
-  )
+export const secretTemplateSchema = z.strictObject({
+  kind: z.literal('secret-template'),
+  template: z.string(),
+})
 
-export const envValueSchema = z
-  .union([z.string(), secretSchema])
-  .describe("A variable's value: a literal string, or a host secret.")
+export const envValueSchema = z.union([z.string(), secretSchema])
 
-export const envVarsSchema = z
-  .record(z.string(), envValueSchema)
-  .describe('Environment variables by name.')
+export const envVarsSchema = z.record(z.string(), envValueSchema)
 
-export const hostFileSchema = z
-  .strictObject({
-    kind: z.literal('file'),
-    path: nonEmpty().describe(
-      "Its path on the host, absolute or relative to the directory of the file it's written in.",
-    ),
-  })
-  .describe('A file on the host, read when an attempt starts. Made by the `file` helper.')
+export const hostFileSchema = z.strictObject({
+  kind: z.literal('file'),
+  path: nonEmpty(),
+})
 
-export const skillPlacementSchema = z
-  .enum(['harness', 'workspace'])
-  .describe(
-    "`harness` (default): the agent's own skills, via its adapter. `workspace`: its repo skill dir.",
-  )
+export const skillPlacementSchema = z.enum(['harness', 'workspace'])
 
-const ONLY = 'The skill names to keep; default every one found.'
-const EXCLUDE = 'Paths in each skill directory to leave out, gitignore-style.'
 const skill = <S extends string, F extends z.core.$ZodLooseShape>(source: S, fields: F) =>
   z.strictObject({
     kind: z.literal('skill'),
@@ -182,211 +149,132 @@ const skill = <S extends string, F extends z.core.$ZodLooseShape>(source: S, fie
     ...fields,
   })
 
-export const skillSourceSchema = z
-  .discriminatedUnion('source', [
-    skill('local', {
-      path: nonEmpty().describe('A host directory with a `SKILL.md`, or a directory of them.'),
-      only: z.array(z.string()).optional().describe(ONLY),
-      exclude: z.array(z.string()).optional().describe(EXCLUDE),
-    }),
-    skill('git', {
-      repo: nonEmpty().describe(
-        'As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL.',
-      ),
-      ref: z
-        .string()
-        .optional()
-        .describe("A branch, tag or commit SHA; unset is the remote's `HEAD`."),
-      path: z.string().optional().describe('The directory in the repository to read skills from.'),
-      only: z.array(z.string()).optional().describe(ONLY),
-      exclude: z.array(z.string()).optional().describe(EXCLUDE),
-    }),
-    skill('registry', {
-      id: z
-        .string()
-        .regex(/^[\w.-]+\/[\w.-]+@[a-z0-9-]+$/)
-        .describe('A skills.sh id, `owner/repo@skill`.'),
-      version: z.string().optional().describe("A git ref of the skill's repository."),
-    }),
-    skill('npm', {
-      spec: nonEmpty().describe('A pinned npm package spec.'),
-      path: z
-        .string()
-        .describe('The directory in the package to read skills from; default `skills`.'),
-      only: z.array(z.string()).optional().describe(ONLY),
-      exclude: z.array(z.string()).optional().describe(EXCLUDE),
-    }),
-    skill('inline', {
-      name: z.string().describe("The skill's name, as in `SKILL.md`'s frontmatter."),
-      description: z.string().describe("The skill's description, as in `SKILL.md`'s frontmatter."),
-      content: z.string().describe('The body of `SKILL.md`.'),
-      files: z
-        .record(z.string(), z.string())
-        .describe('Other files in the skill directory, by relative path.'),
-    }),
-  ])
-  .describe('Skills to place for the agent, made by the `skill` helper.')
+export const skillSourceSchema = z.discriminatedUnion('source', [
+  skill('local', {
+    path: nonEmpty(),
+    only: z.array(z.string()).optional(),
+    exclude: z.array(z.string()).optional(),
+  }),
+  skill('git', {
+    repo: fetched(),
+    ref: z.string().optional(),
+    path: z.string().optional(),
+    only: z.array(z.string()).optional(),
+    exclude: z.array(z.string()).optional(),
+  }),
+  skill('registry', {
+    id: z.string().regex(/^[\w.-]+\/[\w.-]+@[a-z0-9-]+$/),
+    version: z.string().optional(),
+  }),
+  skill('npm', {
+    spec: fetched(),
+    path: z.string(),
+    only: z.array(z.string()).optional(),
+    exclude: z.array(z.string()).optional(),
+  }),
+  skill('inline', {
+    name: z.string(),
+    description: z.string(),
+    content: z.string(),
+    files: z.record(z.string(), z.string()),
+  }),
+])
 
-export const pluginPartSchema = z
-  .enum(['skills', 'agents', 'commands', 'hooks', 'mcp', 'rules'])
-  .describe(
-    "A part of a plugin, as Claude Code's layout bundles it: `skills/<name>/SKILL.md`, `agents/<name>.md`, `commands/<name>.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest's `mcpServers`) or `rules/`.",
-  )
+export const pluginPartSchema = z.enum(['skills', 'agents', 'commands', 'hooks', 'mcp', 'rules'])
 
-export const pluginMarketplaceSchema = z
-  .discriminatedUnion('source', [
-    z.strictObject({
-      source: z.literal('git'),
-      repo: nonEmpty().describe('As written: a URL or `github:owner/repo`.'),
-      ref: z
-        .string()
-        .optional()
-        .describe("A branch, tag or commit SHA; unset is the remote's `HEAD`."),
-    }),
-    z.strictObject({
-      source: z.literal('npm'),
-      spec: nonEmpty().describe('An npm package spec.'),
-    }),
-  ])
-  .describe(
-    'A Claude Code marketplace: the source that holds its `.claude-plugin/marketplace.json`.',
-  )
+export const pluginMarketplaceSchema = z.discriminatedUnion('source', [
+  z.strictObject({
+    source: z.literal('git'),
+    repo: fetched(),
+    ref: z.string().optional(),
+  }),
+  z.strictObject({
+    source: z.literal('npm'),
+    spec: fetched(),
+  }),
+])
 
 const buildCommands = z.union([nonEmpty(), z.array(nonEmpty()).min(1, 'at least one command')])
 
-export const pluginBuildSchema = z
-  .union([
-    buildCommands,
-    z.strictObject({
-      run: buildCommands.describe('The command, or the commands in order.'),
-      cwd: z
-        .string()
-        .regex(
-          /^(?:\.|(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[^\\]+)$/,
-          "a directory relative to the source's root, with forward slashes and no ..",
-        )
-        .optional()
-        .describe("Where they run, relative to the source's root; default the plugin's directory."),
-    }),
-  ])
-  .describe(
-    "Shell commands that build a plugin in a Docker image layer, on the cell's harness image, as root and with no secrets: one, a list, or `{ run, cwd }`. They run from the plugin's directory, or from `cwd`, relative to the source's root (`'.'` for the repository's or package's root).",
-  )
+export const pluginBuildSchema = z.union([
+  buildCommands,
+  z.strictObject({
+    run: buildCommands,
+    cwd: z
+      .string()
+      .regex(
+        /^(?:\.|(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[^\\]+)$/,
+        "a directory relative to the source's root, with forward slashes and no ..",
+      )
+      .optional(),
+  }),
+])
 
 const plugin = <S extends string, F extends z.core.$ZodLooseShape>(source: S, fields: F) =>
   z.strictObject({
     kind: z.literal('plugin'),
     source: z.literal(source),
     ...fields,
-    only: z
-      .array(pluginPartSchema)
-      .min(1, 'at least one part')
-      .optional()
-      .describe('The parts to place; default every part the plugin has.'),
-    build: pluginBuildSchema
-      .optional()
-      .describe(
-        'Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.',
-      ),
+    only: z.array(pluginPartSchema).min(1, 'at least one part').optional(),
+    build: pluginBuildSchema.optional(),
   })
 
-export const pluginSourceSchema = z
-  .discriminatedUnion('source', [
-    plugin('local', {
-      path: nonEmpty().describe('A host directory with a `.claude-plugin/plugin.json`.'),
-    }),
-    plugin('git', {
-      repo: nonEmpty().describe(
-        'As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL.',
-      ),
-      ref: z
-        .string()
-        .optional()
-        .describe("A branch, tag or commit SHA; unset is the remote's `HEAD`."),
-      path: z
-        .string()
-        .optional()
-        .describe("The plugin's directory in the repository; default its root."),
-    }),
-    plugin('npm', {
-      spec: nonEmpty().describe('A pinned npm package spec.'),
-      path: z
-        .string()
-        .optional()
-        .describe("The plugin's directory in the package; default its root."),
-    }),
-    plugin('marketplace', {
-      name: nonEmpty().describe(
-        "The plugin's entry in the marketplace's `.claude-plugin/marketplace.json`.",
-      ),
-      marketplace: pluginMarketplaceSchema.describe(
-        'Where the marketplace is: a git repository (at `ref`) or an npm package.',
-      ),
-    }),
-  ])
-  .describe(
-    "A plugin to place for the agent, in Claude Code's layout, made by the `plugin` helper.",
-  )
+export const pluginSourceSchema = z.discriminatedUnion('source', [
+  plugin('local', {
+    path: nonEmpty(),
+  }),
+  plugin('git', {
+    repo: fetched(),
+    ref: z.string().optional(),
+    path: z.string().optional(),
+  }),
+  plugin('npm', {
+    spec: fetched(),
+    path: z.string().optional(),
+  }),
+  plugin('marketplace', {
+    name: nonEmpty(),
+    marketplace: pluginMarketplaceSchema,
+  }),
+])
 
-export const mcpServerSchema = z
-  .discriminatedUnion('transport', [
-    z.strictObject({
-      kind: z.literal('mcp'),
-      transport: z.literal('stdio'),
-      command: nonEmpty().describe('The command that starts the server in the sandbox.'),
-      args: z.array(z.string()),
-      env: envVarsSchema.describe('Variables the server process gets.'),
-    }),
-    z.strictObject({
-      kind: z.literal('mcp'),
-      transport: z.enum(['http', 'sse']).describe('Streamable HTTP, or the older SSE transport.'),
-      url: z.url('must be a URL'),
-      headers: z
-        .record(z.string(), z.union([z.string(), secretSchema, secretTemplateSchema]))
-        .describe('Request headers, with secrets brokered by the egress gateway.'),
-    }),
-  ])
-  .describe(
-    'An MCP server the agent gets, made by the `mcp` helper: a command in the sandbox, or a URL.',
-  )
+export const mcpServerSchema = z.discriminatedUnion('transport', [
+  z.strictObject({
+    kind: z.literal('mcp'),
+    transport: z.literal('stdio'),
+    command: nonEmpty(),
+    args: z.array(z.string()),
+    env: envVarsSchema,
+  }),
+  z.strictObject({
+    kind: z.literal('mcp'),
+    transport: z.enum(['http', 'sse']),
+    url: z.url('must be a URL'),
+    headers: z.record(z.string(), z.union([z.string(), secretSchema, secretTemplateSchema])),
+  }),
+])
 
-export const gitWorkspaceSchema = z
-  .strictObject({
-    kind: z.literal('git'),
-    repo: nonEmpty().describe('As written: a URL, `github:owner/repo`, or a local path.'),
-    url: nonEmpty().describe(
-      'What reeval fetches: the clone URL, or an absolute path for a local repository.',
-    ),
-    ref: z
-      .string()
-      .optional()
-      .describe("A branch, tag or commit SHA; unset is the remote's `HEAD`."),
-    path: z
-      .string()
-      .optional()
-      .describe('A directory in the repository whose contents become the workspace.'),
-    init: z
-      .boolean()
-      .optional()
-      .describe('Give the workspace a `.git`: one commit of the fetched tree, with no remote.'),
-    token: z
-      .string()
-      .superRefine((token, ctx) => {
-        // Never echo it: a token here instead of its variable's name is the token itself.
-        if (!VAR.test(token) || /^(?:gh[opsur]_|github_pat_)/.test(token)) {
-          ctx.addIssue({
-            code: 'custom',
-            message:
-              "token names the host variable that holds the token, e.g. token: 'GITHUB_TOKEN'. Don't put the token itself in the eval.",
-          })
-        }
-      })
-      .optional()
-      .describe('The host variable holding a token for the fetch; read on the host only.'),
-  })
-  .describe(
-    'A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url` is what reeval fetches: the clone URL, or an absolute path for a local repository.',
-  )
+export const gitWorkspaceSchema = z.strictObject({
+  kind: z.literal('git'),
+  repo: fetched(),
+  url: fetched(),
+  ref: z.string().optional(),
+  path: z.string().optional(),
+  init: z.boolean().optional(),
+  token: z
+    .string()
+    .superRefine((token, ctx) => {
+      // Never echo it: a token here instead of its variable's name is the token itself.
+      if (!VAR.test(token) || /^(?:gh[opsur]_|github_pat_)/.test(token)) {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            "token names the host variable that holds the token, e.g. token: 'GITHUB_TOKEN'. Don't put the token itself in the eval.",
+        })
+      }
+    })
+    .optional(),
+})
 
 export type _SameAsSchema = [
   Assert<Same<z.infer<typeof gatePolicySchema>, GatePolicy>>,

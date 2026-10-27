@@ -7,6 +7,7 @@ import { sandboxProblem } from './contract/docker.ts'
 import { environmentDataSchema, environmentSpecSchema, NAME } from './contract/environment.ts'
 import {
   badHost,
+  credentialsIn,
   descriptorProblem,
   egressProblem,
   gitWorkspaceSchema,
@@ -21,7 +22,7 @@ import { closest, genericProblem, got, type Issue, refusal } from './contract/sh
 import { parseDuration } from './duration.ts'
 import { localPluginServers, PLUGIN_NAME, PLUGIN_PARTS } from './environment/plugins.ts'
 import { isObjectLike } from './object.ts'
-import { SECRET_NAME } from './redact.ts'
+import { hasTokenShape, SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
 import type {
   EgressPolicy,
@@ -209,6 +210,19 @@ export function mcpHosts(url: string): string[] | undefined {
 }
 
 /**
+ * Where an MCP server's header secret is brokered to: its own `hosts`, else the server's host.
+ * Never on an `http://` server: the gateway swaps secrets in over HTTPS only, and the header
+ * goes only to the server.
+ */
+export const mcpHeaderHosts = (
+  value: Secret | SecretTemplate,
+  url: string,
+): readonly string[] | undefined => {
+  const own = mcpHosts(url)
+  return own && isSecret(value) ? (value.hosts ?? own) : own
+}
+
+/**
  * A secret an attempt puts in the sandbox: where it's set (`KEY`, `mcp.docs.headers.auth`), the
  * host variable it reads, and the hosts it's brokered to, or none when the sandbox gets its value.
  */
@@ -230,12 +244,8 @@ export type UnbrokeredSecret = Omit<PlannedSecret, 'hosts'>
  */
 export function plannedSecrets(env: EnvVars, layers: readonly EnvironmentLayer[]): PlannedSecret[] {
   const vars: EnvVars = { ...env }
-  const servers = new Map<string, McpServer>()
-  for (const { spec } of layers) {
-    Object.assign(vars, spec.env)
-    for (const [name, server] of Object.entries(spec.mcp ?? {})) servers.set(name, server)
-  }
-  for (const [name, server] of localPluginServers(layers)) servers.set(name, server)
+  for (const { spec } of layers) Object.assign(vars, spec.env)
+  const servers = layeredServers(layers)
   const out = new Map<string, PlannedSecret>()
   const add = (
     label: string,
@@ -270,18 +280,64 @@ export function plannedSecrets(env: EnvVars, layers: readonly EnvironmentLayer[]
       fromVars(s.env, `mcp.${server}.env.`)
       continue
     }
-    const own = mcpHosts(s.url)
     for (const [header, value] of Object.entries(s.headers)) {
       const label = `mcp.${server}.headers.${header}`
-      if (isSecret(value)) add(label, value.from ?? header, value.hosts ?? own)
+      if (isSecret(value)) add(label, value.from ?? header, mcpHeaderHosts(value, s.url))
       if (isSecretTemplate(value)) {
         for (const [, name] of value.template.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) {
-          add(label, name as string, own)
+          add(label, name as string, mcpHeaderHosts(value, s.url))
         }
       }
     }
   }
   return [...out.values()]
+}
+
+/** The layers' MCP servers and their local plugins', a later one replacing an earlier one of its name. */
+function layeredServers(layers: readonly EnvironmentLayer[]): Map<string, McpServer> {
+  const servers = new Map<string, McpServer>()
+  for (const { spec } of layers) {
+    for (const [name, server] of Object.entries(spec.mcp ?? {})) servers.set(name, server)
+  }
+  for (const [name, server] of localPluginServers(layers)) servers.set(name, server)
+  return servers
+}
+
+const CREDENTIAL_HEADER = /^(?:proxy-)?authorization$|^cookie$|(?:^|[-_])auth(?:$|[-_])/i
+/** An `Authorization`-style value, whatever the header is called. */
+const AUTH_SCHEME = /^(?:Bearer|Basic|Token)\s+\S/i
+
+/** Whether an MCP header written as a plain string looks like a credential, by its name or its value's shape. */
+export const credentialHeader = (name: string, value: string) =>
+  CREDENTIAL_HEADER.test(name.trim()) ||
+  SECRET_NAME.test(name) ||
+  AUTH_SCHEME.test(value.trim()) ||
+  hasTokenShape(value)
+
+/**
+ * The plain-header values masked like a secret-named host variable's: 8 or more characters, so a
+ * guessed-at header such as `X-Token-Count: '1000'` can't mask every `1000` the attempt writes.
+ */
+export const maskedHeaderValue = (name: string, value: string) =>
+  value.length >= 8 && credentialHeader(name, value)
+
+/** An MCP header written as a plain string that looks like a credential, and whether its server is on HTTPS. */
+export type PlainCredentialHeader = { label: string; https: boolean }
+
+/** The layers' MCP headers that look like credentials but aren't a `secret()` or `secret.template`. */
+export function plainCredentialHeaders(
+  layers: readonly EnvironmentLayer[],
+): PlainCredentialHeader[] {
+  const out: PlainCredentialHeader[] = []
+  for (const [server, s] of layeredServers(layers)) {
+    if (s.transport === 'stdio') continue
+    for (const [header, value] of Object.entries(s.headers)) {
+      if (typeof value === 'string' && credentialHeader(header, value)) {
+        out.push({ label: `mcp.${server}.headers.${header}`, https: mcpHosts(s.url) !== undefined })
+      }
+    }
+  }
+  return out
 }
 
 /** The secrets the sandbox gets as real values: no `hosts`, and none implied by an MCP URL. */
@@ -358,14 +414,15 @@ export function sameWorkspaceOnly(
 export const filesOf = (layers: readonly EnvironmentLayer[]): string[] =>
   [...new Set(layers.flatMap((l) => Object.keys(l.spec.files ?? {})))].sort()
 
-/** A URL with its password (or an https username, which is where tokens go) masked. */
-function credentialsIn(repo: string): string | undefined {
-  if (!URL.canParse(repo)) return undefined
-  const u = new URL(repo)
-  if (!u.password && !(u.username && /^https?:$/.test(u.protocol))) return undefined
-  u.username = u.username && '***'
-  u.password = u.password && '***'
-  return u.href
+const NO_GIT_CREDENTIALS =
+  'the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials; remove it from the URL.'
+const NO_NPM_CREDENTIALS =
+  'the URL has a password or token in it. reeval runs npm pack on the host, with your own npm and git credentials; remove it from the URL.'
+
+/** Throws when an npm spec is a URL (a tarball, git+https:, git+ssh:) with a password or token. */
+function npmCredentials(call: string, spec: string) {
+  const masked = credentialsIn(spec)
+  if (masked) throw new DefinitionError(`${call}(${JSON.stringify(masked)}): ${NO_NPM_CREDENTIALS}`)
 }
 
 const GIT_OPTIONS = ['ref', 'path', 'init', 'token']
@@ -495,6 +552,10 @@ function skillHelper(base: string): SkillHelper {
           `skill.git() needs a repository URL, e.g. skill.git('https://github.com/acme/skills') (got ${JSON.stringify(repo)})`,
         )
       }
+      const masked = credentialsIn(repo)
+      if (masked) {
+        throw new DefinitionError(`skill.git(${JSON.stringify(masked)}): ${NO_GIT_CREDENTIALS}`)
+      }
       const parsed = parseGitRepo(repo)
       const ref = o.ref ?? parsed.ref
       const path = o.path ?? parsed.path
@@ -523,15 +584,18 @@ function skillHelper(base: string): SkillHelper {
         placement: placement(o.placement),
       }
     },
-    npm: (spec, o = {}) => ({
-      kind: 'skill',
-      source: 'npm',
-      spec: localNpmSpec(spec, base),
-      path: o.path ?? 'skills',
-      ...(o.only ? { only: [...o.only] } : {}),
-      ...exclude(o.exclude),
-      placement: placement(o.placement),
-    }),
+    npm: (spec, o = {}) => {
+      if (typeof spec === 'string') npmCredentials('skill.npm', spec)
+      return {
+        kind: 'skill',
+        source: 'npm',
+        spec: localNpmSpec(spec, base),
+        path: o.path ?? 'skills',
+        ...(o.only ? { only: [...o.only] } : {}),
+        ...exclude(o.exclude),
+        placement: placement(o.placement),
+      }
+    },
     inline: (skill, o = {}) => ({
       kind: 'skill',
       source: 'inline',
@@ -659,9 +723,7 @@ function pluginHelper(base: string): PluginHelper {
       const what = `plugin.git(${JSON.stringify(repo)})`
       const masked = credentialsIn(repo)
       if (masked) {
-        throw new DefinitionError(
-          `plugin.git(${JSON.stringify(masked)}): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials; remove it from the URL.`,
-        )
+        throw new DefinitionError(`plugin.git(${JSON.stringify(masked)}): ${NO_GIT_CREDENTIALS}`)
       }
       const options = common(what, o, ['ref', 'path'])
       const parsed = parseGitRepo(repo)
@@ -687,6 +749,7 @@ function pluginHelper(base: string): PluginHelper {
           `plugin.npm() needs a pinned package spec, e.g. plugin.npm('@acme/review-plugin@1.2.0') (got ${JSON.stringify(spec)})`,
         )
       }
+      npmCredentials('plugin.npm', spec)
       const what = `plugin.npm(${JSON.stringify(spec)})`
       const options = common(what, o, ['path'])
       const path = dirPath(what, (o as { path?: unknown }).path, 'package')
@@ -723,6 +786,12 @@ function pluginHelper(base: string): PluginHelper {
         }
         const spec = from.slice('npm:'.length)
         if (!spec) throw new DefinitionError(`${what}: npm: needs a package spec`)
+        const masked = credentialsIn(spec)
+        if (masked) {
+          throw new DefinitionError(
+            `plugin.marketplace(${JSON.stringify(`${name}@npm:${masked}`)}): ${NO_NPM_CREDENTIALS}`,
+          )
+        }
         return {
           kind: 'plugin',
           source: 'marketplace',
@@ -734,7 +803,7 @@ function pluginHelper(base: string): PluginHelper {
       const masked = credentialsIn(from)
       if (masked) {
         throw new DefinitionError(
-          `plugin.marketplace(${JSON.stringify(`${name}@${masked}`)}): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials; remove it from the URL.`,
+          `plugin.marketplace(${JSON.stringify(`${name}@${masked}`)}): ${NO_GIT_CREDENTIALS}`,
         )
       }
       const parsed = parseGitRepo(from)

@@ -233,6 +233,99 @@ describe('recording runs into evals/.history', () => {
     }
   })
 
+  test("artifacts 'failures' keeps what a failed eval's compare input and lift gate need", async () => {
+    const p = await fixture('features/compare/question-artifacts')
+    await rm(join(p.dir, 'evals/lands.eval.ts'))
+    await rm(join(p.dir, 'evals/canary.eval.ts'))
+    await writeFile(
+      join(p.dir, 'evals/mixed.eval.ts'),
+      `import { evaluate, expect } from 'reeval'
+import { baseline, variant } from './env.ts'
+
+evaluate(
+  'mixed',
+  {
+    runs: 2,
+    compare: { baseline, variants: [variant] },
+    questions: [{ question: 'Which page looks better?', across: 'environment', artifacts: ['landing'] }],
+  },
+  async (c) => {
+    await c.send('write the page')
+    const server = await c.serve('node server.mjs')
+    await c.capture(server, { name: 'aside' })
+    await c.capture(server, { name: 'landing' })
+    expect(c.attempt.n, 'first try').toBe(1)
+  },
+)
+`,
+    )
+    await writeFile(
+      join(p.dir, 'evals/flat.eval.ts'),
+      `import { evaluate } from 'reeval'
+import { baseline, variant } from './env.ts'
+
+evaluate('flat', { compare: { baseline, variants: [variant], minLift: 0.5 } }, async (c) => {
+  await c.send('write the page')
+})
+`,
+    )
+    await writeFile(
+      join(p.dir, 'evals/lifted.eval.ts'),
+      `import { evaluate, expect } from 'reeval'
+import { baseline, variant } from './env.ts'
+
+evaluate(
+  'lifted',
+  { runs: 2, compare: { baseline, variants: [variant], minLift: 0.6 } },
+  async (c) => {
+    await c.send('write the page')
+    expect(c.attempt.cell.role === 'variant' || c.attempt.n === 1, 'passes').toBe(true)
+  },
+)
+`,
+    )
+    assert.equal((await runCli(p.dir)).code, 1)
+    const r = await runCli(p.dir, ['record', '--artifacts', 'failures'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run, dir } = readRun(p.dir, { history: HISTORY })
+    const evalOf = (name: string) => run.evals.find((e) => e.name === name)
+    const mixed = evalOf('mixed')
+    assert.equal(mixed?.outcome, 'fail')
+    const input = mixed?.answers?.[0]?.input
+    assert.ok(input && existsSync(join(dir, input.path)), 'the failed eval keeps its compare input')
+    const shots = JSON.parse(readFileSync(join(dir, input.path), 'utf8')).calls.flatMap(
+      (c: { screenshots?: { path?: string }[] }) => c.screenshots ?? [],
+    )
+    assert.ok(shots.length > 0)
+    for (const s of shots) assert.ok(s.path && existsSync(join(dir, s.path)), s.path)
+    for (const a of mixed?.attempts ?? []) {
+      const kept = Object.keys(a.files).sort()
+      if (a.outcome === 'fail') assert.ok(a.files.transcript, `${a.id} keeps its transcript`)
+      else {
+        assert.deepEqual(kept, ['artifacts', 'diff'], `${a.id}: the shown capture and its diff`)
+        assert.deepEqual(
+          a.files.artifacts?.map((x) => x.name),
+          ['landing'],
+        )
+      }
+    }
+    const flat = evalOf('flat')
+    assert.equal(flat?.outcome, 'fail')
+    assert.ok(
+      flat?.attempts.every((a) => a.outcome === 'pass' && a.files.transcript),
+      'a lift gate that failed with no failed attempt keeps every attempt',
+    )
+    const lifted = evalOf('lifted')
+    const variantCell = lifted?.cells.find((c) => c.role === 'variant')
+    assert.equal(variantCell?.outcome, 'fail', 'the variant misses its minLift')
+    assert.ok(
+      lifted?.attempts
+        .filter((a) => a.cell === variantCell?.key)
+        .every((a) => a.outcome === 'pass' && a.files.transcript),
+      "the lift-failed cell keeps its attempts beside the control's failure",
+    )
+  })
+
   test('artifact levels, and config.record modes', async () => {
     const p = await gitProject(
       'record-levels',
@@ -361,6 +454,60 @@ describe('recording runs into evals/.history', () => {
         'm',
       ),
     )
+  })
+
+  test('runs further back than the first 20,000 commits are still in HEAD’s history', async () => {
+    const p = await gitProject('record-deep', { 'evals/agent.eval.ts': agent() })
+    const commit = async (name: string) => {
+      await writeFile(join(p.dir, `${name}.txt`), 'x\n')
+      sh(p.dir, 'add', `${name}.txt`)
+      sh(p.dir, 'commit', '-q', '-m', name)
+      return sh(p.dir, 'rev-parse', 'HEAD')
+    }
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const second = await commit('second')
+    await commit('third')
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    // A later run on `second`: its base is the run on the first commit, not the one on `third`.
+    sh(p.dir, 'checkout', '-q', second)
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    // The canary: a run on a commit no branch keeps is still flagged.
+    await commit('dropped')
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    sh(p.dir, 'checkout', '-q', 'main')
+    const [onFirst, onThird, head, onDropped] = recordedRuns(p.dir)
+    const parent = sh(p.dir, 'rev-parse', 'HEAD')
+    let stream = ''
+    for (let i = 1; i <= 20_001; i++) {
+      stream += `commit refs/heads/main\ncommitter t <t@example.com> ${1_700_000_000 + i} +0000\n`
+      stream += `data ${String(i).length}\n${i}\n${i === 1 ? `from ${parent}\n` : ''}\n`
+    }
+    execFileSync('git', ['fast-import', '--quiet'], { cwd: p.dir, input: stream, env: GIT_ENV })
+    sh(p.dir, 'reset', '-q', '--hard', 'main')
+
+    assert.equal(sh(p.dir, 'rev-list', '--count', 'HEAD'), '20004')
+
+    assert.deepEqual(
+      (await historyJson(p.dir)).orphaned,
+      [onDropped],
+      'the others are ancestors of HEAD',
+    )
+
+    const cmp = await runCli(p.dir, ['compare', '--json', head ?? ''])
+    assert.equal(cmp.code, 0, cmp.stderr)
+    const result = JSON.parse(cmp.stdout)
+    assert.equal(result.base.runId, onFirst, `not ${onThird}, a commit after head's`)
+    assert.equal(result.base.inHistory, true)
+    assert.equal(result.head.inHistory, true)
+    const two = await runCli(p.dir, ['compare', '--json', onFirst ?? '', onDropped ?? ''])
+    assert.deepEqual(
+      [JSON.parse(two.stdout).base.inHistory, JSON.parse(two.stdout).head.inHistory],
+      [true, false],
+    )
+
+    const analyze = await runCli(p.dir, ['analyze', head ?? '', '--dry-run'])
+    assert.equal(analyze.code, 0, analyze.stderr)
+    assert.match(analyze.stdout, new RegExp(`^digest ${head} vs ${onFirst}:`))
   })
 
   test('recording refuses files that look like secrets, or that changed after the run', async () => {
@@ -558,8 +705,8 @@ ${fakeConfig({ harness: harness(), ...(gateway ? { extra: `gateway: ${gateway},`
     assert.equal(unset?.gateway, undefined)
     assert.equal(direct?.gateway, 'direct')
     assert.equal(direct?.fingerprintParts.gateway, undefined)
-    assert.equal(direct?.fingerprint, unset?.fingerprint, 'direct() is how reeval always ran')
-    const vercel = await run('gateway-vercel', '[vercel(), direct()]')
+    assert.equal(direct?.fingerprint, unset?.fingerprint, 'direct() is the default')
+    const vercel = await run('gateway-vercel', '[vercel()]')
     assert.equal(vercel?.gateway, 'vercel')
     assert.equal(vercel?.fingerprintParts.gateway, 'vercel')
     assert.equal(vercel?.fingerprintParts.harness, unset?.fingerprintParts.harness)
@@ -696,60 +843,91 @@ ${fakeConfig({ harness: harness(), ...(gateway ? { extra: `gateway: ${gateway},`
 })
 
 describe('what a record says about comparability', () => {
-  const importing = `import { evaluate, expect } from 'reeval'
+  const importing = ({
+    revision = 1,
+    prompt = 'prompt',
+    runs = 1,
+    tags = "'a'",
+    sibling = 'write other.txt',
+    extra = '',
+  } = {}) => `import { evaluate, expect } from 'reeval'
 import { prompt } from './helpers.ts'
-evaluate('agent', async (c) => {
-  await c.send(prompt)
+const unused = 1
+evaluate('agent', { revision: ${revision}, runs: ${runs}, tags: [${tags}]${extra} }, async (c) => {
+  await c.send(${prompt})
   expect(await c.judge('Did it write hello.txt?')).toPass()
+})
+evaluate('sibling', async (c) => {
+  await c.send('${sibling}')
 })
 `
   const compareJson = async (dir: string) => {
     const r = await runCli(dir, ['compare', '--json'])
     assert.equal(r.code, 0, r.stderr)
-    return JSON.parse(r.stdout) as { rows: Array<{ status: string; changes?: string[] }> }
+    return JSON.parse(r.stdout) as {
+      rows: Array<{ id: string; status: string; changes?: string[] }>
+    }
+  }
+  const agentRow = async (dir: string) => {
+    assert.equal((await runCli(dir)).code, 0)
+    const row = (await compareJson(dir)).rows.find((r) => r.id.endsWith('agent'))
+    return [row?.status, row?.changes ?? []]
   }
 
-  test('an imported helper is part of the fingerprint, and reeval compare names what changed', async () => {
-    const p = await gitProject('traced', {
-      'evals/agent.eval.ts': importing,
+  test("an eval's fingerprint covers its body, options and revision, not its file or helpers, and reeval compare names what changed", async () => {
+    const p = await gitProject('eval-source', {
+      'evals/agent.eval.ts': importing(),
       'evals/helpers.ts': "export const prompt = 'write hello.txt'\n",
-      'evals/unrelated.ts': 'export const x = 1\n',
+      'lib/helpers.ts': "export const other = 'write third.txt'\n",
     })
+    const write = (text: string) => writeFile(join(p.dir, 'evals/agent.eval.ts'), text)
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
     const base = readRun(p.dir, { history: HISTORY })
-    const [entry] = base.run.evals
+    const entry = base.run.evals.find((e) => e.name === 'agent')
     assert.deepEqual(
       entry?.sources.map((s) => s.path),
-      ['evals/agent.eval.ts', 'evals/helpers.ts'],
+      ['evals/agent.eval.ts'],
     )
+    assert.equal(entry?.revision, 1)
+    assert.match(entry?.source?.body ?? '', /^[0-9a-f]{64}$/)
     for (const cell of entry?.cells ?? []) {
       assert.equal(cell.fingerprint, fingerprintOf(cell.fingerprintParts))
     }
 
-    // Twin: a file the eval doesn't import changes nothing.
-    await writeFile(join(p.dir, 'evals/unrelated.ts'), 'export const x = 2\n')
-    assert.equal((await runCli(p.dir)).code, 0)
-    assert.equal(readRun(p.dir).run.evals[0]?.fingerprint, entry?.fingerprint)
-    assert.deepEqual(
-      (await compareJson(p.dir)).rows.map((r) => r.status),
-      ['same'],
-    )
-
+    // A helper, the rest of the file, a sibling eval and tags change nothing.
     await writeFile(join(p.dir, 'evals/helpers.ts'), "export const prompt = 'write hello.txt!'\n")
-    assert.equal((await runCli(p.dir)).code, 0)
-    const [row] = (await compareJson(p.dir)).rows
-    assert.deepEqual([row?.status, row?.changes], ['drift', ['evals/helpers.ts changed']])
-    const text = await runCli(p.dir, ['compare'])
-    assert.match(text.stdout, /^can't compare {4}agent\n {2}changed {10}evals\/helpers\.ts\n/m)
+    await write(importing({ tags: "'a', 'b'", sibling: 'write another.txt' }).replace('= 1', '= 2'))
+    assert.deepEqual(await agentRow(p.dir), ['same', []])
+    const sibling = (await compareJson(p.dir)).rows.find((r) => r.id.endsWith('sibling'))
+    assert.deepEqual([sibling?.status, sibling?.changes], ['drift', ['body changed']])
+    // The loader renames this file's import of ./helpers.ts once another helpers module comes
+    // first; the body is still the same source.
+    const third = "evaluate('third', async (c) => {\n  await c.send(other)\n})\n"
+    await write(
+      `import { other } from '../lib/helpers.ts'\n${importing({ tags: "'a', 'b'", sibling: 'write another.txt' })}${third}`,
+    )
+    assert.deepEqual(await agentRow(p.dir), ['same', []])
 
-    await writeFile(join(p.dir, 'evals/helpers.ts'), "export const prompt = 'write hello.txt'\n")
+    await write(importing({ revision: 2 }))
+    assert.deepEqual(await agentRow(p.dir), ['drift', ['revision 1 → 2']])
+    const text = await runCli(p.dir, ['compare'])
+    assert.match(text.stdout, /^can't compare {4}agent\n {2}changed {10}revision 1 → 2\n/m)
+
+    await write(importing({ prompt: "prompt + '!'" }))
+    assert.deepEqual(await agentRow(p.dir), ['drift', ['body changed']])
+    await write(importing({ runs: 2, extra: ", timeout: '10m'" }))
+    assert.deepEqual(await agentRow(p.dir), ['same', []], 'runs and timeout change nothing')
+    await write(importing({ extra: ", pin: ['harness']" }))
+    const [status, changes] = await agentRow(p.dir)
+    assert.equal(status, 'drift')
+    assert.ok((changes as string[]).includes('options changed'), String(changes))
+
+    await write(importing())
     await writeFile(
       join(p.dir, 'reeval.config.ts'),
       fakeConfig({ harness: harness('Wrote it, differently') }),
     )
-    assert.equal((await runCli(p.dir)).code, 0)
-    const [config] = (await compareJson(p.dir)).rows
-    assert.deepEqual(config?.changes, ['harness config changed'])
+    assert.deepEqual(await agentRow(p.dir), ['drift', ['harness config changed']])
   })
 
   test('reeval compare --fail-on-regression fails on a regression and on a failing new eval; no base is no error', async () => {
@@ -824,7 +1002,7 @@ evaluate('edited', async (c) => {
     const failing = await compareCode('--fail-on-regression')
     assert.match(
       failing.out,
-      /^can't compare {4}edited\n {2}changed {10}evals\/a\.eval\.ts\n {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}fail$/m,
+      /^can't compare {4}edited\n {2}changed {10}body\n {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}fail$/m,
     )
     assert.equal(failing.code, 1, failing.out)
     assert.equal((await compareCode()).code, 0, 'without the flag, compare exits 0')
@@ -836,10 +1014,239 @@ evaluate('edited', async (c) => {
     assert.equal(passing.code, 0, passing.out)
   })
 
-  test('reeval compare reads an eval an interrupt cancelled as cancelled, never regressed', {
+  test("reeval compare has a row for a pooled family's minLift gate, and --fail-on-regression fails when it goes from pass to fail", async () => {
+    // The control passes only with REEVAL_TEST_BASE_OK set: then the cases still pass on their
+    // own, but the pooled lift is 0 and falls below minLift.
+    const pooled = (
+      minLift: number,
+    ) => `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const plain = defineEnvironment('plain', { sandbox })
+const skilled = defineEnvironment('skilled', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/s')],
+}))
+evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
+  'writes ok.txt for %s',
+  { compare: { baseline: plain, variants: [skilled], minLift: ${minLift} } },
+  async (c) => {
+    await c.send('go')
+    if (c.attempt.cell.role === 'control' && process.env.REEVAL_TEST_BASE_OK) return
+    await expect(c).toHaveFile('ok.txt')
+  },
+)
+`
+    const p = await gitProject('compare-family', {
+      'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
+      'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
+      'evals/e.eval.ts': pooled(0.2),
+    })
+    const baseOk = { env: { REEVAL_TEST_BASE_OK: '1' } }
+    const compareCode = async (...args: string[]) => {
+      const r = await runCli(p.dir, ['compare', ...args])
+      return { code: r.code, out: r.stdout + r.stderr }
+    }
+    const familyRow = async () =>
+      (
+        JSON.parse((await compareCode('--json')).out).rows as Array<{
+          kind?: string
+          status: string
+          base: string | null
+          head: string | null
+          changes?: string[]
+          lifts?: Array<{ base: { lo: number; minLift?: number; outcome: string } | null }>
+        }>
+      ).find((r) => r.kind === 'family')
+
+    assert.equal((await runCli(p.dir)).code, 0)
+    const fresh = await compareCode('--fail-on-regression')
+    assert.equal(fresh.code, 0, fresh.out)
+    assert.match(fresh.out, /^6 new evals \(6 pass\) · 1 pooled gate \(1 pass\)$/m)
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+
+    assert.equal((await runCli(p.dir, ['run'], baseOk)).code, 1, 'the family gate fails the run')
+    const regressed = await compareCode('--fail-on-regression')
+    assert.equal(regressed.code, 1, regressed.out)
+    assert.match(
+      regressed.out,
+      /^regressed {8}writes ok\.txt for %s \(all cases\)\n {2}base +\S+\n {2}head +\S+\n {2}fake\/skilled\/fake {2}lift \+100 \(\+\d+…\+100\) → \+0 \(−\d+…\+\d+\), not by minLift 20$/m,
+    )
+    assert.match(regressed.out, /^\+6 same$/m, 'the cases pass on their own')
+    assert.match(regressed.out, /^1 regressed · 6 same$/m)
+    const row = await familyRow()
+    assert.deepEqual([row?.status, row?.base, row?.head], ['regressed', 'pass', 'fail'])
+    assert.equal(row?.lifts?.[0]?.base?.minLift, 0.2)
+    assert.equal((await compareCode()).code, 0, 'without the flag, compare exits 0')
+
+    // Canary: the family keeps its lift, so its gate is the same and nothing fails.
+    assert.equal((await runCli(p.dir)).code, 0)
+    const same = await compareCode('--fail-on-regression')
+    assert.equal(same.code, 0, same.out)
+    assert.match(same.out, /^7 same$/m)
+    assert.equal((await familyRow())?.status, 'same')
+
+    // A changed family can't be compared, and fails the check when its gate fails.
+    await writeFile(join(p.dir, 'evals/e.eval.ts'), pooled(0.3))
+    assert.equal((await runCli(p.dir, ['run'], baseOk)).code, 1)
+    const drift = await compareCode('--fail-on-regression')
+    assert.equal(drift.code, 1, drift.out)
+    assert.match(drift.out, /^can't compare {4}writes ok\.txt for %s \(all cases\)$/m)
+    assert.deepEqual((await familyRow())?.changes, ['options changed'])
+    assert.equal((await runCli(p.dir)).code, 0)
+    assert.equal((await compareCode('--fail-on-regression')).code, 0, 'canary: passing, it is fine')
+  })
+
+  test("reeval compare names a config gate change and re-scores base under head's gate", async () => {
+    const config = (gate: string) =>
+      fakeConfig({ harness: harness(), extra: `runs: 2, gate: ${gate},` })
+    const p = await gitProject('compare-gate', {
+      'reeval.config.ts': config('{ passRate: 0.5 }'),
+      'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('flaky', async (c) => {
+  await c.send('go')
+  expect(process.env.REEVAL_TEST_BREAK || c.attempt.n === 2 ? 'miss' : 'ok').toBe('ok')
+})
+`,
+    })
+    type Row = {
+      status: string
+      base: string
+      head: string
+      changes?: string[]
+      gate?: { base: string; head: string; rescored: string }
+    }
+    const compareCode = async () => {
+      const r = await runCli(p.dir, ['compare', '--fail-on-regression'])
+      return { code: r.code, out: r.stdout + r.stderr }
+    }
+    const row = async () =>
+      (JSON.parse((await runCli(p.dir, ['compare', '--json'])).stdout).rows as Row[])[0]
+    const setGate = (gate: string) => writeFile(join(p.dir, 'reeval.config.ts'), config(gate))
+
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0, 'one pass in two is enough')
+
+    await setGate("'all'")
+    assert.equal((await runCli(p.dir)).code, 1, 'the stricter gate fails the run')
+    const tightened = await compareCode()
+    assert.equal(tightened.code, 0, `only the gate explains the flip\n${tightened.out}`)
+    assert.match(
+      tightened.out,
+      /^gate changed {5}flaky\n {2}gate +passRate 0\.5 → all {2}base would fail under it\n {2}base +\S+ {2}pass\n {2}head +\S+ {2}fail$/m,
+    )
+    assert.match(tightened.out, /^1 gate changed$/m)
+    const { perCell: _, ...tightenedRow } = (await row()) as Row & { perCell?: unknown }
+    assert.deepEqual(tightenedRow, {
+      id: 'evals/e.eval.ts › flaky',
+      status: 'gate',
+      base: 'pass',
+      head: 'fail',
+      changes: ['gate changed'],
+      gate: { base: 'passRate 0.5', head: 'all', rescored: 'fail' },
+    })
+
+    // Canary: base would still pass under head's looser gate, so head failing it is a regression.
+    await setGate('{ passRate: 0.3 }')
+    assert.equal((await runCli(p.dir, ['run'], { env: { REEVAL_TEST_BREAK: '1' } })).code, 1)
+    const regressed = await compareCode()
+    assert.equal(regressed.code, 1, regressed.out)
+    assert.match(
+      regressed.out,
+      /^ {2}gate +passRate 0\.5 → passRate 0\.3 {2}base would still pass under it$/m,
+    )
+    assert.deepEqual((await row())?.gate?.rescored, 'pass')
+    assert.equal((await row())?.status, 'regressed')
+
+    // Twin: the same gate as base has no gate change to name.
+    await setGate('{ passRate: 0.5 }')
+    assert.equal((await runCli(p.dir)).code, 0)
+    assert.equal((await compareCode()).code, 0)
+    const same = await row()
+    assert.deepEqual([same?.status, same?.changes, same?.gate], ['same', undefined, undefined])
+  })
+
+  test('a gate change leaves a pooled family comparable, and its real regression still fails', async () => {
+    const config = (gate: string) =>
+      fakeConfig({
+        harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }",
+        extra: `gate: ${gate},`,
+      })
+    const p = await gitProject('compare-family-gate-change', {
+      'reeval.config.ts': config("'all'"),
+      'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
+      'evals/e.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const plain = defineEnvironment('plain', { sandbox })
+const skilled = defineEnvironment('skilled', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/s')],
+}))
+evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
+  'writes ok.txt for %s',
+  { compare: { baseline: plain, variants: [skilled], minLift: 0.2 } },
+  async (c) => {
+    await c.send('go')
+    if (c.attempt.cell.role === 'control' && process.env.REEVAL_TEST_BASE_OK) return
+    await expect(c).toHaveFile('ok.txt')
+  },
+)
+`,
+    })
+    type Row = { kind?: string; status: string; changes?: string[] }
+    const rows = async () =>
+      JSON.parse((await runCli(p.dir, ['compare', '--json'])).stdout).rows as Row[]
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    await writeFile(join(p.dir, 'reeval.config.ts'), config('{ passRate: 0.5 }'))
+
+    assert.equal((await runCli(p.dir)).code, 0)
+    const same = await rows()
+    assert.deepEqual(
+      same.map((r) => [r.kind ?? 'eval', r.status, r.changes?.join()]),
+      [...Array(6).fill(['eval', 'same', 'gate changed']), ['family', 'same', undefined]],
+      'the gate names the change but leaves the cases and family comparable',
+    )
+    const shown = await runCli(p.dir, ['compare', '--fail-on-regression'])
+    assert.equal(shown.code, 0, `nothing regressed\n${shown.stdout}`)
+    assert.match(
+      shown.stdout,
+      /^same {13}writes ok\.txt for ada\n {2}gate +all → passRate 0\.5 {2}base would still pass under it$/m,
+      'a gate change is named even where the outcome held',
+    )
+
+    // Canary: a pooled lift that falls below minLift is still a regression across the gate change.
+    assert.equal((await runCli(p.dir, ['run'], { env: { REEVAL_TEST_BASE_OK: '1' } })).code, 1)
+    const family = (await rows()).find((r) => r.kind === 'family')
+    assert.equal(family?.status, 'regressed')
+    assert.equal((await runCli(p.dir, ['compare', '--fail-on-regression'])).code, 1)
+  })
+
+  test('reeval compare has no row for a pooled family without a gate', async () => {
+    const p = await gitProject('compare-family-ungated', {
+      'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate.each(['ada', 'grace'])('greets %s', async (c) => {
+  await c.send('go')
+  expect(process.env.REEVAL_TEST_BREAK ?? 'ok').toBe('ok')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    assert.equal((await runCli(p.dir, ['run'], { env: { REEVAL_TEST_BREAK: '1' } })).code, 1)
+    const r = await runCli(p.dir, ['compare', '--json'])
+    const rows = JSON.parse(r.stdout).rows as Array<{ kind?: string; status: string }>
+    assert.deepEqual(
+      rows.map((x) => [x.kind ?? 'eval', x.status]),
+      [
+        ['eval', 'regressed'],
+        ['eval', 'regressed'],
+      ],
+    )
+  })
+
+  test('reeval compare reads an eval an interrupt canceled as canceled, never regressed', {
     skip: noSignals,
   }, async () => {
-    const p = await gitProject('compare-cancelled', {})
+    const p = await gitProject('compare-canceled', {})
     const started = join(p.dir, 'slow.started')
     mkdirSync(join(p.dir, 'evals'))
     await writeFile(
@@ -884,18 +1291,18 @@ evaluate('slow', async (c) => {
     }
 
     await interrupted({})
-    const cancelled = await compareCode('--fail-on-regression')
+    const canceled = await compareCode('--fail-on-regression')
     assert.match(
-      cancelled.out,
-      /^can't compare {4}slow\n {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}cancelled$/m,
+      canceled.out,
+      /^can't compare {4}slow\n {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}canceled$/m,
     )
-    assert.doesNotMatch(cancelled.out, /regressed/)
-    assert.match(cancelled.out, /^1 can't compare · 1 same$/m)
-    assert.equal(cancelled.code, 0, cancelled.out)
+    assert.doesNotMatch(canceled.out, /regressed/)
+    assert.match(canceled.out, /^1 can't compare · 1 same$/m)
+    assert.equal(canceled.code, 0, canceled.out)
     const row = JSON.parse((await compareCode('--json')).out).rows.find((r: { id: string }) =>
       r.id.endsWith('slow'),
     )
-    assert.deepEqual([row.status, row.head, row.cancelled], ['drift', 'fail', ['head']])
+    assert.deepEqual([row.status, row.head, row.canceled], ['drift', 'fail', ['head']])
 
     // Canary: a real pass → fail in the same interrupted head still regresses and fails the check.
     await interrupted({ REEVAL_TEST_BREAK: '1' })
@@ -926,8 +1333,8 @@ evaluate('slow', async (c) => {
       'evals/e.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 import { fakeSandbox } from 'reeval/sandbox'
 const sandbox = fakeSandbox()
-const one = defineEnvironment('tools', { sandbox, env: { FLAVOUR: 'one' } })
-const two = defineEnvironment('tools', { sandbox, env: { FLAVOUR: 'two' } })
+const one = defineEnvironment('tools', { sandbox, env: { FLAVOR: 'one' } })
+const two = defineEnvironment('tools', { sandbox, env: { FLAVOR: 'two' } })
 evaluate('uses one', { environment: one, runs: 3 }, async (c) => {
   await c.send('x')
   expect(await c.judge('Is it fine?')).toPass()
@@ -1096,7 +1503,7 @@ describe('records from before a field existed', () => {
   test('plan.sandboxWarnings: a record without it reads as none, and summary.md renders', () => {
     const r = raw()
     assert.deepEqual(readableRecord(r).plan.sandboxWarnings, [])
-    assert.doesNotMatch(renderSummary(readableRecord(raw()), { hint: true }), /running as root/)
+    assert.doesNotMatch(renderSummary(readableRecord(raw())), /running as root/)
   })
 
   test('stack.harnesses[].effort: a record without it reads as unset, and Fast is not served effort', () => {
@@ -1132,10 +1539,7 @@ describe('records from before a field existed', () => {
     assert.equal('runtime' in r.stack || 'language' in r.stack, false)
     assert.equal(runtimeLabel(r.stack), `node ${r.stack.node}`)
     assert.equal(languageLabel(r.stack), null)
-    assert.match(
-      renderSummary(r, { hint: true }),
-      new RegExp(`\\| reeval \\| \\S+ · node ${r.stack.node} · \\w+/`),
-    )
+    assert.match(renderSummary(r), new RegExp(`\\| reeval \\| \\S+ · node ${r.stack.node} · \\w+/`))
   })
 
   test('the runtime and language labels', () => {
@@ -1158,7 +1562,7 @@ describe('records from before a field existed', () => {
       r.evals.map((e) => e.todo),
       [false, false],
     )
-    assert.match(renderSummary(r, { hint: true }), /^pass {13}writes greet\.js$/m)
+    assert.match(renderSummary(r), /^pass {13}writes greet\.js$/m)
   })
 
   test('a newer record keeps what it has', () => {
@@ -1250,7 +1654,7 @@ describe('records from a newer reeval', () => {
       const record = r as unknown as RunRecord
       record.status = 'paused' as RunRecord['status']
       const attempt = record.evals[0]?.attempts[0] as RunRecord['evals'][number]['attempts'][number]
-      attempt.outcome = 'cancelled' as typeof attempt.outcome
+      attempt.outcome = 'canceled' as typeof attempt.outcome
       attempt.error = { kind: 'quota' as never, message: 'a kind this reeval does not know' }
       attempt.turns[0] = {
         ...(attempt.turns[0] as (typeof attempt.turns)[number]),

@@ -77,11 +77,14 @@ import { backoffMs, isApiError, isTransient } from '../src/judge/retry.ts'
 import { withInputSize } from '../src/judge/size.ts'
 import { fakeJudge } from '../src/judge.ts'
 import { cascade, checkOptions, expand, type Resolved } from '../src/options.ts'
-import { redactSecrets } from '../src/redact.ts'
+import { redactSecrets, registerSecret } from '../src/redact.ts'
 import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
 import { fakeSandbox } from '../src/sandbox.ts'
 import { clip } from '../src/text.ts'
-import type { GatewayDescriptor } from '../src/types.ts'
+import type { EvalOptions, Outcome, ResolvedProfile } from '../src/types.ts'
+import { rowKey } from '../src/view/compare.ts'
+import { gatePart } from '../src/view/gate.ts'
+import { splitPatch } from '../src/view/patch.ts'
 import { project } from './helpers.ts'
 
 test("the -v broker line names each brokered endpoint's path matcher", () => {
@@ -249,6 +252,44 @@ test("the snapshot keeps one commit and no placed file's earlier content", async
     await box.destroy()
   }
   assert.ok(!existsSync(box.stateDir), 'destroy removes the state directory')
+})
+
+test('changed paths come back as written, however git would quote them', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  // Windows filenames can't hold a tab or `"`.
+  const names = [
+    'café.txt',
+    'a b.txt',
+    ...(process.platform === 'win32' ? [] : ['t\tab.txt', 'q"uote\\.txt']),
+  ]
+  try {
+    await box.writeFile('keep.txt', 'kept\n')
+    await snapshot(box)
+    for (const name of names) await box.writeFile(name, 'new\n')
+    await box.writeFile('keep.txt', 'changed\n')
+    const diff = await diffSinceSnapshot(box)
+    const expected = [
+      ...names.map((path) => ({ path, status: 'added' })),
+      { path: 'keep.txt', status: 'modified' },
+    ]
+    const byPath = (a: { path: string }, b: { path: string }) => (a.path < b.path ? -1 : 1)
+    assert.deepEqual([...diff.files].sort(byPath), expected.sort(byPath))
+    assert.deepEqual(
+      splitPatch(diff.patch)
+        .map((f) => [f.path, f.added, f.removed])
+        .sort(),
+      [...names.map((n) => [n, 1, 0]), ['keep.txt', 1, 1]].sort(),
+    )
+    const judged = judgeDiff(diff, { patterns: ['!café.txt', '!t*', '!q*'] })
+    assert.doesNotMatch(
+      judged.patch,
+      /caf|t\tab|uote/,
+      'a pattern drops a quoted path from the diff',
+    )
+    assert.match(judged.patch, /a b\.txt/)
+  } finally {
+    await box.destroy()
+  }
 })
 
 test('the snapshot ignores a config the workspace user could plant in its HOME', async () => {
@@ -457,6 +498,15 @@ test('parseDuration', () => {
       `parseDuration(${String(value)})`,
     )
   }
+  assert.equal(parseDuration('596h'), 2_145_600_000)
+  assert.equal(parseDuration(2 ** 31 - 1), 2 ** 31 - 1)
+  for (const value of ['597h', '1000h', 2 ** 31, '2147483648ms']) {
+    assert.throws(
+      () => parseDuration(value as never),
+      /A duration is at most 596h \(2147483647ms\), the longest timer Node can set\./,
+      `parseDuration(${String(value)})`,
+    )
+  }
 })
 
 test('resolveConfig defaults', () => {
@@ -466,7 +516,7 @@ test('resolveConfig defaults', () => {
   assert.deepEqual(c.sandbox, { kind: 'docker' })
   assert.equal(c.environment, undefined, 'no environment by default')
   assert.deepEqual(c.profiles, {})
-  assert.equal(c.runs, 1)
+  assert.equal(c.runs, undefined, 'unset, so each eval takes its own default')
   assert.equal(c.judge.model, undefined, 'no default judge model')
   assert.equal(c.timeoutMs, 900_000)
 })
@@ -634,6 +684,38 @@ test("the credential checks ask for the key of the judge the run uses, the profi
   ])
 })
 
+test("the credential checks ask for the keys of the judges the plan's attempts resolve", () => {
+  const config = resolveConfig({ judge: { model: 'google/gemini-2.5-flash' } }, '/p')
+  const env = { CURSOR_API_KEY: 'k', GOOGLE_GENERATIVE_AI_API_KEY: 'g' }
+  const judges = [
+    { model: 'google/gemini-2.5-flash', gateway: 'direct' as const },
+    { model: 'anthropic/claude-sonnet-5', gateway: 'direct' as const },
+    { model: 'anthropic/claude-sonnet-5', gateway: 'vercel' as const },
+  ]
+  assert.deepEqual(missingCredentials(config, env, { judges }), [
+    'ANTHROPIC_API_KEY (for direct()) for the judge model, "anthropic/claude-sonnet-5"',
+    'AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (for vercel()) for the judge model, "anthropic/claude-sonnet-5"',
+  ])
+  assert.deepEqual(
+    missingCredentials(
+      config,
+      { ...env, ANTHROPIC_API_KEY: 'a', AI_GATEWAY_API_KEY: 'v' },
+      { judges },
+    ),
+    [],
+  )
+  assert.deepEqual(
+    malformedCredentials(
+      config,
+      { ...env, ANTHROPIC_API_KEY: 'a\nb', AI_GATEWAY_API_KEY: ' v' },
+      {
+        judges,
+      },
+    ),
+    ['ANTHROPIC_API_KEY (character 2)', 'AI_GATEWAY_API_KEY (character 1)'],
+  )
+})
+
 test('judge strings use the provider package on direct, and the AI Gateway only on vercel', () => {
   const jev = 'typesafe-ai/jev-1.14.0'
   assert.deepEqual(judgeRoute(jev, { TYPESAFE_AI_API_KEY: 't', AI_GATEWAY_API_KEY: 'g' }), {
@@ -719,40 +801,6 @@ describe('each provider prefix with each combination of keys', () => {
       )
     })
   }
-  test('analysis.model names the keys for its prefix, briefly for the closing line', async () => {
-    const { analysisKeyProblem } = await import('../src/analysis/model.ts')
-    const config = (model: string, gateways?: GatewayDescriptor[]) =>
-      resolveConfig({ analysis: { model }, ...(gateways ? { gateway: gateways } : {}) }, '/p')
-    const anthropic = config('anthropic/claude-sonnet-5')
-    assert.equal(analysisKeyProblem(anthropic, { ANTHROPIC_API_KEY: 'a' }), null)
-    assert.equal(
-      analysisKeyProblem(anthropic, {}),
-      'set ANTHROPIC_API_KEY (for direct()) for analysis.model, "anthropic/claude-sonnet-5", in .env.local, or analysis: { insights: false }',
-    )
-    assert.equal(
-      analysisKeyProblem(anthropic, { AI_GATEWAY_API_KEY: 'g' }),
-      'set ANTHROPIC_API_KEY (for direct()) for analysis.model, "anthropic/claude-sonnet-5", in .env.local, or analysis: { insights: false }. AI_GATEWAY_API_KEY is set, but no gateway in the config uses it: add vercel() to gateway to call the model through Vercel AI Gateway.',
-    )
-    assert.equal(
-      analysisKeyProblem(config('anthropic/claude-sonnet-5', [vercel()]), {
-        AI_GATEWAY_API_KEY: 'g',
-      }),
-      null,
-    )
-    assert.equal(
-      analysisKeyProblem(config('openai/gpt-6-luna'), {}, true),
-      'set OPENAI_API_KEY, or analysis: { insights: false }',
-    )
-    assert.equal(
-      analysisKeyProblem(config('mistral/large'), { AI_GATEWAY_API_KEY: 'g' }),
-      'analysis.model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway. Or analysis: { insights: false }.',
-    )
-    assert.match(
-      analysisKeyProblem(anthropic, { ANTHROPIC_API_KEY: 'a\nb' }) ?? '',
-      /^ANTHROPIC_API_KEY for analysis model "anthropic\/claude-sonnet-5" has whitespace or a line break in it at character 2\./,
-    )
-  })
-
   test('any other prefix needs vercel()', () => {
     for (const env of [{}, { AI_GATEWAY_API_KEY: 'g' }]) {
       assert.throws(
@@ -1325,6 +1373,218 @@ test('compare classifies an eval on the cells both runs have, and lists the rest
   assert.equal(compare(base, disjoint)[0]?.status, 'drift', 'no shared cell: not comparable')
 })
 
+test("compare names a gate change and classifies base's attempts under head's gate", () => {
+  type Gate = HistoryEntry['evals'][number]['cells'][number]['gate']
+  const PARTS = { sources: 's', harness: 'h', judge: 'j', context: 'c' }
+  const cell = (
+    gate: Gate,
+    tally: { pass: number; fail: number },
+    opts: { outcome?: Outcome; part?: boolean; harness?: string; canceled?: number } = {},
+  ) => {
+    const required = gate === 'all' ? 1 : gate === 'none' ? 0 : gate.passRate
+    const parts = {
+      ...PARTS,
+      harness: opts.harness ?? 'h',
+      ...(opts.part === false ? {} : gatePart(gate)),
+    }
+    return {
+      key: 'k',
+      gate,
+      ...tally,
+      infraError: 0,
+      skipped: 0,
+      ...(opts.canceled ? { canceled: opts.canceled } : {}),
+      outcome:
+        opts.outcome ?? (tally.pass / (tally.pass + tally.fail) >= required ? 'pass' : 'fail'),
+      fingerprint: JSON.stringify(parts),
+      fingerprintParts: parts,
+    }
+  }
+  const run = (c: ReturnType<typeof cell>): HistoryEntry => ({
+    ...entry(c.outcome === 'pass' ? 'pass' : 'fail'),
+    evals: [
+      {
+        id: 'e',
+        outcome: c.outcome,
+        sources: [],
+        fingerprint: c.fingerprint,
+        cells: [c],
+      } as unknown as HistoryEntry['evals'][number],
+    ],
+  })
+  const row = (b: ReturnType<typeof cell>, h: ReturnType<typeof cell>) => {
+    const r = compare(run(b), run(h))[0]
+    return r && [r.status, r.base, r.head, r.gate?.rescored ?? null, r.changes ?? null]
+  }
+  const half = { pass: 1, fail: 1 }
+  const loose = { passRate: 0.5 }
+
+  assert.deepEqual(
+    row(cell(loose, half), cell('all', half)),
+    ['gate', 'pass', 'fail', 'fail', ['gate changed']],
+    'tightened: base fails the new gate too',
+  )
+  assert.deepEqual(
+    row(cell('all', half), cell(loose, half)),
+    ['gate', 'fail', 'pass', 'pass', ['gate changed']],
+    'loosened: base passes the new gate too',
+  )
+  assert.deepEqual(
+    row(cell(loose, half), cell({ passRate: 0.3 }, { pass: 0, fail: 2 })),
+    ['regressed', 'pass', 'fail', 'pass', ['gate changed']],
+    'canary: base would still pass, so head failing is a regression',
+  )
+  assert.deepEqual(
+    row(cell(loose, half), cell('all', { pass: 2, fail: 0 })),
+    ['fixed', 'pass', 'pass', 'fail', ['gate changed']],
+    'base would fail the stricter gate head passes: fixed',
+  )
+  assert.deepEqual(
+    row(cell('all', { pass: 2, fail: 0 }, { outcome: 'fail' }), cell(loose, half)),
+    ['fixed', 'fail', 'pass', 'fail', ['gate changed']],
+    "a base that failed its minLift still fails it under head's gate",
+  )
+  assert.deepEqual(
+    row(cell(loose, half, { part: false }), cell(loose, half)),
+    ['same', 'pass', 'pass', null, null],
+    'a record from before the gate was a part compares with one that has it',
+  )
+  assert.deepEqual(
+    row(cell(loose, half, { part: false }), cell('all', half)),
+    ['gate', 'pass', 'fail', 'fail', ['gate changed']],
+    "and its gate is still read from the cell's",
+  )
+  assert.deepEqual(
+    row(cell('all', half), cell({ passRate: 0.3 }, { pass: 0, fail: 2 })),
+    ['regressed', 'fail', 'fail', 'pass', ['gate changed']],
+    'both fail their own gates, but base would pass the looser one head fails',
+  )
+  assert.deepEqual(
+    row(cell(loose, half, { canceled: 1 }), cell('all', { pass: 2, fail: 0 })),
+    ['same', 'pass', 'pass', 'pass', ['gate changed']],
+    "a fail the interrupt canceled isn't one under head's gate",
+  )
+  assert.deepEqual(
+    row(cell({ passRate: 1 }, half), cell('all', half)),
+    ['same', 'fail', 'fail', null, null],
+    '`{ passRate: 1 }` is `all`',
+  )
+  assert.deepEqual(
+    row(cell(loose, half), cell('all', half, { harness: 'h2' })),
+    ['drift', 'pass', 'fail', null, ['harness config changed', 'gate changed']],
+    'a gate change beside another part is drift, naming both',
+  )
+})
+
+test("compare has a row for a pooled family's gate, comparable when its cases and variants are", () => {
+  const FAMILY = 'evals/e.eval.ts › greets %s'
+  type Lift = { variant: string; outcome: 'pass' | 'fail'; minLift?: number }
+  const lift = (variant: string, outcome: 'pass' | 'fail', minLift: number | null = 0.2) => ({
+    variant,
+    outcome,
+    ...(minLift === null ? {} : { minLift }),
+  })
+  const run = (
+    lifts: Lift[],
+    opts: { cases?: string[]; caseOutcome?: Outcome; canceled?: number; fp?: string } = {},
+  ): HistoryEntry => {
+    const cases = opts.cases ?? ['ada', 'grace']
+    return {
+      ...entry('pass'),
+      evals: cases.map(
+        (name) =>
+          ({
+            id: `evals/e.eval.ts › greets ${name}`,
+            outcome: opts.caseOutcome ?? 'pass',
+            sources: [],
+            fingerprint: opts.fp ?? 'fp',
+            cells: [
+              {
+                key: 'k',
+                gate: 'all',
+                outcome: opts.caseOutcome ?? 'pass',
+                fingerprint: opts.fp ?? 'fp',
+                fingerprintParts: {},
+                ...(opts.canceled ? { canceled: opts.canceled } : {}),
+              },
+            ],
+          }) as unknown as HistoryEntry['evals'][number],
+      ),
+      families: [
+        {
+          id: FAMILY,
+          name: 'greets %s',
+          cases: cases.length,
+          ran: cases.length,
+          outcome: lifts.some((l) => l.outcome === 'fail') ? 'fail' : 'pass',
+          caseIds: cases.map((name) => `evals/e.eval.ts › greets ${name}`),
+          lifts: lifts.map((l) => ({ vs: 'control', points: 0, lo: 0, hi: 0, ...l })),
+        },
+      ],
+    }
+  }
+  const family = (base: HistoryEntry, head: HistoryEntry) =>
+    compare(base, head).find((r) => r.kind === 'family')
+  const status = (base: HistoryEntry, head: HistoryEntry) => {
+    const r = family(base, head)
+    return r && [r.status, r.base, r.head]
+  }
+
+  assert.deepEqual(status(run([lift('a', 'pass')]), run([lift('a', 'fail')])), [
+    'regressed',
+    'pass',
+    'fail',
+  ])
+  assert.deepEqual(status(run([lift('a', 'fail')]), run([lift('a', 'pass')])), [
+    'fixed',
+    'fail',
+    'pass',
+  ])
+  assert.equal(status(run([lift('a', 'pass')]), run([lift('a', 'pass')]))?.[0], 'same')
+  assert.equal(
+    family(run([lift('a', 'pass', null)]), run([lift('a', 'pass', null)])),
+    undefined,
+    'no minLift on either side: no row',
+  )
+
+  // Over the variants both have; with none in common, not comparable.
+  const scoped = family(run([lift('a', 'pass'), lift('b', 'fail')]), run([lift('a', 'fail')]))
+  assert.deepEqual(
+    [scoped?.status, scoped?.base, scoped?.cells],
+    ['regressed', 'pass', { added: [], removed: ['b'] }],
+  )
+  const disjoint = family(run([lift('a', 'pass')]), run([lift('b', 'fail')]))
+  assert.deepEqual([disjoint?.status, disjoint?.cells], ['drift', { added: ['b'], removed: ['a'] }])
+
+  // Its cases decide whether it's comparable.
+  const fewer = family(run([lift('a', 'pass')]), run([lift('a', 'fail')], { cases: ['ada'] }))
+  assert.deepEqual([fewer?.status, fewer?.changes], ['drift', ['case greets grace removed']])
+  assert.equal(
+    status(run([lift('a', 'pass')]), run([lift('a', 'fail')], { fp: 'changed' }))?.[0],
+    'drift',
+  )
+  assert.equal(
+    status(run([lift('a', 'pass')]), run([lift('a', 'fail')], { caseOutcome: 'infra_error' }))?.[0],
+    'infra',
+  )
+  const canceled = family(run([lift('a', 'pass')]), run([lift('a', 'fail')], { canceled: 1 }))
+  assert.deepEqual([canceled?.status, canceled?.canceled], ['drift', ['head']])
+
+  // An eval may share the family's id; the rows still tell them apart.
+  const twin = (r: HistoryEntry): HistoryEntry => ({
+    ...r,
+    evals: [...r.evals, { ...(r.evals[0] as HistoryEntry['evals'][number]), id: FAMILY }],
+  })
+  const rows = compare(twin(run([lift('a', 'pass')])), twin(run([lift('a', 'fail')])))
+  assert.deepEqual(
+    rows.filter((r) => r.id === FAMILY).map((r) => [rowKey(r), r.status]),
+    [
+      [FAMILY, 'same'],
+      [`family\0${FAMILY}`, 'regressed'],
+    ],
+  )
+})
+
 test('compare calls a flip drift when the judge changed outside the fingerprint', () => {
   assert.deepEqual(stackChanges(entry('pass'), entry('fail')), [])
   assert.equal(compare(entry('pass'), entry('fail'))[0]?.status, 'regressed')
@@ -1422,6 +1682,32 @@ test('judge calls fail at once on permanent errors, and after the last try on tr
   assert.equal(down.calls, quick.attempts)
 })
 
+test('a judge model is sent the question with secrets masked, and the verdict keeps it as asked', async () => {
+  const value = 'judge-question-secret-5d2c8e1a'
+  registerSecret(value)
+  const asked: unknown[] = []
+  const model = {
+    specificationVersion: 'v4',
+    provider: 'mock',
+    modelId: 'spy',
+    supportedQuestionTypes: ['boolean'],
+    async doEvaluate({ questions }: { questions: Record<string, { instructions?: unknown }> }) {
+      asked.push(questions.answer?.instructions)
+      return { answers: { answer: { type: 'boolean', probability: 0.9 } }, warnings: [] }
+    },
+  }
+  const question = `Did the agent keep ${value} out of the log?`
+  const { verdict } = await runJudge(
+    question,
+    { output: 'x' },
+    { model, threshold: 0.8 },
+    new AbortController().signal,
+    quick,
+  )
+  assert.deepEqual(asked, ['Did the agent keep [REDACTED] out of the log?'])
+  assert.equal(verdict.question, question)
+})
+
 test('isTimeout is the TimeoutError name, not the message', () => {
   assert.equal(isTimeout(new TimeoutError('Eval timed out after 1s')), true)
   assert.equal(isTimeout(new DOMException('Eval timed out after 1s', 'TimeoutError')), true)
@@ -1443,7 +1729,7 @@ test('transient judge errors and bounded backoff', () => {
   assert.equal(isTransient(new Error('No credentials for judge model')), false)
   assert.equal(isTransient(new TimeoutError('Eval timed out after 1s')), false)
   assert.equal(isTransient(new Error('request timed out')), false)
-  assert.equal(isTransient({ name: 'AbortError', message: 'The run was cancelled' }), false)
+  assert.equal(isTransient({ name: 'AbortError', message: 'The run was canceled' }), false)
   assert.equal(
     isTransient({ name: 'AI_RetryError', message: 'x', lastError: { statusCode: 503 } }),
     true,
@@ -1613,9 +1899,9 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
   )
   assert.deepEqual(narrowed.resolved.compare?.variants, [])
   assert.deepEqual(narrowed.notes, [
-    'runs 5 → 1 (profile pr)',
     'harnesses 2 → 1 (profile pr)',
     'compare off (profile pr)',
+    'runs 5 → 1 (profile pr)',
   ])
   const pinned = cascade(
     base,
@@ -1643,6 +1929,48 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
     { profile },
   )
   assert.equal(skipped.skip, 'no harness left: profile pr allows a')
+})
+
+test('cascade: unset runs default to 4 for a compare with variants, 1 otherwise', () => {
+  const plain = defineEnvironment('plain', {})
+  const skill = defineEnvironment('skill', {})
+  const compare = { baseline: plain, variants: [skill] }
+  const unset = { ...base, runs: undefined }
+  const runsOf = (options: EvalOptions, opts: Parameters<typeof cascade>[3] = {}) =>
+    cascade(unset, [{ options, where: 'e' }], 'e', opts)
+  const compared = runsOf({ compare })
+  assert.equal(compared.resolved.runs, 4)
+  assert.deepEqual(compared.notes, ['runs 4 (compare default)'])
+  assert.equal(compared.resolved.sources?.runs, 'compare default: 4 a side')
+  assert.equal(runsOf({}).resolved.runs, 1, 'no compare runs once')
+  assert.equal(runsOf({ compare: { ...compare, variants: [] } }).resolved.runs, 1)
+  assert.equal(runsOf({ compare, runs: 1 }).resolved.runs, 1, 'an explicit 1 stands')
+  assert.equal(runsOf({ compare }, { runs: 2 }).resolved.runs, 2, '--runs replaces the default')
+  assert.equal(runsOf({ compare }, { pooled: true }).resolved.runs, 1, 'a pooled case runs once')
+  const profile = (p: Partial<ResolvedProfile>): ResolvedProfile => ({
+    name: 'pr',
+    reason: '--profile',
+    defaults: {},
+    limit: {},
+    judge: {},
+    tags: [],
+    budget: {},
+    ...p,
+  })
+  assert.equal(
+    runsOf({ compare }, { profile: profile({ defaults: { runs: 2 } }) }).resolved.runs,
+    2,
+  )
+  const capped = runsOf({ compare }, { profile: profile({ limit: { runs: 1 } }) })
+  assert.equal(capped.resolved.runs, 1)
+  assert.deepEqual(capped.notes, ['runs 4 (compare default)', 'runs 4 → 1 (profile pr)'])
+  assert.equal(capped.resolved.sources?.runs, 'profiles.pr.limit', 'the trace names the cap')
+  const off = runsOf({ compare }, { profile: profile({ limit: { compare: false } }) })
+  assert.equal(off.resolved.runs, 1, 'a compare the limit turns off runs once')
+  assert.equal(
+    cascade({ ...base, runs: 2 }, [{ options: { compare }, where: 'e' }], 'e').resolved.runs,
+    2,
+  )
 })
 
 test('a check a side never ran has no verdict, and not-run attempts are not failures', async () => {
@@ -1739,6 +2067,14 @@ test('SKILL.md frontmatter is parsed as YAML', () => {
     parseSkillMd('---\r\nname: crlf\r\ndescription: |\r\n  Windows.\r\n---\r\nBody', 's')
       .description,
     'Windows.',
+  )
+  assert.deepEqual(
+    parseSkillMd('\uFEFF---\nname: bom\ndescription: Saved by Notepad\n---\nBody', 's'),
+    {
+      name: 'bom',
+      description: 'Saved by Notepad',
+      body: 'Body',
+    },
   )
   assert.deepEqual(parseSkillMd('No frontmatter.', 's'), { body: 'No frontmatter.' })
   assert.deepEqual(parseSkillMd('---\n---\nBody', 's'), {

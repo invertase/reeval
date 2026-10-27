@@ -1,5 +1,5 @@
-# Vercel first, then each provider's own key, by name.
+# Vercel by name; Cursor falls back to its own key, which ends every list.
 harness:
   - { kind: claude-code, model: claude-sonnet-4-5 }
   - { kind: cursor, model: composer-2.5 }
-gateway: [vercel, direct]
+gateway: [vercel]

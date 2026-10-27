@@ -1,11 +1,12 @@
 // The engine's main process: finds the eval files, collects each in a fresh worker for the plan,
-// then runs each in a fresh worker again, at most one per CPU at once, handing out the
+// then runs each in a fresh worker again, at most `concurrency` at once, handing out the
 // scheduler's leases over IPC and turning what workers report into reeval's events and results.
-import { availableParallelism } from 'node:os'
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { UsageError } from '../errors.ts'
 import { attemptKey, evalId, relativeFile } from '../ids.ts'
+import { redactSecrets } from '../redact.ts'
 import { ownVersion, PACKAGE_DIR, PACKAGE_NAMES } from '../root.ts'
 import { Scheduler } from '../scheduler/core.ts'
 import { capMiddle } from '../text.ts'
@@ -48,7 +49,7 @@ export const engineVersions: Record<string, string> = {
 const onlyInCi = (file: string) =>
   `evaluate.only/group.only in ${file} isn't allowed in CI (CI is set). Remove it, or run with CI=false.`
 
-type Collected = { file: string; rel: string; tests: WireTest[] }
+type Collected = { file: string; rel: string; tests: WireTest[]; harnesses: string[] }
 
 export async function runEngine(
   options: EngineOptions,
@@ -61,39 +62,51 @@ export async function runEngine(
     '**/.reeval/**',
     `${relativeFile(root, config.history.dir)}/**`,
   ])
-  // A part that names an eval file picks files; any other part picks evals by name or cell.
-  // Parts of one kind widen the selection, and the two kinds narrow each other.
+  // A part that names an eval file picks every eval in the files it names. One that is a file or
+  // directory on disk (from the current directory, or absolute) is only a path; any other, such
+  // as `right` beside `evals/right/`, also matches as a name or cell part anywhere, so a
+  // directory called `fake` doesn't hide the `fake` cells of the other files. Any other part
+  // picks evals by name or cell. Parts of one kind widen the selection, and the two kinds
+  // narrow each other.
   const pathFilters = options.filters.filter((f) => filterFiles(files, [f], root).length)
+  const looseFilters = pathFilters.filter((f) => !existsSync(resolve(f)))
   const nameFilters = options.filters.filter((f) => !pathFilters.includes(f))
   const specs = filterFiles(files, pathFilters, root)
   if (specs.length === 0)
-    return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
+    return { evals: [], unhandledErrors: [], canceled: false, noFiles: true, stopped: false }
+  const named = new Set(specs.map((file) => relativeFile(root, file)))
+  const toCollect = looseFilters.length ? files : specs
 
-  // Attempts wait on the network, not the CPU, so a few workers run many attempts each.
-  const workers = Math.max(1, Math.min(concurrency, availableParallelism()))
+  // A file's worker holds its lane until all of its attempts finish, so `concurrency` attempts in
+  // flight need that many workers.
+  const workers = Math.max(1, Math.min(concurrency, specs.length))
   const entry = workerEntry(root, PACKAGE_NAMES)
   const hide = [...reevalFrames(PACKAGE_DIR), ...reevalFrames(join(entry, '..', '..'))]
-  const matchesName = (e: { id: string; attempt?: EngineEval['attempt'] }) =>
-    nameFilters.length === 0 || nameFilters.some((f) => matchesFilter(e, f))
+  const matchesName = (e: { id: string; file: string; attempt?: EngineEval['attempt'] }) =>
+    (named.has(e.file) || looseFilters.some((f) => matchesFilter(e, f))) &&
+    (nameFilters.length === 0 || nameFilters.some((f) => matchesFilter(e, f)))
   const run = options.run
 
-  // Collect: each file in a worker of its own, for the plan.
+  // Collect: each file in a worker of its own, for the plan. Paths on disk collect only the
+  // files they name; a part that may match by name or cell collects every file, and any of
+  // them failing to load fails the run, as it may hold evals the part picks.
   const collected: Collected[] = []
   const failed = new Map<string, string[]>()
   let usage: string | undefined
-  await eachLimited(specs, workers, async (file) => {
+  await eachLimited(toCollect, workers, async (file) => {
     const rel = relativeFile(root, file)
     const worker = spawn(entry, root)
     let tests: WireTest[] | undefined
+    let harnesses: string[] = []
     let error: SerializedError | undefined
     worker.onMessage((m) => {
-      if (m.t === 'collected') tests = m.tests
+      if (m.t === 'collected') ({ tests, harnesses } = m)
       else if (m.t === 'load-error') error = m.error
     })
     await handshake(worker, entry)
     worker.send({ t: 'init', run, file, select: null })
     const exit = await worker.exited
-    if (tests) collected.push({ file, rel, tests })
+    if (tests) collected.push({ file, rel, tests, harnesses })
     else if (error?.name === 'OnlyInCiError') usage = onlyInCi(rel)
     else if (error?.name === 'UsageError' || error?.name === 'DefinitionError')
       usage = `${rel}: ${error.message}`
@@ -118,19 +131,22 @@ export async function runEngine(
   collected.sort((a, b) => Number(a.file > b.file) - Number(a.file < b.file))
 
   if (options.onPlan) {
-    const plan = collectPlan(collected, matchesName, nameFilters)
+    const plan = collectPlan(collected, matchesName, nameFilters, toCollect.length < files.length)
     // When no part matched anything, the run's own "no evals matched" says so.
     if (plan.unmatched.length === options.filters.length) plan.unmatched = []
     if (!(await options.onPlan(plan)))
-      return { evals: [], unhandledErrors: [], cancelled: false, noFiles: false, stopped: true }
+      return { evals: [], unhandledErrors: [], canceled: false, noFiles: false, stopped: true }
   }
 
-  // With a name filter, only the files it picks an eval in run.
-  const picked = nameFilters.length
-    ? collected.filter(({ rel, tests }) => tests.some((t) => matchesName(identify(rel, t))))
-    : collected
+  // A file a path part names runs unless a name part narrows it; any other only if it has an
+  // eval the filters pick.
+  const picked = collected.filter(
+    ({ rel, tests }) =>
+      (named.has(rel) && nameFilters.length === 0) ||
+      tests.some((t) => matchesName(identify(rel, t))),
+  )
   if (picked.length === 0)
-    return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
+    return { evals: [], unhandledErrors: [], canceled: false, noFiles: true, stopped: false }
   return runFiles({ ...options, spawn, entry, hide, workers, collected: picked, matchesName })
 }
 
@@ -154,6 +170,7 @@ function collectPlan(
   collected: Collected[],
   matchesName: (e: ReturnType<typeof identify>) => boolean,
   nameFilters: readonly string[],
+  partial: boolean,
 ): CollectedPlan {
   const planned: PlannedItem[] = []
   const excluded = new Map<string, ExcludedEval>()
@@ -173,7 +190,14 @@ function collectPlan(
       }
     }
   }
-  return { planned, excluded: [...excluded.values()], matched, unmatched: [...unmatched] }
+  return {
+    planned,
+    excluded: [...excluded.values()],
+    matched,
+    unmatched: [...unmatched],
+    harnesses: [...new Set(collected.flatMap((c) => c.harnesses))],
+    partial,
+  }
 }
 
 type RunInput = EngineOptions & {
@@ -198,6 +222,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
   const root = run.config.root
   const emit = input.onEvent ?? (() => {})
   const unhandledErrors: string[] = []
+  const completed = new Set(run.completed)
   const live = new Set<WorkerProcess>()
   const byFile = new Map<string, FileRun>()
   // Every file in the first round asks for its leases before any is granted, so the first
@@ -214,9 +239,9 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
     if (--gathering === 0) scheduler.resume()
   }
 
-  let cancelled = false
-  input.onCancellable?.(() => {
-    cancelled = true
+  let canceled = false
+  input.onCancelable?.(() => {
+    canceled = true
     scheduler.resume()
     for (const worker of live) worker.send({ t: 'cancel' })
   })
@@ -225,10 +250,10 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
     ...identify(rel, test),
     state: result.state,
     durationMs: Math.round(result.durationMs),
-    errors: result.errors.map((e) => capMiddle(String(e.message))),
+    errors: result.errors.map((e) => capMiddle(redactSecrets(String(e.message)))),
     ...(result.errors[0]?.name ? { errorName: result.errors[0].name } : {}),
     formattedErrors: result.errors.map((e) =>
-      capMiddle(formatError(e, { root, hide, columns: process.stdout.columns })),
+      capMiddle(redactSecrets(formatError(e, { root, hide, columns: process.stdout.columns }))),
     ),
     meta: result.meta,
     ...(test.mode === 'todo' ? { todo: true as const } : {}),
@@ -244,10 +269,36 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
       const worker = input.spawn(entry, root)
       live.add(worker)
       owners.set(id, worker)
-      const state: FileRun = { rel, tests: [], results: new Map() }
+      // Until the worker collects again, the file's tests are the plan's, so a file that fails to
+      // load this time still fails its attempts instead of dropping them. The plan was collected
+      // before a resume knew which attempts were done, so those are skipped, as the worker would.
+      const tests = planned.map(
+        (t): WireTest => (completed.has(identify(rel, t).key) ? { ...t, mode: 'skip' } : t),
+      )
+      const state: FileRun = { rel, tests, results: new Map() }
       byFile.set(file, state)
       let done = false
       let ready = false
+      let reported = false
+      let loadError: string | undefined
+      const report = (tests: WireTest[]) => {
+        reported = true
+        emit({
+          type: 'collected',
+          at: Date.now(),
+          file: rel,
+          evals: tests.map((test) => {
+            const e = identify(rel, test)
+            return {
+              id: e.id,
+              key: e.key,
+              group: e.group,
+              name: e.name,
+              skipped: skipped(test) || !matchesName(e),
+            }
+          }),
+        })
+      }
       const markReady = () => {
         if (ready) return
         ready = true
@@ -266,27 +317,12 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
         switch (m.t) {
           case 'collected': {
             state.tests = m.tests
-            emit({
-              type: 'collected',
-              at: Date.now(),
-              file: rel,
-              evals: m.tests.map((test) => {
-                const e = identify(rel, test)
-                return {
-                  id: e.id,
-                  key: e.key,
-                  group: e.group,
-                  name: e.name,
-                  skipped: skipped(test) || !matchesName(e),
-                }
-              }),
-            })
+            report(m.tests)
             break
           }
           case 'load-error':
-            unhandledErrors.push(
-              `${rel}: ${stripVTControlCharacters(String(m.error.message)).trim()}`,
-            )
+            loadError = stripVTControlCharacters(String(m.error.message)).trim()
+            unhandledErrors.push(`${rel}: ${loadError}`)
             break
           case 'request':
             scheduler.request({
@@ -322,9 +358,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
           case 'result': {
             // As under Vitest, an attempt a cancel cut short is skipped; its record says aborted.
             const result: WireResult =
-              cancelled && m.result.state === 'failed'
-                ? { ...m.result, state: 'skipped' }
-                : m.result
+              canceled && m.result.state === 'failed' ? { ...m.result, state: 'skipped' } : m.result
             const e = toEval(rel, state.tests[m.index] as WireTest, result)
             state.results.set(m.index, e)
             if (matchesName(e)) emit({ type: 'eval-end', at: Date.now(), result: e })
@@ -352,15 +386,20 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
       }
       const select = planned.filter((t) => matchesName(identify(rel, t))).map((t) => t.index)
       worker.send({ t: 'init', run, file, select })
-      if (cancelled) worker.send({ t: 'cancel' })
+      if (canceled) worker.send({ t: 'cancel' })
       const exit = await worker.exited
       live.delete(worker)
       scheduler.releaseOwner(id)
       markReady()
-      if (done) return
-      // The worker died mid-file (killed, out of memory): its unfinished attempts fail.
-      const why = `The worker running ${rel} exited unexpectedly (${describeExit(exit)})`
-      unhandledErrors.push(why)
+      if (done && loadError === undefined) return
+      // The file failed to load this time, or its worker died mid-file (killed, out of memory):
+      // its unfinished attempts fail.
+      let why = loadError as string
+      if (!done) {
+        why = `The worker running ${rel} exited unexpectedly (${describeExit(exit)})`
+        unhandledErrors.push(why)
+      }
+      if (!reported) report(state.tests)
       for (const test of state.tests) {
         if (state.results.has(test.index) || skipped(test) || !matchesName(identify(rel, test)))
           continue
@@ -373,7 +412,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
         emit({ type: 'eval-end', at: Date.now(), result: e })
       }
     },
-    () => !cancelled,
+    () => !canceled,
   )
 
   // Attempts finish in any order; results are listed by file, then as declared.
@@ -387,5 +426,5 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
       if (matchesName(e)) evals.push(e)
     }
   }
-  return { evals, unhandledErrors, cancelled, noFiles: false, stopped: false }
+  return { evals, unhandledErrors, canceled, noFiles: false, stopped: false }
 }

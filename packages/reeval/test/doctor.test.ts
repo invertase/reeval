@@ -19,6 +19,7 @@ import {
   checkJudge,
   checkKeys,
   checkRuntime,
+  checkVertex,
   configuredUses,
   type DoctorDeps,
   defaultDeps,
@@ -52,6 +53,7 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   gitVisibleEnvFiles: async () => [],
   fetch: async () => new Response('{}', { status: 200 }),
   cloudHost: async () => null,
+  vertexToken: async () => SECRET,
   ...over,
 })
 
@@ -59,8 +61,8 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
 async function configOf(name: string, body: string) {
   const p = await project(`doctor-${name}`, {
     'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
-import { direct, vercel } from 'reeval/gateway'
-import { claudeCode, codex, cursor, fakeHarness, pi } from 'reeval/harness'
+import { direct, vercel, vertex } from 'reeval/gateway'
+import { antigravity, claudeCode, codex, cursor, fakeHarness, goose, opencode, pi } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
 import { docker, fakeSandbox, podman } from 'reeval/sandbox'
 export default defineConfig(${body})
@@ -594,20 +596,9 @@ evaluate('a', async () => {})
     )
   })
 
-  test("analysis: analysis.model's key, a warning only: a run without it prints no insights", async () => {
+  test("analysis: analysis.model's key, a warning only; nothing without a model", async () => {
     const none = await configOf('analysis-none', '{ harness: fakeHarness() }')
-    const noModel = await checkAnalysis(none, deps(), false, '.env.local')
-    assert.deepEqual(statuses(noModel), ['warn'])
-    assert.equal(noModel[0]?.summary, 'no analysis.model, so runs print no insights')
-    assert.match(
-      noModel[0]?.fix ?? '',
-      /^set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in \S*reeval\.config\.ts for answers to what each eval asks, or analysis: \{ insights: false \} to go without$/,
-    )
-    const off = await configOf(
-      'analysis-off',
-      '{ harness: fakeHarness(), analysis: { insights: false } }',
-    )
-    assert.deepEqual(await checkAnalysis(off, deps(), false, '.env.local'), [])
+    assert.deepEqual(await checkAnalysis(none, deps(), false, '.env.local'), [])
     const model = await configOf(
       'analysis-model',
       "{ harness: fakeHarness(), analysis: { model: 'google/gemini-3.8-flash' } }",
@@ -678,7 +669,7 @@ evaluate('a', async () => {})
     const config = await configOf(
       'gateway-vercel',
       `{ harness: [claudeCode({ model: 'claude-sonnet-4-5' }), cursor({ model: 'composer-2.5' })],
-         gateway: [vercel(), direct()],
+         gateway: [vercel()],
          judge: { model: 'anthropic/claude-haiku-4-5' },
          analysis: { model: 'google/gemini-3.8-flash' },
          profiles: { local: { gateway: [direct()] } } }`,
@@ -705,7 +696,7 @@ evaluate('a', async () => {})
       [
         [
           'ok',
-          'gateway vercel, direct: claude-code:claude-sonnet-4-5 → vercel, cursor:composer-2.5 → direct',
+          'gateway vercel, direct: claude-code:claude-sonnet-4-5 → vercel, cursor:composer-2.5 → direct (fallback)',
         ],
         [
           'ok',
@@ -726,9 +717,236 @@ evaluate('a', async () => {})
     assert.deepEqual(checkGateways(unset, deps(), '.env.local'), [])
     const stuck = await configOf(
       'gateway-stuck',
-      "{ harness: cursor({ model: 'composer-2.5' }), gateway: [vercel()] }",
+      "{ harness: cursor({ model: 'composer-2.5' }), gateway: [vercel(), direct({ enabled: false })] }",
     )
     assert.equal(checkGateways(stuck, deps(), '.env.local')[0]?.status, 'fail')
+  })
+
+  test('gateway: a judge or analysis model that falls back to direct is marked', async () => {
+    const config = await configOf(
+      'gateway-model-fallback',
+      `{ harness: claudeCode({ model: 'claude-sonnet-4-5' }),
+         gateway: [vertex({ project: 'p' })],
+         judge: { model: 'openai/gpt-5.4-mini' },
+         analysis: { model: 'openai/gpt-5.4-mini' },
+         profiles: {
+           pinned: { gateway: [vertex({ project: 'p' })], judge: { gateway: 'direct' } },
+           first: { gateway: [direct(), vertex({ project: 'p' })] },
+         } }`,
+    )
+    assert.deepEqual(
+      checkGateways(config, deps(), '.env.local').map((c) => c.summary),
+      [
+        'gateway vertex, direct: claude-code:claude-sonnet-4-5 → vertex, judge openai/gpt-5.4-mini → direct (fallback), analysis openai/gpt-5.4-mini → direct (fallback)',
+        'gateway vertex, direct in profile pinned: claude-code:claude-sonnet-4-5 → vertex',
+        'gateway direct, vertex in profile first: claude-code:claude-sonnet-4-5 → direct',
+      ],
+    )
+  })
+
+  test('vertex: each entry’s project, where its tokens come from, and online whose they are', async () => {
+    const config = await configOf(
+      'gateway-vertex',
+      `{ harness: claudeCode({ model: 'claude-haiku-4-5@20251001' }),
+         gateway: [vertex({ project: 'reeval-test' })],
+         judge: { model: 'anthropic/claude-haiku-4-5' },
+         profiles: { env: { gateway: [vertex()] } } }`,
+    )
+    const judge = await checkJudge(config, deps({ env: {} }), false, '.env.local')
+    assert.deepEqual(statuses(judge), ['ok'])
+    assert.match(judge[0]?.summary ?? '', /on vertex\(\), with a token from Application Default/)
+
+    const home = await mkdtemp(join(tmpdir(), 'reeval-adc-'))
+    const offline = await checkVertex(config, deps({ env: { HOME: home } }), false)
+    assert.deepEqual(
+      offline.map((c) => [c.status, c.summary]),
+      [
+        ['ok', 'vertex(): project reeval-test, global'],
+        [
+          'fail',
+          "vertex() has no project: set vertex({ project: '<id>' }) or GOOGLE_CLOUD_PROJECT in profile env",
+        ],
+        [
+          'warn',
+          'no Application Default Credentials found (fine on a Google Cloud VM, whose metadata server serves them)',
+        ],
+      ],
+    )
+    await mkdir(join(home, '.config', 'gcloud'), { recursive: true })
+    const adc = join(home, '.config', 'gcloud', 'application_default_credentials.json')
+    await writeFile(adc, '{}')
+    const env = { HOME: home, GOOGLE_CLOUD_PROJECT: 'from-env' }
+    const found = await checkVertex(config, deps({ env }), false)
+    assert.deepEqual(
+      found.map((c) => [c.status, c.summary]),
+      [
+        ['ok', 'vertex(): project reeval-test, global'],
+        ['ok', 'vertex() in profile env: project from-env (from GOOGLE_CLOUD_PROJECT), global'],
+        ['ok', `access tokens from gcloud's ${adc}`],
+      ],
+    )
+    const missing = await checkVertex(
+      config,
+      deps({ env: { ...env, GOOGLE_APPLICATION_CREDENTIALS: join(home, 'nope.json') } }),
+      false,
+    )
+    assert.equal(missing.at(-1)?.status, 'fail')
+    assert.match(missing.at(-1)?.summary ?? '', /nope\.json, which doesn't exist/)
+
+    const asked: string[] = []
+    const bodies: unknown[] = []
+    const online = await checkVertex(
+      config,
+      deps({
+        env,
+        fetch: async (url, init) => {
+          asked.push(String(url))
+          if (String(url).startsWith('https://oauth2.googleapis.com/tokeninfo'))
+            return Response.json({ email: 'ci@reeval-test.iam.gserviceaccount.com' })
+          const authorization = new Headers(init?.headers).get('authorization')
+          assert.equal(authorization, `Bearer ${SECRET}`)
+          if (String(url).startsWith('https://aiplatform.googleapis.com/')) {
+            const body = JSON.parse(String(init?.body)) as { model: string }
+            bodies.push(body)
+            return body.model === 'claude-haiku-4-5'
+              ? Response.json(
+                  {
+                    error: {
+                      code: 404,
+                      message: `Publisher Model claude-haiku-4-5 was not found or your project does not have access to it. ${SECRET}`,
+                    },
+                  },
+                  { status: 404 },
+                )
+              : Response.json({ input_tokens: 8 })
+          }
+          return String(url).includes('/projects/reeval-test/')
+            ? Response.json({ state: 'ENABLED' })
+            : Response.json({ state: 'DISABLED' })
+        },
+      }),
+      true,
+    )
+    assert.deepEqual(
+      online.slice(2).map((c) => [c.status, c.summary]),
+      [
+        [
+          'ok',
+          `access token minted for ci@reeval-test.iam.gserviceaccount.com from gcloud's ${adc}`,
+        ],
+        ['ok', 'Vertex AI API enabled in reeval-test'],
+        ['fail', 'Vertex AI API not enabled in from-env'],
+        ['ok', 'claude-haiku-4-5@20251001 for claude-code (reeval-test, global): served'],
+        [
+          'warn',
+          'claude-haiku-4-5 for the judge (reeval-test, global): Vertex AI answered HTTP 404 (Publisher Model claude-haiku-4-5 was not found or your project does not have access to it. [REDACTED]), so its calls may fail',
+        ],
+      ],
+    )
+    assert.equal(
+      online.at(-3)?.fix,
+      'run gcloud services enable aiplatform.googleapis.com --project from-env',
+    )
+    assert.equal(
+      online.at(-1)?.fix,
+      "enable claude-haiku-4-5 for reeval-test in Model Garden (https://console.cloud.google.com/vertex-ai/model-garden), or set vertex({ regions: { anthropic: '<region>' } }) to a region that serves it",
+    )
+    assert.deepEqual(asked.slice(3), [
+      'https://aiplatform.googleapis.com/v1/projects/reeval-test/locations/global/publishers/anthropic/models/count-tokens:rawPredict',
+      'https://aiplatform.googleapis.com/v1/projects/reeval-test/locations/global/publishers/anthropic/models/count-tokens:rawPredict',
+    ])
+    assert.deepEqual(bodies[0], {
+      model: 'claude-haiku-4-5@20251001',
+      messages: [{ role: 'user', content: 'ping' }],
+    })
+    noSecret(online)
+    const refused = await checkVertex(
+      config,
+      deps({
+        env,
+        vertexToken: async () => {
+          throw new Error('invalid_grant: reauth related error')
+        },
+      }),
+      true,
+    )
+    assert.equal(refused.at(-1)?.status, 'fail')
+    assert.match(refused.at(-1)?.summary ?? '', /gave no access token: invalid_grant/)
+    const unset = await configOf('vertex-unset', "{ harness: cursor({ model: 'composer-2.5' }) }")
+    assert.deepEqual(await checkVertex(unset, deps(), true), [])
+  })
+
+  test('vertex online: a Gemini model is probed in the google region, once for every caller', async () => {
+    const config = await configOf(
+      'gateway-vertex-gemini',
+      `{ harness: cursor({ model: 'composer-2.5' }),
+         judge: { model: 'google/gemini-3.8-flash' },
+         analysis: { model: 'google/gemini-3.8-flash' },
+         gateway: [vertex({ project: 'reeval-test', regions: { google: 'us-central1' } })] }`,
+    )
+    const asked: Array<[string, unknown]> = []
+    const checks = await checkVertex(
+      config,
+      deps({
+        fetch: async (url, init) => {
+          if (String(url).includes('/publishers/')) {
+            asked.push([String(url), JSON.parse(String(init?.body))])
+            return Response.json({ totalTokens: 1 })
+          }
+          return Response.json({ state: 'ENABLED' })
+        },
+      }),
+      true,
+    )
+    assert.deepEqual(asked, [
+      [
+        'https://us-central1-aiplatform.googleapis.com/v1/projects/reeval-test/locations/us-central1/publishers/google/models/gemini-3.8-flash:countTokens',
+        { contents: [{ role: 'user', parts: [{ text: 'ping' }] }] },
+      ],
+    ])
+    assert.deepEqual(checks.at(-1), {
+      id: 'vertex',
+      status: 'ok',
+      summary: 'gemini-3.8-flash for the judge, analysis.model (reeval-test, us-central1): served',
+    })
+  })
+
+  test('vertex online: the Gemini harnesses are probed on the id they call', async () => {
+    const config = await configOf(
+      'gateway-vertex-harnesses',
+      `{ harness: cursor({ model: 'composer-2.5' }),
+         gateway: [vertex({ project: 'reeval-test' })],
+         profiles: {
+           agy: { defaults: { harness: antigravity({ model: 'gemini-3.8-flash-low' }) } },
+           oc: { defaults: { harness: opencode({ model: 'google-vertex/gemini-3.8-flash' }) } },
+           goose: { defaults: { harness: goose({ model: 'gemini-3.8-flash' }) } },
+           pi: { defaults: { harness: pi({ model: 'gemini-3.8-pro' }) } },
+         } }`,
+    )
+    const asked: string[] = []
+    const checks = await checkVertex(
+      config,
+      deps({
+        fetch: async (url) => {
+          if (String(url).includes('/publishers/')) asked.push(String(url))
+          return Response.json({ state: 'ENABLED', totalTokens: 1 })
+        },
+      }),
+      true,
+    )
+    const models =
+      'https://aiplatform.googleapis.com/v1/projects/reeval-test/locations/global/publishers/google/models'
+    assert.deepEqual(asked, [
+      `${models}/gemini-3.8-flash:countTokens`,
+      `${models}/gemini-3.8-pro:countTokens`,
+    ])
+    assert.deepEqual(
+      checks.slice(-2).map((c) => c.summary),
+      [
+        'gemini-3.8-flash for antigravity in profile agy, opencode in profile oc, goose in profile goose (reeval-test, global): served',
+        'gemini-3.8-pro for pi in profile pi (reeval-test, global): served',
+      ],
+    )
   })
 
   test('egress: the policy, and one the sandbox can’t enforce', async () => {
@@ -820,7 +1038,7 @@ evaluate('a', async () => {})
     assert.equal(await checkEnvFiles(root, visible(null)), null)
   })
 
-  test('env files git sees: found with git ls-files, honouring .gitignore and its ! rules', async () => {
+  test('env files git sees: found with git ls-files, honoring .gitignore and its ! rules', async () => {
     const root = (await project('doctor-env-files-git', {})).dir
     await writeFile(join(root, '.gitignore'), 'node_modules/\n.env\n.env.*\n!.env.example\n')
     await writeFile(join(root, '.env.example'), `GEMINI_API_KEY=${SECRET}\n`)
@@ -890,7 +1108,7 @@ describe('reeval doctor', () => {
     assert.equal(report.healthy, true)
     assert.deepEqual(
       [...new Set(report.checks.map((c: Check) => c.id))],
-      ['runtime', 'config', 'docker', 'key', 'judge', 'analysis', 'egress', 'gitignore'],
+      ['runtime', 'config', 'docker', 'key', 'judge', 'egress', 'gitignore'],
     )
   })
 

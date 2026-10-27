@@ -1,0 +1,6 @@
+no profile · 1 evals · 2 cells · 2 attempts
+evals/right/a.eval.ts › alpha  left/-/docker   control  gated  ×1
+                               right/-/docker  control  gated  ×1
+excluded: —
+image docker · cursor · 1 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

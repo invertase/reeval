@@ -145,7 +145,7 @@ describe('automatic hosts', () => {
     assert.deepEqual(gatewayPolicy({ policy: 'proxy', auto: [] }), { mode: 'allow-all' })
   })
 
-  test('only allow-all lets traffic around the gateway, and only it is labelled', () => {
+  test('only allow-all lets traffic around the gateway, and only it is labeled', () => {
     assert.equal(isDirect('allow-all'), true)
     for (const policy of ['proxy', 'deny-all', { allow: ['a.example.com'] }] as const) {
       assert.equal(isDirect(policy), false, JSON.stringify(policy))

@@ -1,7 +1,0 @@
-fail             greets in French
-  No: only 0 of 1 passed "french greeting".
-  french greeting  failed
-    expected command to succeed, exit code 1
-  +1 more passed
-
-1 fail

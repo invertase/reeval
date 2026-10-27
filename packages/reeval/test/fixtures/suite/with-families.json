@@ -10,7 +10,7 @@
       "notGated": 0,
       "fail": 3,
       "infraError": 7,
-      "cancelled": 0,
+      "canceled": 0,
       "skipped": 2
     },
     "files": [
@@ -1237,50 +1237,6 @@
           }
         ]
       }
-    ],
-    "paths": [
-      "evals%2Fcases.eval.ts › greets %25s",
-      "evals%2Fcases.eval.ts › greets %25s/Ada",
-      "evals%2Fcases.eval.ts › greets %25s/Ada/fake+plain+docker",
-      "evals%2Fcases.eval.ts › greets %25s/Ada/fake+with-house-greeting+docker",
-      "evals%2Fcases.eval.ts › greets %25s/Ada/broken+plain+docker",
-      "evals%2Fcases.eval.ts › greets %25s/Ada/broken+with-house-greeting+docker",
-      "evals%2Fcases.eval.ts › greets %25s/Grace",
-      "evals%2Fcases.eval.ts › greets %25s/Grace/fake+plain+docker",
-      "evals%2Fcases.eval.ts › greets %25s/Grace/fake+with-house-greeting+docker",
-      "evals%2Fcases.eval.ts › greets %25s/Grace/broken+plain+docker",
-      "evals%2Fcases.eval.ts › greets %25s/Grace/broken+with-house-greeting+docker",
-      "evals%2Fcases.eval.ts › greets %25s/fake+with-house-greeting+docker",
-      "evals%2Fcases.eval.ts › writes greet.js for Ada",
-      "evals%2Fcases.eval.ts › writes greet.js for Ada/fake+fake+fake",
-      "evals%2Fcases.eval.ts › writes greet.js for Ada/broken+fake+fake",
-      "evals%2Fcases.eval.ts › writes greet.js for Grace",
-      "evals%2Fcases.eval.ts › writes greet.js for Grace/fake+fake+fake",
-      "evals%2Fcases.eval.ts › writes greet.js for Grace/broken+fake+fake",
-      "evals%2Fgreet.eval.ts › writes greet.js",
-      "evals%2Fgreet.eval.ts › writes greet.js/fake+fake+fake",
-      "evals%2Fgreet.eval.ts › writes greet.js/broken+fake+fake",
-      "evals%2Fgreet.eval.ts › fails its check",
-      "evals%2Fgreet.eval.ts › fails its check/fake+fake+fake",
-      "evals%2Fgreet.eval.ts › fails its check/broken+fake+fake",
-      "evals%2Fgreet.eval.ts › fails its judge",
-      "evals%2Fgreet.eval.ts › fails its judge/fake+fake+fake",
-      "evals%2Fgreet.eval.ts › fails its judge/broken+fake+fake",
-      "evals%2Fgreet.eval.ts › is skipped for now",
-      "evals%2Fgreet.eval.ts › is skipped for now/fake+fake+fake",
-      "evals%2Fgreet.eval.ts › is skipped for now/broken+fake+fake",
-      "evals%2Fgreet.eval.ts › greets in Welsh",
-      "evals%2Fgreet.eval.ts › greets in Welsh/unknown+unknown+unknown",
-      "evals%2Fskill.eval.ts › house greeting › greets in the house style",
-      "evals%2Fskill.eval.ts › house greeting › greets in the house style/fake+plain+docker",
-      "evals%2Fskill.eval.ts › house greeting › greets in the house style/fake+with-house-greeting+docker",
-      "evals%2Fskill.eval.ts › house greeting › greets in the house style/broken+plain+docker",
-      "evals%2Fskill.eval.ts › house greeting › greets in the house style/broken+with-house-greeting+docker",
-      "evals%2Fskill.eval.ts › house greeting › writes a greeting",
-      "evals%2Fskill.eval.ts › house greeting › writes a greeting/fake+plain+docker",
-      "evals%2Fskill.eval.ts › house greeting › writes a greeting/fake+with-house-greeting+docker",
-      "evals%2Fskill.eval.ts › house greeting › writes a greeting/broken+plain+docker",
-      "evals%2Fskill.eval.ts › house greeting › writes a greeting/broken+with-house-greeting+docker"
     ]
   },
   "20261016T082655Z_6329a03_cursor-agent_tyzk": {
@@ -1294,7 +1250,7 @@
       "notGated": 0,
       "fail": 0,
       "infraError": 0,
-      "cancelled": 0,
+      "canceled": 0,
       "skipped": 0
     },
     "files": [
@@ -1349,10 +1305,6 @@
           }
         ]
       }
-    ],
-    "paths": [
-      "evals%2Fslow.eval.ts › takes its time",
-      "evals%2Fslow.eval.ts › takes its time/slow+fake+fake"
     ]
   }
 }

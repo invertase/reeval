@@ -11,6 +11,7 @@ import { resolveQuestionState } from '../compare/state.ts'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
 import { NO_ENVIRONMENT, profileSandbox } from '../environment.ts'
 import { isTimeout } from '../errors.ts'
+import { evalFile, sourcesPart } from '../eval-source.ts'
 import { harnessEffort, resolvedEffortOf, servedEffortOf } from '../harness/effort.ts'
 import { attemptId, attemptKey, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
@@ -19,7 +20,7 @@ import { mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
 import { harnessId, plannedSandboxes, profileJudge, sandboxId } from '../options.ts'
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
-import { redactSecrets } from '../redact.ts'
+import { redactJsonText, redactSecrets, redactSplitSecrets } from '../redact.ts'
 import { isCompletedAttempt, previousAttempt } from '../resume.ts'
 import { containsZero, liftInterval, round3 } from '../stats.ts'
 import { formatDuration } from '../text.ts'
@@ -46,9 +47,9 @@ import type {
 } from '../types.ts'
 import { promptTokens, sumUsage } from '../usage.ts'
 import { checkVerdict } from '../view/contrasts.ts'
-import { checkTries } from '../view/judgements.ts'
+import { cellOutcome, gatePart, passRateOf, worstOutcome } from '../view/gate.ts'
+import { checkTries } from '../view/judgments.ts'
 import { familiesOf } from './families.ts'
-import { type Source, traceSources } from './sources.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
   type AttemptFiles,
@@ -60,7 +61,7 @@ import {
   type FileRef,
   type FingerprintParts,
   type GitInfo,
-  type JudgementRecord,
+  type JudgmentRecord,
   type Lift,
   type RunnerInfo,
   type RunRecord,
@@ -72,12 +73,27 @@ import {
 const TURN_TEXT_LIMIT = 8 * 1024
 const TURN_ERROR_LIMIT = 1024
 
+/**
+ * `text` masked when it's longer than `limit`, so a secret the cut would go through is masked
+ * whole. Text that fits is masked when the record is written.
+ */
+const maskedOver = (text: string, limit: number) =>
+  text.length > limit ? redactSecrets(text) : text
+
 /** A turn's first error event, such as the provider's "Credit balance is too low". */
-function turnError(transcript: TranscriptEvent[] | undefined): string | null {
+export function turnError(transcript: TranscriptEvent[] | undefined): string | null {
   const found = transcript?.find((e) => e.type === 'error')
   if (found?.type !== 'error') return null
-  const message = found.message.trim()
+  const message = maskedOver(found.message.trim(), TURN_ERROR_LIMIT)
   return message.length > TURN_ERROR_LIMIT ? `${message.slice(0, TURN_ERROR_LIMIT)}…` : message
+}
+
+/** A turn's final message, cut at `TURN_TEXT_LIMIT`. */
+export function turnText(text: string): string {
+  const s = maskedOver(text, TURN_TEXT_LIMIT)
+  return s.length > TURN_TEXT_LIMIT
+    ? `${s.slice(0, TURN_TEXT_LIMIT)}… [reeval: truncated ${s.length} characters; the whole message is the turn's last text event in transcript.jsonl]`
+    : s
 }
 
 /** Tokens across every turn that reported them. */
@@ -136,7 +152,8 @@ export type AssembledRun = {
 }
 
 /** Keeps evidence readable without letting one `cat` of a lockfile dominate the record. */
-export function capText(text: string, cap = OUTPUT_CAP): string {
+export function capText(raw: string, cap = OUTPUT_CAP): string {
+  const text = maskedOver(raw, cap)
   if (text.length <= cap) return text
   const omitted = text.length - HEAD - TAIL
   return `${text.slice(0, HEAD)}\n[reeval: truncated ${omitted} of ${text.length} characters, sha256 ${sha256(text)}]\n${text.slice(-TAIL)}`
@@ -164,20 +181,6 @@ export function mergeOutcome(e: EngineEval, record: EvalRecord | null): Merged {
   return { outcome: record?.outcome === 'infra_error' ? 'infra_error' : 'fail', error }
 }
 
-/** Any failure fails; then infra errors; then all-skipped; else pass. */
-export function worstOutcome(outcomes: Outcome[]): Outcome {
-  if (outcomes.includes('fail')) return 'fail'
-  if (outcomes.includes('infra_error')) return 'infra_error'
-  if (outcomes.length > 0 && outcomes.every((o) => o === 'skipped')) return 'skipped'
-  return outcomes.length ? 'pass' : 'skipped'
-}
-
-const passRateOf = (outcomes: Outcome[]) => {
-  const pass = outcomes.filter((o) => o === 'pass').length
-  const counted = pass + outcomes.filter((o) => o === 'fail').length
-  return counted ? pass / counted : null
-}
-
 /**
  * The harness as the measurement sees it: without the operational limits (`maxConcurrent`,
  * `startTimeout`), which don't change results, and without the route, which `gateway` holds.
@@ -203,15 +206,20 @@ export const gatewayPart = (
   gateway && gateway.name !== 'direct' ? { gateway: gateway.name } : {}
 
 /** `<index>:<question hash>`, which follows one verdict across runs. */
-export const judgementKey = (index: number, question: string) =>
+export const judgmentKey = (index: number, question: string) =>
   `${index}:${sha256(question).slice(0, 12)}`
+
+const JSON_FILE = /\.(?:json|jsonl|ndjson)$/
 
 /** Collects artifact files, redacting before anything is hashed. */
 class Artifacts {
   readonly files = new Map<string, Uint8Array>()
 
+  /** JSON and JSON Lines files are masked inside their strings only, so they stay valid. */
   add(path: string, content: string): FileRef {
-    const bytes = Buffer.from(redactSecrets(content))
+    const bytes = Buffer.from(
+      JSON_FILE.test(path) ? redactJsonText(content) : redactSecrets(content),
+    )
     this.files.set(path, bytes)
     return { path, sha256: sha256(bytes), bytes: bytes.length }
   }
@@ -318,13 +326,13 @@ export function transcriptLines(record: EvalRecord): string {
   return `${lines.join('\n')}\n`
 }
 
-/** Every stream part the harness sent, for debugging the normaliser (`REEVAL_RAW_TRANSCRIPT=1`). */
-function rawLines(record: EvalRecord): string | null {
+/** Every stream part the harness sent, for debugging the normalizer (`REEVAL_RAW_TRANSCRIPT=1`). */
+export function rawLines(record: EvalRecord): string | null {
   if (!record.turns.some((t) => t.raw)) return null
   const lines = record.turns.flatMap((turn, index) =>
     (turn.raw ?? []).map((part) => JSON.stringify({ turn: index, ...(part as object) })),
   )
-  return `${lines.join('\n')}\n`
+  return `${redactSplitSecrets(lines).join('\n')}\n`
 }
 
 function activity(record: EvalRecord): AttemptRecord['activity'] {
@@ -395,7 +403,7 @@ function judgeInputs(record: EvalRecord, diff: string | null, diffPath: string) 
 
 /** What the run's attempts have in common, gathered while their records are read. */
 class Seen {
-  readonly sources = new Map<string, Source[]>()
+  readonly sources = new Map<string, EvalEntry['sources']>()
   readonly byEval = new Map<string, EvalEntry>()
   readonly contexts = new Map<string, ContextFile>()
   readonly resolvedJudges = new Set<string>()
@@ -406,6 +414,8 @@ class Seen {
     Omit<Stack['harnesses'][number], 'resolvedModels' | 'resolvedEffort'>
   >()
   readonly resolvedHarnesses = new Map<string, Set<string>>()
+  /** Keys of the attempts kept from the previous record on resume. */
+  readonly kept = new Set<string>()
   /** Registry digests found by the preflight, by image id. */
   readonly digests: Map<string, string[]>
 
@@ -440,7 +450,43 @@ class Seen {
     this.resolvedHarnesses.set(cell.harness, resolved)
   }
 
-  entry(e: EngineEval, sources: Source[]): EvalEntry {
+  /**
+   * A kept attempt has no worker record left, so what `add` reads from one comes from the
+   * previous record instead: its image, environment, context files and resolved models.
+   */
+  addKept(
+    previous: RunRecord,
+    kept: AttemptRecord,
+    cell: Cell,
+    environmentDigest: string | null,
+    planned: boolean,
+  ): void {
+    this.kept.add(kept.key)
+    for (const c of kept.context) this.contexts.set(`${c.path}\0${c.sha256}`, c)
+    for (const j of kept.judgements) {
+      if (j.resolvedModel) this.resolvedJudges.add(j.resolvedModel)
+    }
+    const image = previous.stack.images.find((i) => i.id === kept.imageId)
+    if (image && !this.images.has(image.id)) this.images.set(image.id, image)
+    const environment = previous.environments.find((x) => x.digest === environmentDigest)
+    if (environment) {
+      this.environments.set(`${environment.name}\0${environment.digest}`, environment)
+    }
+    const harness = previous.stack.harnesses.find((h) => h.id === cell.harness)
+    if (!planned && harness && !this.harnesses.has(cell.harness)) {
+      const { resolvedModels: _, resolvedEffort: __, ...rest } = harness
+      this.harnesses.set(cell.harness, rest)
+    }
+    const resolved = this.resolvedHarnesses.get(cell.harness) ?? new Set<string>()
+    for (const t of kept.turns) if (t.model) resolved.add(t.model)
+    this.resolvedHarnesses.set(cell.harness, resolved)
+  }
+
+  entry(
+    e: EngineEval,
+    sources: EvalEntry['sources'],
+    from: Pick<EvalEntry, 'source' | 'revision'>,
+  ): EvalEntry {
     let entry = this.byEval.get(e.id)
     if (!entry) {
       const key = e.id
@@ -456,6 +502,8 @@ class Seen {
         ...(e.attempt?.family ? { family: familyOf(e.attempt.family) } : {}),
         fingerprint: '',
         sources,
+        ...(from.source ? { source: from.source } : {}),
+        ...(from.revision !== undefined ? { revision: from.revision } : {}),
         outcome: 'skipped',
         todo: e.todo === true,
         passRate: null,
@@ -485,6 +533,9 @@ const UNKNOWN_CELL: Cell = {
 
 /** minLift per cell, kept aside while attempts are added; see `rollUp`. */
 const minLifts = new WeakMap<CellRecord, number>()
+
+/** Cells whose fingerprint came from an attempt that ran, not one that was skipped. */
+const measured = new WeakSet<CellRecord>()
 
 const EMPTY_PARTS: FingerprintParts = {
   sources: '',
@@ -553,21 +604,28 @@ async function addPreviousAttempt(
   seen: Seen,
   out: Artifacts,
   judge: JudgeFingerprint,
+  previous: RunRecord,
   previousArtifacts?: string | null,
-  sources?: Source[],
 ): Promise<void> {
-  const cell = e.attempt?.cell ?? {
-    ...UNKNOWN_CELL,
-    key: kept.cell,
-    harness: kept.cell.split('/')[0] ?? 'unknown',
-    environment: kept.cell.split('/')[1] ?? 'unknown',
-    sandbox: kept.cell.split('/')[2]?.replace(/#\d+$/, '') ?? 'unknown',
-  }
-  if (!seen.sources.has(e.file) && sources) seen.sources.set(e.file, sources)
-  if (!seen.sources.has(e.file)) {
-    seen.sources.set(e.file, [])
-  }
-  const resolved = sources ?? seen.sources.get(e.file) ?? []
+  const before = previous.evals.find((p) => p.id === e.id)
+  const beforeCell = before?.cells.find((c) => c.key === kept.cell)
+  const cell: Cell = e.attempt?.cell ??
+    (beforeCell && {
+      key: beforeCell.key,
+      harness: beforeCell.harness,
+      environment: beforeCell.environment,
+      sandbox: beforeCell.sandbox,
+      role: beforeCell.role,
+      ...(beforeCell.variant !== undefined ? { variant: beforeCell.variant } : {}),
+    }) ?? {
+      ...UNKNOWN_CELL,
+      key: kept.cell,
+      harness: kept.cell.split('/')[0] ?? 'unknown',
+      environment: kept.cell.split('/')[1] ?? 'unknown',
+      sandbox: kept.cell.split('/')[2]?.replace(/#\d+$/, '') ?? 'unknown',
+    }
+  const sources = before?.sources ?? []
+  const { source, revision } = e.attempt ?? before ?? {}
   const stub: EngineEval = {
     id: e.id,
     key: e.key,
@@ -582,14 +640,30 @@ async function addPreviousAttempt(
     meta: undefined,
   }
   seen.add(null, cell, stub)
-  const entry = seen.entry(stub, resolved)
+  seen.addKept(previous, kept, cell, beforeCell?.environmentDigest ?? null, e.attempt !== undefined)
+  const entry = seen.entry(stub, sources, { source, revision })
+  const created = !entry.cells.some((c) => c.key === cell.key)
   const cellRecord = cellOf(
     entry,
     cell,
-    e.attempt?.gate ?? 'all',
+    e.attempt?.gate ?? beforeCell?.gate ?? 'all',
     e.attempt?.harness,
     e.attempt?.gateway,
   )
+  if (created && beforeCell && !e.attempt) {
+    cellRecord.harnessKind = beforeCell.harnessKind
+    cellRecord.model = beforeCell.model
+    cellRecord.effort = beforeCell.effort
+    if (beforeCell.gateway !== undefined) cellRecord.gateway = beforeCell.gateway
+  }
+  // Planned, the eval's own options decide; only an unplanned kept attempt reads the old gate.
+  const minLift = e.attempt
+    ? e.attempt.minLift
+    : (beforeCell?.lift?.minLift ??
+      previous.families
+        ?.find((f) => f.id === before?.family?.id)
+        ?.lifts.find((l) => l.variant === kept.cell)?.minLift)
+  if (minLift !== undefined) minLifts.set(cellRecord, minLift)
   const files: AttemptFiles = {}
   for (const [name, ref] of Object.entries(kept.files) as Array<
     [keyof AttemptFiles, AttemptFiles[keyof AttemptFiles]]
@@ -630,9 +704,16 @@ async function addPreviousAttempt(
     checks,
     ...(answers.length ? { answers } : {}),
   })
-  if (!cellRecord.fingerprint && kept.outcome !== 'skipped') {
+  if (measured.has(cellRecord)) return
+  measured.add(cellRecord)
+  if (beforeCell?.fingerprint) {
+    cellRecord.fingerprintParts = beforeCell.fingerprintParts
+    cellRecord.fingerprint = beforeCell.fingerprint
+    cellRecord.environmentDigest = beforeCell.environmentDigest
+    if (cellRecord.overrides.length === 0) cellRecord.overrides = [...beforeCell.overrides]
+  } else {
     const parts: FingerprintParts = {
-      sources: sha256(JSON.stringify(resolved)),
+      sources: sourcesPart(source, revision, sources),
       harness: sha256(JSON.stringify(e.attempt ? withoutCaps(e.attempt.harness) : null)),
       environment: cellRecord.environmentDigest,
       image: kept.imageId,
@@ -640,6 +721,7 @@ async function addPreviousAttempt(
       judge,
       context: sha256(JSON.stringify(kept.context)),
       ...gatewayPart(e.attempt?.gateway),
+      ...gatePart(cellRecord.gate),
     }
     cellRecord.fingerprintParts = parts
     cellRecord.fingerprint = fingerprintOf(parts)
@@ -659,19 +741,23 @@ async function addAttempt(
   const cell = e.attempt?.cell ?? UNKNOWN_CELL
   const n = e.attempt?.n ?? 1
   const kept = previousAttempt(previous, e.key)
-  if (e.state === 'skipped' && kept && isCompletedAttempt(kept.outcome, kept.error)) {
-    await addPreviousAttempt(e, kept, seen, out, judge, previousArtifacts)
+  if (previous && e.state === 'skipped' && kept && isCompletedAttempt(kept.outcome, kept.error)) {
+    await addPreviousAttempt(e, kept, seen, out, judge, previous, previousArtifacts)
     return
   }
   const record = await readRecord(join(ctx.stagingDir, 'evals', recordFileName(e.key)))
   const { outcome, error } = mergeOutcome(e, record)
   if (!seen.sources.has(e.file)) {
-    seen.sources.set(e.file, await traceSources(ctx.config.root, e.file))
+    seen.sources.set(e.file, await evalFile(ctx.config.root, e.file))
   }
   const sources = seen.sources.get(e.file) ?? []
+  const source = e.attempt?.source
+  const revision = e.attempt?.revision
   const context = record?.context ?? []
   seen.add(record, cell, e)
-  const entry = seen.entry(e, sources)
+  const entry = seen.entry(e, sources, { source, revision })
+  // An attempt that ran now saw the files as they are; a kept one may have created the entry.
+  if (record) entry.sources = sources
   const cellRecord = cellOf(
     entry,
     cell,
@@ -689,8 +775,9 @@ async function addAttempt(
   }
   // Skipped attempts never ran, so they have no environment or image to fingerprint.
   if (!cellRecord.fingerprint || record) {
+    if (record) measured.add(cellRecord)
     const parts: FingerprintParts = {
-      sources: sha256(JSON.stringify(sources)),
+      sources: sourcesPart(source, revision, sources),
       harness: sha256(JSON.stringify(e.attempt ? withoutCaps(e.attempt.harness) : null)),
       environment: environment?.digest ?? null,
       image: record?.image?.id ?? null,
@@ -698,6 +785,7 @@ async function addAttempt(
       judge,
       context: sha256(JSON.stringify(context)),
       ...gatewayPart(e.attempt?.gateway),
+      ...gatePart(cellRecord.gate),
     }
     cellRecord.fingerprintParts = parts
     cellRecord.fingerprint = fingerprintOf(parts)
@@ -750,6 +838,7 @@ async function attemptEvidence(
     | 'activity'
     | 'judgements'
     | 'startRetries'
+    | 'setupProcesses'
     | 'checks'
     | 'changedFiles'
     | 'files'
@@ -790,9 +879,9 @@ async function attemptEvidence(
     }
     if (artifacts.length) files.artifacts = artifacts
   }
-  const judgements: JudgementRecord[] = (record?.judgements ?? []).map((j, i) => ({
+  const judgments: JudgmentRecord[] = (record?.judgements ?? []).map(({ call, ...j }, i) => ({
     ...j,
-    key: judgementKey(i, j.question),
+    key: judgmentKey(call ?? i, j.question),
   }))
   return {
     turns: (record?.turns ?? []).map((t) => ({
@@ -805,10 +894,7 @@ async function attemptEvidence(
       unreported: t.unreported ?? [],
       error: turnError(t.transcript),
       ...(t.mcpStartup ? { mcpStartup: t.mcpStartup } : {}),
-      text:
-        t.text.length > TURN_TEXT_LIMIT
-          ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [reeval: truncated ${t.text.length} characters; the whole message is the turn's last text event in transcript.jsonl]`
-          : t.text,
+      text: turnText(t.text),
     })),
     usage: sumUsage((record?.turns ?? []).map((t) => t.usage)),
     ...(record?.captureUse ? { captureUse: record.captureUse } : {}),
@@ -824,8 +910,9 @@ async function attemptEvidence(
           stalledTools: 0,
           maxToolMs: null,
         },
-    judgements,
+    judgements: judgments,
     ...(record?.startRetries?.length ? { startRetries: record.startRetries } : {}),
+    ...(record?.setupProcesses?.length ? { setupProcesses: record.setupProcesses } : {}),
     ...(record?.assertions?.length ? { assertions: record.assertions } : {}),
     checks: (record?.checks ?? []).map((c, i) => ({
       command: c.command,
@@ -903,18 +990,6 @@ function discrimination(control: CellRecord, variant: CellRecord): void {
     const verdict = checkVerdict(check, k)
     if (verdict) check.verdict = verdict
   }
-}
-
-/**
- * A cell's outcome by its gate. `'all'` matches `{ passRate: 1 }`: every counted attempt must
- * pass, and it is an infra error only when nothing counted. `'none'` takes the worst attempt.
- */
-export function cellOutcome(outcomes: Outcome[], gate: CellGate): Outcome {
-  if (gate === 'none') return worstOutcome(outcomes)
-  const required = gate === 'all' ? 1 : gate.passRate
-  const rate = passRateOf(outcomes)
-  if (rate === null) return worstOutcome(outcomes)
-  return rate >= required ? 'pass' : 'fail'
 }
 
 /** Per-cell and per-eval counts, pass rates, lift, outcomes and fingerprints, once every attempt is in. */
@@ -1085,7 +1160,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
           formattedErrors: [],
           meta: undefined,
         }
-        await addPreviousAttempt(stub, a, seen, out, judge, input.previousArtifacts, entry.sources)
+        await addPreviousAttempt(stub, a, seen, out, judge, input.previous, input.previousArtifacts)
       }
     }
   }
@@ -1100,6 +1175,17 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   for (const e of evals) {
     const asked = input.answers?.evals.get(e.id)
     if (asked?.length) e.answers = asked.map((q) => withInput(e, q, out))
+    else if (e.attempts.length && e.attempts.every((a) => seen.kept.has(a.key))) {
+      // Every attempt is the previous record's, so its pairwise answers still describe them.
+      const before = input.previous?.evals.find((p) => p.id === e.id)?.answers ?? []
+      const answers = []
+      for (const q of before) {
+        answers.push(
+          q.input ? { ...q, input: await copyRef(q.input, input.previousArtifacts, out) } : q,
+        )
+      }
+      if (answers.length) e.answers = answers
+    }
     for (const a of e.attempts) {
       const own = input.answers?.attempts.get(a.key)
       if (own?.length) a.answers = own.map((q) => withAttemptInput(e, a, q, out))
@@ -1159,7 +1245,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     config: {
       sandbox: plannedSandboxes(input.plan.sandboxes, profileSandbox(config, profile?.defaults)),
       environment: config.environment?.name ?? null,
-      runs: config.runs,
+      runs: config.runs ?? 1,
       judgeModel,
       threshold: runJudge.threshold,
       timeoutMs: config.timeoutMs,

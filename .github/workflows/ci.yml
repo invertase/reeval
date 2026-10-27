@@ -7,7 +7,7 @@
 #          code change; each heavier job only when the files it tests change (the `changes` job).
 #   full   every Linux tier on every code change, as before the light tier.
 # `main` runs the Linux tiers plus Windows, macOS and npm 10.9. The Node 22.13 floor and the
-# coverage report run on nightly, workflow_dispatch, release.yml's call and a PR labelled
+# coverage report run on nightly, workflow_dispatch, release.yml's call and a PR labeled
 # `ci:full` (ci-full.yml): newest Node already ran on the PR, and coverage is report-only.
 #
 # Coverage (nightly, dispatch, release): the test jobs collect V8 coverage from every process
@@ -206,6 +206,9 @@ jobs:
       - uses: ./.github/actions/setup
       # biome ci: lint and format check, without writing, with GitHub annotations.
       - run: pnpm exec biome ci .
+      # US English and common misspellings everywhere but the user docs (_typos.toml).
+      - if: ${{ !cancelled() }}
+        uses: crate-ci/typos@7f9d0819ca1c008ade73f4b41fa9d258d48f605b # v1.51.1
       # Unused files, exports, types and dependencies across the workspace (knip.json).
       - if: ${{ !cancelled() }}
         run: pnpm knip
@@ -552,7 +555,8 @@ jobs:
           name: package
           path: ${{ runner.temp }}/package/*.tgz
           if-no-files-found: error
-          retention-days: 7
+          # release.yml publishes it from its own run; nothing else reads it.
+          retention-days: ${{ github.workflow == 'release' && 7 || 1 }}
       # Besides npm, the pack test installs with the runner's Yarn 1 and with strict pnpm, which
       # install no peers.
       - working-directory: packages/reeval
@@ -612,8 +616,8 @@ jobs:
           path: coverage/report
           retention-days: 14
 
-  # The one required check: fails when any job above failed or was cancelled. A job the change
-  # doesn't need is skipped, which passes. `always()`, so a cancelled run fails it rather than
+  # The one required check: fails when any job above failed or was canceled. A job the change
+  # doesn't need is skipped, which passes. `always()`, so a canceled run fails it rather than
   # skipping it (a skipped required check counts as passed).
   ci:
     name: ci
@@ -627,6 +631,6 @@ jobs:
         run: |
           jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
           if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<< "$NEEDS" > /dev/null; then
-            echo "::error::A required job failed or was cancelled (listed above)."
+            echo "::error::A required job failed or was canceled (listed above)."
             exit 1
           fi

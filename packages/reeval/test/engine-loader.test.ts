@@ -9,6 +9,7 @@ import {
   checkTsconfig,
   loadEvalFile,
   originalStack,
+  originalText,
   stripJsonComments,
   syntaxError,
   TsconfigError,
@@ -189,6 +190,14 @@ describe('checkTsconfig', () => {
     checkTsconfig(root, root)
   })
 
+  test('a tsconfig saved with a UTF-8 BOM passes, as tsc reads it', () => {
+    const root = tree({
+      'tsconfig.json': '\uFEFF{ "extends": "./base.json" }',
+      'base.json': '\uFEFF{ "compilerOptions": { "strict": true } }',
+    })
+    checkTsconfig(root, root)
+  })
+
   test('a tsconfig that extends a missing file fails, naming it', () => {
     const root = tree({ 'tsconfig.json': '{ "extends": "../../tsconfig.base.json" }' })
     assert.throws(
@@ -276,5 +285,38 @@ export function run(): void {
     )
     rmSync(file)
     assert.throws(() => originalStack(raw), /ENOENT/)
+  })
+})
+
+describe('originalText', () => {
+  test("a function's text is its file's, whatever the transform renamed", async () => {
+    const body = `async (c: { send(s: string): void }) => {
+    c.send(prompt)
+  }`
+    const root = tree({
+      'evals/helpers.ts': "export const prompt = 'go'\n",
+      'x/helpers.ts': "export const other = 'x'\nexport const pick = (n: number) => n * 2\n",
+      'evals/main.ts': `import { other } from '../x/helpers'
+import { prompt } from './helpers'
+export const fns = {
+  other: () => other,
+  body: ${body},
+  word: (n: number) => n,
+  text: () => 'a string',
+}
+`,
+    })
+    const file = join(root, 'evals/main.ts')
+    const { fns } = (await loadEvalFile(file, root)) as { fns: Record<string, () => void> }
+    const { pick } = (await loadEvalFile(join(root, 'x/helpers.ts'), root)) as {
+      pick: () => void
+    }
+    assert.match(String(fns.body), /_helpers2\.prompt/, 'the transform renamed the import')
+    assert.equal(originalText(String(fns.body), file), body)
+    assert.equal(originalText(String(fns.word), file), '(n: number) => n')
+    assert.equal(originalText(String(fns.text)), "() => 'a string'")
+    assert.equal(originalText(String(pick), file), '(n: number) => n * 2', 'found in another file')
+    assert.equal(originalText('() => "nowhere"', file), undefined)
+    assert.equal(originalText(String(pick), join(root, 'not-loaded.ts')), '(n: number) => n * 2')
   })
 })

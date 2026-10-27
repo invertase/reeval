@@ -1,6 +1,6 @@
 // For coding agents running `reeval run`: they read every line back into context, so nothing
 // prints while attempts run but what needs attention now (a sandbox that failed to prepare, a
-// warning), and the run ends with the same result blocks as the terminal, without colour.
+// warning), and the run ends with the same result blocks as the terminal, without color.
 import { sandboxWarningLine } from '../text.ts'
 import { colors } from './colors.ts'
 import type { OutputStream, ReevalEvent, Renderer } from './events.ts'

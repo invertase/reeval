@@ -21,6 +21,7 @@ import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
 import type { Harness, HarnessSession, Treatments } from '../harness/types.ts'
 import { type PluginUnpack, unpackPlugins } from '../harness/unpack.ts'
 import { harnessId } from '../options.ts'
+import { redactSecrets } from '../redact.ts'
 import { createSandbox, InfraError, type Sandbox } from '../sandbox/index.ts'
 import { brokerPhases } from '../sandbox/phases.ts'
 import { clip, formatDuration } from '../text.ts'
@@ -36,7 +37,7 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
   const steps: ResolvedStep[] = env.setup
   record.setup = []
   for (const [i, step] of steps.entries()) {
-    const what = `setup step ${i + 1}/${steps.length} "${clip(step.run, 80)}" in environment ${spec.environment.name}`
+    const what = `setup step ${i + 1}/${steps.length} "${clip(redactSecrets(step.run), 80)}" in environment ${spec.environment.name}`
     const start = performance.now()
     const stepSignal = AbortSignal.any([a.signal, AbortSignal.timeout(step.timeoutMs)])
     const r = await asCheck(a, () =>
@@ -59,7 +60,7 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
     record.setup.push({ run: step.run, exitCode: r?.exitCode ?? null, durationMs, output })
     debugLog(
       'env',
-      `setup ${i + 1}/${steps.length} $ ${clip(step.run, 120)} → ${r ? `exit ${r.exitCode}` : `timed out after ${formatDuration(step.timeoutMs)}`} · ${formatDuration(durationMs)}${step.cwd ? ` · in ${step.cwd}` : ''}`,
+      `setup ${i + 1}/${steps.length} $ ${clip(redactSecrets(step.run), 120)} → ${r ? `exit ${r.exitCode}` : `timed out after ${formatDuration(step.timeoutMs)}`} · ${formatDuration(durationMs)}${step.cwd ? ` · in ${step.cwd}` : ''}`,
     )
     debugTrace(
       'env',
@@ -81,6 +82,67 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
         : `${what} timed out after ${formatDuration(step.timeoutMs)} (see setup.log)`,
     )
   }
+}
+
+/** The `to: 'checks'` secrets the setup steps got as their real value: those without `hosts`. */
+function unbrokeredChecks(env: ResolvedEnvironment): string[] {
+  const brokered = new Set(env.substitutions.filter((s) => s.phase === 'checks').map((s) => s.name))
+  return Object.keys(env.checkVars).filter((name) => !brokered.has(name))
+}
+
+/** How many of the processes setup left running the record keeps, and how much of each command line. */
+const SETUP_PROCESSES = 20
+const SETUP_COMMAND_CHARS = 200
+
+/**
+ * The processes the setup steps left running with an unbrokered `to: 'checks'` secret in their
+ * environment, by the secret's variable name: a copy under another name or in a process's
+ * arguments isn't found. The listing runs as the agent's user, with no checks secrets of its own,
+ * so it sees the environments the agent could read, and prints names, never values. Docker only:
+ * the fake sandbox runs on the host, with no separation to report on.
+ */
+async function leftRunning(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
+  const names = unbrokeredChecks(env)
+  if (a.spec.sandbox.kind !== 'docker' || !env.setup.length || !names.length) return []
+  const r = await box.exec(
+    [
+      'for t in tr sed sort; do command -v "$t" >/dev/null || { echo "no $t in the image" >&2; exit 1; }; done',
+      'for p in /proc/[0-9]*; do',
+      '  [ "$p" = "/proc/$$" ] && continue',
+      `  n=$(tr '\\0' '\\n' < "$p/environ" 2>/dev/null | sed -n -E 's/^(${names.join('|')})=.*/\\1/p' | sort -u | tr '\\n' ' ')`,
+      '  [ -n "$n" ] || continue',
+      // An argument can hold a tab or a line break, which would end the field or the line.
+      `  c=$(tr '\\0\\t\\n' '   ' < "$p/cmdline" 2>/dev/null)`,
+      `  [ -n "$c" ] || c=$(tr '\\t\\n' '  ' < "$p/comm" 2>/dev/null)`,
+      `  printf '%s\\t%s\\n' "$n" "$c"`,
+      'done',
+      'true',
+    ].join('\n'),
+    { signal: a.signal },
+  )
+  if (r.exitCode !== 0) {
+    debugLog('env', `couldn't list the processes setup left running: ${tailOf(r.stderr)}`)
+    return []
+  }
+  const known = new Set(names)
+  const found = r.stdout.split('\n').flatMap((line) => {
+    const tab = line.indexOf('\t')
+    if (tab < 0) return []
+    const secrets = line
+      .slice(0, tab)
+      .split(' ')
+      .filter((n) => known.has(n))
+    // Masked before it's cut, so a cut can't leave part of a value the masking wouldn't match.
+    const command = clip(redactSecrets(line.slice(tab + 1).trim()), SETUP_COMMAND_CHARS)
+    return secrets.length ? [{ command, secrets }] : []
+  })
+  if (found.length > SETUP_PROCESSES) {
+    debugLog(
+      'env',
+      `setup left ${found.length} processes running with a checks secret; the record keeps the first ${SETUP_PROCESSES}`,
+    )
+  }
+  return found.slice(0, SETUP_PROCESSES)
 }
 
 // A relative path: GNU tar (Git for Windows' too) reads a `C:` in its file name as a remote host.
@@ -349,8 +411,8 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     signal: a.signal,
     env: env.vars,
     image: a.image,
-    brokering: brokeringFor(spec.harness),
-    expectedBlocked: expectedBlockedFor(spec.harness, env.plugins.length > 0)?.hosts,
+    brokering: brokeringFor(spec.harness, spec.vertex),
+    expectedBlocked: expectedBlockedFor(spec.harness, env.plugins.length > 0, spec.vertex)?.hosts,
     substitutions: env.substitutions,
     egress: spec.egress,
   })
@@ -415,6 +477,14 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     )
   }
   await runSetup(a, box, env)
+  const running = await leftRunning(a, box, env)
+  if (running.length) {
+    a.record.setupProcesses = running
+    debugLog(
+      'env',
+      `setup left ${running.length} process${running.length === 1 ? '' : 'es'} running with ${[...new Set(running.flatMap((p) => p.secrets))].join(', ')} (to: 'checks', no hosts) in the environment: ${running.map((p) => clip(p.command, 80)).join('; ')}`,
+    )
+  }
   await snapshot(box, a.signal)
   debugLog('env', 'workspace snapshot taken: the diff starts here')
   const timed = await timeMcpServers(box, env.mcp, a.signal)
@@ -427,7 +497,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
   if (layout.pluginPlacement === 'namespaced') {
     await writePluginMcp(box, env, plugins, timed.servers)
   }
-  const harness = await createHarness(spec.harness)
+  const harness = await createHarness(spec.harness, spec.vertex)
   const harnessStart = performance.now()
   debugLog('harness', `starting ${harnessId(spec.harness)}: bootstrap and session`)
   const session = await startHarness(a, harness, box, {

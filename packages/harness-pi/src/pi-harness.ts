@@ -28,7 +28,12 @@ import {
 } from '@ai-sdk/harness/utils'
 import type { Experimental_SandboxSession as SandboxSession } from '@ai-sdk/provider-utils'
 import { z } from 'zod'
-import { getPiBootstrap, PI_BOOTSTRAP_DIR, PI_CLI_PATH } from './pi-bootstrap.ts'
+import {
+  getPiBootstrap,
+  PI_BOOTSTRAP_DIR,
+  PI_CLI_PATH,
+  piGatewayModelsScript,
+} from './pi-bootstrap.ts'
 import { PiStreamTranslator } from './pi-stream.ts'
 import { PI_BUILTIN_TOOLS, type PiBuiltinTools } from './pi-tools.ts'
 
@@ -39,6 +44,8 @@ export const GEMINI_API_URL = 'https://generativelanguage.googleapis.com'
 /** The header pi's `google` provider sends the key in. */
 export const GEMINI_API_KEY_HEADER = 'x-goog-api-key'
 /** pi's agent directory under the home: its sessions, settings, global skills and rules. */
+/** pi's provider for Vertex AI, which authenticates from Application Default Credentials. */
+export const PI_VERTEX_PROVIDER = 'google-vertex'
 export const PI_AGENT_DIR = '.pi/agent'
 /** Where harness-placed skills go, under the sandbox home. */
 export const PI_HOME_SKILLS_DIR = `${PI_AGENT_DIR}/skills`
@@ -62,14 +69,80 @@ export const PI_ENDPOINTS = [
   },
 ] as const
 
+/** pi's model list, which a {@link PiGateway}'s provider goes in. */
+export const PI_MODELS_FILE = `${PI_AGENT_DIR}/models.json`
+
+/**
+ * An AI gateway pi reaches a model through, as a pi provider on the gateway's OpenAI-compatible
+ * Chat Completions API, with the key sent as a Bearer token.
+ */
+export type PiGateway = {
+  /** For messages: `Vercel AI Gateway`. */
+  readonly name: string
+  /** The pi provider id, `--provider`. */
+  readonly id: string
+  readonly credentialEnv: string
+  /** The Chat Completions base URL, ending `/v1`. */
+  readonly baseUrl: string
+  /**
+   * The `providerOptions` keys a Gemini model's native `thinkingConfig` goes under, in a provider
+   * of reeval's that each turn writes to `models.json`. Unset, `id` is a provider pi has built in,
+   * which runs the model from pi's own catalog for it.
+   */
+  readonly upstreams?: readonly string[]
+}
+
+/**
+ * Vercel AI Gateway, whose model ids name their provider (`google/gemini-3.8-flash`). It takes
+ * Gemini's own `thinkingConfig` under the provider that serves the call, Google's or Vertex's.
+ */
+export const PI_AI_GATEWAY: PiGateway = {
+  name: 'Vercel AI Gateway',
+  id: 'reeval-ai-gateway',
+  credentialEnv: 'AI_GATEWAY_API_KEY',
+  baseUrl: 'https://ai-gateway.vercel.sh/v1',
+  upstreams: ['google', 'vertex'],
+}
+
+/**
+ * OpenRouter, on pi's own `openrouter` provider: its catalog's ids name their provider
+ * (`google/gemini-3.8-flash`), and a Gemini 3 model's thinking level goes as OpenRouter's
+ * `reasoning.effort`, which OpenRouter sends Gemini as the same level.
+ */
+export const PI_OPENROUTER: PiGateway = {
+  name: 'OpenRouter',
+  id: 'openrouter',
+  credentialEnv: 'OPENROUTER_API_KEY',
+  baseUrl: 'https://openrouter.ai/api/v1',
+}
+
+/** The model call pi makes on a {@link PiGateway}: Chat Completions, which it streams. */
+export const piGatewayEndpoints = (gateway: PiGateway) =>
+  [
+    {
+      host: new URL(gateway.baseUrl).hostname,
+      path: { exact: `${new URL(gateway.baseUrl).pathname}/chat/completions` },
+      method: ['POST'],
+    },
+  ] as const
+
 /** An `mcp.json` server: stdio (`command`) or streamable HTTP (`url`); pi has no SSE transport. */
 export type PiMcpServer =
   | { command: string; args?: string[]; env?: Record<string, string> }
   | { url: string; headers?: Record<string, string> }
 
 export type PiHarnessSettings = {
-  /** `{ GEMINI_API_KEY }`, the only key used. The host environment is never read. */
+  /**
+   * `{ GEMINI_API_KEY }`, or the gateway's key under its `credentialEnv`: the only key used. The
+   * host environment is never read.
+   */
   readonly auth: HarnessV1AuthenticationEnvironment
+  /**
+   * Run the model on this gateway rather than Gemini's API: a model is the gateway's id
+   * (`google/gemini-3.8-flash`), of a Gemini model in pi's catalog that takes a thinking level, or,
+   * on a provider pi has built in, of a model in pi's catalog for it.
+   */
+  readonly gateway?: PiGateway
   /** MCP servers by name, written to pi's `mcp.json` with their tools declared to the model. */
   readonly mcpServers?: Record<string, PiMcpServer>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
@@ -78,6 +151,19 @@ export type PiHarnessSettings = {
    * Reasoning effort, passed as `--thinking` (pi's name). Values are whatever that flag takes.
    */
   readonly effort?: string
+  /**
+   * Vertex AI instead of the Gemini API: pi's `google-vertex` provider on this project and
+   * region, reading the service-account file at `credentialsFile` in the sandbox. No key is read
+   * (`auth` may be empty); whoever runs the sandbox supplies the file and the token the calls
+   * carry.
+   */
+  readonly vertex?: PiVertex
+}
+
+export type PiVertex = {
+  readonly project: string
+  readonly location: string
+  readonly credentialsFile: string
 }
 
 /**
@@ -169,12 +255,17 @@ export function buildPiCommand(options: {
   sessionDir: string
   mcp?: boolean
   thinking?: string
+  /** The pi provider, `google` by default. */
+  provider?: string
+  /** A command that must succeed before pi starts, such as writing its models.json. */
+  before?: string
 }): string {
   return [
     `cd ${shellQuote(options.workDir)} &&`,
+    ...(options.before ? [`${options.before} &&`] : []),
     `exec ${shellQuote(options.cli)} --mode json -p --offline --approve --no-extensions`,
     ...(options.mcp ? ['-e builtin:mcp'] : []),
-    '--provider google',
+    `--provider ${shellQuote(options.provider ?? 'google')}`,
     ...(options.model ? [`--model ${shellQuote(options.model)}`] : []),
     ...(options.thinking ? [`--thinking ${shellQuote(options.thinking)}`] : []),
     `--session-id ${shellQuote(options.sessionId)} --session-dir ${shellQuote(options.sessionDir)}`,
@@ -189,12 +280,13 @@ export function buildPiCommand(options: {
  * all in the sandbox, MCP servers included.
  */
 export function createPi(settings: PiHarnessSettings): HarnessV1<PiBuiltinTools> {
+  const credential = settings.gateway?.credentialEnv ?? PI_CREDENTIAL_ENV
   const key = isHarnessAuthenticationEnvironment(settings.auth)
-    ? settings.auth[PI_CREDENTIAL_ENV]
+    ? settings.auth[credential]
     : undefined
-  if (!key) {
+  if (!key && !settings.vertex) {
     throw new Error(
-      `pi auth must be an environment object with ${PI_CREDENTIAL_ENV} (a Gemini API key)`,
+      `pi auth must be an environment object with ${credential} (${settings.gateway ? `a ${settings.gateway.name} key` : 'a Gemini API key'})`,
     )
   }
   return {
@@ -209,23 +301,29 @@ export function createPi(settings: PiHarnessSettings): HarnessV1<PiBuiltinTools>
 
 async function startSession(
   settings: PiHarnessSettings,
-  key: string,
+  key: string | undefined,
   options: HarnessV1StartOptions,
 ): Promise<HarnessV1Session> {
   const { sandboxSession: sandbox, sessionWorkDir, abortSignal } = options
+  const { gateway, vertex } = settings
+  const credential = gateway?.credentialEnv ?? PI_CREDENTIAL_ENV
+  const header = gateway ? 'Authorization' : GEMINI_API_KEY_HEADER
+  const sent = (value: string) => (gateway ? `Bearer ${value}` : value)
   let sandboxKey = key
-  if (canBroker(sandbox)) {
+  if (!key || vertex) {
+    sandboxKey = undefined
+  } else if (canBroker(sandbox)) {
     sandboxKey = generateSandboxCredentialPlaceholder()
     await sandbox.addRequestTransformations([
       createCredentialRequestTransformation({
-        matchUrl: GEMINI_API_URL,
-        matchHeaders: { [GEMINI_API_KEY_HEADER]: sandboxKey },
-        transformHeaders: { ...options.headers, [GEMINI_API_KEY_HEADER]: key },
+        matchUrl: gateway ? new URL(gateway.baseUrl).origin : GEMINI_API_URL,
+        matchHeaders: { [header]: sent(sandboxKey) },
+        transformHeaders: { ...options.headers, [header]: sent(key) },
       }),
     ])
   } else if (settings.requireCredentialBrokering) {
     throw new Error(
-      `The sandbox can't broker ${PI_CREDENTIAL_ENV} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
+      `The sandbox can't broker ${credential} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
     )
   }
 
@@ -238,7 +336,33 @@ async function startSession(
   })
   const resumed = lifecycleData.safeParse(options.resumeFrom?.data)
   const piSession = resumed.success ? resumed.data.sessionId : randomUUID()
-  const env = { [PI_CREDENTIAL_ENV]: sandboxKey, PI_OFFLINE: '1' }
+  const env: Record<string, string> = vertex
+    ? {
+        GOOGLE_CLOUD_PROJECT: vertex.project,
+        GOOGLE_CLOUD_LOCATION: vertex.location,
+        GOOGLE_APPLICATION_CREDENTIALS: vertex.credentialsFile,
+        PI_OFFLINE: '1',
+      }
+    : { [credential]: sandboxKey ?? '', PI_OFFLINE: '1' }
+  const bootstrapDir = posix.join(stateDir, PI_BOOTSTRAP_DIR)
+  const modelsScript = posix.join(dataDir, 'gateway-models.mjs')
+  if (gateway?.upstreams) {
+    await sandbox.writeTextFile({
+      path: modelsScript,
+      content: await piGatewayModelsScript(),
+      abortSignal,
+    })
+  }
+  const writeModels = (model: string) =>
+    gateway?.upstreams
+      ? [
+          'node',
+          ...[modelsScript, bootstrapDir, posix.join(home, PI_MODELS_FILE)],
+          ...[JSON.stringify(gateway), model],
+        ]
+          .map(shellQuote)
+          .join(' ')
+      : undefined
   const mcp = Object.keys(settings.mcpServers ?? {}).length > 0
   if (mcp) {
     await sandbox.writeTextFile({
@@ -290,6 +414,10 @@ async function startSession(
         content: promptText(turn.prompt),
         abortSignal: turn.abortSignal,
       })
+      if (gateway && !turn.model) {
+        throw new Error(`pi on ${gateway.name} needs a model, the gateway's id for it`)
+      }
+      const before = turn.model ? writeModels(turn.model) : undefined
       const command = buildPiCommand({
         cli,
         workDir: sessionWorkDir,
@@ -299,6 +427,9 @@ async function startSession(
         sessionDir: posix.join(home, PI_AGENT_DIR, 'sessions'),
         mcp,
         ...(settings.effort ? { thinking: settings.effort } : {}),
+        ...(vertex ? { provider: PI_VERTEX_PROVIDER } : {}),
+        ...(gateway ? { provider: gateway.id } : {}),
+        ...(before ? { before } : {}),
       })
       const translator = new PiStreamTranslator({
         mcpServers: Object.keys(settings.mcpServers ?? {}),

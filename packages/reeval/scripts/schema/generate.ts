@@ -1,10 +1,12 @@
 // Generates a JSON Schema of each shape reeval persists and later reads back, from the TypeScript types
 // that write and read them, with TypeScript 7's (unstable) checker API. Each named type's and
-// property's TSDoc comment becomes its `description`.
+// property's TSDoc comment becomes its `description`, in the contract's Zod-owned defs too.
 import { join } from 'node:path'
 import { API, SymbolFlags, TypeFlags } from 'typescript/unstable/sync'
+import type { z } from 'zod'
+import { CONTRACT_REFS, CONTRACT_SCHEMAS } from '../../src/contract/index.ts'
 import { PACKAGE_DIR, type PersistedShape, PLAN_SHAPES, type PlanShape, SHAPES } from './shapes.ts'
-import { checkContractCoverage, withZodDefs } from './zod.ts'
+import { checkContractCoverage, type TypeDocs, withZodDefs, zodDefs } from './zod.ts'
 
 type SchemaType = 'string' | 'number' | 'integer' | 'boolean' | 'null' | 'array' | 'object'
 
@@ -73,6 +75,13 @@ class Generator {
     const path = String(symbol.declarations?.[0]?.path ?? '')
     if (!path.startsWith(this.srcDir)) return null
     return symbol
+  }
+
+  /** A type alias's or interface's own def, even where `schema` would inline it (a union alias). */
+  def(symbol: Any): Schema {
+    const description = this.#doc(symbol)
+    const inline = this.#inline(this.checker.getDeclaredTypeOfSymbol(symbol))
+    return description ? { description, ...inline } : inline
   }
 
   schema(type: Any): Schema {
@@ -161,29 +170,52 @@ class Generator {
   }
 }
 
-/** Every shape in `SHAPES`, as the code describes it today. */
-export function generate(
-  shapes: Array<PersistedShape | PlanShape> = SHAPES,
-): Map<string, ShapeSchema> {
+type Project = {
+  checker: Any
+  srcDir: string
+  exported: (file: string, name: string) => Any
+}
+
+/** Runs `use` on packages/reeval's program, through TypeScript's API. */
+function withProject<T>(use: (project: Project) => T): T {
   const api = new API({ cwd: PACKAGE_DIR })
   try {
     const snapshot = api.updateSnapshot({ openProject: join(PACKAGE_DIR, 'tsconfig.json') })
     const project = snapshot.getProjects()[0]
     const checker = project.checker
-    const out = new Map<string, ShapeSchema>()
-    const typed = new Set<string>()
-    for (const shape of shapes) {
-      const file = join(PACKAGE_DIR, shape.file)
-      const source = project.program.getSourceFile(file)
-      if (!source) throw new Error(`${shape.file} isn't in packages/reeval's tsconfig`)
-      const symbol = checker.getSymbolAtLocation(source)?.getExports().get(shape.type)
-      if (!symbol) throw new Error(`${shape.file} doesn't export ${shape.type}`)
+    return use({
+      checker,
       // Declarations carry the checker's canonical path: lower case on a case-insensitive file
       // system (macOS, Windows), with forward slashes.
-      const gen = new Generator(checker, api.toPath(join(PACKAGE_DIR, 'src')))
+      srcDir: api.toPath(join(PACKAGE_DIR, 'src')),
+      exported: (file, name) => {
+        const source = project.program.getSourceFile(join(PACKAGE_DIR, file))
+        if (!source) throw new Error(`${file} isn't in packages/reeval's tsconfig`)
+        return checker.getSymbolAtLocation(source)?.getExports().get(name)
+      },
+    })
+  } finally {
+    api.close()
+  }
+}
+
+/** Every shape in `SHAPES`, as the code describes it today. */
+export function generate(
+  shapes: Array<PersistedShape | PlanShape> = SHAPES,
+): Map<string, ShapeSchema> {
+  return withProject((project) => {
+    const { checker, srcDir, exported } = project
+    const out = new Map<string, ShapeSchema>()
+    const typed = new Set<string>()
+    let owned: Record<string, Schema> | undefined
+    for (const shape of shapes) {
+      const symbol = exported(shape.file, shape.type)
+      if (!symbol) throw new Error(`${shape.file} doesn't export ${shape.type}`)
+      const gen = new Generator(checker, srcDir)
       const root = gen.schema(checker.getDeclaredTypeOfSymbol(symbol))
       const plan = !SHAPES.includes(shape as PersistedShape)
       if (plan) for (const name of gen.defs.keys()) typed.add(name)
+      if (plan) owned ??= zodDefs(CONTRACT_SCHEMAS, CONTRACT_REFS, contractDocs(project))
       const doc: ShapeSchema = {
         $schema: 'https://json-schema.org/draft/2020-12/schema',
         $comment: `Generated from ${shape.type} in ${shape.file} by \`pnpm schema:update\`; don't edit. ${shape.where}.`,
@@ -191,7 +223,7 @@ export function generate(
         $ref: root.$ref ?? '',
         // Persisted shapes stay generated from their types; plan shapes take the contract's defs.
         $defs: plan
-          ? withZodDefs(Object.fromEntries(gen.defs))
+          ? withZodDefs(Object.fromEntries(gen.defs), owned)
           : Object.fromEntries([...gen.defs].sort(([a], [b]) => a.localeCompare(b))),
       }
       const field = 'versionField' in shape ? shape.versionField : undefined
@@ -206,9 +238,39 @@ export function generate(
     }
     if (PLAN_SHAPES.every((shape) => shapes.includes(shape))) checkContractCoverage(typed)
     return out
-  } finally {
-    api.close()
-  }
+  })
+}
+
+/** Where the hand-written types whose TSDoc describes a Zod schema are exported. */
+const DOC_TYPE_FILES = ['src/types.ts', 'src/declaration.ts']
+
+function typeDefsIn(project: Project, types: Record<string, string>): Record<string, Schema> {
+  const gen = new Generator(project.checker, project.srcDir)
+  return Object.fromEntries(
+    Object.entries(types).map(([key, type]) => {
+      const symbol = DOC_TYPE_FILES.map((file) => project.exported(file, type)).find(Boolean)
+      if (!symbol) throw new Error(`none of ${DOC_TYPE_FILES.join(', ')} exports a type ${type}`)
+      return [key, gen.def(symbol)]
+    }),
+  )
+}
+
+/**
+ * The def generated from each type in `types` (by the key it's given there), TSDoc included,
+ * even where the type generator would inline it. A type is looked up in `DOC_TYPE_FILES`.
+ */
+export const typeDefs = (types: Record<string, string>) =>
+  withProject((project) => typeDefsIn(project, types))
+
+/** Each contract schema with the def generated from its hand-written type of the same name. */
+function contractDocs(project: Project): TypeDocs[] {
+  const names = Object.keys(CONTRACT_SCHEMAS)
+  const typed = typeDefsIn(project, Object.fromEntries(names.map((name) => [name, name])))
+  return names.map((name) => ({
+    name,
+    schema: CONTRACT_SCHEMAS[name] as z.ZodType,
+    typed: typed[name] as Schema,
+  }))
 }
 
 /** A `$ref` resolved against its document's `$defs`, followed until it isn't one. */

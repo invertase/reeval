@@ -9,6 +9,7 @@ import type {
   DeclaredGroup,
   DeclaredMode,
   DeclaredNode,
+  DeclaredSource,
   DeclaredTodo,
 } from '../declaration.ts'
 import type { EvalOptionsData } from '../types.ts'
@@ -17,70 +18,58 @@ import { type Assert, dataProblem, type Same } from './shared.ts'
 /** A node's options: any object, until the cascade checks it. Its JSON Schema is the type's. */
 export const evalOptionsDataSchema = z.record(z.string(), z.unknown()) as z.ZodType<EvalOptionsData>
 
-export const declaredModeSchema = z
-  .enum(['run', 'skip', 'only'])
-  .describe('How a group or eval was declared: `group`/`evaluate`, `.skip` or `.only`.')
+export const declaredModeSchema = z.enum(['run', 'skip', 'only'])
 
-export const declaredFamilySchema = z
-  .strictObject({
-    name: z.string().describe('The name template passed to `evaluate.each`.'),
-    case: z.number().int().min(0).describe("The case's index, from 0."),
-    cases: z.number().int().min(2).describe('How many cases the list has.'),
-  })
-  .describe('Where a case of a pooled `evaluate.each` sits in its list.')
+export const declaredFamilySchema = z.strictObject({
+  name: z.string(),
+  case: z.number().int().min(0),
+  cases: z.number().int().min(2),
+})
 
-export const declaredTodoSchema = z
-  .strictObject({
-    type: z.literal('todo'),
-    name: z.string().describe('The name passed to `.todo`.'),
-  })
-  .describe('`evaluate.todo` or `group.todo`.')
+export const declaredTodoSchema = z.strictObject({
+  type: z.literal('todo'),
+  name: z.string(),
+})
 
-export const declaredEvalSchema = z
-  .strictObject({
-    type: z.literal('eval'),
-    name: z
-      .string()
-      .describe("The eval's name, as passed to `evaluate` (a case's, for `evaluate.each`)."),
-    mode: declaredModeSchema,
-    options: evalOptionsDataSchema.describe("The eval's own options, before the cascade."),
-    body: z.string().describe("Names the eval's body to whoever runs it."),
-    family: declaredFamilySchema
-      .optional()
-      .describe(
-        "Set on each case of a pooled `evaluate.each`: its template, index and the list's length.",
-      ),
-  })
-  .describe('An `evaluate`: one eval, planned into a test per attempt.')
+const hash = () =>
+  z.string().regex(/^[0-9a-f]{64}$/, 'must be a sha256 hash: 64 lowercase hex digits')
 
-export const declaredGroupSchema = z
-  .strictObject({
-    type: z.literal('group'),
-    name: z.string().describe("The group's name, as passed to `group`."),
-    mode: declaredModeSchema,
-    options: evalOptionsDataSchema.describe("The group's own options, before the cascade."),
-    get children(): z.ZodArray<typeof declaredNodeSchema> {
-      return z.array(declaredNodeSchema)
-    },
-  })
-  .describe(
-    'A `group`: options its evals and groups inherit, and its children in declaration order.',
-  )
+export const declaredSourceSchema = z.strictObject({
+  body: hash(),
+  case: hash().optional(),
+})
+
+export const declaredEvalSchema = z.strictObject({
+  type: z.literal('eval'),
+  name: z.string(),
+  mode: declaredModeSchema,
+  options: evalOptionsDataSchema,
+  body: z.string(),
+  source: declaredSourceSchema,
+  family: declaredFamilySchema.optional(),
+})
+
+export const declaredGroupSchema = z.strictObject({
+  type: z.literal('group'),
+  name: z.string(),
+  mode: declaredModeSchema,
+  options: evalOptionsDataSchema,
+  get children(): z.ZodArray<typeof declaredNodeSchema> {
+    return z.array(declaredNodeSchema)
+  },
+})
 
 export const declaredNodeSchema: z.ZodDiscriminatedUnion<
   [typeof declaredEvalSchema, typeof declaredGroupSchema, typeof declaredTodoSchema],
   'type'
-> = z
-  .discriminatedUnion('type', [declaredEvalSchema, declaredGroupSchema, declaredTodoSchema])
-  .describe('One node of the tree: a group, an eval or a todo.')
+> = z.discriminatedUnion('type', [declaredEvalSchema, declaredGroupSchema, declaredTodoSchema])
 
-export const declarationTreeSchema = z
-  .strictObject({ children: z.array(declaredNodeSchema) })
-  .describe("An eval file's top-level groups, evals and todos, in declaration order.")
+export const declarationTreeSchema = z.strictObject({ children: z.array(declaredNodeSchema) })
 
 export type _SameAsSchema = [
   Assert<Same<z.infer<typeof declaredModeSchema>, DeclaredMode>>,
   Assert<Same<z.infer<typeof declaredFamilySchema>, DeclaredFamily>>,
+  Assert<Same<z.infer<typeof declaredSourceSchema>, DeclaredSource>>,
   Assert<Same<z.infer<typeof declaredTodoSchema>, DeclaredTodo>>,
   Assert<Same<z.infer<typeof declaredEvalSchema>, DeclaredEval>>,
   Assert<Same<z.infer<typeof declaredGroupSchema>, DeclaredGroup>>,

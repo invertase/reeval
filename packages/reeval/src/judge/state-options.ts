@@ -12,7 +12,7 @@ export const DEFAULT_STATE: ResolvedJudgeStateOptions = {
   checks: false,
 }
 
-/** Every key set, in `STATE_KEYS` order, so equal selections serialise the same. */
+/** Every key set, in `STATE_KEYS` order, so equal selections serialize the same. */
 export function resolveStateOptions(
   state: JudgeStateOptions | undefined,
 ): ResolvedJudgeStateOptions {

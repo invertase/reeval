@@ -6,8 +6,10 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
-import { cannedModel, hostModel, isFake } from '../analysis/model.ts'
+import { cannedModel, type HostModelSettings, hostModel, isFake } from '../analysis/model.ts'
 import type { EngineEval } from '../engine/node.ts'
+import type { VertexSettings } from '../gateway/vertex.ts'
+import type { AttemptRecord, FileRef, RunRecord } from '../history/types.ts'
 import { recordFileName } from '../ids.ts'
 import { judgeDiff } from '../judge/patch.ts'
 import { transcriptForJudge } from '../judge/transcript.ts'
@@ -31,9 +33,11 @@ import type {
   QuestionCall,
   QuestionStateOptions,
   ResolvedQuestionStateOptions,
+  TranscriptEvent,
 } from '../types.ts'
 import {
   acrossOf,
+  checksHeld,
   type Pair,
   type PairAttempt,
   type PairTurn,
@@ -81,8 +85,8 @@ function shownParts(shows: QuestionShows, taskEach: boolean): string[] {
 export function questionSystem(shows: QuestionShows = DEFAULT_SHOWS, taskEach = false): string {
   const parts = shownParts(shows, taskEach)
   return `You compare two attempts by coding agents at the same task and answer one question about them.
-Each attempt is shown as ${listed(parts)}, labelled A or B. The labels are assigned at random: which attempt comes first says nothing about it.
-Judge only by the question, from what is shown. Answer A or B for the attempt the question favours, or tie when what is shown doesn't separate them on it. Give a short reason for the pick.`
+Each attempt is shown as ${listed(parts)}, labeled A or B. The labels are assigned at random: which attempt comes first says nothing about it.
+Judge only by the question, from what is shown. Answer A or B for the attempt the question favors, or tie when what is shown doesn't separate them on it. Give a short reason for the pick.`
 }
 
 const voteSchema = z.object({
@@ -341,7 +345,7 @@ export function questionRequest(input: {
 async function ask(
   model: QuestionModel,
   gateway: GatewayName | undefined,
-  fallbacks: boolean,
+  settings: HostModelSettings,
   input: BlindInput,
   maxOutputTokens: number,
   signal?: AbortSignal,
@@ -349,7 +353,7 @@ async function ask(
   const result = await generateText({
     model: isFake(model)
       ? fakeAnswer(model, input.blind)
-      : await hostModel(model, gateway, 'question model', fallbacks),
+      : await hostModel(model, gateway, 'question model', settings),
     ...questionRequest(input),
     output: Output.object({ schema: voteSchema, name: 'vote' }),
     maxOutputTokens,
@@ -385,6 +389,8 @@ export type AnswerOptions = {
   gateway?: GatewayName
   /** On OpenRouter, whether it may fail the call over to another upstream provider. */
   fallbacks?: boolean
+  /** On vertex, the entry's project and regions. */
+  vertex?: VertexSettings
   pairs: Pair[]
   maxInputTokens: number
   maxOutputTokens: number
@@ -506,7 +512,7 @@ export async function answerQuestion(options: AnswerOptions): Promise<CompareAns
       const { pick, reason, resolvedModel } = await ask(
         model,
         options.gateway,
-        !!options.fallbacks,
+        { fallbacks: !!options.fallbacks, ...(options.vertex ? { vertex: options.vertex } : {}) },
         input,
         options.maxOutputTokens,
         options.signal,
@@ -622,6 +628,8 @@ export type AttemptAnswerOptions = {
   model: QuestionModel
   gateway?: GatewayName
   fallbacks?: boolean
+  /** On vertex, the entry's project and regions. */
+  vertex?: VertexSettings
   attempt: PairAttempt
   maxInputTokens: number
   maxOutputTokens: number
@@ -653,7 +661,10 @@ export async function answerAttempt(
     const result = await generateText({
       model: isFake(model)
         ? fakeAttemptAnswer(model, input.blind)
-        : await hostModel(model, options.gateway, 'question model', !!options.fallbacks),
+        : await hostModel(model, options.gateway, 'question model', {
+            fallbacks: !!options.fallbacks,
+            ...(options.vertex ? { vertex: options.vertex } : {}),
+          }),
       ...questionRequest(input),
       output: Output.object({ schema: answerSchema(choices), name: 'answer' }),
       maxOutputTokens: options.maxOutputTokens,
@@ -725,13 +736,15 @@ function limiter(limit: number) {
   }
 }
 
-/** A staged attempt as a pair side: its record's turns, diff and checks, and whether its checks held. */
+/**
+ * A staged attempt as a pair side: its record's turns, diff and checks, and whether its checks
+ * held. One a resume skipped as already completed is judged by its staged outcome.
+ */
 export function stagedAttempt(e: EngineEval, record: EvalRecord | null): PairAttempt | null {
   const cell = e.attempt?.cell
   if (!cell) return null
-  const checksPassed =
-    record !== null &&
-    (e.state === 'passed' || (e.state === 'failed' && record.error?.kind === 'judge'))
+  const outcome = e.state === 'skipped' ? record?.outcome : e.state === 'passed' ? 'pass' : 'fail'
+  const checksPassed = record !== null && outcome !== undefined && checksHeld(outcome, record.error)
   return {
     harness: cell.harness,
     arm: cell.environment,
@@ -751,6 +764,72 @@ export function stagedAttempt(e: EngineEval, record: EvalRecord | null): PairAtt
         stderr,
       })) ?? [],
     id: `${cell.key}#${e.attempt?.n ?? 1}`,
+  }
+}
+
+/** The last try's output in a check log (`--- stdout` then `--- stderr`, as assembly writes it). */
+function logOutput(log: string | null): { stdout: string; stderr: string } {
+  const out = log?.lastIndexOf('--- stdout\n') ?? -1
+  const err = log?.lastIndexOf('--- stderr\n') ?? -1
+  if (!log || out < 0 || err < out) return { stdout: '', stderr: '' }
+  return { stdout: log.slice(out + 11, err), stderr: log.slice(err + 11) }
+}
+
+/**
+ * An attempt a resume kept from the previous record, as a pair side: its turns, `diff.patch`,
+ * transcript, check logs and captures, read back from the previous record's artifact files.
+ */
+async function keptAttempt(
+  e: EngineEval,
+  kept: AttemptRecord,
+  artifacts: string | null,
+  captures: boolean,
+): Promise<PairAttempt | null> {
+  const cell = e.attempt?.cell
+  if (!cell) return null
+  const path = (ref: FileRef) => join(artifacts ?? '', ...ref.path.split('/'))
+  const text = (ref: FileRef | undefined) =>
+    ref && artifacts ? readFile(path(ref), 'utf8').catch(() => null) : Promise.resolve(null)
+  const events = new Map<number, TranscriptEvent[]>()
+  for (const line of (await text(kept.files.transcript))?.split('\n') ?? []) {
+    if (!line) continue
+    const { turn, ...event } = JSON.parse(line) as { turn: number; type: string }
+    if (event.type === 'prompt' || event.type === 'turn-end') continue
+    events.set(turn, [...(events.get(turn) ?? []), event as TranscriptEvent])
+  }
+  const checks = []
+  for (const c of kept.checks) {
+    checks.push({ command: c.command, exitCode: c.exitCode, ...logOutput(await text(c.log)) })
+  }
+  const read = captures && artifacts ? (kept.files.artifacts ?? []) : []
+  const shots = await Promise.all(
+    read.map(async (a) => {
+      const data = await readFile(path(a)).catch(() => null)
+      return data ? [{ name: a.name, data: new Uint8Array(data) }] : []
+    }),
+  )
+  return {
+    harness: cell.harness,
+    arm: cell.environment,
+    run: e.attempt?.n ?? kept.n,
+    diff: (await text(kept.files.diff)) ?? '',
+    checksPassed: checksHeld(kept.outcome, kept.error),
+    control: cell.role === 'control',
+    turns: kept.turns.map((t, i) => {
+      const said = events.get(i) ?? []
+      // The record cuts a long final message; the transcript's last text event has it whole.
+      const last = t.text.includes('… [reeval: truncated ')
+        ? said.findLast((x) => x.type === 'text')
+        : undefined
+      return {
+        prompt: t.prompt,
+        text: last?.type === 'text' ? last.text : t.text,
+        transcript: said,
+      }
+    }),
+    checks,
+    ...(captures ? { captures: shots.flat() } : {}),
+    id: `${cell.key}#${e.attempt?.n ?? kept.n}`,
   }
 }
 
@@ -782,6 +861,8 @@ export type EvalQuestions = {
     gateway?: GatewayName
     /** On OpenRouter, whether it may fail the call over to another upstream provider. */
     fallbacks?: boolean
+    /** On vertex, the entry's project and regions. */
+    vertex?: VertexSettings
     /** Set on a pairwise question; without it, the question is asked of each attempt. */
     across?: PairFactor | PairFactor[]
     choices?: string[]
@@ -803,6 +884,15 @@ export type QuestionRunnerOptions = {
   onAttemptAnswer?: (evalId: string, attempt: string, answer: AttemptAnswer) => void
   /** Told once per per-attempt question that names a check or capture none of its attempts has. */
   onUnshown?: (evalId: string, error: string) => void
+  /**
+   * On resume: the keys of the attempts already completed, which the plan doesn't count, and the
+   * previous record they come from with its artifact directory, when there is one.
+   */
+  resumed?: {
+    completed: ReadonlySet<string>
+    previous: RunRecord | null
+    artifacts: string | null
+  }
 }
 
 /** What `settle` hands the record: each eval's pairwise answers, and each attempt's own, by key. */
@@ -848,7 +938,15 @@ export function questionRunner(options: QuestionRunnerOptions) {
   const pairwiseOf = (e: EvalQuestions) => e.questions.filter((q) => q.across !== undefined)
   const eachOf = (e: EvalQuestions) => e.questions.filter((q) => q.across === undefined)
 
+  const keptAttempts = new Map(
+    (options.resumed?.previous?.evals ?? []).flatMap((e) => e.attempts.map((a) => [a.key, a])),
+  )
+  const isCompleted = (a: EngineEval) =>
+    a.state === 'skipped' && options.resumed?.completed.has(a.key) === true
+
   const side = async (a: EngineEval, record: EvalRecord | null, captures: boolean) => {
+    const kept = isCompleted(a) ? keptAttempts.get(a.key) : undefined
+    if (kept) return keptAttempt(a, kept, options.resumed?.artifacts ?? null, captures)
     const found = stagedAttempt(a, record)
     if (!found || !captures) return found
     return { ...found, captures: await stagedCaptures(options.stagingDir, a.key, record) }
@@ -876,6 +974,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
               model: q.model,
               ...(q.gateway ? { gateway: q.gateway } : {}),
               ...(q.fallbacks ? { fallbacks: q.fallbacks } : {}),
+              ...(q.vertex ? { vertex: q.vertex } : {}),
               attempt,
               maxInputTokens: options.maxInputTokens,
               maxOutputTokens: options.maxOutputTokens,
@@ -954,6 +1053,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
             model: q.model,
             ...(q.gateway ? { gateway: q.gateway } : {}),
             ...(q.fallbacks ? { fallbacks: q.fallbacks } : {}),
+            ...(q.vertex ? { vertex: q.vertex } : {}),
             pairs: pairsOf(staged, acrossOf(pairFactors(q.across))),
             maxInputTokens: options.maxInputTokens,
             maxOutputTokens: options.maxOutputTokens,
@@ -992,14 +1092,14 @@ export function questionRunner(options: QuestionRunnerOptions) {
       const list = ended.get(result.id) ?? []
       list.push(result)
       ended.set(result.id, list)
-      if (list.length >= e.row.plan.attempts) start(result.id)
+      if (list.filter((r) => !isCompleted(r)).length >= e.row.plan.attempts) start(result.id)
     },
-    /** Stops calls in flight and asks nothing more: the run was cancelled. */
+    /** Stops calls in flight and asks nothing more: the run was canceled. */
     cancel(): void {
       controller.abort()
     },
     /**
-     * What a cancelled run keeps: each attempt whose answers all came back before the cancel,
+     * What a canceled run keeps: each attempt whose answers all came back before the cancel,
      * and, for an attempt the cancel cut short, each question as an error, so the record shows
      * it went unanswered. Waits for the aborted calls to unwind.
      */

@@ -1,11 +1,10 @@
 // Tier P: "given this config and these evals, the matrix is Y". Each case runs
-// `reeval run --dry-run --json` on a directory under test/plan/ and compares the normalised matrix
+// `reeval run --dry-run --json` on a directory under test/plan/ and compares the normalized matrix
 // with test/plan/<dir>/expected/<case>.txt. REEVAL_UPDATE_SNAPSHOTS=1 rewrites them; review the diff.
 import assert from 'node:assert/strict'
 import { readdirSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { describe, test } from 'node:test'
-import { VERCEL_GATEWAY } from '../src/gateway/vercel.ts'
 import { fakeConfig, project, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 import { matchFile, type PlanCase, planJson, renderPlan } from './support/plan.ts'
@@ -23,6 +22,17 @@ const modelsDev = async (dir: string) => {
 export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'default', args: [] },
   { dir: 'matrix', name: 'runs-override', args: ['--runs', '1'] },
+  { dir: 'runs-default', name: 'default', args: [] },
+  { dir: 'runs-default', name: 'runs-flag', args: ['--runs', '2'] },
+  { dir: 'runs-default', name: 'config-runs', args: ['--config', 'reeval.once.config.ts'] },
+  { dir: 'runs-default', name: 'profile-defaults', args: ['--profile', 'two'] },
+  { dir: 'runs-default', name: 'profile-limit', args: ['--profile', 'pr'] },
+  {
+    dir: 'runs-default',
+    name: 'profile-limit-capped',
+    args: ['--profile', 'pr', 'runs from the group'],
+  },
+  { dir: 'runs-default', name: 'compare-off', args: ['--profile', 'off'] },
   { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.eval.ts'] },
   { dir: 'compare', name: 'independent', args: ['evals/independent.eval.ts'] },
   { dir: 'compare', name: 'baseline-omitted', args: ['evals/omitted.eval.ts'] },
@@ -32,10 +42,27 @@ export const cases: PlanCase[] = [
     args: ['--profile', 'off', 'evals/omitted.eval.ts'],
   },
   { dir: 'compare', name: 'harness-scoped', args: ['evals/scoped.eval.ts'] },
+  {
+    dir: 'compare',
+    name: 'harness-scoped-dropped',
+    args: ['--profile', 'one', 'evals/scoped.eval.ts'],
+  },
+  {
+    dir: 'compare',
+    name: 'harness-scoped-dropped-pinned',
+    args: ['--profile', 'one-lean', 'evals/scoped-pinned.eval.ts'],
+  },
   { dir: 'compare', name: 'each-pooled', args: ['evals/each.eval.ts'] },
   { dir: 'compare', name: 'each-filtered', args: ['evals/each.eval.ts', 'grace'] },
   { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.eval.ts', 'b/skilled'] },
   { dir: 'compare', name: 'study', args: ['evals/study.eval.ts'] },
+  { dir: 'compare', name: 'verdicts', args: ['evals/verdicts.eval.ts'] },
+  { dir: 'compare', name: 'verdicts-no-control', args: ['evals/verdicts.eval.ts', 'b/skilled'] },
+  {
+    dir: 'compare',
+    name: 'verdicts-some-cases',
+    args: ['evals/verdicts.eval.ts', 'six cases can: a'],
+  },
   { dir: 'compare', name: 'max-variants', args: ['--profile', 'lean', 'evals/limited.eval.ts'] },
   { dir: 'compare', name: 'off-study', args: ['--profile', 'off', 'evals/study.eval.ts'] },
   { dir: 'compare', name: 'zero-variants', args: ['--profile', 'none', 'evals/limited.eval.ts'] },
@@ -59,19 +86,6 @@ export const cases: PlanCase[] = [
     dir: 'compare',
     name: 'questions-one-harness',
     args: ['--profile', 'one', 'evals/questions-attempts.eval.ts'],
-  },
-  { dir: 'insights', name: 'insights', args: [] },
-  { dir: 'insights', name: 'no-insights', args: ['--no-insights'] },
-  {
-    dir: 'insights',
-    name: 'anthropic-no-key',
-    args: ['--config', 'reeval.anthropic.config.ts'],
-  },
-  {
-    dir: 'insights',
-    name: 'anthropic-key',
-    args: ['--config', 'reeval.anthropic.config.ts'],
-    env: { ANTHROPIC_API_KEY: 'sk-ant-test-key' },
   },
   { dir: 'profiles', name: 'local-none', args: [] },
   { dir: 'profiles', name: 'pr-in-ci', args: [], env: { CI: 'true' } },
@@ -107,7 +121,13 @@ export const cases: PlanCase[] = [
   {
     dir: 'python',
     name: 'hello',
-    args: [],
+    args: ['hello.eval'],
+    prepare: (dir) => syncPythonFixtureProject(dir),
+  },
+  {
+    dir: 'python',
+    name: 'dataclass-future',
+    args: ['dataclass-future.eval'],
     prepare: (dir) => syncPythonFixtureProject(dir),
   },
   { dir: 'gateway', name: 'default', args: ['--config', 'reeval.default.config.ts'] },
@@ -126,6 +146,8 @@ export const cases: PlanCase[] = [
     args: ['--config', 'reeval.vercel.config.ts', '--profile', 'codex-pin'],
   },
   { dir: 'gateway', name: 'vercel-yaml', args: ['--config', 'reeval.vercel.yaml'] },
+  { dir: 'gateway-strict', name: 'strict', args: [] },
+  { dir: 'gateway-strict', name: 'strict-yaml', args: ['--config', 'reeval.strict.yaml'] },
   { dir: 'gateway', name: 'openrouter', args: ['--config', 'reeval.openrouter.config.ts'] },
   {
     dir: 'gateway',
@@ -133,9 +155,14 @@ export const cases: PlanCase[] = [
     args: ['--config', 'reeval.openrouter.config.ts', '--profile', 'fallbacks'],
   },
   { dir: 'gateway', name: 'openrouter-yaml', args: ['--config', 'reeval.openrouter.yaml'] },
+  { dir: 'gateway', name: 'vertex-yaml', args: ['--config', 'reeval.vertex.yaml'] },
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
+  { dir: 'revision', name: 'cascade', args: [] },
+  { dir: 'only-in-skip', name: 'only-in-skipped-group', args: [] },
+  { dir: 'filters', name: 'dir-named-like-cell', args: ['right'] },
+  { dir: 'filters', name: 'dir-path-only', args: ['evals/right'] },
   { dir: 'images', name: 'install-from-dockerfile', args: ['evals/i.eval.ts'], env: NO_DOCKER },
   { dir: 'images', name: 'plugin-builds', args: ['evals/plugins.eval.ts'], env: NO_DOCKER },
   { dir: 'harnesses', name: 'claude-code', args: [] },
@@ -150,7 +177,12 @@ export const cases: PlanCase[] = [
   { dir: 'fx', name: 'fx', args: [] },
   { dir: 'cursor', name: 'cursor', args: [] },
   { dir: 'effort', name: 'effort', args: [] },
-  { dir: 'secrets', name: 'brokered', args: [] },
+  { dir: 'secrets', name: 'brokered', args: ['evals/s.eval.ts'] },
+  {
+    dir: 'secrets',
+    name: 'plain-headers',
+    args: ['--profile', 'headers', 'evals/headers.eval.ts', 'evals/tree.eval.ts'],
+  },
   { dir: 'egress', name: 'cascade', args: ['evals/auto.eval.ts', 'evals/cascade.eval.ts'] },
   {
     dir: 'egress',
@@ -282,7 +314,6 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
       'warnings',
       'sandboxWarnings',
       'hints',
-      'insights',
       'evals',
       'excluded',
       'images',
@@ -329,14 +360,54 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
           },
         ],
         ['goose:gemini-3.8-flash', { name: 'vercel', skipped: [] }],
-        [
-          'pi:gemini-3.8-flash',
-          { name: 'direct', skipped: [{ gateway: 'vercel', why: VERCEL_GATEWAY.refusals.pi }] },
-        ],
+        ['pi:gemini-3.8-flash', { name: 'vercel', skipped: [] }],
         ['grok-build:grok-4.6', { name: 'vercel', skipped: [] }],
       ],
     )
   })
+
+  for (const [format, loose, off] of [
+    ['ts', '[vercel()]', '[vercel(), direct({ enabled: false })]'],
+    ['yaml', '[vercel]', '[vercel, { direct: { enabled: false } }]'],
+  ] as const) {
+    test(`with direct() off in ${format}, a cell no listed gateway serves exits 2 at plan time`, async () => {
+      const files = (gateway: string) => ({
+        ...(format === 'ts'
+          ? {
+              'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { direct, vercel } from 'reeval/gateway'
+import { cursor } from 'reeval/harness'
+export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), gateway: ${gateway} })
+`,
+            }
+          : {
+              'reeval.yaml': `harness: { kind: cursor, model: composer-2.5 }
+gateway: ${gateway}
+`,
+            }),
+        'evals/g.eval.ts': `import { evaluate } from 'reeval'
+evaluate('routed', async () => {})
+`,
+      })
+      const fallback = await project(`gateway-fallback-${format}`, files(loose))
+      const planned = await runCli(fallback.dir, ['run', '--dry-run'])
+      assert.equal(planned.code, 0, planned.stdout + planned.stderr)
+      assert.match(
+        planned.stdout,
+        /hint: gateway: cursor:composer-2\.5 falls back to direct \(vercel can't serve it: Cursor's agent only calls Cursor's own API\)/,
+      )
+      const strict = await project(`gateway-strict-${format}`, files(off))
+      for (const args of [['run', '--dry-run'], ['run']]) {
+        const r = await runCli(strict.dir, args)
+        assert.equal(r.code, 2, r.stdout + r.stderr)
+        assert.match(
+          r.stderr,
+          /on cursor:composer-2\.5: no gateway in the list can serve it \(vercel: Cursor's agent only calls Cursor's own API\)\. Drop direct\(\{ enabled: false \}\) from gateway to fall back to Cursor's own key\./,
+        )
+      }
+      assert.deepEqual(readdirSync(strict.dir).includes('.reeval'), false, 'nothing ran')
+    })
+  }
 
   test('a gateway reeval does not know exits 2 at plan time, naming the ones it does', async () => {
     const p = await project('gateway-unknown', {
@@ -353,7 +424,7 @@ evaluate('unknown', async () => {})
       assert.equal(r.code, 2, r.stdout + r.stderr)
       assert.match(
         r.stderr,
-        /gateway\[0\] in reeval\.config\.ts is "vercell", which isn't a gateway reeval knows: 'direct' or 'vercel' or 'openrouter'\. Did you mean 'vercel'\?/,
+        /gateway\[0\] in reeval\.config\.ts is "vercell", which isn't a gateway reeval knows: 'direct' or 'vercel' or 'openrouter' or 'vertex'\. Did you mean 'vercel'\?/,
       )
     }
     assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
@@ -500,6 +571,39 @@ evaluate('streams', { environment: events }, async () => {})
         assert.match(r.stderr, refusal)
       }
     }
+  })
+
+  test('an MCP value OpenCode would substitute exits 2 at plan time on OpenCode only, naming the server and field', async () => {
+    const evals = `import { defineEnvironment, evaluate } from 'reeval'
+const docs = defineEnvironment('docs', ({ mcp }) => ({
+  mcp: { docs: mcp.stdio('node', ['srv.js', '{file:/tmp/tok.txt}'], { env: { GREETING: 'Hello {env:USER}' } }) },
+}))
+evaluate('reads docs', { environment: docs }, async () => {})
+`
+    const refused = await project('opencode-substitution', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor, opencode } from 'reeval/harness'
+export default defineConfig({
+  harness: [cursor({ model: 'composer-2.5' }), opencode({ model: 'google/gemini-3.8-flash' })],
+})
+`,
+      'evals/d.eval.ts': evals,
+    })
+    const r = await runCli(refused.dir, ['run', '--dry-run'])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /evaluate\("reads docs"\) on opencode:gemini-3\.8-flash: OpenCode substitutes \{env:…\} and \{file:…\} anywhere in its config, with no escape, so the docs server wouldn't get mcp\.docs\.args\[1\] as written/,
+    )
+    const elsewhere = await project('opencode-substitution-elsewhere', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
+export default defineConfig({ harness: cursor({ model: 'composer-2.5' }) })
+`,
+      'evals/d.eval.ts': evals,
+    })
+    const ok = await runCli(elsewhere.dir, ['run', '--dry-run'])
+    assert.equal(ok.code, 0, ok.stdout + ok.stderr)
   })
 
   test('pi and Goose take stdio and http MCP servers; pi exits 2 on a server name it would skip', async () => {
@@ -895,13 +999,13 @@ evaluate('uses it', { environment: env${options ?? ''} }, async () => {})
     const p = await fixture('plan/compare')
     const r = await runCli(p.dir, ['run', '--dry-run', 'evals/variants.eval.ts', 'b/skilled'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /2 evals · 2 cells · 3 attempts/)
+    assert.match(r.stdout, /2 evals · 2 cells · 6 attempts/)
     const rows = r.stdout
       .split('\n')
       .filter((l) => l.startsWith('evals/variants.eval.ts'))
       .map((l) => l.split(/\s{2,}/).slice(1, 5))
     assert.deepEqual(rows, [
-      ['1', '1 of 2', '1', '1'],
+      ['1', '1 of 2', '4', '4'],
       ['1', '1', '2', '2'],
     ])
   })
@@ -933,7 +1037,7 @@ evaluate('runs', async (c) => { await c.send('hi') })
     assert.equal(r.code, 0, r.stderr)
     const doc = JSON.parse(r.stdout)
     assert.equal(typeof doc.runId, 'string', r.stderr)
-    assert.ok(Array.isArray(doc.files) && Array.isArray(doc.paths), 'a SuiteResult')
+    assert.ok(Array.isArray(doc.files) && doc.tally !== undefined, 'a SuiteResult')
     assert.equal(doc.totals, undefined, 'not the plan document')
   })
 })

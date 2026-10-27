@@ -1,15 +1,15 @@
 // What a result means: gate policies, lift with its interval, and what a
-// fingerprint covers. Pure functions here; the CLI behaviour is in options.test.ts and
+// fingerprint covers. Pure functions here; the CLI behavior is in options.test.ts and
 // history.test.ts.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { recordFailure } from '../src/attempt/record.ts'
 import type { Attempt } from '../src/attempt/state.ts'
 import {
   acrossOf,
+  checksHeld,
   headToHeadLines,
   type PairAttempt,
   pairsOf,
@@ -29,11 +29,12 @@ import {
 } from '../src/compare/questions.ts'
 import { DEFAULT_QUESTION_STATE } from '../src/compare/state.ts'
 import type { EngineEval } from '../src/engine/node.ts'
+import { defineEnvironment } from '../src/environment.ts'
 import { TimeoutError } from '../src/errors.ts'
-import { cellOutcome, fingerprintOf, judgementKey, mergeOutcome } from '../src/history/assemble.ts'
+import { bodyHash, canonicalJson, caseHash, optionsHash, sourcesPart } from '../src/eval-source.ts'
+import { fingerprintOf, judgmentKey, mergeOutcome } from '../src/history/assemble.ts'
 import { familiesOf } from '../src/history/families.ts'
 import { runnerInfo } from '../src/history/provenance.ts'
-import { traceSources } from '../src/history/sources.ts'
 import type { EvalEntry, FamilyLift, FingerprintParts } from '../src/history/types.ts'
 import { patchForJudge } from '../src/judge/patch.ts'
 import { checkGate } from '../src/options.ts'
@@ -50,7 +51,7 @@ import {
 } from '../src/stats.ts'
 import type { BlindPair, EvalRecord, FakeAnalysisModel, Outcome } from '../src/types.ts'
 import { EFFORT_MIN_RUNS, effortVerdict } from '../src/view/effort.ts'
-import { tempDir } from './helpers.ts'
+import { cellOutcome } from '../src/view/gate.ts'
 import {
   E2E_ARMS,
   e2ePairSides,
@@ -133,7 +134,7 @@ describe("Newcombe's interval for lift, from two Wilson intervals", () => {
     near(down.high, -up.low, 'mirrored high')
   })
 
-  test('equal rates are centred on 0, and a single run each is too few to tell', () => {
+  test('equal rates are centered on 0, and a single run each is too few to tell', () => {
     const same = liftInterval({ pass: 3, n: 5 }, { pass: 3, n: 5 })
     assert.equal(same.points, 0)
     near(same.low, -same.high, 'symmetric')
@@ -359,29 +360,29 @@ describe('mergeOutcome and abort classification', () => {
       ({
         record: { error: null, judgements: [], outcome: 'pass' },
         signal,
-        judgeErrored: false,
+        judgeThrown: new Set(),
       }) as unknown as Attempt
 
     const timeout = new AbortController()
     timeout.abort(new TimeoutError('Eval timed out after 1s'))
     const timedOut = attempt(timeout.signal)
-    recordFailure(timedOut, new Error('ignored'), false)
+    recordFailure(timedOut, new Error('ignored'), false, [])
     assert.deepEqual(timedOut.record.error, { kind: 'timeout', message: 'The eval timed out' })
 
     const cancel = new AbortController()
-    cancel.abort(Object.assign(new Error('The run was cancelled'), { name: 'AbortError' }))
-    const cancelled = attempt(cancel.signal)
-    recordFailure(cancelled, new Error('ignored'), false)
-    assert.deepEqual(cancelled.record.error, {
+    cancel.abort(Object.assign(new Error('The run was canceled'), { name: 'AbortError' }))
+    const canceled = attempt(cancel.signal)
+    recordFailure(canceled, new Error('ignored'), false, [])
+    assert.deepEqual(canceled.record.error, {
       kind: 'aborted',
-      message: 'The run was cancelled',
+      message: 'The run was canceled',
     })
 
     const setup = new AbortController()
     setup.abort(new Error('setup step 1/1 "sleep" timed out after 1s'))
     const other = attempt(setup.signal)
-    recordFailure(other, new Error('setup timed out'), false)
-    assert.deepEqual(other.record.error, { kind: 'aborted', message: 'The run was cancelled' })
+    recordFailure(other, new Error('setup timed out'), false, [])
+    assert.deepEqual(other.record.error, { kind: 'aborted', message: 'The run was canceled' })
   })
 })
 
@@ -450,44 +451,88 @@ describe('fingerprints and keys', () => {
     assert.notEqual(fingerprintOf({ ...parts, judge: 'other' }), hash, 'twin: a part changes it')
   })
 
-  test('judgement keys follow position and question', () => {
-    assert.equal(judgementKey(0, 'q'), judgementKey(0, 'q'))
-    assert.notEqual(judgementKey(0, 'q'), judgementKey(1, 'q'))
-    assert.notEqual(judgementKey(0, 'q'), judgementKey(0, 'q?'))
-    assert.match(judgementKey(2, 'q'), /^2:[0-9a-f]{12}$/)
+  test('judgment keys follow position and question', () => {
+    assert.equal(judgmentKey(0, 'q'), judgmentKey(0, 'q'))
+    assert.notEqual(judgmentKey(0, 'q'), judgmentKey(1, 'q'))
+    assert.notEqual(judgmentKey(0, 'q'), judgmentKey(0, 'q?'))
+    assert.match(judgmentKey(2, 'q'), /^2:[0-9a-f]{12}$/)
   })
 })
 
-describe('traced sources', () => {
-  test("an eval's local imports are traced transitively; packages and unrelated files aren't", async () => {
-    const root = tempDir('sources')
-    const write = (path: string, text: string) => {
-      mkdirSync(join(root, path, '..'), { recursive: true })
-      writeFileSync(join(root, path), text)
+describe("an eval's source", () => {
+  const body = 'a'.repeat(64)
+
+  test('canonical JSON sorts keys, drops undefined, and reads a function as its source', () => {
+    assert.equal(canonicalJson({ b: 1, a: [undefined, 2], c: undefined }), '{"a":[null,2],"b":1}')
+    assert.equal(canonicalJson({ f: () => 1 }), '{"f":"() => 1"}')
+    const env = defineEnvironment('skilled', { files: { 'a.txt': 'a' } })
+    assert.equal(canonicalJson({ env }), '{"env":{"environment":"skilled"}}')
+  })
+
+  test('the options hash leaves out tags, runs, timeout, revision and gate, and reads harnesses and sandboxes by id', () => {
+    const base = optionsHash([{ pin: ['harness'] }])
+    const unhashed = { tags: ['slow'], runs: 5, timeout: '2m', revision: 3, gate: 'all' } as const
+    assert.equal(optionsHash([{ pin: ['harness'], ...unhashed }]), base)
+    assert.equal(optionsHash([{}, { pin: ['harness'] }]), base, 'an option-less group adds nothing')
+    assert.equal(optionsHash([{ runs: 2 }, { pin: ['harness'] }]), base, "a group's runs too")
+    assert.notEqual(optionsHash([{ pin: ['runs'] }]), base, 'twin: another option changes it')
+    assert.notEqual(
+      optionsHash([{ pin: ['harness'] }, { pin: ['harness'] }]),
+      base,
+      'a group level is its own',
+    )
+    const at = (dir: string) => ({
+      sandbox: { kind: 'docker' as const, dockerfile: join(dir, 'docker', 'Dockerfile') },
+    })
+    assert.equal(optionsHash([at('/one')]), optionsHash([at('/two')]), 'no host paths')
+  })
+
+  test('the sources part covers the source and revision, and 2 is not "2"', () => {
+    const source = { body, options: 'b'.repeat(64) }
+    const file = [{ path: 'evals/a.eval.ts', sha256: 'd'.repeat(64) }]
+    const none = sourcesPart(source, undefined, file)
+    assert.notEqual(sourcesPart(source, 2, file), none)
+    assert.notEqual(sourcesPart(source, 2, file), sourcesPart(source, '2', file))
+    assert.notEqual(sourcesPart({ ...source, case: 'c'.repeat(64) }, undefined, file), none)
+    assert.equal(sourcesPart({ options: source.options, body }, undefined, []), none)
+    const other = [{ path: 'evals/b.eval.ts', sha256: 'e'.repeat(64) }]
+    assert.notEqual(
+      sourcesPart(undefined, undefined, file),
+      sourcesPart(undefined, undefined, other),
+      'without a source, the eval file stands in',
+    )
+  })
+
+  test('a body hashes its own source text; a bound function is refused', () => {
+    const a = async () => {}
+    const b = async () => {
+      await Promise.resolve()
     }
-    write(
-      'evals/a.eval.ts',
-      `import { evaluate } from 'reeval'\nimport { h } from './helpers.ts'\n`,
+    assert.notEqual(bodyHash(a, 'evaluate("a")'), bodyHash(b, 'evaluate("b")'))
+    assert.throws(
+      () => bodyHash(a.bind(null), 'evaluate("bound")'),
+      /evaluate\("bound"\)'s body is a bound or built-in function/,
     )
-    write(
-      'evals/helpers.ts',
-      `export * from '../shared/env.js'\nexport const h = await import('./lazy')\n`,
-    )
-    write('shared/env.ts', `import 'node:fs'\nexport const e = 1\n`)
-    write('evals/lazy.ts', 'export {}\n')
-    write('evals/unrelated.ts', 'export {}\n')
-    write('node_modules/pkg/index.js', 'export {}\n')
-    symlinkSync(join(root, 'node_modules/pkg'), join(root, 'evals/pkg'))
-    write('evals/b.eval.ts', `import './pkg/index.js'\n`)
-    const paths = (await traceSources(root, 'evals/a.eval.ts')).map((s) => s.path)
-    assert.deepEqual(paths, [
-      'evals/a.eval.ts',
-      'evals/helpers.ts',
-      'evals/lazy.ts',
-      'shared/env.ts',
-    ])
-    const own = await traceSources(root, 'evals/b.eval.ts')
-    assert.equal(own.length, 2, 'a symlinked package is traced by its link path, once')
+  })
+
+  test("a case hashes as JSON data, and data JSON can't see is refused", () => {
+    const at = 'evaluate.each("e") case 0'
+    assert.equal(caseHash({ n: 1, s: 'x' }, at), caseHash({ s: 'x', n: 1 }, at))
+    assert.notEqual(caseHash({ n: 1 }, at), caseHash({ n: 2 }, at), 'twin: another value')
+    const env = defineEnvironment('skilled', {})
+    assert.equal(caseHash({ env, at: new Date(0) }, at), caseHash({ env, at: new Date(0) }, at))
+    for (const [value, what] of [
+      [/hello/, 'a RegExp'],
+      [new Map([['a', 1]]), 'a Map'],
+      [new Set([1]), 'a Set'],
+      [Number.NaN, 'NaN'],
+      [Number.POSITIVE_INFINITY, 'Infinity'],
+    ] as const) {
+      assert.throws(
+        () => caseHash({ want: value }, at),
+        new RegExp(`^UsageError: evaluate\\.each\\("e"\\) case 0: .* \\(it holds ${what}\\)`),
+      )
+    }
   })
 })
 
@@ -588,6 +633,23 @@ describe('compare question pairs', () => {
     // Without it, h2's run-2 arms and run 2's ui harnesses have no pair; the rest stand.
     assert.equal(pairs.filter((p) => p.cut === 'within').length, 3)
     assert.equal(pairs.filter((p) => p.cut === 'across').length, 3)
+  })
+
+  test("checks held: a pass, or a fail only on the judge; a failed check or an infra error didn't", () => {
+    assert.equal(checksHeld('pass', null), true)
+    assert.equal(checksHeld('fail', { kind: 'judge' }), true)
+    assert.equal(checksHeld('fail', { kind: 'assertion' }), false)
+    assert.equal(checksHeld('fail', null), false)
+    assert.equal(checksHeld('infra_error', { kind: 'infra' }), false)
+  })
+
+  test('fakeAnalysis() without a vote calls every pair a tie', async () => {
+    const answer = await ask(pairsOf(matrix(['h'], ['sdk', 'ui'], 2)), undefined)
+    assert.deepEqual(
+      answer.votes.map((v) => v.winner),
+      ['tie', 'tie', 'tie', 'tie'],
+    )
+    assert.deepEqual(answer.rates, [])
   })
 
   test('every pair is sent twice, swapped, and each pick maps back to its name', async () => {
@@ -698,7 +760,7 @@ describe('compare question pairs', () => {
     assert.notEqual(blind.a.diff, blindPair('Which?', pair, false, 20_000).a.diff)
   })
 
-  test("artifacts send each side's own capture of that name, labelled by position", async () => {
+  test("artifacts send each side's own capture of that name, labeled by position", async () => {
     const png = (n: number) => new Uint8Array([0x89, 0x50, 0x4e, 0x47, n])
     const [pair] = pairsOf([
       {

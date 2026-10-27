@@ -12,6 +12,7 @@ import { useEngine } from '../src/engine/runtime.ts'
 import { defineEnvironment } from '../src/environment.ts'
 import { declaredBody, declaredTree, declareTree, evaluate, group } from '../src/evaluate.ts'
 import { cursor, fakeHarness } from '../src/harness.ts'
+import { harnessId } from '../src/options.ts'
 import { planEval } from '../src/plan-eval.ts'
 import type { RunContext } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
@@ -30,7 +31,13 @@ function runIn(root: string): RunContext {
 /** Collects `file` under `root` with `declare`, as a worker would. */
 async function collected(root: string, declare: () => void) {
   const run = runIn(root)
-  useEngine({ registerTest, registerGroup, getRunContext: () => run, collectingFile })
+  useEngine({
+    registerTest,
+    registerGroup,
+    getRunContext: () => run,
+    collectingFile,
+    declareHarnesses: () => {},
+  })
   const file = join(root, 'evals/x.eval.ts')
   const tests = await collect(file, async () => declare())
   return {
@@ -142,6 +149,7 @@ function relativeTree(): DeclarationTree['children'] {
     mode: 'run' as const,
     options,
     body: 'b1',
+    source: { body: '0'.repeat(64) },
     ...extra,
   })
   return [
@@ -245,7 +253,16 @@ test("a tree's missing Dockerfile is refused at its absolute path, naming the fi
   const sandbox = { kind: 'docker', dockerfile: './Dockerfile' }
   const env = { kind: 'environment', name: 'e', layers: [{ name: 'e', spec: { sandbox } }] }
   const node = (options: object) =>
-    [{ type: 'eval', name: 'e', mode: 'run', options, body: 'b1' }] as DeclarationTree['children']
+    [
+      {
+        type: 'eval',
+        name: 'e',
+        mode: 'run',
+        options,
+        body: 'b1',
+        source: { body: '0'.repeat(64) },
+      },
+    ] as DeclarationTree['children']
   const full = join(root, 'evals', 'Dockerfile')
   for (const [options, field] of [
     [{ sandbox }, 'sandbox.dockerfile'],
@@ -274,6 +291,7 @@ test('replaying a tree with compare: false is refused like evaluate', async () =
               mode: 'run',
               options: { compare: false } as never,
               body: 'b1',
+              source: { body: '0'.repeat(64) },
             },
           ],
           () => async () => {},
@@ -290,7 +308,14 @@ test('a malformed tree is refused before anything is declared', async () => {
       () =>
         declareTree(
           [
-            { type: 'eval', name: 'a', mode: 'run', options: {}, body: 'b1' },
+            {
+              type: 'eval',
+              name: 'a',
+              mode: 'run',
+              options: {},
+              body: 'b1',
+              source: { body: '0'.repeat(64) },
+            },
             { type: 'eval', name: 'b', mode: 'run', options: {}, bdy: 'b2' } as never,
           ],
           () => async () => {},
@@ -305,20 +330,34 @@ test('planEval is pure: the same declaration and context give the same tests, ga
   const run = runIn(tempDir('pure'))
   const ctx = { ...run, file: join(run.config.root, 'evals/p.eval.ts'), order: 3 }
   const declaration = { name: 'p', mode: 'run' as const, groups: [], options: { runs: 2 } }
-  const once = planEval(declaration, ctx)
+  const { tests: once, harnesses } = planEval(declaration, ctx)
   assert.deepEqual(
-    JSON.parse(JSON.stringify(planEval(declaration, ctx))),
+    JSON.parse(JSON.stringify(planEval(declaration, ctx).tests)),
     JSON.parse(JSON.stringify(once)),
   )
   assert.equal(once?.length, 4)
+  assert.deepEqual(harnesses, run.config.harness.map(harnessId))
   assert.deepEqual(once?.[0]?.gate, {
     limits: { attempts: 4 },
     rank: { eval: 'evals/p.eval.ts › p', file: 'evals/p.eval.ts', order: 3, n: 1, cell: 0 },
   })
-  assert.equal(
+  assert.deepEqual(
     planEval({ ...declaration, options: { tags: ['x'] } }, { ...ctx, tags: ['y'] }),
-    null,
+    { tests: null, harnesses },
+    'an eval the tags leave out still names its harnesses',
   )
+})
+
+test("planEval holds the engine's backstop to the longest timer Node can set", () => {
+  const run = runIn(tempDir('backstop'))
+  const ctx = { ...run, file: join(run.config.root, 'evals/p.eval.ts'), order: 0 }
+  const environment = defineEnvironment('slow', { setup: [{ run: 'ls', timeout: '30m' }] })
+  const plan = (timeout: string) =>
+    planEval({ name: 'p', mode: 'run', groups: [], options: { timeout, environment } }, ctx)
+      .tests?.[0]?.timeout
+  // 596h and the setup step each fit a timer; with the harness's start allowance they don't.
+  assert.equal(plan('596h'), 2 ** 31 - 1)
+  assert.equal(plan('1h'), 3_600_000 + 1_800_000 + 2 * 90_000 + 5_000)
 })
 
 test('the tree and the collected tests fit their JSON Schemas in schema/plan/', async () => {
@@ -339,7 +378,15 @@ test('the tree and the collected tests fit their JSON Schemas in schema/plan/', 
   // The canary: a tree the schema rules out.
   assert.notDeepEqual(validate(schema('declaration'), { children: [{ type: 'eval' }] }), [])
   const family = { name: 'case', case: 0.5, cases: 2 }
-  const fractional = { type: 'eval', name: 'e', mode: 'run', options: {}, body: 'b', family }
+  const fractional = {
+    type: 'eval',
+    name: 'e',
+    mode: 'run',
+    options: {},
+    body: 'b',
+    source: { body: '0'.repeat(64) },
+    family,
+  }
   assert.deepEqual(validate(schema('declaration'), { children: [fractional] }), [
     'children[0].family.case: expected a whole number, got 0.5',
   ])

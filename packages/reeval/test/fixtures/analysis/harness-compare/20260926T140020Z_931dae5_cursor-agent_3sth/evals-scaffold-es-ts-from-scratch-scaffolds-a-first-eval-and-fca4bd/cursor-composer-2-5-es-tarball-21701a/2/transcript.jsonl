@@ -1,6 +1,6 @@
-{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to create hello.txt containing \"hello\" and checks that file with a deterministic assertion. Finish when `npx es run` passes."}
+{"turn":0,"type":"prompt","text":"ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES here: an es.config.ts and one eval in evals/hello.es.ts that asks the agent to …"}
 {"turn":0,"type":"reasoning"}
-{"turn":0,"type":"text","text":"I'll set up ES from the tarball and inspect its config and eval format so we can add `hello.es.ts` and get `npx es run` passing.\n"}
+{"turn":0,"type":"text","text":"I'll set up ES from the tarball and inspect its config and eval format so we can add `hello.es.ts` and get `npx es run` …"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cd . && npm init -y && npm install /opt/es/invertase-foobar.tgz"},"ok":true,"durationMs":5953}
 {"turn":0,"type":"tool","tool":"glob","input":{"pattern":"**/*"},"ok":true,"durationMs":71}
 {"turn":0,"type":"tool","tool":"read","input":{"path":"/opt/es/invertase-foobar.tgz"},"ok":true,"durationMs":108}
@@ -75,5 +75,5 @@
 {"turn":0,"type":"reasoning"}
 {"turn":0,"type":"tool","tool":"bash","input":{"command":"cd . && npx es run 2>&1"},"ok":true,"durationMs":1326}
 {"turn":0,"type":"reasoning"}
-{"turn":0,"type":"text","text":"ES is set up and `npx es run` passes.\n\n**`es.config.ts`** — fake harness, sandbox, and judge (no Docker or API keys):\n\n```typescript\nimport { defineConfig } from '@invertase/foobar';\nimport { fakeHarn…"}
+{"turn":0,"type":"text","text":"ES is set up and `npx es run` passes.\n\n**`es.config.ts`** — fake harness, sandbox, and judge (no Docker or API keys):\n\n`…"}
 {"turn":0,"type":"turn-end"}

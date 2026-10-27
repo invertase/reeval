@@ -1,4 +1,4 @@
-# The real-agent tier: real agents in Docker, nightly, on demand, and on PRs labelled
+# The real-agent tier: real agents in Docker, nightly, on demand, and on PRs labeled
 # `real-agents`. It spends model credit, so it runs only in this repository (never a fork's code).
 # A missing secret fails the rows that need it, naming the variable: asked for, the real tier never
 # skips. One run at a time.
@@ -79,6 +79,8 @@ jobs:
   pinned:
     name: contract (pinned)
     needs: gate
+    # contract.yml's Google workload identity federation.
+    permissions: { contents: read, id-token: write }
     uses: ./.github/workflows/contract.yml
     with:
       versions: pinned
@@ -88,6 +90,8 @@ jobs:
   latest:
     name: contract (latest)
     needs: [gate, pinned]
+    # contract.yml's Google workload identity federation.
+    permissions: { contents: read, id-token: write }
     # After the pinned leg, pass or fail, so the two never spend at once.
     if: >-
       !cancelled() && needs.gate.result == 'success' &&
@@ -147,4 +151,4 @@ jobs:
           path: packages/reeval/test/real-agents/.reeval/runs
           include-hidden-files: true
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: ${{ github.event_name == 'pull_request' && 1 || 14 }}

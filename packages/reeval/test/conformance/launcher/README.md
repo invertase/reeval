@@ -2,7 +2,7 @@
 
 Every language SDK ships a `reeval` command that finds the reeval binary for its version
 (`REEVAL_BINARY`, the cache, else a download), checks it, caches it and runs it. This suite holds
-each of those launchers to the same behaviour: one case list, a fake release server it points
+each of those launchers to the same behavior: one case list, a fake release server it points
 each launcher at with `REEVAL_DOWNLOAD`, and a small runner module per language.
 
 ```bash

@@ -2,18 +2,17 @@
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { hasAnalysisModel } from './config.ts'
 import { git, gitText } from './git.ts'
 import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
 import type { ArtifactLevel, HistoryEntry } from './history/types.ts'
 import {
-  addedRow,
   type CompareRow,
   compare,
   formatHistory,
   formatShow,
   history,
+  newRows,
   pickBaseline,
   type Reachability,
   resolveRun,
@@ -21,10 +20,9 @@ import {
   unreachable,
 } from './history/views.ts'
 import { fromCwd, sha256 } from './ids.ts'
-import { readInsights, runInsightsFile } from './insights/files.ts'
+import { readRemarks, runRemarksFile } from './remarks/files.ts'
 import type { ResolvedConfig } from './types.ts'
 import { renderCompare, renderCompareMarkdown } from './ui/compare-layout.ts'
-import { fromModel } from './view/insights.ts'
 import { suiteResult } from './view/suite.ts'
 
 export type HistoryFlags = {
@@ -63,12 +61,45 @@ export async function lines(root: string, args: string[]): Promise<string[] | nu
   return r.stdout.toString('utf8').split('\n').filter(Boolean)
 }
 
-/** Commits reachable from HEAD; null when git can't tell (no repo, or a shallow clone). */
-export async function reachability(root: string): Promise<Reachability> {
+const LISTED = 20_000
+const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
+
+/**
+ * Commits reachable from HEAD that `shas` asks about; null when git can't tell (no repo, or a
+ * shallow clone). It lists HEAD's newest commits, and when the history goes further back, asks git
+ * about each of `shas` that list leaves out.
+ */
+export async function reachability(
+  root: string,
+  shas: Array<string | undefined>,
+): Promise<Reachability> {
   const shallow = await lines(root, ['rev-parse', '--is-shallow-repository'])
   if (!shallow || shallow[0] === 'true') return null
-  const shas = await lines(root, ['rev-list', '--max-count=20000', 'HEAD'])
-  return shas ? new Set(shas) : null
+  const listed = await lines(root, ['rev-list', `--max-count=${LISTED}`, 'HEAD'])
+  if (!listed) return null
+  const reach = new Set(listed)
+  await settle(root, reach, shas)
+  return reach
+}
+
+/**
+ * Adds each of `shas` that's an ancestor of HEAD but past the commits `reach` lists. One commit is
+ * one `merge-base`; several are one walk of HEAD's whole history, since each `merge-base` costs
+ * about a walk.
+ */
+async function settle(root: string, reach: Reachability, shas: Array<string | undefined>) {
+  if (!reach || reach.size < LISTED) return
+  const asked = new Set(
+    shas.filter((sha): sha is string => !!sha && FULL_SHA.test(sha) && !reach.has(sha)),
+  )
+  const [only, ...more] = asked
+  if (only && more.length === 0) {
+    if ((await git(root, ['merge-base', '--is-ancestor', only, 'HEAD'])).code === 0) reach.add(only)
+  } else if (only) {
+    for (const sha of (await lines(root, ['rev-list', `--skip=${LISTED}`, 'HEAD'])) ?? []) {
+      if (asked.has(sha)) reach.add(sha)
+    }
+  }
 }
 
 const rel = (path: string) => fromCwd(path) || path
@@ -91,7 +122,6 @@ export async function record(
     artifacts: parseLevel(flags.artifacts, config.history.artifacts),
     allowIncomplete: flags['allow-incomplete'],
     skipSecretScan: flags['skip-secret-scan'],
-    hint: !hasAnalysisModel(config),
   })
   const where = rel(result.recordPath)
   if (!result.created) return `${where} is already recorded`
@@ -139,7 +169,8 @@ export async function historyView(
   const limit = options.limit ?? 20
   if (!(limit > 0))
     throw new CommandError(`--limit must be a number above 0 (got ${options.limit})`)
-  const reach = await reachability(config.root)
+  const shown = entries.slice(-limit).map((e) => e.git?.sha)
+  const reach = await reachability(config.root, shown)
   return history(entries, { filter: options.filter || undefined, limit, reach })
 }
 
@@ -173,10 +204,9 @@ export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
     ctx.out(JSON.stringify(run, null, 2))
     return 0
   }
-  const insights = await readInsights(runInsightsFile(config, entry))
-  const hint = !(insights && fromModel(insights)) && !hasAnalysisModel(config)
-  if (ctx.flags.md) ctx.out(renderSummary(run, { hint, insights }).trimEnd())
-  else ctx.out(formatShow(run, { hint, insights }))
+  const remarks = await readRemarks(runRemarksFile(config, entry))
+  if (ctx.flags.md) ctx.out(renderSummary(run, { remarks }).trimEnd())
+  else ctx.out(formatShow(run, { remarks }))
   return 0
 }
 
@@ -187,21 +217,24 @@ export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
 export async function compareView(config: ResolvedConfig, refs: string[]) {
   const { root } = config
   const entries = await allRuns(config)
-  const reach = await reachability(root)
   let base: HistoryEntry | null
   let head: HistoryEntry
+  let reach: Reachability
   if (refs.length >= 2) {
     base = resolveRun(entries, refs[0])
     head = resolveRun(entries, refs[1])
+    reach = await reachability(root, [base.git?.sha, head.git?.sha])
   } else {
     head = resolveRun(entries, refs[0] ?? 'latest')
+    reach = await reachability(root, [head.git?.sha])
     // Ancestry of head's commit, or of HEAD when that commit was rebased away.
     const from = head.git && (!reach || reach.has(head.git.sha)) ? head.git.sha : 'HEAD'
     const ancestry = await lines(root, ['rev-list', '--max-count=5000', from])
     const candidates = entries.filter((e) => e.recorded && e.runId !== head.runId)
     base = pickBaseline(candidates, head, ancestry)
+    await settle(root, reach, [base?.git?.sha])
   }
-  const rows = base ? compare(base, head) : head.evals.map(addedRow)
+  const rows = base ? compare(base, head) : newRows(head)
   const flag = (e: HistoryEntry) => ({
     runId: e.runId,
     recorded: e.recorded,
@@ -244,9 +277,9 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
 }
 
 /**
- * What `--fail-on-regression` fails on: an eval that went from pass to fail, and a new or
- * changed (can't compare) eval that fails, since nothing earlier vouches for it. A head the run's
- * interrupt cancelled didn't fail.
+ * What `--fail-on-regression` fails on: an eval or a pooled family's gate that went from pass to
+ * fail, and a new or changed (can't compare) one that fails, since nothing earlier vouches for it.
+ * A head the run's interrupt canceled didn't fail.
  */
 export const regressions = (rows: CompareRow[]) =>
   rows.filter(
@@ -254,7 +287,7 @@ export const regressions = (rows: CompareRow[]) =>
       r.status === 'regressed' ||
       ((r.status === 'added' || r.status === 'drift') &&
         r.head === 'fail' &&
-        !r.cancelled?.includes('head')),
+        !r.canceled?.includes('head')),
   )
 
 /** Recreates the state a run executed in: its commit, plus its uncommitted changes if any. */

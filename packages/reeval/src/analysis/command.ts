@@ -43,8 +43,6 @@ export type AnalyzeFlags = {
   context?: boolean
   'dry-run'?: boolean
   'no-cache'?: boolean
-  insights?: boolean
-  verbose?: boolean[]
 }
 
 type Ctx = {
@@ -69,7 +67,7 @@ export function contextMarkdown(d: Digest, head: string, base: string | null): s
   return [
     `# reeval analysis context: ${head}${base ? ` vs ${base}` : ''}`,
     '',
-    'Analyse this reeval run for the engineer who wrote the evals. The digest below holds facts reeval computed (F…), evidence excerpts (E…, transcript lines as L<n>) and the attempts table. Cite those ids for every claim, keep to the verdicts in the facts, and suggest at most 5 concrete actions, each verified with a reeval command from the CLI list.',
+    'Analyze this reeval run for the engineer who wrote the evals. The digest below holds facts reeval computed (F…), evidence excerpts (E…, transcript lines as L<n>) and the attempts table. Cite those ids for every claim, keep to the verdicts in the facts, and suggest at most 5 concrete actions, each verified with a reeval command from the CLI list.',
     '',
     ...(d.frame === 'study'
       ? [
@@ -150,7 +148,7 @@ export async function defaultBase(
   entries: HistoryEntry[],
   head: HistoryEntry,
 ): Promise<HistoryEntry | null> {
-  const reach = await reachability(config.root)
+  const reach = await reachability(config.root, [head.git?.sha])
   const from = head.git && (!reach || reach.has(head.git.sha)) ? head.git.sha : 'HEAD'
   const ancestry = await lines(config.root, ['rev-list', '--max-count=5000', from])
   return pickBaseline(
@@ -230,7 +228,7 @@ const docBase = async (config: ResolvedConfig, p: PreparedAnalysis) => ({
 })
 
 /** One structured call on the prepared digest (and what tools read), validated: the document the cache holds. */
-export async function analyseDigest(
+export async function analyzeDigest(
   config: ResolvedConfig,
   p: PreparedAnalysis,
   model: ResolvedAnalysisModel,
@@ -283,14 +281,6 @@ export async function analyseDigest(
 
 export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> {
   const { config, flags } = ctx
-  if (flags.insights) {
-    const { checkInsightsFlags, insightsCommand } = await import('../insights/command.ts')
-    checkInsightsFlags(flags)
-    return insightsCommand(ctx, args[0])
-  }
-  if (flags.verbose?.length) {
-    throw new UsageError('reeval analyze takes -v only with --insights')
-  }
   if (flags.json && flags.md) throw new UsageError('reeval analyze takes --json or --md, not both')
   if (flags.context && flags.save) {
     throw new UsageError('reeval analyze --context makes no analysis to save; drop --save')
@@ -359,8 +349,8 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
     )
   } else {
     const resolved = model ?? resolveAnalysisModel(config)
-    ctx.err(`analysing ${head.runId}${base ? ` vs ${base.runId}` : ''} with ${resolved.name}…`)
-    doc = await analyseDigest(config, prepared, resolved)
+    ctx.err(`analyzing ${head.runId}${base ? ` vs ${base.runId}` : ''} with ${resolved.name}…`)
+    doc = await analyzeDigest(config, prepared, resolved)
     await writeCached(config.root, key, doc)
   }
   if (flags.save) {

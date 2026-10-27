@@ -1,8 +1,0 @@
-fail             explains why greet.js fails
-  No: only 1 of 2 passed "names the root cause".
-  2 tries               1 of 2
-  names the root cause  1 of 2
-    expected 'Docker is down' to contain 'null'
-  +1 more passed
-
-1 fail

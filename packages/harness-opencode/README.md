@@ -34,7 +34,7 @@ sends the key on, and the others with the reason a gateway can't broker them (pe
 SigV4, service accounts, subscriptions, local servers, provider packages it installs from npm).
 A provider can also take variables that aren't secret: Bedrock's hosts are built from
 `AWS_REGION`, so its table entry has `{AWS_REGION}` in them, a default (`us-east-1`) and the
-pattern a value must match (`scripts/provider-vars.ts`; the probe runs with a recognisable region).
+pattern a value must match (`scripts/provider-vars.ts`; the probe runs with a recognizable region).
 `resolveOpenCodeProvider(model, env)` gives a model's provider, with its hosts filled in and the
 variables' values (which `createOpenCode`'s `vars` passes into the sandbox), or that reason, and
 `@reeval/harness-opencode/providers` exports the table and its helpers without the harness.

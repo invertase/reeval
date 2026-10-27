@@ -44,6 +44,8 @@ export type Example = {
   profiles?: Record<string, Plan>
   /** `reeval run`'s exit code on the fake agent; default 0. */
   exit?: number
+  /** Host variables its plans and run need, such as `vertex()`'s project. */
+  env?: Record<string, string>
   /**
    * The fake agent flakes at random, so only each cell's attempt count holds, every outcome is a
    * pass or a fail, and the run may exit 0 or 1.
@@ -129,6 +131,11 @@ export const EXAMPLES: Record<string, Example> = {
     run: { 'fake/math/fake': pass(1) },
     profiles: { vercel: inDocker('claude-code:claude-sonnet-5') },
   },
+  'with-vertex-gateway': {
+    run: { 'fake/math/fake': pass(1) },
+    profiles: { vertex: inDocker('claude-code:claude-haiku-4-5-20251001') },
+    env: { GOOGLE_CLOUD_PROJECT: 'reeval-example' },
+  },
   'with-fake-harness': { run: { 'fake/math/fake': pass(1) } },
   'with-oracle-canary': {
     run: { needs: 'Docker' },
@@ -168,19 +175,19 @@ export const EXAMPLES: Record<string, Example> = {
 
   // Compare
   'with-skill-lift': { run: { 'fake/math/fake': fail(4), 'fake/changelog/fake': pass(4) } },
-  'with-compare-control': { run: { 'fake/math/fake': fail(1), 'fake/testing/fake': pass(1) } },
+  'with-compare-control': { run: { 'fake/math/fake': fail(4), 'fake/testing/fake': pass(4) } },
   'with-min-lift': { run: { 'fake/math/fake': fail(4), 'fake/jsdoc/fake': pass(4) } },
   'with-two-variants': {
     run: {
-      'fake/math/fake': fail(1),
-      'fake/errors-skill/fake': pass(1),
-      'fake/errors-doc/fake': pass(1),
+      'fake/math/fake': fail(4),
+      'fake/errors-skill/fake': pass(4),
+      'fake/errors-doc/fake': pass(4),
     },
   },
   'with-rules-ab': {
-    run: { 'fake/short-rules/fake': fail(1), 'fake/detailed-rules/fake': pass(1) },
+    run: { 'fake/short-rules/fake': fail(4), 'fake/detailed-rules/fake': pass(4) },
   },
-  'with-compare-questions': { run: { 'fake/math/fake': pass(1), 'fake/errors/fake': pass(1) } },
+  'with-compare-questions': { run: { 'fake/math/fake': pass(4), 'fake/errors/fake': pass(4) } },
   'with-compare-harness': {
     run: { needs: 'ANTHROPIC_API_KEY, OPENAI_API_KEY and Docker' },
     plain: { harness: ['claude-code:claude-sonnet-5', 'codex:gpt-5.6-luna'], sandbox: ['docker'] },
@@ -200,7 +207,7 @@ export const EXAMPLES: Record<string, Example> = {
     profiles: { docker: fakeInDocker },
   },
   'with-capture-compare': {
-    run: { 'fake/site/fake': pass(1), 'fake/brand/fake': pass(1) },
+    run: { 'fake/site/fake': pass(4), 'fake/brand/fake': pass(4) },
     profiles: { docker: fakeInDocker },
   },
 
@@ -282,9 +289,13 @@ type Cell = { harness: string; sandbox: string }
 const sorted = (xs: string[]) => [...new Set(xs)].sort()
 
 /** What `dir` plans under `profile` ('' for none): its eval files and its cells' harnesses and sandboxes. */
-async function planOf(dir: string, profile: string): Promise<{ files: string[]; plan: Plan }> {
+async function planOf(
+  dir: string,
+  profile: string,
+  env?: Record<string, string>,
+): Promise<{ files: string[]; plan: Plan }> {
   const args = ['run', '--dry-run', '--json', ...(profile ? ['--profile', profile] : [])]
-  const r = await runCli(dir, args)
+  const r = await runCli(dir, args, { env })
   assert.equal(r.code, 0, `${args.join(' ')}\n${r.stdout}${r.stderr}`)
   const evals: { file: string; cells: Cell[] }[] = JSON.parse(r.stdout).evals
   const cells = evals.flatMap((e) => e.cells)
@@ -311,7 +322,7 @@ export async function checkExample(name: string, e: Example): Promise<void> {
   const dir = await copyOut(name)
   const want = expected(e)
   const got = await pooled(
-    Object.keys(want).map((p) => () => planOf(dir, p)),
+    Object.keys(want).map((p) => () => planOf(dir, p, e.env)),
     Math.max(2, availableParallelism()),
   )
   Object.keys(want).forEach((p, i) => {
@@ -320,7 +331,7 @@ export async function checkExample(name: string, e: Example): Promise<void> {
     assert.deepEqual(plan, want[p], `${name} --profile ${p || '(none)'}`)
   })
   if ('needs' in e.run) return
-  const run = await runCli(dir, ['run'], { timeoutMs: 300_000 })
+  const run = await runCli(dir, ['run'], { timeoutMs: 300_000, env: e.env })
   const ran: Record<string, string[]> = {}
   for (const a of readRun(dir).evals.flatMap((x) => x.attempts)) {
     ran[a.cell] = [...(ran[a.cell] ?? []), a.outcome].sort()
