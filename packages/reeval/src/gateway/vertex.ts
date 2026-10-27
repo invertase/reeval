@@ -281,7 +281,8 @@ function grokBuild(settings: VertexSettings, source = vertexTokens()): VertexRou
     {
       host: vertexHost(region),
       path: {
-        regex: `^/v1/projects/${escapeRegex(settings.project)}/locations/${escapeRegex(region)}/endpoints/openapi/chat/completions(?:\\?.*)?$`,
+        // The project as Grok's base_url writes it (`vertexProvider` encodes it).
+        regex: `^/v1/projects/${escapeRegex(encodeURIComponent(settings.project))}/locations/${escapeRegex(region)}/endpoints/openapi/chat/completions(?:\\?.*)?$`,
       },
       method: ['POST'],
     },

@@ -3,6 +3,7 @@
 // on, the upstream OpenRouter names, and Vercel's credential's expiry.
 import assert from 'node:assert/strict'
 import { afterEach, describe, test } from 'node:test'
+import { vertexProvider } from '@reeval/harness-grok-build'
 import { openCodeConfig } from '@reeval/harness-opencode'
 import { onEndpoint } from '@reeval/sandbox-docker'
 import { checkGateways } from '../src/config.ts'
@@ -963,6 +964,28 @@ describe('Vertex AI routes', () => {
       ...(agent.vertexChat ? { vertexChat: agent.vertexChat } : {}),
     })
     assert.equal((adapter as { harnessId: string }).harnessId, 'grok-build')
+  })
+
+  test("Grok Build on Vertex gets the token on the path its own base_url makes, a domain-scoped project's too", () => {
+    for (const [project, region] of [
+      ['reeval-512515', 'global'],
+      ['example.com:reeval', 'us-central1'],
+    ] as const) {
+      const agent = agentFor(
+        { kind: 'grok-build', model: 'grok-4.6', gateway: 'vertex' } as AgentHarnessDescriptor,
+        vertexSettings({ project, regions: { xai: region } }, {}),
+      )
+      const base = new URL(`${vertexProvider(project, region).baseUrl}/chat/completions`)
+      assert.ok(
+        onEndpoint(agent.endpoints, {
+          method: 'POST',
+          host: base.host,
+          path: base.pathname,
+          headers: {},
+        }),
+        `${project} in ${region}: ${base.href}`,
+      )
+    }
   })
 
   test('the gateway serves Claude Code on Vertex, not the agents it has no route for', () => {
