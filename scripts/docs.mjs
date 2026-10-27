@@ -516,6 +516,19 @@ if (!limitCompare) {
   )
 }
 
+// limit.compare runs after the cascade, so it tests the resolved compare from any level, and a
+// baseline it leaves without variants gates like an eval without compare (gateIf in src/options.ts).
+if (limitCompare && /applies when the evaluation sets `compare`/.test(limitCompare)) {
+  problems.push(
+    'reference/profiles limit.compare says it "applies when the evaluation sets `compare`": it limits the resolved compare, from a group, a profile\'s defaults, the config or the evaluation (src/options.ts)',
+  )
+}
+if (limitCompare && !/baseline gates like an evaluation without `compare`/.test(limitCompare)) {
+  problems.push(
+    'reference/profiles limit.compare does not say how a baseline left without variants gates: like an evaluation without `compare` (src/options.ts gateIf)',
+  )
+}
+
 const envPage = page('reference/env-vars')
 for (const name of reevalVariables()) {
   if (!mentions(envPage, `\`${name}\``))
