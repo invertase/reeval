@@ -19,8 +19,8 @@
 //
 // The version is pinned because Vale's results change with it: before 3.18.0 it
 // ignored BlockIgnores and TokenIgnores in a section named by a path
-// (`[docs/index.mdx]`) and honoured them only under a file-name glob, so the
-// exemption for the Introduction lead failed there and 3.25.1 passed it. The
+// (`[docs/overview.mdx]`) and honoured them only under a file-name glob, so the
+// exemption for the Overview lead failed there and 3.25.1 passed it. The
 // run stops with exit 2 on any other version, or when vale is missing.
 //
 // Vale matches the per-file sections of .vale.ini and .vale/lead.ini against
@@ -37,7 +37,7 @@ import { fileURLToPath } from 'node:url'
 
 const script = fileURLToPath(import.meta.url)
 const repoRoot = path.resolve(path.dirname(script), '..')
-const leadFile = 'docs/index.mdx'
+const leadFile = 'docs/overview.mdx'
 const PINNED_VALE = '3.25.1'
 
 function valeVersionProblem(env = process.env) {
@@ -203,7 +203,7 @@ function selfTest() {
   const lead = [
     count([leadFile], repoRoot),
     count([path.join(repoRoot, leadFile)], repoRoot),
-    count(['index.mdx'], docs),
+    count(['overview.mdx'], docs),
   ]
   console.log(`${lead.join(', ')}  ${leadFile} by relative, absolute and from docs/`)
   const counts = new Set([...results.map((r) => r.count), ...lead])
@@ -265,7 +265,7 @@ function flatten(result) {
   )
 }
 
-// .vale.ini turns Reeval.Your off for docs/index.mdx; .vale/lead.ini checks
+// .vale.ini turns Reeval.Your off for docs/overview.mdx; .vale/lead.ini checks
 // it there outside the getting-started lead.
 const inGenerated = new Map()
 const isGenerated = (alert) => {

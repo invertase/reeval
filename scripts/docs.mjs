@@ -1066,7 +1066,7 @@ const pkgSpecifier = new RegExp(
   `(?:from |import\\(|require\\()['"]${pkg}(?:/[\\w-]+)?['"]|\\b(?:npm (?:i|install)|pnpm add|yarn add|bun add)\\b[^\\n]*\\s${pkg}(?:@\\S*)?(?=\\s|$)`,
 )
 /** docs.page leaves `{{ pkg }}` raw in the Markdown it serves to agents, so the page they read first names the package literally, and must keep naming the one in docs.json. */
-const literalPkgPage = join(docsDir, 'index.mdx')
+const literalPkgPage = join(docsDir, 'overview.mdx')
 for (const file of mdxFiles()) {
   if (!linked.has(file)) problems.push(`${relative(root, file)} isn't in the docs.json sidebar`)
   if (file === literalPkgPage) {
@@ -1104,9 +1104,9 @@ for (const file of mdxFiles()) {
 
 const COPIED_BLOCK_LINES = 15
 const COPIED_BLOCK_SHARE = 0.8
-// The Introduction shows the evaluation file and its result; Quick start is where the same
+// The Overview shows the evaluation file and its result; Quick start is where the same
 // evaluation is set up and run, so the two are meant to share it.
-const SHARED_BLOCK_PAGES = ['docs/index.mdx', 'docs/getting-started/quickstart.mdx']
+const SHARED_BLOCK_PAGES = ['docs/overview.mdx', 'docs/getting-started/quickstart.mdx']
 /** A fenced `ts` block's code lines with blank lines, comments and indentation dropped. */
 const codeLines = (code) =>
   code
@@ -1405,8 +1405,8 @@ const wordCount = (text) => text.split(/\s+/).filter(Boolean).length
 for (const file of mdxFiles()) {
   const path = relative(root, file).split('\\').join('/')
   if (path.startsWith('docs/reference/')) continue
-  // The Introduction is the landing page, not a task page.
-  if (path === 'docs/index.mdx') continue
+  // The Overview is the landing page, not a task page.
+  if (path === 'docs/overview.mdx') continue
   const words = wordCount(prose(read(file)))
   if (words > TASK_PAGE_WORDS) {
     problems.push(

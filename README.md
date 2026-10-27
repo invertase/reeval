@@ -143,7 +143,7 @@ The [`examples/`](examples) directory has 80 runnable projects, one idea each, f
 
 ## Documentation
 
-The manual in [`docs/`](docs/index.mdx) covers harnesses, sandboxes, environments, secrets and egress, checks and judges, profiles, history, and every CLI command and flag.
+The manual in [`docs/`](docs/overview.mdx) covers harnesses, sandboxes, environments, secrets and egress, checks and judges, profiles, history, and every CLI command and flag.
 
 ## For coding agents
 

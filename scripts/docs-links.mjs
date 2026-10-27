@@ -33,10 +33,12 @@ export const LEGACY_PATHS = [
 ]
 
 /**
- * Pages whose URL is not their kebab-cased title: the landing page, and the run output page,
- * which keeps its address while its title is open to change.
+ * Pages whose URL is not the path their groups and title make. Overview is the landing
+ * page: its URL is its title's slug, `/overview`, and `/` redirects there, so the
+ * Getting started group does not prefix it. Run output keeps its address while its
+ * title is open to change.
  */
-export const TITLE_EXCEPTIONS = { Introduction: '/', 'Run output': '/results/output' }
+export const TITLE_EXCEPTIONS = { Overview: '/overview', 'Run output': '/results/output' }
 
 const SKIPPED = /^(?:docs-archive|\.git|node_modules)\//
 

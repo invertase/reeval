@@ -27,6 +27,7 @@
     }
   ],
   "redirects": {
+    "/": "/overview",
     "/evals/evaluate": "/evaluations/evaluate",
     "/evals/turns": "/evaluations/task/turns",
     "/evals/checks": "/evaluations/grading/assertions",
@@ -222,8 +223,8 @@
       "group": "Getting started",
       "pages": [
         {
-          "title": "Introduction",
-          "href": "/"
+          "title": "Overview",
+          "href": "/overview"
         },
         {
           "title": "Quickstart",
