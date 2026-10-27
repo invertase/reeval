@@ -48,7 +48,7 @@ The pinned gateway must be in the config's `gateway` list. A pinned gateway neve
 
 ## Harness support
 
-Each gateway serves the harnesses in this table. ✅ means reeval routes the harness and its `effort`. ⚠️ means it routes the harness, but the plan refuses `effort` on that gateway.
+`direct()` serves every harness. This table shows the harnesses each routing gateway serves. ✅ means the gateway routes the harness and its `effort`. ⚠️ means it routes the harness, but a harness with `effort` set takes the next gateway in the list, and a pinned one stops the plan.
 
 | Harness | `vercel()` | `openrouter()` |
 | --- | --- | --- |
@@ -61,3 +61,5 @@ Each gateway serves the harnesses in this table. ✅ means reeval routes the har
 | pi | ❌ | ❌ |
 | fx | ✅ | ❌ |
 | Grok Build | ⚠️ | ⚠️ |
+
+Cursor's agent calls only Cursor's API, and Antigravity's CLI calls only Google's. reeval runs pi on its Gemini key, and fx on `vercel()` or OpenAI's API.
