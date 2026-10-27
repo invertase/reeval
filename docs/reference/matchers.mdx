@@ -20,7 +20,7 @@ evaluate('creates a tested greet module', async (c) => {
 
 `expect` has Vitest's matchers (from `@vitest/expect`), so `toBe`, `toContain`, `toMatch`, `toHaveLength`, `.not`, asymmetric matchers such as `expect.any(…)`, `expect.soft`, `expect.poll` and `expect.assertions(n)` work too. A failed matcher fails the attempt; a failed `expect.soft` fails it when the eval ends.
 
-A failed matcher the eval catches (`try { … } catch {}`) still fails the attempt, when the eval ends, as `expect.soft` does; its error ends `(the eval caught this failed check, which still fails the attempt; to wait or retry, use expect.poll)`. So don't retry `expect` in a loop: `expect.poll` retries the matcher and records only its final outcome.
+A failed matcher the eval catches (`try { … } catch {}`) still fails the attempt, when the eval ends, as `expect.soft` does; its error ends `(the eval caught this failed check, which still fails the attempt; to wait or retry, use expect.poll)`. So don't retry `expect` in a loop: `expect.poll` retries the matcher and records only its final outcome, and an `expect` inside its function counts only on the try the poll ends on.
 
 ```ts
 await expect.poll(() => c.exec('curl -sf localhost:3000'), {

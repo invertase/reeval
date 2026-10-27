@@ -377,6 +377,63 @@ describe('assertions recorded on the attempt', () => {
     )
     assert.ok((records(t)[0]?.durationMs ?? -1) >= 0)
   })
+
+  test("a check in expect.poll's function counts on the try the poll ends on, not the ones it retried", async () => {
+    const t = task()
+    const own = createExpect(t)
+    let n = 0
+    await own
+      .poll(
+        () => {
+          n++
+          own.soft(n, 'soft inner').toBeGreaterThan(1)
+          own(n, 'inner').toBeGreaterThan(2)
+          return n
+        },
+        { interval: 5, timeout: 1000 },
+      )
+      .toBe(3)
+    let m = 0
+    const outer = async () => {
+      m++
+      await own.poll(() => m, { interval: 5, timeout: 1000, message: 'nested' }).toBeGreaterThan(0)
+      return m
+    }
+    await own.poll(outer, { interval: 5, timeout: 1000 }).toBe(2)
+    const inner = () =>
+      own.poll(() => 'no', { interval: 5, timeout: 20, message: 'inner gave up' }).toBe('yes')
+    await assert.rejects(
+      () =>
+        own
+          .poll(inner, { interval: 5, timeout: 30, message: 'outer gave up' })
+          .toBe(undefined) as never,
+    )
+    await assert.rejects(
+      () =>
+        own
+          .poll(
+            () => {
+              own('no', 'last').toBe('yes')
+            },
+            { interval: 5, timeout: 30, message: 'gave up' },
+          )
+          .toBe(1) as never,
+    )
+    assert.deepEqual(
+      records(t).map((x) => [x.label, x.status]),
+      [
+        ['poll.toBe 3', 'pass'],
+        ['soft inner', 'pass'],
+        ['inner', 'pass'],
+        ['poll.toBe 2', 'pass'],
+        ['nested', 'pass'],
+        ['outer gave up', 'fail'],
+        ['inner gave up', 'fail'],
+        ['gave up', 'fail'],
+        ['last', 'fail'],
+      ],
+    )
+  })
 })
 
 describe('expect routed to the attempt', () => {
