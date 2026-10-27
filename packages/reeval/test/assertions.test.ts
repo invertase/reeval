@@ -1,9 +1,10 @@
-// An attempt's assertion records and soft failure (src/attempt/assertions.ts), from the raw matcher
+// An attempt's assertion records and end-of-body failure (src/attempt/assertions.ts), from the raw matcher
 // calls the engine or the attempt protocol hands it.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { assertionRecords, softFailure } from '../src/attempt/assertions.ts'
+import { assertionRecords, CAUGHT_HINT, checkFailure } from '../src/attempt/assertions.ts'
 import type { RawAssertion } from '../src/engine/runtime.ts'
+import { InfraError } from '../src/sandbox/types.ts'
 
 const raw = (over: Partial<RawAssertion>): RawAssertion => ({
   matcher: 'toBe',
@@ -62,14 +63,25 @@ test("labels are unique within an attempt, even when one given looks like anothe
   ])
 })
 
-test('the first soft call that did not pass fails the attempt, as what it threw', () => {
-  const thrown = new Error('expected 1 to be 2')
-  assert.equal(softFailure([raw({}), raw({ status: 'fail', error: thrown })]), undefined)
+test('the first call that did not pass fails the attempt: a soft one as what it threw, a caught hard one with the hint', () => {
+  const thrown = Object.assign(new Error('expected 1 to be 2'), { name: 'AssertionError' })
+  assert.equal(checkFailure([raw({}), raw({ soft: true })]), undefined)
+  const caught = checkFailure([raw({}), raw({ status: 'fail', error: thrown })])
+  assert.equal(caught?.message, `expected 1 to be 2 ${CAUGHT_HINT}`)
+  assert.equal(caught?.name, 'AssertionError')
+  assert.equal(thrown.message, 'expected 1 to be 2', "the check's own record keeps its message")
+  const infra = checkFailure([raw({ status: 'fail', error: new InfraError('docker exec died') })])
+  assert.ok(
+    infra instanceof InfraError,
+    'it keeps its class, so the attempt fails as the same kind',
+  )
+  assert.equal(infra.message, `docker exec died ${CAUGHT_HINT}`)
+  assert.match(infra.stack ?? '', /^InfraError: docker exec died \(the eval caught/)
   assert.equal(
-    softFailure([raw({ soft: true }), raw({ soft: true, status: 'fail', error: thrown })]),
+    checkFailure([raw({ soft: true }), raw({ soft: true, status: 'fail', error: thrown })]),
     thrown,
   )
-  const unanswered = softFailure([raw({ soft: true, status: 'error', error: 'no turn' })])
+  const unanswered = checkFailure([raw({ soft: true, status: 'error', error: 'no turn' })])
   assert.ok(unanswered instanceof Error)
   assert.equal(unanswered.message, 'no turn')
 })

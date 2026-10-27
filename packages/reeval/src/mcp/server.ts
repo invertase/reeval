@@ -4,6 +4,7 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { allRuns, compareView, historyView, showRecord } from '../commands.ts'
 import { openHistoryDb, VIEW_NAMES } from '../history/db.ts'
+import { FLAKY_MIN_ATTEMPTS } from '../history/facts.ts'
 import { readRecord } from '../history/files.ts'
 import { renderSummary } from '../history/summary.ts'
 import type { RunRecord } from '../history/types.ts'
@@ -35,8 +36,7 @@ const VIEW_ROWS: Record<string, string> = {
     'factor contrast (environment, harness, model) by evidence tier, with pass@1 and effort verdicts',
   skill_reads:
     'attempt and skill its environment placed: the transcript line of its first read (a path under skills/<name>/, or a skill / load_skill call), and how many',
-  flaky_cells:
-    'cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict and a likely cause',
+  flaky_cells: `cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict (flaky from ${FLAKY_MIN_ATTEMPTS} counted attempts, else mixed: too few to call it flaky) and a likely cause`,
   drift:
     'run where a cell’s fingerprint changed from its previous run, what changed, and noise = 1 when only agent runtime state did',
   failing_attempts:

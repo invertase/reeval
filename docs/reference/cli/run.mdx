@@ -84,6 +84,13 @@ plan  run 20260926T174055Z_b010670_ci_vdfy · profile pr (auto: CI is set) · 18
 
 `--dry-run` adds a row per eval, then, when Docker is running, a line per sandbox image saying whether it's ready, to build, stale or missing (a `from` tag is looked up in its registry, never pulled), and stops with exit 0. Neither needs credentials, and Docker is optional.
 
+The plan, with or without `--dry-run`, ends with hints for verdicts it already knows it can't give: a compare below `runs: 4` a cell, and a compared `evaluate.each` family running fewer than six cases (a filter can leave out some), each read `can't tell yet` however the attempts go. When a profile's `limit.runs` is what cut the runs, the hint names it (`profile pr's limit.runs caps them; --runs 4 replaces it`). A variant with no control on its harness and sandbox in the run (a filter left it out, or the variant runs another image) has no lift, so it gets no hint.
+
+```text
+hint: 2 compares run 1 or 3 times per cell; a verdict needs 4 runs a side, so their lift and effort will say can't tell yet (runs: 4)
+hint: family evals/each.eval.ts › pooled across %s has 3 cases; its lift needs 6 for a verdict, so it will say can't tell yet whatever the runs (add cases)
+```
+
 `--dry-run --json` prints the whole plan, every cell and what was excluded, as one JSON document, with each image step's `status` and `detail`.
 
 ```text

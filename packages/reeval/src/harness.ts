@@ -1,6 +1,7 @@
 // `reeval/harness`: agent harness descriptors. The implementations load lazily in workers.
 import { splitModel } from '@reeval/harness-opencode/providers'
-import { harnessProblem } from './contract/harness.ts'
+import { directOffPin } from './contract/gateway.ts'
+import { FACTORY, harnessProblem } from './contract/harness.ts'
 import { UsageError } from './errors.ts'
 import type {
   AntigravityHarnessDescriptor,
@@ -29,7 +30,11 @@ function make<D extends HarnessDescriptor>(kind: D['kind'], options: unknown): D
   const descriptor = { kind, ...(options as object) } as D
   const pin: unknown = descriptor.gateway
   if (typeof pin === 'object' && pin !== null && 'kind' in pin) {
-    descriptor.gateway = (pin as GatewayDescriptor).kind
+    const helper = pin as GatewayDescriptor
+    if (helper.kind === 'direct' && helper.enabled === false) {
+      throw new UsageError(directOffPin(`${FACTORY[kind]}({ gateway })`))
+    }
+    descriptor.gateway = helper.kind
   }
   const problem = harnessProblem(descriptor)
   if (problem) throw new UsageError(problem)

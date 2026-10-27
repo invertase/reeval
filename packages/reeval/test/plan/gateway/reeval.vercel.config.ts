@@ -11,7 +11,7 @@ export default defineConfig({
     pi({ model: 'gemini-3.8-flash' }),
     grokBuild({ model: 'grok-4.6' }),
   ],
-  gateway: [vercel(), direct()],
+  gateway: [vercel()],
   profiles: {
     'codex-pin': {
       gateway: [direct(), vercel()],

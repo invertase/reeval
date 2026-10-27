@@ -62,7 +62,7 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   `effort  tools  time  tokens` / `plain  54  1m 39s  2,890k` / `with-house-greeting  3  6.6s  57k`.
   A cell without usage (Goose) is left out of the token sample only; if either side then
   has none, the token metric is omitted, not `insufficient`. Effort's rank test needs
-  `runs: 4` a cell (3 vs 3 can't reach p < 0.05; the plan hints so); `reeval query effort` has
+  `runs: 4` a cell, as lift does (below it both read `can't tell yet`; the plan hints so, at `runs: 1` too); `reeval query effort` has
   its p-values, verdicts and whether the ranges are `separated`.
 - With two variants or more, `reeval query contrasts` sets every pair of arms side by side,
   variant against variant too.

@@ -123,6 +123,12 @@ export const SUBJECT = Symbol.for('reeval.subject')
 
 type Recorded = Omit<RawAssertion, 'status'> & { status?: RawAssertion['status'] }
 
+/**
+ * The matcher calls one try of an `expect.poll` function made: a try the poll retries doesn't
+ * count, so they leave the attempt's list, as the poll's own matcher records only its last try.
+ */
+const pollTry = new AsyncLocalStorage<Recorded[]>()
+
 const recordings = new WeakMap<ExpectTask, Recorded[]>()
 const ownRecordings = new WeakMap<ExpectStatic, Recorded[]>()
 
@@ -169,6 +175,7 @@ function begin(list: Recorded[], assertion: object, name: string, args: unknown[
     soft: !!flag(assertion, 'soft'),
   }
   list.push(entry)
+  pollTry.getStore()?.push(entry)
   return entry
 }
 
@@ -328,22 +335,28 @@ function createPoll(expect: ExpectStatic, list?: Recorded[]): ExpectStatic['poll
           const location = new Error('expect.poll')
           const entry = list && begin(list, assertion, String(key), args)
           const startedAt = performance.now()
+          // A poll inside another poll's function: its last try's calls belong to the outer try.
+          const outer = pollTry.getStore()
           return (async () => {
             const deadline = Date.now() + timeout
             const signal = AbortSignal.timeout(timeout)
             for (;;) {
+              const tried: Recorded[] = []
               try {
-                chai.util.flag(assertion, 'object', await fn({ signal }))
+                chai.util.flag(assertion, 'object', await pollTry.run(tried, () => fn({ signal })))
                 const result = await Reflect.apply(matcher, assertion, args)
                 if (entry) settle(entry, undefined, startedAt)
+                outer?.push(...tried)
                 return result
               } catch (error) {
                 if (Date.now() + interval >= deadline) {
                   if (error instanceof Error && location.stack)
                     error.stack = location.stack.replace(location.message, error.message)
                   if (entry) settle(entry, error, startedAt)
+                  outer?.push(...tried)
                   throw error
                 }
+                for (const t of tried) list?.splice(list.indexOf(t), 1)
                 await new Promise((resolve) => setTimeout(resolve, interval))
               }
             }

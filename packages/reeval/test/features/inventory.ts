@@ -240,7 +240,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'gateway',
     area: 'Config and selection',
-    name: '`gateway`: the ordered gateway list, fallback to the first that can serve a harness, a harness `gateway` pin, a profile override, the plan notes and refusals, and the cell and fingerprint in the record',
+    name: '`gateway`: the ordered gateway list, fallback to the first that can serve a harness, `direct()` ending every list unless placed elsewhere or turned off with `direct({ enabled: false })`, a harness `gateway` pin, a profile override, the plan notes and refusals, and the cell and fingerprint in the record',
     plan: [
       'gateway/default',
       'gateway/listed',
@@ -258,7 +258,13 @@ export const inventory: InventoryFeature[] = [
     id: 'gateway.vercel',
     area: 'Config and selection',
     name: "`vercel()`: Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build on Vercel AI Gateway with one brokered key, fallback past it for the harnesses it cannot serve and for `effort` the model would not read, fx's asked model kept apart from the served one, a brokered 401 hinted as a refused key, an expired `VERCEL_OIDC_TOKEN` refused at plan time, and the judge, analysis and captures routed by the list or a judge pin",
-    plan: ['gateway/vercel', 'gateway/vercel-pin', 'gateway/vercel-yaml'],
+    plan: [
+      'gateway/vercel',
+      'gateway/vercel-pin',
+      'gateway/vercel-yaml',
+      'gateway-strict/strict',
+      'gateway-strict/strict-yaml',
+    ],
     unit: [
       'reeval/test/plan.test.ts',
       'reeval/test/gateway.test.ts',
@@ -1474,7 +1480,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'query.noise',
     area: 'Records and studio',
-    name: '`flaky_cells` pooled over comparable runs with a minimum n, and `drift` with changed paths and a `noise` flag',
+    name: '`flaky_cells` pooled over comparable runs, `flaky` from a minimum n and `mixed` below it, and `drift` with changed paths and a `noise` flag',
     unit: ['reeval/test/analysis.test.ts', 'reeval/test/query.test.ts'],
   },
   {
@@ -1486,9 +1492,22 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'effort.separation',
     area: 'Records and studio',
-    name: 'Effort separation per metric (`no overlap` at 3 vs 3 or more, directional in `reeval analyze`) and the plan hint below 4 runs a cell',
+    name: 'Effort separation per metric (`no overlap` at 3 vs 3 or more, directional in `reeval analyze`)',
     plan: ['compare/study'],
     unit: ['reeval/test/analysis.test.ts'],
+  },
+  {
+    id: 'plan.verdict-hints',
+    area: 'Records and studio',
+    name: "The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will say `can't tell yet` whatever happens; a profile's `limit.runs` cut is named",
+    plan: [
+      'compare/verdicts',
+      'compare/verdicts-no-control',
+      'compare/verdicts-some-cases',
+      'compare/each-pooled',
+      'compare/study',
+      'runs-default/profile-limit-capped',
+    ],
   },
   {
     id: 'contrasts',
@@ -1815,7 +1834,7 @@ export const inventory: InventoryFeature[] = [
     id: 'sdk.python',
     area: 'CLI and runner',
     name: 'Python eval authoring SDK (conformance goldens and fake run)',
-    fixtures: ['python-sdk/hello', 'python-sdk/attempt-isolation'],
+    fixtures: ['python-sdk/hello', 'python-sdk/attempt-isolation', 'python-sdk/caught-checks'],
     plan: ['python/hello', 'python/dataclass-future'],
     unit: ['reeval/test/python-sdk.test.ts'],
   },
