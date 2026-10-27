@@ -7,21 +7,146 @@
 //   node .vale/lint.mjs [paths…]   (default: docs)
 //   node .vale/lint.mjs --self-test
 //
-// Needs vale and mdx2vast on PATH. Vale matches the per-file sections of
-// .vale.ini and .vale/lead.ini against the path it is given, so each target
-// is resolved against the directory the command ran in, made relative to the
-// repo root, and Vale always runs from the root. The result then does not
-// depend on how the command was called; --self-test checks that it doesn't.
-import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+// Setup: Vale PINNED_VALE exactly (below) and mdx2vast on PATH.
+//
+//   Linux/macOS: download vale_<version>_<OS>_<arch> from
+//   https://github.com/errata-ai/vale/releases/tag/v3.25.1 and put `vale` on PATH
+//   (or `brew install vale` and `brew pin` it at that version)
+//   npm install -g mdx2vast
+//
+// The version is pinned because Vale's results change with it: before 3.18.0 it
+// ignored BlockIgnores and TokenIgnores in a section named by a path
+// (`[docs/index.mdx]`) and honoured them only under a file-name glob, so the
+// exemption for the Introduction lead failed there and 3.25.1 passed it. The
+// run stops with exit 2 on any other version, or when vale is missing.
+//
+// Vale matches the per-file sections of .vale.ini and .vale/lead.ini against
+// the path it is given, so each target is resolved against the directory the
+// command ran in, made relative to the repo root, and Vale always runs from the
+// root. The result then does not depend on how the command was called;
+// --self-test checks that it doesn't, that the version pin refuses a mismatch
+// and that the lead's exemption holds and stops at the lead.
+import { execFileSync, spawnSync } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const script = fileURLToPath(import.meta.url)
 const repoRoot = path.resolve(path.dirname(script), '..')
 const leadFile = 'docs/index.mdx'
+const PINNED_VALE = '3.25.1'
+
+function valeVersionProblem(env = process.env) {
+  const probe = spawnSync('vale', ['--version'], { encoding: 'utf8', env })
+  if (probe.error) {
+    return `vale is not on PATH. Install Vale ${PINNED_VALE} (https://github.com/errata-ai/vale/releases/tag/v${PINNED_VALE}) and run again.`
+  }
+  const found = /(\d+\.\d+\.\d+)/.exec(probe.stdout ?? '')?.[1]
+  if (found === PINNED_VALE) return undefined
+  return `vale ${found ?? `(unreadable: ${JSON.stringify((probe.stdout ?? '').trim())})`} is installed, but the docs lint needs exactly ${PINNED_VALE}: other versions read .vale.ini and .vale/lead.ini differently and report different alerts. Install Vale ${PINNED_VALE} from https://github.com/errata-ai/vale/releases/tag/v${PINNED_VALE} and run again.`
+}
+
+function requireVale() {
+  const problem = valeVersionProblem()
+  if (!problem) return
+  console.error(`docs lint: ${problem}`)
+  process.exit(2)
+}
+
+function runLint(args, env) {
+  return spawnSync(process.execPath, [script, ...args], { cwd: repoRoot, encoding: 'utf8', env })
+}
+
+function pinCases() {
+  if (process.platform === 'win32') return
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'reeval-vale-'))
+  const shim = (name, body) => {
+    const bin = path.join(dir, name)
+    mkdirSync(bin, { recursive: true })
+    writeFileSync(path.join(bin, 'vale'), `#!/bin/sh\n${body}\n`)
+    chmodSync(path.join(bin, 'vale'), 0o755)
+    return { ...process.env, PATH: bin }
+  }
+  const [major, minor] = PINNED_VALE.split('.')
+  const cases = [
+    ['an older vale', shim('old', 'echo "vale version 3.12.0"'), /3\.12\.0 is installed/],
+    [
+      'a newer vale',
+      shim('new', `echo "vale version ${major}.${Number(minor) + 1}.0"`),
+      /is installed, but the docs lint needs exactly/,
+    ],
+    ['an unreadable version', shim('odd', 'echo "dev"'), /unreadable/],
+    ['no vale', { ...process.env, PATH: path.join(dir, 'empty') }, /not on PATH/],
+  ]
+  let failed = false
+  for (const [name, env, message] of cases) {
+    const run = runLint([], env)
+    const ok = run.status === 2 && message.test(run.stderr) && run.stderr.includes(PINNED_VALE)
+    console.log(`${ok ? '  ok' : 'FAIL'}  version pin refuses ${name}`)
+    if (!ok) failed = true
+  }
+  rmSync(dir, { recursive: true, force: true })
+  if (failed) {
+    console.error('Self-test failed: the version pin did not stop a mismatched or missing vale.')
+    process.exit(1)
+  }
+}
+
+function leadCases() {
+  const lintLead = (file) => {
+    let out
+    try {
+      out = execFileSync('vale', ['--output=JSON', '--config=.vale/lead.ini', file], {
+        cwd: repoRoot,
+        encoding: 'utf8',
+      })
+    } catch (error) {
+      if (error.status !== 1 || !error.stdout) throw error
+      out = error.stdout
+    }
+    return Object.values(JSON.parse(out || '{}')).flat()
+  }
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'reeval-vale-'))
+  const canary = path.join(dir, 'index.mdx')
+  writeFileSync(
+    canary,
+    [
+      '---',
+      'title: "Introduction"',
+      '---',
+      '',
+      '## Introduction',
+      '',
+      'First paragraph, with your change.',
+      '',
+      'Second paragraph, with your change.',
+      '',
+      'Third paragraph, with your change.',
+      '',
+      'Fourth paragraph, with your change.',
+      '',
+    ].join('\n'),
+  )
+  const flagged = lintLead(canary).filter((a) => a.Check === 'Reeval.Your')
+  rmSync(dir, { recursive: true, force: true })
+  const real = lintLead(leadFile).filter((a) => a.Check === 'Reeval.Your')
+  const canaryOk = flagged.length === 1 && flagged[0].Line === 13
+  const realOk = real.length === 0
+  console.log(
+    `${canaryOk ? '  ok' : 'FAIL'}  lead exemption covers three paragraphs and stops at the fourth`,
+  )
+  console.log(`${realOk ? '  ok' : 'FAIL'}  ${leadFile} has no "your" alert outside its lead`)
+  if (!(canaryOk && realOk)) {
+    console.error('Self-test failed: the lead exemption in .vale/lead.ini does not hold.')
+    process.exit(1)
+  }
+}
 
 function selfTest() {
+  requireVale()
+  pinCases()
+  leadCases()
   const docs = path.join(repoRoot, 'docs')
   const cases = [
     { name: 'no target', args: [], cwd: repoRoot },
@@ -67,6 +192,8 @@ if (process.argv[2] === '--self-test') {
   selfTest()
   process.exit(0)
 }
+
+requireVale()
 
 const toRoot = (t) => path.relative(repoRoot, path.resolve(t)).split(path.sep).join('/') || '.'
 const targets = (
