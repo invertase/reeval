@@ -1,5 +1,5 @@
 ---
-title: "Find out whether a change helped an agent"
+title: "Introduction"
 description: "Evaluate how coding agents discover and use developer tools."
 ---
 
@@ -27,6 +27,71 @@ Agents, environments, and attempts multiply into sandboxes, grading reads each w
   alt="Configuration > Agents > Harness + model; Configuration > Environments > Baseline or variant; Configuration > Attempts > Repeat count; Configuration > Sandboxes > Number to spawn; Evaluation > Sandbox > Agent; Evaluation > Sandbox > Environment; Evaluation > Sandbox > Task; Evaluation > Sandbox > Workspace > Artifacts; Evaluation > Sandbox > Workspace > Transcript; Evaluation > Grading > Assertions > Deterministic checks; Evaluation > Grading > Judgments > LLM verdicts; Evaluation > Grading > Questions > Across attempts; Results > Measure > Pass rate; Results > Measure > Tokens; Results > Measure > Tool calls; Results > Measure > Turns; Results > Measure > Cost; Results > Measure > Time; Results > Compare > Lift > Variant against baseline; Results > Compare > Past runs > This run against earlier ones; Results > Analyze > Answers > What the questions found; Results > Analyze > Insights > What the agent did and why"
   width={828}
 />
+
+## Run an evaluation
+
+This one asks for a page in Anthropic's brand, as a baseline without Anthropic's `brand-guidelines` skill and a variant with it:
+
+```ts title="with-library-skill-lift.eval.ts"
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
+
+const page = defineEnvironment('page', ({ directory }) => ({
+  files: directory('./project'),
+}))
+
+const withSkill = page.extendEnvironment('brand-guidelines', ({ skill }) => ({
+  skills: [
+    skill.git('github:anthropics/skills', {
+      ref: 'dbd4588f9e1033efb41dad4bef2f7947c8993d44',
+      path: 'skills',
+      only: ['brand-guidelines'],
+    }),
+  ],
+}))
+
+evaluate(
+  "styles the page in Anthropic's brand",
+  {
+    environment: page,
+    compare: { variants: [withSkill] },
+    runs: 4,
+    gate: { passRate: 0.75 },
+  },
+  async (c) => {
+    // Send a prompt to a harness in this run
+    await c.send(
+      "Give index.html Anthropic's look: write styles.css with Anthropic's " +
+        'brand colors and fonts, and link it from index.html.',
+    )
+
+    await expect.soft(c, 'links styles.css').toHaveFile('index.html', /href="styles\.css"/)
+    await expect.soft(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
+
+    // Check that the css file contains the brand fonts 'Poppins' and 'Lora'
+    await expect(c, 'brand fonts').toHaveFile(
+      'styles.css',
+      /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/,
+    )
+  },
+)
+```
+
+The prompt never names the color or the fonts, so those assertions pass only when the agent knows them. `reeval run` prints the outcome for each side:
+
+```text
+pass             styles the page in Anthropic's brand
+  arm               pass
+  page              0 of 4
+  brand-guidelines  4 of 4  helped
+  check             page    brand-guidelines
+  brand orange      0 of 4  4 of 4
+    expected styles.css to match /#d97757/i
+  brand fonts       0 of 4  4 of 4
+    expected styles.css to match /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/
+  +1 more passed
+```
+
+The variant passed in 4 of 4 attempts and the baseline in none, so the skill `helped`. [Quick start](/quickstart) sets this evaluation up and runs it.
 
 ## What you can find out
 
