@@ -1,92 +1,70 @@
 ---
 title: "Set the agent's model"
-description: "Find the model IDs, keys, and effort values each harness accepts."
+description: "Set the model and reasoning effort that an agent runs with."
 ---
 
-Every harness factory takes a `model` and an optional `effort`. For more information about setting the model and effort on an evaluation, see [Set the model and effort](/agents#set-the-model-and-effort).
+Each harness factory takes a `model`. All but `fx` also take an optional `effort`. In the `reeval.config.ts` file, set both on the factory:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { claudeCode } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: claudeCode({ model: '<model>', effort: 'high' }),
+})
+```
+
+With `effort` set and `id` unset, the cell id ends in `[effort=<value>]`, so one harness at two efforts is two cells. For a runnable project, see [`with-reasoning-effort`](https://github.com/invertase/reeval/tree/main/examples/with-reasoning-effort).
 
 ## `model`
 
-`model` is the ID the harness's own CLI or SDK accepts. For more information about how each key stays on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host). For more information about every provider variable, see [Environment variables](/reference/env-vars).
+`model` is the id the harness's own CLI or SDK accepts, and the harness's key follows from it. For more information about how a key stays on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-reeval refuses a prefixed ID on a harness that takes a bare ID, or a bare ID on `opencode`, at plan time with exit code 2.
+| Factory | Model id | Key |
+|---|---|---|
+| `cursor` | An id `Cursor.models.list()` returns for the key | `CURSOR_API_KEY` |
+| `claudeCode` | An id or alias the `claude` CLI accepts | `ANTHROPIC_API_KEY` |
+| `antigravity` | A slug `agy models` lists, such as `<model>-medium` | `GEMINI_API_KEY` |
+| `opencode` | `<provider>/<model>` | The provider's key |
+| `goose` | An id with no provider prefix | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| `pi` | An id with no provider prefix | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| `codex` | An id with no provider prefix | `OPENAI_API_KEY` |
+| `grokBuild` | An id with no provider prefix | `XAI_API_KEY` |
+| `fx` | `<provider>/<model>` for Vercel AI Gateway, or a bare OpenAI id | `AI_GATEWAY_API_KEY` or `OPENAI_API_KEY` |
 
-<Property name="cursor" type="string" required>
-  A model ID `Cursor.models.list()` returns for the key. Key: `CURSOR_API_KEY`.
-</Property>
-
-<Property name="claudeCode" type="string" required>
-  A model ID or alias the `claude` CLI accepts. Key: `ANTHROPIC_API_KEY`.
-</Property>
-
-<Property name="antigravity" type="string" required>
-  A model slug `agy models` lists for the key, such as `<model>-medium`. The `-low`, `-medium`, and `-high` suffixes set the reasoning effort in the slug. Key: `GEMINI_API_KEY`.
-</Property>
-
-<Property name="opencode" type="string" required>
-  `<provider>/<model>`. The provider picks the key.
-</Property>
-
-For more information about supported providers, see [the `opencode` harness reference](/integrations/agents/opencode).
-
-<Property name="goose" type="string" required>
-  A model ID with no provider prefix. Key: `GOOGLE_GENERATIVE_AI_API_KEY`.
-</Property>
-
-<Property name="pi" type="string" required>
-  A model ID with no provider prefix. Key: `GOOGLE_GENERATIVE_AI_API_KEY`.
-</Property>
-
-<Property name="codex" type="string" required>
-  A model ID with no provider prefix. Key: `OPENAI_API_KEY`.
-</Property>
-
-<Property name="grokBuild" type="string" required>
-  A model ID with no provider prefix. Key: `XAI_API_KEY`.
-</Property>
-
-<Property name="fx" type="string" required>
-  A Vercel AI Gateway ID, `<provider>/<model>`, on `AI_GATEWAY_API_KEY`, or a bare OpenAI model ID on `OPENAI_API_KEY`. `fx` takes no `effort`.
-</Property>
+reeval refuses a prefixed id on a harness that takes a bare id, or a bare id on `opencode`, at plan time with exit code 2. For more information about the providers `opencode` supports, see [the OpenCode harness](/integrations/agents/opencode).
 
 ## `effort`
 
-`effort` is a reasoning-effort value the harness's own CLI or SDK takes. reeval passes it through, records it as `effort` on the cell, and names the cell `<kind>:<model>[effort=<value>]`. Only `claudeCode` checks the value at plan time.
+`effort` is a reasoning-effort value that reeval passes to the harness's own CLI or SDK. It records the value as `effort` on the cell. Only `claudeCode` checks the value at plan time.
 
-<Property name="cursor" type="string" optional>
-  A value of the effort parameter the harness's model catalog names for the model, `reasoning_effort` or `effort`. A model with no such parameter refuses `effort`. Fast is `params.fast`, not `effort`.
-</Property>
+| Factory | Values | Set as |
+|---|---|---|
+| `cursor` | The values of the model's `reasoning_effort` or `effort` parameter in the model catalog | That parameter. A model with no such parameter refuses `effort`. |
+| `claudeCode` | `low`, `medium`, `high`, `xhigh`, `max` | The Agent SDK's `/effort` control. The UI labels `xhigh` as **Extra**. |
+| `antigravity` | `low`, `medium`, `high`, `max` | `agy --effort`. A slug suffix such as `-low` sets the same level through `model`. |
+| `opencode` | A value the model's provider takes | `options.thinking` on an `anthropic/` model, and `options.reasoningEffort` on every other provider |
+| `goose` | `off`, `low`, `medium`, `high`, `max` | `GOOSE_THINKING_EFFORT` |
+| `pi` | `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` | `--thinking` |
+| `codex` | `low`, `medium`, `high`, `xhigh`, `max`, `ultra` | `model_reasoning_effort` |
+| `grokBuild` | `low`, `medium`, `high` | `default_reasoning_effort`, for a model that accepts it |
 
-<Property name="claudeCode" type="'low' | 'medium' | 'high' | 'xhigh' | 'max'" optional>
-  The Agent SDK's `/effort` control. The harness UI displays `xhigh` as **Extra**. reeval refuses any other value at plan time.
-</Property>
+`fx` has no `effort`, and reeval refuses one at plan time with exit code 2. Cursor's fast mode is `params.fast`, not `effort`.
 
-<Property name="antigravity" type="string" optional>
-  The harness passes `low`, `medium`, `high`, or `max` as the `agy --effort` value. A slug suffix such as `-low` sets the same reasoning effort through `model`.
-</Property>
+## Through a gateway
 
-<Property name="opencode" type="string" optional>
-  A value the model's provider takes. reeval sets it as `options.thinking` on an `anthropic/` model and as `options.reasoningEffort` on every other provider.
-</Property>
+A gateway replaces the harness's own key with the gateway's key, such as `AI_GATEWAY_API_KEY` on `vercel()`, and some gateways refuse `effort` on some harnesses. With `effort` set, a harness a gateway only partly serves takes the next gateway in the config's `gateway` list, and a harness that names its gateway stops the plan with exit code 2.
 
-<Property name="goose" type="string" optional>
-  The harness sets `GOOSE_THINKING_EFFORT` to `off`, `low`, `medium`, `high`, or `max`.
-</Property>
+```bash
+npx reeval run --dry-run
+```
 
-<Property name="pi" type="string" optional>
-  The harness passes `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` to `--thinking`.
-</Property>
-
-<Property name="codex" type="string" optional>
-  The harness sets `model_reasoning_effort` to `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`.
-</Property>
-
-<Property name="grokBuild" type="string" optional>
-  The harness sets `default_reasoning_effort` to `low`, `medium`, or `high` for a model that accepts it.
-</Property>
-
-For more information about sending model calls through one gateway key, see [Route models through a gateway](/agents/gateways).
+The plan shows the gateway each harness resolved to. For the harnesses and efforts each gateway serves, see [Harness support](/agents/gateways#harness-support).
 
 ## Check the model that served
 
-The record keeps the model and effort that served each turn beside the configured `model` and `effort`. For more information about `servedModels`, `servedEffort`, and each harness's `resolvedModels` and `resolvedEffort`, see [Run record reference](/reference/record).
+The record keeps the model and effort that served each turn beside the configured `model` and `effort`, in `servedModels` and `servedEffort`. For more information about those fields, and each harness's `resolvedModels` and `resolvedEffort`, see [Run record reference](/reference/record).
+
+## Next
+
+For more information about running one task on several harnesses, see [Compare harnesses](/recipes/agent-comparison).
