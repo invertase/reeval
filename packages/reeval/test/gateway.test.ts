@@ -3,6 +3,7 @@
 // on, the upstream OpenRouter names, and Vercel's credential's expiry.
 import assert from 'node:assert/strict'
 import { afterEach, describe, test } from 'node:test'
+import { vertexProvider } from '@reeval/harness-grok-build'
 import { openCodeConfig } from '@reeval/harness-opencode'
 import { onEndpoint } from '@reeval/sandbox-docker'
 import { checkGateways } from '../src/config.ts'
@@ -912,6 +913,90 @@ describe('Vertex AI routes', () => {
     assert.equal(opencode.modelId?.('gemini-3.8-flash'), 'google-vertex/gemini-3.8-flash')
     const agy = onGlobal({ kind: 'antigravity', model: 'm' } as never)
     assert.ok(agy.localResponses?.some((r) => r.match.host === 'www.googleapis.com'))
+  })
+
+  test("Grok Build on Vertex calls xAI's models on its Chat Completions API, with the token there only", async () => {
+    const regional = vertexSettings(
+      { project: 'reeval-512515', regions: { xai: 'us-central1' } },
+      {},
+    )
+    const agent = agentFor(
+      { kind: 'grok-build', model: 'grok-4.6', gateway: 'vertex' } as AgentHarnessDescriptor,
+      regional,
+    )
+    const host = 'us-central1-aiplatform.googleapis.com'
+    const chat =
+      '/v1/projects/reeval-512515/locations/us-central1/endpoints/openapi/chat/completions'
+    assert.equal(agent.credential, 'Google Cloud credentials')
+    assert.deepEqual(agent.hosts, [host])
+    assert.deepEqual(agentAuth(agent, {}), {}, 'no key from the environment')
+    assert.deepEqual(agent.vertexChat, { project: 'reeval-512515', region: 'us-central1' })
+    assert.equal(agent.modelId?.('grok-4.6'), 'xai/grok-4.6')
+    assert.equal(agent.modelId?.('xai/grok-4.7'), 'xai/grok-4.7')
+    const on = (method: string, h: string, path: string) =>
+      onEndpoint(agent.endpoints, { method, host: h, path, headers: {} })
+    assert.ok(on('POST', host, chat))
+    assert.ok(!on('GET', host, chat))
+    assert.ok(!on('POST', 'aiplatform.googleapis.com', chat))
+    assert.ok(!on('POST', host, chat.replace('reeval-512515', 'other')))
+    assert.ok(!on('POST', 'api.x.ai', '/v1/chat/completions'))
+    assert.deepEqual(agent.modelResponses, agent.endpoints)
+    assert.equal(
+      agent.servedModel?.({ host, path: chat, responseModel: 'xai/grok-4.6' } as never),
+      'xai/grok-4.6',
+    )
+    assert.equal(
+      agent.servedModel?.({ host: 'api.x.ai', path: chat, responseModel: 'm' } as never),
+      undefined,
+    )
+    const rules = agent.token?.transformations('ya29.t') ?? []
+    assert.deepEqual(
+      rules.map((r) => r.match),
+      agent.endpoints,
+    )
+    assert.ok(rules.every((r) => r.transform.headers?.authorization === 'Bearer ya29.t'))
+    assert.equal(agent.adc, undefined, 'Grok reads no service account')
+    const adapter = await agent.adapter({
+      auth: agentAuth(agent, {}),
+      descriptor: { kind: 'grok-build', model: 'grok-4.6' } as never,
+      model: 'xai/grok-4.6',
+      plugins: [],
+      ...(agent.vertexChat ? { vertexChat: agent.vertexChat } : {}),
+    })
+    assert.equal((adapter as { harnessId: string }).harnessId, 'grok-build')
+  })
+
+  test('Grok Build takes vertex() before the direct() that ends the list, and with direct off', () => {
+    const grok = { kind: 'grok-build', model: 'grok-4.6' } as HarnessDescriptor
+    for (const value of [['vertex'], ['vertex', { direct: { enabled: false } }]]) {
+      assert.deepEqual(resolve(checkGateways(value, 'gateway', 'f'), grok), {
+        name: 'vertex',
+        skipped: [],
+      })
+    }
+    assert.equal(resolve(checkGateways(['direct', 'vertex'], 'gateway', 'f'), grok).name, 'direct')
+  })
+
+  test("Grok Build on Vertex gets the token on the path its own base_url makes, a domain-scoped project's too", () => {
+    for (const [project, region] of [
+      ['reeval-512515', 'global'],
+      ['example.com:reeval', 'us-central1'],
+    ] as const) {
+      const agent = agentFor(
+        { kind: 'grok-build', model: 'grok-4.6', gateway: 'vertex' } as AgentHarnessDescriptor,
+        vertexSettings({ project, regions: { xai: region } }, {}),
+      )
+      const base = new URL(`${vertexProvider(project, region).baseUrl}/chat/completions`)
+      assert.ok(
+        onEndpoint(agent.endpoints, {
+          method: 'POST',
+          host: base.host,
+          path: base.pathname,
+          headers: {},
+        }),
+        `${project} in ${region}: ${base.href}`,
+      )
+    }
   })
 
   test('the gateway serves Claude Code on Vertex, not the agents it has no route for', () => {

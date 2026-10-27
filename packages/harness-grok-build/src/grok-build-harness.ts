@@ -27,8 +27,32 @@ export const XAI_API_URL = 'https://api.x.ai'
 export type GrokProvider = {
   readonly name: string
   readonly credentialEnv: string
-  /** The API base, `base_url`, ending in `/v1`. */
+  /** The API base, `base_url`, which Grok adds `/chat/completions` to. */
   readonly baseUrl: string
+  /**
+   * False when whoever runs the sandbox adds the real credential to the model calls itself (a
+   * short-lived access token): the adapter brokers nothing, and Grok sends whatever `auth` holds.
+   */
+  readonly brokered?: false
+}
+
+/** The variable Grok's `env_key` reads on Vertex AI, where the sandbox's gateway adds the token. */
+export const VERTEX_TOKEN_ENV = 'VERTEX_ACCESS_TOKEN'
+
+/**
+ * Vertex AI's OpenAI-compatible Chat Completions API in a project and region, whose model ids
+ * name their publisher (`xai/grok-4.6`). It takes a Google Cloud access token as a Bearer token,
+ * which the sandbox's gateway adds, so nothing is brokered.
+ */
+export function vertexProvider(project: string, region: string): GrokProvider {
+  const host =
+    region === 'global' ? 'aiplatform.googleapis.com' : `${region}-aiplatform.googleapis.com`
+  return {
+    name: 'Vertex AI',
+    credentialEnv: VERTEX_TOKEN_ENV,
+    baseUrl: `https://${host}/v1/projects/${encodeURIComponent(project)}/locations/${region}/endpoints/openapi`,
+    brokered: false,
+  }
 }
 
 /** Vercel AI Gateway's Chat Completions API, whose model ids name their provider (`xai/grok-4.6`). */
@@ -229,11 +253,12 @@ export function createGrokBuild(
       GROK_CREDENTIAL_ENV,
       AI_GATEWAY_PROVIDER.credentialEnv,
       OPENROUTER_PROVIDER.credentialEnv,
+      VERTEX_TOKEN_ENV,
     ],
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[credential]
       const placeholder = sandboxEnv?.[credential]
-      if (!key || !placeholder) return []
+      if (!key || !placeholder || settings.provider?.brokered === false) return []
       return [
         createCredentialRequestTransformation({
           matchUrl: apiUrl,

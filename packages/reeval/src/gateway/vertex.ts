@@ -87,7 +87,12 @@ export type VertexRoute = ModelSpecific & {
   adc?: SandboxAdc
   /** Requests the egress gateway answers itself, never reaching Google. */
   localResponses?: readonly LocalResponse[]
+  /** The project and region of Vertex's Chat Completions API, for an agent that calls it there. */
+  vertexChat?: VertexChat
 }
+
+/** Where Vertex's OpenAI-compatible Chat Completions API is for an agent's calls. */
+export type VertexChat = { project: string; region: string }
 
 /**
  * A service-account file in the sandbox with a key made up for it, which Google's client
@@ -262,6 +267,39 @@ const antigravityUserinfo = (settings: VertexSettings): LocalResponse[] => [
   },
 ]
 
+/** Vertex's id for an xAI model on its Chat Completions API: `xai/<model>`, unless it names a publisher. */
+export const vertexXaiId = (model: string) => (model.includes('/') ? model : `xai/${model}`)
+
+/**
+ * Grok Build with the model as a `[model.<id>]` table on Vertex's OpenAI-compatible Chat
+ * Completions API (`…/endpoints/openapi/chat/completions`) in the `xai` region, its `env_key` a
+ * placeholder the gateway replaces with the token; it then calls nothing on xAI's API.
+ */
+function grokBuild(settings: VertexSettings, source = vertexTokens()): VertexRoute {
+  const region = vertexRegion(settings, 'xai')
+  const endpoints: EndpointMatch[] = [
+    {
+      host: vertexHost(region),
+      path: {
+        // The project as Grok's base_url writes it (`vertexProvider` encodes it).
+        regex: `^/v1/projects/${escapeRegex(encodeURIComponent(settings.project))}/locations/${escapeRegex(region)}/endpoints/openapi/chat/completions(?:\\?.*)?$`,
+      },
+      method: ['POST'],
+    },
+  ]
+  return {
+    credential: 'Google Cloud credentials',
+    endpoints,
+    modelResponses: endpoints,
+    hosts: [vertexHost(region)],
+    servedModel: ({ host, responseModel }) =>
+      host === vertexHost(region) ? responseModel : undefined,
+    modelId: vertexXaiId,
+    vertexChat: { project: settings.project, region },
+    token: { source, transformations: bearerOn(endpoints) },
+  }
+}
+
 /** OpenCode's id for a Gemini model on Vertex: `google-vertex/<model>`. */
 export const openCodeVertexId = (model: string) =>
   `google-vertex/${model.replace(/^(?:google|google-vertex)\//, '')}`
@@ -280,9 +318,13 @@ export const VERTEX_ROUTES: Partial<
   // google-vertex: `/v1beta1/…:streamGenerateContent`, the session's title on the same model, and
   // web search on Exa's keyless MCP server.
   opencode: gemini(['mcp.exa.ai'], () => [], openCodeVertexId),
+  'grok-build': grokBuild,
 }
 
-/** The publisher whose models each harness on Vertex calls, as `reeval doctor` probes them. */
+/**
+ * The publisher whose models each harness on Vertex calls, as `reeval doctor` probes them. Grok
+ * Build's xAI models have no free token count to probe with, so it isn't here.
+ */
 const VERTEX_HARNESS_PUBLISHERS: Partial<Record<AgentKind, VertexPublisher>> = {
   'claude-code': 'anthropic',
   antigravity: 'google',
@@ -292,8 +334,8 @@ const VERTEX_HARNESS_PUBLISHERS: Partial<Record<AgentKind, VertexPublisher>> = {
 }
 
 /**
- * The model a harness on Vertex calls, as `publisher/id`, or undefined for one reeval doesn't
- * route there. Antigravity's `-low`/`-medium`/`-high` ids name an effort the CLI sends beside the
+ * The model a harness on Vertex calls, as `publisher/id`, or undefined for one `reeval doctor`
+ * doesn't probe there. Antigravity's `-low`/`-medium`/`-high` ids name an effort the CLI sends beside the
  * model, so the id it calls has none.
  */
 export function vertexHarnessModel(kind: AgentKind, model: string): string | undefined {

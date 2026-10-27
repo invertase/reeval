@@ -15,6 +15,8 @@ import {
   type GrokProvider,
   grokConfig,
   OPENROUTER_PROVIDER,
+  VERTEX_TOKEN_ENV,
+  vertexProvider,
 } from '../src/grok-build-harness.ts'
 import { GROK_BUILD_BUILTIN_TOOLS } from '../src/grok-build-tools.ts'
 import { VERSION } from '../src/version.ts'
@@ -172,6 +174,25 @@ test("on OpenRouter, the model is a [model.<id>] table on OpenRouter's key", asy
     createGrokBuild({ auth, model: 'm', ...(provider ? { provider } : {}) }).getBootstrap?.({})
   assert.deepEqual(
     await bootstrap({ OPENROUTER_API_KEY: 'k' }, OPENROUTER_PROVIDER),
+    await bootstrap({ [GROK_CREDENTIAL_ENV]: 'k' }),
+  )
+})
+
+test("on Vertex AI, the model is a [model.<id>] table on Vertex's Chat Completions API, brokered by no one", async () => {
+  const global = vertexProvider('reeval-512515', 'global')
+  assert.equal(global.brokered, false)
+  assert.match(
+    grokConfig({ model: 'xai/grok-4.6', provider: global, effort: 'low' }).content,
+    /\nbase_url = "https:\/\/aiplatform\.googleapis\.com\/v1\/projects\/reeval-512515\/locations\/global\/endpoints\/openapi"\nenv_key = "VERTEX_ACCESS_TOKEN"\napi_backend = "chat_completions"\nreasoning_efforts = \[\{ value = "low" \}\]\n/,
+  )
+  assert.equal(
+    vertexProvider('p', 'us-central1').baseUrl,
+    'https://us-central1-aiplatform.googleapis.com/v1/projects/p/locations/us-central1/endpoints/openapi',
+  )
+  const bootstrap = (auth: Record<string, string>, provider?: GrokProvider) =>
+    createGrokBuild({ auth, model: 'm', ...(provider ? { provider } : {}) }).getBootstrap?.({})
+  assert.deepEqual(
+    await bootstrap({ [VERTEX_TOKEN_ENV]: 'placeholder' }, global),
     await bootstrap({ [GROK_CREDENTIAL_ENV]: 'k' }),
   )
 })

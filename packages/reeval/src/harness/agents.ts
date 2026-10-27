@@ -34,7 +34,13 @@ import {
   VERCEL_HOST,
   VERCEL_KEY,
 } from '../gateway/vercel.ts'
-import { type SandboxAdc, VERTEX_ROUTES, type VertexSettings } from '../gateway/vertex.ts'
+import {
+  SANDBOX_ACCESS_TOKEN,
+  type SandboxAdc,
+  VERTEX_ROUTES,
+  type VertexChat,
+  type VertexSettings,
+} from '../gateway/vertex.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import { withoutBom } from '../text.ts'
 import type {
@@ -109,6 +115,8 @@ export type Agent = Layout & {
   adc?: SandboxAdc
   /** Requests the egress gateway answers itself on the agent's route (Vertex's token exchange). */
   localResponses?: readonly LocalResponse[]
+  /** Where Vertex's Chat Completions API is, for an agent that calls it on Vertex (Grok Build). */
+  vertexChat?: VertexChat
   /** The variable the adapter takes the credential as, when not its own name (a gateway's key). */
   authAs?: string
   /** Variables the adapter takes beside the credential, such as the base URL a gateway sets. */
@@ -198,6 +206,8 @@ export type Agent = Layout & {
     env?: Record<string, string>
     /** On Vertex through `adc`: the project, region and where the service account was written. */
     vertex?: AdapterVertex
+    /** `vertexChat`, for the agent's provider. */
+    vertexChat?: VertexChat
     descriptor: AgentHarnessDescriptor
     /** The model id the agent asks for: `modelId` of the harness's own. */
     model: string
@@ -1154,14 +1164,23 @@ export const AGENTS: Record<AgentKind, Agent> = {
     modelResponses: XAI_MODEL_RESPONSES,
     servedModel: xaiServedModel,
     mcpServers: acpMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor, plugins, model }) =>
-      (await import('@reeval/harness-grok-build')).createGrokBuild({
-        auth,
-        ...(auth[VERCEL_KEY]
-          ? { provider: (await import('@reeval/harness-grok-build')).AI_GATEWAY_PROVIDER }
-          : auth[OPENROUTER_KEY]
-            ? { provider: (await import('@reeval/harness-grok-build')).OPENROUTER_PROVIDER }
-            : {}),
+    adapter: async ({ auth, mcpServers, descriptor, plugins, model, vertexChat }) => {
+      const grok = await import('@reeval/harness-grok-build')
+      return grok.createGrokBuild({
+        // On Vertex the gateway adds the token, so Grok's env_key holds a placeholder.
+        ...(vertexChat
+          ? {
+              auth: { [grok.VERTEX_TOKEN_ENV]: SANDBOX_ACCESS_TOKEN },
+              provider: grok.vertexProvider(vertexChat.project, vertexChat.region),
+            }
+          : {
+              auth,
+              ...(auth[VERCEL_KEY]
+                ? { provider: grok.AI_GATEWAY_PROVIDER }
+                : auth[OPENROUTER_KEY]
+                  ? { provider: grok.OPENROUTER_PROVIDER }
+                  : {}),
+            }),
         model,
         ...(plugins.length
           ? {
@@ -1178,7 +1197,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),
         requireCredentialBrokering: true,
-      }),
+      })
+    },
   },
 }
 
