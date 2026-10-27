@@ -18,36 +18,13 @@ With `effort` set and `id` unset, the cell id ends in `[effort=<value>]`, so one
 
 ## `model`
 
-`model` is the id the harness's own CLI or SDK accepts, and the harness's key follows from it. For more information about how a key stays on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
+`model` is the id the harness's own CLI or SDK accepts, and the harness's key follows from it. For more information about the key each harness reads, see [Harness behavior](/reference/options#harness-behavior). For more information about how a key stays on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-| Factory | Model id | Key |
-|---|---|---|
-| `cursor` | An id `Cursor.models.list()` returns for the key | `CURSOR_API_KEY` |
-| `claudeCode` | An id or alias the `claude` CLI accepts | `ANTHROPIC_API_KEY` |
-| `antigravity` | A slug `agy models` lists, such as `<model>-medium` | `GEMINI_API_KEY` |
-| `opencode` | `<provider>/<model>` | The provider's key |
-| `goose` | An id with no provider prefix | `GOOGLE_GENERATIVE_AI_API_KEY` |
-| `pi` | An id with no provider prefix | `GOOGLE_GENERATIVE_AI_API_KEY` |
-| `codex` | An id with no provider prefix | `OPENAI_API_KEY` |
-| `grokBuild` | An id with no provider prefix | `XAI_API_KEY` |
-| `fx` | `<provider>/<model>` for Vercel AI Gateway, or a bare OpenAI id | `AI_GATEWAY_API_KEY` or `OPENAI_API_KEY` |
-
-reeval refuses a prefixed id on a harness that takes a bare id, or a bare id on `opencode`, at plan time with exit code 2. For more information about the providers `opencode` supports, see [the OpenCode harness](/integrations/agents/opencode).
+reeval refuses a prefixed id on a harness that takes a bare id, or a bare id on `opencode`, at plan time with exit code 2. Each harness page's `model` entry names the ids it accepts. For more information about the providers `opencode` supports, see [the OpenCode harness](/integrations/agents/opencode).
 
 ## `effort`
 
-`effort` is a reasoning-effort value that reeval passes to the harness's own CLI or SDK. It records the value as `effort` on the cell. Only `claudeCode` checks the value at plan time.
-
-| Factory | Values | Set as |
-|---|---|---|
-| `cursor` | The values of the model's `reasoning_effort` or `effort` parameter in the model catalog | That parameter. A model with no such parameter refuses `effort`. |
-| `claudeCode` | `low`, `medium`, `high`, `xhigh`, `max` | The Agent SDK's `/effort` control. The UI labels `xhigh` as **Extra**. |
-| `antigravity` | `low`, `medium`, `high`, `max` | `agy --effort`. A slug suffix such as `-low` sets the same level through `model`. |
-| `opencode` | A value the model's provider takes | `options.thinking` on an `anthropic/` model, and `options.reasoningEffort` on every other provider |
-| `goose` | `off`, `low`, `medium`, `high`, `max` | `GOOSE_THINKING_EFFORT` |
-| `pi` | `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` | `--thinking` |
-| `codex` | `low`, `medium`, `high`, `xhigh`, `max`, `ultra` | `model_reasoning_effort` |
-| `grokBuild` | `low`, `medium`, `high` | `default_reasoning_effort`, for a model that accepts it |
+`effort` is a reasoning-effort value that reeval passes to the harness's own CLI or SDK. It records the value as `effort` on the cell. Only `claudeCode` checks the value at plan time. The `effort` entry on a harness page names the values that harness takes and where reeval sets them.
 
 `fx` has no `effort`, and reeval refuses one at plan time with exit code 2. Cursor's fast mode is `params.fast`, not `effort`.
 

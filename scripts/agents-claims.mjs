@@ -19,6 +19,9 @@ const sentences = (text) =>
  *    provider table names the model in the URL for others too;
  *  - an option every harness schema has, defined on a harness page instead of the landing;
  *  - a harness page with no plugin section or generated plugin block;
+ *  - the landing's cell-id default with no mention of the last-segment rule `opencode` ids follow;
+ *  - the model page holding the harness support matrix instead of linking its home in
+ *    reference/options;
  *  - a heading that two or more harness pages share (`rules`, `skills`, `mcp`, `usage`,
  *    `servedModels`, `web-search`, `web-fetch`): what differs by harness is one entry in
  *    reference/options, and each harness page links to it.
@@ -71,6 +74,35 @@ export async function agentsProblems({ root, docsDir }) {
         )
       }
     }
+  }
+
+  const landingText = read(landing)
+  if (/\bDefaults to the harness name followed by the model\b/.test(landingText)) {
+    const opencodeRule = sentences(landingText).some(
+      (s) => /`opencode`/.test(s) && /\blast `\/`/.test(s),
+    )
+    if (!opencodeRule) {
+      problems.push(
+        "agents/index states the cell-id default (harness name, then model) but not that an opencode id keeps only the part after its last `/` (harnessId in src/options.ts sanitizes with split('/').at(-1))",
+      )
+    }
+  }
+
+  const modelText = read(join(docsDir, 'agents/model.mdx'))
+  const matrixRows = modelText
+    .split('\n')
+    .filter(
+      (l) => l.startsWith('|') && schemas.some((s) => l.includes(`\`${AGENTS[s.kind].factory}\``)),
+    )
+  if (matrixRows.length) {
+    problems.push(
+      `agents/model has a table row per harness (${matrixRows.length} rows): the per-harness matrix lives in reference/options#harness-behavior and each harness page, so link to them`,
+    )
+  }
+  if (!modelText.includes('(/reference/options#harness-behavior)')) {
+    problems.push(
+      'agents/model has no link to /reference/options#harness-behavior, the home of the harness support matrix',
+    )
   }
 
   const common = schemas

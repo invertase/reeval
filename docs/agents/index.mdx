@@ -36,7 +36,7 @@ harness: claudeCode({
 ```
 
 <Property name="id" type="string" optional>
-  Cell id. Defaults to the harness name followed by the model, such as `claude-code:<model>`, with `[effort=<value>]` added when `effort` is set. The id uses letters, digits, and `._:@+-=[]`.
+  Cell id. Defaults to the harness name followed by the model, such as `claude-code:<model>`, with `[effort=<value>]` added when `effort` is set. An id with a `/`, such as the `<provider>/<model>` id of `opencode`, keeps only the part after its last `/`, so `google/gemini-3.8-flash` gives `opencode:gemini-3.8-flash`. The id uses letters, digits, and `._:@+-=[]`.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>

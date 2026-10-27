@@ -50,7 +50,7 @@ For more information about model ids and effort values, see [Set the agent's mod
 
 ## `plugins`
 
-reeval passes each plugin's directory to Grok Build as a plugin directory, and its MCP servers over ACP.
+reeval passes each plugin's directory to Grok Build as a plugin directory, and Grok Build loads the plugin's MCP servers from it. Over ACP, reeval sends only the cell's own MCP servers, and it gives the translator each plugin server's name, so the tool calls get their `mcp__<server>__<tool>` names.
 
 [//]: # (generated:harness-plugins:grok-build)
 
