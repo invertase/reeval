@@ -31,7 +31,7 @@ With the default include patterns, the history folder is the `evals/.history` di
 </Step>
 <Step title="Run the profile">
 
-Run your evaluations with the `track` profile:
+Run the evaluations with the `track` profile:
 
 ```bash
 npx reeval run --profile track
@@ -46,7 +46,7 @@ recorded evals/.history/<run-id>.json + <n> artifact files …
 </Step>
 <Step title="Commit the history folder">
 
-Commit the history folder beside your evaluations:
+Commit the history folder beside the evaluations:
 
 ```bash
 git add evals/.history
@@ -75,7 +75,7 @@ npx reeval query eval_trend
 
 Each row is one evaluation on one run, with its outcome and its pass rate, `pass_at_1`. The outcome is `pass`, `fail`, `infra_error`, or `skipped`.
 
-A run in the history folder has `recorded` set to 1. A run that exists only in the `.reeval/runs` directory has `recorded` set to 0. For more information about choosing columns, see [Write your own SQL](/results/queries#write-your-own-sql).
+A run in the history folder has `recorded` set to 1. A run that exists only in the `.reeval/runs` directory has `recorded` set to 0. For more information about choosing columns, see [Query past runs](/results/queries#write-your-own-sql).
 
 </Step>
 <Step title="Find flaky cells">
