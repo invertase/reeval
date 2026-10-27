@@ -1,0 +1,7 @@
+extends: existence
+message: "'%s' tells the reader what they prefer. State what the value means, as in 'in order of preference'."
+level: error
+ignorecase: true
+tokens:
+  - you prefer
+  - you'd prefer
