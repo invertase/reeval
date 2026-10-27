@@ -1,0 +1,81 @@
+# typos (crate-ci/typos): US English spelling and common misspellings. CI runs it in the lint job.
+[default]
+locale = "en-us"
+extend-ignore-re = [
+  # Persisted names that stay British: the run record's `judgements` and `labelled`, the live
+  # progress phase `cancelling`, and the history database's `judgements` table and `labelled`
+  # column, wherever code, a schema or SQL names them.
+  "\\.(judgements|labelled)\\b",
+  "\\b(judgements|labelled|cancelling)\\??:",
+  "['\"`](judgements|labelled|cancelling)['\"`]",
+  "[{,]\\s*(judgements|labelled)\\s*[,}=]",
+  "(?i)\\b(TABLE|FROM|INTO|JOIN)\\s+judgements\\b",
+  "\\blabelled INTEGER\\b",
+  "attempts, judgements, tool_calls",
+  # Upstream names: GitHub Actions' `cancelled()` and job results, asyncio, ACP's stop reason, the
+  # Cursor SDK's statuses, Antigravity's states, and OpenCode's own output.
+  "\\bcancelled\\(\\)",
+  "\\bCancelledError\\b",
+  "\\bCANCELLED\\b",
+  "['\"]cancelled['\"]",
+  "\\bcancelled:",
+  "\\bcancelled\\.ndjson\\b",
+  "Web search cancelled",
+  # Not words: hashes, tokens, llhttp's error codes, and text cut short on purpose.
+  "\\b[0-9a-f]{7,}\\b",
+  "pypi-AgE\\S*",
+  "zq8Kf93nd0w2LmXp4vT7",
+  "\\bHPE_\\w*",
+  "'Hel'",
+  "lib\\\\/bui…",
+  "/\\\\/hom\\|",
+  "caf\\\\",
+  "/caf\\|",
+]
+
+[default.extend-identifiers]
+PNGs = "PNGs"
+PnP = "PnP"
+ba = "ba"
+froms = "froms"
+
+# British spellings typos' en-us locale accepts.
+[default.extend-words]
+cancelled = "canceled"
+cancelling = "canceling"
+cancellable = "cancelable"
+catalogue = "catalog"
+misspelt = "misspelled"
+tokenise = "tokenize"
+tokenised = "tokenized"
+tokeniser = "tokenizer"
+parameterised = "parameterized"
+unserialisable = "unserializable"
+
+[files]
+extend-exclude = [
+  "docs/",
+  "docs.json",
+  "CHANGELOG.md",
+  "THIRD_PARTY_NOTICES.md",
+  "LICENSE*",
+  "scripts/third-party-licenses/",
+  "patches/",
+  "pnpm-lock.yaml",
+  "uv.lock",
+  "*.ndjson",
+  "packages/reeval/test/fixtures/records/",
+  "packages/reeval/test/fixtures/schema/",
+  "packages/reeval/test/fixtures/analysis/",
+  # Captured agent output.
+  "packages/reeval/test/replay/",
+  "packages/reeval/test/fixtures/claude-code-bridge/",
+  # Misspelled on purpose: refusals and "did you mean" hints.
+  "packages/reeval/test/refusals/",
+  "packages/reeval/test/options.test.ts",
+  "packages/reeval/test/judge-state.test.ts",
+  "packages/reeval/test/contract-schemas.test.ts",
+  "packages/reeval/test/cli.test.ts",
+  "packages/reeval/test/query.test.ts",
+  "packages/reeval-python/tests/test_types.py",
+]

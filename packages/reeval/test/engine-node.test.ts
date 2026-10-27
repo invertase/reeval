@@ -631,8 +631,8 @@ describe('runEngine: running', () => {
         ctl.exit()
       }, 2)
     })
-    const r = await engine({ run: one, onCancellable: (c) => (cancel = c) }, spawn)
-    assert.equal(r.cancelled, true)
+    const r = await engine({ run: one, onCancelable: (c) => (cancel = c) }, spawn)
+    assert.equal(r.canceled, true)
     assert.deepEqual(
       spawned.filter((s) => !s.endsWith('collect')),
       ['a.eval.ts:0'],
@@ -648,8 +648,8 @@ describe('runEngine: running', () => {
   test('a cancel before any worker starts starts none', async () => {
     const { run } = project(['evals/a.eval.ts'])
     const { spawn, spawned } = fakeSpawn(passing({ 'a.eval.ts': [test0(0, 'a')] }))
-    const r = await engine({ run, onCancellable: (cancel) => cancel() }, spawn)
-    assert.equal(r.cancelled, true)
+    const r = await engine({ run, onCancelable: (cancel) => cancel() }, spawn)
+    assert.equal(r.canceled, true)
     assert.deepEqual(spawned, ['a.eval.ts:collect'])
     assert.deepEqual(r.evals, [])
   })
@@ -680,8 +680,8 @@ describe('runEngine: running', () => {
       },
       { helloAfter: (n) => (n === 1 ? 0 : 30) },
     )
-    const r = await engine({ run, onCancellable: (cancel) => setTimeout(cancel, 10) }, spawn)
-    assert.equal(r.cancelled, true)
+    const r = await engine({ run, onCancelable: (cancel) => setTimeout(cancel, 10) }, spawn)
+    assert.equal(r.canceled, true)
     assert.deepEqual(
       r.evals.map((e) => e.state),
       ['skipped'],

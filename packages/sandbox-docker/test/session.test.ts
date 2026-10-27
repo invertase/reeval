@@ -1,4 +1,4 @@
-// Session behaviours in a real container: what an abort or kill leaves
+// Session behaviors in a real container: what an abort or kill leaves
 // running, and what a create leaves behind.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -42,7 +42,7 @@ let n = 0
 const longCommand = () => `sleep 3000.${process.pid}${++n}`
 
 /** Containers, running or not, with the test label `value`. */
-const labelled = (value: string) =>
+const labeled = (value: string) =>
   execFileSync(CLI, ['ps', '-aq', '--filter', `label=ai.reeval.test=${value}`], {
     encoding: 'utf8',
   }).trim()
@@ -72,10 +72,10 @@ describe('create and abort', { skip, timeout: 120_000 }, () => {
           outcomes.push(`${ms}ms: ${(error as Error).message}`)
         }
         try {
-          await eventually(`a container for ${label}`, async () => labelled(label) === '', 10_000)
+          await eventually(`a container for ${label}`, async () => labeled(label) === '', 10_000)
         } catch {
           left.push(`${ms}ms`)
-          const ids = labelled(label).split(/\s+/).filter(Boolean)
+          const ids = labeled(label).split(/\s+/).filter(Boolean)
           if (ids.length) execFileSync(CLI, ['rm', '-f', ...ids])
         }
       }),
@@ -94,7 +94,7 @@ describe('create and abort', { skip, timeout: 120_000 }, () => {
       labels: { 'ai.reeval.test': label },
     })
     await assert.rejects(
-      eventually('expected to time out', async () => labelled(label) === '', 1000),
+      eventually('expected to time out', async () => labeled(label) === '', 1000),
       /expected to time out/,
     )
     await s.destroy()

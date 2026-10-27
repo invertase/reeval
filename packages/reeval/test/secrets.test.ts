@@ -1402,7 +1402,7 @@ describe('redacting credential shapes', () => {
 })
 
 // Last in the file: the short secrets these register would otherwise reach every test above.
-describe('redacting serialised JSON', () => {
+describe('redacting serialized JSON', () => {
   const record = {
     error: null,
     ok: true,
@@ -1424,7 +1424,7 @@ describe('redacting serialised JSON', () => {
       redactJsonText(`${JSON.stringify(record, null, 2)}\n`, {}),
       `${JSON.stringify({ ...record, text: 'PIN [REDACTED], set to [REDACTED]' }, null, 2)}\n`,
     )
-    // Twin: redacting the serialised text breaks it.
+    // Twin: redacting the serialized text breaks it.
     assert.throws(() => JSON.parse(redactSecrets(JSON.stringify(record), {})))
   })
 

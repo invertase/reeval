@@ -247,12 +247,12 @@ function checkMessage(line: Line, where: string, requests: Map<string, string>):
       assert.equal(requests.get(m.id as string), m.op, `${where}: answers request ${m.id}`)
     }
   } else if (line.record) {
-    const { assertions = [], judgements = [] } = line.record as {
+    const { assertions = [], judgements: judgments = [] } = line.record as {
       assertions?: unknown[]
       judgements?: Array<Record<string, unknown>>
     }
     for (const a of assertions) assert.ok(assertionRecordSchema.safeParse(a).success, where)
-    for (const { retries: _, ...j } of judgements)
+    for (const { retries: _, ...j } of judgments)
       assert.ok(verdictSchema.or(judgeFailureSchema).safeParse(j).success, where)
   } else assert.ok(line.case, `${where}: a line is a header, runner, reeval or record`)
 }
@@ -278,7 +278,7 @@ describe('context goldens', () => {
       assert.ok(existsSync(out), `${name}: the runner wrote nothing\n${r.stdout}${r.stderr}`)
       const entry = evals.find((e) => e.name === name)
       assert.ok(entry, `${name}: no eval in the run record`)
-      const { outcome, error, assertions = [], judgements, checks, files } = entry.trial
+      const { outcome, error, assertions = [], judgements: judgments, checks, files } = entry.trial
       type Graded = { question: string; state: { task?: string; output?: unknown } }
       const inputs: Graded[] = files.judgeInput ? JSON.parse(entry.read(files.judgeInput.path)) : []
       const lines = parse(readFileSync(out, 'utf8'))
@@ -287,7 +287,7 @@ describe('context goldens', () => {
           outcome,
           error,
           assertions,
-          judgements: judgements.map(({ key: _, ...j }) => j),
+          judgements: judgments.map(({ key: _, ...j }) => j),
           ...(inputs.length
             ? {
                 graded: inputs.map(({ question, state: { task, output } }) => ({

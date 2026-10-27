@@ -24,7 +24,7 @@ Code through Vercel, and `--profile <name>` runs any agent in
 [`profiles.ts`](../profiles.ts) into the example and import it from `./profiles.ts`, or inline the
 one profile you need.
 
-**What to look at:** the plan's note, then the judgement in the run's record. This run had
+**What to look at:** the plan's note, then the judgment in the run's record. This run had
 `ANTHROPIC_API_KEY` and `TYPESAFE_AI_API_KEY` unset:
 
 ```text

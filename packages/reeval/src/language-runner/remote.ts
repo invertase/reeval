@@ -98,12 +98,12 @@ function remoteBody(
       const onAbort = () => {
         const reason = t.signal.reason
         const message =
-          reason instanceof Error ? reason.message : String(reason ?? 'The run was cancelled')
+          reason instanceof Error ? reason.message : String(reason ?? 'The run was canceled')
         runner.send({
           type: 'abort',
           key: attemptKey,
           reason:
-            reason instanceof Error && reason.name === 'TimeoutError' ? 'timeout' : 'cancelled',
+            reason instanceof Error && reason.name === 'TimeoutError' ? 'timeout' : 'canceled',
           message,
         })
         finish(() => reject(reason))

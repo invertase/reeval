@@ -1,4 +1,4 @@
-# The real-agent tier: real agents in Docker, nightly, on demand, and on PRs labelled
+# The real-agent tier: real agents in Docker, nightly, on demand, and on PRs labeled
 # `real-agents`. It spends model credit, so it runs only in this repository (never a fork's code).
 # A missing secret fails the rows that need it, naming the variable: asked for, the real tier never
 # skips. One run at a time.

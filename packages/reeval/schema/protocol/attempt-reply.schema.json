@@ -590,7 +590,7 @@
       "additionalProperties": false
     },
     "TranscriptEvent": {
-      "description": "Normalised agent events. Each tool call is one event, merged with its result; `durationMs` is wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null when the harness never reported the end. Long shell or edit calls set `stalled: true`.",
+      "description": "Normalized agent events. Each tool call is one event, merged with its result; `durationMs` is wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null when the harness never reported the end. Long shell or edit calls set `stalled: true`.",
       "oneOf": [
         {
           "type": "object",

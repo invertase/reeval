@@ -369,7 +369,7 @@ describe('plain renderer', () => {
     assert.match(out, /\[adds#1 cursor\] {2}\+1:09 stdout \| seeding greet\.js/)
   })
 
-  test('colour: prefixes get Turborepo palette colours, group titles stay plain', () => {
+  test('color: prefixes get Turborepo palette colors, group titles stay plain', () => {
     const out = render(interleaved, options({ githubActions: true }), true)
     assert.ok(out.includes('\x1b[36m[creates#1 cursor]\x1b[39m'))
     assert.ok(out.includes('\x1b[35m[adds#1 cursor]\x1b[39m'))
@@ -483,7 +483,7 @@ test('a check with retries says which try it ended on', () => {
 })
 
 describe('agent renderer', () => {
-  test('prints nothing per attempt, then the result without colour', () => {
+  test('prints nothing per attempt, then the result without color', () => {
     let text = ''
     const renderer = new AgentRenderer({ out: { write: (chunk: string) => (text += chunk) } })
     for (const e of interleaved) renderer.onEvent(e)
@@ -526,7 +526,7 @@ describe('output mode', () => {
     assert.equal(resolve({ CI: '1', REEVAL_LOG_ORDER: 'stream' }).logOrder, 'stream')
   })
 
-  test('GitHub Actions: grouped, no detail prefix, colour on', () => {
+  test('GitHub Actions: grouped, no detail prefix, color on', () => {
     const o = resolve({ GITHUB_ACTIONS: 'true' }, false)
     assert.deepEqual(
       [o.logOrder, o.logPrefix, o.color, o.githubActions],
@@ -538,7 +538,7 @@ describe('output mode', () => {
     )
   })
 
-  test('colour: NO_COLOR, then FORCE_COLOR, never for agents, else when a TTY', () => {
+  test('color: NO_COLOR, then FORCE_COLOR, never for agents, else when a TTY', () => {
     assert.equal(resolve({ NO_COLOR: '1', FORCE_COLOR: '1' }).color, false)
     assert.equal(resolve({ FORCE_COLOR: '1' }, false).color, true)
     assert.equal(resolve({ FORCE_COLOR: '0' }).color, false)

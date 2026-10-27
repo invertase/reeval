@@ -68,7 +68,7 @@ describe('formatError', () => {
         { name: 'E', message: 'm', stack: stack(`${file}:5:3`) },
         { root, hide },
       ).includes('\x1b[36m'),
-      'the highlighted frame is coloured',
+      'the highlighted frame is colored',
     )
   })
 

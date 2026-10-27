@@ -283,12 +283,12 @@ function toolInput(part: StampedPart['part']): unknown {
 
 /**
  * Turns an AI SDK harness stream into reeval transcript events: text and reasoning blocks joined,
- * each tool call merged with its result, edits normalised to `file-edit`, web tools given their
+ * each tool call merged with its result, edits normalized to `file-edit`, web tools given their
  * query or URL, and the harness's duplicate `fileChange` events dropped. Cursor's tool durations
  * come from its runner's own `tool_call` events, because tool results are only flushed at the
  * end of a step.
  */
-export function normaliseStream(parts: StampedPart[], startedAt: number): TranscriptEvent[] {
+export function normalizeStream(parts: StampedPart[], startedAt: number): TranscriptEvent[] {
   const timing = new Map<string, Timing>()
   for (const { ms, part } of parts) {
     if (part.type !== 'raw') continue

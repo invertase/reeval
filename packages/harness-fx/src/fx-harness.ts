@@ -37,7 +37,7 @@ export const FX_HOME_SKILLS_DIR = '.fx/skills'
 /** The repo skill directory fx reads. */
 export const FX_WORKSPACE_SKILLS_DIR = '.fx/skills'
 
-/** Headless and pinned: no self-upgrade, no sounds, no colour. */
+/** Headless and pinned: no self-upgrade, no sounds, no color. */
 export const FX_QUIET_ENV = {
   FX_AUTO_UPGRADE: '0',
   FX_SOUND: '0',
@@ -47,7 +47,7 @@ export const FX_QUIET_ENV = {
 /**
  * fx's HTTP client ignores `HTTPS_PROXY`, so it can't reach the sandbox's egress gateway itself.
  * It talks plain HTTP to this relay on localhost (fx allows `http://` there), which forwards each
- * request with Node's `fetch`, which honours the proxy (`NODE_USE_ENV_PROXY`) and the gateway's CA.
+ * request with Node's `fetch`, which honors the proxy (`NODE_USE_ENV_PROXY`) and the gateway's CA.
  *
  * On a Chat Completions call it also adds `FX_RELAY_EFFORT` as `reasoning_effort`, which fx sends
  * a configured provider none of. With `FX_RELAY_GOOGLE=1` it makes Google's Chat Completions

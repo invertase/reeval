@@ -307,7 +307,7 @@ describe('stream translation', () => {
   })
 })
 
-describe('a failed or cancelled turn, as the runner reports it (SDK 1.0.32)', () => {
+describe('a failed or canceled turn, as the runner reports it (SDK 1.0.32)', () => {
   test("a rejected key: the runner's error line is the turn's error", () => {
     const { parts } = translate(fixture('bad-key.ndjson'), { exitCode: 0 })
     const error = parts.find((p) => p.type === 'error')
@@ -316,7 +316,7 @@ describe('a failed or cancelled turn, as the runner reports it (SDK 1.0.32)', ()
     assert.equal(finish?.type === 'finish' && finish.finishReason.unified, 'error')
   })
 
-  test('a turn reeval cancelled mid-edit: no error, the open edit closed, finish cancelled', () => {
+  test('a turn reeval canceled mid-edit: no error, the open edit closed, finish canceled', () => {
     const { parts } = translate(fixture('cancelled.ndjson'), { exitCode: 0 })
     assert.equal(
       parts.some((p) => p.type === 'error'),

@@ -99,7 +99,7 @@ no gateway, so the judge, analysis and captures take only their provider's own k
 `gateway: [openrouter()]` runs Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi on
 OpenRouter with one `OPENROUTER_API_KEY` (Cursor, Antigravity, and `effort` on fx, on Claude Code or
 on Goose or OpenCode with a model other than Gemini, fall through). Every OpenRouter call records its upstream provider and cost
-(`attempts[].upstreams`, `reportedCostUsd`; a judgement's `upstream`, `costUsd`).
+(`attempts[].upstreams`, `reportedCostUsd`; a judgment's `upstream`, `costUsd`).
 `openrouter({ fallbacks: true })` lets reeval's own calls (judge, analysis, captures) fail over
 between upstreams; the agents' calls take OpenRouter's routing whatever it says. Write OpenCode
 ids as `anthropic/…`, never `openrouter/…` or `vercel/…`.

@@ -115,7 +115,7 @@ export function resolveOutput(input: {
   const outputLogs: OutputLogs =
     logs && logs !== 'auto' ? logs : flags.verbose ? 'full' : 'errors-only'
 
-  // GitHub Actions renders ANSI colour even though stdout isn't a TTY.
+  // GitHub Actions renders ANSI color even though stdout isn't a TTY.
   const color = env.NO_COLOR
     ? false
     : env.FORCE_COLOR !== undefined && env.FORCE_COLOR !== ''

@@ -86,7 +86,7 @@ export function redactionLine(b: ReportBundle): string {
   return `${plural(masked, 'secret value')} masked${already}; ${paths.join(', ')}`
 }
 
-/** The terminal summary, one labelled line each. */
+/** The terminal summary, one labeled line each. */
 export function summaryLines(b: ReportBundle, attached: number): string[] {
   const rows: Array<[string, string | null]> = [
     ['versions', versionsLine(b)],

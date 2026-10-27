@@ -2,7 +2,7 @@
 name: house-greeting
 license: MIT
 description: >-
-  The organisation's greeting style.
+  The organization's greeting style.
   Use when writing greetings.
 ---
 

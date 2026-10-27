@@ -7,7 +7,7 @@ export const MODULES = [
   'branches',
   'budgets',
   'carts',
-  'catalogue',
+  'catalog',
   'channels',
   'checkout',
   'comments',

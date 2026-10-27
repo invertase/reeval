@@ -828,7 +828,7 @@ async function retry<T>(fn: () => Promise<T>, tries = 30): Promise<T> {
 }
 
 describe('image info', { skip: !dockerReady && `needs Docker and ${DEFAULT_IMAGE}` }, () => {
-  test('reads labelled images and images without labels', async () => {
+  test('reads labeled images and images without labels', async () => {
     const { imageInfo } = await import('../src/docker-cli.ts')
     const ours = await imageInfo(DEFAULT_IMAGE, ENGINE)
     assert.match(ours?.labels['ai.reeval.agent-version'] ?? '', /\d/)

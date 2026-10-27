@@ -179,7 +179,7 @@ const NPM_VERSION = /^[\w.^~<>=|*+][\w.^~<>=|*+ -]*$/
 /** A source name Claude Code resolves under `metadata.pluginRoot`. */
 const BARE_SOURCE = /^[A-Za-z0-9][-A-Za-z0-9._]*$/
 
-/** `metadata.pluginRoot` as Claude Code normalises it (`.` for the root), or undefined when it ignores it. */
+/** `metadata.pluginRoot` as Claude Code normalizes it (`.` for the root), or undefined when it ignores it. */
 function pluginRootOf(metadata: unknown): string | undefined {
   const root = isRecord(metadata) ? metadata.pluginRoot : undefined
   if (typeof root !== 'string' || !root || root.startsWith('/') || /[\\:]/.test(root)) {
@@ -190,7 +190,7 @@ function pluginRootOf(metadata: unknown): string | undefined {
   return clean.split('/').some((s) => s === '' || s === '.' || s === '..') ? undefined : clean
 }
 
-/** A path in the marketplace's source, normalised, or undefined when it leaves it. */
+/** A path in the marketplace's source, normalized, or undefined when it leaves it. */
 function insideRoot(path: string): string | undefined {
   const clean = posix.normalize(path).replace(/\/+$/, '')
   if (posix.isAbsolute(clean) || clean === '..' || clean.startsWith('../')) return undefined

@@ -58,7 +58,7 @@ def test_two_bodies_on_one_attempt_id_keep_their_own_calls(host: Host) -> None:
 def test_an_abort_stops_only_the_body_it_names(host: Host) -> None:
     host.start("sleeps then calls", "k1")
     host.start("calls", "k2")
-    host.abort("k1", "cancelled", "x")
+    host.abort("k1", "canceled", "x")
     assert "error" not in host.done("k2")
     assert host.done("k1")["error"] == {"name": "AbortError", "message": "x"}
 
@@ -90,7 +90,7 @@ def test_bytes_go_as_base64_and_a_judge_without_options_sends_none(host: Host) -
 
 def test_a_body_the_runner_cancels_without_an_abort_ends_with_an_error() -> None:
     from reeval_python.runner import (
-        _cancelled_done,  # pyright: ignore[reportPrivateUsage]
+        _canceled_done,  # pyright: ignore[reportPrivateUsage]
         _Connection,  # pyright: ignore[reportPrivateUsage]
     )
 
@@ -101,9 +101,9 @@ def test_a_body_the_runner_cancels_without_an_abort_ends_with_an_error() -> None
             written.append(msg)
 
     conn = _Connection(Frames())  # type: ignore[arg-type]
-    _cancelled_done(conn, "k1")
+    _canceled_done(conn, "k1")
     conn.abort("k2", "TimeoutError", "Eval timed out after 1s")
-    _cancelled_done(conn, "k2")
+    _canceled_done(conn, "k2")
     assert written == [
         {
             "type": "done",

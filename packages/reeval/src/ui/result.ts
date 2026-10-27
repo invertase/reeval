@@ -17,7 +17,7 @@ export function resultLines(c: Colors, e: RunEnd, verbose: boolean): string[] {
       ? [c.yellow('Budget reached: attempts that hadn’t started were skipped')]
       : []),
     ...(record.status === 'interrupted'
-      ? [c.yellow('Interrupted: attempts that hadn’t finished were cancelled')]
+      ? [c.yellow('Interrupted: attempts that hadn’t finished were canceled')]
       : []),
     c.dim(
       [formatDuration(record.durationMs), tokens, `results ${e.summaryPath}`]

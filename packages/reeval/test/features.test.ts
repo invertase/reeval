@@ -114,13 +114,13 @@ type Feature = {
   /** reeval's image the Docker and Podman tiers need, when it isn't Cursor's (a fake agent with `layout`). */
   image?: BakedHarness
   /**
-   * The harness a parameterised fixture's fake agent mimics, as REEVAL_FIXTURE_LAYOUT: the
+   * The harness a parameterized fixture's fake agent mimics, as REEVAL_FIXTURE_LAYOUT: the
    * directory has one row per harness, named `<dir>:<layout>` (see {@link perHarness}).
    */
   layout?: BakedHarness
   /**
    * The harness the real tier runs it on, with that contract row's model and key, when it isn't
-   * Cursor: a harness-specific behaviour only that agent has.
+   * Cursor: a harness-specific behavior only that agent has.
    */
   realHarness?: HarnessRow['id']
   /**
@@ -360,7 +360,7 @@ const answerOf = (run: RunRecord, name: string) => {
 const shownOf = (answer: NonNullable<RunRecord['evals'][number]['answers']>[number]) =>
   [...new Set(answer.votes.map((v) => v.reason ?? ''))].map((r) => JSON.parse(r))
 
-/** A row's name: its directory, and for a parameterised fixture the harness it runs as. */
+/** A row's name: its directory, and for a parameterized fixture the harness it runs as. */
 export const rowName = (f: Pick<Feature, 'dir' | 'layout'>) =>
   f.layout ? `${f.dir}:${f.layout}` : f.dir
 
@@ -2240,7 +2240,7 @@ export const features: Feature[] = [
     record: ({ run }) => assert.deepEqual(run.stack.judge.state?.diff, ['src/']),
   },
   {
-    dir: 'assert/labelled',
+    dir: 'assert/labeled',
     tiers: ['fake', 'docker'],
     env: 'plain',
     canary: /writes the marker: expected marker\.txt to match \/nope\//,
@@ -2890,7 +2890,7 @@ export const features: Feature[] = [
     record: ({ run, stdout }) => {
       const [lands] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
       assert.deepEqual(
-        lands?.assertions?.map(({ label, labelled }) => [label, labelled]),
+        lands?.assertions?.map(({ label, labelled: labeled }) => [label, labeled]),
         [
           ['assert c.exec("test -f greet.py").ok', false],
           ['assert node_check.ok', false],
@@ -3151,7 +3151,7 @@ function fixtureTests(tiers: Tier[]) {
             },
             timeoutMs: timeout - FIXTURE_STOP_MS[tier],
             // Stopped inside the test's timeout, so the failure has the run's output and the run
-            // has cancelled, and removed its containers, before the next test starts.
+            // has canceled, and removed its containers, before the next test starts.
             deadlineMs: timeout - FIXTURE_STOP_MS[tier],
             graceMs: FIXTURE_GRACE_MS[tier],
             signal: t.signal,

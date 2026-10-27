@@ -60,7 +60,7 @@ const installCa = (containerId: string, cert: string, signal?: AbortSignal, engi
   )
 
 /**
- * Starts the egress gateway for one container: a forwarder inside it, tunnelled over one
+ * Starts the egress gateway for one container: a forwarder inside it, tunneled over one
  * `docker exec -i`, and the proxy in this process, which holds the real credentials.
  */
 export async function startGateway(
@@ -180,7 +180,7 @@ export async function startGateway(
       NO_PROXY: noProxy,
       no_proxy: noProxy,
       NODE_EXTRA_CA_CERTS: CA_PATH,
-      // Node's fetch (22.21+, 24+) honours the proxy variables only with this.
+      // Node's fetch (22.21+, 24+) honors the proxy variables only with this.
       NODE_USE_ENV_PROXY: '1',
       // Clients with their own trust store (Python requests, curl builds, git) use the system
       // bundle, which now has the gateway's CA; set only when it does.

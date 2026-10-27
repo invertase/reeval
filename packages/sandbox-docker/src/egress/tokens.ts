@@ -30,7 +30,7 @@ export function tokenPlaceholder(token: string): string {
  * The exchange response with each token field replaced by a placeholder, and a substitution per
  * token. A token already seen keeps its placeholder. Throws when the body isn't a JSON object.
  */
-export function tokeniseResponse(
+export function tokenizeResponse(
   derived: DerivedTokens,
   body: string,
   known: readonly Substitution[],

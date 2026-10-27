@@ -107,7 +107,7 @@ describe('the matrix check (twins: it can fail)', () => {
     ])
   })
 
-  test('a parameterised fixture counts a row per harness; its directory names them all', () => {
+  test('a parameterized fixture counts a row per harness; its directory names them all', () => {
     const rows = {
       ...sources,
       fixtures: [
@@ -145,7 +145,7 @@ describe('the matrix check (twins: it can fail)', () => {
     ])
   })
 
-  test('real-suite checks count on the real tier; a behaviour no feature names fails', () => {
+  test('real-suite checks count on the real tier; a behavior no feature names fails', () => {
     const real = {
       ...sources,
       contract: [
@@ -187,10 +187,10 @@ describe('the matrix check (twins: it can fail)', () => {
       real,
     )
     assert.deepEqual(unclaimed.problems, [
-      'inventory y: contract.test.ts has no behaviour "nope"',
+      'inventory y: contract.test.ts has no behavior "nope"',
       'inventory y: e2e-real.test.ts has no test "nope"',
-      'inventory y: "rules read" isn\'t "contract › <behaviour>", "e2e › <title>", "questions › <title>" or "openrouter › <title>"',
-      'contract behaviour "clean teardown" covers no feature: add it to an entry in inventory.ts',
+      'inventory y: "rules read" isn\'t "contract › <behavior>", "e2e › <title>", "questions › <title>" or "openrouter › <title>"',
+      'contract behavior "clean teardown" covers no feature: add it to an entry in inventory.ts',
     ])
   })
 

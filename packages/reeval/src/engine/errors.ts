@@ -60,7 +60,7 @@ export type FormatOptions = {
 }
 
 /**
- * The error as the terminal shows it, with ANSI colours (renderers strip them when colour is
+ * The error as the terminal shows it, with ANSI colors (renderers strip them when color is
  * off): `Name: message`, the diff, then each stack frame with a code frame at the first one in
  * the project's own files, and any cause.
  */

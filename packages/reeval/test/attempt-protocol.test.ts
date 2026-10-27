@@ -72,19 +72,19 @@ test('every turn in the record corpus fits a send reply, in Zod and in the JSON 
   }
   // The canary: an event with a field the transcript doesn't have.
   const [first] = turns
-  const event = { ...(first?.transcript[0] as TranscriptEvent), colour: 'blue' }
+  const event = { ...(first?.transcript[0] as TranscriptEvent), color: 'blue' }
   assert.equal(transcriptEventSchema.safeParse(event).success, false)
 })
 
-test('every judgement in the record corpus fits a judge reply, in Zod and in the JSON Schema', () => {
-  const judgements = corpus().records.flatMap(({ value }) =>
+test('every judgment in the record corpus fits a judge reply, in Zod and in the JSON Schema', () => {
+  const judgments = corpus().records.flatMap(({ value }) =>
     ((value.evals ?? []) as Array<{ attempts?: Array<{ judgements?: unknown[] }> }>).flatMap((e) =>
       (e.attempts ?? []).flatMap((a) => a.judgements ?? []),
     ),
   ) as Array<Record<string, unknown>>
-  assert.ok(judgements.length >= 10, `${judgements.length} judgements`)
+  assert.ok(judgments.length >= 10, `${judgments.length} judgments`)
   const reply = snapshot('attempt-reply')
-  for (const [i, { key: _, retries: __, ...verdict }] of judgements.entries()) {
+  for (const [i, { key: _, retries: __, ...verdict }] of judgments.entries()) {
     const value = { id: String(i), ok: true, op: 'judge', verdict }
     const parsed = attemptReplySchema.safeParse(value)
     assert.ok(parsed.success, JSON.stringify(parsed.error?.issues[0]))

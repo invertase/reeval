@@ -683,8 +683,8 @@ export const attemptAbortSchema = z
   .strictObject({
     type: z.literal('abort'),
     reason: z
-      .enum(['timeout', 'cancelled'])
-      .describe("`timeout`: the eval's `timeout` ran out. `cancelled`: the run was stopped."),
+      .enum(['timeout', 'canceled'])
+      .describe("`timeout`: the eval's `timeout` ran out. `canceled`: the run was stopped."),
     message: z.string().describe("reeval's sentence, e.g. `Eval timed out after 600s`."),
   })
   .describe(

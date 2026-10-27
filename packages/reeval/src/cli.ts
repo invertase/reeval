@@ -87,7 +87,7 @@ const invocation: { flags?: Flags; runId: string | null; unhandledErrors: string
 
 /** Set by the first Ctrl-C or SIGTERM of `reeval run`. */
 let interrupted = false
-/** The last signal that cancelled the run: 130 after SIGINT, 143 after SIGTERM. */
+/** The last signal that canceled the run: 130 after SIGINT, 143 after SIGTERM. */
 let stopCode: number = EXIT.interrupted
 /**
  * Set once the attempts and questions are done and whether the run stopped is decided, as
@@ -357,7 +357,7 @@ async function runCommand(
   const engines = [
     ...new Set(plan?.sandboxes.flatMap((s) => (s.kind === 'docker' ? [s.engine ?? 'docker'] : []))),
   ]
-  if ((interrupted || engineRun.cancelled) && engines.length) {
+  if ((interrupted || engineRun.canceled) && engines.length) {
     const { removeRunContainers } = await import('./sandbox/docker.ts')
     await removeRunContainers(ctx.runId, engines)
   }
@@ -367,8 +367,8 @@ async function runCommand(
     return EXIT.ok
   }
 
-  let stopped = cutShort || engineRun.cancelled
-  // A cancelled run keeps the per-attempt answers that came back before it stopped, and asks
+  let stopped = cutShort || engineRun.canceled
+  // A canceled run keeps the per-attempt answers that came back before it stopped, and asks
   // no pairwise question.
   if (stopped) questions?.cancel()
   let answers = stopped ? await questions?.answered() : await questions?.settle()
@@ -1010,7 +1010,7 @@ async function executeRun(
         renderer.onEvent(e)
       },
       // SIGTERM (docker stop, a CI runner's cancel) cancels like Ctrl-C.
-      onCancellable: (cancel) => {
+      onCancelable: (cancel) => {
         const onSignal = (signal: NodeJS.Signals) => {
           stopCode = signal === 'SIGTERM' ? EXIT.terminated : EXIT.interrupted
           if (interrupted) {
@@ -1025,7 +1025,7 @@ async function executeRun(
             type: 'notice',
             at: Date.now(),
             level: 'warn',
-            text: 'Cancelling: stopping agents and destroying sandboxes (Ctrl-C again to force)',
+            text: 'Canceling: stopping agents and destroying sandboxes (Ctrl-C again to force)',
           })
           cancel()
         }

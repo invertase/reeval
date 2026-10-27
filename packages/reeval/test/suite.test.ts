@@ -79,7 +79,7 @@ describe('suiteResult over the record corpus', () => {
           f.lifts.some((l) => l.outcome === 'fail'),
         ).length
         assert.equal(
-          t.pass + t.notGated + t.fail + t.infraError + t.cancelled + t.skipped,
+          t.pass + t.notGated + t.fail + t.infraError + t.canceled + t.skipped,
           record.evals.length + gates,
         )
         assert.equal(t.errors, record.errors?.length ?? 0)
@@ -288,7 +288,7 @@ describe('outcomes the record alone has', () => {
     s.files.flatMap((f) => f.evals).find((e) => e.name === name || e.template === name)
   const text = (s: SuiteResult) => render(s, null, { color: false, verbose: false }).join('\n')
 
-  /** An interrupted run, its `writes greet.js` attempt cancelled mid-turn. */
+  /** An interrupted run, its `writes greet.js` attempt canceled mid-turn. */
   function interrupted(): RunRecord {
     const record = read(raw)
     record.status = 'interrupted'
@@ -300,28 +300,25 @@ describe('outcomes the record alone has', () => {
     Object.assign(cell, { outcome: 'fail', pass: 0, fail: 1 })
     Object.assign(attempt, {
       outcome: 'fail',
-      error: { kind: 'aborted', message: 'The run was cancelled' },
+      error: { kind: 'aborted', message: 'The run was canceled' },
       assertions: [],
     })
     return record
   }
 
-  test('an eval whose only failed attempts were cancelled is cancelled, not a fail', () => {
+  test('an eval whose only failed attempts were canceled is canceled, not a fail', () => {
     const before = suiteResult(read(raw)).tally
     const s = suiteResult(interrupted())
-    assert.equal(evalOf(s, 'writes greet.js')?.outcome, 'cancelled')
-    assert.equal(s.tally.cancelled, 1)
+    assert.equal(evalOf(s, 'writes greet.js')?.outcome, 'canceled')
+    assert.equal(s.tally.canceled, 1)
     assert.equal(s.tally.fail, before.fail, 'canary: the real fails still count as fails')
     assert.equal(s.tally.pass, before.pass - 1)
     assert.equal(s.outcome, 'skipped', 'an interrupted run, as its exit code 130 has it')
-    assert.match(text(s), /^cancelled {8}writes greet\.js$/m)
-    assert.match(
-      text(s),
-      new RegExp(`^${before.fail} fail · .* · 1 cancelled · \\d+ skipped$`, 'm'),
-    )
+    assert.match(text(s), /^canceled {9}writes greet\.js$/m)
+    assert.match(text(s), new RegExp(`^${before.fail} fail · .* · 1 canceled · \\d+ skipped$`, 'm'))
   })
 
-  test('a real failure beside a cancelled attempt is still a fail', () => {
+  test('a real failure beside a canceled attempt is still a fail', () => {
     const record = interrupted()
     const e = record.evals.find((x) => x.name === 'writes greet.js')
     const [attempt] = e?.attempts ?? []
@@ -465,7 +462,7 @@ evaluate('writes hello.txt', { compare: { baseline: plain, variants: [bye] } }, 
       notGated: 0,
       fail: 1,
       infraError: 0,
-      cancelled: 0,
+      canceled: 0,
       skipped: 0,
     })
     const e = s.files[0]?.evals[0]

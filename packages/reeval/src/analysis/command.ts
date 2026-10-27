@@ -67,7 +67,7 @@ export function contextMarkdown(d: Digest, head: string, base: string | null): s
   return [
     `# reeval analysis context: ${head}${base ? ` vs ${base}` : ''}`,
     '',
-    'Analyse this reeval run for the engineer who wrote the evals. The digest below holds facts reeval computed (F…), evidence excerpts (E…, transcript lines as L<n>) and the attempts table. Cite those ids for every claim, keep to the verdicts in the facts, and suggest at most 5 concrete actions, each verified with a reeval command from the CLI list.',
+    'Analyze this reeval run for the engineer who wrote the evals. The digest below holds facts reeval computed (F…), evidence excerpts (E…, transcript lines as L<n>) and the attempts table. Cite those ids for every claim, keep to the verdicts in the facts, and suggest at most 5 concrete actions, each verified with a reeval command from the CLI list.',
     '',
     ...(d.frame === 'study'
       ? [
@@ -228,7 +228,7 @@ const docBase = async (config: ResolvedConfig, p: PreparedAnalysis) => ({
 })
 
 /** One structured call on the prepared digest (and what tools read), validated: the document the cache holds. */
-export async function analyseDigest(
+export async function analyzeDigest(
   config: ResolvedConfig,
   p: PreparedAnalysis,
   model: ResolvedAnalysisModel,
@@ -349,8 +349,8 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
     )
   } else {
     const resolved = model ?? resolveAnalysisModel(config)
-    ctx.err(`analysing ${head.runId}${base ? ` vs ${base.runId}` : ''} with ${resolved.name}…`)
-    doc = await analyseDigest(config, prepared, resolved)
+    ctx.err(`analyzing ${head.runId}${base ? ` vs ${base.runId}` : ''} with ${resolved.name}…`)
+    doc = await analyzeDigest(config, prepared, resolved)
     await writeCached(config.root, key, doc)
   }
   if (flags.save) {

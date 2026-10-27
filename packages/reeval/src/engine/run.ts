@@ -70,7 +70,7 @@ export function routeConsole(reporter: Reporter): void {
 export type RunOptions = {
   file: string
   stagingDir: string
-  /** Aborts every attempt: the run was cancelled. */
+  /** Aborts every attempt: the run was canceled. */
   signal: AbortSignal
   reporter: Reporter
   /** Called once every attempt that runs has asked for its lease. */

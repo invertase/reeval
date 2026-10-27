@@ -6,7 +6,7 @@ const sandbox =
     ? docker()
     : fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
 
-// Declared secrets that read as JSON values once serialised: `null` and a short number.
+// Declared secrets that read as JSON values once serialized: `null` and a short number.
 export const pins = defineEnvironment('pins', ({ secret }) => ({
   sandbox,
   env: {

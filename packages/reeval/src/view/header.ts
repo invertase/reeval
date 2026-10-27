@@ -67,7 +67,7 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
         passRate: c.passRate,
         outcome: c.outcome,
         effort: cellEffort(e, c.key),
-        ...cancelledIn(e, c.key),
+        ...canceledIn(e, c.key),
         ...(c.lift
           ? {
               lift: {
@@ -106,10 +106,10 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
   }
 }
 
-/** A cell's failed attempts that the run's interrupt cancelled, when it has any. */
-function cancelledIn(e: RunRecord['evals'][number], cell: string): { cancelled?: number } {
+/** A cell's failed attempts that the run's interrupt canceled, when it has any. */
+function canceledIn(e: RunRecord['evals'][number], cell: string): { canceled?: number } {
   const n = e.attempts.filter(
     (a) => a.cell === cell && a.outcome === 'fail' && a.error?.kind === 'aborted',
   ).length
-  return n ? { cancelled: n } : {}
+  return n ? { canceled: n } : {}
 }

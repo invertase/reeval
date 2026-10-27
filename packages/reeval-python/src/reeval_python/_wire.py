@@ -73,8 +73,8 @@ class AssertionRecord(TypedDict):
 class AttemptAbort(TypedDict):
     # reeval's sentence, e.g. `Eval timed out after 600s`.
     message: str
-    # `timeout`: the eval's `timeout` ran out. `cancelled`: the run was stopped.
-    reason: Literal["timeout", "cancelled"]
+    # `timeout`: the eval's `timeout` ran out. `canceled`: the run was stopped.
+    reason: Literal["timeout", "canceled"]
     type: Literal["abort"]
 
 
@@ -950,7 +950,7 @@ class FakeHarnessDescriptorWithSkill(TypedDict):
 
 # A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`.
 class FakeHarnessDescriptor(TypedDict):
-    # Simulated turn length, honours the abort signal.
+    # Simulated turn length, honors the abort signal.
     delayMs: NotRequired[float]
     # Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what
     # the turn reports (`fake-1[effort=medium]`). Fast is not this.
@@ -1828,7 +1828,7 @@ class TranscriptEventRetry(TypedDict):
     type: Literal["retry"]
 
 
-# Normalised agent events. Each tool call is one event, merged with its result; `durationMs` is
+# Normalized agent events. Each tool call is one event, merged with its result; `durationMs` is
 # wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null when
 # the harness never reported the end. Long shell or edit calls set `stalled: true`.
 TranscriptEvent: TypeAlias = "TranscriptEvent1 | TranscriptEventFileEdit | TranscriptEventWebSearch | TranscriptEventWebFetch | TranscriptEventTool | TranscriptEventError | TranscriptEventRetry"

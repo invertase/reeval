@@ -48,7 +48,7 @@ import type {
 import { promptTokens, sumUsage } from '../usage.ts'
 import { checkVerdict } from '../view/contrasts.ts'
 import { cellOutcome, gatePart, passRateOf, worstOutcome } from '../view/gate.ts'
-import { checkTries } from '../view/judgements.ts'
+import { checkTries } from '../view/judgments.ts'
 import { familiesOf } from './families.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
@@ -61,7 +61,7 @@ import {
   type FileRef,
   type FingerprintParts,
   type GitInfo,
-  type JudgementRecord,
+  type JudgmentRecord,
   type Lift,
   type RunnerInfo,
   type RunRecord,
@@ -206,7 +206,7 @@ export const gatewayPart = (
   gateway && gateway.name !== 'direct' ? { gateway: gateway.name } : {}
 
 /** `<index>:<question hash>`, which follows one verdict across runs. */
-export const judgementKey = (index: number, question: string) =>
+export const judgmentKey = (index: number, question: string) =>
   `${index}:${sha256(question).slice(0, 12)}`
 
 const JSON_FILE = /\.(?:json|jsonl|ndjson)$/
@@ -326,7 +326,7 @@ export function transcriptLines(record: EvalRecord): string {
   return `${lines.join('\n')}\n`
 }
 
-/** Every stream part the harness sent, for debugging the normaliser (`REEVAL_RAW_TRANSCRIPT=1`). */
+/** Every stream part the harness sent, for debugging the normalizer (`REEVAL_RAW_TRANSCRIPT=1`). */
 export function rawLines(record: EvalRecord): string | null {
   if (!record.turns.some((t) => t.raw)) return null
   const lines = record.turns.flatMap((turn, index) =>
@@ -879,9 +879,9 @@ async function attemptEvidence(
     }
     if (artifacts.length) files.artifacts = artifacts
   }
-  const judgements: JudgementRecord[] = (record?.judgements ?? []).map(({ call, ...j }, i) => ({
+  const judgments: JudgmentRecord[] = (record?.judgements ?? []).map(({ call, ...j }, i) => ({
     ...j,
-    key: judgementKey(call ?? i, j.question),
+    key: judgmentKey(call ?? i, j.question),
   }))
   return {
     turns: (record?.turns ?? []).map((t) => ({
@@ -910,7 +910,7 @@ async function attemptEvidence(
           stalledTools: 0,
           maxToolMs: null,
         },
-    judgements,
+    judgements: judgments,
     ...(record?.startRetries?.length ? { startRetries: record.startRetries } : {}),
     ...(record?.setupProcesses?.length ? { setupProcesses: record.setupProcesses } : {}),
     ...(record?.assertions?.length ? { assertions: record.assertions } : {}),

@@ -8,7 +8,7 @@ export type EngineEval = EvalResult
 export type EngineRun = {
   evals: EngineEval[]
   unhandledErrors: string[]
-  cancelled: boolean
+  canceled: boolean
   noFiles: boolean
   /** `onPlan` said not to run, e.g. for `--dry-run`. */
   stopped: boolean
@@ -42,8 +42,8 @@ export type EngineOptions = {
   onRunStart?: (files: number) => void
   /** Collection, start, progress, console output and result of each attempt, as they happen. */
   onEvent?: (e: ReevalEvent) => void
-  /** Called once the engine can be cancelled, with a function that cancels the run. */
-  onCancellable?: (cancel: () => void) => void
+  /** Called once the engine can be canceled, with a function that cancels the run. */
+  onCancelable?: (cancel: () => void) => void
   /**
    * Called with every attempt the run would start, after collecting the files and before any
    * attempt runs. Resolve false to stop there; throw to fail the run.

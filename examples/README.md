@@ -136,7 +136,7 @@ Every example takes the real agents in [`profiles.ts`](./profiles.ts) by name: `
 | Example | Shows |
 |---|---|
 | [`with-bug-fix`](./with-bug-fix) | Fixing a seeded bug without touching the tests |
-| [`with-refactor`](./with-refactor) | A refactor that keeps behaviour |
+| [`with-refactor`](./with-refactor) | A refactor that keeps behavior |
 | [`with-test-writing`](./with-test-writing) | Grading tests by whether they catch a bug |
 | [`with-framework-migration`](./with-framework-migration) | CommonJS to ES modules |
 | [`with-dependency-upgrade`](./with-dependency-upgrade) | Bumping a dependency across a breaking change |

@@ -79,7 +79,7 @@ import {
 } from '../src/harness/agents.ts'
 import { effortFromModelLabel, harnessEffort, servedEffortOf } from '../src/harness/effort.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
-import { normaliseStream, type StampedPart } from '../src/harness/transcript.ts'
+import { normalizeStream, type StampedPart } from '../src/harness/transcript.ts'
 import {
   antigravity,
   claudeCode,
@@ -896,7 +896,7 @@ describe('the pi harness', () => {
   })
 
   test("pi's edit results are file edits with the patch's line counts", () => {
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         {
           ms: 1,
@@ -929,7 +929,7 @@ describe('the pi harness', () => {
 
   test("pi's edit counts lines that start with -- or ++, and not the patch's file headers", () => {
     const edit = (patch: string) =>
-      normaliseStream(
+      normalizeStream(
         [
           {
             ms: 1,
@@ -1015,7 +1015,7 @@ describe('the Codex harness', () => {
       { ms: 1, part: { type: 'tool-call', toolCallId: id, toolName, input: { path } } },
       { ms: 2, part: { type: 'tool-result', toolCallId: id, output: { kind } } },
     ]
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         ...change('a', 'write', 'new.txt', 'add'),
         ...change('u', 'edit', 'notes.txt', 'update'),
@@ -1153,7 +1153,7 @@ describe('the Cursor harness', () => {
     )
   })
 
-  test('a real turn normalises: relative edits, mcp__ names, timed tools', () => {
+  test('a real turn normalizes: relative edits, mcp__ names, timed tools', () => {
     const t = new CursorSdkStreamTranslator({ workDir: '/reeval/workspace' })
     const ndjson = readFileSync(
       new URL('../../harness-cursor-sdk/test/fixtures/tools-mcp-skills.ndjson', import.meta.url),
@@ -1171,7 +1171,7 @@ describe('the Cursor harness', () => {
               : part,
       })),
     )
-    const events = normaliseStream(parts as never, Date.parse('2026-09-26T12:00:00.000Z'))
+    const events = normalizeStream(parts as never, Date.parse('2026-09-26T12:00:00.000Z'))
     const shape = events
       .filter((e) => e.type !== 'reasoning' && e.type !== 'text')
       .map((e) =>
@@ -1559,7 +1559,7 @@ describe('credential brokering per agent', () => {
     })
   }
 
-  test("Cursor's session tokens are tokenised at its exchange and swapped back on its hosts only", () => {
+  test("Cursor's session tokens are tokenized at its exchange and swapped back on its hosts only", () => {
     const tokens = brokeringFor(cursor({ model: 'composer-2.5' }))?.tokens
     assert.equal(tokens?.name, 'CURSOR_API_KEY')
     assert.deepEqual(tokens?.fields, ['accessToken', 'refreshToken'])
@@ -1649,7 +1649,7 @@ describe('OpenCode transcripts', () => {
       part: { type: 'tool-result', toolCallId: id, output },
     })
     // OpenCode's outputs: its content's text, with its ACP rawOutput's metadata.
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         call('w', 'write', { path: '/reeval/workspace/b.txt', content: 'bee\nsting\n' }),
         result('w', { output: 'Created file successfully: b.txt', metadata: {} }),
@@ -1689,7 +1689,7 @@ describe('writes that say nothing of the file before', () => {
       ms: 20,
       part: { type: 'tool-result', toolCallId: id, output },
     })
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         call('p', 'write', { path: 'a.txt', content: 'one\ntwo\n' }),
         result('p', 'Successfully wrote to a.txt'),
@@ -1734,7 +1734,7 @@ describe('writes that say nothing of the file before', () => {
     ].map((p) => t.push(p))
     const call = parts.find((p) => p.type === 'tool-call')
     assert.equal(call?.toolName, 'write')
-    const events = normaliseStream(
+    const events = normalizeStream(
       parts
         .filter((p) => p.type !== 'raw')
         .map((part, i) => ({
@@ -1761,7 +1761,7 @@ describe('Claude Code transcripts', () => {
       ms: 20,
       part: { type: 'tool-result', toolCallId: id, output },
     })
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         call('w', 'write', { file_path: '/reeval/workspace/greet.js', content: 'hi\n' }),
         result('w', 'ok'),
@@ -1800,7 +1800,7 @@ describe('Claude Code transcripts', () => {
   test('its Write and Edit results say what changed and by how many lines', () => {
     const greet =
       'function greet(name) {\n  return "Hello, " + name;\n}\n\nmodule.exports = { greet };\n'
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         call('w', 'write', { file_path: 'greet.js', content: greet }),
         result('w', {
@@ -1864,7 +1864,7 @@ describe('Claude Code transcripts', () => {
   })
 
   test("its WebSearch and WebFetch calls become web events, like Cursor's", () => {
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         call('s', 'webSearch', { query: 'node test runner' }),
         result('s', {
@@ -1881,7 +1881,7 @@ describe('Claude Code transcripts', () => {
           ],
           durationSeconds: 1.2,
         }),
-        call('f', 'WebFetch', { url: 'https://nodejs.org/api/test.html', prompt: 'summarise' }),
+        call('f', 'WebFetch', { url: 'https://nodejs.org/api/test.html', prompt: 'summarize' }),
         result('f', {
           bytes: 10,
           code: 200,
@@ -1890,7 +1890,7 @@ describe('Claude Code transcripts', () => {
           durationMs: 5,
           url: 'https://nodejs.org/api/test.html',
         }),
-        call('m', 'WebFetch', { url: 'https://example.com/missing', prompt: 'summarise' }),
+        call('m', 'WebFetch', { url: 'https://example.com/missing', prompt: 'summarize' }),
         result('m', { code: 404, codeText: 'Not Found', url: 'https://example.com/missing' }),
         call('c', 'webSearch', { searchTerm: 'cursor search' }),
         result('c', { referenceCount: 3 }),
@@ -1925,8 +1925,8 @@ describe('Antigravity transcripts', () => {
     part: { type: 'tool-result', toolCallId: id, output },
   })
 
-  test("its native tool shapes normalise like the other agents' (CLI 1.2.11)", () => {
-    const events = normaliseStream(
+  test("its native tool shapes normalize like the other agents' (CLI 1.2.11)", () => {
+    const events = normalizeStream(
       [
         call('w', 'write', {
           TargetFile: '/reeval/workspace/a.txt',
@@ -1979,7 +1979,7 @@ describe('Antigravity transcripts', () => {
 describe('Cursor tool wall time when completed_at_ms is early', () => {
   test('durationMs follows the stream until the tool result, and marks long shells stalled', () => {
     const startedAt = Date.parse('2026-10-18T12:00:00.000Z')
-    const events = normaliseStream(
+    const events = normalizeStream(
       [
         { ms: 100, part: { type: 'tool-call', toolCallId: 'b', toolName: 'bash', input: {} } },
         {
@@ -2014,7 +2014,7 @@ describe('Cursor tool wall time when completed_at_ms is early', () => {
 
 describe('a failed tool call keeps its error', () => {
   const failed = (error: unknown) =>
-    normaliseStream(
+    normalizeStream(
       [
         { ms: 10, part: { type: 'tool-call', toolCallId: 'w', toolName: 'write', input: {} } },
         { ms: 20, part: { type: 'tool-error', toolCallId: 'w', error } },
@@ -2049,18 +2049,18 @@ describe('a refused webSearch is a web-search event', () => {
     ms: 20,
     part: { type: 'tool-error' as const, toolCallId: id, error },
   })
-  const activity = (events: ReturnType<typeof normaliseStream>) => ({
+  const activity = (events: ReturnType<typeof normalizeStream>) => ({
     tools: events.filter((e) => e.type === 'tool').length,
     webSearches: events.filter((e) => e.type === 'web-search').length,
     webFetches: events.filter((e) => e.type === 'web-fetch').length,
   })
-  const turnOf = (events: ReturnType<typeof normaliseStream>) => ({
+  const turnOf = (events: ReturnType<typeof normalizeStream>) => ({
     transcript: events,
     unreported: [] as Array<'web-search' | 'web-fetch'>,
   })
 
   test('a tool-error search is web-search with ok: false, not a generic tool', () => {
-    const events = normaliseStream(
+    const events = normalizeStream(
       [call('s', 'webSearch', { query: 'firebase ui web' }), err('s', '403 Forbidden')],
       0,
     )
@@ -2082,7 +2082,7 @@ describe('a refused webSearch is a web-search event', () => {
   })
 
   test('a tool-error fetch stays web-fetch with ok: false', () => {
-    const events = normaliseStream(
+    const events = normalizeStream(
       [call('f', 'webFetch', { url: 'https://example.com' }), err('f', '403 Forbidden')],
       0,
     )
@@ -2094,7 +2094,7 @@ describe('a refused webSearch is a web-search event', () => {
   })
 
   test('a successful search still has ok: true and its references', () => {
-    const events = normaliseStream(
+    const events = normalizeStream(
       [call('s', 'webSearch', { query: 'firebase ui web' }), ok('s', { referenceCount: 2 })],
       0,
     )
@@ -2105,7 +2105,7 @@ describe('a refused webSearch is a web-search event', () => {
   })
 
   test('a pending search (no result) is web-search with ok: false', () => {
-    const events = normaliseStream([call('s', 'webSearch', { query: 'firebase ui web' })], 0)
+    const events = normalizeStream([call('s', 'webSearch', { query: 'firebase ui web' })], 0)
     assert.deepEqual(
       events.flatMap((e) => (e.type === 'web-search' ? [[e.query, e.references, e.ok]] : [])),
       [['firebase ui web', null, false]],
@@ -2115,7 +2115,7 @@ describe('a refused webSearch is a web-search event', () => {
   })
 
   test('a pending fetch is web-fetch with ok: false', () => {
-    const events = normaliseStream([call('f', 'webFetch', { url: 'https://example.com' })], 0)
+    const events = normalizeStream([call('f', 'webFetch', { url: 'https://example.com' })], 0)
     assert.deepEqual(
       events.flatMap((e) => (e.type === 'web-fetch' ? [[e.url, e.ok]] : [])),
       [['https://example.com', false]],
@@ -2152,7 +2152,7 @@ describe('a refused webSearch is a web-search event', () => {
     ]
     const { stream } = await turnThrough(parts, ANTIGRAVITY_BUILTIN_TOOLS)
     assert.ok(stream.some((s) => s.part.type === 'tool-error'))
-    const events = normaliseStream(stream, 0)
+    const events = normalizeStream(stream, 0)
     assert.deepEqual(
       events.flatMap((e) =>
         e.type === 'web-search' ? [[e.query, e.ok]] : e.type === 'tool' ? [[e.tool, e.ok]] : [],
@@ -2166,7 +2166,7 @@ describe('a refused webSearch is a web-search event', () => {
 
 /**
  * A harness that emits `parts` for every turn, through a real HarnessAgent, as reeval drives it.
- * `stream` is the agent's `fullStream`, stamped as reeval stamps it for `normaliseStream`.
+ * `stream` is the agent's `fullStream`, stamped as reeval stamps it for `normalizeStream`.
  */
 async function turnThrough(
   parts: HarnessV1StreamPart[],
@@ -2287,7 +2287,7 @@ describe('tools that wait on a person are off', () => {
   })
 })
 
-describe("agy's retried model calls, through HarnessAgent and the normaliser", () => {
+describe("agy's retried model calls, through HarnessAgent and the normalizer", () => {
   /** A captured agy 1.2.11 turn through today's translator, with `edit` made to its NDJSON first. */
   const agyParts = (name: string, edit = (ndjson: string) => ndjson) => {
     const ndjson = readFileSync(
@@ -2313,7 +2313,7 @@ describe("agy's retried model calls, through HarnessAgent and the normaliser", (
     )
     const { text, stream } = await turnThrough(parts)
     assert.equal(text, 'FINAL-ATTEMPT reply, whole.\n')
-    const events = normaliseStream(stream, 0)
+    const events = normalizeStream(stream, 0)
     assert.deepEqual(
       of(events, 'text').map((e) => e.text),
       ['FINAL-ATTEMPT reply, whole.\n'],
@@ -2329,7 +2329,7 @@ describe("agy's retried model calls, through HarnessAgent and the normaliser", (
   test("every call dropped mid-reply: eight retries and agy's error, no partial reply", async () => {
     const { text, stream } = await turnThrough(agyParts('provider-dropped-mid-stream.ndjson'))
     assert.equal(text, null)
-    const events = normaliseStream(stream, 0)
+    const events = normalizeStream(stream, 0)
     assert.deepEqual(of(events, 'text'), [])
     assert.equal(of(events, 'retry').length, 8)
     // The turn's error is still agy's, the first and only error event.
@@ -2340,7 +2340,7 @@ describe("agy's retried model calls, through HarnessAgent and the normaliser", (
   })
 
   test("a call refused once (400) and not retried: the provider's error alone, no retry", async () => {
-    const events = normaliseStream((await turnThrough(agyParts('provider-400.ndjson'))).stream, 0)
+    const events = normalizeStream((await turnThrough(agyParts('provider-400.ndjson'))).stream, 0)
     assert.deepEqual(of(events, 'retry'), [])
     assert.deepEqual(
       of(events, 'error').map((e) => e.message),
@@ -2351,7 +2351,7 @@ describe("agy's retried model calls, through HarnessAgent and the normaliser", (
   })
 })
 
-describe('Cursor web tools at every layer: SDK, adapter, HarnessAgent, normaliser', () => {
+describe('Cursor web tools at every layer: SDK, adapter, HarnessAgent, normalizer', () => {
   const WEB = new Set(['webSearch', 'webFetch'])
   const fixture = (name: string) =>
     readFileSync(new URL(`../../harness-cursor-sdk/test/fixtures/${name}`, import.meta.url), 'utf8')
@@ -2374,13 +2374,13 @@ describe('Cursor web tools at every layer: SDK, adapter, HarnessAgent, normalise
     const adapter = webCalls(parts)
     const { stream } = await turnThrough(parts, CURSOR_SDK_BUILTIN_TOOLS)
     const agent = webCalls(stream.map((s) => s.part as { type: string; toolName?: string }))
-    const events = normaliseStream(stream, startedAt).filter(
+    const events = normalizeStream(stream, startedAt).filter(
       (e) => e.type === 'web-search' || e.type === 'web-fetch',
     )
     return { sdk, adapter, agent, events }
   }
 
-  test('web calls the runner recovers survive the adapter, HarnessAgent and the normaliser', async () => {
+  test('web calls the runner recovers survive the adapter, HarnessAgent and the normalizer', async () => {
     const startedAt = 1790444242000
     const { sdk, adapter, agent, events } = await layers('web-recovered.ndjson', startedAt)
     assert.deepEqual(sdk, ['webFetch', 'webSearch'])

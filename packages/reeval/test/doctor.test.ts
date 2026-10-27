@@ -1038,7 +1038,7 @@ evaluate('a', async () => {})
     assert.equal(await checkEnvFiles(root, visible(null)), null)
   })
 
-  test('env files git sees: found with git ls-files, honouring .gitignore and its ! rules', async () => {
+  test('env files git sees: found with git ls-files, honoring .gitignore and its ! rules', async () => {
     const root = (await project('doctor-env-files-git', {})).dir
     await writeFile(join(root, '.gitignore'), 'node_modules/\n.env\n.env.*\n!.env.example\n')
     await writeFile(join(root, '.env.example'), `GEMINI_API_KEY=${SECRET}\n`)

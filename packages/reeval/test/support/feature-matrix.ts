@@ -7,7 +7,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { EVAL_OPTION_KEYS } from '../../src/options.ts'
-import { behaviours } from '../contract.test.ts'
+import { behaviors } from '../contract.test.ts'
 import { EVAL_OPTION_SPECS } from '../features/eval-options.ts'
 import { inventory } from '../features/inventory.ts'
 import { features, rowName } from '../features.test.ts'
@@ -34,7 +34,7 @@ const matrix = buildMatrix(inventory, {
     canary: existsSync(join(testDir, 'features', f.dir, 'evals/canary.eval.ts')),
   })),
   planCases: cases.map((c) => `${c.dir}/${c.name}`),
-  contract: behaviours.map((b) => ({ name: b.name, canary: b.canary })),
+  contract: behaviors.map((b) => ({ name: b.name, canary: b.canary })),
   testSource: (path) => {
     const file = join(packages, path)
     return existsSync(file) ? readFileSync(file, 'utf8') : null

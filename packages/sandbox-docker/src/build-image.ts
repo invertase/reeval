@@ -397,7 +397,7 @@ export async function buildImage(
   },
 ): Promise<{ image: string; agentVersion: string }> {
   const { harness, from, signal, engine } = options
-  // Built on the digest `from` names now, and labelled with it, so a moved tag is visible.
+  // Built on the digest `from` names now, and labeled with it, so a moved tag is visible.
   const resolved = from ? await resolveFrom(from, signal, engine) : null
   const digest = resolved && 'digest' in resolved ? resolved.digest : null
   const pinned =

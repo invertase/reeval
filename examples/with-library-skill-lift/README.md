@@ -4,7 +4,7 @@
 `brand-guidelines` skill from [anthropics/skills](https://github.com/anthropics/skills) at a pinned
 commit with `skill.git(repo, { ref, path, only })`. The compare has no baseline, so the eval's own
 environment is the control. The agent styles a page in Anthropic's brand, and the checks look for
-the skill's exact accent colour and fonts, which an agent without it has to guess.
+the skill's exact accent color and fonts, which an agent without it has to guess.
 
 **Needs:** the network, for reeval to fetch the skill on the host (it caches it in
 `.reeval/cache/`); in this repo, run `pnpm install && pnpm build` at the root first. A real agent
@@ -19,7 +19,7 @@ pnpm eval
 
 **Real or fake agent:** `pnpm eval` runs a fake agent, with no keys or Docker. It copies the
 [`fake-agent/`](./fake-agent) fixture into the workspace to mimic what an agent would produce, so the
-checks have something to check; here it writes the guessed colours in `plain/`, and the brand ones
+checks have something to check; here it writes the guessed colors in `plain/`, and the brand ones
 in `skill/` only when it's given the skill. `pnpm eval --profile claude-code` runs the same compare
 on Claude Code, and `--profile <name>` on any other agent in [`examples/profiles.ts`](../profiles.ts).
 

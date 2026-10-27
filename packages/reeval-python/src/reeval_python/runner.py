@@ -46,7 +46,7 @@ def _task_factory(loop: asyncio.AbstractEventLoop, coro: Any, **kwargs: Any) -> 
 
 
 def _left_running(key: str) -> list[asyncio.Task[Any]]:
-    """The tasks the body started that are still running, cancelled."""
+    """The tasks the body started that are still running, canceled."""
     current = asyncio.current_task()
     left = [t for t in _started.pop(key, ()) if not t.done() and t is not current]
     for task in left:
@@ -373,7 +373,7 @@ def _flush(key: str) -> None:
 _escaped: BaseException | None = None
 
 
-def _cancelled_done(conn: _Connection, key: str) -> None:
+def _canceled_done(conn: _Connection, key: str) -> None:
     aborted = conn.aborted_by_reeval(key)
     if aborted is None and _escaped is not None:
         aborted = AttemptAborted(
@@ -414,7 +414,7 @@ def _handle(
         def finished(task: asyncio.Task[None], key: str = key) -> None:
             tasks.pop(key, None)
             if task.cancelled():
-                _cancelled_done(conn, key)
+                _canceled_done(conn, key)
 
         task.add_done_callback(finished)
     elif msg.get("type") == "abort":

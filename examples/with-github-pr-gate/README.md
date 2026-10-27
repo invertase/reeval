@@ -50,7 +50,7 @@ the [Nightly matrix and Pages](../../docs/recipes/nightly-pages.mdx) recipe does
 
 | File | What it is |
 |---|---|
-| [`with-github-pr-gate.eval.ts`](./with-github-pr-gate.eval.ts) | The eval: one prompt, two labelled checks |
+| [`with-github-pr-gate.eval.ts`](./with-github-pr-gate.eval.ts) | The eval: one prompt, two labeled checks |
 | [`workflow.yml`](./workflow.yml) | The GitHub Actions workflow to copy into `.github/workflows/` |
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |

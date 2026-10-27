@@ -89,7 +89,7 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
     assert.match(text.stderr, /history\.db: 1 runs/)
   })
 
-  test('check_rates gives each labelled check’s pass rate per cell, on both arms of a compare', async () => {
+  test('check_rates gives each labeled check’s pass rate per cell, on both arms of a compare', async () => {
     const p = await project('query-check-rates', {
       'reeval.config.ts': fakeConfig({
         harness:

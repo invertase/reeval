@@ -132,7 +132,7 @@ describe('persisted shapes', () => {
     const now = snapshot('run-record')
     const wider = copy(now)
     const status = def(wider, 'RunRecord').properties?.status as Schema
-    status.enum = [...(status.enum ?? []), 'cancelled']
+    status.enum = [...(status.enum ?? []), 'canceled']
     const author = def(wider, 'RunRecord').properties as Record<string, Schema>
     author.author = { anyOf: [{ type: 'null' }, { type: 'string' }] }
     def(wider, 'RunRecord').required = def(wider, 'RunRecord').required?.filter(
@@ -154,7 +154,7 @@ describe('persisted shapes', () => {
     const now = snapshot('run-record')
     const wider = copy(now)
     const status = def(wider, 'RunRecord').properties?.status as Schema
-    status.enum = [...(status.enum ?? []), 'cancelled']
+    status.enum = [...(status.enum ?? []), 'canceled']
     assert.deepEqual(
       compare(now, wider, none).map((c) => [c.kind, c.path, c.breaking]),
       [['widened', 'status', false]],

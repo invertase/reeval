@@ -34,7 +34,7 @@ import {
   evalBlock,
   HEAD,
   type Item,
-  labeller,
+  labeler,
   renderBlocks,
   show,
   type Text,
@@ -101,7 +101,7 @@ const OUTCOME: Record<Shown, string> = {
   not_gated: 'not gated',
   fail: 'fail',
   infra_error: 'infra error',
-  cancelled: 'cancelled',
+  canceled: 'canceled',
   skipped: 'skipped',
 }
 
@@ -110,13 +110,13 @@ const paintOutcome = (c: Colors, o: Shown): Paint =>
     ? c.green
     : o === 'fail'
       ? c.red
-      : o === 'infra_error' || o === 'cancelled'
+      : o === 'infra_error' || o === 'canceled'
         ? c.yellow
         : c.dim
 
-/** One side's outcome as `reeval show` reads it: a fail the interrupt caused is `cancelled`. */
+/** One side's outcome as `reeval show` reads it: a fail the interrupt caused is `canceled`. */
 const sideOutcome = (row: CompareRow, side: 'base' | 'head'): ResultOutcome | null =>
-  row.cancelled?.includes(side) ? 'cancelled' : row[side]
+  row.canceled?.includes(side) ? 'canceled' : row[side]
 
 /** One side's outcome as its eval's row in `reeval run` reads it: a study's pass is `not gated`. */
 const shownOutcome = (row: CompareRow, side: 'base' | 'head', unit?: Unit): Shown | null => {
@@ -296,7 +296,7 @@ function flips(
     const [b, h] = pairs[0] as [CellResult, CellResult]
     return rows(b, h, 2)
   }
-  const label = labeller(
+  const label = labeler(
     pairs.map(([, h]) => h),
     ['harness', 'arm', 'sandbox'],
   )
@@ -503,7 +503,7 @@ export function compareTally(c: Colors, rows: CompareRow[]): string {
 }
 
 const UNFINISHED: Partial<Record<RunRecord['status'], string>> = {
-  interrupted: 'was interrupted, so some of its evals were cancelled before they finished',
+  interrupted: 'was interrupted, so some of its evals were canceled before they finished',
   budget: 'stopped at its duration budget, so some of its evals never ran',
 }
 
@@ -531,7 +531,7 @@ function noBaseline(c: Colors, input: CompareInput, opts: CompareOptions): strin
   const { suite, runId } = input.head
   const blocks = renderBlocks(suite, { color: opts.color, verbose: opts.verbose })
   const units = unitsOf(suite)
-  const order = ['fail', 'infra_error', 'cancelled', 'pass', 'not_gated', 'skipped'] as const
+  const order = ['fail', 'infra_error', 'canceled', 'pass', 'not_gated', 'skipped'] as const
   const tally = (rows: CompareRow[], noun: string) => {
     const shown = rows.map((r) => shownOutcome(r, 'head', units.get(rowKey(r))))
     const counts = order.flatMap((o) => {

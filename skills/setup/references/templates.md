@@ -211,7 +211,7 @@ description: Zod 4 APIs. Use when writing or changing code that uses zod.
 # Zod 4
 
 - String formats are top-level: `z.email()`, `z.url()`, `z.uuid()`, not `z.string().email()`.
-- Error customisation is one `error` param: `z.string({ error: 'Required' })`.
+- Error customization is one `error` param: `z.string({ error: 'Required' })`.
 ```
 
 ```ts
@@ -254,5 +254,5 @@ evaluate(
 - Pin the version you researched (`zod@4.1.12`), in the setup step and in what you tell the user.
 - Write the facts down as a skill only if the user wants to know what docs or a skill would
   change. Otherwise drop the compare and keep `environment: zod`.
-- Check behaviour (`validates emails`) and the specific API (`uses z.email()`) as two labelled
+- Check behavior (`validates emails`) and the specific API (`uses z.email()`) as two labeled
   checks, so the result says which one an agent missed.

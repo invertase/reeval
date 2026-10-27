@@ -356,7 +356,7 @@ Usage:${lines.join('')}
 ${HELP_FOOTER}`
 }
 
-/** Splits a command line on whitespace, honouring single and double quotes. */
+/** Splits a command line on whitespace, honoring single and double quotes. */
 export function shellWords(line: string): string[] | null {
   const words: string[] = []
   let word = ''

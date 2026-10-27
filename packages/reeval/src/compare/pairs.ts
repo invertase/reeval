@@ -214,7 +214,7 @@ export function voteOf(
 
 /**
  * Each side's wins over the decided votes it was in, per cut. A tie decides nothing, so it counts
- * for neither side; both orders of a pair count, since each is its own judgement.
+ * for neither side; both orders of a pair count, since each is its own judgment.
  */
 export function ratesOf(votes: PairVote[]): CompareAnswer['rates'] {
   const rates = new Map<string, CompareAnswer['rates'][number]>()

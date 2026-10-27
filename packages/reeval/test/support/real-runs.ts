@@ -87,7 +87,7 @@ export function e2ePairSides(): PairAttempt[] {
 /** Codex ends hello.txt with a newline; Cursor and Claude Code don't. */
 const endsWithNewline = (diff: string) => !diff.includes('No newline at end of file')
 
-/** A pick that favours the diff whose hello.txt ends with a newline, and ties otherwise. */
+/** A pick that favors the diff whose hello.txt ends with a newline, and ties otherwise. */
 export const newlineVote = (p: BlindPair): FakeVote =>
   endsWithNewline(p.a.diff ?? '') === endsWithNewline(p.b.diff ?? '')
     ? 'tie'

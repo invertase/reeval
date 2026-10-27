@@ -13,9 +13,9 @@
           "type": "string"
         },
         "reason": {
-          "description": "`timeout`: the eval's `timeout` ran out. `cancelled`: the run was stopped.",
+          "description": "`timeout`: the eval's `timeout` ran out. `canceled`: the run was stopped.",
           "type": "string",
-          "enum": ["timeout", "cancelled"]
+          "enum": ["timeout", "canceled"]
         },
         "type": {
           "type": "string",

@@ -5,7 +5,7 @@
 # `versions: latest` first swaps the newest `agy`, @cursor/sdk, OpenCode, Goose, pi and Codex into
 # the pinned images
 # (scripts/drift/latest-images.sh, which fails if it can't): the version-drift leg, where any change
-# to an agent's output format, its stored conversation or its behaviour fails a check, never skips.
+# to an agent's output format, its stored conversation or its behavior fails a check, never skips.
 # After the contract, whatever it did, it checks the newest @ai-sdk/harness-claude-code against
 # reeval's patch to the pinned one (scripts/drift/claude-code-patch.mjs): it fails once upstream
 # fixes the bug or the patch stops applying. And it re-probes the newest @opencode/cli's providers

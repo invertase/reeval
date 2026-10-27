@@ -6,7 +6,7 @@ const task =
   PREAMBLE +
   'Write evals/readme.eval.ts: an eval that asks the agent to write README.md for the CLI in ' +
   'cli.js. Check deterministically that README.md exists and mentions `--help`, and ask the ' +
-  "LLM judge whether the README explains how to install and run the CLI, labelling that judge's " +
+  "LLM judge whether the README explains how to install and run the CLI, labeling that judge's " +
   'check `explains usage`. It must typecheck with `npx tsc -p .` and pass with `npx reeval run`.'
 
 group(

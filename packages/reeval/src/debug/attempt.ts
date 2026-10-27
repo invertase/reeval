@@ -50,7 +50,7 @@ const json = (value: unknown) => {
             : v,
     )
   } catch (error) {
-    return JSON.stringify({ unserialisable: (error as Error).message })
+    return JSON.stringify({ unserializable: (error as Error).message })
   }
 }
 

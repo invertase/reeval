@@ -5,7 +5,7 @@
 - What `compare` runs
 - Gates and lift
 - Effort and contrasts
-- Labelled checks that discriminate
+- Labeled checks that discriminate
 - `questions`
 
 ## What `compare` runs
@@ -70,11 +70,11 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   attempt opened, and `context_use` counts its tool calls as `context`, `dependency`
   (`node_modules`, `--help`), `web`, `verify` or `workspace`: a heuristic, read it as counts.
 
-## Labelled checks that discriminate
+## Labeled checks that discriminate
 
 - **Label each requirement** with `expect`'s second argument:
   `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`. Every matcher call
-  is recorded (`evals[].attempts[].assertions`; unlabelled ones get `<matcher> <first arg>`).
+  is recorded (`evals[].attempts[].assertions`; unlabeled ones get `<matcher> <first arg>`).
   In a compare, prefer `expect.soft` for independent requirements: a hard failure ends the
   attempt, and the checks after it count as not run: a side that never reached a check reads
   `not run` and the check gets no verdict, so it can't say which arm met it. The result block's
@@ -150,7 +150,7 @@ evaluate('greets in the house style', {
   end. Attempts that failed their checks (a judge failure doesn't count) are
   left out of the pairs: a pairwise question on a compare whose baseline is
   expected to fail gets no pairs, so ask it of each attempt instead. Each pair
-  goes to the model twice, order swapped, labelled A and B; the record's
+  goes to the model twice, order swapped, labeled A and B; the record's
   `evals[].answers` has every vote and each side's `wins`/`n` over decided
   votes, per pair kind. A model error is stored on the answer as `error` and
   warned about; it never changes an outcome. To see what a question was shown,

@@ -248,7 +248,7 @@ export function AttemptPage() {
 
       {attempt.files.artifacts?.length ? (
         <section className="space-y-3">
-          <h2 className="text-sm font-medium">Artefacts</h2>
+          <h2 className="text-sm font-medium">Artifacts</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             {attempt.files.artifacts.map((art) =>
               art.mediaType === 'image/png' ? (

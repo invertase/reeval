@@ -21,7 +21,7 @@ import { contrastsOf } from '../view/contrasts.ts'
 import { bothUnderATenth, DIRECTIONAL_MIN } from '../view/effort.ts'
 import { familyEffortLabel, familyLiftLabel, familyRateLabel } from '../view/family.ts'
 import { runHeader } from '../view/header.ts'
-import { labelledJudgements } from '../view/judgements.ts'
+import { labeledJudgments } from '../view/judgments.ts'
 
 /** A history query's row: the columns the digest reads, as their table declares them. */
 type Row<Columns> = Columns & Record<string, unknown>
@@ -57,7 +57,7 @@ export type DigestAttempt = {
   checks?: string
   /** The labels of the assertions that failed or couldn't answer. */
   failed?: string[]
-  /** Each judgement's score, by its `expect` label (or question). */
+  /** Each judgment's score, by its `expect` label (or question). */
   judges?: Record<string, number>
   /** `c.exec` calls; `<attempt id>:exec<n>` cites the n-th. */
   execs: number
@@ -120,7 +120,7 @@ export const RULES = [
   "A context-use fact counts each attempt's tool calls by class (context, dependency, web, verify, workspace) and lists which placed files each arm opened: how much an arm leaned on what its environment declared versus digging in installed packages. The classes are a heuristic over tool names and paths; cite them as counts, not as proof of intent.",
   'A contrast fact (kind contrast) is one pair of arms on one harness, a against b, when an eval has two variants or more: pass rate and lift of a over b, the checks that tell them apart (discriminates or mixed; sameOnBoth counts the rest) and effort. It answers how two variants differ from each other, not only from the control; gating stays each variant against its control.',
   'A check (kind checks) whose verdict is both-pass or both-fail passes, or fails, on both the variant and its control: it is no evidence for or against the variant. Only discriminates rows say which requirement separated them.',
-  "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check. Each pair is voted in both orders; splits counts pairs whose two orders picked opposite sides (the position decided, not the work), and rates count such a pair as one win each. With more than two arms, read headToHead (a–b wins per pair, splits apart), not the pooled rates. shows lists what each side was shown: a question that shows output or transcript can favour the better-written account rather than the better work, and one that shows artifacts rests on screenshots.",
+  "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check. Each pair is voted in both orders; splits counts pairs whose two orders picked opposite sides (the position decided, not the work), and rates count such a pair as one win each. With more than two arms, read headToHead (a–b wins per pair, splits apart), not the pooled rates. shows lists what each side was shown: a question that shows output or transcript can favor the better-written account rather than the better work, and one that shows artifacts rests on screenshots.",
 ]
 
 const pts = (x: number | null | undefined) =>
@@ -260,10 +260,10 @@ function criteriaOf(e: EvalEntry, tag: (cell: string) => string) {
   const scores = new Map<string, number[]>()
   for (const a of e.attempts) {
     if (!counted(a)) continue
-    for (const j of labelledJudgements(a)) {
+    for (const j of labeledJudgments(a)) {
       if (j.check === undefined) continue
       const id = `${a.cell}\0${j.check}`
-      scores.set(id, [...(scores.get(id) ?? []), j.judgement.score])
+      scores.set(id, [...(scores.get(id) ?? []), j.judgment.score])
     }
   }
   const rows: Array<{ label: string; cells: Record<string, string> }> = []
@@ -326,7 +326,7 @@ export async function buildDigestKeepingDropped(
         const any = a.files.transcript ?? a.files.judgeInput ?? a.checks.find((c) => c.log)?.log
         const assertions = a.assertions ?? []
         const failed = failedLabels(a)
-        const judges = labelledJudgements(a)
+        const judges = labeledJudgments(a)
         attempts[id] = {
           run: short.get(r.record.runId) as string,
           runId: r.record.runId,
@@ -347,7 +347,7 @@ export async function buildDigestKeepingDropped(
           ...(judges.length
             ? {
                 judges: Object.fromEntries(
-                  judges.map((j) => [clip(j.label, LABEL_CHARS), round2(j.judgement.score)]),
+                  judges.map((j) => [clip(j.label, LABEL_CHARS), round2(j.judgment.score)]),
                 ),
               }
             : {}),
@@ -770,7 +770,7 @@ export async function buildDigestKeepingDropped(
       : failures.slice(0, 8)
   for (const { r, e, a } of failureFacts) {
     const failed = failedLabels(a)
-    const judges = labelledJudgements(a).filter((j) => j.judgement.verdict === 'fail')
+    const judges = labeledJudgments(a).filter((j) => j.judgment.verdict === 'fail')
     fact('failure', {
       attempt: idOf.get(`${r.record.runId}\0${a.key}`),
       outcome: a.outcome,
@@ -782,9 +782,9 @@ export async function buildDigestKeepingDropped(
         ? {
             judges: judges.map((j) => ({
               label: clip(j.label, LABEL_CHARS),
-              question: clip(j.judgement.question, 300),
-              score: j.judgement.score,
-              threshold: j.judgement.threshold,
+              question: clip(j.judgment.question, 300),
+              score: j.judgment.score,
+              threshold: j.judgment.threshold,
             })),
           }
         : {}),
@@ -866,7 +866,7 @@ export async function buildDigestKeepingDropped(
         status: row.status,
         ...(row.changes?.length ? { changes: row.changes } : {}),
         ...(row.gate ? { gate: row.gate } : {}),
-        ...(row.cancelled ? { cancelled: row.cancelled } : {}),
+        ...(row.canceled ? { canceled: row.canceled } : {}),
       })),
     })
   }
@@ -1081,8 +1081,8 @@ export async function buildDigestKeepingDropped(
   for (const [i, { r, e, a }] of [...perCell.values()].slice(0, 6).entries()) {
     const id = idOf.get(`${r.record.runId}\0${a.key}`) as string
     const lines = await lastText(r.record.runId, a)
-    const judges = labelledJudgements(a).filter((j) => j.judgement.verdict === 'fail')
-    for (const { label, judgement: j } of judges) {
+    const judges = labeledJudgments(a).filter((j) => j.judgment.verdict === 'fail')
+    for (const { label, judgment: j } of judges) {
       lines.push(
         `judge ${clip(label, LABEL_CHARS)}: ${j.question}`,
         `judge score: ${j.score} (threshold ${j.threshold})`,

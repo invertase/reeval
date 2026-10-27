@@ -844,7 +844,7 @@
       "type": "object",
       "properties": {
         "delayMs": {
-          "description": "Simulated turn length, honours the abort signal.",
+          "description": "Simulated turn length, honors the abort signal.",
           "type": "number",
           "maximum": 2147483647
         },

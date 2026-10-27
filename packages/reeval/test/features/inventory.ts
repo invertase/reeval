@@ -11,7 +11,7 @@ export type InventoryFeature = {
   /** The feature as the docs name it. */
   name: string
   /**
-   * Directories under test/features/, or one row of a parameterised one (`harness/rules:pi`).
+   * Directories under test/features/, or one row of a parameterized one (`harness/rules:pi`).
    * Their tiers (fake, docker, podman, real) come from features.test.ts.
    */
   fixtures?: string[]
@@ -23,7 +23,7 @@ export type InventoryFeature = {
    */
   unit?: string[]
   /**
-   * Checks in the real-agent suites: `contract › <behaviour>` (a behaviour in contract.test.ts,
+   * Checks in the real-agent suites: `contract › <behavior>` (a behavior in contract.test.ts,
    * on every real harness), `e2e › <the test's title, or a part of it>` (e2e-real.test.ts),
    * `questions › <title>` (questions-real.test.ts, a real model answering compare questions) or
    * `openrouter › <title>` (openrouter-real.test.ts, reeval's own calls on real OpenRouter).
@@ -1161,7 +1161,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.usage',
     area: 'Harnesses',
-    name: 'Token usage and the served model, per turn and totalled, from any harness',
+    name: 'Token usage and the served model, per turn and totaled, from any harness',
     fixtures: ['harness/cursor-reports-usage'],
     unit: ['reeval/test/harness.test.ts'],
     real: [
@@ -1201,7 +1201,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.transcripts',
     area: 'Harnesses',
-    name: 'Transcripts, normalised per harness',
+    name: 'Transcripts, normalized per harness',
     unit: [
       'reeval/test/replay.test.ts',
       'reeval/test/harness.test.ts',
@@ -1224,7 +1224,7 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/replay.test.ts'],
     real: [
       "contract › every tool call in the adapter's catalog",
-      'contract › file edits, reads and commands normalised',
+      'contract › file edits, reads and commands normalized',
     ],
   },
   {
@@ -1330,7 +1330,7 @@ export const inventory: InventoryFeature[] = [
     id: 'assert.named-checks',
     area: 'Judges and matchers',
     name: "Named check results: `expect(value, 'label')`, every `expect` and `expect.soft` recorded per attempt, tallied per cell, and checks that don't discriminate in a compare",
-    fixtures: ['assert/labelled', 'compare/check-not-run'],
+    fixtures: ['assert/labeled', 'compare/check-not-run'],
     unit: ['reeval/test/engine-expect.test.ts', 'reeval/test/checks.test.ts'],
   },
   {
@@ -1429,9 +1429,9 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/history.test.ts'],
   },
   {
-    id: 'compare.cancelled',
+    id: 'compare.canceled',
     area: 'Records and studio',
-    name: "An eval Ctrl-C cancelled reads `can't compare` with that side `cancelled` in `reeval compare`, never `regressed`, and doesn't fail `--fail-on-regression`",
+    name: "An eval Ctrl-C canceled reads `can't compare` with that side `canceled` in `reeval compare`, never `regressed`, and doesn't fail `--fail-on-regression`",
     unit: ['reeval/test/history.test.ts', 'reeval/test/output.test.ts'],
   },
   {
@@ -1541,7 +1541,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'query.check-rates',
     area: 'Records and studio',
-    name: 'Each labelled check\u2019s pass rate per cell, control and variant alike (`check_rates`)',
+    name: 'Each labeled check\u2019s pass rate per cell, control and variant alike (`check_rates`)',
     unit: ['reeval/test/query.test.ts'],
   },
   {
@@ -1742,7 +1742,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'output.tally',
     area: 'CLI and runner',
-    name: 'The tally (`5 fail · 2 pass`, infra errors, cancelled attempts and skips apart) and the no-model hint',
+    name: 'The tally (`5 fail · 2 pass`, infra errors, canceled attempts and skips apart) and the no-model hint',
     fixtures: ['output/infra-error'],
     unit: ['reeval/test/output.test.ts', 'reeval/test/suite.test.ts'],
   },

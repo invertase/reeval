@@ -299,7 +299,7 @@ function configFromData(data: Record<string, unknown>): ReevalConfig {
  * Resolves a config in its data form (a parsed `reeval.yaml`, or `ReevalConfigData` from another
  * language) whose relative host paths resolve against `root`, its directory: `resolveConfig`'s
  * checks name a mistake in their own words first, and the config contract refuses anything they
- * let through, such as a `null` or a misspelt nested key.
+ * let through, such as a `null` or a misspelled nested key.
  */
 export function resolveConfigData(input: unknown, root: string, file: string): ResolvedConfig {
   if (!isRecord(input)) {

@@ -332,15 +332,15 @@ CREATE VIEW eval_trend AS
 -- Each judge question's pass rate per cell per run, where it differs from that cell's last run.
 CREATE VIEW verdict_flips AS
   WITH rates AS (
-    SELECT j.run_id, a.eval_key, a.cell_key, j.key AS judgement_key, j.question,
+    SELECT j.run_id, a.eval_key, a.cell_key, j.key AS judgment_key, j.question,
       AVG(j.verdict = 'pass') AS pass_rate, COUNT(*) AS n
     FROM judgements j JOIN attempts a ON a.run_id = j.run_id AND a.key = j.attempt_key
     GROUP BY j.run_id, a.eval_key, a.cell_key, j.key
   ), ordered AS (
     SELECT *, LAG(pass_rate) OVER w AS prev_pass_rate, LAG(run_id) OVER w AS prev_run_id
-    FROM rates WINDOW w AS (PARTITION BY eval_key, cell_key, judgement_key ORDER BY run_id)
+    FROM rates WINDOW w AS (PARTITION BY eval_key, cell_key, judgment_key ORDER BY run_id)
   )
-  SELECT run_id, prev_run_id, eval_key, cell_key, judgement_key, question, prev_pass_rate,
+  SELECT run_id, prev_run_id, eval_key, cell_key, judgment_key, question, prev_pass_rate,
     pass_rate, n
   FROM ordered WHERE prev_run_id IS NOT NULL AND pass_rate IS NOT prev_pass_rate;
 `

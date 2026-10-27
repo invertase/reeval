@@ -33,7 +33,7 @@ export async function runScript(c: AttemptContext, run: ScriptRun): Promise<void
       out.push({
         reeval: {
           type: 'abort',
-          reason: reason?.name === 'TimeoutError' ? 'timeout' : 'cancelled',
+          reason: reason?.name === 'TimeoutError' ? 'timeout' : 'canceled',
           message: reason?.message ?? String(reason),
         },
       })

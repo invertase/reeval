@@ -32,7 +32,7 @@ export default defineConfig({
 
 const SKILL = `---
 name: house-greeting
-description: The organisation's greeting style. Use when writing greetings.
+description: The organization's greeting style. Use when writing greetings.
 ---
 
 Greet people with "Ahoy, <name>!".
@@ -465,9 +465,9 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
     assert.match(r.stdout, block)
     assert.match(r.stdout, /^1 pass$/m)
 
-    const colour = await runCli(p.dir, ['run'], { env: { FORCE_COLOR: '1' } })
-    assert.equal(colour.code, 0, colour.stdout + colour.stderr)
-    assert.ok(!colour.stdout.includes('\x1b[31m'), 'nothing red')
+    const color = await runCli(p.dir, ['run'], { env: { FORCE_COLOR: '1' } })
+    assert.equal(color.code, 0, color.stdout + color.stderr)
+    assert.ok(!color.stdout.includes('\x1b[31m'), 'nothing red')
 
     const agent = await runCli(p.dir, ['run', '--ui', 'agent'])
     assert.equal(agent.code, 0, agent.stdout + agent.stderr)
@@ -1393,7 +1393,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
         /Unknown judge option "contents" in reeval\.config\.ts\. Did you mean "state\.contents"\?/,
       ],
       [
-        'a misspelt judge.state key',
+        'a misspelled judge.state key',
         { judge: { model: fakeJudge({ score: 0.9 }), state: { transcipt: true } } },
         /Unknown judge\.state key "transcipt" in reeval\.config\.ts\. Did you mean "transcript"\?/,
       ],
@@ -1813,7 +1813,7 @@ export const withSkill = defineEnvironment('with-skill', ({ file, mcp, secret, s
   rules: 'Always write tests.',
   files: { 'notes/readme.txt': 'hello', 'docs/api.md': file('../docs/api.md') },
   env: {
-    FLAVOUR: 'mint',
+    FLAVOR: 'mint',
     EXTRA_TOKEN: secret.fromEnv('REEVAL_TEST_HOST_TOKEN'),
     CHECK_TOKEN: secret.fromEnv('REEVAL_TEST_HOST_TOKEN', { to: 'checks' }),
     MAYBE_TOKEN: secret.fromEnv('REEVAL_TEST_NOT_SET', { optional: true }),
@@ -1839,7 +1839,7 @@ evaluate('greets', { runs: 1, compare: { baseline: plain, variants: [withSkill] 
   expect(await c.readFile('notes/readme.txt')).toBe('hello')
   expect(await c.readFile('docs/api.md')).toBe('# API\\n')
   expect((await c.readFile('secret-length.txt'))?.trim()).toBe('32')
-  expect((await c.exec('printf %s "$FLAVOUR"')).stdout).toBe('mint')
+  expect((await c.exec('printf %s "$FLAVOR"')).stdout).toBe('mint')
   expect((await c.exec('printf %s "$CHECK_TOKEN"')).stdout).toBe('s3cret-value-123')
   expect(turn.diff.files.map((f) => f.path)).not.toContain('AGENTS.md')
 })
@@ -1862,13 +1862,13 @@ evaluate('greets', { runs: 1, compare: { baseline: plain, variants: [withSkill] 
     assert.deepEqual(w?.mcp, ['docs'])
     assert.deepEqual(w?.secrets, ['APP_TOKEN', 'CHECK_TOKEN', 'EXTRA_TOKEN'])
     assert.deepEqual(w?.unset, ['MAYBE_TOKEN'])
-    assert.deepEqual(w?.vars, ['FLAVOUR', 'MODE'])
+    assert.deepEqual(w?.vars, ['FLAVOR', 'MODE'])
     assert.equal('image' in (w ?? {}), false, 'environments record no image steps')
     assert.equal(w?.setup.length, 1)
     const [e] = evals
     const variant = e?.attempts.find((a) => a.cell === 'fake/with-skill/fake')
     assert.deepEqual(variant?.env, {
-      vars: ['FLAVOUR', 'MODE'],
+      vars: ['FLAVOR', 'MODE'],
       secrets: ['APP_TOKEN', 'CHECK_TOKEN', 'EXTRA_TOKEN'],
       brokered: [],
     })

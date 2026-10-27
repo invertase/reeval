@@ -53,7 +53,7 @@ changelog  0                  1                  1       0.307  1
 
 | File | What it is |
 |---|---|
-| [`with-query.eval.ts`](./with-query.eval.ts) | The eval: the control, the variant and two labelled checks |
+| [`with-query.eval.ts`](./with-query.eval.ts) | The eval: the control, the variant and two labeled checks |
 | [`skills/changelog/SKILL.md`](./skills/changelog/SKILL.md) | The skill the variant adds |
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |

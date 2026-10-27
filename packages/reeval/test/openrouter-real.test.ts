@@ -58,18 +58,18 @@ evaluate('writes a greet(name) function', async (c) => {
   ) as ShapeSchema
   assert.deepEqual(validate(schema, run), [], 'the record fits its schema')
 
-  const judgement = run.evals[0]?.attempts[0]?.judgements?.[0]
-  assert.ok(judgement, `no judgement recorded\n${r.stdout}\n${r.stderr}`)
+  const judgment = run.evals[0]?.attempts[0]?.judgements?.[0]
+  assert.ok(judgment, `no judgment recorded\n${r.stdout}\n${r.stderr}`)
   t.diagnostic(
-    `${judgement.resolvedModel} on ${judgement.upstream} · $${judgement.costUsd} · score ${judgement.score}`,
+    `${judgment.resolvedModel} on ${judgment.upstream} · $${judgment.costUsd} · score ${judgment.score}`,
   )
-  assert.equal(judgement.model, OPENROUTER_JUDGE_MODEL)
-  assert.equal(judgement.gateway, 'openrouter')
-  assert.ok(judgement.resolvedModel, 'OpenRouter names the model that served the judge')
-  assert.ok(judgement.upstream, 'OpenRouter names the upstream provider that served the judge')
+  assert.equal(judgment.model, OPENROUTER_JUDGE_MODEL)
+  assert.equal(judgment.gateway, 'openrouter')
+  assert.ok(judgment.resolvedModel, 'OpenRouter names the model that served the judge')
+  assert.ok(judgment.upstream, 'OpenRouter names the upstream provider that served the judge')
   assert.ok(
-    typeof judgement.costUsd === 'number' && judgement.costUsd >= 0,
-    `the judge's cost: ${judgement.costUsd}`,
+    typeof judgment.costUsd === 'number' && judgment.costUsd >= 0,
+    `the judge's cost: ${judgment.costUsd}`,
   )
   assert.match(r.stdout, /judge served by \S/, "the output names the judge's upstream")
 

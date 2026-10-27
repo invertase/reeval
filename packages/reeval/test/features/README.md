@@ -18,10 +18,10 @@ name an inventory entry with a plan case.
 |---|---|
 | which evals, cells, attempts or notes a run plans (options and their cascade, profiles, selection, compare, images) | a plan case in `plan.test.ts`: a new directory under `test/plan/`, or a case on an existing one, then `REEVAL_UPDATE_SNAPSHOTS=1 pnpm test:plan` and review the diff |
 | what input reeval accepts or refuses (a new option or value) | rows in `test/refusals/cases.ts`, then `REEVAL_UPDATE_SNAPSHOTS=1` on `test/refusals.test.ts`; also the plan case above when `--dry-run` output changes |
-| what lands in or happens inside an attempt (environment fields, sandbox behaviour, harness inputs, the `c` API) | a fixture here: one check and one canary |
+| what lands in or happens inside an attempt (environment fields, sandbox behavior, harness inputs, the `c` API) | a fixture here: one check and one canary |
 | … and touches Docker, images, egress, ports or brokering | list it with `tiers: ['fake', 'docker']` (only `docker` if the fake can't model it) |
 | what a real harness receives (skills, MCP, rules, auth) | also list the `real` tier: the same fixture on real Cursor (see Running) |
-| runner behaviour (exit codes, output, history, cancel, budget, redaction) | a plain `node:test` case in the matching existing test file |
+| runner behavior (exit codes, output, history, cancel, budget, redaction) | a plain `node:test` case in the matching existing test file |
 | a new error message | a row in the `common mistakes` table in `options.test.ts` |
 
 Every tier also adds or updates the feature's entry in [`inventory.ts`](./inventory.ts) and, for
@@ -30,7 +30,7 @@ eval/group options, a row in [`eval-options.ts`](./eval-options.ts), then
 
 ## What a fixture is
 
-Each directory here is a small reeval project that checks **one** behaviour of one feature, from
+Each directory here is a small reeval project that checks **one** behavior of one feature, from
 inside the attempt, with reeval's own API. `features.test.ts` runs it and checks the record from
 outside.
 
@@ -45,7 +45,7 @@ outside.
   …                             whatever the feature needs (skills/, files)
 ```
 
-- One `evaluate` per file and one behavioural expectation. A feature with two properties (the
+- One `evaluate` per file and one behavioral expectation. A feature with two properties (the
   file set and the content, say) gets two fixtures.
 - The canary makes the same check with one deliberate mistake, so it fails with an assertion.
   That proves the check can fail. The oracle matches its message, so it also fails for the right
@@ -60,7 +60,7 @@ outside.
 
 ### One fixture, a row per harness
 
-A behaviour every harness has in its own place (where `rules`, workspace and home skills land, the
+A behavior every harness has in its own place (where `rules`, workspace and home skills land, the
 image a Dockerfile builds on, a plugin kept whole) is **one** fixture, not a copy per harness:
 
 ```text
@@ -82,7 +82,7 @@ marketplace.
 
 Every user-facing feature has an entry in [`inventory.ts`](./inventory.ts): an id, its area, its
 name as the docs give it, and what covers it. That's `fixtures` (directories here, or one row of a
-parameterised one, `harness/rules:pi`), `plan` cases (`dir/name`), `unit` (test files under
+parameterized one, `harness/rules:pi`), `plan` cases (`dir/name`), `unit` (test files under
 `packages/`, such as `reeval/test/options.test.ts`) and `real` checks. Unit tests are listed by
 file, not by title. [`COVERAGE.md`](./COVERAGE.md) is the feature × tier matrix (unit, plan, fake,
 docker, real) generated from it, the table in `features.test.ts` and the cases in `plan.test.ts`.
@@ -90,7 +90,7 @@ CI writes the same matrix to the job summary.
 
 - **A new feature adds its entry** in the same change, naming the fixtures, plan cases or test
   files that cover it. Every fixture row and plan case must be named by some entry.
-- **A parameterised fixture counts one row per harness.** Naming its directory claims and counts
+- **A parameterized fixture counts one row per harness.** Naming its directory claims and counts
   every row (the generic feature, such as `rules`); naming `<dir>:<harness>` claims one row (that
   harness's entry).
 - **A feature that nothing covers yet** needs `gap: '<why>'`. Once something covers it, delete
@@ -130,11 +130,11 @@ CI writes the same matrix to the job summary.
   DNS server answers every A query with `REEVAL_EGRESS_DNS_ANSWER` at `REEVAL_EGRESS_DNS` (address and
   port), so whether a name resolves doesn't hang on the machine's own resolver. The row's `record`
   checks the attempt's `egress` from outside.
-- **Per-harness behaviour without a key:** `fakeHarness({ layout: 'claude-code' })` (or
+- **Per-harness behavior without a key:** `fakeHarness({ layout: 'claude-code' })` (or
   `'cursor'`) places rules and skills exactly where that agent reads them and runs in that
   agent's image, so a fixture under `harness/` covers what a real harness receives. List the
   fixture's `image` in its row when it isn't Cursor's, so the Docker tier knows what to need
-  (`perHarness` sets it). When every harness has the behaviour, make it one fixture with a row per
+  (`perHarness` sets it). When every harness has the behavior, make it one fixture with a row per
   harness (see [above](#one-fixture-a-row-per-harness)).
 
 ## The real tier
@@ -149,14 +149,14 @@ at a time, at `--concurrency 1`, and spend money, so keep them cheap:
 - The check reads something the model can't fake: a file a tool wrote, the agent's own tool
   output, or the record (`context`, taken after the first turn, lists the adapter's home).
 - A canary that needs no turn (only `c.exec` or `c.readFile`) when the check allows it; else one short turn.
-- A fixture whose behaviour only a real agent has (rules reaching its context) lists `real` alone,
+- A fixture whose behavior only a real agent has (rules reaching its context) lists `real` alone,
   next to the fake/Docker fixture that checks where reeval put the file.
 
 What every real harness must do, on each of them, is the **harness contract**
-([`../contract/README.md`](../contract/README.md)): a table of behaviours run once per harness
+([`../contract/README.md`](../contract/README.md)): a table of behaviors run once per harness
 row. A feature a real harness receives (skills, rules, MCP, auth, egress, the record) adds a
-behaviour there when it applies to every harness, and names it in its inventory entry's `real`
-(`contract › <behaviour>`); a harness-specific check stays a fixture here.
+behavior there when it applies to every harness, and names it in its inventory entry's `real`
+(`contract › <behavior>`); a harness-specific check stays a fixture here.
 
 ## Running
 

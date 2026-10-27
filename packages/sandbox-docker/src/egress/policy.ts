@@ -97,7 +97,7 @@ const inList = (list: BlockList, address: string) => {
   return v !== 0 && list.check(address, v === 6 ? 'ipv6' : 'ipv4')
 }
 
-const normalise = (host: string) =>
+const normalize = (host: string) =>
   host
     .toLowerCase()
     .replace(/\.$/, '')
@@ -150,8 +150,8 @@ const reaches = (address: string) =>
 
 /** How `host` matches: listed as it is, only by a `*.` pattern (never an IP address), or not. */
 function hostMatch(patterns: readonly string[], host: string): 'exact' | 'wildcard' | undefined {
-  const h = normalise(host)
-  const ps = patterns.map(normalise)
+  const h = normalize(host)
+  const ps = patterns.map(normalize)
   if (ps.includes(h)) return 'exact'
   // No top-level domain is numeric: such a host is an IP address, maybe in a short form like 10.1.
   if (isIP(h) || /(?:^|\.)\d+$/.test(h)) return undefined
@@ -179,7 +179,7 @@ export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions 
   const deniedCidrs = blockList(custom?.deniedCIDRs)
 
   return async (rawHost: string): Promise<Verdict> => {
-    const host = normalise(rawHost)
+    const host = normalize(rawHost)
     if (policy.mode === 'deny-all') {
       return { allowed: false, status: 403, reason: 'the policy denies all egress' }
     }

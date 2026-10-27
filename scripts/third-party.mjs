@@ -1,8 +1,8 @@
 // The third-party code inlined into reeval's tarball, for its THIRD_PARTY_NOTICES.md.
 // rollup-plugin-license lists the packages whose modules land in a bundle (tsdown's, and the
 // studio app's Vite build); packages that reach it other ways (CSS @imports, files copied from a
-// package) are added by path. Every one must carry a licence in ALLOWED, and a licence file
-// where its licence asks for the notice to ship; otherwise the build fails. The package's own
+// package) are added by path. Every one must carry a license in ALLOWED, and a license file
+// where its license asks for the notice to ship; otherwise the build fails. The package's own
 // `dependencies` aren't inlined: installers fetch them, notices and all.
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
@@ -10,7 +10,7 @@ import license from 'rollup-plugin-license'
 import validate from 'spdx-expression-validate'
 import satisfies from 'spdx-satisfies'
 
-/** Licences bundled code may carry (an `OR` needs one of them, an `AND` all). */
+/** Licenses bundled code may carry (an `OR` needs one of them, an `AND` all). */
 export const ALLOWED = [
   'MIT',
   'MIT-0',
@@ -40,8 +40,8 @@ const own = new Set(
  */
 
 /**
- * Licence files for packages whose tarball leaves theirs out, from their repository, named by
- * package (`@scope__name`). Check a new one is the version's licence before adding it.
+ * License files for packages whose tarball leaves theirs out, from their repository, named by
+ * package (`@scope__name`). Check a new one is the version's license before adding it.
  */
 const missingLicenses = join(import.meta.dirname, 'third-party-licenses')
 
@@ -50,14 +50,14 @@ function entry(pkg, licenseText, noticeText, where) {
   const id = `${pkg.name}@${pkg.version}`
   const spdx = typeof pkg.license === 'string' ? pkg.license : null
   if (!spdx || !validate(spdx))
-    throw new Error(`${id} is bundled but has no SPDX licence (${JSON.stringify(pkg.license)})`)
+    throw new Error(`${id} is bundled but has no SPDX license (${JSON.stringify(pkg.license)})`)
   if (!satisfies(spdx, ALLOWED))
-    throw new Error(`${id} is bundled but its licence, ${spdx}, isn't allowed (${ALLOWED})`)
+    throw new Error(`${id} is bundled but its license, ${spdx}, isn't allowed (${ALLOWED})`)
   const fallback = join(missingLicenses, pkg.name.replace('/', '__'))
   if (!licenseText && existsSync(fallback)) licenseText = readFileSync(fallback, 'utf8')
   if (!licenseText && !satisfies(spdx, NO_NOTICE))
     throw new Error(
-      `${id} is bundled but ships no LICENSE file for its ${spdx} notice: add its licence ` +
+      `${id} is bundled but ships no LICENSE file for its ${spdx} notice: add its license ` +
         `from its repository as scripts/third-party-licenses/${pkg.name.replace('/', '__')}`,
     )
   const repo = typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url
@@ -141,7 +141,7 @@ export function markedFiles(dir, marker, base) {
 }
 
 /**
- * THIRD_PARTY_NOTICES.md: one section per package and version, where it's inlined, its licence
+ * THIRD_PARTY_NOTICES.md: one section per package and version, where it's inlined, its license
  * and its notices.
  * @param {string} name The package the notices ship in.
  * @param {ThirdParty[]} packages
@@ -170,18 +170,18 @@ export function renderNotices(name, packages, copied) {
     '# Third-party notices',
     '',
     `${name} is licensed under the Apache License 2.0 (see \`LICENSE\`). Its published package`,
-    'also contains the third-party code below, inlined at build time, under its own licence.',
+    'also contains the third-party code below, inlined at build time, under its own license.',
     `The packages ${name} lists in \`dependencies\` aren't inlined: npm installs them, each`,
-    'with its own licence.',
+    'with its own license.',
     '',
-    '| Package | Version | Licence | Inlined into |',
+    '| Package | Version | License | Inlined into |',
     '|---|---|---|---|',
     ...sorted.map((p) => `| ${p.name} | ${p.version} | ${p.license} | ${p.where.join(', ')} |`),
     ...copied.map((c) => `| ${c.title} | | ${c.license} | ${c.files.length} source files |`),
   ]
   for (const p of sorted) {
     lines.push('', `## ${p.name}@${p.version}`, '')
-    lines.push(`- Licence: ${p.license}`)
+    lines.push(`- License: ${p.license}`)
     if (p.source) lines.push(`- Source: ${p.source}`)
     lines.push(`- Inlined into: ${p.where.join(', ')}`)
     if (p.modified) lines.push(`- Modified: ${p.modified}`)
@@ -190,7 +190,7 @@ export function renderNotices(name, packages, copied) {
   }
   for (const c of copied) {
     lines.push('', `## ${c.title}`, '')
-    lines.push(`- Licence: ${c.license}`, `- Source: ${c.source}`)
+    lines.push(`- License: ${c.license}`, `- Source: ${c.source}`)
     lines.push(
       `- Copied${c.modified ? ', then modified,' : ''} into these source files of ${c.into}:`,
     )

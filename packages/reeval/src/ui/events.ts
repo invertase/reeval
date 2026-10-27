@@ -21,7 +21,7 @@ export type EvalResult = {
   errors: string[]
   /** The first error's `name` (`TimeoutError`, `AbortError`), when the worker sent one. */
   errorName?: string
-  /** `errors` as Vitest prints them (diff, code frame), with ANSI colour codes. */
+  /** `errors` as Vitest prints them (diff, code frame), with ANSI color codes. */
   formattedErrors: string[]
   meta: EvalMeta | undefined
   /** A placeholder (`evaluate.todo` or `group.todo`): no body; it's skipped and shown as todo. */

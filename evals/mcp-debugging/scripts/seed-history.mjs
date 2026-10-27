@@ -61,7 +61,7 @@ const tidy = {
   config: () => edit('evals/parse-config.eval.ts', 'reads a JSON config file', 'reads a JSON file'),
   uniq: () => edit('evals/uniq.eval.ts', 'keeping the first', 'keeping first occurrences'),
   pad: () => edit('evals/pad.eval.ts', 'to n characters', 'to a width of n'),
-  title: () => edit('evals/title-case.eval.ts', 'capitalises each word', 'capitalises every word'),
+  title: () => edit('evals/title-case.eval.ts', 'capitalizes each word', 'capitalizes every word'),
   greetAgent: () => edit('agent/src/greet.js', '(name) =>', "(name = 'there') =>"),
   sumAgent: () => edit('agent/src/sum.js', '(a, b) => a + b', '(total, x) => total + x'),
 }

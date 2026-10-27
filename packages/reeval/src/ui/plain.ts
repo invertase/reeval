@@ -56,7 +56,7 @@ const STARTS: Partial<Record<Progress['kind'], Progress['kind']>> = {
 type Attempt = {
   key: string
   id: string
-  /** `[greet#1 cursor]` without colour. */
+  /** `[greet#1 cursor]` without color. */
   label: string
   startedAt: number
   lines: Line[]

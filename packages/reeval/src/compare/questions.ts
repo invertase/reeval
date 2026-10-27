@@ -85,8 +85,8 @@ function shownParts(shows: QuestionShows, taskEach: boolean): string[] {
 export function questionSystem(shows: QuestionShows = DEFAULT_SHOWS, taskEach = false): string {
   const parts = shownParts(shows, taskEach)
   return `You compare two attempts by coding agents at the same task and answer one question about them.
-Each attempt is shown as ${listed(parts)}, labelled A or B. The labels are assigned at random: which attempt comes first says nothing about it.
-Judge only by the question, from what is shown. Answer A or B for the attempt the question favours, or tie when what is shown doesn't separate them on it. Give a short reason for the pick.`
+Each attempt is shown as ${listed(parts)}, labeled A or B. The labels are assigned at random: which attempt comes first says nothing about it.
+Judge only by the question, from what is shown. Answer A or B for the attempt the question favors, or tie when what is shown doesn't separate them on it. Give a short reason for the pick.`
 }
 
 const voteSchema = z.object({
@@ -1094,12 +1094,12 @@ export function questionRunner(options: QuestionRunnerOptions) {
       ended.set(result.id, list)
       if (list.filter((r) => !isCompleted(r)).length >= e.row.plan.attempts) start(result.id)
     },
-    /** Stops calls in flight and asks nothing more: the run was cancelled. */
+    /** Stops calls in flight and asks nothing more: the run was canceled. */
     cancel(): void {
       controller.abort()
     },
     /**
-     * What a cancelled run keeps: each attempt whose answers all came back before the cancel,
+     * What a canceled run keeps: each attempt whose answers all came back before the cancel,
      * and, for an attempt the cancel cut short, each question as an error, so the record shows
      * it went unanswered. Waits for the aborted calls to unwind.
      */

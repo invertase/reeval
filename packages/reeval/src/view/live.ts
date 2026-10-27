@@ -36,7 +36,7 @@ export type LiveCounts = {
   running: number
 }
 
-/** What the run is doing: running attempts, cancelling them, or assembling its record. */
+/** What the run is doing: running attempts, canceling them, or assembling its record. */
 export type LivePhase = 'running' | 'cancelling' | 'finishing'
 
 export type LiveProgress = {
