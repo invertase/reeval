@@ -203,7 +203,7 @@ For more information about sandbox factories, see [Choose a sandbox](/integratio
 `docker()` and `podman()` take these options. Each limit applies to one container, and reeval passes them to the container engine's run command (`docker run` or `podman run`) as `--memory`, `--memory-swap`, `--cpus`, and `--pids-limit`. For more information, see [Docker sandbox](/integrations/sandboxes/docker).
 
 <Property name="docker.id" type="string" optional>
-  The last segment of the cell key. Defaults to `docker`, `docker:<image>` when `image` or `from` names another image, or `docker:<name>` for a `dockerfile`, where the name is the file's, or its directory's for a file named `Dockerfile`. A hash of `install` follows.
+  The last segment of the cell key. The default begins with the engine's name, `docker`, or `podman` for `podman()`. It is `<engine>` alone, `<engine>:<image>` when `image` or `from` names another image, or `<engine>:<name>` for a `dockerfile`, where the name is the file's, or its directory's for a file named `Dockerfile`. A hash of `install` follows.
 </Property>
 
 <Property name="docker.maxConcurrent" type="number" optional>
@@ -565,7 +565,7 @@ For more information about analysis, see [Analyze a run](/results/analyze#set-an
 </Property>
 
 <Property name="compare.minLift" type="number" optional>
-  Lift from -1 to 1; a variant cell fails when its lift interval's lower end is below it.
+  Lift from -1 to 1. A variant cell fails when its lift interval's lower end is below it. A family of pooled cases is gated on the family's pooled lift instead, and fails when the pooled interval's lower end is below it.
 </Property>
 
 <Property name="compare.harness" type="Array<string | HarnessDescriptor>" optional>

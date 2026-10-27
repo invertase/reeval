@@ -791,6 +791,36 @@ for (const href of ['environments/secrets', 'environments/egress']) {
   }
 }
 
+// ---- Options entries ---------------------------------------------------------------------------
+
+/** One `<Property name="…">` entry of reference/options. */
+function optionEntry(text, name) {
+  const open = text.indexOf(`<Property name="${name}"`)
+  if (open === -1) return undefined
+  return text.slice(open, text.indexOf('</Property>', open))
+}
+const dockerId = optionEntry(optionsPage, 'docker.id')
+if (dockerId && /\bbegins? with\b[^.]*`docker`/.test(dockerId) && !/podman/.test(dockerId)) {
+  problems.push(
+    'reference/options docker.id says the default begins `docker` and does not name `podman`: sandboxId in src/options.ts prefixes the engine, `podman` for podman()',
+  )
+}
+if (dockerId && /Defaults to `docker`/.test(dockerId)) {
+  problems.push(
+    'reference/options docker.id says the default begins `docker`: sandboxId in src/options.ts prefixes the engine, `podman` for podman()',
+  )
+}
+const minLift = optionEntry(optionsPage, 'compare.minLift')
+if (
+  minLift &&
+  /variant cell fails/.test(minLift) &&
+  !/famil(?:y|ies)[^.]*\bpooled lift\b/.test(minLift)
+) {
+  problems.push(
+    "reference/options compare.minLift says a variant cell fails and does not say a family is gated on the family's pooled lift (history/families.ts gates the pooled interval)",
+  )
+}
+
 // ---- Agents pages ------------------------------------------------------------------------------
 
 problems.push(...(await agentsProblems({ root, docsDir })))
