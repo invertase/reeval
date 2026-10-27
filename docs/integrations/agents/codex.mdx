@@ -45,19 +45,9 @@ The prompt is a shell argument under 128 KiB.
   Reasoning effort, written as `model_reasoning_effort` in the `~/.codex/config.toml` file. Values include `low`, `medium`, `high`, `xhigh`, `max`, and `ultra`.
 </Property>
 
-<Property name="id" type="string" optional>
-  Cell id. Defaults to `codex:<model>`, or `codex:<model>[effort=<value>]` when `effort` is set. The id uses letters, digits, and `._:@+-=[]`.
-</Property>
+For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
-<Property name="maxConcurrent" type="number" optional>
-  The most Codex attempts that run at the same time, across the run. A whole number of at least 1.
-</Property>
-
-<Property name="startTimeout" type="Duration" optional>
-  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
-</Property>
-
-In the sandbox, Codex's `config.toml` file turns analytics off, and turns the plugin sync off unless the environment has plugins, so a turn without plugins contacts only `api.openai.com`.
+In the sandbox, Codex's `config.toml` file turns analytics off.
 
 For more information about choosing a harness, see [Choose an agent](/agents).
 
@@ -74,6 +64,22 @@ For more information about writing rules, see [Add project rules](/environments/
 The Codex harness reads skills from the `.agents/skills` directory in the workspace, from the working directory up to the repo root, and from the `~/.agents/skills` directory in the home directory.
 
 For more information about placing skills, see [Give the agent skills](/environments/skills).
+
+## `plugins`
+
+reeval lists the plugins in a marketplace named `reeval` in Codex's home directory and installs each with `codex plugin add` as the session starts, so Codex caches a copy and loads its skills and MCP servers. In the sandbox, Codex's `config.toml` file turns the plugin sync off unless the environment has plugins, so a turn without plugins contacts only `api.openai.com`.
+
+[//]: # (generated:harness-plugins:codex)
+
+- Takes `skills` and `mcp`, and refuses a plugin that keeps `agents`, `commands`, `hooks` and `rules`: narrow it with `only`, or leave it out of the cell.
+- Reads `plugin.json` and `.codex-plugin/plugin.json` (a root `plugin.json` only when it names an Agent Plugins `$schema`) in place of `.claude-plugin/plugin.json`, so a plugin that has one is refused.
+- Refuses a plugin that bundles apps: they need a ChatGPT login.
+- Names a plugin's MCP servers by their own keys, in one list with `mcp`, and keeps one of two servers of a name, so a clash is refused.
+- With plugins it tries `github.com`, `api.github.com` and `chatgpt.com` (Codex's plugin sync, which it runs on every turn once plugins are on); a restricted egress policy refuses them and records them under `egress.expectedBlocked`.
+
+[//]: # (/generated:harness-plugins:codex)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).
 
 ## `mcp`
 
