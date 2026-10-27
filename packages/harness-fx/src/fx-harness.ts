@@ -146,7 +146,7 @@ server.on('error', (error) => {
   writeFileSync(ready, '')
   process.exit(0)
 })
-server.listen(Number(port), '127.0.0.1', () => writeFileSync(ready, ''))
+server.listen(Number(port), '127.0.0.1', () => writeFileSync(ready, String(server.address().port)))
 `
 
 /** `fx-acp`: starts the relay to the model's provider (`FX_RELAY_UPSTREAM`), waits for it, then becomes `fx acp`. */

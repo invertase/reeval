@@ -166,15 +166,24 @@ async function withRelay(
   const dir = mkdtempSync(join(tmpdir(), 'fx-relay-'))
   writeFileSync(join(dir, 'relay.mjs'), relayScript())
   const ready = join(dir, 'ready')
-  const port = 40000 + Math.floor(Math.random() * 20000)
   const { port: upstreamPort } = server.address() as AddressInfo
   const relay = spawn(
     process.execPath,
-    [join(dir, 'relay.mjs'), String(port), `http://127.0.0.1:${upstreamPort}`, ready],
+    [join(dir, 'relay.mjs'), '0', `http://127.0.0.1:${upstreamPort}`, ready],
     { env: { PATH: process.env.PATH, ...env }, stdio: 'ignore' },
   )
+  let exited = false
+  relay.on('exit', () => {
+    exited = true
+  })
   try {
-    for (let i = 0; i < 100 && !existsSync(ready); i++) await sleep(20)
+    // Port 0 so nothing else can hold the relay's port; the relay writes the one it bound.
+    let port = ''
+    while (!port) {
+      if (exited) throw new Error('the relay exited before it listened')
+      if (existsSync(ready)) port = readFileSync(ready, 'utf8')
+      if (!port) await sleep(10)
+    }
     await run(`http://127.0.0.1:${port}`, requests)
   } finally {
     relay.kill()
