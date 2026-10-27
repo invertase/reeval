@@ -183,7 +183,7 @@ reeval compare [base] [head]  Diff two runs; base defaults to head's nearest rec
 
 ## `reeval checkout`
 
-The `reeval checkout` command creates a Git worktree at the run's commit. An omitted run is `latest`.
+The `reeval checkout` command creates a detached Git worktree at the commit from the start of the run and applies the record's `worktree.patch` file, the uncommitted changes from that start, when the record kept one. An omitted run is `latest`. A run is `latest`, `latest~N`, a run id or a unique prefix, or a Git SHA prefix. The commit must be in this clone, and the command refuses a directory that already exists.
 
 [//]: # (generated:cli-help:checkout)
 
