@@ -1,4 +1,6 @@
 no profile · 2 evals · 8 cells · 8 attempts
+hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)
+hint: family evals/each.eval.ts › pooled across %s runs 1 of its 3 cases; its lift needs 6 for a verdict, so it will say can't tell yet whatever the runs (add cases)
 evals/each.eval.ts › pooled across grace        a/base/docker     control          ungated  ×1  family pooled across %s case 2/3
                                                 a/skilled/docker  variant skilled  gated    ×1  minLift 0.2
                                                 b/base/docker     control          ungated  ×1

@@ -1,4 +1,5 @@
 profile one (--profile) · 4 evals · 5 cells · 6 attempts
+hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)
 evals/questions-attempts.eval.ts › asked of each attempt               a/-/docker        control          gated               ×1  harnesses 2 → 1 (profile one)
                                                                        question: How did the agent find the failing test? · shows task, output, diff, transcript · each attempt · 1 attempt · no language model
 evals/questions-attempts.eval.ts › with choices                        a/-/docker        control          gated passRate 0.5  ×2  harnesses 2 → 1 (profile one)

@@ -1,4 +1,5 @@
 profile lean (--profile) · 3 evals · 14 cells · 14 attempts
+hint: 3 compares run once per cell; a verdict needs 4 runs a side, so their lift and effort will say can't tell yet (runs: 4)
 evals/limited.eval.ts › two variants  a/base/docker     control          ungated  ×1  variants 2 → 1 (profile lean)
                                       a/skilled/docker  variant skilled  gated    ×1
                                       b/base/docker     control          ungated  ×1

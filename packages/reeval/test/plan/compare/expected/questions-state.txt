@@ -1,5 +1,6 @@
 no profile · 5 evals · 16 cells · 16 attempts
 warning: question "Which agent verified its work?" shows state.transcript, which names each harness's tools, so its harness pairs aren't blind. Ask it with across: 'environment', or leave the transcript out.
+hint: 3 compares run once per cell; a verdict needs 4 runs a side, so their lift and effort will say can't tell yet (runs: 4)
 evals/questions-state.eval.ts › transcript across harnesses          a/base/docker     control          ungated  ×1
                                                                      a/skilled/docker  variant skilled  gated    ×1
                                                                      b/base/docker     control          ungated  ×1

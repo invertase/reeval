@@ -1,4 +1,5 @@
 profile locked (--profile) · 8 evals · 9 cells · 9 attempts
+hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)
 evals/cascade.eval.ts › the config policy                                   fake/-/docker         control         gated    ×1  egress "deny-all"
 evals/cascade.eval.ts › an environment replaces it                          fake/closed/docker    control         gated    ×1  egress "deny-all"
 evals/cascade.eval.ts › an extend child replaces its parent                 fake/reopened/docker  control         gated    ×1  egress "allow-all"
