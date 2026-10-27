@@ -1705,6 +1705,11 @@ environment:
       'route: fx with a claude model falls through vertex to vercel',
       route([VERTEX, VERCEL], fx({ model: 'anthropic/claude-haiku-4-5' })),
     ],
+    ['route: fx with a bare openai id on vertex alone', route([VERTEX], fx({ model: 'gpt-5.5' }))],
+    [
+      'route: fx with a bare openai id falls through vertex to direct',
+      route([VERTEX, DIRECT], fx({ model: 'gpt-5.5' })),
+    ],
     ['route: fx on openrouter alone', route([OPENROUTER], fx({ model: 'gpt-5.5' }))],
     [
       'route: pi with effort on a gemini model on openrouter',

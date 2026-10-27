@@ -576,7 +576,7 @@ describe('OpenRouter routes', () => {
     for (const [kind, why] of [
       ['cursor', /Cursor's agent only calls Cursor's own API/],
       ['antigravity', /OpenRouter has no Gemini API/],
-      ['fx', /fx reaches models only on Vercel AI Gateway or OpenAI's API/],
+      ['fx', /fx reaches models only on Vercel AI Gateway, OpenAI's API or Vertex AI/],
     ] as const) {
       const h = { kind, model: kind === 'fx' ? 'gpt-4.1' : 'm' } as HarnessDescriptor
       assert.throws(() => resolve(list('openrouter'), h), why, kind)
@@ -939,6 +939,14 @@ describe('Vertex AI routes', () => {
       FX_VERTEX_LOCATION: 'us-east5',
     })
     assert.equal(vertexHarnessModel('fx', 'google/gemini-3.8-flash'), 'google/gemini-3.8-flash')
+  })
+
+  test("a bare fx id is OpenAI's, so on Vertex only a bare Gemini id stays there", () => {
+    const on = (model: string) =>
+      resolve(list('vertex', 'direct'), { kind: 'fx', model } as HarnessDescriptor).name
+    assert.equal(on('gemini-3.8-flash'), 'vertex')
+    assert.equal(on('google/gemini-3.8-flash'), 'vertex')
+    assert.equal(on('gpt-5.5'), 'direct')
   })
 
   test('the gateway serves Claude Code on Vertex, not the agents it has no route for', () => {

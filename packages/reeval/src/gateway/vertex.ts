@@ -377,11 +377,12 @@ export function vertexModelProbe(
 /**
  * Why Vertex AI can't serve a routed harness's model, or undefined when it can: fx's Chat
  * Completions endpoint serves Google's models, and Claude only over Anthropic's own API there.
+ * A bare fx id is OpenAI's everywhere else, so only a bare `gemini-…` one is taken as Google's.
  */
 export function vertexModelRefusalFor(h: AgentHarnessDescriptor): string | undefined {
   if (h.kind !== 'fx') return undefined
   const provider = /^([^/]+)\//.exec(h.model)?.[1]
-  if (!provider || provider === 'google') return undefined
+  if (provider === 'google' || (!provider && /^gemini-/.test(h.model))) return undefined
   return `fx reaches Vertex AI only on its Chat Completions endpoint, which serves Google's models, not ${JSON.stringify(h.model)}: use a Gemini model, such as google/gemini-3.8-flash`
 }
 

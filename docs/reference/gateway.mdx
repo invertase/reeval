@@ -93,7 +93,7 @@ Cursor, Antigravity and fx don't run on `openrouter()`, and fall through to the 
 | Grok Build | `reasoning_effort`, which xAI's models take | the same |
 | pi | Gemini's `thinkingConfig` under `providerOptions` | a Gemini model: OpenRouter's `reasoning.effort` |
 
-The plan refuses `effort` for a harness and model the table doesn't cover, since nothing checks the model gets it as its own setting, and such a cell falls through to the next entry. fx takes no `effort`. Each request's reasoning settings are in `.reeval/debug` (see [Debug data](/reference/debug-data)).
+The plan refuses `effort` for a harness and model the table doesn't cover, since nothing checks the model gets it as its own setting, and such a cell falls through to the next entry. fx takes `effort` only on `vertex()`. Each request's reasoning settings are in `.reeval/debug` (see [Debug data](/reference/debug-data)).
 
 ### Upstream providers and fallbacks
 
@@ -133,11 +133,11 @@ There's no key. reeval mints a Google Cloud access token on the host from Applic
 | OpenCode | its `google-vertex` provider, with `GOOGLE_CLOUD_PROJECT` and `GOOGLE_VERTEX_LOCATION` | `POST /v1beta1/…/publishers/google/models/<id>:streamGenerateContent` | `google/<id>` or `<id>`, run as `google-vertex/<id>` | from each call's path |
 | Goose | its `gcp_vertex_ai` provider, with `GCP_PROJECT_ID` and `GCP_LOCATION` | `POST /v1beta1/…/publishers/google/models/<id>:streamGenerateContent` | Gemini's, e.g. `gemini-3.8-flash`; a `google/` prefix is dropped | from each call's path |
 | pi | `--provider google-vertex`, with `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` | `POST /v1/…/publishers/google/models/<id>:streamGenerateContent` | Gemini's, e.g. `gemini-3.8-flash`; a `google/` prefix is dropped | from each call's path |
-| fx | a configured provider on Vertex's OpenAI-compatible Chat Completions endpoint, with no auth of its own | `POST /v1/…/endpoints/openapi/chat/completions` | Gemini's, with or without `google/`, run as `google/<id>`; no Claude | from each response, which names it |
+| fx | a configured provider on Vertex's OpenAI-compatible Chat Completions endpoint, with no auth of its own | `POST /v1/…/endpoints/openapi/chat/completions` | Gemini's, `google/<id>` or a bare `gemini-…` id, run as `google/<id>`; no Claude, and no other bare id | from each response, which names it |
 
 The Gemini CLIs call Vertex in the `google` region (`regions.google`, else `location`) and authenticate with Application Default Credentials of their own, so reeval writes them a service account beside the workspace with a key made up for the attempt, in `GOOGLE_APPLICATION_CREDENTIALS`. The egress gateway answers its token exchange (`POST oauth2.googleapis.com/token`) itself with a placeholder token, and Antigravity's account lookup (`GET www.googleapis.com/oauth2/v2/userinfo`) too, so neither reaches Google. It adds the real token to the model calls as it does for Claude Code. A restricted policy allows those hosts automatically.
 
-fx speaks only Chat Completions to a provider of your own, so it runs on Vertex's OpenAI-compatible endpoint, which serves Gemini but not Claude: an `anthropic/…` model falls through to the next gateway. It needs no service account; the gateway adds the token to its calls. Its relay in the sandbox puts back the thought signature Gemini needs on each tool call fx returns, and adds fx's `effort` as `reasoning_effort`, the only gateway where fx takes one. See [fx on Vertex AI](/reference/harness/fx#vertex-ai).
+fx speaks only Chat Completions to a provider of your own, so it runs on Vertex's OpenAI-compatible endpoint, which serves Gemini but not Claude: an `anthropic/…` model, or a bare id that isn't `gemini-…` (OpenAI's everywhere else), falls through to the next gateway. It needs no service account; the gateway adds the token to its calls. Its relay in the sandbox puts back the thought signature Gemini needs on each tool call fx returns, and adds fx's `effort` as `reasoning_effort`, the only gateway where fx takes one. See [fx on Vertex AI](/reference/harness/fx#vertex-ai).
 
 Every other harness falls through to the next gateway in the list, and the plan's hint says so. Cursor and Codex never can: Cursor's agent calls only Cursor's API, and Codex only OpenAI's Responses API.
 
