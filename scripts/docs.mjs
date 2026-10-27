@@ -488,6 +488,34 @@ for (const name of reevalVariables()) {
     problems.push(`${name} is read in src/ but not on reference/env-vars`)
 }
 
+// The lead of reference/env-vars says a value outside the allowed list stops the command. It must
+// name each variable's accepted values, as src/ui/mode.ts's `pick` calls list them.
+{
+  const modeSource = read(join(src, 'ui', 'mode.ts'))
+  const lead = envPage.split(/^## /m)[0]
+  const picks = [
+    ...modeSource.matchAll(/env\.(REEVAL_[A-Z_]+)\s*,\s*\[([^\]]*)\]\s*as const/g),
+  ].map((m) => ({ name: m[1], values: [...m[2].matchAll(/'([\w-]+)'/g)].map((v) => v[1]) }))
+  if (picks.length !== 4) {
+    problems.push('docs.mjs cannot find the four enum variables in src/ui/mode.ts')
+  }
+  if (/\bany other value stops the command\b/.test(lead)) {
+    problems.push(
+      'reference/env-vars lead says "any other value stops the command" without naming the accepted values of each variable',
+    )
+  }
+  for (const { name, values } of picks) {
+    const sentence = lead.split(/(?<=\.)\s/).find((s) => /stops the command/.test(s)) ?? ''
+    for (const value of values) {
+      if (!sentence.includes(`\`${value}\``) || !sentence.includes(`\`${name}\``)) {
+        problems.push(
+          `reference/env-vars lead doesn't name \`${value}\` as an accepted value of \`${name}\``,
+        )
+      }
+    }
+  }
+}
+
 /** The values `reeval` exports from its root: the names a user imports from the package. */
 function rootValueExports() {
   const text = read(join(src, 'index.ts')).replace(/\/\/.*$/gm, '')
