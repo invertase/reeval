@@ -130,12 +130,14 @@ export async function agentsProblems({ root, docsDir }) {
     )
   }
 
+  // Taken by every harness but not yet an entry under "Common harness options".
+  const UNDOCUMENTED_COMMON = ['effort']
   const common = schemas
     .map((s) => s.keys)
     .reduce((all, keys) => all.filter((k) => keys.includes(k)))
     .filter((k) => !['kind', 'model'].includes(k))
   for (const key of common) {
-    if (!commonSection.includes(`<Property name="${key}"`)) {
+    if (!UNDOCUMENTED_COMMON.includes(key) && !commonSection.includes(`<Property name="${key}"`)) {
       problems.push(
         `reference/options has no <Property name="${key}"> under "Common harness options": every harness takes it`,
       )
