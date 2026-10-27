@@ -1,11 +1,11 @@
 ---
 title: "Check an app"
-description: "Verify what the agent-built app displays."
+description: "Capture the app the agent built and judge what it shows."
 ---
 
 A file assertion can't tell you whether a page renders. The `nextApp` environment must contain the app project before you start. For more information about the `nextApp` environment, see [Environments](/environments).
 
-Check the app the agent built in this order.
+Three calls check the app the agent built:
 
 1. Start the app in the sandbox with `c.serve`.
 2. Capture a page with `c.capture`.
@@ -49,9 +49,9 @@ await expect(
 
 ## Capture a page
 
-`c.capture` takes a `ServeHandle` or a port and opens a path on it in a headless browser on your machine through a tunnel to the sandbox. It waits until the server answers, then saves the image at the `artifacts/<name>.png` path in the attempt record. The sandbox image needs no browser, because reeval downloads one into its cache on the first capture.
+`c.capture` takes a `ServeHandle` or a port and opens a path on it in a headless browser on the host through a tunnel to the sandbox. It waits until the server answers, then saves the image at the `artifacts/<name>.png` path in the attempt record. The sandbox image needs no browser, because reeval downloads one into its cache on the first capture.
 
-`path` defaults to `/`. `name` defaults to the path, so `/login` saves `login.png`, and a name can't repeat in one attempt. `wait` defaults to `'load'`; use `'idle'` to wait until there are no pending network requests, or `{ ms: 500 }` to wait a fixed time.
+`path` defaults to `/`. `name` defaults to the path, so `/login` saves `login.png`, and a name can't repeat in one attempt. `wait` defaults to `'load'`; use `'idle'` to wait until at most two requests are in flight for 500 ms, or `{ ms: 500 }` to wait a fixed time.
 
 In the `evals/sign-in.eval.ts` file, name a second capture:
 
@@ -87,7 +87,7 @@ The viewport defaults to 1280×720. In the `evals/sign-in.eval.ts` file, set the
 { environment: nextApp, capture: { viewport: { width: 390, height: 844 } } },
 ```
 
-`viewport: 'full-page'` captures the whole page. `browser: false` stops reeval from using its browser on your machine, and `c.capture` then throws. For more information about every key, see [the `capture` option](/reference/options#capture).
+`viewport: 'full-page'` captures the whole page. `browser: false` stops reeval from using its browser on the host, and `c.capture` then throws. For more information about every key, see [the `capture` option](/reference/options#capture).
 
 ## Run a background command
 
