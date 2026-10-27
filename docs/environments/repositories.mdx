@@ -20,15 +20,9 @@ export const camelcase = defineEnvironment('camelcase', ({ git }) => ({
 }))
 ```
 
-By default the workspace holds the tree with no `.git` directory, so the agent's diff starts after `setup`, and the repository never counts as the agent's change. `init: true` gives the workspace a `.git` directory with one commit of the tree and no remote, for an agent that expects a repository. In the `evals/camelcase.eval.ts` file, add the `camelcase` import and pass `environment: camelcase`:
+By default the workspace holds the tree with no `.git` directory, so the agent's diff starts after `setup`, and the repository never counts as the agent's change. `init: true` gives the workspace a `.git` directory with one commit of the tree and no remote, for an agent that expects a repository.
 
-```diff title="evals/camelcase.eval.ts"
-+import { camelcase } from './environments.ts'
- evaluate(
-   'adds a separators option',
-+  { environment: camelcase },
-   async (c) => {
-```
+Pass `camelcase` as an evaluation's `environment`, as [Environments](/environments#define-and-use-an-environment) shows.
 
 For a runnable project, see [`with-existing-codebase`](https://github.com/invertase/reeval/tree/main/examples/with-existing-codebase).
 
