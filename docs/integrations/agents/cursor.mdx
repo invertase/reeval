@@ -47,17 +47,7 @@ export default defineConfig({
   Reasoning effort, mapped onto the catalog parameter this model names, `reasoning_effort` or `effort`. A model with no such parameter refuses `effort`. Fast is `params.fast`.
 </Property>
 
-<Property name="id" type="string" optional>
-  Cell id. Defaults to `cursor` followed by the model, such as `cursor:<model>`. With `effort` set to `high`, the id is `cursor:<model>[effort=high]`. The id uses letters, digits, and `._:@+-=[]`.
-</Property>
-
-<Property name="maxConcurrent" type="number" optional>
-  The most Cursor attempts that run at the same time, across the run. A whole number of at least 1.
-</Property>
-
-<Property name="startTimeout" type="Duration" optional>
-  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
-</Property>
+For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 `params` belongs to `cursor()` alone. With no `harness` option, reeval uses `cursor()` with its default model.
 
@@ -76,6 +66,19 @@ For more information about writing rules, see [Add project rules](/environments/
 The Cursor harness reads skills from the `.cursor/skills` directory in the workspace and from the `~/.agents/skills` directory in the home directory.
 
 For more information about placing skills, see [Give the agent skills](/environments/skills).
+
+## `plugins`
+
+reeval adds each plugin's skills to the home skills directory and unpacks the rest into the workspace: rules to `.cursor/rules`, subagents to `.cursor/agents`, commands to `.cursor/commands`, and hooks into `.cursor/hooks.json`. Cursor never loads the plugins of the account that owns the key.
+
+[//]: # (generated:harness-plugins:cursor)
+
+- Takes every plugin part: `skills`, `agents`, `commands`, `hooks`, `mcp` and `rules`.
+- Runs only command hooks, on `SessionStart`, `SessionEnd`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `SubagentStop`, `PreCompact` and `Stop`; a plugin with any other hook is refused.
+
+[//]: # (/generated:harness-plugins:cursor)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).
 
 ## `mcp`
 
