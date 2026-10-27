@@ -19,7 +19,7 @@ questions: [{ question: 'Which multiply() is easier to read?', across: 'harness'
 
 ## Set the question model
 
-In the `reeval.config.ts` file, set `question.model` to a language model. The model answers every question. Without it, reeval falls back to `analysis.model`, then to the judge's language model. reeval refuses an evaluation model, which only scores yes-or-no questions.
+In the `reeval.config.ts` file, set `question.model` to a language model. The model answers every question that doesn't set its own `model`. Without it, reeval falls back to `analysis.model`, then to the judge's language model. reeval refuses an evaluation model, which only scores yes-or-no questions.
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'

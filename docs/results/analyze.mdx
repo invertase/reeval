@@ -56,7 +56,7 @@ For more information about the other `analysis` fields, see [the `analysis` opti
    npx reeval analyze
    ```
 
-The analysis starts with `analysis` and the run id, then `vs` and the ancestor's run id when the digest includes one. `TL;DR`, `Suggested actions`, and `Confidence` always print. `What happened`, `Results`, `Why`, and `Anomalies` print when the model has something for them. reeval caches each analysis in the `.reeval/analysis` directory, so the same runs and model print the cached analysis. To analyze another run, pass its id, and to choose the run it compares with, pass `--vs`.
+The analysis starts with `analysis` and the run id, then `vs` and the ancestor's run id when the digest includes one. `TL;DR`, `Suggested actions`, and `Confidence` always print. `What happened`, `Results`, `Why`, and `Anomalies` print when the model has something for them. reeval caches each analysis in the `.reeval/analysis` directory, so the same runs, model, and `analysis.instructions` print the cached analysis. To analyze another run, pass its id, and to choose the run it compares with, pass `--vs`.
 
 ## Read insights
 

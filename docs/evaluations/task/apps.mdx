@@ -66,7 +66,7 @@ To interact with the page before the capture, pass `instructions` as goal string
 
 ## Judge a capture
 
-The `artifacts` field on `c.judge` sends captures to the judge as images: the handles from `c.capture`, their names, or `true` for every capture so far. The default evaluation model takes PNG captures, and a provider that can't take files fails the call. Ask what the picture shows, such as a field or a label, not whether it looks good.
+The `artifacts` field on `c.judge` sends captures to the judge as images: the handles from `c.capture`, their names, or `true` for every capture so far. An evaluation model such as `typesafe-ai/jev-1.14.0` takes PNG captures, and a provider that can't take files fails the call. Ask what the picture shows, such as a field or a label, not whether it looks good.
 
 In the `evals/sign-in.eval.ts` file, send both captures:
 

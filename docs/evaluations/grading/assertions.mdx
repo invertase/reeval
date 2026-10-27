@@ -65,13 +65,11 @@ expect(turn, 'installed nothing').not.toHaveRun(/npm (install|i)\b/)
 
 ## Use soft and polled assertions
 
-`expect.soft` records a failure and runs the later assertions. The attempt fails at the end on the first soft assertion that did not pass. The [Quick start](/getting-started/quickstart) evaluation makes two of its three assertions soft, so each attempt reports all three:
+`expect.soft` records a failure and runs the later assertions. The attempt fails at the end on the first soft assertion that did not pass. In the `evals/camelcase.eval.ts` file, make both file assertions soft, so each attempt reports both:
 
-```ts title="evals/brand.eval.ts"
-await expect
-  .soft(c, 'links styles.css')
-  .toHaveFile('index.html', /href="styles\.css"/)
-await expect.soft(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
+```ts title="evals/camelcase.eval.ts"
+await expect.soft(c, 'readme documents it').toHaveFile('readme.md', /separators/)
+await expect.soft(c, 'tests cover it').toHaveFile('test.js', /separators/)
 ```
 
 `expect.poll` calls a function until the matcher passes, every 50 milliseconds, for at most 1000 milliseconds. It then fails with the last error. Await it. Pass `{ interval, timeout }` in milliseconds to change the wait. `message` sets the label:

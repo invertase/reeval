@@ -29,7 +29,7 @@ The `.gitignore` entry writes that string to the workspace. For a runnable proje
 
 When the content already exists on the host, pass a host path to `file`, as the `data/people.csv` entry does. A relative path resolves from the file that calls `file`. reeval uses an absolute path as given.
 
-reeval reads the host bytes when the attempt starts. A host file with its executable bit set stays executable in the sandbox. A destination that starts with `~/` goes in the home directory, outside the workspace and its diff:
+A destination that starts with `~/` goes in the home directory, outside the workspace and its diff:
 
 ```ts title="with-multi-turn.eval.ts"
 files: {
@@ -40,7 +40,7 @@ files: {
 
 ## Copy a directory
 
-Pass a host directory to `directory` to copy the files in it, as the `./project` entry does. `directory` chooses the files when you call it, and reeval reads each host file when the attempt starts. A relative path resolves from the file that calls `directory`. Here `glob` leaves out the maintainer notes in `NOTES.md`.
+Pass a host directory to `directory` to copy the files in it, as the `./project` entry does. Here `glob` leaves out the maintainer notes in `NOTES.md`.
 
 To copy into a subdirectory, pass `into`, such as `directory('./fixtures', { into: 'src' })`. `into` is the destination directory. A value that starts with `~/` places the files under the home directory. `into` uses forward slashes and doesn't contain `..`.
 

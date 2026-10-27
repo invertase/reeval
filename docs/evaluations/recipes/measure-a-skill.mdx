@@ -3,41 +3,58 @@ title: "Measure a skill"
 description: "See whether a skill helped a harness."
 ---
 
-You measure a skill by running one task on a baseline with no skill and a variant with the skill. The effect reads `helped`, `made it worse`, or `can't tell yet`. For a runnable project, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
+You measure a skill by running one task on a baseline with no skill and a variant with the skill. The effect reads `helped`, `made it worse`, or `can't tell yet`. For a runnable project, see [`with-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-skill-lift).
 
 ## Run one task with and without the skill
 
 <Steps>
-<Step title="Write the evaluation">
+<Step title="Define the baseline and variant">
 
-The baseline `page` holds the project the task styles ([Quick start](/getting-started/quickstart)). In the `evals/environments.ts` file, define the variant `withSkill`. It extends `page` and adds Anthropic's `brand-guidelines` skill, pinned to a commit.
+The baseline `math` holds a small package with `src/math.js` and its tests. The variant `changelog` extends it and adds a local skill that says every change adds a line under `## Unreleased` in the `CHANGELOG.md` file. In the `evals/environments.ts` file, define both:
 
 ```ts title="evals/environments.ts"
-export const withSkill = page.extendEnvironment(
-  'brand-guidelines',
-  ({ skill }) => ({
-    skills: [
-      skill.git('github:anthropics/skills', {
-        ref: 'dbd4588f9e1033efb41dad4bef2f7947c8993d44',
-        path: 'skills',
-        only: ['brand-guidelines'],
-      }),
-    ],
-  }),
+import { defineEnvironment } from '{{ pkg }}'
+
+export const math = defineEnvironment('math', ({ directory }) => ({
+  files: directory('./project'),
+}))
+
+export const withSkill = math.extendEnvironment('changelog', ({ skill }) => ({
+  skills: [skill.local('./skills/changelog')],
+}))
+```
+
+For more information about other skill sources, see [Give the agent skills](/configuration/environments/skills).
+
+</Step>
+<Step title="Write the evaluation">
+
+Assert on what the skill teaches, so the baseline fails without it. The prompt doesn't mention the changelog, so only a harness that follows the skill writes the entry. In the `evals/changelog.eval.ts` file, name the baseline and the variant in `compare`:
+
+```ts title="evals/changelog.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { math, withSkill } from './environments.ts'
+
+evaluate(
+  'records the change in the changelog',
+  {
+    compare: { baseline: math, variants: [withSkill] },
+    runs: 4,
+    gate: { passRate: 0.75 },
+  },
+  async (c) => {
+    await c.send('Add a multiply(a, b) function to src/math.js.')
+
+    await expect.soft(c.exec('node --test'), 'tests pass').toSucceed()
+    await expect(c, 'changelog entry').toHaveFile(
+      'CHANGELOG.md',
+      /## Unreleased\s+- feat: /,
+    )
+  },
 )
 ```
 
-For more information about placing skills, see [Give the agent skills](/configuration/environments/skills).
-
-In the `evals/brand.eval.ts` file, run the evaluation in `page` and name the variant in `compare.variants`:
-
-```ts title="evals/brand.eval.ts"
-{ environment: page, compare: { variants: [withSkill] }, runs: 4 },
-```
-
-Assert on what the skill teaches, so the baseline fails without it. The task asks for Anthropic's brand color and fonts, and its `brand orange` and `brand fonts` assertions read `styles.css`. The prompt doesn't name the brand's color or fonts, so they pass only when the harness knows them. For the full evaluation, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift). For more information about how reeval reaches the effect, see [Comparison](/reference/glossary#comparison).
-
-To also check that the variant loaded the skill, guard `toHaveCalledSkill` with `c.attempt.cell.role === 'variant'`, since the baseline has no skill to load ([Give the agent skills](/configuration/environments/skills#check-the-agent-used-the-skill)).
+`runs: 4` gives each cell four attempts, the fewest that can read `helped`. The variant passes when at least 3 of its 4 attempts pass. To also check that the variant loaded the skill, guard `toHaveCalledSkill` with `c.attempt.cell.role === 'variant'`, since the baseline has no skill to load ([Give the agent skills](/configuration/environments/skills#check-the-agent-used-the-skill)).
 
 </Step>
 <Step title="Run the comparison">
@@ -45,13 +62,26 @@ To also check that the variant loaded the skill, guard `toHaveCalledSkill` with 
 Run the evaluation with the harness named in the `reeval.config.ts` file:
 
 ```bash
-npx reeval run brand
+npx reeval run changelog
 ```
 
 </Step>
-<Step title="Read whether it helped">
+<Step title="Read whether the skill helped">
 
-The block prints one row per cell and an effect word beside the variant: `helped`, `made it worse`, or `can't tell yet`. The assertion rows that differ between the cells show what the skill changed. When `brand orange` and `brand fonts` pass on both sides, the harness already knows the brand, and this task can't show the skill. For more information about the block, see [Read the result](/results/compare/lift#read-the-result). To fail the variant when its lift may be below a floor, see [Gate on lift](/results/compare/lift#gate-on-lift).
+The run prints a block like this one:
+
+```text
+pass             records the change in the changelog
+  arm              pass
+  math             0 of 4
+  changelog        4 of 4  helped
+  check            math    changelog
+  changelog entry  0 of 4  4 of 4
+    expected file CHANGELOG.md to exist
+  +1 more passed
+```
+
+The `changelog entry` row differs between the cells, so the skill changed what the harness did. When it passes on both sides, the harness already writes the entry, and this task can't show the skill. For more information about the block, see [Read the result](/results/compare/lift#read-the-result). To fail the variant when its lift may be below a floor, see [Gate on lift](/results/compare/lift#gate-on-lift).
 
 </Step>
 </Steps>
