@@ -545,6 +545,54 @@ for (const file of mdxFiles()) {
   }
 }
 
+// ---- Walkthroughs: one home each --------------------------------------------------------------
+
+// `reeval init` writes `analysis.model`, whose missing key is a warning in `reeval doctor`
+// (src/init.ts, src/doctor.ts), so a page that shows init and a clean doctor must set the key.
+for (const file of mdxFiles()) {
+  const text = read(file)
+  if (
+    /reeval init\b/.test(text) &&
+    /^No problems\.$/m.test(text) &&
+    !text.includes('GOOGLE_GENERATIVE_AI_API_KEY')
+  ) {
+    problems.push(
+      `${relative(root, file)} shows reeval init and a doctor transcript ending "No problems." without setting GOOGLE_GENERATIVE_AI_API_KEY: init writes analysis.model, so doctor ends "No problems, 1 warning." unless the key is set`,
+    )
+  }
+}
+
+const COPIED_BLOCK_LINES = 15
+const COPIED_BLOCK_SHARE = 0.8
+/** A fenced `ts` block's code lines with blank lines, comments and indentation dropped. */
+const codeLines = (code) =>
+  code
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('//'))
+const tsBlocks = []
+for (const file of mdxFiles()) {
+  for (const match of read(file).matchAll(/^```ts\b[^\n]*\n([\s\S]*?)^```/gm)) {
+    const lines = match[1].replace(/\n$/, '').split('\n')
+    if (lines.length > COPIED_BLOCK_LINES) {
+      tsBlocks.push({ file: relative(root, file), lines: new Set(codeLines(match[1])) })
+    }
+  }
+}
+const copied = new Set()
+for (const [i, a] of tsBlocks.entries()) {
+  for (const b of tsBlocks.slice(i + 1)) {
+    if (a.file === b.file) continue
+    const shared = [...a.lines].filter((line) => b.lines.has(line)).length
+    if (shared / Math.min(a.lines.size, b.lines.size) >= COPIED_BLOCK_SHARE) {
+      copied.add(
+        `${a.file} and ${b.file} show the same ts block of more than ${COPIED_BLOCK_LINES} lines: keep it on one page and link to it from the other`,
+      )
+    }
+  }
+}
+problems.push(...copied)
+
 if (problems.length) {
   console.error(`docs: ${problems.length} problem${problems.length === 1 ? '' : 's'}`)
   for (const p of problems) console.error(`  - ${p}`)
