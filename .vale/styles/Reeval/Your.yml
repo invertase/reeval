@@ -1,0 +1,9 @@
+extends: existence
+message: "Name the tool, the agent or the reader's role instead of '%s'; only the getting-started lead says 'your'."
+level: error
+ignorecase: true
+# The lead of docs/index.mdx (its first three paragraphs) may say "your
+# change". .vale.ini turns this rule off for that file and .vale/lead.ini
+# checks the rest of it, since a Vale rule cannot see its place in the file.
+tokens:
+  - \byour\b

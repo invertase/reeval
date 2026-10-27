@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Lints docs/ with the Reeval house style and splits the alerts in two: the
-// handwritten prose, which fails the run on an error, and the blocks that
-// scripts/docs.mjs generates from the code, which only a code change can fix
-// and so are listed without failing it.
+// handwritten prose, which fails the run on any alert (suggestion, warning or
+// error), and the blocks that scripts/docs.mjs generates from the code, which
+// only a code change can fix and so are listed without failing it.
 //
 //   node .vale/lint.mjs [paths…]   (default: docs)
 //
@@ -13,10 +13,10 @@ import { readFileSync } from 'node:fs'
 const paths = process.argv.slice(2)
 const targets = paths.length ? paths : ['docs']
 
-function vale(args) {
+function vale(args, only = targets) {
   let out
   try {
-    out = execFileSync('vale', ['--output=JSON', ...args, ...targets], {
+    out = execFileSync('vale', ['--output=JSON', ...args, ...only], {
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
     })
@@ -48,7 +48,14 @@ function flatten(result) {
   )
 }
 
-const handwritten = flatten(vale([]))
+// .vale.ini turns Reeval.Your off for docs/index.mdx; .vale/lead.ini checks
+// it there outside the getting-started lead.
+const handwritten = [
+  ...flatten(vale([])),
+  ...(targets.some((t) => 'docs/index.mdx'.startsWith(t.replace(/\/$/, '')))
+    ? flatten(vale(['--config=.vale/lead.ini'], ['docs/index.mdx']))
+    : []),
+]
 const generated = flatten(vale(['--config=.vale/generated.ini'])).filter((alert) =>
   generatedLines(alert.file).has(alert.Line),
 )
@@ -71,5 +78,4 @@ function print(title, alerts) {
 print('Handwritten prose', handwritten)
 print('Generated from the code (fix in the code, not the page)', generated)
 
-const errors = handwritten.filter((alert) => alert.Severity === 'error')
-process.exitCode = errors.length ? 1 : 0
+process.exitCode = handwritten.length ? 1 : 0
