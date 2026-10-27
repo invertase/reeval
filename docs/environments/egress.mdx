@@ -31,7 +31,7 @@ evaluate(
 )
 ```
 
-A restricted policy still lets through the hosts an attempt can't run without: your harness's own API, the `hosts` of each brokered secret, and each `http` or `sse` MCP server. reeval adds these automatic hosts to `'deny-all'` and to every allow list, and the plan prints them:
+A restricted policy still lets through the hosts an attempt can't run without: the harness's own API, the `hosts` of each brokered secret, and each `http` or `sse` MCP server. reeval adds these automatic hosts to `'deny-all'` and to every allow list, and the plan prints them:
 
 ```bash
 npx reeval run --dry-run
@@ -43,7 +43,7 @@ The `notes` column shows each evaluation's policy and its automatic hosts:
 egress: deny-all + auto: api.anthropic.com, *.anthropic.com
 ```
 
-An evaluation or group's `egress` option overrides the environment's, which overrides the one in the `reeval.config.ts` file or a profile. A blocked request never fails the attempt on its own. The agent gets a refusal, and your assertions decide what that means.
+An evaluation or group's `egress` option overrides the environment's, which overrides the one in the `reeval.config.ts` file or a profile. A blocked request never fails the attempt on its own. The agent gets a refusal, and the assertions decide what that means.
 
 ## Read blocked requests
 
@@ -78,7 +78,7 @@ A refused request names the host and why it was blocked:
 }
 ```
 
-The `allowed` list is every host the policy let through, the `allow` hosts and the automatic ones; it is `null` under `'proxy'` and `'allow-all'`. Hosts your harness's CLI always tries and never needs, such as its telemetry, are recorded in `expectedBlocked`; other refused requests remain in `blocked`. When you run `npx reeval run -v`, each blocked request also prints a `gateway` line as it happens. For more information, see [Debugging](/results/debugging).
+The `allowed` list is every host the policy let through, the `allow` hosts and the automatic ones; it is `null` under `'proxy'` and `'allow-all'`. Hosts the harness's CLI always tries and never needs, such as its telemetry, are recorded in `expectedBlocked`; other refused requests remain in `blocked`. When you run `npx reeval run -v`, each blocked request also prints a `gateway` line as it happens. For more information, see [Debugging](/results/debugging).
 
 ## Allow a list of hosts
 
