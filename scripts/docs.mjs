@@ -758,6 +758,47 @@ problems.push(...copied)
 
 problems.push(...docsRunsProblems(root))
 
+// ---- Write pages ----------------------------------------------------------------------------
+
+/** The body of the `##` section titled `title`, or null when the page has none. */
+function sectionBody(text, title) {
+  const match = new RegExp(`^## ${title}\\s*$`, 'm').exec(text)
+  if (!match) return null
+  const rest = text.slice(match.index + match[0].length)
+  const next = /^## /m.exec(rest)
+  return next ? rest.slice(0, next.index) : rest
+}
+
+/** The text outside code fences, with the frontmatter kept. */
+const outsideFences = (text) => text.replace(/```[\s\S]*?```/g, '')
+
+const writeDir = join(docsDir, 'write')
+const turnsPage = join(writeDir, 'turns.mdx')
+if (existsSync(turnsPage)) {
+  const sendBody = sectionBody(read(turnsPage), 'Send a prompt')
+  if (sendBody !== null && /\bc\.send\(\s*['"`]/.test(sendBody)) {
+    problems.push(
+      `${relative(root, turnsPage)} has a "Send a prompt" section that shows a first c.send() of a string: /write owns the first send, so Turns starts at the second turn and links there`,
+    )
+  }
+}
+
+const appsPage = join(writeDir, 'apps.mdx')
+const browserSource = read(join(src, 'capture/browser.ts'))
+const quietMs = /NETWORK_QUIET_MS\s*=\s*(\d+)/.exec(browserSource)?.[1]
+if (existsSync(appsPage) && quietMs) {
+  const idle = /[^.\n]*'idle'[^.\n]*/.exec(outsideFences(read(appsPage)))?.[0]
+  if (
+    idle &&
+    (/\b(?:no|zero) (?:pending |in-flight |outstanding )?(?:network )?requests\b/i.test(idle) ||
+      !idle.includes(`${quietMs} ms`))
+  ) {
+    problems.push(
+      `${relative(root, appsPage)} says 'idle' without the rule in capture/browser.ts: Chromium's networkAlmostIdle, at most two requests in flight for ${quietMs} ms, not no pending requests`,
+    )
+  }
+}
+
 if (problems.length) {
   console.error(`docs: ${problems.length} problem${problems.length === 1 ? '' : 's'}`)
   for (const p of problems) console.error(`  - ${p}`)
