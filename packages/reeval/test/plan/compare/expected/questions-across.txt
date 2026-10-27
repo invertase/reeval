@@ -1,19 +1,20 @@
-no profile · 3 evals · 12 cells · 12 attempts
-evals/questions-across.eval.ts › environment only  a/base/docker     control          ungated  ×1
-                                                   a/skilled/docker  variant skilled  gated    ×1
-                                                   b/base/docker     control          ungated  ×1
-                                                   b/skilled/docker  variant skilled  gated    ×1
-                                                   question: Which handles state more cleanly? · shows task, diff · environment · 2 pairs · no language model
-evals/questions-across.eval.ts › harness only      a/base/docker     control          ungated  ×1
-                                                   a/skilled/docker  variant skilled  gated    ×1
-                                                   b/base/docker     control          ungated  ×1
-                                                   b/skilled/docker  variant skilled  gated    ×1
-                                                   question: Which agent is clearer? · shows task, diff · harness · 2 pairs · no language model
-evals/questions-across.eval.ts › both factors      a/base/docker     control          ungated  ×1
-                                                   a/skilled/docker  variant skilled  gated    ×1
-                                                   b/base/docker     control          ungated  ×1
-                                                   b/skilled/docker  variant skilled  gated    ×1
-                                                   question: Which follows the house style more closely? · shows task, diff · environment, harness · 4 pairs · no language model
+no profile · 3 evals · 12 cells · 48 attempts
+hint: 3 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+evals/questions-across.eval.ts › environment only  a/base/docker     control          ungated  ×4  runs 4 (compare default)
+                                                   a/skilled/docker  variant skilled  gated    ×4
+                                                   b/base/docker     control          ungated  ×4
+                                                   b/skilled/docker  variant skilled  gated    ×4
+                                                   question: Which handles state more cleanly? · shows task, diff · environment · 8 pairs · no language model
+evals/questions-across.eval.ts › harness only      a/base/docker     control          ungated  ×4  runs 4 (compare default)
+                                                   a/skilled/docker  variant skilled  gated    ×4
+                                                   b/base/docker     control          ungated  ×4
+                                                   b/skilled/docker  variant skilled  gated    ×4
+                                                   question: Which agent is clearer? · shows task, diff · harness · 8 pairs · no language model
+evals/questions-across.eval.ts › both factors      a/base/docker     control          ungated  ×4  runs 4 (compare default)
+                                                   a/skilled/docker  variant skilled  gated    ×4
+                                                   b/base/docker     control          ungated  ×4
+                                                   b/skilled/docker  variant skilled  gated    ×4
+                                                   question: Which follows the house style more closely? · shows task, diff · environment, harness · 16 pairs · no language model
 excluded: —
 image docker · cursor · 3 evals
   base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

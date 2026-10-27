@@ -88,7 +88,7 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 </Property>
 
 <Property name="runs" type="number">
-  Attempts per cell, a whole number of at least 1. **Replaces**. `reeval run --runs n` overrides every level, pins included. Default 1.
+  Attempts per cell, a whole number of at least 1. **Replaces**. `reeval run --runs n` overrides every level, pins included. Default 1, except a `compare` with variants, which runs 4 per cell: the fewest counted tries a side a lift verdict needs, so a default compare can say `helped` or `made it worse` rather than `can't tell yet`. The plan notes `runs 4 (compare default)`, and its attempts and estimate include them. Any level that sets `runs`, `runs: 1` included, replaces the default; a profile's `limit.runs` caps it, and a compare that `limit.compare` turns off runs once. A case of a pooled `evaluate.each` runs once, since its lift pools over the cases.
 </Property>
 
 <Property name="gate" type="'all' | { passRate: number }">

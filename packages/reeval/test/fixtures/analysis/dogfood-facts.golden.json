@@ -852,7 +852,7 @@
       "counted": 4,
       "lo": 0.301,
       "hi": 0.954,
-      "verdict": "insufficient",
+      "verdict": "mixed",
       "cause": "agent"
     }
   ],

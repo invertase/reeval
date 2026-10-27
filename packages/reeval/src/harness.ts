@@ -1,6 +1,7 @@
 // `reeval/harness`: agent harness descriptors. The implementations load lazily in workers.
 import { splitModel } from '@reeval/harness-opencode/providers'
-import { harnessProblem } from './contract/harness.ts'
+import { directOffPin } from './contract/gateway.ts'
+import { FACTORY, harnessProblem } from './contract/harness.ts'
 import { UsageError } from './errors.ts'
 import type {
   AntigravityHarnessDescriptor,
@@ -29,7 +30,11 @@ function make<D extends HarnessDescriptor>(kind: D['kind'], options: unknown): D
   const descriptor = { kind, ...(options as object) } as D
   const pin: unknown = descriptor.gateway
   if (typeof pin === 'object' && pin !== null && 'kind' in pin) {
-    descriptor.gateway = (pin as GatewayDescriptor).kind
+    const helper = pin as GatewayDescriptor
+    if (helper.kind === 'direct' && helper.enabled === false) {
+      throw new UsageError(directOffPin(`${FACTORY[kind]}({ gateway })`))
+    }
+    descriptor.gateway = helper.kind
   }
   const problem = harnessProblem(descriptor)
   if (problem) throw new UsageError(problem)
@@ -127,10 +132,12 @@ export const codex = (options: Options<CodexHarnessDescriptor>): CodexHarnessDes
   make('codex', options)
 
 /**
- * fx, on Vercel AI Gateway, OpenAI's API or OpenRouter: `model` is a gateway id, e.g.
+ * fx, on Vercel AI Gateway, OpenAI's API, OpenRouter or Vertex AI: `model` is a gateway id, e.g.
  * `anthropic/claude-sonnet-5`, which needs `vercel()` or `openrouter()` in the config's gateway
  * list, or a bare OpenAI id, e.g. `gpt-5.5`, run with `OPENAI_API_KEY` on `direct()` or as
- * `openai/<id>` on `vercel()` and `openrouter()`. `id` names the cell; it defaults to `fx:<model>`.
+ * `openai/<id>` on `vercel()` and `openrouter()`; on `vertex()`, a Gemini id, e.g.
+ * `google/gemini-3.8-flash`. `effort` is `reasoning_effort`, taken on `vertex()` only. `id` names
+ * the cell; it defaults to `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set.
  */
 export const fx = (options: Options<FxHarnessDescriptor>): FxHarnessDescriptor =>
   make('fx', options)

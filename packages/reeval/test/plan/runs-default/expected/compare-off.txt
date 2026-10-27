@@ -1,0 +1,9 @@
+profile off (--profile) · 4 evals · 4 cells · 5 attempts
+hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+evals/r.eval.ts › compare                        a/base/docker  control  gated  ×1  compare off (profile off)
+evals/r.eval.ts › compare with runs 1            a/base/docker  control  gated  ×1  compare off (profile off)
+evals/r.eval.ts › runs from the group › compare  a/base/docker  control  gated  ×2  compare off (profile off)
+evals/r.eval.ts › no compare                     a/base/docker  control  gated  ×1
+excluded: —
+image docker · cursor · 4 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

@@ -23,7 +23,7 @@ import {
 import { filesOf, workspaceOf } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { optionsHash } from './eval-source.ts'
-import { resolveModelGateway } from './gateway/models.ts'
+import { fellBackToDirect, resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { resolveGateway } from './gateway/resolve.ts'
 import { vercelCredentialProblem } from './gateway/vercel.ts'
@@ -32,6 +32,7 @@ import { refusedMcp, refusedPlugins } from './harness/agents.ts'
 import { attemptId, attemptKey, evalId, relativeFile } from './ids.ts'
 import {
   brokeredIn,
+  type Cascading,
   cascade,
   checkOptions,
   evalPlan,
@@ -42,7 +43,6 @@ import {
   type PlannedAttempt,
   plainHeaderError,
   plainHeaders,
-  type Resolved,
   type ResolvedEval,
   sandboxProvider,
   sandboxSetBy,
@@ -99,7 +99,7 @@ export type PlannedTest = {
   spec?: AttemptSpec
 }
 
-function configLevel(config: ResolvedConfig): Resolved {
+function configLevel(config: ResolvedConfig): Cascading {
   return {
     harness: config.harness,
     sandbox: config.sandbox,
@@ -141,6 +141,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
     profile: ctx.profile,
     runs: ctx.runs,
     skipped: declaration.mode === 'skip' || declaration.mode === 'todo',
+    pooled: declaration.family !== undefined,
   })
   const { harnesses } = resolvedEval
   if (!matchesTags(resolvedEval.resolved.tags, ctx.tags)) return { tests: null, harnesses }
@@ -176,7 +177,9 @@ function planTests(
         const hid = harnessId(harness)
         if (gatewaySet || harness.gateway !== undefined) {
           routes.set(hid, route)
-          gatewayNotes.push(`gateway: ${hid} → ${route.name}`)
+          gatewayNotes.push(
+            `gateway: ${hid} → ${route.name}${route.name === 'direct' && route.skipped.length ? ' (fallback)' : ''}`,
+          )
         }
         if (route.name === 'direct') return harness
         if (harness.kind !== 'fake') {
@@ -210,6 +213,9 @@ function planTests(
       )
       const { model } = resolved.judge
       if (typeof model === 'string') judge = { model, ...(gateway ? { gateway } : {}) }
+      if (gatewaySet && fellBackToDirect(gateway, resolved.judge.gateway, { gateways })) {
+        gatewayNotes.push(`gateway: judge ${model} → direct (fallback)`)
+      }
     } catch (error) {
       if (error instanceof UsageError) throw new UsageError(`${where}: ${error.message}`)
       throw error

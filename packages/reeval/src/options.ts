@@ -44,6 +44,7 @@ import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
 import { mergeJudge } from './judge/state-options.ts'
 import { isObjectLike } from './object.ts'
+import { EFFECT_MIN_COUNTED } from './stats.ts'
 import type {
   CaptureOptions,
   Cell,
@@ -526,12 +527,12 @@ const plannedQuestions = (value: Question[]): PlannedQuestion[] =>
   )
 
 /** Whether the eval's matrix varies each factor a pairwise question can vary. */
-const variesBy = (r: Resolved): Record<PairFactor, boolean> => ({
+const variesBy = (r: Pick<Resolved, 'compare' | 'harness'>): Record<PairFactor, boolean> => ({
   environment: (r.compare?.variants.length ?? 0) > 0,
   harness: r.harness.length > 1,
 })
 
-const FACTOR_FIX: Record<PairFactor, (r: Resolved, where: string) => string> = {
+const FACTOR_FIX: Record<PairFactor, (r: Pick<Resolved, 'harness'>, where: string) => string> = {
   environment: (_, where) =>
     `varies the environment (across: 'environment'), but ${where} runs one environment, so it has no pairs to ask. Add compare: { variants: [...] }`,
   harness: (r, where) =>
@@ -581,8 +582,18 @@ function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | un
   }
 }
 
+/** Resolved but for `runs`, which stays unset until the cascade picks its default. */
+export type Cascading = Omit<Resolved, 'runs'> & { runs: number | undefined }
+
+/**
+ * Runs per cell when no level sets `runs`: a compare with variants runs `EFFECT_MIN_COUNTED` a
+ * side, the fewest whose lift can reach a verdict; anything else, a pooled family's cases
+ * included, runs once.
+ */
+export const COMPARE_DEFAULT_RUNS = EFFECT_MIN_COUNTED
+
 function applyLevel(
-  out: Resolved,
+  out: Cascading,
   options: EvalOptions,
   where: string,
   egress: 'inherited' | 'own' = 'own',
@@ -631,12 +642,18 @@ export type ResolvedEval = {
  * profile's limit (narrowing only, except pinned keys); then `--runs`.
  */
 export function cascade(
-  base: Resolved,
+  base: Cascading,
   levels: Level[],
   where: string,
-  options: { profile?: ResolvedProfile | null; runs?: number; skipped?: boolean } = {},
+  options: {
+    profile?: ResolvedProfile | null
+    runs?: number
+    skipped?: boolean
+    /** A case of a pooled `evaluate.each`, whose lift pools over the cases, not the runs. */
+    pooled?: boolean
+  } = {},
 ): ResolvedEval {
-  const out: Resolved = {
+  const out: Cascading = {
     ...base,
     env: { ...base.env },
     egress: { ...base.egress },
@@ -729,16 +746,6 @@ export function cascade(
   if (profile && limit) {
     const tag = `profile ${profile.name}`
     const pinned = (key: PinnableKey) => out.pin.includes(key)
-    // --runs replaces the runs outright, so the profile's limit doesn't apply.
-    if (
-      limit.runs !== undefined &&
-      options.runs === undefined &&
-      !pinned('runs') &&
-      out.runs > limit.runs
-    ) {
-      notes.push(`runs ${out.runs} → ${limit.runs} (${tag})`)
-      out.runs = limit.runs
-    }
     let comparedLeft = true
     if (limit.harness && !pinned('harness')) {
       const kept = out.harness.filter((h) => limit.harness?.includes(harnessId(h)))
@@ -775,6 +782,19 @@ export function cascade(
         }
       }
     }
+    // After the compare's narrowing, so a compare the limit turns off defaults to one run.
+    defaultRuns(out, notes, options)
+    // --runs replaces the runs outright, so the profile's limit doesn't apply.
+    if (
+      limit.runs !== undefined &&
+      options.runs === undefined &&
+      !pinned('runs') &&
+      (out.runs ?? 1) > limit.runs
+    ) {
+      notes.push(`runs ${out.runs} → ${limit.runs} (${tag})`)
+      out.runs = limit.runs
+      out.sources = { ...out.sources, runs: `profiles.${profile.name}.limit` }
+    }
     const pins = out.pin.filter((k) =>
       k === 'compare'
         ? limit.compare !== undefined && out.compare && comparedLeft
@@ -802,8 +822,25 @@ export function cascade(
     if (narrowed) notes.push(`${plural(narrowed)} narrowed (profile ${profile.name})`)
     out.questions = kept
   }
-  if (options.runs !== undefined) out.runs = options.runs
-  return { resolved: out, notes, harnesses, ...(skip ? { skip } : {}) }
+  defaultRuns(out, notes, options)
+  const resolved: Resolved = { ...out, runs: options.runs ?? out.runs ?? 1 }
+  return { resolved, notes, harnesses, ...(skip ? { skip } : {}) }
+}
+
+/** Gives `out` its default runs when no level set them and `--runs` doesn't replace them. */
+function defaultRuns(
+  out: Cascading,
+  notes: string[],
+  options: { runs?: number; pooled?: boolean },
+): void {
+  if (out.runs !== undefined || options.runs !== undefined) return
+  if (!out.compare?.variants.length || options.pooled) {
+    out.runs = 1
+    return
+  }
+  out.runs = COMPARE_DEFAULT_RUNS
+  out.sources = { ...out.sources, runs: `compare default: ${COMPARE_DEFAULT_RUNS} a side` }
+  notes.push(`runs ${COMPARE_DEFAULT_RUNS} (compare default)`)
 }
 
 /**

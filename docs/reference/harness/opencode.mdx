@@ -97,7 +97,7 @@ reeval runs the provider's calls over HTTP (`transport: 'http'`, below): OpenCod
 
 ```ts title="reeval.config.ts"
 harness: opencode({ model: 'google/gemini-3.8-flash' }),
-gateway: [vercel(), direct()],
+gateway: [vercel()],
 ```
 
 With [`vercel()`](/reference/gateway#vercel-ai-gateway) in the config's `gateway`, OpenCode runs on its own `vercel` provider, as `vercel/<model>`, on `vercel()`'s key. Write the model as its provider's id: a `vercel/…` id would skip the gateway list, so it exits 2 at plan time. On Vercel any `<provider>/<model>` Vercel serves runs; the provider table below gates `direct()` only, where a provider reeval can't run stops the plan with exit 2. `effort` runs there on a Gemini model only, as its `thinkingConfig` under Vercel's `providerOptions`; with another model, such a cell falls through to the next gateway.
@@ -106,7 +106,7 @@ With [`vercel()`](/reference/gateway#vercel-ai-gateway) in the config's `gateway
 
 ```ts title="reeval.config.ts"
 harness: opencode({ model: 'google/gemini-3.8-flash' }),
-gateway: [openrouter(), direct()],
+gateway: [openrouter()],
 ```
 
 With [`openrouter()`](/reference/gateway#openrouter) in the config's `gateway`, OpenCode runs on its own `openrouter` provider, as `openrouter/<model>`, on `OPENROUTER_API_KEY`, brokered on `POST openrouter.ai/api/v1/chat/completions`. Write the model as its provider's id: an `openrouter/…` id would skip the gateway list, so it exits 2 at plan time. Each call records the upstream provider OpenRouter says served it, and its cost. `effort` runs there on a Gemini model only, as OpenRouter's `reasoning.effort`; with another model, such a cell falls through to the next gateway.
@@ -115,7 +115,7 @@ With [`openrouter()`](/reference/gateway#openrouter) in the config's `gateway`, 
 
 ```ts title="reeval.config.ts"
 harness: opencode({ model: 'google/gemini-3.8-flash' }),
-gateway: [vertex(), direct()],
+gateway: [vertex()],
 ```
 
 With [`vertex()`](/reference/gateway#vertex-ai) in the config's `gateway`, a Gemini model runs on OpenCode's own `google-vertex` provider, as `google-vertex/<model>`, with no key: it reads a service account reeval writes for it, and the gateway adds an access token from your Application Default Credentials to its `POST /v1beta1/…/publishers/google/models/<model>:streamGenerateContent` calls. On `direct()`, a `google-vertex/…` model stays refused.

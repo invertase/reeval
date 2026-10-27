@@ -3,8 +3,11 @@
 // on, the upstream OpenRouter names, and Vercel's credential's expiry.
 import assert from 'node:assert/strict'
 import { afterEach, describe, test } from 'node:test'
+import { fxVertexBaseUrl } from '@reeval/harness-fx'
+import { vertexProvider } from '@reeval/harness-grok-build'
 import { openCodeConfig } from '@reeval/harness-opencode'
 import { onEndpoint } from '@reeval/sandbox-docker'
+import { checkGateways } from '../src/config.ts'
 import { type GatewayScope, resolveModelGateway } from '../src/gateway/models.ts'
 import {
   anthropicOnOpenRouter,
@@ -23,6 +26,7 @@ import {
 import {
   SANDBOX_ACCESS_TOKEN,
   vertexDecisionModel,
+  vertexHarnessModel,
   vertexHost,
   vertexLanguageModel,
   vertexModelRefusal,
@@ -71,14 +75,36 @@ describe('resolveGateway', () => {
   test('the plan hint names where a harness fell to, and why', () => {
     assert.equal(
       fallbackHint('cursor:composer-2.5', resolve(list('vercel', 'direct'), cursor)),
-      `gateway: cursor:composer-2.5 → direct (vercel can't serve it: ${CURSOR_WHY})`,
+      `gateway: cursor:composer-2.5 falls back to direct (vercel can't serve it: ${CURSOR_WHY})`,
+    )
+    assert.equal(
+      fallbackHint('fx:google/m', {
+        name: 'vercel',
+        skipped: [{ gateway: 'direct', why: 'no' }],
+      }),
+      "gateway: fx:google/m → vercel (direct can't serve it: no)",
     )
   })
 
-  test('nothing in the list serving it exits 2, naming each gateway tried', () => {
+  test('direct() ends every list, unless placed elsewhere or turned off', () => {
+    const kinds = (value: unknown) =>
+      checkGateways(value, 'gateway', 'reeval.config.ts').map((g) => g.kind)
+    assert.deepEqual(kinds([{ kind: 'vercel' }]), ['vercel', 'direct'])
+    assert.deepEqual(kinds(['vertex', 'openrouter']), ['vertex', 'openrouter', 'direct'])
+    assert.deepEqual(kinds([{ kind: 'direct' }, { kind: 'vercel' }]), ['direct', 'vercel'])
+    assert.deepEqual(kinds([{ kind: 'direct', enabled: true }, 'vercel']), ['direct', 'vercel'])
+    assert.deepEqual(kinds([{ kind: 'direct', enabled: false }, 'vercel']), ['vercel'])
+    assert.deepEqual(kinds(['vercel', { direct: { enabled: false } }]), ['vercel'])
+    assert.deepEqual(resolve(checkGateways(['vercel'], 'gateway', 'f'), cursor), {
+      name: 'direct',
+      skipped: [{ gateway: 'vercel', why: CURSOR_WHY }],
+    })
+  })
+
+  test('with direct() off, nothing in the list serving it exits 2, naming each gateway tried', () => {
     assert.throws(() => resolve(list('vercel'), cursor), {
       name: 'UsageError',
-      message: `evaluate("e") on cursor:composer-2.5: no gateway in the list can serve it (vercel: ${CURSOR_WHY}). Add direct() to the end of gateway to use Cursor's own key.`,
+      message: `evaluate("e") on cursor:composer-2.5: no gateway in the list can serve it (vercel: ${CURSOR_WHY}). Drop direct({ enabled: false }) from gateway to fall back to Cursor's own key.`,
     })
   })
 
@@ -582,6 +608,30 @@ describe('OpenRouter routes', () => {
     }
   })
 
+  test('fx takes openrouter() before the direct() that ends the list, but not with effort', () => {
+    const fx = { kind: 'fx', model: 'gpt-5.5' } as HarnessDescriptor
+    for (const value of [['openrouter'], ['openrouter', { direct: { enabled: false } }]]) {
+      assert.deepEqual(resolve(checkGateways(value, 'gateway', 'f'), fx), {
+        name: 'openrouter',
+        skipped: [],
+      })
+    }
+    assert.equal(
+      resolve(checkGateways(['direct', 'openrouter'], 'gateway', 'f'), fx).name,
+      'direct',
+    )
+    const gatewayId = { kind: 'fx', model: 'anthropic/claude-sonnet-5' } as HarnessDescriptor
+    assert.equal(
+      resolve(checkGateways(['openrouter'], 'gateway', 'f'), gatewayId).name,
+      'openrouter',
+    )
+    const effort = { ...fx, effort: 'low' } as HarnessDescriptor
+    assert.throws(
+      () => resolve(checkGateways(['openrouter'], 'gateway', 'f'), effort),
+      /openrouter: fx sends no effort of its own, .*not on OpenRouter/,
+    )
+  })
+
   test("Claude Code calls OpenRouter's Messages API on a Bearer token, with dotted Anthropic ids", () => {
     process.env.OPENROUTER_API_KEY = 'sk-or-test'
     const agent = onOpenRouter(claude)
@@ -890,6 +940,171 @@ describe('Vertex AI routes', () => {
     assert.equal(opencode.modelId?.('gemini-3.8-flash'), 'google-vertex/gemini-3.8-flash')
     const agy = onGlobal({ kind: 'antigravity', model: 'm' } as never)
     assert.ok(agy.localResponses?.some((r) => r.match.host === 'www.googleapis.com'))
+  })
+
+  test("fx on Vertex calls its Chat Completions endpoint, with the token there and Gemini's model", async () => {
+    const regional = vertexSettings({ project: 'reeval-512515', location: 'us-east5' }, {})
+    const fx = { kind: 'fx', model: 'gemini-3.8-flash', effort: 'low' } as const
+    const agent = agentFor({ ...fx, gateway: 'vertex' } as AgentHarnessDescriptor, regional)
+    const host = 'us-east5-aiplatform.googleapis.com'
+    const chat = (v: string) =>
+      `/${v}/projects/reeval-512515/locations/us-east5/endpoints/openapi/chat/completions`
+    assert.equal(agent.credential, 'Google Cloud credentials')
+    assert.deepEqual(agentAuth(agent, {}), {}, 'no key from the environment')
+    assert.deepEqual(agent.hosts, [host])
+    assert.equal(agent.adc, undefined, 'fx reads no service account')
+    const on = (h: string, path: string) =>
+      onEndpoint(agent.endpoints, { method: 'POST', host: h, path, headers: {} })
+    assert.ok(on(host, chat('v1')))
+    assert.ok(on(host, chat('v1beta1')))
+    assert.ok(!on(host, chat('v1').replace('reeval-512515', 'other')), 'only its own project')
+    assert.ok(!on('aiplatform.googleapis.com', chat('v1')), 'only its region')
+    assert.ok(
+      !on(host, '/v1/projects/reeval-512515/locations/us-east5/publishers/google/models/m:predict'),
+    )
+    assert.deepEqual(agent.modelResponses, agent.endpoints)
+    const token = await agent.token?.transformations('t')
+    assert.deepEqual(token?.[0]?.transform, { headers: { authorization: 'Bearer t' } })
+    assert.equal(
+      agent.servedModel?.({
+        method: 'POST',
+        host,
+        path: chat('v1'),
+        responseModel: 'google/gemini-3.8-flash',
+      }),
+      'gemini-3.8-flash',
+    )
+    assert.equal(agent.modelId?.('gemini-3.8-flash'), 'google/gemini-3.8-flash')
+    assert.equal(agent.modelId?.('google/gemini-3.8-flash'), 'google/gemini-3.8-flash')
+    const adapter = await agent.adapter({
+      auth: agentAuth(agent, {}),
+      ...(agent.routeEnv ? { env: agent.routeEnv } : {}),
+      descriptor: fx,
+      model: 'google/gemini-3.8-flash',
+      plugins: [],
+    })
+    assert.equal((adapter as { harnessId: string }).harnessId, 'fx')
+    assert.deepEqual(agent.routeEnv, {
+      FX_VERTEX_PROJECT: 'reeval-512515',
+      FX_VERTEX_LOCATION: 'us-east5',
+    })
+    assert.equal(vertexHarnessModel('fx', 'google/gemini-3.8-flash'), 'google/gemini-3.8-flash')
+  })
+
+  test("a bare fx id is OpenAI's, so on Vertex only a bare Gemini id stays there", () => {
+    const on = (model: string) =>
+      resolve(list('vertex', 'direct'), { kind: 'fx', model } as HarnessDescriptor).name
+    assert.equal(on('gemini-3.8-flash'), 'vertex')
+    assert.equal(on('google/gemini-3.8-flash'), 'vertex')
+    assert.equal(on('gpt-5.5'), 'direct')
+    const bare = { kind: 'fx', model: 'gpt-5.5' } as HarnessDescriptor
+    assert.deepEqual(resolve(checkGateways(['vertex'], 'gateway', 'f'), bare).name, 'direct')
+  })
+
+  test("fx on Vertex gets the token on the path its relay's base_url makes, a domain-scoped project's too", () => {
+    for (const [project, location] of [
+      ['reeval-512515', 'global'],
+      ['example.com:reeval', 'us-central1'],
+    ] as const) {
+      const agent = agentFor(
+        {
+          kind: 'fx',
+          model: 'google/gemini-3.8-flash',
+          gateway: 'vertex',
+        } as AgentHarnessDescriptor,
+        vertexSettings({ project, location }, {}),
+      )
+      const { pathname } = new URL(`${fxVertexBaseUrl({ project, location })}/chat/completions`)
+      const host = agent.hosts?.[0] ?? ''
+      assert.ok(
+        onEndpoint(agent.endpoints, { method: 'POST', host, path: pathname, headers: {} }),
+        `${project} in ${location}: ${pathname}`,
+      )
+    }
+  })
+
+  test("Grok Build on Vertex calls xAI's models on its Chat Completions API, with the token there only", async () => {
+    const regional = vertexSettings(
+      { project: 'reeval-512515', regions: { xai: 'us-central1' } },
+      {},
+    )
+    const agent = agentFor(
+      { kind: 'grok-build', model: 'grok-4.6', gateway: 'vertex' } as AgentHarnessDescriptor,
+      regional,
+    )
+    const host = 'us-central1-aiplatform.googleapis.com'
+    const chat =
+      '/v1/projects/reeval-512515/locations/us-central1/endpoints/openapi/chat/completions'
+    assert.equal(agent.credential, 'Google Cloud credentials')
+    assert.deepEqual(agent.hosts, [host])
+    assert.deepEqual(agentAuth(agent, {}), {}, 'no key from the environment')
+    assert.deepEqual(agent.vertexChat, { project: 'reeval-512515', region: 'us-central1' })
+    assert.equal(agent.modelId?.('grok-4.6'), 'xai/grok-4.6')
+    assert.equal(agent.modelId?.('xai/grok-4.7'), 'xai/grok-4.7')
+    const on = (method: string, h: string, path: string) =>
+      onEndpoint(agent.endpoints, { method, host: h, path, headers: {} })
+    assert.ok(on('POST', host, chat))
+    assert.ok(!on('GET', host, chat))
+    assert.ok(!on('POST', 'aiplatform.googleapis.com', chat))
+    assert.ok(!on('POST', host, chat.replace('reeval-512515', 'other')))
+    assert.ok(!on('POST', 'api.x.ai', '/v1/chat/completions'))
+    assert.deepEqual(agent.modelResponses, agent.endpoints)
+    assert.equal(
+      agent.servedModel?.({ host, path: chat, responseModel: 'xai/grok-4.6' } as never),
+      'xai/grok-4.6',
+    )
+    assert.equal(
+      agent.servedModel?.({ host: 'api.x.ai', path: chat, responseModel: 'm' } as never),
+      undefined,
+    )
+    const rules = agent.token?.transformations('ya29.t') ?? []
+    assert.deepEqual(
+      rules.map((r) => r.match),
+      agent.endpoints,
+    )
+    assert.ok(rules.every((r) => r.transform.headers?.authorization === 'Bearer ya29.t'))
+    assert.equal(agent.adc, undefined, 'Grok reads no service account')
+    const adapter = await agent.adapter({
+      auth: agentAuth(agent, {}),
+      descriptor: { kind: 'grok-build', model: 'grok-4.6' } as never,
+      model: 'xai/grok-4.6',
+      plugins: [],
+      ...(agent.vertexChat ? { vertexChat: agent.vertexChat } : {}),
+    })
+    assert.equal((adapter as { harnessId: string }).harnessId, 'grok-build')
+  })
+
+  test('Grok Build takes vertex() before the direct() that ends the list, and with direct off', () => {
+    const grok = { kind: 'grok-build', model: 'grok-4.6' } as HarnessDescriptor
+    for (const value of [['vertex'], ['vertex', { direct: { enabled: false } }]]) {
+      assert.deepEqual(resolve(checkGateways(value, 'gateway', 'f'), grok), {
+        name: 'vertex',
+        skipped: [],
+      })
+    }
+    assert.equal(resolve(checkGateways(['direct', 'vertex'], 'gateway', 'f'), grok).name, 'direct')
+  })
+
+  test("Grok Build on Vertex gets the token on the path its own base_url makes, a domain-scoped project's too", () => {
+    for (const [project, region] of [
+      ['reeval-512515', 'global'],
+      ['example.com:reeval', 'us-central1'],
+    ] as const) {
+      const agent = agentFor(
+        { kind: 'grok-build', model: 'grok-4.6', gateway: 'vertex' } as AgentHarnessDescriptor,
+        vertexSettings({ project, regions: { xai: region } }, {}),
+      )
+      const base = new URL(`${vertexProvider(project, region).baseUrl}/chat/completions`)
+      assert.ok(
+        onEndpoint(agent.endpoints, {
+          method: 'POST',
+          host: base.host,
+          path: base.pathname,
+          headers: {},
+        }),
+        `${project} in ${region}: ${base.href}`,
+      )
+    }
   })
 
   test('the gateway serves Claude Code on Vertex, not the agents it has no route for', () => {

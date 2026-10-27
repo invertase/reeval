@@ -19,7 +19,7 @@ export const skilled = defineEnvironment('skilled', { sandbox })
     'evals/envs.ts': ENVS,
     'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-evaluate('asks', { compare: { baseline: base, variants: [skilled] }, questions: ${question} }, async (c) => {
+evaluate('asks', { runs: 1, compare: { baseline: base, variants: [skilled] }, questions: ${question} }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -118,8 +118,8 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled] }, questions: 
       'evals/q.eval.ts': `import { evaluate } from 'reeval'
 import { base, skilled } from './envs.ts'
 const compare = { baseline: base, variants: [skilled] }
-evaluate('own model', { compare, questions: [{ question: 'Which is cleaner?', across: 'environment', model: 'anthropic/claude-sonnet-5' }] }, async () => {})
-evaluate('cascade', { compare, questions: [{ question: 'Which is cleaner?', across: 'environment' }, { question: 'Which is shorter?', across: 'environment', model: 'openai/gpt-5.5' }] }, async () => {})
+evaluate('own model', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment', model: 'anthropic/claude-sonnet-5' }] }, async () => {})
+evaluate('cascade', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment' }, { question: 'Which is shorter?', across: 'environment', model: 'openai/gpt-5.5' }] }, async () => {})
 `,
     })
     const dry = await runCli(p.dir, ['run', '--dry-run', '--json'], { env: noKeys })
@@ -202,8 +202,8 @@ const body = async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 }
-evaluate('two questions', { compare, questions: [{ question: 'Which is cleaner?', across: 'environment' }, { question: 'Which is shorter?', across: 'environment' }] }, body)
-evaluate('reasons', { compare, questions: [{ question: 'Which reads better?', across: 'environment' }] }, body)
+evaluate('two questions', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment' }, { question: 'Which is shorter?', across: 'environment' }] }, body)
+evaluate('reasons', { runs: 1, compare, questions: [{ question: 'Which reads better?', across: 'environment' }] }, body)
 evaluate('three arms', { compare: { baseline: none, variants: [current, next], gate: 'none' }, questions: [{ question: 'Which delivers a better user experience?', across: 'environment' }], runs: 3 }, body)
 `,
     })
@@ -588,8 +588,8 @@ const body = async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 }
-evaluate('asks', { compare, questions: ${PAIRWISE} }, body)
-evaluate('describes', { compare, questions: ['What did it write?'] }, body)
+evaluate('asks', { runs: 1, compare, questions: ${PAIRWISE} }, body)
+evaluate('describes', { runs: 1, compare, questions: ['What did it write?'] }, body)
 `,
     })
     const r = await runCli(p.dir)

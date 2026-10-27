@@ -1,5 +1,5 @@
-// `@reeval/harness-grok-build`: xAI's Grok Build on an xAI API key, Vercel AI Gateway or OpenRouter, as
-// an AI SDK harness over ACP.
+// `@reeval/harness-grok-build`: xAI's Grok Build on an xAI API key, Vercel AI Gateway, OpenRouter or
+// Vertex AI, as an AI SDK harness over ACP.
 export {
   AI_GATEWAY_PROVIDER,
   createGrokBuild,
@@ -16,6 +16,8 @@ export {
   type GrokProvider,
   grokConfig,
   OPENROUTER_PROVIDER,
+  VERTEX_TOKEN_ENV,
+  vertexProvider,
   XAI_API_URL,
 } from './grok-build-harness.ts'
 export { GrokBuildStreamTranslator, grokTurnUsage } from './grok-build-stream.ts'

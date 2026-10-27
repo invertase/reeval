@@ -336,9 +336,13 @@
       "additionalProperties": false
     },
     "DirectGatewayDescriptor": {
-      "description": "Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.",
+      "description": "Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends with it unless it's listed elsewhere, where it's tried in that place.",
       "type": "object",
       "properties": {
+        "enabled": {
+          "description": "`false` turns off the fallback to each provider's own key, so a cell no other gateway in the list serves is refused at plan time. Default `true`.",
+          "type": "boolean"
+        },
         "kind": {
           "type": "string",
           "const": "direct"
@@ -974,15 +978,20 @@
       "enum": ["A", "B", "tie"]
     },
     "FxHarnessDescriptor": {
-      "description": "fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or OpenAI's API by the model id, or on OpenRouter through `openrouter()`, and reports each turn's tokens.",
+      "description": "fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or OpenAI's API by the model id, or on OpenRouter or Vertex AI, and reports each turn's tokens.",
       "type": "object",
       "properties": {
+        "effort": {
+          "description": "Reasoning effort, sent as `reasoning_effort` on each model call; only on `vertex()`, since fx sends none itself. Values are what the model takes there, e.g. `low`, `medium` or `high`.",
+          "type": "string",
+          "pattern": "\\S"
+        },
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
           "$ref": "#/$defs/GatewayName"
         },
         "id": {
-          "description": "Cell id; defaults to `fx:<model>`.",
+          "description": "Cell id; defaults to `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
           "pattern": "\\S"
         },
@@ -995,7 +1004,7 @@
           "type": "number"
         },
         "model": {
-          "description": "A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `openrouter()`, either runs on OpenRouter's Chat Completions API with `OPENROUTER_API_KEY`, a bare id as `openai/<id>`.",
+          "description": "A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `openrouter()`, either runs on OpenRouter's Chat Completions API with `OPENROUTER_API_KEY`, a bare id as `openai/<id>`. On `vertex()`, a Gemini model id, `google/<id>` or a bare `gemini-…` id, run on Vertex AI's Chat Completions endpoint, e.g. `google/gemini-3.8-flash`.",
           "type": "string",
           "minLength": 1
         },
@@ -1056,7 +1065,12 @@
           "properties": {
             "direct": {
               "type": "object",
-              "properties": {},
+              "properties": {
+                "enabled": {
+                  "description": "`false` turns off the fallback to each provider's own key, so a cell no other gateway in the list serves is refused at plan time. Default `true`.",
+                  "type": "boolean"
+                }
+              },
               "additionalProperties": false
             }
           },
@@ -2313,7 +2327,7 @@
           "$ref": "#/$defs/GatePolicy"
         },
         "gateway": {
-          "description": "The gateways model calls may go through, in the order you prefer them: each harness takes the first that can serve it. Default `[direct]`, each provider's own key.",
+          "description": "The gateways model calls may go through, in the order you prefer them: each harness takes the first that can serve it. `direct`, each provider's own key, ends the list unless it's listed in another place or turned off with `{ direct: { enabled: false } }`. Default `[direct]`.",
           "minItems": 1,
           "type": "array",
           "items": {
@@ -2370,7 +2384,7 @@
           "enum": ["manual", "ci", "always"]
         },
         "runs": {
-          "description": "Attempts per cell; default 1.",
+          "description": "Attempts per cell; unset, a compare with variants runs 4 a side and anything else once.",
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991

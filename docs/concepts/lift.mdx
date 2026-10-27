@@ -139,7 +139,7 @@ The `all cases` row pools the cases into one effect; `-v` adds its paired interv
 | 1 | Newcombe's paired score interval (his method 10) | McNemar's exact test | 6 discordant cases |
 | More | A t interval over each case's pass-rate difference | Wilcoxon signed-rank | 6 cases |
 
-Six discordant cases are the fewest whose exact p can fall below 0.05 (2 · 0.5⁶ = 0.031). The verdict is `lift` or `drop` when the interval excludes 0, else `noise`, and a family's effort uses the same per-case pairing with a signed-rank verdict.
+Six discordant cases are the fewest whose exact p can fall below 0.05 (2 · 0.5⁶ = 0.031). A family can't have more discordant cases than cases, so one of fewer than six can never get a verdict, whatever its runs, and the plan says so: `hint: family evals/each.eval.ts › pooled across %s has 3 cases; its lift needs 6 for a verdict, so it will say can't tell yet whatever the runs (add cases)`. The verdict is `lift` or `drop` when the interval excludes 0, else `noise`, and a family's effort uses the same per-case pairing with a signed-rank verdict.
 
 ## Effort next to lift
 
@@ -180,7 +180,7 @@ Without ties, the smallest p a rank test can give depends only on the attempt co
 | 4 vs 4 | 0.029 | yes, unless ties prevent it |
 | 5 vs 5 | 0.008 | yes, unless ties prevent it |
 
-So `reeval run` hints when a compare runs 2 or 3 times a cell: `hint: 1 compare runs 3 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)`.
+Pass-rate lift needs four counted attempts a side too, so below `runs: 4` a compare reads `can't tell yet` however its attempts go. The plan says so before anything runs, at one run a cell as at three: `hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)`.
 
 ### No overlap at small n
 

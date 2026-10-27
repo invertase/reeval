@@ -1,4 +1,6 @@
-no profile · 6 evals · 22 cells · 22 attempts
+no profile · 6 evals · 22 cells · 46 attempts
+hint: 2 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+hint: family evals/each.eval.ts › pooled across %s has 3 cases; its lift needs 6 for a verdict, so it will say can't tell yet whatever the runs (add cases)
 evals/each.eval.ts › pooled across ada               a/base/docker     control          ungated  ×1  family pooled across %s case 1/3
                                                      a/skilled/docker  variant skilled  gated    ×1  minLift 0.2
                                                      b/base/docker     control          ungated  ×1
@@ -11,14 +13,14 @@ evals/each.eval.ts › pooled across linus             a/base/docker     control
                                                      a/skilled/docker  variant skilled  gated    ×1  minLift 0.2
                                                      b/base/docker     control          ungated  ×1
                                                      b/skilled/docker  variant skilled  gated    ×1  minLift 0.2
-evals/each.eval.ts › each on its own for ada         a/base/docker     control          ungated  ×1
-                                                     a/skilled/docker  variant skilled  gated    ×1
-                                                     b/base/docker     control          ungated  ×1
-                                                     b/skilled/docker  variant skilled  gated    ×1
-evals/each.eval.ts › each on its own for grace       a/base/docker     control          ungated  ×1
-                                                     a/skilled/docker  variant skilled  gated    ×1
-                                                     b/base/docker     control          ungated  ×1
-                                                     b/skilled/docker  variant skilled  gated    ×1
+evals/each.eval.ts › each on its own for ada         a/base/docker     control          ungated  ×4  runs 4 (compare default)
+                                                     a/skilled/docker  variant skilled  gated    ×4
+                                                     b/base/docker     control          ungated  ×4
+                                                     b/skilled/docker  variant skilled  gated    ×4
+evals/each.eval.ts › each on its own for grace       a/base/docker     control          ungated  ×4  runs 4 (compare default)
+                                                     a/skilled/docker  variant skilled  gated    ×4
+                                                     b/base/docker     control          ungated  ×4
+                                                     b/skilled/docker  variant skilled  gated    ×4
 evals/each.eval.ts › one case is not a family: only  a/-/docker        control          gated    ×1
                                                      b/-/docker        control          gated    ×1
 excluded: —

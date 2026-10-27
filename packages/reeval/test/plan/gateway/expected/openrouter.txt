@@ -1,7 +1,7 @@
 no profile · 2 evals · 10 cells · 10 attempts
-hint: gateway: cursor:composer-2.5 → direct (openrouter can't serve it: Cursor's agent only calls Cursor's own API)
-hint: gateway: antigravity:gemini-3.8-flash-low → direct (openrouter can't serve it: Antigravity's CLI only calls Google's API, with a Gemini key, and OpenRouter has no Gemini API)
-evals/g.eval.ts › greets  claude-code:claude-haiku-4-5/-/docker      control  gated  ×1  gateway: claude-code:claude-haiku-4-5 → openrouter · gateway: codex:gpt-5.4-mini → openrouter · gateway: goose:gemini-3.8-flash → openrouter · gateway: opencode:gemini-3.8-flash → openrouter · gateway: grok-build:grok-4.6 → openrouter · gateway: cursor:composer-2.5 → direct · gateway: antigravity:gemini-3.8-flash-low → direct · gateway: fx:gpt-5.5 → openrouter · gateway: pi:gemini-3.8-flash → openrouter
+hint: gateway: cursor:composer-2.5 falls back to direct (openrouter can't serve it: Cursor's agent only calls Cursor's own API)
+hint: gateway: antigravity:gemini-3.8-flash-low falls back to direct (openrouter can't serve it: Antigravity's CLI only calls Google's API, with a Gemini key, and OpenRouter has no Gemini API)
+evals/g.eval.ts › greets  claude-code:claude-haiku-4-5/-/docker      control  gated  ×1  gateway: claude-code:claude-haiku-4-5 → openrouter · gateway: codex:gpt-5.4-mini → openrouter · gateway: goose:gemini-3.8-flash → openrouter · gateway: opencode:gemini-3.8-flash → openrouter · gateway: grok-build:grok-4.6 → openrouter · gateway: cursor:composer-2.5 → direct (fallback) · gateway: antigravity:gemini-3.8-flash-low → direct (fallback) · gateway: fx:gpt-5.5 → openrouter · gateway: pi:gemini-3.8-flash → openrouter
                           codex:gpt-5.4-mini/-/docker                control  gated  ×1
                           goose:gemini-3.8-flash/-/docker            control  gated  ×1
                           opencode:gemini-3.8-flash/-/docker         control  gated  ×1
@@ -21,12 +21,12 @@ image docker · goose · 1 evals
 image docker · opencode · 1 evals
   base  reeval-sandbox:opencode-0.2.10  (reeval's image: built when missing or when its base changed)
 image docker · grok-build · 1 evals
-  base  reeval-sandbox:grok-build-0.1.5  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:grok-build-0.1.6  (reeval's image: built when missing or when its base changed)
 image docker · cursor · 2 evals
   base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
 image docker · antigravity · 1 evals
   base  reeval-sandbox:antigravity-0.1.12  (reeval's image: built when missing or when its base changed)
 image docker · fx · 1 evals
-  base  reeval-sandbox:fx-0.1.1  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:fx-0.1.2  (reeval's image: built when missing or when its base changed)
 image docker · pi · 1 evals
   base  reeval-sandbox:pi-0.2.8  (reeval's image: built when missing or when its base changed)

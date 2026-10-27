@@ -124,7 +124,7 @@ That's `reeval run greetings -v`, which adds the pooled interval under `all case
 ```
 
 <Info>
-  At `runs: 1` the lift uses Newcombe's paired interval and McNemar's exact test; with more runs it's a t interval over each case's pass-rate difference. Fewer than six discordant cases (or six cases, with runs) reads `can't tell yet` (`insufficient` in `reeval query family_lift`). [Lift](/concepts/lift) has the details.
+  At `runs: 1` the lift uses Newcombe's paired interval and McNemar's exact test; with more runs it's a t interval over each case's pass-rate difference. Fewer than six discordant cases (or six cases, with runs) reads `can't tell yet` (`insufficient` in `reeval query family_lift`), and the plan hints so for a family of fewer than six cases. [Lift](/concepts/lift) has the details.
 </Info>
 
 ## Name placeholders

@@ -1,5 +1,5 @@
 import { defineConfig } from 'reeval'
-import { direct, openrouter } from 'reeval/gateway'
+import { openrouter } from 'reeval/gateway'
 import {
   antigravity,
   claudeCode,
@@ -24,8 +24,8 @@ export default defineConfig({
     fx({ model: 'gpt-5.5' }),
     pi({ model: 'gemini-3.8-flash' }),
   ],
-  gateway: [openrouter(), direct()],
+  gateway: [openrouter()],
   profiles: {
-    fallbacks: { gateway: [openrouter({ fallbacks: true }), direct()] },
+    fallbacks: { gateway: [openrouter({ fallbacks: true })] },
   },
 })

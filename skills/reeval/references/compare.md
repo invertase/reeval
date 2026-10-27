@@ -18,7 +18,12 @@ Each variant runs as that environment on its own, with the same prompt and check
 does not layer, inherit or extend. Share setup first (the example is in SKILL.md).
 
 - Attempts = evals × harnesses × (1 control + variants) × runs. The example is 1 eval, 2 cells
-  (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 4 attempts.
+  (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 8 attempts.
+- With `runs` unset at every level, a compare with variants runs 4 a cell, the fewest tries a
+  side a lift verdict needs (the plan notes `runs 4 (compare default)`); anything else runs once.
+  Any level that sets `runs`, `runs: 1` and `--runs` included, replaces it, and a profile's
+  `limit.runs` caps it. A pooled `evaluate.each` case runs once: its lift pools over the cases.
+  Don't set `runs: 1` in the config unless you mean every compare to run once.
 - `parent.extendEnvironment(name, spec)` appends the child's spec as a new layer. The child wins
   on shared keys; `setup` concatenates. Call it before `compare`. Two stacks that should not
   share are two `defineEnvironment` calls, then `{ baseline, variants }`.
@@ -57,7 +62,7 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   `effort  tools  time  tokens` / `plain  54  1m 39s  2,890k` / `with-house-greeting  3  6.6s  57k`.
   A cell without usage (Goose) is left out of the token sample only; if either side then
   has none, the token metric is omitted, not `insufficient`. Effort's rank test needs
-  `runs: 4` a cell (3 vs 3 can't reach p < 0.05; the plan hints so); `reeval query effort` has
+  `runs: 4` a cell, as lift does (below it both read `can't tell yet`; the plan hints so, at `runs: 1` too); `reeval query effort` has
   its p-values, verdicts and whether the ranges are `separated`.
 - With two variants or more, `reeval query contrasts` sets every pair of arms side by side,
   variant against variant too.

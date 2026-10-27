@@ -22,6 +22,17 @@ const modelsDev = async (dir: string) => {
 export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'default', args: [] },
   { dir: 'matrix', name: 'runs-override', args: ['--runs', '1'] },
+  { dir: 'runs-default', name: 'default', args: [] },
+  { dir: 'runs-default', name: 'runs-flag', args: ['--runs', '2'] },
+  { dir: 'runs-default', name: 'config-runs', args: ['--config', 'reeval.once.config.ts'] },
+  { dir: 'runs-default', name: 'profile-defaults', args: ['--profile', 'two'] },
+  { dir: 'runs-default', name: 'profile-limit', args: ['--profile', 'pr'] },
+  {
+    dir: 'runs-default',
+    name: 'profile-limit-capped',
+    args: ['--profile', 'pr', 'runs from the group'],
+  },
+  { dir: 'runs-default', name: 'compare-off', args: ['--profile', 'off'] },
   { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.eval.ts'] },
   { dir: 'compare', name: 'independent', args: ['evals/independent.eval.ts'] },
   { dir: 'compare', name: 'baseline-omitted', args: ['evals/omitted.eval.ts'] },
@@ -45,6 +56,13 @@ export const cases: PlanCase[] = [
   { dir: 'compare', name: 'each-filtered', args: ['evals/each.eval.ts', 'grace'] },
   { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.eval.ts', 'b/skilled'] },
   { dir: 'compare', name: 'study', args: ['evals/study.eval.ts'] },
+  { dir: 'compare', name: 'verdicts', args: ['evals/verdicts.eval.ts'] },
+  { dir: 'compare', name: 'verdicts-no-control', args: ['evals/verdicts.eval.ts', 'b/skilled'] },
+  {
+    dir: 'compare',
+    name: 'verdicts-some-cases',
+    args: ['evals/verdicts.eval.ts', 'six cases can: a'],
+  },
   { dir: 'compare', name: 'max-variants', args: ['--profile', 'lean', 'evals/limited.eval.ts'] },
   { dir: 'compare', name: 'off-study', args: ['--profile', 'off', 'evals/study.eval.ts'] },
   { dir: 'compare', name: 'zero-variants', args: ['--profile', 'none', 'evals/limited.eval.ts'] },
@@ -128,6 +146,8 @@ export const cases: PlanCase[] = [
     args: ['--config', 'reeval.vercel.config.ts', '--profile', 'codex-pin'],
   },
   { dir: 'gateway', name: 'vercel-yaml', args: ['--config', 'reeval.vercel.yaml'] },
+  { dir: 'gateway-strict', name: 'strict', args: [] },
+  { dir: 'gateway-strict', name: 'strict-yaml', args: ['--config', 'reeval.strict.yaml'] },
   { dir: 'gateway', name: 'openrouter', args: ['--config', 'reeval.openrouter.config.ts'] },
   {
     dir: 'gateway',
@@ -345,6 +365,49 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
       ],
     )
   })
+
+  for (const [format, loose, off] of [
+    ['ts', '[vercel()]', '[vercel(), direct({ enabled: false })]'],
+    ['yaml', '[vercel]', '[vercel, { direct: { enabled: false } }]'],
+  ] as const) {
+    test(`with direct() off in ${format}, a cell no listed gateway serves exits 2 at plan time`, async () => {
+      const files = (gateway: string) => ({
+        ...(format === 'ts'
+          ? {
+              'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { direct, vercel } from 'reeval/gateway'
+import { cursor } from 'reeval/harness'
+export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), gateway: ${gateway} })
+`,
+            }
+          : {
+              'reeval.yaml': `harness: { kind: cursor, model: composer-2.5 }
+gateway: ${gateway}
+`,
+            }),
+        'evals/g.eval.ts': `import { evaluate } from 'reeval'
+evaluate('routed', async () => {})
+`,
+      })
+      const fallback = await project(`gateway-fallback-${format}`, files(loose))
+      const planned = await runCli(fallback.dir, ['run', '--dry-run'])
+      assert.equal(planned.code, 0, planned.stdout + planned.stderr)
+      assert.match(
+        planned.stdout,
+        /hint: gateway: cursor:composer-2\.5 falls back to direct \(vercel can't serve it: Cursor's agent only calls Cursor's own API\)/,
+      )
+      const strict = await project(`gateway-strict-${format}`, files(off))
+      for (const args of [['run', '--dry-run'], ['run']]) {
+        const r = await runCli(strict.dir, args)
+        assert.equal(r.code, 2, r.stdout + r.stderr)
+        assert.match(
+          r.stderr,
+          /on cursor:composer-2\.5: no gateway in the list can serve it \(vercel: Cursor's agent only calls Cursor's own API\)\. Drop direct\(\{ enabled: false \}\) from gateway to fall back to Cursor's own key\./,
+        )
+      }
+      assert.deepEqual(readdirSync(strict.dir).includes('.reeval'), false, 'nothing ran')
+    })
+  }
 
   test('a gateway reeval does not know exits 2 at plan time, naming the ones it does', async () => {
     const p = await project('gateway-unknown', {
@@ -936,13 +999,13 @@ evaluate('uses it', { environment: env${options ?? ''} }, async () => {})
     const p = await fixture('plan/compare')
     const r = await runCli(p.dir, ['run', '--dry-run', 'evals/variants.eval.ts', 'b/skilled'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /2 evals · 2 cells · 3 attempts/)
+    assert.match(r.stdout, /2 evals · 2 cells · 6 attempts/)
     const rows = r.stdout
       .split('\n')
       .filter((l) => l.startsWith('evals/variants.eval.ts'))
       .map((l) => l.split(/\s{2,}/).slice(1, 5))
     assert.deepEqual(rows, [
-      ['1', '1 of 2', '1', '1'],
+      ['1', '1 of 2', '4', '4'],
       ['1', '1', '2', '2'],
     ])
   })

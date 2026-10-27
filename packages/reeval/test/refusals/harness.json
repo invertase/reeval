@@ -32,7 +32,7 @@
   "grokBuild good": null,
   "fx without a model": "UsageError: fx() needs a model: a Vercel AI Gateway id, e.g. fx({ model: 'anthropic/claude-sonnet-5' }), or a bare OpenAI id, e.g. fx({ model: 'gpt-5.5' }) (got undefined)",
   "fx with an empty model": "UsageError: fx() needs a model: a Vercel AI Gateway id, e.g. fx({ model: 'anthropic/claude-sonnet-5' }), or a bare OpenAI id, e.g. fx({ model: 'gpt-5.5' }) (got \"\")",
-  "fx with a typo": "UsageError: Unknown fx() option \"efort\".",
+  "fx with a typo": "UsageError: Unknown fx() option \"efort\". Did you mean \"effort\"?",
   "fx good": null,
   "fakeHarness script not a list": "UsageError: fakeHarness({ script }) takes one list of steps per turn, e.g. script: [[{ exec: 'cat notes.txt' }, { reply: 'done' }]] (got \"x\")",
   "fakeHarness script a flat list": "UsageError: fakeHarness({ script }) takes one list of steps per turn, e.g. script: [[{ exec: 'cat notes.txt' }, { reply: 'done' }]] (got [{\"exec\":\"ls\"}])",

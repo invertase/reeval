@@ -1245,7 +1245,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     config: {
       sandbox: plannedSandboxes(input.plan.sandboxes, profileSandbox(config, profile?.defaults)),
       environment: config.environment?.name ?? null,
-      runs: config.runs,
+      runs: config.runs ?? 1,
       judgeModel,
       threshold: runJudge.threshold,
       timeoutMs: config.timeoutMs,

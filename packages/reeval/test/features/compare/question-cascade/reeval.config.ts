@@ -6,6 +6,8 @@ import { fakeAnalysis } from 'reeval/judge'
 // The question's vote reports what it was shown as its reason, for the record check.
 export default defineConfig({
   harness: fakeHarness({ files: { 'out.txt': 'hi\n' }, text: 'REPLY-MARK' }),
+  // One attempt a cell, where a compare would otherwise run 4 a side.
+  runs: 1,
   question: { state: { output: true } },
   analysis: {
     model: fakeAnalysis({

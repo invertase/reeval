@@ -97,7 +97,7 @@ export default defineConfig({
   harness: cursor({ model: 'composer-2.5' }), // model required; CURSOR_API_KEY
   // no default judge model; pin versions
   judge: { model: 'typesafe-ai/jev-1.14.0', threshold: 0.8 },
-  runs: 1,                                    // attempts per cell
+  // runs: attempts per cell; unset, 1, or 4 for a compare with variants
   timeout: '15m',                             // per attempt
 })
 ```
@@ -116,7 +116,9 @@ export default defineConfig({
   `gateway: 'vercel'` pin, listed there), `OPENROUTER_API_KEY` only with `openrouter()`. As a
   judge, `vercel()` serves decision models only (Jev, `openai/gpt-6-luna-decisions`), and
   `openrouter()` only those on its Decisions API (`typesafe/jev-1.14`), never a language model:
-  pin a language-model judge to `gateway: 'direct'`. Always a provider prefix.
+  pin a language-model judge to `gateway: 'direct'`. Always a provider prefix. Every `gateway`
+  list ends with `direct()`, so a cell no listed gateway serves falls back to its own key (the
+  plan's hint says so); `direct({ enabled: false })` refuses it instead.
 - Imports: `reeval` (`defineConfig`, `defineEnvironment`, `group`, `evaluate`,
   `expect`, `DEFAULT_EGRESS_ALLOW`, `DEFAULT_SKILL_EXCLUDE`, types), `/harness`, `/sandbox`
   (`docker`, `fakeSandbox`), `/judge` (`fakeJudge`, `RECOMMENDED_JUDGE_MODEL`,
@@ -223,6 +225,11 @@ group('hello', () => {
   `toHaveFetched(url?)`. `expect(c).not.toHaveChanged(globs)` guards files (it reads the diff;
   `toHaveEdited` reads the transcript, so don't use it as a guard). Label requirements with
   `expect`'s second argument: `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`.
+- A failed `expect` fails the attempt even when the eval catches it (TypeScript `try`/`catch`,
+  Python `try`/`except`), at the end like `expect.soft`. To wait for something, use
+  `expect.poll(() => c.exec(cmd), { timeout: 10_000 }).toSucceed()` (Python
+  `expect.poll(lambda: c.exec(cmd), timeout=10).to_succeed()`), never `expect` in a retry loop. A
+  caught plain Python `assert` records nothing, so `assert` or `if` in a loop also works.
 
 ## Environments and compare
 
@@ -242,7 +249,7 @@ const houseStyle = plain.extendEnvironment('house-style', ({ skill }) => ({
 
 group(
   'greetings',
-  { compare: { baseline: plain, variants: [houseStyle] }, runs: 2 },
+  { compare: { baseline: plain, variants: [houseStyle] } },
   () => {
     evaluate('greets in the house style', async (c) => {
       await c.send('Create greet.js exporting greet(name) in our house style.')
@@ -259,7 +266,9 @@ group(
   `setup: [{ run: 'npm ci', timeout: '5m' }]`. More in
   [references/environments.md](references/environments.md).
 - Attempts = evals × harnesses × (1 control + variants) × runs. The example is 1 eval, 2 cells
-  (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 4 attempts.
+  (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 8 attempts:
+  without `runs`, a compare runs 4 a cell, the fewest for a lift verdict. A `runs` below 4 reads
+  `can't tell yet`; `runs: 1` at any level or a profile's `limit.runs: 1` keeps a smoke run cheap.
 - Each variant runs as that environment on its own; `compare` does not layer, inherit or
   extend. Share setup with `parent.extendEnvironment(name, spec)` before `compare`. Without
   `baseline`, the cascaded `environment` is the control.

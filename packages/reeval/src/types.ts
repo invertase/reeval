@@ -744,8 +744,7 @@ export type CodexHarnessDescriptor = {
 }
 /**
  * fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or
- * OpenAI's API by the model id, or on OpenRouter through `openrouter()`, and reports each turn's
- * tokens.
+ * OpenAI's API by the model id, or on OpenRouter or Vertex AI, and reports each turn's tokens.
  */
 export type FxHarnessDescriptor = {
   kind: 'fx'
@@ -759,9 +758,16 @@ export type FxHarnessDescriptor = {
    * `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on
    * OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `openrouter()`, either
    * runs on OpenRouter's Chat Completions API with `OPENROUTER_API_KEY`, a bare id as `openai/<id>`.
+   * On `vertex()`, a Gemini model id, `google/<id>` or a bare `gemini-…` id, run on Vertex AI's
+   * Chat Completions endpoint, e.g. `google/gemini-3.8-flash`.
    */
   model: string
-  /** Cell id; defaults to `fx:<model>`. */
+  /**
+   * Reasoning effort, sent as `reasoning_effort` on each model call; only on `vertex()`, since fx
+   * sends none itself. Values are what the model takes there, e.g. `low`, `medium` or `high`.
+   */
+  effort?: string
+  /** Cell id; defaults to `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set. */
   id?: string
   /** The most fx attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
@@ -806,9 +812,17 @@ export type GrokBuildHarnessDescriptor = {
  */
 export type GatewayName = 'direct' | 'vercel' | 'openrouter' | 'vertex'
 
-/** Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`. */
+/**
+ * Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends with
+ * it unless it's listed elsewhere, where it's tried in that place.
+ */
 export type DirectGatewayDescriptor = {
   kind: 'direct'
+  /**
+   * `false` turns off the fallback to each provider's own key, so a cell no other gateway in the
+   * list serves is refused at plan time. Default `true`.
+   */
+  enabled?: boolean
 }
 
 /**
@@ -1654,7 +1668,11 @@ type EvalOptionFields = {
    * Not an environment: it does not invent skills, files or a name.
    */
   sandbox?: SandboxDescriptor
-  /** Attempts per cell. */
+  /**
+   * Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
+   * whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
+   * included.
+   */
   runs?: number
   /** How each cell's attempts decide its outcome; default `'all'`. */
   gate?: GatePolicy
@@ -1914,7 +1932,7 @@ export type ReevalConfig = {
   sandbox?: SandboxDescriptor
   /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
   environment?: Environment
-  /** Attempts per cell; default 1. */
+  /** Attempts per cell; unset, a compare with variants runs 4 a side and anything else once. */
   runs?: number
   /** How each cell's attempts decide its outcome; default `'all'`. */
   gate?: GatePolicy
@@ -1956,7 +1974,8 @@ export type ReevalConfig = {
   analysis?: AnalysisConfig
   /**
    * The gateways model calls may go through, in the order you prefer them: each harness takes
-   * the first that can serve it. Default `[direct()]`, each provider's own key.
+   * the first that can serve it. `direct()`, each provider's own key, ends the list unless it's listed
+   * in another place or turned off with `direct({ enabled: false })`. Default `[direct()]`.
    */
   gateway?: GatewayDescriptor[]
 }
@@ -2031,7 +2050,8 @@ export type ReevalConfigData = Omit<
   analysis?: AnalysisConfigData
   /**
    * The gateways model calls may go through, in the order you prefer them: each harness takes
-   * the first that can serve it. Default `[direct]`, each provider's own key.
+   * the first that can serve it. `direct`, each provider's own key, ends the list unless it's listed
+   * in another place or turned off with `{ direct: { enabled: false } }`. Default `[direct]`.
    */
   gateway?: GatewayEntryData[]
 }
@@ -2078,7 +2098,8 @@ export type ResolvedConfig = {
    */
   sandbox: SandboxDescriptor
   environment: Environment | undefined
-  runs: number
+  /** Unset leaves each eval its default: 4 for a compare with variants, otherwise 1. */
+  runs: number | undefined
   /** Unset means `'all'`; kept unset so the plan can hint when `runs > 1`. */
   gate: GatePolicy | undefined
   env: EnvVars
@@ -2100,7 +2121,10 @@ export type ResolvedConfig = {
     maxInputTokens: number
     maxOutputTokens: number
   }
-  /** The `gateway` list, in preference order; `[direct()]` when the config sets none. */
+  /**
+   * The `gateway` list, in preference order, with `direct()` at the end unless it's listed
+   * elsewhere or turned off; `[direct()]` when the config sets none.
+   */
   gateway: GatewayDescriptor[]
   /** Whether the config sets `gateway`, so the plan shows where each cell resolved. */
   gatewaySet: boolean

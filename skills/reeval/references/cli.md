@@ -37,6 +37,9 @@ reeval doctor            Docker, keys and images, with fixes (--json, --online)
   verdict LIKE 'both-%'"` finds checks that don't tell a variant from its control, and
   `reeval query "SELECT cell_key, role, rate FROM check_rates WHERE label = 'flow works'"` is one
   check's pass rate per cell (`pass / (pass + fail)`; errors and not-run left out).
+- `reeval query flaky_cells` lists cells that both passed and failed over comparable runs:
+  `verdict` is `flaky` from 6 counted attempts, else `mixed` (too few to call it flaky; raise
+  `runs` or record more runs before treating it as flaky).
 - `reeval query skill_files` says which declared files (`SKILL.md`, references, rules) each
   attempt opened, and `context_use` counts its tool calls as `context`, `dependency`
   (`node_modules`, `--help`), `web`, `verify` or `workspace`: a heuristic, read it as counts.

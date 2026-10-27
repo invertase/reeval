@@ -614,8 +614,12 @@ class Diff(TypedDict):
     patch: str
 
 
-# Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.
+# Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends
+# with it unless it's listed elsewhere, where it's tried in that place.
 class DirectGatewayDescriptor(TypedDict):
+    # `false` turns off the fallback to each provider's own key, so a cell no other gateway in
+    # the list serves is refused at plan time. Default `true`.
+    enabled: NotRequired[bool]
     kind: Literal["direct"]
 
 
@@ -772,7 +776,9 @@ class EvalOptionsDataCompare(TypedDict):
     # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
     # the evals inside it that set none.
     revision: NotRequired[float | str]
-    # Attempts per cell.
+    # Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
+    # whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
+    # included.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
@@ -845,7 +851,9 @@ class EvalOptionsDataCompare2(TypedDict):
     # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
     # the evals inside it that set none.
     revision: NotRequired[float | str]
-    # Attempts per cell.
+    # Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
+    # whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
+    # included.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
@@ -902,7 +910,9 @@ class EvalOptionsData3(TypedDict):
     # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
     # the evals inside it that set none.
     revision: NotRequired[float | str]
-    # Attempts per cell.
+    # Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
+    # whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
+    # included.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
@@ -1051,14 +1061,17 @@ class FileChange(TypedDict):
 
 
 # fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or
-# OpenAI's API by the model id, or on OpenRouter through `openrouter()`, and reports each turn's
-# tokens.
+# OpenAI's API by the model id, or on OpenRouter or Vertex AI, and reports each turn's tokens.
 class FxHarnessDescriptor(TypedDict):
+    # Reasoning effort, sent as `reasoning_effort` on each model call; only on `vertex()`, since
+    # fx sends none itself. Values are what the model takes there, e.g. `low`, `medium` or
+    # `high`.
+    effort: NotRequired[str]
     # The gateway this harness's model calls go through, by name. It skips the config's
     # `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this
     # harness.
     gateway: NotRequired[GatewayName]
-    # Cell id; defaults to `fx:<model>`.
+    # Cell id; defaults to `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set.
     id: NotRequired[str]
     kind: Literal["fx"]
     # The most fx attempts at once, across the run, e.g. for the key's rate limits.
@@ -1067,7 +1080,8 @@ class FxHarnessDescriptor(TypedDict):
     # `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on
     # OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `openrouter()`,
     # either runs on OpenRouter's Chat Completions API with `OPENROUTER_API_KEY`, a bare id as
-    # `openai/<id>`.
+    # `openai/<id>`. On `vertex()`, a Gemini model id, `google/<id>` or a bare `gemini-…` id,
+    # run on Vertex AI's Chat Completions endpoint, e.g. `google/gemini-3.8-flash`.
     model: str
     # How long the harness's session may take to become ready (its bootstrap and first session)
     # before the attempt is an infra error, after one retry; default 90s.
@@ -1178,8 +1192,12 @@ class JudgeArtifactRef(TypedDict):
     sha256: str
 
 
-# Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.
+# Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends
+# with it unless it's listed elsewhere, where it's tried in that place.
 class JudgeCallDataGatewayDirect(TypedDict):
+    # `false` turns off the fallback to each provider's own key, so a cell no other gateway in
+    # the list serves is refused at plan time. Default `true`.
+    enabled: NotRequired[bool]
     kind: Literal["direct"]
 
 

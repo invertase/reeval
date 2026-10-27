@@ -454,14 +454,15 @@ function checkProfile(name: string, profile: unknown, file: string): Profile {
   return p
 }
 
-const GATEWAY_EXAMPLE = 'gateway: [direct()]'
+const GATEWAY_EXAMPLE = 'gateway: [vercel()]'
 const isGatewayName = (v: unknown): v is GatewayName =>
   typeof v === 'string' && (GATEWAY_NAMES as readonly string[]).includes(v)
 
 /**
  * A `gateway` list as descriptors: each entry is a helper's descriptor, or as data its name or a
- * one-key map from its name to its settings. Refuses an empty list, an unknown entry and a
- * gateway listed twice.
+ * one-key map from its name to its settings. `direct()` ends the list unless it's listed in
+ * another place, and `direct({ enabled: false })` leaves it out, so the resolved list is the one
+ * every route walks. Refuses an empty list, an unknown entry and a gateway listed twice.
  */
 export function checkGateways(value: unknown, where: string, file: string): GatewayDescriptor[] {
   if (!Array.isArray(value) || value.length === 0) {
@@ -504,14 +505,34 @@ export function checkGateways(value: unknown, where: string, file: string): Gate
           : `${at} must be a gateway, e.g. direct() from 'reeval/gateway' (got ${describeValue(entry)})`,
       )
     }
-    if (out.some((g) => g.kind === parsed.data.kind)) {
+    const twice = out.find((g) => g.kind === parsed.data.kind)
+    if (twice?.kind === 'direct' && parsed.data.kind === 'direct') {
+      if ((twice.enabled === false) !== (parsed.data.enabled === false)) {
+        throw new UsageError(
+          `${at} lists direct() and direct({ enabled: false }). direct() places the fallback to each provider's own key and direct({ enabled: false }) turns it off: keep one.`,
+        )
+      }
+    }
+    if (twice) {
       throw new UsageError(
         `${at} lists ${parsed.data.kind} a second time. Each gateway is listed once, where you prefer it.`,
       )
     }
     out.push(parsed.data)
   })
-  return out
+  const direct = out.find((g) => g.kind === 'direct')
+  if (direct?.enabled === false) {
+    const rest = out.filter((g) => g.kind !== 'direct')
+    if (!rest.length) {
+      throw new UsageError(
+        `${where} in ${file} turns direct() off and lists no other gateway, so no model call has one. Add a gateway such as vercel(), or drop direct({ enabled: false }).`,
+      )
+    }
+    return rest
+  }
+  return direct
+    ? out.map((g) => (g.kind === 'direct' ? { kind: 'direct' } : g))
+    : [...out, { kind: 'direct' }]
 }
 
 /** `--profile`, then `REEVAL_PROFILE`, then `defaultProfile.ci` in CI (or `.local`), then none. */
@@ -626,7 +647,7 @@ export function resolveConfig(
     harness,
     sandbox: user.sandbox ?? docker(),
     environment: user.environment,
-    runs: user.runs ?? 1,
+    runs: user.runs,
     gate: user.gate,
     env: user.env ?? {},
     ...(user.egress !== undefined ? { egress: user.egress } : {}),
