@@ -18,7 +18,10 @@ const sentences = (text) =>
  *  - a sentence that ties `servedModels` to the request URL for some providers only, when the
  *    provider table names the model in the URL for others too;
  *  - an option every harness schema has, defined on a harness page instead of the landing;
- *  - a harness page with no plugin section or generated plugin block.
+ *  - a harness page with no plugin section or generated plugin block;
+ *  - a heading that two or more harness pages share (`rules`, `skills`, `mcp`, `usage`,
+ *    `servedModels`, `web-search`, `web-fetch`): what differs by harness is one entry in
+ *    reference/options, and each harness page links to it.
  */
 export async function agentsProblems({ root, docsDir }) {
   const problems = []
@@ -93,6 +96,30 @@ export async function agentsProblems({ root, docsDir }) {
     if (!/^## `plugins`$/m.test(text) || !text.includes(`(generated:harness-plugins:${kind})`)) {
       problems.push(
         `integrations/agents/${kind} needs a plugins section with the generated harness-plugins:${kind} block: plugin support differs by harness`,
+      )
+    }
+  }
+  const shared = new Set([
+    'rules',
+    'skills',
+    'mcp',
+    'usage',
+    'servedmodels',
+    'web-search',
+    'web-fetch',
+  ])
+  const homes = new Map()
+  for (const file of harnessPages) {
+    for (const [, heading] of read(file).matchAll(/^#{2,6} `?([\w-]+)`?\s*$/gm)) {
+      const key = heading.toLowerCase()
+      if (!shared.has(key)) continue
+      homes.set(key, [...(homes.get(key) ?? []), relative(root, file)])
+    }
+  }
+  for (const [heading, files] of homes) {
+    if (files.length > 1) {
+      problems.push(
+        `${files.length} harness pages have a "${heading}" heading (${files.join(', ')}): it is one entry in reference/options, so link to it`,
       )
     }
   }

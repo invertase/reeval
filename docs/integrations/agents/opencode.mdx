@@ -258,21 +258,7 @@ For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`,
 
 In the sandbox, OpenCode runs with its `question` and browser tools off, self-update, share links, and the model-catalog fetch off, session titles on the run's model, and its model calls over HTTP. That configuration overrides the workspace's own `opencode.json` file where both set a key.
 
-For more information about choosing a harness, see [Choose an agent](/agents).
-
-For more information about model ids and effort values, see [Set the agent's model](/agents/model).
-
-## `rules`
-
-The OpenCode harness reads rules from the `AGENTS.md` file in the workspace.
-
-For more information about writing rules, see [Add project rules](/environments/rules).
-
-## `skills`
-
-The OpenCode harness reads skills from the `.opencode/skills` directory in the workspace and from the `~/.config/opencode/skills` directory in the home directory, and also from the `.agents/skills` and `.claude/skills` directories in both places.
-
-For more information about placing skills, see [Give the agent skills](/environments/skills).
+For more information about model ids and effort values, see [Set the agent's model](/agents/model). For rules, skills, MCP servers, usage, served models, and web events, see [Harness behavior](/reference/options#harness-behavior).
 
 ## `plugins`
 
@@ -285,33 +271,3 @@ reeval adds each plugin's skills to the home skills directory and unpacks subage
 [//]: # (/generated:harness-plugins:opencode)
 
 For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).
-
-## `mcp`
-
-The OpenCode harness accepts MCP servers on `stdio` and `http`. reeval refuses an `sse` server at plan time with exit code 2. reeval writes a `stdio` server as `{ type: 'local', command: [command, ...args], environment }` and an `http` server as `{ type: 'remote', url, headers, oauth: false }` in OpenCode's configuration, with Code Mode off, so the agent calls their tools directly, and the first prompt waits until every server has connected.
-
-For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
-
-## `usage`
-
-The OpenCode harness records tokens on each turn's `usage`, as one total for the whole turn. `usage` is null when OpenCode reports none.
-
-For more information about the token fields, see [`TokenUsage`](/reference/record#tokenusage).
-
-## `servedModels`
-
-OpenCode's stream names no model, so each turn's `model` is the model on the turn's last brokered request. The attempt's `servedModels` comes from the request URL for a provider whose model path names the model (`amazon-bedrock/`, `google/`, `ofox/`, `opencode/` and `opencode-go/`) and from the response body for every other provider, with `[effort=<value>]` when the response names an effort.
-
-For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
-
-## `web-search`
-
-The OpenCode harness records `web-search` events. A web search runs on a hosted MCP server at `mcp.exa.ai`, which needs no key and is one of the harness's automatic egress hosts.
-
-For more information about the automatic hosts, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts). For more information about the matcher, see [`toHaveSearched()`](/reference/matchers#tohavesearched).
-
-## `web-fetch`
-
-The OpenCode harness records `web-fetch` events. The turn's `unreported` list stays empty, so `toHaveFetched()` reads those events.
-
-For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).

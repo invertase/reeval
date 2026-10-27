@@ -51,44 +51,18 @@ harness: claudeCode({
   The gateway this harness's model calls go through. It skips the config's `gateway` fallback, and the plan refuses a gateway that isn't listed or can't serve the harness. For more information about routing, see [Route models through a gateway](/agents/gateways).
 </Property>
 
-Each harness page covers the options and behavior that are specific to that harness, including its plugin support.
+## Pick a harness
 
-## Compare harness support
+Each factory comes from the `{{ pkg }}/harness` module.
 
-This table lists each harness's key, rules and skills files, MCP transports, recorded events, and sandbox. For more information about a harness's options, plugins, and quirks, see its name in the table.
+- [Cursor](/integrations/agents/cursor): `cursor()`
+- [Claude Code](/integrations/agents/claude-code): `claudeCode()`
+- [Codex](/integrations/agents/codex): `codex()`
+- [Antigravity](/integrations/agents/antigravity): `antigravity()`
+- [OpenCode](/integrations/agents/opencode): `opencode()`
+- [Goose](/integrations/agents/goose): `goose()`
+- [pi](/integrations/agents/pi): `pi()`
+- [fx](/integrations/agents/fx): `fx()`
+- [Grok Build](/integrations/agents/grok-build): `grokBuild()`
 
-[//]: # (generated:harness-matrix)
-
-| Harness | Key | Key brokered | Rules file | Skills: workspace | Skills: home | MCP stdio | MCP `http` | MCP `sse` | Tokens | Served model | Web search events | Web fetch events | Sandbox |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| [Cursor](/integrations/agents/cursor) | `CURSOR_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [Claude Code](/integrations/agents/claude-code) | `ANTHROPIC_API_KEY` | ✓ | `CLAUDE.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [Antigravity](/integrations/agents/antigravity) | `GEMINI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [OpenCode](/integrations/agents/opencode) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [Goose](/integrations/agents/goose) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ | `docker()` |
-| [pi](/integrations/agents/pi) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
-| [Codex](/integrations/agents/codex) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [fx](/integrations/agents/fx) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [Grok Build](/integrations/agents/grok-build) | `XAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | `docker()` |
-
-[//]: # (/generated:harness-matrix)
-
-## Where each harness reads rules and skills
-
-Each harness reads the environment's rules and skills from these paths.
-
-[//]: # (generated:harness-layout)
-
-| Harness | Rules file | Workspace skills directory | Home skills directory |
-|---|---|---|---|
-| Cursor | `AGENTS.md` | `.cursor/skills` | `~/.agents/skills` |
-| Claude Code | `CLAUDE.md` | `.claude/skills` | `~/.claude/skills` |
-| Antigravity | `AGENTS.md` | `.agents/skills` | `~/.gemini/config/skills` |
-| OpenCode | `AGENTS.md` | `.opencode/skills` | `~/.config/opencode/skills` |
-| Goose | `AGENTS.md` | `.goose/skills` | `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills` |
-| pi | `AGENTS.md` | `.pi/skills` | `~/.pi/agent/skills` |
-| Codex | `AGENTS.md` | `.agents/skills` | `~/.agents/skills` |
-| fx | `AGENTS.md` | `.fx/skills` | `~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills` |
-| Grok Build | `AGENTS.md` | `.grok/skills` | `~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/skills` |
-
-[//]: # (/generated:harness-layout)
+For more information about each harness's keys, rules and skills paths, MCP servers, token usage, served models, and web events, see [Harness behavior](/reference/options#harness-behavior).

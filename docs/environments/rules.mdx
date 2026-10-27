@@ -3,7 +3,7 @@ title: "Add project rules"
 description: "Give the harness project instructions it reads at the start of every attempt."
 ---
 
-The `rules` field holds project instructions for the harness. reeval writes them into the file the harness reads at the start of every attempt, such as the `AGENTS.md` file. For more information about the file each harness reads, see [Harnesses](/agents#where-each-harness-reads-rules-and-skills).
+The `rules` field holds project instructions for the harness. reeval writes them into the file the harness reads at the start of every attempt, such as the `AGENTS.md` file. For more information about the file each harness reads, see [Rules and skills](/reference/options#rules-and-skills).
 
 You extend the `plain` environment in the `evals/environments.ts` file with a variant, `with-rules`. A comparison between the baseline and the variant shows whether the rules helped.
 

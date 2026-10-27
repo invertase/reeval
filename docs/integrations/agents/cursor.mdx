@@ -51,21 +51,7 @@ For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`,
 
 `params` belongs to `cursor()` alone. With no `harness` option, reeval uses `cursor()` with its default model.
 
-For more information about choosing a harness, see [Choose an agent](/agents).
-
-For more information about model ids, effort values, and served models, see [Set the agent's model](/agents/model).
-
-## `rules`
-
-The Cursor harness reads rules from the `AGENTS.md` file in the workspace.
-
-For more information about writing rules, see [Add project rules](/environments/rules).
-
-## `skills`
-
-The Cursor harness reads skills from the `.cursor/skills` directory in the workspace and from the `~/.agents/skills` directory in the home directory.
-
-For more information about placing skills, see [Give the agent skills](/environments/skills).
+For more information about model ids and effort values, see [Set the agent's model](/agents/model). For rules, skills, MCP servers, usage, served models, and web events, see [Harness behavior](/reference/options#harness-behavior).
 
 ## `plugins`
 
@@ -79,33 +65,3 @@ reeval adds each plugin's skills to the home skills directory and unpacks the re
 [//]: # (/generated:harness-plugins:cursor)
 
 For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).
-
-## `mcp`
-
-The Cursor harness accepts MCP servers on `stdio`, `http`, and `sse`. reeval passes each server in the Cursor SDK's `McpServerConfig` shape: a `stdio` server is `{ type: 'stdio', command, args, env }`, and an `http` or `sse` server is `{ type, url, headers }`.
-
-For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
-
-## `usage`
-
-The Cursor harness records tokens on each turn's `usage`. `input` excludes cache reads and writes, so the prompt total is `input` plus `cacheRead` plus `cacheWrite`. `reasoning` is part of `output`. `usage` is null when the harness reports no tokens.
-
-For more information about the token fields, see [`TokenUsage`](/reference/record#tokenusage).
-
-## `servedModels`
-
-Each turn's `model` is the served model with its parameters, in the form `model[param=value]`. The attempt's `servedModels` is null, because the API requests name no model.
-
-For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
-
-## `web-search`
-
-The Cursor harness records `web-search` events. The Cursor SDK's stream leaves web search calls out, and reeval recovers those calls from the stored conversation. A turn reeval cannot recover lists `web-search` on `unreported`, and `toHaveSearched()` refuses that turn.
-
-For more information about the matcher, see [`toHaveSearched()`](/reference/matchers#tohavesearched).
-
-## `web-fetch`
-
-The Cursor harness records `web-fetch` events. The Cursor SDK's stream leaves web fetch calls out, and reeval recovers those calls from the stored conversation. A turn reeval cannot recover lists `web-fetch` on `unreported`, and `toHaveFetched()` refuses that turn.
-
-For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).

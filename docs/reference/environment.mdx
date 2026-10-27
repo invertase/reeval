@@ -56,7 +56,7 @@ export const chatbot = defineEnvironment('chatbot', ({
 </Property>
 
 <Property name="rules" type="string | HostFile" optional>
-  Instructions for the harness rules file, written after `files`. A string is copied, `file()` is read at attempt start, and a missing file ends the attempt as an infrastructure error. For more information about the file each harness reads, see [Harnesses](/agents#where-each-harness-reads-rules-and-skills).
+  Instructions for the harness rules file, written after `files`. A string is copied, `file()` is read at attempt start, and a missing file ends the attempt as an infrastructure error. For more information about the file each harness reads, see [Rules and skills](/reference/options#rules-and-skills).
 </Property>
 
 <Property name="setup" type="Array<string | { run: string; timeout?: Duration; cwd?: string }>" optional>

@@ -80,7 +80,113 @@ The default is:
 harness: cursor({ model: 'composer-2.5' })
 ```
 
-For more information about harness forms, see [Run several agents](/agents#run-several-agents).
+For more information about harness forms, see [Choose an agent](/agents).
+
+## Harness behavior
+
+Each harness reads the environment's rules, skills, and MCP servers from its own places and records its own events. The harness pages hold each one's key, options, and plugins.
+
+### Support by harness
+
+[//]: # (generated:harness-matrix)
+
+| Harness | Key | Key brokered | Rules file | Skills: workspace | Skills: home | MCP stdio | MCP `http` | MCP `sse` | Tokens | Served model | Web search events | Web fetch events | Sandbox |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| [Cursor](/integrations/agents/cursor) | `CURSOR_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Claude Code](/integrations/agents/claude-code) | `ANTHROPIC_API_KEY` | ✓ | `CLAUDE.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Antigravity](/integrations/agents/antigravity) | `GEMINI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [OpenCode](/integrations/agents/opencode) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Goose](/integrations/agents/goose) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ | `docker()` |
+| [pi](/integrations/agents/pi) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
+| [Codex](/integrations/agents/codex) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [fx](/integrations/agents/fx) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Grok Build](/integrations/agents/grok-build) | `XAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | `docker()` |
+
+[//]: # (/generated:harness-matrix)
+
+### Rules and skills
+
+[//]: # (generated:harness-layout)
+
+| Harness | Rules file | Workspace skills directory | Home skills directory |
+|---|---|---|---|
+| Cursor | `AGENTS.md` | `.cursor/skills` | `~/.agents/skills` |
+| Claude Code | `CLAUDE.md` | `.claude/skills` | `~/.claude/skills` |
+| Antigravity | `AGENTS.md` | `.agents/skills` | `~/.gemini/config/skills` |
+| OpenCode | `AGENTS.md` | `.opencode/skills` | `~/.config/opencode/skills` |
+| Goose | `AGENTS.md` | `.goose/skills` | `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills` |
+| pi | `AGENTS.md` | `.pi/skills` | `~/.pi/agent/skills` |
+| Codex | `AGENTS.md` | `.agents/skills` | `~/.agents/skills` |
+| fx | `AGENTS.md` | `.fx/skills` | `~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills` |
+| Grok Build | `AGENTS.md` | `.grok/skills` | `~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/skills` |
+
+[//]: # (/generated:harness-layout)
+
+- Codex reads the `~/.codex/AGENTS.md` file before the workspace rules file. It reads workspace skills from the working directory up to the repo root.
+- Goose and Grok Build also read the `.agents/skills` and `.claude/skills` directories in the workspace. OpenCode reads them in the workspace and in the home directory.
+- Grok Build ignores an untrusted folder's rules and skills, so reeval marks the workspace trusted. pi loads workspace skills because the harness trusts the project.
+
+For more information about writing rules and placing skills, see [Add project rules](/environments/rules) and [Give the agent skills](/environments/skills).
+
+### MCP servers
+
+- **Cursor:** `stdio`, `http`, and `sse`, in the Cursor SDK's `McpServerConfig` shape: `{ type: 'stdio', command, args, env }` or `{ type, url, headers }`.
+- **Claude Code:** `stdio`, `http`, and `sse`, in the shape of the `.mcp.json` file: `{ type: 'stdio', command, args, env }` or `{ type, url, headers }`.
+- **Antigravity:** `stdio`, `http`, and `sse`, in the `~/.gemini/config/mcp_config.json` file. A `stdio` server is `command`, `args`, and `env`, and an `http` or `sse` server is `serverUrl` and `headers`.
+- **Codex:** `stdio` and `http`, under `[mcp_servers]` in the `~/.codex/config.toml` file. A `stdio` server is `command`, `args`, and `env`, and an `http` server is `url` and `http_headers`. A call is named `mcp__<server>__<tool>`. An `sse` server fails at plan time with exit code 2.
+- **OpenCode:** `stdio` and `http`, written as `{ type: 'local', command: [command, ...args], environment }` or `{ type: 'remote', url, headers, oauth: false }` in OpenCode's configuration. Code Mode is off, so the agent calls the tools directly, and the first prompt waits until every server has connected. reeval refuses an `sse` server at plan time with exit code 2.
+- **Goose:** `stdio` and `http`, written as enabled extensions in the `.config/goose/config.yaml` file under the private home directory `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home`. A `stdio` server is `cmd`, `args`, and `envs`, and an `http` server is `uri` and `headers`, with type `streamable_http`. Goose keys each extension by dropping whitespace, replacing every character outside letters, digits, `_`, and `-` with `_`, and lower-casing the name. reeval refuses an `sse` server, or two servers that share a key, at plan time with exit code 2.
+- **pi:** `stdio` and `http`, in the `~/.pi/agent/mcp.json` file with direct exposure, so the model and the transcript name each tool `mcp__<server>__<tool>`. reeval escapes `$` and a leading `!` in `env` and header values, so each value reaches the server as written. reeval refuses an `sse` server, or a server name with characters other than letters, digits, `_`, and `-`, at plan time with exit code 2.
+- **fx:** `stdio`, `http`, and `sse`, passed on the ACP `session/new` call: a `stdio` server as `command`, `args`, and `env`, and an `http` or `sse` server as `type`, `url`, and `headers`. fx's `http` and `sse` servers, like its web tools, don't go through the relay. fx names an MCP call `mcp_<server>_<tool>`, which the transcript renames `mcp__<server>__<tool>`, so [`toHaveCalledMcp()`](/reference/matchers#tohavecalledmcp) matches it.
+- **Grok Build:** `stdio`, `http`, and `sse`, passed on the ACP `session/new` call like fx. Grok Build calls a server's tool through its `use_tool` tool, which the transcript names `mcp__<server>__<tool>`, so [`toHaveCalledMcp()`](/reference/matchers#tohavecalledmcp) matches it.
+
+For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
+
+### Token usage
+
+Each turn's `usage` is null when the harness reports no tokens.
+
+- **Cursor:** `input` excludes cache reads and writes, so the prompt total is `input` plus `cacheRead` plus `cacheWrite`. `reasoning` is part of `output`.
+- **Claude Code:** tokens on each turn.
+- **Antigravity:** `input` excludes cache reads, `cacheRead` holds those reads, and `cacheWrite` is 0. `output` includes thinking tokens, and `reasoning` holds that count.
+- **Codex:** one `usage` for the turn. `input` is uncached input, and `cacheRead` and `cacheWrite` hold cached input. `reasoning` is part of `output`.
+- **OpenCode:** one total for the whole turn.
+- **Goose:** always null. The adapter drops the session token count, which covers the last model call and would undercount the turn.
+- **pi:** the sum of each model call's tokens, reasoning tokens included.
+- **fx:** summed over the turn's model calls. `reasoning` is part of `output`.
+- **Grok Build:** summed over the turn's model calls. `input` excludes cache reads, so the prompt total is `input` plus `cacheRead`. `cacheWrite` records cache creation tokens, and `reasoning` is part of `output`.
+
+For more information about the token fields, see [`TokenUsage`](/reference/record#tokenusage).
+
+### Served models
+
+- **Cursor:** each turn's `model` is the served model with its parameters, in the form `model[param=value]`. The attempt's `servedModels` is null, because the API requests name no model.
+- **Claude Code:** each turn's `model` is the model id Claude Code reports. `servedModels` is null, because the API requests name no model.
+- **Antigravity:** each turn's `model` is the model the CLI reports at the start of the turn, or else the last brokered request's model. `servedModels` lists the model id in each brokered path `/v1beta/models/<model>:streamGenerateContent`, which can include a model the CLI calls for a title or a checkpoint.
+- **Codex:** the egress gateway reads the served model and effort from the response body. The turn's `model` and `servedModels` hold `<model>` or `<model>[effort=<value>]`. `servedEffort` is the reasoning effort in that label, and `effort` is the factory value, or null when unset.
+- **OpenCode:** the stream names no model, so each turn's `model` is the model on the turn's last brokered request. `servedModels` comes from the request URL for a provider whose model path names the model (`amazon-bedrock/`, `google/`, `ofox/`, `opencode/` and `opencode-go/`) and from the response body for every other provider, with `[effort=<value>]` when the response names an effort.
+- **Goose:** each turn's `model` is the model id from the last brokered `POST /v1beta/models/<model>:streamGenerateContent` request in the turn, or null when that turn made none. `servedModels` lists every such id.
+- **pi:** each turn's `model` is the model pi names on its first assistant message. `servedModels` comes from the brokered request URL, without an effort suffix.
+- **fx:** fx names no model over ACP, so the egress gateway reads the served model from each response, such as the dated snapshot OpenAI answers `gpt-5.5` with. On Vercel AI Gateway, a stream that names no model, such as Gemini's, leaves `servedModels` null and records the model each call asked for in `askedModels`.
+- **Grok Build:** the stream names no model, so each turn's `model` and `servedModels` come from the model xAI's responses name.
+
+For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
+
+### Web search and fetch events
+
+A turn's `unreported` list names the events a harness can't report, and the matchers refuse a turn that lists their event.
+
+- **Cursor:** records both. The SDK's stream leaves those calls out, so reeval recovers them from the stored conversation. A turn reeval can't recover lists the event on `unreported`.
+- **Claude Code:** records both. A `webSearch` call records `query` and `references`, and a `webFetch` or `WebFetch` call records `url`. `ok` is false when a call fails.
+- **Antigravity:** records both, with `unreported` empty.
+- **Codex:** records both, with `unreported` empty. A search stores its text on `query`, and an `open_page` or `find_in_page` action with a URL is a fetch. Both run on OpenAI's side, and the transcript keeps each event under a restricted egress policy.
+- **OpenCode:** records both, with `unreported` empty. A search runs on a hosted MCP server at `mcp.exa.ai`, which needs no key and is one of the harness's automatic egress hosts.
+- **Goose:** records neither, and `unreported` is empty.
+- **pi:** records neither. Its built-in tools are `bash`, `read`, `write`, and `edit`, so the matchers fail on a pi turn.
+- **fx:** records both, from fx's `web_search` and `web_fetch` tools. A search stores its text on `query`.
+- **Grok Build:** records searches, which run through its `web_search` tool on xAI's Responses API at `api.x.ai`, one of the harness's automatic egress hosts. It records no fetches, so `toHaveFetched()` fails on a Grok Build turn.
+
+For more information about the matchers, see [`toHaveSearched()`](/reference/matchers#tohavesearched) and [`toHaveFetched()`](/reference/matchers#tohavefetched). For more information about the automatic hosts, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts).
 
 ## `sandbox`
 

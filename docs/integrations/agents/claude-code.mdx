@@ -54,21 +54,7 @@ For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`,
 
 reeval turns `askUserQuestions` off, so Claude Code asks in its reply. reeval sets `IS_SANDBOX` to `1`, so Claude Code skips permission prompts as root. The adapter also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` to `1`, so a turn sends no telemetry, error reports, or feature-flag requests.
 
-For more information about choosing a harness, see [Choose an agent](/agents).
-
-For more information about model ids, effort values, and served models, see [Set the agent's model](/agents/model).
-
-## `rules`
-
-The Claude Code harness reads rules from the `CLAUDE.md` file in the workspace.
-
-For more information about writing rules, see [Add project rules](/environments/rules).
-
-## `skills`
-
-The Claude Code harness reads skills from the `.claude/skills` directory in the workspace and from the `~/.claude/skills` directory in the home directory.
-
-For more information about placing skills, see [Give the agent skills](/environments/skills).
+For more information about model ids and effort values, see [Set the agent's model](/agents/model). For rules, skills, MCP servers, usage, served models, and web events, see [Harness behavior](/reference/options#harness-behavior).
 
 ## `plugins`
 
@@ -81,33 +67,3 @@ reeval copies the plugins into a generated marketplace named `reeval` and enable
 [//]: # (/generated:harness-plugins:claude-code)
 
 For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).
-
-## `mcp`
-
-The Claude Code harness accepts MCP servers on `stdio`, `http`, and `sse`. reeval passes each server in the shape of the `.mcp.json` file: a `stdio` server is `{ type: 'stdio', command, args, env }`, and an `http` or `sse` server is `{ type, url, headers }`.
-
-For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
-
-## `usage`
-
-The Claude Code harness records tokens on each turn's `usage`. `usage` is null when the harness reports no tokens.
-
-For more information about the token fields, see [`TokenUsage`](/reference/record#tokenusage).
-
-## `servedModels`
-
-Each turn's `model` is the model id Claude Code reports. The attempt's `servedModels` is null, because the API requests name no model.
-
-For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
-
-## `web-search`
-
-The Claude Code harness records `web-search` events. A `webSearch` call records `query` and `references`. `ok` is false when the call fails. The turn's `unreported` list stays empty, so `toHaveSearched()` reads those events.
-
-For more information about the matcher, see [`toHaveSearched()`](/reference/matchers#tohavesearched).
-
-## `web-fetch`
-
-The Claude Code harness records `web-fetch` events. A `webFetch` or `WebFetch` call records `url`. `ok` is false when the call fails. The turn's `unreported` list stays empty, so `toHaveFetched()` reads those events.
-
-For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).
