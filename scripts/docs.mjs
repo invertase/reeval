@@ -668,6 +668,20 @@ if (calledHelpers) {
   }
 }
 
+/** A secret without `hosts` is the sandbox's real value (types.ts, options.ts's unbrokeredWarning). */
+const keptOnHost =
+  /\b(?:keys?|secrets?)\b[^.]*\b(?:stays?|remains?|kept|keeps?)\b[^.]*\bon the host\b/i
+for (const href of ['environments/secrets', 'environments/egress']) {
+  const prose = page(href).replace(/^```[\s\S]*?^```/gm, '')
+  for (const sentence of prose.split(/(?<=[.!?])\s+/)) {
+    if (keptOnHost.test(sentence) && !/\bhosts\b/.test(sentence)) {
+      problems.push(
+        `${href} says a key stays on the host without requiring \`hosts\`: "${sentence.trim().slice(0, 80)}…"`,
+      )
+    }
+  }
+}
+
 // ---- Navigation and the package name --------------------------------------------------------
 
 const config = JSON.parse(read(join(root, 'docs.json')))
