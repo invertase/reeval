@@ -189,7 +189,7 @@ async function describeAttempt(
       ? { kind: a.error.kind, message: repeated ? null : clip(a.error.message, 1500) }
       : null,
     failedAssertions,
-    failedJudgements: a.judgements
+    failedJudgments: a.judgements
       .filter((j) => j.verdict === 'fail')
       .map((j) => ({ question: j.question, score: j.score, threshold: j.threshold })),
     failedChecks,

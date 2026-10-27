@@ -9,7 +9,7 @@ const FIXTURE_TIERS: readonly string[] = ['fake', 'docker', 'podman', 'real']
 
 export type Sources = {
   /**
-   * The rows of features.test.ts, and whether each directory has a canary. A parameterised
+   * The rows of features.test.ts, and whether each directory has a canary. A parameterized
    * fixture's rows are named `<dir>:<harness>`, with `of` their directory.
    */
   fixtures: { dir: string; of?: string; tiers: readonly string[]; canary: boolean }[]
@@ -17,7 +17,7 @@ export type Sources = {
   planCases: string[]
   /** A test file's source, by its path under packages/; null when it doesn't exist. */
   testSource: (path: string) => string | null
-  /** contract.test.ts's behaviours, and whether each has a canary. */
+  /** contract.test.ts's behaviors, and whether each has a canary. */
   contract: { name: string; canary: boolean }[]
   /** Top-level eval/group keys from src/options.ts EVAL_OPTION_KEYS. */
   evalOptionKeys: readonly string[]
@@ -101,7 +101,7 @@ export function checkEvalOptionCoverage(
 
 export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Matrix {
   const problems: string[] = []
-  /** The rows an inventory name covers: one row, or every row of a parameterised directory. */
+  /** The rows an inventory name covers: one row, or every row of a parameterized directory. */
   const rowsOf = (name: string) => sources.fixtures.filter((f) => f.dir === name || f.of === name)
   const planCases = new Set(sources.planCases)
   const ids = new Set<string>()
@@ -138,19 +138,19 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
     }
     for (const ref of feature.real ?? []) {
       const [suite, title, ...rest] = ref.split(' › ')
-      const behaviour = sources.contract.find((b) => b.name === title)
+      const behavior = sources.contract.find((b) => b.name === title)
       const file = suite ? REAL_SUITES[suite] : undefined
       if (rest.length || !title || (suite !== 'contract' && !file))
         problems.push(
-          `${at}: "${ref}" isn't "contract › <behaviour>", "e2e › <title>", "questions › <title>" or "openrouter › <title>"`,
+          `${at}: "${ref}" isn't "contract › <behavior>", "e2e › <title>", "questions › <title>" or "openrouter › <title>"`,
         )
-      else if (suite === 'contract' && !behaviour)
-        problems.push(`${at}: contract.test.ts has no behaviour "${title}"`)
+      else if (suite === 'contract' && !behavior)
+        problems.push(`${at}: contract.test.ts has no behavior "${title}"`)
       else if (file && !testTitles(sources.testSource(file) ?? '').some((t) => t.includes(title)))
         problems.push(`${at}: ${file.split('/').at(-1)} has no test "${title}"`)
       else {
         cells.real.count++
-        if (behaviour?.canary) cells.real.canaries++
+        if (behavior?.canary) cells.real.canaries++
       }
     }
     const row = { feature, cells }
@@ -172,7 +172,7 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
   for (const b of sources.contract)
     if (!inventory.some((f) => f.real?.includes(`contract › ${b.name}`)))
       problems.push(
-        `contract behaviour "${b.name}" covers no feature: add it to an entry in inventory.ts`,
+        `contract behavior "${b.name}" covers no feature: add it to an entry in inventory.ts`,
       )
   for (const c of sources.planCases)
     if (!claimed('plan', c))
@@ -202,7 +202,7 @@ export function renderMarkdown({ rows }: Matrix): string {
     '- **plan**: `reeval run --dry-run --json` snapshots in `plan.test.ts`',
     '- **fake**, **docker**, **podman**: feature fixtures in `features.test.ts` on the fake sandbox, in Docker and in rootless Podman',
     '- **real**: real-tier fixtures in `features.test.ts` (real Cursor), and the harness contract (`contract.test.ts`) and CLI end to end (`e2e-real.test.ts`) on every real harness',
-    '- `● n`: n fixtures or contract behaviours, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n plan cases or test files · `—`: nothing',
+    '- `● n`: n fixtures or contract behaviors, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n plan cases or test files · `—`: nothing',
     '',
   ]
   for (const area of AREAS) {

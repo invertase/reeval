@@ -8,7 +8,7 @@ import {
   resolveWait,
 } from '../src/capture/index.ts'
 import { stubPng } from '../src/capture/stub.ts'
-import { normalisesPoints, runJourney, scalePoints } from '../src/capture/use.ts'
+import { normalizesPoints, runJourney, scalePoints } from '../src/capture/use.ts'
 import type { CaptureUseAction } from '../src/types.ts'
 
 const window = { width: 1280, height: 720 }
@@ -137,16 +137,16 @@ async function journeyClick(model: string, x: number, y: number) {
 }
 
 test("runJourney scales a Gemini model's 0-1000 point to the screenshot's CSS pixels", async () => {
-  // gemini-3.8-flash's answer for a button centred at (1000, 550) on a 1280x720 page.
+  // gemini-3.8-flash's answer for a button centered at (1000, 550) on a 1280x720 page.
   const gemini = await journeyClick('google/gemini-3.8-flash', 781, 764)
   assert.deepEqual(gemini.clicks, [{ type: 'click', x: 1000, y: 550 }])
-  assert.match(gemini.systems[0] ?? '', /normalised to 0-1000/)
+  assert.match(gemini.systems[0] ?? '', /normalized to 0-1000/)
   const claude = await journeyClick('anthropic/claude-sonnet-5', 1000, 550)
   assert.deepEqual(claude.clicks, [{ type: 'click', x: 1000, y: 550 }])
   assert.match(claude.systems[0] ?? '', /CSS pixels/)
 })
 
-test('scalePoints scales every point of an action and only Gemini ids normalise', () => {
+test('scalePoints scales every point of an action and only Gemini ids normalize', () => {
   const page = { width: 1280, height: 3000 }
   assert.deepEqual(scalePoints({ type: 'drag', x: 0, y: 500, toX: 1000, toY: 1000 }, page), {
     type: 'drag',
@@ -162,10 +162,10 @@ test('scalePoints scales every point of an action and only Gemini ids normalise'
     dy: 300,
   })
   assert.deepEqual(scalePoints({ type: 'type', text: 'hi' }, page), { type: 'type', text: 'hi' })
-  assert.equal(normalisesPoints('google/gemini-3.8-flash'), true)
-  assert.equal(normalisesPoints('vertex/gemini-3.8-pro'), true)
-  assert.equal(normalisesPoints('anthropic/claude-sonnet-5'), false)
-  assert.equal(normalisesPoints('openai/gpt-5.5'), false)
+  assert.equal(normalizesPoints('google/gemini-3.8-flash'), true)
+  assert.equal(normalizesPoints('vertex/gemini-3.8-pro'), true)
+  assert.equal(normalizesPoints('anthropic/claude-sonnet-5'), false)
+  assert.equal(normalizesPoints('openai/gpt-5.5'), false)
 })
 
 test('runJourney times out before the saved screenshot', async () => {

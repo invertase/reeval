@@ -207,7 +207,7 @@
           "$ref": "#/$defs/FileRef"
         },
         "rawTranscript": {
-          "description": "Unnormalised harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`.",
+          "description": "Unnormalized harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`.",
           "$ref": "#/$defs/FileRef"
         },
         "setupLog": {
@@ -471,7 +471,7 @@
         "judgements": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/JudgementRecord"
+            "$ref": "#/$defs/JudgmentRecord"
           }
         },
         "key": {
@@ -1957,7 +1957,20 @@
       },
       "required": ["bytes", "mediaType", "name", "path", "sha256"]
     },
-    "JudgementRecord": {
+    "JudgeRetry": {
+      "description": "One failed judge try that was retried, and the backoff before the next.",
+      "type": "object",
+      "properties": {
+        "delayMs": {
+          "type": "number"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": ["delayMs", "error"]
+    },
+    "JudgmentRecord": {
       "type": "object",
       "properties": {
         "artifacts": {
@@ -2011,19 +2024,6 @@
         }
       },
       "required": ["key", "model", "question", "score", "threshold", "verdict"]
-    },
-    "JudgeRetry": {
-      "description": "One failed judge try that was retried, and the backoff before the next.",
-      "type": "object",
-      "properties": {
-        "delayMs": {
-          "type": "number"
-        },
-        "error": {
-          "type": "string"
-        }
-      },
-      "required": ["delayMs", "error"]
     },
     "Lift": {
       "description": "A variant cell's pass@1 against the control's, on the same harness and sandbox.",
@@ -2118,7 +2118,7 @@
       "enum": ["fail", "infra_error", "pass", "skipped"]
     },
     "PairVote": {
-      "description": "One judgement of one pair of attempts, in one order.",
+      "description": "One judgment of one pair of attempts, in one order.",
       "type": "object",
       "properties": {
         "a": {

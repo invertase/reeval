@@ -89,24 +89,24 @@ function actionFromTool(name: string, input: Record<string, unknown>): CaptureUs
 }
 
 /**
- * Gemini models answer a point normalised to 0–1000 across the image they were shown, whatever
+ * Gemini models answer a point normalized to 0–1000 across the image they were shown, whatever
  * the prompt asks, so their journeys are prompted in that scale and their points scaled back.
  */
-export const normalisesPoints = (model: string) =>
+export const normalizesPoints = (model: string) =>
   model
     .slice(model.lastIndexOf('/') + 1)
     .toLowerCase()
     .startsWith('gemini-')
 
-const NORMALISED = 1000
+const NORMALIZED = 1000
 
 /** Scales an action's 0–1000 points to CSS pixels on a `page`-sized screenshot. */
 export function scalePoints(
   action: CaptureUseAction,
   page: { width: number; height: number },
 ): CaptureUseAction {
-  const x = (n: number) => Math.round((n * page.width) / NORMALISED)
-  const y = (n: number) => Math.round((n * page.height) / NORMALISED)
+  const x = (n: number) => Math.round((n * page.width) / NORMALIZED)
+  const y = (n: number) => Math.round((n * page.height) / NORMALIZED)
   switch (action.type) {
     case 'click':
     case 'hover':
@@ -119,10 +119,10 @@ export function scalePoints(
   }
 }
 
-const systemPrompt = (normalised: boolean) =>
+const systemPrompt = (normalized: boolean) =>
   `You drive a web page from screenshots. Call one tool. ${
-    normalised
-      ? `Coordinates are normalised to 0-${NORMALISED} on the full-page image: x and toX across its width, y and toY down its height. A scroll's dy is in CSS pixels.`
+    normalized
+      ? `Coordinates are normalized to 0-${NORMALIZED} on the full-page image: x and toX across its width, y and toY down its height. A scroll's dy is in CSS pixels.`
       : 'Coordinates are CSS pixels on the full-page image.'
   } Call done when the goal is met. Do not mention CDP.`
 
@@ -196,7 +196,7 @@ async function runModelGoal(
   loadModel: (name: string) => Promise<unknown>,
 ): Promise<{ moves: number; usage: TokenUsage | null }> {
   const model = await loadModel(modelName)
-  const normalised = normalisesPoints(modelName)
+  const normalized = normalizesPoints(modelName)
   let moves = 0
   let usage: TokenUsage | null = null
   while (moves < CAPTURE_USE_MOVE_CAP) {
@@ -207,7 +207,7 @@ async function runModelGoal(
     let chosen: CaptureUseAction | undefined
     const result = await generateText({
       model: model as never,
-      system: systemPrompt(normalised),
+      system: systemPrompt(normalized),
       messages: [
         {
           role: 'user',
@@ -225,7 +225,7 @@ async function runModelGoal(
     usage = addUsage(usage, asUsage(result.usage ?? {}))
     const call = result.toolCalls?.[0]
     if (call) chosen = actionFromTool(call.toolName, (call.input ?? {}) as Record<string, unknown>)
-    if (chosen && normalised) chosen = scalePoints(chosen, page)
+    if (chosen && normalized) chosen = scalePoints(chosen, page)
     if (!chosen) {
       throw new Error(`c.capture() instruction ${JSON.stringify(goal)} returned no action`)
     }

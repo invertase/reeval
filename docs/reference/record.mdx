@@ -746,7 +746,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   Counts from the transcript, so a run's shape is visible without reading it. `webSearches` includes refused searches.
 </Property>
 
-<Property name="judgements" type="JudgementRecord[]"></Property>
+<Property name="judgements" type="JudgmentRecord[]"></Property>
 
 <Property name="startRetries" type="StartRetry[]" optional>
   Harness session starts that didn't become ready within `startTimeout` and were started again (at most one).
@@ -783,7 +783,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 <Property name="transcript" type="FileRef" optional></Property>
 
 <Property name="rawTranscript" type="FileRef" optional>
-  Unnormalised harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`.
+  Unnormalized harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`.
 </Property>
 
 <Property name="diff" type="FileRef" optional></Property>
@@ -808,7 +808,7 @@ Also has every field of `FileRef`.
   Set when the file came from `c.capture()`.
 </Property>
 
-### JudgementRecord
+### JudgmentRecord
 
 <Property name="question" type="string"></Property>
 

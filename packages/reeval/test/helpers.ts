@@ -209,7 +209,7 @@ export function runCli(
       const pid = child.pid
       kill = setTimeout(() => killTree(pid), opts.graceMs ?? 20_000)
     }
-    const onAbort = () => stop('the test was cancelled (it timed out, or a sibling failed)')
+    const onAbort = () => stop('the test was canceled (it timed out, or a sibling failed)')
     const arm = () => {
       clearTimeout(idle)
       if (stopped === null) {

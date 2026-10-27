@@ -25,7 +25,7 @@ claude-code` runs the same eval on Claude Code, and `--profile <name>` on any ot
 [`profiles.ts`](../profiles.ts) into the example and import it from `./profiles.ts`, or inline the
 one profile you need.
 
-**What to look at:** the result block. An agent that skips the tests fails the labelled check,
+**What to look at:** the result block. An agent that skips the tests fails the labeled check,
 here with the fake agent's `npm test` step taken out:
 
 ```text

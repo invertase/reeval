@@ -1,7 +1,7 @@
 // The project `node scripts/corpus/add.ts <name>` records into a new corpus entry: one run that
 // covers what a record can hold (a pooled family with lift, answered and failed pairwise questions,
 // questions asked of each attempt, judges that pass and fail, a failed check, an infra error,
-// todo and skipped evals, tool calls and reasoning, labelled and default-labelled assertions), and
+// todo and skipped evals, tool calls and reasoning, labeled and default-labeled assertions), and
 // a saved analysis. Each is one eval with as few attempts as it needs, so an entry stays small.
 import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
@@ -26,7 +26,7 @@ export default defineConfig({
   judge: { model: fakeJudge({ score: 0.8 }) },
   analysis: {
     model: fakeAnalysis({
-      // Pairwise questions favour the attempt whose diff greets with Ahoy; one fails at the model.
+      // Pairwise questions favor the attempt whose diff greets with Ahoy; one fails at the model.
       // Asked of one attempt, the choice says whether its diff greets with Ahoy.
       answer: (a) =>
         a.choices

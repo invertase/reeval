@@ -1087,7 +1087,7 @@ describe('package boundary', () => {
     }
   })
 
-  test('each harness has its own image, tagged and labelled with its adapter version', () => {
+  test('each harness has its own image, tagged and labeled with its adapter version', () => {
     const { cursor, 'claude-code': claude } = HARNESS_PACKAGES
     assert.equal(imageFor('cursor'), `reeval-sandbox:cursor-${cursor.version}`)
     assert.equal(

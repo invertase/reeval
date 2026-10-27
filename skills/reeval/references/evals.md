@@ -122,7 +122,7 @@ Keep grading out of the
 agent's reach: place hidden tests after the turn with `c.writeFile`, so the agent never sees
 them, seed tests in `files` only when the agent should see them, and guard seeded files
 with `expect(await c.readFile(path)).toBe(original)`. `not.toHaveEdited(path)` is not a guard:
-a read of the file trips it and a script's write slips past. When the behaviour is the
+a read of the file trips it and a script's write slips past. When the behavior is the
 outcome, judge the program's output, not the diff:
 `c.judge(q, { on: (await c.exec('node app.js')).stdout })`. Checks run in the agent's
 container as the same user, which suits AX evals but isn't a sealed verifier.
@@ -141,7 +141,7 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
   is opened or loaded (a `skill` / `load_skill` tool, or a Read/`sed` of
   `skills/<name>/`), not "followed". MCP is `toHaveCalledMcp(server, tool)`
   (the names in `mcp.<server>`); `toHaveCalledTool('mcp__<server>__<tool>')` is
-  the raw transcript name. After adapters and the normaliser, that string is
+  the raw transcript name. After adapters and the normalizer, that string is
   the same on every harness (stdio; Goose, OpenCode, pi and Codex refuse
   `mcp.sse`). Use `toHaveEdited` / `toHaveSearched`, not
   `toHaveCalledTool('edit')` or `'webSearch'`.
@@ -155,7 +155,7 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
   check with its final outcome, not with `expect` in a `try` loop.
 - **Label each requirement** with `expect`'s second argument:
   `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`. Every matcher call
-  is recorded (`evals[].attempts[].assertions`; unlabelled ones get `<matcher> <first arg>`).
+  is recorded (`evals[].attempts[].assertions`; unlabeled ones get `<matcher> <first arg>`).
   Changing a label changes the eval's fingerprint. Label judges too
   (`expect.soft(await c.judge(q), 'Social OAuth').toPass()`): the label replaces the clipped
   question in judge rates, `reeval show`, `summary.md` and the digest.

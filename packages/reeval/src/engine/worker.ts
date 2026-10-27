@@ -32,7 +32,7 @@ export function startWorker(channel: Channel): Worker {
   let working: Promise<void> = Promise.resolve()
   let running = false
   const stop = () =>
-    cancel.abort(Object.assign(new Error('The run was cancelled'), { name: 'AbortError' }))
+    cancel.abort(Object.assign(new Error('The run was canceled'), { name: 'AbortError' }))
   channel.onMessage((message) => {
     if (message.t === 'init') working = init(message.run, message.file, message.select)
     else if (message.t === 'grant') grant?.(message.id)

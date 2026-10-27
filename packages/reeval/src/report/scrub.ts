@@ -8,7 +8,7 @@ export type Scrubber = {
   text: (text: string) => string
   /** The same over every string (and key) in a value. */
   value: <T>(value: T) => T
-  /** The same over the strings of serialised JSON or JSON Lines, which stays valid. */
+  /** The same over the strings of serialized JSON or JSON Lines, which stays valid. */
   json: (text: string) => string
   /** What was replaced: `~`, and `<project>` when there's a project. */
   paths: string[]

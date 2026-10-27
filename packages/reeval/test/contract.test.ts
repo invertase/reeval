@@ -1,6 +1,6 @@
-// The harness contract: every real harness passes the same behaviours against a real agent, in
+// The harness contract: every real harness passes the same behaviors against a real agent, in
 // Docker, from one reeval project (test/contract/) run once per harness. The rows are in
-// support/harnesses.ts, the behaviours below; each behaviour is its eval's outcome, its canary's
+// support/harnesses.ts, the behaviors below; each behavior is its eval's outcome, its canary's
 // failure, and a host-side check of the record. The fake row runs the same suite key-free, so the
 // suite's own checks are proven on every PR's Docker job. See test/contract/README.md.
 import assert from 'node:assert/strict'
@@ -53,13 +53,13 @@ import {
 } from './support/tool-catalog.ts'
 
 type Ran = { cli: CliRun; run: RunRecord; runDir: string; project: string }
-/** Returns 'n/a' when the behaviour doesn't apply to the row. */
+/** Returns 'n/a' when the behavior doesn't apply to the row. */
 type Check = (ran: Ran, row: HarnessRow) => void | 'n/a' | Promise<void>
 /**
  * `canary`: whether the check includes a canary that must fail (a record-only check has none).
- * `skips`: why the row skips the behaviour (its evals weren't in its run), or undefined.
+ * `skips`: why the row skips the behavior (its evals weren't in its run), or undefined.
  */
-type Behaviour = {
+type Behavior = {
   name: string
   canary: boolean
   check: Check
@@ -102,13 +102,13 @@ const attemptsFor = (row: HarnessRow) =>
   CONTRACT_ATTEMPTS -
   tagsLeftOut(row).reduce((sum, tag) => sum + TAGGED[tag as keyof typeof TAGGED], 0)
 
-/** Why a row skips the plugin behaviours: it has no plugin field, as another row covers its harness's. */
+/** Why a row skips the plugin behaviors: it has no plugin field, as another row covers its harness's. */
 const noPlugins = (row: HarnessRow) =>
   row.plugin
     ? undefined
     : `the ${row.id} row places no plugins; another ${harnessOf(row)} row checks them`
 
-/** Why a row skips a plugin behaviour for a part its harness doesn't load. */
+/** Why a row skips a plugin behavior for a part its harness doesn't load. */
 const withoutPart = (part: PluginPart, what: string) => (row: HarnessRow) =>
   noPlugins(row) ??
   (row.plugin?.parts.includes(part) ? undefined : `${harnessOf(row)} loads no plugin ${what}`)
@@ -181,7 +181,7 @@ type TurnRecord = AttemptRecord['turns'][number] & {
   model?: string | null
 }
 
-/** The attempt's normalised transcript, from its `transcript.jsonl`. */
+/** The attempt's normalized transcript, from its `transcript.jsonl`. */
 const transcriptOf = (ran: Ran, a: AttemptRecord): TranscriptEvent[] => {
   const file = a.files.transcript?.path
   assert.ok(file, `${a.key} has no transcript`)
@@ -215,7 +215,7 @@ const envOf: Record<string, string> = {
 /** What one contract run starts: reeval.config.ts's budget.attempts, which reeval run enforces too. */
 const CONTRACT_ATTEMPTS = 23
 
-export const behaviours: Behaviour[] = [
+export const behaviors: Behavior[] = [
   {
     name: 'skill placed where the agent reads it, and used',
     canary: true,
@@ -463,7 +463,7 @@ export const behaviours: Behaviour[] = [
     },
   },
   {
-    name: 'file edits, reads and commands normalised',
+    name: 'file edits, reads and commands normalized',
     canary: false,
     async check(ran, row) {
       const catalog = await catalogOf(row)
@@ -684,12 +684,12 @@ function capture(ran: Ran, row: HarnessRow) {
   }
 }
 
-/** Each row's result per behaviour, for the summary table. */
+/** Each row's result per behavior, for the summary table. */
 const results = new Map<string, Map<string, string>>()
 const spent = new Map<string, number>()
-const mark = (row: HarnessRow, behaviour: string, result: string) => {
+const mark = (row: HarnessRow, behavior: string, result: string) => {
   const r = results.get(row.id) ?? new Map<string, string>()
-  r.set(behaviour, result)
+  r.set(behavior, result)
   results.set(row.id, r)
 }
 
@@ -736,7 +736,7 @@ for (const row of harnesses) {
       assert.equal(ran.run.evals.length, attemptsFor(row), out)
       assert.equal(ran.cli.code, 1, out)
     })
-    for (const b of behaviours) {
+    for (const b of behaviors) {
       const skipped = b.skips?.(row)
       if (skipped) {
         test(b.name, { skip: skipped }, () => {})
@@ -754,16 +754,16 @@ for (const row of harnesses) {
       })
     }
   })
-  if (skip) for (const b of behaviours) mark(row, b.name, `skip: ${skip}`)
+  if (skip) for (const b of behaviors) mark(row, b.name, `skip: ${skip}`)
 }
 
 /** The contract table, printed and appended to `REEVAL_CONTRACT_SUMMARY` (CI's job summary). */
 after(() => {
   const rows = harnesses.map((h) => h.id)
   const lines = [
-    `| behaviour | ${rows.join(' | ')} |`,
+    `| behavior | ${rows.join(' | ')} |`,
     `|---|${rows.map(() => '---').join('|')}|`,
-    ...behaviours.map(
+    ...behaviors.map(
       (b) =>
         `| ${b.name} | ${rows.map((r) => results.get(r)?.get(b.name) ?? 'not run').join(' | ')} |`,
     ),

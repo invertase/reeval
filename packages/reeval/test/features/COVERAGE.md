@@ -9,7 +9,7 @@
 - **plan**: `reeval run --dry-run --json` snapshots in `plan.test.ts`
 - **fake**, **docker**, **podman**: feature fixtures in `features.test.ts` on the fake sandbox, in Docker and in rootless Podman
 - **real**: real-tier fixtures in `features.test.ts` (real Cursor), and the harness contract (`contract.test.ts`) and CLI end to end (`e2e-real.test.ts`) on every real harness
-- `● n`: n fixtures or contract behaviours, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n plan cases or test files · `—`: nothing
+- `● n`: n fixtures or contract behaviors, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n plan cases or test files · `—`: nothing
 
 ## Config and selection
 
@@ -140,11 +140,11 @@
 | `fx()`: fx over ACP on a brokered AI Gateway or OpenAI key, through a relay to the egress gateway, with per-turn tokens and its tool names | ✓ 2 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `cursor()`: Cursor through its TypeScript SDK, one runner per session | ✓ 2 | ✓ 1 | ● 2 | ● 2 | — | — |
 | `effort` on each harness factory: default id, requested vs served, and sent as the model's own setting | ✓ 7 | ✓ 1 | ● 1 | ● 1 | — | ◐ 1 (1 without a canary) |
-| Token usage and the served model, per turn and totalled, from any harness | ✓ 1 | — | — | — | — | ◐ 3 (2 without a canary) |
+| Token usage and the served model, per turn and totaled, from any harness | ✓ 1 | — | — | — | — | ◐ 3 (2 without a canary) |
 | Web search and fetch events (Cursor's recovered from its stored conversation), `turn.unreported`, `toHaveSearched` and `toHaveFetched` | ✓ 6 | — | — | — | — | ◐ 3 (1 without a canary) |
 | `fakeHarness({ script })` and `layout` | ✓ 2 | — | ● 2 | ● 2 | — | — |
 | A turn the timeout cuts off is recorded as `aborted` | ✓ 1 | — | ● 1 | ● 1 | — | ● 1 |
-| Transcripts, normalised per harness | ✓ 3 | — | — | — | — | ● 1 |
+| Transcripts, normalized per harness | ✓ 3 | — | — | — | — | ● 1 |
 | Each agent CLI's native stream: replayed through the adapters, and checked for format drift | ✓ 1 | — | — | — | — | ◐ 1 (1 without a canary) |
 | Every tool a CLI calls is in its adapter's catalog, and file edits, reads and commands land as those kinds | ✓ 1 | — | — | — | — | ◐ 2 (2 without a canary) |
 | The models a harness's API requests named on the wire (`servedModels`) | ✓ 1 | — | — | — | — | ◐ 1 (1 without a canary) |
@@ -181,7 +181,7 @@
 | `reeval history`, `reeval show` and `reeval compare`, with `--json` and `--md` | ✓ 4 | — | — | — | — | ◐ 2 (2 without a canary) |
 | `revision` and the `sources` fingerprint part: an eval's body, options, case data and revision, named by `reeval compare` | ✓ 2 | ✓ 1 | — | — | — | — |
 | `reeval compare --fail-on-regression` | ✓ 1 | — | — | — | — | — |
-| An eval Ctrl-C cancelled reads `can't compare` with that side `cancelled` in `reeval compare`, never `regressed`, and doesn't fail `--fail-on-regression` | ✓ 2 | — | — | — | — | — |
+| An eval Ctrl-C canceled reads `can't compare` with that side `canceled` in `reeval compare`, never `regressed`, and doesn't fail `--fail-on-regression` | ✓ 2 | — | — | — | — | — |
 | A pooled family's `minLift` gate is a row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail | ✓ 2 | — | — | — | — | — |
 | A changed gate is a fingerprint part `reeval compare` names and re-scores base under, so `--fail-on-regression` fails only on a flip the gate doesn't explain | ✓ 3 | — | — | — | — | — |
 | `reeval query` | ✓ 1 | — | — | — | — | ◐ 1 (1 without a canary) |
@@ -197,7 +197,7 @@
 | Compare questions: pairs whose two orders disagree are splits, counted on the answer line, each pair head to head with three sides or more, `reeval query question_pairs` and `votes`, and the digest | ✓ 2 | — | — | — | — | — |
 | Labels and names: judges and `toSucceed` checks by their `expect` label in judge rates, `reeval show` and `summary.md` (a long script on one line), tokens as `430k vs 1,094k` everywhere, and a compare’s control named by its environment in the digest | ✓ 1 | — | — | — | — | — |
 | Tool calls classed as context, dependency, web, verify or workspace (`context_use`), the declared files each attempt opened (`skill_files`), and the digest’s `context-use` fact | ✓ 2 | — | — | — | — | — |
-| Each labelled check’s pass rate per cell, control and variant alike (`check_rates`) | ✓ 1 | — | — | — | — | — |
+| Each labeled check’s pass rate per cell, control and variant alike (`check_rates`) | ✓ 1 | — | — | — | — | — |
 | Each check’s streak of clean recorded runs per cell, setup and branch (`check_streaks`) | ✓ 1 | — | — | — | — | — |
 | Standing per-key judge pass rate on the studio eval page, with lift per key when both sides have enough counted attempts | ✓ 1 | — | — | — | — | — |
 | Studio attempt rows show each judge as fail 0.78/0.80 (or the minimum plus a count) | ✓ 1 | — | — | — | — | — |
@@ -231,7 +231,7 @@
 | `--log-order`, `--log-prefix` and `--output-logs` through `reeval run` | ✓ 1 | — | — | — | — | — |
 | Result layouts by what an eval varies: results, measure a change, compare harnesses, both, and a family | ✓ 1 | — | ● 5 | — | — | — |
 | A check that never ran reads `not run`, never `0 of N`, including every check of a cell with no counted attempt | ✓ 2 | — | ● 2 | — | — | — |
-| The tally (`5 fail · 2 pass`, infra errors, cancelled attempts and skips apart) and the no-model hint | ✓ 2 | — | ● 1 | — | — | — |
+| The tally (`5 fail · 2 pass`, infra errors, canceled attempts and skips apart) and the no-model hint | ✓ 2 | — | ● 1 | — | — | — |
 | An error outside any attempt: printed first, `N run error` in the tally, `errors` in the record, and `outcome: fail` with exit 1 | ✓ 1 | — | ● 1 | — | — | — |
 | A family's block reads every case: its columns, pooled arms and summed compare questions | ✓ 1 | — | — | — | — | — |
 | `-v`/`--verbose`: the timestamped per-attempt phase trace (plan, image, container, environment, brokering, turns and tool calls, checks, judge, gateway requests, teardown) | ✓ 4 | — | — | — | — | ◐ 1 (1 without a canary) |

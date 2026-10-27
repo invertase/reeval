@@ -40,7 +40,7 @@ const KEYS = Object.keys(DEFAULT_QUESTION_STATE) as Array<keyof ResolvedQuestion
 export const defaultQuestionState = (pairwise: boolean): ResolvedQuestionStateOptions =>
   pairwise ? DEFAULT_QUESTION_STATE : DEFAULT_ATTEMPT_QUESTION_STATE
 
-/** Every key set, in `DEFAULT_QUESTION_STATE`'s order, so equal selections serialise the same. */
+/** Every key set, in `DEFAULT_QUESTION_STATE`'s order, so equal selections serialize the same. */
 export function resolveQuestionState(
   state: QuestionStateOptions | undefined,
   pairwise: boolean,

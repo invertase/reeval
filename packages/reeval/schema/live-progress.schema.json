@@ -89,7 +89,7 @@
       "required": ["done", "errored", "failed", "passed", "running", "skipped"]
     },
     "LivePhase": {
-      "description": "What the run is doing: running attempts, cancelling them, or assembling its record.",
+      "description": "What the run is doing: running attempts, canceling them, or assembling its record.",
       "enum": ["cancelling", "finishing", "running"]
     },
     "LiveProgress": {

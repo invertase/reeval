@@ -4,7 +4,7 @@ import type {
   AttemptRecord,
   CellRecord,
   EvalEntry,
-  JudgementRecord,
+  JudgmentRecord,
   Lift,
 } from '../history/types.ts'
 import { containsZero, EFFECT_MIN_COUNTED, liftInterval, round3 } from '../stats.ts'
@@ -122,7 +122,7 @@ function keyTallies(e: Pick<EvalEntry, 'attempts'>, cellKey: string): Map<string
   const expectLabels = new Map<string, string>()
   for (const a of e.attempts) {
     if (a.cell !== cellKey || !counted(a)) continue
-    for (const { judgement: j, label, labelled } of labelledJudgements(a)) {
+    for (const { judgment: j, label, labelled: labeled } of labeledJudgments(a)) {
       const row = byKey.get(j.key) ?? {
         label: '',
         labelled: false,
@@ -133,7 +133,7 @@ function keyTallies(e: Pick<EvalEntry, 'attempts'>, cellKey: string): Map<string
       row.counted++
       if (j.verdict === 'pass') row.pass++
       byKey.set(j.key, row)
-      if (labelled && !expectLabels.has(j.key)) expectLabels.set(j.key, label)
+      if (labeled && !expectLabels.has(j.key)) expectLabels.set(j.key, label)
     }
   }
   const labels = uniqueJudgeLabels(
@@ -190,7 +190,7 @@ export function cellJudgeRates(
 }
 
 /**
- * The judge rates a cell's summary line adds to its checks: a labelled judge whose label is one
+ * The judge rates a cell's summary line adds to its checks: a labeled judge whose label is one
  * of the cell's checks against its control is already there.
  */
 export function summaryJudgeRates(
@@ -224,12 +224,12 @@ export type CollapsedJudge = {
 }
 
 /** Each key, or the lowest score plus how many judges there were. */
-export function collapsedJudges(judgements: readonly JudgementRecord[]): {
+export function collapsedJudges(judgments: readonly JudgmentRecord[]): {
   shown: CollapsedJudge[]
   extra: number
 } {
-  const labels = uniqueJudgeLabels(judgements)
-  const items = judgements.map((j) => ({
+  const labels = uniqueJudgeLabels(judgments)
+  const items = judgments.map((j) => ({
     verdict: j.verdict,
     score: j.score,
     threshold: j.threshold,
@@ -242,9 +242,9 @@ export function collapsedJudges(judgements: readonly JudgementRecord[]): {
 }
 
 /** `fail 0.78/0.80`, or `fail 0.33/0.80 · 3 judges` when there are many. */
-export function collapsedJudgeLabel(judgements: readonly JudgementRecord[]): string | null {
-  if (!judgements.length) return null
-  const { shown, extra } = collapsedJudges(judgements)
+export function collapsedJudgeLabel(judgments: readonly JudgmentRecord[]): string | null {
+  if (!judgments.length) return null
+  const { shown, extra } = collapsedJudges(judgments)
   const parts = shown.map((j) => `${j.verdict} ${j.score.toFixed(2)}/${j.threshold.toFixed(2)}`)
   if (extra) parts.push(`${extra} judges`)
   return parts.join(' · ')
@@ -253,23 +253,23 @@ export function collapsedJudgeLabel(judgements: readonly JudgementRecord[]): str
 const JUDGE_ERROR = /^judge failed for /
 
 /**
- * Each judgement's `expect` label, by position: the attempt's `toPass` assertions (less those on a
- * failed judge call, which recorded no judgement) in call order, when they are exactly as many as
- * its judgements. `check` is that assertion's label, the key of its check; a judgement no label
+ * Each judgment's `expect` label, by position: the attempt's `toPass` assertions (less those on a
+ * failed judge call, which recorded no judgment) in call order, when they are exactly as many as
+ * its judgments. `check` is that assertion's label, the key of its check; a judgment no label
  * reaches is named by its question.
  */
-export function labelledJudgements(
+export function labeledJudgments(
   a: Pick<AttemptRecord, 'judgements' | 'assertions'>,
-): Array<{ judgement: JudgementRecord; label: string; labelled: boolean; check?: string }> {
+): Array<{ judgment: JudgmentRecord; label: string; labelled: boolean; check?: string }> {
   const passes = (a.assertions ?? []).filter(
     (x) => /(^|\.)toPass$/.test(x.matcher) && !JUDGE_ERROR.test(x.message ?? ''),
   )
   const zip = passes.length === a.judgements.length
-  return a.judgements.map((judgement, i) => {
+  return a.judgements.map((judgment, i) => {
     const x = zip ? passes[i] : undefined
     return {
-      judgement,
-      label: x?.labelled ? x.label : judgeText(judgement.question),
+      judgment,
+      label: x?.labelled ? x.label : judgeText(judgment.question),
       labelled: x?.labelled === true,
       ...(x ? { check: x.label } : {}),
     }

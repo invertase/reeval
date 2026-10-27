@@ -70,7 +70,7 @@ export type AnalysisValidation = {
 export type AnalysisScope = {
   kind: 'run'
   head: string
-  /** Resolved once, so a nearer ancestor recorded later doesn't change what this analysed. */
+  /** Resolved once, so a nearer ancestor recorded later doesn't change what this analyzed. */
   base: string | null
   /** An eval filter (substring of the eval id), or null for every eval. */
   evals: string | null
@@ -99,7 +99,7 @@ export type AnalysisDoc = {
   analysis: AnalysisBody
   /** Short attempt ids used in citations, and where each attempt is. */
   attempts: Record<string, { runId: string; evalSlug: string; attempt: string }>
-  /** Each cited fact or evidence id, summarised in one line. */
+  /** Each cited fact or evidence id, summarized in one line. */
   cited: Record<string, string>
   /**
    * Why the analysis failed; its `analysis` is then empty. `reeval analyze` treats a cached one as

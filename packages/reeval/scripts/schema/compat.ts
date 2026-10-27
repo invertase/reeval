@@ -266,7 +266,7 @@ export function compare(
 
 /**
  * Checks each read default names a required field of the shape: a default for a field that's gone,
- * optional or misspelt never runs.
+ * optional or misspelled never runs.
  */
 export function checkDefaults(doc: ShapeSchema, defaults: string[]): Change[] {
   const changes: Change[] = []

@@ -10,7 +10,7 @@
       "notGated": 0,
       "fail": 3,
       "infraError": 7,
-      "cancelled": 0,
+      "canceled": 0,
       "skipped": 2
     },
     "files": [
@@ -1250,7 +1250,7 @@
       "notGated": 0,
       "fail": 0,
       "infraError": 0,
-      "cancelled": 0,
+      "canceled": 0,
       "skipped": 0
     },
     "files": [

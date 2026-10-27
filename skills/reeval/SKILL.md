@@ -28,7 +28,7 @@ compare a skill, fix a config, read a failure. Read a reference file when the ta
 | [references/config.md](references/config.md) | Harness factories and their keys, `effort`, judge models, `reeval.yaml`, path rules, where the sandbox comes from, imports, the options cascade |
 | [references/evals.md](references/evals.md) | `evaluate.each` and families, `c.serve`, `c.writeFile` hidden tests, judge `state`, the judge's input size, judge errors, every matcher |
 | [references/capture.md](references/capture.md) | Web UIs: `c.capture()` screenshots, `instructions` journeys, `artifacts` on judges and questions |
-| [references/compare.md](references/compare.md) | `compare` beyond the example below: baselines, gates, lift and effort, labelled checks, `questions`, `skill_files` |
+| [references/compare.md](references/compare.md) | `compare` beyond the example below: baselines, gates, lift and effort, labeled checks, `questions`, `skill_files` |
 | [references/environments.md](references/environments.md) | Environments: skills, files, rules, MCP servers, `git()` workspaces, `directory()`, Docker sandboxes, secrets, egress |
 | [references/cli.md](references/cli.md) | The CLI beyond `run`: `query` views, `analyze`, `show`, `compare`, `record`, `studio`, `mcp`, filters, exit codes |
 | [references/mistakes.md](references/mistakes.md) | An error message from reeval you need to map to its fix (the full table) |
@@ -213,7 +213,7 @@ group('hello', () => {
   [references/evals.md](references/evals.md#trustworthy-evals). Not `fakeSandbox()`.
   Keep grading out of the agent's reach: place hidden tests after the turn with `c.writeFile`, and guard seeded files
   with `expect(await c.readFile(path)).toBe(original)` or `expect(c).not.toHaveChanged(['test/**'])`.
-  When the behaviour is the outcome, judge the program's output, not the diff:
+  When the behavior is the outcome, judge the program's output, not the diff:
   `c.judge(q, { on: (await c.exec('node app.js')).stdout })`.
 - Give the environment a `.gitignore` in `files` (the project's isn't copied in): an agent that
   runs a build otherwise fills the judge's diff with its output.

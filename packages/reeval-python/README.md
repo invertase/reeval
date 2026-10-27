@@ -106,7 +106,7 @@ Use snake_case on the context (`read_file`, `write_file`, `file`) and on matcher
 `to_pass`, `to_equal`, `to_contain`, …). Matcher failures raise `ReevalAssertionError`.
 
 Options are typed (`EvalOptions`, and `JudgeOptions` for `c.judge(…)`), so pyright refuses a
-misspelt key such as `runz`. They take reeval's keys in snake_case at any depth (`min_lift`,
+misspelled key such as `runz`. They take reeval's keys in snake_case at any depth (`min_lift`,
 `delay_ms`); the keys of `env`, `headers` and the other maps of your own keep their spelling. Every
 duration is seconds or a `timedelta`: `{"timeout": 90}`, `docker(start_timeout=timedelta(minutes=2))`,
 `expect.poll(…, timeout=10)`. `docker()`, `fake_harness()`, `fake_judge()` and `plugin.*` return

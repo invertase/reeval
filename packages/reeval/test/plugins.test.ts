@@ -1199,7 +1199,7 @@ test('a marketplace reeval can’t read, or an entry it doesn’t list or can’
   assert.match(problem(listed, 'private'), /names its own npm registry/)
 })
 
-test('a bare entry source resolves under pluginRoot as Claude Code normalises it, and nowhere else', () => {
+test('a bare entry source resolves under pluginRoot as Claude Code normalizes it, and nowhere else', () => {
   const entries = [
     { name: 'bare', source: 'format' },
     { name: 'nested', source: 'tools/format' },

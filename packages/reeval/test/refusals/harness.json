@@ -49,7 +49,7 @@
   "fakeHarness files not strings": "UsageError: fakeHarness({ files[\"a.txt\"] }) must be a string (got 1)",
   "fakeHarness a tool with an extra key": "UsageError: fakeHarness({ tools[0] }) has an unknown key \"okay\"",
   "cursor with an empty id": "UsageError: cursor({ id }) must be a non-empty string (got \"\")",
-  "codex with a typo far from any option": "UsageError: Unknown codex() option \"colour\".",
+  "codex with a typo far from any option": "UsageError: Unknown codex() option \"color\".",
   "fakeHarness good": null,
   "opencode mcp: {file:} in an arg": "UsageError: OpenCode substitutes {env:…} and {file:…} anywhere in its config, with no escape, so the docs server wouldn't get mcp.docs.args[1] as written: take the reference out, or leave OpenCode out of this cell",
   "opencode mcp: {env:} in an env value": "UsageError: OpenCode substitutes {env:…} and {file:…} anywhere in its config, with no escape, so the docs server wouldn't get mcp.docs.env.GREETING as written: take the reference out, or leave OpenCode out of this cell",

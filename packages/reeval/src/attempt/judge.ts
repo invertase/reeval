@@ -269,10 +269,10 @@ export function judgeCaller(
         ),
       )
       const recorded = refs.length ? { ...verdict, artifacts: refs } : verdict
-      const { judgements } = a.record
-      judgements.splice(
+      const { judgements: judgments } = a.record
+      judgments.splice(
         placeFor(
-          judgements.map((j) => j.call ?? 0),
+          judgments.map((j) => j.call ?? 0),
           order,
         ),
         0,

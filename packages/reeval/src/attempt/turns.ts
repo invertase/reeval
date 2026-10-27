@@ -26,7 +26,7 @@ function cutOff(signal: AbortSignal, startedAt: string, grace = TURN_STOP_GRACE_
   const cutoff = new Promise<Awaited<ReturnType<HarnessSession['send']>>>((resolve) => {
     onAbort = () => {
       timer = setTimeout(() => {
-        const message = `The agent didn't stop within ${grace / 1000}s of being cancelled, so reeval stopped waiting for its turn`
+        const message = `The agent didn't stop within ${grace / 1000}s of being canceled, so reeval stopped waiting for its turn`
         const at = Date.now() - Date.parse(startedAt)
         resolve({
           text: '',

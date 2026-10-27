@@ -42,10 +42,10 @@ export type CompareRow = {
   /** Cells in both runs, with each side's lift (variants) and effort. */
   perCell?: CompareCell[]
   /**
-   * The sides whose `fail` is only attempts the run's interrupt cancelled, which `reeval show`
-   * reads as `cancelled`. Such an eval is never `regressed` or `fixed`: it's `drift`.
+   * The sides whose `fail` is only attempts the run's interrupt canceled, which `reeval show`
+   * reads as `canceled`. Such an eval is never `regressed` or `fixed`: it's `drift`.
    */
-  cancelled?: Array<'base' | 'head'>
+  canceled?: Array<'base' | 'head'>
   /**
    * `family`: a pooled `evaluate.each`'s gate, its `id` the family's. `base` and `head` are its
    * pooled outcome (`fail` when a lift is below its `minLift`); its cases have rows of their own.
@@ -307,24 +307,24 @@ function outcomeOf(cells: ReadonlyArray<Pick<HistoryCell, 'gate' | 'outcome'>>):
 type Cells = ComparableEval['cells']
 
 /**
- * Whether a failing eval failed only on attempts the run's interrupt cancelled: every failed
- * attempt in a gated cell was cut short, so the agent didn't fail it (`reeval show`'s `cancelled`).
+ * Whether a failing eval failed only on attempts the run's interrupt canceled: every failed
+ * attempt in a gated cell was cut short, so the agent didn't fail it (`reeval show`'s `canceled`).
  */
-const cancelledOn = (outcome: Outcome | null, cells: Cells) => {
+const canceledOn = (outcome: Outcome | null, cells: Cells) => {
   const gated = cells.filter((c) => c.gate !== 'none')
   return (
     outcome === 'fail' &&
     gated.some((c) => c.fail > 0) &&
-    gated.every((c) => c.fail === (c.cancelled ?? 0))
+    gated.every((c) => c.fail === (c.canceled ?? 0))
   )
 }
 
-function cancelledSides(
+function canceledSides(
   outcomes: Pick<CompareRow, 'base' | 'head'>,
   cells: { base?: Cells; head?: Cells },
-): Pick<CompareRow, 'cancelled'> {
-  const sides = (['base', 'head'] as const).filter((s) => cancelledOn(outcomes[s], cells[s] ?? []))
-  return sides.length ? { cancelled: sides } : {}
+): Pick<CompareRow, 'canceled'> {
+  const sides = (['base', 'head'] as const).filter((s) => canceledOn(outcomes[s], cells[s] ?? []))
+  return sides.length ? { canceled: sides } : {}
 }
 
 /** An eval only head has. */
@@ -333,7 +333,7 @@ export const addedRow = (h: ComparableEval): CompareRow => ({
   base: null,
   head: h.outcome,
   status: 'added',
-  ...cancelledSides({ base: null, head: h.outcome }, { head: h.cells }),
+  ...canceledSides({ base: null, head: h.outcome }, { head: h.cells }),
 })
 
 /**
@@ -417,15 +417,15 @@ export const newRows = (head: Comparable): CompareRow[] => [
 type FamilyContext = {
   rows: ReadonlyMap<string, CompareRow>
   graderChanged: boolean
-  /** Whether the run's interrupt cancelled an attempt of any of these cases on that side. */
-  cancelledIn: (side: 'base' | 'head', caseIds: readonly string[]) => boolean
+  /** Whether the run's interrupt canceled an attempt of any of these cases on that side. */
+  canceledIn: (side: 'base' | 'head', caseIds: readonly string[]) => boolean
 }
 
 /**
  * A gated family's row. Its pooled outcome is comparable only when both runs ran the same cases
  * and every case is: a case that changed or hit an infrastructure error makes the family `drift`
- * or `infra` as it does the case, and a failing side with a cancelled attempt in any case reads
- * `cancelled`, since the pooled lift counts it. With different variants, it's over the lifts both
+ * or `infra` as it does the case, and a failing side with a canceled attempt in any case reads
+ * `canceled`, since the pooled lift counts it. With different variants, it's over the lifts both
  * have, and with none in common it can't compare them.
  */
 function familyRow(
@@ -468,13 +468,13 @@ function familyRow(
       ...caseRows.flatMap((r) => (r.status === 'drift' ? (r.changes ?? []) : [])),
     ]),
   ]
-  const cancelled = (['base', 'head'] as const).filter(
-    (s) => row[s] === 'fail' && ctx.cancelledIn(s, s === 'base' ? b.caseIds : h.caseIds),
+  const canceled = (['base', 'head'] as const).filter(
+    (s) => row[s] === 'fail' && ctx.canceledIn(s, s === 'base' ? b.caseIds : h.caseIds),
   )
-  if (cancelled.length) row.cancelled = cancelled
+  if (canceled.length) row.canceled = canceled
   if (caseRows.some((r) => r.status === 'infra')) return { ...row, status: 'infra' }
   if (changes.length) return { ...row, status: 'drift', changes }
-  if (disjoint || row.cancelled || caseRows.some((r) => r.status === 'drift')) {
+  if (disjoint || row.canceled || caseRows.some((r) => r.status === 'drift')) {
     return { ...row, status: 'drift' }
   }
   if (ctx.graderChanged && row.base !== row.head) return { ...row, status: 'drift' }
@@ -496,9 +496,9 @@ export function compare(base: Comparable, head: Comparable): CompareRow[] {
   const ctx: FamilyContext = {
     rows: new Map(rows.map((r) => [r.id, r])),
     graderChanged,
-    cancelledIn: (side, caseIds) =>
+    canceledIn: (side, caseIds) =>
       runs[side].evals.some(
-        (e) => caseIds.includes(e.id) && e.cells.some((c) => (c.cancelled ?? 0) > 0),
+        (e) => caseIds.includes(e.id) && e.cells.some((c) => (c.canceled ?? 0) > 0),
       ),
   }
   return [...rows, ...families.map((id) => familyRow(id, before.get(id), after.get(id), ctx))]
@@ -520,7 +520,7 @@ function evalRows(base: Comparable, head: Comparable, graderChanged: boolean): C
         base: b.outcome,
         head: null,
         status: 'removed',
-        ...cancelledSides({ base: b.outcome, head: null }, { base: b.cells }),
+        ...canceledSides({ base: b.outcome, head: null }, { base: b.cells }),
       }
     }
     const comparable = sameEval(b, h)
@@ -532,7 +532,7 @@ function evalRows(base: Comparable, head: Comparable, graderChanged: boolean): C
       id,
       ...outcomes,
       ...(scoped ? { cells: scoped.cells } : {}),
-      ...cancelledSides(outcomes, scoped?.over ?? { base: b.cells, head: h.cells }),
+      ...canceledSides(outcomes, scoped?.over ?? { base: b.cells, head: h.cells }),
     }
     const perCell = compareCells(b, h)
     if (perCell.length) row.perCell = perCell
@@ -542,7 +542,7 @@ function evalRows(base: Comparable, head: Comparable, graderChanged: boolean): C
     const gate = gateChange(over.base, over.head)
     if (gate) Object.assign(row, { changes: ['gate changed'], gate })
     const from = gate?.rescored ?? row.base
-    if (row.cancelled) return { ...row, status: 'drift' }
+    if (row.canceled) return { ...row, status: 'drift' }
     if (graderChanged && from !== row.head) return { ...row, status: 'drift' }
     if (from === 'pass' && row.head === 'fail') return { ...row, status: 'regressed' }
     if (from === 'fail' && row.head === 'pass') return { ...row, status: 'fixed' }

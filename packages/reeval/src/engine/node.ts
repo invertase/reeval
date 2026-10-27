@@ -73,7 +73,7 @@ export async function runEngine(
   const nameFilters = options.filters.filter((f) => !pathFilters.includes(f))
   const specs = filterFiles(files, pathFilters, root)
   if (specs.length === 0)
-    return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
+    return { evals: [], unhandledErrors: [], canceled: false, noFiles: true, stopped: false }
   const named = new Set(specs.map((file) => relativeFile(root, file)))
   const toCollect = looseFilters.length ? files : specs
 
@@ -135,7 +135,7 @@ export async function runEngine(
     // When no part matched anything, the run's own "no evals matched" says so.
     if (plan.unmatched.length === options.filters.length) plan.unmatched = []
     if (!(await options.onPlan(plan)))
-      return { evals: [], unhandledErrors: [], cancelled: false, noFiles: false, stopped: true }
+      return { evals: [], unhandledErrors: [], canceled: false, noFiles: false, stopped: true }
   }
 
   // A file a path part names runs unless a name part narrows it; any other only if it has an
@@ -146,7 +146,7 @@ export async function runEngine(
       tests.some((t) => matchesName(identify(rel, t))),
   )
   if (picked.length === 0)
-    return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
+    return { evals: [], unhandledErrors: [], canceled: false, noFiles: true, stopped: false }
   return runFiles({ ...options, spawn, entry, hide, workers, collected: picked, matchesName })
 }
 
@@ -239,9 +239,9 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
     if (--gathering === 0) scheduler.resume()
   }
 
-  let cancelled = false
-  input.onCancellable?.(() => {
-    cancelled = true
+  let canceled = false
+  input.onCancelable?.(() => {
+    canceled = true
     scheduler.resume()
     for (const worker of live) worker.send({ t: 'cancel' })
   })
@@ -358,9 +358,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
           case 'result': {
             // As under Vitest, an attempt a cancel cut short is skipped; its record says aborted.
             const result: WireResult =
-              cancelled && m.result.state === 'failed'
-                ? { ...m.result, state: 'skipped' }
-                : m.result
+              canceled && m.result.state === 'failed' ? { ...m.result, state: 'skipped' } : m.result
             const e = toEval(rel, state.tests[m.index] as WireTest, result)
             state.results.set(m.index, e)
             if (matchesName(e)) emit({ type: 'eval-end', at: Date.now(), result: e })
@@ -388,7 +386,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
       }
       const select = planned.filter((t) => matchesName(identify(rel, t))).map((t) => t.index)
       worker.send({ t: 'init', run, file, select })
-      if (cancelled) worker.send({ t: 'cancel' })
+      if (canceled) worker.send({ t: 'cancel' })
       const exit = await worker.exited
       live.delete(worker)
       scheduler.releaseOwner(id)
@@ -414,7 +412,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
         emit({ type: 'eval-end', at: Date.now(), result: e })
       }
     },
-    () => !cancelled,
+    () => !canceled,
   )
 
   // Attempts finish in any order; results are listed by file, then as declared.
@@ -428,5 +426,5 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
       if (matchesName(e)) evals.push(e)
     }
   }
-  return { evals, unhandledErrors, cancelled, noFiles: false, stopped: false }
+  return { evals, unhandledErrors, canceled, noFiles: false, stopped: false }
 }

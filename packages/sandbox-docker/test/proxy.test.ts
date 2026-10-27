@@ -332,7 +332,7 @@ async function startProxy(
 
 type Gw = Awaited<ReturnType<typeof startProxy>>
 
-/** CONNECTs through the proxy and returns the raw tunnel, or the refusal's status and body. */
+/** Sends a CONNECT through the proxy and returns the raw tunnel, or the refusal's status and body. */
 function connect(gw: Gw, host: string, port: number) {
   return new Promise<
     { ok: true; socket: net.Socket } | { ok: false; status: number; body: string }
@@ -521,7 +521,7 @@ describe('egress proxy', () => {
     assert.doesNotMatch(everything(), new RegExp(REAL))
   })
 
-  test('other hosts are tunnelled end to end: never decrypted, never given the key', async () => {
+  test('other hosts are tunneled end to end: never decrypted, never given the key', async () => {
     const other = await startUpstream(OTHER, false)
     try {
       seen.length = 0
@@ -638,7 +638,7 @@ describe('egress proxy', () => {
       gw2.proxy.addTransformations([rule(0)])
       gw2.proxy.setTransformations([])
       seen.length = 0
-      // With no rules the host is tunnelled blind, so the gateway's CA isn't presented.
+      // With no rules the host is tunneled blind, so the gateway's CA isn't presented.
       await assert.rejects(
         viaProxy(gw2, HOST, h1.port, { method: 'POST', path: '/auth/exchange_user_api_key' }),
         /self-signed|unable to verify|certificate/i,
@@ -1190,7 +1190,7 @@ describe('a port outside 1-65535', () => {
   })
   after(() => h1.close())
 
-  test('a tunnelled CONNECT gets a 400, and the gateway keeps serving', async () => {
+  test('a tunneled CONNECT gets a 400, and the gateway keeps serving', async () => {
     const gw = await startProxy()
     try {
       for (const port of [99999, 0, 65536]) {
@@ -1351,7 +1351,7 @@ describe('brokered secrets through the proxy', () => {
       )
       assert.equal(JSON.stringify(events).includes(SECRET), false)
 
-      // Another allowed host is tunnelled, and reported when the tunnel closes.
+      // Another allowed host is tunneled, and reported when the tunnel closes.
       const tunnel = await connect(gw, OTHER, other.port)
       assert.ok(tunnel.ok)
       await new Promise<void>((resolve, reject) => {
@@ -1373,9 +1373,9 @@ describe('brokered secrets through the proxy', () => {
       })
       tunnel.socket.destroy()
       assert.equal((await connect(gw, 'elsewhere.test', 443)).ok, false)
-      const [, tunnelled, refused] = await settled(3)
-      assert.equal(tunnelled?.type === 'request' && tunnelled.via, 'tunnel')
-      assert.ok(tunnelled?.type === 'request' && tunnelled.sent > 0 && tunnelled.received > 0)
+      const [, tunneled, refused] = await settled(3)
+      assert.equal(tunneled?.type === 'request' && tunneled.via, 'tunnel')
+      assert.ok(tunneled?.type === 'request' && tunneled.sent > 0 && tunneled.received > 0)
       assert.deepEqual(
         refused?.type === 'request' && [
           refused.method,
@@ -1974,7 +1974,7 @@ describe('brokered secrets through the proxy', () => {
       await assert.rejects(
         viaProxy(gw, HOST, h1.port, { path: '/echo' }),
         /self-signed|unable to verify|certificate/i,
-        'tunnelled blind: the gateway CA is not presented',
+        'tunneled blind: the gateway CA is not presented',
       )
     } finally {
       gw.close()
@@ -2266,7 +2266,7 @@ describe('derived tokens through the proxy', () => {
       assert.equal(body.kind, 'user', 'other fields untouched')
       assert.equal(Number(r.headers['content-length']), Buffer.byteLength(r.body))
       assert.ok(
-        gw.lines.some((l) => l.includes('tokenised accessToken, refreshToken (CURSOR_API_KEY)')),
+        gw.lines.some((l) => l.includes('tokenized accessToken, refreshToken (CURSOR_API_KEY)')),
         gw.lines.join('\n'),
       )
       assert.doesNotMatch(gw.lines.join('\n'), /real-(access|refresh)-signature|reeval_secret_/)
@@ -2317,7 +2317,7 @@ describe('derived tokens through the proxy', () => {
       assert.equal(r.headers['x-echo-authorization'], `Bearer ${accessToken}`, 'headers scrubbed')
       await viaProxyH2(gw, HOST, h2.port, '/echo', `Bearer ${accessToken}`)
       assert.equal(seen[1]?.headers.authorization, `Bearer ${ACCESS}`)
-      // Twin: another host is tunnelled blind, so nothing there could swap the token in.
+      // Twin: another host is tunneled blind, so nothing there could swap the token in.
       await assert.rejects(
         viaProxy(gw, OTHER, other.port, {
           path: '/echo',

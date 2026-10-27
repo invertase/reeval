@@ -20,7 +20,7 @@ evaluate(
   { environment: page, compare: { variants: [withSkill] }, runs: 4, gate: { passRate: 0.75 } },
   async (c) => {
     await c.send(
-      "Give index.html Anthropic's look: write styles.css with Anthropic's brand colours and " +
+      "Give index.html Anthropic's look: write styles.css with Anthropic's brand colors and " +
         'fonts, and link it from index.html.',
     )
 

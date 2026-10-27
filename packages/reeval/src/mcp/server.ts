@@ -266,7 +266,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Saved analyses of a run',
         description:
-          "The analyses reeval analyze saved for a run (in its history folder) and cached ones anchored on it, newest first: claims with citations, anomalies and suggested actions. Never calls a model; empty when the run hasn't been analysed.",
+          "The analyses reeval analyze saved for a run (in its history folder) and cached ones anchored on it, newest first: claims with citations, anomalies and suggested actions. Never calls a model; empty when the run hasn't been analyzed.",
         inputSchema: z.object({ run: z.string().optional().describe(RUN_REF) }),
         annotations: READ_ONLY,
       },

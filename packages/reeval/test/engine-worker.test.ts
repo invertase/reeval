@@ -208,12 +208,10 @@ registerTest('waits', { mode: 'run' }, async (h) => {
     await until(() => c.sent.some((m) => m.t === 'start'))
     c.send({ t: 'cancel' })
     await c.exit
-    const cancelled = c.sent.find(
-      (m): m is Extract<FromWorker, { t: 'result' }> => m.t === 'result',
-    )
-    assert.equal(cancelled?.result.state, 'failed')
-    assert.equal(cancelled?.result.errors[0]?.name, 'AbortError')
-    assert.equal(cancelled?.result.errors[0]?.message, 'The run was cancelled')
+    const canceled = c.sent.find((m): m is Extract<FromWorker, { t: 'result' }> => m.t === 'result')
+    assert.equal(canceled?.result.state, 'failed')
+    assert.equal(canceled?.result.errors[0]?.name, 'AbortError')
+    assert.equal(canceled?.result.errors[0]?.message, 'The run was canceled')
 
     const orphan = fakeChannel()
     startWorker(orphan.channel)

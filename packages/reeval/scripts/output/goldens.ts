@@ -70,7 +70,7 @@ export const GOLDENS: Golden[] = [
 export const OUTPUT_DIR = join(CORPUS_DIR, '..', 'output')
 
 function tallyOf(evals: EvalResult[], errors: number): SuiteResult['tally'] {
-  const tally = { errors, pass: 0, notGated: 0, fail: 0, infraError: 0, cancelled: 0, skipped: 0 }
+  const tally = { errors, pass: 0, notGated: 0, fail: 0, infraError: 0, canceled: 0, skipped: 0 }
   const units = evals.flatMap((e) => e.cases ?? [e])
   for (const { outcome: o, cells } of units) {
     if (o === 'infra_error') tally.infraError++

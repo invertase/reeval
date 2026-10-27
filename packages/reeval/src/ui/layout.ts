@@ -21,7 +21,7 @@ import type {
   ResultOutcome,
   SuiteResult,
 } from '../view/suite.ts'
-import { cancelledOf, countedOf, isNotGatedResult, isStudy } from '../view/suite.ts'
+import { canceledOf, countedOf, isNotGatedResult, isStudy } from '../view/suite.ts'
 import { type Colors, colors, type Paint } from './colors.ts'
 import { remarkLines } from './remarks.ts'
 
@@ -67,7 +67,7 @@ const VERDICT: Record<ResultOutcome, string> = {
   pass: 'pass',
   fail: 'fail',
   infra_error: 'infra error',
-  cancelled: 'cancelled',
+  canceled: 'canceled',
   skipped: 'skipped',
 }
 
@@ -125,7 +125,7 @@ const paintOutcome = (c: Colors, o: ResultOutcome): Paint =>
     ? c.green
     : o === 'fail'
       ? c.red
-      : o === 'infra_error' || o === 'cancelled'
+      : o === 'infra_error' || o === 'canceled'
         ? c.yellow
         : c.dim
 
@@ -137,15 +137,15 @@ function verdict(c: Colors, e: Pick<EvalResult, 'outcome' | 'todo' | 'cells'>): 
 
 /**
  * `3 of 4`, with the attempts that didn't count named: `2 of 3 · 1 infra error · 1 skipped`. A
- * cancelled attempt is recorded as a fail, but the agent didn't fail it, so it's named apart.
+ * canceled attempt is recorded as a fail, but the agent didn't fail it, so it's named apart.
  */
 function cellCount(cell: CellResult): string {
-  const cancelled = cancelledOf(cell)
+  const canceled = canceledOf(cell)
   const counted = countedOf(cell)
   const parts = [
     counted > 0 ? `${cell.passed} of ${counted}` : '',
     cell.infraError ? plural(cell.infraError, 'infra error') : '',
-    cancelled ? `${cancelled} cancelled` : '',
+    canceled ? `${canceled} canceled` : '',
     cell.skipped ? `${cell.skipped} skipped` : '',
   ].filter(Boolean)
   if (!parts.length) return 'not run'
@@ -198,7 +198,7 @@ const ERROR_KIND: Record<CellError['kind'], string> = {
   assertion: 'error',
   judge: 'judge',
   timeout: 'timeout',
-  aborted: 'cancelled',
+  aborted: 'canceled',
   infra: 'infra error',
   turn: 'turn error',
 }
@@ -244,7 +244,7 @@ const armOf = (cell: CellResult) =>
   cell.variant ?? (cell.environment === '-' ? 'baseline' : cell.environment)
 
 /** Each cell's label: the parts that vary between them (harness, arm, sandbox). */
-export function labeller(cells: CellResult[], parts: Array<'harness' | 'arm' | 'sandbox'>) {
+export function labeler(cells: CellResult[], parts: Array<'harness' | 'arm' | 'sandbox'>) {
   const vary = parts.filter((p) => {
     const of = (cell: CellResult) =>
       p === 'harness' ? cell.harness : p === 'arm' ? armOf(cell) : cell.sandbox
@@ -352,7 +352,7 @@ type BodyOptions = { failed: boolean; verbose: boolean; effects: boolean }
 
 /** Measure a change: a row per arm with its effect, the check matrix and the effort table. */
 function measureBody(c: Colors, cells: CellResult[], indent: number, o: BodyOptions): string[] {
-  const label = labeller(cells, ['arm', 'sandbox'])
+  const label = labeler(cells, ['arm', 'sandbox'])
   const arms: Item[] = [{ indent, cells: ['arm', t('pass', c.dim)] }]
   for (const cell of cells) {
     const effect = o.effects ? gatedEffect(c, cell) : t('')
@@ -380,7 +380,7 @@ function measureBody(c: Colors, cells: CellResult[], indent: number, o: BodyOpti
 
 /** A row per cell (harness, or sandbox), the ones that didn't pass outright with their evidence. */
 function cellRows(c: Colors, cells: CellResult[], heading: string, indent: number): string[] {
-  const label = labeller(cells, heading === 'harness' ? ['harness', 'sandbox'] : ['sandbox'])
+  const label = labeler(cells, heading === 'harness' ? ['harness', 'sandbox'] : ['sandbox'])
   const items: Item[] = [{ indent, cells: [heading, t('pass', c.dim)] }]
   for (const cell of cells) {
     items.push({ indent, cells: [label(cell), cellCount(cell)] })
@@ -391,7 +391,7 @@ function cellRows(c: Colors, cells: CellResult[], heading: string, indent: numbe
 
 /** Compare harnesses with arms: a heading per harness, its arms as Measure a change under it. */
 function bothBody(c: Colors, cells: CellResult[], indent: number, o: BodyOptions): string[] {
-  const harnessOf = labeller(cells, ['harness', 'sandbox'])
+  const harnessOf = labeler(cells, ['harness', 'sandbox'])
   const groups = new Map<string, CellResult[]>()
   for (const cell of cells)
     groups.set(harnessOf(cell), [...(groups.get(harnessOf(cell)) ?? []), cell])
@@ -557,7 +557,7 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
     out.push(...cellsBody(c, kind, k.cells, 4, { failed, verbose, effects: false }))
   }
   if (pooled.length) {
-    const label = labeller(columns, ['harness', 'arm', 'sandbox'])
+    const label = labeler(columns, ['harness', 'arm', 'sandbox'])
     const byKey = new Map(pooled.map((p) => [p.key, p]))
     const items: Item[] = [
       { indent: 4, cells: [kind === 'harnesses' ? 'harness' : 'arm', t('pass', c.dim)] },
@@ -630,7 +630,7 @@ export function evalBlock(c: Colors, e: EvalResult, verbose = false): string[] {
 }
 
 /**
- * `5 fail · 2 pass · 1 not gated · 1 cancelled`: errors outside any eval and fails first, every
+ * `5 fail · 2 pass · 1 not gated · 1 canceled`: errors outside any eval and fails first, every
  * case counting one, zeros left out.
  */
 export function tallyLine(c: Colors, tally: SuiteResult['tally']): string {
@@ -640,7 +640,7 @@ export function tallyLine(c: Colors, tally: SuiteResult['tally']): string {
     tally.pass ? c.green(`${tally.pass} pass`) : '',
     tally.notGated ? c.dim(`${tally.notGated} not gated`) : '',
     tally.infraError ? c.yellow(plural(tally.infraError, 'infra error')) : '',
-    tally.cancelled ? c.yellow(`${tally.cancelled} cancelled`) : '',
+    tally.canceled ? c.yellow(`${tally.canceled} canceled`) : '',
     tally.skipped ? c.dim(`${tally.skipped} skipped`) : '',
   ].filter(Boolean)
   return parts.length ? parts.join(c.dim(' · ')) : 'no evals ran'

@@ -310,7 +310,7 @@ export const CASES: Record<string, Case[]> = {
     ['an install timeout over 596h', any(docker, { install: [{ run: 'ls', timeout: '1000h' }] })],
     ['steps instead of install', any(docker, { steps: ['x'] })],
     ['user instead of root', any(docker, { user: 'root' })],
-    ['an unknown key without a hint', any(docker, { colour: 'blue' })],
+    ['an unknown key without a hint', any(docker, { color: 'blue' })],
     ['root that is not a boolean', any(docker, { root: 'yes' })],
     ['a capability that is not a name', any(docker, { capabilities: 'NET_RAW' })],
     ['a lower-case capability', any(docker, { capabilities: ['net_raw'] })],
@@ -333,7 +333,7 @@ export const CASES: Record<string, Case[]> = {
     ['two bad values', any(docker, { pids: 0, root: 'yes' })],
     ['a good one', any(docker, { from: 'node:24', memory: '4g', swap: 0, install: ['ls'] })],
     ['podman: a memory size podman does not take', any(podman, { memory: '4GB' })],
-    ['podman: an unknown key', any(podman, { colour: 'blue' })],
+    ['podman: an unknown key', any(podman, { color: 'blue' })],
     ['podman: a good one', any(podman, { from: 'node:24', memory: '4g', install: ['ls'] })],
     ['data: not docker() or fakeSandbox()', options({ sandbox: { kind: 'vm' } })],
     [
@@ -412,7 +412,7 @@ export const CASES: Record<string, Case[]> = {
       any(fakeHarness, { tools: [{ tool: 't', input: 1, output: 2, okay: true }] }),
     ],
     ['cursor with an empty id', any(cursor, { model: 'm', id: '' })],
-    ['codex with a typo far from any option', any(codex, { model: 'gpt', colour: 'red' })],
+    ['codex with a typo far from any option', any(codex, { model: 'gpt', color: 'red' })],
     [
       'fakeHarness good',
       any(fakeHarness, { script: [[{ exec: 'ls' }, { mcp: 's/t' }]], layout: 'pi' }),
@@ -1244,7 +1244,7 @@ export const CASES: Record<string, Case[]> = {
     ['an image field with steps', env({ image: ['npm i'] })],
     ['install beside the sandbox', env({ install: ['x'] })],
     ['steps instead of setup', env({ steps: ['x'] })],
-    ['an unknown field', env({ colour: 'blue' })],
+    ['an unknown field', env({ color: 'blue' })],
     ['a sandbox that is not one', env({ sandbox: 'docker' })],
     ['a sandbox maxConcurrent 0', env({ sandbox: { kind: 'fake', maxConcurrent: 0 } })],
     [
@@ -1261,7 +1261,7 @@ export const CASES: Record<string, Case[]> = {
     ['a setup step cwd empty', env({ setup: [{ run: 'x', cwd: '' }] })],
     ['a setup step that is a number', env({ setup: [3] })],
     ['extend a bad name', () => e1.extend('a b', {})],
-    ['extend an unknown field', () => e1.extend('c', { colour: 'blue' } as never)],
+    ['extend an unknown field', () => e1.extend('c', { color: 'blue' } as never)],
     [
       'good',
       env({

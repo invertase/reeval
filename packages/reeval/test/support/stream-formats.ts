@@ -25,7 +25,7 @@ type Format = {
   /**
    * Keys and events the CLI's protocol defines for one outcome only, by signature (`<kind> .<key>`),
    * for the same reason: a provider's refusal (pi's `errorMessage`, agy's `error_message` steps) or
-   * a cancelled turn shows them, whatever the CLI's version.
+   * a canceled turn shows them, whatever the CLI's version.
    */
   optional?: readonly string[]
   /**

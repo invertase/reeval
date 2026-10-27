@@ -85,7 +85,7 @@ describe('every layout', () => {
       const lines = rendered(g.name)
       assert.match(
         lines.at(-1) ?? '',
-        /^(\d+ (run errors?|fail|pass|infra errors?|cancelled|skipped)( · )?)+$/,
+        /^(\d+ (run errors?|fail|pass|infra errors?|canceled|skipped)( · )?)+$/,
         g.name,
       )
       if (!g.verbose) assert.doesNotMatch(lines.join('\n'), /\d%|pass@1|interval/, g.name)
@@ -166,7 +166,7 @@ describe('every layout', () => {
     assert.doesNotMatch(text, /^ {2}pass {2}\S.* +0 of 1$/m)
   })
 
-  test('cancelled and skipped tries are named beside the count, never counted as fails', () => {
+  test('canceled and skipped tries are named beside the count, never counted as fails', () => {
     const g = GOLDENS.find((x) => x.name === 'results')
     assert.ok(g)
     const suite = goldenSuite(g)
@@ -178,10 +178,10 @@ describe('every layout', () => {
     cell.attempts = 4
     cell.failed = 2
     cell.skipped = 1
-    cell.errors.push({ kind: 'aborted', message: 'The run was cancelled', attempts: 1 })
+    cell.errors.push({ kind: 'aborted', message: 'The run was canceled', attempts: 1 })
     const text = render(suite, null, { color: false, verbose: false }).join('\n')
-    assert.match(text, /^ {2}4 tries +1 of 2 · 1 cancelled · 1 skipped$/m)
-    assert.doesNotMatch(text, /^ {2}4 tries +1 of 3/m, 'canary: a cancelled try is not a fail')
+    assert.match(text, /^ {2}4 tries +1 of 2 · 1 canceled · 1 skipped$/m)
+    assert.doesNotMatch(text, /^ {2}4 tries +1 of 3/m, 'canary: a canceled try is not a fail')
   })
 
   test('the tally puts fail first, leaves zeros out and counts infra errors and skips apart', () => {
@@ -192,7 +192,7 @@ describe('every layout', () => {
       notGated: 0,
       fail: 0,
       infraError: 0,
-      cancelled: 0,
+      canceled: 0,
       skipped: 0,
       ...t,
     })
@@ -202,15 +202,15 @@ describe('every layout', () => {
       '1 pass · 2 infra errors · 1 skipped',
     )
     assert.equal(
-      tallyLine(c, tally({ fail: 1, pass: 2, cancelled: 3 })),
-      '1 fail · 2 pass · 3 cancelled',
+      tallyLine(c, tally({ fail: 1, pass: 2, canceled: 3 })),
+      '1 fail · 2 pass · 3 canceled',
     )
     assert.equal(tallyLine(c, tally({ errors: 1, pass: 2 })), '1 run error · 2 pass')
     assert.equal(tallyLine(c, tally({ pass: 1, notGated: 4 })), '1 pass · 4 not gated')
     assert.equal(tallyLine(c, tally({})), 'no evals ran')
   })
 
-  test('render is pure, and colour is the only difference colour makes', () => {
+  test('render is pure, and color is the only difference color makes', () => {
     const g = GOLDENS.find((x) => x.name === 'suite')
     assert.ok(g)
     const plain = render(goldenSuite(g), null, { color: false, verbose: false })
@@ -348,7 +348,7 @@ describe('catch regressions (reeval compare)', () => {
   test('a run that did not finish is noted above the tally', () => {
     const g = compareGolden('compare')
     for (const [status, note] of [
-      ['interrupted', /^head \S+ was interrupted, so some of its evals were cancelled/m],
+      ['interrupted', /^head \S+ was interrupted, so some of its evals were canceled/m],
       ['budget', /^head \S+ stopped at its duration budget, so some of its evals never ran$/m],
     ] as const) {
       const input = goldenCompare(g)
@@ -375,17 +375,17 @@ describe('catch regressions (reeval compare)', () => {
     assert.match(last, /^8 new evals \(\d fail · 1 infra error · \d pass\)$/)
   })
 
-  test('a side the interrupt cancelled reads cancelled, not fail', () => {
+  test('a side the interrupt canceled reads canceled, not fail', () => {
     const g = compareGolden('compare')
     const input = goldenCompare(g)
     const [first, ...rest] = input.rows
     assert.ok(first)
     const row = { ...first, status: 'drift' as const, base: 'pass' as const, head: 'fail' as const }
-    input.rows = [{ ...row, cancelled: ['head'] }, ...rest]
+    input.rows = [{ ...row, canceled: ['head'] }, ...rest]
     const text = comparedText(g, input).join('\n')
     assert.match(
       text,
-      /^can't compare {4}.+\n( {2}changed .+\n)? {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}cancelled$/m,
+      /^can't compare {4}.+\n( {2}changed .+\n)? {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}canceled$/m,
     )
     input.rows = [row, ...rest]
     assert.match(
@@ -397,12 +397,12 @@ describe('catch regressions (reeval compare)', () => {
     const none = goldenCompare(compareGolden('compare-no-baseline'))
     const [added, ...others] = none.rows
     assert.ok(added)
-    none.rows = [{ ...added, head: 'fail', cancelled: ['head'] }, ...others]
+    none.rows = [{ ...added, head: 'fail', canceled: ['head'] }, ...others]
     const last = renderCompare(none, { color: false, verbose: false }).at(-1) ?? ''
-    assert.match(last, /^8 new evals \((\d fail · )?1 cancelled · \d pass\)$/)
+    assert.match(last, /^8 new evals \((\d fail · )?1 canceled · \d pass\)$/)
   })
 
-  test('colour is the only difference colour makes', () => {
+  test('color is the only difference color makes', () => {
     const input = goldenCompare(compareGolden('compare'))
     const plain = renderCompare(input, { color: false, verbose: false })
     const painted = renderCompare(input, { color: true, verbose: false })

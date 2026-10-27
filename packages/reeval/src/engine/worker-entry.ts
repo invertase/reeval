@@ -7,7 +7,7 @@ if (!process.send) {
   )
   process.exit(2)
 }
-// Workers run in their own process group, but a stray Ctrl-C must still leave cancelling to the CLI.
+// Workers run in their own process group, but a stray Ctrl-C must still leave canceling to the CLI.
 process.on('SIGINT', () => {})
 const worker = startWorker({
   // With a callback, a send after the main process went away isn't an uncaught 'error'.

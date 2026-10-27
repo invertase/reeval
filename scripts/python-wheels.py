@@ -94,7 +94,7 @@ def record_line(name: str, data: bytes) -> str:
 
 
 def write_wheel(path: Path, entries: dict[str, bytes], dist_info: str, executable: str) -> None:
-    """Writes the wheel atomically, with a fresh RECORD and regular-file modes pip honours."""
+    """Writes the wheel atomically, with a fresh RECORD and regular-file modes pip honors."""
     entries = {n: d for n, d in entries.items() if n != f"{dist_info}/RECORD"}
     record = [record_line(n, d) for n, d in entries.items()] + [f"{dist_info}/RECORD,,"]
     entries[f"{dist_info}/RECORD"] = ("\n".join(record) + "\n").encode()

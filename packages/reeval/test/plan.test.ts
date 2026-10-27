@@ -1,5 +1,5 @@
 // Tier P: "given this config and these evals, the matrix is Y". Each case runs
-// `reeval run --dry-run --json` on a directory under test/plan/ and compares the normalised matrix
+// `reeval run --dry-run --json` on a directory under test/plan/ and compares the normalized matrix
 // with test/plan/<dir>/expected/<case>.txt. REEVAL_UPDATE_SNAPSHOTS=1 rewrites them; review the diff.
 import assert from 'node:assert/strict'
 import { readdirSync } from 'node:fs'

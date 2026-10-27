@@ -22,7 +22,7 @@ export function wilson(pass: number, n: number): Interval {
 
 /**
  * The difference of two pass rates (variant minus control), with Newcombe's hybrid score
- * interval: each rate's Wilson interval combined, so it inherits Wilson's behaviour at 0 and 1.
+ * interval: each rate's Wilson interval combined, so it inherits Wilson's behavior at 0 and 1.
  */
 export function liftInterval(
   variant: { pass: number; n: number },

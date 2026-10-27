@@ -32,7 +32,7 @@ lifecycle stay shared.
   takes a function that reads or runs something (`expect.poll(lambda: c.read_file(p))`), which the
   SDK calls once to learn the subject for reeval to re-read.
 - **TypeScript stays in-process.** Never send `.eval.ts` through the runner transport; records,
-  stacks and matcher behaviour must stay unchanged.
+  stacks and matcher behavior must stay unchanged.
 - **No per-language branches in the engine.** The worker calls `loadEvalModule()` only; do not
   fork plan/matrix logic or special-case languages in `engine/worker.ts`.
 - **Update goldens in the same PR** when declaration or attempt-protocol shapes change
@@ -151,7 +151,7 @@ own test runner.
    (Python's `runners/python.ts` is the reference) and a row in `ci.yml`'s `launchers` matrix; see
    its [README](../../../packages/reeval/test/conformance/launcher/README.md).
 
-When TypeScript changes declaration or protocol behaviour, run
+When TypeScript changes declaration or protocol behavior, run
 `REEVAL_UPDATE_SNAPSHOTS=1` on `conformance.test.ts`, review the diff, and update every SDK mirror
 in the **same PR**. Do not duplicate the full `test/features/` corpus per language — one **smoke
 fixture** per adapter plus declare/context conformance is enough.

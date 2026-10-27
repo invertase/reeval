@@ -1,7 +1,7 @@
 import { clip, formatDuration, plural } from '../text.ts'
 import type { AttemptMeta } from '../types.ts'
 import { type DebugLine, debugTime } from '../view/debug.ts'
-import { triesNote } from '../view/judgements.ts'
+import { triesNote } from '../view/judgments.ts'
 import type { Colors } from './colors.ts'
 import { stripAnsi } from './colors.ts'
 import type { EvalResult, Progress, ReevalEvent } from './events.ts'
@@ -30,11 +30,11 @@ export function offset(ms: number): string {
   return `+${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped' | 'cancelled'
+export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped' | 'canceled'
 
 export function outcomeOf(e: EvalResult): Outcome {
   if (e.state === 'skipped') return 'skipped'
-  if (e.meta?.errorKind === 'aborted') return 'cancelled'
+  if (e.meta?.errorKind === 'aborted') return 'canceled'
   return e.meta?.outcome ?? (e.state === 'passed' ? 'pass' : 'fail')
 }
 
@@ -156,7 +156,7 @@ export function failureLines(
   options: { max: number; reasons?: Array<string | null> },
 ): string[] {
   const outcome = outcomeOf(e)
-  if (outcome === 'cancelled') return [c.yellow('cancelled')]
+  if (outcome === 'canceled') return [c.yellow('canceled')]
   const message = e.errors[0] ?? ''
   const turns = (e.meta?.turnErrors ?? [])
     .filter((t) => !message.includes(t.replace(/^turn \d+ error: /, '')))

@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 
 const STATE = {
   running: { label: 'Running', tone: 'border-brand/30 bg-brand/10 text-brand' },
-  cancelling: { label: 'Cancelling', tone: 'border-infra/30 bg-infra/10 text-infra' },
+  cancelling: { label: 'Canceling', tone: 'border-infra/30 bg-infra/10 text-infra' },
   finishing: { label: 'Finishing', tone: 'border-brand/30 bg-brand/10 text-brand' },
   stopped: { label: 'Stopped', tone: 'border-border bg-muted text-muted-foreground' },
 } satisfies Record<LiveRun['state'], unknown>

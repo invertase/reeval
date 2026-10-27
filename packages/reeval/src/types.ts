@@ -22,7 +22,7 @@ export type FileEditEvent = {
 }
 
 /**
- * Normalised agent events. Each tool call is one event, merged with its result; `durationMs`
+ * Normalized agent events. Each tool call is one event, merged with its result; `durationMs`
  * is wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null
  * when the harness never reported the end. Long shell or edit calls set `stalled: true`.
  */
@@ -470,7 +470,7 @@ export type FakeHarnessDescriptor = {
   files?: Record<string, string>
   /** The fake agent's final message on every turn; default `Done.`. */
   text?: string
-  /** Simulated turn length, honours the abort signal. */
+  /** Simulated turn length, honors the abort signal. */
   delayMs?: number
   /** Sits out `delayMs` even after an abort, like an agent that doesn't stop when it's told to. */
   ignoreAbort?: boolean
@@ -1520,7 +1520,7 @@ export type PairFactor = 'environment' | 'harness'
 /** Which pairs a vote is over: two environments on one harness, or two harnesses on one environment. */
 export type CompareCut = 'within' | 'across'
 
-/** One judgement of one pair of attempts, in one order. */
+/** One judgment of one pair of attempts, in one order. */
 export type PairVote = {
   question: string
   cut: CompareCut
@@ -1899,7 +1899,7 @@ export type BlindSide = BlindTurn & {
         notRun: true
       }
   >
-  /** Its captures, in the order sent, labelled by position; a name it lacks is `missing`. */
+  /** Its captures, in the order sent, labeled by position; a name it lacks is `missing`. */
   artifacts?: Array<
     { label: string; mediaType: 'image/png'; bytes: number } | { label: string; missing: true }
   >
@@ -2441,7 +2441,7 @@ export type EvalRecord = {
   /**
    * In call order, with `retries` when transient provider errors were retried on the way to the
    * verdict. `call` is the call's place among the attempt's `c.judge()` calls, failed ones
-   * included, which its judgement key is numbered by.
+   * included, which its judgment key is numbered by.
    */
   judgements: Array<Verdict & { retries?: JudgeRetry[]; call?: number }>
   /** Session starts that didn't become ready in time and were started again. */

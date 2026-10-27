@@ -97,8 +97,8 @@ def returns_value(c: SyncAttemptContext) -> bool:
 async def wrong_each(c: SyncAttemptContext, case: int) -> None: ...
 
 
-@evaluate("misspelt option", {"runz": 3})  # flagged
-def misspelt(c: SyncAttemptContext) -> None:
+@evaluate("misspelled option", {"runz": 3})  # flagged
+def misspelled(c: SyncAttemptContext) -> None:
     c.judge("q", treshold=1)  # flagged
     expect.poll(c.read_file("x")).to_be("y")  # flagged
     expect.poll(c.read_file).to_be("y")  # flagged
@@ -106,7 +106,7 @@ def misspelt(c: SyncAttemptContext) -> None:
 """
 
 
-def test_pyright_refuses_a_misdeclared_body_and_misspelt_options(tmp_path: Path) -> None:
+def test_pyright_refuses_a_misdeclared_body_and_misspelled_options(tmp_path: Path) -> None:
     sample = tmp_path / "misuse.eval.py"
     sample.write_text(MISUSE)
     out = subprocess.run(

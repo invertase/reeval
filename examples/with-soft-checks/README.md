@@ -1,6 +1,6 @@
 # with-soft-checks
 
-**Shows:** labelled soft checks, so every requirement reports even after one fails. The agent adds
+**Shows:** labeled soft checks, so every requirement reports even after one fails. The agent adds
 `divide(a, b)` to a small package, throwing on zero, and the eval checks four requirements with
 `expect.soft(value, label)`; `reeval query check_rates` then has a pass rate per label.
 
@@ -48,7 +48,7 @@ tests pass           0     1     0
 
 | File | What it is |
 |---|---|
-| [`with-soft-checks.eval.ts`](./with-soft-checks.eval.ts) | The eval: one prompt, four labelled soft checks |
+| [`with-soft-checks.eval.ts`](./with-soft-checks.eval.ts) | The eval: one prompt, four labeled soft checks |
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |

@@ -17,7 +17,7 @@ class ReevalCallError(Exception):
 
 
 class AttemptAborted(BaseException):  # noqa: N818
-    """reeval aborted the attempt (its timeout ran out, or the run was cancelled): every call the
+    """reeval aborted the attempt (its timeout ran out, or the run was canceled): every call the
     body makes from then on raises this. A `BaseException`, so `except Exception` can't keep a
     body running that reeval has already given up on."""
 

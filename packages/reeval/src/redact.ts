@@ -148,7 +148,7 @@ const jsonEscaped = (s: string) => JSON.stringify(s).slice(1, -1)
 const formsCache = new Map<string, string[]>()
 /**
  * The value and its encoded forms, each also as it reads inside a JSON string: secret scans and
- * plain-text redaction read serialised JSON, and a JSON string can hold JSON the agent printed.
+ * plain-text redaction read serialized JSON, and a JSON string can hold JSON the agent printed.
  */
 const formsOf = (value: string) => {
   let forms = formsCache.get(value)
@@ -179,7 +179,7 @@ const tokenLike = (value: string) =>
 const WORDISH = /^(?:[a-z]+|[A-Z]+|\d+)$/
 /**
  * Windows with quotes, backslashes, commas, brackets or whitespace aren't masked alone: they can
- * match the structure of serialised JSON (`","sha256":"`) and break the record around them.
+ * match the structure of serialized JSON (`","sha256":"`) and break the record around them.
  */
 const STRUCTURAL = /["'\\,:{}[\]\s]/
 
@@ -407,7 +407,7 @@ function mapLiterals(json: string, map: (value: string, key: boolean) => string)
 }
 
 /**
- * Serialised JSON or JSON Lines with every string literal (object keys included) passed through
+ * Serialized JSON or JSON Lines with every string literal (object keys included) passed through
  * `map`, and the text kept byte for byte outside the ones it changes, so `null`, numbers and
  * booleans stay as they are. A line that isn't JSON goes through `map` whole, as a value.
  */
@@ -423,7 +423,7 @@ const redactLiteral = (secrets: Secrets) => (value: string, key: boolean) =>
   redactWith(value, secrets, key && FIELD_NAME.test(value) ? secrets.keyForms : secrets.forms)
 
 /**
- * `value` serialised (`JSON.stringify(value, null, space)`), with secrets masked as
+ * `value` serialized (`JSON.stringify(value, null, space)`), with secrets masked as
  * `redactSecrets` masks them but only inside its strings: the result is valid JSON of the same
  * shape, and `null`, numbers and booleans stay as they are whatever the secrets are, so a secret
  * held as a number isn't masked. In a key that reads as a field name (`durationMs`), only forms
@@ -446,7 +446,7 @@ export const redactValue = <T>(value: T, env: NodeJS.ProcessEnv = process.env): 
   JSON.parse(redactJson(value, undefined, env))
 
 /**
- * Serialised JSON or JSON Lines, masked as `redactJson` masks a value, with the text kept byte
+ * Serialized JSON or JSON Lines, masked as `redactJson` masks a value, with the text kept byte
  * for byte outside the strings it masks. A line that isn't JSON is masked as plain text.
  */
 export const redactJsonText = (text: string, env: NodeJS.ProcessEnv = process.env): string =>
@@ -490,7 +490,7 @@ export function cutOutsideSecrets(
 }
 
 /**
- * What `redactJsonText` would mask in serialised JSON or JSON Lines: `findSecrets`' matches inside
+ * What `redactJsonText` would mask in serialized JSON or JSON Lines: `findSecrets`' matches inside
  * the string literals it would change, and every match in lines that aren't JSON.
  */
 export function findSecretsInJson(

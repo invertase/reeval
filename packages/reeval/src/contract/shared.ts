@@ -205,7 +205,7 @@ export function closest(key: string, keys: readonly string[]): string | undefine
   return best && best.distance <= allowed ? best.key : undefined
 }
 
-/** Edits from `a` to `b`: insertions, deletions, substitutions and swaps of neighbours. */
+/** Edits from `a` to `b`: insertions, deletions, substitutions and swaps of neighbors. */
 function editDistance(a: string, b: string): number {
   const d = Array.from({ length: a.length + 1 }, (_, i) =>
     Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),

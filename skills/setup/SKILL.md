@@ -18,7 +18,7 @@ github.com/invertase/reeval) has it; this file has everything a first setup need
 
 Rules that hold throughout:
 
-- **Never overwrite or re-initialise.** Don't run `reeval init` where a `reeval.config.*` or
+- **Never overwrite or re-initialize.** Don't run `reeval init` where a `reeval.config.*` or
   `reeval.yaml` exists, never pass `--force`, never edit or delete an existing eval, and add new
   files beside the user's.
 - **Never write, print or ask for a key's value.** Name the variable and the file it goes in.
@@ -65,7 +65,7 @@ research it before you write a line: read its docs, changelog and README (search
 the pages), note the current version, and find a few things a coding agent gets wrong without
 help: a renamed API, a new default, a required option, a convention. Those are your evals.
 
-## 3. Install and initialise
+## 3. Install and initialize
 
 Use the project's package manager (its lockfile), and pick the harness the user has a key for:
 
@@ -85,7 +85,7 @@ npx reeval init --bare --harness cursor      # pnpm reeval init … · yarn reev
 
 `--bare` writes only `reeval.config.ts`, the `.gitignore` entries (`.reeval/`, `.env*`) and the
 `eval` script; it merges into existing files and skips the rest. It exits 2 if reeval is set up
-already: that's your cue to stop initialising, not to `--force`. The config sets
+already: that's your cue to stop initializing, not to `--force`. The config sets
 `analysis.model` for `reeval analyze` (needs `GOOGLE_GENERATIVE_AI_API_KEY`) and `pr` and `nightly`
 profiles. Leave them.
 
@@ -120,7 +120,7 @@ Each eval:
   entry, where tests go, a file to register in. Grep the repo for each rule: one that
   `CONTRIBUTING.md` or the docs repeat reaches the control too, so leave those files out of
   the control as well, or pick another rule. Check that the task triggers each rule: a rule for
-  user-facing changes needs a user-facing task. One labelled check per rule, so the check
+  user-facing changes needs a user-facing task. One labeled check per rule, so the check
   table shows which ones the skill changed.
 - **One task, one prompt, that doesn't name the answer.** Ask for the outcome in the user's
   words ("an invoices table with its total"), never the rule the check looks for ("store the

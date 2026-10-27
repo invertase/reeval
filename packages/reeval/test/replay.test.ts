@@ -1,6 +1,6 @@
 // Replays real agent streams, captured from the contract suite (test/replay/<harness>/, refreshed
-// with REEVAL_UPDATE_CAPTURES=1 on a real run), through today's code, key-free: reeval's normaliser must
-// still find each behaviour's signals, each adapter (Antigravity, the Cursor SDK) must still translate the native events
+// with REEVAL_UPDATE_CAPTURES=1 on a real run), through today's code, key-free: reeval's normalizer must
+// still find each behavior's signals, each adapter (Antigravity, the Cursor SDK) must still translate the native events
 // to the same tool calls, text and token counts, and every native event must match the committed
 // format (test/replay/formats/). Claude Code's adapter translates inside its bridge, so its
 // captured SDK messages (test/fixtures/claude-code-bridge/) replay through the bridge reeval ships.
@@ -18,7 +18,7 @@ import { FxStreamTranslator } from '@reeval/harness-fx'
 import { GooseStreamTranslator } from '@reeval/harness-goose'
 import { OpenCodeStreamTranslator } from '@reeval/harness-opencode'
 import { PiStreamTranslator } from '@reeval/harness-pi'
-import { normaliseStream } from '../src/harness/transcript.ts'
+import { normalizeStream } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
 import { replayBridge } from './support/claude-code-bridge.ts'
 import { testDir } from './support/fixture.ts'
@@ -45,7 +45,7 @@ const parse = (text: string): Line[] =>
     .filter(Boolean)
     .map((l) => JSON.parse(l) as Line)
 const events = (lines: Line[]) =>
-  normaliseStream(
+  normalizeStream(
     lines.map((l) => ({ ms: l.ms, part: l.part as never })),
     0,
   )
@@ -55,7 +55,7 @@ const tools = (events: TranscriptEvent[]) => events.flatMap((e) => (e.type === '
 const edits = (events: TranscriptEvent[]) =>
   events.flatMap((e) => (e.type === 'file-edit' ? [e] : []))
 
-/** What each captured behaviour's stream must still say once normalised: robust signals only. */
+/** What each captured behavior's stream must still say once normalized: robust signals only. */
 const signals: Record<string, (events: TranscriptEvent[]) => void> = {
   skill(events) {
     // It read the file, or loaded it with its skill tool (OpenCode's `skill`, Goose's
@@ -123,7 +123,7 @@ test("skill.raw.jsonl's new file is a create where the harness says so, and a wr
 for (const harness of harnesses) {
   describe(`replay: ${harness}`, () => {
     const files = readdirSync(join(root, harness)).filter((f) => f.endsWith('.raw.jsonl'))
-    test('one capture per behaviour', () => {
+    test('one capture per behavior', () => {
       assert.deepEqual(
         files.map((f) => f.replace('.raw.jsonl', '')).sort(),
         Object.keys(signals).sort(),
@@ -131,21 +131,21 @@ for (const harness of harnesses) {
     })
     for (const file of files) {
       const name = file.replace('.raw.jsonl', '')
-      test(`${name}: reeval's normaliser still finds its signals`, () => {
+      test(`${name}: reeval's normalizer still finds its signals`, () => {
         const check = signals[name]
         assert.ok(check, `no signals for ${name}`)
         check(events(parse(read(harness, file))))
       })
     }
-    test('twin: a capture checked for another behaviour fails', () => {
+    test('twin: a capture checked for another behavior fails', () => {
       assert.throws(() => signals.egress?.(events(parse(read(harness, 'skill.raw.jsonl')))))
     })
-    test(`every tool call is in ${harness}'s catalog, its files and commands normalised`, async () => {
+    test(`every tool call is in ${harness}'s catalog, its files and commands normalized`, async () => {
       const catalog = await catalogOfHarness(harness)
       for (const file of files) {
-        const normalised = events(parse(read(harness, file)))
-        assert.deepEqual(unmappedTools(catalog, normalised), [], file)
-        assert.deepEqual(misfiled(catalog, behaviourOf(file), normalised), [], file)
+        const normalized = events(parse(read(harness, file)))
+        assert.deepEqual(unmappedTools(catalog, normalized), [], file)
+        assert.deepEqual(misfiled(catalog, behaviorOf(file), normalized), [], file)
       }
     })
     if (nativeToolNames(harness, []) !== null)
@@ -160,7 +160,7 @@ for (const harness of harnesses) {
 }
 
 /** The eval a capture's file is named after: `edit-and-run.raw.jsonl` is `edit and run`. */
-const behaviourOf = (file: string) => file.replace('.raw.jsonl', '').replaceAll('-', ' ')
+const behaviorOf = (file: string) => file.replace('.raw.jsonl', '').replaceAll('-', ' ')
 
 // agy 1.4.3 renamed its file tools (view_file → read_file, write_to_file → write_file,
 // replace_file_content → edit_file) with every event's shape unchanged. The adapter before it
@@ -214,7 +214,7 @@ describe("replay: agy's file tools renamed under an adapter that knows only the 
     assert.deepEqual(unmappedNativeTools(catalog, names), ['edit_file', 'read_file', 'write_file'])
   })
 
-  test('canary: the edit and the skill read and write are not normalised', async () => {
+  test('canary: the edit and the skill read and write are not normalized', async () => {
     const catalog = await catalogOfHarness('antigravity')
     // Even with the new names in the catalog as tools of no kind, they aren't edits or reads.
     const passthrough: Catalog = {
@@ -669,7 +669,7 @@ const rawLine = (value: unknown) =>
   JSON.stringify({ turn: 0, ms: 1, part: { type: 'raw', rawValue: value } })
 
 describe("replay: the Cursor runner's format holds every failure it can report", () => {
-  // Real runner output (SDK 1.0.32): a rejected key, a turn reeval cancelled, and web calls the runner
+  // Real runner output (SDK 1.0.32): a rejected key, a turn reeval canceled, and web calls the runner
   // recovered from the stored conversation.
   for (const file of ['bad-key.ndjson', 'cancelled.ndjson', 'web-recovered.ndjson'])
     test(`${file} is not a format change`, () => {
@@ -842,7 +842,7 @@ describe("replay: pi's format holds every stop reason pi defines, and a failed c
   // Synthetic, not captured: the edit-and-run turn with a 503 on its second call, in pi 1.4.0's
   // auto-retry order (harness-pi's test/fixtures): recovered on the first retry, and failing every
   // retry.
-  const normalised = (name: string) => {
+  const normalized = (name: string) => {
     const t = new PiStreamTranslator()
     const lines = packageCapture('harness-pi', name).map((e) => JSON.stringify(e))
     // As the harness agent passes them on: a step's finish reason flat, a call's input parsed.
@@ -860,10 +860,10 @@ describe("replay: pi's format holds every stop reason pi defines, and a failed c
   test("a turn pi auto-retried is not a format change, and keeps the retry's work", () => {
     for (const name of ['auto-retry.ndjson', 'auto-retry-exhausted.ndjson'])
       assert.deepEqual(unknownIn(packageCapture('harness-pi', name)), [], name)
-    const retried = normalised('auto-retry.ndjson')
+    const retried = normalized('auto-retry.ndjson')
     assert.ok(!kinds(retried).includes('error'), kinds(retried).join(' '))
     assert.equal(kinds(retried).filter((k) => k === 'retry').length, 1)
-    const plain = normalised('edit-and-run.ndjson')
+    const plain = normalized('edit-and-run.ndjson')
     assert.deepEqual(
       [...tools(retried), ...edits(retried)].map((e) => e.toolCallId),
       [...tools(plain), ...edits(plain)].map((e) => e.toolCallId),
@@ -872,7 +872,7 @@ describe("replay: pi's format holds every stop reason pi defines, and a failed c
   })
 
   test('twin: a call pi gave up retrying is an error, after a retry for each attempt', () => {
-    const failed = kinds(normalised('auto-retry-exhausted.ndjson'))
+    const failed = kinds(normalized('auto-retry-exhausted.ndjson'))
     assert.equal(failed.filter((k) => k === 'retry').length, 3)
     assert.equal(failed.at(-1), 'error')
     const renamed = packageCapture('harness-pi', 'auto-retry.ndjson').map((e) =>
@@ -886,9 +886,9 @@ describe("replay: pi's format holds every stop reason pi defines, and a failed c
   test("a turn pi continued after compacting is not a format change, and keeps the new run's work", () => {
     for (const name of ['compaction-overflow.ndjson', 'compaction-length.ndjson'])
       assert.deepEqual(unknownIn(packageCapture('harness-pi', name)), [], name)
-    const plain = normalised('edit-and-run.ndjson')
+    const plain = normalized('edit-and-run.ndjson')
     for (const name of ['compaction-overflow.ndjson', 'compaction-length.ndjson']) {
-      const continued = normalised(name)
+      const continued = normalized(name)
       assert.ok(!kinds(continued).includes('error'), `${name}: ${kinds(continued).join(' ')}`)
       assert.deepEqual(
         [...tools(continued), ...edits(continued)].map((e) => e.toolCallId),
@@ -898,7 +898,7 @@ describe("replay: pi's format holds every stop reason pi defines, and a failed c
       assert.equal(edits(continued).length, 2, name)
     }
     assert.equal(
-      kinds(normalised('compaction-overflow.ndjson')).filter((k) => k === 'retry').length,
+      kinds(normalized('compaction-overflow.ndjson')).filter((k) => k === 'retry').length,
       1,
     )
   })

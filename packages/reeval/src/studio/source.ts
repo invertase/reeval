@@ -7,7 +7,7 @@ import type { DataTarget } from '../view/paths.ts'
 export type StudioSource = {
   root: string
   historyDir: string
-  /** Also list unrecorded runs from `.reeval/runs/`, labelled as scratch. */
+  /** Also list unrecorded runs from `.reeval/runs/`, labeled as scratch. */
   scratch: boolean
 }
 

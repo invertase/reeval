@@ -31,7 +31,7 @@ import {
   substitutionsFor,
   unsubstituted,
 } from './substitution.ts'
-import { type DerivedTokens, tokeniseResponse } from './tokens.ts'
+import { type DerivedTokens, tokenizeResponse } from './tokens.ts'
 import { webSocketScrubber } from './websocket.ts'
 
 export type EgressProxyOptions = {
@@ -831,7 +831,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     /** Whether its response names the model that served it. */
     readsModel?: boolean
   } {
-    // An absolute-form target names its own host, which the upstream honours over Host.
+    // An absolute-form target names its own host, which the upstream honors over Host.
     if (!path.startsWith('/') && !(method === 'OPTIONS' && path === '*')) {
       const reason = `reeval egress gateway: expected a path in the request line on a connection to ${target.host}, not an absolute URL.`
       log(`reeval:egress ${method} https://${target.host} refused (absolute-form target)`)
@@ -902,7 +902,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       path,
       headers: {},
     })
-    // Uncompressed responses, so the scrubber, the tokeniser and the model reader see them.
+    // Uncompressed responses, so the scrubber, the tokenizer and the model reader see them.
     if (
       scrubbedInBodies(own).length ||
       credentialValues(rules, target.host).length ||
@@ -1135,7 +1135,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
    * A token exchange's response, read whole, with each token replaced by a placeholder. A success
    * that can't be read (compressed, too big, not JSON) is a 502: the real tokens never go through.
    */
-  function tokenised(
+  function tokenized(
     exchange: DerivedTokens,
     url: string,
     status: number,
@@ -1173,19 +1173,19 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       const out = responseHeaders(headers, own, creds, plan)
       t?.set({ responseHeaders: plainHeaders(out) })
       if (status < 200 || status >= 300) return res.writeHead(status, out).end(body)
-      // Fails closed even when decoded: the tokeniser reads only what the upstream sent as is.
+      // Fails closed even when decoded: the tokenizer reads only what the upstream sent as is.
       const encoding = String(headers['content-encoding'] ?? 'identity')
       if (encoding !== 'identity') return refuse(`the response is ${encoding}-encoded`)
       if (size > EXCHANGE_LIMIT) return refuse(`the response is over ${EXCHANGE_LIMIT} bytes`)
-      let result: ReturnType<typeof tokeniseResponse>
+      let result: ReturnType<typeof tokenizeResponse>
       try {
-        result = tokeniseResponse(exchange, body.toString('utf8'), tokens)
+        result = tokenizeResponse(exchange, body.toString('utf8'), tokens)
       } catch (error) {
         return refuse((error as Error).message)
       }
       tokens = [...tokens, ...result.added]
       log(
-        `reeval:egress ${url} tokenised ${result.fields.join(', ') || 'nothing'} (${exchange.name})`,
+        `reeval:egress ${url} tokenized ${result.fields.join(', ') || 'nothing'} (${exchange.name})`,
       )
       const text = Buffer.from(result.body)
       delete out['content-encoding']
@@ -1283,7 +1283,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const creds = credentialScrubs(target.host)
     stream.once('response', (h) => {
       const status = Number(h[':status'])
-      if (exchange) return tokenised(exchange, url, status, h, stream, res, own, creds, t)
+      if (exchange) return tokenized(exchange, url, status, h, stream, res, own, creds, t)
       if (!respond(status, h, stream, res, own, creds, url, t, readsModel)) return
       stream.once('trailers', (trailers) =>
         res.addTrailers(scrubbedHeaders(trailers, [...own, ...creds]) as Record<string, string>),
@@ -1338,7 +1338,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const { own, creds, url, exchange, t } = to
     upstream.once('response', (up) => {
       const status = up.statusCode ?? 502
-      if (exchange) return tokenised(exchange, url, status, up.headers, up, res, own, creds, t)
+      if (exchange) return tokenized(exchange, url, status, up.headers, up, res, own, creds, t)
       if (!respond(status, up.headers, up, res, own, creds, url, t, to.readsModel)) return
       up.once('end', () => {
         if (Object.keys(up.trailers).length) {

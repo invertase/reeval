@@ -564,20 +564,20 @@ async function entrySourceDir(
  * A marketplace entry's is its marketplace's for a `./` entry, else the entry's own source.
  */
 export async function pluginSourceDir(root: string, p: PluginSource): Promise<SourceDir> {
-  const labelled = { source: pluginSourceLabel(p, root), marketplace: null }
+  const labeled = { source: pluginSourceLabel(p, root), marketplace: null }
   switch (p.source) {
     case 'local':
-      return { context: p.path, path: '.', commit: null, ...labelled }
+      return { context: p.path, path: '.', commit: null, ...labeled }
     case 'git': {
       const clone = await cloneSkills(root, parseGitRepo(p.repo).url, p.ref)
-      return { context: clone.dir, path: p.path ?? '.', commit: clone.commit, ...labelled }
+      return { context: clone.dir, path: p.path ?? '.', commit: clone.commit, ...labeled }
     }
     case 'npm':
       return {
         context: await unpackNpm(root, p.spec),
         path: p.path ?? '.',
         commit: null,
-        ...labelled,
+        ...labeled,
       }
     case 'marketplace':
       return entrySourceDir(root, p)

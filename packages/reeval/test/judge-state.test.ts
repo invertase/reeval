@@ -105,7 +105,7 @@ test('state resolves every key to its default, and merges key by key', () => {
   assert.deepEqual(mergeJudge({ threshold: 0.7 }, { threshold: 0.9 }), { threshold: 0.9 })
 })
 
-test('judge options name an unknown key, a misspelt state key and a bad value', () => {
+test('judge options name an unknown key, a misspelled state key and a bad value', () => {
   const loc = { at: 'options', where: 'evals/a.eval.ts › lands' } as const
   assert.equal(
     judgeProblem({ diff: ['src/'] }, loc),

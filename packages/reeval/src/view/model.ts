@@ -20,7 +20,7 @@ import {
   stackChanges,
 } from './compare.ts'
 import { type CellEffort, cellContrast, cellEffort, type EffortContrast } from './effort.ts'
-import { cellJudgeRates, cellUsage, type JudgeKeyRate, uniqueJudgeLabels } from './judgements.ts'
+import { cellJudgeRates, cellUsage, type JudgeKeyRate, uniqueJudgeLabels } from './judgments.ts'
 import { manifestPath, shardOf, shardPath } from './paths.ts'
 import { readableTranscriptLine } from './record.ts'
 
@@ -565,7 +565,7 @@ export type CompareViewRow = {
   cells?: CompareRow['cells']
   changes?: string[]
   gate?: CompareRow['gate']
-  /** Mean judge score per run; null without judgements or without the record. */
+  /** Mean judge score per run; null without judgments or without the record. */
   baseScore: number | null
   headScore: number | null
   /** Cells in both runs, with lift and effort on each side. */

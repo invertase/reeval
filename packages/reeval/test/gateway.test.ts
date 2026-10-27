@@ -313,7 +313,7 @@ describe('Vercel AI Gateway routes', () => {
       goose.modelResponses?.map((e) => e.path),
       [{ exact: '/v1/chat/completions' }, { exact: '/v1/responses' }],
     )
-    assert.deepEqual(goose.expectedBlocked?.hosts, ['models.dev'], "Goose's catalogue refresh")
+    assert.deepEqual(goose.expectedBlocked?.hosts, ['models.dev'], "Goose's catalog refresh")
     assert.deepEqual(goose.hosts, ['ai-gateway.vercel.sh'])
     assert.equal(goose.modelId?.('gemini-3-flash'), 'google/gemini-3-flash')
     assert.equal(goose.modelId?.('anthropic/claude-haiku-4.5'), 'anthropic/claude-haiku-4.5')
@@ -1190,26 +1190,26 @@ describe('Vertex AI routes', () => {
 describe('brokered tokens', () => {
   const clock = () => {
     let t = 0
-    const timers: { at: number; run: () => void; cancelled: boolean }[] = []
+    const timers: { at: number; run: () => void; canceled: boolean }[] = []
     return {
       now: () => t,
       schedule: (run: () => void, ms: number) => {
-        const timer = { at: t + ms, run, cancelled: false }
+        const timer = { at: t + ms, run, canceled: false }
         timers.push(timer)
         return () => {
-          timer.cancelled = true
+          timer.canceled = true
         }
       },
       async advance(ms: number) {
         t += ms
         for (const timer of timers.splice(0)) {
-          if (timer.cancelled) continue
+          if (timer.canceled) continue
           if (timer.at <= t) timer.run()
           else timers.push(timer)
         }
         await new Promise((r) => setImmediate(r))
       },
-      pending: () => timers.filter((x) => !x.cancelled).map((x) => x.at),
+      pending: () => timers.filter((x) => !x.canceled).map((x) => x.at),
     }
   }
   const MIN = 60_000

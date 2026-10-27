@@ -69,7 +69,7 @@ Without `--yes`, `init` asks which agent to configure. The starter eval only pro
 
 ## Measure whether a skill helps
 
-The Vercel AI SDK deprecates `generateObject` in favour of `Output.object`, and agents trained on older code still reach for the old call. This eval measures whether a skill shipped with the SDK fixes that. It runs the same task in two arms, four attempts each: `plain` has no skill, and `with-skill` adds the one in `skills/ai-sdk`.
+The Vercel AI SDK deprecates `generateObject` in favor of `Output.object`, and agents trained on older code still reach for the old call. This eval measures whether a skill shipped with the SDK fixes that. It runs the same task in two arms, four attempts each: `plain` has no skill, and `with-skill` adds the one in `skills/ai-sdk`.
 
 ```ts
 // evals/ai-sdk.eval.ts
@@ -155,6 +155,6 @@ To check a machine's setup, run `npx reeval doctor --json`. It checks Node.js, t
 
 To read past runs without calling a model, run `npx reeval query failing_attempts --json`, or `npx reeval analyze --context` for a run's digest. `npx reeval mcp` serves the run history over stdio as read-only MCP tools.
 
-## Licence
+## License
 
-[Apache-2.0](LICENSE). Copyright 2026 Invertase Limited. The npm package ships third-party licences and attributions in `THIRD_PARTY_NOTICES.md`. Questions about licensing: [oss@invertase.io](mailto:oss@invertase.io).
+[Apache-2.0](LICENSE). Copyright 2026 Invertase Limited. The npm package ships third-party licenses and attributions in `THIRD_PARTY_NOTICES.md`. Questions about licensing: [oss@invertase.io](mailto:oss@invertase.io).

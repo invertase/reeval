@@ -7,7 +7,7 @@ const withHouseGreeting = defineEnvironment('with-house-greeting', ({ skill }) =
 
 // Both arms write greet.js, so the first pairwise question has votes and the second fails at the
 // model. Each attempt is asked the last two on its own: one picks from choices, one answers in
-// words. One check is labelled and one keeps its default label.
+// words. One check is labeled and one keeps its default label.
 group(
   'house greeting',
   {

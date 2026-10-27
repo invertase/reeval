@@ -21,7 +21,7 @@ function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; messa
   if (signal.aborted) {
     return isTimeout(signal.reason)
       ? { kind: 'timeout', message: 'The eval timed out' }
-      : { kind: 'aborted', message: 'The run was cancelled' }
+      : { kind: 'aborted', message: 'The run was canceled' }
   }
   if (error instanceof InfraError) return { kind: 'infra', message }
   return { kind: 'assertion', message }
@@ -103,7 +103,7 @@ export async function recordOom(
 /**
  * The attempt's egress policy and, when its sandbox records it, what it contacted and was refused.
  * Refused hosts the harness always tries (in a session like this one) are `expectedBlocked`,
- * summarised in one `-v` line.
+ * summarized in one `-v` line.
  */
 export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
   const traffic = sandbox?.traffic?.()

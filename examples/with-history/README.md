@@ -66,7 +66,7 @@ real agent that fails with nothing changed reads `regressed`, and
 
 | File | What it is |
 |---|---|
-| [`with-history.eval.ts`](./with-history.eval.ts) | The eval: one prompt, two labelled checks |
+| [`with-history.eval.ts`](./with-history.eval.ts) | The eval: one prompt, two labeled checks |
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, `record` and `history`, and the real agents from `../profiles.ts` |

@@ -16,7 +16,7 @@ import {
   authHint,
   writePluginFiles,
 } from './agents.ts'
-import { errorText, normaliseStream, type StampedPart } from './transcript.ts'
+import { errorText, normalizeStream, type StampedPart } from './transcript.ts'
 import type { Harness } from './types.ts'
 
 /** A stream part into the attempt's trace, and each tool call as a `-v` line as it happens. */
@@ -234,7 +234,7 @@ export function createAgentHarness(
           ) => {
             const statuses = sandbox.brokeredStatuses?.().slice(brokeredBefore) ?? []
             const refused = statuses.includes(401)
-            const events = [...normaliseStream(parts, startedAt), ...extra]
+            const events = [...normalizeStream(parts, startedAt), ...extra]
             const failed = everyCallFailed(catalog.name, statuses)
             // A CLI can end a turn as if it worked when its API refused every call (fx does).
             if (status === 'completed' && failed && !events.some((e) => e.type === 'error')) {

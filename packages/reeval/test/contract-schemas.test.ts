@@ -40,13 +40,13 @@ test('the drift guard names a property or required flag that differs, not a desc
   assert.deepEqual(differences(generated, owned.Thing ?? {}), [])
   const drift = [
     { ...generated, required: ['kind'] },
-    { ...generated, properties: { ...generated.properties, colour: { type: 'string' as const } } },
+    { ...generated, properties: { ...generated.properties, color: { type: 'string' as const } } },
     { ...generated, properties: { ...generated.properties, name: { description: 'Name.' } } },
     { ...generated, description: 'Another thing.' },
   ].map((g) => differences(g, owned.Thing ?? {}))
   assert.deepEqual(drift, [
     ['type only:  name?', 'Zod only:   name'],
-    ['type only:  colour?'],
+    ['type only:  color?'],
     [],
     [],
   ])
@@ -160,7 +160,7 @@ test('refusal explains the first issue in the order the old checks ran, skipping
 test('closest suggests a likely typo and nothing else', () => {
   const keys = ['model', 'effort', 'params', 'id', 'maxConcurrent', 'text']
   assert.deepEqual(
-    ['modle', 'efort', 'Model', 'txt', 'maxconcurrent', 'colour', 'x', 'params2'].map((k) =>
+    ['modle', 'efort', 'Model', 'txt', 'maxconcurrent', 'color', 'x', 'params2'].map((k) =>
       closest(k, keys),
     ),
     ['model', 'effort', 'model', 'text', 'maxConcurrent', undefined, undefined, 'params'],

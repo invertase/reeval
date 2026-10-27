@@ -1379,7 +1379,7 @@ test("compare names a gate change and classifies base's attempts under head's ga
   const cell = (
     gate: Gate,
     tally: { pass: number; fail: number },
-    opts: { outcome?: Outcome; part?: boolean; harness?: string; cancelled?: number } = {},
+    opts: { outcome?: Outcome; part?: boolean; harness?: string; canceled?: number } = {},
   ) => {
     const required = gate === 'all' ? 1 : gate === 'none' ? 0 : gate.passRate
     const parts = {
@@ -1393,7 +1393,7 @@ test("compare names a gate change and classifies base's attempts under head's ga
       ...tally,
       infraError: 0,
       skipped: 0,
-      ...(opts.cancelled ? { cancelled: opts.cancelled } : {}),
+      ...(opts.canceled ? { canceled: opts.canceled } : {}),
       outcome:
         opts.outcome ?? (tally.pass / (tally.pass + tally.fail) >= required ? 'pass' : 'fail'),
       fingerprint: JSON.stringify(parts),
@@ -1460,9 +1460,9 @@ test("compare names a gate change and classifies base's attempts under head's ga
     'both fail their own gates, but base would pass the looser one head fails',
   )
   assert.deepEqual(
-    row(cell(loose, half, { cancelled: 1 }), cell('all', { pass: 2, fail: 0 })),
+    row(cell(loose, half, { canceled: 1 }), cell('all', { pass: 2, fail: 0 })),
     ['same', 'pass', 'pass', 'pass', ['gate changed']],
-    "a fail the interrupt cancelled isn't one under head's gate",
+    "a fail the interrupt canceled isn't one under head's gate",
   )
   assert.deepEqual(
     row(cell({ passRate: 1 }, half), cell('all', half)),
@@ -1486,7 +1486,7 @@ test("compare has a row for a pooled family's gate, comparable when its cases an
   })
   const run = (
     lifts: Lift[],
-    opts: { cases?: string[]; caseOutcome?: Outcome; cancelled?: number; fp?: string } = {},
+    opts: { cases?: string[]; caseOutcome?: Outcome; canceled?: number; fp?: string } = {},
   ): HistoryEntry => {
     const cases = opts.cases ?? ['ada', 'grace']
     return {
@@ -1505,7 +1505,7 @@ test("compare has a row for a pooled family's gate, comparable when its cases an
                 outcome: opts.caseOutcome ?? 'pass',
                 fingerprint: opts.fp ?? 'fp',
                 fingerprintParts: {},
-                ...(opts.cancelled ? { cancelled: opts.cancelled } : {}),
+                ...(opts.canceled ? { canceled: opts.canceled } : {}),
               },
             ],
           }) as unknown as HistoryEntry['evals'][number],
@@ -1567,8 +1567,8 @@ test("compare has a row for a pooled family's gate, comparable when its cases an
     status(run([lift('a', 'pass')]), run([lift('a', 'fail')], { caseOutcome: 'infra_error' }))?.[0],
     'infra',
   )
-  const cancelled = family(run([lift('a', 'pass')]), run([lift('a', 'fail')], { cancelled: 1 }))
-  assert.deepEqual([cancelled?.status, cancelled?.cancelled], ['drift', ['head']])
+  const canceled = family(run([lift('a', 'pass')]), run([lift('a', 'fail')], { canceled: 1 }))
+  assert.deepEqual([canceled?.status, canceled?.canceled], ['drift', ['head']])
 
   // An eval may share the family's id; the rows still tell them apart.
   const twin = (r: HistoryEntry): HistoryEntry => ({
@@ -1729,7 +1729,7 @@ test('transient judge errors and bounded backoff', () => {
   assert.equal(isTransient(new Error('No credentials for judge model')), false)
   assert.equal(isTransient(new TimeoutError('Eval timed out after 1s')), false)
   assert.equal(isTransient(new Error('request timed out')), false)
-  assert.equal(isTransient({ name: 'AbortError', message: 'The run was cancelled' }), false)
+  assert.equal(isTransient({ name: 'AbortError', message: 'The run was canceled' }), false)
   assert.equal(
     isTransient({ name: 'AI_RetryError', message: 'x', lastError: { statusCode: 503 } }),
     true,

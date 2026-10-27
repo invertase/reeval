@@ -1243,10 +1243,10 @@ evaluate.each(['ada', 'grace'])('greets %s', async (c) => {
     )
   })
 
-  test('reeval compare reads an eval an interrupt cancelled as cancelled, never regressed', {
+  test('reeval compare reads an eval an interrupt canceled as canceled, never regressed', {
     skip: noSignals,
   }, async () => {
-    const p = await gitProject('compare-cancelled', {})
+    const p = await gitProject('compare-canceled', {})
     const started = join(p.dir, 'slow.started')
     mkdirSync(join(p.dir, 'evals'))
     await writeFile(
@@ -1291,18 +1291,18 @@ evaluate('slow', async (c) => {
     }
 
     await interrupted({})
-    const cancelled = await compareCode('--fail-on-regression')
+    const canceled = await compareCode('--fail-on-regression')
     assert.match(
-      cancelled.out,
-      /^can't compare {4}slow\n {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}cancelled$/m,
+      canceled.out,
+      /^can't compare {4}slow\n {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}canceled$/m,
     )
-    assert.doesNotMatch(cancelled.out, /regressed/)
-    assert.match(cancelled.out, /^1 can't compare · 1 same$/m)
-    assert.equal(cancelled.code, 0, cancelled.out)
+    assert.doesNotMatch(canceled.out, /regressed/)
+    assert.match(canceled.out, /^1 can't compare · 1 same$/m)
+    assert.equal(canceled.code, 0, canceled.out)
     const row = JSON.parse((await compareCode('--json')).out).rows.find((r: { id: string }) =>
       r.id.endsWith('slow'),
     )
-    assert.deepEqual([row.status, row.head, row.cancelled], ['drift', 'fail', ['head']])
+    assert.deepEqual([row.status, row.head, row.canceled], ['drift', 'fail', ['head']])
 
     // Canary: a real pass → fail in the same interrupted head still regresses and fails the check.
     await interrupted({ REEVAL_TEST_BREAK: '1' })
@@ -1333,8 +1333,8 @@ evaluate('slow', async (c) => {
       'evals/e.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 import { fakeSandbox } from 'reeval/sandbox'
 const sandbox = fakeSandbox()
-const one = defineEnvironment('tools', { sandbox, env: { FLAVOUR: 'one' } })
-const two = defineEnvironment('tools', { sandbox, env: { FLAVOUR: 'two' } })
+const one = defineEnvironment('tools', { sandbox, env: { FLAVOR: 'one' } })
+const two = defineEnvironment('tools', { sandbox, env: { FLAVOR: 'two' } })
 evaluate('uses one', { environment: one, runs: 3 }, async (c) => {
   await c.send('x')
   expect(await c.judge('Is it fine?')).toPass()
@@ -1654,7 +1654,7 @@ describe('records from a newer reeval', () => {
       const record = r as unknown as RunRecord
       record.status = 'paused' as RunRecord['status']
       const attempt = record.evals[0]?.attempts[0] as RunRecord['evals'][number]['attempts'][number]
-      attempt.outcome = 'cancelled' as typeof attempt.outcome
+      attempt.outcome = 'canceled' as typeof attempt.outcome
       attempt.error = { kind: 'quota' as never, message: 'a kind this reeval does not know' }
       attempt.turns[0] = {
         ...(attempt.turns[0] as (typeof attempt.turns)[number]),

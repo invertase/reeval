@@ -1,5 +1,5 @@
 // What a result means: gate policies, lift with its interval, and what a
-// fingerprint covers. Pure functions here; the CLI behaviour is in options.test.ts and
+// fingerprint covers. Pure functions here; the CLI behavior is in options.test.ts and
 // history.test.ts.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
@@ -32,7 +32,7 @@ import type { EngineEval } from '../src/engine/node.ts'
 import { defineEnvironment } from '../src/environment.ts'
 import { TimeoutError } from '../src/errors.ts'
 import { bodyHash, canonicalJson, caseHash, optionsHash, sourcesPart } from '../src/eval-source.ts'
-import { fingerprintOf, judgementKey, mergeOutcome } from '../src/history/assemble.ts'
+import { fingerprintOf, judgmentKey, mergeOutcome } from '../src/history/assemble.ts'
 import { familiesOf } from '../src/history/families.ts'
 import { runnerInfo } from '../src/history/provenance.ts'
 import type { EvalEntry, FamilyLift, FingerprintParts } from '../src/history/types.ts'
@@ -134,7 +134,7 @@ describe("Newcombe's interval for lift, from two Wilson intervals", () => {
     near(down.high, -up.low, 'mirrored high')
   })
 
-  test('equal rates are centred on 0, and a single run each is too few to tell', () => {
+  test('equal rates are centered on 0, and a single run each is too few to tell', () => {
     const same = liftInterval({ pass: 3, n: 5 }, { pass: 3, n: 5 })
     assert.equal(same.points, 0)
     near(same.low, -same.high, 'symmetric')
@@ -370,19 +370,19 @@ describe('mergeOutcome and abort classification', () => {
     assert.deepEqual(timedOut.record.error, { kind: 'timeout', message: 'The eval timed out' })
 
     const cancel = new AbortController()
-    cancel.abort(Object.assign(new Error('The run was cancelled'), { name: 'AbortError' }))
-    const cancelled = attempt(cancel.signal)
-    recordFailure(cancelled, new Error('ignored'), false, [])
-    assert.deepEqual(cancelled.record.error, {
+    cancel.abort(Object.assign(new Error('The run was canceled'), { name: 'AbortError' }))
+    const canceled = attempt(cancel.signal)
+    recordFailure(canceled, new Error('ignored'), false, [])
+    assert.deepEqual(canceled.record.error, {
       kind: 'aborted',
-      message: 'The run was cancelled',
+      message: 'The run was canceled',
     })
 
     const setup = new AbortController()
     setup.abort(new Error('setup step 1/1 "sleep" timed out after 1s'))
     const other = attempt(setup.signal)
     recordFailure(other, new Error('setup timed out'), false, [])
-    assert.deepEqual(other.record.error, { kind: 'aborted', message: 'The run was cancelled' })
+    assert.deepEqual(other.record.error, { kind: 'aborted', message: 'The run was canceled' })
   })
 })
 
@@ -451,11 +451,11 @@ describe('fingerprints and keys', () => {
     assert.notEqual(fingerprintOf({ ...parts, judge: 'other' }), hash, 'twin: a part changes it')
   })
 
-  test('judgement keys follow position and question', () => {
-    assert.equal(judgementKey(0, 'q'), judgementKey(0, 'q'))
-    assert.notEqual(judgementKey(0, 'q'), judgementKey(1, 'q'))
-    assert.notEqual(judgementKey(0, 'q'), judgementKey(0, 'q?'))
-    assert.match(judgementKey(2, 'q'), /^2:[0-9a-f]{12}$/)
+  test('judgment keys follow position and question', () => {
+    assert.equal(judgmentKey(0, 'q'), judgmentKey(0, 'q'))
+    assert.notEqual(judgmentKey(0, 'q'), judgmentKey(1, 'q'))
+    assert.notEqual(judgmentKey(0, 'q'), judgmentKey(0, 'q?'))
+    assert.match(judgmentKey(2, 'q'), /^2:[0-9a-f]{12}$/)
   })
 })
 
@@ -760,7 +760,7 @@ describe('compare question pairs', () => {
     assert.notEqual(blind.a.diff, blindPair('Which?', pair, false, 20_000).a.diff)
   })
 
-  test("artifacts send each side's own capture of that name, labelled by position", async () => {
+  test("artifacts send each side's own capture of that name, labeled by position", async () => {
     const png = (n: number) => new Uint8Array([0x89, 0x50, 0x4e, 0x47, n])
     const [pair] = pairsOf([
       {

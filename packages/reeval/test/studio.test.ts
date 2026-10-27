@@ -217,7 +217,7 @@ evaluate('writes ok', { runs: 1, compare }, async (c) => {
   })
 
   test('a run lead names pass, fail, infra and failed judges', () => {
-    const judgement = (question: string, verdict: 'pass' | 'fail') => ({
+    const judgment = (question: string, verdict: 'pass' | 'fail') => ({
       question,
       verdict,
       score: verdict === 'pass' ? 0.9 : 0.2,
@@ -227,7 +227,7 @@ evaluate('writes ok', { runs: 1, compare }, async (c) => {
     })
     const attempt = (
       outcome: 'pass' | 'fail' | 'infra_error',
-      judgements: ReturnType<typeof judgement>[] = [],
+      judgements: ReturnType<typeof judgment>[] = [],
     ) => ({ outcome, judgements }) as RunRecord['evals'][number]['attempts'][number]
     const record = (
       summary: Pick<RunRecord['summary'], 'pass' | 'fail' | 'infraError'>,
@@ -239,9 +239,9 @@ evaluate('writes ok', { runs: 1, compare }, async (c) => {
       }) as Pick<RunRecord, 'summary' | 'evals'>
 
     const mixed = record({ pass: 9, fail: 2, infraError: 1 }, [
-      attempt('pass', [judgement('login?', 'pass')]),
-      attempt('fail', [judgement('login?', 'fail')]),
-      attempt('fail', [judgement('login?', 'fail'), judgement('checkout?', 'fail')]),
+      attempt('pass', [judgment('login?', 'pass')]),
+      attempt('fail', [judgment('login?', 'fail')]),
+      attempt('fail', [judgment('login?', 'fail'), judgment('checkout?', 'fail')]),
       attempt('infra_error'),
     ])
     assert.deepEqual(failedJudgeLabels(mixed), ['login', 'checkout'])
@@ -1301,7 +1301,7 @@ evaluate('writes', async (c) => {
     assert.match(refused.stderr, /isn't empty and isn't a previous studio build/)
   })
 
-  test('reeval studio prints a tokenised 127.0.0.1 URL and serves the app', async () => {
+  test('reeval studio prints a tokenized 127.0.0.1 URL and serves the app', async () => {
     const child = spawn(
       process.execPath,
       [join(pkgRoot, 'dist/cli.js'), 'studio', '--port', '47311'],

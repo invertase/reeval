@@ -41,13 +41,13 @@ export function cellOutcome(outcomes: Outcome[], gate: CellGate): Outcome {
 
 type Tallied = Pick<
   HistoryCell,
-  'gate' | 'outcome' | 'pass' | 'fail' | 'infraError' | 'skipped' | 'cancelled'
+  'gate' | 'outcome' | 'pass' | 'fail' | 'infraError' | 'skipped' | 'canceled'
 >
 
-/** The cell's attempts, less the fails the run's interrupt cancelled, which the agent didn't fail. */
+/** The cell's attempts, less the fails the run's interrupt canceled, which the agent didn't fail. */
 const outcomesOf = (c: Tallied): Outcome[] => [
   ...Array<Outcome>(c.pass).fill('pass'),
-  ...Array<Outcome>(c.fail - (c.cancelled ?? 0)).fill('fail'),
+  ...Array<Outcome>(c.fail - (c.canceled ?? 0)).fill('fail'),
   ...Array<Outcome>(c.infraError).fill('infra_error'),
   ...Array<Outcome>(c.skipped).fill('skipped'),
 ]

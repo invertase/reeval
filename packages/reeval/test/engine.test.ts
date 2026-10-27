@@ -199,7 +199,7 @@ export default defineConfig({
       r.stderr,
       /2 eval files failed to load:\nevals\/a\.eval\.ts, evals\/b\.eval\.ts: [\s\S]*Failed to load tsconfig '\.\.\/\.\.\/tsconfig\.base\.json'/,
     )
-    assert.equal(r.stderr.includes('\u001b['), false, 'no terminal colours')
+    assert.equal(r.stderr.includes('\u001b['), false, 'no terminal colors')
   })
 
   test('groups nest, cascade options and appear in ids and result.json', async () => {
@@ -1047,7 +1047,7 @@ evaluate('fails', async (c) => {
     assert.match(bad.stderr, /--log-order is one of stream, grouped, auto \(got sideways\)/)
   })
 
-  test('agent mode prints the plan and the result blocks only, with no colour', async () => {
+  test('agent mode prints the plan and the result blocks only, with no color', async () => {
     const p = await project('agent-mode', {
       'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
       'evals/agent.eval.ts': `${agentEval(`expect(await c.judge('ok?')).toPass()`)}
@@ -1226,7 +1226,7 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     assert.equal(inputs[1]?.error, undefined)
   })
 
-  test("judgement keys and judge inputs follow the calls' order, whichever finishes first or fails", async () => {
+  test("judgment keys and judge inputs follow the calls' order, whichever finishes first or fails", async () => {
     const p = await project('judge-call-order', {
       'reeval.config.ts': fakeConfig({ harness: `{ files: { 'a.txt': 'hi\\n' } }` }),
       'evals/agent.eval.ts': agentEval(`
@@ -2032,7 +2032,7 @@ evaluate('fine', async () => {})
 
   for (const [why, stop] of [
     ['its deadline passes', { deadlineMs: 10_000 }],
-    ['its test is cancelled', { abortOnTurn: true }],
+    ['its test is canceled', { abortOnTurn: true }],
   ] as const) {
     test(`runCli stops a stuck run when ${why}: SIGTERM, then nothing is left`, {
       skip: noSignals,
@@ -2061,11 +2061,11 @@ evaluate('fine', async () => {})
         error.message,
         'deadlineMs' in stop
           ? /^reeval run --output-logs full was stopped because it was still running after 10000ms; it exited \(exit 143\)/
-          : /^reeval run --output-logs full was stopped because the test was cancelled .*; it exited \(exit 143\)/,
+          : /^reeval run --output-logs full was stopped because the test was canceled .*; it exited \(exit 143\)/,
       )
       // The canary: the agent was mid-turn, with a sandbox, when it was stopped.
       assert.match(error.message, /turn 1 started/)
-      assert.match(error.message, /Cancelling: stopping agents and destroying sandboxes/)
+      assert.match(error.message, /Canceling: stopping agents and destroying sandboxes/)
       assert.throws(() => process.kill(-pid, 0), { code: 'ESRCH' }, 'its process group is gone')
       assert.deepEqual(liveSandboxes(p), [])
       assert.equal(readRun(p.dir).run.status, 'interrupted')
@@ -2108,9 +2108,9 @@ evaluate('fine', async () => {})
       assert.equal(run.status, 'interrupted')
       assert.equal(evals[0]?.outcome, 'fail')
       assert.equal(evals[0]?.error?.kind, 'aborted')
-      assert.match(r.stdout, /^cancelled {8}agent eval\n {2}cancelled {8}The run was cancelled$/m)
-      assert.match(r.stdout, /^Interrupted: attempts that hadn’t finished were cancelled$/m)
-      assert.match(r.stdout, /^1 cancelled$/m, 'a cancelled attempt is not a fail')
+      assert.match(r.stdout, /^canceled {9}agent eval\n {2}canceled {9}The run was canceled$/m)
+      assert.match(r.stdout, /^Interrupted: attempts that hadn’t finished were canceled$/m)
+      assert.match(r.stdout, /^1 canceled$/m, 'a canceled attempt is not a fail')
       assert.deepEqual(liveSandboxes(p), [])
     })
   }

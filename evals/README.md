@@ -26,7 +26,7 @@ channel to learn it from and four authoring tasks, and compares the channels:
 
 | Task | Starts from | Checks |
 |---|---|---|
-| `judge.eval.ts` | A CLI and a fake-agent config | The eval it writes typechecks, plans, passes on the fake agent, asks a labelled judge question |
+| `judge.eval.ts` | A CLI and a fake-agent config | The eval it writes typechecks, plans, passes on the fake agent, asks a labeled judge question |
 | `compare.eval.ts` | An eval that screenshots a page | The plan has 2 cells, 4 attempts and a pairwise question that sees the screenshot |
 | `fix-config.eval.ts` | A config with four mistakes | `--dry-run` plans 2 cells × 3 runs, `reeval run` passes, `docs/` untouched |
 | `debug.eval.ts` | A run whose check is wrong | The fixed eval passes, keeps the check, and the answer names it |

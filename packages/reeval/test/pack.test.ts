@@ -211,7 +211,7 @@ test('the packed package installs into a clean project and runs reeval', {
   assert.ok(!Object.keys(manifest.dependencies).some((d) => d.startsWith('@reeval/')))
 
   // THIRD_PARTY_NOTICES.md: the third-party code inlined into the tarball, each package with
-  // its licence text, and none of the dependencies npm installs.
+  // its license text, and none of the dependencies npm installs.
   assert.match(listing, /^package\/THIRD_PARTY_NOTICES\.md$/m)
   const notices = extract(dir, tarball, 'THIRD_PARTY_NOTICES.md')
   const sections = notices.split(/^## /m).slice(1)
@@ -232,7 +232,7 @@ test('the packed package installs into a clean project and runs reeval', {
     )
   assert.ok(listed.length > 30, listed.join(', '))
   for (const section of sections) {
-    assert.match(section, /^- Licence: \S+/m, section.slice(0, 200))
+    assert.match(section, /^- License: \S+/m, section.slice(0, 200))
     assert.match(section, /^```+text\n[\s\S]*(Copyright|Permission)/m, section.slice(0, 200))
   }
   // A dependency can still be inlined into the bridge, which the sandbox runs from its own files.

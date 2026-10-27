@@ -92,7 +92,7 @@ export type RunnerInfo =
 /** One failed judge try that was retried, and the backoff before the next. */
 export type JudgeRetry = { error: string; delayMs: number }
 
-export type JudgementRecord = {
+export type JudgmentRecord = {
   question: string
   verdict: 'pass' | 'fail'
   score: number
@@ -123,7 +123,7 @@ export type AttemptFiles = {
   /** Each environment setup step's command, exit code, duration and output. */
   setupLog?: FileRef
   transcript?: FileRef
-  /** Unnormalised harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`. */
+  /** Unnormalized harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`. */
   rawTranscript?: FileRef
   diff?: FileRef
   judgeInput?: FileRef
@@ -237,7 +237,7 @@ export type AttemptRecord = {
     /** Longest tool `durationMs` in the transcript; null when none reported a duration. */
     maxToolMs: number | null
   }
-  judgements: JudgementRecord[]
+  judgements: JudgmentRecord[]
   /** Harness session starts that didn't become ready within `startTimeout` and were started again (at most one). */
   startRetries?: StartRetry[]
   /**
@@ -750,8 +750,8 @@ export type HistoryCell = Pick<
   lift?: { vs: string; points: number; lo: number; hi: number; withinNoise: boolean }
   /** Median tool calls, agent time and tokens over the counted attempts; null when none counted. */
   effort: CellEffort | null
-  /** Of `fail`, the attempts the run's interrupt cancelled (`error.kind: 'aborted'`); unset when none. */
-  cancelled?: number
+  /** Of `fail`, the attempts the run's interrupt canceled (`error.kind: 'aborted'`); unset when none. */
+  canceled?: number
 }
 
 /** A family's pooled lift as the history listing keeps it: enough to compare its gate. */

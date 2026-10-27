@@ -38,7 +38,7 @@ one profile you need.
   transcript.jsonl
 ```
 
-With `--profile docker` it's the 1280×720 page with its blue button. The run record's judgement
+With `--profile docker` it's the 1280×720 page with its blue button. The run record's judgment
 names the PNG it was sent:
 
 ```json
@@ -46,7 +46,7 @@ names the PNG it was sent:
   "verdict": "pass",
   "score": 0.9,
   "threshold": 0.8,
-  "question": "Does the screenshot show a button labelled \"Sign up\" under the intro paragraph?",
+  "question": "Does the screenshot show a button labeled \"Sign up\" under the intro paragraph?",
   "model": "fake",
   "artifacts": [{ "name": "home", "path": "artifacts/home.png", "bytes": 11931, "mediaType": "image/png", … }]
 }
