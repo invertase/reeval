@@ -69,7 +69,23 @@ A non-empty `REEVAL_NO_REPORT_HINT` hides the `reeval report` hint after a crash
 
 ## `REEVAL_PYTHON`
 
-`REEVAL_PYTHON` names the Python interpreter for `*.eval.py` when neither `uv run` nor `.venv` applies. Unset, reeval uses `python3`.
+`REEVAL_PYTHON` names the Python interpreter for `*.eval.py`. It applies ahead of `uv run` and `.venv`. Unset, reeval tries `uv run`, then `.venv`, then `python` on Windows or `python3` elsewhere.
+
+## `REEVAL_BINARY`
+
+`REEVAL_BINARY` is the path of the reeval binary the Python launcher runs. It must be a file, and it must not be the launcher itself. Set, it takes precedence over the packaged binary and the cached download.
+
+## `REEVAL_VERSION`
+
+`REEVAL_VERSION` pins the reeval version the Python launcher runs, and a leading `v` is ignored. Without a packaged `reeval-python` version, the launcher needs `REEVAL_VERSION` or `REEVAL_BINARY`.
+
+## `REEVAL_DOWNLOAD`
+
+`REEVAL_DOWNLOAD` is the base URL the Python launcher downloads the release binary from. With no value, the base is the GitHub releases URL for the version. A base that starts with `http:` prints a warning.
+
+## `REEVAL_OFFLINE`
+
+`REEVAL_OFFLINE` stops the Python launcher downloading a version that is not already cached. Any value other than empty, `0`, or `false` turns it on, and a missing version then stops the command.
 
 ## `AI_GATEWAY_API_KEY`
 

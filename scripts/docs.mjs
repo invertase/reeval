@@ -30,6 +30,7 @@ import { recipeProblems } from './recipe-claims.mjs'
 const root = join(import.meta.dirname, '..')
 const docsDir = join(root, 'docs')
 const src = join(root, 'packages/reeval/src')
+const pythonSrc = join(root, 'packages/reeval-python/src')
 const cli = join(root, 'packages/reeval/dist/cli.js')
 const check = process.argv.includes('--check')
 const problems = []
@@ -127,6 +128,16 @@ function reevalVariables() {
     }
   }
   walk(src)
+  const walkPython = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name)
+      if (entry.isDirectory()) walkPython(path)
+      else if (entry.name.endsWith('.py')) {
+        for (const m of read(path).matchAll(/\bREEVAL_[A-Z][A-Z0-9_]*\b/g)) found.add(m[0])
+      }
+    }
+  }
+  walkPython(pythonSrc)
   found.delete('REEVAL_BASE_ARG') // the constant that holds the name REEVAL_BASE
   found.delete('REEVAL_PYTHON_MODULE') // python -m target, not an env var
   for (const name of INTERNAL_VARIABLES) found.delete(name)
@@ -486,6 +497,36 @@ const envPage = page('reference/env-vars')
 for (const name of reevalVariables()) {
   if (!mentions(envPage, `\`${name}\``))
     problems.push(`${name} is read in src/ but not on reference/env-vars`)
+}
+
+// Every variable the source reads (packages/reeval/src and the Python launcher) has its own
+// heading, and REEVAL_PYTHON's entry says what python-runner.ts does: the variable applies first,
+// and the unset fallback is `python` on Windows and `python3` elsewhere.
+{
+  const envSections = new Map(
+    envPage
+      .split(/^## /m)
+      .slice(1)
+      .map((s) => [/^`([^`]+)`/.exec(s)?.[1], s]),
+  )
+  for (const name of new Set([...reevalVariables(), 'REEVAL_PYTHON'])) {
+    if (!envSections.has(name))
+      problems.push(`${name} has no \`## \` heading on reference/env-vars`)
+  }
+  const python = envSections.get('REEVAL_PYTHON') ?? ''
+  if (/\bneither\b|\bonly when\b/.test(python)) {
+    problems.push(
+      'REEVAL_PYTHON on reference/env-vars says it applies only when uv and .venv do not; python-runner.ts applies it ahead of both',
+    )
+  }
+  if (!/\bahead of `uv run`/.test(python)) {
+    problems.push('REEVAL_PYTHON on reference/env-vars must say it applies ahead of `uv run`')
+  }
+  if (!/`python3`/.test(python) || !/`python`/.test(python) || !/Windows/.test(python)) {
+    problems.push(
+      'REEVAL_PYTHON on reference/env-vars must say the unset fallback is `python` on Windows and `python3` elsewhere',
+    )
+  }
 }
 
 // The lead of reference/env-vars says a value outside the allowed list stops the command. It must
