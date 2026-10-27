@@ -127,6 +127,6 @@
     "@reeval/sandbox-docker": "workspace:*",
     "@types/picomatch": "4.0.3",
     "studio-web": "workspace:*",
-    "tsdown": "0.23.1"
+    "tsdown": "0.23.2"
   }
 }
