@@ -711,6 +711,24 @@ for (const file of readdirSync(join(docsDir, 'integrations/agents')).filter((f) 
   }
 }
 
+// Every factory `reeval/harness` exports is a row of the "Harness factory options" table or named in
+// its lead, so the lead's claims cover every factory.
+{
+  const harnessSource = readFileSync(join(src, 'harness.ts'), 'utf8')
+  const factories = [...harnessSource.matchAll(/^export const (\w+) = /gm)].map((m) => m[1])
+  const options = page('reference/options')
+  const section = options.match(/^### Harness factory options\n([\s\S]*?)(?=^#{1,3} )/m)?.[1] ?? ''
+  const lead = section.slice(0, section.indexOf('\n|'))
+  const rows = new Set([...section.matchAll(/^\| `(\w+)\(\)` \|/gm)].map((m) => m[1]))
+  for (const name of factories) {
+    if (!rows.has(name) && !lead.includes(`\`${name}()\``)) {
+      problems.push(
+        `reference/options "Harness factory options" has no row for ${name}() and its lead doesn't name it: add a row or name it in the lead`,
+      )
+    }
+  }
+}
+
 // The landing's option entries moved to reference/options#docker; the Docker task page no longer
 // lists them, so a link back there for them is a stale promise.
 {

@@ -84,7 +84,9 @@ For more information about harness forms, see [Choose an agent](/agents).
 
 ### Harness factory options
 
-Every factory requires `model`. All but `fx()` take an optional `effort`. reeval refuses a missing `model`, an `effort` the harness doesn't take, or an unknown option at plan time with exit code 2. For `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
+Each factory in this table runs an agent and requires `model`. All but `fx()` take an optional `effort`. reeval refuses a missing `model`, an `effort` the harness doesn't take, or an unknown option at plan time with exit code 2. For `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
+
+`fakeHarness()` runs no agent, so it is not in the table. It is for tests and dry runs, takes no `model`, and records an optional `effort` on the cell without sending it anywhere.
 
 | Factory | `model` | `effort` |
 |---|---|---|
