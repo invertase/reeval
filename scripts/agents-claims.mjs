@@ -17,9 +17,9 @@ const sentences = (text) =>
  *  - a sentence that says every harness takes `effort` while a harness schema has none;
  *  - a sentence that ties `servedModels` to the request URL for some providers only, when the
  *    provider table names the model in the URL for others too;
- *  - an option every harness schema has, defined on a harness page instead of the landing;
+ *  - an option every harness schema has, missing from "Common harness options" on reference/options or defined on a harness page;
  *  - a harness page with no plugin section or generated plugin block;
- *  - the landing's cell-id default with no mention of the last-segment rule `opencode` ids follow;
+ *  - the cell-id default on reference/options with no mention of the last-segment rule `opencode` ids follow;
  *  - the model page holding the harness support matrix instead of linking its home in
  *    reference/options;
  *  - the generated OpenCode provider table on a harness page, or missing from reference/options:
@@ -97,14 +97,16 @@ export async function agentsProblems({ root, docsDir }) {
     problems.push('reference/options has no generated opencode-providers block in Harness behavior')
   }
 
-  const landingText = read(landing)
-  if (/\bDefaults to the harness name followed by the model\b/.test(landingText)) {
-    const opencodeRule = sentences(landingText).some(
+  const optionsText = read(optionsFile)
+  const commonSection =
+    optionsText.match(/^### Common harness options\n([\s\S]*?)(?=^#{1,3} )/m)?.[1] ?? ''
+  if (/\bDefaults to the harness name followed by the model\b/.test(commonSection)) {
+    const opencodeRule = sentences(commonSection).some(
       (s) => /`opencode`/.test(s) && /\blast `\/`/.test(s),
     )
     if (!opencodeRule) {
       problems.push(
-        "agents/index states the cell-id default (harness name, then model) but not that an opencode id keeps only the part after its last `/` (harnessId in src/options.ts sanitizes with split('/').at(-1))",
+        "reference/options states the cell-id default (harness name, then model) but not that an opencode id keeps only the part after its last `/` (harnessId in src/options.ts sanitizes with split('/').at(-1))",
       )
     }
   }
@@ -131,13 +133,15 @@ export async function agentsProblems({ root, docsDir }) {
     .reduce((all, keys) => all.filter((k) => keys.includes(k)))
     .filter((k) => !['kind', 'model'].includes(k))
   for (const key of common) {
-    if (!read(landing).includes(`<Property name="${key}"`)) {
-      problems.push(`agents/index has no <Property name="${key}">: every harness takes it`)
+    if (!commonSection.includes(`<Property name="${key}"`)) {
+      problems.push(
+        `reference/options has no <Property name="${key}"> under "Common harness options": every harness takes it`,
+      )
     }
     for (const file of harnessPages) {
       if (read(file).includes(`<Property name="${key}"`)) {
         problems.push(
-          `${relative(root, file)} defines ${key}, which every harness takes: it lives on agents/index, so link to it`,
+          `${relative(root, file)} defines ${key}, which every harness takes: it lives under "Common harness options" on reference/options, so link to it`,
         )
       }
     }
@@ -177,11 +181,12 @@ export async function agentsProblems({ root, docsDir }) {
     }
   }
 
-  const gatewayEntry = landingText.match(/<Property name="gateway"[\s\S]*?<\/Property>/)?.[0] ?? ''
+  const gatewayEntry =
+    commonSection.match(/<Property name="gateway"[\s\S]*?<\/Property>/)?.[0] ?? ''
   const helperNamed = /`(?:direct|vercel|openrouter)\(\)`/.test(gatewayEntry)
   if (/type="(?:'\w+'(?: \| )?)+"/.test(gatewayEntry) || !helperNamed) {
     problems.push(
-      'agents/index documents the gateway option as string literals without a gateway helper, but harness.ts also takes a GatewayDescriptor, which direct(), vercel() and openrouter() return: type it GatewayName | GatewayDescriptor and name the helpers',
+      'reference/options documents the common gateway option as string literals without a gateway helper, but harness.ts also takes a GatewayDescriptor, which direct(), vercel() and openrouter() return: type it GatewayName | GatewayDescriptor and name the helpers',
     )
   }
 

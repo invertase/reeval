@@ -104,6 +104,44 @@ Each factory in this table runs an agent and requires `model`. All but `fx()` ta
   `cursor()` only. Parameter ids mapped to string values, such as `{ fast: 'true' }`. An unset parameter takes the default variant in Cursor's model catalog, which reeval sends on the request. `fast` is `'false'` when the model accepts it and `params` leaves it unset.
 </Property>
 
+### Common harness options
+
+Every factory takes these options beside `model`.
+
+<Property name="id" type="string" optional>
+  Cell id. Defaults to the harness name followed by the model, such as `claude-code:<model>`, with `[effort=<value>]` added when `effort` is set. An id with a `/`, such as the `<provider>/<model>` id of `opencode`, keeps only the part after its last `/`, so `google/gemini-3.8-flash` gives `opencode:gemini-3.8-flash`. The id uses letters, digits, and `._:@+-=[]`.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most attempts of this harness that run at the same time, across the run. A whole number of at least 1.
+</Property>
+
+<Property name="startTimeout" type="Duration" optional>
+  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
+</Property>
+
+<Property name="gateway" type="GatewayName | GatewayDescriptor" optional>
+  The gateway this harness's model calls go through: `'direct'`, `'vercel'`, or `'openrouter'`, or the descriptor that `direct()`, `vercel()`, or `openrouter()` from `{{ pkg }}/gateway` returns. It skips the config's `gateway` fallback, and the plan refuses a gateway that isn't listed or can't serve the harness. For more information about routing, see [Route models through a gateway](/agents/gateways).
+</Property>
+
+### Gateway support by harness
+
+✅ means the gateway routes the harness and its `effort`. ⚠️ means it routes the harness, but a harness with `effort` set takes the next gateway in the list, and a pinned one stops the plan.
+
+| Harness | `vercel()` | `openrouter()` |
+| --- | --- | --- |
+| Cursor | ❌ | ❌ |
+| Claude Code | ✅ | ⚠️ |
+| Codex | ✅ | ✅ |
+| Antigravity | ❌ | ❌ |
+| OpenCode | ⚠️ | ⚠️ |
+| Goose | ⚠️ | ⚠️ |
+| pi | ❌ | ❌ |
+| fx | ✅ | ❌ |
+| Grok Build | ⚠️ | ⚠️ |
+
+Cursor's agent calls only Cursor's API, and Antigravity's CLI calls only Google's. reeval runs pi on its Gemini key, and fx on `vercel()` or OpenAI's API.
+
 ## Harness behavior
 
 Each harness reads the environment's rules, skills, and MCP servers from its own places and records its own events. The harness pages hold each one's key and plugins.
@@ -152,7 +190,7 @@ For more information about writing rules and placing skills, see [Add project ru
 
 ### MCP servers
 
-- **Cursor:** `stdio`, `http`, and `sse`, in the Cursor SDK's `McpServerConfig` shape: `{ type: 'stdio', command, args, env }` or `{ type, url, headers }`.
+- **Cursor:** `stdio`, `http`, and `sse`, as `{ type: 'stdio', command, args, env }` or `{ type, url, headers }`.
 - **Claude Code:** `stdio`, `http`, and `sse`, in the shape of the `.mcp.json` file: `{ type: 'stdio', command, args, env }` or `{ type, url, headers }`.
 - **Antigravity:** `stdio`, `http`, and `sse`, in the `~/.gemini/config/mcp_config.json` file. A `stdio` server is `command`, `args`, and `env`, and an `http` or `sse` server is `serverUrl` and `headers`.
 - **Codex:** `stdio` and `http`, under `[mcp_servers]` in the `~/.codex/config.toml` file. A `stdio` server is `command`, `args`, and `env`, and an `http` server is `url` and `http_headers`. A call is named `mcp__<server>__<tool>`. An `sse` server fails at plan time with exit code 2.

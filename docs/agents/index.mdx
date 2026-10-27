@@ -24,7 +24,7 @@ For more information about setting `model` and `effort`, see [Set the agent's mo
 
 ## Set the harness options
 
-Every factory takes these options beside `model`, so the harness pages don't repeat them. Set them in the factory call:
+In the factory call, set `id`, `maxConcurrent`, `startTimeout`, and `gateway` beside `model`:
 
 ```ts title="reeval.config.ts"
 harness: claudeCode({
@@ -35,21 +35,7 @@ harness: claudeCode({
 }),
 ```
 
-<Property name="id" type="string" optional>
-  Cell id. Defaults to the harness name followed by the model, such as `claude-code:<model>`, with `[effort=<value>]` added when `effort` is set. An id with a `/`, such as the `<provider>/<model>` id of `opencode`, keeps only the part after its last `/`, so `google/gemini-3.8-flash` gives `opencode:gemini-3.8-flash`. The id uses letters, digits, and `._:@+-=[]`.
-</Property>
-
-<Property name="maxConcurrent" type="number" optional>
-  The most attempts of this harness that run at the same time, across the run. A whole number of at least 1.
-</Property>
-
-<Property name="startTimeout" type="Duration" optional>
-  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
-</Property>
-
-<Property name="gateway" type="GatewayName | GatewayDescriptor" optional>
-  The gateway this harness's model calls go through: `'direct'`, `'vercel'`, or `'openrouter'`, or the descriptor that `direct()`, `vercel()`, or `openrouter()` from `{{ pkg }}/gateway` returns. It skips the config's `gateway` fallback, and the plan refuses a gateway that isn't listed or can't serve the harness. For more information about routing, see [Route models through a gateway](/agents/gateways).
-</Property>
+For each option's type and default, see [Common harness options](/reference/options#common-harness-options).
 
 ## Pick a harness
 

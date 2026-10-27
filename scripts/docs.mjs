@@ -760,6 +760,25 @@ if (page('integrations/agents/cursor').includes("model: '<model>'")) {
   )
 }
 
+// Reference entries live on reference/options: the agents landing holds no `<Property>` entry, the
+// gateways landing no per-harness gateway table, and the Cursor MCP bullet names the transports and
+// fields, not the SDK's class.
+if (/<Property\b/.test(page('agents/index'))) {
+  problems.push(
+    'agents/index has a <Property> entry: id, maxConcurrent, startTimeout and gateway live under "Common harness options" on reference/options',
+  )
+}
+if (page('agents/gateways').includes('| Harness | `vercel()` | `openrouter()` |')) {
+  problems.push(
+    'agents/gateways has the per-harness vercel() and openrouter() table: it lives under "Gateway support by harness" on reference/options',
+  )
+}
+if (page('reference/options').includes('McpServerConfig')) {
+  problems.push(
+    "reference/options names McpServerConfig in the Cursor MCP bullet: name the transports and fields, not the Cursor SDK's class",
+  )
+}
+
 // Every factory `reeval/harness` exports is a row of the "Harness factory options" table or named in
 // its lead, so the lead's claims cover every factory.
 {
