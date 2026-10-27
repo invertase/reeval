@@ -5,7 +5,9 @@ description: "The words name the parts of a run and what a result reports."
 
 ## Agent
 
-An agent is a harness plus its model, named in the `harness` option, such as `claude-code:claude-sonnet-5`. For more information about an agent, see [Harness](/reference/glossary#harness).
+An agent is a harness plus its model, named in the `harness` option, such as `claude-code:claude-sonnet-5`.
+
+**Agent mode** is `--ui agent`, output for an agent that is itself running reeval. `to: 'agent'` on a secret puts the value in the container's environment. For more information about an agent, see [Harness](/reference/glossary#harness).
 
 ## Analysis
 
@@ -17,11 +19,15 @@ Answers are what an evaluation's questions found, such as `won 3 of 4` for each 
 
 ## Artifacts
 
-Artifacts are what the agent leaves in the workspace: the files it wrote, the diff, and screenshots from `c.capture()`. For more information about artifacts, see [Workspace](/reference/glossary#workspace).
+Artifacts are what an attempt leaves behind: the files the agent wrote and the diff, from the workspace, and the screenshots `c.capture()` saves in the attempt's `artifacts/` directory, outside it.
+
+**Judge artifacts** are `artifacts` on `c.judge()` and on a question. **Stored artifacts** are `history.artifacts` and `reeval record --artifacts`. For more information about artifacts, see [Workspace](/reference/glossary#workspace).
 
 ## Assertion
 
-An assertion is a named, deterministic pass or fail on what an attempt produced, written with `expect`. For more information about assertions, see [Assertions](/write/assertions).
+An assertion is a named, deterministic pass or fail on what an attempt produced, written with `expect`.
+
+A [judgment](#judgment) is not an assertion, and neither are the **doctor checks** `reeval doctor` verifies. The **assertion table** is the terminal table of assertions by cell, headed `check`. For more information about assertions, see [Assertions](/write/assertions).
 
 ## Attempt
 
@@ -31,25 +37,61 @@ An attempt is one execution of a cell in a fresh sandbox, and its outcome is pas
 
 The baseline is a comparison's environment without the change, and each variant is measured against it. `compare.baseline` optionally names it; the record's cell role calls it `'control'`. For more information about a baseline, see [Compare setups](/results/compare/lift).
 
+## Case
+
+A case is one item of the array `evaluate.each()` takes, and each case is an evaluation. Two or more cases pool into one family with one pass rate. For more information about a case, see [Evaluate many cases](/write/cases).
+
 ## Cell
 
 A cell is one agent, one environment, and one `sandbox` option of an evaluation, and each of its attempts gets a fresh sandbox. In a comparison, the baseline and each variant are separate cells. For more information about a cell, see [Attempt](/reference/glossary#attempt).
+
+## compare
+
+**Compare** is the `compare` option. The **run diff** is `reeval compare`, and the Run history `compare` tool, which diffs two runs.
 
 ## Comparison
 
 A comparison runs its baseline and each variant as separate cells. It measures a variant against the baseline only when the cells share an agent and `sandbox` option, and reports `helped`, `made it worse`, or `can't tell yet`. For more information about a comparison, see [Compare setups](/results/compare/lift).
 
+## digest
+
+The **digest** is what `reeval analyze` hands the model. The **environment digest** is one part of a cell fingerprint.
+
+## effect
+
+See [Comparison](#comparison) for `helped` / `made it worse` / `can't tell yet`. `EffortVerdict` is `fewer`, `more`, `noise`, or `insufficient` (printed as “within noise” and “too few attempts to test”). A **family verdict** is `FamilyVerdict` on the family's paired lift.
+
+## effort
+
+**Reasoning effort** is the harness `effort` option, an input, recorded as `reasoning_effort`. The `effort` table prints tool calls, agent time, and tokens, an output.
+
 ## Environment
 
-An environment is what the agent receives in an attempt, such as skills, MCP servers, rules, files, setup steps, variables, and secrets. For more information about an environment, see [Define an environment](/environments).
+An environment is what the agent receives in an attempt, such as skills, MCP servers, rules, files, setup steps, variables, and secrets.
+
+In code, an **environment** is the value `defineEnvironment()` returns. **Variables** are the sandbox `env`. **Host variables** are variables in the shell that runs reeval. For more information about an environment, see [Define an environment](/environments).
 
 ## Evaluation
 
-An evaluation is one task for the agent and the assertions and judgments on its result, declared with `evaluate()` or as one case of `evaluate.each()` in a `*.eval.ts` file. The evaluation fails when a cell that counts toward it fails. For more information about an evaluation, see [Write an evaluation](/write).
+An evaluation is one task for the agent and the assertions and judgments on its result, declared with `evaluate()` or as one case of `evaluate.each()` in a `*.eval.ts` file. The evaluation fails when a cell that counts toward it fails.
+
+The **evaluation model** is a `typesafe-ai/*` judge model, which only scores yes or no, as the error strings name it. A **language model** writes text. For more information about an evaluation, see [Evaluations](/write).
+
+## gate
+
+**Gate** is a cell's `gate`. The **comparison gate** is `compare.gate`.
 
 ## Harness
 
 A harness is the coding agent's program, such as Claude Code or Codex, and with a model it makes an agent. For more information about a harness, see [Choose a harness](/agents).
+
+## history
+
+The **history folder** is `.history`. `reeval history` is the pass/fail list over recent runs. **Run history** is the `reeval mcp` server. The `history` tool lists recorded runs; the code still titles that tool "Run history". `.reeval/history.db` is the database those commands read.
+
+## id
+
+The **harness id** is `id` on a harness, and the **sandbox id** is `id` on a sandbox. The **attempt id** is `<cell key>#<n>`. The **run id** names one run.
 
 ## Insights
 
@@ -63,13 +105,33 @@ A judgment is an LLM verdict from `c.judge()` on a yes or no question about the 
 
 Lift is a variant against the baseline: the difference in pass rate on the same agent and `sandbox` option. For more information about lift, see [How reeval decides a change helped](/results/compare/statistics).
 
+## maxConcurrent
+
+Harness `maxConcurrent`, sandbox `maxConcurrent`, and `judge.maxConcurrent` are separate caps. `concurrency` is how many attempts run at once.
+
+## MCP server
+
+An **MCP server** is one the harness receives, under `mcp`. **Run history** is reeval's read-only MCP server, `reeval mcp`.
+
 ## Measures
 
 The measures are pass rate, tokens, tool calls, turns, cost, and time. For more information about each measure, see [Run](/reference/glossary#run).
 
+## model
+
+The **harness model** is `model`. Separate from it are `judge.model`, `capture.model`, `question.model`, `analysis.model`, and the served model `turn.model`. For the evaluation model and the language model, see [Evaluation](#evaluation).
+
+## only
+
+`evaluate.only` and `group.only` mark which evaluations run. A **harness edit** is `{ add }`, `{ only }`, or a function of the inherited list. Skill `only` and `exclude` choose which files a skill directory keeps.
+
 ## Past runs
 
 Past runs are earlier recorded runs, and `reeval compare` diffs this run against one. For more information about past runs, see [Find run regressions](/results/compare/past-runs).
+
+## placement
+
+`placement` on a skill is `'harness'` or `'workspace'`. Those values are not the harness and not the workspace.
 
 ## Profile
 
@@ -77,130 +139,56 @@ A profile is a named preset that sizes a run, and the run's record stores the pr
 
 ## Question
 
-A question in `questions` reads across attempts after they end, and never changes an outcome. For more information about a question, see [Attempt](/reference/glossary#attempt).
+A question in `questions` reads across attempts after they end, and never changes an outcome.
+
+A **judge question** is the argument to `c.judge()`. One with `across` is a **pairwise question**. For more information about a question, see [Ask which did better](/results/compare/lift#ask-which-did-better).
 
 ## Record
 
-A record is the saved JSON of a run. reeval writes a scratch copy in the `.reeval/runs/` directory, and recording copies that JSON into the history folder. For more information about a record, see [Recording](/runs/recording).
+A record is the saved JSON of a run. reeval writes a scratch copy in the `.reeval/runs/` directory, and recording copies that JSON into the history folder.
+
+**Recording** is `reeval record`, the `record` key, and `--record`. For more information about a record, see [Recording](/runs/recording).
 
 ## Run
 
-A run is one `reeval run` command and every attempt that command starts, and reeval saves them as one record. For more information about a run, see [Running](/runs/running).
+A run is one `reeval run` command and every attempt that command starts, and reeval saves them as one record.
+
+`runs` is attempts per cell. A setup step's `run` is its command. The `runs` table is a query storage table. For more information about a run, see [Running](/runs/running).
 
 ## Sandbox
 
 A sandbox is the container an attempt runs in. Restricted egress sends leaving requests through that attempt's egress gateway; under `allow-all`, traffic can leave around it. For more information about a sandbox, see [Choose a sandbox](/integrations/sandboxes).
 
+## summary
+
+`summary.md` is the run written as Markdown. The **GitHub step summary** is `GITHUB_STEP_SUMMARY`, which receives `summary.md` when it is set. For what the model writes about a run, see [Analysis](#analysis).
+
 ## Task
 
-The task is what the agent is asked to do, sent with `c.send()`. For more information about a task, see [Write an evaluation](/write).
+The task is what the agent is asked to do, sent with `c.send()`. For more information about a task, see [Evaluations](/write).
+
+## timeout
+
+`timeout` defaults to `'15m'`. A setup step's `timeout` defaults to `'5m'`. `capture.timeout` defaults to `'60s'`. `startTimeout` limits how long a harness may take to start. `expect.poll`'s `timeout` defaults to 1000 milliseconds.
 
 ## Transcript
 
-A transcript records every message and tool call of an attempt as one JSON object per line in the `transcript.jsonl` file. For more information about a transcript, see [Read a transcript](/results/debugging#read-a-transcript).
+A transcript records every message and tool call of an attempt as one JSON object per line in the `transcript.jsonl` file.
+
+`turn.transcript` is that turn's events. The Run history `transcript` tool is titled "Attempt transcript". `REEVAL_RAW_TRANSCRIPT` is the host variable. For more information about a transcript, see [Read a transcript](/results/debugging#read-a-transcript).
 
 ## Turn
 
 A turn is the agent's reply to one `c.send()` call. The turn holds the final message, transcript events, token usage, the served model, and the workspace diff. For more information about a turn, see [Turns](/write/turns).
 
+## Variant
+
+A variant is an environment in `compare.variants`: the baseline's setup with the change under test. It runs as its own cell and is measured against the baseline. For more information about a variant, see [Compare setups](/results/compare/lift).
+
+## verdict
+
+A **judge verdict** is `Verdict`, checked with `toPass()`. A **family verdict** is `FamilyVerdict`. A verdict on tool calls, time, or tokens is `EffortVerdict`. An **assertion verdict** is `CheckVerdict`. An **outcome** (`pass`, `fail`, infra error, or `skipped`) is never called a verdict.
+
 ## Workspace
 
 The workspace is the directory in the sandbox where the agent works, and grading reads it. For more information about a workspace, see [Sandbox](/reference/glossary#sandbox).
-
-## Shared words
-
-### agent
-
-**Agent mode** is `--ui agent`, output for an agent that is itself running reeval. `to: 'agent'` on a secret puts the value in the container's environment. For the coding-agent sense, see [Agent](#agent).
-
-### artifacts
-
-**Judge artifacts** are `artifacts` on `c.judge()` and on a question. **Stored artifacts** are `history.artifacts` and `reeval record --artifacts`. For workspace leftovers, see [Artifacts](#artifacts).
-
-### assertion
-
-A **judgment** is an LLM verdict. **Doctor checks** are what `reeval doctor` verifies, and are not assertions. The **assertion table** is the terminal table of assertions by cell, headed `check`. For the `expect` sense, see [Assertion](#assertion).
-
-### compare
-
-**Compare** is the `compare` option. The **run diff** is `reeval compare`, and the Run history `compare` tool, which diffs two runs.
-
-### digest
-
-The **digest** is what `reeval analyze` hands the model. The **environment digest** is one part of a cell fingerprint.
-
-### effect
-
-See [Comparison](#comparison) for `helped` / `made it worse` / `can't tell yet`. `EffortVerdict` is `fewer`, `more`, `noise`, or `insufficient` (printed as “within noise” and “too few attempts to test”). A **family verdict** is `FamilyVerdict` on the family's paired lift.
-
-### effort
-
-**Reasoning effort** is the harness `effort` option, an input, recorded as `reasoning_effort`. The `effort` table prints tool calls, agent time, and tokens, an output.
-
-### environment
-
-An **environment** is `defineEnvironment()`. **Variables** are the sandbox `env`. **Host variables** are variables in the shell that runs reeval. The **environment digest** is one part of a cell fingerprint. For what the agent receives, see [Environment](#environment).
-
-### evaluation
-
-The **evaluation model** is a `typesafe-ai/*` judge model, which only scores yes or no, as the error strings name it. A **language model** writes text. For `evaluate()`, see [Evaluation](#evaluation).
-
-### gate
-
-**Gate** is a cell's `gate`. The **comparison gate** is `compare.gate`.
-
-### history
-
-The **history folder** is `.history`. `reeval history` is the pass/fail list over recent runs. **Run history** is the `reeval mcp` server. The `history` tool lists recorded runs; the code still titles that tool "Run history". `.reeval/history.db` is the database those commands read.
-
-### id
-
-The **harness id** is `id` on a harness, and the **sandbox id** is `id` on a sandbox. The **attempt id** is `<cell key>#<n>`. The **run id** names one run.
-
-### maxConcurrent
-
-Harness `maxConcurrent`, sandbox `maxConcurrent`, and `judge.maxConcurrent` are separate caps. `concurrency` is how many attempts run at once.
-
-### MCP server
-
-An **MCP server** is one the harness receives, under `mcp`. **Run history** is reeval's read-only MCP server, `reeval mcp`.
-
-### model
-
-The **harness model** is `model`. Separate from it are `judge.model`, `capture.model`, `question.model`, `analysis.model`, and the served model `turn.model`. An **evaluation model** scores yes or no. A **language model** writes text.
-
-### only
-
-`evaluate.only` and `group.only` mark which evaluations run. A **harness edit** is `{ add }`, `{ only }`, or a function of the inherited list. Skill `only` and `exclude` choose which files a skill directory keeps.
-
-### placement
-
-`placement` on a skill is `'harness'` or `'workspace'`. Those values are not the harness and not the workspace.
-
-### question
-
-A **judge question** is the argument to `c.judge()`. One with `across` is a **pairwise question**. For a question in `questions`, see [Question](#question).
-
-### record
-
-**Recording** is `reeval record`, the `record` key, and `--record`. For the saved JSON, see [Record](#record).
-
-### run
-
-`runs` is attempts per cell. A setup step's `run` is its command. The `runs` table is a query storage table. For one `reeval run`, see [Run](#run).
-
-### summary
-
-`summary.md` is the run written as Markdown. The **GitHub step summary** is `GITHUB_STEP_SUMMARY`, which receives `summary.md` when it is set. For what the model writes about a run, see [Analysis](#analysis).
-
-### timeout
-
-`timeout` defaults to `'15m'`. A setup step's `timeout` defaults to `'5m'`. `capture.timeout` defaults to `'60s'`. `startTimeout` limits how long a harness may take to start. `expect.poll`'s `timeout` defaults to 1000 milliseconds.
-
-### transcript
-
-`turn.transcript` is that turn's events. The Run history `transcript` tool is titled "Attempt transcript". `REEVAL_RAW_TRANSCRIPT` is the host variable. For `transcript.jsonl`, see [Transcript](#transcript).
-
-### verdict
-
-A **judge verdict** is `Verdict`, checked with `toPass()`. A **family verdict** is `FamilyVerdict`. A verdict on tool calls, time, or tokens is `EffortVerdict`. An **assertion verdict** is `CheckVerdict`. An **outcome** (`pass`, `fail`, infra error, or `skipped`) is never called a verdict.
