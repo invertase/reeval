@@ -479,7 +479,7 @@ for (const [name, flags] of commands ?? []) {
 }
 
 const optionsPage =
-  page('reference/options') + page('reference/config') + page('reference/profiles')
+  page('reference/options') + page('reference/configuration') + page('reference/profiles')
 for (const key of [
   ...new Set([
     ...stringList('config.ts', 'CONFIG_KEYS'),
@@ -530,10 +530,10 @@ if (limitCompare && !/baseline gates like an evaluation without `compare`/.test(
   )
 }
 
-const envPage = page('reference/env-vars')
+const envPage = page('reference/environment-variables')
 for (const name of reevalVariables()) {
   if (!mentions(envPage, `\`${name}\``))
-    problems.push(`${name} is read in src/ but not on reference/env-vars`)
+    problems.push(`${name} is read in src/ but not on reference/environment-variables`)
 }
 
 // Every variable the source reads (packages/reeval/src and the Python launcher) has its own
@@ -548,25 +548,27 @@ for (const name of reevalVariables()) {
   )
   for (const name of new Set([...reevalVariables(), 'REEVAL_PYTHON'])) {
     if (!envSections.has(name))
-      problems.push(`${name} has no \`## \` heading on reference/env-vars`)
+      problems.push(`${name} has no \`## \` heading on reference/environment-variables`)
   }
   const python = envSections.get('REEVAL_PYTHON') ?? ''
   if (/\bneither\b|\bonly when\b/.test(python)) {
     problems.push(
-      'REEVAL_PYTHON on reference/env-vars says it applies only when uv and .venv do not; python-runner.ts applies it ahead of both',
+      'REEVAL_PYTHON on reference/environment-variables says it applies only when uv and .venv do not; python-runner.ts applies it ahead of both',
     )
   }
   if (!/\bahead of `uv run`/.test(python)) {
-    problems.push('REEVAL_PYTHON on reference/env-vars must say it applies ahead of `uv run`')
+    problems.push(
+      'REEVAL_PYTHON on reference/environment-variables must say it applies ahead of `uv run`',
+    )
   }
   if (!/`python3`/.test(python) || !/`python`/.test(python) || !/Windows/.test(python)) {
     problems.push(
-      'REEVAL_PYTHON on reference/env-vars must say the unset fallback is `python` on Windows and `python3` elsewhere',
+      'REEVAL_PYTHON on reference/environment-variables must say the unset fallback is `python` on Windows and `python3` elsewhere',
     )
   }
 }
 
-// The lead of reference/env-vars says a value outside the allowed list stops the command. It must
+// The lead of reference/environment-variables says a value outside the allowed list stops the command. It must
 // name each variable's accepted values, as src/ui/mode.ts's `pick` calls list them.
 {
   const modeSource = read(join(src, 'ui', 'mode.ts'))
@@ -579,7 +581,7 @@ for (const name of reevalVariables()) {
   }
   if (/\bany other value stops the command\b/.test(lead)) {
     problems.push(
-      'reference/env-vars lead says "any other value stops the command" without naming the accepted values of each variable',
+      'reference/environment-variables lead says "any other value stops the command" without naming the accepted values of each variable',
     )
   }
   for (const { name, values } of picks) {
@@ -587,7 +589,7 @@ for (const name of reevalVariables()) {
     for (const value of values) {
       if (!sentence.includes(`\`${value}\``) || !sentence.includes(`\`${name}\``)) {
         problems.push(
-          `reference/env-vars lead doesn't name \`${value}\` as an accepted value of \`${name}\``,
+          `reference/environment-variables lead doesn't name \`${value}\` as an accepted value of \`${name}\``,
         )
       }
     }
@@ -607,11 +609,13 @@ function rootValueExports() {
   return names
 }
 
-const apiPage = page('reference/api')
+const apiPage = page('reference/authoring-api')
 for (const name of rootValueExports()) {
   const heading = new RegExp(`^#{2,3} \`${name.replace(/\W/g, '\\$&')}(\\(\\))?\`$`, 'm')
   if (!heading.test(apiPage)) {
-    problems.push(`${name} is exported from src/index.ts but has no entry on reference/api`)
+    problems.push(
+      `${name} is exported from src/index.ts but has no entry on reference/authoring-api`,
+    )
   }
 }
 
@@ -642,7 +646,7 @@ function readEnvNames(file) {
 }
 for (const name of readEnvNames('egress.ts')) {
   if (!mentions(envPage, `\`${name}\``)) {
-    problems.push(`${name} is read in src/egress.ts but not on reference/env-vars`)
+    problems.push(`${name} is read in src/egress.ts but not on reference/environment-variables`)
   }
 }
 
@@ -654,29 +658,35 @@ for (const { code } of exitCodes()) {
 
 // ---- Recipes link a workflow instead of repeating it ----------------------------------------------
 
-// /runs/ci owns the workflow of a recording profile, a secret, a run and a compare. A recipe that
+// /evaluations/runs/ci owns the workflow of a recording profile, a secret, a run and a compare. A recipe that
 // links it and still teaches all four steps is a second home for them.
 const CI_WORKFLOW_STEPS = [/\bprofile\b/, /\bsecrets?\b/, /\breeval run\b/, /\bcompare\b/i]
 for (const file of mdxFiles()) {
-  if (!relative(docsDir, file).startsWith('recipes/')) continue
+  if (!relative(docsDir, file).startsWith('evaluations/recipes/')) continue
   const prose = read(file).replace(/^---\n[\s\S]*?\n---\n/, '')
-  if (/\]\(\/runs\/ci[)#]/.test(prose) && CI_WORKFLOW_STEPS.every((step) => step.test(prose))) {
+  if (
+    /\]\(\/evaluations\/runs\/ci[)#]/.test(prose) &&
+    CI_WORKFLOW_STEPS.every((step) => step.test(prose))
+  ) {
     problems.push(
-      `${relative(root, file)} links /runs/ci and also teaches its workflow (profile, secret, reeval run, compare): keep the applied result here and link CI for the steps`,
+      `${relative(root, file)} links /evaluations/runs/ci and also teaches its workflow (profile, secret, reeval run, compare): keep the applied result here and link CI for the steps`,
     )
   }
 }
 
-// The regression rule (which diff words fail the job) is written once, as prose on /runs/ci, and
+// The regression rule (which diff words fail the job) is written once, as prose on /evaluations/runs/ci, and
 // the diff words live on /results/compare/past-runs. A decision table that maps diff words to a
 // passing or failing job is a second copy of the rule, on the recipe or beside CI's prose.
 const hasGateDecisionTable = (text) => /^\|[^\n]*`regressed`[^\n]*\|[^\n]*\bFails\b/m.test(text)
 {
-  const recipe = page('recipes/ci-gate')
-  const linksRule = /\]\(\/(runs\/ci|results\/compare\/past-runs)[)#]/.test(recipe)
-  if (hasGateDecisionTable(recipe) && (linksRule || hasGateDecisionTable(page('runs/ci')))) {
+  const recipe = page('evaluations/recipes/gate-pull-requests')
+  const linksRule = /\]\(\/(evaluations\/runs\/ci|results\/compare\/past-runs)[)#]/.test(recipe)
+  if (
+    hasGateDecisionTable(recipe) &&
+    (linksRule || hasGateDecisionTable(page('evaluations/runs/ci')))
+  ) {
     problems.push(
-      'docs/recipes/ci-gate.mdx has the regression decision table and also links /runs/ci or /results/compare/past-runs: link the rule instead of repeating it',
+      'docs/evaluations/recipes/gate-pull-requests.mdx has the regression decision table and also links /evaluations/runs/ci or /results/compare/past-runs: link the rule instead of repeating it',
     )
   }
 }
@@ -709,8 +719,8 @@ for (const withArtifacts of builtSummaries.flatMap((match) => match.slice(1))) {
 // reeval studio build and reeval clean entries on reference/cli, so neither page shows them in a
 // code block.
 for (const [pageName, command] of [
-  ['results/studio', 'reeval studio build'],
-  ['results/debugging', 'reeval clean'],
+  ['results/inspection/studio', 'reeval studio build'],
+  ['results/inspection/debugging', 'reeval clean'],
 ]) {
   const blocks = [...page(pageName).matchAll(/^```[^\n]*\n([\s\S]*?)^```/gm)]
   if (blocks.some(([, code]) => new RegExp(`\\b${command}\\b`).test(code))) {
@@ -723,21 +733,21 @@ for (const [pageName, command] of [
 // Debug data is built per attempt (src/attempt/index.ts, src/debug/attempt.ts), so a run with no
 // attempt writes no directory.
 if (
-  page('results/debugging')
+  page('results/inspection/debugging')
     .split(/\n\n+/)
     .some((paragraph) => /debug\b/i.test(paragraph) && /\bon every run\b/i.test(paragraph))
 ) {
   problems.push(
-    'docs/results/debugging.mdx says a debug directory is written on every run: an attempt writes it, so a run with no attempt writes none',
+    'docs/results/inspection/debugging.mdx says a debug directory is written on every run: an attempt writes it, so a run with no attempt writes none',
   )
 }
 
 // ---- Gateway pages -----------------------------------------------------------------------------
 
 const srcFile = (file) => read(join(root, 'packages/reeval/src', file))
-const gatewayPages = ['direct', 'vercel', 'openrouter', 'vertex'].map((name) => ({
-  file: `integrations/gateways/${name}`,
-  text: page(`integrations/gateways/${name}`),
+const gatewayPages = ['direct', 'vercel-ai-gateway', 'openrouter', 'vertex-ai'].map((name) => ({
+  file: `configuration/gateways/${name}`,
+  text: page(`configuration/gateways/${name}`),
 }))
 
 // Only the judge takes `typesafe-ai/*` models; the others refuse them in code, so the page that
@@ -748,7 +758,7 @@ const evaluationModelRefusals = [
   'contract/questions.ts',
 ].filter((file) => srcFile(file).includes("startsWith('typesafe-ai/')"))
 if (evaluationModelRefusals.length === 3) {
-  const prose = page('integrations/gateways/direct').replace(/```[\s\S]*?```/g, '')
+  const prose = page('configuration/gateways/direct').replace(/```[\s\S]*?```/g, '')
   for (const sentence of prose.split(/(?<=[.!?])\s+/)) {
     if (
       sentence.includes('typesafe-ai/') &&
@@ -756,7 +766,7 @@ if (evaluationModelRefusals.length === 3) {
       !/\b(?:refuse|refuses|reject|rejects)\b/.test(sentence)
     ) {
       problems.push(
-        `integrations/gateways/direct says the analysis model, captures or questions call typesafe-ai/*, but ${evaluationModelRefusals.join(', ')} refuse it: only the judge takes it`,
+        `configuration/gateways/direct says the analysis model, captures or questions call typesafe-ai/*, but ${evaluationModelRefusals.join(', ')} refuse it: only the judge takes it`,
       )
     }
   }
@@ -781,7 +791,7 @@ problems.push(...recipeProblems(docsDir))
 // option's entry lives on reference/options, which they link to.
 const SANDBOX_PAGE_MAX_SECTIONS = 3
 for (const name of ['docker', 'podman']) {
-  const href = `integrations/sandboxes/${name}`
+  const href = `configuration/sandboxes/${name}`
   const text = page(href).replace(/^```[\s\S]*?^```/gm, '')
   const sections = [...text.matchAll(/^## .+$/gm)].length
   if (sections > SANDBOX_PAGE_MAX_SECTIONS) {
@@ -796,10 +806,10 @@ for (const name of ['docker', 'podman']) {
 
 // A harness page is a short tutorial: the key, one factory example and the plugins. The factory's
 // field definitions live on reference/options#harness-factory-options.
-for (const file of readdirSync(join(docsDir, 'integrations/agents')).filter((f) =>
+for (const file of readdirSync(join(docsDir, 'configuration/agents')).filter((f) =>
   f.endsWith('.mdx'),
 )) {
-  const href = `integrations/agents/${file.replace(/\.mdx$/, '')}`
+  const href = `configuration/agents/${file.replace(/\.mdx$/, '')}`
   const text = page(href).replace(/^```[\s\S]*?^```/gm, '')
   if (/<Property\b/.test(text)) {
     problems.push(
@@ -810,23 +820,23 @@ for (const file of readdirSync(join(docsDir, 'integrations/agents')).filter((f) 
 
 // `composer-2.5` takes no `effort`, so the Cursor example names a model that does (`grok-4.7`)
 // instead of a `'<model>'` placeholder.
-if (page('integrations/agents/cursor').includes("model: '<model>'")) {
+if (page('configuration/agents/cursor').includes("model: '<model>'")) {
   problems.push(
-    "integrations/agents/cursor still has model: '<model>': name a model that takes effort, such as grok-4.7",
+    "configuration/agents/cursor still has model: '<model>': name a model that takes effort, such as grok-4.7",
   )
 }
 
 // Reference entries live on reference/options: the agents landing holds no `<Property>` entry, the
 // gateways landing no per-harness gateway table, and the Cursor MCP bullet names the transports and
 // fields, not the SDK's class.
-if (/<Property\b/.test(page('agents/index'))) {
+if (/<Property\b/.test(page('configuration/agents/index'))) {
   problems.push(
-    'agents/index has a <Property> entry: id, maxConcurrent, startTimeout and gateway live under "Common harness options" on reference/options',
+    'configuration/agents/index has a <Property> entry: id, maxConcurrent, startTimeout and gateway live under "Common harness options" on reference/options',
   )
 }
-if (page('agents/gateways').includes('| Harness | `vercel()` | `openrouter()` |')) {
+if (page('configuration/gateways/index').includes('| Harness | `vercel()` | `openrouter()` |')) {
   problems.push(
-    'agents/gateways has the per-harness vercel() and openrouter() table: it lives under "Gateway support by harness" on reference/options',
+    'configuration/gateways/index has the per-harness vercel() and openrouter() table: it lives under "Gateway support by harness" on reference/options',
   )
 }
 if (page('reference/options').includes('McpServerConfig')) {
@@ -856,14 +866,14 @@ if (page('reference/options').includes('McpServerConfig')) {
 // The landing's option entries moved to reference/options#docker; the Docker task page no longer
 // lists them, so a link back there for them is a stale promise.
 {
-  const landing = page('integrations/sandboxes/index')
+  const landing = page('configuration/sandboxes/index')
   for (const sentence of landing.replace(/```[\s\S]*?```/g, '').split(/(?<=[.!?])\s+/)) {
     if (
       /`root`|`capabilities`|`maxConcurrent`|every option the factories accept/.test(sentence) &&
-      sentence.includes('](/integrations/sandboxes/docker)')
+      sentence.includes('](/configuration/sandboxes/docker)')
     ) {
       problems.push(
-        "integrations/sandboxes links root, capabilities, maxConcurrent or the factories' options to /integrations/sandboxes/docker: those entries live at /reference/options#docker",
+        "configuration/sandboxes links root, capabilities, maxConcurrent or the factories' options to /configuration/sandboxes/docker: those entries live at /reference/options#docker",
       )
     }
   }
@@ -888,7 +898,7 @@ for (const sentence of page('reference/options')
 
 // `across: 'environment'` pairs every two environments on a harness (variants with each other
 // too), not only the baseline with each variant (compare/pairs.ts).
-for (const sentence of page('write/questions')
+for (const sentence of page('evaluations/grading/questions')
   .replace(/```[\s\S]*?```/g, '')
   .split(/(?<=[.!?])\s+/)) {
   if (
@@ -897,12 +907,12 @@ for (const sentence of page('write/questions')
     !/every two environments/.test(sentence)
   ) {
     problems.push(
-      "write/questions says across: 'environment' pairs the baseline with each variant: it pairs every two environments on the same agent, variants with each other included",
+      "evaluations/grading/questions says across: 'environment' pairs the baseline with each variant: it pairs every two environments on the same agent, variants with each other included",
     )
   }
 }
 
-// The harness support matrix lives on agents/gateways; the pages beside it link to it.
+// The harness support matrix lives on configuration/gateways; the pages beside it link to it.
 const HARNESS_NAMES =
   /\b(?:Cursor|Claude Code|Codex|Antigravity|OpenCode|Goose|Grok Build|fx|pi)\b/g
 for (const { file, text } of gatewayPages) {
@@ -910,7 +920,7 @@ for (const { file, text } of gatewayPages) {
     const names = new Set(line.match(HARNESS_NAMES))
     if (names.size >= 3) {
       problems.push(
-        `${file}:${i + 1} lists ${names.size} harnesses: the matrix of which gateway serves which lives on agents/gateways, so link to it`,
+        `${file}:${i + 1} lists ${names.size} harnesses: the matrix of which gateway serves which lives on configuration/gateways, so link to it`,
       )
     }
   })
@@ -947,13 +957,13 @@ for (const file of resultsPages) {
 }
 
 /** `reeval query` syncs changed records; only `--rebuild` rebuilds the database (src/query.ts). */
-const queriesPage = join(docsDir, 'results/queries.mdx')
+const queriesPage = join(docsDir, 'results/inspection/queries.mdx')
 if (
   existsSync(queriesPage) &&
   /rebuilds? the database[^.\n]*every query/i.test(read(queriesPage))
 ) {
   problems.push(
-    'results/queries.mdx says the database rebuilds on every query; only --rebuild rebuilds it',
+    'results/inspection/queries.mdx says the database rebuilds on every query; only --rebuild rebuilds it',
   )
 }
 
@@ -968,7 +978,7 @@ function environmentHelpers() {
   return [...body[1].matchAll(/^ {4}(\w+):/gm)].map((m) => m[1])
 }
 
-const environmentsLanding = page('environments/index')
+const environmentsLanding = page('configuration/environments/index')
 const calledHelpers = /receives((?:[`,\sa-z]|and)*?)\./.exec(environmentsLanding)
 if (calledHelpers) {
   const listed = new Set([...calledHelpers[1].matchAll(/`(\w+)`/g)].map((m) => m[1]))
@@ -984,7 +994,7 @@ if (calledHelpers) {
 /** A secret without `hosts` is the sandbox's real value (types.ts, options.ts's unbrokeredWarning). */
 const keptOnHost =
   /\b(?:keys?|secrets?)\b[^.]*\b(?:stays?|remains?|kept|keeps?)\b[^.]*\bon the host\b/i
-for (const href of ['environments/secrets', 'environments/egress']) {
+for (const href of ['configuration/environments/secrets', 'configuration/environments/egress']) {
   const prose = page(href).replace(/^```[\s\S]*?^```/gm, '')
   for (const sentence of prose.split(/(?<=[.!?])\s+/)) {
     if (keptOnHost.test(sentence) && !/\bhosts\b/.test(sentence)) {
@@ -1087,7 +1097,7 @@ const COPIED_BLOCK_LINES = 15
 const COPIED_BLOCK_SHARE = 0.8
 // The Introduction shows the evaluation file and its result; Quick start is where the same
 // evaluation is set up and run, so the two are meant to share it.
-const SHARED_BLOCK_PAGES = ['docs/index.mdx', 'docs/quickstart.mdx']
+const SHARED_BLOCK_PAGES = ['docs/index.mdx', 'docs/getting-started/quickstart.mdx']
 /** A fenced `ts` block's code lines with blank lines, comments and indentation dropped. */
 const codeLines = (code) =>
   code
@@ -1125,7 +1135,9 @@ problems.push(...copied)
 // entry, or defines a term with a `## ` heading there in a sentence that opens "A/An/The <term>
 // is". Only a definition counts: the predicate starts with an article, "one", "what", "how",
 // "each" or "every", so "A cell is flaky when" and "The lift is paired by case" pass.
-const ABOUT_THE_EXAMPLE = new Set(['docs/quickstart.mdx: The baseline is an unstyled page.'])
+const ABOUT_THE_EXAMPLE = new Set([
+  'docs/getting-started/quickstart.mdx: The baseline is an unstyled page.',
+])
 
 const plainMarkdown = (text) =>
   text
@@ -1202,7 +1214,7 @@ problems.push(...docsRunsProblems(root))
 
 // The values and defaults of every `reeval run` flag live on reference/cli, and the `record` and
 // `history` defaults on reference/options: the runs pages keep the task and link them.
-for (const file of mdxFiles(join(docsDir, 'runs'))) {
+for (const file of mdxFiles(join(docsDir, 'evaluations/runs'))) {
   const text = read(file)
   const flagDefaultTable = outsideFences(text)
     .split('\n')
@@ -1213,16 +1225,16 @@ for (const file of mdxFiles(join(docsDir, 'runs'))) {
     )
   }
 }
-const recordingText = read(join(docsDir, 'runs/recording.mdx'))
+const recordingText = read(join(docsDir, 'evaluations/runs/recording.mdx'))
 for (const [, intro] of recordingText.matchAll(/([^\n]+)\n\n```ts[^\n]*\n[^`]*defineConfig\(/g)) {
   if (/\bdefaults?\b/i.test(intro)) {
     problems.push(
-      `docs/runs/recording.mdx introduces a config block as the defaults ("${intro}"): the record and history defaults live on reference/options, so link them`,
+      `docs/evaluations/runs/recording.mdx introduces a config block as the defaults ("${intro}"): the record and history defaults live on reference/options, so link them`,
     )
   }
 }
 
-// ---- Write pages ----------------------------------------------------------------------------
+// ---- Evaluation task pages ------------------------------------------------------------------
 
 /** The body of the `##` section titled `title`, or null when the page has none. */
 function sectionBody(text, title) {
@@ -1233,13 +1245,13 @@ function sectionBody(text, title) {
   return next ? rest.slice(0, next.index) : rest
 }
 
-const writeDir = join(docsDir, 'write')
+const writeDir = join(docsDir, 'evaluations/task')
 const turnsPage = join(writeDir, 'turns.mdx')
 if (existsSync(turnsPage)) {
   const sendBody = sectionBody(read(turnsPage), 'Send a prompt')
   if (sendBody !== null && /\bc\.send\(\s*['"`]/.test(sendBody)) {
     problems.push(
-      `${relative(root, turnsPage)} has a "Send a prompt" section that shows a first c.send() of a string: /write owns the first send, so Turns starts at the second turn and links there`,
+      `${relative(root, turnsPage)} has a "Send a prompt" section that shows a first c.send() of a string: /evaluations/evaluate owns the first send, so Turns starts at the second turn and links there`,
     )
   }
 }
@@ -1287,9 +1299,9 @@ for (const file of mdxFiles()) {
 // ---- Facts moved from Cases, Groups and Egress ------------------------------------------------
 
 // planTable (src/plan.ts) drops only the family note for { pool: false }: the other notes still print.
-if (/empty `notes` column/.test(page('reference/api'))) {
+if (/empty `notes` column/.test(page('reference/authoring-api'))) {
   problems.push(
-    'reference/api EachOptions says a { pool: false } dry-run row has an empty `notes` column: only the family note goes, and the skip, profile, brokered, egress and workspace notes still print (src/plan.ts)',
+    'reference/authoring-api EachOptions says a { pool: false } dry-run row has an empty `notes` column: only the family note goes, and the skip, profile, brokered, egress and workspace notes still print (src/plan.ts)',
   )
 }
 
@@ -1315,22 +1327,22 @@ if (!/`insufficient` below six discordant/.test(page('reference/options'))) {
   )
 }
 
-// DEFAULT_EGRESS_ALLOW's hosts are listed once, on reference/api; the egress option links that entry.
+// DEFAULT_EGRESS_ALLOW's hosts are listed once, on reference/authoring-api; the egress option links that entry.
 const egressText = page('reference/options').match(/^## `egress`\n([\s\S]*?)(?=^## )/m)?.[1] ?? ''
 if (!egressText) {
   problems.push('docs.mjs cannot find the "## `egress`" section on reference/options')
 } else if (
-  !egressText.includes('(/reference/api#defaultegressallow)') ||
+  !egressText.includes('(/reference/authoring-api#defaultegressallow)') ||
   /holds the package registries|registry\.npmjs\.org|github\.com/.test(egressText)
 ) {
   problems.push(
-    "reference/options egress describes DEFAULT_EGRESS_ALLOW's hosts: link [`DEFAULT_EGRESS_ALLOW`](/reference/api#defaultegressallow), which lists them",
+    "reference/options egress describes DEFAULT_EGRESS_ALLOW's hosts: link [`DEFAULT_EGRESS_ALLOW`](/reference/authoring-api#defaultegressallow), which lists them",
   )
 }
 
 // ---- The Evaluate page's names -----------------------------------------------------------------
 
-// The /write page is titled Evaluate in the sidebar and its frontmatter, under the Evaluations
+// The /evaluations/evaluate page is titled Evaluate in the sidebar and its frontmatter, under the Evaluations
 // section. docs.page renders the frontmatter title as the page's one H1, so the body has no H1
 // of its own that could drift from it.
 {
@@ -1344,23 +1356,27 @@ if (!egressText) {
     }
     return undefined
   }
-  const found = sectionOf(config.sidebar, '/write')
+  const found = sectionOf(config.sidebar, '/evaluations/evaluate')
   if (found?.section !== 'Evaluations') {
     problems.push(
-      `docs.json: the sidebar section holding /write is "${found?.section}", not "Evaluations"`,
+      `docs.json: the sidebar section holding /evaluations/evaluate is "${found?.section}", not "Evaluations"`,
     )
   }
   if (found?.item.title !== 'Evaluate') {
-    problems.push(`docs.json: the /write sidebar label is "${found?.item.title}", not "Evaluate"`)
+    problems.push(
+      `docs.json: the /evaluations/evaluate sidebar label is "${found?.item.title}", not "Evaluate"`,
+    )
   }
-  const writeText = read(join(docsDir, 'write', 'index.mdx'))
+  const writeText = read(join(docsDir, 'evaluations/evaluate.mdx'))
   const writeTitle = writeText.match(/^---\n[\s\S]*?^title:\s*"?([^"\n]+)"?\s*$/m)?.[1]
   if (writeTitle !== 'Evaluate') {
-    problems.push(`write/index.mdx: the frontmatter title is "${writeTitle}", not "Evaluate"`)
+    problems.push(
+      `evaluations/evaluate.mdx: the frontmatter title is "${writeTitle}", not "Evaluate"`,
+    )
   }
   const writeH1 = outsideFences(writeText).match(/^# .+$/m)?.[0]
   if (writeH1 && writeH1 !== '# Evaluate') {
-    problems.push(`write/index.mdx: the page heading is "${writeH1}", not "# Evaluate"`)
+    problems.push(`evaluations/evaluate.mdx: the page heading is "${writeH1}", not "# Evaluate"`)
   }
 }
 

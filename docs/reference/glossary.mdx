@@ -27,7 +27,7 @@ Artifacts are what an attempt leaves behind: the files the agent wrote and the d
 
 An assertion is a named, deterministic pass or fail on what an attempt produced, written with `expect`.
 
-A [judgment](#judgment) is not an assertion, and neither are the **doctor checks** `reeval doctor` verifies. The **assertion table** is the terminal table of assertions by cell, headed `check`. For more information about assertions, see [Assertions](/write/assertions).
+A [judgment](#judgment) is not an assertion, and neither are the **doctor checks** `reeval doctor` verifies. The **assertion table** is the terminal table of assertions by cell, headed `check`. For more information about assertions, see [Assertions](/evaluations/grading/assertions).
 
 ## Attempt
 
@@ -39,7 +39,7 @@ The baseline is a comparison's environment without the change, and each variant 
 
 ## Case
 
-A case is one item of the array `evaluate.each()` takes, and each case is an evaluation. Two or more cases pool into one family with one pass rate. For more information about a case, see [Evaluate many cases](/write/cases).
+A case is one item of the array `evaluate.each()` takes, and each case is an evaluation. Two or more cases pool into one family with one pass rate. For more information about a case, see [Evaluate many cases](/evaluations/task/cases).
 
 ## Cell
 
@@ -69,13 +69,13 @@ See [Comparison](#comparison) for `helped` / `made it worse` / `can't tell yet`.
 
 An environment is what the agent receives in an attempt, such as skills, MCP servers, rules, files, setup steps, variables, and secrets.
 
-In code, an **environment** is the value `defineEnvironment()` returns. **Variables** are the sandbox `env`. **Host variables** are variables in the shell that runs reeval. For more information about an environment, see [Define an environment](/environments).
+In code, an **environment** is the value `defineEnvironment()` returns. **Variables** are the sandbox `env`. **Host variables** are variables in the shell that runs reeval. For more information about an environment, see [Define an environment](/configuration/environments).
 
 ## Evaluation
 
 An evaluation is one task for the agent and the assertions and judgments on its result, declared with `evaluate()` or as one case of `evaluate.each()` in a `*.eval.ts` file. The evaluation fails when a cell that counts toward it fails.
 
-The **evaluation model** is a `typesafe-ai/*` judge model, which only scores yes or no, as the error strings name it. A **language model** writes text. For more information about an evaluation, see [Evaluate](/write).
+The **evaluation model** is a `typesafe-ai/*` judge model, which only scores yes or no, as the error strings name it. A **language model** writes text. For more information about an evaluation, see [Evaluate](/evaluations/evaluate).
 
 ## gate
 
@@ -83,7 +83,7 @@ The **evaluation model** is a `typesafe-ai/*` judge model, which only scores yes
 
 ## Harness
 
-A harness is the coding agent's program, such as Claude Code or Codex, and with a model it makes an agent. For more information about a harness, see [Choose a harness](/agents).
+A harness is the coding agent's program, such as Claude Code or Codex, and with a model it makes an agent. For more information about a harness, see [Choose a harness](/configuration/agents).
 
 ## history
 
@@ -99,11 +99,11 @@ Insights are what an analysis model says the agent did and why, not only whether
 
 ## Judgment
 
-A judgment is an LLM verdict from `c.judge()` on a yes or no question about the agent's work. `toPass()` turns it into a pass or fail; the record stores it in `judgements`. For more information about a judgment, see [Score agent work](/write/judgments).
+A judgment is an LLM verdict from `c.judge()` on a yes or no question about the agent's work. `toPass()` turns it into a pass or fail; the record stores it in `judgements`. For more information about a judgment, see [Score agent work](/evaluations/grading/judgments).
 
 ## Lift
 
-Lift is a variant against the baseline: the difference in pass rate on the same agent and `sandbox` option. For more information about lift, see [How reeval decides a change helped](/results/compare/statistics).
+Lift is a variant against the baseline: the difference in pass rate on the same agent and `sandbox` option. For more information about lift, see [How reeval decides a change helped](/reference/statistics).
 
 ## maxConcurrent
 
@@ -135,7 +135,7 @@ Past runs are earlier recorded runs, and `reeval compare` diffs this run against
 
 ## Profile
 
-A profile is a named preset that sizes a run, and the run's record stores the profile that sized it. For more information about a profile, see [Profiles](/runs/profiles).
+A profile is a named preset that sizes a run, and the run's record stores the profile that sized it. For more information about a profile, see [Profiles](/evaluations/runs/profiles).
 
 ## Question
 
@@ -147,17 +147,17 @@ A **judge question** is the argument to `c.judge()`. One with `across` is a **pa
 
 A record is the saved JSON of a run. reeval writes a scratch copy in the `.reeval/runs/` directory, and recording copies that JSON into the history folder.
 
-**Recording** is `reeval record`, the `record` key, and `--record`. For more information about a record, see [Recording](/runs/recording).
+**Recording** is `reeval record`, the `record` key, and `--record`. For more information about a record, see [Recording](/evaluations/runs/recording).
 
 ## Run
 
 A run is one `reeval run` command and every attempt that command starts, and reeval saves them as one record.
 
-`runs` is attempts per cell. A setup step's `run` is its command. The `runs` table is a query storage table. For more information about a run, see [Running](/runs/running).
+`runs` is attempts per cell. A setup step's `run` is its command. The `runs` table is a query storage table. For more information about a run, see [Running](/evaluations/runs/running).
 
 ## Sandbox
 
-A sandbox is the container an attempt runs in. Restricted egress sends leaving requests through that attempt's egress gateway; under `allow-all`, traffic can leave around it. For more information about a sandbox, see [Choose a sandbox](/integrations/sandboxes).
+A sandbox is the container an attempt runs in. Restricted egress sends leaving requests through that attempt's egress gateway; under `allow-all`, traffic can leave around it. For more information about a sandbox, see [Choose a sandbox](/configuration/sandboxes).
 
 ## summary
 
@@ -165,7 +165,7 @@ A sandbox is the container an attempt runs in. Restricted egress sends leaving r
 
 ## Task
 
-The task is what the agent is asked to do, sent with `c.send()`. For more information about a task, see [Evaluate](/write).
+The task is what the agent is asked to do, sent with `c.send()`. For more information about a task, see [Evaluate](/evaluations/evaluate).
 
 ## timeout
 
@@ -175,11 +175,11 @@ The task is what the agent is asked to do, sent with `c.send()`. For more inform
 
 A transcript records every message and tool call of an attempt as one JSON object per line in the `transcript.jsonl` file.
 
-`turn.transcript` is that turn's events. The Run history `transcript` tool is titled "Attempt transcript". `REEVAL_RAW_TRANSCRIPT` is the host variable. For more information about a transcript, see [Read a transcript](/results/debugging#read-a-transcript).
+`turn.transcript` is that turn's events. The Run history `transcript` tool is titled "Attempt transcript". `REEVAL_RAW_TRANSCRIPT` is the host variable. For more information about a transcript, see [Read a transcript](/results/inspection/debugging#read-a-transcript).
 
 ## Turn
 
-A turn is the agent's reply to one `c.send()` call. The turn holds the final message, transcript events, token usage, the served model, and the workspace diff. For more information about a turn, see [Turns](/write/turns).
+A turn is the agent's reply to one `c.send()` call. The turn holds the final message, transcript events, token usage, the served model, and the workspace diff. For more information about a turn, see [Turns](/evaluations/task/turns).
 
 ## Variant
 

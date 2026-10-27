@@ -46,5 +46,5 @@ fail             keeps the test token from the agent
 | [`with-secret-for-checks.eval.ts`](./with-secret-for-checks.eval.ts) | The eval: the checks-only token, one prompt, two checks |
 | [`reeval.config.ts`](./reeval.config.ts) | The scripted fake agent in Docker, and the real agents from `../profiles.ts` |
 
-Secrets, `to` and `optional` are in the [Pass secrets](../../docs/environments/secrets.mdx)
+Secrets, `to` and `optional` are in the [Pass secrets](../../docs/configuration/environments/secrets.mdx)
 guide.

@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { directExceptionProblems } from './gateway-landing-claims.mjs'
 
-const PAGES = ['direct', 'vercel', 'openrouter']
+const PAGES = ['direct', 'vercel-ai-gateway', 'openrouter']
 const SLOTS = [
   ['judge', /\bjudges?\b/i],
   ['analysis', /\banalysis\b/i],
@@ -18,11 +18,11 @@ export function modelsSection(text) {
   return match ? match[1].replace(/```[\s\S]*?```/g, '') : ''
 }
 
-/** Problems on docs/integrations/gateways: a routing gateway's models section must name the judge, analysis, captures and questions, or say it refuses them. */
+/** Problems on docs/configuration/gateways: a routing gateway's models section must name the judge, analysis, captures and questions, or say it refuses them. */
 export function gatewayModelProblems(docsDir) {
   const problems = []
   for (const name of PAGES) {
-    const file = `integrations/gateways/${name}`
+    const file = `configuration/gateways/${name}`
     const section = modelsSection(readFileSync(join(docsDir, `${file}.mdx`), 'utf8'))
     const sentences = section.split(/(?<=[.!?])\s+/)
     for (const [slot, pattern] of SLOTS) {
@@ -39,10 +39,10 @@ export function gatewayModelProblems(docsDir) {
   return problems
 }
 
-/** Problems on docs/integrations/gateways/direct: it names the `fx` and OpenCode exceptions when it says `direct()` serves every harness, and never says a list ending with it leaves no harness unrouted. */
+/** Problems on docs/configuration/gateways/direct: it names the `fx` and OpenCode exceptions when it says `direct()` serves every harness, and never says a list ending with it leaves no harness unrouted. */
 export function directPageProblems(docsDir) {
-  const file = 'docs/integrations/gateways/direct.mdx'
-  const text = readFileSync(join(docsDir, 'integrations/gateways/direct.mdx'), 'utf8')
+  const file = 'docs/configuration/gateways/direct.mdx'
+  const text = readFileSync(join(docsDir, 'configuration/gateways/direct.mdx'), 'utf8')
   const problems = directExceptionProblems(text, file)
   if (/no harness without a route/i.test(text.replace(/```[\s\S]*?```/g, ''))) {
     problems.push(
@@ -52,12 +52,12 @@ export function directPageProblems(docsDir) {
   return problems
 }
 
-/** Problems on docs/integrations/gateways: a gateway page is a task page, so a `<Property` entry belongs on reference/options. */
+/** Problems on docs/configuration/gateways: a gateway page is a task page, so a `<Property` entry belongs on reference/options. */
 export function gatewayPropertyProblems(docsDir) {
   const problems = []
-  const dir = join(docsDir, 'integrations/gateways')
+  const dir = join(docsDir, 'configuration/gateways')
   for (const entry of readdirSync(dir).filter((f) => f.endsWith('.mdx'))) {
-    const file = `integrations/gateways/${entry.replace(/\.mdx$/, '')}`
+    const file = `configuration/gateways/${entry.replace(/\.mdx$/, '')}`
     const text = readFileSync(join(dir, entry), 'utf8')
     if (/<Property\b/.test(text)) {
       problems.push(
@@ -76,10 +76,10 @@ function harnessFactories(root) {
   return [...source.matchAll(/^export const (\w+) = /gm)].map((m) => m[1])
 }
 
-/** Problems on docs/agents/gateways: a `gateway:` notes block names a gateway for every harness factory in the config block before it. */
+/** Problems on docs/configuration/gateways/index: a `gateway:` notes block names a gateway for every harness factory in the config block before it. */
 export function gatewayNotesProblems(docsDir) {
   const problems = []
-  const file = 'agents/gateways'
+  const file = 'configuration/gateways/index'
   const text = readFileSync(join(docsDir, `${file}.mdx`), 'utf8')
   const factories = harnessFactories(join(docsDir, '..'))
   let config

@@ -44,7 +44,7 @@ reeval applies the `reeval.config.ts` file, then the selected profile's `default
 
 A later level replaces most keys, `compare` whole. `env` merges by name, `judge` and `question` field by field with `state` key by key, `capture` shallowly, and `tags` and `pin` keep every value. `--runs` then replaces `runs`. `--tag` filters which evaluations run, and `--concurrency` caps the attempts running at once; neither changes an evaluation's options.
 
-For more information about overriding an option, see [Group evaluations](/write/groups#see-how-options-cascade).
+For more information about overriding an option, see [Group evaluations](/evaluations/task/groups#see-how-options-cascade).
 
 ## `include`
 
@@ -64,7 +64,7 @@ For more information about overriding an option, see [Group evaluations](/write/
 
 A selected profile's [`gateway`](/reference/profiles#gateway) replaces this list.
 
-A harness or a judge that names its own `gateway` skips the list's fallback. For more information about pinning a gateway, see [Route models through a gateway](/agents/gateways#pin-one-gateway).
+A harness or a judge that names its own `gateway` skips the list's fallback. For more information about pinning a gateway, see [Route models through a gateway](/configuration/gateways#pin-one-gateway).
 
 ### `openrouter()` options
 
@@ -74,7 +74,7 @@ A harness or a judge that names its own `gateway` skips the list's fallback. For
   Lets OpenRouter fail over to another upstream provider when the one it picked can't serve a call. The default is `false`, so reeval's own calls, the judge, analysis, questions, and captures, send `allow_fallbacks: false`. The harnesses' calls take OpenRouter's own routing either way. The plan notes where it is on.
 </Property>
 
-For more information about OpenRouter, see [Route through OpenRouter](/integrations/gateways/openrouter).
+For more information about OpenRouter, see [Route through OpenRouter](/configuration/gateways/openrouter).
 
 ## `harness`
 
@@ -90,11 +90,11 @@ The default is:
 harness: cursor({ model: 'composer-2.5' })
 ```
 
-For more information about harness forms, see [Choose an agent](/agents).
+For more information about harness forms, see [Choose an agent](/configuration/agents).
 
 ### Harness factory options
 
-Each factory in this table runs an agent and requires `model`. All but `fx()` take an optional `effort`. reeval refuses a missing `model`, an `effort` the harness doesn't take, or an unknown option at plan time with exit code 2. For `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
+Each factory in this table runs an agent and requires `model`. All but `fx()` take an optional `effort`. reeval refuses a missing `model`, an `effort` the harness doesn't take, or an unknown option at plan time with exit code 2. For `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/configuration/agents#set-the-harness-options).
 
 `fakeHarness()` runs no agent, so it is not in the table. It is for tests and dry runs, takes no `model`, and records an optional `effort` on the cell without sending it anywhere.
 
@@ -131,7 +131,7 @@ Every factory takes these options beside `model`.
 </Property>
 
 <Property name="gateway" type="GatewayName | GatewayDescriptor" optional>
-  The gateway this harness's model calls go through: `'direct'`, `'vercel'`, or `'openrouter'`, or the descriptor that `direct()`, `vercel()`, or `openrouter()` from `{{ pkg }}/gateway` returns. It skips the config's `gateway` fallback, and the plan refuses a gateway that isn't listed or can't serve the harness. For more information about routing, see [Route models through a gateway](/agents/gateways).
+  The gateway this harness's model calls go through: `'direct'`, `'vercel'`, or `'openrouter'`, or the descriptor that `direct()`, `vercel()`, or `openrouter()` from `{{ pkg }}/gateway` returns. It skips the config's `gateway` fallback, and the plan refuses a gateway that isn't listed or can't serve the harness. For more information about routing, see [Route models through a gateway](/configuration/gateways).
 </Property>
 
 ### Gateway support by harness
@@ -162,15 +162,15 @@ Each harness reads the environment's rules, skills, and MCP servers from its own
 
 | Harness | Key | Key brokered | Rules file | Skills: workspace | Skills: home | MCP stdio | MCP `http` | MCP `sse` | Tokens | Served model | Web search events | Web fetch events | Sandbox |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| [Cursor](/integrations/agents/cursor) | `CURSOR_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [Claude Code](/integrations/agents/claude-code) | `ANTHROPIC_API_KEY` | ✓ | `CLAUDE.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [Antigravity](/integrations/agents/antigravity) | `GEMINI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [OpenCode](/integrations/agents/opencode) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [Goose](/integrations/agents/goose) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ | `docker()` |
-| [pi](/integrations/agents/pi) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
-| [Codex](/integrations/agents/codex) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [fx](/integrations/agents/fx) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [Grok Build](/integrations/agents/grok-build) | `XAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | `docker()` |
+| [Cursor](/configuration/agents/cursor) | `CURSOR_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Claude Code](/configuration/agents/claude-code) | `ANTHROPIC_API_KEY` | ✓ | `CLAUDE.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Antigravity](/configuration/agents/antigravity) | `GEMINI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [OpenCode](/configuration/agents/opencode) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Goose](/configuration/agents/goose) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ | `docker()` |
+| [pi](/configuration/agents/pi) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
+| [Codex](/configuration/agents/codex) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [fx](/configuration/agents/fx) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Grok Build](/configuration/agents/grok-build) | `XAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | `docker()` |
 
 [//]: # (/generated:harness-matrix)
 
@@ -196,7 +196,7 @@ Each harness reads the environment's rules, skills, and MCP servers from its own
 - Goose and Grok Build also read the `.agents/skills` and `.claude/skills` directories in the workspace. OpenCode reads them in the workspace and in the home directory.
 - Grok Build ignores an untrusted folder's rules and skills, so reeval marks the workspace trusted. pi loads workspace skills because the harness trusts the project.
 
-For more information about writing rules and placing skills, see [Add project rules](/environments/rules) and [Give the agent skills](/environments/skills).
+For more information about writing rules and placing skills, see [Add project rules](/configuration/environments/rules) and [Give the agent skills](/configuration/environments/skills).
 
 ### MCP servers
 
@@ -210,7 +210,7 @@ For more information about writing rules and placing skills, see [Add project ru
 - **fx:** `stdio`, `http`, and `sse`, passed on the ACP `session/new` call: a `stdio` server as `command`, `args`, and `env`, and an `http` or `sse` server as `type`, `url`, and `headers`. fx's `http` and `sse` servers, like its web tools, don't go through the relay. fx names an MCP call `mcp_<server>_<tool>`, which the transcript renames `mcp__<server>__<tool>`, so [`toHaveCalledMcp()`](/reference/matchers#tohavecalledmcp) matches it.
 - **Grok Build:** `stdio`, `http`, and `sse`, passed on the ACP `session/new` call like fx. Grok Build calls a server's tool through its `use_tool` tool, which the transcript names `mcp__<server>__<tool>`, so [`toHaveCalledMcp()`](/reference/matchers#tohavecalledmcp) matches it.
 
-For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
+For more information about placing MCP servers, see [Connect MCP servers](/configuration/environments/mcp-servers).
 
 ### Token usage
 
@@ -226,7 +226,7 @@ Each turn's `usage` is null when the harness reports no tokens.
 - **fx:** summed over the turn's model calls. `reasoning` is part of `output`.
 - **Grok Build:** summed over the turn's model calls. `input` excludes cache reads, so the prompt total is `input` plus `cacheRead`. `cacheWrite` records cache creation tokens, and `reasoning` is part of `output`.
 
-For more information about the token fields, see [`TokenUsage`](/reference/record#tokenusage).
+For more information about the token fields, see [`TokenUsage`](/reference/run-record#tokenusage).
 
 ### Served models
 
@@ -240,7 +240,7 @@ For more information about the token fields, see [`TokenUsage`](/reference/recor
 - **fx:** fx names no model over ACP, so the egress gateway reads the served model from each response, such as the dated snapshot OpenAI answers `gpt-5.5` with. On Vercel AI Gateway, a stream that names no model, such as Gemini's, leaves `servedModels` null and records the model each call asked for in `askedModels`.
 - **Grok Build:** the stream names no model, so each turn's `model` and `servedModels` come from the model xAI's responses name.
 
-For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
+For more information about the attempt fields, see [`AttemptRecord`](/reference/run-record#attemptrecord).
 
 ### Web search and fetch events
 
@@ -256,11 +256,11 @@ A turn's `unreported` list names the events a harness can't report, and the matc
 - **fx:** records both, from fx's `web_search` and `web_fetch` tools. A search stores its text on `query`.
 - **Grok Build:** records searches, which run through its `web_search` tool on xAI's Responses API at `api.x.ai`, one of the harness's automatic egress hosts. It records no fetches, so `toHaveFetched()` fails on a Grok Build turn.
 
-For more information about the matchers, see [`toHaveSearched()`](/reference/matchers#tohavesearched) and [`toHaveFetched()`](/reference/matchers#tohavefetched). For more information about the automatic hosts, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts).
+For more information about the matchers, see [`toHaveSearched()`](/reference/matchers#tohavesearched) and [`toHaveFetched()`](/reference/matchers#tohavefetched). For more information about the automatic hosts, see [Block non-automatic hosts](/configuration/environments/egress#block-non-automatic-hosts).
 
 ### OpenCode providers
 
-`opencode()` runs on any provider whose key OpenCode sends in a header on known hosts. The part of the model id before the first `/` picks the provider. reeval reads the provider's variable from the `Key` column, swaps it into the `Header` on each request to the `Hosts`, and refuses it anywhere else. A host with a `{NAME}` placeholder takes that variable from the host too, or the provider's default. For more information about the harness, see [OpenCode harness](/integrations/agents/opencode).
+`opencode()` runs on any provider whose key OpenCode sends in a header on known hosts. The part of the model id before the first `/` picks the provider. reeval reads the provider's variable from the `Key` column, swaps it into the `Header` on each request to the `Hosts`, and refuses it anywhere else. A host with a `{NAME}` placeholder takes that variable from the host too, or the provider's default. For more information about the harness, see [OpenCode harness](/configuration/agents/opencode).
 
 [//]: # (generated:opencode-providers)
 
@@ -482,11 +482,11 @@ For more information about the matchers, see [`toHaveSearched()`](/reference/mat
   A descriptor from a sandbox factory, with `maxConcurrent` a whole number of at least 1. The default is `docker()`. An empty baseline in a comparison without `compare.baseline` or `environment` uses the first variant's sandbox when that variant sets one.
 </Property>
 
-For more information about sandbox factories, see [Choose a sandbox](/integrations/sandboxes). For the factories' own options, see [`docker()`](#docker).
+For more information about sandbox factories, see [Choose a sandbox](/configuration/sandboxes). For the factories' own options, see [`docker()`](#docker).
 
 ## `docker()`
 
-`docker()` and `podman()` take these options. Each limit applies to one container, and reeval passes them to the container engine's run command (`docker run` or `podman run`) as `--memory`, `--memory-swap`, `--cpus`, and `--pids-limit`. For more information, see [Docker sandbox](/integrations/sandboxes/docker).
+`docker()` and `podman()` take these options. Each limit applies to one container, and reeval passes them to the container engine's run command (`docker run` or `podman run`) as `--memory`, `--memory-swap`, `--cpus`, and `--pids-limit`. For more information, see [Docker sandbox](/configuration/sandboxes/docker).
 
 <Property name="docker.id" type="string" optional>
   The last segment of the cell key. The default begins with the engine's name, `docker`, or `podman` for `podman()`. It is `<engine>` alone, `<engine>:<image>` when `image` or `from` names another image, or `<engine>:<name>` for a `dockerfile`, where the name is the file's, or its directory's for a file named `Dockerfile`. A hash of `install` follows.
@@ -544,7 +544,7 @@ For more information about sandbox factories, see [Choose a sandbox](/integratio
   One environment from `defineEnvironment()`. reeval refuses a list, and `environment` beside `compare.baseline`.
 </Property>
 
-For more information about environments, see [Define an environment](/environments).
+For more information about environments, see [Define an environment](/configuration/environments).
 
 ## `runs`
 
@@ -580,9 +580,9 @@ For more information about environments, see [Define an environment](/environmen
 
 A plain `allow` entry matches that host only. A `*.` entry matches every subdomain, not the apex domain itself, and never an IP address. The gateway carries HTTP and HTTPS only, so SSH and database clients get no network under every policy but `'allow-all'`. Under `'allow-all'`, raw traffic leaves the sandbox directly, unfiltered and unrecorded, and the record marks the attempt's egress `partial`.
 
-Spread [`DEFAULT_EGRESS_ALLOW`](/reference/api#defaultegressallow) into an `allow` list that still installs packages.
+Spread [`DEFAULT_EGRESS_ALLOW`](/reference/authoring-api#defaultegressallow) into an `allow` list that still installs packages.
 
-For more information about the automatic hosts, see [Egress](/environments/egress).
+For more information about the automatic hosts, see [Egress](/configuration/environments/egress).
 
 ## `judge`
 
@@ -648,7 +648,7 @@ For more information about the automatic hosts, see [Egress](/environments/egres
   `c.exec` results, or a list of the commands to show. The default is `false`.
 </Property>
 
-For more information about judging, see [Judge agent work](/write/judgments).
+For more information about judging, see [Judge agent work](/evaluations/grading/judgments).
 
 ## `capture`
 
@@ -674,7 +674,7 @@ For more information about judging, see [Judge agent work](/write/judgments).
   The `'provider/model'` string behind `instructions`, or `analysis.model`, then a judge language model. reeval refuses an evaluation model.
 </Property>
 
-For more information about screenshots, see [Check an app](/write/apps#set-the-viewport-and-browser).
+For more information about screenshots, see [Check an app](/evaluations/task/apps#set-the-viewport-and-browser).
 
 ## `question`
 
@@ -790,7 +790,7 @@ For more information about each profile key, see [Profiles reference](/reference
   `'warn'` (the default) warns when an attempt would receive the real value. `'error'` fails the plan.
 </Property>
 
-For more information about brokering a secret, see [Secrets](/environments/secrets#broker-a-secret-to-a-host).
+For more information about brokering a secret, see [Secrets](/configuration/environments/secrets#broker-a-secret-to-a-host).
 
 ## `debug`
 
@@ -862,7 +862,7 @@ For more information about analysis, see [Analyze a run](/results/analyze#set-an
   The harnesses to compare on; the others run the baseline only. reeval refuses an id the evaluation does not run.
 </Property>
 
-A family of pooled cases reports one `all cases` row that sums each cell's counts, with a lift paired by case. A paired outcome is `insufficient` below six discordant pairs or cases, so six cases with one attempt a side can read `helped` only when all six are discordant. A case still fails on its own assertions, and a failed case fails the family. The [`family_lift`](/reference/query#familylift) view lists each family's pooled lift.
+A family of pooled cases reports one `all cases` row that sums each cell's counts, with a lift paired by case. A paired outcome is `insufficient` below six discordant pairs or cases, so six cases with one attempt a side can read `helped` only when all six are discordant. A case still fails on its own assertions, and a failed case fails the family. The [`family_lift`](/reference/query-views#familylift) view lists each family's pooled lift.
 
 For more information about comparisons, see [Measure lift against a baseline](/results/compare/lift).
 
@@ -882,7 +882,7 @@ For more information about comparisons, see [Measure lift against a baseline](/r
   The answers a question asked of each attempt picks from, with a short reason.
 </Property>
 
-For more information about questions, see [Ask questions across attempts](/write/questions).
+For more information about questions, see [Ask questions across attempts](/evaluations/grading/questions).
 
 ## `tags`
 

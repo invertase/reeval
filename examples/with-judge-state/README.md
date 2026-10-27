@@ -55,4 +55,4 @@ the judge was given. The README is whole in `contents`, so it's out of the diff,
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, and the real agents from `../profiles.ts` |
 
 Every `state` key and its default is in
-[Judge agent work](../../docs/write/judgments.mdx).
+[Judge agent work](../../docs/evaluations/grading/judgments.mdx).

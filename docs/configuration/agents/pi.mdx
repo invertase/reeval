@@ -1,0 +1,56 @@
+---
+title: "pi harness"
+description: "The pi harness runs pi in the sandbox on a Gemini API key and records its events."
+---
+
+`pi()` runs pi in the sandbox as one `pi --mode json` process per turn that resumes the session's conversation. For more information about the sandbox, see [Choose a sandbox](/configuration/sandboxes).
+
+## `GOOGLE_GENERATIVE_AI_API_KEY`
+
+`pi()` reads `GOOGLE_GENERATIVE_AI_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
+
+In the sandbox, pi sees a placeholder as `GEMINI_API_KEY`, and reeval swaps the real key into the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` at `generativelanguage.googleapis.com`. reeval refuses the key anywhere else. A restricted egress policy allows `generativelanguage.googleapis.com`.
+
+When the API rejects the key, the attempt error begins with `The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key in the environment or .env.local`.
+
+For more information about keeping API keys on the host, see [Keep API keys on the host](/configuration/environments/secrets#keep-api-keys-on-the-host).
+
+For more information about the variable, see [`GOOGLE_GENERATIVE_AI_API_KEY`](/reference/environment-variables#googlegenerativeaiapikey).
+
+For more information about the automatic hosts, see [Block non-automatic hosts](/configuration/environments/egress#block-non-automatic-hosts).
+
+## `pi()`
+
+`pi()` is exported from `{{ pkg }}/harness`. The following configuration passes it as the `harness` option:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { pi } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: pi({
+    model: 'gemini-3.8-flash',
+    effort: 'high',
+  }),
+})
+```
+
+`model` is required. For what each field takes, see [Harness factory options](/reference/options#harness-factory-options).
+
+
+
+In the sandbox, pi runs in print mode with the project trusted, its startup network operations off, and no extensions loaded besides its built-in `mcp` one for the environment's MCP servers.
+
+For more information about model ids and effort values, see [Set the agent's model](/configuration/agents/model). For rules, skills, MCP servers, usage, served models, and web events, see [Harness behavior](/reference/options#harness-behavior).
+
+## `plugins`
+
+reeval adds each plugin's skills to the home skills directory and unpacks its commands into `.pi/prompts`, where pi reads them as prompt templates named `/<name>`. pi keeps `description` and `argument-hint` from a command's frontmatter. Its own packages, which carry extension code, are never loaded from an environment's plugin.
+
+[//]: # (generated:harness-plugins:pi)
+
+- Takes `skills`, `commands` and `mcp`, and refuses a plugin that keeps `agents`, `hooks` and `rules`: narrow it with `only`, or leave it out of the cell.
+
+[//]: # (/generated:harness-plugins:pi)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment-helpers#pluginlocal).

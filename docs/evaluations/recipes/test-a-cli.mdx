@@ -1,0 +1,89 @@
+---
+title: "Test a CLI"
+description: "See whether a harness runs a CLI and its result works."
+---
+
+You test a CLI by installing it on the sandbox image, giving the harness a task that uses it, and checking the result. The sample uses `jq`. For a runnable project, see [`with-docker-install`](https://github.com/invertase/reeval/tree/main/examples/with-docker-install).
+
+## Install and check the CLI
+
+<Steps>
+<Step title="Add the CLI to the image">
+
+In the `evals/cli.eval.ts` file, define an environment that installs the CLI on the sandbox image and copies in the files the harness starts from:
+
+```ts title="evals/cli.eval.ts"
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
+
+// jq is baked onto reeval's image once, and the image is cached by the
+// exact command list.
+const withJq = defineEnvironment('jq', ({ directory }) => ({
+  files: directory('./project'),
+  sandbox: docker({
+    install: [
+      'apt-get update && apt-get install -y --no-install-recommends jq' +
+        ' && rm -rf /var/lib/apt/lists/*',
+    ],
+  }),
+}))
+```
+
+Before any attempt starts, reeval builds this `install` layer on the sandbox image if it is missing, so every attempt has the CLI. For more information about adding a tool to the image, see [Add toolchains](/configuration/environments/toolchains).
+
+The `project/orders.json` file has five orders, and two of them have a total over 100.
+
+</Step>
+<Step title="Write the task and the assertions">
+
+In the `evals/cli.eval.ts` file, write the task that uses the CLI and check its result:
+
+```ts title="evals/cli.eval.ts"
+evaluate('counts the large orders with jq', {
+  environment: withJq,
+}, async (c) => {
+  await c.send(
+    'Write count.sh, a bash script that prints how many orders in ' +
+      'orders.json have a total over 100, using jq.',
+  )
+
+  await expect(c.exec('jq --version')).toSucceed()
+  expect((await c.exec('bash count.sh')).stdout.trim()).toBe('2')
+})
+```
+
+`c.exec` runs a command in the sandbox after `c.send` returns. The first assertion confirms the image has `jq`; `toSucceed` passes when `exitCode` is 0. The second runs the harness's script and compares what it prints with the expected count. For more information about `c.exec` and `toSucceed`, see [Assertions](/evaluations/grading/assertions).
+
+To check the commands the harness ran during the turn, use `toHaveRun`. For more information, see [Check what the agent did](/evaluations/grading/assertions#check-what-the-agent-did).
+
+</Step>
+<Step title="Run the evaluation">
+
+From the project root, run the evaluation in the `evals/cli.eval.ts` file. The command uses the harness named in the `reeval.config.ts` file:
+
+```bash
+npx reeval run cli
+```
+
+When both assertions pass, the block for the evaluation reads `pass` and the assertion lines are absent. For more information about the outcomes and the tally, see [Read a run's output](/results/output).
+
+</Step>
+<Step title="Check the install layer">
+
+List the sandbox images with `reeval image build --dry-run`. The install layer sits on top of the harness's image. This capture is from after the first run built it:
+
+```text
+images  1 sandbox image (nothing built: --dry-run)
+docker+0ab0e263 · cursor + install · 1 eval
+  ✓ base               reeval-sandbox:cursor-0.1.6  (ready: built (3fa1c0ba62b4))
+  ✓ install 1 command  reeval-install:1d7d61958ab1a130  (ready: built (15642b46f47f))
+```
+
+Any edit to the command list builds a new layer. Install commands never see secrets or the workspace; put per-attempt steps in the environment's `setup`. For more information, see [Run setup commands](/configuration/environments/setup-commands).
+
+</Step>
+</Steps>
+
+## Next
+
+For more information about measuring a skill that documents the CLI, see [Measure a skill](/evaluations/recipes/measure-a-skill).

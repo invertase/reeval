@@ -59,5 +59,5 @@ changelog  0                  1                  1       0.307  1
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-Every view and its columns are on the [Query views](../../docs/reference/query.mdx) reference
+Every view and its columns are on the [Query views](../../docs/reference/query-views.mdx) reference
 page.

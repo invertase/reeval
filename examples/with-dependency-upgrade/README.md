@@ -45,4 +45,4 @@ fail             upgrades strfmt across its breaking change
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace: the new import and call sites |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-Seeding files and `setup` steps are in the [Define an environment](../../docs/environments/index.mdx) page.
+Seeding files and `setup` steps are in the [Define an environment](../../docs/configuration/environments/index.mdx) page.

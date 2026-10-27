@@ -1,0 +1,95 @@
+---
+title: "Configuration reference"
+description: "defineConfig sets a project's defaults, reeval finds reeval.config.ts, and a config callback receives helpers."
+---
+
+## `defineConfig()`
+
+`defineConfig(config)` returns its argument unchanged. Put the project defaults in `reeval.config.ts`:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { claudeCode } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  include: ['evals/**/*.eval.ts'],
+  harness: claudeCode({ model: 'claude-sonnet-5' }),
+  judge: { model: 'google/gemini-3.8-flash' },
+  timeout: '15m',
+})
+```
+
+<Property name="config" type="ReevalConfig | (helpers: ConfigHelpers) => ReevalConfig" required>
+  A plain object, or a callback that receives the config helpers and returns the object. The `defineConfig()` function returns its argument unchanged.
+</Property>
+
+Every key is optional. The callback runs once, when the config loads, and returns synchronously. reeval refuses a callback that returns a `Promise` with exit code 2. reeval refuses a config file without a default export, or whose default export is neither an object nor a callback, with exit code 2.
+
+For more information about each key, its default, and where it is accepted, see [Options](/reference/options).
+
+For more information about scaffolding the `reeval.config.ts` file, see [Quickstart](/getting-started/quickstart).
+
+## `--config`
+
+For a command that loads a project config, `--config` names the file. The following command names the file for one run:
+
+```bash
+npx reeval run --config configs/reeval.nightly.config.ts
+```
+
+Without `--config`, reeval searches the current directory and then each parent directory, up to the filesystem root. In each directory, reeval takes the first script file that exists, in this order: the `reeval.config.ts`, `reeval.config.mts`, `reeval.config.cts`, `reeval.config.js`, `reeval.config.mjs`, and `reeval.config.cjs` files. reeval also looks for the `reeval.yaml` and `reeval.yml` files and uses a lone YAML file. A script file beside the `reeval.yaml` file or the `reeval.yml` file, or both of those files in one directory, makes the search refuse that directory. `reeval doctor` reports the refusal as a failed config check and exits with code 1. Any other command that searches exits with code 2. reeval uses the nearest config file the search finds. A Git root or a workspace root does not stop the search.
+
+The `--config` path resolves against the current directory. The config file's directory is the project root, and relative paths in the config resolve against that directory. When `--config` names a path that does not exist, `reeval doctor` fails its config check and exits with code 1, and `reeval report` records the missing file and exits with code 0. Every command that loads a config, apart from `reeval doctor` and `reeval report`, exits with code 2.
+
+`reeval run` and `reeval image build` require a config file. When the search finds none, either command exits with code 2, and the message lists every recognized filename and `reeval init`. `reeval doctor` fails its config check and exits with code 1. `reeval init` does not load a project config. `reeval report` loads a file the search finds, and records the miss when it finds none. When the search finds none, a command that loads a config without requiring one takes the default for every key, and the current directory is the project root.
+
+For more information about the `--config` flag on each command, see [CLI](/reference/cli).
+
+For more information about the precedence of the `.env.local` file, the `.env` file, and the shell, see [Secrets](/configuration/environments/secrets).
+
+## `ConfigHelpers`
+
+The callback form of the `defineConfig()` function receives one `ConfigHelpers` object. The following configuration destructures the helpers it uses:
+
+```ts title="reeval.config.ts"
+// ...
+export default defineConfig(({ secret, ci, profile }) => ({
+  runs: ci ? 1 : 4,
+  record: profile === 'nightly' ? 'always' : 'ci',
+  env: {
+    GITHUB_TOKEN: secret.fromEnv('GITHUB_TOKEN', {
+      hosts: secret.hosts.github,
+    }),
+  },
+}))
+```
+
+`ConfigHelpers` holds the environment helpers `secret`, `skill`, `mcp`, `plugin`, `file`, `directory`, and `git`. Relative paths resolve against the config file's directory.
+
+For more information about the signatures of `secret`, `skill`, `mcp`, `plugin`, `file`, `directory`, and `git`, see [Environment helpers reference](/reference/environment-helpers).
+
+## `ci`
+
+<Property name="ci" type="boolean" required>
+  `true` when the `CI` variable is set to any value other than `false`.
+</Property>
+
+## `command`
+
+<Property name="command" type="string" required>
+  The reeval command that is loading the config, such as `run`, `doctor`, or `studio`.
+</Property>
+
+## `hostEnv`
+
+<Property name="hostEnv" type="NodeJS.ProcessEnv" required>
+  The host's `process.env`.
+</Property>
+
+## `profile`
+
+<Property name="profile" type="string | undefined" required>
+  The profile from `--profile` or `REEVAL_PROFILE`, or `undefined`. `defaultProfile` does not set this.
+</Property>
+
+For more information about how a profile is chosen, see [Profiles reference](/reference/profiles#defaultprofile).

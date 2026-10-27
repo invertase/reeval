@@ -41,5 +41,5 @@ the verdict.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, and the real agents from `../profiles.ts` |
 
-How a judge scores, and which model it calls, is in [Judge agent work](../../docs/write/judgments.mdx). For
+How a judge scores, and which model it calls, is in [Judge agent work](../../docs/evaluations/grading/judgments.mdx). For
 the recommended judge model, see [`with-jev`](../with-jev).

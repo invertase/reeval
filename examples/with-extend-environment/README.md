@@ -49,5 +49,5 @@ the files from both layers, and both setup steps in order:
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-How each field merges is in the [defineEnvironment](../../docs/reference/environment.mdx#extend)
+How each field merges is in the [defineEnvironment](../../docs/reference/environment-helpers.mdx#extend)
 reference.

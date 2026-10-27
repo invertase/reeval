@@ -48,5 +48,5 @@ need it, not the config.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent in Docker, and the real agents from `../profiles.ts` |
 
-[Pass secrets](../../docs/environments/secrets.mdx) in the
+[Pass secrets](../../docs/configuration/environments/secrets.mdx) in the
 Secrets and egress guide has the details.

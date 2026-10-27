@@ -62,5 +62,5 @@ math  errors  1      0       1       0     0
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace, without and with the skill |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the fake model that answers the question |
 
-The [Ask questions across attempts](../../docs/write/questions.mdx) page covers picking the model, what each side
+The [Ask questions across attempts](../../docs/evaluations/grading/questions.mdx) page covers picking the model, what each side
 shows, and questions asked of each attempt on its own.

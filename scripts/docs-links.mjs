@@ -32,6 +32,12 @@ export const LEGACY_PATHS = [
   '/sandboxes',
 ]
 
+/**
+ * Pages whose URL is not their kebab-cased title: the landing page, and the run output page,
+ * which keeps its address while its title is open to change.
+ */
+export const TITLE_EXCEPTIONS = { Introduction: '/', 'Run output': '/results/output' }
+
 const SKIPPED = /^(?:docs-archive|\.git|node_modules)\//
 
 /** The path of a docs URL or link target: no query, no #anchor, no trailing slash. */
@@ -53,7 +59,40 @@ export function sidebarHrefs(config) {
   return hrefs
 }
 
-/** The URL path a page file under `dir` serves: `docs/write/index.mdx` is `/write`. */
+/** `Measure MCP servers` is `measure-mcp-servers`. */
+export function slug(title) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+/**
+ * The sidebar's titles and URLs, held together: a page's path is its enclosing groups' slugs and
+ * its own title's slug, so a title says where the page lives. A group with an `href` lands on
+ * the same path built from its own name.
+ */
+export function titleProblems(config) {
+  const problems = []
+  const walk = (items, chain) => {
+    for (const item of items) {
+      const name = item.title ?? item.group
+      if (item.href && name) {
+        const expected = TITLE_EXCEPTIONS[name] ?? `/${[...chain, slug(name)].join('/')}`
+        if (item.href !== expected) {
+          problems.push(
+            `docs.json: "${name}" is at ${item.href}, but its title makes it ${expected}: move the page, update its links and redirect the old path`,
+          )
+        }
+      }
+      if (item.pages) walk(item.pages, item.group ? [...chain, slug(item.group)] : chain)
+    }
+  }
+  walk(config.sidebar, [])
+  return problems
+}
+
+/** The URL path a page file under `dir` serves: `docs/evaluations/evaluate.mdx` is `/evaluations/evaluate`. */
 function urlOf(dir, file) {
   const path = `/${relative(dir, file)
     .replace(/\\/g, '/')
@@ -109,7 +148,7 @@ const DOC_URL =
   /\bhttps?:\/\/(?:docs\.page\/invertase\/reeval(?:~[^/\s)"'`>]+)?|docs\.reeval\.ai(?:\/~[^/\s)"'`>]+)?|(?:www\.)?reeval\.ai\/docs)((?:\/[A-Za-z0-9_.\-%]+)*)\/?(?=[#?\s)"'`>\]]|$)/g
 
 /**
- * A problem for each of: a redirect that points at a path the sidebar doesn't own, or that
+ * A problem for each of: a sidebar page whose path isn't its title's; a redirect that points at a path the sidebar doesn't own, or that
  * shadows a page the sidebar lists; an old path with no redirect; and a link to an old path (in a
  * page, in docs.json, or as a documentation URL anywhere in the repository) or a relative link
  * from outside docs/ to a docs file or heading that doesn't exist.
@@ -118,6 +157,7 @@ export function linkProblems({ root, config }) {
   const problems = []
   const owned = new Set(sidebarHrefs(config))
   const redirects = config.redirects ?? {}
+  problems.push(...titleProblems(config))
   const variables = config.variables ?? {}
   const fill = (text) =>
     text.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (all, name) => variables[name] ?? all)

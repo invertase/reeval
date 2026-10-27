@@ -213,7 +213,7 @@ node --test --test-name-pattern 'python-sdk/hello' test/features.test.ts
 
 ## Environment variables
 
-Documented for users in `docs/reference/env-vars.mdx`. Remote runners receive:
+Documented for users in `docs/reference/environment-variables.mdx`. Remote runners receive:
 
 | Variable | Purpose |
 |---|---|

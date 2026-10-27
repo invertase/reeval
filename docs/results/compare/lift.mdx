@@ -5,7 +5,7 @@ description: "See whether a skill, doc, or MCP server changes what the harness d
 
 A comparison runs one evaluation on a baseline without the change and on a variant with it. Both get the same prompt and assertions. reeval reports whether the variant `helped`, `made it worse`, or `can't tell yet`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For where a comparison appears in a run, see [Comparison](/reference/glossary#comparison).
 
-The examples use the baseline `page`, an unstyled HTML page, and the variant `brand-guidelines`, which adds Anthropic's `brand-guidelines` skill. To build them, see [Quick start](/quickstart) or [Environments](/environments).
+The examples use the baseline `page`, an unstyled HTML page, and the variant `brand-guidelines`, which adds Anthropic's `brand-guidelines` skill. To build them, see [Quick start](/getting-started/quickstart) or [Environments](/configuration/environments).
 
 ## Run the comparison
 
@@ -78,7 +78,7 @@ To print the interval under each variant, pass `-v`:
 
 The evaluation's outcome, `pass`, is the variant's, because reeval gates only variants by default. Set `compare.gate` to `'all'` to gate the baseline too, or `'none'` to gate neither. `gate: { passRate: 0.75 }` passes a cell when at least 3 of its 4 attempts pass.
 
-For when each effect word applies, including the four-attempt minimum, see [Variant outcomes](/results/compare/statistics#variant-outcomes).
+For when each effect word applies, including the four-attempt minimum, see [Variant outcomes](/reference/statistics#variant-outcomes).
 
 If the baseline and the variant both pass, the harness already does what the skill teaches, and this task can't show the change. A baseline that includes the change, such as a rules file or a doc that repeats the skill, gives both cells the same instructions and measures nothing either.
 
@@ -94,7 +94,7 @@ Each variant gets its own row, effect, and gate. For a runnable project, see [`w
 
 ## Compare harnesses
 
-To measure the variant on more than one harness, list them in `harness`; [Compare harnesses](/recipes/agent-comparison) sets up each harness and its key. This excerpt limits the variant to Claude Code:
+To measure the variant on more than one harness, list them in `harness`; [Compare harnesses](/evaluations/recipes/compare-harnesses) sets up each harness and its key. This excerpt limits the variant to Claude Code:
 
 ```ts title="with-compare-harness.eval.ts"
 harness: [
@@ -132,7 +132,7 @@ questions: [
 ],
 ```
 
-`across: 'environment'` pairs the baseline with each variant on the same harness, and `across: 'harness'` pairs harnesses in the same environment. After the run, the block prints each side's wins as `won W of N`. reeval asks about each pair in both orders with the sides unlabeled. `npx reeval query question_pairs` lists the wins, ties, and splits ([Query views](/reference/query)). For the model that answers a question, see [`question`](/reference/options#question).
+`across: 'environment'` pairs the baseline with each variant on the same harness, and `across: 'harness'` pairs harnesses in the same environment. After the run, the block prints each side's wins as `won W of N`. reeval asks about each pair in both orders with the sides unlabeled. `npx reeval query question_pairs` lists the wins, ties, and splits ([Query views](/reference/query-views)). For the model that answers a question, see [`question`](/reference/options#question).
 
 Questions never gate: they don't change an outcome or the exit code. For a runnable project, see [`with-compare-questions`](https://github.com/invertase/reeval/tree/main/examples/with-compare-questions).
 

@@ -49,5 +49,5 @@ one.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-Each limit and its default is in [Configure Docker sandboxes](../../docs/integrations/sandboxes/docker.mdx), and why the
-container is locked down in [Choose a sandbox](../../docs/integrations/sandboxes/index.mdx).
+Each limit and its default is in [Configure Docker sandboxes](../../docs/configuration/sandboxes/docker.mdx), and why the
+container is locked down in [Choose a sandbox](../../docs/configuration/sandboxes/index.mdx).

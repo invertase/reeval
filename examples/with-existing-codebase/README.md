@@ -52,5 +52,5 @@ test:
 | [`fake-agent/`](./fake-agent) | What the fake agent applies to the checkout: `separators.patch` |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-The [Start from a repository](../../docs/environments/repositories.mdx) page covers
+The [Start from a repository](../../docs/configuration/environments/repositories.mdx) page covers
 `path`, private repositories and what the record keeps.

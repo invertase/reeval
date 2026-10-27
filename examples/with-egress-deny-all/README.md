@@ -49,5 +49,5 @@ A refused request doesn't fail the attempt; the checks decide whether it matters
 | [`fake-agent/`](./fake-agent) | What the fake agent writes into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The scripted fake agent in Docker, and the real agents from `../profiles.ts` |
 
-Egress policies are in the [Pass secrets](../../docs/environments/secrets.mdx) page, and
-the record's fields in the [Restrict sandbox egress](../../docs/environments/egress.mdx).
+Egress policies are in the [Pass secrets](../../docs/configuration/environments/secrets.mdx) page, and
+the record's fields in the [Restrict sandbox egress](../../docs/configuration/environments/egress.mdx).

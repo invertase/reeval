@@ -48,4 +48,4 @@ answer         1     0
 | [`reeval.config.ts`](./reeval.config.ts) | Claude Code by default, and the other agents from `../profiles.ts` |
 
 The web matchers and `unreported` are in the [Matchers](../../docs/reference/matchers.mdx) reference;
-which harness reports which web events is in the [Choose an agent](../../docs/agents/index.mdx) page.
+which harness reports which web events is in the [Choose an agent](../../docs/configuration/agents/index.mdx) page.

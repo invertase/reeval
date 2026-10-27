@@ -1,0 +1,93 @@
+---
+title: "Compare harnesses"
+description: "Run one task on each agent and compare pass rate, tokens, tool calls, and time."
+---
+
+You compare agents by running one task on each agent in one run, then reading each agent's pass rate, tokens, tool calls, and time side by side. For a runnable project, see [`with-many-harnesses`](https://github.com/invertase/reeval/tree/main/examples/with-many-harnesses).
+
+To measure a change on each agent instead, add `compare` ([Compare harnesses](/results/compare/lift#compare-harnesses)).
+
+## Run one task on each agent
+
+<Steps>
+<Step title="Write the evaluation">
+
+In the `evals/stream.eval.ts` file, list the agents in `harness` and give each agent four attempts with `runs`:
+
+```ts title="evals/stream.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { claudeCode, codex, cursor } from '{{ pkg }}/harness'
+
+evaluate(
+  'streams with Vercel AI SDK',
+  {
+    harness: [
+      cursor({ model: 'composer-2.5' }),
+      claudeCode({ model: 'claude-sonnet-5' }),
+      codex({ model: 'gpt-5.6-luna' }),
+    ],
+    runs: 4,
+  },
+  async (c) => {
+    await c.send(
+      'Add src/stream.ts with a streamChat(prompt) function that ' +
+        'streams a reply with Vercel AI SDK.',
+    )
+    await expect(c, 'adds the ai package').toHaveFile('package.json', /"ai"/)
+    await expect(c, 'uses streamText').toHaveFile(
+      'src/stream.ts',
+      /streamText\(/,
+    )
+  },
+)
+```
+
+Each agent runs the same prompt and assertions as its own cell. For more information about the harness factories, see [Pick a harness](/configuration/agents#pick-a-harness). For more information about each harness's key, see [Harness behavior](/reference/options#harness-behavior). To plan the cells without starting one, see [Preview the plan](/evaluations/runs/running#preview-the-plan).
+
+</Step>
+<Step title="Run the evaluation">
+
+Run the evaluation on every agent it lists:
+
+```bash
+npx reeval run stream
+```
+
+</Step>
+<Step title="Read the pass rate per agent">
+
+The block prints one row per agent. The counts can differ:
+
+```text
+fail             streams with Vercel AI SDK
+  harness                      pass
+  cursor:composer-2.5          4 of 4
+  claude-code:claude-sonnet-5  4 of 4
+  codex:gpt-5.6-luna           3 of 4
+    adds the ai package        3 of 4
+      expected file package.json to exist
+    +1 more passed
+```
+
+Here `codex:gpt-5.6-luna` failed `adds the ai package` in one attempt, so it fails the evaluation. For more information about the rows and gating, see [Read the result](/results/compare/lift#read-the-result).
+
+</Step>
+<Step title="Read the effort per agent">
+
+Read each agent's tool calls, time, and tokens from the `effort` view, because the block prints none of them for these cells. The view holds each cell's median tool calls, agent seconds, and tokens. Select the last run's rows:
+
+```bash
+npx reeval query "SELECT harness, tools_median, agent_s_median,
+  tokens_median FROM effort WHERE run_id = :run" --run last
+```
+
+The query returns one row per agent: `harness`, `tools_median`, `agent_s_median`, and `tokens_median`. `tokens_median` is empty for an agent that reports no usage.
+
+The medians describe each agent's attempts. reeval calls a difference `fewer` or `more` only when a Mann-Whitney test gives p below 0.05 between a variant and its baseline. These cells have no baseline, so the `verdict` columns are empty. For more information about the test, see [Statistics](/reference/statistics). For more information about the `reeval query` command, see [Query past runs](/results/inspection/queries).
+
+</Step>
+</Steps>
+
+## Next
+
+For more information about every view and its columns, see [Query views](/reference/query-views).

@@ -1,0 +1,73 @@
+---
+title: "Connect MCP servers"
+description: "Let the agent call tools exposed by MCP servers."
+---
+
+You set `mcp` on an environment to give the agent servers it can call during an attempt. For more information about the history server `reeval mcp` serves, see [History MCP server reference](/reference/history-mcp-server).
+
+## Add a stdio server
+
+`mcp.stdio` runs a command in the sandbox. The command must use MCP over stdin and stdout. The key in `mcp` is the server name.
+
+In the `evals/environments.ts` file, copy the server's script into the workspace and add it as the `releases` server:
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const app = defineEnvironment(
+  'acme-cli',
+  ({ directory, file, mcp }) => ({
+    files: {
+      ...directory('./project'),
+      'mcp/releases.mjs': file('./mcp/releases.mjs'),
+    },
+    mcp: { releases: mcp.stdio('node', ['mcp/releases.mjs']) },
+  }),
+)
+```
+
+The command runs in the workspace, so `mcp/releases.mjs` is the copied script. A server from npm runs the same way, such as `mcp.stdio('npx', ['-y', '<package>'])`.
+
+## Add a remote server
+
+`mcp.http` connects to a server over streamable HTTP, and `mcp.sse` over SSE. Pass the URL and, for a server that needs a key, `headers`. Take each key from a host variable with `secret.fromEnv()`:
+
+```ts title="evals/environments.ts"
+const remote = defineEnvironment('remote', ({ mcp, secret }) => ({
+  mcp: {
+    docs: mcp.http('https://mcp.example.com/v1', {
+      headers: { 'x-api-key': secret.fromEnv('DOCS_API_KEY') },
+    }),
+  },
+}))
+```
+
+For a `https` URL, the sandbox's header holds a placeholder, and the egress gateway swaps in the real key on the request to the server's host. A header on a plain `http` URL carries the real value. The server's host is an automatic egress host, so a `'deny-all'` policy still reaches it.
+
+To build a header from several host variables, pass `secret.template()` with a `${NAME}` for each:
+
+```ts title="evals/environments.ts"
+headers: { authorization: secret.template('Bearer ${DOCS_TOKEN}') },
+```
+
+An unset variable ends the attempt as an infrastructure error. For more information about brokering, see [Secrets](/configuration/environments/secrets), and for the options, see [`mcp.http()`](/reference/environment-helpers#mcphttp). OpenCode, Goose, pi, and Codex have no SSE transport, so `mcp.sse` stops the plan with exit code 2 on them. Use `mcp.http` or `mcp.stdio`.
+
+## Check the agent called the server
+
+`toHaveCalledMcp` passes when the transcript has a call named `mcp__<server>__<tool>`. Pass the server name, the tool name the server advertises, and `c` or the turn that `c.send` returns:
+
+```ts
+expect(turn).toHaveCalledMcp('releases', 'latest_version')
+```
+
+To match the tool input, pass a string, a regular expression, or an object as the third argument. For more information about the arguments, see [the `toHaveCalledMcp` matcher](/reference/matchers#tohavecalledmcp). For a complete baseline and variant evaluation of a server, see [Measure MCP servers](/evaluations/recipes/measure-mcp-servers). For a runnable project, see [`with-mcp`](https://github.com/invertase/reeval/tree/main/examples/with-mcp).
+
+## Troubleshooting
+
+Match the message to a fix:
+
+| Symptom | Check | Next action |
+|---|---|---|
+| `MCP server releases didn't answer initialize within 60s` | The stdio command never answered `initialize`. The attempt stops. | Run the command in the sandbox and read why it exits. |
+| `MCP server releases took 4s to start.` | A stdio server took at least 2 seconds to answer `initialize`. | Install the package in the image. For more information about install layers, see [`docker.install`](/reference/options#docker). |
+| `expected MCP calls matching releases/latest_version, got none` | The transcript has no matching MCP call. | Pass the server name from `mcp` and the tool name the server advertises. |

@@ -1,4 +1,4 @@
-// Checks that hold docs/runs/ to the code it describes. docs.mjs --check calls it.
+// Checks that hold docs/evaluations/runs/ to the code it describes. docs.mjs --check calls it.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -39,7 +39,7 @@ export function leavesExitOneToCompare(step) {
 
 export function docsRunsProblems(root) {
   const problems = []
-  const docs = join(root, 'docs/runs')
+  const docs = join(root, 'docs/evaluations/runs')
 
   const accepted = outputFlagValues(
     readFileSync(join(root, 'packages/reeval/src/ui/mode.ts'), 'utf8'),
@@ -56,7 +56,7 @@ export function docsRunsProblems(root) {
     const missing = want.filter((value) => !have.includes(value))
     if (missing.length) {
       problems.push(
-        `docs/runs/running.mdx lists ${flag} values without ${missing.map((v) => `\`${v}\``).join(', ')}, which ui/mode.ts accepts`,
+        `docs/evaluations/runs/running.mdx lists ${flag} values without ${missing.map((v) => `\`${v}\``).join(', ')}, which ui/mode.ts accepts`,
       )
     }
   }
@@ -65,7 +65,7 @@ export function docsRunsProblems(root) {
   for (const step of runSteps(ci)) {
     if (!leavesExitOneToCompare(step)) {
       problems.push(
-        'docs/runs/ci.mdx runs `npx reeval run` so exit 1 fails the job before `reeval compare --fail-on-regression` decides: wrap it with `set +e`, `code=$?` and `[ "$code" -gt 1 ]` as examples/with-github-pr-gate/workflow.yml does',
+        'docs/evaluations/runs/ci.mdx runs `npx reeval run` so exit 1 fails the job before `reeval compare --fail-on-regression` decides: wrap it with `set +e`, `code=$?` and `[ "$code" -gt 1 ]` as examples/with-github-pr-gate/workflow.yml does',
       )
     }
   }

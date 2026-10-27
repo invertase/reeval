@@ -23,9 +23,9 @@ Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interru
 
 `latest` is the most recent run, and `latest~N` counts N runs back. A run id prefix must match one run. A Git SHA prefix is 4 to 40 hexadecimal characters, matched without regard to case, and names the newest run at that commit. Resolution tries the `latest` forms, then a run id or its prefix, then a Git SHA prefix.
 
-For more information about loading the config file, see [`--config`](/reference/config#--config).
+For more information about loading the config file, see [`--config`](/reference/configuration#--config).
 
-For more information about environment variables, see [Environment variables](/reference/env-vars).
+For more information about environment variables, see [Environment variables](/reference/environment-variables).
 
 ## `reeval init`
 
@@ -213,7 +213,7 @@ reeval query [sql | view]     Read-only SQL over every recorded and scratch run 
 
 [//]: # (/generated:cli-help:query)
 
-For more information about views and tables, see [Query views](/reference/query).
+For more information about views and tables, see [Query views](/reference/query-views).
 
 ## `reeval analyze`
 
@@ -258,7 +258,7 @@ reeval mcp                    Serve the run history to other agents over MCP (st
 
 [//]: # (/generated:cli-help:mcp)
 
-For more information about the tools and resources, see [the history MCP server](/reference/mcp-tools).
+For more information about the tools and resources, see [the history MCP server](/reference/history-mcp-server).
 
 ## `reeval studio`
 
@@ -364,4 +364,4 @@ Filters match file paths, evaluation names, and cell keys as `reeval run` filter
 
 Other errors, including a missing config file, exit 2. A preflight infrastructure error or an unhandled crash exits 3.
 
-For more information about these codes in a CI job, see [Run evaluations in CI](/runs/ci).
+For more information about these codes in a CI job, see [Run evaluations in CI](/evaluations/runs/ci).

@@ -43,4 +43,4 @@ fail             follows the project rules
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
 `rules` and the other environment fields are in the
-[defineEnvironment](../../docs/reference/environment.mdx) reference.
+[defineEnvironment](../../docs/reference/environment-helpers.mdx) reference.

@@ -91,24 +91,24 @@ pass             styles the page in Anthropic's brand
   +1 more passed
 ```
 
-The variant passed in 4 of 4 attempts and the baseline in none, so the skill `helped`. [Quick start](/quickstart) sets this evaluation up and runs it.
+The variant passed in 4 of 4 attempts and the baseline in none, so the skill `helped`. [Quick start](/getting-started/quickstart) sets this evaluation up and runs it.
 
 ## What you can find out
 
 <CardGroup cols={2}>
-  <Card title="How each agent handles a tool" href="/recipes/agent-comparison">
+  <Card title="How each agent handles a tool" href="/evaluations/recipes/compare-harnesses">
     Run the same task on each agent, a harness plus its model, and read each one's results.
   </Card>
-  <Card title="Whether agents finish the task" href="/write/assertions">
+  <Card title="Whether agents finish the task" href="/evaluations/grading/assertions">
     Assert on the files, commands, and transcript each attempt leaves in its workspace.
   </Card>
-  <Card title="Which tools agents choose" href="/recipes/recommendation">
+  <Card title="Which tools agents choose" href="/evaluations/recipes/test-recommendations">
     Prompt for an outcome without naming a tool, and judge what the agent picks.
   </Card>
   <Card title="Whether a change helped" href="/results/compare/lift">
     Read the lift of a variant against the baseline.
   </Card>
-  <Card title="Regressions before release" href="/recipes/ci-gate">
+  <Card title="Regressions before release" href="/evaluations/recipes/gate-pull-requests">
     Fail a pull request when this run regresses against a past run.
   </Card>
   <Card title="What the agent did and why" href="/results/analyze">
@@ -121,20 +121,20 @@ The variant passed in 4 of 4 attempts and the baseline in none, so the skill `he
 ### Configuration
 
 <CardGroup cols={2}>
-  <Card title="Agents" href="/agents">A harness plus its model.</Card>
-  <Card title="Environments" href="/environments">The baseline and its variants: files, skills, rules, MCP servers, and secrets.</Card>
-  <Card title="Attempts" href="/runs/running#set-the-attempts">The `runs` option sets the attempts for each agent and environment.</Card>
-  <Card title="Sandboxes" href="/integrations/sandboxes">A fresh container on the local machine for each attempt.</Card>
+  <Card title="Agents" href="/configuration/agents">A harness plus its model.</Card>
+  <Card title="Environments" href="/configuration/environments">The baseline and its variants: files, skills, rules, MCP servers, and secrets.</Card>
+  <Card title="Attempts" href="/evaluations/runs/running#set-the-attempts">The `runs` option sets the attempts for each agent and environment.</Card>
+  <Card title="Sandboxes" href="/configuration/sandboxes">A fresh container on the local machine for each attempt.</Card>
 </CardGroup>
 
 ### Evaluation
 
 <CardGroup cols={2}>
-  <Card title="Task" href="/write">The prompt each attempt sends to the agent.</Card>
-  <Card title="Workspace" href="/results/debugging#read-the-workspace-and-artifacts">The artifacts and the transcript grading reads.</Card>
-  <Card title="Assertions" href="/write/assertions">Deterministic checks.</Card>
-  <Card title="Judgments" href="/write/judgments">LLM judgments.</Card>
-  <Card title="Questions" href="/write/questions">Across attempts.</Card>
+  <Card title="Task" href="/evaluations/evaluate">The prompt each attempt sends to the agent.</Card>
+  <Card title="Workspace" href="/results/inspection/debugging#read-the-workspace-and-artifacts">The artifacts and the transcript grading reads.</Card>
+  <Card title="Assertions" href="/evaluations/grading/assertions">Deterministic checks.</Card>
+  <Card title="Judgments" href="/evaluations/grading/judgments">LLM judgments.</Card>
+  <Card title="Questions" href="/evaluations/grading/questions">Across attempts.</Card>
 </CardGroup>
 
 ### Results
@@ -148,4 +148,4 @@ The variant passed in 4 of 4 attempts and the baseline in none, so the skill `he
 
 ## Next steps
 
-Install reeval and run a comparison of a baseline and a variant in [Quick start](/quickstart).
+Install reeval and run a comparison of a baseline and a variant in [Quick start](/getting-started/quickstart).

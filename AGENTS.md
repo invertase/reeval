@@ -548,7 +548,7 @@ pnpm reeval run --dry-run          # the plan, without running
    pnpm reeval run --profile claude-code
    ```
 
-The harness keys stay on the host (see [Secrets](./docs/environments/secrets.mdx) and [Egress](./docs/environments/egress.mdx)). reeval masks secret-looking values in
+The harness keys stay on the host (see [Secrets](./docs/configuration/environments/secrets.mdx) and [Egress](./docs/configuration/environments/egress.mdx)). reeval masks secret-looking values in
 everything it writes to `.reeval/`. A key with whitespace or a line break in it (pasted from a wrapped
 terminal line) stops the run with exit 2 naming it and the character, for the agents' and the
 judge's keys; a brokered secret that goes in a header fails its attempt the same way.
@@ -563,5 +563,5 @@ transcripts, the studio and the record) is in the user docs under [`docs/`](./do
 |---|---|
 | [Guide](./docs/index.mdx) | Learning reeval in order, from a first eval to CI and analysis |
 | [Glossary](./docs/reference/glossary.mdx) | The words for a run and what a result reports |
-| [Recipes](./docs/recipes) | Complete solutions to common tasks |
+| [Recipes](./docs/evaluations/recipes) | Complete solutions to common tasks |
 | [Reference](./docs/reference) | Every option, helper, command, flag, exit code and file format |

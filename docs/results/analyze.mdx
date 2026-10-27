@@ -29,7 +29,7 @@ In the `.env.local` file, add the key for the analysis model:
 GOOGLE_GENERATIVE_AI_API_KEY=replace-with-your-key
 ```
 
-For more information about other model prefixes, see [`AI_GATEWAY_API_KEY`](/reference/env-vars#aigatewayapikey).
+For more information about other model prefixes, see [`AI_GATEWAY_API_KEY`](/reference/environment-variables#aigatewayapikey).
 
 When the key is missing, the run keeps its outcome and prints this line:
 
@@ -47,7 +47,7 @@ Run the evaluation:
 npx reeval run
 ```
 
-After the attempts finish, the analysis model's answer is the line under the evaluation name. The answers to the evaluation's own questions print in the same block. For more information about questions, see [Ask questions across attempts](/write/questions).
+After the attempts finish, the analysis model's answer is the line under the evaluation name. The answers to the evaluation's own questions print in the same block. For more information about questions, see [Ask questions across attempts](/evaluations/grading/questions).
 
 ## Read insights
 

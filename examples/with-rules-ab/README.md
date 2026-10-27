@@ -54,4 +54,4 @@ one.
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and its rules-following step, and the real agents from `../profiles.ts` |
 
 [Measure lift against a baseline](../../docs/results/compare/lift.mdx) covers naming both arms, and
-[Add project rules](../../docs/environments/rules.mdx) covers `rules`.
+[Add project rules](../../docs/configuration/environments/rules.mdx) covers `rules`.

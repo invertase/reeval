@@ -1,0 +1,76 @@
+---
+title: "Judge a running app"
+description: "See whether the app the harness built renders what the prompt asked for."
+---
+
+A file assertion shows the harness wrote a page. It can't show the page renders. The evaluation starts the app the harness built, captures one page, and asks the judge what the picture shows. For a runnable project that captures a page after a model drives it, see [`with-capture-journey`](https://github.com/invertase/reeval/tree/main/examples/with-capture-journey).
+
+The example uses the `nextApp` environment, whose workspace holds a Next.js app on the Vercel AI SDK with `build` and `start` scripts. For more information about putting an app in the workspace, see [Workspaces](/configuration/environments/repositories).
+
+## Start, capture, and judge the app
+
+<Steps>
+<Step title="Write the evaluation">
+
+Ask the harness for the page, then check the app builds. In the `evals/chat.eval.ts` file, declare the evaluation:
+
+```ts title="evals/chat.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { nextApp } from './environments.ts'
+
+evaluate(
+  'the chat page shows a composer',
+  { environment: nextApp },
+  async (c) => {
+    await c.send('Add a /chat page built on useChat from @ai-sdk/react.')
+    await expect(c.exec('npm run build'), 'builds').toSucceed()
+  },
+)
+```
+
+The `builds` assertion runs before the app starts, so a build error fails the attempt with the compiler's output instead of a blank capture.
+
+</Step>
+<Step title="Judge the rendered page">
+
+Start the built app, capture the chat page, and ask the judge what the picture shows. In the `evals/chat.eval.ts` file, add these lines after the `builds` assertion:
+
+```diff title="evals/chat.eval.ts"
+     await expect(c.exec('npm run build'), 'builds').toSucceed()
++    const app = await c.serve('npm start')
++    const shot = await c.capture(app, { path: '/chat', wait: 'idle' })
++    const q = 'Does the screenshot show a text input and a send button?'
++    expect(await c.judge(q, { artifacts: [shot] }), 'renders').toPass()
+```
+
+`next start` reads `PORT`, so the app listens where `c.serve` expects it. The question names two elements the page must show, so the judge answers from the picture. For more information about the three calls, see [Start a server](/evaluations/task/apps#start-a-server), [Capture a page](/evaluations/task/apps#capture-a-page), and [Judge a capture](/evaluations/task/apps#judge-a-capture).
+
+</Step>
+<Step title="Read the outcome">
+
+Run the evaluation in the `evals/chat.eval.ts` file:
+
+```bash
+npx reeval run chat
+```
+
+During the run, reeval prints the judgment and score. The score can differ:
+
+```text
+judge  pass 0.93 (≥ 0.8)  Does the screenshot show a text input and a send button?
+```
+
+At the end, the block for the evaluation reads `pass`:
+
+```text
+pass             the chat page shows a composer
+```
+
+A score below the threshold fails the `renders` assertion, and the block prints the score. To see what the judge saw, open the `artifacts/chat.png` file under the run's directory in the `.reeval/runs/` directory. For more information about the outcomes and the tally, see [Read a run's output](/results/output).
+
+</Step>
+</Steps>
+
+## Next
+
+For more information about driving the page before the capture, see [Apps](/evaluations/task/apps#capture-a-page).

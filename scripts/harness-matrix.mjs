@@ -78,7 +78,7 @@ export async function harnessFacts() {
       continue
     }
     const excluded = EXCLUDED_KINDS.includes(kind)
-    const page = `integrations/agents/${kind}`
+    const page = `configuration/agents/${kind}`
     if (!excluded && !existsSync(join(root, 'docs', `${page}.mdx`)))
       problems.push(`harness ${kind} has no docs/${page}.mdx`)
     const credential = agentFor({ kind, model: row.model }).credential
@@ -129,7 +129,7 @@ export async function harnessFacts() {
 const yes = (ok) => (ok ? '✓' : '✗')
 
 /**
- * The matrix. `href` turns a docs page (`integrations/agents/pi`) into a link for the file it
+ * The matrix. `href` turns a docs page (`configuration/agents/pi`) into a link for the file it
  * goes in. What a harness does beyond a cell stays on its own page.
  */
 export function renderMatrix(facts, { href }) {

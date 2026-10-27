@@ -46,5 +46,5 @@ it even when the tag moves; pin a digest (`python:3.12-slim@sha256:…`) to neve
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-Toolchain images are in the [Choose a sandbox](../../docs/integrations/sandboxes/index.mdx) page, and
-complete setups in the [Add toolchains](../../docs/environments/toolchains.mdx) page.
+Toolchain images are in the [Choose a sandbox](../../docs/configuration/sandboxes/index.mdx) page, and
+complete setups in the [Add toolchains](../../docs/configuration/environments/toolchains.mdx) page.

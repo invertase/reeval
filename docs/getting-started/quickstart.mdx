@@ -1,0 +1,170 @@
+---
+title: "Quick start"
+description: "reeval shows you whether a change helped a coding agent."
+---
+
+reeval runs a coding agent in a sandbox and checks the outcome. Here you run the same harness as a baseline without the skill and a variant with the skill, then see whether the skill helped.
+
+To have a coding agent follow these steps, use the [setup skill](https://github.com/invertase/reeval/tree/main/skills/setup).
+
+## Before you begin
+
+This example uses Docker for its sandbox. You need these:
+
+| You need | For |
+|---|---|
+| Node {{ node }} or later | reeval's CLI |
+| Docker or Podman | the sandbox |
+| An API key for the agent harness | the harness |
+| A Google API key (optional) | insights, the model's explanation of each evaluation after a run |
+
+For more information about other harnesses and their keys, see [Harnesses](/configuration/agents).
+
+For more information about Podman or Docker on macOS or Windows, see [Sandboxes](/configuration/sandboxes).
+
+## 1. Set up reeval
+
+Install reeval in the project:
+
+```bash
+npm install -D {{ pkg }}
+```
+
+Create the project files for the harness:
+
+```bash
+npx reeval init --harness claude-code
+```
+
+The command writes the `reeval.config.ts` file, an example evaluation in `evals/greet.eval.ts`, and the `evals/environments.ts` file, and names the keys it uses. Add them to the `.env.local` file next to the `reeval.config.ts` file. The Google key turns insights on. A run without it skips insights and still runs the evaluation:
+
+```bash title=".env.local"
+ANTHROPIC_API_KEY=replace-with-anthropic-key
+GOOGLE_GENERATIVE_AI_API_KEY=replace-with-google-key
+```
+
+Build the image the harness runs in:
+
+```bash
+npx reeval image build
+```
+
+For more information about image builds, see [Toolchains](/configuration/environments/toolchains).
+
+Check Node, Docker, the image, and the keys with the `reeval doctor` command:
+
+```bash
+npx reeval doctor
+```
+
+The command highlights any environment issues. When it finds none, the output ends with this line:
+
+```text
+No problems.
+```
+
+Without the Google key, the output ends with this line instead, and you can continue:
+
+```text
+No problems, 1 warning.
+```
+
+## 2. Write the evaluation
+
+The baseline is an unstyled page. Create the `evals/project/index.html` file:
+
+```html title="evals/project/index.html"
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Release notes</title>
+  </head>
+  <body>
+    <h1>Release notes</h1>
+    <p>Version 2.0 is out, with faster builds and a new command line.</p>
+  </body>
+</html>
+```
+
+The variant adds Anthropic's `brand-guidelines` skill. Add the baseline and the variant to the end of the `evals/environments.ts` file:
+
+```ts title="evals/environments.ts"
+export const page = defineEnvironment('page', ({ directory }) => ({
+  files: directory('./project'),
+}))
+
+export const withSkill = page.extendEnvironment(
+  'brand-guidelines',
+  ({ skill }) => ({
+    skills: [
+      skill.git('github:anthropics/skills', {
+        ref: 'dbd4588f9e1033efb41dad4bef2f7947c8993d44',
+        path: 'skills',
+        only: ['brand-guidelines'],
+      }),
+    ],
+  }),
+)
+```
+
+Create the evaluation:
+
+```ts title="evals/brand.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { page, withSkill } from './environments.ts'
+
+evaluate(
+  "styles the page in Anthropic's brand",
+  {
+    environment: page,
+    compare: { variants: [withSkill] },
+    runs: 4,
+    gate: { passRate: 0.75 },
+  },
+  async (c) => {
+    await c.send(
+      "Give index.html Anthropic's look: write styles.css with Anthropic's " +
+        'brand colors and fonts, and link it from index.html.',
+    )
+
+    await expect
+      .soft(c, 'links styles.css')
+      .toHaveFile('index.html', /href="styles\.css"/)
+    await expect.soft(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
+    await expect(c, 'brand fonts').toHaveFile(
+      'styles.css',
+      /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/,
+    )
+  },
+)
+```
+
+The prompt doesn't name the brand's color or fonts, so the assertions pass only when the harness knows them. The variant passes when at least 3 of its 4 attempts pass. For more information about why this evaluation uses four attempts, see [Statistics](/reference/statistics#four-attempt-minimum).
+
+## 3. Run the comparison
+
+Run the eight attempts:
+
+```bash
+npx reeval run brand
+```
+
+The run prints a block like this one:
+
+```text
+pass             styles the page in Anthropic's brand
+  arm               pass
+  page              0 of 4
+  brand-guidelines  4 of 4  helped
+  check             page    brand-guidelines
+  brand orange      0 of 4  4 of 4
+  brand fonts       0 of 4  4 of 4
+  +1 more passed
+```
+
+The variant passed both brand assertions in 4 of 4 attempts and the baseline in 0 of 4, so the effect reads `helped`. The counts can differ.
+
+## Next steps
+
+For more information about adding variants or gates, see [Measure lift against a baseline](/results/compare/lift).

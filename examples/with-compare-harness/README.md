@@ -45,4 +45,4 @@ with-compare-harness.eval.ts › documents the new function  2          1       
 | [`reeval.config.ts`](./reeval.config.ts) | The question's model, and the profiles from `../profiles.ts` |
 
 The [Options](../../docs/reference/options.mdx) reference page covers `compare.harness` and
-`questions`' `across`, and the [Ask questions across attempts](../../docs/write/questions.mdx) page covers pairing.
+`questions`' `across`, and the [Ask questions across attempts](../../docs/evaluations/grading/questions.mdx) page covers pairing.

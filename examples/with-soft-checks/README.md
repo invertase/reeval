@@ -53,4 +53,4 @@ tests pass           0     1     0
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-Labels and soft checks are in the [Evaluate](../../docs/write/index.mdx) page.
+Labels and soft checks are in the [Evaluate](../../docs/evaluations/evaluate.mdx) page.

@@ -50,5 +50,5 @@ A git skill on a branch, or a registry skill without a `version`, warns in the p
 | [`fake-agent/reply.md`](./fake-agent/reply.md) | The fake agent's reply |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-Every skill source and its options are in the [Environment helpers reference](../../docs/reference/environment.mdx)
+Every skill source and its options are in the [Environment helpers reference](../../docs/reference/environment-helpers.mdx)
 reference.

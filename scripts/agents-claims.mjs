@@ -13,7 +13,7 @@ const sentences = (text) =>
     .filter(Boolean)
 
 /**
- * The problems on docs/agents and docs/integrations/agents:
+ * The problems on docs/configuration/agents:
  *  - a sentence that says every harness takes `effort` while a harness schema has none;
  *  - a sentence that ties `servedModels` to the request URL for some providers only, when the
  *    provider table names the model in the URL for others too;
@@ -49,12 +49,12 @@ export async function agentsProblems({ root, docsDir }) {
     .map((o) => ({ kind: o.shape.kind.value, keys: Object.keys(o.shape) }))
     .filter((s) => AGENTS[s.kind])
   const read = (file) => readFileSync(file, 'utf8')
-  const landing = join(docsDir, 'agents/index.mdx')
-  const harnessDir = join(docsDir, 'integrations/agents')
+  const landing = join(docsDir, 'configuration/agents/index.mdx')
+  const harnessDir = join(docsDir, 'configuration/agents')
   const harnessPages = readdirSync(harnessDir)
-    .filter((f) => f.endsWith('.mdx'))
+    .filter((f) => f.endsWith('.mdx') && f !== 'index.mdx' && f !== 'model.mdx')
     .map((f) => join(harnessDir, f))
-  const pages = [landing, join(docsDir, 'agents/model.mdx'), ...harnessPages]
+  const pages = [landing, join(docsDir, 'configuration/agents/model.mdx'), ...harnessPages]
 
   const effortless = schemas.filter((s) => !s.keys.includes('effort'))
   const everyHarness = /\b(?:every|each|all)\b[^.]*\b(?:harness(?:es)?|factory|factories)\b/i
@@ -113,7 +113,7 @@ export async function agentsProblems({ root, docsDir }) {
     }
   }
 
-  const modelText = read(join(docsDir, 'agents/model.mdx'))
+  const modelText = read(join(docsDir, 'configuration/agents/model.mdx'))
   const matrixRows = modelText
     .split('\n')
     .filter(
@@ -154,7 +154,7 @@ export async function agentsProblems({ root, docsDir }) {
     const text = read(file)
     if (!/^## `plugins`$/m.test(text) || !text.includes(`(generated:harness-plugins:${kind})`)) {
       problems.push(
-        `integrations/agents/${kind} needs a plugins section with the generated harness-plugins:${kind} block: plugin support differs by harness`,
+        `configuration/agents/${kind} needs a plugins section with the generated harness-plugins:${kind} block: plugin support differs by harness`,
       )
     }
   }
@@ -197,13 +197,13 @@ export async function agentsProblems({ root, docsDir }) {
     []
   const [, optionsLead = '', optionsCode = ''] = optionsSection
   if (!optionsLead) {
-    problems.push('agents/index has no code block under "Set the harness options"')
+    problems.push('configuration/agents/index has no code block under "Set the harness options"')
   }
   const named = [...optionsLead.matchAll(/`([A-Za-z]\w*)`/g)].map((m) => m[1])
   for (const option of new Set(named)) {
     if (!new RegExp(`^\\s*${option}\\s*:`, 'm').test(optionsCode)) {
       problems.push(
-        `agents/index says to set \`${option}\` under "Set the harness options", but the code block does not set it: add \`${option}: …\` to the factory call`,
+        `configuration/agents/index says to set \`${option}\` under "Set the harness options", but the code block does not set it: add \`${option}: …\` to the factory call`,
       )
     }
   }

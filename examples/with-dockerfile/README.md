@@ -46,4 +46,4 @@ builds anew. `RUN` lines build as root, but the agent runs as the `reeval` user.
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
 Dockerfiles, `from` and `install` are in the
-[Choose a sandbox](../../docs/integrations/sandboxes/index.mdx) page.
+[Choose a sandbox](../../docs/configuration/sandboxes/index.mdx) page.

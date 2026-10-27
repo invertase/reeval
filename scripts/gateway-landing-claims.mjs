@@ -6,7 +6,7 @@ import { join } from 'node:path'
 const prose = (text) => text.replace(/```[\s\S]*?```/g, '')
 
 /** Problems in the landing's text: `direct()` serving every harness with no `fx` gateway-id or OpenCode provider exception. */
-export function directExceptionProblems(text, file = 'docs/agents/gateways.mdx') {
+export function directExceptionProblems(text, file = 'docs/configuration/gateways/index.mdx') {
   const claim = /`direct\(\)` serves every harness[\s\S]*?(?=This table|\n\n)/.exec(prose(text))
   if (!claim) return []
   const missing = []
@@ -21,6 +21,9 @@ export function directExceptionProblems(text, file = 'docs/agents/gateways.mdx')
 }
 
 export function gatewayLandingProblems(docsDir) {
-  const file = join(docsDir, 'agents/gateways.mdx')
-  return directExceptionProblems(readFileSync(file, 'utf8'), 'docs/agents/gateways.mdx')
+  const file = join(docsDir, 'configuration/gateways/index.mdx')
+  return directExceptionProblems(
+    readFileSync(file, 'utf8'),
+    'docs/configuration/gateways/index.mdx',
+  )
 }

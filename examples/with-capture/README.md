@@ -59,5 +59,5 @@ names the PNG it was sent:
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, the `docker` profile, and the real agents from `../profiles.ts` |
 
-The [Check an app](../../docs/write/apps.mdx) page covers `c.serve`, `c.capture`,
+The [Check an app](../../docs/evaluations/task/apps.mdx) page covers `c.serve`, `c.capture`,
 waits and judging the screenshot.

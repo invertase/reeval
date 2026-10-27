@@ -52,4 +52,4 @@ pass             adds a tested multiply function
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The slow fake agent, `concurrency`, and the real agents from `../profiles.ts` |
 
-How reeval schedules attempts, and its default, is in [Run evaluations](../../docs/runs/running.mdx).
+How reeval schedules attempts, and its default, is in [Run evaluations](../../docs/evaluations/runs/running.mdx).

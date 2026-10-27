@@ -1,0 +1,38 @@
+---
+title: "Run models without Vertex AI"
+description: "Run Gemini and Claude models with a provider key through direct(), or through the Vercel AI Gateway or OpenRouter."
+---
+
+Run Gemini and Claude models on a provider key with `direct()`, or through a routing gateway with `vercel()` or `openrouter()`. Google Cloud's Vertex AI takes a service account, which the sandbox can't hold without exposing it.
+
+## Credential
+
+Use the provider key or the gateway key from the table below. The egress gateway swaps a key in a header, and Vertex AI takes a service account instead, so it can't keep that credential out of the sandbox.
+
+## Helper
+
+Import `direct()`, `vercel()`, or `openrouter()` from `{{ pkg }}/gateway`.
+
+For more information about combining gateways, see [Route models through a gateway](/configuration/gateways).
+
+## Harnesses and models
+
+An OpenCode model on the `google-vertex` provider fails at plan time with exit code 2 on `direct()`:
+
+```text
+UsageError: … on opencode:gemini-3.8-flash: no gateway in the list can serve it (direct: reeval can't run OpenCode on Vertex (google-vertex): it takes a service account (Vertex refuses API keys for most models), not a key in a header, so the gateway can't keep its key out of the sandbox) …
+```
+
+On `vercel()`, OpenCode takes any `<provider>/<model>` id, and the call goes to the Vercel AI Gateway on `AI_GATEWAY_API_KEY`, not to a Google Cloud project. For more information about OpenCode's providers, see [OpenCode harness](/configuration/agents/opencode).
+
+Run the same models another way:
+
+| Models | Route | Key |
+| :--- | :--- | :--- |
+| Gemini on Antigravity | `direct()` | `GEMINI_API_KEY` |
+| Gemini on Goose or pi | `direct()` | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| OpenCode's `google` provider | `direct()` | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| Claude on Claude Code | `direct()` | `ANTHROPIC_API_KEY` |
+| OpenCode's `anthropic` provider | `direct()` | `ANTHROPIC_API_KEY` |
+| A gateway id, such as `google/gemini-3.8-flash` | `vercel()` | `AI_GATEWAY_API_KEY` |
+| An OpenRouter model | `openrouter()` | `OPENROUTER_API_KEY` |

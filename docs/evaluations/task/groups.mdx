@@ -1,0 +1,82 @@
+---
+title: "Group evaluations"
+description: "Apply the same options to several evaluations."
+---
+
+Use `group()` when several evaluations share an environment, tags, or the `judge` option. The two evaluations below ask for Vitest tests in a `plain` environment, defined in the `evals/environments.ts` file.
+
+## Group evaluations
+
+A `group()` call wraps the evaluations that share its options. In the `evals/shoehorn.eval.ts` file, give both evaluations the `plain` environment and the `smoke` tag:
+
+```ts title="evals/shoehorn.eval.ts"
+import { evaluate, expect, group } from '{{ pkg }}'
+import { plain } from './environments.ts'
+
+group('request builders', { environment: plain, tags: ['smoke'] }, () => {
+  evaluate('tests build only the request fields they read', async (c) => {
+    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
+    await expect(c, 'uses fromPartial').toHaveFile(
+      'src/user.test.ts',
+      /fromPartial(<\w+>)?\(/,
+    )
+  })
+
+  evaluate('tests mock only the services they call', async (c) => {
+    await c.send('Add a Vitest test for chargeCard in src/billing.test.ts.')
+    await expect(c, 'uses fromPartial').toHaveFile(
+      'src/billing.test.ts',
+      /fromPartial(<\w+>)?\(/,
+    )
+  })
+})
+```
+
+## Nest groups
+
+An inner `group()` inherits the outer group's options and can set its own. In the `evals/shoehorn.eval.ts` file, put the billing evaluation in an inner group:
+
+```ts title="evals/shoehorn.eval.ts"
+  group('billing', { tags: ['billing'] }, () => {
+    evaluate(
+      'tests mock only the services they call',
+      // ...
+    )
+  })
+```
+
+The inner evaluation keeps the outer group's `plain` environment and `smoke` tag, and adds the `billing` tag.
+
+## Override an option in one evaluation
+
+An `environment`, `timeout`, `runs`, `gate`, or `sandbox` on one `evaluate()` call replaces the group's value for that evaluation. The other evaluations keep the group's value. In the `evals/shoehorn.eval.ts` file, give one evaluation a longer timeout:
+
+```ts title="evals/shoehorn.eval.ts"
+    evaluate(
+      'tests build only the request fields they read',
+      { timeout: '30m' },
+      // ...
+    )
+```
+
+## Verify with the `reeval run --dry-run` command
+
+The `reeval run --dry-run` command plans the run without starting a sandbox or a harness, so it needs no API key. Plan the run:
+
+```bash
+npx reeval run --dry-run
+```
+
+The `plan` line counts the evaluations, cells, and attempts, and estimates the time. Each row names an evaluation by its file, its groups, and its name, joined with `›`. If an evaluation is missing, check that its file ends in `.eval.ts` and sits under the `evals/` folder.
+
+## Skip, focus, or plan groups
+
+`group.skip`, `group.only`, and `group.todo` skip, focus, or plan a group, as [`group()`](/reference/authoring-api#group) describes. For a runnable project with a group, `evaluate.skip`, and `evaluate.todo`, see [`with-groups`](https://github.com/invertase/reeval/tree/main/examples/with-groups).
+
+## See how options cascade
+
+Options cascade from the config through each group to the evaluation. For the full order, see [The cascade](/reference/options#the-cascade). Tags add up at each group, so `npx reeval run --tag smoke` runs both evaluations above. For more information about filtering by tag, see [Filter evaluations](/evaluations/runs/running#filter-evaluations).
+
+## Reference
+
+For more information about every argument `group()` takes, see [Authoring API](/reference/authoring-api#group).

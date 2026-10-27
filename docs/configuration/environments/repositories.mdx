@@ -1,0 +1,63 @@
+---
+title: "Start from a repository"
+description: "Start the agent in a copy of a repository at a pinned ref."
+---
+
+The `git()` helper gives the agent existing code to work on. reeval fetches the repository on the host before any attempt starts, copies its tree into the workspace, writes `files` there, then runs `setup`. For more information about the other fields of an environment, see [Environments](/configuration/environments).
+
+## Start from a repository
+
+In the `evals/environments.ts` file, set the environment's `workspace` to `git()` with a URL, `github:owner/repo`, or a local path relative to the file:
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const camelcase = defineEnvironment('camelcase', ({ git }) => ({
+  workspace: git('github:sindresorhus/camelcase', {
+    ref: 'v10.0.0',
+    init: true,
+  }),
+}))
+```
+
+By default the workspace holds the tree with no `.git` directory, so the agent's diff starts after `setup`, and the repository never counts as the agent's change. `init: true` gives the workspace a `.git` directory with one commit of the tree and no remote, for an agent that expects a repository.
+
+Pass `camelcase` as an evaluation's `environment`, as [Environments](/configuration/environments#define-and-use-an-environment) shows.
+
+For a runnable project, see [`with-existing-codebase`](https://github.com/invertase/reeval/tree/main/examples/with-existing-codebase).
+
+## Pin a ref or a path
+
+Without a `ref`, the workspace is the remote's `HEAD`, and `reeval run` warns that results aren't comparable over time. Pin a tag, such as `ref: 'v10.0.0'` above, or a commit SHA.
+
+To start from one directory of a repository, pass `path`. The directory's contents become the workspace:
+
+```ts title="with-git-workspace.eval.ts"
+const math = defineEnvironment('reeval-math', ({ git }) => ({
+  workspace: git('github:invertase/reeval', {
+    ref: 'f60f255edb8a110d42d2ae4e483bd8555168b854',
+    path: 'examples/with-checks/project',
+    init: true,
+  }),
+  files: { '.gitignore': 'node_modules/\n' },
+}))
+```
+
+A GitHub `/tree/<ref>/<path>` URL sets both at once. Whatever you pin, the record keeps the commit the ref resolved to and the hash of the tree copied in. A ref, path, or URL that doesn't exist fails the attempts that use it with an infrastructure error. For a runnable project, see [`with-git-workspace`](https://github.com/invertase/reeval/tree/main/examples/with-git-workspace).
+
+## Use a private repository
+
+For an `https://` URL, pass `token` with the name of a host variable. reeval reads the variable on the host, sends it in the fetch's `Authorization` header, and never writes it into the sandbox:
+
+```ts title="evals/environments.ts"
+  workspace: git('https://example.com/vercel/ai-chatbot.git', {
+    ref: 'v3.1.0',
+    token: 'GITHUB_TOKEN',
+  }),
+```
+
+In the shell or the `.env.local` file, set the variable. reeval refuses the file when the token itself is in the URL or in `token`. For an SSH URL or a local repository, the fetch uses this machine's own Git credentials, and reeval refuses `token`.
+
+## Reference
+
+For more information, see [Environment helpers](/reference/environment-helpers#git) for the full `git()` signature, [Files](/configuration/environments/files) for adding single files or a fixture directory to the workspace, and [Recording](/evaluations/runs/recording) for recording each run with its resolved commit.

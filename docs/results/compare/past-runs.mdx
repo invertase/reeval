@@ -3,7 +3,7 @@ title: "Compare with past runs"
 description: "Prevent regressions by comparing the outcomes of two recorded runs."
 ---
 
-`reeval compare` diffs two runs one evaluation at a time and names each one that regressed, was fixed, or can't be compared. It reads the runs you recorded to the history folder ([History](/runs/recording)). For more information about the baseline and variants inside one run, see [Measure lift against a baseline](/results/compare/lift).
+`reeval compare` diffs two runs one evaluation at a time and names each one that regressed, was fixed, or can't be compared. It reads the runs you recorded to the history folder ([History](/evaluations/runs/recording)). For more information about the baseline and variants inside one run, see [Measure lift against a baseline](/results/compare/lift).
 
 ## Compare two runs
 
@@ -71,7 +71,7 @@ To make the diff a gate, add `--fail-on-regression`:
 npx reeval compare --fail-on-regression
 ```
 
-`reeval compare` exits with code 1 when an evaluation `regressed`, or when a `new` or `can't compare` evaluation fails, since no earlier run provides a passing result for comparison. Otherwise it exits with code 0, whatever else changed. Add `--md` to write the diff into a job summary. For more information about the GitHub Actions job, see [CI](/runs/ci).
+`reeval compare` exits with code 1 when an evaluation `regressed`, or when a `new` or `can't compare` evaluation fails, since no earlier run provides a passing result for comparison. Otherwise it exits with code 0, whatever else changed. Add `--md` to write the diff into a job summary. For more information about the GitHub Actions job, see [CI](/evaluations/runs/ci).
 
 ## Reference
 

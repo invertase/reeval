@@ -1,0 +1,97 @@
+---
+title: "Measure a skill"
+description: "See whether a skill helped a harness."
+---
+
+You measure a skill by running one task on a baseline with no skill and a variant with the skill. The effect reads `helped`, `made it worse`, or `can't tell yet`. For a runnable project, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
+
+## Run one task with and without the skill
+
+<Steps>
+<Step title="Write the evaluation">
+
+The baseline `page` holds the project the task styles ([Quick start](/getting-started/quickstart)). In the `evals/environments.ts` file, define the variant `withSkill`. It extends `page` and adds Anthropic's `brand-guidelines` skill, pinned to a commit.
+
+```ts title="evals/environments.ts"
+export const withSkill = page.extendEnvironment(
+  'brand-guidelines',
+  ({ skill }) => ({
+    skills: [
+      skill.git('github:anthropics/skills', {
+        ref: 'dbd4588f9e1033efb41dad4bef2f7947c8993d44',
+        path: 'skills',
+        only: ['brand-guidelines'],
+      }),
+    ],
+  }),
+)
+```
+
+For more information about placing skills, see [Give the agent skills](/configuration/environments/skills).
+
+In the `evals/brand.eval.ts` file, run the evaluation in `page` and name the variant in `compare.variants`:
+
+```ts title="evals/brand.eval.ts"
+{ environment: page, compare: { variants: [withSkill] }, runs: 4 },
+```
+
+Assert on what the skill teaches, so the baseline fails without it. The task asks for Anthropic's brand color and fonts, and its `brand orange` and `brand fonts` assertions read `styles.css`. The prompt doesn't name the brand's color or fonts, so they pass only when the harness knows them. For the full evaluation, see [Run the comparison](/results/compare/lift#run-the-comparison). For more information about how reeval reaches the effect, see [Comparison](/reference/glossary#comparison).
+
+To also check that the variant loaded the skill, guard `toHaveCalledSkill` with `c.attempt.cell.role === 'variant'`, since the baseline has no skill to load ([Give the agent skills](/configuration/environments/skills#check-the-agent-used-the-skill)).
+
+</Step>
+<Step title="Run the comparison">
+
+Run the evaluation with the harness named in the `reeval.config.ts` file:
+
+```bash
+npx reeval run brand
+```
+
+</Step>
+<Step title="Read whether it helped">
+
+The block prints one row per cell and an effect word beside the variant: `helped`, `made it worse`, or `can't tell yet`. The assertion rows that differ between the cells show what the skill changed. When `brand orange` and `brand fonts` pass on both sides, the harness already knows the brand, and this task can't show the skill. For more information about the block, see [Read the result](/results/compare/lift#read-the-result). To fail the variant when its lift may be below a floor, see [Gate on lift](/results/compare/lift#gate-on-lift).
+
+</Step>
+</Steps>
+
+## Compare skill versions
+
+To measure a change to a skill, pin each commit on its own environment. The example uses Matt Pocock's `migrate-to-shoehorn` skill, which changed between two commits, on a `plain` environment that holds the `src/user.ts` file the task tests. The earlier commit is the baseline, and the later commit is the variant. In the `evals/environments.ts` file, add two environments:
+
+```ts title="evals/environments.ts"
+export const earlier = plain.extendEnvironment('earlier', ({ skill }) => ({
+  skills: [
+    skill.git('github:mattpocock/skills', {
+      ref: '62f43a18177be6ec82da242e59ffbc490a4c22ea',
+      path: 'skills/misc',
+      only: ['migrate-to-shoehorn'],
+    }),
+  ],
+}))
+
+export const later = earlier.extendEnvironment('later', ({ skill }) => ({
+  skills: [
+    skill.git('github:mattpocock/skills', {
+      ref: '697d4ce9742da558fd1ba6697c8e9775e2e302dd',
+      path: 'skills/misc',
+      only: ['migrate-to-shoehorn'],
+    }),
+  ],
+}))
+```
+
+Both environments extend `plain`, so they share its files and differ only by the pinned commit. `later` replaces the skill of the same name, so the harness gets the later commit only. A commit in `ref` keeps the cells comparable. For more information about the helper, see [the `skill.git` helper](/reference/environment-helpers#skillgit).
+
+In the evaluation file, set `compare.baseline` to `earlier` and `compare.variants` to `later`:
+
+```ts title="evals/shoehorn.eval.ts"
+{ runs: 4, compare: { baseline: earlier, variants: [later] } },
+```
+
+The assertion that separates the cells shows whether the later commit helped.
+
+## Next
+
+For more information about every `compare` key, see [the `compare` option](/reference/options#compare).

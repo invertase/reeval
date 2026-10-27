@@ -11,7 +11,7 @@ The outcome word is `pass`, `fail`, `infra error`, `cancelled`, `skipped`, `todo
 
 A `fail` block lists each assertion that failed or did not run. For more information about what an assertion decides, see [Assertion](/reference/glossary#assertion).
 
-On one attempt, a failed assertion prints `failed`. Several attempts add a tries row. Passed assertions print as `+N more passed`. For more information about the trace of a failed assertion, see [Debug a failing attempt](/results/debugging).
+On one attempt, a failed assertion prints `failed`. Several attempts add a tries row. Passed assertions print as `+N more passed`. For more information about the trace of a failed assertion, see [Debug a failing attempt](/results/inspection/debugging).
 
 A failed evaluation prints like this:
 
@@ -68,6 +68,6 @@ To print the record as JSON, pass `--json`:
 npx reeval show --json
 ```
 
-For more information about the job summary in a pull request, see [Fail a pull request when results regress](/recipes/ci-gate).
+For more information about the job summary in a pull request, see [Fail a pull request when results regress](/evaluations/recipes/gate-pull-requests).
 
 For more information about every `reeval show` flag, see [the `reeval show` command](/reference/cli#reeval-show).
