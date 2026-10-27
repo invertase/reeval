@@ -3,9 +3,9 @@ title: "Measure lift against a baseline"
 description: "See whether a skill, doc, or MCP server changes what the harness does."
 ---
 
-A comparison runs one evaluation on a baseline without the change and on a variant with it. Both get the same prompt and assertions. reeval reports whether the variant `helped`, `made it worse`, or `can't tell yet`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For more information about where a comparison appears in a run, see [Comparison](/reference/glossary#comparison).
+A comparison runs one evaluation on a baseline without the change and on a variant with it. Both get the same prompt and assertions. reeval reports whether the variant `helped`, `made it worse`, or `can't tell yet`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For where a comparison appears in a run, see [Comparison](/reference/glossary#comparison).
 
-The examples use the baseline `page`, an unstyled HTML page, and the variant `brand-guidelines`, which adds Anthropic's `brand-guidelines` skill. For more information about building them, see [Quick start](/quickstart) or [Environments](/environments).
+The examples use the baseline `page`, an unstyled HTML page, and the variant `brand-guidelines`, which adds Anthropic's `brand-guidelines` skill. To build them, see [Quick start](/quickstart) or [Environments](/environments).
 
 ## Run the comparison
 
@@ -53,7 +53,7 @@ npx reeval run with-library-skill-lift
 
 ## Read the result
 
-The run prints one block for the evaluation, in this format:
+The run prints one block for the evaluation:
 
 ```text
 pass             styles the page in Anthropic's brand
@@ -68,7 +68,7 @@ pass             styles the page in Anthropic's brand
   +1 more passed
 ```
 
-The `arm` column lists the baseline and the variant. A comparison of harnesses or sandboxes heads the column `harness` or `sandbox`. The `pass` column is passed attempts out of counted attempts, and the effect word is `helped`, `made it worse`, or `can't tell yet`. The `check` table counts each assertion per cell ([Measure a run](/results/measure#read-the-assertion-and-effort-tables)).
+The `arm` column lists the baseline and the variant. A comparison of harnesses or sandboxes heads the column `harness` or `sandbox`. The `pass` column is passed attempts out of counted attempts, and the last word is the effect. The `check` table counts each assertion per cell ([Measure a run](/results/measure#read-the-assertion-and-effort-tables)).
 
 To print the interval under each variant, pass `-v`:
 
@@ -80,7 +80,7 @@ The evaluation's outcome, `pass`, is the variant's, because reeval gates only va
 
 For when each effect word applies, including the four-attempt minimum, see [Variant outcomes](/results/compare/statistics#variant-outcomes).
 
-If the baseline and the variant both pass, the harness already does what the skill teaches, and this task can't show the change. A baseline that includes the change measures nothing either. A rules file or a doc that repeats the skill gives both cells the same instructions.
+If the baseline and the variant both pass, the harness already does what the skill teaches, and this task can't show the change. A baseline that includes the change, such as a rules file or a doc that repeats the skill, gives both cells the same instructions and measures nothing either.
 
 ## Add more variants
 
@@ -90,11 +90,11 @@ Add each extra environment to `compare.variants`. This excerpt measures one conv
 { compare: { baseline: math, variants: [withSkill, withDoc] } },
 ```
 
-Each variant gets its own row and effect. reeval gates each variant separately. For a runnable project, see [`with-two-variants`](https://github.com/invertase/reeval/tree/main/examples/with-two-variants).
+Each variant gets its own row, effect, and gate. For a runnable project, see [`with-two-variants`](https://github.com/invertase/reeval/tree/main/examples/with-two-variants).
 
 ## Compare harnesses
 
-To measure the variant on more than one harness, list them in `harness`. For setting up each harness and its key, see [Compare harnesses](/recipes/agent-comparison). This excerpt limits the variant to Claude Code:
+To measure the variant on more than one harness, list them in `harness`; [Compare harnesses](/recipes/agent-comparison) sets up each harness and its key. This excerpt limits the variant to Claude Code:
 
 ```ts title="with-compare-harness.eval.ts"
 harness: [
@@ -107,7 +107,7 @@ compare: {
 },
 ```
 
-reeval measures each variant against the baseline on the same harness. `compare.harness` limits the variant to the listed harnesses, and the others run the baseline only. For a runnable project, see [`with-compare-harness`](https://github.com/invertase/reeval/tree/main/examples/with-compare-harness).
+reeval measures each variant against the baseline on the same harness. `compare.harness` limits the variant to the listed harnesses; the others run the baseline only. For a runnable project, see [`with-compare-harness`](https://github.com/invertase/reeval/tree/main/examples/with-compare-harness).
 
 ## Gate on lift
 
@@ -121,7 +121,7 @@ A variant whose lift may be below 20 points fails, even when it `helped`, and it
 
 ## Ask which did better
 
-A pairwise question asks a language model which of two attempts did better. The comparison leaves out attempts that failed their assertions, so the question needs an assertion both sides can pass. Add the question to the evaluation's options:
+A pairwise question asks a language model which of two attempts did better. The comparison leaves out attempts that failed their assertions, so the question needs an assertion both sides can pass. Add it to the evaluation's options:
 
 ```ts title="with-compare-questions.eval.ts"
 questions: [
@@ -132,10 +132,10 @@ questions: [
 ],
 ```
 
-`across: 'environment'` pairs the baseline with each variant on the same harness, and `across: 'harness'` pairs harnesses in the same environment. After the run, the block prints each side's wins as `won W of N`. reeval asks about each pair in both orders with the sides unlabeled. `npx reeval query question_pairs` lists the wins, ties, and splits ([Query views](/reference/query)). For more information about the model that answers a question, see [`question`](/reference/options#question).
+`across: 'environment'` pairs the baseline with each variant on the same harness, and `across: 'harness'` pairs harnesses in the same environment. After the run, the block prints each side's wins as `won W of N`. reeval asks about each pair in both orders with the sides unlabeled. `npx reeval query question_pairs` lists the wins, ties, and splits ([Query views](/reference/query)). For the model that answers a question, see [`question`](/reference/options#question).
 
-Questions never gate. They don't change an outcome or the exit code. For a runnable project, see [`with-compare-questions`](https://github.com/invertase/reeval/tree/main/examples/with-compare-questions).
+Questions never gate: they don't change an outcome or the exit code. For a runnable project, see [`with-compare-questions`](https://github.com/invertase/reeval/tree/main/examples/with-compare-questions).
 
 ## Reference
 
-For more information about every `compare` key, see [the `compare` option](/reference/options#compare).
+For every `compare` key, see [the `compare` option](/reference/options#compare).
