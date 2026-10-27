@@ -1,6 +1,6 @@
 // Which gateway in the config's `gateway` list a model reeval calls itself goes through (the
 // judge's, analysis's, a capture's): its pin, or the first entry that can serve the model.
-import { GATEWAY_NAMES } from '../contract/gateway.ts'
+import { directOffPin, GATEWAY_NAMES } from '../contract/gateway.ts'
 import { UsageError } from '../errors.ts'
 import {
   DIRECT_PROVIDERS,
@@ -60,6 +60,9 @@ export function resolveModelGateway(
   if (typeof model !== 'string' || !model.includes('/')) return undefined
   const on = `${what} "${model}"`
   const listed = scope.gateways.map((g) => g.kind)
+  if (typeof pin === 'object' && pin.kind === 'direct' && pin.enabled === false) {
+    throw new UsageError(directOffPin(on))
+  }
   const name = typeof pin === 'object' ? pin.kind : pin
   if (name !== undefined) {
     if (!listed.includes(name)) {

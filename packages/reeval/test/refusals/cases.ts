@@ -1637,6 +1637,10 @@ environment:
     ['harness: a pin not a name', any(fakeHarness, { gateway: 'vercell' })],
     ['harness: a pin a number', any(cursor, { model: 'm', gateway: 3 })],
     ['harness: a helper pin', any(fakeHarness, { gateway: { kind: 'direct' } })],
+    [
+      'harness: a pin to direct off',
+      any(cursor, { model: 'm', gateway: { kind: 'direct', enabled: false } }),
+    ],
     ['ts: vercel with a typo', config({ gateway: [{ kind: 'vercel', apikey: 'x' }] })],
     ['ts: vercel then direct', config({ gateway: [{ kind: 'vercel' }, { kind: 'direct' }] })],
     ['yaml: vercel with options', yaml('gateway: [{ vercel: { apikey: x } }]\n')],
@@ -1772,6 +1776,11 @@ environment:
     ['judge: an eval pin not a name', options({ judge: { gateway: 3 } })],
     ['model: openai on vertex falls back to direct', model('openai/m', undefined, [VERTEX])],
     ['model: pinned to direct, direct off', model('anthropic/m', 'direct', [VERCEL, OFF])],
+    [
+      'judge: a pin to direct off',
+      () =>
+        resolveModelGateway('anthropic/m', OFF, { gateways: listed([VERCEL]) }, 'the judge model'),
+    ],
     ['model: mistral on direct alone', model('mistral/large', undefined, [DIRECT])],
     ['model: mistral on vercel then direct', model('mistral/large', undefined, [VERCEL, DIRECT])],
     ['model: pinned to vercel, not listed', model('anthropic/m', 'vercel', [DIRECT])],

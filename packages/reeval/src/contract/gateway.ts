@@ -24,6 +24,10 @@ const directSettings = {
 
 export const directGatewaySchema = z.strictObject({ kind: z.literal('direct'), ...directSettings })
 
+/** Why `direct({ enabled: false })` can't be a pin: it turns a list's fallback off, not a route on. */
+export const directOffPin = (on: string): string =>
+  `${on} pins direct({ enabled: false }), which turns the fallback to each provider's own key off rather than naming a gateway. Pin direct(), or put direct({ enabled: false }) in the config's gateway list.`
+
 export const vercelGatewaySchema = z.strictObject({ kind: z.literal('vercel') })
 
 const openrouterSettings = {
