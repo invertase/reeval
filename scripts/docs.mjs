@@ -1282,6 +1282,32 @@ for (const file of mdxFiles()) {
   }
 }
 
+// ---- Task page length --------------------------------------------------------------------------
+
+// A task page (every page outside docs/reference/) stays at 600 words of prose: a short tutorial
+// with the alternatives linked out. The count leaves out the frontmatter, code blocks, generated
+// blocks, JSX tags and link addresses, and keeps the words in tables.
+const TASK_PAGE_WORDS = 600
+const prose = (text) =>
+  outsideFences(text)
+    .replace(/^---\n[\s\S]*?\n---\n/, '')
+    .replace(/\[\/\/\]: # \(generated:([\w:-]+)\)[\s\S]*?\[\/\/\]: # \(\/generated:\1\)/g, '')
+    .replace(/<\/?[A-Za-z][^>]*>/g, ' ')
+    .replace(/\]\([^)]*\)/g, ']')
+const wordCount = (text) => text.split(/\s+/).filter(Boolean).length
+for (const file of mdxFiles()) {
+  const path = relative(root, file).split('\\').join('/')
+  if (path.startsWith('docs/reference/')) continue
+  // The Introduction is the landing page, not a task page.
+  if (path === 'docs/index.mdx') continue
+  const words = wordCount(prose(read(file)))
+  if (words > TASK_PAGE_WORDS) {
+    problems.push(
+      `${path} has ${words} words of prose: a task page stays at ${TASK_PAGE_WORDS}, so cut it to the tutorial and link the alternatives`,
+    )
+  }
+}
+
 if (problems.length) {
   console.error(`docs: ${problems.length} problem${problems.length === 1 ? '' : 's'}`)
   for (const p of problems) console.error(`  - ${p}`)

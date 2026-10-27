@@ -87,38 +87,7 @@ The three cases print one block:
 
 ## Compare over a family
 
-With `compare`, a family reports one effect over all its cases, in an `all cases` row. The lift is paired by case, so six cases with one attempt a side can read `helped`:
-
-```ts title="with-family-lift.eval.ts"
-evaluate.each(functions)(
-  'documents %s',
-  { compare: { baseline: math, variants: [withJsdoc], minLift: 0.2 } },
-  // ...
-```
-
-The `all cases` row sums each cell's counts:
-
-```text
-  pass  all cases
-    arm            pass
-    math           0 of 6
-    jsdoc          6 of 6  helped
-      jsdoc: 6 paired cases, 95% interval +45…+100
-```
-
-`compare.minLift` gates the family's pooled lift, not each case's. A case still fails on its own assertions, and a failed case fails the family. The `family_lift` view lists every family's pooled lift across recorded runs ([Queries](/results/queries)). For more information about how reeval reaches the family's effect, see [Statistics](/results/compare/statistics#cases-as-pairs). For a runnable project, see [`with-family-lift`](https://github.com/invertase/reeval/tree/main/examples/with-family-lift).
-
-## Keep the cases independent
-
-To keep the cases independent, pass `{ pool: false }` beside the cases:
-
-```ts title="evals/recommendation.eval.ts"
-evaluate.each(['LangChain', 'LlamaIndex', 'the Vercel AI SDK'], {
-  pool: false,
-})(
-```
-
-Each case then gates alone and prints its own block. The dry-run table lists each case on its own row and the `notes` column is empty.
+A family with `compare` reports one pooled `all cases` effect, paired by case. For more information, see [Lift](/results/compare/lift) and [`compare`](/reference/options#compare). To keep the cases independent, pass `{ pool: false }`, as [`EachOptions`](/reference/api#eachoptions) describes. For a runnable project, see [`with-family-lift`](https://github.com/invertase/reeval/tree/main/examples/with-family-lift).
 
 ## Reference
 

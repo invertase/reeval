@@ -71,37 +71,11 @@ The `plan` line counts the evaluations, cells, and attempts, and estimates the t
 
 ## Skip, focus, or plan groups
 
-In the `evals/shoehorn.eval.ts` file, focus the group and leave a placeholder:
-
-```ts title="evals/shoehorn.eval.ts"
-group.only(
-  'request builders',
-  // ...
-)
-group.todo('payment builders')
-```
-
-`group.skip` keeps a group in the file and skips every evaluation inside it, including a nested group. `group.only` runs only that group in its own file, and other files still run. reeval refuses `group.only` when the `CI` variable is set. `group.todo` takes a name and no body, and the plan lists it as `todo`. The groups around a `group.todo` still add their tags to it. For a runnable project with a group, `evaluate.skip`, and `evaluate.todo`, see [`with-groups`](https://github.com/invertase/reeval/tree/main/examples/with-groups).
+`group.skip`, `group.only`, and `group.todo` skip, focus, or plan a group, as [`group()`](/reference/api#group) describes. For a runnable project with a group, `evaluate.skip`, and `evaluate.todo`, see [`with-groups`](https://github.com/invertase/reeval/tree/main/examples/with-groups).
 
 ## See how options cascade
 
-reeval applies options from the config, through each group, to the evaluation. A later level replaces `environment`, `runs`, `gate`, `timeout`, and `sandbox` when it sets them.
-
-The table lists the levels that set an option before a profile limit, from first to last:
-
-| Level | Set in |
-| :--- | :--- |
-| Config | the `reeval.config.ts` file |
-| Profile defaults | the selected profile |
-| Outer group | the outer `group()` call |
-| Inner group | an inner `group()` call |
-| Evaluation | the `evaluate()` call |
-
-After the evaluation, a profile limit can narrow `runs`, `compare`, and `harness`. The `--runs`, `--tag`, and `--concurrency` flags come last. For more information about the full order, see [The cascade](/reference/options#the-cascade).
-
-For more information about narrowing harnesses with `add` and `only`, see [Harnesses](/agents).
-
-`tags` are added at each group and on the evaluation, so an evaluation keeps every tag from the groups around it. `npx reeval run --tag smoke` runs both evaluations above. For more information about filtering by tag, see [Filter evaluations](/runs/running#filter-evaluations).
+Options cascade from the config through each group to the evaluation. For the full order, see [The cascade](/reference/options#the-cascade). Tags add up at each group, so `npx reeval run --tag smoke` runs both evaluations above. For more information about filtering by tag, see [Filter evaluations](/runs/running#filter-evaluations).
 
 ## Reference
 
