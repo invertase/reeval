@@ -58,7 +58,7 @@ Open the `debug.log` file for that trace. Each line has a full timestamp.
 2026-09-26T12:50:01.234Z check     $ test -f src/user.test.ts → exit 1 · 4ms
 ```
 
-The `requests.ndjson` file records one JSON object for each request the egress gateway handles. reeval writes the `trace.ndjson` file for a failing attempt and for every attempt with `-vv`. The first line of the `trace.ndjson` file counts entries the buffer dropped. The `debug.traceBufferMb` option caps that file.
+The `requests.ndjson` file records one JSON object for each request the egress gateway handles. reeval writes the `trace.ndjson` file for a failing attempt and for every attempt with `-vv`. The first line of the `trace.ndjson` file counts entries the buffer dropped. To cap that file, set [`debug.traceBufferMb`](/reference/options#debug).
 
 For more information, see [the studio's **Debug** tab](/results/studio).
 
@@ -80,7 +80,7 @@ A prompt line has these fields.
 }
 ```
 
-To also write the `transcript.raw.jsonl` file in that directory, one stream part per line, set `REEVAL_RAW_TRANSCRIPT` to `1`.
+To also write the `transcript.raw.jsonl` file in that directory, one stream part per line, set [`REEVAL_RAW_TRANSCRIPT`](/reference/env-vars#reevalrawtranscript).
 
 ## Read the workspace and artifacts
 
@@ -94,7 +94,7 @@ The workspace goes when the sandbox stops. reeval keeps what the agent left in i
 
 ## Prune debug data
 
-Each run keeps the newest debug directories and deletes the older ones. The `debug.keep` option sets the number of directories to keep, and the default is 20. The `.reeval/runs/` directory stays on disk.
+Each run keeps the newest debug directories and deletes the older ones. To change the number of directories to keep, set [`debug.keep`](/reference/options#debug). The `.reeval/runs/` directory stays on disk.
 
 Remove the debug data.
 
@@ -112,26 +112,4 @@ To also remove untagged sandbox images that reeval built, pass `--images`.
 
 ## Reference
 
-In the `reeval.config.ts` file, add the `debug` option.
-
-```ts
-import { defineConfig } from '{{ pkg }}'
-
-export default defineConfig({
-  debug: { keep: 20, traceBufferMb: 8 },
-})
-```
-
-The `debug.keep` option is a whole number of at least 1. The `debug.traceBufferMb` option is a number of megabytes above 0. Oldest entries in an attempt's buffer drop first.
-
-In the shell that starts reeval, set these variables.
-
-| Variable | Effect |
-| :--- | :--- |
-| `REEVAL_DEBUG` | Prints image prepare logs, container engine logs, an evaluation file's stdout and stderr, and an unexpected error's stack. |
-| `REEVAL_RAW_TRANSCRIPT` | Writes the `transcript.raw.jsonl` file when set to `1`. |
-| `REEVAL_NO_REPORT_HINT` | Hides the hint reeval prints after a crash when set to `1`. |
-
-For more information about every variable, see [Environment variables](/reference/env-vars).
-
-For more information about a redacted bug report, see [reeval report](/reference/cli#reeval-report).
+For more information about the `debug.keep` and `debug.traceBufferMb` options, see [`debug`](/reference/options#debug). For more information about the variables that change what reeval prints and writes, see [`REEVAL_DEBUG`](/reference/env-vars#reevaldebug) and [`REEVAL_NO_REPORT_HINT`](/reference/env-vars#reevalnoreporthint). For more information about a redacted bug report, see [reeval report](/reference/cli#reeval-report).
