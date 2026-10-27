@@ -3,9 +3,9 @@ title: "Evaluate many cases"
 description: "Run the same evaluation over a list of cases and read one pooled result."
 ---
 
-The `evaluate.each()` function turns an array of cases into one evaluation per case. Every case shares one prompt, one set of options, and one body. Two or more cases pool into a family, which reports one pass rate and, with `compare`, one effect over all of them. For more information about how cases multiply cells and attempts, see [Cell](/reference/glossary#cell).
+The `evaluate.each()` function turns an array of cases into one evaluation per case. Every case shares one set of options and one body, which takes the case as its second argument. Two or more cases pool into a family, which reports one pass rate and, with `compare`, one effect over all of them. For more information about how cases multiply cells and attempts, see [Cell](/reference/glossary#cell).
 
-The family below asks your harness to choose between Genkit and three other AI frameworks, and a judge reads each answer.
+The family below asks an agent to choose between Genkit and three other AI frameworks, and a judge reads each answer.
 
 ## Run one evaluation over many cases
 
