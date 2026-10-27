@@ -17,6 +17,7 @@ import { join, relative } from 'node:path'
 import { agentsProblems } from './agents-claims.mjs'
 import { anchorProblems } from './docs-anchors.mjs'
 import { docsRunsProblems } from './docs-runs-checks.mjs'
+import { gatewayLandingProblems } from './gateway-landing-claims.mjs'
 import {
   harnessFacts,
   renderLayout,
@@ -648,6 +649,7 @@ for (const { file, text } of gatewayPages) {
 }
 
 problems.push(...(await import('./gateway-claims.mjs')).gatewayModelProblems(docsDir))
+problems.push(...gatewayLandingProblems(docsDir))
 problems.push(...recipeProblems(docsDir))
 
 // The Docker and Podman pages are short task pages: a few sections and no option catalog. Each

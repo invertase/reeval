@@ -48,7 +48,7 @@ The pinned gateway must be in the config's `gateway` list. A pinned gateway neve
 
 ## Harness support
 
-`direct()` serves every harness. This table shows the harnesses each routing gateway serves. ✅ means the gateway routes the harness and its `effort`. ⚠️ means it routes the harness, but a harness with `effort` set takes the next gateway in the list, and a pinned one stops the plan.
+`direct()` serves every harness on its provider's own key, with two exceptions. It refuses `fx` with a gateway model id such as `anthropic/claude-sonnet-5`, which only `vercel()` serves, and it refuses an OpenCode model id whose provider reeval can't run. This table shows the harnesses each routing gateway serves. ✅ means the gateway routes the harness and its `effort`. ⚠️ means it routes the harness, but a harness with `effort` set takes the next gateway in the list, and a pinned one stops the plan.
 
 | Harness | `vercel()` | `openrouter()` |
 | --- | --- | --- |
