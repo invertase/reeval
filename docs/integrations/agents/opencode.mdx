@@ -254,17 +254,7 @@ export default defineConfig({
   Reasoning effort, as a value the provider takes. reeval sets it as `options.thinking` on an `anthropic/` model and as `options.reasoningEffort` on every other provider.
 </Property>
 
-<Property name="id" type="string" optional>
-  Cell id. Defaults to `opencode:` followed by the part of `model` after its last `/`, in the form `opencode:<model>`, or `opencode:<model>[effort=high]` with `effort` set to `high`. The id uses letters, digits, and `._:@+-=[]`.
-</Property>
-
-<Property name="maxConcurrent" type="number" optional>
-  The most OpenCode attempts that run at the same time, across the run. A whole number of at least 1.
-</Property>
-
-<Property name="startTimeout" type="Duration" optional>
-  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
-</Property>
+For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options). The cell id is `opencode:` followed by the part of `model` after its last `/`.
 
 In the sandbox, OpenCode runs with its `question` and browser tools off, self-update, share links, and the model-catalog fetch off, session titles on the run's model, and its model calls over HTTP. That configuration overrides the workspace's own `opencode.json` file where both set a key.
 
@@ -284,6 +274,18 @@ The OpenCode harness reads skills from the `.opencode/skills` directory in the w
 
 For more information about placing skills, see [Give the agent skills](/environments/skills).
 
+## `plugins`
+
+reeval adds each plugin's skills to the home skills directory and unpacks subagents and commands into `.opencode/agents` and `.opencode/commands`. OpenCode skips a file whose frontmatter it refuses, so reeval keeps only `description`, and `mode: subagent` for a subagent. OpenCode's own plugins are code modules, and reeval never loads them from an environment's plugin.
+
+[//]: # (generated:harness-plugins:opencode)
+
+- Takes `skills`, `agents`, `commands` and `mcp`, and refuses a plugin that keeps `hooks` and `rules`: narrow it with `only`, or leave it out of the cell.
+
+[//]: # (/generated:harness-plugins:opencode)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).
+
 ## `mcp`
 
 The OpenCode harness accepts MCP servers on `stdio` and `http`. reeval refuses an `sse` server at plan time with exit code 2. reeval writes a `stdio` server as `{ type: 'local', command: [command, ...args], environment }` and an `http` server as `{ type: 'remote', url, headers, oauth: false }` in OpenCode's configuration, with Code Mode off, so the agent calls their tools directly, and the first prompt waits until every server has connected.
@@ -298,7 +300,7 @@ For more information about the token fields, see [`TokenUsage`](/reference/recor
 
 ## `servedModels`
 
-OpenCode's stream names no model, so each turn's `model` is the model on the turn's last brokered request. The attempt's `servedModels` comes from the request URL on a `google/` model and from the response body on every other provider, with `[effort=<value>]` when the response names an effort.
+OpenCode's stream names no model, so each turn's `model` is the model on the turn's last brokered request. The attempt's `servedModels` comes from the request URL for a provider whose model path names the model (`amazon-bedrock/`, `google/`, `ofox/`, `opencode/` and `opencode-go/`) and from the response body for every other provider, with `[effort=<value>]` when the response names an effort.
 
 For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
 
