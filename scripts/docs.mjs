@@ -711,6 +711,14 @@ for (const file of readdirSync(join(docsDir, 'integrations/agents')).filter((f) 
   }
 }
 
+// `composer-2.5` takes no `effort`, so the Cursor example names a model that does (`grok-4.7`)
+// instead of a `'<model>'` placeholder.
+if (page('integrations/agents/cursor').includes("model: '<model>'")) {
+  problems.push(
+    "integrations/agents/cursor still has model: '<model>': name a model that takes effort, such as grok-4.7",
+  )
+}
+
 // Every factory `reeval/harness` exports is a row of the "Harness factory options" table or named in
 // its lead, so the lead's claims cover every factory.
 {
