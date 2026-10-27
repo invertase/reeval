@@ -520,6 +520,61 @@ if (!/\breeval run\b/.test(page('recipes/ci-gate'))) {
   )
 }
 
+// ---- Gateway pages -----------------------------------------------------------------------------
+
+const srcFile = (file) => read(join(root, 'packages/reeval/src', file))
+const gatewayPages = ['direct', 'vercel', 'openrouter', 'vertex'].map((name) => ({
+  file: `integrations/gateways/${name}`,
+  text: page(`integrations/gateways/${name}`),
+}))
+
+// Only the judge takes `typesafe-ai/*` models; the others refuse them in code, so the page that
+// lists what `direct()` calls must not put them in the same sentence.
+const evaluationModelRefusals = [
+  'analysis/model.ts',
+  'capture/index.ts',
+  'contract/questions.ts',
+].filter((file) => srcFile(file).includes("startsWith('typesafe-ai/')"))
+if (evaluationModelRefusals.length === 3) {
+  const prose = page('integrations/gateways/direct').replace(/```[\s\S]*?```/g, '')
+  for (const sentence of prose.split(/(?<=[.!?])\s+/)) {
+    if (
+      sentence.includes('typesafe-ai/') &&
+      /analysis\.model|captures?\b|questions?\b/.test(sentence) &&
+      !/\b(?:refuse|refuses|reject|rejects)\b/.test(sentence)
+    ) {
+      problems.push(
+        `integrations/gateways/direct says the analysis model, captures or questions call typesafe-ai/*, but ${evaluationModelRefusals.join(', ')} refuse it: only the judge takes it`,
+      )
+    }
+  }
+}
+
+// The four gateway pages cover the same slots in the same order.
+const GATEWAY_SECTIONS = ['Credential', 'Helper', 'Harnesses and models']
+for (const { file, text } of gatewayPages) {
+  const headings = [...text.matchAll(/^## (.+)$/gm)].map((m) => m[1])
+  if (headings.join('|') !== GATEWAY_SECTIONS.join('|')) {
+    problems.push(
+      `${file} has sections [${headings.join(', ')}]; gateway pages use [${GATEWAY_SECTIONS.join(', ')}] in that order`,
+    )
+  }
+}
+
+// The harness support matrix lives on agents/gateways; the pages beside it link to it.
+const HARNESS_NAMES =
+  /\b(?:Cursor|Claude Code|Codex|Antigravity|OpenCode|Goose|Grok Build|fx|pi)\b/g
+for (const { file, text } of gatewayPages) {
+  text.split('\n').forEach((line, i) => {
+    const names = new Set(line.match(HARNESS_NAMES))
+    if (names.size >= 3) {
+      problems.push(
+        `${file}:${i + 1} lists ${names.size} harnesses: the matrix of which gateway serves which lives on agents/gateways, so link to it`,
+      )
+    }
+  })
+}
+
 // ---- Navigation and the package name --------------------------------------------------------
 
 const config = JSON.parse(read(join(root, 'docs.json')))
