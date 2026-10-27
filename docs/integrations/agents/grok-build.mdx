@@ -42,17 +42,7 @@ export default defineConfig({
   Reasoning effort, for a model that takes one, such as `low`, `medium`, or `high`. reeval sets it as `default_reasoning_effort` in Grok Build's `config.toml` file.
 </Property>
 
-<Property name="id" type="string" optional>
-  Cell id. Defaults to `grok-build:<model>`, or `grok-build:<model>[effort=<value>]` when `effort` is set. The id uses letters, digits, and `._:@+-=[]`.
-</Property>
-
-<Property name="maxConcurrent" type="number" optional>
-  The most Grok Build attempts that run at the same time, across the run. A whole number of at least 1.
-</Property>
-
-<Property name="startTimeout" type="Duration" optional>
-  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
-</Property>
+For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 In the sandbox, Grok Build runs with a private home, whose `config.toml` file puts the session and its title on the run's model and turns off telemetry, self-update, and the summary, recap, and title-refresh calls, so a turn contacts only `api.x.ai`.
 
@@ -71,6 +61,19 @@ For more information about writing rules, see [Add project rules](/environments/
 The Grok Build harness reads skills from the workspace's `.grok/skills` directory, the private home's `.grok/skills` directory under the `~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home` path, and the `.agents/skills` and `.claude/skills` directories.
 
 For more information about placing skills, see [Give the agent skills](/environments/skills).
+
+## `plugins`
+
+reeval passes each plugin's directory to Grok Build as a plugin directory, and its MCP servers over ACP.
+
+[//]: # (generated:harness-plugins:grok-build)
+
+- Takes `skills`, `agents`, `commands`, `hooks` and `mcp`, and refuses a plugin that keeps `rules`: narrow it with `only`, or leave it out of the cell.
+- Names a plugin's MCP servers by their own keys, in one list with `mcp`, and keeps one of two servers of a name, so a clash is refused.
+
+[//]: # (/generated:harness-plugins:grok-build)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).
 
 ## `mcp`
 
