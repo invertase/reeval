@@ -27,7 +27,7 @@ export default defineConfig({
 
 For a runnable project, see [`with-profiles`](https://github.com/invertase/reeval/tree/main/examples/with-profiles). For one profile per harness, each in Docker with its own judge, see the examples' shared [`profiles.ts`](https://github.com/invertase/reeval/blob/main/examples/profiles.ts).
 
-reeval applies a profile's `defaults` after the `reeval.config.ts` file and before groups and evaluations, so an evaluation that sets its own `runs` keeps it. A profile's `tags` select evaluations like `--tag` does, and `'!slow'` excludes a tag. `record: 'always'` copies every run under that profile into the history folder.
+An evaluation that sets its own `runs` keeps it over the profile's `defaults`. For more information about the order, see [The cascade](/reference/options#the-cascade).
 
 To pick a profile, pass `--profile`:
 
@@ -55,7 +55,7 @@ reeval picks `defaultProfile.ci` when the `CI` variable is set and `defaultProfi
 
 ## Limit a profile
 
-A profile's `limit` applies after every group and evaluation, and it only narrows. `runs` caps the attempts per cell, `compare: false` runs the baseline alone, `compare: { maxVariants: n }` keeps the first `n` variants, and `harness` lists the harness ids the run may use. In the `reeval.config.ts` file, restrict the `pr` profile to one harness:
+A profile's `limit` narrows what evaluations ask for. In the `reeval.config.ts` file, restrict the `pr` profile to one harness:
 
 ```ts title="reeval.config.ts"
     pr: {
@@ -68,7 +68,7 @@ A profile's `limit` applies after every group and evaluation, and it only narrow
     },
 ```
 
-The relevant notes show each cut. reeval skips an evaluation when a profile leaves it with no harness:
+The plan notes show each cut:
 
 ```text
 runs 4 → 1 (profile pr)
@@ -76,7 +76,7 @@ compare off (profile pr)
 skipped: no harness left: profile pr allows claude-code:claude-sonnet-5
 ```
 
-The `--runs` flag replaces every evaluation's `runs` outright, so a profile's `limit.runs` does not apply to it.
+For more information about each `limit` key, see [`limit`](/reference/profiles#limit).
 
 ## Pin an evaluation
 
@@ -90,7 +90,7 @@ Under the `pr` profile, the plan lists both cells and notes `pinned: compare, ru
 
 ## Set a budget
 
-reeval merges a profile's `budget` over the `budget` in the `reeval.config.ts` file, key by key. `attempts` caps the plan. reeval exits with code 2 before starting a run over the cap. `--force` starts it anyway. `duration` starts with the first attempt. At the limit, reeval lets running attempts finish and skips queued attempts. Preview a run against its budget:
+A profile's `budget` caps the plan and the run. Preview a run against its budget:
 
 ```bash
 npx reeval run --profile pr --dry-run
@@ -102,7 +102,7 @@ The relevant end of the plan line shows whether the plan fits:
 … · 6 attempts · budget 5 attempts ✗
 ```
 
-A run over `budget.attempts` stops with the same numbers:
+A run over the cap stops before it starts:
 
 ```text
 reeval: this run plans 6 attempts, over budget.attempts 5 (profile pr).
@@ -110,7 +110,7 @@ Narrow it with --tag or --runs, or raise the budget.
 (--force runs it anyway)
 ```
 
-When `budget.duration` stops a run, reeval records the status as `budget`.
+For more information about `attempts` and `duration`, see [`budget`](/reference/profiles#budget).
 
 ## Reference
 
