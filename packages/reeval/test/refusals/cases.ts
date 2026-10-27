@@ -160,6 +160,20 @@ const strict = (o: unknown) => () => {
     { config, profile: null, tags: [], concurrency: 1, file: undefined, order: 0 },
   )
 }
+/** What planning an eval with `options` refuses under a config's own options and `--runs`. */
+const planned =
+  (o: unknown, own: object = {}, runs?: number) =>
+  () => {
+    const config = resolveConfig(
+      { harness: fakeHarness(), sandbox: fakeSandbox(), ...own },
+      DIR,
+      'reeval.config.ts',
+    )
+    planEval(
+      { name: 'e', mode: 'run', groups: [], options: o as never, source: { body: '0'.repeat(64) } },
+      { config, profile: null, runs, tags: [], concurrency: 1, file: undefined, order: 0 },
+    )
+  }
 /** An environment with one MCP server on `url` that sends `headers`. */
 const mcpHeaders = (url: string, headers: Record<string, unknown>) =>
   defineEnvironment('e', ({ mcp }) => ({ mcp: { docs: mcp.http(url, { headers } as never) } }))
@@ -601,6 +615,15 @@ export const CASES: Record<string, Case[]> = {
     [
       'data: a variant with a bad spec',
       options({ compare: { variants: [envData({ setpu: [] })] } }),
+    ],
+    ['runs best of 3 on a compare', planned({ runs: { bestOf: 3 }, compare: { variants: [e2] } })],
+    [
+      'runs best of 3 from the config on a compare',
+      planned({ compare: { variants: [e2] } }, { runs: { bestOf: 3 } }),
+    ],
+    [
+      'runs best of 3 on a compare, its runs replaced',
+      planned({ compare: { variants: [e2] } }, { runs: { bestOf: 3 } }, 2),
     ],
   ],
   questions: [
@@ -1399,6 +1422,22 @@ export const CASES: Record<string, Case[]> = {
     ['yaml: an unknown key', yaml('harnesses: []\n')],
     ['yaml: runs 0', yaml('runs: 0\n')],
     ['yaml: runs null', yaml('runs:\n')],
+    ['yaml: runs best of 2', yaml('runs: { bestOf: 2 }\n')],
+    ['yaml: runs best of 5', yaml('runs: { bestOf: 5 }\n')],
+    ['yaml: runs with a typo', yaml('runs: { bestof: 3 }\n')],
+    [
+      'yaml: a profile defaults runs best of 1',
+      yaml('profiles:\n  pr:\n    defaults: { runs: { bestOf: 1 } }\n'),
+    ],
+    ['runs best of 4', options({ runs: { bestOf: 4 } })],
+    ['runs best of 1', options({ runs: { bestOf: 1 } })],
+    ['runs best of 3.5', options({ runs: { bestOf: 3.5 } })],
+    ['runs best of a string', options({ runs: { bestOf: '3' } })],
+    ['runs best of with another key', options({ runs: { bestOf: 3, min: 2 } })],
+    ['runs a string', options({ runs: 'adaptive' })],
+    ['runs 1.5', options({ runs: 1.5 })],
+    ['runs best of 3', options({ runs: { bestOf: 3 } })],
+    ['config runs best of 6', config({ runs: { bestOf: 6 } })],
     ['yaml: include null', yaml('include:\n')],
     ['yaml: a typo in history', yaml('history:\n  dirr: runs\n')],
     ['yaml: history.dir a number', yaml('history:\n  dir: 3\n')],

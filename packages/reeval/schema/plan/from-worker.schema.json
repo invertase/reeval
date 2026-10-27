@@ -47,6 +47,10 @@
       "description": "Set when an attempt is registered, so the reporter has it even for skipped attempts.",
       "type": "object",
       "properties": {
+        "bestOf": {
+          "description": "Set by `runs: { bestOf }`: past the majority's first attempts, this one runs only when the cell's earlier attempts haven't reached a majority.",
+          "type": "number"
+        },
         "brokered": {
           "description": "The secrets this attempt brokers, as `NAME → host, host`.",
           "type": "array",
@@ -703,6 +707,10 @@
         "attempts": {
           "type": "number"
         },
+        "bestOf": {
+          "description": "Set by `runs: { bestOf }`: each cell stops once a majority of this many attempts agree.",
+          "type": "number"
+        },
         "brokered": {
           "description": "Secrets any of its attempts brokers, as `NAME → host, host`.",
           "type": "array",
@@ -759,6 +767,7 @@
           }
         },
         "runs": {
+          "description": "Attempts per cell; with `bestOf`, the most a cell runs.",
           "type": "number"
         },
         "sandboxWarnings": {

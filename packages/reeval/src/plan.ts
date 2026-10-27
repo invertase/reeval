@@ -7,6 +7,7 @@ import { UsageError } from './errors.ts'
 import { fallbackHint } from './gateway/resolve.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
+import { majorityOf } from './options.ts'
 import type { Prices } from './prices.ts'
 import { EFFECT_MIN_COUNTED, PAIRED_MIN } from './stats.ts'
 import { clip, formatDuration, plural } from './text.ts'
@@ -54,8 +55,11 @@ export type RunPlan = {
   rows: PlanRow[]
   evals: number
   cells: number
+  /** Every attempt the plan may start: with `runs: { bestOf }`, its upper bound. */
   attempts: number
-  /** Serial: every attempt one after another. */
+  /** The attempts that start whatever the results: below `attempts` when best-of cells may stop early. */
+  fewest: number
+  /** Serial: every attempt one after another, best-of cells at their most. */
   estimateMs: number
   /** Agent and judge tokens, and their cost when there are prices; only for `--dry-run`. */
   cost?: PlanCost
@@ -151,6 +155,7 @@ export async function buildPlan(options: {
     }
   >()
   let attempts = 0
+  let fewest = 0
   let estimateMs = 0
   for (const { id, attempt } of planned) {
     const existing = rows.get(id)
@@ -168,6 +173,7 @@ export async function buildPlan(options: {
       sandboxWarnings.set(`${w.file}\0${w.message}`, w)
     }
     attempts++
+    if (attempt.bestOf === undefined || attempt.n <= majorityOf(attempt.bestOf)) fewest++
     cells.add(`${id}\0${attempt.cell.key}`)
     estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind, attempt.sandbox.kind)
     costed.push({ id, cell: attempt.cell, harness: attempt.harness })
@@ -218,6 +224,7 @@ export async function buildPlan(options: {
     evals: [...rows.values()].filter((r) => !r.plan.skip).length,
     cells: cells.size,
     attempts,
+    fewest,
     estimateMs,
     ...(options.prices
       ? { cost: planCost(costed, records, options.judgeModel ?? null, options.prices) }
@@ -397,7 +404,12 @@ export function planLine(plan: RunPlan, config?: string, runId?: string): string
   if (plan.profile) parts.push(`profile ${plan.profile.name} (${plan.profile.reason})`)
   const skipped = plan.rows.length - plan.evals
   parts.push(plural(plan.evals, 'eval') + (skipped ? ` (${skipped} skipped)` : ''))
-  parts.push(plural(plan.cells, 'cell'), plural(plan.attempts, 'attempt'))
+  parts.push(
+    plural(plan.cells, 'cell'),
+    plan.fewest < plan.attempts
+      ? `${plan.fewest}–${plan.attempts} attempts`
+      : plural(plan.attempts, 'attempt'),
+  )
   const serial = `~${formatDuration(plan.estimateMs)} serial`
   const parallel = Math.min(plan.concurrency, plan.attempts)
   parts.push(
@@ -414,6 +426,12 @@ export function planLine(plan: RunPlan, config?: string, runId?: string): string
   ].filter(Boolean)
   if (caps.length) parts.push(`budget ${caps.join(', ')}`)
   return `plan  ${parts.join(' · ')}`
+}
+
+/** `6–10` for a best-of eval's attempts, which stop once a majority agrees; else the count. */
+function bestOfRange(p: EvalPlan, attempts: number): string {
+  if (p.bestOf === undefined) return String(attempts)
+  return `${(attempts / p.bestOf) * majorityOf(p.bestOf)}–${attempts}`
 }
 
 /**
@@ -447,8 +465,8 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
         : p.variants.run === p.variants.of
           ? String(p.variants.run)
           : `${p.variants.run} of ${p.variants.of}`,
-      String(p.runs),
-      String(family ? attempts : p.attempts),
+      p.bestOf !== undefined ? `best of ${p.bestOf}` : String(p.runs),
+      bestOfRange(p, family ? attempts : p.attempts),
       [
         live.length === 0 && p.skip ? `skipped: ${p.skip}` : '',
         ...pooled,
@@ -482,7 +500,10 @@ export type PlanCell = Cell & {
   gateway?: ResolvedGateway
   gate: CellGate
   minLift?: number
+  /** With `bestOf`, the most attempts the cell runs. */
   runs: number
+  /** Set by `runs: { bestOf }`: the cell stops once a majority of this many agree. */
+  bestOf?: number
   /** Secrets its attempts broker, as `NAME → host, host`. */
   brokered: string[]
   egress: PlannedEgress
@@ -528,7 +549,8 @@ export type PlanDocument = {
   profile: { name: string; reason: string } | null
   /** Set when `--resume` continues a previous run. */
   resume?: { runId: string; completed: number }
-  totals: { evals: number; skipped: number; cells: number; attempts: number }
+  /** `attempts` at most; `fewest` start whatever the results (fewer when best-of cells may stop early). */
+  totals: { evals: number; skipped: number; cells: number; attempts: number; fewest: number }
   budget: { attempts: number | null; duration: Duration | null; fits: boolean }
   concurrency: number
   estimateMs: number
@@ -584,6 +606,7 @@ export function planDocument(
         gate: attempt.gate,
         ...(attempt.minLift !== undefined ? { minLift: attempt.minLift } : {}),
         runs: 1,
+        ...(attempt.bestOf !== undefined ? { bestOf: attempt.bestOf } : {}),
         brokered: attempt.brokered,
         egress: attempt.egress,
         ...(attempt.workspace && {
@@ -608,6 +631,7 @@ export function planDocument(
       skipped: plan.rows.length - plan.evals,
       cells: plan.cells,
       attempts: plan.attempts,
+      fewest: plan.fewest,
     },
     budget: {
       attempts: attempts ?? null,

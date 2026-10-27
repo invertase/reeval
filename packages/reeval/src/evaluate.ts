@@ -1,5 +1,6 @@
 import { dirname } from 'node:path'
 import { runAttempt } from './attempt/index.ts'
+import { bestOfCell } from './best-of.ts'
 import { declarationProblem } from './contract/declaration.ts'
 import type {
   DeclarationTree,
@@ -112,8 +113,8 @@ function splitArgs<F extends (...args: never[]) => unknown>(
 }
 
 type GroupFn = {
-  (name: string, fn: () => void, options?: GroupOptions): void
-  (name: string, options: GroupOptions, fn: () => void): void
+  <N extends number = number>(name: string, fn: () => void, options?: GroupOptions<N>): void
+  <N extends number = number>(name: string, options: GroupOptions<N>, fn: () => void): void
 }
 
 /** `evaluate.only` and `group.only` are refused in CI, where they'd silently skip the rest. */
@@ -162,9 +163,10 @@ function registerTodo(name: string) {
   if (matchesTags(tags, getRunContext().tags)) registerTest(name, { mode: 'todo' }, async () => {})
 }
 
+/** `N` is `runs.bestOf` as written, so an even or fractional literal is a type error. */
 type EvaluateFn<F = EvalFn> = {
-  (name: string, fn: F, options?: EvalOptions): void
-  (name: string, options: EvalOptions, fn: F): void
+  <N extends number = number>(name: string, fn: F, options?: EvalOptions<N>): void
+  <N extends number = number>(name: string, options: EvalOptions<N>, fn: F): void
 }
 
 /**
@@ -271,12 +273,22 @@ function register(
   declareHarnesses(harnesses)
   if (!tests) return
   registered++
-  for (const { name: testName, spec, ...options } of tests)
+  const bestOfCells = new Map<string, ReturnType<typeof bestOfCell>>()
+  for (const { name: testName, spec, ...options } of tests) {
+    const { cell, n, bestOf } = options.attempt
+    let hooks = {}
+    // A resumed run's completed attempts are skipped, but still settle their place in the cell.
+    if (bestOf !== undefined) {
+      const of = bestOfCells.get(cell.key) ?? bestOfCell(bestOf)
+      bestOfCells.set(cell.key, of)
+      hooks = of(n)
+    }
     registerTest(
       testName,
-      options,
+      { ...options, ...hooks },
       spec ? (handle) => runAttempt(spec, fn, handle) : async () => {},
     )
+  }
 }
 
 /** Evals registered so far in this worker, for the scheduler's tie-break. */

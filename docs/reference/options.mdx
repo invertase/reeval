@@ -87,8 +87,20 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
   - `harness`: harness ids to compare on; the others run the control only. An id the eval doesn't run is an error. A profile's `limit.harness` that drops every listed id turns the compare off, as `limit.compare: false` does.
 </Property>
 
-<Property name="runs" type="number">
-  Attempts per cell, a whole number of at least 1. **Replaces**. `reeval run --runs n` overrides every level, pins included. Default 1, except a `compare` with variants, which runs 4 per cell: the fewest counted tries a side a lift verdict needs, so a default compare can say `helped` or `made it worse` rather than `can't tell yet`. The plan notes `runs 4 (compare default)`, and its attempts and estimate include them. Any level that sets `runs`, `runs: 1` included, replaces the default; a profile's `limit.runs` caps it, and a compare that `limit.compare` turns off runs once. A case of a pooled `evaluate.each` runs once, since its lift pools over the cases.
+<Property name="runs" type="number | { bestOf: number }">
+  Attempts per cell, a whole number of at least 1, or `{ bestOf: n }`. **Replaces**. `reeval run --runs n` overrides every level, pins included, and turns a best-of into `n` fixed attempts. Default 1, except a `compare` with variants, which runs 4 per cell: the fewest counted tries a side a lift verdict needs, so a default compare can say `helped` or `made it worse` rather than `can't tell yet`. The plan notes `runs 4 (compare default)`, and its attempts and estimate include them. Any level that sets `runs`, `runs: 1` included, replaces the default; a profile's `limit.runs` caps it, and a compare that `limit.compare` turns off runs once. A case of a pooled `evaluate.each` runs once, since its lift pools over the cases.
+
+  `{ bestOf: n }` stops each cell once one side, pass or fail, has a majority of `n`: `n` is odd and 3 or more, anything else exits 2 (`runs.bestOf in evaluate("e") must be an odd whole number of 3 or more, … (got 4)`). The cell gates on that majority (`gate: { passRate: 0.5 }`), and a `gate` set anywhere else is replaced, with a plan note.
+
+  | `bestOf` | Attempts |
+  |---|---|
+  | 3 | 2, and a 3rd only when they split |
+  | 5 | 3 to 5 |
+  | 7 | 4 to 7 |
+
+  A cell's first `(n + 1) / 2` attempts start together; each later one waits until every earlier attempt of its cell has ended, and runs only while neither side has a majority. Other cells keep running meanwhile. An infra error counts on neither side, and a cell never runs more than `n`. The plan shows the range (`2–3 attempts`), and the budget and time estimate use the most. The record marks the attempt the majority added (`bestOf: 'added'`) and each one it left unrun (`bestOf: 'skipped'`, outcome `skipped`), and sets `bestOf` on the cell; the output names those `not needed (best of 5)`.
+
+  Refused on an eval that compares environments, wherever the best-of came from: a lift needs the same attempts on each side. A profile's `limit.runs` below `n` makes it that fixed count, with a note. [`flaky_cells`](/reference/cli/query) calls a cell flaky from 6 counted attempts, pooled over comparable runs, so in one run only a best of 7 or more can reach it; a smaller one that split reports `mixed`. In TypeScript, an inline even, decimal or below-3 literal is a type error, and a value typed `number` is checked when the run is planned. In YAML, `runs: { bestOf: 5 }`; in Python, `{"runs": {"best_of": 5}}`.
 </Property>
 
 <Property name="gate" type="'all' | { passRate: number }">

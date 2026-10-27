@@ -1,0 +1,14 @@
+profile pr (--profile) · 5 evals · 10 cells · 10 attempts · budget attempts 20 ✓
+evals/b.eval.ts › best of 3                                           a/-/docker  control  gated  ×1  runs best of 3 → 1 (profile pr)
+                                                                      b/-/docker  control  gated  ×1
+evals/b.eval.ts › best of 5 over a gate                               a/-/docker  control  gated  ×1  runs best of 5 → 1 (profile pr)
+                                                                      b/-/docker  control  gated  ×1
+evals/b.eval.ts › best of 3 for the group › inherits it               a/-/docker  control  gated  ×1  runs best of 3 → 1 (profile pr)
+                                                                      b/-/docker  control  gated  ×1
+evals/b.eval.ts › best of 3 for the group › a fixed count of its own  a/-/docker  control  gated  ×1  runs 2 → 1 (profile pr)
+                                                                      b/-/docker  control  gated  ×1
+evals/b.eval.ts › fixed                                               a/-/docker  control  gated  ×1
+                                                                      b/-/docker  control  gated  ×1
+excluded: —
+image docker · cursor · 5 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

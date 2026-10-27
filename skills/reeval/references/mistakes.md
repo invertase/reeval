@@ -14,6 +14,8 @@ Each row is a mistake, what reeval says and the fix.
 | A question and no language model | `questions "…" (…) needs a language model` (exit 2) | Set `analysis.model`, give the question its own `model`, or set `question: { model }` |
 | `import { baseline }` | `reeval has no baseline` | `baseline` is a field of `compare`, not an export |
 | `repeat: 3` / `times` | `Unknown option "repeat" … Did you mean "runs"?` | `runs: 3` |
+| `runs: { bestOf: 4 }` | `runs.bestOf … must be an odd whole number of 3 or more` | `runs: { bestOf: 3 }` or `5` |
+| `runs: { bestOf: 3 }` with `compare` | `… compares environments, so it can't take runs: { bestOf: 3 }` | a fixed count, `runs: 4` |
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |
 | `opencode({ model: 'gemini-3.8-flash' })` | `an OpenCode model id names its provider` (exit 2) | `'google/gemini-3.8-flash'` |
 | No `judge.model` anywhere | `c.judge() has no model` | Set one, or `fakeJudge()` |

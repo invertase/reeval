@@ -32,6 +32,13 @@ class JudgeOptions(JudgeDefaults, total=False):
     artifacts: Literal[True] | Sequence[str]
 
 
+class BestOf(TypedDict):
+    """`runs={"best_of": 5}`: stop each cell once a majority of its 5 attempts agree."""
+
+    best_of: int
+    """Odd, 3 or more."""
+
+
 class EvalOptions(TypedDict, total=False):
     """Options for an eval or a group; a group's cascade to the evals inside it."""
 
@@ -47,7 +54,9 @@ class EvalOptions(TypedDict, total=False):
     question: Mapping[str, Any]
     questions: Sequence[str | Mapping[str, Any]]
     """Asked of each attempt, or between attempts with `across`; `[]` clears the group's."""
-    runs: int
+    runs: int | BestOf
+    """Attempts per cell, or `{"best_of": n}`, which gates each cell on its majority. Not on a
+    compared eval."""
     sandbox: DockerSandbox | Mapping[str, Any]
     revision: int | str
     """The eval's version, in its fingerprint: bump it when a helper, a constant outside the body

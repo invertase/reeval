@@ -304,6 +304,10 @@
             "$ref": "#/$defs/AssertionRecord"
           }
         },
+        "bestOf": {
+          "description": "In a `runs: { bestOf }` cell: `added` when it ran past the majority's first attempts (the earlier ones split, or an infra error left them short), `skipped` when it didn't run because the earlier ones already had a majority. Unset on the attempts that always run.",
+          "enum": ["added", "skipped"]
+        },
         "captureUse": {
           "description": "Tokens the capture vision loop used. Infrastructure only: never folded into `usage`, effort, compare or lift.",
           "type": "object",
@@ -729,6 +733,10 @@
       "description": "One harness and environment of an eval, and how its attempts went.",
       "type": "object",
       "properties": {
+        "bestOf": {
+          "description": "Set by `runs: { bestOf }`: the cell stopped once a majority of this many attempts agreed, and gates on that majority. `runs` still counts every planned attempt, the skipped ones included.",
+          "type": "number"
+        },
         "checks": {
           "description": "Each check (assertion label) seen in any attempt of the eval, over this cell's counted attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.",
           "type": "array",
@@ -2613,6 +2621,10 @@
           "description": "The run's settings. `sandbox` is the id of each sandbox the planned attempts ran on, after the profile's defaults, joined with `, `.",
           "type": "object",
           "properties": {
+            "bestOf": {
+              "description": "Set by the config's `runs: { bestOf }`.",
+              "type": "number"
+            },
             "concurrency": {
               "description": "Attempts that ran at once; not part of `configHash`, since it doesn't change results.",
               "type": "number"
@@ -2641,7 +2653,7 @@
               ]
             },
             "runs": {
-              "description": "The config's `runs`; 1 when it sets none, though a compare's cells then run 4 each.",
+              "description": "The config's `runs` (with `bestOf`, the most a cell runs); 1 when it sets none, though a compare's cells then run 4 each.",
               "type": "number"
             },
             "sandbox": {
@@ -2773,6 +2785,10 @@
                 "defaults": {
                   "type": "object",
                   "properties": {
+                    "bestOf": {
+                      "description": "Set by `defaults.runs: { bestOf }`.",
+                      "type": "number"
+                    },
                     "env": {
                       "type": "array",
                       "items": {
@@ -2789,6 +2805,7 @@
                       }
                     },
                     "runs": {
+                      "description": "With `bestOf`, the most attempts a cell runs.",
                       "type": "number"
                     },
                     "sandbox": {

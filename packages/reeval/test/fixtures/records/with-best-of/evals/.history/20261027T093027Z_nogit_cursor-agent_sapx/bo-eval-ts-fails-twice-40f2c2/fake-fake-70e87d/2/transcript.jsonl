@@ -1,0 +1,4 @@
+{"ts":"2026-10-27T09:30:27.806Z","atMs":0,"turn":0,"type":"prompt","text":"hi"}
+{"turn":0,"ts":"2026-10-27T09:30:27.806Z","atMs":0,"type":"text","text":"Working on: hi","durationMs":0}
+{"turn":0,"ts":"2026-10-27T09:30:27.806Z","atMs":0,"type":"text","text":"ok","durationMs":0}
+{"ts":"2026-10-27T09:30:27.806Z","atMs":0,"turn":0,"type":"turn-end","status":"completed","durationMs":0}

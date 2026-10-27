@@ -15,5 +15,8 @@
   "harness with a number": "UsageError: compare.harness in evals/a.eval.ts › e must be a list of harness ids, e.g. harness: ['cursor:composer-2.5'] (got 3)",
   "environment beside baseline": "UsageError: environment and compare.baseline can't both be set in evals/a.eval.ts › e. compare: { baseline, variants } names every arm, so drop environment, or drop baseline to make environment the control.",
   "good": null,
-  "data: a variant with a bad spec": "UsageError: Unknown field \"setpu\" in layer \"x\" of environment \"x\" in compare.variants[0] in evals/a.eval.ts › e. Did you mean \"setup\"?"
+  "data: a variant with a bad spec": "UsageError: Unknown field \"setpu\" in layer \"x\" of environment \"x\" in compare.variants[0] in evals/a.eval.ts › e. Did you mean \"setup\"?",
+  "runs best of 3 on a compare": "UsageError: evaluate(\"e\") compares environments, so it can't take runs: { bestOf: 3 }: a lift needs the same number of attempts on each side, and best-of stops each cell on its own. Set a fixed count on it, e.g. runs: 4.",
+  "runs best of 3 from the config on a compare": "UsageError: evaluate(\"e\") compares environments, so it can't take runs: { bestOf: 3 } from the config: a lift needs the same number of attempts on each side, and best-of stops each cell on its own. Set a fixed count on it, e.g. runs: 4.",
+  "runs best of 3 on a compare, its runs replaced": null
 }

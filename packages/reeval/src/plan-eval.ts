@@ -44,6 +44,7 @@ import {
   plainHeaderError,
   plainHeaders,
   type ResolvedEval,
+  runsOf,
   sandboxProvider,
   sandboxSetBy,
   secretVarsIn,
@@ -100,12 +101,14 @@ export type PlannedTest = {
 }
 
 function configLevel(config: ResolvedConfig): Cascading {
+  const { runs, bestOf } = config.runs !== undefined ? runsOf(config.runs) : { runs: undefined }
   return {
     harness: config.harness,
     sandbox: config.sandbox,
     environment: config.environment,
     compare: undefined,
-    runs: config.runs,
+    runs,
+    bestOf,
     gate: config.gate,
     env: config.env,
     egress: config.egress !== undefined ? { inherited: config.egress } : {},
@@ -313,6 +316,7 @@ function planTests(
       setBy,
       gate: planned.gate,
       ...(planned.minLift !== undefined ? { minLift: planned.minLift } : {}),
+      ...(planned.bestOf !== undefined ? { bestOf: planned.bestOf } : {}),
       brokered: brokeredIn(resolved.env, planned),
       secretVars: secretVarsIn(resolved.env, planned),
       egress: planned.egress,

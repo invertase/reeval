@@ -41,7 +41,17 @@ export type TestOptions = {
   attempt?: AttemptMeta
   /** The leases the attempt waits for when it's ready to start; none for placeholders. */
   gate?: Gate
+  /**
+   * Awaited before the attempt asks for its leases: `false` skips it unrun. A best-of cell's
+   * later attempts wait here for the earlier ones, so they hold no lease while they wait.
+   */
+  ready?: () => Promise<boolean>
+  /** Called once the test is done with, run or not: after its body settles, when it had one. */
+  settled?: (settled: Settled) => void
 }
+
+/** How a test ended, for `settled`: its state, and the meta its body set last. */
+export type Settled = { state: 'passed' | 'failed' | 'skipped'; meta?: EvalMeta }
 
 export type Engine = {
   registerTest(

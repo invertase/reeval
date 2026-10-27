@@ -10,7 +10,7 @@ import { expect } from '../src/engine/expect.ts'
 import { loadEvalFile } from '../src/engine/loader.ts'
 import type { WireResult } from '../src/engine/protocol.ts'
 import { type Reporter, routeConsole, runTests, serializeError } from '../src/engine/run.ts'
-import type { TestHandle, TestOptions } from '../src/engine/runtime.ts'
+import type { Settled, TestHandle, TestOptions } from '../src/engine/runtime.ts'
 import { useSchedulerChannel } from '../src/scheduler/client.ts'
 import type { EvalMeta } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
@@ -278,6 +278,91 @@ describe('runTests', () => {
       onReady: () => {},
     })
     assert.deepEqual(seen, [['checks 0'], ['checks 1']])
+  })
+
+  test('ready runs, skips or fails an attempt; settled hears how each ended', async () => {
+    const ended: Record<string, Settled> = {}
+    const ran: string[] = []
+    const on = (name: string, ready?: () => Promise<boolean>): Partial<TestOptions> => ({
+      ...(ready ? { ready } : {}),
+      settled: (s) => {
+        ended[name] = s
+      },
+    })
+    const body =
+      (name: string, ok = true) =>
+      async (h: TestHandle) => {
+        ran.push(name)
+        h.setMeta(meta)
+        if (!ok) assert.fail('no')
+      }
+    const collected = await tests(
+      ['go', on('go', async () => true), body('go')],
+      ['stop', on('stop', async () => false), body('stop')],
+      ['broken', on('broken', () => Promise.reject(new Error('ready broke'))), body('broken')],
+      ['fails', on('fails'), body('fails', false)],
+      ['unselected', on('unselected'), body('unselected')],
+    )
+    const { results, reporter } = recorder()
+    await runTests(collected, new Set([0, 1, 2, 3]), {
+      file: '/f',
+      stagingDir: stagingDir(),
+      signal: new AbortController().signal,
+      reporter,
+      onReady: () => {},
+    })
+    assert.deepEqual(ran.sort(), ['fails', 'go'])
+    assert.equal(results.get(1)?.state, 'skipped')
+    assert.equal(results.get(2)?.errors[0]?.message, 'ready broke')
+    assert.deepEqual(ended, {
+      go: { state: 'passed', meta },
+      stop: { state: 'skipped' },
+      broken: { state: 'failed' },
+      fails: { state: 'failed', meta },
+      unselected: { state: 'skipped' },
+    })
+  })
+
+  test('a cancel while an attempt awaits ready skips it; a timed-out attempt settles failed', async () => {
+    const cancel = new AbortController()
+    const ended: Settled[] = []
+    const collected = await tests([
+      'waits',
+      {
+        ready: async () => {
+          cancel.abort()
+          return true
+        },
+        settled: (s) => void ended.push(s),
+      },
+      async () => assert.fail('ran'),
+    ])
+    const a = recorder()
+    await runTests(collected, new Set([0]), {
+      file: '/f',
+      stagingDir: stagingDir(),
+      signal: cancel.signal,
+      reporter: a.reporter,
+      onReady: () => {},
+    })
+    assert.equal(a.results.get(0)?.state, 'skipped')
+
+    const slow = await tests([
+      'slow',
+      { timeout: 20, settled: (s) => void ended.push(s) },
+      async (h) => {
+        await new Promise((resolve) => h.signal.addEventListener('abort', resolve))
+      },
+    ])
+    const b = recorder()
+    await runTests(slow, new Set([0]), {
+      file: '/f',
+      stagingDir: stagingDir(),
+      signal: new AbortController().signal,
+      reporter: b.reporter,
+      onReady: () => {},
+    })
+    assert.deepEqual(ended, [{ state: 'skipped' }, { state: 'failed' }])
   })
 })
 

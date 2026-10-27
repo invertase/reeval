@@ -60,6 +60,28 @@ hint: 1 eval runs more than once with the default gate, so every attempt must pa
 
 The hint is about [gates](/concepts/lift): with more than one run, the default gate needs every attempt to pass.
 
+## Best of n
+
+`runs: { bestOf: n }` stops each cell once pass or fail has a majority, so a cell that agrees early costs fewer attempts than a fixed count:
+
+```ts
+evaluate('splits', { runs: { bestOf: 3 } }, async (c) => {
+  // …
+})
+```
+
+The plan shows each cell's range, and the budget uses the most:
+
+```text
+plan  … · 3 evals · 3 cells · 7–11 attempts · …
+eval                      harnesses  variants  runs       attempts  notes
+bo.eval.ts › agrees       1          —         best of 3  2–3
+bo.eval.ts › splits       1          —         best of 3  2–3
+bo.eval.ts › fails twice  1          —         best of 5  3–5
+```
+
+A cell's later attempts wait for its earlier ones, while other cells keep running. It gates on the majority and can't sit on a compare; see [`runs`](/reference/options#runs).
+
 ## Cell keys and attempt ids
 
 A cell key is `<harness>/<environment>/<sandbox>`, and an attempt id adds `#<n>`:
@@ -111,7 +133,8 @@ reeval run --dry-run --json --config reeval.fake.config.ts skill
     "evals": 1,
     "skipped": 0,
     "cells": 2,
-    "attempts": 8
+    "attempts": 8,
+    "fewest": 8
   },
 …
   "evals": [
