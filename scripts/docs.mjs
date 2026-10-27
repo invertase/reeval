@@ -1065,9 +1065,18 @@ const pkg = config.variables.pkg
 const pkgSpecifier = new RegExp(
   `(?:from |import\\(|require\\()['"]${pkg}(?:/[\\w-]+)?['"]|\\b(?:npm (?:i|install)|pnpm add|yarn add|bun add)\\b[^\\n]*\\s${pkg}(?:@\\S*)?(?=\\s|$)`,
 )
+/** docs.page leaves `{{ pkg }}` raw in the Markdown it serves to agents, so the page they read first names the package literally, and must keep naming the one in docs.json. */
+const literalPkgPage = join(docsDir, 'index.mdx')
 for (const file of mdxFiles()) {
   if (!linked.has(file)) problems.push(`${relative(root, file)} isn't in the docs.json sidebar`)
-  if (pkgSpecifier.test(read(file).replace(exampleBlock, ''))) {
+  if (file === literalPkgPage) {
+    const page = read(file)
+    if (page.includes('{{ pkg }}') || !pkgSpecifier.test(page)) {
+      problems.push(
+        `${relative(root, file)} must name ${pkg} literally where it installs or imports it, not {{ pkg }}`,
+      )
+    }
+  } else if (pkgSpecifier.test(read(file).replace(exampleBlock, ''))) {
     problems.push(
       `${relative(root, file)} installs or imports ${pkg} by name: use {{ pkg }} so it lives in docs.json`,
     )
