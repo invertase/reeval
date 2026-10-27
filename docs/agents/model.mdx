@@ -20,11 +20,11 @@ With `effort` set and `id` unset, the cell id ends in `[effort=<value>]`, so one
 
 `model` is the id the harness's own CLI or SDK accepts, and the harness's key follows from it. For more information about the key each harness reads, see [Harness behavior](/reference/options#harness-behavior). For more information about how a key stays on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-reeval refuses a prefixed id on a harness that takes a bare id, or a bare id on `opencode`, at plan time with exit code 2. Each harness page's `model` entry names the ids it accepts. For more information about the providers `opencode` supports, see [OpenCode providers](/reference/options#opencode-providers).
+reeval refuses a prefixed id on a harness that takes a bare id, or a bare id on `opencode`, at plan time with exit code 2. The `model` entries in [Harness factory options](/reference/options#harness-factory-options) name the ids a harness accepts. For more information about the providers `opencode` supports, see [OpenCode providers](/reference/options#opencode-providers).
 
 ## `effort`
 
-`effort` is a reasoning-effort value that reeval passes to the harness's own CLI or SDK. It records the value as `effort` on the cell. Only `claudeCode` checks the value at plan time. The `effort` entry on a harness page names the values that harness takes and where reeval sets them.
+`effort` is a reasoning-effort value that reeval passes to the harness's own CLI or SDK. It records the value as `effort` on the cell. Only `claudeCode` checks the value at plan time. The `effort` entries in [Harness factory options](/reference/options#harness-factory-options) name the values a harness takes and where reeval sets them.
 
 `fx` has no `effort`, and reeval refuses one at plan time with exit code 2. Cursor's fast mode is `params.fast`, not `effort`.
 
@@ -40,7 +40,7 @@ The plan shows the gateway each harness resolved to. For the harnesses and effor
 
 ## Check the model that served
 
-The record keeps the model and effort that served each turn beside the configured `model` and `effort`, in `servedModels` and `servedEffort`. For more information about those fields, and each harness's `resolvedModels` and `resolvedEffort`, see [Run record reference](/reference/record).
+The record keeps the configured `model` and `effort` beside what ran. `turns[].model` is the model the harness says served each turn, and null when it reports none. `servedModels` is the models the egress gateway observed in the harness's API calls, and it is null for Cursor and Claude Code, whose API requests name no model. `servedEffort` is the level those labels name. For more information about those fields, and each harness's `resolvedModels` and `resolvedEffort`, see [Run record reference](/reference/record).
 
 ## Next
 

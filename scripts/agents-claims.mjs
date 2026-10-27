@@ -26,7 +26,13 @@ const sentences = (text) =>
  *    it is a reference catalog, so it lives in Harness behavior and the harness page links to it;
  *  - a heading that two or more harness pages share (`rules`, `skills`, `mcp`, `usage`,
  *    `servedModels`, `web-search`, `web-fetch`): what differs by harness is one entry in
- *    reference/options, and each harness page links to it.
+ *    reference/options, and each harness page links to it;
+ *  - the landing's `gateway` option written as string literals with no gateway helper, when
+ *    harness.ts also takes the `GatewayDescriptor` that `direct()`, `vercel()` and `openrouter()`
+ *    return;
+ *  - the model page saying `servedModels` records each turn, or not saying it is null for Cursor
+ *    and Claude Code (history/types.ts: `servedModels` observes API calls; the per-turn model is
+ *    `turns[].model`).
  */
 export async function agentsProblems({ root, docsDir }) {
   const problems = []
@@ -169,6 +175,47 @@ export async function agentsProblems({ root, docsDir }) {
         `${files.length} harness pages have a "${heading}" heading (${files.join(', ')}): it is one entry in reference/options, so link to it`,
       )
     }
+  }
+
+  const gatewayEntry = landingText.match(/<Property name="gateway"[\s\S]*?<\/Property>/)?.[0] ?? ''
+  const helperNamed = /`(?:direct|vercel|openrouter)\(\)`/.test(gatewayEntry)
+  if (/type="(?:'\w+'(?: \| )?)+"/.test(gatewayEntry) || !helperNamed) {
+    problems.push(
+      'agents/index documents the gateway option as string literals without a gateway helper, but harness.ts also takes a GatewayDescriptor, which direct(), vercel() and openrouter() return: type it GatewayName | GatewayDescriptor and name the helpers',
+    )
+  }
+
+  for (const sentence of sentences(modelText)) {
+    if (
+      /`servedModels`/.test(sentence) &&
+      /\b(?:each|every) turn\b/.test(sentence) &&
+      !/`turns\[\]\.model`/.test(sentence)
+    ) {
+      problems.push(
+        'agents/model says servedModels records each turn: it is the models the egress gateway observed in API calls (history/types.ts), and the per-turn model is turns[].model',
+      )
+    }
+  }
+  for (const sentence of sentences(modelText)) {
+    if (/\bharness page\b/i.test(sentence) && /`(?:model|effort)`\s+entry/.test(sentence)) {
+      problems.push(
+        'agents/model sends the reader to an entry on a harness page for model or effort: the harness pages hold no Property entries, so link to /reference/options#harness-factory-options',
+      )
+    }
+  }
+  if (!modelText.includes('(/reference/options#harness-factory-options)')) {
+    problems.push('agents/model has no link to /reference/options#harness-factory-options')
+  }
+  if (
+    /`servedModels`/.test(modelText) &&
+    !sentences(modelText).some(
+      (s) =>
+        /`servedModels`/.test(s) && /\bnull\b/.test(s) && /Cursor/.test(s) && /Claude Code/.test(s),
+    )
+  ) {
+    problems.push(
+      'agents/model names servedModels but not that it is null for Cursor and Claude Code, whose API requests name no model (history/types.ts)',
+    )
   }
   return problems
 }

@@ -47,8 +47,8 @@ harness: claudeCode({
   How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
 </Property>
 
-<Property name="gateway" type="'direct' | 'vercel' | 'openrouter'" optional>
-  The gateway this harness's model calls go through. It skips the config's `gateway` fallback, and the plan refuses a gateway that isn't listed or can't serve the harness. For more information about routing, see [Route models through a gateway](/agents/gateways).
+<Property name="gateway" type="GatewayName | GatewayDescriptor" optional>
+  The gateway this harness's model calls go through: `'direct'`, `'vercel'`, or `'openrouter'`, or the descriptor that `direct()`, `vercel()`, or `openrouter()` from `{{ pkg }}/gateway` returns. It skips the config's `gateway` fallback, and the plan refuses a gateway that isn't listed or can't serve the harness. For more information about routing, see [Route models through a gateway](/agents/gateways).
 </Property>
 
 ## Pick a harness
