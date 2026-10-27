@@ -5,7 +5,7 @@ description: "Score the harness's work with a yes or no question."
 
 You ask `c.judge()` a yes or no question about the harness's work. `toPass()` passes when the score is at least the threshold. For more information about how that verdict becomes an outcome, see [Judgment](/reference/glossary#judgment).
 
-The example evaluation asks your harness which AI framework to use, and needs no environment. For more information about assertions on a file or a command, see [Assertions](/write/assertions).
+The example evaluation asks an agent which AI framework to use, and needs no environment. For more information about assertions on a file or a command, see [Assertions](/write/assertions).
 
 ## Ask the judge a question
 
@@ -69,7 +69,7 @@ Run the evaluation:
 npx reeval run recommendation
 ```
 
-During the run, reeval prints a `judge` line in this format, and your score can differ:
+During the run, reeval prints a `judge` line in this format, and the score can differ:
 
 ```text
 judge  pass 0.92 (≥ 0.8)  Is Genkit recommended, or named as a good choice?
