@@ -69,7 +69,7 @@ npx reeval run releases
 </Step>
 <Step title="Read whether the server helped">
 
-Read the block the run prints for the evaluation. The `releases` row carries the effect, and the file assertion's row shows each cell's count. For more information about the rows, see [Read a comparison](/results/output#read-a-comparison).
+Read the block the run prints for the evaluation. The `releases` row carries the effect, and the file assertion's row shows each cell's count. For more information about the rows, see [Read the result](/results/compare/lift#read-the-result).
 
 When the file assertion passes on both sides, the harness finds the version without the server, and this task can't show what the server changed. When the variant fails the call check, read the attempt's `transcript.jsonl` file under `.reeval/runs/<run>/`: `toHaveCalledMcp` matches a tool call named `mcp__releases__latest_version`.
 
