@@ -1,5 +1,4 @@
 no profile · 1 evals · 2 cells · 2 attempts
-hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)
 evals/compare.eval.ts › config is the control  fake/node22/docker:node:22-bookworm   control          ungated  ×1
                                                fake/skilled/docker:node:24-bookworm  variant skilled  gated    ×1
 excluded: —

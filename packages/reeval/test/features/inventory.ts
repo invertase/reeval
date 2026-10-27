@@ -1484,7 +1484,13 @@ export const inventory: InventoryFeature[] = [
     id: 'plan.verdict-hints',
     area: 'Records and studio',
     name: "The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will say `can't tell yet` whatever happens",
-    plan: ['compare/verdicts', 'compare/each-pooled', 'compare/study'],
+    plan: [
+      'compare/verdicts',
+      'compare/verdicts-no-control',
+      'compare/verdicts-some-cases',
+      'compare/each-pooled',
+      'compare/study',
+    ],
   },
   {
     id: 'contrasts',

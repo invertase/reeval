@@ -141,7 +141,14 @@ export async function buildPlan(options: {
   // A filter can leave out some of an eval's cells: each row counts what it actually plans.
   const counted = new Map<
     string,
-    { harnesses: Set<string>; variants: Set<string>; n: number; gated: boolean }
+    {
+      harnesses: Set<string>
+      variants: Set<string>
+      n: number
+      gated: boolean
+      controls: Set<string>
+      variantSides: Set<string>
+    }
   >()
   let attempts = 0
   let estimateMs = 0
@@ -172,10 +179,15 @@ export async function buildPlan(options: {
       variants: new Set(),
       n: 0,
       gated: false,
+      controls: new Set(),
+      variantSides: new Set(),
     }
     row.harnesses.add(attempt.cell.harness)
     if (attempt.gate !== 'none') row.gated = true
     if (attempt.cell.variant !== undefined) row.variants.add(attempt.cell.variant)
+    const side = `${attempt.cell.harness}\0${attempt.cell.sandbox}`
+    if (attempt.cell.role === 'control') row.controls.add(side)
+    else if (attempt.cell.role === 'variant') row.variantSides.add(side)
     row.n++
     counted.set(id, row)
   }
@@ -195,6 +207,11 @@ export async function buildPlan(options: {
         .map((p) => p.attempt),
     )
   }
+  // A lift needs a variant and the control on its harness and sandbox in the same run.
+  const lifted = (r: PlanRow) => {
+    const c = counted.get(r.id)
+    return !r.plan.skip && !!c && [...c.variantSides].some((s) => c.controls.has(s))
+  }
   return {
     profile: options.profile,
     rows: [...rows.values()],
@@ -213,8 +230,8 @@ export async function buildPlan(options: {
     ),
     hints: [
       ...gateHint([...rows.values()].filter((r) => counted.get(r.id)?.gated)),
-      ...verdictHint([...rows.values()]),
-      ...familyHints([...rows.values()]),
+      ...verdictHint([...rows.values()].filter(lifted)),
+      ...familyHints([...rows.values()].filter(lifted)),
       ...gatewayHints(planned),
     ],
     sandboxes: [...sandboxes.values()],
@@ -313,16 +330,10 @@ const VERDICT_MIN_RUNS = Math.max(EFFECT_MIN_COUNTED, EFFORT_MIN_RUNS)
 
 /**
  * One line when compares outside a family run too few times per cell for any verdict: their lift
- * and effort say `can't tell yet` however the attempts go.
+ * and effort say `can't tell yet` however the attempts go. `rows` are those that plan a lift.
  */
 function verdictHint(rows: PlanRow[]): string[] {
-  const few = rows.filter(
-    (r) =>
-      !r.plan.skip &&
-      !r.family &&
-      (r.plan.variants?.run ?? 0) > 0 &&
-      r.plan.runs < VERDICT_MIN_RUNS,
-  )
+  const few = rows.filter((r) => !r.family && r.plan.runs < VERDICT_MIN_RUNS)
   if (few.length === 0) return []
   const counts = [...new Set(few.map((r) => r.plan.runs))].sort((a, b) => a - b)
   const runs = counts.length === 1 && counts[0] === 1 ? 'once' : `${counts.join(' or ')} times`
@@ -335,20 +346,22 @@ function verdictHint(rows: PlanRow[]): string[] {
 /**
  * One line per compared family with too few cases for its paired lift to get a verdict: one
  * attempt a case can't give more discordant cases than there are cases, and several need as many
- * cases, so more runs don't help.
+ * cases, so more runs don't help. `rows` are those that plan a lift.
  */
 function familyHints(rows: PlanRow[]): string[] {
-  const cases = new Map<string, number>()
+  const cases = new Map<string, { n: number; of: number }>()
   for (const r of rows) {
-    if (!r.family || r.plan.skip || (r.plan.variants?.run ?? 0) === 0) continue
-    cases.set(r.family.id, (cases.get(r.family.id) ?? 0) + 1)
+    if (!r.family) continue
+    const c = cases.get(r.family.id) ?? { n: 0, of: r.family.cases }
+    cases.set(r.family.id, { ...c, n: c.n + 1 })
   }
   return [...cases]
-    .filter(([, n]) => n < PAIRED_MIN)
-    .map(
-      ([id, n]) =>
-        `family ${clip(id, 64)} has ${plural(n, 'case')}; its lift needs ${PAIRED_MIN} for a verdict, so it will say can't tell yet whatever the runs (add cases)`,
-    )
+    .filter(([, { n }]) => n < PAIRED_MIN)
+    .map(([id, { n, of }]) => {
+      const has = n === of ? `has ${plural(n, 'case')}` : `runs ${n} of its ${of} cases`
+      const fix = of >= PAIRED_MIN ? 'run all its cases' : 'add cases'
+      return `family ${clip(id, 64)} ${has}; its lift needs ${PAIRED_MIN} for a verdict, so it will say can't tell yet whatever the runs (${fix})`
+    })
 }
 
 /** One line per harness whose cells fell past the first entries of the `gateway` list. */
