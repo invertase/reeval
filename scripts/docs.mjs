@@ -625,6 +625,23 @@ for (const name of ['docker', 'podman']) {
   }
 }
 
+// Podman runs the same limits through `podman run`, so the docker() introduction names the
+// engine's run command rather than `docker run` alone.
+for (const sentence of page('reference/options')
+  .replace(/```[\s\S]*?```/g, '')
+  .split(/(?<=[.!?])\s+/)) {
+  if (
+    sentence.includes('--memory') &&
+    sentence.includes('`docker run`') &&
+    !sentence.includes('`podman run`') &&
+    !sentence.includes('run command')
+  ) {
+    problems.push(
+      "reference/options passes docker() and podman() limits to `docker run` alone: name the engine's run command, or both docker run and podman run",
+    )
+  }
+}
+
 // The harness support matrix lives on agents/gateways; the pages beside it link to it.
 const HARNESS_NAMES =
   /\b(?:Cursor|Claude Code|Codex|Antigravity|OpenCode|Goose|Grok Build|fx|pi)\b/g

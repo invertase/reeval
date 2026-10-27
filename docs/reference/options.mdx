@@ -94,7 +94,7 @@ For more information about sandbox factories, see [Choose a sandbox](/integratio
 
 ## `docker()`
 
-`docker()` and `podman()` take these options. Each limit applies to one container, and reeval passes them to `docker run` as `--memory`, `--memory-swap`, `--cpus`, and `--pids-limit`. For more information, see [Docker sandbox](/integrations/sandboxes/docker).
+`docker()` and `podman()` take these options. Each limit applies to one container, and reeval passes them to the container engine's run command (`docker run` or `podman run`) as `--memory`, `--memory-swap`, `--cpus`, and `--pids-limit`. For more information, see [Docker sandbox](/integrations/sandboxes/docker).
 
 <Property name="docker.id" type="string" optional>
   The last segment of the cell key. Defaults to `docker`, `docker:<image>` when `image` or `from` names another image, or `docker:<name>` for a `dockerfile`, where the name is the file's, or its directory's for a file named `Dockerfile`. A hash of `install` follows.
