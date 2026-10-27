@@ -55,5 +55,5 @@ todo             math › adds power
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-`group`, `.skip`, `.only` and `.todo` are in the [group and evaluate](../../docs/reference/group-evaluate.mdx)
+`group`, `.skip`, `.only` and `.todo` are in the [Authoring API reference](../../docs/reference/api.mdx)
 reference, and how each option merges in [Options](../../docs/reference/options.mdx).

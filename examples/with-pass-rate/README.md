@@ -46,4 +46,4 @@ two runs).
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The flaky fake agent, and the real agents from `../profiles.ts` |
 
-Gates, pass@1 and pass^k are in the [Gates and lift](../../docs/concepts/lift.mdx) concept page.
+Gates, pass@1 and pass^k are in [How statistics work](../../docs/results/compare/statistics.mdx).

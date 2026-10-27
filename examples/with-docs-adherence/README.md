@@ -49,4 +49,4 @@ one profile you need.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace: the handler and its tests |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, and the real agents from `../profiles.ts` |
 
-What the judge is given is in the [Judges](../../docs/reference/judges.mdx) reference.
+What the judge is given is in the [Judge agent work](../../docs/write/judgments.mdx).

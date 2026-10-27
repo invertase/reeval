@@ -48,5 +48,5 @@ counted as the agent's change.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-Hidden tests are in the [Writing evals](../../docs/guide/writing-evals.mdx) guide, and
-`c.writeFile` in the [attempt context](../../docs/reference/attempt-context.mdx) reference.
+Hidden tests are in the [Evaluate](../../docs/write/index.mdx) page, and
+`c.writeFile` in the [Attempt context reference](../../docs/reference/context.mdx).

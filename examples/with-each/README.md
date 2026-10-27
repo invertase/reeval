@@ -59,4 +59,4 @@ case.
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
 Families, name placeholders and a paired lift over cases are in the
-[Suites of cases](../../docs/recipes/eval-each.mdx) recipe.
+[Evaluate many cases](../../docs/write/cases.mdx) page.

@@ -74,5 +74,5 @@ a reeval run, use the `reeval` MCP server's `failures` tool first" makes it reac
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace: a `multiply` that adds |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-The [Query history from your agent](../../docs/recipes/agent-mcp.mdx) recipe covers HTTP and
-tokens; every tool is on the [reeval mcp](../../docs/reference/cli/mcp.mdx) reference page.
+The [History MCP server](../../docs/reference/mcp-tools.mdx) page covers HTTP,
+tokens and every tool.

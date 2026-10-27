@@ -50,5 +50,5 @@ reeval: Rootless Podman can't limit a sandbox's cpu, pids: your user's cgroup do
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-[podman()](../../docs/reference/sandbox/podman.mdx) has its options, macOS with `podman machine`,
+[Run with Podman](../../docs/integrations/sandboxes/podman.mdx) has its options, macOS with `podman machine`,
 and what reeval has been tested on.

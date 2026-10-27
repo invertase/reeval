@@ -51,4 +51,4 @@ Serve it from any static host. Anyone who can open it can read every included fi
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-Every page of the studio is in [The studio](../../docs/guide/studio.mdx) guide.
+Every page of the studio is in [Browse studio runs](../../docs/results/studio.mdx).

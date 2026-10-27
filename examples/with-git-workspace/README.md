@@ -44,4 +44,4 @@ A branch or no `ref` warns in the plan, since the code under the eval could chan
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-`git()` and its options are in the [Helpers](../../docs/reference/helpers.mdx#git) reference.
+`git()` and its options are in the [Environment helpers reference](../../docs/reference/environment.mdx#git).

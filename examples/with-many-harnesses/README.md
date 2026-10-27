@@ -56,4 +56,4 @@ here; Claude Code, Codex and Cursor read `harness`.
 | [`fake-agent/`](./fake-agent) | What the fake agents copy into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The two fake agents, the `agents` profile and the real agents from `../profiles.ts` |
 
-Running agents side by side is the [Compare agents](../../docs/recipes/compare-agents.mdx) recipe.
+Running agents side by side is the [Compare harnesses](../../docs/recipes/agent-comparison.mdx) recipe.

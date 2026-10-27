@@ -63,5 +63,5 @@ context  1      cat ~/.agents/skills/jsdoc/SKILL.md
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent in Docker, and the real agents from `../profiles.ts` |
 
-The `reeval query` [views](../../docs/reference/cli/query.mdx#views) reference has every column of
+The `reeval query` [Query views](../../docs/reference/query.mdx#views) reference has every column of
 `skill_files`, `skill_reads` and `context_use`.

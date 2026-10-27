@@ -48,4 +48,4 @@ where the skill and server went:
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
 Plugin sources, their parts and what each agent loads are in the
-[Helpers](../../docs/reference/helpers.mdx#plugin) reference.
+[Environment helpers reference](../../docs/reference/environment.mdx).

@@ -42,5 +42,5 @@ names the call `mcp__<server>__<tool>`, which is what `toHaveCalledMcp('releases
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-The [Evaluate an MCP server](../../docs/recipes/mcp-server.mdx) recipe goes further: a remote
+The [Measure MCP servers](../../docs/recipes/mcp-comparison.mdx) recipe goes further: a remote
 server with a brokered token, and a compare with and without it.

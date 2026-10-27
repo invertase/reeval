@@ -71,4 +71,4 @@ don't hold, before it prints, whether a real model or the fake wrote it.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, `analysis.model`, and the real agents from `../profiles.ts` |
 
-Insights and `reeval analyze` are in the [Analysis](../../docs/guide/analysis.mdx) guide.
+Insights and `reeval analyze` are in the [Analyze a run](../../docs/results/analyze.mdx) page.

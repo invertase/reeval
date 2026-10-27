@@ -168,7 +168,7 @@ with `scripts/binary-smoke.mjs` (nothing installed; Docker on linux-x64, Alpine 
 it from those files with `scripts/install.sh` or `scripts/install.ps1` (Windows PowerShell and
 pwsh), which check the binary starts before installing it, and uploads `reeval-<version>-<os>-<arch>` plus `SHA256SUMS` as one artifact. `release.yml`
 calls it for each npm release and uploads that artifact to the GitHub release, which is where the
-install scripts download from (docs: `docs/guide/binary.mdx`).
+install scripts download from (docs: `docs-archive/guide/binary.mdx`, until the rebuild has a page for it).
 
 **The build.** [tsdown](https://tsdown.dev) bundles `reeval`
 (`packages/reeval/tsdown.config.mjs`) into chunks directly in `dist/`, with its `.d.ts`. The

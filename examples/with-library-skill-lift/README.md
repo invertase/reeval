@@ -53,4 +53,4 @@ commit and content hash under `environments[].skills`.
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
 Skill sources (`skill.git`, `skill.npm`, `skill.registry`) are in the
-[Helpers](../../docs/reference/helpers.mdx) reference.
+[Environment helpers reference](../../docs/reference/environment.mdx).

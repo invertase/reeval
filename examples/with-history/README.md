@@ -72,4 +72,4 @@ real agent that fails with nothing changed reads `regressed`, and
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, `record` and `history`, and the real agents from `../profiles.ts` |
 
 Recording, `reeval history`, `reeval compare` and `reeval show` are in the
-[History](../../docs/guide/history.mdx) guide.
+[Record runs in Git](../../docs/runs/recording.mdx) page.

@@ -43,5 +43,5 @@ fail             writes tests that catch a bug
 | [`canary/`](./canary) | What the `canary` profile's agent writes instead: a test too weak to catch it |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, the canary, and the real agents from `../profiles.ts` |
 
-`c.writeFile` and hidden checks are in the [Attempt context](../../docs/reference/attempt-context.mdx)
+`c.writeFile` and hidden checks are in the [Attempt context reference](../../docs/reference/context.mdx)
 reference.

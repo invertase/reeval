@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { agentsProblems } from './agents-claims.mjs'
 import { anchorProblems } from './docs-anchors.mjs'
+import { linkProblems } from './docs-links.mjs'
 import { docsRunsProblems } from './docs-runs-checks.mjs'
 import { gatewayLandingProblems } from './gateway-landing-claims.mjs'
 import {
@@ -1048,6 +1049,7 @@ for (const href of hrefs) {
 }
 const linked = new Set(hrefs.map(fileFor).filter(Boolean))
 problems.push(...anchorProblems({ root, docsDir, variables: config.variables }))
+problems.push(...linkProblems({ root, config }))
 const pkg = config.variables.pkg
 /** The package named where it's installed or imported; the brand and CLI share its name. */
 const pkgSpecifier = new RegExp(

@@ -48,4 +48,4 @@ every machine. With the token set, `pnpm eval -v` shows the gateway swapping it 
 | [`reeval.config.ts`](./reeval.config.ts) | `secrets: { unbrokered: 'error' }`, the fake agent in Docker, and the real agents |
 
 `secrets` is in the [config reference](../../docs/reference/config.mdx), and brokering in the
-[Secrets and egress](../../docs/guide/secrets-and-egress.mdx) guide.
+[Pass secrets](../../docs/environments/secrets.mdx) page.

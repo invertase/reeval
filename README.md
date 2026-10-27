@@ -27,11 +27,11 @@ Evals are TypeScript files in `evals/`, next to the tool they test. Each run wri
 
 Cursor ⋅ Claude Code ⋅ Codex ⋅ Antigravity ⋅ OpenCode ⋅ Goose ⋅ pi ⋅ Grok Build
 
-- **Real agents**: each harness runs the agent itself, with its own tools, skills, and rules, as it works on a developer's machine ([harnesses](docs/guide/harnesses.mdx)).
-- **Keys stay on the host**: each attempt starts in a fresh sandbox that holds only a placeholder key. reeval's egress gateway swaps in the real key on requests to that provider and nowhere else ([secrets and egress](docs/guide/secrets-and-egress.mdx)).
-- **Compare a change**: one eval runs a baseline and its variants with the same prompt and checks, then prints whether each variant helped, made it worse, or can't tell yet ([compare](docs/guide/compare.mdx)).
-- **Pinned environments**: an environment starts from a workspace, such as a git repository at a fixed ref, then adds files, setup steps, rules, skills, and MCP servers, so every attempt starts from the same state ([environments](docs/guide/environments.mdx)).
-- **History in Git**: recorded runs sit beside the code. `reeval query` reads them with SQL, and `reeval studio` shows each attempt's transcript, diff, and checks ([history](docs/guide/history.mdx)).
+- **Real agents**: each harness runs the agent itself, with its own tools, skills, and rules, as it works on a developer's machine ([Choose an agent](docs/agents/index.mdx)).
+- **Keys stay on the host**: each attempt starts in a fresh sandbox that holds only a placeholder key. reeval's egress gateway swaps in the real key on requests to that provider and nowhere else ([Pass secrets](docs/environments/secrets.mdx)).
+- **Compare a change**: one eval runs a baseline and its variants with the same prompt and checks, then prints whether each variant helped, made it worse, or can't tell yet ([Measure lift against a baseline](docs/results/compare/lift.mdx)).
+- **Pinned environments**: an environment starts from a workspace, such as a git repository at a fixed ref, then adds files, setup steps, rules, skills, and MCP servers, so every attempt starts from the same state ([Define an environment](docs/environments/index.mdx)).
+- **History in Git**: recorded runs sit beside the code. `reeval query` reads them with SQL, and `reeval studio` shows each attempt's transcript, diff, and checks ([Record runs in Git](docs/runs/recording.mdx)).
 
 ## Install
 
@@ -131,13 +131,13 @@ Environments load extensions from where teams already keep them:
 
 ## Examples
 
-The [recipes](docs/recipes/index.mdx) are complete evals for common jobs:
+The recipes in [`docs/recipes`](docs/recipes) are complete evals for common jobs:
 
-- [Prove a skill helps](docs/recipes/skill-lift.mdx): with and without a skill, gated on a minimum lift.
-- [Compare agents](docs/recipes/compare-agents.mdx): one suite on several agents at once, with pass rate and effort per agent.
-- [Evaluate an MCP server](docs/recipes/mcp-server.mdx): check the agent calls the server's tools, and whether answers improve.
+- [Measure a skill](docs/recipes/skill-comparison.mdx): with and without a skill, gated on a minimum lift.
+- [Compare harnesses](docs/recipes/agent-comparison.mdx): one suite on several agents at once, with pass rate and effort per agent.
+- [Measure MCP servers](docs/recipes/mcp-comparison.mdx): check the agent calls the server's tools, and whether answers improve.
 - [Check a recommendation](docs/recipes/recommendation.mdx): ask which library to use, and let a judge decide whether the agent picks the right one.
-- [PR gate in GitHub Actions](docs/recipes/github-pr-gate.mdx): run on every pull request and fail the check on a regression.
+- [Fail a pull request](docs/recipes/ci-gate.mdx): run on every pull request and fail the check on a regression.
 
 The [`examples/`](examples) directory has 80 runnable projects, one idea each, from [`with-checks`](examples/with-checks) (deterministic checks) and [`with-skill-lift`](examples/with-skill-lift) (does a skill help?) to sandboxes, egress, judges, captures and real-world tasks. Most run on a fake agent with no keys or Docker; [`examples/README.md`](examples/README.md) lists them all.
 

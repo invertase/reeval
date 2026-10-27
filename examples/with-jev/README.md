@@ -44,4 +44,4 @@ With `gateway: [vercel()]` in the config, Jev takes `AI_GATEWAY_API_KEY` instead
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-Judge models and their keys are in the [Judges](../../docs/reference/judges.mdx) reference.
+Judge models and their keys are in the [Judge agent work](../../docs/write/judgments.mdx).

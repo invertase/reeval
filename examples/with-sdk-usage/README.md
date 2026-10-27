@@ -52,4 +52,4 @@ AcmeError: Acme API answered 503
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace: `src/forecast.js` |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, and the real agents from `../profiles.ts` |
 
-`directory()` and its options are in the [Helpers](../../docs/reference/helpers.mdx) reference.
+`directory()` and its options are in the [Environment helpers reference](../../docs/reference/environment.mdx).
