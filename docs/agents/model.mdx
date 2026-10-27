@@ -20,7 +20,7 @@ reeval refuses a prefixed ID on a harness that takes a bare ID, or a bare ID on 
 </Property>
 
 <Property name="antigravity" type="string" required>
-  A model slug `agy models` lists for the key, such as `<model>-medium`. The `-low`, `-medium`, and `-high` suffixes set effort in the slug. Key: `GEMINI_API_KEY`.
+  A model slug `agy models` lists for the key, such as `<model>-medium`. The `-low`, `-medium`, and `-high` suffixes set the reasoning effort in the slug. Key: `GEMINI_API_KEY`.
 </Property>
 
 <Property name="opencode" type="string" required>
@@ -62,7 +62,7 @@ For more information about supported providers, see [the `opencode` harness refe
 </Property>
 
 <Property name="antigravity" type="string" optional>
-  The harness passes `low`, `medium`, `high`, or `max` as the `agy --effort` value. A slug suffix such as `-low` sets the same effort through `model`.
+  The harness passes `low`, `medium`, `high`, or `max` as the `agy --effort` value. A slug suffix such as `-low` sets the same reasoning effort through `model`.
 </Property>
 
 <Property name="opencode" type="string" optional>
