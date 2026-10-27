@@ -1282,6 +1282,50 @@ for (const file of mdxFiles()) {
   }
 }
 
+// ---- Facts moved from Cases, Groups and Egress ------------------------------------------------
+
+// planTable (src/plan.ts) drops only the family note for { pool: false }: the other notes still print.
+if (/empty `notes` column/.test(page('reference/api'))) {
+  problems.push(
+    'reference/api EachOptions says a { pool: false } dry-run row has an empty `notes` column: only the family note goes, and the skip, profile, brokered, egress and workspace notes still print (src/plan.ts)',
+  )
+}
+
+// The cascade says where the run flags act: --runs replaces runs, --tag filters evaluations and
+// --concurrency caps parallel attempts (src/cli.ts).
+const cascadeText =
+  page('reference/options').match(/^## The cascade\n([\s\S]*?)(?=^## )/m)?.[1] ?? ''
+if (!cascadeText) {
+  problems.push('docs.mjs cannot find the "## The cascade" section on reference/options')
+} else if (
+  /`--runs`/.test(cascadeText) &&
+  !(/`--tag`/.test(cascadeText) && /`--concurrency`/.test(cascadeText))
+) {
+  problems.push(
+    'reference/options The cascade names --runs but not --tag and --concurrency: say that --tag filters evaluations and --concurrency caps parallel attempts (src/cli.ts)',
+  )
+}
+
+// A paired outcome needs PAIRED_MIN (6) discordant pairs or cases (src/stats.ts); the compare entry says so.
+if (!/`insufficient` below six discordant/.test(page('reference/options'))) {
+  problems.push(
+    'reference/options compare must say a paired outcome is `insufficient` below six discordant pairs or cases (PAIRED_MIN in src/stats.ts)',
+  )
+}
+
+// DEFAULT_EGRESS_ALLOW's hosts are listed once, on reference/api; the egress option links that entry.
+const egressText = page('reference/options').match(/^## `egress`\n([\s\S]*?)(?=^## )/m)?.[1] ?? ''
+if (!egressText) {
+  problems.push('docs.mjs cannot find the "## `egress`" section on reference/options')
+} else if (
+  !egressText.includes('(/reference/api#defaultegressallow)') ||
+  /holds the package registries|registry\.npmjs\.org|github\.com/.test(egressText)
+) {
+  problems.push(
+    "reference/options egress describes DEFAULT_EGRESS_ALLOW's hosts: link [`DEFAULT_EGRESS_ALLOW`](/reference/api#defaultegressallow), which lists them",
+  )
+}
+
 // ---- Task page length --------------------------------------------------------------------------
 
 // A task page (every page outside docs/reference/) stays at 600 words of prose: a short tutorial

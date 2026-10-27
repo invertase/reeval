@@ -42,7 +42,7 @@ description: "Options set how evaluations run. Each key is accepted in set place
 
 reeval applies the `reeval.config.ts` file, then the selected profile's `defaults`, then each enclosing `group()`, outermost first, then the `evaluate()` call. A profile `limit` then narrows `runs`, `compare`, and `harness`, except the keys in `pin`.
 
-A later level replaces most keys, `compare` whole. `env` merges by name, `judge` and `question` field by field with `state` key by key, `capture` shallowly, and `tags` and `pin` keep every value. `--runs` then replaces `runs`.
+A later level replaces most keys, `compare` whole. `env` merges by name, `judge` and `question` field by field with `state` key by key, `capture` shallowly, and `tags` and `pin` keep every value. `--runs` then replaces `runs`. `--tag` filters which evaluations run, and `--concurrency` caps the attempts running at once; neither changes an evaluation's options.
 
 For more information about overriding an option, see [Group evaluations](/write/groups#see-how-options-cascade).
 
@@ -580,7 +580,7 @@ For more information about environments, see [Define an environment](/environmen
 
 A plain `allow` entry matches that host only. A `*.` entry matches every subdomain, not the apex domain itself, and never an IP address. The gateway carries HTTP and HTTPS only, so SSH and database clients get no network under every policy but `'allow-all'`. Under `'allow-all'`, raw traffic leaves the sandbox directly, unfiltered and unrecorded, and the record marks the attempt's egress `partial`.
 
-`DEFAULT_EGRESS_ALLOW` holds the package registries and GitHub, so an `allow` list that spreads it still installs packages.
+Spread [`DEFAULT_EGRESS_ALLOW`](/reference/api#defaultegressallow) into an `allow` list that still installs packages.
 
 For more information about the automatic hosts, see [Egress](/environments/egress).
 
@@ -862,7 +862,7 @@ For more information about analysis, see [Analyze a run](/results/analyze#set-an
   The harnesses to compare on; the others run the baseline only. reeval refuses an id the evaluation does not run.
 </Property>
 
-A family of pooled cases reports one `all cases` row that sums each cell's counts, with a lift paired by case. A case still fails on its own assertions, and a failed case fails the family. The [`family_lift`](/reference/query#familylift) view lists each family's pooled lift.
+A family of pooled cases reports one `all cases` row that sums each cell's counts, with a lift paired by case. A paired outcome is `insufficient` below six discordant pairs or cases, so six cases with one attempt a side can read `helped` only when all six are discordant. A case still fails on its own assertions, and a failed case fails the family. The [`family_lift`](/reference/query#familylift) view lists each family's pooled lift.
 
 For more information about comparisons, see [Measure lift against a baseline](/results/compare/lift).
 

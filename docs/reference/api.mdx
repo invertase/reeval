@@ -89,7 +89,7 @@ For more information about `AttemptContext` and the types the methods of `c` tak
 `EachOptions` is the type of `evaluate.each()`'s second argument.
 
 <Property name="pool" type="boolean" optional>
-  `true` by default: two or more cases form a family with one pass rate and, under `compare`, one paired lift gated by `compare.minLift`. `false` keeps each case independent: each case gates alone and prints its own block, and the `--dry-run` table lists each on its own row with an empty `notes` column. One case is never pooled.
+  `true` by default: two or more cases form a family with one pass rate and, under `compare`, one paired lift gated by `compare.minLift`. `false` keeps each case independent: each case gates alone and prints its own block, and the `--dry-run` table lists each on its own row, without the family note. One case is never pooled.
 </Property>
 
 reeval refuses any other key with exit code 2.
