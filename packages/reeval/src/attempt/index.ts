@@ -9,7 +9,7 @@ import { attemptId, evalId, evalSlug, relativeFile } from '../ids.ts'
 import { redactSecrets } from '../redact.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { AttemptContext, EvalFn } from '../types.ts'
-import { assertionRecords, softFailure } from './assertions.ts'
+import { assertionRecords, checkFailure } from './assertions.ts'
 import { capturePage, serveCommand } from './capture.ts'
 import { createChecks } from './checks.ts'
 import { contextTaker } from './context.ts'
@@ -100,7 +100,7 @@ async function attemptBody(
     })
     // A body that ignores the signal can still return normally after a timeout or cancel.
     a.signal.throwIfAborted()
-    const missed = (await unawaited()) ?? softFailure(assertions()) ?? expectError()
+    const missed = (await unawaited()) ?? checkFailure(assertions()) ?? expectError()
     // A start that failed under a caught call or `expect.soft` still fails the attempt as itself.
     if (a.startFailure) throw a.startFailure.error
     if (missed) throw missed
