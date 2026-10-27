@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -330,7 +330,8 @@ function fakeBootstrap(models: Record<string, unknown>) {
   )
   mkdirSync(join(root, 'bootstrap/node_modules/@earendil-works'), { recursive: true })
   const link = join(root, 'bootstrap/node_modules/@earendil-works/pi-coding-agent')
-  spawnSync('ln', ['-s', join(store, 'pi-coding-agent'), link])
+  // A junction on Windows, where a plain symlink needs Developer Mode or admin.
+  symlinkSync(join(store, 'pi-coding-agent'), link, 'junction')
   return { root, bootstrap: join(root, 'bootstrap') }
 }
 
