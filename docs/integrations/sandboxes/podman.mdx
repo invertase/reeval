@@ -7,7 +7,7 @@ description: "Run each attempt in one Podman container on your machine."
 
 ## Requirements
 
-`podman()` needs a Podman that answers `podman info` as your user. `reeval doctor` reports it on a `podman` line, with the machine's CPUs and memory and the concurrency reeval derives from them. Before a run, reeval checks the same requirements and exits with code 2 when one fails, naming the fix.
+`podman()` needs a Podman that answers `podman info` for the account that runs reeval. `reeval doctor` reports it on a `podman` line, with the machine's CPUs and memory and the concurrency reeval derives from them. Before a run, reeval checks the same requirements and exits with code 2 when one fails, naming the fix.
 
 - **Podman {{ podman }} or later.** `podman()` needs its rootless bridge network.
 - **On macOS and Windows, a running machine.** reeval reaches it through the machine's API socket or named pipe, unless `CONTAINER_HOST` or `CONTAINER_CONNECTION` names another host. The machine needs at least 4 GB of memory for the default `memory` limit; `reeval doctor` warns below that.
