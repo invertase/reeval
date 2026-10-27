@@ -46,4 +46,4 @@ workspace; per-attempt steps belong in the environment's `setup`.
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
 `install`, `from` and `dockerfile` are in the
-[Sandboxes and toolchains](../../docs/guide/sandboxes.mdx) guide.
+[Choose a sandbox](../../docs/configuration/sandboxes/index.mdx) page.

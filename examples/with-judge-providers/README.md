@@ -48,4 +48,4 @@ one profile you need.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-Providers and their keys are in [Providers and keys](../../docs/reference/judges.mdx#providers-and-keys).
+Providers and their keys are in [Judge agent work](../../docs/evaluations/grading/judgments.mdx).

@@ -43,4 +43,4 @@ and `claude-code:claude-sonnet-5[effort=high]`.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent at two efforts, the `claude-code-efforts` profile and the real agents from `../profiles.ts` |
 
-Each harness's `effort` values are on its page, such as [Claude Code](../../docs/reference/harness/claude-code.mdx).
+Each harness's `effort` values are on its page, such as [Claude Code harness](../../docs/configuration/agents/claude-code.mdx).

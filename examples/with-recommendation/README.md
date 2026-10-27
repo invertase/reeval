@@ -52,5 +52,5 @@ Last message:
 | [`fake-agent/reply.md`](./fake-agent/reply.md) | The fake agent's answer |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, and the real agents from `../profiles.ts` |
 
-The [Check a recommendation](../../docs/recipes/recommendation.mdx) recipe reads a real run's
+The [Check a recommendation](../../docs/evaluations/recipes/test-recommendations.mdx) recipe reads a real run's
 answers.

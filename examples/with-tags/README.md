@@ -46,5 +46,5 @@ same slice; `pnpm eval` runs both evals.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, a `smoke` profile, and the real agents from `../profiles.ts` |
 
-`--tag` and the other filters are on the [reeval run](../../docs/reference/cli/run.mdx#filters)
+`--tag` and the other filters are on the [CLI reference](../../docs/reference/cli.mdx)
 reference page.

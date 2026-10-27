@@ -58,4 +58,4 @@ it off with `direct({ enabled: false })`. Of the judge models there, only Jev an
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, the `vercel` profile, and the real agents from `../profiles.ts` |
 
-Gateways, fallback and pins are in the [Gateways](../../docs/reference/gateway.mdx) reference.
+Gateways, fallback and pins are in the [Route models through a gateway](../../docs/configuration/gateways/index.mdx) page.

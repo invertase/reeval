@@ -51,4 +51,4 @@ one profile you need.
 | [`fake-agent/`](./fake-agent) | What the fake agent writes on each turn |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, and the real agents from `../profiles.ts` |
 
-Sessions and follow-up turns are in the [Multi-turn evals](../../docs/guide/multi-turn.mdx) guide.
+Sessions and follow-up turns are in the [Read each turn](../../docs/evaluations/task/turns.mdx) page.

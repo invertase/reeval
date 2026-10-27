@@ -1,0 +1,51 @@
+---
+title: "Route models through a gateway"
+description: "Send the harness's, the judge's, and reeval's own model calls through one gateway key."
+---
+
+A gateway serves model calls for several providers on one key, so you don't need a key for each provider. The `{{ pkg }}/gateway` module exports `vercel()` for [Vercel AI Gateway](/configuration/gateways/vercel-ai-gateway), `openrouter()` for [OpenRouter](/configuration/gateways/openrouter), and `direct()` for [each provider's own key](/configuration/gateways/direct), which is the default.
+
+## Route calls through a gateway
+
+In the `reeval.config.ts` file, list gateways in `gateway`, in order of preference. Each harness and judge goes through the first gateway in the list that can serve it. The analysis, capture, and question models resolve the same way. For the models each gateway accepts, see "Harnesses and models" on [Direct](/configuration/gateways/direct#harnesses-and-models), [Vercel AI Gateway](/configuration/gateways/vercel-ai-gateway#harnesses-and-models), and [OpenRouter](/configuration/gateways/openrouter#harnesses-and-models):
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { direct, vercel } from '{{ pkg }}/gateway'
+import { claudeCode, cursor } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  gateway: [vercel(), direct()],
+  harness: [
+    claudeCode({ model: 'claude-sonnet-5' }),
+    cursor({ model: 'composer-2.5' }),
+  ],
+})
+```
+
+Vercel AI Gateway serves Claude Code on `AI_GATEWAY_API_KEY`. It can't serve Cursor, so Cursor falls back to `direct()` and its own `CURSOR_API_KEY`. Without `direct()` at the end, a harness that no gateway in the list serves stops the plan with exit code 2. The plan's `notes` column lists the gateway each harness resolved to, in `harness` order:
+
+```bash
+npx reeval run --dry-run
+```
+
+```text
+eval                 harnesses  variants  runs  attempts  notes
+evals/a.eval.ts › x  2          —         1     2         gateway: claude-code:claude-sonnet-5 → vercel · gateway: cursor:composer-2.5 → direct
+```
+
+For a runnable project that also sends the judge through Vercel AI Gateway, see [`with-vercel-gateway`](https://github.com/invertase/reeval/tree/main/examples/with-vercel-gateway).
+
+## Pin one gateway
+
+To send one harness or the judge through a particular gateway, set `gateway` on its factory or on `judge`:
+
+```ts title="reeval.config.ts"
+harness: codex({ model: 'gpt-5.6-luna', gateway: 'openrouter' }),
+```
+
+The pinned gateway must be in the config's `gateway` list. A pinned gateway never falls back, so the plan stops when that gateway can't serve the harness. For more information about the list and the pin, see [the `gateway` option](/reference/options#gateway).
+
+## Harness support
+
+`direct()` serves every harness on its provider's own key, with two exceptions. It refuses `fx` with a gateway model id such as `anthropic/claude-sonnet-5`, which only `vercel()` serves, and it refuses an OpenCode model id whose provider reeval can't run. For the harnesses `vercel()` and `openrouter()` serve, see [Gateway support by harness](/reference/options#gateway-support-by-harness).

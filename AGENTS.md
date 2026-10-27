@@ -179,7 +179,7 @@ with `scripts/binary-smoke.mjs` (nothing installed; Docker on linux-x64, Alpine 
 it from those files with `scripts/install.sh` or `scripts/install.ps1` (Windows PowerShell and
 pwsh), which check the binary starts before installing it, and uploads `reeval-<version>-<os>-<arch>` plus `SHA256SUMS` as one artifact. `release.yml`
 calls it for each npm release and uploads that artifact to the GitHub release, which is where the
-install scripts download from (docs: `docs/guide/binary.mdx`).
+install scripts download from.
 
 **The build.** [tsdown](https://tsdown.dev) bundles `reeval`
 (`packages/reeval/tsdown.config.mjs`) into chunks directly in `dist/`, with its `.d.ts`. The
@@ -565,7 +565,7 @@ pnpm reeval run --dry-run          # the plan, without running
    pnpm reeval run --profile claude-code
    ```
 
-The harness keys stay on the host (see [Secrets and egress](./docs/guide/secrets-and-egress.mdx)). reeval masks secret-looking values in
+The harness keys stay on the host (see [Secrets](./docs/configuration/environments/secrets.mdx) and [Egress](./docs/configuration/environments/egress.mdx)). reeval masks secret-looking values in
 everything it writes to `.reeval/`. A key with whitespace or a line break in it (pasted from a wrapped
 terminal line) stops the run with exit 2 naming it and the character, for the agents' and the
 judge's keys; a brokered secret that goes in a header fails its attempt the same way.
@@ -578,7 +578,7 @@ transcripts, the studio and the record) is in the user docs under [`docs/`](./do
 
 | Tab | For |
 |---|---|
-| [Guide](./docs/index.mdx) | Learning reeval in order, from a first eval to CI and analysis |
-| [Concepts](./docs/concepts/index.mdx) | How and why it works: the matrix, lift, brokering, egress |
-| [Recipes](./docs/recipes/index.mdx) | Complete solutions to common tasks |
-| [Reference](./docs/reference/index.mdx) | Every option, helper, command, flag, exit code and file format |
+| [Guide](./docs/overview.mdx) | Learning reeval in order, from a first eval to CI and analysis |
+| [Glossary](./docs/reference/glossary.mdx) | The words for a run and what a result reports |
+| [Recipes](./docs/evaluations/recipes) | Complete solutions to common tasks |
+| [Reference](./docs/reference) | Every option, helper, command, flag, exit code and file format |

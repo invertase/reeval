@@ -1,0 +1,121 @@
+---
+title: "Run evaluations"
+description: "Run the evaluations in a project."
+---
+
+`reeval run` runs the evaluations in a project. The command prints a plan line, starts the attempts, and ends with one block per evaluation.
+
+For more information about the result blocks, see [Read a run's output](/results/output).
+
+## Run every evaluation
+
+Run every evaluation the config includes:
+
+```bash
+npx reeval run
+```
+
+By default, reeval includes every `.eval.ts` and `.eval.py` file under the `evals/` directory, and the [`include` option](/reference/options#include) changes that. The command writes the record in the `.reeval/runs` directory.
+
+## Filter evaluations
+
+Pass a substring of a file path, an evaluation name, or a cell key. Substrings of one kind match if any of them matches. A path substring and a name or cell substring both have to match.
+
+Select the `evals/brand.eval.ts` file:
+
+```bash
+npx reeval run brand
+```
+
+Pass one `--tag` for each tag an evaluation must carry. Quote a value that starts with `!` to exclude that tag:
+
+```bash
+npx reeval run --tag smoke --tag '!billing'
+```
+
+If a filter or tag matches nothing, reeval exits before it starts any attempt.
+
+## Preview the plan
+
+To print the plan without starting a sandbox or a harness, pass `--dry-run`:
+
+```bash
+npx reeval run --dry-run
+```
+
+The command needs no API key. If you omit the run id, the counts and the estimate look like this:
+
+```text
+plan  run … · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
+```
+
+A table under that line lists each evaluation. To print the same plan as one JSON document, pass `--json` as well:
+
+```bash
+npx reeval run --dry-run --json
+```
+
+The document lists every cell, and any evaluation set to `skip` or `todo`.
+
+## Set the attempts
+
+The `runs` option sets how many attempts each cell gets, and it defaults to 1. Each attempt runs in a fresh sandbox. In the `evals/camelcase.eval.ts` file, add `runs` to the options:
+
+```ts title="evals/camelcase.eval.ts"
+evaluate(
+  'adds a separators option',
+  { environment: camelcase, runs: 4 },
+  // ...
+```
+
+To set it for one run, pass `--runs`, which replaces the option:
+
+```bash
+npx reeval run --runs 4
+```
+
+A comparison needs at least four counted attempts a side before it calls an effect. For more information, see [Four-attempt minimum](/reference/statistics#four-attempt-minimum).
+
+## Set concurrency
+
+Pass `--concurrency` to set how many attempts reeval starts together:
+
+```bash
+npx reeval run --concurrency 4
+```
+
+The `--concurrency` flag overrides `REEVAL_CONCURRENCY`, which overrides `concurrency` in the `reeval.config.ts` file. If you set none of those three, reeval uses 8, capped at one attempt per CPU and per gigabyte of memory where the sandboxes run.
+
+## Choose the output
+
+reeval adapts the output to where you run the command: a live status line in a terminal, plain log lines in CI or a pipe, and result blocks without color for a coding agent. For the values and defaults of `--ui`, `--log-order`, `--log-prefix`, and `--output-logs`, see [the `reeval run` command](/reference/cli#reeval-run).
+
+Pick plain output for a log without the status line:
+
+```bash
+npx reeval run --ui plain
+```
+
+Each flag has a variable, such as `REEVAL_UI`, and the flag overrides it. For the variables, including `REEVAL_HEARTBEAT`, see [Environment variables](/reference/environment-variables).
+
+## Resume a run
+
+To continue a stopped, interrupted, or budget-stopped run, pass `--resume`:
+
+```bash
+npx reeval run --resume
+```
+
+The command keeps the run id. It skips finished attempts. It runs the remaining attempts. With no id, the command continues the newest stopped, interrupted, or budget-stopped run saved under the `.reeval` directory.
+
+Pass the run id from the plan line, or a unique prefix of that id:
+
+```bash
+npx reeval run --resume 20261022T172927Z
+```
+
+For more information about attempt budgets, see [Size runs with profiles](/evaluations/runs/profiles).
+
+For more information about every `reeval run` flag, see [the `reeval run` command](/reference/cli#reeval-run).
+
+For more information about every variable, see [Environment variables](/reference/environment-variables).

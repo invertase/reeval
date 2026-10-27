@@ -1,0 +1,48 @@
+extends: capitalization
+message: "Use sentence case for '%s'."
+level: warning
+scope: heading
+match: $sentence
+indicators:
+  - ":"
+exceptions:
+  - reeval
+  - AI
+  - AI Gateway
+  - AI SDK
+  - ACP
+  - API
+  - Antigravity
+  - Anthropic
+  - CI
+  - CLI
+  - Claude
+  - Claude Code
+  - Codex
+  - Cursor
+  - Docker
+  - Dockerfile
+  - fx
+  - Gemini
+  - GitHub
+  - GitHub Actions
+  - Goose
+  - Google
+  - Grok
+  - Grok Build
+  - JSON
+  - LLM
+  - MCP
+  - Newcombe
+  - Node
+  - OpenAI
+  - OpenCode
+  - OpenRouter
+  - pi
+  - Podman
+  - Python
+  - SDK
+  - SQL
+  - TCP
+  - TypeScript
+  - Vercel

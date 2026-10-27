@@ -51,5 +51,5 @@ not ok 2 - a name with a quote in it still matches
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace: the fix |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-`c.writeFile` and hidden checks are in the [Attempt context](../../docs/reference/attempt-context.mdx)
+`c.writeFile` and hidden checks are in the [Attempt context reference](../../docs/reference/attempt-context.mdx)
 reference.

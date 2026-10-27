@@ -1,0 +1,223 @@
+---
+title: "Authoring API reference"
+description: "evaluate, evaluate.each, group, and defineEnvironment declare evaluations and environments, with the types they take."
+---
+
+## `evaluate()`
+
+`evaluate(name, options?, fn)` declares one evaluation, as in the following file:
+
+```ts title="evals/shoehorn.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { plain } from './environments.ts'
+
+evaluate(
+  'tests build only the request fields they read',
+  { environment: plain, timeout: '30m' },
+  async (c) => {
+    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
+    await expect(c, 'uses fromPartial').toHaveFile(
+      'src/user.test.ts',
+      /fromPartial(<\w+>)?\(/,
+    )
+  },
+)
+```
+
+<Property name="name" type="string" required>
+  The evaluation's name. Results, insights, and history list it first.
+</Property>
+
+<Property name="options" type="EvalOptions" optional>
+  A plain object. `environment` and `compare.baseline` cannot both be set.
+</Property>
+
+<Property name="fn" type="EvalFn" required>
+  The body, called once per attempt.
+</Property>
+
+`options` and `fn` take either order. `evaluate.skip(name, options?, fn)` declares without running. `evaluate.only(name, options?, fn)` runs only the marked evaluations in its file. `evaluate.todo(name)` takes no body, and the plan lists it as `todo`.
+
+reeval refuses, with exit code 2, two functions, no function, a second evaluation with the same full name in one file, and `evaluate.only()` when the `CI` variable is set to a value other than `false`.
+
+For more information about `EvalOptions`, `GroupOptions`, and the type of each key, see [Options reference](/reference/options).
+
+## `evaluate.each()`
+
+`evaluate.each(cases, options?)` returns a function with the signature of `evaluate()`, whose body also receives the case. The following call declares one evaluation per case:
+
+```ts title="evals/shoehorn.eval.ts"
+const handlers = ['getUserId', 'getUserEmail', 'getUserRole']
+
+evaluate.each(handlers)(
+  'tests %s with only the request fields it reads',
+  { compare: { baseline: plain, variants: [withShoehorn] } },
+  async (c, handler) => {
+    // ...
+  },
+)
+```
+
+<Property name="cases" type="readonly T[]" required>
+  The cases, one evaluation each.
+</Property>
+
+<Property name="options" type="EachOptions" optional>
+  Whether the cases pool into a family.
+</Property>
+
+<Property name="name" type="string" required>
+  A template for each case's name, and the family's name. `%s` is the case, `%#` is its index from 0, and `$key` is a property of an object case. A string case prints as itself, and an object case prints as JSON.
+</Property>
+
+<Property name="fn" type="(c: AttemptContext, item: T) => Promise<void>" required>
+  The body, called once per attempt with the case.
+</Property>
+
+The returned function has no `skip`, `only`, or `todo`. reeval refuses, with exit code 2, a `cases` value that is not an array, and two cases with the same name.
+
+For more information about families and the `all cases` row, see [`compare`](/reference/options#compare).
+
+## `EvalFn`
+
+`EvalFn` is the type of the body `evaluate()` takes: `(c: AttemptContext) => Promise<void>`. The attempt fails when it throws, rejects, or leaves an `expect.soft` failure.
+
+For more information about `AttemptContext` and the types the methods of `c` take and return, see [Attempt context reference](/reference/attempt-context).
+
+## `EachOptions`
+
+`EachOptions` is the type of `evaluate.each()`'s second argument.
+
+<Property name="pool" type="boolean" optional>
+  `true` by default: two or more cases form a family with one pass rate and, under `compare`, one paired lift gated by `compare.minLift`. `false` keeps each case independent: each case gates alone and prints its own block, and the `--dry-run` table lists each on its own row, without the family note. One case is never pooled.
+</Property>
+
+reeval refuses any other key with exit code 2.
+
+## `group()`
+
+`group(name, options?, fn)` applies its options to every evaluation and nested group inside it, as in the following call:
+
+```ts title="evals/shoehorn.eval.ts"
+group('request builders', { environment: plain, tags: ['smoke'] }, () => {
+  // ...
+  group('billing', { tags: ['billing'] }, () => {
+    // ...
+  })
+})
+```
+
+<Property name="name" type="string" required>
+  The group's name. The full name of each evaluation inside it joins the group names and its own with `›`.
+</Property>
+
+<Property name="options" type="GroupOptions" optional>
+  The same type as `EvalOptions`.
+</Property>
+
+<Property name="fn" type="() => void" required>
+  The body, which declares evaluations and nested groups and returns synchronously.
+</Property>
+
+`options` and `fn` take either order. `group.skip(name, options?, fn)` skips every evaluation inside the group, including a nested group. `group.only(name, options?, fn)` runs only that group in its file, and other files still run. `group.todo(name)` takes no body, the plan lists it as `todo`, and the groups around it still add their tags to it. reeval refuses `group.only()` with exit code 2 when the `CI` variable is set to a value other than `false`.
+
+For more information about the cascade from `ReevalConfig` and `Profile` to an evaluation, see [The cascade](/reference/options#the-cascade), [Configuration reference](/reference/configuration), and [Profiles reference](/reference/profiles).
+
+## `defineEnvironment()`
+
+`defineEnvironment(name, spec)` defines what an evaluation runs in. The following declaration extends a baseline into a variant:
+
+```ts title="evals/environments.ts"
+export const plain = defineEnvironment('plain', {
+  // ...
+})
+
+export const withShoehorn = plain.extend('with-shoehorn', ({ skill }) => ({
+  // ...
+}))
+```
+
+<Property name="name" type="string" required>
+  The environment's name, which names its cells. It starts with a letter or digit and continues with letters, digits, `.`, `_`, `@`, `+`, or `-`.
+</Property>
+
+<Property name="spec" type="EnvironmentInput" required>
+  An `EnvironmentSpec` object, or a callback that receives `EnvironmentHelpers` and returns one synchronously, once, when the file loads. The documented helpers are `secret`, `skill`, `mcp`, `plugin`, `file`, `directory`, and `git`.
+</Property>
+
+Relative paths in `spec` resolve against the file that calls `defineEnvironment()`. A spec that omits `sandbox` runs in the cascaded `sandbox` option, else in the default sandbox. reeval refuses, with exit code 2, any other name and a callback that returns a `Promise`. For more information about the default sandbox, see [Sandboxes](/configuration/sandboxes).
+
+The returned `Environment` is a frozen object with the following fields.
+
+<Property name="kind" type="'environment'" required>
+  Identifies an environment.
+</Property>
+
+<Property name="name" type="string" required>
+  The name passed to `defineEnvironment()` or `extendEnvironment()`.
+</Property>
+
+<Property name="layers" type="readonly EnvironmentLayer[]" required>
+  Each layer's `name` and its `spec` as that layer wrote it, root first.
+</Property>
+
+<Property name="extendEnvironment" type="(name: string, spec: EnvironmentInput) => Environment" required>
+  Returns a child environment layered on this one.
+</Property>
+
+<Property name="extend" type="(name: string, spec: EnvironmentInput) => Environment" required>
+  An alias of `extendEnvironment()`.
+</Property>
+
+For more information about `EnvironmentSpec`, `EnvironmentHelpers`, each field's type, and how `extendEnvironment()` merges each field, see [Environment fields](/reference/environment-helpers#environmentspec) and [extend](/reference/environment-helpers#extend).
+
+## `defineConfig()`
+
+`defineConfig(config)` returns its argument unchanged, so `reeval.config.ts` is type-checked. For more information about the config keys and the callback form, see [Configuration reference](/reference/configuration#defineconfig).
+
+## `expect()`
+
+`expect(actual, label?)` checks `actual` and records an assertion. For more information about its matchers, `expect.soft()`, and `expect.poll()`, see [Matchers reference](/reference/matchers#expect).
+
+## `DEFAULT_EGRESS_ALLOW`
+
+`DEFAULT_EGRESS_ALLOW` is a `readonly string[]` of the package registries and GitHub: `registry.npmjs.org`, `registry.yarnpkg.com`, `github.com`, `*.github.com`, `*.githubusercontent.com`, `pypi.org`, and `files.pythonhosted.org`. Spread it into an `egress.allow` list that still installs packages, as in `egress: { allow: [...DEFAULT_EGRESS_ALLOW, 'example.com'] }`.
+
+For more information about egress policies, see [`egress`](/reference/options#egress).
+
+## `DEFAULT_DIRECTORY_IGNORES`
+
+`DEFAULT_DIRECTORY_IGNORES` is a `readonly string[]` of the `glob` patterns `directory()` skips unless `defaultIgnores` is `false`. For more information about `directory()`, see [Environment fields](/reference/environment-helpers#directory).
+
+## `DEFAULT_SKILL_EXCLUDE`
+
+`DEFAULT_SKILL_EXCLUDE` is a `readonly string[]` of the path patterns each skill leaves out unless `exclude` replaces them: `/evals/`, `.history/`, and `*.eval.ts`. For more information about skills, see [Environment fields](/reference/environment-helpers#skilllocal).
+
+## `HarnessCapabilityError`
+
+`HarnessCapabilityError` is the error `toHaveSearched()` and `toHaveFetched()` throw when the turn's `unreported` list holds `web-search` or `web-fetch`. The following assertion catches it:
+
+```ts title="evals/search.eval.ts"
+import { evaluate, expect, HarnessCapabilityError } from '{{ pkg }}'
+// ...
+  try {
+    expect(turn, 'searched the web').toHaveSearched(/ai sdk/i)
+  } catch (error) {
+    if (!(error instanceof HarnessCapabilityError)) throw error
+    expect(turn.text, 'names a version').toMatch(/\d+\.\d+/)
+  }
+```
+
+<Property name="name" type="'HarnessCapabilityError'" required>
+  The error's `name`.
+</Property>
+
+<Property name="message" type="string" required>
+  Names the matcher, the event type, and the alternatives.
+</Property>
+
+Uncaught, it fails the attempt, and the record lists the assertion with status `error` rather than `fail`. With `expect.soft()`, the attempt still fails at its end.
+
+For more information about the two matchers, see [Matchers reference](/reference/matchers#tohavesearched).
+
+For more information about `RunRecord` and the assertion's record, see [Run record reference](/reference/run-record).

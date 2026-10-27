@@ -9,12 +9,13 @@
     ".": {
       "entry": [
         "scripts/**/*.{mjs,ts}",
+        ".vale/lint.mjs",
         "reeval*.config.ts",
         "evals/*/*.{eval.ts,config.ts}",
         "evals/*/scripts/*.mjs"
       ],
       "ignore": ["evals/*/fixtures/**", "evals/*/oracle/**"],
-      "ignoreBinaries": ["report"],
+      "ignoreBinaries": ["report", "vale"],
       "ignoreDependencies": ["jiti"]
     },
     "packages/reeval": {

@@ -69,6 +69,4 @@ too, or `'none'` to only report.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace, without and with the skill |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-[Require a minimum lift](../../docs/guide/compare.mdx#require-a-minimum-lift) in the Compare and
-lift guide covers `minLift`, and [Choose which cells gate](../../docs/guide/compare.mdx#choose-which-cells-gate)
-covers `compare.gate`.
+[Measure lift against a baseline](../../docs/results/compare/lift.mdx) covers `minLift`.

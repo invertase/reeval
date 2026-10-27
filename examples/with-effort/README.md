@@ -59,5 +59,5 @@ project-layout  4  1             0               0.0286     fewer
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and its shell step, and the real agents from `../profiles.ts` |
 
-[Effort next to lift](../../docs/concepts/lift.mdx#effort-next-to-lift) covers the table and the
+[Measure a run](../../docs/results/measure.mdx#read-the-assertion-and-effort-tables) covers the table and the
 rank test.

@@ -1,0 +1,94 @@
+---
+title: "Check an app"
+description: "Capture the app the agent built and judge what it shows."
+---
+
+A file assertion can't tell you whether a page renders. The `nextApp` environment must contain the app project before you start. For more information about the `nextApp` environment, see [Environments](/configuration/environments).
+
+Three calls check the app the agent built:
+
+1. Start the app in the sandbox with `c.serve`.
+2. Capture a page with `c.capture`.
+3. Send the capture to the judge.
+
+## Start a server
+
+`c.serve` starts a command in the background and returns its port. reeval allocates a free port and sets it as `PORT`, so a server that reads `PORT` listens where reeval expects it. In the `evals/sign-in.eval.ts` file, build and start the app:
+
+```ts title="evals/sign-in.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { nextApp } from './environments.ts'
+
+evaluate(
+  'the sign-in page shows an email and a password field',
+  { environment: nextApp },
+  async (c) => {
+    await c.send('Add a /login page with email and password fields.')
+    await expect(c.exec('npm run build'), 'builds').toSucceed()
+    const app = await c.serve('npm start')
+    const shot = await c.capture(app, { path: '/login', wait: 'idle' })
+    const q = 'Does the screenshot show an email field and a password field?'
+    expect(await c.judge(q, { artifacts: [shot] }), 'two fields').toPass()
+  },
+)
+```
+
+## Check the running app
+
+`c.exec` runs in the sandbox, so a request to `localhost` on the server's port reaches the app. `c.serve` returns as soon as the command starts, so retry until the server answers. In the `evals/sign-in.eval.ts` file, check the page over HTTP:
+
+```ts title="evals/sign-in.eval.ts"
+const url = `localhost:${app.port}/login`
+await expect(
+  c.exec(`curl -fsS --retry 10 --retry-connrefused ${url}`),
+  'serves /login',
+).toSucceed()
+```
+
+`-f` makes an HTTP error a non-zero exit code, which fails `toSucceed`. To assert on the body, read `stdout` from the `c.exec` result.
+
+## Capture a page
+
+`c.capture` takes a `ServeHandle` or a port and opens a path on it in a headless browser on the host through a tunnel to the sandbox. It waits until the server answers, then saves the image at the `artifacts/<name>.png` path in the attempt record. The sandbox image needs no browser, because reeval downloads one into its cache on the first capture.
+
+`path` defaults to `/`. `name` defaults to the path, so `/login` saves `login.png`, and a name can't repeat in one attempt. `wait` defaults to `'load'`; use `'idle'` to wait until at most two requests are in flight for 500 ms, or `{ ms: 500 }` to wait a fixed time.
+
+In the `evals/sign-in.eval.ts` file, name a second capture:
+
+```ts title="evals/sign-in.eval.ts"
+const error = await c.capture(app, {
+  name: 'login-error',
+  path: '/login?error=1',
+})
+```
+
+To interact with the page before the capture, pass `instructions` as goal strings, which a vision model from `capture.model` drives.
+
+## Judge a capture
+
+The `artifacts` field on `c.judge` sends captures to the judge as images: the handles from `c.capture`, their names, or `true` for every capture so far. An evaluation model such as `typesafe-ai/jev-1.14.0` takes PNG captures, and a provider that can't take files fails the call. Ask what the picture shows, such as a field or a label, not whether it looks good.
+
+In the `evals/sign-in.eval.ts` file, send both captures:
+
+```ts title="evals/sign-in.eval.ts"
+const q = 'Does the error page keep both fields and show one error message?'
+expect(await c.judge(q, { artifacts: true }), 'error state').toPass()
+```
+
+For more information about the judge, its model, and its threshold, see [Judgments](/evaluations/grading/judgments).
+
+In a comparison, a question shows each side's own capture when `artifacts` names the captures, or is `true`, on the question or the `question` option, so the model sees the baseline's page beside the variant's. For more information about pairwise questions, see [Ask questions across attempts](/evaluations/grading/questions).
+
+## Set the viewport and browser
+
+The viewport defaults to 1280×720. In the `evals/sign-in.eval.ts` file, set the capture width and height:
+
+```ts title="evals/sign-in.eval.ts"
+{ environment: nextApp, capture: { viewport: { width: 390, height: 844 } } },
+```
+
+`viewport: 'full-page'` captures the whole page. `browser: false` stops reeval from using its browser on the host, and `c.capture` then throws. For more information about every key, see [the `capture` option](/reference/options#capture).
+
+## Reference
+
+For more information about every argument `c.serve` takes, see [`c.serve`](/reference/attempt-context#cserve). For more information about every capture field, see [`c.capture`](/reference/attempt-context#ccapture). For runnable projects, see [`with-capture`](https://github.com/invertase/reeval/tree/main/examples/with-capture) and [`with-capture-journey`](https://github.com/invertase/reeval/tree/main/examples/with-capture-journey).

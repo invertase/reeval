@@ -1,0 +1,93 @@
+---
+title: "Measure a skill"
+description: "See whether a skill helped a harness."
+---
+
+You measure a skill by running one task on a baseline with no skill and a variant with the skill. The effect reads `helped`, `made it worse`, or `can't tell yet`. For a runnable project, see [`with-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-skill-lift).
+
+## Run one task with and without the skill
+
+<Steps>
+<Step title="Define the baseline and variant">
+
+The baseline `math` holds a small package with `src/math.js` and its tests. The variant `changelog` extends it and adds a local skill that says every change adds a line under `## Unreleased` in the `CHANGELOG.md` file. In the `evals/environments.ts` file, define both:
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const math = defineEnvironment('math', ({ directory }) => ({
+  files: directory('./project'),
+}))
+
+export const withSkill = math.extendEnvironment('changelog', ({ skill }) => ({
+  skills: [skill.local('./skills/changelog')],
+}))
+```
+
+For more information about other skill sources, see [Give the agent skills](/configuration/environments/skills).
+
+</Step>
+<Step title="Write the evaluation">
+
+Assert on what the skill teaches, so the baseline fails without it. The prompt doesn't mention the changelog, so only a harness that follows the skill writes the entry. In the `evals/changelog.eval.ts` file, name the baseline and the variant in `compare`:
+
+```ts title="evals/changelog.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { math, withSkill } from './environments.ts'
+
+evaluate(
+  'records the change in the changelog',
+  {
+    compare: { baseline: math, variants: [withSkill] },
+    runs: 4,
+    gate: { passRate: 0.75 },
+  },
+  async (c) => {
+    await c.send('Add a multiply(a, b) function to src/math.js.')
+
+    await expect.soft(c.exec('node --test'), 'tests pass').toSucceed()
+    await expect(c, 'changelog entry').toHaveFile(
+      'CHANGELOG.md',
+      /## Unreleased\s+- feat: /,
+    )
+  },
+)
+```
+
+`runs: 4` gives each cell four attempts, the fewest that can read `helped`. The variant passes when at least 3 of its 4 attempts pass. To also check that the variant loaded the skill, guard `toHaveCalledSkill` with `c.attempt.cell.role === 'variant'`, since the baseline has no skill to load ([Give the agent skills](/configuration/environments/skills#check-the-agent-used-the-skill)).
+
+</Step>
+<Step title="Run the comparison">
+
+Run the evaluation with the harness named in the `reeval.config.ts` file:
+
+```bash
+npx reeval run changelog
+```
+
+</Step>
+<Step title="Read whether the skill helped">
+
+The run prints a block like this one:
+
+```text
+pass             records the change in the changelog
+  arm              pass
+  math             0 of 4
+  changelog        4 of 4  helped
+  check            math    changelog
+  changelog entry  0 of 4  4 of 4
+    expected file CHANGELOG.md to exist
+  +1 more passed
+```
+
+The `changelog entry` row differs between the cells, so the skill changed what the harness did. When it passes on both sides, the harness already writes the entry, and this task can't show the skill. For more information about the block, see [Read the result](/results/compare/lift#read-the-result). To fail the variant when its lift may be below a floor, see [Gate on lift](/results/compare/lift#gate-on-lift).
+
+</Step>
+</Steps>
+
+## Next
+
+For more information about every `compare` key, see [the `compare` option](/reference/options#compare).
+
+To compare two commits of a skill instead, pin each commit with `ref` on its own environment, then set one as `compare.baseline` and the other in `compare.variants`. For more information about pinning, see [the `skill.git` helper](/reference/environment-helpers#skillgit).

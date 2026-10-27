@@ -1,0 +1,81 @@
+---
+title: "Measure MCP servers"
+description: "See whether an MCP server helped a harness."
+---
+
+You measure an MCP server by running one task on a baseline with no server and a variant with the server. The effect reads `helped`, `made it worse`, or `can't tell yet`. The example server is `releases`, a stdio server that knows the latest `acme-cli` release. For a runnable project with the server, see [`with-mcp`](https://github.com/invertase/reeval/tree/main/examples/with-mcp).
+
+## Run one task with and without the server
+
+<Steps>
+<Step title="Define the baseline and variant">
+
+In the `evals/environments.ts` file, define the baseline `app`, which holds the project, and the variant `withReleases`, which adds the server's script and starts the server in the sandbox:
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const app = defineEnvironment('acme-cli', ({ directory }) => ({
+  files: directory('./project'),
+}))
+
+export const withReleases = app.extendEnvironment(
+  'releases',
+  ({ file, mcp }) => ({
+    files: { 'mcp/releases.mjs': file('./mcp/releases.mjs') },
+    mcp: { releases: mcp.stdio('node', ['mcp/releases.mjs']) },
+  }),
+)
+```
+
+The server is the only change between the cells. For more information about `mcp.stdio` and servers by URL, see [Connect MCP servers](/configuration/environments/mcp-servers).
+
+</Step>
+<Step title="Write the evaluation">
+
+In the `evals/releases.eval.ts` file, declare the evaluation and name the variant in `compare.variants`:
+
+```ts title="evals/releases.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { app, withReleases } from './environments.ts'
+
+evaluate(
+  'bumps to the latest release',
+  { environment: app, compare: { variants: [withReleases] }, runs: 4 },
+  async (c) => {
+    const turn = await c.send(
+      "Set package.json's version to the latest acme-cli release.",
+    )
+
+    if (c.attempt.cell.role === 'variant') {
+      expect(turn).toHaveCalledMcp('releases', 'latest_version')
+    }
+    await expect(turn).toHaveFile('package.json', /"version": "2\.4\.0"/)
+  },
+)
+```
+
+The prompt doesn't name the server, so the file assertion passes on the baseline only when the harness finds the version another way. The baseline has no server to call, so only the variant checks the call. `runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect reads `can't tell yet`.
+
+</Step>
+<Step title="Run the comparison">
+
+Run the evaluation with the harness named in the `reeval.config.ts` file:
+
+```bash
+npx reeval run releases
+```
+
+</Step>
+<Step title="Read whether the server helped">
+
+Read the block the run prints for the evaluation. The `releases` row carries the effect, and the file assertion's row shows each cell's count. For more information about the rows, see [Read the result](/results/compare/lift#read-the-result).
+
+When the file assertion passes on both sides, the harness finds the version without the server, and this task can't show what the server changed. When the variant fails the call check, read the attempt's `transcript.jsonl` file under `.reeval/runs/<run>/`: `toHaveCalledMcp` matches a tool call named `mcp__releases__latest_version`.
+
+</Step>
+</Steps>
+
+## Next
+
+For more information about gates and extra variants, see [Measure lift against a baseline](/results/compare/lift).

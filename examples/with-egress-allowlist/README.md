@@ -44,5 +44,5 @@ matches subdomains.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent in Docker, and the real agents from `../profiles.ts` |
 
-Egress policies are in the [Secrets and egress](../../docs/guide/secrets-and-egress.mdx) guide, and
-what each enforces in [Egress](../../docs/concepts/egress.mdx).
+Egress policies are in the [Pass secrets](../../docs/configuration/environments/secrets.mdx) page, and
+what each enforces in [Restrict sandbox egress](../../docs/configuration/environments/egress.mdx).

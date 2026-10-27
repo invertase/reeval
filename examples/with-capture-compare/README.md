@@ -66,5 +66,5 @@ the capture each side sent:
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace, with and without the skill |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and analysis model, the `docker` profile, and the real agents from `../profiles.ts` |
 
-The [Capturing UI](../../docs/recipes/capturing-ui.mdx) recipe covers comparing two arms'
-screenshots, and [Questions](../../docs/guide/questions.mdx) what each side shows.
+The [Check an app](../../docs/evaluations/task/apps.mdx) page covers comparing two arms'
+screenshots, and [Ask questions across attempts](../../docs/evaluations/grading/questions.mdx) what each side shows.

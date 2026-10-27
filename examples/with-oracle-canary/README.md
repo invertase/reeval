@@ -49,5 +49,5 @@ it catches.
 | [`canary/`](./canary) | What the canary writes: a `clamp` that returns `n`, and a test that only tries 5 |
 | [`reeval.config.ts`](./reeval.config.ts) | The oracle in `docker()`, the `canary` profile and the real agents from `../profiles.ts` |
 
-The pattern is [Oracle and canary](../../docs/recipes/fake-harness.mdx#oracle-and-canary) in the
-fake-harness recipe.
+The fake harness the pattern runs on is in the
+[Options reference](../../docs/reference/options.mdx).

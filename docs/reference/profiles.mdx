@@ -1,168 +1,169 @@
 ---
-title: Profiles and budgets
-description: Named presets in reeval.config.ts that fill in defaults, narrow what runs and cap a run's size.
+title: "Profiles reference"
+description: "A profile is a named set of defaults, limits, judge, and budget that --profile selects."
 ---
 
-A profile is a named preset under `profiles` in `reeval.config.ts`. You pick one with `--profile`, `REEVAL_PROFILE` or `defaultProfile`.
+## `profiles`
+
+`profiles` in the `reeval.config.ts` file maps a name to `defaults`, `limit`, `judge`, `budget`, `record`, `tags`, and `gateway`. reeval exits with code 2 for an unknown key or a value of the wrong shape.
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 
 export default defineConfig({
-  defaultProfile: { ci: 'pr' },
   profiles: {
-    pr: {
-      limit: { runs: 1, compare: false, harness: ['cursor:composer-2.5'] },
-      budget: { attempts: 20 },
-    },
     nightly: {
-      defaults: { runs: 4 },
-      record: 'always',
+      defaults: { runs: 3 },
+      limit: { runs: 1, compare: false },
+      judge: { threshold: 0.9 },
       budget: { attempts: 80, duration: '2h' },
+      record: 'always',
+      tags: ['nightly'],
     },
   },
 })
 ```
 
-## Which profile runs
-
-The first of these that names a profile wins. The plan line says which one and why.
-
-| Source | Plan says |
-|---|---|
-| `reeval run --profile nightly` | `profile nightly (--profile)` |
-| `REEVAL_PROFILE=nightly` | `profile nightly (REEVAL_PROFILE)` |
-| `defaultProfile.ci`, when `CI` is set | `profile pr (auto: CI is set)` |
-| `defaultProfile.local`, when `CI` isn't set | `profile dev (default)` |
-
-With none of them, no profile applies. `CI=false` counts as unset. A name that isn't in `profiles` is an error:
-
-```text
-reeval: Unknown profile "nigthly". Profiles in reeval.config.ts: smoke, nightly.
-```
-
-## Profile keys
-
-A profile takes `defaults`, `limit`, `judge`, `budget`, `record`, `tags` and `gateway`. Anything else is an error.
-
-<Property name="defaults" type="object" optional>
-  Options that fill in what the config set and the eval files didn't. Accepts `harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge`, `capture`, `question` and `timeout`, with the same types as on [Options](/reference/options). `sandbox` is the default machine when the resolved environment omits one. They sit above the config and below every group and eval. When `defaults.harness` is set and an eval sets its own, the plan notes `harness set by the eval`.
+<Property name="profiles" type="Record<string, Profile>" optional>
+  Named profile objects.
 </Property>
 
-<Property name="limit" type="{ runs?, compare?, harness? }" optional>
-  Narrows what the eval files ask for, after the cascade. It never adds work. See [limit](#limit).
+reeval applies the `reeval.config.ts` file, then `defaults`, then each group, outermost first, then the evaluation, then `limit`. `defaults.judge` wins over the profile `judge` in that `defaults` step. `--runs` then replaces `runs`.
+
+For more information about the per-key cascade, see [The cascade](/reference/options#the-cascade).
+
+For more information about sizing a run with a profile, see [Size runs with profiles](/evaluations/runs/profiles).
+
+## `defaults`
+
+`defaults` applies before groups and the evaluation. A later `harness` can replace or edit `defaults.harness`; the plan notes `harness set by the eval` whenever a group or evaluation sets `harness`.
+
+<Property name="defaults" type="ProfileDefaults" optional>
+  `harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge`, `capture`, `question`, and `timeout`.
 </Property>
 
-<Property name="judge" type="{ model?, threshold?, providerOptions?, maxConcurrent? }" optional>
-  Judge settings for this profile, the same as `defaults.judge`. When both are set, `defaults.judge` wins field by field. In a profile, `model` must be a `"provider/model"` string or `fakeJudge()`.
+For more information about those keys, see [Options reference](/reference/options).
+
+## `limit`
+
+`limit` narrows `runs`, `compare`, and `harness` after the evaluation. `pin` names keys that stay as resolved. reeval unions `pin` from each group, outermost first, then the evaluation.
+
+<Property name="limit" type="ProfileLimit" optional>
+  The plan notes a cut, as in `runs 3 → 1 (profile nightly)`. It notes protected keys that `limit` also sets, as in `pinned: compare, runs`.
 </Property>
 
-<Property name="budget" type="{ attempts?, duration? }" optional>
-  Caps the run. Merged over the config's `budget`, key by key. See [budget](#budget).
-</Property>
+For more information about `pin`, see [Options reference](/reference/options#pin).
 
-<Property name="record" type="'manual' | 'ci' | 'always'" optional>
-  Replaces the config's `record` while this profile runs.
-</Property>
-
-<Property name="tags" type="string[]" optional>
-  Tag filters added to any `--tag` flags. Every filter must match: `smoke` keeps evals tagged `smoke`, `!slow` drops evals tagged `slow`.
-</Property>
-
-<Property name="gateway" type="Gateway[]" optional>
-  Replaces the config's `gateway` list while this profile runs. See [Gateways](/reference/gateway).
-</Property>
-
-## limit
-
-`limit` only narrows. Each key applies to an eval unless the eval (or a group around it) lists the key in `pin`.
+### `runs`
 
 <Property name="runs" type="number" optional>
-  The most attempts per cell. An eval asking for more runs this many, and so does a compare's default of 4 (`runs 4 → 1 (profile pr)` in the plan). A whole number of at least 1.
+  A whole number of at least 1. reeval lowers `runs` only when the resolved value is higher. `--runs` replaces `runs` after the cap, including when `pin` lists `runs`.
 </Property>
+
+### `compare`
 
 <Property name="compare" type="false | { maxVariants: number }" optional>
-  `false` turns `compare` off, so only the control runs. `{ maxVariants: n }` keeps the first `n` variants. A pairwise `question` whose `across` no longer varies is dropped, and the plan notes `1 pairwise question off (profile pr)`; a question asked of each attempt stays. A limit that leaves only the control, `false` or `{ maxVariants: 0 }`, runs that control alone. It gates on the eval's `gate`, as without `compare`, whatever `compare.gate` says.
+  `false` drops the variants and runs the baseline. `{ maxVariants: n }` keeps the first `n` variants. `n` is a whole number of at least 0.
 </Property>
+
+`limit.compare` applies when the resolved evaluation has `compare`, whether a group, a profile's `defaults`, the config or the evaluation set it. After `false` or `{ maxVariants: 0 }`, the baseline gates like an evaluation without `compare`. The plan notes `compare off (profile nightly)` or `variants 4 → 1 (profile nightly)`.
+
+A pairwise question needs two attempts that differ in a factor it varies. When the limit leaves none of its factors varying, the plan notes `1 pairwise question off (profile nightly)`, or `2 pairwise questions off (profile nightly)` for two. When it leaves some, the question keeps those and the plan notes `1 pairwise question narrowed (profile nightly)`, or `2 pairwise questions narrowed (profile nightly)` for two.
+
+### `harness`
 
 <Property name="harness" type="string[]" optional>
-  Harness ids to keep, matched exactly: `cursor:composer-2.5` keeps the default harness, and a bare `cursor` matches none. The others are dropped from each eval; an eval left with none is skipped. It can't add a harness: use `defaults.harness` for that. An id that no eval in the run's files runs on stops the run before anything starts (exit 2), whatever `--tag` and name filters pick. When a path filter loads only some eval files, reeval refuses only a list none of whose ids match, since the others may name harnesses of files it didn't load. A pinned eval's own harness counts like any other: the eval keeps it whatever the limit says, but the limit still has to name a harness some eval runs on. When it drops every harness in an eval's `compare.harness`, no harness runs a variant, so the compare is off as with `limit.compare: false`, even when the eval pins `compare`, and the plan notes `compare off: no compared harness left (profile pr)`.
+  Harness ids to keep. A default id includes `[effort=<value>]` whenever `effort` is set. reeval skips an evaluation left with none.
 </Property>
 
-The plan shows what `limit` changed in the notes column. This is the `pr` profile above with `harness: ['fake']`, run in CI against an eval group with `compare` and `runs: 3`, using the fake harness:
+The plan notes `harnesses 2 → 1 (profile nightly)`. A miss notes `skipped: no harness left: profile nightly allows none`, with the allowed ids in place of `none`.
 
-```text
-plan  profile pr (auto: CI is set) · 3 evals (1 skipped) · 4 cells · 4 attempts · …
-eval                                    harnesses  variants  runs  attempts  notes
-pf/sized.eval.ts › sized › narrowed       1          0 of 1    1     1         runs 3 → 1 (profile pr) · compare off (profile pr)
-pf/sized.eval.ts › sized › pinned         1          1         1     2         runs 3 → 1 (profile pr) · pinned: compare
-pf/sized.eval.ts › sized › two harnesses  1          0 of 1    1     1         runs 3 → 1 (profile pr) · harnesses 2 → 1 (profile pr) · compare off (profile pr)
-pf/sized.eval.ts › sized › other only     0          0 of 1    1     0         skipped: no harness left: profile pr allows fake · …
-```
+reeval exits with code 2 for anything but a list of id strings. Descriptors belong on `defaults.harness`.
 
-With `compare: false`, an eval drops each pairwise question that no longer has pairs to ask, and one that varies the harness too keeps only its harness pairs. A pinned compare keeps them, and a question asked of each attempt always stays:
+## `judge`
 
-```text
-plan  profile off (--profile) · 3 evals · 8 cells · 8 attempts · …
-eval                                                             harnesses  variants  runs  attempts  notes
-evals/questions.eval.ts › one question                           2          0 of 1    1     2         compare off (profile off) · 1 pairwise question off (profile off)
-evals/questions.eval.ts › two questions, one with its own model  2          0 of 2    1     2         compare off (profile off) · 1 pairwise question off (profile off)
-  question 1/1  Which handles state more cleanly? · after the run · shows task, diff · harness · 1 pair · needs a language model: set analysis.model
-evals/questions.eval.ts › pinned                                 2          1         1     4         pinned: compare
-  question 1/1  Which is shorter? · after the run · shows task, diff · environment · 2 pairs · needs a language model: set analysis.model
-```
+`defaults.judge` wins field by field over the profile `judge`, and that result wins over the config `judge`. `state` merges key by key. Each group merges over that result, outermost first, and then the evaluation does.
 
-## pin
+<Property name="judge" type="ConfigJudgeOptions" optional>
+  The same fields as `defaults.judge`.
+</Property>
 
-An eval that must keep a key whatever the profile says lists it in `pin`: `'runs'`, `'harness'` or `'compare'`. The plan notes `pinned: compare` when a pin blocked a limit. `--runs` still overrides `runs`, pinned or not.
+For more information about judge fields, see [Options reference](/reference/options#judge).
 
-```ts title="evals/skill.eval.ts"
-evaluate('keeps its variants', { pin: ['compare'] }, async (c) => {
-  // …
-})
-```
+## `budget`
 
-## budget
+`budget` merges key by key over the config `budget`. A set key replaces the config value. An omitted key keeps it.
 
-`budget` sits in the config, in a profile, or both; the profile's keys win.
+<Property name="budget" type="{ attempts?: number, duration?: Duration }" optional>
+  reeval exits with code 2 for `usd`, `tokens`, or any other key.
+</Property>
+
+### `attempts`
 
 <Property name="attempts" type="number" optional>
-  The most attempts the plan may have. A bigger plan stops before anything runs (exit 2). `--force` runs it anyway.
+  A whole number of at least 1. reeval exits with code 2 before the run starts when the plan is over the cap, unless `--force` is set. The plan line shows the cap, as in `budget 5 attempts ✗`.
 </Property>
 
-<Property name="duration" type="string | number" optional>
-  The longest the run may take, from the first attempt's start: `'2h'`, `'45m'`, or milliseconds. When it's reached, running attempts finish and queued ones are skipped, and the run ends with status `budget` (exit 1). It's still recorded when the run would be (`--record`, `record: 'always'`, or `'ci'` in CI): the skipped attempts show as skipped, and `reeval compare` never takes it as a base.
+### `duration`
+
+<Property name="duration" type="Duration" optional>
+  Greater than zero. A number is milliseconds, and a number plus `ms`, `s`, `m`, or `h` is that unit.
 </Property>
 
-The plan line shows the budget and whether the plan fits:
+The plan line appends the duration, as in `budget 5 attempts ✗, 2h`.
 
-```text
-plan  profile smoke (--profile) · 10 evals · 11 cells · 220 attempts · … · budget 12 attempts ✗
-…
-reeval: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)
-```
+The timer starts when the first attempt starts. At the cap, running attempts finish and queued attempts are skipped. The record status is `budget`, and the run fails.
 
-`usd` and `tokens` are refused. reeval records the tokens that `cursor()`, `claudeCode()`, `antigravity()`, `pi()`, `codex()` and `fx()` report, per turn, per attempt and for the run, but it prices no models and enforces no token budget.
+## `record`
 
-## Errors
+`record` replaces the config `record`. An omitted `record` keeps the config value, whose default is `ci`.
 
-| Mistake | Message |
-|---|---|
-| An unknown profile key | `Unknown option "x" in profiles.pr in reeval.config.ts. Use defaults, limit, judge, budget, record, tags, gateway.` (a near miss gets `Did you mean "limit"?`) |
-| `compare` in a profile | `… compare only goes on a group or eval; a profile can narrow it with limit.compare.` |
-| An unknown `defaultProfile` key | `Unknown option "remote" in defaultProfile in reeval.config.ts. Use ci, local.` |
-| A default that isn't a profile | `defaultProfile.ci in reeval.config.ts names "pr", which isn't a profile (it defines none). Add it under profiles, or name one that's there.` |
-| A harness object in `limit.harness` | `profiles.pr.limit.harness in reeval.config.ts can only list harness ids to allow (got cursor({ … })). To add harnesses, use profiles.pr.defaults.harness.` |
-| A `limit.harness` id no eval runs on | `profiles.pr.limit.harness in reeval.config.ts lists "cursor", which no eval runs on. Harness ids the evals run on: cursor:composer-2.5.` |
-| A bad `limit.compare` | `profiles.pr.limit.compare in reeval.config.ts must be false or { maxVariants: n }, e.g. { maxVariants: 1 } (got true)` |
-| A bad `limit.runs` | `profiles.pr.limit.runs in reeval.config.ts must be a whole number of at least 1 (got 0)` |
-| Tags that aren't strings | `profiles.pr.tags in reeval.config.ts must be a list of tag filters, e.g. tags: ['smoke'] (got "smoke")` |
-| `budget.usd` | `profiles.pr.budget.usd in reeval.config.ts isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.` |
-| A bad `budget.attempts` | `profiles.pr.budget.attempts in reeval.config.ts must be a whole number of at least 1 (got 0)` |
+<Property name="record" type="'manual' | 'ci' | 'always'" optional>
+  Same values as [`record`](/reference/options#record).
+</Property>
 
-## Related
+reeval exits with code 2 for any other `record` value.
 
-- [Profiles guide](/guide/profiles)
-- [Options](/reference/options)
-- [defineConfig](/reference/config)
-- [reeval run](/reference/cli/run)
+`--record` copies the run when `reeval run` ends. An interrupted run is not copied. A run that stops with status `budget` is copied.
+
+For more information about copying a run later, see [reeval record](/reference/cli#reeval-record).
+
+## `tags`
+
+`tags` selects evaluations. Every profile filter must hold, and every `--tag` flag must hold.
+
+<Property name="tags" type="string[]" optional>
+  Tag filters for this profile, same shape as [`tags`](/reference/options#tags) / `--tag`. reeval omits an evaluation that fails a filter.
+</Property>
+
+reeval exits with code 2 when `tags` is not a list of strings.
+
+For more information about tags on a group or evaluation, see [Options reference](/reference/options#tags).
+
+## `gateway`
+
+`gateway` replaces the config's `gateway` list while the profile is selected.
+
+<Property name="gateway" type="GatewayDescriptor[]" optional>
+  The same helpers as the config's [`gateway`](/reference/options#gateway), in order of preference.
+</Property>
+
+## `defaultProfile`
+
+`reeval run` and `reeval image build` read `--profile`, then `REEVAL_PROFILE`, then `defaultProfile`.
+
+<Property name="defaultProfile" type="{ ci?: string, local?: string }" optional>
+  `ci` applies when `CI` is set to anything but `false`. `local` applies when `CI` is unset or `false`. An unset matching field selects no profile.
+</Property>
+
+A `defaultProfile` name that is not a profile exits with code 2 when the config loads.
+
+An unknown `--profile` or `REEVAL_PROFILE` name exits with code 2. The message lists the names in `profiles`, or says that the `reeval.config.ts` file defines none.
+
+The plan line includes the reason, as in `profile nightly (--profile)`, `REEVAL_PROFILE`, `auto: CI is set`, or `default`. With no profile, that segment is absent.
+
+The `profile` field on the config callback is the `--profile` or `REEVAL_PROFILE` name. `defaultProfile` leaves that field unset.
+
+For more information about the `profile` field, see [Configuration reference](/reference/configuration#profile).
+
+For more information about the `--profile` flag, see [reeval run](/reference/cli#reeval-run).

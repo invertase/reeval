@@ -1,0 +1,6 @@
+extends: existence
+message: "Replace the em dash with a full stop, comma, colon, or parentheses."
+level: error
+nonword: true
+tokens:
+  - "—"

@@ -1,0 +1,101 @@
+---
+title: "Define an environment"
+description: "Give each harness attempt the files, rules, skills, and servers it needs."
+---
+
+Give the harness its files, rules, skills, and servers with `defineEnvironment()`, and derive a variant with its `.extendEnvironment()` method. For the definition, see [Environment](/reference/glossary#environment). Define environments in the `evals/environments.ts` file that `reeval init` writes.
+
+## Define and use an environment
+
+<Steps>
+<Step title="Define an environment">
+
+In the `evals/environments.ts` file, pass `defineEnvironment()` a name and a spec, or a callback that returns one. The name becomes the environment segment of the cell key.
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const page = defineEnvironment('page', ({ directory }) => ({
+  files: directory('./project'),
+}))
+```
+
+For more information about each environment field, see [Workspaces](/configuration/environments/repositories), [Files](/configuration/environments/files), [Rules](/configuration/environments/rules), [Setup commands](/configuration/environments/setup-commands), [MCP servers](/configuration/environments/mcp-servers), [Secrets](/configuration/environments/secrets), [Egress](/configuration/environments/egress), [Sandboxes](/configuration/sandboxes), and [Environment fields](/reference/environment-helpers#environmentspec).
+
+</Step>
+<Step title="Extend an environment">
+
+In the `evals/environments.ts` file, call `.extendEnvironment()` on `page` to derive `page-production`. The child keeps the parent's fields and adds its own, so the baseline and the variant differ by one change.
+
+```ts title="evals/environments.ts"
+export const production = page.extendEnvironment('page-production', {
+  env: { NODE_ENV: 'production' },
+})
+```
+
+A callback receives `skill`, `mcp`, `plugin`, `secret`, `file`, `directory`, and `git`, and `defineEnvironment()` accepts the same callback. Relative paths resolve against the file that calls the helper. For more information about skill sources, see [Skills](/configuration/environments/skills). For more information about plugin sources, see [`plugin.local()`](/reference/environment-helpers#pluginlocal).
+
+A child merges `files`, `env`, `skills`, `plugins`, and `mcp` with its parent's by name, and runs its `setup` commands after its parent's. A child that sets `sandbox`, `workspace`, `rules`, or `egress` replaces the parent's value. `extend` is an alias of `.extendEnvironment()`.
+
+For more information about the merge rules, see [`extend`](/reference/environment-helpers#extend).
+
+</Step>
+<Step title="Use an environment in an evaluation">
+
+In the `evals/page.eval.ts` file, pass `page` as the `environment` and `production` as a variant. reeval names each cell by its harness, environment, and sandbox.
+
+```ts title="evals/page.eval.ts"
+import { page, production } from './environments.ts'
+// ...
+evaluate(
+  'adds a footer',
+  { environment: page, compare: { variants: [production] } },
+  // ...
+)
+```
+
+For more information about where you can set the option, see [the `environment` option](/reference/options#environment).
+
+</Step>
+<Step title="Verify with the `reeval run --dry-run` command">
+
+Print the plan as JSON. The `reeval run --dry-run --json` command plans the run without starting a sandbox or a harness, so it needs no API key.
+
+```bash
+npx reeval run --dry-run --json
+```
+
+Each cell in an evaluation's `cells` list names its environment and the files it writes. The `page-production` cell, trimmed here to the fields that matter, lists the `index.html` file from `page`, which shows that the child kept the parent's files:
+
+```json
+{
+  "key": "claude-code:claude-sonnet-5/page-production/docker",
+  "environment": "page-production",
+  "role": "variant",
+  "files": [
+    "index.html"
+  ]
+}
+```
+
+For a variant that adds a skill, see [Quick start](/getting-started/quickstart).
+
+</Step>
+</Steps>
+
+## Give every evaluation an environment from the config
+
+In the `reeval.config.ts` file, set `environment` to run every evaluation that sets none of its own in it:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { page } from './evals/environments.ts'
+
+export default defineConfig({ environment: page })
+```
+
+A group's or an evaluation's `environment` replaces the config's.
+
+## Reference
+
+For more information about every field and helper signature, see [Environment helpers reference](/reference/environment-helpers).

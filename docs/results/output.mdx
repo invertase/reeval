@@ -1,0 +1,73 @@
+---
+title: "Read a run's output"
+description: "Read the outcomes, the tally, and the remarks that reeval run and reeval show print."
+---
+
+`reeval run` ends with one block per evaluation, then a tally of the run.
+
+## Read the outcomes
+
+The outcome word is `pass`, `fail`, `infra error`, `cancelled`, `skipped`, `todo`, or `not gated`. `not gated` replaces `pass` on the block when no cell is gated. The tally counts that block as `not gated`. A `todo` block counts as `skipped`.
+
+A `fail` block lists each assertion that failed or did not run. For more information about what an assertion decides, see [Assertion](/reference/glossary#assertion).
+
+On one attempt, a failed assertion prints `failed`. Several attempts add a tries row. Passed assertions print as `+N more passed`. For more information about the trace of a failed assertion, see [Debug a failing attempt](/results/inspection/debugging).
+
+A failed evaluation prints like this:
+
+```text
+fail             adds a tested multiply function
+  toSucceed node --test  failed
+    expected command to succeed, exit code 1
+  +2 more passed
+```
+
+The tally omits zeros, as in `2 fail · 1 pass · 1 infra error`. A failure outside any evaluation counts as a `run error`. With no analysis model, this line follows the tally:
+
+```text
+Set analysis.model in reeval.config.ts for answers to what each eval asks.
+```
+
+For more information about setting that model, see [Analyze a run with reeval analyze](/results/analyze).
+
+## Read remarks
+
+After the tally, `Remarks:` names concerns about the evaluations, such as a flaky assertion or a slow MCP server start. reeval's own rules raise them with or without an analysis model, and an analysis model adds its own. A `fix` or `at` line names the file location. At most three concerns print, then `+N more (-v)`. To print the rest and any suggestion, pass `-v`. A concern prints on the run that first raises it. A slow server start prints on every run where it happens.
+
+A remark looks like this:
+
+```text
+Remarks:
+  reads an SSH banner over raw TCP: It failed with "Temporary failure in name resolution" and nothing reached the egress gateway: under egress 'proxy' only HTTP(S) through the gateway leaves the sandbox, so raw TCP, UDP, SSH and database connections fail.
+    fix  with-egress-allow-all.eval.ts:5  set egress: 'allow-all' on the eval if it needs raw TCP or UDP, or point the client at HTTPS_PROXY
+```
+
+## Show one run
+
+`reeval show` prints the most recent run, with the same blocks as `reeval run`:
+
+```bash
+npx reeval show
+```
+
+To print one run, pass its id:
+
+```bash
+npx reeval show <run-id>
+```
+
+To print that run's `summary.md` file, pass `--md`:
+
+```bash
+npx reeval show <run-id> --md
+```
+
+To print the record as JSON, pass `--json`:
+
+```bash
+npx reeval show --json
+```
+
+For more information about the job summary in a pull request, see [Fail a pull request when results regress](/evaluations/recipes/gate-pull-requests).
+
+For more information about every `reeval show` flag, see [the `reeval show` command](/reference/cli#reeval-show).

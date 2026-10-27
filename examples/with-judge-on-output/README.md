@@ -46,4 +46,4 @@ output stands in for the agent's final message, as `output`; the task, files and
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, and the real agents from `../profiles.ts` |
 
-Why to judge output is in [Judge what the code prints](../../docs/concepts/judges.mdx#judge-what-the-code-prints).
+Why to judge output is in [Judge agent work](../../docs/evaluations/grading/judgments.mdx).

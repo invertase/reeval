@@ -46,4 +46,4 @@ jsdoc  harness    1
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
 Skills and the other parts of an environment are in the
-[Environments](../../docs/guide/environments.mdx) guide.
+[Define an environment](../../docs/configuration/environments/index.mdx) page.

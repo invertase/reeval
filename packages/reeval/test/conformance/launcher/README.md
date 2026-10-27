@@ -118,5 +118,5 @@ toolchain, and its paths to the job's `changes` filter.
 ## Adding a case
 
 Add it to `cases.json` with the exit code and the stderr substrings the
-[launcher contract](../../../../../docs/guide/binary.mdx) implies, then run every runner. A runner
+launcher contract implies (the behavior at the top of this page), then run every runner. A runner
 that fails it either gets fixed in the same change or lists it under `divergences` with the reason.
