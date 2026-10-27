@@ -512,6 +512,14 @@ for (const { code } of exitCodes()) {
     problems.push(`exit code ${code} isn't on reference/cli`)
 }
 
+// ---- Recipes apply the mechanic they link: a recipe with no run command is only a pointer ----
+
+if (!/\breeval run\b/.test(page('recipes/ci-gate'))) {
+  problems.push(
+    'docs/recipes/ci-gate.mdx has no `reeval run` command: a recipe that only points at another page is a miss',
+  )
+}
+
 // ---- Navigation and the package name --------------------------------------------------------
 
 const config = JSON.parse(read(join(root, 'docs.json')))

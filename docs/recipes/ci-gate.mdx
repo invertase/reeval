@@ -3,4 +3,76 @@ title: "Fail a pull request"
 description: "Fail a pull request when an evaluation regresses."
 ---
 
-To fail a pull request when an evaluation regresses, use the workflow in [CI](/runs/ci).
+A pull request fails when an evaluation that passed on its base commit fails on its head. Four changes set that up: a recording profile, a secret, a run, and a compare. For the workflow file that runs them, see [CI](/runs/ci). For a runnable project, see [`with-github-pr-gate`](https://github.com/invertase/reeval/tree/main/examples/with-github-pr-gate).
+
+## Gate a pull request
+
+<Steps>
+<Step title="Add a recording profile">
+
+In the `reeval.config.ts` file, add a `pr` profile that records every run it makes, so the next pull request has a base to compare with. `defaultProfile.ci` selects it whenever the `CI` variable is set.
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+
+export default defineConfig({
+  defaultProfile: { ci: 'pr' },
+  profiles: {
+    pr: {
+      record: 'always',
+      limit: { runs: 1 },
+      budget: { attempts: 20 },
+    },
+  },
+})
+```
+
+`limit.runs` caps each cell at one attempt, and `budget.attempts` stops the run at 20. For more information about profiles, see [Profiles](/runs/profiles).
+
+</Step>
+<Step title="Add the secrets">
+
+Add the harness's API key, such as `ANTHROPIC_API_KEY`, as a repository secret. The workflow passes it to the run step as an environment variable. When the judge uses another provider, add its key the same way.
+
+</Step>
+<Step title="Run the evaluations">
+
+The run step runs the evaluations under the `pr` profile and records the run in the history folder:
+
+```bash
+npx reeval run --profile pr
+```
+
+The command exits 0 when the outcome is a pass, 1 when it is a fail, and 3 when it is an infrastructure error. For more information about exit codes, see [Exit codes](/reference/cli#exit-codes).
+
+</Step>
+<Step title="Compare with the base">
+
+The compare step diffs the head run against the newest recorded run at an ancestor commit, and fails the job on a regression:
+
+```bash
+npx reeval compare --fail-on-regression
+```
+
+To write the diff into the job summary, add `--md`. For more information about the diff, see [Compare with past runs](/results/compare/past-runs).
+
+</Step>
+<Step title="Read the job result">
+
+The regression rule decides the job:
+
+| Compare reports | Job |
+| :--- | :--- |
+| Every evaluation `same` or `fixed` | Passes |
+| An evaluation `regressed` | Fails |
+| A `new` or `can't compare` evaluation that fails | Fails |
+| A `new` evaluation that passes | Passes |
+
+The first run has no earlier record, so every evaluation is `new` and only a failing one fails the job.
+
+</Step>
+</Steps>
+
+## Next
+
+For more information about the workflow file, see [CI](/runs/ci). For more information about following outcomes across recorded runs, see [Track past runs](/recipes/results-over-time).
