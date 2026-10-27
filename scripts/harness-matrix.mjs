@@ -22,8 +22,8 @@ const PROBE = {
   sse: { transport: 'sse', url: 'https://mcp.example/sse', headers: {} },
 }
 
-/** Whether the agent takes an MCP server of each transport, and when reeval refuses one it can't. */
-function mcpSupport(kind, agent) {
+/** Whether the agent takes an MCP server of each transport. */
+function mcpSupport(agent) {
   const out = {}
   for (const transport of TRANSPORTS) {
     let refused = false
@@ -94,7 +94,7 @@ export async function harnessFacts() {
     }
     if (!row.tokens && !row.tokensWhy)
       problems.push(`${kind}: a contract row with tokens: false needs tokensWhy`)
-    const mcp = mcpSupport(kind, agent)
+    const mcp = mcpSupport(agent)
     if ((row.mcp !== false) !== mcp.stdio.ok) {
       problems.push(`${kind}: the contract row's mcp and the catalog disagree on stdio MCP servers`)
     }
