@@ -56,7 +56,7 @@ For more information about overriding an option, see [Group evaluations](/write/
 
 ## `gateway`
 
-`gateway` lists the gateways that serve model calls, in the order you prefer them.
+`gateway` lists the gateways that serve model calls, in order of preference.
 
 <Property name="gateway" type="GatewayDescriptor[]" optional>
   Helpers from `{{ pkg }}/gateway`: `direct()` is each provider's own key, `vercel()` is Vercel AI Gateway, and `openrouter()` is OpenRouter. The default is `[direct()]`. Each harness and judge model takes the first gateway that can serve it. reeval refuses a gateway listed twice, and a plan where no listed gateway can serve a model.
@@ -65,6 +65,16 @@ For more information about overriding an option, see [Group evaluations](/write/
 A selected profile's [`gateway`](/reference/profiles#gateway) replaces this list.
 
 A harness or a judge that names its own `gateway` skips the list's fallback. For more information about pinning a gateway, see [Route models through a gateway](/agents/gateways#pin-one-gateway).
+
+### `openrouter()` options
+
+`openrouter()` takes one option. `direct()` and `vercel()` take none.
+
+<Property name="fallbacks" type="boolean" optional>
+  Lets OpenRouter fail over to another upstream provider when the one it picked can't serve a call. The default is `false`, so reeval's own calls, the judge, analysis, questions, and captures, send `allow_fallbacks: false`. The harnesses' calls take OpenRouter's own routing either way. The plan notes where it is on.
+</Property>
+
+For more information about OpenRouter, see [Route through OpenRouter](/integrations/gateways/openrouter).
 
 ## `harness`
 

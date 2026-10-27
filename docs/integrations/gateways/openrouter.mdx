@@ -20,13 +20,11 @@ import { defineConfig } from '{{ pkg }}'
 import { direct, openrouter } from '{{ pkg }}/gateway'
 
 export default defineConfig({
-  gateway: [openrouter(), direct()],
+  gateway: [openrouter({ fallbacks: true }), direct()],
 })
 ```
 
-<Property name="fallbacks" type="boolean" optional>
-  Lets reeval's own calls, the judge, analysis, questions, and captures, fail over to another upstream provider when the first one fails. Defaults to `false`. The harnesses' calls take OpenRouter's own routing either way.
-</Property>
+With `fallbacks: true`, reeval's own calls may fail over to another upstream provider. The harnesses' calls keep OpenRouter's own routing. For more information about the option, see [`fallbacks`](/reference/options#openrouter-options).
 
 A harness `openrouter()` cannot serve takes the next gateway in the list. Each call records the upstream provider that served it, on the attempt's `upstreams` and the judgment's `upstream`.
 

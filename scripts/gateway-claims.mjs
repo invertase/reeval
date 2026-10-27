@@ -1,6 +1,6 @@
 // Holds each routing gateway page to naming every model call reeval routes, so a page that stops
 // after the judge fails `pnpm docs:check` instead of waiting for a judge.
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const PAGES = ['direct', 'vercel', 'openrouter']
@@ -33,6 +33,23 @@ export function gatewayModelProblems(docsDir) {
     }
   }
   problems.push(...gatewayNotesProblems(docsDir))
+  problems.push(...gatewayPropertyProblems(docsDir))
+  return problems
+}
+
+/** Problems on docs/integrations/gateways: a gateway page is a task page, so a `<Property` entry belongs on reference/options. */
+export function gatewayPropertyProblems(docsDir) {
+  const problems = []
+  const dir = join(docsDir, 'integrations/gateways')
+  for (const entry of readdirSync(dir).filter((f) => f.endsWith('.mdx'))) {
+    const file = `integrations/gateways/${entry.replace(/\.mdx$/, '')}`
+    const text = readFileSync(join(dir, entry), 'utf8')
+    if (/<Property\b/.test(text)) {
+      problems.push(
+        `${file} has a <Property> entry: gateway pages are task pages, so move the option's entry to reference/options and link it`,
+      )
+    }
+  }
   return problems
 }
 
