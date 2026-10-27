@@ -46,7 +46,7 @@ npx reeval run brand
 
 ## Read the result
 
-The run prints one block for the evaluation, in this format ([Output](/results/output)):
+The run prints one block for the evaluation, in this format:
 
 ```text
 pass             styles the page in Anthropic's brand
@@ -61,7 +61,15 @@ pass             styles the page in Anthropic's brand
   +1 more passed
 ```
 
-The `arm` column lists the baseline and the variant. The evaluation's outcome, `pass`, is the variant's, because reeval gates only variants by default. Set `compare.gate` to `'all'` to gate the baseline too, or `'none'` to gate neither. `gate: { passRate: 0.75 }` passes a cell when at least 3 of its 4 attempts pass.
+The `arm` column lists the baseline and the variant. A comparison of harnesses or sandboxes heads the column `harness` or `sandbox`. The `pass` column is passed attempts out of counted attempts, and the effect word is `helped`, `made it worse`, or `can't tell yet`. Equal pass rates, with at least four counted attempts a side, print no effect word. The `check` table counts each assertion per cell ([Measure a run](/results/measure#read-the-assertion-and-effort-tables)).
+
+To print the interval under each variant, pass `-v`:
+
+```text
+    difference +100 points, 95% interval +31…+100
+```
+
+The evaluation's outcome, `pass`, is the variant's, because reeval gates only variants by default. Set `compare.gate` to `'all'` to gate the baseline too, or `'none'` to gate neither. `gate: { passRate: 0.75 }` passes a cell when at least 3 of its 4 attempts pass.
 
 Below four counted attempts a side, reeval doesn't call `helped` or `made it worse`. With `runs: 2`, the same counts read `can't tell yet` ([Statistics](/results/compare/statistics)).
 
