@@ -22,6 +22,8 @@ const sentences = (text) =>
  *  - the landing's cell-id default with no mention of the last-segment rule `opencode` ids follow;
  *  - the model page holding the harness support matrix instead of linking its home in
  *    reference/options;
+ *  - the generated OpenCode provider table on a harness page, or missing from reference/options:
+ *    it is a reference catalog, so it lives in Harness behavior and the harness page links to it;
  *  - a heading that two or more harness pages share (`rules`, `skills`, `mcp`, `usage`,
  *    `servedModels`, `web-search`, `web-fetch`): what differs by harness is one entry in
  *    reference/options, and each harness page links to it.
@@ -63,7 +65,8 @@ export async function agentsProblems({ root, docsDir }) {
   const urlNamed = OPENCODE_PROVIDERS.filter((p) => p.endpoints.some((e) => 'regex' in e.path)).map(
     (p) => p.id,
   )
-  for (const file of harnessPages) {
+  const optionsFile = join(docsDir, 'reference/options.mdx')
+  for (const file of [...harnessPages, optionsFile]) {
     for (const sentence of sentences(read(file))) {
       if (!/\brequest URL\b/.test(sentence)) continue
       const named = [...sentence.matchAll(/`([\w.-]+)\/`/g)].map((m) => m[1])
@@ -74,6 +77,18 @@ export async function agentsProblems({ root, docsDir }) {
         )
       }
     }
+  }
+
+  const providerBlock = '(generated:opencode-providers)'
+  for (const file of harnessPages) {
+    if (read(file).includes(providerBlock)) {
+      problems.push(
+        `${relative(root, file)} holds the generated opencode-providers table: it is a reference catalog, so it lives in reference/options (Harness behavior) and the harness page links to it`,
+      )
+    }
+  }
+  if (!read(optionsFile).includes(providerBlock)) {
+    problems.push('reference/options has no generated opencode-providers block in Harness behavior')
   }
 
   const landingText = read(landing)
