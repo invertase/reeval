@@ -48,7 +48,7 @@ For more information about every `reeval run` flag, see [reeval run](/reference/
 
 ## Open the debug directory
 
-The `.reeval/debug` directory holds one directory per run. reeval writes that directory on every run. Git ignores it with the rest of the `.reeval/` directory.
+The `.reeval/debug` directory holds one directory per run. Each attempt writes its own files there, so a run with no attempt writes no directory. Git ignores it with the rest of the `.reeval/` directory.
 
 Attempt files sit at the `.reeval/debug/<run id>/<evaluation>/<cell>/<n>/` path. The evaluation and cell names are slugs, each with a short hash.
 

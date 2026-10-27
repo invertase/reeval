@@ -46,10 +46,10 @@ npx reeval studio build
 The command names the output folder and what it holds:
 
 ```text
-built studio-dist/: 12 runs, 348 files, 9.4 MB
+built studio-dist/: 12 runs, 348 files, 9.4 MB (records, transcripts, diffs, logs and judge inputs)
 Serve it from any static host. Anyone who can open it can read every included file.
 ```
 
-The site uses relative addresses and hash routing, so it works from any host and any subpath. It has no live runs and no **Debug** tab. The `studio-dist` directory must be empty or a previous studio build.
+With `--no-artifacts`, the line ends `(records only: --no-artifacts)`. The site uses relative addresses and hash routing, so it works from any host and any subpath. It has no live runs and no **Debug** tab. The `studio-dist` directory must be empty or a previous studio build.
 
 For more information about every flag of `reeval studio` and `reeval studio build`, see [CLI](/reference/cli#reeval-studio) and [`reeval studio build`](/reference/cli#reeval-studio-build).

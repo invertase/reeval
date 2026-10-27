@@ -558,6 +558,38 @@ for (const file of mdxFiles()) {
   }
 }
 
+// ---- Studio and debug pages describe what the code does ------------------------------------------
+
+// `reeval studio build` ends its `built` line with the artifact summary, or the records-only note
+// under `--no-artifacts` (src/studio/command.ts).
+const studioCommand = read(join(src, 'studio/command.ts'))
+const builtSummaries = [
+  ...studioCommand.matchAll(/\$\{artifacts \? '( \([^']+\))' : '( \([^']+\))'\}/g),
+]
+if (builtSummaries.length === 0) {
+  problems.push('docs.mjs cannot find the built line summaries in src/studio/command.ts')
+}
+for (const [, withArtifacts] of builtSummaries) {
+  const builtLine = /^built .*$/m.exec(page('results/studio'))?.[0]
+  if (!builtLine?.endsWith(withArtifacts)) {
+    problems.push(
+      `docs/results/studio.mdx shows a built line without the artifact summary${withArtifacts} that src/studio/command.ts prints`,
+    )
+  }
+}
+
+// Debug data is built per attempt (src/attempt/index.ts, src/debug/attempt.ts), so a run with no
+// attempt writes no directory.
+if (
+  page('results/debugging')
+    .split(/\n\n+/)
+    .some((paragraph) => /debug\b/i.test(paragraph) && /\bon every run\b/i.test(paragraph))
+) {
+  problems.push(
+    'docs/results/debugging.mdx says a debug directory is written on every run: an attempt writes it, so a run with no attempt writes none',
+  )
+}
+
 // ---- Gateway pages -----------------------------------------------------------------------------
 
 const srcFile = (file) => read(join(root, 'packages/reeval/src', file))
