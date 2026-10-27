@@ -45,7 +45,7 @@
     "@reeval/harness-cursor-sdk": "workspace:0.1.6",
     "@reeval/harness-fx": "workspace:0.1.2",
     "@reeval/harness-goose": "workspace:0.1.6",
-    "@reeval/harness-grok-build": "workspace:0.1.5",
+    "@reeval/harness-grok-build": "workspace:0.1.6",
     "@reeval/harness-opencode": "workspace:0.2.10",
     "@reeval/harness-pi": "workspace:0.2.8",
     "ws": "8.22.0",

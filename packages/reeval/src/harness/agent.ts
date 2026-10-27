@@ -155,6 +155,7 @@ export function createAgentHarness(
         auth,
         ...(catalog.routeEnv ? { env: catalog.routeEnv } : {}),
         ...(vertex ? { vertex } : {}),
+        ...(catalog.vertexChat ? { vertexChat: catalog.vertexChat } : {}),
         descriptor,
         model,
         plugins,

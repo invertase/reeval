@@ -46,6 +46,7 @@ export type HarnessRow = {
     | 'goose-vertex'
     | 'pi-vertex'
     | 'fx-vertex'
+    | 'grok-build-vertex'
     | 'codex-gateway'
     | 'opencode-gateway'
     | 'goose-gateway'
@@ -519,6 +520,26 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
+  },
+  {
+    // Grok Build on Vertex AI: the model as a [model."xai/<id>"] table on Vertex's
+    // OpenAI-compatible Chat Completions API, its env_key a placeholder the gateway replaces with
+    // the host's token, so nothing reaches xAI's API.
+    id: 'grok-build-vertex',
+    harness: 'grok-build',
+    gateway: 'vertex',
+    model: 'grok-4.6',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'grok-build',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: true,
+    servedModel: /grok-4\.6/,
+    wireModel: /grok-4\.6/,
+    effort: { value: 'low', asked: /^reasoning_effort=low$/ },
   },
   {
     // Codex on Vercel AI Gateway: a Responses API provider on Vercel, the model as openai/<id>.

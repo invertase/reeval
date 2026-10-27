@@ -89,9 +89,9 @@ Code, Codex, Goose, pi, OpenCode, fx and Grok Build on Vercel AI Gateway with on
 on Goose, or on OpenCode with a model other than Gemini, falls back to `direct()`), and
 everything else on its own key; the plan's hint says which cells fell back. Pin one with
 the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. `vertex({ project })`
-(else `GOOGLE_CLOUD_PROJECT`) runs Claude Code, Antigravity, OpenCode, Goose, pi and fx (Gemini only) on Vertex AI
+(else `GOOGLE_CLOUD_PROJECT`) runs Claude Code, Antigravity, OpenCode, Goose, pi, Grok Build and fx (Gemini only) on Vertex AI
 with no key: reeval mints a token from Application Default Credentials on the host and the egress
-gateway adds it (OpenCode's Gemini model runs as `google-vertex/<id>`). Claude ids work in
+gateway adds it (OpenCode's Gemini model runs as `google-vertex/<id>`, Grok Build's xAI model as `xai/<id>` on Vertex's Chat Completions API). Claude ids work in
 either form (`claude-haiku-4-5-20251001` is sent as Vertex's `claude-haiku-4-5@20251001`), so one
 string works through `[vertex()]` and its `direct()` fallback; `google/*` and `anthropic/*` judge and analysis models run there
 too. `reeval doctor --online` checks the token, the project's Vertex AI API and that Vertex serves each model the config sends there (Claude needs enabling in Model Garden). Default `[direct()]`:
