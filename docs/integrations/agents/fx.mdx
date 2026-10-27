@@ -47,17 +47,7 @@ export default defineConfig({
   A Vercel AI Gateway id, `<provider>/<model>`, or a bare OpenAI model id. A missing or empty id fails at plan time with exit code 2.
 </Property>
 
-<Property name="id" type="string" optional>
-  Cell id. Defaults to `fx:<model>`. The id uses letters, digits, and `._:@+-=[]`.
-</Property>
-
-<Property name="maxConcurrent" type="number" optional>
-  The most fx attempts that run at the same time, across the run. A whole number of at least 1.
-</Property>
-
-<Property name="startTimeout" type="Duration" optional>
-  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
-</Property>
+For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 In the sandbox, fx runs with a private home, whose `settings.json` file turns session titles off, so the run's model is the only one called. Auto-upgrade and sound are off.
 
@@ -73,9 +63,21 @@ For more information about writing rules, see [Add project rules](/environments/
 
 ## `skills`
 
-The fx harness reads skills from the workspace's `.fx/skills` directory and from the private home's `.fx/skills` directory under the `~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home` path. A plugin's skills join the home skills, since fx has no plugins of its own.
+The fx harness reads skills from the workspace's `.fx/skills` directory and from the private home's `.fx/skills` directory under the `~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home` path.
 
 For more information about placing skills, see [Give the agent skills](/environments/skills).
+
+## `plugins`
+
+fx has no plugins of its own. reeval adds each plugin's skills to the home skills directory and passes its MCP servers over ACP with the environment's.
+
+[//]: # (generated:harness-plugins:fx)
+
+- Takes `skills` and `mcp`, and refuses a plugin that keeps `agents`, `commands`, `hooks` and `rules`: narrow it with `only`, or leave it out of the cell.
+
+[//]: # (/generated:harness-plugins:fx)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).
 
 ## `mcp`
 
