@@ -4,13 +4,13 @@
 // redirect in docs.json so old URLs resolve, and nothing in the docs, the README, the skills or
 // the examples links to it.
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { existsSync, readFileSync, statSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { headingIds, internalLinks } from './docs-anchors.mjs'
 
 /**
- * Paths of earlier docs layouts that the archived pages (docs-archive/) don't name: the section
- * roots and the pages of the layout before the sidebar's. Each keeps a redirect.
+ * Paths of earlier docs layouts that docs.json's redirects don't already name: the section roots
+ * and the pages of the layout before the sidebar's. Each keeps a redirect.
  */
 export const LEGACY_PATHS = [
   '/comparisons/compare',
@@ -40,7 +40,7 @@ export const LEGACY_PATHS = [
  */
 export const TITLE_EXCEPTIONS = { Overview: '/overview', 'Run output': '/results/output' }
 
-const SKIPPED = /^(?:docs-archive|\.git|node_modules)\//
+const SKIPPED = /^(?:\.git|node_modules)\//
 
 /** The path of a docs URL or link target: no query, no #anchor, no trailing slash. */
 export function pathOf(target) {
@@ -94,32 +94,10 @@ export function titleProblems(config) {
   return problems
 }
 
-/** The URL path a page file under `dir` serves: `docs/evaluations/evaluate.mdx` is `/evaluations/evaluate`. */
-function urlOf(dir, file) {
-  const path = `/${relative(dir, file)
-    .replace(/\\/g, '/')
-    .replace(/\.mdx?$/, '')}`
-  return path.replace(/\/index$/, '') || '/'
-}
-
-function pagesUnder(dir) {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
-    entry.isDirectory()
-      ? pagesUnder(join(dir, entry.name))
-      : /\.mdx?$/.test(entry.name)
-        ? [join(dir, entry.name)]
-        : [],
-  )
-}
-
-/** Every old path: the archived pages' URLs and LEGACY_PATHS, less what the sidebar owns. */
-export function oldPaths({ root, config }) {
+/** Every old path: docs.json's redirects and LEGACY_PATHS, less what the sidebar owns. */
+export function oldPaths({ config }) {
   const owned = new Set(sidebarHrefs(config))
   const old = new Set(LEGACY_PATHS)
-  for (const file of pagesUnder(join(root, 'docs-archive'))) {
-    old.add(urlOf(join(root, 'docs-archive'), file))
-  }
   for (const source of Object.keys(config.redirects ?? {})) old.add(source)
   return [...old].filter((path) => !owned.has(path)).sort()
 }
@@ -174,7 +152,7 @@ export function linkProblems({ root, config }) {
       )
     }
   }
-  for (const path of oldPaths({ root, config })) {
+  for (const path of oldPaths({ config })) {
     if (!(path in redirects)) {
       problems.push(`${path} is an old docs path with no redirect in docs.json: add one`)
     }
@@ -193,7 +171,7 @@ export function linkProblems({ root, config }) {
     }
   }
 
-  const old = new Set(oldPaths({ root, config }))
+  const old = new Set(oldPaths({ config }))
   const headings = new Map()
   const idsOf = (file) => {
     if (!headings.has(file))
