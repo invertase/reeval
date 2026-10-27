@@ -547,6 +547,18 @@ for (const key of judgeKeys ?? []) {
   }
 }
 
+/** The environment variables a src/ file reads off an `env` object, as `env.NAME`. */
+function readEnvNames(file) {
+  return [
+    ...new Set([...read(join(src, file)).matchAll(/\benv\.([A-Z][A-Z0-9_]*)\b/g)].map((m) => m[1])),
+  ].sort()
+}
+for (const name of readEnvNames('egress.ts')) {
+  if (!mentions(envPage, `\`${name}\``)) {
+    problems.push(`${name} is read in src/egress.ts but not on reference/env-vars`)
+  }
+}
+
 const cliPage = page('reference/cli')
 for (const { code } of exitCodes()) {
   if (!new RegExp(`\\| ${code} \\|`).test(cliPage))

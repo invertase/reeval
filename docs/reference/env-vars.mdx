@@ -9,7 +9,7 @@ Where a flag and a variable set the same thing, the flag takes precedence. `REEV
 
 Whitespace or a control character in a harness, judge, or `question` credential stops the run. A missing credential for a harness, a judge, or a `question` stops the run. A missing `analysis.model` credential skips insights.
 
-For more information about config keys, see [Options](/reference/options). For more information about harnesses, see [Choose an agent](/agents).
+For more information about config keys, see [Options](/reference/options). For more information about harnesses, see [Agents](/agents).
 
 ## `REEVAL_PROFILE`
 
@@ -21,7 +21,7 @@ For more information about config keys, see [Options](/reference/options). For m
 
 ## `REEVAL_PRICES`
 
-`REEVAL_PRICES` names a JSON file of your own model prices for the `reeval run --dry-run` cost estimate. Its prices take precedence over models.dev's. `none` shows tokens only, with no cost. A file reeval can't read or parse stops the command.
+`REEVAL_PRICES` names a JSON file of custom model prices for the `reeval run --dry-run` cost estimate. Its prices take precedence over models.dev's. `none` shows tokens only, with no cost. A file reeval can't read or parse stops the command.
 
 ## `REEVAL_CAPTURE_BROWSER`
 
@@ -130,6 +130,14 @@ On a CI run, `GITHUB_ACTIONS` records the provider `github`. `GITHUB_SERVER_URL`
 ## `GITLAB_CI`
 
 On a CI run, `GITLAB_CI` records the provider `gitlab`. The branch is `CI_COMMIT_REF_NAME` when neither `GITHUB_HEAD_REF` nor `GITHUB_REF_NAME` is set. `CI_JOB_URL` is the job URL. `CI_MERGE_REQUEST_IID` and `CI_MERGE_REQUEST_TARGET_BRANCH_NAME` fill the merge request.
+
+## `BUILDKITE`
+
+A non-empty `BUILDKITE` identifies the machine as a Buildkite agent. On a CI runner, `reeval run` and `reeval doctor` warn about `egress: 'allow-all'`, because the sandbox can then reach the cloud metadata service and the host's network around the egress gateway.
+
+## `CIRCLECI`
+
+A non-empty `CIRCLECI` identifies the machine as a CircleCI runner, with the same `egress: 'allow-all'` warning as `BUILDKITE`.
 
 ## `GITHUB_OUTPUT`
 
