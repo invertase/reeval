@@ -21,6 +21,42 @@ questions: [{ question: 'Which multiply() is easier to read?', across: 'harness'
 
 Without `across`, reeval asks the question of each attempt on its own, once the attempt passes or fails. A question can be a string, or an object with `question` and `choices`, the answers it picks from with a short reason.
 
+## Set the question model
+
+In the `reeval.config.ts` file, set `question.model` to a language model. The model answers every question. Without it, reeval falls back to `analysis.model`, then to the judge's language model. reeval refuses an evaluation model, which only scores yes-or-no questions.
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+
+export default defineConfig({
+  question: { model: 'anthropic/claude-sonnet-5' },
+})
+```
+
+In the `.env.local` file next to the `reeval.config.ts` file, add the key for the model's provider, such as `ANTHROPIC_API_KEY`:
+
+```bash title=".env.local"
+ANTHROPIC_API_KEY=replace-with-your-key
+```
+
+For more information about other providers and gateways, see [Route models through a gateway](/agents/model#route-models-through-a-gateway).
+
+## Verify the plan
+
+The `reeval run --dry-run` command plans the run without starting a sandbox or a harness, so it needs no API key. Plan the run:
+
+```bash
+npx reeval run --dry-run
+```
+
+Under the evaluation, a `question` line names the question, when reeval asks it, what each side shows, the pairing, the number of pairs, and the model. This is the line the `with-compare-harness` example printed:
+
+```text
+  question 1/1  Which multiply() is easier to read? · after the run · shows task, diff · harness · 1 pair · anthropic/claude-sonnet-5
+```
+
+To ask the question, run the same command without `--dry-run`.
+
 ## Read the answers
 
 `npx reeval query question_pairs` lists the wins, ties, and splits of each pairwise question. `attempt_answers` lists each attempt's answer. For more information about both views, see [Query views](/reference/query).
