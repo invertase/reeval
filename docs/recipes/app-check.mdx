@@ -1,9 +1,9 @@
 ---
 title: "Judge a running app"
-description: "See whether the app the harness built renders what you asked for."
+description: "See whether the app the harness built renders what the prompt asked for."
 ---
 
-A file assertion tells you the harness wrote a page. It can't tell you the page renders. You start the app the harness built, capture one page, and ask the judge what the picture shows. For a runnable project that captures a page after a model drives it, see [`with-capture-journey`](https://github.com/invertase/reeval/tree/main/examples/with-capture-journey).
+A file assertion shows the harness wrote a page. It can't show the page renders. The evaluation starts the app the harness built, captures one page, and asks the judge what the picture shows. For a runnable project that captures a page after a model drives it, see [`with-capture-journey`](https://github.com/invertase/reeval/tree/main/examples/with-capture-journey).
 
 The example uses the `nextApp` environment, whose workspace holds a Next.js app on the Vercel AI SDK with `build` and `start` scripts. For more information about putting an app in the workspace, see [Workspaces](/environments/repositories).
 
@@ -31,30 +31,19 @@ evaluate(
 The `builds` assertion runs before the app starts, so a build error fails the attempt with the compiler's output instead of a blank capture.
 
 </Step>
-<Step title="Start the app">
+<Step title="Judge the rendered page">
 
-Start the built app with `c.serve`. In the `evals/chat.eval.ts` file, add the server after the `builds` assertion:
+Start the built app, capture the chat page, and ask the judge what the picture shows. In the `evals/chat.eval.ts` file, add these lines after the `builds` assertion:
 
 ```diff title="evals/chat.eval.ts"
      await expect(c.exec('npm run build'), 'builds').toSucceed()
 +    const app = await c.serve('npm start')
-```
-
-`c.serve` runs the command in the background, allocates a free port, and sets it as `PORT`. `next start` listens on `PORT`, so the app listens where reeval expects it. The attempt stops the server when the body finishes. For more information about `c.serve` and background commands, see [Apps](/write/apps).
-
-</Step>
-<Step title="Capture and judge it">
-
-Capture the page and send the picture to the judge. In the `evals/chat.eval.ts` file, add the capture and the judge call after the server starts:
-
-```diff title="evals/chat.eval.ts"
-     const app = await c.serve('npm start')
 +    const shot = await c.capture(app, { path: '/chat', wait: 'idle' })
 +    const q = 'Does the screenshot show a text input and a send button?'
 +    expect(await c.judge(q, { artifacts: [shot] }), 'renders').toPass()
 ```
 
-For the capture options, see [Apps](/write/apps#capture-a-page). For more information about the judge's model, threshold, and key, see [Judgments](/write/judgments).
+`next start` reads `PORT`, so the app listens where `c.serve` expects it. The question names two elements the page must show, so the judge answers from the picture. For more information about the three calls, see [Start a server](/write/apps#start-a-server), [Capture a page](/write/apps#capture-a-page), and [Judge a capture](/write/apps#judge-a-capture).
 
 </Step>
 <Step title="Read the outcome">
@@ -65,7 +54,7 @@ Run the evaluation in the `evals/chat.eval.ts` file:
 npx reeval run chat
 ```
 
-During the run, reeval prints the judge's verdict and score, and your score can differ:
+During the run, reeval prints the judge's verdict and score. The score can differ:
 
 ```text
 judge  pass 0.93 (≥ 0.8)  Does the screenshot show a text input and a send button?
