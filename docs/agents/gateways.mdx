@@ -23,15 +23,15 @@ export default defineConfig({
 })
 ```
 
-Vercel AI Gateway serves Claude Code on `AI_GATEWAY_API_KEY`. It can't serve Cursor, so Cursor falls back to `direct()` and its own `CURSOR_API_KEY`. Without `direct()` at the end, a harness that no gateway in the list serves stops the plan with exit code 2. The plan names the gateway each harness resolved to:
+Vercel AI Gateway serves Claude Code on `AI_GATEWAY_API_KEY`. It can't serve Cursor, so Cursor falls back to `direct()` and its own `CURSOR_API_KEY`. Without `direct()` at the end, a harness that no gateway in the list serves stops the plan with exit code 2. The plan's `notes` column lists the gateway each harness resolved to, in `harness` order:
 
 ```bash
 npx reeval run --dry-run
 ```
 
 ```text
-notes
-gateway: claude-code:claude-sonnet-5 → vercel
+eval                 harnesses  variants  runs  attempts  notes
+evals/a.eval.ts › x  2          —         1     2         gateway: claude-code:claude-sonnet-5 → vercel · gateway: cursor:composer-2.5 → direct
 ```
 
 For a runnable project that also sends the judge through Vercel AI Gateway, see [`with-vercel-gateway`](https://github.com/invertase/reeval/tree/main/examples/with-vercel-gateway).
