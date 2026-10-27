@@ -1,6 +1,6 @@
 ---
-title: "Read the results summary"
-description: "Interpret a run's results summary."
+title: "Read a run's output"
+description: "Read the outcomes, the tally, and the remarks that reeval run and reeval show print."
 ---
 
 `reeval run` ends with one block per evaluation, then a tally of the run.
@@ -29,28 +29,6 @@ Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
 
 For more information about setting that model, see [Analyze a run with reeval analyze](/results/analyze).
-
-## Read the assertion and `effort` tables
-
-With several cells, the assertion table, headed `check`, has one column per cell and lists assertions that failed or did not run in some cell. `couldn't check` means the assertion raised an error. For a comparison's table, see [Read the result](/results/compare/lift#read-the-result).
-
-The `effort` table prints the median tool calls, time, and tokens of each cell:
-
-```text
-  effort           tools  time
-  math             1      1.0s
-  project-layout   1      <0.1s
-```
-
-For when it prints and what each column counts, see [Measure a run](/results/measure).
-
-## Read a comparison
-
-Rows for the baseline and each variant print under `arm`, `harness`, or `sandbox`, each with passed attempts out of counted attempts and an effect word: `helped`, `made it worse`, or `can't tell yet`. To print the interval under each variant, pass `-v`. For how to read the rows, see [Read the result](/results/compare/lift#read-the-result).
-
-## Read insights
-
-With an analysis model, the block adds an answer under the name, a sentence under a comparison row or a failure, and a headline before the tally. The outcome word stays the assertions' result. For more information, see [Analyze a run](/results/analyze#read-the-answers).
 
 ## Read remarks
 
