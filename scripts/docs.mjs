@@ -1326,6 +1326,42 @@ if (!egressText) {
   )
 }
 
+// ---- The Evaluate page's names -----------------------------------------------------------------
+
+// The /write page is titled Evaluate in the sidebar and its frontmatter, under the Evaluations
+// section. docs.page renders the frontmatter title as the page's one H1, so the body has no H1
+// of its own that could drift from it.
+{
+  const sectionOf = (items, href) => {
+    for (const item of items) {
+      if (item.href === href) return { section: undefined, item }
+      if (item.pages) {
+        const found = sectionOf(item.pages, href)
+        if (found) return { section: found.section ?? item.group, item: found.item }
+      }
+    }
+    return undefined
+  }
+  const found = sectionOf(config.sidebar, '/write')
+  if (found?.section !== 'Evaluations') {
+    problems.push(
+      `docs.json: the sidebar section holding /write is "${found?.section}", not "Evaluations"`,
+    )
+  }
+  if (found?.item.title !== 'Evaluate') {
+    problems.push(`docs.json: the /write sidebar label is "${found?.item.title}", not "Evaluate"`)
+  }
+  const writeText = read(join(docsDir, 'write', 'index.mdx'))
+  const writeTitle = writeText.match(/^---\n[\s\S]*?^title:\s*"?([^"\n]+)"?\s*$/m)?.[1]
+  if (writeTitle !== 'Evaluate') {
+    problems.push(`write/index.mdx: the frontmatter title is "${writeTitle}", not "Evaluate"`)
+  }
+  const writeH1 = outsideFences(writeText).match(/^# .+$/m)?.[0]
+  if (writeH1 && writeH1 !== '# Evaluate') {
+    problems.push(`write/index.mdx: the page heading is "${writeH1}", not "# Evaluate"`)
+  }
+}
+
 // ---- Task page length --------------------------------------------------------------------------
 
 // A task page (every page outside docs/reference/) stays at 600 words of prose: a short tutorial

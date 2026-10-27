@@ -75,7 +75,7 @@ In code, an **environment** is the value `defineEnvironment()` returns. **Variab
 
 An evaluation is one task for the agent and the assertions and judgments on its result, declared with `evaluate()` or as one case of `evaluate.each()` in a `*.eval.ts` file. The evaluation fails when a cell that counts toward it fails.
 
-The **evaluation model** is a `typesafe-ai/*` judge model, which only scores yes or no, as the error strings name it. A **language model** writes text. For more information about an evaluation, see [Evaluations](/write).
+The **evaluation model** is a `typesafe-ai/*` judge model, which only scores yes or no, as the error strings name it. A **language model** writes text. For more information about an evaluation, see [Evaluate](/write).
 
 ## gate
 
@@ -165,7 +165,7 @@ A sandbox is the container an attempt runs in. Restricted egress sends leaving r
 
 ## Task
 
-The task is what the agent is asked to do, sent with `c.send()`. For more information about a task, see [Evaluations](/write).
+The task is what the agent is asked to do, sent with `c.send()`. For more information about a task, see [Evaluate](/write).
 
 ## timeout
 
