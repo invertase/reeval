@@ -19,14 +19,14 @@ Each mark in a strip is one run. The fraction is the runs the evaluation passed 
   ✓✓    2/2  evals/ai-sdk.eval.ts › streams model text with Vercel AI SDK
   ✓✓    2/2  evals/ai-sdk.eval.ts › retries a failed generation from the model
 
-✓ pass  ✗ fail  ! infra error  ↓ skipped  · not run  ¦ eval or stack changed
+✓ pass  ✗ fail  ! infra error  ↓ skipped  ○ not gated  · not run  ¦ eval or stack changed
 ```
 
 To narrow the list, pass part of an evaluation's name as a filter, such as `npx reeval history stream`. The `--limit` flag sets how many runs the strips cover. The `--all` flag adds the runs in the `.reeval/runs` directory that you have not recorded.
 
 ## Run a view
 
-The `reeval query` command reads the `.reeval/history.db` file, a SQLite database. reeval rebuilds the database from the records on every query. Each view returns data for one common question. Run a view by its name:
+The `reeval query` command reads the `.reeval/history.db` file, a SQLite database. reeval reads only the new, changed, and removed records into the database on every query. Each view returns data for one common question. Run a view by its name:
 
 ```bash
 npx reeval query lift
@@ -34,7 +34,7 @@ npx reeval query lift
 
 Pass `--json` to print the rows as JSON. To list every view and table with its columns, run `npx reeval query` with no argument. The `--schema` flag prints the same list. For more information about each view's columns, see [Query views](/reference/query).
 
-## Write your own SQL
+## Write SQL
 
 The `reeval query` command takes one `SELECT` statement in quotes. Count each evaluation's outcomes across runs from the `eval_trend` view:
 
@@ -55,7 +55,7 @@ The database is read-only. The `reeval query` command runs one statement at a ti
 
 ## Read one run
 
-The `--run` flag binds a run id to the `:run` parameter in your statement. Pass `last` to bind the newest run. Read the last run's evaluations:
+The `--run` flag binds a run id to the `:run` parameter in the statement. Pass `last` to bind the newest run. Read the last run's evaluations:
 
 ```bash
 npx reeval query "SELECT name, outcome FROM evals
