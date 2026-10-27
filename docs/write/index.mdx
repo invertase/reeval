@@ -1,9 +1,9 @@
 ---
-title: "Evaluations"
-description: "Declare an evaluation that gives your harness one task and checks the outcome."
+title: "Write an evaluation"
+description: "Declare an evaluation that gives an agent one task and checks the outcome."
 ---
 
-An evaluation is one `evaluate()` call that gives your harness a task and checks the outcome. For more information about how an evaluation fits into a run, see [Evaluation](/reference/glossary#evaluation).
+An evaluation is one `evaluate()` call that gives an agent a task and checks the outcome. For more information about how an evaluation fits into a run, see [Evaluation](/reference/glossary#evaluation).
 
 reeval loads every `*.eval.ts` file under the `evals/` folder. The example evaluation adds a feature to `sindresorhus/camelcase`, a real npm package, checked out at a release tag.
 
@@ -78,7 +78,7 @@ The `reeval run --dry-run` command plans the run without starting a sandbox or a
 plan  run 20261022T172927Z_58d8a94_ada_t5w2 · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
 ```
 
-A table below the `plan` line lists each evaluation by its file and name. If your evaluation is missing, check that its file ends in `.eval.ts` and is in the `evals/` folder.
+A table below the `plan` line lists each evaluation by its file and name. If the evaluation is missing, check that its file ends in `.eval.ts` and is in the `evals/` folder.
 
 </Step>
 </Steps>
