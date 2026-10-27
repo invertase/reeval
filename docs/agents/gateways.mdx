@@ -1,13 +1,13 @@
 ---
 title: "Route models through a gateway"
-description: "Send the harness's and the judge's model calls through one gateway key."
+description: "Send the harness's, the judge's, and reeval's own model calls through one gateway key."
 ---
 
 A gateway serves model calls for several providers on one key, so you don't need a key for each provider. The `{{ pkg }}/gateway` module exports `vercel()` for [Vercel AI Gateway](/integrations/gateways/vercel), `openrouter()` for [OpenRouter](/integrations/gateways/openrouter), and `direct()` for [each provider's own key](/integrations/gateways/direct), which is the default.
 
 ## Route calls through a gateway
 
-In the `reeval.config.ts` file, list gateways in `gateway`, in order of preference. Each harness and judge goes through the first gateway in the list that can serve it:
+In the `reeval.config.ts` file, list gateways in `gateway`, in order of preference. Each harness and judge goes through the first gateway in the list that can serve it. The analysis, capture, and question models resolve the same way. For the models each gateway accepts, see "Harnesses and models" on [Direct](/integrations/gateways/direct#harnesses-and-models), [Vercel AI Gateway](/integrations/gateways/vercel#harnesses-and-models), and [OpenRouter](/integrations/gateways/openrouter#harnesses-and-models):
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'

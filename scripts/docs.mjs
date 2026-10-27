@@ -631,6 +631,8 @@ for (const { file, text } of gatewayPages) {
   }
 }
 
+problems.push(...(await import('./gateway-claims.mjs')).gatewayModelProblems(docsDir))
+
 // The Docker and Podman pages are short task pages: a few sections and no option catalog. Each
 // option's entry lives on reference/options, which they link to.
 const SANDBOX_PAGE_MAX_SECTIONS = 3
