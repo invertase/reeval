@@ -276,7 +276,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'gateway.openrouter',
     area: 'Config and selection',
-    name: "`openrouter()`: Claude Code, Codex, Goose, OpenCode, Grok Build and pi on OpenRouter with one brokered key, fallback past it for Cursor, Antigravity and fx and for `effort` the model would not read, the upstream provider and cost OpenRouter reports for every call in the record and the output, `fallbacks` for reeval's own calls (off by default), and the judge, analysis and captures through `@openrouter/ai-sdk-provider`",
+    name: "`openrouter()`: Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi on OpenRouter with one brokered key, fallback past it for Cursor and Antigravity and for `effort` the model would not read, the upstream provider and cost OpenRouter reports for every call in the record and the output, `fallbacks` for reeval's own calls (off by default), and the judge, analysis and captures through `@openrouter/ai-sdk-provider`",
     plan: ['gateway/openrouter', 'gateway/openrouter-fallbacks', 'gateway/openrouter-yaml'],
     unit: [
       'reeval/test/gateway.test.ts',
@@ -286,6 +286,7 @@ export const inventory: InventoryFeature[] = [
       'harness-grok-build/test/unit.test.ts',
       'harness-codex/test/unit.test.ts',
       'harness-pi/test/unit.test.ts',
+      'harness-fx/test/unit.test.ts',
     ],
     real: [
       'contract › upstream provider and cost recorded',

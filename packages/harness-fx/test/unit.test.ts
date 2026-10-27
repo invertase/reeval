@@ -69,6 +69,47 @@ test('a gateway id runs on AI Gateway, a bare id on OpenAI', () => {
   )
 })
 
+test('on OpenRouter, an OpenRouter id runs on its Chat Completions API through the relay', () => {
+  assert.deepEqual(fxEnv('openai/gpt-5-mini', { provider: 'openrouter' }), {
+    ...FX_QUIET_ENV,
+    FX_PROVIDER: 'openrouter',
+    FX_MODEL: 'openai/gpt-5-mini',
+    FX_GATEWAY_BASE_URL: 'http://127.0.0.1:47823',
+    FX_GATEWAY_CHAT_URL: 'http://127.0.0.1:47823/v4/ai/language-model',
+    FX_RELAY_UPSTREAM: 'https://openrouter.ai',
+    FX_RELAY_GOOGLE: '',
+    FX_RELAY_EFFORT: '',
+  })
+  const [file] = fxSettings('openai/gpt-5-mini', { provider: 'openrouter' })
+  assert.deepEqual(JSON.parse(file?.content ?? ''), {
+    session_titles: false,
+    providers: {
+      openrouter: {
+        protocol: 'openai-chat-completions',
+        base_url: 'http://127.0.0.1:47823/api/v1',
+        auth: { type: 'bearer', env: 'OPENROUTER_API_KEY' },
+      },
+    },
+  })
+  assert.throws(
+    () =>
+      createFx({
+        auth: { AI_GATEWAY_API_KEY: 'k' },
+        model: 'openai/gpt-5-mini',
+        provider: 'openrouter',
+      }),
+    /fx auth must be an environment object with OPENROUTER_API_KEY for openai\/gpt-5-mini/,
+  )
+  assert.equal(
+    createFx({
+      auth: { OPENROUTER_API_KEY: 'k' },
+      model: 'openai/gpt-5-mini',
+      provider: 'openrouter',
+    }).harnessId,
+    'fx',
+  )
+})
+
 test("on Vertex AI, fx calls the relay's copy of the Chat Completions endpoint with no auth", () => {
   const vertex = { project: 'p-1', location: 'global' }
   const env = fxEnv('google/gemini-3.8-flash', { vertex, effort: 'low' })

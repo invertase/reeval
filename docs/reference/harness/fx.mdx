@@ -1,9 +1,9 @@
 ---
 title: fx()
-description: The fx harness, its options and id, its AI Gateway or OpenAI key or Vertex AI, the relay that takes it through the egress gateway, and what that relay can't cover.
+description: The fx harness, its options and id, its AI Gateway, OpenAI or OpenRouter key or Vertex AI, the relay that takes it through the egress gateway, and what that relay can't cover.
 ---
 
-`fx()` runs Vercel's [fx](https://fx.sh) in the Docker sandbox over its ACP server (`fx acp`), on Vercel AI Gateway, OpenAI's API or Vertex AI. `model` is required, and its form picks the provider, or `vertex()` does.
+`fx()` runs Vercel's [fx](https://fx.sh) in the Docker sandbox over its ACP server (`fx acp`), on Vercel AI Gateway, OpenAI's API, OpenRouter or Vertex AI. `model` is required; its form and the config's `gateway` list pick the provider.
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
@@ -16,12 +16,12 @@ export default defineConfig({
 })
 ```
 
-A gateway id runs only through [`vercel()`](/reference/gateway#vercel-ai-gateway), so the config lists it in `gateway`; a bare OpenAI id runs on Vercel as `openai/<id>`, or on `direct()` when you list it first: `[direct(), vercel()]`.
+A gateway id runs only through [`vercel()`](/reference/gateway#vercel-ai-gateway) or [`openrouter()`](/reference/gateway#openrouter), so the config lists one in `gateway`; a bare OpenAI id runs on Vercel or OpenRouter as `openai/<id>`, or on `direct()` when you list it first: `[direct(), vercel()]`.
 
 ## Options
 
 <Property name="model" type="string">
-  A Vercel AI Gateway id with its provider, such as `anthropic/claude-sonnet-5`, which runs on AI Gateway through `vercel()` in the config's `gateway`, or a bare OpenAI id, such as `gpt-5.5`, which runs on OpenAI's Chat Completions API. On `vertex()`, a Gemini id, such as `google/gemini-3.8-flash` ([below](#vertex-ai)). Required.
+  A Vercel AI Gateway id with its provider, such as `anthropic/claude-sonnet-5`, which runs on AI Gateway through `vercel()` (or on OpenRouter, as OpenRouter names it, through `openrouter()`) in the config's `gateway`, or a bare OpenAI id, such as `gpt-5.5`, which runs on OpenAI's Chat Completions API. On `vertex()`, a Gemini id, such as `google/gemini-3.8-flash` ([below](#vertex-ai)). Required.
 </Property>
 
 <Property name="effort" type="string" optional>
@@ -49,21 +49,21 @@ A gateway id runs only through [`vercel()`](/reference/gateway#vercel-ai-gateway
 | | |
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
-| Credential | `vercel()`'s (`AI_GATEWAY_API_KEY`) on Vercel, `OPENAI_API_KEY` for a bare OpenAI id on `direct()`, Application Default Credentials on `vertex()` |
-| Adapter | `@reeval/harness-fx` 0.1.2 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| Credential | `vercel()`'s (`AI_GATEWAY_API_KEY`) on Vercel, `OPENROUTER_API_KEY` on `openrouter()`, `OPENAI_API_KEY` for a bare OpenAI id on `direct()`, Application Default Credentials on `vertex()` |
+| Adapter | `@reeval/harness-fx` 0.1.3 (over `@ai-sdk/harness-acp`), bundled with reeval |
 | CLI | fx 0.0.14, from its GitHub release, checked against its sha256 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:fx-0.1.2` |
+| Image | `reeval-sandbox:fx-0.1.3` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `.fx/skills` in fx's own home (below) |
 | Skills (`placement: 'workspace'`) | `.fx/skills` in the workspace |
-| Egress hosts added | `ai-gateway.vercel.sh` or `api.openai.com`, by the model, or Vertex AI's host for the `google` region |
+| Egress hosts added | `ai-gateway.vercel.sh`, `openrouter.ai` or `api.openai.com`, by the gateway and model, or Vertex AI's host for the `google` region |
 | Tokens | Reported for each turn |
 | Served model | From each API response, which the gateway reads |
 | MCP | `mcp.stdio`, `mcp.http` and `mcp.sse`, over ACP |
 | Plugins | Skills and MCP servers ([below](#plugins)) |
 
-Build its image once with `reeval image build` in a project whose config uses `fx()`. `gpt-5.5` passes the harness contract on OpenAI; pin the model you mean to measure.
+Build its image once with `reeval image build` in a project whose config uses `fx()`. `gpt-5.5` passes the harness contract on OpenAI and on OpenRouter; pin the model you mean to measure.
 
 ## The key and the relay
 
@@ -78,6 +78,7 @@ fx's HTTP client ignores `HTTPS_PROXY`, so it can't reach the egress gateway its
 |---|---|---|
 | Gateway id | `ai-gateway.vercel.sh` | `GET /coding-agent/v1/…` (the model list) and `POST /v<n>/ai/language-model` |
 | Bare OpenAI id | `api.openai.com` | `POST /v1/chat/completions` |
+| Any id on `openrouter()` | `openrouter.ai` | `POST /api/v1/chat/completions` |
 | On `vertex()` | Vertex AI's, e.g. `aiplatform.googleapis.com` | `POST /v1/projects/<project>/locations/<region>/endpoints/openapi/chat/completions`, with an access token |
 
 The adapter refuses to run in a sandbox that can't broker the key.
@@ -91,9 +92,10 @@ The adapter refuses to run in a sandbox that can't broker the key.
 | `model` | Runs on | Served model recorded |
 |---|---|---|
 | `gpt-5.5` | An fx configured provider, `openai`, over the Chat Completions API | `gpt-5.5-2026-04-23` |
+| `gpt-5.5` on `openrouter()` | An fx configured provider, `openrouter`, over OpenRouter's Chat Completions API, as `openai/gpt-5.5` | `openai/gpt-5.5`, with its upstream provider and cost in `upstreams` |
 | `anthropic/claude-sonnet-5` | fx's `gateway` provider | The model AI Gateway answers with; none when its stream names none, with the model each call asked for in `askedModels` |
 
-fx sends a configured provider no `reasoning_effort` and no `max_tokens`, so a bare id must be a model that accepts function tools on Chat Completions without `reasoning_effort`, such as `gpt-5.5`. OpenAI refuses them from `gpt-5.6` on unless `reasoning_effort` is `none`, so run those through AI Gateway. Each turn's tokens are fx's ACP `PromptResponse.usage`, the turn's summed input and output, with its reasoning tokens. fx doesn't name the served model over ACP, so the gateway reads it from each response; a provider whose stream names none (Gemini's) records no served model, and the attempt's `askedModels` holds the model each successful call asked AI Gateway for, its `ai-language-model-id` header. A turn whose every model call got an HTTP error fails, naming the statuses. Session titles are off, since fx writes them with its own model, so the run's model is the only one called.
+fx sends a configured provider no `reasoning_effort` and no `max_tokens`, so a bare id must be a model that accepts function tools on Chat Completions without `reasoning_effort`, such as `gpt-5.5`. OpenAI refuses them from `gpt-5.6` on unless `reasoning_effort` is `none`, so run those through AI Gateway or OpenRouter, which take them at the model's default effort. Each turn's tokens are fx's ACP `PromptResponse.usage`, the turn's summed input and output, with its reasoning tokens. fx doesn't name the served model over ACP, so the gateway reads it from each response; a provider whose stream names none (Gemini's) records no served model, and the attempt's `askedModels` holds the model each successful call asked AI Gateway for, its `ai-language-model-id` header. A turn whose every model call got an HTTP error fails, naming the statuses. Session titles are off, since fx writes them with its own model, so the run's model is the only one called.
 
 ## Vertex AI
 
@@ -147,9 +149,9 @@ fx has no plugins, no subagents of your own and no commands, so it loads a plugi
 | No model | `fx() needs a model: a Vercel AI Gateway id, e.g. fx({ model: 'anthropic/claude-sonnet-5' }), or a bare OpenAI id, e.g. fx({ model: 'gpt-5.5' }) (got …)` |
 | `effort` on a gateway but `vertex()` (at plan time, exit 2) | `evaluate("<eval>") on fx:<model>[effort=low]: no gateway in the list can serve it (direct: fx sends no effort of its own, and reeval adds fx's effort ("low") only to its calls on Vertex AI, not on direct(): drop effort or run fx on vertex()). Add vertex() to gateway.` |
 | A Claude model on `vertex()` without `vercel()` (at plan time, exit 2) | `… (vertex: fx reaches Vertex AI only on its Chat Completions endpoint, which serves Google's models, not "anthropic/…": use a Gemini model, such as google/gemini-3.8-flash) …` |
-| A gateway id without `vercel()` in `gateway` (at plan time, exit 2) | `evaluate("<eval>") on fx:<model>: no gateway in the list can serve it (direct: fx runs a gateway id such as "anthropic/claude-sonnet-5" only through Vercel AI Gateway). Add vercel() to gateway.` |
-| No key when the attempt starts | `AI_GATEWAY_API_KEY isn't set, so the fx harness can't authenticate. Set it in the environment or .env.local.` (or `OPENAI_API_KEY`) |
-| The provider refuses the key | `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local. …` (or `AI_GATEWAY_API_KEY`) |
+| A gateway id without `vercel()` in `gateway` (at plan time, exit 2) | `evaluate("<eval>") on fx:<model>: no gateway in the list can serve it (direct: fx runs a gateway id such as "anthropic/claude-sonnet-5" only through Vercel AI Gateway or OpenRouter). Add vercel() to gateway.` |
+| No key when the attempt starts | `AI_GATEWAY_API_KEY isn't set, so the fx harness can't authenticate. Set it in the environment or .env.local.` (or `OPENAI_API_KEY`, `OPENROUTER_API_KEY`) |
+| The provider refuses the key | `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local. …` (or `AI_GATEWAY_API_KEY`, `OPENROUTER_API_KEY`) |
 | A plugin with subagents, commands, hooks or rules (at plan time, exit 2) | `evaluate("<eval>") on fx:<model>: fx can't load the <plugin> plugin's agents (agents/): use only: ['skills', 'mcp'], or leave the plugin out of this cell` |
 | A non-Docker sandbox | `The fx harness needs the Docker sandbox: set sandbox: docker() …` |
 | fx doesn't start | `fx harness failed to start: …` |

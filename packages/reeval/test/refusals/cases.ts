@@ -1757,6 +1757,10 @@ environment:
     ],
     ['route: fx on openrouter, direct off', route([OPENROUTER, OFF], fx({ model: 'gpt-5.5' }))],
     [
+      'route: fx with effort on openrouter',
+      route([OPENROUTER], fx({ model: 'gpt-5.5', effort: 'low' })),
+    ],
+    [
       'route: pi with effort on a gemini model on openrouter',
       route([OPENROUTER], pi({ model: 'gemini-3.8-flash', effort: 'low' })),
     ],

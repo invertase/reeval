@@ -28,7 +28,7 @@ Every list ends with `direct()`, each harness's own key, so Cursor here falls ba
 |---|---|---|---|
 | `direct({ enabled? })` from `'{{ pkg }}/gateway'` | `direct` or `{ direct: { enabled: false } }` | every harness; judge and analysis models whose provider reeval calls directly (`anthropic/*`, `google/*`, `openai/*`, `typesafe-ai/*`) | each harness's or provider's own, such as `CURSOR_API_KEY` |
 | `vercel()` from `'{{ pkg }}/gateway'` | `vercel` or `{ vercel: {} }` | Claude Code, Codex, Goose, OpenCode, fx, Grok Build, pi; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe-ai/jev-1.14.0` | `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN` |
-| `openrouter({ fallbacks })` from `'{{ pkg }}/gateway'` | `openrouter` or `{ openrouter: { fallbacks: true } }` | Claude Code, Codex, Goose, OpenCode, Grok Build, pi; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe/jev-1.14` | `OPENROUTER_API_KEY` |
+| `openrouter({ fallbacks })` from `'{{ pkg }}/gateway'` | `openrouter` or `{ openrouter: { fallbacks: true } }` | Claude Code, Codex, Goose, OpenCode, fx, Grok Build, pi; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe/jev-1.14` | `OPENROUTER_API_KEY` |
 | `vertex({ project?, location?, regions? })` from `'{{ pkg }}/gateway'` | `vertex` or `{ vertex: { project: p } }` | Claude Code, Antigravity, OpenCode, Goose, pi, Grok Build and fx ([below](#vertex-ai)); `google/*` and `anthropic/*` judge and analysis models | Application Default Credentials |
 
 ## Vercel AI Gateway
@@ -73,6 +73,7 @@ One key, `OPENROUTER_API_KEY`, serves every harness and model on `openrouter()`.
 | Codex | a Responses API provider at OpenRouter in `config.toml`, sending `X-OpenRouter-Metadata: enabled` so each response names its upstream | `POST /api/v1/responses` | `openai/` prefixed |
 | Goose | its `openrouter` provider, a Bearer key | `POST /api/v1/chat/completions`, `GET /api/v1/models` | `google/` prefixed |
 | OpenCode | its `openrouter` provider, a Bearer key | `POST /api/v1/chat/completions` | `<provider>/<model>` as written, run as `openrouter/<provider>/<model>` |
+| fx | OpenRouter's Chat Completions API as fx's configured provider `openrouter`, a Bearer key, through fx's [relay](/reference/harness/fx#the-key-and-the-relay) | `POST /api/v1/chat/completions` | `openai/` prefixed |
 | Grok Build | a `[model."x-ai/<id>"]` table on OpenRouter's Chat Completions API, keyed by `env_key` | `POST /api/v1/chat/completions` | `x-ai/` prefixed |
 | pi | its own `openrouter` provider, a Bearer key | `POST /api/v1/chat/completions` | `google/` prefixed; a Gemini model in pi's own catalog for OpenRouter |
 
@@ -80,7 +81,7 @@ An id that already names a provider (`anthropic/claude-sonnet-4.5`) runs as writ
 
 pi takes its model's limits, prices and thinking levels from its own catalog for OpenRouter, and sends each level as OpenRouter's `reasoning.effort`; a model outside the catalog fails the attempt.
 
-Cursor, Antigravity and fx don't run on `openrouter()`, and fall through to the next entry. `effort` runs as [Effort on a gateway](#effort-on-a-gateway) says.
+Cursor and Antigravity don't run on `openrouter()`, and fall through to the next entry. `effort` runs as [Effort on a gateway](#effort-on-a-gateway) says.
 
 ## Effort on a gateway
 
@@ -226,7 +227,7 @@ Each cell resolved under a configured `gateway` or a pin records its gateway as 
 | Settings a gateway doesn't take | `gateway[0] in reeval.yaml isn't a valid vercel(): Unrecognized key: "apikey" (got {"vercel":{"apikey":"x"}})` |
 | A harness pin that isn't a gateway | `cursor({ gateway }) names a gateway in the config's gateway list: 'direct' or 'vercel' or 'openrouter' or 'vertex' (got 3)` |
 | Nothing in a list with `direct()` off serves a harness | `evals/a.eval.ts › e on cursor:composer-2.5: no gateway in the list can serve it (vercel: Cursor's agent only calls Cursor's own API). Drop direct({ enabled: false }) from gateway to fall back to Cursor's own key.` |
-| An fx gateway id without `vercel()` | `evals/a.eval.ts › e on fx:m: no gateway in the list can serve it (direct: fx runs a gateway id such as "google/m" only through Vercel AI Gateway). Add vercel() to gateway.` |
+| An fx gateway id without `vercel()` | `evals/a.eval.ts › e on fx:m: no gateway in the list can serve it (direct: fx runs a gateway id such as "google/m" only through Vercel AI Gateway or OpenRouter). Add vercel() to gateway.` |
 | `effort` on Goose, or on OpenCode with a model other than Gemini, on `vercel()` with `direct()` off | `evals/a.eval.ts › e on goose:m[effort=high]: no gateway in the list can serve it (vercel: reeval doesn't send Goose's effort ("high") to m through Vercel AI Gateway yet: nothing checks the model gets it as its own setting, so drop effort or run Goose on another gateway). …` |
 | An OpenCode provider `direct()` can't run, without `vercel()` | `evals/a.eval.ts › e on opencode:m: no gateway in the list can serve it (direct: OpenCode has no provider "nope" (in "nope/m"); …). Add vercel() to gateway.` |
 | `fallbacks` that isn't a boolean | `gateway[0] in reeval.config.ts isn't a valid openrouter(): Invalid input: expected boolean, received string (got {"kind":"openrouter","fallbacks":"yes"})` |

@@ -17,16 +17,18 @@ export const FX_CLI_SHA256 = {
 
 /**
  * Where a model runs: Vercel AI Gateway for a gateway id (`anthropic/claude-sonnet-5`), fx's own
- * provider, or OpenAI's Chat Completions API for a bare OpenAI id (`gpt-5.5`), as an fx
- * configured provider. Each takes one key, sent as a bearer token.
+ * provider; OpenAI's Chat Completions API for a bare OpenAI id (`gpt-5.5`); or OpenRouter's, for
+ * an OpenRouter id (`openai/gpt-5-mini`) when asked for. The last two are fx configured providers
+ * at `path` on the relay. Each takes one key, sent as a bearer token.
  */
 export const FX_PROVIDERS = {
   gateway: { credential: 'AI_GATEWAY_API_KEY', url: 'https://ai-gateway.vercel.sh' },
-  openai: { credential: 'OPENAI_API_KEY', url: 'https://api.openai.com' },
+  openai: { credential: 'OPENAI_API_KEY', url: 'https://api.openai.com', path: '/v1' },
+  openrouter: { credential: 'OPENROUTER_API_KEY', url: 'https://openrouter.ai', path: '/api/v1' },
 } as const
 export type FxProvider = keyof typeof FX_PROVIDERS
 
-/** The provider a model id names: a gateway id has a `/`, an OpenAI id doesn't. */
+/** The provider a model id names when none is asked for: a gateway id has a `/`, an OpenAI id doesn't. */
 export const fxProviderOf = (model: string): FxProvider =>
   model.includes('/') ? 'gateway' : 'openai'
 
@@ -184,10 +186,12 @@ export type FxHarnessSettings = {
    */
   readonly auth: HarnessV1AuthenticationEnvironment
   /**
-   * A gateway id (`anthropic/claude-sonnet-5`) or a bare OpenAI id (`gpt-5.5`); on Vertex AI, the
-   * Chat Completions endpoint's id (`google/gemini-3.8-flash`).
+   * A gateway id (`anthropic/claude-sonnet-5`) or a bare OpenAI id (`gpt-5.5`); on OpenRouter, an
+   * OpenRouter id; on Vertex AI, the Chat Completions endpoint's id (`google/gemini-3.8-flash`).
    */
   readonly model: string
+  /** Where the model runs, off Vertex AI; by default the one {@link fxProviderOf} names. */
+  readonly provider?: FxProvider
   /**
    * Vertex AI's OpenAI-compatible Chat Completions endpoint in this project and region instead,
    * as the configured provider `vertex`, with no credential: whoever runs the sandbox adds the
@@ -215,14 +219,15 @@ const vertexHost = (location: string) =>
 export const fxVertexBaseUrl = ({ project, location }: FxVertex) =>
   `${relayUrl}/v1/projects/${project}/locations/${location}/endpoints/openapi`
 
-type FxRoute = Pick<FxHarnessSettings, 'vertex' | 'effort'>
+type FxRoute = Pick<FxHarnessSettings, 'provider' | 'vertex' | 'effort'>
 
 /**
  * fx's process env: quiet flags, the provider, the model and the relay. The same keys for every
  * model, so the bootstrap an image bakes for one provider serves the others.
  */
-export function fxEnv(model: string, { vertex, effort }: FxRoute = {}) {
-  const provider = vertex ? FX_VERTEX_PROVIDER : fxProviderOf(model)
+export function fxEnv(model: string, { provider: asked, vertex, effort }: FxRoute = {}) {
+  const configured = asked ?? fxProviderOf(model)
+  const provider = vertex ? FX_VERTEX_PROVIDER : configured
   return {
     ...FX_QUIET_ENV,
     FX_PROVIDER: provider,
@@ -232,7 +237,7 @@ export function fxEnv(model: string, { vertex, effort }: FxRoute = {}) {
     FX_GATEWAY_CHAT_URL: `${relayUrl}${FX_GATEWAY_CHAT_PATH}`,
     FX_RELAY_UPSTREAM: vertex
       ? `https://${vertexHost(vertex.location)}`
-      : FX_PROVIDERS[fxProviderOf(model)].url,
+      : FX_PROVIDERS[configured].url,
     FX_RELAY_GOOGLE: vertex ? '1' : '',
     FX_RELAY_EFFORT: effort ?? '',
   }
@@ -241,10 +246,13 @@ export function fxEnv(model: string, { vertex, effort }: FxRoute = {}) {
 /**
  * fx's `settings.json`: no session titles, which fx otherwise generates on its own model
  * (`openai/gpt-5.6-luna`) with each first prompt, so the run's model is the only one called; and
- * for a bare OpenAI id, OpenAI's Chat Completions API as the configured provider `openai`, or on
- * Vertex AI its Chat Completions endpoint as `vertex`, with no auth of fx's own.
+ * off AI Gateway, the provider's Chat Completions API as the configured provider of its name, or
+ * on Vertex AI its Chat Completions endpoint as `vertex`, with no auth of fx's own.
  */
-export function fxSettings(model: string, { vertex }: FxRoute = {}) {
+export function fxSettings(
+  model: string,
+  { provider = fxProviderOf(model), vertex }: FxRoute = {},
+) {
   const providers = vertex
     ? {
         [FX_VERTEX_PROVIDER]: {
@@ -253,12 +261,12 @@ export function fxSettings(model: string, { vertex }: FxRoute = {}) {
           auth: { type: 'none' },
         },
       }
-    : fxProviderOf(model) === 'openai'
+    : provider !== 'gateway'
       ? {
-          openai: {
+          [provider]: {
             protocol: 'openai-chat-completions',
-            base_url: `${relayUrl}/v1`,
-            auth: { type: 'bearer', env: FX_PROVIDERS.openai.credential },
+            base_url: `${relayUrl}${FX_PROVIDERS[provider].path}`,
+            auth: { type: 'bearer', env: FX_PROVIDERS[provider].credential },
           },
         }
       : undefined
@@ -268,13 +276,14 @@ export function fxSettings(model: string, { vertex }: FxRoute = {}) {
 
 /**
  * fx (`fx acp`) as an AI SDK harness, on Vercel AI Gateway or OpenAI's API by the model id, or on
- * Vertex AI. Thin config over `@ai-sdk/harness-acp`: fx names its tool calls, and its ACP
+ * OpenRouter or Vertex AI. Thin config over `@ai-sdk/harness-acp`: fx names its tool calls, and its ACP
  * `PromptResponse.usage` is the turn's summed tokens, so {@link FxStreamTranslator} only renames
  * MCP calls, rebuilds command output and keeps the reasoning tokens.
  */
 export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools> {
   const { vertex } = settings
-  const provider = vertex ? undefined : FX_PROVIDERS[fxProviderOf(settings.model)]
+  const providerName = settings.provider ?? fxProviderOf(settings.model)
+  const provider = vertex ? undefined : FX_PROVIDERS[providerName]
   if (
     !isHarnessAuthenticationEnvironment(settings.auth) ||
     (provider && !settings.auth[provider.credential])
@@ -284,7 +293,7 @@ export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools>
     )
   }
   const route = {
-    ...(vertex ? { vertex } : {}),
+    ...(vertex ? { vertex } : { provider: providerName }),
     ...(settings.effort ? { effort: settings.effort } : {}),
   }
   const mcpServers = Object.keys(settings.mcpServers ?? {})

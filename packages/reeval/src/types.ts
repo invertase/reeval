@@ -744,7 +744,7 @@ export type CodexHarnessDescriptor = {
 }
 /**
  * fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or
- * OpenAI's API by the model id, or on Vertex AI, and reports each turn's tokens.
+ * OpenAI's API by the model id, or on OpenRouter or Vertex AI, and reports each turn's tokens.
  */
 export type FxHarnessDescriptor = {
   kind: 'fx'
@@ -756,9 +756,10 @@ export type FxHarnessDescriptor = {
   /**
    * A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with
    * `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on
-   * OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `vertex()`, a Gemini
-   * model id, `google/<id>` or a bare `gemini-…` id, run on Vertex AI's Chat Completions endpoint,
-   * e.g. `google/gemini-3.8-flash`.
+   * OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `openrouter()`, either
+   * runs on OpenRouter's Chat Completions API with `OPENROUTER_API_KEY`, a bare id as `openai/<id>`.
+   * On `vertex()`, a Gemini model id, `google/<id>` or a bare `gemini-…` id, run on Vertex AI's
+   * Chat Completions endpoint, e.g. `google/gemini-3.8-flash`.
    */
   model: string
   /**
@@ -834,7 +835,7 @@ export type VercelGatewayDescriptor = {
 
 /**
  * OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves
- * Claude Code, Codex, Goose, OpenCode and Grok Build.
+ * Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi.
  */
 export type OpenRouterGatewayDescriptor = {
   kind: 'openrouter'

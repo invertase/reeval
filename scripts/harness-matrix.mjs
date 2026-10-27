@@ -152,7 +152,7 @@ const NOTES = [
   (h) =>
     h.agent.forModel &&
     h.kind === 'fx' &&
-    `Its key is the model's provider's: ${code('AI_GATEWAY_API_KEY')} for a Vercel AI Gateway id (${code('anthropic/claude-sonnet-5')}), ${code('OPENAI_API_KEY')} for a bare OpenAI id (${code('gpt-5.5')}), which must accept function tools without ${code('reasoning_effort')} (fx sends none).`,
+    `Its key is the model's provider's: ${code('AI_GATEWAY_API_KEY')} for a Vercel AI Gateway id (${code('anthropic/claude-sonnet-5')}), ${code('OPENAI_API_KEY')} for a bare OpenAI id (${code('gpt-5.5')}), which must accept function tools without ${code('reasoning_effort')} (fx sends none); on ${code('openrouter()')}, ${code('OPENROUTER_API_KEY')} for either.`,
   (h) =>
     h.kind === 'fx' &&
     `fx ignores ${code('HTTPS_PROXY')}, so its model calls reach the egress gateway through a relay inside the sandbox; its own web search and fetch, HTTP and SSE MCP servers don't use the relay, so a restricted egress policy blocks them and the record lists none of their requests.`,

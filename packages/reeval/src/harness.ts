@@ -132,12 +132,12 @@ export const codex = (options: Options<CodexHarnessDescriptor>): CodexHarnessDes
   make('codex', options)
 
 /**
- * fx, on Vercel AI Gateway, OpenAI's API or Vertex AI: `model` is a gateway id, e.g.
- * `anthropic/claude-sonnet-5`, which needs `vercel()` in the config's gateway list, or a bare
- * OpenAI id, e.g. `gpt-5.5`, run with `OPENAI_API_KEY` on `direct()` or as `openai/<id>` on
- * `vercel()`; on `vertex()`, a Gemini id, e.g. `google/gemini-3.8-flash`. `effort` is
- * `reasoning_effort`, taken on `vertex()` only. `id` names the cell; it defaults to
- * `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set.
+ * fx, on Vercel AI Gateway, OpenAI's API, OpenRouter or Vertex AI: `model` is a gateway id, e.g.
+ * `anthropic/claude-sonnet-5`, which needs `vercel()` or `openrouter()` in the config's gateway
+ * list, or a bare OpenAI id, e.g. `gpt-5.5`, run with `OPENAI_API_KEY` on `direct()` or as
+ * `openai/<id>` on `vercel()` and `openrouter()`; on `vertex()`, a Gemini id, e.g.
+ * `google/gemini-3.8-flash`. `effort` is `reasoning_effort`, taken on `vertex()` only. `id` names
+ * the cell; it defaults to `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set.
  */
 export const fx = (options: Options<FxHarnessDescriptor>): FxHarnessDescriptor =>
   make('fx', options)

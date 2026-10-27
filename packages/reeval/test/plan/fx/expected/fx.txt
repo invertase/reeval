@@ -1,5 +1,5 @@
 no profile · 3 evals · 5 cells · 5 attempts
-hint: gateway: fx:claude-sonnet-5 → vercel (direct can't serve it: fx runs a gateway id such as "anthropic/claude-sonnet-5" only through Vercel AI Gateway)
+hint: gateway: fx:claude-sonnet-5 → vercel (direct can't serve it: fx runs a gateway id such as "anthropic/claude-sonnet-5" only through Vercel AI Gateway or OpenRouter)
 evals/a.eval.ts › both harnesses                          cursor:composer-2.5/-/docker                        control  gated  ×1  gateway: cursor:composer-2.5 → direct · gateway: fx:claude-sonnet-5 → vercel
                                                           fx:claude-sonnet-5/-/docker                         control  gated  ×1
 evals/a.eval.ts › fx on OpenAI, own id                    fx-openai/-/docker                                  control  gated  ×1  gateway: fx-openai → direct
@@ -9,8 +9,8 @@ excluded: —
 image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
 image docker · fx · 2 evals
-  base  reeval-sandbox:fx-0.1.2  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:fx-0.1.3  (reeval's image: built when missing or when its base changed)
 image docker:python:3.12-slim · cursor · 1 evals
   from python:3.12-slim  reeval-sandbox:cursor-0.1.6-python-3-12-slim-375f4a61  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
 image docker:python:3.12-slim · fx · 1 evals
-  from python:3.12-slim  reeval-sandbox:fx-0.1.2-python-3-12-slim-375f4a61  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+  from python:3.12-slim  reeval-sandbox:fx-0.1.3-python-3-12-slim-375f4a61  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

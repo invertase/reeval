@@ -1146,6 +1146,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
       (await import('@reeval/harness-fx')).createFx({
         auth,
         model,
+        ...(auth[OPENROUTER_KEY] ? { provider: 'openrouter' as const } : {}),
         // On Vertex AI, the route's project and region.
         ...(env?.FX_VERTEX_PROJECT
           ? { vertex: { project: env.FX_VERTEX_PROJECT, location: env.FX_VERTEX_LOCATION ?? '' } }

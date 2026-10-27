@@ -105,8 +105,8 @@ export default defineConfig({
 - Harnesses (`reeval/harness`), each with a required `model`; a list runs each as its own cell:
   `cursor` (`CURSOR_API_KEY`), `claudeCode` (`ANTHROPIC_API_KEY`), `antigravity`
   (`GEMINI_API_KEY`), `opencode` (the provider's key; model `<provider>/<model>`), `goose` and
-  `pi` (`GOOGLE_GENERATIVE_AI_API_KEY`), `codex` (`OPENAI_API_KEY`), `fx` (`OPENAI_API_KEY` for a bare id, or
-  `AI_GATEWAY_API_KEY` with `vercel()` in `gateway`), `grokBuild` (`XAI_API_KEY`), `fakeHarness`. Details
+  `pi` (`GOOGLE_GENERATIVE_AI_API_KEY`), `codex` (`OPENAI_API_KEY`), `fx` (`OPENAI_API_KEY` for a bare id,
+  `AI_GATEWAY_API_KEY` with `vercel()` or `OPENROUTER_API_KEY` with `openrouter()` in `gateway`), `grokBuild` (`XAI_API_KEY`), `fakeHarness`. Details
   and `effort` in [references/config.md](references/config.md).
 - Judge models: `'typesafe-ai/jev-1.14.0'` (`TYPESAFE_AI_API_KEY`, recommended),
   `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), `anthropic/*` (`ANTHROPIC_API_KEY`)
