@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { assertionRecords, CAUGHT_HINT, checkFailure } from '../src/attempt/assertions.ts'
 import type { RawAssertion } from '../src/engine/runtime.ts'
+import { InfraError } from '../src/sandbox/types.ts'
 
 const raw = (over: Partial<RawAssertion>): RawAssertion => ({
   matcher: 'toBe',
@@ -69,6 +70,13 @@ test('the first call that did not pass fails the attempt: a soft one as what it 
   assert.equal(caught?.message, `expected 1 to be 2 ${CAUGHT_HINT}`)
   assert.equal(caught?.name, 'AssertionError')
   assert.equal(thrown.message, 'expected 1 to be 2', "the check's own record keeps its message")
+  const infra = checkFailure([raw({ status: 'fail', error: new InfraError('docker exec died') })])
+  assert.ok(
+    infra instanceof InfraError,
+    'it keeps its class, so the attempt fails as the same kind',
+  )
+  assert.equal(infra.message, `docker exec died ${CAUGHT_HINT}`)
+  assert.match(infra.stack ?? '', /^InfraError: docker exec died \(the eval caught/)
   assert.equal(
     checkFailure([raw({ soft: true }), raw({ soft: true, status: 'fail', error: thrown })]),
     thrown,

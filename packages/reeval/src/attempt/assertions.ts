@@ -75,7 +75,10 @@ export function checkFailure(raw: readonly RawAssertion[]): Error | undefined {
   if (!failed) return undefined
   const error = failed.error instanceof Error ? failed.error : new Error(text(failed.error))
   if (failed.soft) return error
-  const caught = Object.assign(new Error(), error)
+  const caught = Object.setPrototypeOf(
+    Object.assign(new Error(), error),
+    Object.getPrototypeOf(error),
+  )
   caught.name = error.name
   caught.message = `${error.message} ${CAUGHT_HINT}`
   caught.stack = error.stack?.replace(error.message, caught.message)
