@@ -47,17 +47,7 @@ export default defineConfig({
   Reasoning effort passed as `GOOSE_THINKING_EFFORT`, such as `off`, `low`, `medium`, `high`, or `max`.
 </Property>
 
-<Property name="id" type="string" optional>
-  Cell id. Defaults to `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set. The id uses letters, digits, and `._:@+-=[]`.
-</Property>
-
-<Property name="maxConcurrent" type="number" optional>
-  The most Goose attempts that run at the same time, across the run. A whole number of at least 1.
-</Property>
-
-<Property name="startTimeout" type="Duration" optional>
-  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
-</Property>
+For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 In the sandbox, Goose runs with a private home, with telemetry, the keyring, and session naming off.
 
@@ -76,6 +66,18 @@ For more information about writing rules, see [Add project rules](/environments/
 The Goose harness reads skills from the `.goose/skills` directory, the `.agents/skills` directory, and the `.claude/skills` directory in the workspace. Home skills are in the `.config/goose/skills` directory under the private home directory `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home`.
 
 For more information about placing skills, see [Give the agent skills](/environments/skills).
+
+## `plugins`
+
+reeval adds each plugin's skills to the home skills directory and writes its MCP servers as enabled extensions in `config.yaml`.
+
+[//]: # (generated:harness-plugins:goose)
+
+- Takes `skills` and `mcp`, and refuses a plugin that keeps `agents`, `commands`, `hooks` and `rules`: narrow it with `only`, or leave it out of the cell.
+
+[//]: # (/generated:harness-plugins:goose)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).
 
 ## `mcp`
 
