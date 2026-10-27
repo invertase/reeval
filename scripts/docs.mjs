@@ -14,12 +14,14 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
+import { agentsProblems } from './agents-claims.mjs'
 import { docsRunsProblems } from './docs-runs-checks.mjs'
 import {
   harnessFacts,
   renderLayout,
   renderMatrix,
   renderOpenCodeProviders,
+  renderPlugins,
 } from './harness-matrix.mjs'
 
 const root = join(import.meta.dirname, '..')
@@ -380,8 +382,9 @@ async function blocks() {
 
   const harness = await harnessFacts()
   problems.push(...harness.problems)
-  out.set('harness-matrix', renderMatrix(harness.facts, { href: (p) => `/${p}`, text: mdxText }))
+  out.set('harness-matrix', renderMatrix(harness.facts, { href: (p) => `/${p}` }))
   out.set('harness-layout', renderLayout(harness.facts))
+  for (const h of harness.facts) out.set(`harness-plugins:${h.kind}`, renderPlugins(h))
   out.set('opencode-providers', renderOpenCodeProviders())
   return out
 }
@@ -681,6 +684,10 @@ for (const href of ['environments/secrets', 'environments/egress']) {
     }
   }
 }
+
+// ---- Agents pages ------------------------------------------------------------------------------
+
+problems.push(...(await agentsProblems({ root, docsDir })))
 
 // ---- Navigation and the package name --------------------------------------------------------
 

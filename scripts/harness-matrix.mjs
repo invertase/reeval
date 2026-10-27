@@ -1,19 +1,18 @@
 // The harness feature matrix in the docs' Harnesses guide, from the code: the
 // harness catalog (src/harness/agents.ts), each adapter's builtin tool catalog, and the rows of
 // the harness contract (test/support/harnesses.ts), whose real runs check tokens and the served
-// model. Every note is tied to the fact it explains, so it goes when that fact changes.
+// model.
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..')
 const src = join(root, 'packages/reeval/src')
-const { AGENTS, agentFor, gooseMcpServers, refusedMcp } = await import(
-  join(src, 'harness/agents.ts')
-)
+const { AGENTS, agentFor } = await import(join(src, 'harness/agents.ts'))
 const { OPENCODE_PROVIDERS } = await import(
   join(root, 'packages/harness-opencode/src/opencode-providers.ts')
 )
 const { InfraError } = await import(join(src, 'sandbox/types.ts'))
+const { PLUGIN_PARTS } = await import(join(src, 'environment/plugins.ts'))
 const { harnesses } = await import(join(root, 'packages/reeval/test/support/harnesses.ts'))
 
 const TRANSPORTS = ['stdio', 'http', 'sse']
@@ -34,9 +33,7 @@ function mcpSupport(kind, agent) {
       if (!(error instanceof InfraError)) throw error
       refused = true
     }
-    const layers = [{ spec: { mcp: { probe: PROBE[transport] } } }]
-    const atPlan = refused && !!refusedMcp({ kind, model: 'probe' }, layers)
-    out[transport] = { ok: !refused, atPlan }
+    out[transport] = { ok: !refused }
   }
   return out
 }
@@ -63,68 +60,6 @@ const code = (s) => `\`${s}\``
 
 /** Harnesses the docs leave out: no page, no matrix or layout row. Their code checks still run. */
 const EXCLUDED_KINDS = []
-
-/** Each note is said only while its fact holds. */
-const NOTES = [
-  (h) =>
-    h.agent.tokens &&
-    `The gateway also swaps the session tokens the ${h.agent.name} SDK exchanges its key for (${list(h.agent.tokens.fields.map(code))}) on ${list(h.agent.tokens.hosts.map(code))}.`,
-  (h) => {
-    const off = TRANSPORTS.filter((t) => !h.mcp[t].ok)
-    if (!off.length) return false
-    const plan = off.filter((t) => h.mcp[t].atPlan)
-    const when =
-      plan.length === off.length
-        ? 'refused at plan time (exit 2)'
-        : plan.length
-          ? `refused at plan time for ${list(plan.map((t) => code(`mcp.${t}`)))}, when the attempt starts otherwise`
-          : 'refused when the attempt starts'
-    return off.length === TRANSPORTS.length
-      ? `No MCP client: an eval that gives it MCP servers is ${when}.`
-      : `No ${list(off.map((t) => code(`mcp.${t}`)))} transport: those servers are ${when}.`
-  },
-  (h) =>
-    h.agent.mcpServers === gooseMcpServers &&
-    `MCP servers go in its ${code('config.yaml')} file as enabled extensions, not over ACP, where they start disabled.`,
-  (h) => !h.row.tokens && `No tokens recorded: ${h.row.tokensWhy}`,
-  (h) =>
-    !h.row.servedModel &&
-    h.row.wireModel &&
-    `Served model from the gateway's requests only (the record's ${code('servedModels')}); each turn's ${code('model')} is null.`,
-  (h) => h.row.servedModelGap && `No served model recorded: ${h.row.servedModelGap}`,
-  (h) =>
-    h.row.servedModel &&
-    !h.row.servedModelGap &&
-    !h.row.wireModel &&
-    `Served model as the harness reports it: its API requests don't name one, so the record's ${code('servedModels')} is null.`,
-  (h) =>
-    h.agent.unreported &&
-    h.kind === 'cursor' &&
-    `Its SDK leaves web search and fetch calls out of the stream; reeval recovers them from the stored conversation, and a turn it can't recover is marked ${code('unreported')} so web matchers refuse it.`,
-  (h) =>
-    h.kind === 'opencode' &&
-    h.web.search &&
-    `Its web searches go to Exa's hosted MCP server, keyless, from the sandbox: ${code('mcp.exa.ai')} is one of its automatic hosts.`,
-  (h) =>
-    h.kind === 'opencode' &&
-    `MCP servers go in its config with Code Mode off, not over ACP, where OpenCode offers them only through its ${code('execute')} tool; the first prompt waits until they've connected.`,
-  (h) =>
-    h.agent.modelResponses &&
-    h.kind === 'codex' &&
-    `Served model and reasoning effort from each API response, which the gateway reads, such as ${code('<model>[effort=medium]')}: its CLI doesn't report them.`,
-  (h) =>
-    h.agent.modelResponses &&
-    h.kind === 'grok-build' &&
-    `Served model from each API response, which the gateway reads: its CLI doesn't report it.`,
-  (h) =>
-    h.kind === 'codex' &&
-    h.web.search &&
-    `Its web searches and the pages it opens run on OpenAI's side, so a restricted egress policy doesn't limit them; each is in the transcript.`,
-  (h) =>
-    h.agent.expectedBlocked &&
-    !h.agent.expectedBlocked.withPlugins &&
-    `It tries ${list(h.agent.expectedBlocked.hosts.map(code))} (${h.agent.expectedBlocked.why}); a restricted egress policy refuses ${h.agent.expectedBlocked.hosts.length > 1 ? 'them' : 'it'} and records ${h.agent.expectedBlocked.hosts.length > 1 ? 'them' : 'it'} under the record's ${code('egress.expectedBlocked')}.`,
-]
 
 /** The facts for each real harness, in the catalog's order, and whatever doesn't add up. */
 export async function harnessFacts() {
@@ -171,7 +106,6 @@ export async function harnessFacts() {
     if (excluded) continue
     const web = await webEvents(kind, agentFor({ kind, model: row.model }), row.model)
     const h = { kind, agent, row, page, mcp, web }
-    h.notes = NOTES.map((note) => note(h)).filter(Boolean)
     facts.push(h)
   }
   for (const row of harnesses) {
@@ -195,10 +129,10 @@ export async function harnessFacts() {
 const yes = (ok) => (ok ? '✓' : '✗')
 
 /**
- * The matrix and its notes. `href` turns a docs page (`integrations/agents/pi`) into a link for
- * the file it goes in; `text` escapes a note for it.
+ * The matrix. `href` turns a docs page (`integrations/agents/pi`) into a link for the file it
+ * goes in. What a harness does beyond a cell stays on its own page.
  */
-export function renderMatrix(facts, { href, text = (s) => s }) {
+export function renderMatrix(facts, { href }) {
   const head = [
     'Harness',
     'Key',
@@ -230,15 +164,7 @@ export function renderMatrix(facts, { href, text = (s) => s }) {
     code('docker()'),
   ])
   const line = (cells) => `| ${cells.join(' | ')} |`
-  return [
-    line(head),
-    `|${head.map(() => '---').join('|')}|`,
-    ...rows.map(line),
-    '',
-    ...facts
-      .filter((h) => h.notes.length)
-      .map((h) => `- **${h.agent.name}**: ${text(h.notes.join(' '))}`),
-  ].join('\n')
+  return [line(head), `|${head.map(() => '---').join('|')}|`, ...rows.map(line)].join('\n')
 }
 
 /** Where each agent reads the environment's rules and skills. */
@@ -251,6 +177,47 @@ export function renderLayout(facts) {
         `| ${h.agent.name} | ${code(h.agent.rulesFile)} | ${code(h.agent.workspaceSkillDir)} | ${code(`~/${h.agent.harnessSkillDir}`)} |`,
     ),
   ].join('\n')
+}
+
+/**
+ * What an agent loads of a plugin, from its catalog entry: the parts it takes and refuses, the
+ * hook events it runs, the manifests it reads first, and whether it names servers by their own
+ * keys. Where each part lands stays on the harness's page.
+ */
+export function renderPlugins(h) {
+  const { pluginParts, pluginHookEvents, pluginManifestsFirst, pluginApps } = h.agent
+  const refused = PLUGIN_PARTS.filter((p) => !pluginParts.includes(p))
+  const lines = [
+    refused.length
+      ? `Takes ${list(pluginParts.map(code))}, and refuses a plugin that keeps ${list(refused.map(code))}: narrow it with ${code('only')}, or leave it out of the cell.`
+      : `Takes every plugin part: ${list(pluginParts.map(code))}.`,
+  ]
+  if (pluginHookEvents && pluginParts.includes('hooks')) {
+    lines.push(
+      `Runs only command hooks, on ${list(pluginHookEvents.map(code))}; a plugin with any other hook is refused.`,
+    )
+  }
+  if (pluginManifestsFirst) {
+    const schema = h.agent.pluginRootManifestNeedsSchema
+      ? ` (a root ${code('plugin.json')} only when it names an Agent Plugins ${code('$schema')})`
+      : ''
+    lines.push(
+      `Reads ${list(pluginManifestsFirst.map(code))}${schema} in place of ${code('.claude-plugin/plugin.json')}, so a plugin that has one is refused.`,
+    )
+  }
+  if (pluginApps) lines.push(`Refuses a plugin that bundles apps: ${pluginApps}.`)
+  if (h.agent.pluginServersByName) {
+    lines.push(
+      `Names a plugin's MCP servers by their own keys, in one list with ${code('mcp')}, and keeps one of two servers of a name, so a clash is refused.`,
+    )
+  }
+  const blocked = h.agent.expectedBlocked
+  if (blocked?.withPlugins) {
+    lines.push(
+      `With plugins it tries ${list(blocked.hosts.map(code))} (${blocked.why}); a restricted egress policy refuses them and records them under ${code('egress.expectedBlocked')}.`,
+    )
+  }
+  return lines.map((l) => `- ${l}`).join('\n')
 }
 
 const cell = (s) => s.replaceAll('|', '\\|')
