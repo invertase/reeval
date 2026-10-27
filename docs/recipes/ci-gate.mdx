@@ -19,16 +19,7 @@ regressed        adds a LangGraph node
   +1 more passed
 ```
 
-The regression rule decides the job:
-
-| Diff reports | Job |
-| :--- | :--- |
-| Every evaluation `same` or `fixed` | Passes |
-| An evaluation `regressed` | Fails |
-| A `new` or `can't compare` evaluation that fails | Fails |
-| A `new` evaluation that passes | Passes |
-
-The first run has no earlier record, so every evaluation is `new` and only a failing one fails the job. An evaluation that already failed on the base commit is not a regression, so a pull request does not fail for it.
+The job fails when the diff reports a regression. For the rule, see [CI](/runs/ci). For the words the diff uses, see [Compare with past runs](/results/compare/past-runs#fail-on-a-regression).
 
 ## Next
 

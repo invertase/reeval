@@ -559,6 +559,20 @@ for (const file of mdxFiles()) {
   }
 }
 
+// The regression rule (which diff words fail the job) is written once, as prose on /runs/ci, and
+// the diff words live on /results/compare/past-runs. A decision table that maps diff words to a
+// passing or failing job is a second copy of the rule, on the recipe or beside CI's prose.
+const hasGateDecisionTable = (text) => /^\|[^\n]*`regressed`[^\n]*\|[^\n]*\bFails\b/m.test(text)
+{
+  const recipe = page('recipes/ci-gate')
+  const linksRule = /\]\(\/(runs\/ci|results\/compare\/past-runs)[)#]/.test(recipe)
+  if (hasGateDecisionTable(recipe) && (linksRule || hasGateDecisionTable(page('runs/ci')))) {
+    problems.push(
+      'docs/recipes/ci-gate.mdx has the regression decision table and also links /runs/ci or /results/compare/past-runs: link the rule instead of repeating it',
+    )
+  }
+}
+
 // ---- Studio and debug pages describe what the code does ------------------------------------------
 
 // `reeval studio build` ends its `built` line with the artifact summary, or the records-only note
