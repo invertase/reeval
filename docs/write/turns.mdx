@@ -1,34 +1,20 @@
 ---
 title: "Read each turn"
-description: "Read each turn your harness returns in one session."
+description: "Read each turn the harness returns in one session."
 ---
 
-`c.send()` runs one prompt on your harness and returns that turn. Read that `Turn` before you send the next prompt.
-
-## Send a prompt
-
-`c.send()` takes the prompt as a string. The call waits until the harness finishes the turn. The first `c.send()` starts the sandbox and the harness session. In the `evals/user.eval.ts` file, send one prompt and keep the turn:
-
-```ts title="evals/user.eval.ts"
-import { evaluate } from '{{ pkg }}'
-
-evaluate('adds a test for getUserId', async (c) => {
-  const turn = await c.send(
-    'Add a Vitest test for getUserId in src/user.test.ts.',
-  )
-})
-```
-
-For more information about `c.send()`, see [the `c.send` method](/reference/context#csend).
+Each `c.send()` runs one prompt on the harness and returns that turn. The first `c.send()` is in [Write an evaluation](/write#send-the-task). Read the `Turn` it returns before you send the next prompt.
 
 ## Read the turn
 
-A turn's fields stay fixed after `c.send()` returns. Read the harness's final message from `turn.text`. The `turn.status` field reports `completed`, `aborted`, or `error`. The `turn.diff` field compares the workspace at the end of the turn with its state before your harness runs. Token counts for the turn are in `turn.usage`, or `null` when the harness reports none. Messages and tool calls are in `turn.transcript`.
+A turn's fields stay fixed after `c.send()` returns. Read the harness's final message from `turn.text`. The `turn.status` field reports `completed`, `aborted`, or `error`. The `turn.diff` field compares the workspace at the end of the turn with its state before the harness runs. Token counts for the turn are in `turn.usage`, or `null` when the harness reports none. Messages and tool calls are in `turn.transcript`.
 
-Inside the callback, after `c.send()`, read the message, the changed paths, the generated tokens, the test file, and a command:
+In the `evals/user.eval.ts` file, keep the turn the first `c.send()` returns, then read the message, the changed paths, the generated tokens, the test file, and a command:
 
 ```ts title="evals/user.eval.ts"
-// ...
+const turn = await c.send(
+  'Add a Vitest test for getUserId in src/user.test.ts.',
+)
 const message = turn.text
 const changed = turn.diff.files.map((file) => file.path)
 const generated = turn.usage?.output
@@ -55,7 +41,7 @@ const second = await c.send('Make src/user.ts satisfy that test.')
 const earlier = c.turns[0]
 ```
 
-`second.text` is only the second reply. `second.diff` includes files from the first turn because each diff compares the current workspace with its state before your harness runs. `earlier` is the same turn as `first`. `first.text` stays the first reply. For a runnable project that checks each turn, see [`with-multi-turn`](https://github.com/invertase/reeval/tree/main/examples/with-multi-turn).
+`second.text` is only the second reply. `second.diff` includes files from the first turn because each diff compares the current workspace with its state before the harness runs. `earlier` is the same turn as `first`. `first.text` stays the first reply. For a runnable project that checks each turn, see [`with-multi-turn`](https://github.com/invertase/reeval/tree/main/examples/with-multi-turn).
 
 ## Reference
 
