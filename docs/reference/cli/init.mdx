@@ -54,7 +54,7 @@ Docker is running: ready for npx reeval image build
 
 | File | What `reeval init` writes |
 |---|---|
-| `reeval.config.ts` | The chosen agent in `docker()`, `analysis.model` for [`reeval analyze`](/reference/cli/analyze), and profiles `pr` (one attempt per cell, the CI default) and `nightly` (three, recorded) |
+| `reeval.config.ts` | The chosen agent in `docker()`, `analysis.model` for [`reeval analyze`](/reference/cli/analyze), and profiles `pr` (one attempt per cell, the CI default) and `nightly` (four, recorded) |
 | `evals/environments.ts` | One environment, `greeter`: a `package.json` written into the workspace and the project's rules (`AGENTS.md`, or `CLAUDE.md` for Claude Code) |
 | `evals/greet.eval.ts` | One deterministic eval in `greeter`: the agent writes `greet.js`, and a command checks it |
 | `.gitignore` | `node_modules/`, `.reeval/` and `.env*` |

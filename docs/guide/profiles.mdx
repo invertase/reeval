@@ -15,7 +15,7 @@ export default defineConfig({
       budget: { attempts: 20 },
     },
     nightly: {
-      defaults: { runs: 3 },
+      defaults: { runs: 4 },
       record: 'always',
       budget: { attempts: 80, duration: '2h' },
     },
@@ -23,7 +23,7 @@ export default defineConfig({
 })
 ```
 
-This config has two profiles. `pr` runs every cell once, drops compare variants and keeps only Cursor. `nightly` runs each eval three times, unless the eval says otherwise.
+This config has two profiles. `pr` runs every cell once, drops compare variants and keeps only Cursor. `nightly` runs each eval four times, the fewest a compare's lift needs, unless the eval says otherwise.
 
 ## Choose a profile
 
@@ -95,10 +95,10 @@ npx reeval run --dry-run --profile nightly
 ```
 
 ```text
-plan  profile nightly (--profile) · 18 evals · 19 cells · 57 attempts · ~171m 00s serial (~42m 45s at concurrency 4) · budget 80 attempts ✓, 2h
+plan  profile nightly (--profile) · 18 evals · 19 cells · 76 attempts · ~228m 00s serial (~57m 00s at concurrency 4) · budget 80 attempts ✓, 2h
 …
-evals/skill.eval.ts › house greeting › greets in the house style    1          1         3     6
-evals/sqlite.eval.ts › queries a seeded SQLite database             1          —         3     3
+evals/skill.eval.ts › house greeting › greets in the house style    1          1         4     8
+evals/sqlite.eval.ts › queries a seeded SQLite database             1          —         4     4
 hint: 18 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
 ```
 
@@ -149,7 +149,7 @@ profiles:
     limit: { runs: 1, compare: false, harness: ['cursor:composer-2.5'] }
     budget: { attempts: 20 }
   nightly:
-    defaults: { runs: 3 }
+    defaults: { runs: 4 }
     record: always
     budget: { attempts: 80, duration: 2h }
 ```
