@@ -44,17 +44,7 @@ export default defineConfig({
   Reasoning effort, passed as pi's `--thinking` flag. The value is one that flag takes, such as `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.
 </Property>
 
-<Property name="id" type="string" optional>
-  Cell id. Defaults to `pi:<model>`, or `pi:<model>[effort=<value>]` with `effort` set. The id uses letters, digits, and `._:@+-=[]`.
-</Property>
-
-<Property name="maxConcurrent" type="number" optional>
-  The most pi attempts that run at the same time, across the run. A whole number of at least 1.
-</Property>
-
-<Property name="startTimeout" type="Duration" optional>
-  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
-</Property>
+For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 In the sandbox, pi runs in print mode with the project trusted, its startup network operations off, and no extensions loaded besides its built-in `mcp` one for the environment's MCP servers.
 
@@ -73,6 +63,18 @@ For more information about writing rules, see [Add project rules](/environments/
 The pi harness reads skills from the `.pi/skills` directory in the workspace, which pi loads because the harness trusts the project, and from the `~/.pi/agent/skills` directory in the home directory.
 
 For more information about placing skills, see [Give the agent skills](/environments/skills).
+
+## `plugins`
+
+reeval adds each plugin's skills to the home skills directory and unpacks its commands into `.pi/prompts`, where pi reads them as prompt templates named `/<name>`. pi keeps `description` and `argument-hint` from a command's frontmatter. Its own packages, which carry extension code, are never loaded from an environment's plugin.
+
+[//]: # (generated:harness-plugins:pi)
+
+- Takes `skills`, `commands` and `mcp`, and refuses a plugin that keeps `agents`, `hooks` and `rules`: narrow it with `only`, or leave it out of the cell.
+
+[//]: # (/generated:harness-plugins:pi)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).
 
 ## `mcp`
 
