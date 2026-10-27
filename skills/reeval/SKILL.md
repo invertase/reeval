@@ -242,7 +242,7 @@ const houseStyle = plain.extendEnvironment('house-style', ({ skill }) => ({
 
 group(
   'greetings',
-  { compare: { baseline: plain, variants: [houseStyle] }, runs: 2 },
+  { compare: { baseline: plain, variants: [houseStyle] } },
   () => {
     evaluate('greets in the house style', async (c) => {
       await c.send('Create greet.js exporting greet(name) in our house style.')
@@ -259,9 +259,9 @@ group(
   `setup: [{ run: 'npm ci', timeout: '5m' }]`. More in
   [references/environments.md](references/environments.md).
 - Attempts = evals × harnesses × (1 control + variants) × runs. The example is 1 eval, 2 cells
-  (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 4 attempts.
-  Without `runs`, a compare runs 4 a cell (8 attempts here), the fewest for a lift verdict;
-  `runs: 1` at any level or a profile's `limit.runs: 1` keeps a smoke run cheap.
+  (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 8 attempts:
+  without `runs`, a compare runs 4 a cell, the fewest for a lift verdict. A `runs` below 4 reads
+  `can't tell yet`; `runs: 1` at any level or a profile's `limit.runs: 1` keeps a smoke run cheap.
 - Each variant runs as that environment on its own; `compare` does not layer, inherit or
   extend. Share setup with `parent.extendEnvironment(name, spec)` before `compare`. Without
   `baseline`, the cascaded `environment` is the control.
