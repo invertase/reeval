@@ -543,12 +543,19 @@ for (const { code } of exitCodes()) {
     problems.push(`exit code ${code} isn't on reference/cli`)
 }
 
-// ---- Recipes apply the mechanic they link: a recipe with no run command is only a pointer ----
+// ---- Recipes link a workflow instead of repeating it ----------------------------------------------
 
-if (!/\breeval run\b/.test(page('recipes/ci-gate'))) {
-  problems.push(
-    'docs/recipes/ci-gate.mdx has no `reeval run` command: a recipe that only points at another page is a miss',
-  )
+// /runs/ci owns the workflow of a recording profile, a secret, a run and a compare. A recipe that
+// links it and still teaches all four steps is a second home for them.
+const CI_WORKFLOW_STEPS = [/\bprofile\b/, /\bsecrets?\b/, /\breeval run\b/, /\bcompare\b/i]
+for (const file of mdxFiles()) {
+  if (!relative(docsDir, file).startsWith('recipes/')) continue
+  const prose = read(file).replace(/^---\n[\s\S]*?\n---\n/, '')
+  if (/\]\(\/runs\/ci[)#]/.test(prose) && CI_WORKFLOW_STEPS.every((step) => step.test(prose))) {
+    problems.push(
+      `${relative(root, file)} links /runs/ci and also teaches its workflow (profile, secret, reeval run, compare): keep the applied result here and link CI for the steps`,
+    )
+  }
 }
 
 // ---- Gateway pages -----------------------------------------------------------------------------

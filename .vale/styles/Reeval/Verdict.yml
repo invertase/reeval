@@ -1,0 +1,9 @@
+extends: existence
+message: "Write 'judgment' in prose; 'verdict' belongs in code only (`Verdict`, `verdict`)."
+level: warning
+ignorecase: true
+# The judge's answer is a judgment. `Verdict` and `verdict` name it in code,
+# where Vale skips code spans. .vale.ini turns the rule on for the recipes;
+# the reference pages and the glossary document the code name.
+tokens:
+  - '(?<![\x60"''/\[=.-])\bverdicts?\b(?![\x60"''\]=-])'
