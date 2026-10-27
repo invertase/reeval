@@ -287,6 +287,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/gateway.test.ts › Claude Code on Vertex is pointed at the project and brokered only on its model calls',
       'reeval/test/gateway.test.ts › the gateway serves Claude Code on Vertex, not the agents it has no route for',
       "reeval/test/gateway.test.ts › fx on Vertex calls its Chat Completions endpoint, with the token there and Gemini's model",
+      "reeval/test/gateway.test.ts › a bare fx id is OpenAI's, so on Vertex only a bare Gemini id stays there",
       'reeval/test/gateway.test.ts › a cached source shares one mint and one token until near its expiry',
       'reeval/test/gateway.test.ts › the session gets fresh rules before each token expires, and none after stop',
       'reeval/test/gateway.test.ts › a failed refresh is retried while the current token works; a failed first mint throws',
