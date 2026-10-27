@@ -1,47 +1,54 @@
 ---
 title: "Measure lift against a baseline"
-description: "See whether a skill, doc, or MCP server changes what your harness does."
+description: "See whether a skill, doc, or MCP server changes what the harness does."
 ---
 
-A comparison runs one evaluation on a baseline without your change and on a variant with it. Both get the same prompt and assertions. reeval reports whether the variant `helped`, `made it worse`, or `can't tell yet`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For more information about where a comparison appears in a run, see [Comparison](/reference/glossary#comparison).
+A comparison runs one evaluation on a baseline without the change and on a variant with it. Both get the same prompt and assertions. reeval reports whether the variant `helped`, `made it worse`, or `can't tell yet`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For more information about where a comparison appears in a run, see [Comparison](/reference/glossary#comparison).
 
 The examples use the baseline `page`, an unstyled HTML page, and the variant `brand-guidelines`, which adds Anthropic's `brand-guidelines` skill. For more information about building them, see [Quick start](/quickstart) or [Environments](/environments).
 
 ## Run the comparison
 
-In the `evals/brand.eval.ts` file, name the variants in `compare.variants`:
+The `with-library-skill-lift` example names the variants in `compare.variants`:
 
-```ts title="evals/brand.eval.ts"
+```ts title="examples/with-library-skill-lift/with-library-skill-lift.eval.ts"
+import { defineEnvironment, evaluate, expect } from 'reeval'
+
+// The page in ./project is the control; the variant adds Anthropic's published brand-guidelines
+// skill, fetched from its repository at a pinned commit.
+const page = defineEnvironment('page', ({ directory }) => ({ files: directory('./project') }))
+const withSkill = page.extendEnvironment('brand-guidelines', ({ skill }) => ({
+  skills: [
+    skill.git('github:anthropics/skills', {
+      ref: 'dbd4588f9e1033efb41dad4bef2f7947c8993d44',
+      path: 'skills',
+      only: ['brand-guidelines'],
+    }),
+  ],
+}))
+
 evaluate(
   "styles the page in Anthropic's brand",
-  {
-    environment: page,
-    compare: { variants: [withSkill] },
-    runs: 4,
-    gate: { passRate: 0.75 },
-  },
+  // No baseline, so the eval's environment is the control. Four tries a side is the fewest that
+  // gives a verdict; the variant passes on 3 of 4 or more.
+  { environment: page, compare: { variants: [withSkill] }, runs: 4, gate: { passRate: 0.75 } },
   async (c) => {
     await c.send(
-      "Give index.html Anthropic's look: write styles.css with Anthropic's " +
-        'brand colors and fonts, and link it from index.html.',
+      "Give index.html Anthropic's look: write styles.css with Anthropic's brand colours and " +
+        'fonts, and link it from index.html.',
     )
 
-    await expect
-      .soft(c, 'links styles.css')
-      .toHaveFile('index.html', /href="styles\.css"/)
+    await expect.soft(c, 'links styles.css').toHaveFile('index.html', /href="styles\.css"/)
     await expect.soft(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
-    await expect(c, 'brand fonts').toHaveFile(
-      'styles.css',
-      /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/,
-    )
+    await expect(c, 'brand fonts').toHaveFile('styles.css', /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/)
   },
 )
 ```
 
-With no `compare.baseline`, the evaluation's `environment` is the baseline. To name a different baseline, set `compare.baseline`. `runs: 4` gives each cell four attempts. Run the evaluation:
+With no `compare.baseline`, the evaluation's `environment` is the baseline, here `page`. To name a different baseline, set `compare.baseline`. `runs: 4` gives each cell four attempts. Run the evaluation:
 
 ```bash
-npx reeval run brand
+npx reeval run with-library-skill-lift
 ```
 
 ## Read the result
@@ -61,7 +68,7 @@ pass             styles the page in Anthropic's brand
   +1 more passed
 ```
 
-The `arm` column lists the baseline and the variant. A comparison of harnesses or sandboxes heads the column `harness` or `sandbox`. The `pass` column is passed attempts out of counted attempts, and the effect word is `helped`, `made it worse`, or `can't tell yet`. Equal pass rates, with at least four counted attempts a side, print no effect word. The `check` table counts each assertion per cell ([Measure a run](/results/measure#read-the-assertion-and-effort-tables)).
+The `arm` column lists the baseline and the variant. A comparison of harnesses or sandboxes heads the column `harness` or `sandbox`. The `pass` column is passed attempts out of counted attempts, and the effect word is `helped`, `made it worse`, or `can't tell yet`. The `check` table counts each assertion per cell ([Measure a run](/results/measure#read-the-assertion-and-effort-tables)).
 
 To print the interval under each variant, pass `-v`:
 
@@ -71,7 +78,7 @@ To print the interval under each variant, pass `-v`:
 
 The evaluation's outcome, `pass`, is the variant's, because reeval gates only variants by default. Set `compare.gate` to `'all'` to gate the baseline too, or `'none'` to gate neither. `gate: { passRate: 0.75 }` passes a cell when at least 3 of its 4 attempts pass.
 
-Below four counted attempts a side, reeval doesn't call `helped` or `made it worse`. With `runs: 2`, the same counts read `can't tell yet` ([Statistics](/results/compare/statistics)).
+For when each effect word applies, including the four-attempt minimum, see [Variant outcomes](/results/compare/statistics#variant-outcomes).
 
 If the baseline and the variant both pass, the harness already does what the skill teaches, and this task can't show the change. A baseline that includes the change measures nothing either. A rules file or a doc that repeats the skill gives both cells the same instructions.
 
@@ -87,9 +94,7 @@ Each variant gets its own row and effect. reeval gates each variant separately. 
 
 ## Compare harnesses
 
-To measure the variant on more than one harness, list them in `harness`. For setting up each harness and its key, see [Compare harnesses](/recipes/agent-comparison).
-
-This excerpt limits the variant to Claude Code:
+To measure the variant on more than one harness, list them in `harness`. For setting up each harness and its key, see [Compare harnesses](/recipes/agent-comparison). This excerpt limits the variant to Claude Code:
 
 ```ts title="with-compare-harness.eval.ts"
 harness: [
