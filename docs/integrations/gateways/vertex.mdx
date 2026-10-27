@@ -3,26 +3,36 @@ title: "Run models without Vertex AI"
 description: "reeval has no Vertex AI gateway: run Gemini and Claude models on a provider key or a routing gateway instead."
 ---
 
-reeval has no gateway for Google Cloud's Vertex AI. `{{ pkg }}/gateway` exports `direct()`, `vercel()`, and `openrouter()`. Vertex takes a service account, not a key in a header, so the egress gateway can't keep the credential out of the sandbox.
+reeval has no gateway for Google Cloud's Vertex AI. Run Gemini and Claude models on a provider key or a routing gateway instead.
 
-## OpenCode on `google-vertex`
+## Credential
+
+Vertex has no credential in reeval. It takes a service account, not a key in a header, so the egress gateway can't keep the credential out of the sandbox.
+
+## Helper
+
+Vertex has no helper. `{{ pkg }}/gateway` exports `direct()`, `vercel()`, and `openrouter()`.
+
+For more information about combining gateways, see [Route models through a gateway](/agents/gateways).
+
+## Harnesses and models
+
+An OpenCode model on the `google-vertex` provider fails at plan time with exit code 2 on `direct()`:
 
 ```text
 UsageError: … on opencode:gemini-3.8-flash: no gateway in the list can serve it (direct: reeval can't run OpenCode on Vertex (google-vertex): it takes a service account (Vertex refuses API keys for most models), not a key in a header, so the gateway can't keep its key out of the sandbox) …
 ```
 
-An OpenCode model on the `google-vertex` provider fails at plan time with exit code 2 on `direct()`. On `vercel()`, OpenCode takes any `<provider>/<model>` id, and the call goes to the Vercel AI Gateway on `AI_GATEWAY_API_KEY`, not to your Google Cloud project.
+On `vercel()`, OpenCode takes any `<provider>/<model>` id, and the call goes to the Vercel AI Gateway on `AI_GATEWAY_API_KEY`, not to a Google Cloud project. For more information about OpenCode's providers, see [OpenCode harness](/integrations/agents/opencode).
 
-For more information about OpenCode's providers, see [OpenCode harness](/integrations/agents/opencode).
-
-## Run the same models another way
+Run the same models another way:
 
 | Models | Route | Key |
 | :--- | :--- | :--- |
 | Gemini on Antigravity | `direct()` | `GEMINI_API_KEY` |
-| Gemini on Goose, pi, or OpenCode's `google` provider | `direct()` | `GOOGLE_GENERATIVE_AI_API_KEY` |
-| Claude on Claude Code or OpenCode's `anthropic` provider | `direct()` | `ANTHROPIC_API_KEY` |
+| Gemini on Goose or pi | `direct()` | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| OpenCode's `google` provider | `direct()` | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| Claude on Claude Code | `direct()` | `ANTHROPIC_API_KEY` |
+| OpenCode's `anthropic` provider | `direct()` | `ANTHROPIC_API_KEY` |
 | A gateway id, such as `google/gemini-3.8-flash` | `vercel()` | `AI_GATEWAY_API_KEY` |
 | An OpenRouter model | `openrouter()` | `OPENROUTER_API_KEY` |
-
-For more information about combining gateways, see [Route models through a gateway](/agents/gateways).
