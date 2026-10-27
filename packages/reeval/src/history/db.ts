@@ -211,7 +211,7 @@ CREATE VIEW family_lift AS
   FROM family_lift_m f JOIN runs r USING (run_id);
 
 -- Cells with mixed outcomes, pooled over runs whose fingerprints match once agent runtime state is
--- left out; 'flaky' needs FLAKY_MIN_ATTEMPTS counted attempts, else 'insufficient'.
+-- left out; 'flaky' needs FLAKY_MIN_ATTEMPTS counted attempts, else 'mixed'.
 CREATE VIEW flaky_cells AS SELECT * FROM flaky_m;
 
 -- Each run where a cell's fingerprint differs from its previous run: which parts, which context

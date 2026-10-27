@@ -16,7 +16,7 @@ export default defineConfig({
       budget: { attempts: 20 },
     },
     nightly: {
-      defaults: { runs: 3 },
+      defaults: { runs: 4 },
       record: 'always',
       budget: { attempts: 80, duration: '2h' },
     },
@@ -78,7 +78,7 @@ A profile takes `defaults`, `limit`, `judge`, `budget`, `record`, `tags` and `ga
 `limit` only narrows. Each key applies to an eval unless the eval (or a group around it) lists the key in `pin`.
 
 <Property name="runs" type="number" optional>
-  The most attempts per cell. An eval asking for more runs this many. A whole number of at least 1.
+  The most attempts per cell. An eval asking for more runs this many, and so does a compare's default of 4 (`runs 4 → 1 (profile pr)` in the plan). A whole number of at least 1.
 </Property>
 
 <Property name="compare" type="false | { maxVariants: number }" optional>

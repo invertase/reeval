@@ -1357,18 +1357,32 @@ evaluate('caught check', async (c) => {
   } catch {}
   expect(await c.judge('nice?')).toPass()
 })
+evaluate('caught check alone', async (c) => {
+  await c.send('go')
+  try {
+    await expect(c.exec('exit 3'), 'optional').toSucceed()
+  } catch {}
+})
 `,
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
     const byName = Object.fromEntries(readRun(p.dir).evals.map((e) => [e.name, e]))
+    const alone = byName['caught check alone']
+    assert.equal(alone?.outcome, 'fail', 'a body that returns after a caught check fails')
+    assert.equal(alone?.error?.kind, 'assertion')
     const check = byName['check then judge']?.error
     assert.equal(check?.kind, 'assertion')
     assert.match(check?.message ?? '', /^tests pass: expected command to succeed/)
     const erroring = byName['judge then erroring check']?.error
     assert.equal(erroring?.kind, 'assertion', 'a check that errored didn’t hold either')
     assert.match(erroring?.message ?? '', /toSucceed\(\) expects/)
-    assert.equal(byName['caught check']?.error?.kind, 'judge', 'a caught check fails nothing')
+    const caught = byName['caught check']?.error
+    assert.equal(caught?.kind, 'assertion', 'a caught check still fails the attempt, as itself')
+    assert.match(
+      caught?.message ?? '',
+      /^optional: expected command to succeed[\s\S]*\(the eval caught this failed check, which still fails the attempt; to wait or retry, use expect\.poll\)$/,
+    )
     assert.match(r.stdout, /Error: tests pass: expected command to succeed/)
   })
 

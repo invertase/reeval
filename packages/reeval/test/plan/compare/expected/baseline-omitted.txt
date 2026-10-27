@@ -1,16 +1,17 @@
-no profile · 3 evals · 12 cells · 12 attempts
-evals/omitted.eval.ts › no environment                    a/baseline/docker  control          ungated  ×1
-                                                          a/skilled/docker   variant skilled  gated    ×1
-                                                          b/baseline/docker  control          ungated  ×1
-                                                          b/skilled/docker   variant skilled  gated    ×1
-evals/omitted.eval.ts › inherits › the group environment  a/base/docker      control          ungated  ×1
-                                                          a/skilled/docker   variant skilled  gated    ×1
-                                                          b/base/docker      control          ungated  ×1
-                                                          b/skilled/docker   variant skilled  gated    ×1
-evals/omitted.eval.ts › its own environment               a/base/docker      control          ungated  ×1
-                                                          a/skilled/docker   variant skilled  gated    ×1
-                                                          b/base/docker      control          ungated  ×1
-                                                          b/skilled/docker   variant skilled  gated    ×1
+no profile · 3 evals · 12 cells · 48 attempts
+hint: 3 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+evals/omitted.eval.ts › no environment                    a/baseline/docker  control          ungated  ×4  runs 4 (compare default)
+                                                          a/skilled/docker   variant skilled  gated    ×4
+                                                          b/baseline/docker  control          ungated  ×4
+                                                          b/skilled/docker   variant skilled  gated    ×4
+evals/omitted.eval.ts › inherits › the group environment  a/base/docker      control          ungated  ×4  runs 4 (compare default)
+                                                          a/skilled/docker   variant skilled  gated    ×4
+                                                          b/base/docker      control          ungated  ×4
+                                                          b/skilled/docker   variant skilled  gated    ×4
+evals/omitted.eval.ts › its own environment               a/base/docker      control          ungated  ×4  runs 4 (compare default)
+                                                          a/skilled/docker   variant skilled  gated    ×4
+                                                          b/base/docker      control          ungated  ×4
+                                                          b/skilled/docker   variant skilled  gated    ×4
 excluded: —
 image docker · cursor · 3 evals
   base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

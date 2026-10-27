@@ -1,0 +1,55 @@
+no profile · 12 evals · 48 cells · 104 attempts
+hint: 5 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+hint: 2 compares run 1 or 3 times per cell; a verdict needs 4 runs a side, so their lift and effort will say can't tell yet (runs: 4)
+hint: family evals/verdicts.eval.ts › three cases can never get a verdict: %s has 3 cases; its lift needs 6 for a verdict, so it will say can't tell yet whatever the runs (add cases)
+evals/verdicts.eval.ts › one run a cell can never get a verdict      a/base/docker     control          ungated  ×1
+                                                                     a/skilled/docker  variant skilled  gated    ×1
+                                                                     b/base/docker     control          ungated  ×1
+                                                                     b/skilled/docker  variant skilled  gated    ×1
+evals/verdicts.eval.ts › three runs a cell can never get a verdict   a/base/docker     control          ungated  ×3
+                                                                     a/skilled/docker  variant skilled  gated    ×3
+                                                                     b/base/docker     control          ungated  ×3
+                                                                     b/skilled/docker  variant skilled  gated    ×3
+evals/verdicts.eval.ts › four runs a cell can                        a/base/docker     control          ungated  ×4
+                                                                     a/skilled/docker  variant skilled  gated    ×4
+                                                                     b/base/docker     control          ungated  ×4
+                                                                     b/skilled/docker  variant skilled  gated    ×4
+evals/verdicts.eval.ts › three cases can never get a verdict: ada    a/base/docker     control          ungated  ×4  family three cases can never get a verdict: %s case 1/3
+                                                                     a/skilled/docker  variant skilled  gated    ×4
+                                                                     b/base/docker     control          ungated  ×4
+                                                                     b/skilled/docker  variant skilled  gated    ×4
+evals/verdicts.eval.ts › three cases can never get a verdict: grace  a/base/docker     control          ungated  ×4  family three cases can never get a verdict: %s case 2/3
+                                                                     a/skilled/docker  variant skilled  gated    ×4
+                                                                     b/base/docker     control          ungated  ×4
+                                                                     b/skilled/docker  variant skilled  gated    ×4
+evals/verdicts.eval.ts › three cases can never get a verdict: linus  a/base/docker     control          ungated  ×4  family three cases can never get a verdict: %s case 3/3
+                                                                     a/skilled/docker  variant skilled  gated    ×4
+                                                                     b/base/docker     control          ungated  ×4
+                                                                     b/skilled/docker  variant skilled  gated    ×4
+evals/verdicts.eval.ts › six cases can: a                            a/base/docker     control          ungated  ×1  family six cases can: %s case 1/6
+                                                                     a/skilled/docker  variant skilled  gated    ×1
+                                                                     b/base/docker     control          ungated  ×1
+                                                                     b/skilled/docker  variant skilled  gated    ×1
+evals/verdicts.eval.ts › six cases can: b                            a/base/docker     control          ungated  ×1  family six cases can: %s case 2/6
+                                                                     a/skilled/docker  variant skilled  gated    ×1
+                                                                     b/base/docker     control          ungated  ×1
+                                                                     b/skilled/docker  variant skilled  gated    ×1
+evals/verdicts.eval.ts › six cases can: c                            a/base/docker     control          ungated  ×1  family six cases can: %s case 3/6
+                                                                     a/skilled/docker  variant skilled  gated    ×1
+                                                                     b/base/docker     control          ungated  ×1
+                                                                     b/skilled/docker  variant skilled  gated    ×1
+evals/verdicts.eval.ts › six cases can: d                            a/base/docker     control          ungated  ×1  family six cases can: %s case 4/6
+                                                                     a/skilled/docker  variant skilled  gated    ×1
+                                                                     b/base/docker     control          ungated  ×1
+                                                                     b/skilled/docker  variant skilled  gated    ×1
+evals/verdicts.eval.ts › six cases can: e                            a/base/docker     control          ungated  ×1  family six cases can: %s case 5/6
+                                                                     a/skilled/docker  variant skilled  gated    ×1
+                                                                     b/base/docker     control          ungated  ×1
+                                                                     b/skilled/docker  variant skilled  gated    ×1
+evals/verdicts.eval.ts › six cases can: f                            a/base/docker     control          ungated  ×1  family six cases can: %s case 6/6
+                                                                     a/skilled/docker  variant skilled  gated    ×1
+                                                                     b/base/docker     control          ungated  ×1
+                                                                     b/skilled/docker  variant skilled  gated    ×1
+excluded: —
+image docker · cursor · 12 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

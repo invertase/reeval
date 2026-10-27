@@ -669,7 +669,7 @@ evaluate('a', async () => {})
     const config = await configOf(
       'gateway-vercel',
       `{ harness: [claudeCode({ model: 'claude-sonnet-4-5' }), cursor({ model: 'composer-2.5' })],
-         gateway: [vercel(), direct()],
+         gateway: [vercel()],
          judge: { model: 'anthropic/claude-haiku-4-5' },
          analysis: { model: 'google/gemini-3.8-flash' },
          profiles: { local: { gateway: [direct()] } } }`,
@@ -696,7 +696,7 @@ evaluate('a', async () => {})
       [
         [
           'ok',
-          'gateway vercel, direct: claude-code:claude-sonnet-4-5 → vercel, cursor:composer-2.5 → direct',
+          'gateway vercel, direct: claude-code:claude-sonnet-4-5 → vercel, cursor:composer-2.5 → direct (fallback)',
         ],
         [
           'ok',
@@ -717,9 +717,31 @@ evaluate('a', async () => {})
     assert.deepEqual(checkGateways(unset, deps(), '.env.local'), [])
     const stuck = await configOf(
       'gateway-stuck',
-      "{ harness: cursor({ model: 'composer-2.5' }), gateway: [vercel()] }",
+      "{ harness: cursor({ model: 'composer-2.5' }), gateway: [vercel(), direct({ enabled: false })] }",
     )
     assert.equal(checkGateways(stuck, deps(), '.env.local')[0]?.status, 'fail')
+  })
+
+  test('gateway: a judge or analysis model that falls back to direct is marked', async () => {
+    const config = await configOf(
+      'gateway-model-fallback',
+      `{ harness: claudeCode({ model: 'claude-sonnet-4-5' }),
+         gateway: [vertex({ project: 'p' })],
+         judge: { model: 'openai/gpt-5.4-mini' },
+         analysis: { model: 'openai/gpt-5.4-mini' },
+         profiles: {
+           pinned: { gateway: [vertex({ project: 'p' })], judge: { gateway: 'direct' } },
+           first: { gateway: [direct(), vertex({ project: 'p' })] },
+         } }`,
+    )
+    assert.deepEqual(
+      checkGateways(config, deps(), '.env.local').map((c) => c.summary),
+      [
+        'gateway vertex, direct: claude-code:claude-sonnet-4-5 → vertex, judge openai/gpt-5.4-mini → direct (fallback), analysis openai/gpt-5.4-mini → direct (fallback)',
+        'gateway vertex, direct in profile pinned: claude-code:claude-sonnet-4-5 → vertex',
+        'gateway direct, vertex in profile first: claude-code:claude-sonnet-4-5 → direct',
+      ],
+    )
   })
 
   test('vertex: each entry’s project, where its tokens come from, and online whose they are', async () => {
@@ -860,7 +882,7 @@ evaluate('a', async () => {})
       `{ harness: cursor({ model: 'composer-2.5' }),
          judge: { model: 'google/gemini-3.8-flash' },
          analysis: { model: 'google/gemini-3.8-flash' },
-         gateway: [vertex({ project: 'reeval-test', regions: { google: 'us-central1' } }), direct()] }`,
+         gateway: [vertex({ project: 'reeval-test', regions: { google: 'us-central1' } })] }`,
     )
     const asked: Array<[string, unknown]> = []
     const checks = await checkVertex(
@@ -893,7 +915,7 @@ evaluate('a', async () => {})
     const config = await configOf(
       'gateway-vertex-harnesses',
       `{ harness: cursor({ model: 'composer-2.5' }),
-         gateway: [vertex({ project: 'reeval-test' }), direct()],
+         gateway: [vertex({ project: 'reeval-test' })],
          profiles: {
            agy: { defaults: { harness: antigravity({ model: 'gemini-3.8-flash-low' }) } },
            oc: { defaults: { harness: opencode({ model: 'google-vertex/gemini-3.8-flash' }) } },

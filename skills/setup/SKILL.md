@@ -133,7 +133,8 @@ Each eval:
   (`c.judge`) only for what no check can see, and then add `judge:` to the config.
 - **A name that states the question:** `stores invoice totals in cents with the billing skill`,
   not `billing test`. The results and `reeval analyze` read in its terms.
-- **Small:** `runs: 2` on a compare (4 attempts), 1 elsewhere. Seed only the files the task
+- **Small:** leave `runs` unset: a compare runs 4 a cell (8 attempts), the fewest for a lift
+  verdict, and anything else once. Seed only the files the task
   needs. If it needs the repo, seed it with `directory('..', { glob: ['!.env*', '!.reeval/',
   '!evals/', '!reeval.config.*'] })`: `directory()` doesn't skip `.env*`, keys must not reach
   the sandbox, and the agent must not read your checks or the oracle's answer in the config.
@@ -170,7 +171,7 @@ npx reeval doctor               # Docker, image, keys; exit 1 names each fix
   check is too narrow. Fix the check.
 
 Only start a real `npx reeval run` if the user asked for it or agrees: it runs a real agent on
-their key. One compare at `runs: 2` on Cursor is a few minutes.
+their key. One compare (8 attempts) on Cursor is several minutes.
 
 ## 6. Hand over
 

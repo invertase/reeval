@@ -614,8 +614,12 @@ class Diff(TypedDict):
     patch: str
 
 
-# Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.
+# Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends
+# with it unless it's listed elsewhere, where it's tried in that place.
 class DirectGatewayDescriptor(TypedDict):
+    # `false` turns off the fallback to each provider's own key, so a cell no other gateway in
+    # the list serves is refused at plan time. Default `true`.
+    enabled: NotRequired[bool]
     kind: Literal["direct"]
 
 
@@ -772,7 +776,9 @@ class EvalOptionsDataCompare(TypedDict):
     # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
     # the evals inside it that set none.
     revision: NotRequired[float | str]
-    # Attempts per cell.
+    # Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
+    # whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
+    # included.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
@@ -845,7 +851,9 @@ class EvalOptionsDataCompare2(TypedDict):
     # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
     # the evals inside it that set none.
     revision: NotRequired[float | str]
-    # Attempts per cell.
+    # Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
+    # whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
+    # included.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
@@ -902,7 +910,9 @@ class EvalOptionsData3(TypedDict):
     # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
     # the evals inside it that set none.
     revision: NotRequired[float | str]
-    # Attempts per cell.
+    # Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
+    # whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
+    # included.
     runs: NotRequired[float]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
@@ -1181,8 +1191,12 @@ class JudgeArtifactRef(TypedDict):
     sha256: str
 
 
-# Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.
+# Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends
+# with it unless it's listed elsewhere, where it's tried in that place.
 class JudgeCallDataGatewayDirect(TypedDict):
+    # `false` turns off the fallback to each provider's own key, so a cell no other gateway in
+    # the list serves is refused at plan time. Default `true`.
+    enabled: NotRequired[bool]
     kind: Literal["direct"]
 
 

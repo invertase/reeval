@@ -81,19 +81,22 @@ harness's own endpoints. Every harness but Goose reports tokens, which reeval re
 attempt and run (no prices).
 
 `gateway` (`reeval/gateway`) lists the routes model calls may take, in order: each harness, the
-judge and analysis take the first that can serve them. `gateway: [vercel(), direct()]` runs Claude
+judge and analysis take the first that can serve them. Every list ends with `direct()` (each
+provider's own key), so don't write it at the end: list it only to move it (`[direct(), vercel()]`
+tries own keys first), or write `direct({ enabled: false })` for strict routing, where a cell no
+entry serves stops the plan (never both). `gateway: [vercel()]` runs Claude
 Code, Codex, Goose, pi, OpenCode, fx and Grok Build on Vercel AI Gateway with one `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`) (`effort`
-on Goose, or on OpenCode with a model other than Gemini, falls through to `direct()`), and
-everything else on its own key; the plan's hint says where each harness fell through. Pin one with
+on Goose, or on OpenCode with a model other than Gemini, falls back to `direct()`), and
+everything else on its own key; the plan's hint says which cells fell back. Pin one with
 the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. `vertex({ project })`
 (else `GOOGLE_CLOUD_PROJECT`) runs Claude Code, Antigravity, OpenCode, Goose, pi and fx (Gemini only) on Vertex AI
 with no key: reeval mints a token from Application Default Credentials on the host and the egress
 gateway adds it (OpenCode's Gemini model runs as `google-vertex/<id>`). Claude ids work in
 either form (`claude-haiku-4-5-20251001` is sent as Vertex's `claude-haiku-4-5@20251001`), so one
-string works through `[vertex(), direct()]`; `google/*` and `anthropic/*` judge and analysis models run there
+string works through `[vertex()]` and its `direct()` fallback; `google/*` and `anthropic/*` judge and analysis models run there
 too. `reeval doctor --online` checks the token, the project's Vertex AI API and that Vertex serves each model the config sends there (Claude needs enabling in Model Garden). Default `[direct()]`:
 no gateway, so the judge, analysis and captures take only their provider's own key.
-`gateway: [openrouter(), direct()]` runs Claude Code, Codex, Goose, OpenCode, Grok Build and pi on
+`gateway: [openrouter()]` runs Claude Code, Codex, Goose, OpenCode, Grok Build and pi on
 OpenRouter with one `OPENROUTER_API_KEY` (Cursor, Antigravity, fx, and `effort` on Claude Code or
 on Goose or OpenCode with a model other than Gemini, fall through). Every OpenRouter call records its upstream provider and cost
 (`attempts[].upstreams`, `reportedCostUsd`; a judgement's `upstream`, `costUsd`).
@@ -132,7 +135,7 @@ ids as `anthropic/…`, never `openrouter/…` or `vercel/…`.
 | `env` | Merged by name |
 | `judge` | Merged by field |
 | `capture` | Shallow-merged camera defaults (`viewport`, `timeout`, `browser`, `model`, the vision model); `viewport` replaces the value, and the port is not an option |
-| `runs`, `gate`, `egress`, `timeout` | Replaced |
+| `runs`, `gate`, `egress`, `timeout` | Replaced (`runs` unset everywhere: 4 for a compare with variants, else 1) |
 | `tags`, `pin` | Unioned |
 | `compare` | Groups and evals only |
 

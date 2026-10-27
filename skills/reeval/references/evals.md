@@ -17,7 +17,7 @@
   one pass rate over the cases and, with `compare`, one lift paired by case, which `minLift` gates
   (not each case's). Prefer it to separate evals when the cases are one population: six cases at
   `runs: 1` can reach a lift verdict where each case alone is within noise. Fewer than six
-  discordant cases reads `can't tell yet` (`insufficient` in `reeval query family_lift`). `evaluate.each(cases, { pool: false })` keeps the cases
+  discordant cases reads `can't tell yet` (`insufficient` in `reeval query family_lift`), so a family needs six cases or more; the plan hints when it has fewer. `evaluate.each(cases, { pool: false })` keeps the cases
   independent; eval options go after the name, never beside the cases.
   A comment on an eval describes the current check (why a canary fails, which path it reads),
   not what used to be true or which product a prompt was ported from.
@@ -149,6 +149,10 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
   'package.json'])` (sync): it reads the workspace diff, so a shell or subprocess write counts
   and a read doesn't. Strings are globs (a directory matches everything under it), RegExps work,
   and a turn means up to that turn. `toHaveEdited` reads the transcript; don't use it as a guard.
+- A failed `expect` the eval catches still fails the attempt, when the body ends, as
+  `expect.soft` does; its error says the eval caught it. Wait or retry with `expect.poll`
+  (`await expect.poll(() => c.exec(cmd), { timeout: 10_000 }).toSucceed()`), which records one
+  check with its final outcome, not with `expect` in a `try` loop.
 - **Label each requirement** with `expect`'s second argument:
   `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`. Every matcher call
   is recorded (`evals[].attempts[].assertions`; unlabelled ones get `<matcher> <first arg>`).

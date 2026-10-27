@@ -521,11 +521,11 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
       'evals/envs.ts': envs,
       'evals/c.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-evaluate('all gated', { compare: { baseline: base, variants: [skilled], gate: 'all' } }, async (c) => {
+evaluate('all gated', { runs: 1, compare: { baseline: base, variants: [skilled], gate: 'all' } }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
-evaluate('no worse', { compare: { baseline: base, variants: [skilled], minLift: 0.5, gate: 'none' } }, async (c) => {
+evaluate('no worse', { runs: 1, compare: { baseline: base, variants: [skilled], minLift: 0.5, gate: 'none' } }, async (c) => {
   await c.send('go')
   if (c.attempt.cell.role === 'variant') throw new Error('the variant is worse')
 })
@@ -1823,7 +1823,7 @@ export const withSkill = defineEnvironment('with-skill', ({ file, mcp, secret, s
 `,
       'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
 import { plain, withSkill } from './envs.ts'
-evaluate('greets', { compare: { baseline: plain, variants: [withSkill] } }, async (c) => {
+evaluate('greets', { runs: 1, compare: { baseline: plain, variants: [withSkill] } }, async (c) => {
   const turn = await c.send('greet')
   const loaded = turn.transcript.some((e) => e.type === 'text' && e.text === 'Loaded skills: house-greeting; mcp: docs')
   const token = (await c.exec('printf %s "$APP_TOKEN"')).stdout

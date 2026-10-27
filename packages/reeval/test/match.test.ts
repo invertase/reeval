@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { assertionRecords, softFailure } from '../src/attempt/assertions.ts'
+import { assertionRecords, checkFailure } from '../src/attempt/assertions.ts'
 import {
   type ExpectCall,
   expectCall,
@@ -356,7 +356,7 @@ describe('one matcher table', () => {
       soft: true,
       message: "copy is final: assert 'draft' == 'final'",
     })
-    assert.equal(softFailure(calls)?.message, "copy is final: assert 'draft' == 'final'")
+    assert.equal(checkFailure(calls)?.message, "copy is final: assert 'draft' == 'final'")
     assert.equal(recordCall(calls, { ...check, status: 'fail' }).message, 'assert failed')
     assert.equal(assertionRecords(calls).length, 4)
   })

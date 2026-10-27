@@ -2948,6 +2948,46 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'python-sdk/caught-checks',
+    tiers: ['fake'],
+    env: '-',
+    canary: /missing file: expected.*to succeed/i,
+    evals: {
+      'caught expect': {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: {
+          kind: 'assertion',
+          message:
+            /^missing file: expected.*to succeed[\s\S]*\(the eval caught this failed check, which still fails the attempt; to wait or retry, use expect\.poll\)$/,
+        },
+      },
+      'assert retries': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      canary: {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: { kind: 'assertion', message: /missing file: expected.*to succeed/i },
+      },
+    },
+    prepare: (dir) => syncPythonFixtureProject(dir),
+    record: ({ run }) => {
+      const assertions = (name: string) =>
+        run.evals
+          .find((e) => e.name === name)
+          ?.attempts[0]?.assertions?.map(({ label, status }) => [label, status])
+      assert.deepEqual(
+        assertions('caught expect'),
+        [['missing file', 'fail']],
+        'a failed expect the body catches is a failed check, recorded with its own message',
+      )
+      assert.deepEqual(
+        assertions('assert retries'),
+        [['assert c.exec("test -f ready.txt").ok', 'pass']],
+        'a plain assert the body catches records nothing',
+      )
+    },
+  },
+  {
     dir: 'run/resume',
     tiers: ['fake'],
     env: 'resume',

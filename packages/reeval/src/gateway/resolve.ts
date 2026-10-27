@@ -14,7 +14,7 @@ import type {
 import { ROUTING_GATEWAYS, type RoutingGatewayName } from './routes.ts'
 import { VERTEX_REFUSALS, VERTEX_ROUTES, vertexModelRefusalFor } from './vertex.ts'
 
-/** The config's list when it sets none: each provider's own key, as reeval has always run. */
+/** The config's list when it sets none: each provider's own key. */
 export const DEFAULT_GATEWAYS: GatewayDescriptor[] = [{ kind: 'direct' }]
 
 /** What reeval knows of a gateway: why it can't serve a harness, or undefined when it can. */
@@ -106,9 +106,7 @@ export function resolveGateway(
   const pin: string | undefined = harness.gateway
   if (pin !== undefined) {
     if (!gateways.some((g) => g.kind === pin)) {
-      throw new UsageError(
-        `${on}: it pins gateway '${pin}', which isn't in the gateway list (${listed}). Add ${gatewayHelper(pin)} to gateway, or pin one that's there.`,
-      )
+      throw new UsageError(`${on}: it pins gateway '${pin}', ${notListed(pin, listed)}`)
     }
     const refused = why(pin)
     if (refused) {
@@ -129,7 +127,10 @@ export function resolveGateway(
   )
 }
 
-/** What to add to the list so it serves `harness`: `direct()` when it can, else the first that can. */
+/**
+ * What to change so the list serves `harness`: a list without `direct` has it turned off, so
+ * turning it back on when it can serve, else adding the first gateway that can.
+ */
 function addHint(
   gateways: readonly { kind: string }[],
   harness: HarnessDescriptor,
@@ -138,7 +139,7 @@ function addHint(
   const unlisted = Object.keys(catalog).filter((name) => !gateways.some((g) => g.kind === name))
   const serves = unlisted.filter((name) => !catalog[name]?.cantServe(harness))
   if (serves.includes('direct')) {
-    return `Add direct() to the end of gateway to use ${agentName(harness)}'s own key.`
+    return `Drop direct({ enabled: false }) from gateway to fall back to ${agentName(harness)}'s own key.`
   }
   const [first] = serves
   return first ? `Add ${gatewayHelper(first)} to gateway.` : `No gateway reeval knows can serve it.`
@@ -160,6 +161,17 @@ export function routedHarness(
   }
 }
 
-/** `gateway: claude-code:… → direct (vercel can't serve it: …)`, for the plan's hints. */
+/**
+ * Why a pin names a gateway the list doesn't have: a list without `direct` has it turned off.
+ */
+export const notListed = (pin: string, listed: string): string =>
+  pin === 'direct'
+    ? `which the gateway list (${listed}) turns off with direct({ enabled: false }). Drop that, or pin one that's there.`
+    : `which isn't in the gateway list (${listed}). Add ${gatewayHelper(pin)} to gateway, or pin one that's there.`
+
+/**
+ * `gateway: cursor:… falls back to direct (vercel can't serve it: …)`, or `→ vercel (…)` past
+ * another gateway, for the plan's hints.
+ */
 export const fallbackHint = (harness: string, resolved: ResolvedGateway): string =>
-  `gateway: ${harness} → ${resolved.name} (${resolved.skipped.map((s) => `${s.gateway} can't serve it: ${s.why}`).join('; ')})`
+  `gateway: ${harness} ${resolved.name === 'direct' ? 'falls back to' : '→'} ${resolved.name} (${resolved.skipped.map((s) => `${s.gateway} can't serve it: ${s.why}`).join('; ')})`

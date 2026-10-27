@@ -1,14 +1,15 @@
-profile none (--profile) · 3 evals · 10 cells · 10 attempts
+profile none (--profile) · 3 evals · 10 cells · 28 attempts
+hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
 evals/limited.eval.ts › two variants  a/base/docker     control          gated    ×1  variants 2 → 0 (profile none)
                                       b/base/docker     control          gated    ×1
 evals/limited.eval.ts › one variant   a/base/docker     control          gated    ×1  variants 1 → 0 (profile none)
                                       b/base/docker     control          gated    ×1
-evals/limited.eval.ts › pinned        a/base/docker     control          ungated  ×1  pinned: compare
-                                      a/skilled/docker  variant skilled  gated    ×1
-                                      a/terse/docker    variant terse    gated    ×1
-                                      b/base/docker     control          ungated  ×1
-                                      b/skilled/docker  variant skilled  gated    ×1
-                                      b/terse/docker    variant terse    gated    ×1
+evals/limited.eval.ts › pinned        a/base/docker     control          ungated  ×4  runs 4 (compare default) · pinned: compare
+                                      a/skilled/docker  variant skilled  gated    ×4
+                                      a/terse/docker    variant terse    gated    ×4
+                                      b/base/docker     control          ungated  ×4
+                                      b/skilled/docker  variant skilled  gated    ×4
+                                      b/terse/docker    variant terse    gated    ×4
 excluded: —
 image docker · cursor · 3 evals
   base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

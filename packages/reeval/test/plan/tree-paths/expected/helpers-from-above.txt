@@ -1,8 +1,9 @@
-no profile · 3 evals · 4 cells · 4 attempts
+no profile · 3 evals · 4 cells · 10 attempts
+hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
 evals/helpers.eval.ts › images › from the group  fake/-/docker:images      control      gated    ×1
 evals/helpers.eval.ts › an environment           fake/built/docker:docker  control      gated    ×1
-evals/helpers.eval.ts › a compare                fake/built/docker:docker  control      ungated  ×1
-                                                 fake/own/docker:images    variant own  gated    ×1
+evals/helpers.eval.ts › a compare                fake/built/docker:docker  control      ungated  ×4  runs 4 (compare default)
+                                                 fake/own/docker:images    variant own  gated    ×4
 excluded: —
 image docker:images · cursor · 2 evals
   dockerfile evals/images/Dockerfile  reeval-dockerfile:images-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
