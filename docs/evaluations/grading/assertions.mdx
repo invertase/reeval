@@ -32,21 +32,15 @@ expect
   .toContain('divide(')
 ```
 
-`c.writeFile` writes a file into the sandbox. The diff leaves that write out. In the `evals/camelcase.eval.ts` file, add the hidden test the prompt never mentions:
-
-```ts title="evals/camelcase.eval.ts"
-  await c.writeFile('separators.test.js', hidden)
-```
-
 ## Run the project's tests
 
 `c.exec` runs a command in the sandbox and returns `exitCode`, `stdout`, and `stderr`. `toSucceed` passes when `exitCode` is 0. Await it.
 
-In the `evals/camelcase.eval.ts` file, run the repository's tests, then the hidden test:
+In the `evals/camelcase.eval.ts` file, run the repository's tests, then write a hidden test the prompt never mentions and run it:
 
 ```ts title="evals/camelcase.eval.ts"
   await expect(c.exec('node --test'), "the repo's tests pass").toSucceed()
-  // ...
+  await c.writeFile('separators.test.js', hidden)
   await expect(
     c.exec('node --test separators.test.js'),
     'the option works',

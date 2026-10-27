@@ -35,55 +35,7 @@ Record the most recent run and commit the history folder:
 
 The copy writes a `.gitignore` file in the history folder that un-ignores recorded `*.json`, `*.jsonl`, `*.md`, `*.patch`, and `*.log` files. To record an older run, pass its id. For more information about every flag, see [the `reeval record` command](/reference/cli#reeval-record).
 
-## Record automatically
-
-By default, a run is recorded only in CI. For the defaults, see [`record`](/reference/options#record) and [`history`](/reference/options#history).
-
-To record every run and keep transcripts only for failing evaluations, override both:
-
-```ts title="with-history/reeval.config.ts"
-  record: 'always',
-  history: { dir: 'history', artifacts: 'failures' },
-```
-
-When `dir` names another folder, stage that folder instead. For a runnable project, see [`with-history`](https://github.com/invertase/reeval/tree/main/examples/with-history). For more information about the `record` and `history` options, see [Options](/reference/options#record).
-
-To record one run without changing `record`, pass `--record`. It copies that run when `reeval run` ends, even under `record: 'manual'`:
-
-```bash
-npx reeval run --record
-```
-
-## Check out a run
-
-The `reeval checkout` command creates a detached Git worktree at the commit from the start of the run. The commit that adds the history folder is a different commit.
-
-When the record includes a `worktree.patch` file, the command applies it. The `worktree.patch` file holds the repository's uncommitted changes from the start of the run.
-
-Check out the most recent run:
-
-```bash
-npx reeval checkout
-```
-
-The command prints the commit, the directory, and how to remove the worktree:
-
-```text
-checked out <sha> into .reeval/checkouts/<run-id>.
-Remove it with: git worktree remove .reeval/checkouts/<run-id>
-```
-
-The `reeval checkout` command refuses a directory that already exists. The commit must be in this clone. Fetch the commit when the command says it is missing, then run `reeval checkout` again.
-
-When a dirty run has no `worktree.patch` file, the first line says the uncommitted changes were not saved. When the record kept the `worktree.patch` file, the first line includes `and applied worktree.patch`.
-
-To choose the directory, pass the run and then the path:
-
-```bash
-npx reeval checkout <run-id> ../that-run
-```
-
-Name a run with `latest`, `latest~N`, a run id or a unique prefix, or a Git SHA prefix. For more information about listing recorded runs, see [Browse history](/results/inspection/queries#browse-history).
+By default, reeval also records each run in CI. To record every run instead, see [the `record` option](/reference/options#record) and [`with-history`](https://github.com/invertase/reeval/tree/main/examples/with-history). To return to the code a recorded run used, see [Track past runs](/evaluations/recipes/track-past-runs).
 
 ## Reference
 

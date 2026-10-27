@@ -95,6 +95,24 @@ reeval sets `cause` to the first match in the order `infra`, `judge`, `check`, a
 For more information about when a cell is flaky, see [Flaky cells](/reference/statistics#flaky-cells). For more information about the columns, see [Query views](/reference/query-views#views).
 
 </Step>
+<Step title="Check out a recorded run">
+
+Create a detached Git worktree at the commit from the start of the most recent run:
+
+```bash
+npx reeval checkout
+```
+
+The command prints the commit, the directory, and how to remove the worktree:
+
+```text
+checked out <sha> into .reeval/checkouts/<run-id>.
+Remove it with: git worktree remove .reeval/checkouts/<run-id>
+```
+
+When the record holds a `worktree.patch` file, the repository's uncommitted changes from the start of the run, the command applies it. The commit must be in this clone, and the directory must not exist. To pick a run, pass `latest~N`, a run id or a unique prefix, or a Git SHA prefix, then optionally a path. For more information about the flags, see [`reeval checkout`](/reference/cli#reeval-checkout).
+
+</Step>
 </Steps>
 
 Repeat the run and the commit so each later run is in the trend.

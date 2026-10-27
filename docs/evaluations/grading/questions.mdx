@@ -15,11 +15,7 @@ In the evaluation's options, add `questions`. This excerpt pairs Claude Code's a
 questions: [{ question: 'Which multiply() is easier to read?', across: 'harness' }],
 ```
 
-`across: 'harness'` pairs agents in the same environment, and `across: 'environment'` pairs every two environments on the same agent, the baseline first. reeval asks about each pair of attempts that passed their assertions, in both orders, with the sides unlabeled. After the run, the block prints each side's wins as `won W of N`. For a runnable project, see [`with-compare-harness`](https://github.com/invertase/reeval/tree/main/examples/with-compare-harness).
-
-## Ask each attempt on its own
-
-Without `across`, reeval asks the question of each attempt on its own, once the attempt passes or fails. A question can be a string, or an object with `question` and `choices`, the answers it picks from with a short reason.
+`across: 'harness'` pairs agents in the same environment, and `across: 'environment'` pairs every two environments on the same agent, the baseline first. reeval asks about each pair of attempts that passed their assertions, in both orders, with the sides unlabeled. After the run, the block prints each side's wins as `won W of N`. For a runnable project, see [`with-compare-harness`](https://github.com/invertase/reeval/tree/main/examples/with-compare-harness). For more information about asking each attempt on its own without `across`, see [the `questions` option](/reference/options#questions).
 
 ## Set the question model
 

@@ -21,8 +21,6 @@ export default defineConfig({
 })
 ```
 
-Leave the `harness` setting unchanged.
-
 In the `.env.local` file, add the key for the analysis model:
 
 ```bash title=".env.local"
@@ -39,21 +37,30 @@ insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY, or analysis: { insights: fal
 
 For more information about the other `analysis` fields, see [the `analysis` option](/reference/options#analysis).
 
-## Read the answers
+## Analyze a run
 
-Run the evaluation:
+`reeval analyze` makes one language model call over a digest of the most recent run's facts. When a recorded run on an ancestor commit exists, the digest includes that run.
 
-```bash
-npx reeval run
-```
+1. In the `reeval.config.ts` file, set `analysis.instructions` to the question you want answered:
 
-After the attempts finish, the analysis model's answer is the line under the evaluation name. The answers to the evaluation's own questions print in the same block. For more information about questions, see [Ask questions across attempts](/evaluations/grading/questions).
+   ```ts title="reeval.config.ts"
+   analysis: {
+     model: 'google/gemini-3.8-flash',
+     instructions: 'Fewer tool calls count as a win.',
+   },
+   ```
+
+2. Run the analysis:
+
+   ```bash
+   npx reeval analyze
+   ```
+
+The analysis starts with `analysis` and the run id, then `vs` and the ancestor's run id when the digest includes one. `TL;DR`, `Suggested actions`, and `Confidence` always print. `What happened`, `Results`, `Why`, and `Anomalies` print when the model has something for them. reeval caches each analysis in the `.reeval/analysis` directory, so the same runs and model print the cached analysis. To analyze another run, pass its id, and to choose the run it compares with, pass `--vs`.
 
 ## Read insights
 
-Insights are what the agent did and why. A sentence prints under a comparison row or a failure, and a headline prints above the tally. The sentences and counts differ from run to run.
-
-The block uses this format:
+Without `reeval analyze`, `reeval run` prints insights after the attempts finish: a sentence under a comparison row or a failure, and a headline above the tally. reeval fixes the outcome and exit code first. This is the block the scripted model in [`with-analysis`](https://github.com/invertase/reeval/tree/main/examples/with-analysis) printed:
 
 ```text
 insights: 1 eval with fake (Ctrl-C skips the rest; --no-insights skips them all)
@@ -64,50 +71,7 @@ pass             adds a tested multiply function
 Every eval passed.
 ```
 
-This output comes from the scripted analysis model in [`with-analysis`](https://github.com/invertase/reeval/tree/main/examples/with-analysis), which has a runnable project.
-
-reeval fixes the outcome and exit code before the insights print.
-
-For more information about the outcome words and the `Remarks:` that can follow the tally, see [Read a run's output](/results/output).
-
-Set `analysis.insights` to `false` to skip insights on every run, or pass `--no-insights` to skip them on one.
-
-## Analyze a run
-
-`reeval analyze` makes one language model call over a digest of the most recent run's facts. When a recorded run on an ancestor commit exists, the digest includes that run. To analyze another run, pass its id, and to choose the run it compares with, pass `--vs`.
-
-In the `reeval.config.ts` file, set `analysis.instructions` to the question you want `reeval analyze` to answer:
-
-```ts title="reeval.config.ts"
-// ...
-analysis: {
-  model: 'google/gemini-3.8-flash',
-  instructions: 'Fewer tool calls count as a win.',
-},
-```
-
-Run the analysis:
-
-```bash
-npx reeval analyze
-```
-
-The analysis starts with `analysis` followed by the run id. When the digest includes an ancestor, the `analysis` line names the ancestor's run id after `vs`.
-
-The analysis prints these sections:
-
-| Section | Contents |
-| :--- | :--- |
-| `TL;DR` | One sentence, marked `high`, `medium`, or `low` |
-| `What happened` | Claims, each citing a digest id such as `F1` |
-| `Results` | Measured pass rates, tokens, tool calls, and time |
-| `Why` | Causes |
-| `Suggested actions` | At most five changes, each with one `reeval` command |
-| `Confidence` | `high`, `medium`, or `low`, and a reason |
-
-`TL;DR`, `Suggested actions`, and `Confidence` always print. reeval omits empty `What happened`, `Results`, and `Why` sections. An `Anomalies` section prints only when the model reports one.
-
-reeval writes each analysis to the `.reeval/analysis` directory. Running `reeval analyze` again, with the same runs and model, prints the cached analysis.
+To skip insights on one run, pass `--no-insights`. To skip them on every run, set `analysis.insights` to `false`. For more information about the `Remarks:` that can follow the tally, see [Read a run's output](/results/output).
 
 ## Reference
 

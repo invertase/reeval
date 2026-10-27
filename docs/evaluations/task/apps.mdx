@@ -89,18 +89,6 @@ The viewport defaults to 1280×720. In the `evals/sign-in.eval.ts` file, set the
 
 `viewport: 'full-page'` captures the whole page. `browser: false` stops reeval from using its browser on the host, and `c.capture` then throws. For more information about every key, see [the `capture` option](/reference/options#capture).
 
-## Run a background command
-
-`c.exec` with `{ background: true }` starts a command the same way as `c.serve`, without a port. It returns a handle with `kill()` only, so use a foreground `c.exec` for anything you assert on. After the server starts, in the `evals/sign-in.eval.ts` file, start a worker:
-
-```ts title="evals/sign-in.eval.ts"
-const worker = await c.exec('npm run worker', { background: true })
-// ...
-await worker.kill()
-```
-
-reeval kills a background command the evaluation leaves running when the attempt ends. For runnable projects, see [`with-capture`](https://github.com/invertase/reeval/tree/main/examples/with-capture), [`with-capture-journey`](https://github.com/invertase/reeval/tree/main/examples/with-capture-journey), and [`with-background-process`](https://github.com/invertase/reeval/tree/main/examples/with-background-process).
-
 ## Reference
 
-For more information about every argument `c.serve` takes, see [`c.serve`](/reference/attempt-context#cserve). For more information about every capture field, see [`c.capture`](/reference/attempt-context#ccapture).
+For more information about every argument `c.serve` takes, see [`c.serve`](/reference/attempt-context#cserve). For more information about every capture field, see [`c.capture`](/reference/attempt-context#ccapture). For runnable projects, see [`with-capture`](https://github.com/invertase/reeval/tree/main/examples/with-capture) and [`with-capture-journey`](https://github.com/invertase/reeval/tree/main/examples/with-capture-journey).

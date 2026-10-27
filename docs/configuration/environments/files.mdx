@@ -44,39 +44,7 @@ Pass a host directory to `directory` to copy the files in it, as the `./project`
 
 To copy into a subdirectory, pass `into`, such as `directory('./fixtures', { into: 'src' })`. `into` is the destination directory. A value that starts with `~/` places the files under the home directory. `into` uses forward slashes and doesn't contain `..`.
 
-`glob` is an ordered list of gitignore-style patterns over paths relative to the host directory. The last pattern that matches a path decides. A pattern that starts with `!` excludes that path. When a pattern includes files, reeval leaves out a file that no pattern matches. With only `!` patterns, or with `glob` omitted, every file starts included.
-
-`directory` anchors a pattern that contains a `/`, other than at the end, to the host directory. Without a `/`, a pattern matches a name at any depth. A trailing `/` matches a directory and everything in it.
-
-By default, `directory` leaves out these paths:
-
-```text
-node_modules/
-.DS_Store
-dist/
-.next/
-.turbo/
-coverage/
-.cache/
-__pycache__/
-.venv/
-venv/
-.pytest_cache/
-.mypy_cache/
-*.pyc
-.dart_tool/
-/build/
-/target/
-.gradle/
-.idea/
-.vscode/
-```
-
-A leading `/` anchors a pattern to the top of the host directory. The `/build/` and `/target/` patterns don't match a nested directory of that name. The other patterns match that name at any depth. `directory` copies a `vendor/` directory because an offline build needs it.
-
-To switch the default ignores off, set `defaultIgnores` to `false`. `directory` always leaves out the `.git` directory. A `glob` pattern can't include a path excluded by the defaults.
-
-`directory` doesn't copy an empty directory. Calling `directory` fails when the directory is missing, or when no file matches. A later entry in `files` replaces a copied file.
+By default, `directory` leaves out paths such as the `node_modules/` directory, and always leaves out the `.git` directory. A later entry in `files` replaces a copied file. For more information about pattern order, anchoring, and the default ignores, see [the directory helper](/reference/environment-helpers#directory).
 
 ## Reference
 

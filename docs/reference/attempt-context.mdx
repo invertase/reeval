@@ -365,7 +365,7 @@ const changed = turn.diff.files.map((file) => file.path)
 </Property>
 
 <Property name="transcript" type="TranscriptEvent[]" required>
-  Normalized events, one per message or tool call merged with its result. Each has `ts` (ISO 8601) and `atMs` (milliseconds from the start of the turn).
+  Normalized events, one per message or tool call merged with its result. For each event type, see [`TranscriptEvent`](#transcriptevent).
 </Property>
 
 <Property name="usage" type="TokenUsage | null" required>
@@ -392,10 +392,16 @@ const changed = turn.diff.files.map((file) => file.path)
   Reads a sandbox file, as `c.readFile()` does, and returns the text or `null`.
 </Property>
 
+## `TranscriptEvent`
+
+A `TranscriptEvent` is one entry in `turn.transcript`. Every event has `ts`, the wall-clock time as an ISO 8601 string, and `atMs`, milliseconds from the start of the turn. Its `type` is one of the values below, and each subsection lists the fields that type adds.
+
 ### `text`
 
+A message the harness sent.
+
 <Property name="text" type="string" required>
-  The message.
+  The message's text.
 </Property>
 
 <Property name="durationMs" type="number | null" required>

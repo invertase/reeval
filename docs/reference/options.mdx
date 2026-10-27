@@ -152,11 +152,11 @@ Every factory takes these options beside `model`.
 
 Cursor's agent calls only Cursor's API, and Antigravity's CLI calls only Google's. reeval runs pi on its Gemini key, and fx on `vercel()` or OpenAI's API.
 
-## Harness behavior
+### Harness behavior
 
-Each harness reads the environment's rules, skills, and MCP servers from its own places and records its own events. The harness pages hold each one's key and plugins.
+Each value of `harness` reads the environment's `rules`, `skills`, and `mcp` servers from its own places and records its own events. Each row is one harness. The harness pages hold each one's key and plugins.
 
-### Support by harness
+#### Support by harness
 
 [//]: # (generated:harness-matrix)
 
@@ -174,7 +174,7 @@ Each harness reads the environment's rules, skills, and MCP servers from its own
 
 [//]: # (/generated:harness-matrix)
 
-### Rules and skills
+#### Rules and skills
 
 [//]: # (generated:harness-layout)
 
@@ -198,7 +198,7 @@ Each harness reads the environment's rules, skills, and MCP servers from its own
 
 For more information about writing rules and placing skills, see [Add project rules](/configuration/environments/rules) and [Give the agent skills](/configuration/environments/skills).
 
-### MCP servers
+#### MCP servers
 
 - **Cursor:** `stdio`, `http`, and `sse`, as `{ type: 'stdio', command, args, env }` or `{ type, url, headers }`.
 - **Claude Code:** `stdio`, `http`, and `sse`, in the shape of the `.mcp.json` file: `{ type: 'stdio', command, args, env }` or `{ type, url, headers }`.
@@ -212,7 +212,7 @@ For more information about writing rules and placing skills, see [Add project ru
 
 For more information about placing MCP servers, see [Connect MCP servers](/configuration/environments/mcp-servers).
 
-### Token usage
+#### Token usage
 
 Each turn's `usage` is null when the harness reports no tokens.
 
@@ -228,7 +228,7 @@ Each turn's `usage` is null when the harness reports no tokens.
 
 For more information about the token fields, see [`TokenUsage`](/reference/run-record#tokenusage).
 
-### Served models
+#### Served models
 
 - **Cursor:** each turn's `model` is the served model with its parameters, in the form `model[param=value]`. The attempt's `servedModels` is null, because the API requests name no model.
 - **Claude Code:** each turn's `model` is the model id Claude Code reports. `servedModels` is null, because the API requests name no model.
@@ -242,7 +242,7 @@ For more information about the token fields, see [`TokenUsage`](/reference/run-r
 
 For more information about the attempt fields, see [`AttemptRecord`](/reference/run-record#attemptrecord).
 
-### Web search and fetch events
+#### Web search and fetch events
 
 A turn's `unreported` list names the events a harness can't report, and the matchers refuse a turn that lists their event.
 
@@ -258,7 +258,7 @@ A turn's `unreported` list names the events a harness can't report, and the matc
 
 For more information about the matchers, see [`toHaveSearched()`](/reference/matchers#tohavesearched) and [`toHaveFetched()`](/reference/matchers#tohavefetched). For more information about the automatic hosts, see [Block non-automatic hosts](/configuration/environments/egress#block-non-automatic-hosts).
 
-### OpenCode providers
+#### OpenCode providers
 
 `opencode()` runs on any provider whose key OpenCode sends in a header on known hosts. The part of the model id before the first `/` picks the provider. reeval reads the provider's variable from the `Key` column, swaps it into the `Header` on each request to the `Hosts`, and refuses it anywhere else. A host with a `{NAME}` placeholder takes that variable from the host too, or the provider's default. For more information about the harness, see [OpenCode harness](/configuration/agents/opencode).
 
@@ -567,7 +567,7 @@ For more information about environments, see [Define an environment](/configurat
 `env` is the variables and secrets the sandbox gets.
 
 <Property name="env" type="Record<string, string | Secret>" optional>
-  Names use letters, digits, and `_`, not starting with a digit. A value is a string or a secret; reeval refuses a literal string under a secret-looking name.
+  Names use letters, digits, and `_`, not starting with a digit. A value is a string or a secret; reeval refuses a literal string under a secret-looking name. `env` merges by name: the config, a profile, a group, and an evaluation merge in first, and an environment's own value takes precedence.
 </Property>
 
 ## `egress`
