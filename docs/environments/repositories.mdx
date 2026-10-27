@@ -1,6 +1,6 @@
 ---
 title: "Start from a repository"
-description: "Start the agent in a copy of your repository at a pinned ref."
+description: "Start the agent in a copy of a repository at a pinned ref."
 ---
 
 The `git()` helper gives the agent existing code to work on. reeval fetches the repository on the host before any attempt starts, copies its tree into the workspace, writes `files` there, then runs `setup`. For more information about the other fields of an environment, see [Environments](/environments).
@@ -56,7 +56,7 @@ For an `https://` URL, pass `token` with the name of a host variable. reeval rea
   }),
 ```
 
-In your shell or the `.env.local` file, set the variable. reeval refuses the file when the token itself is in the URL or in `token`. For an SSH URL or a local repository, the fetch uses this machine's own Git credentials, and reeval refuses `token`.
+In the shell or the `.env.local` file, set the variable. reeval refuses the file when the token itself is in the URL or in `token`. For an SSH URL or a local repository, the fetch uses this machine's own Git credentials, and reeval refuses `token`.
 
 ## Reference
 
