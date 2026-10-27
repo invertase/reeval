@@ -7,7 +7,7 @@ The studio is a local web app over the same run history the `reeval history` com
 
 ## Open the studio
 
-The `reeval studio` command serves the studio on `127.0.0.1` and reads the history directory from your `reeval.config.ts` file, plus the unrecorded runs in the `.reeval/runs` directory. Open it in your browser:
+The `reeval studio` command serves the studio on `127.0.0.1` and reads the history directory from the `reeval.config.ts` file, plus the unrecorded runs in the `.reeval/runs` directory. Open it in the browser:
 
 ```bash
 npx reeval studio --open
@@ -33,7 +33,7 @@ While the studio is open, a `reeval run` in the same project appears at the top 
 npx reeval run
 ```
 
-The run shows a **Running** badge with the attempts finished so far, and each attempt's transcript grows as the harness works. When the run writes its record, the studio moves it into the history and keeps its address. A run whose process exits before it writes the record, or that produces no activity for fifteen seconds, shows **Stopped**.
+The run shows a **Running** badge with the attempts finished so far, and each attempt's transcript becomes readable once the attempt finishes, while the run continues. When the run writes its record, the studio moves it into the history and keeps its address. A run whose process exits before it writes the record, or that produces no activity for fifteen seconds, shows **Stopped**.
 
 ## Export a static site
 
