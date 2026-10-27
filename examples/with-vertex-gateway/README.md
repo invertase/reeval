@@ -65,4 +65,4 @@ Without a project in `GOOGLE_CLOUD_PROJECT` or `vertex({ project })`, the plan s
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, the `vertex` profile, and the real agents from `../profiles.ts` |
 
-Vertex AI, fallback and pins are in the [Gateways](../../docs/reference/gateway.mdx) reference.
+Vertex AI, fallback and pins are in the [Vertex AI](../../docs/configuration/gateways/vertex-ai.mdx) gateway page.

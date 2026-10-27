@@ -178,7 +178,7 @@ export function createAgentHarness(
       })
       if (!isDockerSandbox(sandbox)) {
         throw new InfraError(
-          `The ${catalog.name} harness needs the Docker sandbox: set sandbox: docker() or podman() for this eval`,
+          `The ${catalog.name} harness needs the Docker sandbox: set sandbox: docker() for this eval, or use fakeHarness() with fakeSandbox()`,
         )
       }
       const refusedSince = (from: number) =>

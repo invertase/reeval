@@ -114,7 +114,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
   reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, an
                                 environment, an eval that runs in it, .gitignore entries and a
                                 package.json script; asks which agent, then checks Docker
-    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex or
+    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex, fx or
                                 grok-build: the config's harness
     -y, --yes                   Don't ask: take the defaults (--harness cursor)
     --bare                      Only reeval.config.ts, .gitignore and package.json: no environment
@@ -317,7 +317,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
 export const GLOBAL: FlagName[] = ['config', 'help', 'version']
 
 const HELP_FOOTER = `Options: --config <path> (default: the nearest reeval.config.ts, or .mts, .cts, .js, .mjs, .cjs,
-in the current directory or above)
+or reeval.yaml, in the current directory or above)
 Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted (Ctrl-C),
 143 terminated (SIGTERM)
 `

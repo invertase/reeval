@@ -448,8 +448,8 @@ class Cell(TypedDict):
     key: str
     role: CellRole
     # The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts
-    # with the engine (`docker` by default). It adds `:` and the sanitised final component of
-    # `image` or `from`, or for `dockerfile` the sanitised filename (the parent directory name
+    # with the engine (`docker` by default). It adds `:` and the sanitized final component of
+    # `image` or `from`, or for `dockerfile` the sanitized filename (the parent directory name
     # when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps
     # append `+` and an eight-character hash.
     sandbox: str

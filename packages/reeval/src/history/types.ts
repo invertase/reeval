@@ -33,7 +33,7 @@ export const SCHEMA_VERSION = 1
 export type ArtifactLevel = 'all' | 'failures' | 'none'
 export type RecordMode = 'manual' | 'ci' | 'always'
 
-/** `path` is relative to the run's artefact directory; `sha256` is of the bytes on disk. */
+/** `path` is relative to the run's artifact directory; `sha256` is of the bytes on disk. */
 export type FileRef = { path: string; sha256: string; bytes: number }
 
 /** A generic attempt file from `c.capture()`. */
@@ -66,7 +66,7 @@ export type GitInfo = {
   /** sha256 of the uncommitted changes (tracked and untracked, as a binary patch), when dirty. */
   diffHash: string | null
   /**
-   * Those changes are stored as the `worktree.patch` file in the artefact directory. Applying it
+   * Those changes are stored as the `worktree.patch` file in the artifact directory. Applying it
    * to `sha` reproduces the workspace.
    */
   worktreePatch: FileRef | null
@@ -287,7 +287,7 @@ export type EvalEntry = {
   id: string
   /** Used to match an evaluation across runs; equal to `id`. */
   key: string
-  /** Directory name inside the artefact directory, from `key`. */
+  /** Directory name inside the artifact directory, from `key`. */
   slug: string
   file: string
   group: string[]
@@ -632,7 +632,7 @@ export type RunRecord = {
     configHash: string
   }
   cost: Cost
-  /** Which artefacts sit next to this record. Refs to files that weren't kept are removed. */
+  /** Which artifacts sit next to this record. Refs to files that weren't kept are removed. */
   artifacts: ArtifactLevel
   redaction: { version: 1 }
   summary: RunSummary
