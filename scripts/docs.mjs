@@ -353,7 +353,7 @@ async function blocks() {
   out.set(
     'option-keys',
     [
-      '| Key | `reeval.config.ts` | Profile `defaults` | Group or eval | Profile `limit` |',
+      '| Key | `reeval.config.ts` | Profile `defaults` | Group or evaluation | Profile `limit` |',
       '|---|---|---|---|---|',
       ...all.map(
         (k) =>
@@ -442,6 +442,13 @@ for (const file of mdxFiles()) {
 }
 for (const name of generated.keys()) {
   if (!used.has(name)) problems.push(`generated block "${name}" isn't used on any page`)
+}
+
+// The option-keys table's header says "evaluation" in full, as the prose does.
+if (/Group or eval(?!uation)/.test(generated.get('option-keys').split('\n')[0])) {
+  problems.push(
+    'the option-keys table header says "Group or eval": write "Group or evaluation" (scripts/docs.mjs)',
+  )
 }
 
 // ---- Coverage: things that exist in the code must be named in the reference ------------------
