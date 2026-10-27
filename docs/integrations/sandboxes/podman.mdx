@@ -11,7 +11,7 @@ description: "Run each attempt in one Podman container on your machine."
 
 - **Podman {{ podman }} or later.** `podman()` needs its rootless bridge network.
 - **On macOS and Windows, a running machine.** reeval reaches it through the machine's API socket or named pipe, unless `CONTAINER_HOST` or `CONTAINER_CONNECTION` names another host. The machine needs at least 4 GB of memory for the default `memory` limit; `reeval doctor` warns below that.
-- **Rootless, the `cpu`, `memory`, and `pids` cgroup controllers.** Your user account's cgroup must delegate them. A systemd drop-in for the `user@.service` unit with `Delegate=cpu cpuset io memory pids` delegates them, after a new login.
+- **Rootless, the `cpu`, `memory`, and `pids` cgroup controllers.** The cgroup of the account that runs reeval must delegate them. A systemd drop-in for the `user@.service` unit with `Delegate=cpu cpuset io memory pids` delegates them, after a new login.
 
 ## `podman()`
 
