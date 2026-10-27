@@ -32,11 +32,11 @@ control misses:
 ```text
 pass             rejects division by zero
   arm                pass
-  math               0 of 1
-  errors-skill       1 of 1  can't tell yet
-  errors-doc         1 of 1  can't tell yet
+  math               0 of 4
+  errors-skill       4 of 4  helped
+  errors-doc         4 of 4  helped
   check              math    errors-skill  errors-doc
-  throws RangeError  0 of 1  1 of 1        1 of 1
+  throws RangeError  0 of 4  4 of 4        4 of 4
     expected command to succeed, exit code 1
 ```
 
@@ -49,14 +49,14 @@ pnpm reeval query "SELECT a_environment, b_environment, a_pass, b_pass, points F
 
 ```text
 a_environment  b_environment  a_pass  b_pass  points
-errors-skill   math           1       0       1
-errors-doc     math           1       0       1
-errors-doc     errors-skill   1       1       0
+errors-skill   math           4       0       1
+errors-doc     math           4       0       1
+errors-doc     errors-skill   4       4       0
 ```
 
 The last row is the question the compare asks: the doc and the skill tie on this agent, so
-either way of handing it the convention works. On a real agent, `pnpm eval --runs 4` gives each
-arm enough tries for a verdict.
+either way of handing it the convention works. The eval sets no `runs`, so each arm gets four
+tries, enough for a verdict.
 
 | File | What it is |
 |---|---|

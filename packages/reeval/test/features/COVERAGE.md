@@ -19,7 +19,7 @@
 | Config and option mistakes exit 2 with the fix | ✓ 4 | — | — | — | — | — |
 | `.env` and `.env.local` loading, from the config's directory | ✓ 1 | — | — | — | — | — |
 | Finding the nearest `reeval.config.*` upward from the current directory; `--config` wins | ✓ 2 | — | ● 1 | ● 1 | — | — |
-| `harness` lists × `runs`, and `--runs` | ✓ 2 | ✓ 2 | — | — | — | — |
+| `harness` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once | ✓ 2 | ✓ 8 | — | — | — | — |
 | Option cascade through groups and evals; harness edits (`{ add }`, `{ only }`, functions) | ✓ 2 | ✓ 1 | — | — | — | — |
 | `compare`: control, variants, lift and `minLift` | ✓ 2 | ✓ 2 | ● 1 | ● 1 | — | — |
 | `evaluate.each`: one eval per case, pooled into a family with a pass rate and a paired lift that `minLift` gates; `{ pool: false }` | ✓ 2 | ✓ 3 | ● 1 | — | — | — |
@@ -192,7 +192,7 @@
 | `flaky_cells` pooled over comparable runs, `flaky` from a minimum n and `mixed` below it, and `drift` with changed paths and a `noise` flag | ✓ 2 | — | — | — | — | — |
 | Effort (tool calls, agent time, and tokens when both sides reported usage): the effort table in `reeval run` and `summary.md` from four counted tries a side, beside lift in `reeval compare -v` and the studio | ✓ 2 | — | — | — | — | — |
 | Effort separation per metric (`no overlap` at 3 vs 3 or more, directional in `reeval analyze`) | ✓ 1 | ✓ 1 | — | — | — | — |
-| The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will say `can't tell yet` whatever happens | — | ✓ 5 | — | — | — | — |
+| The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will say `can't tell yet` whatever happens; a profile's `limit.runs` cut is named | — | ✓ 6 | — | — | — | — |
 | Contrasts: every arm side by side (checks, effort) in the run output, `reeval show` and `summary.md`; each pair of arms on one harness in `reeval query contrasts` and the digest | ✓ 1 | — | — | — | — | — |
 | Compare questions: pairs whose two orders disagree are splits, counted on the answer line, each pair head to head with three sides or more, `reeval query question_pairs` and `votes`, and the digest | ✓ 2 | — | — | — | — | — |
 | Labels and names: judges and `toSucceed` checks by their `expect` label in judge rates, `reeval show` and `summary.md` (a long script on one line), tokens as `430k vs 1,094k` everywhere, and a compare’s control named by its environment in the digest | ✓ 1 | — | — | — | — | — |

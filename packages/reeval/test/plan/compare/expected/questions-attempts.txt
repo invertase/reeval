@@ -1,17 +1,17 @@
-no profile · 4 evals · 10 cells · 12 attempts
-hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)
+no profile · 4 evals · 10 cells · 24 attempts
+hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
 evals/questions-attempts.eval.ts › asked of each attempt               a/-/docker        control          gated               ×1
                                                                        b/-/docker        control          gated               ×1
                                                                        question: How did the agent find the failing test? · shows task, output, diff, transcript · each attempt · 2 attempts · no language model
 evals/questions-attempts.eval.ts › with choices                        a/-/docker        control          gated passRate 0.5  ×2
                                                                        b/-/docker        control          gated passRate 0.5  ×2
                                                                        question: Did the agent run the tests first? · shows task, output, diff, transcript · each attempt · 4 attempts · yes / no · no language model
-evals/questions-attempts.eval.ts › beside a compare                    a/base/docker     control          ungated             ×1
-                                                                       a/skilled/docker  variant skilled  gated               ×1
-                                                                       b/base/docker     control          ungated             ×1
-                                                                       b/skilled/docker  variant skilled  gated               ×1
-                                                                       question: What did the agent read first? · shows task, output, diff, transcript · each attempt · 4 attempts · no language model
-                                                                       question: Which is cleaner? · shows task, diff · environment · 2 pairs · no language model
+evals/questions-attempts.eval.ts › beside a compare                    a/base/docker     control          ungated             ×4  runs 4 (compare default)
+                                                                       a/skilled/docker  variant skilled  gated               ×4
+                                                                       b/base/docker     control          ungated             ×4
+                                                                       b/skilled/docker  variant skilled  gated               ×4
+                                                                       question: What did the agent read first? · shows task, output, diff, transcript · each attempt · 16 attempts · no language model
+                                                                       question: Which is cleaner? · shows task, diff · environment · 8 pairs · no language model
 evals/questions-attempts.eval.ts › across harnesses without a compare  a/-/docker        control          gated               ×1
                                                                        b/-/docker        control          gated               ×1
                                                                        question: Which agent explained its change better? · shows task, diff · harness · 1 pair · no language model

@@ -1,0 +1,7 @@
+profile pr (--profile) · 1 evals · 2 cells · 2 attempts
+hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (profile pr's limit.runs caps it; --runs 4 replaces it)
+evals/r.eval.ts › runs from the group › compare  a/base/docker     control          ungated  ×1  runs 2 → 1 (profile pr)
+                                                 a/skilled/docker  variant skilled  gated    ×1
+excluded: —
+image docker · cursor · 1 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

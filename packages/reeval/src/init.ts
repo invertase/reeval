@@ -96,9 +96,9 @@ export default defineConfig({
   profiles: {
     // PR runs in CI: one attempt per cell, no variants.
     pr: { limit: { runs: 1, compare: false }, budget: { attempts: 20 } },
-    // Thorough: three attempts per cell, recorded every time.
+    // Thorough: four attempts per cell, the fewest a compare's lift needs, recorded every time.
     nightly: {
-      defaults: { runs: 3 },
+      defaults: { runs: 4 },
       record: 'always',
       budget: { attempts: 80, duration: '2h' },
     },

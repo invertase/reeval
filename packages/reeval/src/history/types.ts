@@ -617,6 +617,7 @@ export type RunRecord = {
   config: {
     sandbox: string
     environment: string | null
+    /** The config's `runs`; 1 when it sets none, though a compare's cells then run 4 each. */
     runs: number
     judgeModel: string | null
     threshold: number

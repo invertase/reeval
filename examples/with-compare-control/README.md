@@ -30,17 +30,17 @@ one profile you need.
 ```text
 pass             tests the new function
   arm                  pass
-  math                 0 of 1
-  testing              1 of 1  can't tell yet
+  math                 0 of 4
+  testing              4 of 4  helped
   check                math    testing
-  multiply has a test  0 of 1  1 of 1
+  multiply has a test  0 of 4  4 of 4
     expected test/math.test.js to match /multiply\(/
   +1 more passed
 ```
 
 The run record says where the control came from: `evals[].compare` is
-`{ "baseline": "math", "from": "environment" }`. One try a side can't give a verdict;
-`pnpm eval --runs 4` can.
+`{ "baseline": "math", "from": "environment" }`. The eval sets no `runs`, so each arm runs four
+times, enough for the verdict.
 
 | File | What it is |
 |---|---|

@@ -1660,7 +1660,11 @@ type EvalOptionFields = {
    * Not an environment: it does not invent skills, files or a name.
    */
   sandbox?: SandboxDescriptor
-  /** Attempts per cell. */
+  /**
+   * Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
+   * whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
+   * included.
+   */
   runs?: number
   /** How each cell's attempts decide its outcome; default `'all'`. */
   gate?: GatePolicy
@@ -1920,7 +1924,7 @@ export type ReevalConfig = {
   sandbox?: SandboxDescriptor
   /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
   environment?: Environment
-  /** Attempts per cell; default 1. */
+  /** Attempts per cell; unset, a compare with variants runs 4 a side and anything else once. */
   runs?: number
   /** How each cell's attempts decide its outcome; default `'all'`. */
   gate?: GatePolicy
@@ -2086,7 +2090,8 @@ export type ResolvedConfig = {
    */
   sandbox: SandboxDescriptor
   environment: Environment | undefined
-  runs: number
+  /** Unset leaves each eval its default: 4 for a compare with variants, otherwise 1. */
+  runs: number | undefined
   /** Unset means `'all'`; kept unset so the plan can hint when `runs > 1`. */
   gate: GatePolicy | undefined
   env: EnvVars

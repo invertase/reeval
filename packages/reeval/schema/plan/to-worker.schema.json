@@ -2426,6 +2426,7 @@
           "type": "string"
         },
         "runs": {
+          "description": "Unset leaves each eval its default: 4 for a compare with variants, otherwise 1.",
           "type": "number"
         },
         "sandbox": {

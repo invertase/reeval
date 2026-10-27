@@ -647,7 +647,7 @@ export function resolveConfig(
     harness,
     sandbox: user.sandbox ?? docker(),
     environment: user.environment,
-    runs: user.runs ?? 1,
+    runs: user.runs,
     gate: user.gate,
     env: user.env ?? {},
     ...(user.egress !== undefined ? { egress: user.egress } : {}),

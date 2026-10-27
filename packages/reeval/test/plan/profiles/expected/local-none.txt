@@ -1,9 +1,9 @@
-no profile · 5 evals · 7 cells · 11 attempts
-hint: 2 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
-hint: 2 compares run 1 or 2 times per cell; a verdict needs 4 runs a side, so their lift and effort will say can't tell yet (runs: 4)
+no profile · 5 evals · 7 cells · 17 attempts
+hint: 3 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+hint: 1 compare runs 2 times per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)
 evals/p.eval.ts › plain                a/-/fake        control          gated    ×3
-evals/p.eval.ts › compared             a/plain/fake    control          ungated  ×1
-                                       a/skilled/fake  variant skilled  gated    ×1
+evals/p.eval.ts › compared             a/plain/fake    control          ungated  ×4  runs 4 (compare default)
+                                       a/skilled/fake  variant skilled  gated    ×4
 evals/p.eval.ts › regression           a/plain/fake    control          ungated  ×2
                                        a/skilled/fake  variant skilled  gated    ×2
 evals/p.eval.ts › own harness          b/-/fake        control          gated    ×1

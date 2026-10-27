@@ -15,6 +15,8 @@ const unused =
 
 export default defineConfig({
   harness: fakeHarness({}),
+  // One attempt a cell, where a compare would otherwise run 4 a side.
+  runs: 1,
   sandbox: root,
   // Present so the fixture can prove a named env does not inherit this sandbox.
   environment: defineEnvironment('config', { sandbox: unused }),

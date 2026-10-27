@@ -80,8 +80,17 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'matrix.harness-runs',
     area: 'Config and selection',
-    name: '`harness` lists × `runs`, and `--runs`',
-    plan: ['matrix/default', 'matrix/runs-override'],
+    name: '`harness` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once',
+    plan: [
+      'matrix/default',
+      'matrix/runs-override',
+      'runs-default/default',
+      'runs-default/runs-flag',
+      'runs-default/config-runs',
+      'runs-default/profile-defaults',
+      'runs-default/profile-limit',
+      'runs-default/compare-off',
+    ],
     unit: ['reeval/test/unit.test.ts', 'reeval/test/options.test.ts'],
   },
   {
@@ -1490,13 +1499,14 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'plan.verdict-hints',
     area: 'Records and studio',
-    name: "The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will say `can't tell yet` whatever happens",
+    name: "The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will say `can't tell yet` whatever happens; a profile's `limit.runs` cut is named",
     plan: [
       'compare/verdicts',
       'compare/verdicts-no-control',
       'compare/verdicts-some-cases',
       'compare/each-pooled',
       'compare/study',
+      'runs-default/profile-limit-capped',
     ],
   },
   {

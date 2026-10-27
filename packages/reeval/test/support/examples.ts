@@ -175,19 +175,19 @@ export const EXAMPLES: Record<string, Example> = {
 
   // Compare
   'with-skill-lift': { run: { 'fake/math/fake': fail(4), 'fake/changelog/fake': pass(4) } },
-  'with-compare-control': { run: { 'fake/math/fake': fail(1), 'fake/testing/fake': pass(1) } },
+  'with-compare-control': { run: { 'fake/math/fake': fail(4), 'fake/testing/fake': pass(4) } },
   'with-min-lift': { run: { 'fake/math/fake': fail(4), 'fake/jsdoc/fake': pass(4) } },
   'with-two-variants': {
     run: {
-      'fake/math/fake': fail(1),
-      'fake/errors-skill/fake': pass(1),
-      'fake/errors-doc/fake': pass(1),
+      'fake/math/fake': fail(4),
+      'fake/errors-skill/fake': pass(4),
+      'fake/errors-doc/fake': pass(4),
     },
   },
   'with-rules-ab': {
-    run: { 'fake/short-rules/fake': fail(1), 'fake/detailed-rules/fake': pass(1) },
+    run: { 'fake/short-rules/fake': fail(4), 'fake/detailed-rules/fake': pass(4) },
   },
-  'with-compare-questions': { run: { 'fake/math/fake': pass(1), 'fake/errors/fake': pass(1) } },
+  'with-compare-questions': { run: { 'fake/math/fake': pass(4), 'fake/errors/fake': pass(4) } },
   'with-compare-harness': {
     run: { needs: 'ANTHROPIC_API_KEY, OPENAI_API_KEY and Docker' },
     plain: { harness: ['claude-code:claude-sonnet-5', 'codex:gpt-5.6-luna'], sandbox: ['docker'] },
@@ -207,7 +207,7 @@ export const EXAMPLES: Record<string, Example> = {
     profiles: { docker: fakeInDocker },
   },
   'with-capture-compare': {
-    run: { 'fake/site/fake': pass(1), 'fake/brand/fake': pass(1) },
+    run: { 'fake/site/fake': pass(4), 'fake/brand/fake': pass(4) },
     profiles: { docker: fakeInDocker },
   },
 

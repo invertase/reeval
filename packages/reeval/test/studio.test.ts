@@ -150,7 +150,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
 const compare = process.env.REEVAL_TEST_GATE_ALL
   ? { baseline: plain, variants: [skilled], gate: 'all' as const }
   : { baseline: plain, variants: [skilled] }
-evaluate('writes ok', { compare }, async (c) => {
+evaluate('writes ok', { runs: 1, compare }, async (c) => {
   await c.send('write ok.txt')
   await expect(c.exec('test -f ok.txt')).toSucceed()
 })

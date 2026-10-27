@@ -338,10 +338,20 @@ function verdictHint(rows: PlanRow[]): string[] {
   const counts = [...new Set(few.map((r) => r.plan.runs))].sort((a, b) => a - b)
   const runs = counts.length === 1 && counts[0] === 1 ? 'once' : `${counts.join(' or ')} times`
   const one = few.length === 1
+  const capped = new Set(few.map((r) => r.plan.notes.map(cappedBy).find(Boolean)))
+  const [profile] = capped
+  const fix =
+    capped.size === 1 && profile
+      ? `profile ${profile}'s limit.runs caps ${one ? 'it' : 'them'}; --runs ${VERDICT_MIN_RUNS} replaces it`
+      : `runs: ${VERDICT_MIN_RUNS}`
   return [
-    `${plural(few.length, 'compare')} ${one ? 'runs' : 'run'} ${runs} per cell; a verdict needs ${VERDICT_MIN_RUNS} runs a side, so ${one ? 'its' : 'their'} lift and effort will say can't tell yet (runs: ${VERDICT_MIN_RUNS})`,
+    `${plural(few.length, 'compare')} ${one ? 'runs' : 'run'} ${runs} per cell; a verdict needs ${VERDICT_MIN_RUNS} runs a side, so ${one ? 'its' : 'their'} lift and effort will say can't tell yet (${fix})`,
   ]
 }
+
+/** The profile whose `limit.runs` cut a row's runs, from its `runs a → b (profile name)` note. */
+const cappedBy = (note: string): string | undefined =>
+  /^runs \d+ → \d+ \(profile (.+)\)$/.exec(note)?.[1]
 
 /**
  * One line per compared family with too few cases for its paired lift to get a verdict: one

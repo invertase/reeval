@@ -3,7 +3,7 @@ title: The matrix
 description: How harnesses, compare variants and runs multiply into cells and attempts.
 ---
 
-reeval never runs an eval once. It runs it once per cell, and `runs` times per cell, each time in a fresh sandbox:
+reeval never runs an eval once. It runs it once per cell, and `runs` times per cell, each time in a fresh sandbox. `runs` defaults to 1, or to 4 for a `compare` with variants, so each side has the tries a lift verdict needs:
 
 ```text
 attempts = harnesses × (control + variants) × runs
@@ -111,7 +111,7 @@ reeval run --dry-run --json --config reeval.fake.config.ts skill
     "evals": 1,
     "skipped": 0,
     "cells": 2,
-    "attempts": 2
+    "attempts": 8
   },
 …
   "evals": [
@@ -126,7 +126,7 @@ reeval run --dry-run --json --config reeval.fake.config.ts skill
           "sandbox": "fake",
           "role": "control",
           "gate": "none",
-          "runs": 1,
+          "runs": 4,
           "brokered": [],
           "egress": {
             "policy": "allow-all",
@@ -151,20 +151,20 @@ The control's `gate` is `"none"`: under the default `compare.gate: 'variants'`, 
 
 ## A real suite
 
-A project of 18 evals, one with a variant, so 19 cells.
+A project of 18 evals, one with a variant, so 19 cells. The compare sets no `runs`, so its two cells run 4 times each.
 
 ```text
-plan  18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4)
+plan  18 evals · 19 cells · 25 attempts · ~75m 00s serial (~18m 45s at concurrency 4)
 eval                                                              harnesses  variants  runs  attempts  notes
 evals/brokering.eval.ts › the agent authenticates without seeing…   1          —         1     1
 …
 evals/gemini.eval.ts › the agent calls Gemini with a brokered key   1          —         1     1         brokered: GOOGLE_GENAI_API_KEY → generativelanguage.googleapis.com; GEMINI_API_KEY → generativelanguage.googleapis.com
 …
-evals/skill.eval.ts › house greeting › greets in the house style    1          1         1     2
+evals/skill.eval.ts › house greeting › greets in the house style    1          1         4     8         runs 4 (compare default)
 evals/sqlite.eval.ts › queries a seeded SQLite database             1          —         1     1
 ```
 
-With `--profile nightly` (`defaults: { runs: 3 }`) the same suite is 57 attempts. The estimate is the median of each eval's recent attempts on that harness, else 3 minutes each (for `fakeHarness`, 1 second in `fakeSandbox()` and 30 seconds in a container).
+With `--profile nightly` (`defaults: { runs: 4 }`) the same suite is 76 attempts. The estimate is the median of each eval's recent attempts on that harness, else 3 minutes each (for `fakeHarness`, 1 second in `fakeSandbox()` and 30 seconds in a container).
 
 <Info>
   An eval has one sandbox. Comparing toolchains needs different checks, so that's a separate eval, not another axis.

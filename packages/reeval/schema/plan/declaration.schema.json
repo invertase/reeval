@@ -1005,7 +1005,7 @@
               ]
             },
             "runs": {
-              "description": "Attempts per cell.",
+              "description": "Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
               "type": "number"
             },
             "sandbox": {
@@ -1304,7 +1304,7 @@
               ]
             },
             "runs": {
-              "description": "Attempts per cell.",
+              "description": "Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
               "type": "number"
             },
             "sandbox": {
@@ -1540,7 +1540,7 @@
               ]
             },
             "runs": {
-              "description": "Attempts per cell.",
+              "description": "Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
               "type": "number"
             },
             "sandbox": {
