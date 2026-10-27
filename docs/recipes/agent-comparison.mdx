@@ -77,20 +77,20 @@ Here `codex:gpt-5.6-luna` failed `adds the ai package` in one attempt, so it fai
 Read each agent's tool calls, time, and tokens from the `effort` view, because the block prints none of them for these cells. The view holds each cell's median tool calls, agent seconds, and tokens. Select the last run's rows:
 
 ```bash
-npx reeval query "SELECT harness, tools_median, agent_s_median
-  FROM effort WHERE run_id = :run" --run last
+npx reeval query "SELECT harness, tools_median, agent_s_median,
+  tokens_median FROM effort WHERE run_id = :run" --run last
 ```
 
 The numbers differ:
 
 ```text
-harness                      tools_median  agent_s_median
-cursor:composer-2.5          12            0.4
-claude-code:claude-sonnet-5  9             0.3
-codex:gpt-5.6-luna           21            0.9
+harness                      tools_median  agent_s_median  tokens_median
+cursor:composer-2.5          12            0.4             41200
+claude-code:claude-sonnet-5  9             0.3             36800
+codex:gpt-5.6-luna           21            0.9             58100
 ```
 
-An agent that passes with fewer tool calls and seconds did the task with less work. To add tokens, select `tokens_median`. For more information about the `reeval query` command, see [Query past runs](/results/queries).
+The medians describe each agent's attempts. They do not show that one agent did less work: reeval calls a difference `fewer` or `more` only when a Mann-Whitney significance test gives p below 0.05, and it runs that test between a variant and its baseline, so the `verdict` columns are empty for these cells. For more information about the test, see [Statistics](/results/compare/statistics). For more information about the `reeval query` command, see [Query past runs](/results/queries).
 
 </Step>
 </Steps>

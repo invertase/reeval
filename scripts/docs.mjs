@@ -24,6 +24,7 @@ import {
   renderOpenCodeProviders,
   renderPlugins,
 } from './harness-matrix.mjs'
+import { recipeProblems } from './recipe-claims.mjs'
 
 const root = join(import.meta.dirname, '..')
 const docsDir = join(root, 'docs')
@@ -647,6 +648,7 @@ for (const { file, text } of gatewayPages) {
 }
 
 problems.push(...(await import('./gateway-claims.mjs')).gatewayModelProblems(docsDir))
+problems.push(...recipeProblems(docsDir))
 
 // The Docker and Podman pages are short task pages: a few sections and no option catalog. Each
 // option's entry lives on reference/options, which they link to.
