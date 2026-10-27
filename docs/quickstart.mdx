@@ -15,7 +15,7 @@ This example uses Docker for its sandbox. You need these:
 |---|---|
 | Node {{ node }} or later | reeval's CLI |
 | Docker or Podman | the sandbox |
-| API keys for the agent harnesses | the harnesses |
+| API keys for the agent harness and the insights model | the harness and the insights |
 
 For more information about other harnesses and their keys, see [Harnesses](/agents).
 
@@ -23,25 +23,26 @@ For more information about Podman or Docker on macOS or Windows, see [Sandboxes]
 
 ## 1. Set up reeval
 
-Install reeval in your project:
+Install reeval in the project:
 
 ```bash
 npm install -D {{ pkg }}
 ```
 
-Create a project for your harness:
+Create the project files for the harness:
 
 ```bash
 npx reeval init --harness claude-code
 ```
 
-The command writes the `reeval.config.ts` file, an example evaluation in `evals/greet.eval.ts`, and the `evals/environments.ts` file, and names the key your harness needs. Add the key to the `.env.local` file next to the `reeval.config.ts` file:
+The command writes the `reeval.config.ts` file, an example evaluation in `evals/greet.eval.ts`, and the `evals/environments.ts` file, and names the keys the harness and the insights model need. Add the keys to the `.env.local` file next to the `reeval.config.ts` file:
 
 ```bash title=".env.local"
-ANTHROPIC_API_KEY=replace-with-your-key
+ANTHROPIC_API_KEY=replace-with-anthropic-key
+GOOGLE_GENERATIVE_AI_API_KEY=replace-with-google-key
 ```
 
-Build the image your harness runs in:
+Build the image the harness runs in:
 
 ```bash
 npx reeval image build
@@ -49,7 +50,7 @@ npx reeval image build
 
 For more information about image builds, see [Toolchains](/environments/toolchains).
 
-Check Node, Docker, the image, and your key with the `reeval doctor` command:
+Check Node, Docker, the image, and the keys with the `reeval doctor` command:
 
 ```bash
 npx reeval doctor
@@ -155,7 +156,7 @@ pass             styles the page in Anthropic's brand
   +1 more passed
 ```
 
-The variant passed both brand assertions in 4 of 4 attempts and the baseline in 0 of 4, so the effect reads `helped`. Your counts can differ.
+The variant passed both brand assertions in 4 of 4 attempts and the baseline in 0 of 4, so the effect reads `helped`. The counts can differ.
 
 ## Next steps
 
