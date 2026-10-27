@@ -7,7 +7,7 @@ description: "Prevent regressions by comparing the outcomes of two recorded runs
 
 ## Compare two runs
 
-With no arguments, `reeval compare` takes the most recent run as the head and picks the base for you: the newest recorded run at a commit in the head's Git ancestry. Run it after a run finishes:
+With no arguments, `reeval compare` takes the most recent run as the head and picks the base for you: the newest recorded run at a commit in the head's Git ancestry. When no run is in the ancestry, the base is the previous complete run. Run it after a run finishes:
 
 ```bash
 npx reeval compare
@@ -56,12 +56,12 @@ Each block and the tally use these words:
 | `regressed` | The evaluation passed in the base and fails in the head. |
 | `fixed` | The evaluation failed in the base and passes in the head. |
 | `same` | The outcome is the same in both runs. |
-| `can't compare` | The evaluation's source files, environment, harness config, image, agent CLI, judge, or agent context changed between the runs, so a changed outcome has another explanation. The block names what changed. |
+| `can't compare` | The evaluation's source files, environment, harness config, image, agent CLI, judge, agent context, or gateway changed between the runs, so a changed outcome has another explanation. The block names what changed. |
 | `infra error` | One side ended in an infrastructure error, so it has no verdict. |
 | `new` | Only the head has the evaluation. |
 | `removed` | Only the base has the evaluation. |
 
-`reeval compare` also prints `can't compare` for an outcome change when one side's only failures are attempts an interrupt canceled, or when the served judge model changed. To print every evaluation with each cell's lift, tokens, tool calls, and time from base to head, and the associated stack changes, add `-v`.
+When two runs differ only in which cells ran, `reeval compare` compares the cells both have and names the cells only one has. When the runs share no cell, or a shared cell changed, the evaluation reads `can't compare`. It also prints `can't compare` for an outcome change when one side's only failures are attempts an interrupt canceled, or when the served judge model changed. To print every evaluation with each cell's lift, tokens, tool calls, and time from base to head, and the associated stack changes, add `-v`.
 
 ## Fail on a regression
 
