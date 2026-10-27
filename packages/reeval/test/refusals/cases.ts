@@ -1730,6 +1730,31 @@ environment:
       'route: antigravity on openrouter, direct off',
       route([OPENROUTER, OFF], antigravity({ model: 'm' })),
     ],
+    ['route: fx with effort on direct', route([DIRECT], fx({ model: 'gpt-5.5', effort: 'low' }))],
+    [
+      'route: fx with effort on vercel',
+      route([VERCEL], fx({ model: 'google/gemini-3.8-flash', effort: 'low' })),
+    ],
+    [
+      'route: fx with effort on vertex',
+      route([VERTEX], fx({ model: 'google/gemini-3.8-flash', effort: 'low' })),
+    ],
+    [
+      'route: fx with a claude model on vertex, direct off',
+      route([VERTEX, OFF], fx({ model: 'anthropic/claude-haiku-4-5' })),
+    ],
+    [
+      'route: fx with a claude model falls through vertex to vercel',
+      route([VERTEX, VERCEL], fx({ model: 'anthropic/claude-haiku-4-5' })),
+    ],
+    [
+      'route: fx with a bare openai id on vertex, direct off',
+      route([VERTEX, OFF], fx({ model: 'gpt-5.5' })),
+    ],
+    [
+      'route: fx with a bare openai id falls through vertex to direct',
+      route([VERTEX], fx({ model: 'gpt-5.5' })),
+    ],
     ['route: fx on openrouter, direct off', route([OPENROUTER, OFF], fx({ model: 'gpt-5.5' }))],
     [
       'route: pi with effort on a gemini model on openrouter',

@@ -82,6 +82,7 @@ reeval mints the token on the host and the egress gateway adds it to the agent's
 | A Gemini judge | `judge: { model: 'google/gemini-3.8-flash' }`, called on Vertex in `regions.google` |
 | A Gemini agent | `goose({ model: 'gemini-3.8-flash' })`, or Antigravity, OpenCode or pi, on the same list. Each calls Vertex in `regions.google` with a made-up service account reeval writes for it, and the real token stays on the host |
 | A Grok agent | `grokBuild({ model: 'grok-4.6' })` on the same list, once the xAI model is enabled in Model Garden. It calls Vertex's Chat Completions API in `regions.xai`, and `reeval doctor` doesn't probe its model |
+| fx on Gemini | `fx({ model: 'google/gemini-3.8-flash', effort: 'low' })`: Vertex's Chat Completions endpoint in `regions.google`, with no service account. A Claude id or a bare OpenAI id such as `gpt-5.5` goes elsewhere: the OpenAI id falls back to `direct()`, and a Claude id needs `vercel()` |
 | One profile on Vertex | Put `gateway: [vertex()]` in a profile, and run it with `--profile` |
 | Another project per profile | `vertex({ project: 'billing-b' })` in that profile's list |
 

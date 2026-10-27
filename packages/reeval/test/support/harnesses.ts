@@ -45,6 +45,7 @@ export type HarnessRow = {
     | 'opencode-vertex'
     | 'goose-vertex'
     | 'pi-vertex'
+    | 'fx-vertex'
     | 'grok-build-vertex'
     | 'codex-gateway'
     | 'opencode-gateway'
@@ -397,6 +398,26 @@ export const harnesses: HarnessRow[] = [
     servedModel: null,
     wireModel: 'none named',
     askedModel: /^google\/gemini-3\.8-flash$/,
+  },
+  {
+    // And on Vertex AI through `gateway: [vertex()]`: a configured provider on Vertex's
+    // OpenAI-compatible Chat Completions endpoint with no auth of fx's own; the gateway adds the
+    // host's token. fx's relay gives Gemini back its thought signatures and adds the effort.
+    id: 'fx-vertex',
+    harness: 'fx',
+    gateway: 'vertex',
+    model: 'google/gemini-3.8-flash',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    hostEnv: ['GOOGLE_CLOUD_PROJECT'],
+    image: 'fx',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: true,
+    servedModel: /^gemini-3\.8-flash$/,
+    wireModel: /^gemini-3\.8-flash$/,
+    effort: { value: 'low', asked: /^reasoning_effort=low$/ },
   },
   {
     // Claude Code on Vercel AI Gateway through `gateway: [vercel()]`: its base URL on Vercel, and

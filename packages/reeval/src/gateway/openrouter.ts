@@ -147,7 +147,7 @@ export const OPENROUTER_GATEWAY: RoutingGateway = {
     cursor: "Cursor's agent only calls Cursor's own API",
     antigravity:
       "Antigravity's CLI only calls Google's API, with a Gemini key, and OpenRouter has no Gemini API",
-    fx: "fx reaches models only on Vercel AI Gateway or OpenAI's API, and no run has checked it on OpenRouter",
+    fx: "fx reaches models only on Vercel AI Gateway, OpenAI's API or Vertex AI, and no run has checked it on OpenRouter",
   },
   // Codex's response names the effort it ran at; Goose, OpenCode and pi send OpenRouter's
   // reasoning.effort, which it sends a Gemini model as its thinking level, and Grok Build

@@ -46,22 +46,93 @@ export const FX_QUIET_ENV = {
  * fx's HTTP client ignores `HTTPS_PROXY`, so it can't reach the sandbox's egress gateway itself.
  * It talks plain HTTP to this relay on localhost (fx allows `http://` there), which forwards each
  * request with Node's `fetch`, which honours the proxy (`NODE_USE_ENV_PROXY`) and the gateway's CA.
+ *
+ * On a Chat Completions call it also adds `FX_RELAY_EFFORT` as `reasoning_effort`, which fx sends
+ * a configured provider none of. With `FX_RELAY_GOOGLE=1` it makes Google's Chat Completions
+ * stream one fx reads: each tool call's thought signature, which Gemini needs back on the next call
+ * and fx drops, is kept by call id and put back (or Google's placeholder for one it never saw); a
+ * tool call gets the `index` and the finish the `tool_calls` reason fx needs; and the thinking
+ * tokens Google counts in `total_tokens` but not `completion_tokens` (which fx refuses) join
+ * `completion_tokens` as its `reasoning_tokens`.
  */
 export const FX_RELAY_PORT = 47823
 const FX_RELAY = `import { createServer } from 'node:http'
-import { Readable } from 'node:stream'
+import { Readable, Transform } from 'node:stream'
+import { StringDecoder } from 'node:string_decoder'
 import { writeFileSync } from 'node:fs'
 const [port, upstream, ready] = process.argv.slice(2)
+const effort = process.env.FX_RELAY_EFFORT
+const google = process.env.FX_RELAY_GOOGLE === '1'
+const signatures = new Map()
 const drop = new Set(['host', 'connection', 'content-length', 'transfer-encoding', 'keep-alive'])
+const chat = (req) => req.method === 'POST' && /\\/chat\\/completions(\\?|$)/.test(req.url)
+async function request(req) {
+  let text = ''
+  req.setEncoding('utf8')
+  for await (const piece of req) text += piece
+  const body = JSON.parse(text)
+  if (effort) body.reasoning_effort = effort
+  if (google) {
+    for (const message of body.messages ?? []) {
+      for (const call of message.tool_calls ?? []) {
+        call.extra_content ??= { google: { thought_signature: signatures.get(call.id) ?? 'skip_thought_signature_validator' } }
+      }
+    }
+  }
+  return JSON.stringify(body)
+}
+function chunk(data, state) {
+  const json = JSON.parse(data)
+  for (const choice of json.choices ?? []) {
+    for (const call of choice.delta?.tool_calls ?? []) {
+      const signature = call.extra_content?.google?.thought_signature
+      if (signature && call.id) signatures.set(call.id, signature)
+      const id = call.id ?? state.last
+      if (!state.calls.has(id)) state.calls.set(id, state.calls.size)
+      state.last = id
+      call.index ??= state.calls.get(id)
+    }
+    if (choice.finish_reason === 'stop' && state.calls.size) choice.finish_reason = 'tool_calls'
+  }
+  const usage = json.usage
+  const thoughts = usage ? usage.total_tokens - usage.prompt_tokens - usage.completion_tokens : 0
+  if (thoughts > 0) {
+    usage.completion_tokens += thoughts
+    usage.completion_tokens_details = { ...usage.completion_tokens_details, reasoning_tokens: thoughts }
+  }
+  return JSON.stringify(json)
+}
+function stream() {
+  const state = { calls: new Map(), last: undefined }
+  const decoder = new StringDecoder('utf8')
+  let rest = ''
+  const line = (text) => {
+    if (!text.startsWith('data: {')) return text
+    try { return 'data: ' + chunk(text.slice(6), state) } catch { return text }
+  }
+  return new Transform({
+    transform(data, _, done) {
+      const lines = (rest + decoder.write(data)).split('\\n')
+      rest = lines.pop()
+      done(null, lines.map((each) => line(each) + '\\n').join(''))
+    },
+    flush(done) {
+      rest += decoder.end()
+      done(null, rest ? line(rest) : '')
+    },
+  })
+}
 const server = createServer(async (req, res) => {
   try {
     const headers = Object.entries(req.headers).filter(([k]) => !drop.has(k))
-    const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : Readable.toWeb(req)
+    const rewrite = chat(req) && (google || effort)
+    const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : rewrite ? await request(req) : Readable.toWeb(req)
     const r = await fetch(upstream + req.url, { method: req.method, headers, body, duplex: 'half' })
     const out = {}
     r.headers.forEach((v, k) => { if (k !== 'content-encoding' && k !== 'content-length') out[k] = v })
     res.writeHead(r.status, out)
-    if (r.body) Readable.fromWeb(r.body).pipe(res)
+    const events = google && chat(req) && /event-stream/.test(r.headers.get('content-type') ?? '')
+    if (r.body) (events ? Readable.fromWeb(r.body).pipe(stream()) : Readable.fromWeb(r.body)).pipe(res)
     else res.end()
   } catch (error) {
     res.writeHead(502, { 'content-type': 'text/plain' })
@@ -107,22 +178,51 @@ const relayUrl = `http://127.0.0.1:${FX_RELAY_PORT}`
 export const FX_GATEWAY_CHAT_PATH = '/v4/ai/language-model'
 
 export type FxHarnessSettings = {
-  /** The model's provider's key only (see {@link FX_PROVIDERS}). The host environment is never read. */
+  /**
+   * The model's provider's key only (see {@link FX_PROVIDERS}); empty on Vertex AI. The host
+   * environment is never read.
+   */
   readonly auth: HarnessV1AuthenticationEnvironment
-  /** A gateway id (`anthropic/claude-sonnet-5`) or a bare OpenAI id (`gpt-5.5`). */
+  /**
+   * A gateway id (`anthropic/claude-sonnet-5`) or a bare OpenAI id (`gpt-5.5`); on Vertex AI, the
+   * Chat Completions endpoint's id (`google/gemini-3.8-flash`).
+   */
   readonly model: string
+  /**
+   * Vertex AI's OpenAI-compatible Chat Completions endpoint in this project and region instead,
+   * as the configured provider `vertex`, with no credential: whoever runs the sandbox adds the
+   * token to its calls.
+   */
+  readonly vertex?: FxVertex
+  /** Sent as `reasoning_effort` on each Chat Completions call (Vertex AI's or OpenAI's). */
+  readonly effort?: string
   /** MCP servers in ACP's `McpServer` shape, keyed by name, passed on `session/new`. */
   readonly mcpServers?: Record<string, Record<string, unknown>>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
   readonly requireCredentialBrokering?: boolean
 }
 
+export type FxVertex = { readonly project: string; readonly location: string }
+
+/** fx's configured provider for Vertex AI. */
+export const FX_VERTEX_PROVIDER = 'vertex'
+
+/** Vertex AI's API host for a region: `global` has no prefix. */
+const vertexHost = (location: string) =>
+  location === 'global' ? 'aiplatform.googleapis.com' : `${location}-aiplatform.googleapis.com`
+
+/** Where fx sends Vertex AI's calls: the relay's copy of `…/endpoints/openapi`, which fx appends `/chat/completions` to. */
+export const fxVertexBaseUrl = ({ project, location }: FxVertex) =>
+  `${relayUrl}/v1/projects/${project}/locations/${location}/endpoints/openapi`
+
+type FxRoute = Pick<FxHarnessSettings, 'vertex' | 'effort'>
+
 /**
  * fx's process env: quiet flags, the provider, the model and the relay. The same keys for every
- * model, so the bootstrap an image bakes for one provider serves the other.
+ * model, so the bootstrap an image bakes for one provider serves the others.
  */
-export function fxEnv(model: string) {
-  const provider = fxProviderOf(model)
+export function fxEnv(model: string, { vertex, effort }: FxRoute = {}) {
+  const provider = vertex ? FX_VERTEX_PROVIDER : fxProviderOf(model)
   return {
     ...FX_QUIET_ENV,
     FX_PROVIDER: provider,
@@ -130,43 +230,62 @@ export function fxEnv(model: string) {
     FX_GATEWAY_BASE_URL: relayUrl,
     // The model calls' own URL: unset, fx sends them to AI Gateway directly, past the relay.
     FX_GATEWAY_CHAT_URL: `${relayUrl}${FX_GATEWAY_CHAT_PATH}`,
-    FX_RELAY_UPSTREAM: FX_PROVIDERS[provider].url,
+    FX_RELAY_UPSTREAM: vertex
+      ? `https://${vertexHost(vertex.location)}`
+      : FX_PROVIDERS[fxProviderOf(model)].url,
+    FX_RELAY_GOOGLE: vertex ? '1' : '',
+    FX_RELAY_EFFORT: effort ?? '',
   }
 }
 
 /**
  * fx's `settings.json`: no session titles, which fx otherwise generates on its own model
  * (`openai/gpt-5.6-luna`) with each first prompt, so the run's model is the only one called; and
- * for a bare OpenAI id, OpenAI's Chat Completions API as the configured provider `openai`.
+ * for a bare OpenAI id, OpenAI's Chat Completions API as the configured provider `openai`, or on
+ * Vertex AI its Chat Completions endpoint as `vertex`, with no auth of fx's own.
  */
-export function fxSettings(model: string) {
-  const settings = {
-    session_titles: false,
-    ...(fxProviderOf(model) === 'openai' && {
-      providers: {
-        openai: {
+export function fxSettings(model: string, { vertex }: FxRoute = {}) {
+  const providers = vertex
+    ? {
+        [FX_VERTEX_PROVIDER]: {
           protocol: 'openai-chat-completions',
-          base_url: `${relayUrl}/v1`,
-          auth: { type: 'bearer', env: FX_PROVIDERS.openai.credential },
+          base_url: fxVertexBaseUrl(vertex),
+          auth: { type: 'none' },
         },
-      },
-    }),
-  }
+      }
+    : fxProviderOf(model) === 'openai'
+      ? {
+          openai: {
+            protocol: 'openai-chat-completions',
+            base_url: `${relayUrl}/v1`,
+            auth: { type: 'bearer', env: FX_PROVIDERS.openai.credential },
+          },
+        }
+      : undefined
+  const settings = { session_titles: false, ...(providers && { providers }) }
   return [{ path: '.fx/settings.json', content: `${JSON.stringify(settings, null, 2)}\n` }]
 }
 
 /**
- * fx (`fx acp`) as an AI SDK harness, on Vercel AI Gateway or OpenAI's API by the model id. Thin
- * config over `@ai-sdk/harness-acp`: fx names its tool calls, and its ACP `PromptResponse.usage`
- * is the turn's summed tokens, so {@link FxStreamTranslator} only renames MCP calls, rebuilds
- * command output and keeps the reasoning tokens.
+ * fx (`fx acp`) as an AI SDK harness, on Vercel AI Gateway or OpenAI's API by the model id, or on
+ * Vertex AI. Thin config over `@ai-sdk/harness-acp`: fx names its tool calls, and its ACP
+ * `PromptResponse.usage` is the turn's summed tokens, so {@link FxStreamTranslator} only renames
+ * MCP calls, rebuilds command output and keeps the reasoning tokens.
  */
 export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools> {
-  const provider = FX_PROVIDERS[fxProviderOf(settings.model)]
-  if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[provider.credential]) {
+  const { vertex } = settings
+  const provider = vertex ? undefined : FX_PROVIDERS[fxProviderOf(settings.model)]
+  if (
+    !isHarnessAuthenticationEnvironment(settings.auth) ||
+    (provider && !settings.auth[provider.credential])
+  ) {
     throw new Error(
-      `fx auth must be an environment object with ${provider.credential} for ${settings.model}`,
+      `fx auth must be an environment object with ${provider?.credential ?? 'no key'} for ${settings.model}`,
     )
+  }
+  const route = {
+    ...(vertex ? { vertex } : {}),
+    ...(settings.effort ? { effort: settings.effort } : {}),
   }
   const mcpServers = Object.keys(settings.mcpServers ?? {})
   const acp = createACP({
@@ -177,9 +296,10 @@ export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools>
     executable: 'fx-acp',
     args: [],
     auth: settings.auth,
-    env: fxEnv(settings.model),
+    env: fxEnv(settings.model, route),
     credentialEnv: Object.values(FX_PROVIDERS).map((each) => each.credential),
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
+      if (!provider) return []
       const key = env[provider.credential]
       const placeholder = sandboxEnv?.[provider.credential]
       if (!key || !placeholder) return []
@@ -201,13 +321,14 @@ export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools>
     },
     skillsDirectory: FX_HOME_SKILLS_DIR,
     // Not authentication: the hook that writes into fx's private home before it starts.
-    authenticationFiles: () => fxSettings(settings.model),
+    authenticationFiles: () => fxSettings(settings.model, route),
   })
   return {
     ...acp,
     doStart: async (options) => {
       const sandbox = options.sandboxSession as { addRequestTransformations?: unknown }
       if (
+        provider &&
         settings.requireCredentialBrokering &&
         typeof sandbox.addRequestTransformations !== 'function'
       ) {

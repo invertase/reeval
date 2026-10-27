@@ -1142,10 +1142,15 @@ export const AGENTS: Record<AgentKind, Agent> = {
     ...fxForModel('provider/model'),
     forModel: fxForModel,
     mcpServers: acpMcpServers,
-    adapter: async ({ auth, mcpServers, model }) =>
+    adapter: async ({ auth, env, mcpServers, model, descriptor }) =>
       (await import('@reeval/harness-fx')).createFx({
         auth,
         model,
+        // On Vertex AI, the route's project and region.
+        ...(env?.FX_VERTEX_PROJECT
+          ? { vertex: { project: env.FX_VERTEX_PROJECT, location: env.FX_VERTEX_LOCATION ?? '' } }
+          : {}),
+        ...(descriptor.kind === 'fx' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),

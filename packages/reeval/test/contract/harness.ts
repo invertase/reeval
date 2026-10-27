@@ -39,7 +39,7 @@ export const contractHarness = (effort?: string) => {
     case 'grok-build':
       return grokBuild({ model, ...e })
     case 'fx':
-      return fx({ model })
+      return fx({ model, ...e })
     default:
       return fakeHarness({ layout: 'cursor', script: [fakeScript] })
   }

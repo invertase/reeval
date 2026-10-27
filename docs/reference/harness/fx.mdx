@@ -1,9 +1,9 @@
 ---
 title: fx()
-description: The fx harness, its options and id, its AI Gateway or OpenAI key, the relay that takes it through the egress gateway, and what that relay can't cover.
+description: The fx harness, its options and id, its AI Gateway or OpenAI key or Vertex AI, the relay that takes it through the egress gateway, and what that relay can't cover.
 ---
 
-`fx()` runs Vercel's [fx](https://fx.sh) in the Docker sandbox over its ACP server (`fx acp`), on Vercel AI Gateway or OpenAI's API. `model` is required, and its form picks the provider.
+`fx()` runs Vercel's [fx](https://fx.sh) in the Docker sandbox over its ACP server (`fx acp`), on Vercel AI Gateway, OpenAI's API or Vertex AI. `model` is required, and its form picks the provider, or `vertex()` does.
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
@@ -21,11 +21,15 @@ A gateway id runs only through [`vercel()`](/reference/gateway#vercel-ai-gateway
 ## Options
 
 <Property name="model" type="string">
-  A Vercel AI Gateway id with its provider, such as `anthropic/claude-sonnet-5`, which runs on AI Gateway through `vercel()` in the config's `gateway`, or a bare OpenAI id, such as `gpt-5.5`, which runs on OpenAI's Chat Completions API. Required.
+  A Vercel AI Gateway id with its provider, such as `anthropic/claude-sonnet-5`, which runs on AI Gateway through `vercel()` in the config's `gateway`, or a bare OpenAI id, such as `gpt-5.5`, which runs on OpenAI's Chat Completions API. On `vertex()`, a Gemini id, such as `google/gemini-3.8-flash` ([below](#vertex-ai)). Required.
+</Property>
+
+<Property name="effort" type="string" optional>
+  Reasoning effort, sent as `reasoning_effort` on each model call, on `vertex()` only: fx sends none itself, and the plan refuses `effort` on any other gateway. Values are what the model takes there, such as `low`, `medium` or `high`.
 </Property>
 
 <Property name="id" type="string" optional>
-  The harness's id in cell keys, filters and the record. Default `fx:<model>`.
+  The harness's id in cell keys, filters and the record. Default `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set.
 </Property>
 
 <Property name="gateway" type="'direct' | Gateway" optional>
@@ -40,22 +44,20 @@ A gateway id runs only through [`vercel()`](/reference/gateway#vercel-ai-gateway
   How long its session may take to become ready (bootstrap and session start) before the attempt is an infra error, such as `'3m'`. Default `'90s'`. A start that times out is aborted and started once more; a second timeout fails the attempt with `fx: session did not become ready within 90s (tried twice)`, and the record's `startRetries` notes a retried start.
 </Property>
 
-`fx()` has no `effort`: fx offers a reasoning level only on reasoning models, and its OpenAI route can't run those (below).
-
 ## At a glance
 
 | | |
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
-| Credential | `vercel()`'s (`AI_GATEWAY_API_KEY`) on Vercel, `OPENAI_API_KEY` for a bare OpenAI id on `direct()` |
-| Adapter | `@reeval/harness-fx` 0.1.1 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| Credential | `vercel()`'s (`AI_GATEWAY_API_KEY`) on Vercel, `OPENAI_API_KEY` for a bare OpenAI id on `direct()`, Application Default Credentials on `vertex()` |
+| Adapter | `@reeval/harness-fx` 0.1.2 (over `@ai-sdk/harness-acp`), bundled with reeval |
 | CLI | fx 0.0.14, from its GitHub release, checked against its sha256 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:fx-0.1.1` |
+| Image | `reeval-sandbox:fx-0.1.2` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `.fx/skills` in fx's own home (below) |
 | Skills (`placement: 'workspace'`) | `.fx/skills` in the workspace |
-| Egress hosts added | `ai-gateway.vercel.sh` or `api.openai.com`, by the model |
+| Egress hosts added | `ai-gateway.vercel.sh` or `api.openai.com`, by the model, or Vertex AI's host for the `google` region |
 | Tokens | Reported for each turn |
 | Served model | From each API response, which the gateway reads |
 | MCP | `mcp.stdio`, `mcp.http` and `mcp.sse`, over ACP |
@@ -76,6 +78,7 @@ fx's HTTP client ignores `HTTPS_PROXY`, so it can't reach the egress gateway its
 |---|---|---|
 | Gateway id | `ai-gateway.vercel.sh` | `GET /coding-agent/v1/…` (the model list) and `POST /v<n>/ai/language-model` |
 | Bare OpenAI id | `api.openai.com` | `POST /v1/chat/completions` |
+| On `vertex()` | Vertex AI's, e.g. `aiplatform.googleapis.com` | `POST /v1/projects/<project>/locations/<region>/endpoints/openapi/chat/completions`, with an access token |
 
 The adapter refuses to run in a sandbox that can't broker the key.
 
@@ -92,11 +95,34 @@ The adapter refuses to run in a sandbox that can't broker the key.
 
 fx sends a configured provider no `reasoning_effort` and no `max_tokens`, so a bare id must be a model that accepts function tools on Chat Completions without `reasoning_effort`, such as `gpt-5.5`. OpenAI refuses them from `gpt-5.6` on unless `reasoning_effort` is `none`, so run those through AI Gateway. Each turn's tokens are fx's ACP `PromptResponse.usage`, the turn's summed input and output, with its reasoning tokens. fx doesn't name the served model over ACP, so the gateway reads it from each response; a provider whose stream names none (Gemini's) records no served model, and the attempt's `askedModels` holds the model each successful call asked AI Gateway for, its `ai-language-model-id` header. A turn whose every model call got an HTTP error fails, naming the statuses. Session titles are off, since fx writes them with its own model, so the run's model is the only one called.
 
+## Vertex AI
+
+```ts title="reeval.config.ts"
+import { vertex } from '{{ pkg }}/gateway'
+
+export default defineConfig({
+  harness: fx({ model: 'google/gemini-3.8-flash', effort: 'low' }),
+  gateway: [vertex()],
+})
+```
+
+On [`vertex()`](/reference/gateway#vertex-ai), fx runs a configured provider, `vertex`, on Vertex AI's OpenAI-compatible Chat Completions endpoint in the `google` region, with no auth of its own: the gateway adds an access token from your Application Default Credentials to those calls only. That endpoint serves Gemini, not Claude, so an `anthropic/…` model falls through to the next gateway, as does a bare id that isn't `gemini-…`, which fx takes as OpenAI's elsewhere: `gateway: [vertex()]` runs `gpt-5.5` on OpenAI through the `direct()` fallback. The served model comes from each response, without its `google/` prefix.
+
+The relay makes Google's stream one fx reads, and fx's requests ones Gemini takes:
+
+| What | Why |
+|---|---|
+| Each tool call's thought signature, kept by call id and sent back with it | Gemini refuses a function call without it, and fx drops it. A call it never saw gets Google's placeholder. |
+| `index` on each tool call, `tool_calls` as the finish reason after one | fx reads OpenAI's stream shape |
+| Thinking tokens moved into `completion_tokens`, as its `reasoning_tokens` | Google counts them in `total_tokens` only, which fx refuses as an invalid chunk |
+| `effort` as `reasoning_effort` | fx sends a configured provider no reasoning setting |
+
 ## Settings
 
 | Setting | Why |
 |---|---|
-| `FX_PROVIDER`, `FX_MODEL` | The provider the model picks, and the model the session starts on. |
+| `FX_PROVIDER`, `FX_MODEL` | The provider the model picks (`vertex` on `vertex()`), and the model the session starts on. |
+| `FX_RELAY_GOOGLE`, `FX_RELAY_EFFORT` | Set on `vertex()`: the relay's Google fixes and the effort it adds. Empty otherwise. |
 | `FX_AUTO_UPGRADE=0`, `FX_SOUND=0`, `NO_COLOR=1` | No self-upgrade, sounds or colour. |
 | `full-access` session mode | Tool calls run without asking; fx's `auto` mode would send each reviewed action to a reviewer model. |
 
@@ -119,6 +145,8 @@ fx has no plugins, no subagents of your own and no commands, so it loads a plugi
 | Situation | Message |
 |---|---|
 | No model | `fx() needs a model: a Vercel AI Gateway id, e.g. fx({ model: 'anthropic/claude-sonnet-5' }), or a bare OpenAI id, e.g. fx({ model: 'gpt-5.5' }) (got …)` |
+| `effort` on a gateway but `vertex()` (at plan time, exit 2) | `evaluate("<eval>") on fx:<model>[effort=low]: no gateway in the list can serve it (direct: fx sends no effort of its own, and reeval adds fx's effort ("low") only to its calls on Vertex AI, not on direct(): drop effort or run fx on vertex()). Add vertex() to gateway.` |
+| A Claude model on `vertex()` without `vercel()` (at plan time, exit 2) | `… (vertex: fx reaches Vertex AI only on its Chat Completions endpoint, which serves Google's models, not "anthropic/…": use a Gemini model, such as google/gemini-3.8-flash) …` |
 | A gateway id without `vercel()` in `gateway` (at plan time, exit 2) | `evaluate("<eval>") on fx:<model>: no gateway in the list can serve it (direct: fx runs a gateway id such as "anthropic/claude-sonnet-5" only through Vercel AI Gateway). Add vercel() to gateway.` |
 | No key when the attempt starts | `AI_GATEWAY_API_KEY isn't set, so the fx harness can't authenticate. Set it in the environment or .env.local.` (or `OPENAI_API_KEY`) |
 | The provider refuses the key | `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local. …` (or `AI_GATEWAY_API_KEY`) |

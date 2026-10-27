@@ -1061,20 +1061,26 @@ class FileChange(TypedDict):
 
 
 # fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or
-# OpenAI's API by the model id, and reports each turn's tokens.
+# OpenAI's API by the model id, or on Vertex AI, and reports each turn's tokens.
 class FxHarnessDescriptor(TypedDict):
+    # Reasoning effort, sent as `reasoning_effort` on each model call; only on `vertex()`, since
+    # fx sends none itself. Values are what the model takes there, e.g. `low`, `medium` or
+    # `high`.
+    effort: NotRequired[str]
     # The gateway this harness's model calls go through, by name. It skips the config's
     # `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this
     # harness.
     gateway: NotRequired[GatewayName]
-    # Cell id; defaults to `fx:<model>`.
+    # Cell id; defaults to `fx:<model>`, or `fx:<model>[effort=<value>]` when `effort` is set.
     id: NotRequired[str]
     kind: Literal["fx"]
     # The most fx attempts at once, across the run, e.g. for the key's rate limits.
     maxConcurrent: NotRequired[float]
     # A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with
     # `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on
-    # OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.
+    # OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `vertex()`, a
+    # Gemini model id, `google/<id>` or a bare `gemini-…` id, run on Vertex AI's Chat
+    # Completions endpoint, e.g. `google/gemini-3.8-flash`.
     model: str
     # How long the harness's session may take to become ready (its bootstrap and first session)
     # before the attempt is an infra error, after one retry; default 90s.
