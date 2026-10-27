@@ -1,9 +1,9 @@
 ---
 title: "Choose an agent"
-description: "Run an evaluation on one harness or several."
+description: "Choose the harness and model that each evaluation runs on."
 ---
 
-An agent is a harness plus its model. Set the `harness` option to a harness factory with a `model` to choose one.
+Set the `harness` option to a harness factory with a `model` to choose an agent. For the definition, see [Agent](/reference/glossary#agent) in the Glossary.
 
 For more information about installing reeval, see [Quick start](/quickstart).
 
@@ -20,54 +20,42 @@ export default defineConfig({
 })
 ```
 
-For more information about the harness's options and key, see [the harness reference](/integrations/agents/claude-code).
+For more information about setting `model` and `effort`, see [Set the agent's model](/agents/model). For more information about running one evaluation on several harnesses, see [Compare harnesses](/recipes/agent-comparison).
 
-## Set the model and effort
+## Set the harness options
 
-`model` and `effort` are fields on the factory. `model` is required. Set `effort` when you want a reasoning level. In the `reeval.config.ts` file, set `harness` to a factory with both fields:
+Every factory takes these options beside `model`, so the harness pages don't repeat them. Set them in the factory call:
 
 ```ts title="reeval.config.ts"
-import { claudeCode } from '{{ pkg }}/harness'
-// ...
-harness: claudeCode({ model: '<model>', effort: 'high' }),
+harness: claudeCode({
+  model: '<model>',
+  id: 'claude-code:baseline',
+  maxConcurrent: 2,
+  startTimeout: '3m',
+}),
 ```
 
-With `effort` set and `id` unset, reeval appends an effort suffix to the cell ID. For a runnable project with one harness at two efforts, see [`with-reasoning-effort`](https://github.com/invertase/reeval/tree/main/examples/with-reasoning-effort).
+<Property name="id" type="string" optional>
+  Cell id. Defaults to the harness name followed by the model, such as `claude-code:<model>`, with `[effort=<value>]` added when `effort` is set. The id uses letters, digits, and `._:@+-=[]`.
+</Property>
 
-For more information about model ids, providers, and effort values, see [Models and providers for each harness](/agents/model).
+<Property name="maxConcurrent" type="number" optional>
+  The most attempts of this harness that run at the same time, across the run. A whole number of at least 1.
+</Property>
 
-## Run several agents
+<Property name="startTimeout" type="Duration" optional>
+  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
+</Property>
 
-In the `reeval.config.ts` file, pass several factories so each evaluation runs on every harness. This excerpt puts three in a profile's `defaults`:
+<Property name="gateway" type="'direct' | 'vercel' | 'openrouter'" optional>
+  The gateway this harness's model calls go through. It skips the config's `gateway` fallback, and the plan refuses a gateway that isn't listed or can't serve the harness. For more information about routing, see [Route models through a gateway](/agents/gateways).
+</Property>
 
-```ts title="with-many-harnesses/reeval.config.ts"
-agents: {
-  defaults: {
-    harness: [
-      claudeCode({ model: 'claude-sonnet-5' }),
-      codex({ model: 'gpt-5.6-luna' }),
-      cursor({ model: 'composer-2.5' }),
-    ],
-    sandbox: docker(),
-  },
-},
-```
-
-reeval runs each harness as its own cell. On a group or an evaluation, a list replaces the harnesses it inherited. For a runnable project, see [`with-many-harnesses`](https://github.com/invertase/reeval/tree/main/examples/with-many-harnesses).
-
-For more information about `add`, `only`, and function forms, see [the `harness` option](/reference/options#harness).
-
-Plan the cells without starting a harness:
-
-```bash
-npx reeval run --dry-run --json
-```
-
-For more information about comparing harnesses as a baseline and variants, see [Compare harnesses](/results/compare/lift#compare-harnesses).
+Each harness page covers the options and behavior that are specific to that harness, including its plugin support.
 
 ## Compare harness support
 
-This table lists what each harness supports. For more information about each harness's options and key, see its name in the table.
+This table lists each harness's key, rules and skills files, MCP transports, recorded events, and sandbox. For more information about a harness's options, plugins, and quirks, see its name in the table.
 
 [//]: # (generated:harness-matrix)
 
@@ -82,15 +70,6 @@ This table lists what each harness supports. For more information about each har
 | [Codex](/integrations/agents/codex) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
 | [fx](/integrations/agents/fx) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
 | [Grok Build](/integrations/agents/grok-build) | `XAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | `docker()` |
-
-- **Cursor**: The gateway also swaps the session tokens the Cursor SDK exchanges its key for (`accessToken` and `refreshToken`) on `cursor.sh` and `*.cursor.sh`. Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null. Its SDK leaves web search and fetch calls out of the stream; reeval recovers them from the stored conversation, and a turn it can't recover is marked `unreported` so web matchers refuse it.
-- **Claude Code**: Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null.
-- **Antigravity**: It tries `play.googleapis.com` and `antigravity-unleash.goog` (Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off); a restricted egress policy refuses them and records them under the record's `egress.expectedBlocked`.
-- **OpenCode**: No `mcp.sse` transport: those servers are refused at plan time (exit 2). Its web searches go to Exa's hosted MCP server, keyless, from the sandbox: `mcp.exa.ai` is one of its automatic hosts. MCP servers go in its config with Code Mode off, not over ACP, where OpenCode offers them only through its `execute` tool; the first prompt waits until they've connected.
-- **Goose**: No `mcp.sse` transport: those servers are refused at plan time (exit 2). MCP servers go in its `config.yaml` file as enabled extensions, not over ACP, where they start disabled. No tokens recorded: its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount. It tries `models.dev` (Goose's model catalog refresh, which no setting turns off); a restricted egress policy refuses it and records it under the record's `egress.expectedBlocked`.
-- **pi**: No `mcp.sse` transport: those servers are refused at plan time (exit 2).
-- **Codex**: No `mcp.sse` transport: those servers are refused at plan time (exit 2). Served model and reasoning effort from each API response, which the gateway reads, such as `<model>[effort=medium]`: its CLI doesn't report them. Its web searches and the pages it opens run on OpenAI's side, so a restricted egress policy doesn't limit them; each is in the transcript.
-- **Grok Build**: Served model from each API response, which the gateway reads: its CLI doesn't report it.
 
 [//]: # (/generated:harness-matrix)
 
