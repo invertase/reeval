@@ -68,6 +68,7 @@ const drop = new Set(['host', 'connection', 'content-length', 'transfer-encoding
 const chat = (req) => req.method === 'POST' && /\\/chat\\/completions(\\?|$)/.test(req.url)
 async function request(req) {
   let text = ''
+  req.setEncoding('utf8')
   for await (const piece of req) text += piece
   const body = JSON.parse(text)
   if (effort) body.reasoning_effort = effort

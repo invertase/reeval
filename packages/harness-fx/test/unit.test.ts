@@ -100,9 +100,9 @@ const relayScript = () => {
 }
 
 const body = async (req: IncomingMessage) => {
-  let text = ''
-  for await (const piece of req) text += piece
-  return text
+  const pieces: Buffer[] = []
+  for await (const piece of req) pieces.push(piece)
+  return Buffer.concat(pieces).toString('utf8')
 }
 
 /** Starts the relay in front of `upstream` with `env`, and stops it after `run`. */
@@ -218,6 +218,34 @@ test('without FX_RELAY_GOOGLE or FX_RELAY_EFFORT the relay passes calls through 
       )
       assert.equal(text, stream)
       assert.equal(requests[0], sent)
+    },
+  )
+})
+
+test('the relay keeps a character its request splits across chunks whole', async () => {
+  await withRelay(
+    () => sse({ choices: [] }),
+    { FX_RELAY_GOOGLE: '1' },
+    async (url, requests) => {
+      const content = 'héllo — 日本語 🎉'
+      const sent = Buffer.from(
+        JSON.stringify({ model: 'm', messages: [{ role: 'user', content }] }),
+      )
+      const cut = sent.indexOf(Buffer.from('日')) + 1
+      const halves = [sent.subarray(0, cut), sent.subarray(cut)]
+      await fetch(`${url}/v1/projects/p/locations/global/endpoints/openapi/chat/completions`, {
+        method: 'POST',
+        body: new ReadableStream({
+          async pull(controller) {
+            const half = halves.shift()
+            if (!half) return controller.close()
+            controller.enqueue(half)
+            await sleep(20)
+          },
+        }),
+        duplex: 'half',
+      } as RequestInit).then((r) => r.text())
+      assert.equal(JSON.parse(requests[0] ?? '').messages[0].content, content)
     },
   )
 })
