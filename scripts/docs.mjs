@@ -627,6 +627,9 @@ for (const file of mdxFiles()) {
 
 const COPIED_BLOCK_LINES = 15
 const COPIED_BLOCK_SHARE = 0.8
+// The Introduction shows the evaluation file and its result; Quick start is where the same
+// evaluation is set up and run, so the two are meant to share it.
+const SHARED_BLOCK_PAGES = ['docs/index.mdx', 'docs/quickstart.mdx']
 /** A fenced `ts` block's code lines with blank lines, comments and indentation dropped. */
 const codeLines = (code) =>
   code
@@ -646,6 +649,7 @@ const copied = new Set()
 for (const [i, a] of tsBlocks.entries()) {
   for (const b of tsBlocks.slice(i + 1)) {
     if (a.file === b.file) continue
+    if (SHARED_BLOCK_PAGES.includes(a.file) && SHARED_BLOCK_PAGES.includes(b.file)) continue
     const shared = [...a.lines].filter((line) => b.lines.has(line)).length
     if (shared / Math.min(a.lines.size, b.lines.size) >= COPIED_BLOCK_SHARE) {
       copied.add(
