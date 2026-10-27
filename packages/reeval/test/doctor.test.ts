@@ -722,6 +722,28 @@ evaluate('a', async () => {})
     assert.equal(checkGateways(stuck, deps(), '.env.local')[0]?.status, 'fail')
   })
 
+  test('gateway: a judge or analysis model that falls back to direct is marked', async () => {
+    const config = await configOf(
+      'gateway-model-fallback',
+      `{ harness: claudeCode({ model: 'claude-sonnet-4-5' }),
+         gateway: [vertex({ project: 'p' })],
+         judge: { model: 'openai/gpt-5.4-mini' },
+         analysis: { model: 'openai/gpt-5.4-mini' },
+         profiles: {
+           pinned: { gateway: [vertex({ project: 'p' })], judge: { gateway: 'direct' } },
+           first: { gateway: [direct(), vertex({ project: 'p' })] },
+         } }`,
+    )
+    assert.deepEqual(
+      checkGateways(config, deps(), '.env.local').map((c) => c.summary),
+      [
+        'gateway vertex, direct: claude-code:claude-sonnet-4-5 → vertex, judge openai/gpt-5.4-mini → direct (fallback), analysis openai/gpt-5.4-mini → direct (fallback)',
+        'gateway vertex, direct in profile pinned: claude-code:claude-sonnet-4-5 → vertex',
+        'gateway direct, vertex in profile first: claude-code:claude-sonnet-4-5 → direct',
+      ],
+    )
+  })
+
   test('vertex: each entry’s project, where its tokens come from, and online whose they are', async () => {
     const config = await configOf(
       'gateway-vertex',

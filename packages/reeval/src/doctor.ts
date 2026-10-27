@@ -19,7 +19,12 @@ import { ciRunner, DEFAULT_EGRESS, directOnCloud, isDirect, unenforceable } from
 import { DEFAULT_EXCLUDE, findEvalFiles } from './engine/files.ts'
 import { loadEnvFiles } from './env.ts'
 import { environmentSandbox, profileSandbox } from './environment.ts'
-import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
+import {
+  fellBackToDirect,
+  gatewayScope,
+  modelGatewayOrNone,
+  resolveModelGateway,
+} from './gateway/models.ts'
 import { resolveGateway, routedHarness } from './gateway/resolve.ts'
 import { VERCEL_KEY, vercelCredentialProblem } from './gateway/vercel.ts'
 import {
@@ -793,8 +798,9 @@ export async function checkAnalysis(
 }
 
 /**
- * The gateway lists the config and its profiles set: where each harness they run resolves, and
- * whether Vercel's project token has expired. Nothing when no list is set. Each gateway's key is
+ * The gateway lists the config and its profiles set: where each harness they run resolves, the
+ * judge or analysis model when it falls back to direct, and whether Vercel's project token has
+ * expired. Nothing when no list is set. Each gateway's key is
  * the key check's, since a harness on a gateway needs that gateway's.
  */
 export function checkGateways(config: ResolvedConfig, deps: DoctorDeps, envFile: string): Check[] {
@@ -828,6 +834,23 @@ export function checkGateways(config: ResolvedConfig, deps: DoctorDeps, envFile:
         const { name, skipped } = resolveGateway(gateways, h, where)
         return `${harnessId(h)} → ${name}${name === 'direct' && skipped.length ? ' (fallback)' : ''}`
       })
+      const p = profile === undefined ? undefined : config.profiles[profile]
+      const models = [
+        {
+          who: 'judge',
+          model: p?.defaults?.judge?.model ?? p?.judge?.model ?? config.judge.model,
+          pin: p?.defaults?.judge?.gateway ?? p?.judge?.gateway ?? config.judge.gateway,
+        },
+        // analysis routes on the config's list only
+        ...(profile ? [] : [{ who: 'analysis', model: config.analysis.model, pin: undefined }]),
+      ]
+      for (const { who, model, pin } of models) {
+        const scope = { gateways }
+        if (typeof model !== 'string') continue
+        if (fellBackToDirect(modelGatewayOrNone(model, pin, scope), pin, scope)) {
+          routes.push(`${who} ${model} → direct (fallback)`)
+        }
+      }
       checks.push({ id: 'gateway', status: 'ok', summary: `${list}: ${routes.join(', ')}` })
     } catch (error) {
       checks.push({ id: 'gateway', status: 'fail', summary: (error as Error).message })

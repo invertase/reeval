@@ -93,6 +93,13 @@ export function resolveModelGateway(
   )
 }
 
+/** Whether an unpinned model resolved to `direct` past the list's other entries, for the plan and doctor. */
+export const fellBackToDirect = (
+  gateway: GatewayName | undefined,
+  pin: GatewayName | GatewayDescriptor | undefined,
+  scope: GatewayScope,
+): boolean => gateway === 'direct' && pin === undefined && scope.gateways[0]?.kind !== 'direct'
+
 /** As `resolveModelGateway`, but undefined where it would throw, for checks the plan already makes. */
 export function modelGatewayOrNone(
   model: JudgeModel | FakeAnalysisModel | undefined,
