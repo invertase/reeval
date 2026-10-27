@@ -528,6 +528,25 @@ for (const name of rootValueExports()) {
   }
 }
 
+/** The top-level keys of an exported object type in types.ts, one `key?: type` per line. */
+function typeKeys(name) {
+  const m = new RegExp(`export type ${name} = \\{\\n([\\s\\S]*?)\\n\\}`).exec(
+    read(join(src, 'types.ts')),
+  )
+  if (!m) return null
+  return [...m[1].matchAll(/^ {2}(?:readonly )?(\w+)\??:/gm)].map((k) => k[1])
+}
+
+const judgeKeys = typeKeys('JudgeOptions')
+if (!judgeKeys?.length) {
+  problems.push('docs.mjs cannot find the JudgeOptions keys in src/types.ts')
+}
+for (const key of judgeKeys ?? []) {
+  if (!mentions(page('reference/options'), `name="judge.${key}"`)) {
+    problems.push(`judge option "${key}" has no entry on reference/options`)
+  }
+}
+
 const cliPage = page('reference/cli')
 for (const { code } of exitCodes()) {
   if (!new RegExp(`\\| ${code} \\|`).test(cliPage))

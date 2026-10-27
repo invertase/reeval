@@ -160,6 +160,10 @@ For more information about the automatic hosts, see [Egress](/environments/egres
   The maximum judge calls to this model's provider at once across the run, a whole number of at least 1.
 </Property>
 
+<Property name="judge.gateway" type="GatewayName | GatewayDescriptor" optional>
+  The gateway the judge's calls go through: `'direct'`, `'vercel'`, `'openrouter'`, or the helper from `{{ pkg }}/gateway`. It skips the config's `gateway` fallback. reeval refuses a gateway that is not in the `gateway` list or cannot serve the judge model.
+</Property>
+
 <Property name="judge.state" type="JudgeStateOptions" optional>
   What the judge is given beside the question.
 </Property>
