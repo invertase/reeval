@@ -113,7 +113,9 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
 
 ## `reeval clean`
 
-The `reeval clean` command deletes local debug data. `--keep` defaults to 0. `--images` prunes every Docker and Podman store that answers.
+The `reeval clean` command deletes local debug data, and leaves the `.reeval/runs/` directory. `--keep` defaults to 0. `--images` prunes every Docker and Podman store that answers.
+
+The command prints `Removed debug data for <n> runs (<size>) from <directory>`, or `No debug data to remove in <directory>`. With `--images`, it then prints how many images it removed, or `No leftover images to remove`.
 
 [//]: # (generated:cli-help:clean)
 
@@ -276,6 +278,10 @@ reeval studio                 Browse runs, evals and transcripts in the web stud
 ## `reeval studio build`
 
 The `reeval studio build` command writes the studio as a static site. `--no-artifacts` keeps the records, the index, saved analyses, and analysis notes.
+
+The command prints `built studio-dist/: <n> runs, <n> files, <size> (records, transcripts, diffs, logs and judge inputs)`. With `--no-artifacts`, the parenthesis reads `(records only: --no-artifacts)`. Anyone who can open the site can read every included file.
+
+The output folder must be empty or a previous studio build, or the command stops and asks for another `--out`. The site uses relative addresses and hash routing, so it works from any host and subpath. It has no live runs and no **Debug** tab.
 
 [//]: # (generated:cli-help:studio-build)
 

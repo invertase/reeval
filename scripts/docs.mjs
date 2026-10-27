@@ -683,7 +683,7 @@ const hasGateDecisionTable = (text) => /^\|[^\n]*`regressed`[^\n]*\|[^\n]*\bFail
 // ---- Studio and debug pages describe what the code does ------------------------------------------
 
 // `reeval studio build` ends its `built` line with the artifact summary, or the records-only note
-// under `--no-artifacts` (src/studio/command.ts).
+// under `--no-artifacts` (src/studio/command.ts); its Reference entry holds both.
 const studioCommand = read(join(src, 'studio/command.ts'))
 const builtSummaries = [
   ...studioCommand.matchAll(/\$\{artifacts \? '( \([^']+\))' : '( \([^']+\))'\}/g),
@@ -691,11 +691,30 @@ const builtSummaries = [
 if (builtSummaries.length === 0) {
   problems.push('docs.mjs cannot find the built line summaries in src/studio/command.ts')
 }
-for (const [, withArtifacts] of builtSummaries) {
-  const builtLine = /^built .*$/m.exec(page('results/studio'))?.[0]
-  if (!builtLine?.endsWith(withArtifacts)) {
+const studioBuildEntry =
+  page('reference/cli').match(/^## `reeval studio build`\n([\s\S]*?)(?=^## )/m)?.[1] ?? ''
+if (!studioBuildEntry) {
+  problems.push('docs.mjs cannot find the "## `reeval studio build`" section on reference/cli')
+}
+for (const withArtifacts of builtSummaries.flatMap((match) => match.slice(1))) {
+  if (studioBuildEntry && !studioBuildEntry.includes(withArtifacts.trim())) {
     problems.push(
-      `docs/results/studio.mdx shows a built line without the artifact summary${withArtifacts} that src/studio/command.ts prints`,
+      `reference/cli's reeval studio build entry omits the built line's summary${withArtifacts} that src/studio/command.ts prints`,
+    )
+  }
+}
+
+// Studio and Debugging keep their one job. Exporting a static site and pruning debug data are the
+// reeval studio build and reeval clean entries on reference/cli, so neither page shows them in a
+// code block.
+for (const [pageName, command] of [
+  ['results/studio', 'reeval studio build'],
+  ['results/debugging', 'reeval clean'],
+]) {
+  const blocks = [...page(pageName).matchAll(/^```[^\n]*\n([\s\S]*?)^```/gm)]
+  if (blocks.some(([, code]) => new RegExp(`\\b${command}\\b`).test(code))) {
+    problems.push(
+      `docs/${pageName}.mdx has a \`${command}\` code block: link its entry on reference/cli instead`,
     )
   }
 }

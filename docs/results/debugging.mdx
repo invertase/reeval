@@ -50,6 +50,8 @@ For more information about every `reeval run` flag, see [reeval run](/reference/
 
 The `.reeval/debug` directory holds one directory per run. Each attempt writes its own files there, so a run with no attempt writes no directory. Git ignores it with the rest of the `.reeval/` directory.
 
+Each run keeps the newest debug directories, set by [`debug.keep`](/reference/options#debug), and [`reeval clean`](/reference/cli#reeval-clean) removes the rest.
+
 Attempt files sit at the `.reeval/debug/<run id>/<evaluation>/<cell>/<n>/` path. The evaluation and cell names are slugs, each with a short hash.
 
 Open the `debug.log` file for that trace. Each line has a full timestamp.
@@ -91,24 +93,6 @@ The workspace goes when the sandbox stops. reeval keeps what the agent left in i
 | `diff.patch` | The workspace diff, from the snapshot after setup to the end of the attempt |
 | `artifacts/<name>.png` | Screenshots from `c.capture()` |
 | `judge-input.json` | What each `c.judge()` call received |
-
-## Prune debug data
-
-Each run keeps the newest debug directories and deletes the older ones. To change the number of directories to keep, set [`debug.keep`](/reference/options#debug). The `.reeval/runs/` directory stays on disk.
-
-Remove the debug data.
-
-```bash
-npx reeval clean
-```
-
-reeval prints how many runs it removed and the size. To leave the newest runs in place, pass `--keep`.
-
-```bash
-npx reeval clean --keep 5
-```
-
-To also remove untagged sandbox images that reeval built, pass `--images`.
 
 ## Reference
 
