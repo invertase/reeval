@@ -14,6 +14,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
+import { docsRunsProblems } from './docs-runs-checks.mjs'
 import {
   harnessFacts,
   renderLayout,
@@ -680,6 +681,10 @@ for (const [i, a] of tsBlocks.entries()) {
   }
 }
 problems.push(...copied)
+
+// ---- docs/runs against the code -----------------------------------------------------------------
+
+problems.push(...docsRunsProblems(root))
 
 if (problems.length) {
   console.error(`docs: ${problems.length} problem${problems.length === 1 ? '' : 's'}`)

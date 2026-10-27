@@ -1,9 +1,9 @@
 ---
 title: "Run evaluations"
-description: "Run the evaluations in your project."
+description: "Run the evaluations in a project."
 ---
 
-You run the evaluations in your project with `reeval run`. The command prints a plan line, starts the attempts, and ends with one block per evaluation.
+`reeval run` runs the evaluations in a project. The command prints a plan line, starts the attempts, and ends with one block per evaluation.
 
 For more information about the result blocks, see [Read a run's output](/results/output).
 
@@ -92,12 +92,12 @@ reeval chooses the output from where you run the command. These flags set the mo
 
 | Flag | Values | Default |
 | :--- | :--- | :--- |
-| `--ui` | `live`, `plain`, `agent` | `agent` for a coding agent, `plain` in CI or when stdout is not a terminal, otherwise `live` |
-| `--log-order` | `stream`, `grouped` | `grouped` in CI, otherwise `stream` |
-| `--log-prefix` | `task`, `none` | `task`, or `none` for grouped output on GitHub Actions |
-| `--output-logs` | `full`, `errors-only`, `none` | `errors-only`, or `full` with `-v` |
+| `--ui` | `auto`, `live`, `plain`, `agent` | `agent` for a coding agent, `plain` in CI or when stdout is not a terminal, otherwise `live` |
+| `--log-order` | `auto`, `stream`, `grouped` | `grouped` in CI, otherwise `stream` |
+| `--log-prefix` | `auto`, `task`, `none` | `task`, or `none` for grouped output on GitHub Actions |
+| `--output-logs` | `auto`, `full`, `errors-only`, `none` | `errors-only`, or `full` with `-v` |
 
-`stream` prints each line as it happens, and `grouped` prints each attempt as one block at the end. The `task` prefix names the evaluation, the attempt, and the cell. `live` adds a status line such as `1 eval · 0/4 tries`. `plain` prints the log alone. `agent` prints the result blocks at the end without color.
+`auto` picks the default in the last column, as if the flag were unset. `stream` prints each line as it happens, and `grouped` prints each attempt as one block at the end. The `task` prefix names the evaluation, the attempt, and the cell. `live` adds a status line such as `1 eval · 0/4 tries`. `plain` prints the log alone. `agent` prints the result blocks at the end without color.
 
 Set plain output for a log without the status line:
 
