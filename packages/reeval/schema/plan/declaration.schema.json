@@ -442,9 +442,13 @@
       "additionalProperties": false
     },
     "DirectGatewayDescriptor": {
-      "description": "Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.",
+      "description": "Each provider's own key: made by `direct()` in `reeval/gateway`. Every `gateway` list ends with it unless it's listed elsewhere, where it's tried in that place.",
       "type": "object",
       "properties": {
+        "enabled": {
+          "description": "`false` turns off the fallback to each provider's own key, so a cell no other gateway in the list serves is refused at plan time. Default `true`.",
+          "type": "boolean"
+        },
         "kind": {
           "type": "string",
           "const": "direct"

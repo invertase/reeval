@@ -116,7 +116,9 @@ export default defineConfig({
   `gateway: 'vercel'` pin, listed there), `OPENROUTER_API_KEY` only with `openrouter()`. As a
   judge, `vercel()` serves decision models only (Jev, `openai/gpt-6-luna-decisions`), and
   `openrouter()` only those on its Decisions API (`typesafe/jev-1.14`), never a language model:
-  pin a language-model judge to `gateway: 'direct'`. Always a provider prefix.
+  pin a language-model judge to `gateway: 'direct'`. Always a provider prefix. Every `gateway`
+  list ends with `direct()`, so a cell no listed gateway serves falls back to its own key (the
+  plan's hint says so); `direct({ enabled: false })` refuses it instead.
 - Imports: `reeval` (`defineConfig`, `defineEnvironment`, `group`, `evaluate`,
   `expect`, `DEFAULT_EGRESS_ALLOW`, `DEFAULT_SKILL_EXCLUDE`, types), `/harness`, `/sandbox`
   (`docker`, `fakeSandbox`), `/judge` (`fakeJudge`, `RECOMMENDED_JUDGE_MODEL`,

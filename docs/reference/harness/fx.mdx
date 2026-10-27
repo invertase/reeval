@@ -7,16 +7,16 @@ description: The fx harness, its options and id, its AI Gateway or OpenAI key, t
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
-import { direct, vercel } from '{{ pkg }}/gateway'
+import { vercel } from '{{ pkg }}/gateway'
 import { fx } from '{{ pkg }}/harness'
 
 export default defineConfig({
   harness: fx({ model: 'anthropic/claude-sonnet-5' }),
-  gateway: [vercel(), direct()],
+  gateway: [vercel()],
 })
 ```
 
-A gateway id runs only through [`vercel()`](/reference/gateway#vercel-ai-gateway), so the config lists it in `gateway`; a bare OpenAI id runs on `direct()`, or on Vercel as `openai/<id>` when `vercel()` comes first.
+A gateway id runs only through [`vercel()`](/reference/gateway#vercel-ai-gateway), so the config lists it in `gateway`; a bare OpenAI id runs on Vercel as `openai/<id>`, or on `direct()` when you list it first: `[direct(), vercel()]`.
 
 ## Options
 

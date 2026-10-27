@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { afterEach, describe, test } from 'node:test'
 import { openCodeConfig } from '@reeval/harness-opencode'
 import { onEndpoint } from '@reeval/sandbox-docker'
+import { checkGateways } from '../src/config.ts'
 import { type GatewayScope, resolveModelGateway } from '../src/gateway/models.ts'
 import {
   anthropicOnOpenRouter,
@@ -71,14 +72,36 @@ describe('resolveGateway', () => {
   test('the plan hint names where a harness fell to, and why', () => {
     assert.equal(
       fallbackHint('cursor:composer-2.5', resolve(list('vercel', 'direct'), cursor)),
-      `gateway: cursor:composer-2.5 → direct (vercel can't serve it: ${CURSOR_WHY})`,
+      `gateway: cursor:composer-2.5 falls back to direct (vercel can't serve it: ${CURSOR_WHY})`,
+    )
+    assert.equal(
+      fallbackHint('fx:google/m', {
+        name: 'vercel',
+        skipped: [{ gateway: 'direct', why: 'no' }],
+      }),
+      "gateway: fx:google/m → vercel (direct can't serve it: no)",
     )
   })
 
-  test('nothing in the list serving it exits 2, naming each gateway tried', () => {
+  test('direct() ends every list, unless placed elsewhere or turned off', () => {
+    const kinds = (value: unknown) =>
+      checkGateways(value, 'gateway', 'reeval.config.ts').map((g) => g.kind)
+    assert.deepEqual(kinds([{ kind: 'vercel' }]), ['vercel', 'direct'])
+    assert.deepEqual(kinds(['vertex', 'openrouter']), ['vertex', 'openrouter', 'direct'])
+    assert.deepEqual(kinds([{ kind: 'direct' }, { kind: 'vercel' }]), ['direct', 'vercel'])
+    assert.deepEqual(kinds([{ kind: 'direct', enabled: true }, 'vercel']), ['direct', 'vercel'])
+    assert.deepEqual(kinds([{ kind: 'direct', enabled: false }, 'vercel']), ['vercel'])
+    assert.deepEqual(kinds(['vercel', { direct: { enabled: false } }]), ['vercel'])
+    assert.deepEqual(resolve(checkGateways(['vercel'], 'gateway', 'f'), cursor), {
+      name: 'direct',
+      skipped: [{ gateway: 'vercel', why: CURSOR_WHY }],
+    })
+  })
+
+  test('with direct() off, nothing in the list serving it exits 2, naming each gateway tried', () => {
     assert.throws(() => resolve(list('vercel'), cursor), {
       name: 'UsageError',
-      message: `evaluate("e") on cursor:composer-2.5: no gateway in the list can serve it (vercel: ${CURSOR_WHY}). Add direct() to the end of gateway to use Cursor's own key.`,
+      message: `evaluate("e") on cursor:composer-2.5: no gateway in the list can serve it (vercel: ${CURSOR_WHY}). Drop direct({ enabled: false }) from gateway to fall back to Cursor's own key.`,
     })
   })
 

@@ -231,7 +231,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'gateway',
     area: 'Config and selection',
-    name: '`gateway`: the ordered gateway list, fallback to the first that can serve a harness, a harness `gateway` pin, a profile override, the plan notes and refusals, and the cell and fingerprint in the record',
+    name: '`gateway`: the ordered gateway list, fallback to the first that can serve a harness, `direct()` ending every list unless placed elsewhere or turned off with `direct({ enabled: false })`, a harness `gateway` pin, a profile override, the plan notes and refusals, and the cell and fingerprint in the record',
     plan: [
       'gateway/default',
       'gateway/listed',
@@ -249,7 +249,13 @@ export const inventory: InventoryFeature[] = [
     id: 'gateway.vercel',
     area: 'Config and selection',
     name: "`vercel()`: Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build on Vercel AI Gateway with one brokered key, fallback past it for the harnesses it cannot serve and for `effort` the model would not read, fx's asked model kept apart from the served one, a brokered 401 hinted as a refused key, an expired `VERCEL_OIDC_TOKEN` refused at plan time, and the judge, analysis and captures routed by the list or a judge pin",
-    plan: ['gateway/vercel', 'gateway/vercel-pin', 'gateway/vercel-yaml'],
+    plan: [
+      'gateway/vercel',
+      'gateway/vercel-pin',
+      'gateway/vercel-yaml',
+      'gateway-strict/strict',
+      'gateway-strict/strict-yaml',
+    ],
     unit: [
       'reeval/test/plan.test.ts',
       'reeval/test/gateway.test.ts',

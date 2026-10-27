@@ -7,11 +7,15 @@ import type {
 } from './types.ts'
 
 /**
- * Each provider's own key, as a config without `gateway` uses: the harness's own credential
- * (`CURSOR_API_KEY`, `ANTHROPIC_API_KEY`, …), brokered into its sandbox as today. It serves every
- * harness, so ending the list with it means nothing falls through.
+ * Each provider's own key: the harness's own credential (`CURSOR_API_KEY`, `ANTHROPIC_API_KEY`,
+ * …), brokered into its sandbox. Every `gateway` list ends with it, so a cell no other gateway
+ * serves falls back to it; list it to try it in another place, e.g. `[direct(), vercel()]`, or
+ * pass `{ enabled: false }` to turn the fallback off.
  */
-export const direct = (): DirectGatewayDescriptor => ({ kind: 'direct' })
+export const direct = (
+  options: Omit<DirectGatewayDescriptor, 'kind'> = {},
+): DirectGatewayDescriptor =>
+  options.enabled === undefined ? { kind: 'direct' } : { kind: 'direct', enabled: options.enabled }
 
 /**
  * Vercel AI Gateway: one key, `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`), brokered into the
