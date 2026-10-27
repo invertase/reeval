@@ -793,6 +793,7 @@ export function cascade(
     ) {
       notes.push(`runs ${out.runs} → ${limit.runs} (${tag})`)
       out.runs = limit.runs
+      out.sources = { ...out.sources, runs: `profiles.${profile.name}.limit` }
     }
     const pins = out.pin.filter((k) =>
       k === 'compare'

@@ -1964,6 +1964,7 @@ test('cascade: unset runs default to 4 for a compare with variants, 1 otherwise'
   const capped = runsOf({ compare }, { profile: profile({ limit: { runs: 1 } }) })
   assert.equal(capped.resolved.runs, 1)
   assert.deepEqual(capped.notes, ['runs 4 (compare default)', 'runs 4 → 1 (profile pr)'])
+  assert.equal(capped.resolved.sources?.runs, 'profiles.pr.limit', 'the trace names the cap')
   const off = runsOf({ compare }, { profile: profile({ limit: { compare: false } }) })
   assert.equal(off.resolved.runs, 1, 'a compare the limit turns off runs once')
   assert.equal(
