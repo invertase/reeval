@@ -87,7 +87,7 @@ For more information about the keys on `stack.judge.state`, see [the `judge` opt
 <Property name="cost" type="Cost"></Property>
 
 <Property name="artifacts" type="ArtifactLevel">
-  Which artefacts sit next to this record. Refs to files that weren't kept are removed.
+  Which artifacts sit next to this record. Refs to files that weren't kept are removed.
 </Property>
 
 <Property name="redaction" type="{version: 1}"></Property>
@@ -121,7 +121,7 @@ For more information about the keys on `stack.judge.state`, see [the `judge` opt
 </Property>
 
 <Property name="worktreePatch" type="FileRef | null">
-  Those changes are stored as the `worktree.patch` file in the artefact directory. Applying it to `sha` reproduces the workspace.
+  Those changes are stored as the `worktree.patch` file in the artifact directory. Applying it to `sha` reproduces the workspace.
 </Property>
 
 <Property name="worktreePatchNote" type="string | null">
@@ -259,7 +259,7 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 </Property>
 
 <Property name="slug" type="string">
-  Directory name inside the artefact directory, from `key`.
+  Directory name inside the artifact directory, from `key`.
 </Property>
 
 <Property name="file" type="string"></Property>
@@ -273,7 +273,15 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 </Property>
 
 <Property name="sources" type="Array<{path: string; sha256: string}>">
-  The evaluation file and every local file it imports, directly or not, by content hash.
+  The evaluation file, by content hash: where the evaluation lives. Records from before `source` also list the local files it imported, and were fingerprinted over them.
+</Property>
+
+<Property name="source" type="EvalSource" optional>
+  Hashes of what the `sources` fingerprint part covers but `revision`: the eval's body, its case data and its options with its groups'. Unset on records from before it.
+</Property>
+
+<Property name="revision" type="Revision" optional>
+  The eval's `revision`, part of the `sources` fingerprint part; unset when it sets none.
 </Property>
 
 <Property name="tags" type="string[]"></Property>
@@ -319,7 +327,7 @@ Also has every field of `Cell`.
 <Property name="fingerprintParts" type="FingerprintParts"></Property>
 
 <Property name="environmentDigest" type="string | null">
-  The environment's digest: the join key into `RunRecord.environments`; null for none.
+  The environment's digest; null for none. With `environment`, the key into `RunRecord.environments`: environments with the same contents share a digest.
 </Property>
 
 <Property name="harnessKind" type="string"></Property>
@@ -561,7 +569,7 @@ One effort metric over a family's paired cases.
 Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="sources" type="string">
-  Over `EvalEntry.sources`.
+  Over `EvalEntry.source` and `EvalEntry.revision`; on records from before them, over `EvalEntry.sources`.
 </Property>
 
 <Property name="harness" type="string">
@@ -584,6 +592,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="gateway" type="string" optional>
   The gateway its model calls went through; unset on `direct`, each provider's own key.
+</Property>
+
+<Property name="gate" type="string" optional>
+  The cell's gate (`none`, `passRate 0.5`); unset on the default `all`. Compare reads a change in it as a policy change, not a reason the runs can't be compared.
 </Property>
 
 ### `AttemptRecord`
@@ -674,10 +686,14 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   Counts from the transcript, so the attempt's activity is available without reading the transcript. `webSearches` includes refused searches.
 </Property>
 
-<Property name="judgements" type="JudgementRecord[]"></Property>
+<Property name="judgements" type="JudgmentRecord[]"></Property>
 
 <Property name="startRetries" type="StartRetry[]" optional>
   Harness session starts that didn't become ready within `startTimeout` and were started again (at most one).
+</Property>
+
+<Property name="setupProcesses" type="SetupProcess[]" optional>
+  Processes the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in their environment, so they hold its real value while the agent works and the agent, as the same user, can read it from them. Found by the secret's variable name, so a copy under another name or in a command's arguments isn't. At most 20, each `{ command, secrets }`: its command line, masked and cut at 200 characters, and those secrets' names. Absent when there were none.
 </Property>
 
 <Property name="checks" type="Array<{command: string; exitCode: number; durationMs: number; log?: FileRef; retries?: number; tries?: ExecTry[]}>">
@@ -707,7 +723,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 <Property name="transcript" type="FileRef" optional></Property>
 
 <Property name="rawTranscript" type="FileRef" optional>
-  Unnormalised harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`.
+  Unnormalized harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`.
 </Property>
 
 <Property name="diff" type="FileRef" optional></Property>
@@ -732,7 +748,7 @@ Also has every field of `FileRef`.
   Set when the file came from `c.capture()`.
 </Property>
 
-### `JudgementRecord`
+### `JudgmentRecord`
 
 <Property name="question" type="string"></Property>
 
@@ -761,7 +777,7 @@ Also has every field of `FileRef`.
 </Property>
 
 <Property name="key" type="string">
-  `<index>:<sha256(question) prefix>`: the same question at the same place in the evaluation, so a verdict can be followed across runs (and an edited question starts a new series).
+  `<index>:<sha256(question) prefix>`: the same question at the same place in the evaluation, so a verdict can be followed across runs (and an edited question starts a new series). `<index>` is the call's place among the attempt's `c.judge()` calls, counting calls that failed, whichever finishes first.
 </Property>
 
 <Property name="retries" type="JudgeRetry[]" optional>
@@ -798,7 +814,7 @@ One failed judge try that was retried, and the backoff before the next.
 
 ### `FileRef`
 
-`path` is relative to the run's artefact directory; `sha256` is of the bytes on disk.
+`path` is relative to the run's artifact directory; `sha256` is of the bytes on disk.
 
 <Property name="path" type="string"></Property>
 
@@ -829,7 +845,7 @@ A cell of an evaluation combines a harness, an environment (`-` when none is set
 </Property>
 
 <Property name="sandbox" type="string">
-  The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts with the engine (`docker` by default). It adds `:` and the sanitised final component of `image` or `from`, or for `dockerfile` the sanitised filename (the parent directory name when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps append `+` and an eight-character hash.
+  The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts with the engine (`docker` by default). It adds `:` and the sanitized final component of `image` or `from`, or for `dockerfile` the sanitized filename (the parent directory name when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps append `+` and an eight-character hash.
 </Property>
 
 <Property name="role" type="CellRole"></Property>
@@ -872,10 +888,12 @@ An environment as it was applied, without secret values.
 
 <Property name="vars" type="string[]"></Property>
 
-<Property name="secrets" type="string[]"></Property>
+<Property name="secrets" type="string[]">
+  Every secret, by the variable it's set as in the sandbox; an MCP header's (`secret.fromEnv`, `secret.template`, a plugin's `${VAR}`) by each host variable it reads.
+</Property>
 
 <Property name="brokered" type="string[]">
-  Secrets the sandbox only had placeholders for, swapped in by the egress gateway.
+  Secrets the sandbox only had placeholders for, swapped in by the egress gateway, named as in `secrets`. A variable it also got as its real value somewhere (an `http://` header, an env secret without `hosts`) isn't listed.
 </Property>
 
 <Property name="unset" type="string[]">
