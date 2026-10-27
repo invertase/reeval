@@ -1,0 +1,54 @@
+---
+title: "Grok Build harness"
+description: "The Grok Build harness runs xAI's Grok Build CLI in the sandbox on an xAI API key and records its events."
+---
+
+`grokBuild()` runs xAI's Grok Build CLI (`grok agent stdio`) in the sandbox. For more information about the sandbox, see [Choose a sandbox](/integrations/sandboxes).
+
+## `XAI_API_KEY`
+
+`grokBuild()` reads `XAI_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
+
+reeval swaps it into the `Authorization: Bearer` header on Grok Build's requests to `api.x.ai`, `GET /v1/models`, `GET /v1/api-key`, `POST /v1/chat/completions`, and `POST /v1/responses`, and refuses it anywhere else. A restricted egress policy allows `api.x.ai`.
+
+When xAI refuses the key, Grok Build drops its `xai.api_key` sign-in, and the attempt error begins with `The API rejected XAI_API_KEY: set a valid key in the environment or .env.local`.
+
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
+
+For more information about the variable, see [`XAI_API_KEY`](/reference/env-vars#xaiapikey).
+
+## `grokBuild()`
+
+The factory comes from `{{ pkg }}/harness`, and its return value sets the `harness` option:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { grokBuild } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: grokBuild({
+    model: 'grok-4.6',
+  }),
+})
+```
+
+`model` is required. For what each field takes, see [Harness factory options](/reference/options#harness-factory-options).
+
+
+
+In the sandbox, Grok Build runs with a private home, whose `config.toml` file puts the session and its title on the run's model and turns off telemetry, self-update, and the summary, recap, and title-refresh calls, so a turn contacts only `api.x.ai`.
+
+For more information about model ids and effort values, see [Set the agent's model](/agents/model). For rules, skills, MCP servers, usage, served models, and web events, see [Harness behavior](/reference/options#harness-behavior).
+
+## `plugins`
+
+reeval passes each plugin's directory to Grok Build as a plugin directory, and Grok Build loads the plugin's MCP servers from it. Over ACP, reeval sends only the cell's own MCP servers, and it gives the translator each plugin server's name, so the tool calls get their `mcp__<server>__<tool>` names.
+
+[//]: # (generated:harness-plugins:grok-build)
+
+- Takes `skills`, `agents`, `commands`, `hooks` and `mcp`, and refuses a plugin that keeps `rules`: narrow it with `only`, or leave it out of the cell.
+- Names a plugin's MCP servers by their own keys, in one list with `mcp`, and keeps one of two servers of a name, so a clash is refused.
+
+[//]: # (/generated:harness-plugins:grok-build)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).

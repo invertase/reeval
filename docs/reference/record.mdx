@@ -1,11 +1,11 @@
 ---
 title: "Run record reference"
-description: "Look up every field of the run record."
+description: "A run record holds one run's cells, attempts, assertions, judgments, and the environment each ran in."
 ---
 
 The `reeval show --json` command prints one run's record. The record is the `<runId>.json` file in the `.reeval/runs/` directory, or the same name in the history folder, with artifacts in the `<runId>` directory.
 
-For more information about saving a record, see [Recording](/runs/recording). For more information about the saved result, see [Record](/core-concepts#record). For more information about querying recorded runs, see [Query views](/reference/query).
+For more information about saving a record, see [Recording](/runs/recording). For more information about the saved result, see [Record](/reference/glossary#record). For more information about querying recorded runs, see [Query views](/reference/query).
 
 ## Value types
 
@@ -627,7 +627,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="servedModels" type="string[] | null">
-  The models served by the harness's API calls, as observed by the egress gateway. Values may come from requests or responses and include reported effort; null when no model was named or recorded.
+  The models served by the harness's API calls, as observed by the egress gateway. Values may come from requests or responses and include reported effort; null when no model was named or recorded. The gateway reads the request URL for Antigravity, Goose, pi, and OpenCode on a `google/` model, so a request for `<model>-low` records `<model>`, and the API response for Codex, Grok Build, and OpenCode on another provider. Null for Cursor and Claude Code, whose API requests name no model.
 </Property>
 
 <Property name="askedModels" type="string[]" optional>
@@ -858,10 +858,14 @@ An environment as it was applied, without secret values.
 
 <Property name="setup" type="string[]"></Property>
 
-<Property name="skills" type="Array<{name: string; source: string; commit: string | null; sha256: string; placement: SkillPlacement; excluded: string[]}>"></Property>
+<Property name="skills" type="Array<{name: string; source: string; commit: string | null; sha256: string; placement: SkillPlacement; excluded: string[]; plugin?: string}>"></Property>
 
 <Property name="mcp" type="string[]">
   The names of the MCP servers the agent was given.
+</Property>
+
+<Property name="plugins" type="PluginRecord[]" optional>
+  The plugins placed, each with what it placed; in the digest. Unset when there are none.
 </Property>
 
 <Property name="files" type="Array<{path: string; sha256: string}>"></Property>
@@ -884,6 +888,38 @@ An environment as it was applied, without secret values.
 
 <Property name="workspace" type="{source: string; ref: string | null; path: string | null; commit: string; tree: string; init?: boolean}" optional>
   This records the Git repository the workspace started as: the repo as written (a local one relative to the project root), the ref and path asked for (null when unset), the commit the ref resolved to, and the hash of the tree that was copied in, which is in the digest.
+</Property>
+
+### `PluginRecord`
+
+A plugin as an attempt placed it.
+
+<Property name="name" type="string">
+  The manifest's `name`.
+</Property>
+
+<Property name="source" type="string">
+  Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`; for a marketplace entry, the entry's own source.
+</Property>
+
+<Property name="marketplace" type="{name: string; source: string; commit: string | null} | null">
+  The marketplace it was listed in, with its `marketplace.json` name, its source as written (`github:acme/agent-plugins#v3`, `npm:@acme/plugins@2.0.0`) and the commit a git one resolved to (null for npm); null when the plugin was named directly.
+</Property>
+
+<Property name="commit" type="string | null">
+  The commit a git source resolved to (the marketplace's, for an entry inside it); null for a local or npm one.
+</Property>
+
+<Property name="sha256" type="string">
+  The hash of the files placed.
+</Property>
+
+<Property name="build" type="string | null">
+  The tag of the image layer its build ran in (`reeval-plugin:…`); null without a build.
+</Property>
+
+<Property name="parts" type="{skills: string[]; agents: string[]; commands: string[]; hooks: string[]; mcp: string[]; rules: boolean}">
+  What it placed: skill, agent, command and MCP server names, hook events, and whether it had rules.
 </Property>
 
 ### `EgressRecord`
@@ -982,7 +1018,7 @@ On a CI run, `RunRecord.runner` has `kind` `ci` and `provider` `github`, `gitlab
 
 ## `PrepareFailureRecord`
 
-`AttemptError.prepare` records a sandbox preparation that failed. `class` is `config`, `transient` after the retries, or `resource`. `stage` is `image`, `from`, `dockerfile`, `harness`, `install`, or `workspace`. `ref` is what was prepared, `repo#ref:path` for a Git workspace. `cause` is `enospc`, `oom`, or null. `log` is the build log or null, and `setBy` names the levels that set the sandbox.
+`AttemptError.prepare` records a sandbox preparation that failed. `class` is `config`, `transient` after the retries, or `resource`. `stage` is `image`, `from`, `dockerfile`, `harness`, `install`, `plugin`, or `workspace`. `ref` is what was prepared, `repo#ref:path` for a Git workspace. `cause` is `enospc`, `oom`, or null. `log` is the build log or null, and `setBy` names the levels that set the sandbox.
 
 ## `ResourceFailureRecord`
 
@@ -1000,11 +1036,11 @@ A `StartRetry` is one entry of `AttemptRecord.startRetries`. `error` is `<harnes
 
 ## `CellCheck`
 
-`CellRecord.checks` tallies one label over the cell's counted attempts. `pass`, `fail`, `error`, and `notRun` are those counts, and `control` repeats them for the control. `verdict` is `discriminates` when every answered instance passes on one side and fails on the other, `both-pass` when every answered instance passes on both sides, `both-fail` when every answered instance fails on both sides, or `mixed` otherwise. It is absent when either side has no pass or fail.
+`CellRecord.checks` tallies one label over the cell's counted attempts. `pass`, `fail`, `error`, and `notRun` are those counts, and `control` repeats them for the baseline. `verdict` is `discriminates` when every answered instance passes on one side and fails on the other, `both-pass` when every answered instance passes on both sides, `both-fail` when every answered instance fails on both sides, or `mixed` otherwise. It is absent when either side has no pass or fail.
 
 ## `EvalCompareMeta`
 
-`EvalEntry.compare` names the control when the evaluation uses `compare`. `baseline` is that environment's name. When `compare.baseline` was omitted, `from` is `environment` for the cascaded environment, or `empty` for an empty environment named `baseline`.
+`EvalEntry.compare` names the baseline when the evaluation uses `compare`. `baseline` is that environment's name. When `compare.baseline` was omitted, `from` is `environment` for the cascaded environment, or `empty` for an empty environment named `baseline`.
 
 ## `CompareAnswer`
 

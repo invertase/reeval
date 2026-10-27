@@ -1,59 +1,30 @@
 ---
 title: "Give the agent skills"
-description: "Verify that an agent uses a skill during an attempt."
+description: "Place a skill where the harness loads it, and check the agent used it."
 ---
 
-You place a skill on an environment so the harness can load it during an attempt. Each entry in `skills` comes from the `skill` helper. For more information about measuring whether a skill helped, see [Compare setups](/evals/compare).
+You place a skill on an environment so the harness can load it during an attempt. Each entry in `skills` comes from the `skill` helper. For more information about measuring whether a skill helped, see [Measure lift against a baseline](/results/compare/lift).
 
 ## Add a skill
 
-A skill directory holds a `SKILL.md` file. The frontmatter `name` is kebab-case, and `description` is required. When the frontmatter omits `name`, reeval uses the directory name. A `name` other than kebab-case, or a missing `description`, fails the attempt. Quote a frontmatter value that contains `": "`.
-
-The repository is `github:owner/repo`, an `https://` URL, an SSH URL, or a GitHub `/tree/<ref>/<path>` URL. In the `evals/environments.ts` file, place Anthropic's `brand-guidelines` skill on a variant of `page`:
+In the `evals/environments.ts` file, place a skill from a host directory with `skill.local()`:
 
 ```ts title="evals/environments.ts"
-export const withSkill = page.extendEnvironment(
-  'brand-guidelines',
-  ({ skill }) => ({
-    skills: [
-      skill.git('github:anthropics/skills', {
-        ref: 'dbd4588f9e1033efb41dad4bef2f7947c8993d44',
-        path: 'skills',
-        only: ['brand-guidelines'],
-      }),
-    ],
-  }),
-)
+import { defineEnvironment } from '{{ pkg }}'
+
+export const math = defineEnvironment('math', ({ directory, skill }) => ({
+  files: directory('./project'),
+  skills: [skill.local('./skills/jsdoc')],
+}))
 ```
 
-In the `evals/brand.eval.ts` file, import `withSkill` from the `./environments.ts` file and list it in `compare.variants`, as [Quick start](/quickstart) does. For a runnable project, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
+Pass `math` as an evaluation's `environment`, as [Environments](/environments#define-and-use-an-environment) shows. To compare the environment with and without the skill, see [Measure lift against a baseline](/results/compare/lift).
 
-Without `ref`, reeval reads the default branch and warns that results aren't comparable over time. Pin `ref` to a commit or a tag to keep them comparable.
+A skill directory holds a `SKILL.md` file. The frontmatter `name` is kebab-case, and `description` is required. When the frontmatter omits `name`, reeval uses the directory name. A `name` other than kebab-case, or a missing `description`, fails the attempt. Quote a frontmatter value that contains `": "`.
 
-Pass `path` as the directory to read. It can be one skill directory or a directory whose immediate subdirectories are skills. Without `path`, reeval reads the `skills/` directory when the repository has that directory and no root `SKILL.md` file. Otherwise reeval reads the repository root.
+## Use another source
 
-`only` keeps the listed skill names. When `only` names a skill that is absent, the attempt fails and the message lists the skills that are there.
-
-reeval leaves out the `/evals/` directory, the `.history/` directory, and `*.eval.ts` files. reeval always leaves the `.git` directory out. Pass `exclude` to replace that list. To keep those paths out, repeat the three patterns in `exclude`.
-
-## Use other skill sources
-
-`skill.git` is one of five sources. This excerpt places one skill from each of three:
-
-```ts title="with-skill-sources.eval.ts"
-skills: [
-  skill.git('github:anthropics/skills', {
-    ref: anthropicSkills,
-    only: ['brand-guidelines'],
-  }),
-  skill.registry('anthropics/skills@doc-coauthoring', {
-    version: anthropicSkills,
-  }),
-  skill.npm('reeval@0.13.0', { only: ['eval-rubric'] }),
-],
-```
-
-`skill.inline` writes a skill from a name, a description, and its content, and `skill.local` reads a skill directory on your machine. For a runnable project, see [`with-skill-sources`](https://github.com/invertase/reeval/tree/main/examples/with-skill-sources). For more information about each source and placement, see [Environment helpers](/reference/environment#skilllocal).
+Place a skill from a repository with [`skill.git`](/reference/environment#skillgit), from skills.sh with [`skill.registry`](/reference/environment#skillregistry), from an npm package with [`skill.npm`](/reference/environment#skillnpm), or from a name, a description, and its content with [`skill.inline`](/reference/environment#skillinline). For a runnable project, see [`with-skill-sources`](https://github.com/invertase/reeval/tree/main/examples/with-skill-sources).
 
 ## Check the agent used the skill
 

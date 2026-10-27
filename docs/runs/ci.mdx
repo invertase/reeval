@@ -36,7 +36,11 @@ jobs:
       - id: reeval
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: npx reeval run --profile pr
+        run: |
+          set +e
+          npx reeval run --profile pr
+          code=$?
+          if [ "$code" -gt 1 ]; then exit "$code"; fi
 ```
 
 The `ubuntu-latest` runner includes the container runtime the sandbox uses. `fetch-depth: 0` keeps every ancestor commit, so `reeval compare` can pick a base run from one of them. The `ref` input checks out the pull request branch, and the `contents: write` permission lets a later step push to that branch.
@@ -45,14 +49,14 @@ The run step's id is `reeval`. At the start of the run, the `reeval run` command
 
 When the run finishes, the `reeval run` command appends the run's `summary.md` file to the job summary. A failed run receives that file too. With `GITHUB_ACTIONS` set, a failing attempt stays expanded in the log and adds an error annotation on its evaluation file.
 
-The `reeval run` command exits 0 when the outcome is a pass, 1 when it is a fail, and 3 when it is an infrastructure error. Any other non-zero code fails the job too.
+The `reeval run` command exits 1 when an evaluation fails. The step lets that code through so the later `reeval compare` step decides, because an evaluation that already failed on the base commit is not a regression. Any other non-zero code, such as 2 for a usage error or 3 for an infrastructure error, fails the job here.
 
-An ungated cell, a control by default, can fail on a run that exits 0. A `budget.duration` stop counts as a failed run. For more information about exit codes, see [Exit codes](/reference/cli#exit-codes).
+An ungated cell, a baseline by default, can fail on a run that exits 0. A `budget.duration` stop counts as a failed run. For more information about exit codes, see [Exit codes](/reference/cli#exit-codes).
 
 </Step>
 <Step title="Add the API key">
 
-Add your harness's API key to the repository secret used by the run step.
+Add the harness's API key to the repository secret used by the run step.
 
 </Step>
 <Step title="Record results">
@@ -70,20 +74,16 @@ In the `.github/workflows/reeval.yml` file, add this step to commit the history 
           git push
 ```
 
-The default `record` value is `'ci'`. It copies each finished run into the history directory when the `CI` variable is set to anything other than `false`. With the default include patterns, that directory is `evals/.history`.
+With the default `record: 'ci'`, reeval copies each finished run into `evals/.history` when the `CI` variable is set ([Record automatically](/runs/recording#record-automatically)). The copy includes a run whose evaluations fail. reeval leaves an interrupted run in the `.reeval/runs` directory. A run that `budget.duration` stops is recorded with status `budget`, and a later `reeval compare` skips a run with that status when it picks a base.
 
-When that copy finishes, reeval prints a line that ends with `Commit it with git`.
-
-The copy includes a run whose evaluations fail. reeval leaves an interrupted run in the `.reeval/runs` directory. A run that `budget.duration` stops is recorded with status `budget`, and a later `reeval compare` skips a run with that status when it picks a base.
-
-The commit step runs when `reeval run` passes or fails. `if: ${{ !cancelled() }}` skips it when the job is cancelled.
+The commit step runs when `reeval run` passes or fails. `if: ${{ !cancelled() }}` skips it when the job is canceled.
 
 The job skips pull requests opened from forks because their default token has no push access.
 
 </Step>
 <Step title="Fail on a regression">
 
-In the `.github/workflows/reeval.yml` file, add these two steps. `reeval compare` reads the history directory and picks the newest complete run on an ancestor of the pull request's commit. The steps append the diff to the job summary and fail the job on a regression, and they run unless the job is cancelled.
+In the `.github/workflows/reeval.yml` file, add these two steps. `reeval compare` reads the history directory and picks the newest complete run on an ancestor of the pull request's commit. The steps append the diff to the job summary and fail the job on a regression, and they run unless the job is canceled.
 
 ```yaml title=".github/workflows/reeval.yml"
       - if: ${{ !cancelled() }}
@@ -92,11 +92,7 @@ In the `.github/workflows/reeval.yml` file, add these two steps. `reeval compare
         run: npx reeval compare --fail-on-regression
 ```
 
-The `reeval compare --fail-on-regression` command exits 1 when the diff says `regressed`, when an evaluation marked `new` fails, or when an evaluation marked `can't compare` fails. The gate ignores an evaluation whose only failures are attempts an interrupt cancels.
-
-With no earlier recorded run, `reeval compare` lists every evaluation as `new`, and the gate fails only when one of them fails.
-
-For more information about `regressed`, `new`, and `can't compare`, see [Regressions](/results/regressions).
+The gate fails when an evaluation `regressed`, or when a `new` or `can't compare` evaluation fails, so the first run with no earlier record fails only on a failing evaluation. For more information about those words, see [Compare with past runs](/results/compare/past-runs#fail-on-a-regression).
 
 </Step>
 </Steps>

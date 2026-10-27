@@ -26,21 +26,53 @@
       "href": "https://www.npmjs.com/package/reeval"
     }
   ],
+  "redirects": {
+    "/evals/evaluate": "/write",
+    "/evals/turns": "/write/turns",
+    "/evals/checks": "/write/assertions",
+    "/evals/judges": "/write/judgments",
+    "/evals/questions": "/write/questions",
+    "/evals/groups": "/write/groups",
+    "/evals/cases": "/write/cases",
+    "/evals/servers": "/write/apps",
+    "/harnesses": "/agents",
+    "/harnesses/models": "/agents/model",
+    "/gateways": "/agents/gateways",
+    "/environments/workspaces": "/environments/repositories",
+    "/evals/compare": "/results/compare/lift",
+    "/results/regressions": "/results/compare/past-runs",
+    "/evals/statistics": "/results/compare/statistics",
+    "/results/analysis": "/results/analyze",
+    "/sandboxes": "/integrations/sandboxes",
+    "/sandboxes/toolchains": "/environments/toolchains",
+    "/sandboxes/docker": "/integrations/sandboxes/docker",
+    "/sandboxes/podman": "/integrations/sandboxes/podman",
+    "/harnesses/cursor": "/integrations/agents/cursor",
+    "/harnesses/claude-code": "/integrations/agents/claude-code",
+    "/harnesses/codex": "/integrations/agents/codex",
+    "/harnesses/antigravity": "/integrations/agents/antigravity",
+    "/harnesses/opencode": "/integrations/agents/opencode",
+    "/harnesses/goose": "/integrations/agents/goose",
+    "/harnesses/pi": "/integrations/agents/pi",
+    "/harnesses/grok-build": "/integrations/agents/grok-build",
+    "/gateways/direct": "/integrations/gateways/direct",
+    "/gateways/vercel": "/integrations/gateways/vercel",
+    "/gateways/openrouter": "/integrations/gateways/openrouter",
+    "/gateways/vertex": "/integrations/gateways/vertex",
+    "/integrations/sandboxes/toolchains": "/environments/toolchains",
+    "/core-concepts": "/reference/glossary"
+  },
   "sidebar": [
     {
       "group": "Getting started",
       "pages": [
         {
-          "title": "Overview",
+          "title": "Introduction",
           "href": "/"
         },
         {
           "title": "Quickstart",
           "href": "/quickstart"
-        },
-        {
-          "title": "Core concepts",
-          "href": "/core-concepts"
         }
       ]
     },
@@ -48,40 +80,241 @@
       "group": "Evaluations",
       "pages": [
         {
-          "title": "Overview",
-          "href": "/evals/evaluate"
+          "title": "Evaluate",
+          "href": "/write"
         },
         {
-          "title": "Compare",
-          "href": "/evals/compare"
+          "group": "Task",
+          "pages": [
+            {
+              "title": "Turns",
+              "href": "/write/turns"
+            },
+            {
+              "title": "Cases",
+              "href": "/write/cases"
+            },
+            {
+              "title": "Groups",
+              "href": "/write/groups"
+            },
+            {
+              "title": "Apps",
+              "href": "/write/apps"
+            }
+          ]
         },
         {
-          "title": "Assertions",
-          "href": "/evals/checks"
+          "group": "Grading",
+          "pages": [
+            {
+              "title": "Assertions",
+              "href": "/write/assertions"
+            },
+            {
+              "title": "Judgments",
+              "href": "/write/judgments"
+            },
+            {
+              "title": "Questions",
+              "href": "/write/questions"
+            }
+          ]
         },
         {
-          "title": "Statistics",
-          "href": "/evals/statistics"
+          "group": "Runs",
+          "pages": [
+            {
+              "title": "Running",
+              "href": "/runs/running"
+            },
+            {
+              "title": "Profiles",
+              "href": "/runs/profiles"
+            },
+            {
+              "title": "Recording",
+              "href": "/runs/recording"
+            },
+            {
+              "title": "CI",
+              "href": "/runs/ci"
+            }
+          ]
         },
         {
-          "title": "Turns",
-          "href": "/evals/turns"
+          "group": "Recipes",
+          "pages": [
+            {
+              "title": "Measure a skill",
+              "href": "/recipes/skill-comparison"
+            },
+            {
+              "title": "Measure your docs",
+              "href": "/recipes/docs-comparison"
+            },
+            {
+              "title": "Measure MCP servers",
+              "href": "/recipes/mcp-comparison"
+            },
+            {
+              "title": "Test an SDK",
+              "href": "/recipes/sdk"
+            },
+            {
+              "title": "Test a CLI",
+              "href": "/recipes/cli"
+            },
+            {
+              "title": "Test recommendations",
+              "href": "/recipes/recommendation"
+            },
+            {
+              "title": "Judge an app",
+              "href": "/recipes/app-check"
+            },
+            {
+              "title": "Compare harnesses",
+              "href": "/recipes/agent-comparison"
+            },
+            {
+              "title": "Gate pull requests",
+              "href": "/recipes/ci-gate"
+            },
+            {
+              "title": "Track past runs",
+              "href": "/recipes/results-over-time"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Configuration",
+      "pages": [
+        {
+          "group": "Gateways",
+          "href": "/agents/gateways",
+          "pages": [
+            {
+              "title": "Direct",
+              "href": "/integrations/gateways/direct"
+            },
+            {
+              "title": "Vercel AI Gateway",
+              "href": "/integrations/gateways/vercel"
+            },
+            {
+              "title": "OpenRouter",
+              "href": "/integrations/gateways/openrouter"
+            },
+            {
+              "title": "Vertex AI",
+              "href": "/integrations/gateways/vertex"
+            }
+          ]
         },
         {
-          "title": "Judges",
-          "href": "/evals/judges"
+          "group": "Agents",
+          "href": "/agents",
+          "pages": [
+            {
+              "title": "Model",
+              "href": "/agents/model"
+            },
+            {
+              "title": "Cursor",
+              "href": "/integrations/agents/cursor"
+            },
+            {
+              "title": "Claude Code",
+              "href": "/integrations/agents/claude-code"
+            },
+            {
+              "title": "Codex",
+              "href": "/integrations/agents/codex"
+            },
+            {
+              "title": "Antigravity",
+              "href": "/integrations/agents/antigravity"
+            },
+            {
+              "title": "OpenCode",
+              "href": "/integrations/agents/opencode"
+            },
+            {
+              "title": "Goose",
+              "href": "/integrations/agents/goose"
+            },
+            {
+              "title": "pi",
+              "href": "/integrations/agents/pi"
+            },
+            {
+              "title": "fx",
+              "href": "/integrations/agents/fx"
+            },
+            {
+              "title": "Grok Build",
+              "href": "/integrations/agents/grok-build"
+            }
+          ]
         },
         {
-          "title": "Groups",
-          "href": "/evals/groups"
+          "group": "Sandboxes",
+          "href": "/integrations/sandboxes",
+          "pages": [
+            {
+              "title": "Docker",
+              "href": "/integrations/sandboxes/docker"
+            },
+            {
+              "title": "Podman",
+              "href": "/integrations/sandboxes/podman"
+            }
+          ]
         },
         {
-          "title": "Cases",
-          "href": "/evals/cases"
-        },
-        {
-          "title": "Apps",
-          "href": "/evals/servers"
+          "group": "Environments",
+          "href": "/environments",
+          "pages": [
+            {
+              "title": "Files",
+              "href": "/environments/files"
+            },
+            {
+              "title": "Repositories",
+              "href": "/environments/repositories"
+            },
+            {
+              "title": "Skills",
+              "href": "/environments/skills"
+            },
+            {
+              "title": "Rules",
+              "href": "/environments/rules"
+            },
+            {
+              "title": "MCP servers",
+              "href": "/environments/mcp"
+            },
+            {
+              "title": "Toolchains",
+              "href": "/environments/toolchains"
+            },
+            {
+              "title": "Setup commands",
+              "href": "/environments/setup"
+            },
+            {
+              "title": "Secrets",
+              "href": "/environments/secrets"
+            },
+            {
+              "title": "Egress",
+              "href": "/environments/egress"
+            }
+          ]
         }
       ]
     },
@@ -89,206 +322,46 @@
       "group": "Results",
       "pages": [
         {
-          "title": "Output",
+          "title": "Run output",
           "href": "/results/output"
         },
         {
-          "title": "Debugging",
-          "href": "/results/debugging"
+          "title": "Measure",
+          "href": "/results/measure"
         },
         {
-          "title": "Analysis",
-          "href": "/results/analysis"
-        },
-        {
-          "title": "Regressions",
-          "href": "/results/regressions"
-        },
-        {
-          "title": "Studio",
-          "href": "/results/studio"
-        },
-        {
-          "title": "Queries",
-          "href": "/results/queries"
-        }
-      ]
-    },
-    {
-      "group": "Environments",
-      "pages": [
-        {
-          "title": "Overview",
-          "href": "/environments"
-        },
-        {
-          "title": "Workspaces",
-          "href": "/environments/workspaces"
-        },
-        {
-          "title": "Files",
-          "href": "/environments/files"
-        },
-        {
-          "title": "Rules",
-          "href": "/environments/rules"
-        },
-        {
-          "title": "Setup commands",
-          "href": "/environments/setup"
-        },
-        {
-          "title": "Skills",
-          "href": "/environments/skills"
-        },
-        {
-          "title": "MCP servers",
-          "href": "/environments/mcp"
-        },
-        {
-          "title": "Secrets",
-          "href": "/environments/secrets"
-        },
-        {
-          "title": "Egress",
-          "href": "/environments/egress"
-        }
-      ]
-    },
-    {
-      "group": "Runs",
-      "pages": [
-        {
-          "title": "Running",
-          "href": "/runs/running"
-        },
-        {
-          "title": "Profiles",
-          "href": "/runs/profiles"
-        },
-        {
-          "title": "Recording",
-          "href": "/runs/recording"
-        },
-        {
-          "title": "CI",
-          "href": "/runs/ci"
-        }
-      ]
-    },
-    {
-      "group": "Integrations",
-      "pages": [
-        {
-          "group": "Harnesses",
+          "group": "Compare",
           "pages": [
             {
-              "title": "Overview",
-              "href": "/harnesses"
+              "title": "Lift",
+              "href": "/results/compare/lift"
             },
             {
-              "title": "Models",
-              "href": "/harnesses/models"
-            },
-            {
-              "title": "Cursor",
-              "href": "/harnesses/cursor"
-            },
-            {
-              "title": "Claude Code",
-              "href": "/harnesses/claude-code"
-            },
-            {
-              "title": "Codex",
-              "href": "/harnesses/codex"
-            },
-            {
-              "title": "Antigravity",
-              "href": "/harnesses/antigravity"
-            },
-            {
-              "title": "OpenCode",
-              "href": "/harnesses/opencode"
-            },
-            {
-              "title": "Goose",
-              "href": "/harnesses/goose"
-            },
-            {
-              "title": "pi",
-              "href": "/harnesses/pi"
-            },
-            {
-              "title": "Grok Build",
-              "href": "/harnesses/grok-build"
+              "title": "Past runs",
+              "href": "/results/compare/past-runs"
             }
           ]
         },
         {
-          "group": "Sandboxes",
+          "title": "Analyze",
+          "href": "/results/analyze"
+        },
+        {
+          "group": "Inspection",
           "pages": [
             {
-              "title": "Overview",
-              "href": "/sandboxes"
+              "title": "Studio",
+              "href": "/results/studio"
             },
             {
-              "title": "Toolchains",
-              "href": "/sandboxes/toolchains"
+              "title": "Debugging",
+              "href": "/results/debugging"
             },
             {
-              "title": "Docker",
-              "href": "/sandboxes/docker"
-            },
-            {
-              "title": "Podman",
-              "href": "/sandboxes/podman"
+              "title": "Queries",
+              "href": "/results/queries"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "Recipes",
-      "pages": [
-        {
-          "title": "Measure a skill",
-          "href": "/recipes/skill-comparison"
-        },
-        {
-          "title": "Measure your docs",
-          "href": "/recipes/docs-comparison"
-        },
-        {
-          "title": "Measure MCP servers",
-          "href": "/recipes/mcp-comparison"
-        },
-        {
-          "title": "Test recommendations",
-          "href": "/recipes/recommendation"
-        },
-        {
-          "title": "Test an SDK",
-          "href": "/recipes/sdk"
-        },
-        {
-          "title": "Test a CLI",
-          "href": "/recipes/cli"
-        },
-        {
-          "title": "Compare harnesses",
-          "href": "/recipes/agent-comparison"
-        },
-        {
-          "title": "Gate pull requests",
-          "href": "/recipes/ci-gate"
-        },
-        {
-          "title": "Track results",
-          "href": "/recipes/results-over-time"
-        },
-        {
-          "title": "Judge an app",
-          "href": "/recipes/app-check"
         }
       ]
     },
@@ -298,22 +371,6 @@
           "group": "Reference",
           "pages": [
             {
-              "title": "CLI",
-              "href": "/reference/cli"
-            },
-            {
-              "title": "Configuration",
-              "href": "/reference/config"
-            },
-            {
-              "title": "Options",
-              "href": "/reference/options"
-            },
-            {
-              "title": "Profiles",
-              "href": "/reference/profiles"
-            },
-            {
               "title": "Authoring API",
               "href": "/reference/api"
             },
@@ -322,12 +379,32 @@
               "href": "/reference/context"
             },
             {
+              "title": "Matchers",
+              "href": "/reference/matchers"
+            },
+            {
+              "title": "Options",
+              "href": "/reference/options"
+            },
+            {
               "title": "Environment helpers",
               "href": "/reference/environment"
             },
             {
-              "title": "Matchers",
-              "href": "/reference/matchers"
+              "title": "Configuration",
+              "href": "/reference/config"
+            },
+            {
+              "title": "Profiles",
+              "href": "/reference/profiles"
+            },
+            {
+              "title": "CLI",
+              "href": "/reference/cli"
+            },
+            {
+              "title": "Environment variables",
+              "href": "/reference/env-vars"
             },
             {
               "title": "Run record",
@@ -338,12 +415,12 @@
               "href": "/reference/query"
             },
             {
-              "title": "Run history",
+              "title": "History MCP server",
               "href": "/reference/mcp-tools"
             },
             {
-              "title": "Environment variables",
-              "href": "/reference/env-vars"
+              "title": "Statistics",
+              "href": "/results/compare/statistics"
             },
             {
               "title": "Glossary",

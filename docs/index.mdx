@@ -1,25 +1,15 @@
 ---
-title: "reeval"
+title: "Introduction"
 description: "Evaluate how coding agents discover and use developer tools."
 ---
 
 ## Introduction
 
-**reeval** is an open-source evaluation runner built for developer tools—including SDKs, CLIs, MCP servers, skills, and documentation.
+**reeval** is an open-source evaluation runner built for developer tools, including SDKs, CLIs, MCP servers, skills, and documentation.
 
-It runs coding agents inside isolated sandboxes, then grades their output using assertions and LLM judges. Run identical prompted tasks across a baseline setup (the control) and a variant (your change) to compare whether it improves or regresses pass rates, token effort, and time.
+It runs coding agents inside isolated sandboxes, then grades their output using assertions and LLM judgments. Run identical prompted tasks across a baseline and a variant (your change) to compare whether it improves or regresses pass rates, tokens, and time.
 
 The evaluation is code, committed alongside the tool, skill, or doc you are changing. The result is reproducible evidence you can share in pull requests, docs, or release notes.
-
-## Set it up
-
-Ask your coding agent to set reeval up with the setup skill:
-
-```bash
-npx skills add https://github.com/invertase/reeval --skill setup
-```
-
-To set it up by hand, see [Quick start](/quickstart).
 
 ## How reeval works
 
@@ -28,24 +18,22 @@ Agents, environments, and attempts multiply into sandboxes, grading reads each w
 <Image
   theme="light"
   src="/assets/mental-model-v26-light.png"
-  alt="Configuration > Agents > Harness + model; Configuration > Environments > Baseline or variant; Configuration > Attempts > Repeat count; Configuration > Sandboxes > Number to spawn; Evaluation > Sandbox > Agent; Evaluation > Sandbox > Environment; Evaluation > Sandbox > Task; Evaluation > Sandbox > Workspace > Artifacts; Evaluation > Sandbox > Workspace > Transcript; Evaluation > Grading > Assertions > Deterministic checks; Evaluation > Grading > Judgments > LLM verdicts; Evaluation > Grading > Questions > Across attempts; Results > Measure > Pass rate; Results > Measure > Tokens; Results > Measure > Tool calls; Results > Measure > Turns; Results > Measure > Cost; Results > Measure > Time; Results > Compare > Lift > Variant against baseline; Results > Compare > Past runs > This run against earlier ones; Results > Analyze > Answers > What the questions found; Results > Analyze > Insights > What the agent did and why"
+  alt="Configuration > Agents > Harness + model; Configuration > Environments > Baseline or variant; Configuration > Attempts > Repeat count; Configuration > Sandboxes > Number to spawn; Evaluation > Sandbox > Agent; Evaluation > Sandbox > Environment; Evaluation > Sandbox > Task; Evaluation > Sandbox > Workspace > Artifacts; Evaluation > Sandbox > Workspace > Transcript; Evaluation > Grading > Assertions > Deterministic checks; Evaluation > Grading > Judgments > LLM judgments; Evaluation > Grading > Questions > Across attempts; Results > Measure > Pass rate; Results > Measure > Tokens; Results > Measure > Tool calls; Results > Measure > Turns; Results > Measure > Cost; Results > Measure > Time; Results > Compare > Lift > Variant against baseline; Results > Compare > Past runs > This run against earlier ones; Results > Analyze > Answers > What the questions found; Results > Analyze > Insights > What the agent did and why"
   width={828}
 />
 <Image
   theme="dark"
   src="/assets/mental-model-v26-dark.png"
-  alt="Configuration > Agents > Harness + model; Configuration > Environments > Baseline or variant; Configuration > Attempts > Repeat count; Configuration > Sandboxes > Number to spawn; Evaluation > Sandbox > Agent; Evaluation > Sandbox > Environment; Evaluation > Sandbox > Task; Evaluation > Sandbox > Workspace > Artifacts; Evaluation > Sandbox > Workspace > Transcript; Evaluation > Grading > Assertions > Deterministic checks; Evaluation > Grading > Judgments > LLM verdicts; Evaluation > Grading > Questions > Across attempts; Results > Measure > Pass rate; Results > Measure > Tokens; Results > Measure > Tool calls; Results > Measure > Turns; Results > Measure > Cost; Results > Measure > Time; Results > Compare > Lift > Variant against baseline; Results > Compare > Past runs > This run against earlier ones; Results > Analyze > Answers > What the questions found; Results > Analyze > Insights > What the agent did and why"
+  alt="Configuration > Agents > Harness + model; Configuration > Environments > Baseline or variant; Configuration > Attempts > Repeat count; Configuration > Sandboxes > Number to spawn; Evaluation > Sandbox > Agent; Evaluation > Sandbox > Environment; Evaluation > Sandbox > Task; Evaluation > Sandbox > Workspace > Artifacts; Evaluation > Sandbox > Workspace > Transcript; Evaluation > Grading > Assertions > Deterministic checks; Evaluation > Grading > Judgments > LLM judgments; Evaluation > Grading > Questions > Across attempts; Results > Measure > Pass rate; Results > Measure > Tokens; Results > Measure > Tool calls; Results > Measure > Turns; Results > Measure > Cost; Results > Measure > Time; Results > Compare > Lift > Variant against baseline; Results > Compare > Past runs > This run against earlier ones; Results > Analyze > Answers > What the questions found; Results > Analyze > Insights > What the agent did and why"
   width={828}
 />
 
 ## Run an evaluation
 
-This one asks for a page in Anthropic's brand, as a control without Anthropic's `brand-guidelines` skill and a variant with it, on both Claude Code and Codex:
+This one asks for a page in Anthropic's brand, as a baseline without Anthropic's `brand-guidelines` skill and a variant with it:
 
 ```ts title="with-library-skill-lift.eval.ts"
-// evals/with-library-skill-lift.eval.ts
 import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
-import { claudeCode, codex } from '{{ pkg }}/harness'
 
 const page = defineEnvironment('page', ({ directory }) => ({
   files: directory('./project'),
@@ -66,16 +54,8 @@ evaluate(
   {
     environment: page,
     compare: { variants: [withSkill] },
-
-    // Claude Code runs by default; Codex runs the same prompt too.
-    harness: [claudeCode({ model: 'claude-sonnet-5' }), codex({ model: 'gpt-5.6-luna' })],
     runs: 4,
     gate: { passRate: 0.75 },
-
-    // Asks each harness which of its own two pages looks more on-brand.
-    questions: [
-      { question: "Which page looks more like Anthropic's brand?", across: 'environment' },
-    ],
   },
   async (c) => {
     // Send a prompt to a harness in this run
@@ -92,10 +72,6 @@ evaluate(
       'styles.css',
       /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/,
     )
-
-    // A judge call for what the assertions above can't read
-    const verdict = await c.judge("Does styles.css look designed for Anthropic's site?")
-    expect(verdict).toPass()
   },
 )
 ```
@@ -115,49 +91,61 @@ pass             styles the page in Anthropic's brand
   +1 more passed
 ```
 
-The variant passed in 4 of 4 attempts and the control in none, so the skill `helped`. The judge verdict and the question's answer print alongside this per harness; they're trimmed here for space.
+The variant passed in 4 of 4 attempts and the baseline in none, so the skill `helped`. [Quick start](/quickstart) sets this evaluation up and runs it.
 
 ## What you can find out
 
 <CardGroup cols={2}>
+  <Card title="How each agent handles a tool" href="/recipes/agent-comparison">
+    Run the same task on each agent, a harness plus its model, and read each one's results.
+  </Card>
+  <Card title="Whether agents finish the task" href="/write/assertions">
+    Assert on the files, commands, and transcript each attempt leaves in its workspace.
+  </Card>
   <Card title="Which tools agents choose" href="/recipes/recommendation">
-    Prompt for an outcome without naming a tool. See what agents discover and select.
+    Prompt for an outcome without naming a tool, and judge what the agent picks.
   </Card>
-  <Card title="Whether agents finish the task" href="/evals/checks">
-    Run tasks against a pinned codebase in an isolated sandbox and assert on the result.
-  </Card>
-  <Card title="Whether a change helped" href="/evals/compare">
-    Run the same task with and without a change. Compare pass rate, tokens, tool calls, and time.
-  </Card>
-  <Card title="How each harness handles your tool" href="/recipes/agent-comparison">
-    Run the same task across different coding agents and see how each one does.
+  <Card title="Whether a change helped" href="/results/compare/lift">
+    Read the lift of a variant against the baseline.
   </Card>
   <Card title="Regressions before release" href="/recipes/ci-gate">
-    Commit baselines to Git. Diff agent behavior on pull requests and in CI.
+    Fail a pull request when this run regresses against a past run.
+  </Card>
+  <Card title="What the agent did and why" href="/results/analyze">
+    Read the answers to the questions, then the insights.
   </Card>
 </CardGroup>
 
-## How it runs
-
-reeval runs on your machine, and each run leaves a record you can commit:
-
-| Part | What reeval does |
-|---|---|
-| [Sandbox](/sandboxes) | Starts a fresh container for each attempt |
-| [Secrets](/environments/secrets) | Keeps API keys on the host and adds them only on requests to their provider |
-| [Records](/runs/recording) | Writes each run as JSON beside your code, so a pull request can diff against it |
-
 ## Explore the docs
 
-<CardGroup cols={3}>
-  <Card title="Evaluations" href="/evals/evaluate">Tasks, assertions, judges, and comparisons.</Card>
-  <Card title="Environments" href="/environments">Skills, MCP servers, rules, files, and secrets.</Card>
-  <Card title="Harnesses" href="/harnesses">The coding agents, with their models and effort.</Card>
-  <Card title="Runs" href="/runs/running">Plans, profiles, recording, and CI.</Card>
-  <Card title="Results" href="/results/output">Outcomes, transcripts, analysis, and queries.</Card>
-  <Card title="Recipes" href="/recipes/sdk">Test an SDK, a CLI, an MCP server, or your docs.</Card>
+### Configuration
+
+<CardGroup cols={2}>
+  <Card title="Agents" href="/agents">A harness plus its model.</Card>
+  <Card title="Environments" href="/environments">The baseline and its variants: files, skills, rules, MCP servers, and secrets.</Card>
+  <Card title="Attempts" href="/runs/running#set-the-attempts">The `runs` option sets the attempts for each agent and environment.</Card>
+  <Card title="Sandboxes" href="/integrations/sandboxes">A fresh container on the local machine for each attempt.</Card>
+</CardGroup>
+
+### Evaluation
+
+<CardGroup cols={2}>
+  <Card title="Task" href="/write">The prompt each attempt sends to the agent.</Card>
+  <Card title="Workspace" href="/results/debugging#read-the-workspace-and-artifacts">The artifacts and the transcript grading reads.</Card>
+  <Card title="Assertions" href="/write/assertions">Deterministic checks.</Card>
+  <Card title="Judgments" href="/write/judgments">LLM judgments.</Card>
+  <Card title="Questions" href="/write/questions">Across attempts.</Card>
+</CardGroup>
+
+### Results
+
+<CardGroup cols={2}>
+  <Card title="Measure" href="/results/measure">Pass rate, tokens, tool calls, turns, cost, and time.</Card>
+  <Card title="Lift" href="/results/compare/lift">Variant against baseline.</Card>
+  <Card title="Past runs" href="/results/compare/past-runs">This run against earlier ones.</Card>
+  <Card title="Analyze" href="/results/analyze">Answers, then insights.</Card>
 </CardGroup>
 
 ## Next steps
 
-To install reeval and run your first comparison, see [Quick start](/quickstart).
+Install reeval and run a comparison of a baseline and a variant in [Quick start](/quickstart).

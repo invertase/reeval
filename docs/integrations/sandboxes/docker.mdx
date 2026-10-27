@@ -1,0 +1,27 @@
+---
+title: "Configure Docker sandboxes"
+description: "Run evaluation attempts in containers with controlled images, resources, and privileges."
+---
+
+`docker()` returns a sandbox that runs each attempt in one Docker container on the host.
+
+## Requirements
+
+`docker()` needs a running Docker engine that runs Linux containers: Docker Engine or Docker Desktop on Linux, Docker Desktop or another engine such as OrbStack or Colima on macOS, and Docker Desktop with the WSL 2 backend on Windows. `reeval doctor` reports it on a `docker` line. Before a run, reeval exits with code 2 when Docker is missing or not running, naming the fix.
+
+For more information about the `reeval doctor` line, see [Verify with reeval doctor](/integrations/sandboxes#verify-with-reeval-doctor).
+
+## `docker()`
+
+The `{{ pkg }}/sandbox` subpath exports `docker()` for the `sandbox` option:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
+
+export default defineConfig({
+  sandbox: docker({ memory: '8g', cpus: 4 }),
+})
+```
+
+Every option is optional, and `podman()` takes the same ones. For each option and its default, see [the `docker()` options](/reference/options#docker). For more information about the `sandbox` option, see [Choose a sandbox](/integrations/sandboxes). For more information about the image recipes, see [Bake the tools](/environments/toolchains). For more information about the `egress` option and its automatic hosts, see [Restrict sandbox egress](/environments/egress).

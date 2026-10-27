@@ -1,58 +1,64 @@
 ---
 title: "Measure MCP servers"
-description: "See whether an MCP server helped your harness."
+description: "See whether an MCP server helped a harness."
 ---
 
-You measure an MCP server by running one task on a control with no server and a variant with the server. The effect reads `helped`, `made it worse`, or `can't tell yet`. For more information about adding MCP servers, see [Connect MCP servers](/environments/mcp).
-
-This page's server is `releases`, a stdio server that knows the latest `acme-cli` release.
+You measure an MCP server by running one task on a baseline with no server and a variant with the server. The effect reads `helped`, `made it worse`, or `can't tell yet`. The example server is `releases`, a stdio server that knows the latest `acme-cli` release. For a runnable project with the server, see [`with-mcp`](https://github.com/invertase/reeval/tree/main/examples/with-mcp).
 
 ## Run one task with and without the server
 
 <Steps>
-<Step title="Define the environment with the server">
+<Step title="Define the baseline and variant">
 
-In the `evals/environments.ts` file, define the environment. It copies the project and the server's script into the workspace, and starts the server in the sandbox:
+In the `evals/environments.ts` file, define the baseline `app`, which holds the project, and the variant `withReleases`, which adds the server's script and starts the server in the sandbox:
 
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
 
-export const app = defineEnvironment(
-  'acme-cli',
-  ({ directory, file, mcp }) => ({
-    files: {
-      ...directory('./project'),
-      'mcp/releases.mjs': file('./mcp/releases.mjs'),
-    },
+export const app = defineEnvironment('acme-cli', ({ directory }) => ({
+  files: directory('./project'),
+}))
+
+export const withReleases = app.extendEnvironment(
+  'releases',
+  ({ file, mcp }) => ({
+    files: { 'mcp/releases.mjs': file('./mcp/releases.mjs') },
     mcp: { releases: mcp.stdio('node', ['mcp/releases.mjs']) },
   }),
 )
 ```
 
+The server is the only change between the cells. For more information about `mcp.stdio` and servers by URL, see [Connect MCP servers](/environments/mcp).
+
 </Step>
 <Step title="Write the evaluation">
 
-In the `evals/releases.eval.ts` file, declare the evaluation. `toHaveCalledMcp` fails the attempt when the harness never calls the server's tool, and the file assertion decides whether the task was done:
+In the `evals/releases.eval.ts` file, declare the evaluation and name the variant in `compare.variants`:
 
 ```ts title="evals/releases.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
-import { app } from './environments.ts'
+import { app, withReleases } from './environments.ts'
 
-evaluate('bumps to the latest release', { environment: app }, async (c) => {
-  const turn = await c.send(
-    "Set package.json's version to the latest acme-cli release. " +
-      "The releases MCP server's latest_version tool knows it.",
-  )
+evaluate(
+  'bumps to the latest release',
+  { environment: app, compare: { variants: [withReleases] }, runs: 4 },
+  async (c) => {
+    const turn = await c.send(
+      "Set package.json's version to the latest acme-cli release.",
+    )
 
-  expect(turn).toHaveCalledMcp('releases', 'latest_version')
-  await expect(turn).toHaveFile('package.json', /"version": "2\.4\.0"/)
-})
+    if (c.attempt.cell.role === 'variant') {
+      expect(turn).toHaveCalledMcp('releases', 'latest_version')
+    }
+    await expect(turn).toHaveFile('package.json', /"version": "2\.4\.0"/)
+  },
+)
 ```
 
-For more information about the matcher, see [`toHaveCalledMcp`](/reference/matchers#tohavecalledmcp). For a runnable project, see [`with-mcp`](https://github.com/invertase/reeval/tree/main/examples/with-mcp).
+The prompt doesn't name the server, so the file assertion passes on the baseline only when the harness finds the version another way. The baseline has no server to call, so only the variant checks the call. `runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect reads `can't tell yet`.
 
 </Step>
-<Step title="Run and read the call">
+<Step title="Run the comparison">
 
 Run the evaluation with the harness named in the `reeval.config.ts` file:
 
@@ -60,22 +66,16 @@ Run the evaluation with the harness named in the `reeval.config.ts` file:
 npx reeval run releases
 ```
 
-The attempt's `transcript.jsonl` file, under `.reeval/runs/<run>/`, names the call `mcp__<server>__<tool>`, which is what `toHaveCalledMcp` matches:
-
-```text
-{"turn":0,…,"type":"tool","toolCallId":"call_1","tool":"mcp__releases__latest_version","input":{},"output":"acme-cli 2.4.0","ok":true,"durationMs":178}
-```
-
 </Step>
-<Step title="Compare with a control">
+<Step title="Read whether the server helped">
 
-To measure what the server changed, run the same evaluation on a control without `mcp`, and the environment with the server as the variant ([Compare setups](/evals/compare)). Set `runs: 4`, because below four counted attempts a side the effect reads `can't tell yet`.
+Read the block the run prints for the evaluation. The `releases` row carries the effect, and the file assertion's row shows each cell's count. For more information about the rows, see [Read the result](/results/compare/lift#read-the-result).
 
-The control has no server, so `toHaveCalledMcp` fails on every control attempt. Read the file assertion's row for the task. When the file assertion passes on both sides, the harness finds the version without the server, and this task can't show what the server changed. For more information about the rows, see [Read the results summary](/results/output).
+When the file assertion passes on both sides, the harness finds the version without the server, and this task can't show what the server changed. When the variant fails the call check, read the attempt's `transcript.jsonl` file under `.reeval/runs/<run>/`: `toHaveCalledMcp` matches a tool call named `mcp__releases__latest_version`.
 
 </Step>
 </Steps>
 
 ## Next
 
-For more information about gates and extra variants, see [Compare setups](/evals/compare).
+For more information about gates and extra variants, see [Measure lift against a baseline](/results/compare/lift).

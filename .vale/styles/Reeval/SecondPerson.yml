@@ -1,0 +1,14 @@
+extends: existence
+message: "Address the reader as 'you', not '%s'."
+level: error
+ignorecase: true
+tokens:
+  - we
+  - we're
+  - we've
+  - we'll
+  - our
+  - ours
+  - ourselves
+  - the user
+  - the users

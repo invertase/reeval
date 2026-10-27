@@ -1,0 +1,53 @@
+---
+title: "Cursor harness"
+description: "The Cursor harness runs Cursor's agent in the sandbox on a Cursor API key and records its events."
+---
+
+`cursor()` runs Cursor's agent in the sandbox through the Cursor TypeScript SDK's local runtime. For more information about the sandbox, see [Choose a sandbox](/integrations/sandboxes).
+
+## `CURSOR_API_KEY`
+
+`cursor()` reads `CURSOR_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
+
+reeval exchanges that key for `accessToken` and `refreshToken` at `api2.cursor.sh`, on `POST /auth/exchange_user_api_key`. Requests to `cursor.sh` and `*.cursor.sh` carry those tokens. A restricted egress policy allows `api2.cursor.sh` and `*.cursor.sh`.
+
+When the API rejects the key, the attempt error begins with `The API rejected CURSOR_API_KEY: set a valid key in the environment or .env.local`.
+
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
+
+For more information about the variable, see [`CURSOR_API_KEY`](/reference/env-vars#cursorapikey).
+
+## `cursor()`
+
+`cursor()` is exported from `{{ pkg }}/harness`. The following configuration passes it as the `harness` option:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { cursor } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: cursor({
+    model: 'grok-4.7',
+    effort: 'high',
+  }),
+})
+```
+
+`model` is required, and `cursor()` also takes `params`, such as `{ fast: 'true' }`. For what each field takes, see [Harness factory options](/reference/options#harness-factory-options).
+
+With no `harness` option, reeval uses `cursor()` with its default model.
+
+For more information about model ids and effort values, see [Set the agent's model](/agents/model). For rules, skills, MCP servers, usage, served models, and web events, see [Harness behavior](/reference/options#harness-behavior).
+
+## `plugins`
+
+reeval adds each plugin's skills to the home skills directory and unpacks the rest into the workspace: rules to `.cursor/rules`, subagents to `.cursor/agents`, commands to `.cursor/commands`, and hooks into `.cursor/hooks.json`. Cursor never loads the plugins of the account that owns the key.
+
+[//]: # (generated:harness-plugins:cursor)
+
+- Takes every plugin part: `skills`, `agents`, `commands`, `hooks`, `mcp` and `rules`.
+- Runs only command hooks, on `SessionStart`, `SessionEnd`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `SubagentStop`, `PreCompact` and `Stop`; a plugin with any other hook is refused.
+
+[//]: # (/generated:harness-plugins:cursor)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).

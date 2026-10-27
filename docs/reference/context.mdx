@@ -1,6 +1,6 @@
 ---
 title: "Attempt context reference"
-description: "Look up every method and field of c and of the turn it returns."
+description: "c is the attempt context: it sends prompts on the harness session and returns each finished turn."
 ---
 
 `c` is the attempt context the evaluation body receives, for one cell and one run. The sandbox and the harness session start on the first call that needs them.
@@ -17,7 +17,7 @@ const turn = await c.send('Add a Vitest test for getUserId.')
   The prompt for this turn.
 </Property>
 
-For more information about the returned turn's fields, see [`Turn`](#turn). For more information about reading turns, see [Turns](/evals/turns).
+For more information about the returned turn's fields, see [`Turn`](#turn). For more information about reading turns, see [Turns](/write/turns).
 
 ## `c.exec()`
 
@@ -34,6 +34,14 @@ const worker = await c.exec('npm run worker', { background: true })
 
 <Property name="options.background" type="boolean" optional>
   `true` returns a `BackgroundHandle` without waiting (default `false`, an `ExecResult` after exit).
+</Property>
+
+<Property name="options.retries" type="number" optional>
+  Extra tries after a non-zero exit (default `0`). Not with `background: true`.
+</Property>
+
+<Property name="options.interval" type="number" optional>
+  Milliseconds before each extra try (default `1000`). Not with `background: true`.
 </Property>
 
 The `ExecResult` has these fields:
@@ -56,7 +64,7 @@ The `BackgroundHandle` has this method:
   Stops the process and its children, as the end of the attempt does.
 </Property>
 
-For more information about asserting on a command, see [Assertions](/evals/checks).
+For more information about asserting on a command, see [Assertions](/write/assertions).
 
 ## `c.serve()`
 
@@ -128,7 +136,7 @@ The `Capture` echoes the resolved `name`, `port`, `path`, and `viewport`, and ha
   The PNG's `artifacts/<name>.png` path under the attempt directory, digest, and size.
 </Property>
 
-For more information about the cascaded defaults, see [the `capture` option](/reference/options#capture). For more information about serving and capturing an app, see [Apps](/evals/servers).
+For more information about the cascaded defaults, see [the `capture` option](/reference/options#capture). For more information about serving and capturing an app, see [Apps](/write/apps).
 
 ## `c.judge()`
 
@@ -168,36 +176,12 @@ const verdict = await c.judge('Does the test read like a specification?', {
   The most judge calls to this provider at a time, across the run.
 </Property>
 
-<Property name="options.state.task" type="boolean" optional>
-  Sends the graded turn's prompt (default `true`).
+<Property name="options.gateway" type="GatewayName | GatewayDescriptor" optional>
+  The gateway for this call, skipping the config list's fallback.
 </Property>
 
-<Property name="options.state.output" type="boolean" optional>
-  Sends the graded turn's final message, or the value of `on` (default `true`).
-</Property>
-
-<Property name="options.state.files" type="boolean" optional>
-  Sends a `status path` line for each changed file kept by any `state.diff` patterns (default `true`).
-</Property>
-
-<Property name="options.state.diff" type="boolean | string[]" optional>
-  Sends the diff, or only the paths the gitignore-style patterns keep (default `true`).
-</Property>
-
-<Property name="options.state.contents" type="string[]" optional>
-  Sends these files whole, by path or pattern, and drops them from the diff.
-</Property>
-
-<Property name="options.state.transcript" type="boolean | 'tools' | 'full'" optional>
-  Sends the graded turn's transcript clipped, as tool calls only, or in full (default `false`).
-</Property>
-
-<Property name="options.state.turns" type="'last' | 'all'" optional>
-  `'all'` sends every turn up to the graded one (default `'last'`).
-</Property>
-
-<Property name="options.state.checks" type="boolean | string[]" optional>
-  Sends the foreground `c.exec()` results so far, or only the listed commands (default `false`).
+<Property name="options.state" type="JudgeStateOptions" optional>
+  What the judge sees, with the keys and defaults of [`judge.state`](/reference/options#judge).
 </Property>
 
 A field on the call replaces the cascaded field, and `state` merges key by key. A `Verdict` has these fields:
@@ -226,6 +210,18 @@ A field on the call replaces the cascaded field, and `state` merges key by key. 
   The model id the provider reports, when it reports one.
 </Property>
 
+<Property name="gateway" type="GatewayName" optional>
+  The config gateway the call used, when any.
+</Property>
+
+<Property name="upstream" type="string" optional>
+  The upstream provider the gateway reports (OpenRouter), when any.
+</Property>
+
+<Property name="costUsd" type="number" optional>
+  What the gateway reports the call cost, in US dollars, when any.
+</Property>
+
 <Property name="artifacts" type="JudgeArtifactRef[]" optional>
   The captures sent, each with `name`, `path`, `sha256`, `bytes`, and `mediaType`.
 </Property>
@@ -236,7 +232,7 @@ A `JudgeFailure` has `verdict` `'error'` and `score` `null`.
   The provider's message on a `JudgeFailure`, after any retries.
 </Property>
 
-For more information about the cascaded defaults, see [the `judge` option](/reference/options#judge). For more information about scoring, see [Judges](/evals/judges).
+For more information about the cascaded defaults, see [the `judge` option](/reference/options#judge). For more information about scoring, see [Judge agent work](/write/judgments).
 
 ## `c.readFile()`
 
@@ -282,7 +278,7 @@ const first = c.turns[0]
 
 ## `c.signal`
 
-`c.signal` aborts when the evaluation times out or the run is cancelled.
+`c.signal` aborts when the evaluation times out or the run is canceled.
 
 ```ts
 const response = await fetch(url, { signal: c.signal })
@@ -373,7 +369,7 @@ const changed = turn.diff.files.map((file) => file.path)
 </Property>
 
 <Property name="usage" type="TokenUsage | null" required>
-  `input`, `output`, `cacheRead`, `cacheWrite`, and `reasoning` tokens, or `null` when the harness reports none.
+  `input`, `output`, `cacheRead`, `cacheWrite`, and `reasoning` (`null` when the harness reports none for reasoning), or `null` when the harness reports no usage.
 </Property>
 
 <Property name="model" type="string | null" required>
@@ -388,8 +384,8 @@ const changed = turn.diff.files.map((file) => file.path)
   Workspace changes from the start of the evaluation, each file with a `path` and a `status` of `added`, `modified`, or `deleted`.
 </Property>
 
-<Property name="exec" type="(command: string) => Promise<ExecResult>" required>
-  Runs a foreground command in the sandbox, as `c.exec()` does, and returns `exitCode`, `stdout`, and `stderr`. It does not take `{ background: true }`.
+<Property name="exec" type="(command: string, options?: ExecRetry) => Promise<ExecResult>" required>
+  Runs a foreground command in the sandbox, as `c.exec()` does, with optional `{ retries, interval }`. It does not take `{ background: true }`.
 </Property>
 
 <Property name="readFile" type="(path: string) => Promise<string | null>" required>

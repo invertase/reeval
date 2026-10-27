@@ -1,13 +1,13 @@
 ---
 title: "Matchers reference"
-description: "Look up expect, expect.soft, expect.poll, and every matcher reeval adds."
+description: "expect, expect.soft, and expect.poll assert on an attempt's files, commands, and strings, with matchers reeval adds."
 ---
 
 Each matcher reads a turn from `c.send()`, the attempt context `c`, a `c.exec()` result, or a `c.judge()` verdict. Passed `c`, a transcript matcher reads every turn so far.
 
 For more information about standard matchers, see [Vitest's `expect` reference](https://vitest.dev/api/expect).
 
-For more information about checking an attempt, see [Assertions](/evals/checks).
+For more information about checking an attempt, see [Assertions](/write/assertions).
 
 ## `expect()`
 
@@ -31,7 +31,7 @@ await expect(c.exec('npm test'), 'tests pass').toSucceed()
 
 ## `expect.soft()`
 
-`expect.soft(actual, label?)` records a failure and lets the body continue. The attempt fails at its end on the first soft assertion that did not pass. A soft assertion can use `toHaveFile()`.
+`expect.soft(actual, label?)` records a failure and lets the body continue. The attempt fails at its end on the first soft assertion that did not pass. Soft assertions take the same matchers as `expect()`, including async ones; await those.
 
 ```ts
     await expect.soft(c, 'uses fromPartial').toHaveFile(

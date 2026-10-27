@@ -1,0 +1,37 @@
+---
+title: "Route through OpenRouter"
+description: "Send model calls through OpenRouter on one key."
+---
+
+`openrouter()` sends the model calls of the harnesses it serves through OpenRouter, on one key. The egress gateway swaps the key in only on OpenRouter's model paths at `openrouter.ai`, so the key never enters the sandbox.
+
+## Credential
+
+`openrouter()` reads `OPENROUTER_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset and a planned harness or model takes `openrouter()`.
+
+For more information about the variable, see [`OPENROUTER_API_KEY`](/reference/env-vars#openrouterapikey).
+
+## Helper
+
+`openrouter()` is exported from `{{ pkg }}/gateway`:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { direct, openrouter } from '{{ pkg }}/gateway'
+
+export default defineConfig({
+  gateway: [openrouter({ fallbacks: true }), direct()],
+})
+```
+
+With `fallbacks: true`, reeval's own calls may fail over to another upstream provider. The harnesses' calls keep OpenRouter's own routing. For more information about the option, see [`fallbacks`](/reference/options#openrouter-options).
+
+A harness `openrouter()` cannot serve takes the next gateway in the list. Each call records the upstream provider that served it, on the attempt's `upstreams` and the judgment's `upstream`.
+
+For more information about combining gateways, see [Gateways](/agents/gateways).
+
+## Harnesses and models
+
+For the harnesses `openrouter()` serves, and the ones that fall through to the next gateway, see [Harness support](/agents/gateways#harness-support).
+
+On `openrouter()`, a judge must be a decision model that OpenRouter answers on its Decisions API, such as `typesafe/jev-1.14`, and each call to any other judge model fails. Analysis, captures, and questions take language models, which `openrouter()` calls on OpenRouter's Chat Completions API.

@@ -1,0 +1,30 @@
+extends: existence
+message: "Say the thing itself instead of describing the page or how to use it ('%s')."
+level: error
+ignorecase: false
+nonword: true
+# Frontmatter descriptions are linted too: they feed /llms.txt, so "Look up …"
+# there routes nobody. "each entry", "each row" and "the document" alone stay
+# quiet: "each entry in skills" and "the document lists every cell" describe
+# data, not the page.
+tokens:
+  # The page's own structure
+  - \b[Ee]ach (?:section|entry|heading|page) (?:defines|names|covers|describes|explains|lists|introduces)\b
+  - \b[Ee]ach (?:section|entry|heading) (?:on|in|of) this (?:page|section|guide)\b
+  - \b[Ee]ach section\b
+  - \b[Ee]ach core (?:noun|term|concept)s?\b
+  - \bin the order of\b
+  - \b(?:[Tt]his (?:page|section|guide|document)|[Tt]he (?:page|section|guide))(?:'s)? (?:covers|describes|explains|lists|shows|defines|introduces|walks you through|is about|uses)\b
+  - \b[Tt]his page(?:'s)?\b
+  - \b(?:[Oo]n|[Ii]n) this (?:page|section|guide)\b
+  - \b[Tt]he following (?:sections?|pages?|subsections?|entries|terms)\b
+  - \b[Tt]he rest of this (?:page|section)\b
+  - \bas (?:described|mentioned|explained|shown|noted|discussed) (?:above|below|earlier|previously)\b
+  - \b(?:above|below), you(?:'ll| will) (?:find|see|learn)\b
+  - \b[Ll]et(?:'s| us) (?:look|start|take|dive|begin)\b
+  # How to use the page
+  - \bLook up\b
+  - \blook up (?:each|every|the|a|an|any)\b
+  - \b[Tt]he (?:distinct )?terms that\b
+  - \b[Uu]se this (?:page|section|reference|table) to\b
+  - \b[Rr]efer to (?:this|the following|the table below)\b

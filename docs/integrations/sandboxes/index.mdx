@@ -1,0 +1,65 @@
+---
+title: "Choose a sandbox"
+description: "Run each attempt in a fresh container on the host."
+---
+
+Choose the container each attempt runs in. For the definition, see [Sandbox](/reference/glossary#sandbox). reeval starts one container per attempt, runs the harness, the setup commands, and the assertions in it, and removes it when the attempt ends. Without a `sandbox` option, every attempt runs in `docker()`.
+
+## Choose Docker or Podman
+
+reeval uses `docker()` by default. For more information about using `podman()`, see [Podman sandbox](/integrations/sandboxes/podman).
+
+## Set the sandbox
+
+In the `reeval.config.ts` file, import the factory from `{{ pkg }}/sandbox` and pass it as `sandbox`:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
+
+export default defineConfig({
+  sandbox: docker(),
+})
+```
+
+An environment's `sandbox` takes precedence over the cascade. This lets environments use different sandbox configurations.
+
+The sandbox names the last segment of the cell key, `docker` or `podman` by default. To tell two sandboxes apart in results, pass `id`:
+
+```ts title="reeval.config.ts"
+  sandbox: docker({ id: 'docker-8g', memory: '8g' }),
+```
+
+For more information about where the option is accepted, see [the `sandbox` option](/reference/options#sandbox). For more information about base images and install layers, see [Toolchains](/environments/toolchains).
+
+## Set resource limits
+
+Pass the limits to the factory, in the `reeval.config.ts` file or on an evaluation:
+
+```ts title="with-resource-limits.eval.ts"
+  sandbox: docker({ memory: '1g', swap: 0, cpus: 1, pids: 256 }),
+```
+
+For a runnable project, see [`with-resource-limits`](https://github.com/invertase/reeval/tree/main/examples/with-resource-limits). Each limit applies to one container. For more information about each limit and its default, see [the `docker()` options](/reference/options#docker).
+
+The agent, the setup commands, and the assertions run as an unprivileged user with every capability dropped. For more information about `root`, `capabilities`, and `maxConcurrent`, see [Options](/reference/options#docker).
+
+## Verify with reeval doctor
+
+To check that the engine is running and has enough resources for the configured limits, run the `reeval doctor` command:
+
+```bash
+npx reeval doctor
+```
+
+The engine's line reports its capacity and the concurrency reeval derives from it:
+
+```text
+✓ docker     running · 8 CPUs, 15.6 GB memory (default concurrency 8)
+```
+
+A `!` on that line means the engine has under 4 GB of memory. Give it more, or lower `memory`.
+
+## Reference
+
+For more information about every option the factories accept, see [Options](/reference/options#docker). For more information about how `podman()` differs from `docker()`, see [Podman sandbox](/integrations/sandboxes/podman).

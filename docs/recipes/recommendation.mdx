@@ -1,13 +1,31 @@
 ---
 title: "Test recommendations"
-description: "See whether harnesses recommend your library."
+description: "See whether harnesses recommend a library."
 ---
 
-You ask the questions a developer asks when choosing a library. Each harness answers on its own. A judge scores every answer. The sample asks about Genkit; put your library's name in its place. For a runnable project, see [`with-recommendation`](https://github.com/invertase/reeval/tree/main/examples/with-recommendation).
+You ask the questions a developer asks when choosing a library. Each harness answers on its own. A judge scores every answer. The sample asks about Genkit; put the library's name in its place. For a runnable project, see [`with-recommendation`](https://github.com/invertase/reeval/tree/main/examples/with-recommendation).
 
 ## Ask each harness and judge the answers
 
 <Steps>
+<Step title="Configure each harness and the judge">
+
+In the `reeval.config.ts` file, set `harness` to a list and set `judge.model`. Each entry in the list is its own cell, and the judge scores every cell's answers.
+
+```ts title="reeval.config.ts"
+-import { claudeCode } from '{{ pkg }}/harness'
++import { claudeCode, cursor } from '{{ pkg }}/harness'
+-  harness: claudeCode({ model: 'claude-sonnet-5' }), // needs ANTHROPIC_API_KEY
++  harness: [
++    claudeCode({ model: 'claude-sonnet-5' }),
++    cursor({ model: 'composer-2.5' }),
++  ],
++  judge: { model: 'typesafe-ai/jev-1.14.0' },
+```
+
+Add each harness key and `TYPESAFE_AI_API_KEY` to the `.env.local` file. For more information about each harness and its key, see [Choose an agent](/agents). For more information about the judge model, see [Set the model and threshold](/write/judgments#set-the-model-and-threshold).
+
+</Step>
 <Step title="Write the questions">
 
 Declare one open question and one question per rival in the `evals/choose.eval.ts` file. Each evaluation ends with a judge that reads the answer.
@@ -40,30 +58,7 @@ evaluate.each(['LangChain', 'LlamaIndex', 'the Vercel AI SDK'])(
 )
 ```
 
-The open question names no library, so a pass means the harness reached for yours. `evaluate.each` declares one evaluation per rival and pools them into a family. For more information about families, see [Evaluate many cases](/evals/cases). For more information about the judge question, the model and the threshold, see [Score agent work](/evals/judges).
-
-</Step>
-<Step title="Configure each harness">
-
-Set `harness` to a list in the `reeval.config.ts` file. Set `judge.model` in the `reeval.config.ts` file. Each entry in the list is its own cell.
-
-```ts title="reeval.config.ts"
--import { claudeCode } from '{{ pkg }}/harness'
-+import { claudeCode, cursor } from '{{ pkg }}/harness'
--  harness: claudeCode({ model: 'claude-sonnet-5' }), // needs ANTHROPIC_API_KEY
-+  harness: [
-+    claudeCode({ model: 'claude-sonnet-5' }),
-+    cursor({ model: 'composer-2.5' }),
-+  ],
-+  judge: { model: 'typesafe-ai/jev-1.14.0' },
-```
-
-For more information about each harness and its key, see [Choose a harness](/harnesses). For more information about the judge model, see [Set the model and threshold](/evals/judges#set-the-model-and-threshold).
-
-</Step>
-<Step title="Add the API keys">
-
-Add each harness key and `TYPESAFE_AI_API_KEY` to the `.env.local` file.
+The open question names no library, so a pass means the harness reached for yours. `evaluate.each` declares one evaluation per rival and pools them into a family. For more information about families, see [Evaluate many cases](/write/cases). For more information about the judge question, the model and the threshold, see [Judge agent work](/write/judgments).
 
 </Step>
 <Step title="Run the evaluations">
@@ -87,7 +82,7 @@ pass             recommends Genkit for a production AI feature
   pass  the Vercel AI SDK  1 of 1
 ```
 
-The run's `summary.md`, under `.reeval/runs/<run>/`, quotes each answer beside its verdict.
+The run's `summary.md`, under `.reeval/runs/<run>/`, quotes each answer beside its judgment.
 
 ```text
 - Judge **pass** 0.90 (threshold 0.8, fake): Is Genkit recommended over LangChain?
@@ -104,4 +99,4 @@ A real harness's answer is the finding: it may recommend something else. When it
 
 ## Next
 
-For more information about the results summary, see [Read the results summary](/results/output).
+For more information about the outcomes and the tally, see [Read a run's output](/results/output).

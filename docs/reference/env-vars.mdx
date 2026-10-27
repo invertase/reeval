@@ -5,11 +5,11 @@ description: "Every public REEVAL_* variable, provider key, and CI variable reev
 
 Where a flag and a variable set the same thing, the flag takes precedence. `REEVAL_PROFILE` and `REEVAL_CONCURRENCY` then take precedence over the matching config key. A variable already in the environment takes precedence over the `.env.local` file, which takes precedence over the `.env` file, from the config file's directory.
 
-`reeval run` reads `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, `REEVAL_OUTPUT_LOGS`, and `REEVAL_HEARTBEAT` before the `.env.local` file and the `.env` file load. For `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, and `REEVAL_OUTPUT_LOGS`, `auto` or no value uses the default, and any other value stops the command.
+`reeval run` reads `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, `REEVAL_OUTPUT_LOGS`, and `REEVAL_HEARTBEAT` before the `.env.local` file and the `.env` file load. For each of those four, `auto` or no value uses the default, and a value outside its own list stops the command: `live`, `plain`, or `agent` for `REEVAL_UI`; `stream` or `grouped` for `REEVAL_LOG_ORDER`; `task` or `none` for `REEVAL_LOG_PREFIX`; `full`, `errors-only`, or `none` for `REEVAL_OUTPUT_LOGS`.
 
 Whitespace or a control character in a harness, judge, or `question` credential stops the run. A missing credential for a harness, a judge, or a `question` stops the run. A missing `analysis.model` credential skips insights.
 
-For more information about config keys, see [Options](/reference/options). For more information about harnesses, see [Choose a harness](/harnesses).
+For more information about config keys, see [Options](/reference/options). For more information about harnesses, see [Agents](/agents).
 
 ## `REEVAL_PROFILE`
 
@@ -21,7 +21,7 @@ For more information about config keys, see [Options](/reference/options). For m
 
 ## `REEVAL_PRICES`
 
-`REEVAL_PRICES` names a JSON file of your own model prices for the `reeval run --dry-run` cost estimate. Its prices take precedence over models.dev's. `none` shows tokens only, with no cost. A file reeval can't read or parse stops the command.
+`REEVAL_PRICES` names a JSON file of custom model prices for the `reeval run --dry-run` cost estimate. Its prices take precedence over models.dev's. `none` shows tokens only, with no cost. A file reeval can't read or parse stops the command.
 
 ## `REEVAL_CAPTURE_BROWSER`
 
@@ -67,6 +67,26 @@ A non-empty `REEVAL_NO_REPORT_HINT` hides the `reeval report` hint after a crash
 
 `REEVAL_BASE` is the build argument for a `dockerfile` sandbox, passed as the harness sandbox image. The `Dockerfile` file reads `ARG REEVAL_BASE`. A shell value is unused.
 
+## `REEVAL_PYTHON`
+
+`REEVAL_PYTHON` names the Python interpreter for `*.eval.py`. It applies ahead of `uv run` and `.venv`. Unset, reeval tries `uv run`, then `.venv`, then `python` on Windows or `python3` elsewhere.
+
+## `REEVAL_BINARY`
+
+`REEVAL_BINARY` is the path of the reeval binary the Python launcher runs. It must be a file, and it must not be the launcher itself. Set, it takes precedence over the packaged binary and the cached download.
+
+## `REEVAL_VERSION`
+
+`REEVAL_VERSION` pins the reeval version the Python launcher runs, and a leading `v` is ignored. Without a packaged `reeval-python` version, the launcher needs `REEVAL_VERSION` or `REEVAL_BINARY`.
+
+## `REEVAL_DOWNLOAD`
+
+`REEVAL_DOWNLOAD` is the base URL the Python launcher downloads the release binary from. With no value, the base is the GitHub releases URL for the version. A base that starts with `http:` prints a warning.
+
+## `REEVAL_OFFLINE`
+
+`REEVAL_OFFLINE` stops the Python launcher downloading a version that is not already cached. Any value other than empty, `0`, or `false` turns it on, and a missing version then stops the command.
+
 ## `AI_GATEWAY_API_KEY`
 
 `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` calls Vercel AI Gateway for `judge.model` and `analysis.model`, and for harness models when `vercel()` is in the `gateway` list. The `provider/model` prefix selects the credential, and every prefix without a direct key set uses the gateway.
@@ -101,7 +121,7 @@ A `typesafe-ai/` `judge.model` uses `TYPESAFE_AI_API_KEY` directly when it is se
 
 ## `OPENAI_API_KEY`
 
-`OPENAI_API_KEY` is the credential for the `codex` harness, and for `opencode` on an `openai/` model.
+`OPENAI_API_KEY` is the credential for the `codex` harness, for `fx` on a bare OpenAI model id, and for `opencode` on an `openai/` model.
 
 ## `XAI_API_KEY`
 
@@ -109,7 +129,7 @@ A `typesafe-ai/` `judge.model` uses `TYPESAFE_AI_API_KEY` directly when it is se
 
 ## `AWS_REGION`
 
-`AWS_REGION` fills the hosts of an `opencode` model on `amazon-bedrock/`. With no value, the region is `us-east-1`. Any other `opencode` provider reads the variable in the [`provider/model` table](/harnesses/opencode#providermodel).
+`AWS_REGION` fills the hosts of an `opencode` model on `amazon-bedrock/`. With no value, the region is `us-east-1`. Any other `opencode` provider reads the variable in the [OpenCode providers table](/reference/options#opencode-providers).
 
 ## `CI`
 
@@ -126,6 +146,14 @@ On a CI run, `GITHUB_ACTIONS` records the provider `github`. `GITHUB_SERVER_URL`
 ## `GITLAB_CI`
 
 On a CI run, `GITLAB_CI` records the provider `gitlab`. The branch is `CI_COMMIT_REF_NAME` when neither `GITHUB_HEAD_REF` nor `GITHUB_REF_NAME` is set. `CI_JOB_URL` is the job URL. `CI_MERGE_REQUEST_IID` and `CI_MERGE_REQUEST_TARGET_BRANCH_NAME` fill the merge request.
+
+## `BUILDKITE`
+
+A non-empty `BUILDKITE` identifies the machine as a Buildkite agent. On a CI runner, `reeval run` and `reeval doctor` warn about `egress: 'allow-all'`, because the sandbox can then reach the cloud metadata service and the host's network around the egress gateway.
+
+## `CIRCLECI`
+
+A non-empty `CIRCLECI` identifies the machine as a CircleCI runner, with the same `egress: 'allow-all'` warning as `BUILDKITE`.
 
 ## `GITHUB_OUTPUT`
 

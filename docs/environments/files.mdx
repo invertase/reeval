@@ -27,7 +27,7 @@ The `.gitignore` entry writes that string to the workspace. For a runnable proje
 
 ## Copy a host file
 
-When the content already exists on your machine, pass a host path to `file`, as the `data/people.csv` entry does. A relative path resolves from the file that calls `file`. reeval uses an absolute path as given.
+When the content already exists on the host, pass a host path to `file`, as the `data/people.csv` entry does. A relative path resolves from the file that calls `file`. reeval uses an absolute path as given.
 
 reeval reads the host bytes when the attempt starts. A host file with its executable bit set stays executable in the sandbox. A destination that starts with `~/` goes in the home directory, outside the workspace and its diff:
 
@@ -76,12 +76,10 @@ A leading `/` anchors a pattern to the top of the host directory. The `/build/` 
 
 To switch the default ignores off, set `defaultIgnores` to `false`. `directory` always leaves out the `.git` directory. A `glob` pattern can't include a path excluded by the defaults.
 
-`directory` doesn't copy an empty directory. Calling `directory` fails when the directory is missing, or when no file matches. A later entry in `files` replaces a copied file. A host file with its executable bit set stays executable in the sandbox.
+`directory` doesn't copy an empty directory. Calling `directory` fails when the directory is missing, or when no file matches. A later entry in `files` replaces a copied file.
 
 ## Reference
 
 For more information about `file`, see [the file helper](/reference/environment#file).
 
 For more information about `directory`, see [the directory helper](/reference/environment#directory).
-
-For more information about rules files, see [Rules](/environments/rules).

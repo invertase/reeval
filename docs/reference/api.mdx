@@ -1,6 +1,6 @@
 ---
 title: "Authoring API reference"
-description: "Look up the signatures of evaluate, evaluate.each, group, and defineEnvironment, and the authoring types."
+description: "evaluate, evaluate.each, group, and defineEnvironment declare evaluations and environments, with the types they take."
 ---
 
 ## `evaluate()`
@@ -76,7 +76,7 @@ evaluate.each(handlers)(
 
 The returned function has no `skip`, `only`, or `todo`. reeval refuses, with exit code 2, a `cases` value that is not an array, and two cases with the same name.
 
-For more information about families and the `all cases` row, see [Evaluate many cases](/evals/cases).
+For more information about families and the `all cases` row, see [`compare`](/reference/options#compare).
 
 ## `EvalFn`
 
@@ -89,7 +89,7 @@ For more information about `AttemptContext` and the types the methods of `c` tak
 `EachOptions` is the type of `evaluate.each()`'s second argument.
 
 <Property name="pool" type="boolean" optional>
-  `true` by default: two or more cases form a family with one pass rate and, under `compare`, one paired lift gated by `compare.minLift`. `false` keeps each case independent. One case is never pooled.
+  `true` by default: two or more cases form a family with one pass rate and, under `compare`, one paired lift gated by `compare.minLift`. `false` keeps each case independent: each case gates alone and prints its own block, and the `--dry-run` table lists each on its own row, without the family note. One case is never pooled.
 </Property>
 
 reeval refuses any other key with exit code 2.
@@ -119,13 +119,13 @@ group('request builders', { environment: plain, tags: ['smoke'] }, () => {
   The body, which declares evaluations and nested groups and returns synchronously.
 </Property>
 
-`options` and `fn` take either order. `group.skip(name, options?, fn)` skips every evaluation inside the group. `group.only(name, options?, fn)` runs only that group in its file. `group.todo(name)` takes no body, and the plan lists it as `todo`. reeval refuses `group.only()` with exit code 2 when the `CI` variable is set to a value other than `false`.
+`options` and `fn` take either order. `group.skip(name, options?, fn)` skips every evaluation inside the group, including a nested group. `group.only(name, options?, fn)` runs only that group in its file, and other files still run. `group.todo(name)` takes no body, the plan lists it as `todo`, and the groups around it still add their tags to it. reeval refuses `group.only()` with exit code 2 when the `CI` variable is set to a value other than `false`.
 
 For more information about the cascade from `ReevalConfig` and `Profile` to an evaluation, see [The cascade](/reference/options#the-cascade), [Configuration reference](/reference/config), and [Profiles reference](/reference/profiles).
 
 ## `defineEnvironment()`
 
-`defineEnvironment(name, spec)` defines what an evaluation runs in. The following declaration extends a control into a variant:
+`defineEnvironment(name, spec)` defines what an evaluation runs in. The following declaration extends a baseline into a variant:
 
 ```ts title="evals/environments.ts"
 export const plain = defineEnvironment('plain', {
@@ -142,10 +142,10 @@ export const withShoehorn = plain.extend('with-shoehorn', ({ skill }) => ({
 </Property>
 
 <Property name="spec" type="EnvironmentInput" required>
-  An `EnvironmentSpec` object, or a callback that receives `EnvironmentHelpers` and returns one synchronously, once, when the file loads. The documented helpers are `secret`, `skill`, `mcp`, `file`, `directory`, and `git`.
+  An `EnvironmentSpec` object, or a callback that receives `EnvironmentHelpers` and returns one synchronously, once, when the file loads. The documented helpers are `secret`, `skill`, `mcp`, `plugin`, `file`, `directory`, and `git`.
 </Property>
 
-Relative paths in `spec` resolve against the file that calls `defineEnvironment()`. A spec that omits `sandbox` runs in the cascaded `sandbox` option, else in the default sandbox. reeval refuses, with exit code 2, any other name and a callback that returns a `Promise`. For more information about the default sandbox, see [Sandboxes](/sandboxes).
+Relative paths in `spec` resolve against the file that calls `defineEnvironment()`. A spec that omits `sandbox` runs in the cascaded `sandbox` option, else in the default sandbox. reeval refuses, with exit code 2, any other name and a callback that returns a `Promise`. For more information about the default sandbox, see [Sandboxes](/integrations/sandboxes).
 
 The returned `Environment` is a frozen object with the following fields.
 
@@ -170,6 +170,28 @@ The returned `Environment` is a frozen object with the following fields.
 </Property>
 
 For more information about `EnvironmentSpec`, `EnvironmentHelpers`, each field's type, and how `extendEnvironment()` merges each field, see [Environment fields](/reference/environment#environmentspec) and [extend](/reference/environment#extend).
+
+## `defineConfig()`
+
+`defineConfig(config)` returns its argument unchanged, so `reeval.config.ts` is type-checked. For more information about the config keys and the callback form, see [Configuration reference](/reference/config#defineconfig).
+
+## `expect()`
+
+`expect(actual, label?)` checks `actual` and records an assertion. For more information about its matchers, `expect.soft()`, and `expect.poll()`, see [Matchers reference](/reference/matchers#expect).
+
+## `DEFAULT_EGRESS_ALLOW`
+
+`DEFAULT_EGRESS_ALLOW` is a `readonly string[]` of the package registries and GitHub: `registry.npmjs.org`, `registry.yarnpkg.com`, `github.com`, `*.github.com`, `*.githubusercontent.com`, `pypi.org`, and `files.pythonhosted.org`. Spread it into an `egress.allow` list that still installs packages, as in `egress: { allow: [...DEFAULT_EGRESS_ALLOW, 'example.com'] }`.
+
+For more information about egress policies, see [`egress`](/reference/options#egress).
+
+## `DEFAULT_DIRECTORY_IGNORES`
+
+`DEFAULT_DIRECTORY_IGNORES` is a `readonly string[]` of the `glob` patterns `directory()` skips unless `defaultIgnores` is `false`. For more information about `directory()`, see [Environment fields](/reference/environment#directory).
+
+## `DEFAULT_SKILL_EXCLUDE`
+
+`DEFAULT_SKILL_EXCLUDE` is a `readonly string[]` of the path patterns each skill leaves out unless `exclude` replaces them: `/evals/`, `.history/`, and `*.eval.ts`. For more information about skills, see [Environment fields](/reference/environment#skilllocal).
 
 ## `HarnessCapabilityError`
 

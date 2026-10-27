@@ -3,84 +3,24 @@ title: "Fail a pull request"
 description: "Fail a pull request when an evaluation regresses."
 ---
 
-Fail a pull request when a variant misses the minimum lift, or when an evaluation regresses. For a runnable project, see [`with-github-pr-gate`](https://github.com/invertase/reeval/tree/main/examples/with-github-pr-gate).
+A pull request fails when an evaluation that passed on its base commit fails on its head. For the workflow file that sets this up, including the recording profile, the API key, the run, and the compare, see [CI](/runs/ci). For a runnable project, see [`with-github-pr-gate`](https://github.com/invertase/reeval/tree/main/examples/with-github-pr-gate).
 
-## Gate pull requests
+## Read the job result
 
-<Steps>
-<Step title="Size the profile">
+The job summary holds the diff between the head and the base. A regressed evaluation lists the assertions whose outcomes changed:
 
-Add a `pr` profile to the `reeval.config.ts` file. A run uses it when `CI` is set to anything other than `false` and you omit `--profile`.
-
-```ts title="reeval.config.ts"
-import { defineConfig } from '{{ pkg }}'
-
-export default defineConfig({
-  defaultProfile: { ci: 'pr' },
-  profiles: {
-    pr: {
-      budget: { attempts: 20 },
-    },
-  },
-})
+```text
+regressed        adds a LangGraph node
+  base             20261020T230147Z_958e309_cursor-agent_aamj
+  head             20261020T230148Z_958e309_cursor-agent_qghb
+  graph compiles   pass → fail
+    expected command to succeed, exit code 1
+  state schema     not run
+  +1 more passed
 ```
 
-`budget.attempts` caps the plan. The profile sets no `limit`, so the variant still runs. For more information about profiles, see [Profiles](/runs/profiles).
+The job fails when the diff reports a regression. For the rule, see [CI](/runs/ci). For the words the diff uses, see [Compare with past runs](/results/compare/past-runs#fail-on-a-regression).
 
-</Step>
-<Step title="Require a minimum lift">
+## Next
 
-Set `compare.gate` and `compare.minLift` in the `evals/shoehorn.eval.ts` file.
-
-```ts title="evals/shoehorn.eval.ts"
--  { runs: 4, compare: { baseline: plain, variants: [withShoehorn] } },
-+  {
-+    runs: 4,
-+    compare: {
-+      baseline: plain,
-+      variants: [withShoehorn],
-+      gate: 'variants',
-+      minLift: 0.25,
-+    },
-+  },
-```
-
-`compare.minLift` is the smallest lift you accept, from -1 to 1. `compare.gate` at `'variants'` is the default, so a variant's failure fails the evaluation. A control that fails its assertions does not fail the run, so `reeval run` can exit 0.
-
-For more information about the comparison and the other `compare.gate` values, see [Compare setups](/evals/compare).
-
-With `compare.gate` at `'variants'`, the variant fails when the low end of its lift interval is below `0.25`. The variant's row adds `not by minLift 25`. The effect can still read `helped`.
-
-`reeval run` exits 1, and the job fails. For more information about exit codes, see [Exit codes](/reference/cli#exit-codes).
-
-</Step>
-<Step title="Add the workflow">
-
-Add the workflow that runs the `pr` profile. For more information about the workflow file and the API key, see [CI](/runs/ci).
-
-</Step>
-<Step title="Print the summary">
-
-Print the summary the job shows.
-
-```bash
-npx reeval show --md
-```
-
-The `reeval run` command appends that summary to the job summary. For more information about the command, see [Show one run](/results/output#show-one-run).
-
-</Step>
-<Step title="Fail on a regression">
-
-Run the regression check in the job after the run is recorded.
-
-```bash
-npx reeval compare --fail-on-regression
-```
-
-`reeval compare --fail-on-regression` exits 1 when an evaluation `regressed`. For more information about the other results that exit 1, see [Find run regressions](/results/regressions).
-
-</Step>
-</Steps>
-
-For more information about tracking recorded runs, see [Track results over time](/recipes/results-over-time).
+For more information about the workflow file, see [CI](/runs/ci). For more information about the diff, see [Compare with past runs](/results/compare/past-runs). For more information about following outcomes across recorded runs, see [Track past runs](/recipes/results-over-time).

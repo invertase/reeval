@@ -1,9 +1,9 @@
 ---
-title: "Control sandbox egress"
+title: "Restrict sandbox egress"
 description: "Limit which hosts the sandbox reaches, and see what was blocked."
 ---
 
-The `egress` option sets which hosts the sandbox can reach. The default is `'proxy'`: any host over HTTP and HTTPS, through the egress gateway, which records each request. Set `'deny-all'` to block every host except automatic hosts, or `{ allow: [...] }` to allow selected hosts in addition to them. API keys stay on the host either way. For more information about keeping API keys on the host, see [Secrets](/environments/secrets#keep-api-keys-on-the-host).
+The `egress` option sets which hosts the sandbox can reach. The default is `'proxy'`: any host over HTTP and HTTPS, through the egress gateway, which records each request. Set `'deny-all'` to block every host except automatic hosts, or `{ allow: [...] }` to allow selected hosts in addition to them. Brokered harness credentials and secrets with `hosts` stay on the host either way, but a secret without `hosts` is in the sandbox as its real value. For more information, see [Secrets](/environments/secrets#keep-api-keys-on-the-host).
 
 ## Block non-automatic hosts
 
@@ -31,7 +31,7 @@ evaluate(
 )
 ```
 
-A restricted policy still lets through the hosts an attempt can't run without: your harness's own API, the `hosts` of each brokered secret, and each `http` or `sse` MCP server. reeval adds these automatic hosts to `'deny-all'` and to every allow list, and the plan prints them:
+A restricted policy still lets through the hosts an attempt can't run without: the harness's own API, the `hosts` of each brokered secret, and each `http` or `sse` MCP server. reeval adds these automatic hosts to `'deny-all'` and to every allow list, and the plan prints them:
 
 ```bash
 npx reeval run --dry-run
@@ -43,50 +43,7 @@ The `notes` column shows each evaluation's policy and its automatic hosts:
 egress: deny-all + auto: api.anthropic.com, *.anthropic.com
 ```
 
-An evaluation or group's `egress` option overrides the environment's, which overrides the one in the `reeval.config.ts` file or a profile. A blocked request never fails the attempt on its own. The agent gets a refusal, and your assertions decide what that means.
-
-## Allow a list of hosts
-
-To let the agent reach a site, list it. `DEFAULT_EGRESS_ALLOW` holds the package registries and GitHub, so the agent can still install packages. In an evaluation file, spread it into an allow list:
-
-```ts title="with-egress-allowlist.eval.ts"
-import { DEFAULT_EGRESS_ALLOW, evaluate, expect } from '{{ pkg }}'
-
-const egress = { allow: [...DEFAULT_EGRESS_ALLOW, 'example.com'] }
-
-evaluate('fetches a page from an allowed host', { egress }, async (c) => {
-  await c.send(
-    'Write title.js, a Node script that fetches https://example.com ' +
-      'and prints its title.',
-  )
-
-  const run = await c.exec('node title.js')
-  await expect(run).toSucceed()
-  expect(run.stdout.trim()).toBe('Example Domain')
-  expect(
-    (await c.exec('curl -sS https://example.org')).exitCode,
-    'other hosts',
-  ).not.toBe(0)
-})
-```
-
-A plain entry matches that host only. A `*.` entry matches every subdomain, not the apex domain itself, and never an IP address. The automatic hosts join the list, and the plan prints them after `+ auto:`.
-
-## Allow raw TCP
-
-The egress gateway carries HTTP and HTTPS only. Under every other policy, SSH and database clients get no network. Set `'allow-all'` on the evaluation that needs raw TCP or UDP:
-
-```ts title="with-egress-allow-all.eval.ts"
-evaluate(
-  'reads an SSH banner over raw TCP',
-  { egress: 'allow-all' },
-  async (c) => {
-    // ...
-  },
-)
-```
-
-Under `'allow-all'`, that traffic leaves the sandbox directly, unfiltered and unrecorded, and the record marks the attempt's egress `partial`. Set it on the evaluations that need it, not in the `reeval.config.ts` file.
+An evaluation or group's `egress` option overrides the environment's, which overrides the one in the `reeval.config.ts` file or a profile. A blocked request never fails the attempt on its own. The agent gets a refusal, and the assertions decide what that means.
 
 ## Read blocked requests
 
@@ -121,10 +78,15 @@ A refused request names the host and why it was blocked:
 }
 ```
 
-The `allowed` list is every host the policy let through, the `allow` hosts and the automatic ones; it is `null` under `'proxy'` and `'allow-all'`. Hosts your harness's CLI always tries and never needs, such as its telemetry, are recorded in `expectedBlocked`; other refused requests remain in `blocked`. When you run `npx reeval run -v`, each blocked request also prints a `gateway` line as it happens. For more information, see [Debugging](/results/debugging).
+The `allowed` list is every host the policy let through, the `allow` hosts and the automatic ones; it is `null` under `'proxy'` and `'allow-all'`. Hosts the harness's CLI always tries and never needs, such as its telemetry, are recorded in `expectedBlocked`; other refused requests remain in `blocked`. When you run `npx reeval run -v`, each blocked request also prints a `gateway` line as it happens. For more information, see [Debugging](/results/debugging).
 
-For more information about egress enforcement, see [Core concepts](/core-concepts). For runnable projects, see [`with-egress-deny-all`](https://github.com/invertase/reeval/tree/main/examples/with-egress-deny-all), [`with-egress-allowlist`](https://github.com/invertase/reeval/tree/main/examples/with-egress-allowlist), and [`with-egress-allow-all`](https://github.com/invertase/reeval/tree/main/examples/with-egress-allow-all).
+## Choose another policy
+
+Pass `{ allow: [...DEFAULT_EGRESS_ALLOW, 'example.com'] }` when the agent needs a few more hosts and still installs packages. Pass `'allow-all'` on the evaluations that need raw TCP or UDP, such as SSH, not in the `reeval.config.ts` file. For runnable projects, see [`with-egress-allowlist`](https://github.com/invertase/reeval/tree/main/examples/with-egress-allowlist) and [`with-egress-allow-all`](https://github.com/invertase/reeval/tree/main/examples/with-egress-allow-all). For each policy's rules, see [`egress`](/reference/options#egress).
 
 ## Reference
 
-For more information about the `egress` option's shape and where it is accepted, see [Options](/reference/options#egress). For more information about the `egress` record's fields, see [Run record](/reference/record).
+For more information about the `egress` option's shape and where it is accepted, see [Options](/reference/options#egress). For more information about the `egress` record's fields, see [Run record](/reference/record). For more information about the allow-list constant, see [`DEFAULT_EGRESS_ALLOW`](/reference/api#defaultegressallow).
+
+For more information about egress enforcement, see [Sandbox](/reference/glossary#sandbox). For a runnable project, see [`with-egress-deny-all`](https://github.com/invertase/reeval/tree/main/examples/with-egress-deny-all).
+

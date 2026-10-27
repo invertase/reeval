@@ -1,6 +1,6 @@
 ---
 title: "CLI reference"
-description: "Look up every command, flag, and exit code."
+description: "The reeval CLI runs evaluations and reads their run history, and each outcome has an exit code."
 ---
 
 The `reeval` command and the `re` command run the same CLI. `-h`, `--help`, and `--version` exit 0.
@@ -51,7 +51,7 @@ reeval init [dir]             Scaffold a project in dir (default: here): reeval.
 
 ## `reeval doctor`
 
-The `reeval doctor` command reports one line per check. It checks Node, not npm. With `--online`, each harness, judge, and analysis credential check authenticates supported credentials. The supported variables are `CURSOR_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, and `OPENAI_API_KEY`; a variable reused by separate checks may be requested more than once, and any other credential is reported as set without an authentication request.
+The `reeval doctor` command reports one line per check. It checks Node, not npm. With `--online`, each harness, judge, and analysis credential check authenticates supported credentials. The supported variables are `CURSOR_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, and `OPENROUTER_API_KEY`; a variable reused by separate checks may be requested more than once, and any other credential is reported as set without an authentication request.
 
 [//]: # (generated:cli-help:doctor)
 
@@ -111,32 +111,11 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
 
 [//]: # (/generated:cli-help:run)
 
-## `reeval image build`
-
-The `reeval image build` command builds the sandbox images a plan needs.
-
-[//]: # (generated:cli-help:image-build)
-
-```text
-reeval image build [filter...]
-                              Build every image the evals' Docker sandboxes need, per harness: reeval's
-                              image (bakes in its CLI), from and dockerfile images, install layers.
-                              Builds what's missing or stale (a from tag that moved upstream), three
-                              at a time, and reports every failure; exit 3 if any image failed
-  --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does, so its
-                              harness, sandbox and tags pick the images (also REEVAL_PROFILE)
-  --force                     Rebuild every image, pulling each base again
-  --dry-run                   List the images, how each is made and how each stands, building
-                              nothing (a from tag is looked up in its registry, not pulled)
-```
-
-[//]: # (/generated:cli-help:image-build)
-
-Filters match file paths, evaluation names, and cell keys as `reeval run` filters do. `reeval image` without `build` exits 2.
-
 ## `reeval clean`
 
-The `reeval clean` command deletes local debug data. `--keep` defaults to 0. `--images` prunes every Docker and Podman store that answers.
+The `reeval clean` command deletes local debug data, and leaves the `.reeval/runs/` directory. `--keep` defaults to 0. `--images` prunes every Docker and Podman store that answers.
+
+The command prints `Removed debug data for <n> runs (<size>) from <directory>`, or `No debug data to remove in <directory>`. With `--images`, it then prints how many images it removed, or `No leftover images to remove`.
 
 [//]: # (generated:cli-help:clean)
 
@@ -300,6 +279,10 @@ reeval studio                 Browse runs, evals and transcripts in the web stud
 
 The `reeval studio build` command writes the studio as a static site. `--no-artifacts` keeps the records, the index, saved analyses, and analysis notes.
 
+The command prints `built studio-dist/: <n> runs, <n> files, <size> (records, transcripts, diffs, logs and judge inputs)`. With `--no-artifacts`, the parenthesis reads `(records only: --no-artifacts)`. Anyone who can open the site can read every included file.
+
+The output folder must be empty or a previous studio build, or the command stops and asks for another `--out`. The site uses relative addresses and hash routing, so it works from any host and subpath. It has no live runs and no **Debug** tab.
+
 [//]: # (generated:cli-help:studio-build)
 
 ```text
@@ -333,9 +316,30 @@ reeval report [run]           Collect a bug report: versions, reeval doctor, the
 
 [//]: # (/generated:cli-help:report)
 
-## Exit codes
+## `reeval image build`
 
-Every command exits with one of these codes.
+The `reeval image build` command builds the sandbox images a plan needs.
+
+[//]: # (generated:cli-help:image-build)
+
+```text
+reeval image build [filter...]
+                              Build every image the evals' Docker sandboxes need, per harness: reeval's
+                              image (bakes in its CLI), from and dockerfile images, install layers.
+                              Builds what's missing or stale (a from tag that moved upstream), three
+                              at a time, and reports every failure; exit 3 if any image failed
+  --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does, so its
+                              harness, sandbox and tags pick the images (also REEVAL_PROFILE)
+  --force                     Rebuild every image, pulling each base again
+  --dry-run                   List the images, how each is made and how each stands, building
+                              nothing (a from tag is looked up in its registry, not pulled)
+```
+
+[//]: # (/generated:cli-help:image-build)
+
+Filters match file paths, evaluation names, and cell keys as `reeval run` filters do. `reeval image` without `build` exits 2.
+
+## Exit codes
 
 [//]: # (generated:exit-codes)
 
@@ -354,7 +358,7 @@ Every command exits with one of these codes.
 
 `reeval doctor` exits 1 when a check fails. A warning alone exits 0.
 
-`reeval compare --fail-on-regression` exits 1 on a regression, or when an added or incomparable evaluation fails on a head run that was not cancelled.
+`reeval compare --fail-on-regression` exits 1 on a regression, or when an added or incomparable evaluation fails on a head run that was not canceled.
 
 `reeval image build` exits 2 when every failed image is a usage error, else 3.
 

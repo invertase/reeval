@@ -1,0 +1,60 @@
+---
+title: "Codex harness"
+description: "The Codex harness runs OpenAI's Codex CLI in the sandbox on an OpenAI API key and records its events."
+---
+
+`codex()` runs OpenAI's Codex CLI in the sandbox as one `codex exec --json` process for each turn, and a later turn resumes the same thread. The turn bypasses approval prompts. For more information about the sandbox, see [Choose a sandbox](/integrations/sandboxes).
+
+## `OPENAI_API_KEY`
+
+`codex()` reads `OPENAI_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
+
+reeval brokers that key on `POST https://api.openai.com/v1/responses` only, over HTTP. A restricted egress policy allows `api.openai.com`.
+
+When the API rejects the key, the attempt error begins with `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local`.
+
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
+
+For more information about the variable, see [`OPENAI_API_KEY`](/reference/env-vars#openaiapikey).
+
+## `codex()`
+
+`codex()` is exported from `{{ pkg }}/harness`. The `reeval.config.ts` file passes it as the `harness` option:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { codex } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: codex({
+    model: 'gpt-5.6-luna',
+    effort: 'medium',
+  }),
+})
+```
+
+The prompt is a shell argument under 128 KiB.
+
+`model` is required. For what each field takes, see [Harness factory options](/reference/options#harness-factory-options).
+
+
+
+In the sandbox, Codex's `config.toml` file turns analytics off.
+
+For more information about model ids and effort values, see [Set the agent's model](/agents/model). For rules, skills, MCP servers, usage, served models, and web events, see [Harness behavior](/reference/options#harness-behavior).
+
+## `plugins`
+
+reeval lists the plugins in a marketplace named `reeval` in Codex's home directory and installs each with `codex plugin add` as the session starts, so Codex caches a copy and loads its skills and MCP servers. In the sandbox, Codex's `config.toml` file turns the plugin sync off unless the environment has plugins, so a turn without plugins contacts only `api.openai.com`.
+
+[//]: # (generated:harness-plugins:codex)
+
+- Takes `skills` and `mcp`, and refuses a plugin that keeps `agents`, `commands`, `hooks` and `rules`: narrow it with `only`, or leave it out of the cell.
+- Reads `plugin.json` and `.codex-plugin/plugin.json` (a root `plugin.json` only when it names an Agent Plugins `$schema`) in place of `.claude-plugin/plugin.json`, so a plugin that has one is refused.
+- Refuses a plugin that bundles apps: they need a ChatGPT login.
+- Names a plugin's MCP servers by their own keys, in one list with `mcp`, and keeps one of two servers of a name, so a clash is refused.
+- With plugins it tries `github.com`, `api.github.com` and `chatgpt.com` (Codex's plugin sync, which it runs on every turn once plugins are on); a restricted egress policy refuses them and records them under `egress.expectedBlocked`.
+
+[//]: # (/generated:harness-plugins:codex)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).

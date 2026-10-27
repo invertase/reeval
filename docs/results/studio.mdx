@@ -3,11 +3,11 @@ title: "Browse studio runs"
 description: "Browse run history and runs in progress in a local web app."
 ---
 
-The studio is a local web app over the same run history the `reeval history` command lists. It shows every recorded run, each run's evaluations, cells, and attempts, and each attempt's transcript, diff, assertions, and judge inputs. For more information about recording runs, see [Recording](/runs/recording).
+The studio is a local web app over the same run history the `reeval history` command lists. It shows every recorded run, each run's evaluations, cells, and attempts, and each attempt's transcript, diff, assertions, and judgment inputs. For more information about recording runs, see [Recording](/runs/recording).
 
 ## Open the studio
 
-The `reeval studio` command serves the studio on `127.0.0.1` and reads the history directory from your `reeval.config.ts` file, plus the unrecorded runs in the `.reeval/runs` directory. Open it in your browser:
+The `reeval studio` command serves the studio on `127.0.0.1` and reads the history directory from the `reeval.config.ts` file, plus the unrecorded runs in the `.reeval/runs` directory. Open it in the browser:
 
 ```bash
 npx reeval studio --open
@@ -23,7 +23,7 @@ Ctrl-C to stop.
 
 The address carries a session token, and the studio refuses a request without it, so open the printed address rather than typing the port.
 
-The runs list opens first. A run opens to its evaluations, each cell's pass counts and, with `compare`, each variant's effect against the control. An attempt has **Transcript**, **Diff**, **Checks**, **Judge**, and **State** tabs, and a **Debug** tab when the attempt has a trace in the `.reeval/debug` directory. For more information about debug traces, see [Debugging](/results/debugging).
+The runs list opens first. A run opens to its evaluations, each cell's pass counts and, with `compare`, each variant's effect against the baseline. An attempt has **Transcript**, **Diff**, **Checks**, **Judge**, and **State** tabs, and a **Debug** tab when the attempt has a trace in the `.reeval/debug` directory. For more information about debug traces, see [Debugging](/results/debugging).
 
 ## Watch a run live
 
@@ -33,23 +33,10 @@ While the studio is open, a `reeval run` in the same project appears at the top 
 npx reeval run
 ```
 
-The run shows a **Running** badge with the attempts finished so far, and each attempt's transcript grows as the harness works. When the run writes its record, the studio moves it into the history and keeps its address. A run whose process exits before it writes the record, or that produces no activity for fifteen seconds, shows **Stopped**.
+The run shows a **Running** badge with the attempts finished so far, and each attempt's transcript becomes readable once the attempt finishes, while the run continues. When the run writes its record, the studio moves it into the history and keeps its address. A run whose process exits before it writes the record, or that produces no activity for fifteen seconds, shows **Stopped**.
 
 ## Export a static site
 
-The `reeval studio build` command writes the studio and the recorded history as a static site, so a team can read runs without reeval installed. Build the site:
+The `reeval studio build` command writes the history as a static site for readers without reeval. For more information, see [`reeval studio build`](/reference/cli#reeval-studio-build).
 
-```bash
-npx reeval studio build
-```
-
-The command names the output folder and what it holds:
-
-```text
-built studio-dist/: 12 runs, 348 files, 9.4 MB
-Serve it from any static host. Anyone who can open it can read every included file.
-```
-
-The site uses relative addresses and hash routing, so it works from any host and any subpath. It has no live runs and no **Debug** tab. The `studio-dist` directory must be empty or a previous studio build.
-
-For more information about every flag of `reeval studio` and `reeval studio build`, see [CLI](/reference/cli#reeval-studio) and [`reeval studio build`](/reference/cli#reeval-studio-build).
+For more information about every flag of `reeval studio`, see [CLI](/reference/cli#reeval-studio).

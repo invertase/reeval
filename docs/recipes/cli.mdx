@@ -1,11 +1,9 @@
 ---
 title: "Test a CLI"
-description: "See whether your harness runs a CLI and its result works."
+description: "See whether a harness runs a CLI and its result works."
 ---
 
-You test a CLI by installing it on the sandbox image, giving your harness a task that uses it, and checking the result. The sample uses `jq`. For a runnable project, see [`with-docker-install`](https://github.com/invertase/reeval/tree/main/examples/with-docker-install).
-
-Before any attempt starts, reeval prepares the sandbox image and builds this `install` layer if it is missing. For more information about adding a tool to the image, see [Add toolchains](/sandboxes/toolchains).
+You test a CLI by installing it on the sandbox image, giving the harness a task that uses it, and checking the result. The sample uses `jq`. For a runnable project, see [`with-docker-install`](https://github.com/invertase/reeval/tree/main/examples/with-docker-install).
 
 ## Install and check the CLI
 
@@ -31,7 +29,9 @@ const withJq = defineEnvironment('jq', ({ directory }) => ({
 }))
 ```
 
-reeval runs those commands when it builds the image, so every attempt has the CLI. The `project/orders.json` file has five orders, and two of them have a total over 100.
+Before any attempt starts, reeval builds this `install` layer on the sandbox image if it is missing, so every attempt has the CLI. For more information about adding a tool to the image, see [Add toolchains](/environments/toolchains).
+
+The `project/orders.json` file has five orders, and two of them have a total over 100.
 
 </Step>
 <Step title="Write the task and the assertions">
@@ -52,9 +52,9 @@ evaluate('counts the large orders with jq', {
 })
 ```
 
-`c.exec` runs a command in the sandbox after `c.send` returns. The first assertion confirms the image has `jq`; `toSucceed` passes when `exitCode` is 0. The second runs the harness's script and compares what it prints with the expected count. For more information about `c.exec` and `toSucceed`, see [Assertions](/evals/checks).
+`c.exec` runs a command in the sandbox after `c.send` returns. The first assertion confirms the image has `jq`; `toSucceed` passes when `exitCode` is 0. The second runs the harness's script and compares what it prints with the expected count. For more information about `c.exec` and `toSucceed`, see [Assertions](/write/assertions).
 
-To check the commands the harness ran during the turn, use `toHaveRun`. For more information, see [Check what the agent did](/evals/checks#check-what-the-agent-did).
+To check the commands the harness ran during the turn, use `toHaveRun`. For more information, see [Check what the agent did](/write/assertions#check-what-the-agent-did).
 
 </Step>
 <Step title="Run the evaluation">
@@ -65,7 +65,7 @@ From the project root, run the evaluation in the `evals/cli.eval.ts` file. The c
 npx reeval run cli
 ```
 
-When both assertions pass, the block for the evaluation reads `pass` and the assertion lines are absent. For more information about the results summary, see [Read the results summary](/results/output).
+When both assertions pass, the block for the evaluation reads `pass` and the assertion lines are absent. For more information about the outcomes and the tally, see [Read a run's output](/results/output).
 
 </Step>
 <Step title="Check the install layer">

@@ -1,0 +1,62 @@
+---
+title: "Choose an agent"
+description: "Choose the harness and model that each evaluation runs on."
+---
+
+Set the `harness` option to a harness factory with a `model` to choose an agent. For the definition, see [Agent](/reference/glossary#agent) in the Glossary.
+
+For more information about installing reeval, see [Quick start](/quickstart).
+
+## Choose an agent
+
+In the `reeval.config.ts` file, pass one factory from the `{{ pkg }}/harness` module. With no `harness` option, the default harness is Cursor. Each harness is its own cell.
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { claudeCode } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: claudeCode({ model: '<model>' }),
+})
+```
+
+For more information about setting `model` and `effort`, see [Set the agent's model](/agents/model). For more information about running one evaluation on several harnesses, see [Compare harnesses](/recipes/agent-comparison).
+
+## Set the harness options
+
+In the factory call, set `id`, `maxConcurrent`, `startTimeout`, and `gateway` beside `model`. A pinned gateway must be in the config's `gateway` list:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { vercel } from '{{ pkg }}/gateway'
+import { claudeCode } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  gateway: [vercel()],
+  harness: claudeCode({
+    model: '<model>',
+    id: 'claude-code:baseline',
+    maxConcurrent: 2,
+    startTimeout: '3m',
+    gateway: 'vercel',
+  }),
+})
+```
+
+For each option's type and default, see [Common harness options](/reference/options#common-harness-options).
+
+## Pick a harness
+
+Each factory comes from the `{{ pkg }}/harness` module.
+
+- [Cursor](/integrations/agents/cursor): `cursor()`
+- [Claude Code](/integrations/agents/claude-code): `claudeCode()`
+- [Codex](/integrations/agents/codex): `codex()`
+- [Antigravity](/integrations/agents/antigravity): `antigravity()`
+- [OpenCode](/integrations/agents/opencode): `opencode()`
+- [Goose](/integrations/agents/goose): `goose()`
+- [pi](/integrations/agents/pi): `pi()`
+- [fx](/integrations/agents/fx): `fx()`
+- [Grok Build](/integrations/agents/grok-build): `grokBuild()`
+
+For more information about each harness's keys, rules and skills paths, MCP servers, token usage, served models, and web events, see [Harness behavior](/reference/options#harness-behavior).

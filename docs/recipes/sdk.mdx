@@ -1,6 +1,6 @@
 ---
 title: "Test an SDK"
-description: "See whether an agent can use your SDK correctly."
+description: "See whether an agent can use an SDK correctly."
 ---
 
 An SDK test seeds the SDK into the workspace, asks the harness to build with it, and checks the result with a script the harness never sees. The sample tests the small Acme weather SDK. For a runnable project, see [`with-sdk-usage`](https://github.com/invertase/reeval/tree/main/examples/with-sdk-usage).
@@ -45,7 +45,7 @@ evaluate('uses the Acme SDK correctly', { environment: app }, async (c) => {
 
 `directory('./acme-sdk', { into: 'vendor/acme' })` copies the SDK and its `README.md` into the workspace. For more information about seeding files, see [Place files](/environments/files).
 
-`c.writeFile` adds `check-client.mjs` after the harness finishes, so the harness never sees it. The script runs `forecast()` against a stand-in API that answers `503` once. The judge asks the one question a command can't answer. For more information about judges, see [Score agent work](/evals/judges).
+`c.writeFile` adds `check-client.mjs` after the harness finishes, so the harness never sees it. The script runs `forecast()` against a stand-in API that answers `503` once. The judge asks the one question a command can't answer. For more information about judgments, see [Judge agent work](/write/judgments).
 
 </Step>
 <Step title="Run the evaluation">
@@ -56,7 +56,7 @@ From the directory that contains the `reeval.config.ts` file, run the `evals/sdk
 npx reeval run sdk
 ```
 
-The run needs an API key for your harness and for the judge. For more information about that key, see [the harness reference](/harnesses/claude-code).
+The run needs an API key for the harness and for the judge. For more information about each harness's key, see [Choose an agent](/agents). For more information about the judge's key, see [Judge agent work](/write/judgments).
 
 </Step>
 <Step title="Read the outcome">
@@ -87,4 +87,4 @@ For more information about outcome words, see [Read the outcomes](/results/outpu
 
 ## Next
 
-For more information about file, command and transcript assertions, see [Assertions](/evals/checks).
+For more information about file, command and transcript assertions, see [Assertions](/write/assertions).

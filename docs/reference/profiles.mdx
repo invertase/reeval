@@ -1,13 +1,11 @@
 ---
 title: "Profiles reference"
-description: "Look up each profile key and how reeval chooses a profile."
+description: "A profile is a named set of defaults, limits, judge, and budget that --profile selects."
 ---
 
 ## `profiles`
 
 `profiles` in the `reeval.config.ts` file maps a name to `defaults`, `limit`, `judge`, `budget`, `record`, `tags`, and `gateway`. reeval exits with code 2 for an unknown key or a value of the wrong shape.
-
-A profile object sets every key.
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
@@ -65,10 +63,12 @@ For more information about `pin`, see [Options reference](/reference/options#pin
 ### `compare`
 
 <Property name="compare" type="false | { maxVariants: number }" optional>
-  `false` drops the variants and runs the control. `{ maxVariants: n }` keeps the first `n` variants. `n` is a whole number of at least 0.
+  `false` drops the variants and runs the baseline. `{ maxVariants: n }` keeps the first `n` variants. `n` is a whole number of at least 0.
 </Property>
 
-`limit.compare` applies when the evaluation sets `compare`. The plan notes `compare off (profile nightly)` or `variants 4 → 1 (profile nightly)`. With no variants left and questions set, it notes `questions off (profile nightly)`.
+`limit.compare` applies when the resolved evaluation has `compare`, whether a group, a profile's `defaults`, the config or the evaluation set it. After `false` or `{ maxVariants: 0 }`, the baseline gates like an evaluation without `compare`. The plan notes `compare off (profile nightly)` or `variants 4 → 1 (profile nightly)`.
+
+A pairwise question needs two attempts that differ in a factor it varies. When the limit leaves none of its factors varying, the plan notes `1 pairwise question off (profile nightly)`, or `2 pairwise questions off (profile nightly)` for two. When it leaves some, the question keeps those and the plan notes `1 pairwise question narrowed (profile nightly)`, or `2 pairwise questions narrowed (profile nightly)` for two.
 
 ### `harness`
 
@@ -119,7 +119,7 @@ The timer starts when the first attempt starts. At the cap, running attempts fin
 `record` replaces the config `record`. An omitted `record` keeps the config value, whose default is `ci`.
 
 <Property name="record" type="'manual' | 'ci' | 'always'" optional>
-  `manual` does not copy the run when `reeval run` ends. `ci` copies it when `CI` is set to anything but `false`. `always` copies it.
+  Same values as [`record`](/reference/options#record).
 </Property>
 
 reeval exits with code 2 for any other `record` value.
@@ -133,7 +133,7 @@ For more information about copying a run later, see [reeval record](/reference/c
 `tags` selects evaluations. Every profile filter must hold, and every `--tag` flag must hold.
 
 <Property name="tags" type="string[]" optional>
-  A name includes that tag. A leading `!` excludes it, as in `!slow`. reeval omits an evaluation that fails a filter.
+  Tag filters for this profile, same shape as [`tags`](/reference/options#tags) / `--tag`. reeval omits an evaluation that fails a filter.
 </Property>
 
 reeval exits with code 2 when `tags` is not a list of strings.
@@ -145,7 +145,7 @@ For more information about tags on a group or evaluation, see [Options reference
 `gateway` replaces the config's `gateway` list while the profile is selected.
 
 <Property name="gateway" type="GatewayDescriptor[]" optional>
-  The same helpers as the config's [`gateway`](/reference/options#gateway), in the order you prefer them.
+  The same helpers as the config's [`gateway`](/reference/options#gateway), in order of preference.
 </Property>
 
 ## `defaultProfile`

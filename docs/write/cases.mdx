@@ -1,0 +1,94 @@
+---
+title: "Evaluate many cases"
+description: "Run the same evaluation over a list of cases and read one pooled result."
+---
+
+The `evaluate.each()` function turns an array of cases into one evaluation per case. Every case shares one set of options and one body, which takes the case as its second argument. Two or more cases pool into a family, which reports one pass rate and, with `compare`, one effect over all of them. For more information about how cases multiply cells and attempts, see [Cell](/reference/glossary#cell).
+
+The family below asks an agent to choose between Genkit and three other AI frameworks, and a judge reads each answer.
+
+## Run one evaluation over many cases
+
+<Steps>
+<Step title="Declare the evaluations">
+
+In the `evals/recommendation.eval.ts` file, declare one evaluation per rival.
+
+```ts title="evals/recommendation.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+
+evaluate.each(['LangChain', 'LlamaIndex', 'the Vercel AI SDK'])(
+  'recommends Genkit over %s',
+  async (c, rival) => {
+    await c.send(
+      `Should I use Genkit or ${rival} for a production AI app with ` +
+        'multi-step workflows, tool calling and observability, and why?',
+    )
+
+    expect(await c.judge(`Is Genkit recommended over ${rival}?`)).toPass()
+  },
+)
+```
+
+Each case is an evaluation with its own name, such as `recommends Genkit over LangChain`, and its own history. For a runnable project, see [`with-recommendation`](https://github.com/invertase/reeval/tree/main/examples/with-recommendation).
+
+</Step>
+<Step title="Name the cases">
+
+The name is a template, and each case's name must differ, or reeval refuses the file. `%s` is the case, `%#` is its index from 0, and `$key` is a property of an object case. A string case prints as itself, and an object case prints as JSON. This excerpt names each object case by its `fn`:
+
+```ts title="with-each.eval.ts"
+const cases = [
+  { fn: 'subtract', a: 7, b: 3, want: '4' },
+  { fn: 'multiply', a: 2, b: 3, want: '6' },
+  { fn: 'power', a: 2, b: 5, want: '32' },
+]
+
+evaluate.each(cases)(
+  'adds $fn to src/math.js',
+  { environment: math },
+  async (c, item) => {
+    // ...
+```
+
+The template is the family's name, so renaming it starts the history of every case again. For a runnable project, see [`with-each`](https://github.com/invertase/reeval/tree/main/examples/with-each).
+
+</Step>
+<Step title="Verify the run plan">
+
+With the `reeval run --dry-run` command, plan the run without starting a sandbox or a harness:
+
+```bash
+npx reeval run --dry-run
+```
+
+The `plan` line counts one evaluation per case. The table below the `plan` line lists the family by its template, with its case count in the `notes` column.
+
+</Step>
+<Step title="Run the evaluation">
+
+Run the evaluation. The result prints the template as a heading and a row per case.
+
+```bash
+npx reeval run recommendation
+```
+
+The three cases print one block:
+
+```text
+                 recommends Genkit over %s
+  pass  LangChain          1 of 1
+  pass  LlamaIndex         1 of 1
+  pass  the Vercel AI SDK  1 of 1
+```
+
+</Step>
+</Steps>
+
+## Compare over a family
+
+A family with `compare` reports one pooled `all cases` effect, paired by case. For more information, see [Lift](/results/compare/lift) and [`compare`](/reference/options#compare). To keep the cases independent, pass `{ pool: false }`, as [`EachOptions`](/reference/api#eachoptions) describes. For a runnable project, see [`with-family-lift`](https://github.com/invertase/reeval/tree/main/examples/with-family-lift).
+
+## Reference
+
+For more information about every argument `evaluate.each()` takes, see [Authoring API](/reference/api#evaluateeach).

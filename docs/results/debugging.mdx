@@ -15,7 +15,7 @@ Print the phase trace for the run.
 npx reeval run -v
 ```
 
-Each line starts with the attempt's tag. This trace follows the evaluation in [Write an evaluation](/evals/evaluate), from the pinned checkout to the hidden test:
+Each line starts with the attempt's tag. This trace follows the evaluation in [Evaluate](/write), from the pinned checkout to the hidden test:
 
 ```text
 [adds#1 fake] 15:04:40 env       workspace github:sindresorhus/camelcase#v10.0.0 at 328428291b2f (92160 bytes of tar, with a .git) in 25ms
@@ -48,7 +48,9 @@ For more information about every `reeval run` flag, see [reeval run](/reference/
 
 ## Open the debug directory
 
-The `.reeval/debug` directory holds one directory per run. reeval writes that directory on every run. Git ignores it with the rest of the `.reeval/` directory.
+The `.reeval/debug` directory holds one directory per run. Each attempt writes its own files there, so a run with no attempt writes no directory. Git ignores it with the rest of the `.reeval/` directory.
+
+Each run keeps the newest debug directories, set by [`debug.keep`](/reference/options#debug), and [`reeval clean`](/reference/cli#reeval-clean) removes the rest.
 
 Attempt files sit at the `.reeval/debug/<run id>/<evaluation>/<cell>/<n>/` path. The evaluation and cell names are slugs, each with a short hash.
 
@@ -58,7 +60,7 @@ Open the `debug.log` file for that trace. Each line has a full timestamp.
 2026-09-26T12:50:01.234Z check     $ test -f src/user.test.ts → exit 1 · 4ms
 ```
 
-The `requests.ndjson` file records one JSON object for each request the egress gateway handles. reeval writes the `trace.ndjson` file for a failing attempt and for every attempt with `-vv`. The first line of the `trace.ndjson` file counts entries the buffer dropped. The `debug.traceBufferMb` option caps that file.
+The `requests.ndjson` file records one JSON object for each request the egress gateway handles. reeval writes the `trace.ndjson` file for a failing attempt and for every attempt with `-vv`. The first line of the `trace.ndjson` file counts entries the buffer dropped. To cap that file, set [`debug.traceBufferMb`](/reference/options#debug).
 
 For more information, see [the studio's **Debug** tab](/results/studio).
 
@@ -80,48 +82,18 @@ A prompt line has these fields.
 }
 ```
 
-To also write the `transcript.raw.jsonl` file in that directory, one stream part per line, set `REEVAL_RAW_TRANSCRIPT` to `1`.
+To also write the `transcript.raw.jsonl` file in that directory, one stream part per line, set [`REEVAL_RAW_TRANSCRIPT`](/reference/env-vars#reevalrawtranscript).
 
-## Prune debug data
+## Read the workspace and artifacts
 
-Each run keeps the newest debug directories and deletes the older ones. The `debug.keep` option sets the number of directories to keep, and the default is 20. The `.reeval/runs/` directory stays on disk.
+The workspace goes when the sandbox stops. reeval keeps what the agent left in it in the attempt's `.reeval/runs/<run id>/<evaluation>/<cell>/<n>/` directory:
 
-Remove the debug data.
-
-```bash
-npx reeval clean
-```
-
-reeval prints how many runs it removed and the size. To leave the newest runs in place, pass `--keep`.
-
-```bash
-npx reeval clean --keep 5
-```
-
-To also remove untagged sandbox images that reeval built, pass `--images`.
+| File | Holds |
+| :--- | :--- |
+| `diff.patch` | The workspace diff, from the snapshot after setup to the end of the attempt |
+| `artifacts/<name>.png` | Screenshots from `c.capture()` |
+| `judge-input.json` | What each `c.judge()` call received |
 
 ## Reference
 
-In the `reeval.config.ts` file, add the `debug` option.
-
-```ts
-import { defineConfig } from '{{ pkg }}'
-
-export default defineConfig({
-  debug: { keep: 20, traceBufferMb: 8 },
-})
-```
-
-The `debug.keep` option is a whole number of at least 1. The `debug.traceBufferMb` option is a number of megabytes above 0. Oldest entries in an attempt's buffer drop first.
-
-In the shell that starts reeval, set these variables.
-
-| Variable | Effect |
-| :--- | :--- |
-| `REEVAL_DEBUG` | Prints image prepare logs, container engine logs, an evaluation file's stdout and stderr, and an unexpected error's stack. |
-| `REEVAL_RAW_TRANSCRIPT` | Writes the `transcript.raw.jsonl` file when set to `1`. |
-| `REEVAL_NO_REPORT_HINT` | Hides the hint reeval prints after a crash when set to `1`. |
-
-For more information about every variable, see [Environment variables](/reference/env-vars).
-
-For more information about a redacted bug report, see [reeval report](/reference/cli#reeval-report).
+For more information about the `debug.keep` and `debug.traceBufferMb` options, see [`debug`](/reference/options#debug). For more information about the variables that change what reeval prints and writes, see [`REEVAL_DEBUG`](/reference/env-vars#reevaldebug) and [`REEVAL_NO_REPORT_HINT`](/reference/env-vars#reevalnoreporthint). For more information about a redacted bug report, see [reeval report](/reference/cli#reeval-report).

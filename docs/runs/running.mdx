@@ -1,11 +1,11 @@
 ---
 title: "Run evaluations"
-description: "Run the evaluations in your project."
+description: "Run the evaluations in a project."
 ---
 
-You run the evaluations in your project with `reeval run`. The command prints a plan line, starts the attempts, and ends with one block per evaluation.
+`reeval run` runs the evaluations in a project. The command prints a plan line, starts the attempts, and ends with one block per evaluation.
 
-For more information about the result blocks, see [Read the results summary](/results/output).
+For more information about the result blocks, see [Read a run's output](/results/output).
 
 ## Run every evaluation
 
@@ -15,7 +15,7 @@ Run every evaluation the config includes:
 npx reeval run
 ```
 
-By default, reeval includes every `.eval.ts` file under the `evals/` directory. The command writes the record in the `.reeval/runs` directory.
+By default, reeval includes every `.eval.ts` and `.eval.py` file under the `evals/` directory, and the [`include` option](/reference/options#include) changes that. The command writes the record in the `.reeval/runs` directory.
 
 ## Filter evaluations
 
@@ -57,28 +57,24 @@ npx reeval run --dry-run --json
 
 The document lists every cell, and any evaluation set to `skip` or `todo`.
 
-## Choose the output
+## Set the attempts
 
-reeval chooses the output from where you run the command. These flags set the mode, the line order, the prefix, and which attempts print detail lines:
+The `runs` option sets how many attempts each cell gets, and it defaults to 1. Each attempt runs in a fresh sandbox. In the `evals/camelcase.eval.ts` file, add `runs` to the options:
 
-| Flag | Values | Default |
-| :--- | :--- | :--- |
-| `--ui` | `live`, `plain`, `agent` | `agent` for a coding agent, `plain` in CI or when stdout is not a terminal, otherwise `live` |
-| `--log-order` | `stream`, `grouped` | `grouped` in CI, otherwise `stream` |
-| `--log-prefix` | `task`, `none` | `task`, or `none` for grouped output on GitHub Actions |
-| `--output-logs` | `full`, `errors-only`, `none` | `errors-only`, or `full` with `-v` |
-
-`stream` prints each line as it happens, and `grouped` prints each attempt as one block at the end. The `task` prefix names the evaluation, the attempt, and the cell. `live` adds a status line such as `1 eval · 0/4 tries`. `plain` prints the log alone. `agent` prints the result blocks at the end without color.
-
-Set plain output for a log without the status line:
-
-```bash
-npx reeval run --ui plain
+```ts title="evals/camelcase.eval.ts"
+evaluate(
+  'adds a separators option',
+  { environment: camelcase, runs: 4 },
+  // ...
 ```
 
-`REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, and `REEVAL_OUTPUT_LOGS` take the same values. A flag overrides the variable. `auto` selects the default.
+To set it for one run, pass `--runs`, which replaces the option:
 
-Set `REEVAL_HEARTBEAT` to a duration such as `30s`, or to `0` to turn the heartbeat off. The default is `60s`. In `plain` mode, silence for that duration prints a count of the attempts in progress. `live` mode uses the status line. `agent` mode leaves the heartbeat off.
+```bash
+npx reeval run --runs 4
+```
+
+A comparison needs at least four counted attempts a side before it calls an effect. For more information, see [Four-attempt minimum](/results/compare/statistics#four-attempt-minimum).
 
 ## Set concurrency
 
@@ -89,6 +85,18 @@ npx reeval run --concurrency 4
 ```
 
 The `--concurrency` flag overrides `REEVAL_CONCURRENCY`, which overrides `concurrency` in the `reeval.config.ts` file. If you set none of those three, reeval uses 8, capped at one attempt per CPU and per gigabyte of memory where the sandboxes run.
+
+## Choose the output
+
+reeval adapts the output to where you run the command: a live status line in a terminal, plain log lines in CI or a pipe, and result blocks without color for a coding agent. For the values and defaults of `--ui`, `--log-order`, `--log-prefix`, and `--output-logs`, see [the `reeval run` command](/reference/cli#reeval-run).
+
+Pick plain output for a log without the status line:
+
+```bash
+npx reeval run --ui plain
+```
+
+Each flag has a variable, such as `REEVAL_UI`, and the flag overrides it. For the variables, including `REEVAL_HEARTBEAT`, see [Environment variables](/reference/env-vars).
 
 ## Resume a run
 

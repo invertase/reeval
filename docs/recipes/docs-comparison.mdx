@@ -1,16 +1,16 @@
 ---
-title: "Measure your docs"
-description: "See whether your docs helped the agent pass an assertion."
+title: "Measure docs"
+description: "See whether docs helped the agent pass an assertion."
 ---
 
-You run one task on a control without your docs and on a variant that has them. The cells share the prompt and the assertions.
+You run one task on a baseline without the docs and on a variant that has them. The cells share the prompt and the assertions. For a runnable project that measures the same convention as a doc and as a skill, see [`with-two-variants`](https://github.com/invertase/reeval/tree/main/examples/with-two-variants).
 
-## Run one task with and without your docs
+## Run one task with and without the docs
 
 <Steps>
-<Step title="Define the control and variant">
+<Step title="Define the baseline and variant">
 
-In the `evals/environments.ts` file, define the control `plain` and the variant `with-docs`. The `plain` control sets no `rules`. The `with-docs` variant sets `rules`.
+In the `evals/environments.ts` file, define the baseline `plain` and the variant `with-docs`. The `plain` baseline sets no `rules`. The `with-docs` variant sets `rules`.
 
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
@@ -29,9 +29,9 @@ Do not buffer the whole response.
 Both cells install the `ai` package. The rules text is the only change. The harness reads the rules text at the start of every attempt.
 
 </Step>
-<Step title="Add your docs">
+<Step title="Add the docs">
 
-Replace the rules string with your docs. For more information about rules files, see [Add project rules](/environments/rules). For more information about placing a doc in the workspace instead, see [Place files](/environments/files).
+Replace the rules string with the docs. For more information about rules files, see [Add project rules](/environments/rules). For more information about placing a doc in the workspace instead, see [Place files](/environments/files).
 
 </Step>
 <Step title="Write the evaluation">
@@ -71,7 +71,7 @@ npx reeval run stream
 </Step>
 <Step title="Read whether the docs helped">
 
-Read the block the run prints for the evaluation. When `with-docs` passes every attempt and `plain` passes none, the block reads like this. For more information about the results summary, see [Read the results summary](/results/output).
+Read the block the run prints for the evaluation. When `with-docs` passes every attempt and `plain` passes none, the block reads like this. For more information about the outcomes and the tally, see [Read a run's output](/results/output).
 
 ```text
 pass             streams the chat reply
@@ -83,15 +83,13 @@ pass             streams the chat reply
     expected src/chat.ts to match /streamText/
 ```
 
-Your counts can differ. The `with-docs` row reads `helped` because the `with-docs` variant passed the `uses streamText` assertion in 4 of 4 attempts, and the `plain` cell passed it in 0 of 4. The other effect words are `made it worse` and `can't tell yet`.
+The `with-docs` row reads `helped` because the `with-docs` variant passed the `uses streamText` assertion in 4 of 4 attempts, and the `plain` cell passed it in 0 of 4. The other effect words are `made it worse` and `can't tell yet`.
 
-If the `plain` control and the `with-docs` variant both pass, the harness already calls `streamText`, and this task cannot show what the docs changed. A control that already includes the docs measures nothing.
+If the `plain` baseline and the `with-docs` variant both pass, the harness already calls `streamText`, and this task cannot show what the docs changed. A baseline that already includes the docs measures nothing.
 
 </Step>
 </Steps>
 
-For a runnable project that measures the same convention as a doc and as a skill, see [`with-two-variants`](https://github.com/invertase/reeval/tree/main/examples/with-two-variants).
-
 ## Next
 
-For more information about gates and extra variants, see [Compare setups](/evals/compare).
+For more information about gates and extra variants, see [Measure lift against a baseline](/results/compare/lift).

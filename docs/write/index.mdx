@@ -1,0 +1,128 @@
+---
+title: "Evaluate"
+description: "Declare an evaluation that gives an agent one task and checks the outcome."
+---
+
+Declare each evaluation with `evaluate()`: a task for the agent and the assertions that check the outcome. For the definition, see [Evaluation](/reference/glossary#evaluation).
+
+reeval loads every `*.eval.ts` file under the `evals/` folder. The example evaluation adds a feature to `sindresorhus/camelcase`, a real npm package, checked out at a release tag.
+
+## Write the evaluation
+
+<Steps>
+<Step title="Name the question">
+
+Pass the evaluation name as the first argument to `evaluate()`. The name states the question the evaluation answers. Results and insights lead with the name, so you know what a pass means before reading any assertion. In the `evals/camelcase.eval.ts` file, declare the evaluation:
+
+```ts title="evals/camelcase.eval.ts"
+import { readFileSync } from 'node:fs'
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
+
+const camelcase = defineEnvironment('camelcase', ({ git }) => ({
+  workspace: git('github:sindresorhus/camelcase', {
+    ref: 'v10.0.0',
+    init: true,
+  }),
+}))
+const hidden = readFileSync(
+  new URL('./hidden/separators.test.js', import.meta.url),
+  'utf8',
+)
+
+evaluate('adds a separators option', { environment: camelcase }, async (c) => {
+  await c.send(
+    'Add a separators option to camelCase: a string of extra characters ' +
+      "that also separate words, so camelCase('foo/bar', {separators: '/'}) " +
+      "is 'fooBar'. Add tests to test.js and document it in readme.md. " +
+      'Run the tests with node --test.',
+  )
+
+  await expect(c.exec('node --test'), "the repo's tests pass").toSucceed()
+  await expect(c).toHaveFile('readme.md', /separators/)
+  await c.writeFile('separators.test.js', hidden)
+  await expect(
+    c.exec('node --test separators.test.js'),
+    'the option works',
+  ).toSucceed()
+})
+```
+
+A name such as `camelcase test 2` says nothing about what passed. Renaming an evaluation starts its history again, so settle the name before you record runs.
+
+</Step>
+<Step title="Write one prompt">
+
+Ask for the outcome you want in `c.send()`. The assertions then decide whether the harness reached it.
+
+Name the files the task is about, such as `test.js` and `readme.md`. Leave out the hidden test: the evaluation writes `separators.test.js` only after the harness finishes, so a pass shows the option works on cases the harness never saw.
+
+</Step>
+<Step title="Check the outcome">
+
+Each `expect` line is an assertion. The label, such as `'the option works'`, names the assertion's row in the result. For more information about every kind of assertion, see [Assertions](/write/assertions).
+
+To measure a change, such as a skill, replace `environment` with `compare`. For more information about the baseline, the variant, and the effect, see [Measure lift against a baseline](/results/compare/lift).
+
+</Step>
+<Step title="Verify with the `reeval run --dry-run` command">
+
+Plan the run with the `reeval run --dry-run` command:
+
+```bash
+npx reeval run --dry-run
+```
+
+The `reeval run --dry-run` command plans the run without starting a sandbox or a harness, so it needs no API key. The `plan` line counts the evaluations, cells, and attempts, and estimates the time:
+
+```text
+plan  run 20261022T172927Z_58d8a94_ada_t5w2 · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
+```
+
+A table below the `plan` line lists each evaluation by its file and name. If the evaluation is missing, check that its file ends in `.eval.ts` and is in the `evals/` folder.
+
+</Step>
+</Steps>
+
+To start the attempts, run the same command without `--dry-run`. For the runnable project, see [`with-existing-codebase`](https://github.com/invertase/reeval/tree/main/examples/with-existing-codebase).
+
+## Send the task
+
+The prompt in `c.send()` is what each attempt sends to the agent, in a fresh sandbox, after the environment is in place. For the definition, see [Task](/reference/glossary#task).
+
+```ts title="evals/camelcase.eval.ts"
+await c.send('Add a separators option to camelCase: …')
+```
+
+For more information about a task over several prompts, see [Turns](/write/turns).
+
+## Set a timeout
+
+The `timeout` option limits each attempt, and it defaults to `'15m'`. The clock starts after the setup commands finish. An attempt that reaches the timeout fails. In the `evals/camelcase.eval.ts` file, add `timeout` to the options:
+
+```ts title="evals/camelcase.eval.ts"
+evaluate(
+  'adds a separators option',
+  { environment: camelcase, timeout: '30m' },
+  // ...
+```
+
+For more information about the accepted durations, see [the `timeout` option](/reference/options#timeout).
+
+## Skip, focus, or plan evaluations
+
+The `evaluate.skip`, `evaluate.only`, and `evaluate.todo` functions change which evaluations run. In the `evals/camelcase.eval.ts` file, focus the evaluation:
+
+```ts title="evals/camelcase.eval.ts"
+evaluate.only(
+  'adds a separators option',
+  // ...
+)
+```
+
+`evaluate.skip` keeps an evaluation in the file without running it. `evaluate.only` runs only the marked evaluations in its own file, and other files still run. reeval refuses `evaluate.only` when the environment contains the `CI` variable. `evaluate.todo` takes a name and no body, and the plan lists it as `todo`. For a runnable project with `skip` and `todo`, see [`with-groups`](https://github.com/invertase/reeval/tree/main/examples/with-groups).
+
+For more information about sharing options across several evaluations, see [Groups](/write/groups).
+
+## Reference
+
+For more information about every argument `evaluate()` takes, see [Authoring API](/reference/api#evaluate).
