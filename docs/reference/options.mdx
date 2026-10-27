@@ -90,7 +90,59 @@ For more information about harness forms, see [Run several agents](/agents#run-s
   A descriptor from a sandbox factory, with `maxConcurrent` a whole number of at least 1. The default is `docker()`. An empty baseline in a comparison without `compare.baseline` or `environment` uses the first variant's sandbox when that variant sets one.
 </Property>
 
-For more information about sandbox factories, see [Choose a sandbox](/integrations/sandboxes).
+For more information about sandbox factories, see [Choose a sandbox](/integrations/sandboxes). For the factories' own options, see [`docker()`](#docker).
+
+## `docker()`
+
+`docker()` and `podman()` take these options. Each limit applies to one container, and reeval passes them to `docker run` as `--memory`, `--memory-swap`, `--cpus`, and `--pids-limit`. For more information, see [Docker sandbox](/integrations/sandboxes/docker).
+
+<Property name="docker.id" type="string" optional>
+  The last segment of the cell key. Defaults to `docker`, `docker:<image>` when `image` or `from` names another image, or `docker:<name>` for a `dockerfile`, where the name is the file's, or its directory's for a file named `Dockerfile`. A hash of `install` follows.
+</Property>
+
+<Property name="docker.maxConcurrent" type="number" optional>
+  The most containers reeval runs at once across the run, whatever their image. A whole number of at least 1. The run's `concurrency` option still caps attempts overall.
+</Property>
+
+<Property name="docker.root" type="boolean" optional>
+  Runs the agent, the setup commands, and the assertions as root, with the capabilities `apt-get` needs, instead of the unprivileged `reeval` user. Defaults to `false`.
+</Property>
+
+<Property name="docker.capabilities" type="string[]" optional>
+  Linux capabilities to add back, such as `['NET_RAW']`, with or without the `CAP_` prefix. The container drops every other capability and runs with `no-new-privileges`.
+</Property>
+
+<Property name="docker.image" type="string" optional>
+  An image that already has the harness baked in. reeval uses it as is. At most one of `image`, `from`, and `dockerfile`; without one, the container runs reeval's own image for the harness.
+</Property>
+
+<Property name="docker.from" type="string" optional>
+  A Debian or Ubuntu based toolchain image, such as `python:3.12-slim`. reeval bakes Node, Git, and the harness on top on first use and caches the result. The image needs `apt-get` and glibc.
+</Property>
+
+<Property name="docker.dockerfile" type="string | URL" optional>
+  A Dockerfile, relative to the file that calls `docker()`, absolute, or a `file:` URL. reeval builds it from its directory with `REEVAL_BASE` set to its sandbox image and caches the result by content hash. A Dockerfile that starts from another Debian or Ubuntu image gets the harness baked on, as for `from`.
+</Property>
+
+<Property name="docker.install" type="(string | { run: string; timeout?: Duration })[]" optional>
+  Shell commands baked onto the base image in one cached layer. They run as root from `/`, in order, and see neither secrets nor the workspace. `install` does not combine with `dockerfile`.
+</Property>
+
+<Property name="docker.memory" type="string | number" optional>
+  The container's memory: `'4g'`, `'512m'`, or a byte count. Defaults to `'4g'`.
+</Property>
+
+<Property name="docker.swap" type="string | number" optional>
+  Swap on top of `memory`, in the same units. Defaults to as much as `memory`; `0` makes `memory` the hard ceiling. A host without swap has none to give.
+</Property>
+
+<Property name="docker.cpus" type="number" optional>
+  The CPUs the container may use, fractions allowed. Defaults to `2`, capped at the Docker host's count.
+</Property>
+
+<Property name="docker.pids" type="number" optional>
+  Processes and threads at once. Defaults to `1024`.
+</Property>
 
 ## `environment`
 

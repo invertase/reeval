@@ -592,6 +592,23 @@ for (const { file, text } of gatewayPages) {
   }
 }
 
+// The Docker and Podman pages are short task pages: a few sections and no option catalog. Each
+// option's entry lives on reference/options, which they link to.
+const SANDBOX_PAGE_MAX_SECTIONS = 3
+for (const name of ['docker', 'podman']) {
+  const href = `integrations/sandboxes/${name}`
+  const text = page(href).replace(/^```[\s\S]*?^```/gm, '')
+  const sections = [...text.matchAll(/^## .+$/gm)].length
+  if (sections > SANDBOX_PAGE_MAX_SECTIONS) {
+    problems.push(
+      `${href} has ${sections} level-2 headings, over ${SANDBOX_PAGE_MAX_SECTIONS}: a task page is a short tutorial, so move option entries to reference/options and link them`,
+    )
+  }
+  if (/<Property\b/.test(text)) {
+    problems.push(`${href} has <Property> entries: option entries live on reference/options`)
+  }
+}
+
 // The harness support matrix lives on agents/gateways; the pages beside it link to it.
 const HARNESS_NAMES =
   /\b(?:Cursor|Claude Code|Codex|Antigravity|OpenCode|Goose|Grok Build|fx|pi)\b/g

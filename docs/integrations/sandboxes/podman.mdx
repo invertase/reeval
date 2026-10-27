@@ -26,13 +26,13 @@ export default defineConfig({
 })
 ```
 
-`podman()` takes the same options as `docker()`: the image recipes, the resource limits, `id`, `maxConcurrent`, `root`, and `capabilities`. Every option is optional. For more information about each option, see [Docker sandbox](/integrations/sandboxes/docker). For more information about where the `sandbox` option is accepted, see [Choose a sandbox](/integrations/sandboxes). For a runnable project, see [`with-podman`](https://github.com/invertase/reeval/tree/main/examples/with-podman).
+`podman()` takes the same options as `docker()`: the image recipes, the resource limits, `id`, `maxConcurrent`, `root`, and `capabilities`. Every option is optional. For each option and its default, see [the `docker()` options](/reference/options#docker). For more information about where the `sandbox` option is accepted, see [Choose a sandbox](/integrations/sandboxes). For a runnable project, see [`with-podman`](https://github.com/invertase/reeval/tree/main/examples/with-podman).
 
 The cell key's last segment defaults to `podman`, or `podman:<image>` when `image` or `from` names another image, or `podman:<name>` for a `dockerfile`, as for `docker()`, plus a hash of `install`. The sandbox's images, egress gateway, and records are the Docker sandbox's.
 
 ## Differences from `docker()`
 
-Each difference from `docker()` is in what the host runs, not in the options, the egress policies, or the record.
+Each difference from `docker()` is in what the host runs, not in the options, the egress policies, or the record. The options are [the `docker()` options](/reference/options#docker).
 
 | Point | `docker()` | `podman()` |
 | :--- | :--- | :--- |
