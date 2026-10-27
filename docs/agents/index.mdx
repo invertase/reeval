@@ -24,15 +24,23 @@ For more information about setting `model` and `effort`, see [Set the agent's mo
 
 ## Set the harness options
 
-In the factory call, set `id`, `maxConcurrent`, `startTimeout`, and `gateway` beside `model`:
+In the factory call, set `id`, `maxConcurrent`, `startTimeout`, and `gateway` beside `model`. A pinned gateway must be in the config's `gateway` list:
 
 ```ts title="reeval.config.ts"
-harness: claudeCode({
-  model: '<model>',
-  id: 'claude-code:baseline',
-  maxConcurrent: 2,
-  startTimeout: '3m',
-}),
+import { defineConfig } from '{{ pkg }}'
+import { vercel } from '{{ pkg }}/gateway'
+import { claudeCode } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  gateway: [vercel()],
+  harness: claudeCode({
+    model: '<model>',
+    id: 'claude-code:baseline',
+    maxConcurrent: 2,
+    startTimeout: '3m',
+    gateway: 'vercel',
+  }),
+})
 ```
 
 For each option's type and default, see [Common harness options](/reference/options#common-harness-options).

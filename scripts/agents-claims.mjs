@@ -30,6 +30,8 @@ const sentences = (text) =>
  *  - the landing's `gateway` option written as string literals with no gateway helper, when
  *    harness.ts also takes the `GatewayDescriptor` that `direct()`, `vercel()` and `openrouter()`
  *    return;
+ *  - the code block under "Set the harness options" on the landing that does not set every
+ *    option the sentence before it names;
  *  - the model page saying `servedModels` records each turn, or not saying it is null for Cursor
  *    and Claude Code (history/types.ts: `servedModels` observes API calls; the per-turn model is
  *    `turns[].model`).
@@ -188,6 +190,22 @@ export async function agentsProblems({ root, docsDir }) {
     problems.push(
       'reference/options documents the common gateway option as string literals without a gateway helper, but harness.ts also takes a GatewayDescriptor, which direct(), vercel() and openrouter() return: type it GatewayName | GatewayDescriptor and name the helpers',
     )
+  }
+
+  const optionsSection =
+    read(landing).match(/^## Set the harness options\n([\s\S]*?)```\w*[^\n]*\n([\s\S]*?)\n```/m) ??
+    []
+  const [, optionsLead = '', optionsCode = ''] = optionsSection
+  if (!optionsLead) {
+    problems.push('agents/index has no code block under "Set the harness options"')
+  }
+  const named = [...optionsLead.matchAll(/`([A-Za-z]\w*)`/g)].map((m) => m[1])
+  for (const option of new Set(named)) {
+    if (!new RegExp(`^\\s*${option}\\s*:`, 'm').test(optionsCode)) {
+      problems.push(
+        `agents/index says to set \`${option}\` under "Set the harness options", but the code block does not set it: add \`${option}: …\` to the factory call`,
+      )
+    }
   }
 
   for (const sentence of sentences(modelText)) {
