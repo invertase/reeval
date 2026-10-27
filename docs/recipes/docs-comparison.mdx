@@ -1,11 +1,11 @@
 ---
 title: "Measure your docs"
-description: "See whether your docs helped the agent pass an assertion."
+description: "See whether docs helped the agent pass an assertion."
 ---
 
-You run one task on a baseline without your docs and on a variant that has them. The cells share the prompt and the assertions. For a runnable project that measures the same convention as a doc and as a skill, see [`with-two-variants`](https://github.com/invertase/reeval/tree/main/examples/with-two-variants).
+You run one task on a baseline without the docs and on a variant that has them. The cells share the prompt and the assertions. For a runnable project that measures the same convention as a doc and as a skill, see [`with-two-variants`](https://github.com/invertase/reeval/tree/main/examples/with-two-variants).
 
-## Run one task with and without your docs
+## Run one task with and without the docs
 
 <Steps>
 <Step title="Define the baseline and variant">
@@ -29,9 +29,9 @@ Do not buffer the whole response.
 Both cells install the `ai` package. The rules text is the only change. The harness reads the rules text at the start of every attempt.
 
 </Step>
-<Step title="Add your docs">
+<Step title="Add the docs">
 
-Replace the rules string with your docs. For more information about rules files, see [Add project rules](/environments/rules). For more information about placing a doc in the workspace instead, see [Place files](/environments/files).
+Replace the rules string with the docs. For more information about rules files, see [Add project rules](/environments/rules). For more information about placing a doc in the workspace instead, see [Place files](/environments/files).
 
 </Step>
 <Step title="Write the evaluation">
@@ -83,7 +83,7 @@ pass             streams the chat reply
     expected src/chat.ts to match /streamText/
 ```
 
-Your counts can differ. The `with-docs` row reads `helped` because the `with-docs` variant passed the `uses streamText` assertion in 4 of 4 attempts, and the `plain` cell passed it in 0 of 4. The other effect words are `made it worse` and `can't tell yet`.
+The `with-docs` row reads `helped` because the `with-docs` variant passed the `uses streamText` assertion in 4 of 4 attempts, and the `plain` cell passed it in 0 of 4. The other effect words are `made it worse` and `can't tell yet`.
 
 If the `plain` baseline and the `with-docs` variant both pass, the harness already calls `streamText`, and this task cannot show what the docs changed. A baseline that already includes the docs measures nothing.
 
