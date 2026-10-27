@@ -3,15 +3,15 @@ title: "Run models without Vertex AI"
 description: "Run Gemini and Claude models with a provider key through direct(), or through the Vercel AI Gateway or OpenRouter."
 ---
 
-reeval has no gateway for Google Cloud's Vertex AI. Run Gemini and Claude models on a provider key or a routing gateway instead.
+Run Gemini and Claude models on a provider key with `direct()`, or through a routing gateway with `vercel()` or `openrouter()`. Google Cloud's Vertex AI takes a service account, which the sandbox can't hold without exposing it.
 
 ## Credential
 
-Vertex has no credential in reeval. It takes a service account, not a key in a header, so the egress gateway can't keep the credential out of the sandbox.
+Use the provider key or the gateway key from the table below. The egress gateway swaps a key in a header, and Vertex AI takes a service account instead, so it can't keep that credential out of the sandbox.
 
 ## Helper
 
-Vertex has no helper. `{{ pkg }}/gateway` exports `direct()`, `vercel()`, and `openrouter()`.
+Import `direct()`, `vercel()`, or `openrouter()` from `{{ pkg }}/gateway`.
 
 For more information about combining gateways, see [Route models through a gateway](/agents/gateways).
 
