@@ -235,35 +235,14 @@ const attr = (text) => text.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
 
 const codeBlock = (lines) => ['```text', ...lines, '```'].join('\n')
 
-/**
- * Record fields for features the docs leave out, so they aren't rendered: `field` drops a
- * top-level field, `field[].sub` drops `sub` from the item type of the array `field`.
- */
-const EXCLUDED_FIELDS = { EnvironmentRecord: ['plugins', 'skills[].plugin'] }
-
-const nestedField = (sub) => new RegExp(`; ${sub}\\??: [^;}]+`)
-
-/** The excluded field paths of a type that no longer match anything in it. */
-function staleExclusions(type) {
-  return (EXCLUDED_FIELDS[type.name] ?? []).filter((path) => {
-    const [field, sub] = path.split('[].')
-    const f = type.fields.find((f) => f.name === field)
-    return !f || (sub && !nestedField(sub).test(f.type))
-  })
-}
-
 function renderType(type) {
   const lines = [`### \`${type.name}\``, '']
   if (type.doc) lines.push(mdxText(type.doc), '')
   if (type.prefix) lines.push(`Also has every field of \`${type.prefix.replace(/ &$/, '')}\`.`, '')
-  const excluded = (EXCLUDED_FIELDS[type.name] ?? []).map((path) => path.split('[].'))
   for (const f of type.fields) {
-    if (excluded.some(([field, sub]) => field === f.name && !sub)) continue
-    const subs = excluded.filter(([field, sub]) => field === f.name && sub).map(([, sub]) => sub)
-    const fieldType = subs.reduce((t, sub) => t.replace(nestedField(sub), ''), f.type)
     const opt = f.optional ? ' optional' : ''
     const body = f.doc ? `\n  ${mdxText(f.doc)}\n` : ''
-    lines.push(`<Property name="${f.name}" type="${attr(fieldType)}"${opt}>${body}</Property>`, '')
+    lines.push(`<Property name="${f.name}" type="${attr(f.type)}"${opt}>${body}</Property>`, '')
   }
   return lines.join('\n').trimEnd()
 }
@@ -295,6 +274,7 @@ const RECORD_TYPES = [
   'ContextFile',
   'Cell',
   'EnvironmentRecord',
+  'PluginRecord',
   'EgressRecord',
   'AttemptImage',
   'PhaseTimings',
@@ -390,11 +370,6 @@ async function blocks() {
   for (const name of RECORD_TYPES) {
     if (!types.has(name))
       problems.push(`record type ${name} isn't in history/types.ts or types.ts any more`)
-  }
-  for (const name of Object.keys(EXCLUDED_FIELDS)) {
-    const type = types.get(name) ?? { name, fields: [] }
-    for (const path of staleExclusions(type))
-      problems.push(`record type ${name} has no field ${path} to leave out any more`)
   }
   out.set(
     'record-types',

@@ -1,6 +1,6 @@
 ---
 title: "Run record reference"
-description: "The run record is the JSON file reeval writes for each run."
+description: "A run record holds one run's cells, attempts, assertions, judgments, and the environment each ran in."
 ---
 
 The `reeval show --json` command prints one run's record. The record is the `<runId>.json` file in the `.reeval/runs/` directory, or the same name in the history folder, with artifacts in the `<runId>` directory.
@@ -858,10 +858,14 @@ An environment as it was applied, without secret values.
 
 <Property name="setup" type="string[]"></Property>
 
-<Property name="skills" type="Array<{name: string; source: string; commit: string | null; sha256: string; placement: SkillPlacement; excluded: string[]}>"></Property>
+<Property name="skills" type="Array<{name: string; source: string; commit: string | null; sha256: string; placement: SkillPlacement; excluded: string[]; plugin?: string}>"></Property>
 
 <Property name="mcp" type="string[]">
   The names of the MCP servers the agent was given.
+</Property>
+
+<Property name="plugins" type="PluginRecord[]" optional>
+  The plugins placed, each with what it placed; in the digest. Unset when there are none.
 </Property>
 
 <Property name="files" type="Array<{path: string; sha256: string}>"></Property>
@@ -884,6 +888,38 @@ An environment as it was applied, without secret values.
 
 <Property name="workspace" type="{source: string; ref: string | null; path: string | null; commit: string; tree: string; init?: boolean}" optional>
   This records the Git repository the workspace started as: the repo as written (a local one relative to the project root), the ref and path asked for (null when unset), the commit the ref resolved to, and the hash of the tree that was copied in, which is in the digest.
+</Property>
+
+### `PluginRecord`
+
+A plugin as an attempt placed it.
+
+<Property name="name" type="string">
+  The manifest's `name`.
+</Property>
+
+<Property name="source" type="string">
+  Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`; for a marketplace entry, the entry's own source.
+</Property>
+
+<Property name="marketplace" type="{name: string; source: string; commit: string | null} | null">
+  The marketplace it was listed in, with its `marketplace.json` name, its source as written (`github:acme/agent-plugins#v3`, `npm:@acme/plugins@2.0.0`) and the commit a git one resolved to (null for npm); null when the plugin was named directly.
+</Property>
+
+<Property name="commit" type="string | null">
+  The commit a git source resolved to (the marketplace's, for an entry inside it); null for a local or npm one.
+</Property>
+
+<Property name="sha256" type="string">
+  The hash of the files placed.
+</Property>
+
+<Property name="build" type="string | null">
+  The tag of the image layer its build ran in (`reeval-plugin:…`); null without a build.
+</Property>
+
+<Property name="parts" type="{skills: string[]; agents: string[]; commands: string[]; hooks: string[]; mcp: string[]; rules: boolean}">
+  What it placed: skill, agent, command and MCP server names, hook events, and whether it had rules.
 </Property>
 
 ### `EgressRecord`
