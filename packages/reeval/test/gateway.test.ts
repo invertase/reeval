@@ -966,6 +966,17 @@ describe('Vertex AI routes', () => {
     assert.equal((adapter as { harnessId: string }).harnessId, 'grok-build')
   })
 
+  test('Grok Build takes vertex() before the direct() that ends the list, and with direct off', () => {
+    const grok = { kind: 'grok-build', model: 'grok-4.6' } as HarnessDescriptor
+    for (const value of [['vertex'], ['vertex', { direct: { enabled: false } }]]) {
+      assert.deepEqual(resolve(checkGateways(value, 'gateway', 'f'), grok), {
+        name: 'vertex',
+        skipped: [],
+      })
+    }
+    assert.equal(resolve(checkGateways(['direct', 'vertex'], 'gateway', 'f'), grok).name, 'direct')
+  })
+
   test("Grok Build on Vertex gets the token on the path its own base_url makes, a domain-scoped project's too", () => {
     for (const [project, region] of [
       ['reeval-512515', 'global'],
