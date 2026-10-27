@@ -15,6 +15,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { agentsProblems } from './agents-claims.mjs'
+import { anchorProblems } from './docs-anchors.mjs'
 import { docsRunsProblems } from './docs-runs-checks.mjs'
 import {
   harnessFacts,
@@ -799,6 +800,7 @@ for (const href of hrefs) {
   if (!fileFor(href)) problems.push(`sidebar link ${href} has no page under docs/`)
 }
 const linked = new Set(hrefs.map(fileFor).filter(Boolean))
+problems.push(...anchorProblems({ root, docsDir, variables: config.variables }))
 const pkg = config.variables.pkg
 /** The package named where it's installed or imported; the brand and CLI share its name. */
 const pkgSpecifier = new RegExp(
