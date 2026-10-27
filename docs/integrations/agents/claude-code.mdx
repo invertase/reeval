@@ -50,17 +50,7 @@ export default defineConfig({
   Reasoning effort for the Agent SDK `/effort` control. The Claude Code UI labels `xhigh` as **Extra**.
 </Property>
 
-<Property name="id" type="string" optional>
-  Cell id. Defaults to `claude-code` followed by the model, such as `claude-code:<model>`. With `effort` set to `high`, the id is `claude-code:<model>[effort=high]`. The id uses letters, digits, and `._:@+-=[]`.
-</Property>
-
-<Property name="maxConcurrent" type="number" optional>
-  The most Claude Code attempts that run at the same time, across the run. A whole number of at least 1.
-</Property>
-
-<Property name="startTimeout" type="Duration" optional>
-  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `90s`. Defaults to `90s`.
-</Property>
+For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 reeval turns `askUserQuestions` off, so Claude Code asks in its reply. reeval sets `IS_SANDBOX` to `1`, so Claude Code skips permission prompts as root. The adapter also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` to `1`, so a turn sends no telemetry, error reports, or feature-flag requests.
 
@@ -79,6 +69,18 @@ For more information about writing rules, see [Add project rules](/environments/
 The Claude Code harness reads skills from the `.claude/skills` directory in the workspace and from the `~/.claude/skills` directory in the home directory.
 
 For more information about placing skills, see [Give the agent skills](/environments/skills).
+
+## `plugins`
+
+reeval copies the plugins into a generated marketplace named `reeval` and enables each as `<plugin>@reeval` in `~/.claude/settings.json`, merging into a settings file the environment wrote there. Claude Code installs and loads them as it starts, and loads each plugin's MCP servers itself.
+
+[//]: # (generated:harness-plugins:claude-code)
+
+- Takes `skills`, `agents`, `commands`, `hooks` and `mcp`, and refuses a plugin that keeps `rules`: narrow it with `only`, or leave it out of the cell.
+
+[//]: # (/generated:harness-plugins:claude-code)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).
 
 ## `mcp`
 
