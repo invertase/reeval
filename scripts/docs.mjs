@@ -698,6 +698,22 @@ for (const sentence of page('reference/options')
   }
 }
 
+// `across: 'environment'` pairs every two environments on a harness (variants with each other
+// too), not only the baseline with each variant (compare/pairs.ts).
+for (const sentence of page('write/questions')
+  .replace(/```[\s\S]*?```/g, '')
+  .split(/(?<=[.!?])\s+/)) {
+  if (
+    sentence.includes("across: 'environment'") &&
+    /pairs the baseline with each variant/.test(sentence) &&
+    !/every two environments/.test(sentence)
+  ) {
+    problems.push(
+      "write/questions says across: 'environment' pairs the baseline with each variant: it pairs every two environments on the same agent, variants with each other included",
+    )
+  }
+}
+
 // The harness support matrix lives on agents/gateways; the pages beside it link to it.
 const HARNESS_NAMES =
   /\b(?:Cursor|Claude Code|Codex|Antigravity|OpenCode|Goose|Grok Build|fx|pi)\b/g
