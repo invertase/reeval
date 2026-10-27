@@ -30,6 +30,6 @@ For more information about combining gateways, see [Gateways](/agents/gateways).
 
 ## Harnesses and models
 
-`direct()` serves every harness, so a list that ends with it leaves no harness without a route. For the harnesses each routing gateway serves, see [Harness support](/agents/gateways#harness-support). `direct()` refuses an `fx()` model with a gateway id, such as `google/gemini-3.8-flash`, which only `vercel()` serves.
+`direct()` serves every harness on its own key, with two exceptions. It refuses an `fx()` model with a gateway id, such as `google/gemini-3.8-flash`, which only `vercel()` serves, and it refuses an OpenCode model id whose provider reeval can't run. For the harnesses each routing gateway serves, see [Harness support](/agents/gateways#harness-support).
 
 The judge calls `anthropic/*`, `google/*`, `openai/*`, and `typesafe-ai/*` models on `direct()`, each on its provider's own key. `analysis.model`, captures, and questions call `anthropic/*`, `google/*`, and `openai/*` language models. They refuse `typesafe-ai/*`, which scores yes/no questions and can't write an analysis or drive a capture.

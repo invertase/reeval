@@ -2,6 +2,7 @@
 // after the judge fails `pnpm docs:check` instead of waiting for a judge.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { directExceptionProblems } from './gateway-landing-claims.mjs'
 
 const PAGES = ['direct', 'vercel', 'openrouter']
 const SLOTS = [
@@ -34,6 +35,20 @@ export function gatewayModelProblems(docsDir) {
   }
   problems.push(...gatewayNotesProblems(docsDir))
   problems.push(...gatewayPropertyProblems(docsDir))
+  problems.push(...directPageProblems(docsDir))
+  return problems
+}
+
+/** Problems on docs/integrations/gateways/direct: it names the `fx` and OpenCode exceptions when it says `direct()` serves every harness, and never says a list ending with it leaves no harness unrouted. */
+export function directPageProblems(docsDir) {
+  const file = 'docs/integrations/gateways/direct.mdx'
+  const text = readFileSync(join(docsDir, 'integrations/gateways/direct.mdx'), 'utf8')
+  const problems = directExceptionProblems(text, file)
+  if (/no harness without a route/i.test(text.replace(/```[\s\S]*?```/g, ''))) {
+    problems.push(
+      `${file} says a list ending with direct() leaves no harness without a route: gateway/resolve.ts refuses fx with a gateway model id and an OpenCode model whose provider reeval can't run`,
+    )
+  }
   return problems
 }
 
