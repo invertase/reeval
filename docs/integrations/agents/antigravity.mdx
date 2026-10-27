@@ -47,17 +47,7 @@ export default defineConfig({
   Reasoning effort passed as `agy --effort`, such as `low`, `medium`, `high`, or `max`. The cell's `effort` field copies this option.
 </Property>
 
-<Property name="id" type="string" optional>
-  Cell id. Defaults to `antigravity` followed by the model, such as `antigravity:<model>`. With `effort` set to `high`, the id is `antigravity:<model>[effort=high]`. The id uses letters, digits, and `._:@+-=[]`.
-</Property>
-
-<Property name="maxConcurrent" type="number" optional>
-  The most Antigravity attempts that run at the same time, across the run. A whole number of at least 1.
-</Property>
-
-<Property name="startTimeout" type="Duration" optional>
-  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
-</Property>
+For more information about `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/agents#set-the-harness-options).
 
 For more information about choosing a harness, see [Choose an agent](/agents).
 
@@ -74,6 +64,20 @@ For more information about writing rules, see [Add project rules](/environments/
 The Antigravity harness reads skills from the `.agents/skills` directory in the workspace and from the `~/.gemini/config/skills` directory in the home directory.
 
 For more information about placing skills, see [Give the agent skills](/environments/skills).
+
+## `plugins`
+
+reeval installs each plugin whole with `agy plugin install` as the session starts, and Antigravity loads each plugin's MCP servers itself.
+
+[//]: # (generated:harness-plugins:antigravity)
+
+- Takes every plugin part: `skills`, `agents`, `commands`, `hooks`, `mcp` and `rules`.
+- Runs only command hooks, on `SessionStart`, `PreToolUse`, `PostToolUse` and `Stop`; a plugin with any other hook is refused.
+- Reads `plugin.json`, `.antigravity-plugin/plugin.json`, `.gemini-plugin/plugin.json` and `gemini-extension.json` in place of `.claude-plugin/plugin.json`, so a plugin that has one is refused.
+
+[//]: # (/generated:harness-plugins:antigravity)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment#pluginlocal).
 
 ## `mcp`
 
