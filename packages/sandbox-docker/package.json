@@ -43,7 +43,7 @@
     "@reeval/harness-antigravity": "workspace:0.1.12",
     "@reeval/harness-codex": "workspace:0.1.9",
     "@reeval/harness-cursor-sdk": "workspace:0.1.6",
-    "@reeval/harness-fx": "workspace:0.1.1",
+    "@reeval/harness-fx": "workspace:0.1.2",
     "@reeval/harness-goose": "workspace:0.1.6",
     "@reeval/harness-grok-build": "workspace:0.1.5",
     "@reeval/harness-opencode": "workspace:0.2.10",
