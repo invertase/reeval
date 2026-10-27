@@ -1051,7 +1051,8 @@ class FileChange(TypedDict):
 
 
 # fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or
-# OpenAI's API by the model id, and reports each turn's tokens.
+# OpenAI's API by the model id, or on OpenRouter through `openrouter()`, and reports each turn's
+# tokens.
 class FxHarnessDescriptor(TypedDict):
     # The gateway this harness's model calls go through, by name. It skips the config's
     # `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this
@@ -1064,7 +1065,9 @@ class FxHarnessDescriptor(TypedDict):
     maxConcurrent: NotRequired[float]
     # A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with
     # `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on
-    # OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.
+    # OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`. On `openrouter()`,
+    # either runs on OpenRouter's Chat Completions API with `OPENROUTER_API_KEY`, a bare id as
+    # `openai/<id>`.
     model: str
     # How long the harness's session may take to become ready (its bootstrap and first session)
     # before the attempt is an infra error, after one retry; default 90s.
@@ -1187,7 +1190,7 @@ class JudgeCallDataGatewayVercel(TypedDict):
 
 
 # OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves
-# Claude Code, Codex, Goose, OpenCode and Grok Build.
+# Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi.
 class JudgeCallDataGatewayOpenrouter(TypedDict):
     # Let OpenRouter fail over to another upstream provider when the one it picked can't serve a
     # call. Off by default, so reeval's own calls (the judge, analysis, compare questions and
@@ -1377,7 +1380,7 @@ class OpenCodeHarnessDescriptor(TypedDict):
 
 
 # OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves
-# Claude Code, Codex, Goose, OpenCode and Grok Build.
+# Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi.
 class OpenRouterGatewayDescriptor(TypedDict):
     # Let OpenRouter fail over to another upstream provider when the one it picked can't serve a
     # call. Off by default, so reeval's own calls (the judge, analysis, compare questions and

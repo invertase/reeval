@@ -619,7 +619,7 @@
                   "additionalProperties": false
                 },
                 {
-                  "description": "OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode and Grok Build.",
+                  "description": "OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode, fx, Grok Build and pi.",
                   "type": "object",
                   "properties": {
                     "fallbacks": {

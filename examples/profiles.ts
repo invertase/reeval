@@ -41,7 +41,7 @@ export const profiles = {
     'google/gemini-3.8-flash',
   ),
   // AI_GATEWAY_API_KEY, for the agent and the judge: fx runs a gateway id like this one only
-  // through Vercel AI Gateway, which serves Jev as a judge but no language model
+  // through Vercel AI Gateway or OpenRouter; Vercel serves Jev as a judge but no language model
   fx: {
     ...inDocker(fx({ model: 'anthropic/claude-sonnet-5' }), 'typesafe-ai/jev-1.14.0'),
     gateway: [vercel()],
