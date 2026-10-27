@@ -1203,6 +1203,30 @@ if (existsSync(appsPage) && quietMs) {
   }
 }
 
+// ---- Image alt text ----------------------------------------------------------------------------
+
+// Vale reads Markdown and skips JSX attributes, so Reeval.Verdict never sees an <Image alt="…">.
+// "Verdict" is the code name the reference pages document; every other page says judgment.
+const altAttribute = /\balt=(?:"([^"]*)"|'([^']*)')/g
+const markdownImage = /!\[([^\]]*)\]\(/g
+for (const file of mdxFiles()) {
+  const path = relative(root, file).split('\\').join('/')
+  if (path.startsWith('docs/reference/')) continue
+  const text = outsideFences(read(file))
+  const alts = [
+    ...[...text.matchAll(altAttribute)].map((m) => m[1] ?? m[2]),
+    ...[...text.matchAll(markdownImage)].map((m) => m[1]),
+  ]
+  for (const alt of alts) {
+    const found = /(.{0,30})\b(verdicts?)\b(.{0,20})/i.exec(alt)
+    if (found) {
+      problems.push(
+        `${path} has image alt text with "${found[2]}" ("…${found[1]}${found[2]}${found[3]}…"): write "judgment" outside docs/reference/`,
+      )
+    }
+  }
+}
+
 if (problems.length) {
   console.error(`docs: ${problems.length} problem${problems.length === 1 ? '' : 's'}`)
   for (const p of problems) console.error(`  - ${p}`)
