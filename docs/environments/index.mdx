@@ -25,42 +25,31 @@ For more information about each environment field, see [Workspaces](/environment
 </Step>
 <Step title="Extend an environment">
 
-In the `evals/environments.ts` file, call `.extendEnvironment()` on `page` to derive `brand-guidelines`. The child keeps the parent's fields and adds its own, so the baseline and the variant differ by one change.
+In the `evals/environments.ts` file, call `.extendEnvironment()` on `page` to derive `page-production`. The child keeps the parent's fields and adds its own, so the baseline and the variant differ by one change.
 
 ```ts title="evals/environments.ts"
-export const withSkill = page.extendEnvironment(
-  'brand-guidelines',
-  ({ skill }) => ({
-    skills: [
-      skill.git('github:anthropics/skills', {
-        ref: 'dbd4588f9e1033efb41dad4bef2f7947c8993d44',
-        path: 'skills',
-        only: ['brand-guidelines'],
-      }),
-    ],
-  }),
-)
+export const production = page.extendEnvironment('page-production', {
+  env: { NODE_ENV: 'production' },
+})
 ```
 
-The callback receives `skill`, `mcp`, `secret`, `file`, `directory`, and `git`. `defineEnvironment()` accepts the same callback. Relative paths resolve against the file that calls the helper.
+A callback receives `skill`, `mcp`, `plugin`, `secret`, `file`, `directory`, and `git`, and `defineEnvironment()` accepts the same callback. Relative paths resolve against the file that calls the helper. For more information about skill sources, see [Skills](/environments/skills). For more information about plugin sources, see [`plugin.local()`](/reference/environment#pluginlocal).
 
-For more information about skill sources, see [Skills](/environments/skills).
-
-A child merges `files`, `env`, `skills`, and `mcp` with its parent's by name, and runs its `setup` commands after its parent's. A child that sets `sandbox`, `workspace`, `rules`, or `egress` replaces the parent's value. `extend` is an alias of `.extendEnvironment()`.
+A child merges `files`, `env`, `skills`, `plugins`, and `mcp` with its parent's by name, and runs its `setup` commands after its parent's. A child that sets `sandbox`, `workspace`, `rules`, or `egress` replaces the parent's value. `extend` is an alias of `.extendEnvironment()`.
 
 For more information about the merge rules, see [`extend`](/reference/environment#extend).
 
 </Step>
 <Step title="Use an environment in an evaluation">
 
-In the `evals/brand.eval.ts` file, pass `page` as the `environment` and `withSkill` as a variant. reeval names each cell by its harness, environment, and sandbox.
+In the `evals/page.eval.ts` file, pass `page` as the `environment` and `production` as a variant. reeval names each cell by its harness, environment, and sandbox.
 
-```ts title="evals/brand.eval.ts"
-import { page, withSkill } from './environments.ts'
+```ts title="evals/page.eval.ts"
+import { page, production } from './environments.ts'
 // ...
 evaluate(
-  "styles the page in Anthropic's brand",
-  { environment: page, compare: { variants: [withSkill] } },
+  'adds a footer',
+  { environment: page, compare: { variants: [production] } },
   // ...
 )
 ```
@@ -76,12 +65,12 @@ Print the plan as JSON. The `reeval run --dry-run --json` command plans the run 
 npx reeval run --dry-run --json
 ```
 
-Each cell in an evaluation's `cells` list names its environment and the files it writes. The `brand-guidelines` cell, trimmed here to the fields that matter, lists the `index.html` file from `page`, which shows that the child kept the parent's files:
+Each cell in an evaluation's `cells` list names its environment and the files it writes. The `page-production` cell, trimmed here to the fields that matter, lists the `index.html` file from `page`, which shows that the child kept the parent's files:
 
 ```json
 {
-  "key": "claude-code:claude-sonnet-5/brand-guidelines/docker",
-  "environment": "brand-guidelines",
+  "key": "claude-code:claude-sonnet-5/page-production/docker",
+  "environment": "page-production",
   "role": "variant",
   "files": [
     "index.html"
@@ -89,7 +78,7 @@ Each cell in an evaluation's `cells` list names its environment and the files it
 }
 ```
 
-For a runnable project, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
+For a variant that adds a skill, see [Quick start](/quickstart).
 
 </Step>
 </Steps>

@@ -644,6 +644,30 @@ if (
   )
 }
 
+// ---- Environment pages ----------------------------------------------------------------------
+
+/** The helper names `helpersFor` hands an environment callback. */
+function environmentHelpers() {
+  const body = /export function helpersFor\([^)]*\)[^{]*\{\s*return \{([\s\S]*?)\n {2}\}\n\}/.exec(
+    read(join(src, 'environment.ts')),
+  )
+  if (!body) throw new Error("docs: can't find helpersFor in environment.ts")
+  return [...body[1].matchAll(/^ {4}(\w+):/gm)].map((m) => m[1])
+}
+
+const environmentsLanding = page('environments/index')
+const calledHelpers = /receives((?:[`,\sa-z]|and)*?)\./.exec(environmentsLanding)
+if (calledHelpers) {
+  const listed = new Set([...calledHelpers[1].matchAll(/`(\w+)`/g)].map((m) => m[1]))
+  for (const name of environmentHelpers()) {
+    if (!listed.has(name)) {
+      problems.push(
+        `environments/index lists the environment callback helpers and omits \`${name}\`, which helpersFor in environment.ts passes`,
+      )
+    }
+  }
+}
+
 // ---- Navigation and the package name --------------------------------------------------------
 
 const config = JSON.parse(read(join(root, 'docs.json')))
