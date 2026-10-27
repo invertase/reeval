@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/invertase/reeval/compare/v0.15.0...v0.15.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* **pi:** link the fake bootstrap with a junction so the gateway tests run on Windows ([#691](https://github.com/invertase/reeval/issues/691)) ([055574b](https://github.com/invertase/reeval/commit/055574b41b25b21971302ef303b7f540963ed337))
+
 ## [0.15.0](https://github.com/invertase/reeval/compare/v0.14.0...v0.15.0) (2026-10-27)
 
 
