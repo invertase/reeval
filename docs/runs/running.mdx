@@ -88,24 +88,15 @@ The `--concurrency` flag overrides `REEVAL_CONCURRENCY`, which overrides `concur
 
 ## Choose the output
 
-reeval chooses the output from where you run the command. These flags set the mode, the line order, the prefix, and which attempts print detail lines:
+reeval adapts the output to where you run the command: a live status line in a terminal, plain log lines in CI or a pipe, and result blocks without color for a coding agent. For the values and defaults of `--ui`, `--log-order`, `--log-prefix`, and `--output-logs`, see [the `reeval run` command](/reference/cli#reeval-run).
 
-| Flag | Values | Default |
-| :--- | :--- | :--- |
-| `--ui` | `auto`, `live`, `plain`, `agent` | `agent` for a coding agent, `plain` in CI or when stdout is not a terminal, otherwise `live` |
-| `--log-order` | `auto`, `stream`, `grouped` | `grouped` in CI, otherwise `stream` |
-| `--log-prefix` | `auto`, `task`, `none` | `task`, or `none` for grouped output on GitHub Actions |
-| `--output-logs` | `auto`, `full`, `errors-only`, `none` | `errors-only`, or `full` with `-v` |
-
-`auto` picks the default in the last column, as if the flag were unset. `stream` prints each line as it happens, and `grouped` prints each attempt as one block at the end. The `task` prefix names the evaluation, the attempt, and the cell. `live` adds a status line such as `1 eval · 0/4 tries`. `plain` prints the log alone. `agent` prints the result blocks at the end without color.
-
-Set plain output for a log without the status line:
+Pick plain output for a log without the status line:
 
 ```bash
 npx reeval run --ui plain
 ```
 
-Each flag has a variable, such as `REEVAL_UI`, and a flag overrides its variable. In `plain` mode, a quiet minute prints a count of the attempts in progress, and `REEVAL_HEARTBEAT` changes that wait. For more information, see [Environment variables](/reference/env-vars).
+Each flag has a variable, such as `REEVAL_UI`, and the flag overrides it. For the variables, including `REEVAL_HEARTBEAT`, see [Environment variables](/reference/env-vars).
 
 ## Resume a run
 

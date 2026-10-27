@@ -1136,9 +1136,34 @@ problems.push(
   ),
 )
 
+/** The text outside code fences, with the frontmatter kept. */
+const outsideFences = (text) => text.replace(/```[\s\S]*?```/g, '')
+
 // ---- docs/runs against the code -----------------------------------------------------------------
 
 problems.push(...docsRunsProblems(root))
+
+// The values and defaults of every `reeval run` flag live on reference/cli, and the `record` and
+// `history` defaults on reference/options: the runs pages keep the task and link them.
+for (const file of mdxFiles(join(docsDir, 'runs'))) {
+  const text = read(file)
+  const flagDefaultTable = outsideFences(text)
+    .split('\n')
+    .some((line) => /^\|/.test(line) && /\bFlag\b/.test(line) && /\bDefault\b/.test(line))
+  if (flagDefaultTable) {
+    problems.push(
+      `${relative(root, file)} has a table with Flag and Default columns: the flags' values and defaults live on reference/cli, so link it`,
+    )
+  }
+}
+const recordingText = read(join(docsDir, 'runs/recording.mdx'))
+for (const [, intro] of recordingText.matchAll(/([^\n]+)\n\n```ts[^\n]*\n[^`]*defineConfig\(/g)) {
+  if (/\bdefaults?\b/i.test(intro)) {
+    problems.push(
+      `docs/runs/recording.mdx introduces a config block as the defaults ("${intro}"): the record and history defaults live on reference/options, so link them`,
+    )
+  }
+}
 
 // ---- Write pages ----------------------------------------------------------------------------
 
@@ -1150,9 +1175,6 @@ function sectionBody(text, title) {
   const next = /^## /m.exec(rest)
   return next ? rest.slice(0, next.index) : rest
 }
-
-/** The text outside code fences, with the frontmatter kept. */
-const outsideFences = (text) => text.replace(/```[\s\S]*?```/g, '')
 
 const writeDir = join(docsDir, 'write')
 const turnsPage = join(writeDir, 'turns.mdx')

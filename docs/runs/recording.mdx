@@ -37,21 +37,9 @@ The copy writes a `.gitignore` file in the history folder that un-ignores record
 
 ## Record automatically
 
-The `reeval.config.ts` file uses these defaults:
+By default, a run is recorded only in CI. For the defaults, see [`record`](/reference/options#record) and [`history`](/reference/options#history).
 
-```ts title="reeval.config.ts"
-import { defineConfig } from '{{ pkg }}'
-
-export default defineConfig({
-  record: 'ci',
-  history: {
-    dir: 'evals/.history',
-    artifacts: 'all',
-  },
-})
-```
-
-`record: 'ci'` copies each finished run when the `CI` variable is set, and `'manual'` never does. To record every run and keep transcripts only for failing evaluations, override both:
+To record every run and keep transcripts only for failing evaluations, override both:
 
 ```ts title="with-history/reeval.config.ts"
   record: 'always',
