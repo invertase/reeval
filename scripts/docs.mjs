@@ -775,17 +775,19 @@ for (const file of mdxFiles()) {
 // ---- Walkthroughs: one home each --------------------------------------------------------------
 
 // `reeval init` writes `analysis.model`, whose missing key is a warning in `reeval doctor`
-// (src/init.ts, src/doctor.ts), so a page that shows init and a clean doctor must set the key.
+// (src/init.ts, src/doctor.ts) and skips insights in a run (test/init.test.ts), so a page that
+// shows init and a doctor transcript may end "No problems." or "No problems, 1 warning.", and
+// must not call the insights key required.
+const INSIGHTS_KEY_REQUIRED =
+  /\bkeys? (?:for )?the (?:agent )?harness and (?:the )?insights model\b|\bkeys the harness and the insights model need\b|\bGoogle (?:API )?key\b[^\n]{0,40}\brequired\b/i
 for (const file of mdxFiles()) {
   const text = read(file)
-  if (
-    /reeval init\b/.test(text) &&
-    /^No problems\.$/m.test(text) &&
-    !text.includes('GOOGLE_GENERATIVE_AI_API_KEY')
-  ) {
-    problems.push(
-      `${relative(root, file)} shows reeval init and a doctor transcript ending "No problems." without setting GOOGLE_GENERATIVE_AI_API_KEY: init writes analysis.model, so doctor ends "No problems, 1 warning." unless the key is set`,
-    )
+  if (/reeval init\b/.test(text) && /^No problems(?:, \d+ warnings?)?\.$/m.test(text)) {
+    if (INSIGHTS_KEY_REQUIRED.test(text)) {
+      problems.push(
+        `${relative(root, file)} shows reeval init and calls the insights key required: a run without GOOGLE_GENERATIVE_AI_API_KEY skips insights and doctor ends "No problems, 1 warning.", so say the key turns insights on`,
+      )
+    }
   }
 }
 
