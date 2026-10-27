@@ -609,6 +609,22 @@ for (const name of ['docker', 'podman']) {
   }
 }
 
+// The landing's option entries moved to reference/options#docker; the Docker task page no longer
+// lists them, so a link back there for them is a stale promise.
+{
+  const landing = page('integrations/sandboxes/index')
+  for (const sentence of landing.replace(/```[\s\S]*?```/g, '').split(/(?<=[.!?])\s+/)) {
+    if (
+      /`root`|`capabilities`|`maxConcurrent`|every option the factories accept/.test(sentence) &&
+      sentence.includes('](/integrations/sandboxes/docker)')
+    ) {
+      problems.push(
+        "integrations/sandboxes links root, capabilities, maxConcurrent or the factories' options to /integrations/sandboxes/docker: those entries live at /reference/options#docker",
+      )
+    }
+  }
+}
+
 // The harness support matrix lives on agents/gateways; the pages beside it link to it.
 const HARNESS_NAMES =
   /\b(?:Cursor|Claude Code|Codex|Antigravity|OpenCode|Goose|Grok Build|fx|pi)\b/g
