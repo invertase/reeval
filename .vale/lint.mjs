@@ -2,7 +2,10 @@
 // Lints docs/ with the Reeval house style and splits the alerts in two: the
 // handwritten prose, which fails the run on any alert (suggestion, warning or
 // error), and the blocks that scripts/docs.mjs generates from the code, which
-// only a code change can fix and so are listed without failing it.
+// only a code change can fix and so are listed without failing it. Vale lints
+// the whole page and the generated blocks are told apart by line afterwards:
+// ignoring them with BlockIgnores makes Vale 3.25.1 skip the prose that follows
+// a block holding a code fence, so a handwritten alert went unreported.
 //
 //   node .vale/lint.mjs [paths…]   (default: docs)
 //   node .vale/lint.mjs --self-test
@@ -143,10 +146,33 @@ function leadCases() {
   }
 }
 
+function generatedCases() {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'reeval-vale-'))
+  const canary = path.join(dir, 'page.mdx')
+  const block = ['[//]: # (generated:a)', '', '```text', 'x', '```', '', '[//]: # (/generated:a)']
+  writeFileSync(canary, ['A page.', '', ...block, '', 'It was cancelled.', ''].join('\n'))
+  let out
+  try {
+    out = execFileSync('vale', ['--output=JSON', canary], { cwd: repoRoot, encoding: 'utf8' })
+  } catch (error) {
+    if (error.status !== 1 || !error.stdout) throw error
+    out = error.stdout
+  }
+  rmSync(dir, { recursive: true, force: true })
+  const alerts = Object.values(JSON.parse(out || '{}')).flat()
+  const ok = alerts.length === 1 && alerts[0].Check === 'Reeval.USSpelling' && alerts[0].Line === 11
+  console.log(`${ok ? '  ok' : 'FAIL'}  prose after a generated block with a code fence is linted`)
+  if (!ok) {
+    console.error('Self-test failed: Vale skipped prose that follows a generated block.')
+    process.exit(1)
+  }
+}
+
 function selfTest() {
   requireVale()
   pinCases()
   leadCases()
+  generatedCases()
   const docs = path.join(repoRoot, 'docs')
   const cases = [
     { name: 'no target', args: [], cwd: repoRoot },
@@ -241,13 +267,17 @@ function flatten(result) {
 
 // .vale.ini turns Reeval.Your off for docs/index.mdx; .vale/lead.ini checks
 // it there outside the getting-started lead.
+const inGenerated = new Map()
+const isGenerated = (alert) => {
+  if (!inGenerated.has(alert.file)) inGenerated.set(alert.file, generatedLines(alert.file))
+  return inGenerated.get(alert.file).has(alert.Line)
+}
+const alerts = flatten(vale([]))
 const handwritten = [
-  ...flatten(vale([])),
+  ...alerts.filter((alert) => !isGenerated(alert)),
   ...(lintsLead ? flatten(vale(['--config=.vale/lead.ini'], [leadFile])) : []),
 ]
-const generated = flatten(vale(['--config=.vale/generated.ini'])).filter((alert) =>
-  generatedLines(alert.file).has(alert.Line),
-)
+const generated = alerts.filter(isGenerated)
 
 function print(title, alerts) {
   console.log(`\n${title}: ${alerts.length}`)
