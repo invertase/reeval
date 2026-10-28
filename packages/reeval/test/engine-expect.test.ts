@@ -1,7 +1,9 @@
 // The standalone `expect` (engine/expect.ts): Vitest's matchers from @vitest/expect, routed to the
 // attempt that asserts, with reeval's shims for the runner state @vitest/expect expects.
 import assert from 'node:assert/strict'
+import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import { assertionRecords, checkFailure } from '../src/attempt/assertions.ts'
 import {
   attemptExpectError,
@@ -538,6 +540,44 @@ describe('unawaited assertions', () => {
       error?.message ?? '',
       /^expected file a\.txt to exist\n\nexpect\(…\)\.toHaveFile\(\) wasn't awaited/,
     )
+  })
+
+  test("the hint names the eval's line, and the error's stack is where the eval called it", async () => {
+    const dir = join(process.cwd(), 'my evals (x)')
+    const file = join(dir, 'build.eval.ts')
+    const stackOf = (...frames: string[]) => ['Error', ...frames].join('\n')
+    const at = (stack: string): Pending[] => [
+      { ...pendingOf(Promise.resolve()), site: Object.assign(new Error(), { stack }) },
+    ]
+    const hint = (line: number) =>
+      `expect(…).toHaveFile() at my evals (x)/build.eval.ts:${line} wasn't awaited. Its check is async: write \`await expect(…).toHaveFile()\`.`
+    const bare = stackOf(
+      '    at tracked (/pkg/dist/expect.js:1:1)',
+      '    at <anonymous>',
+      `    at ${pathToFileURL(join(dir, 'other.ts')).href}:3:1`,
+      `    at async ${pathToFileURL(file).href}:12:5`,
+    )
+    const error = await unawaitedError(at(bare), file)
+    assert.equal(error?.message, hint(12))
+    assert.equal(
+      error?.stack,
+      `AssertionError: ${hint(12)}\n${bare.split('\n').slice(1).join('\n')}`,
+    )
+    assert.equal((await unawaitedError(at(bare), pathToFileURL(file).href))?.message, hint(12))
+    const inCall = stackOf(`    at Object.body (${file}:7:3)`)
+    assert.equal((await unawaitedError(at(inCall), file))?.message, hint(7))
+    const elsewhere = await unawaitedError(at(bare), join(dir, 'x.eval.ts'))
+    assert.match(elsewhere?.message ?? '', /^expect\(…\)\.toHaveFile\(\) wasn't awaited/)
+    const unknown = await unawaitedError([pendingOf(Promise.resolve())], file)
+    assert.match(unknown?.message ?? '', /^expect\(…\)\.toHaveFile\(\) wasn't awaited/)
+  })
+
+  test('a tracked matcher keeps the stack it was called from', async () => {
+    const pending: Pending[] = []
+    await withAttemptExpect(createExpect(task()), pending, async () => {
+      await expect(Promise.resolve(1)).resolves.toBe(1)
+    })
+    assert.match(pending[0]?.site?.stack ?? '', /engine-expect\.test\.ts:\d+:\d+/)
   })
 
   test('a failure that is not an Error gets the hint alone', async () => {

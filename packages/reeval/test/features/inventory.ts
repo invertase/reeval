@@ -1322,6 +1322,26 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/ui.test.ts'],
   },
   {
+    id: 'assert.exec-result-sync',
+    area: 'Judges and matchers',
+    name: "`expect(await c.exec(…)).toSucceed()` checks the result at once, with no `await` in front of `expect`; only `c.exec()`'s promise makes it async",
+    fixtures: ['assert/exec-result-sync'],
+    unit: ['reeval/test/match.test.ts', 'reeval/test/types.test.ts'],
+  },
+  {
+    id: 'assert.unawaited-matcher',
+    area: 'Judges and matchers',
+    name: "An async matcher the eval doesn't await (`toHaveFile`, `expect(c.exec(…)).toSucceed()`, `.resolves`) fails the attempt, naming the matcher and the eval's line",
+    fixtures: ['assert/unawaited-matcher'],
+    unit: ['reeval/test/engine-expect.test.ts'],
+  },
+  {
+    id: 'assert.matcher-subjects',
+    area: 'Judges and matchers',
+    name: "Each of reeval's matchers typechecks only on the subjects it takes (`toPass` on a verdict, `toSucceed` on an exec, the transcript matchers on `c` or a turn)",
+    unit: ['reeval/test/types.test.ts'],
+  },
+  {
     id: 'assert.named-checks',
     area: 'Judges and matchers',
     name: "Named check results: `expect(value, 'label')`, every `expect` and `expect.soft` recorded per attempt, tallied per cell, and checks that don't discriminate in a compare",

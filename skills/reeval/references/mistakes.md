@@ -23,7 +23,8 @@ Each row is a mistake, what reeval says and the fix.
 | An input (`diff`, `contents`, …) on a config, profile, group or eval `judge` | `Unknown judge option "diff" in …. diff is per call: c.judge(question, { diff }).` | Put it on each `c.judge()` call |
 | A question as a string, or with no input | `questions … takes { question, model?, across?, choices?, turns? } with at least one of task, output, …` / `… shows the model nothing: …` (exit 2) | `{ question: 'Which is cleaner?', across: 'environment', diff: true }` |
 | `cursor()` with `fakeSandbox()` | real harnesses need `docker()` | Use `fakeHarness()` or `docker()` |
-| Forgetting `await` on `toHaveFile`/`toSucceed` | ``… wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)` |
+| Forgetting `await` on `toHaveFile`, or on `toSucceed` given `c.exec()`'s promise | ``expect(…).toHaveFile() at <file>:<line> wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)`; `expect(await c.exec(cmd)).toSucceed()` needs no `await` |
+| `toPass()` on an exec result, `toSucceed()` on a verdict | a type error, ``Type 'WrongSubject<"toPass() takes the verdict from await c.judge()">' has no call signatures`` | `toSucceed()` for `c.exec()`, `toPass()` for `await c.judge()` |
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |
 | `workspace: 'https://…'` | `must come from the git helper` | `({ git }) => ({ workspace: git('https://…', { ref }) })` |
 | `async` environment callback | returned a Promise | Return synchronously; fetch in a `setup` step |

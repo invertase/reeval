@@ -221,7 +221,10 @@ group('hello', () => {
 - Give the environment a `.gitignore` in `files` (the project's isn't copied in): an agent that
   runs a build otherwise fills the judge's diff with its output.
 - Matchers: `await expect(turn).toHaveFile(path, pattern?)`,
-  `await expect(c.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`, plus Vitest's.
+  `expect(await c.exec(cmd)).toSucceed()` (or `await expect(c.exec(cmd)).toSucceed()`),
+  `expect(await c.judge(q, { diff: true })).toPass()`, plus Vitest's. Each takes only its own subject:
+  `toPass()` on an exec result is a type error, so typecheck evals (`tsc --noEmit`, with
+  `typescript` installed).
   Transcript matchers (sync, no `await`): `expect(turn | c).toHaveCalledSkill(name)`,
   `toHaveCalledMcp(server, tool, input?)`, `toHaveCalledTool(name | RegExp, input?)`,
   `toHaveRun(command?)`, `toHaveEdited(path?)`, `toHaveSearched(query?)`,
@@ -329,7 +332,8 @@ server: [references/cli.md](references/cli.md).
 | `import { baseline }` | `baseline` is a field of `compare`, not an export |
 | `repeat: 3` / `times` | `runs: 3` |
 | Judge model `'gemini-3.8-flash'` | `'google/gemini-3.8-flash'` |
-| Forgetting `await` on `toHaveFile`/`toSucceed` | `await expect(...)` |
+| Forgetting `await` on `toHaveFile`, or on `toSucceed` given `c.exec()`'s promise | `await expect(...)` |
+| `toPass()` on `c.exec()`'s result | `toSucceed()`; `toPass()` is for `await c.judge()` |
 | `cursor()` with `fakeSandbox()` | Use `fakeHarness()` or `docker()` |
 | Test file named `*.test.ts` | `*.eval.ts` under `evals/` |
 

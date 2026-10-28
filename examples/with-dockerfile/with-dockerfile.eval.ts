@@ -12,6 +12,6 @@ evaluate('queries the seeded database', { environment: shop }, async (c) => {
   )
 
   const report = await c.exec('sqlite3 /opt/shop.db < report.sql')
-  await expect(report).toSucceed()
+  expect(report).toSucceed()
   expect(report.stdout).toBe('Ada\nGrace\nLinus\n')
 })

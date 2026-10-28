@@ -137,7 +137,9 @@ async function once(
   try {
     const actual = await subjectOf(c, call.subject)
     const running = runMatcher(name, actual, args, { not: call.not })
-    async = running instanceof Promise
+    // An exec the call runs is `expect(c.exec(…))` in TypeScript: its promise makes it async.
+    async =
+      running instanceof Promise || ('exec' in call.subject && call.subject.result === undefined)
     const result = await running
     if (untested.size > 0) return { status: 'pass', async }
     if (result.pass !== call.not) return { status: 'pass', async }
