@@ -148,7 +148,7 @@ async function runTest(
         },
         progress: (progress) => reporter.progress(index, progress),
         debug: (line) => reporter.debug(index, line),
-        unawaited: () => unawaitedError(pending),
+        unawaited: () => unawaitedError(pending, file),
         expectError: () => attemptExpectError(own),
         assertions: () => rawAssertions(task),
       }),

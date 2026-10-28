@@ -53,6 +53,22 @@ const show = (value: unknown): string => {
   }
 }
 
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+  isObjectLike(value) && typeof value.then === 'function'
+
+function succeeded(actual: unknown): Result {
+  const r = actual as ExecResult
+  if (typeof r?.exitCode !== 'number') throw new TypeError('toSucceed() expects a c.exec() result')
+  return {
+    pass: r.exitCode === 0,
+    message: () =>
+      r.exitCode === 0
+        ? 'expected command to fail'
+        : `expected command to succeed, exit code ${r.exitCode}\n` +
+          `--- stderr ---\n${tail(r.stderr)}\n--- stdout ---\n${tail(r.stdout)}`,
+  }
+}
+
 export const MATCHERS = {
   toBe: matcher((actual, [expected]: [unknown]) => {
     const pass = Object.is(actual, expected)
@@ -119,18 +135,10 @@ export const MATCHERS = {
     },
   ),
 
-  toSucceed: matcher(async (actual, _: []) => {
-    const r = (await actual) as ExecResult
-    if (typeof r?.exitCode !== 'number') throw new TypeError('toSucceed() expects run.exec(...)')
-    return {
-      pass: r.exitCode === 0,
-      message: () =>
-        r.exitCode === 0
-          ? 'expected command to fail'
-          : `expected command to succeed, exit code ${r.exitCode}\n` +
-            `--- stderr ---\n${tail(r.stderr)}\n--- stdout ---\n${tail(r.stdout)}`,
-    }
-  }),
+  // Synchronous on a result; only `c.exec()`'s promise, unawaited, makes it async.
+  toSucceed: matcher((actual, _: []): Result | Promise<Result> =>
+    isThenable(actual) ? Promise.resolve(actual).then(succeeded) : succeeded(actual),
+  ),
 
   toHaveSearched: matcher((actual, [query]: [query?: RegExp | string]) => searched(actual, query)),
 

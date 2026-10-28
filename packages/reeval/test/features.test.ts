@@ -2292,6 +2292,27 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'assert/exec-result-sync',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    canary: /builds: expected command to succeed, exit code 1\n--- stderr ---\nbroken/,
+    record: ({ run }) => {
+      const recorded = (name: string) =>
+        run.evals.find((e) => e.name === name)?.attempts[0]?.assertions
+      assert.deepEqual(recorded('lands'), [
+        { label: 'builds', labelled: true, matcher: 'toSucceed', status: 'pass', soft: false },
+      ])
+      assert.equal(recorded('canary')?.[0]?.status, 'fail')
+    },
+  },
+  {
+    dir: 'assert/unawaited-matcher',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    canary:
+      /expect\(…\)\.toHaveFile\(\) at evals\/canary\.eval\.ts:7 wasn't awaited\. Its check is async: write `await expect\(…\)\.toHaveFile\(\)`\./,
+  },
+  {
     dir: 'assert/called-skill',
     tiers: ['fake'],
     env: 'plain',

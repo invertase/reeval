@@ -1,7 +1,9 @@
 // The standalone `expect` (engine/expect.ts): Vitest's matchers from @vitest/expect, routed to the
 // attempt that asserts, with reeval's shims for the runner state @vitest/expect expects.
 import assert from 'node:assert/strict'
+import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import { assertionRecords, checkFailure } from '../src/attempt/assertions.ts'
 import {
   attemptExpectError,
@@ -538,6 +540,37 @@ describe('unawaited assertions', () => {
       error?.message ?? '',
       /^expected file a\.txt to exist\n\nexpect\(…\)\.toHaveFile\(\) wasn't awaited/,
     )
+  })
+
+  test("the hint names the eval's line, and the error's stack is where the eval called it", async () => {
+    const file = join(process.cwd(), 'evals', 'build.eval.ts')
+    const site = [
+      'Error',
+      '    at tracked (/pkg/dist/expect.js:1:1)',
+      '    at <anonymous>',
+      `    at file://${pathToFileURL(join(process.cwd(), 'evals', 'other.ts')).pathname}:3:1`,
+      `    at ${pathToFileURL(file).href}:12:5`,
+    ].join('\n')
+    const hint =
+      "expect(…).toHaveFile() at evals/build.eval.ts:12 wasn't awaited. Its check is async: write `await expect(…).toHaveFile()`."
+    const missed = (): Pending[] => [{ ...pendingOf(Promise.resolve()), site }]
+    const error = await unawaitedError(missed(), file)
+    assert.equal(error?.message, hint)
+    assert.equal(error?.stack, `AssertionError: ${hint}\n${site.split('\n').slice(1).join('\n')}`)
+    const byUrl = await unawaitedError(missed(), pathToFileURL(file).href)
+    assert.equal(byUrl?.message, hint)
+    const elsewhere = await unawaitedError(missed(), join(process.cwd(), 'evals', 'x.eval.ts'))
+    assert.match(elsewhere?.message ?? '', /^expect\(…\)\.toHaveFile\(\) wasn't awaited/)
+    const unknown = await unawaitedError([pendingOf(Promise.resolve())], file)
+    assert.match(unknown?.message ?? '', /^expect\(…\)\.toHaveFile\(\) wasn't awaited/)
+  })
+
+  test('a tracked matcher keeps the stack it was called from', async () => {
+    const pending: Pending[] = []
+    await withAttemptExpect(createExpect(task()), pending, async () => {
+      await expect(Promise.resolve(1)).resolves.toBe(1)
+    })
+    assert.match(pending[0]?.site ?? '', /engine-expect\.test\.ts:\d+:\d+/)
   })
 
   test('a failure that is not an Error gets the hint alone', async () => {
