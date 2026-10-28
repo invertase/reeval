@@ -175,7 +175,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
     flags: ['keep', 'images'],
     positionals: 0,
     help: `
-  reeval clean                  Remove local debug data (.reeval/debug); --keep <n> keeps the newest n runs
+  reeval clean                  Remove local debug data (.reeval/debug) and snapshots (in .reeval/runs);
+                                --keep <n> keeps the newest n runs'
     --images                    Also remove the Docker images reeval built that nothing tags any more,
                                 and the intermediate -base tags of from builds`,
   },
@@ -213,16 +214,6 @@ export const COMMANDS: Record<string, CommandSpec> = {
     help: `
   reeval checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
                                 (default dir: .reeval/checkouts/<run>)`,
-  },
-  workspace: {
-    flags: ['run'],
-    positionals: 2,
-    help: `
-  reeval workspace [attempt] [dir]
-                                An attempt's kept final workspace, written into dir (default:
-                                .reeval/workspaces/<run>/…); attempt is its key, <cell>#<n> or
-                                part of its key, and may be left out when the run has one attempt
-    --run <run>                 A run id, latest or latest~N (default: latest)`,
   },
   query: {
     flags: ['json', 'schema', 'rebuild', 'run'],

@@ -1932,10 +1932,6 @@
           "description": "Defaults for `c.judge()`, merged field by field over the config's.",
           "$ref": "#/$defs/ConfigJudgeOptions"
         },
-        "keepWorkspace": {
-          "description": "Whether each attempt keeps its final workspace; replaces the config's.",
-          "type": "boolean"
-        },
         "question": {
           "description": "Defaults for every question, merged over the config's.",
           "$ref": "#/$defs/QuestionOptions"
@@ -1952,6 +1948,20 @@
             },
             {
               "$ref": "#/$defs/FakeSandboxDescriptor"
+            }
+          ]
+        },
+        "snapshot": {
+          "description": "When each attempt's workspace is copied; merged over the config's.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SnapshotOptions"
+            },
+            {
+              "const": "turns"
+            },
+            {
+              "type": "boolean"
             }
           ]
         },
@@ -2239,9 +2249,6 @@
           },
           "required": ["threshold"]
         },
-        "keepWorkspace": {
-          "type": "boolean"
-        },
         "optionKeys": {
           "description": "The keys the config sets, for `reeval report`'s config shape.",
           "type": "array",
@@ -2283,6 +2290,9 @@
           },
           "required": ["unbrokered"]
         },
+        "snapshot": {
+          "$ref": "#/$defs/ResolvedSnapshot"
+        },
         "timeoutMs": {
           "type": "number"
         }
@@ -2304,7 +2314,6 @@
         "history",
         "include",
         "judge",
-        "keepWorkspace",
         "profiles",
         "question",
         "record",
@@ -2312,6 +2321,7 @@
         "runs",
         "sandbox",
         "secrets",
+        "snapshot",
         "timeoutMs"
       ]
     },
@@ -2356,6 +2366,26 @@
         }
       },
       "required": ["budget", "defaults", "judge", "limit", "name", "reason", "tags"]
+    },
+    "ResolvedSnapshot": {
+      "description": "`snapshot` once every level is merged.",
+      "type": "object",
+      "properties": {
+        "compress": {
+          "type": "boolean"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "const": "turns"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "required": ["compress", "when"]
     },
     "RunContext": {
       "type": "object",
@@ -2709,6 +2739,28 @@
           "additionalProperties": false
         }
       ]
+    },
+    "SnapshotOptions": {
+      "description": "`snapshot` as an object, merged field by field over the levels above.",
+      "type": "object",
+      "properties": {
+        "compress": {
+          "description": "Write each as `<name>.tar.gz` instead of a directory. Default `false`.",
+          "type": "boolean"
+        },
+        "when": {
+          "description": "`true` after the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.",
+          "anyOf": [
+            {
+              "const": "turns"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "required": []
     },
     "SubstituteIn": {
       "description": "`header` values, the `query` string, or the request `body`.",

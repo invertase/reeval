@@ -11,6 +11,7 @@ import type {
   EvalRecord,
   HarnessDescriptor,
   JudgeOptions,
+  ResolvedSnapshot,
   Turn,
 } from '../types.ts'
 import type { ProgressUpdate } from '../ui/events.ts'
@@ -27,7 +28,7 @@ export type AttemptSpec = PlannedAttempt & {
   env: EnvVars
   judge: JudgeOptions
   capture: CaptureOptions
-  keepWorkspace: boolean
+  snapshot: ResolvedSnapshot
   /** Which level set each option; unset means the config or its default. */
   sources: Partial<Record<string, string>>
   /** What the profile's limit changed. */
@@ -89,6 +90,8 @@ export type Attempt = {
   backgrounds: BackgroundHandle[]
   /** PNG bytes keyed by capture name; written as sidecars next to the staging JSON. */
   artifactBlobs: Map<string, Buffer>
+  /** Where the attempt's snapshots are written, beside its staging record. */
+  readonly snapshotDir: string
 }
 
 export function createAttempt(
@@ -96,6 +99,7 @@ export function createAttempt(
   signal: AbortSignal,
   progress: (update: ProgressUpdate & { at: number }) => void,
   start: (a: Attempt, who: string) => Promise<[Sandbox, HarnessSession]>,
+  snapshotDir: string,
 ): Attempt {
   const record: EvalRecord = {
     startedAt: new Date().toISOString(),
@@ -145,6 +149,7 @@ export function createAttempt(
     captureNames: new Set(),
     backgrounds: [],
     artifactBlobs: new Map(),
+    snapshotDir,
   }
   return a
 }

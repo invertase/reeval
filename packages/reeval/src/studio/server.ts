@@ -3,11 +3,13 @@ import { createReadStream } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, relative, sep } from 'node:path'
 import { Readable } from 'node:stream'
+import { gzipSync } from 'node:zlib'
 import { type Context, Hono } from 'hono'
 import { getCookie, setCookie } from 'hono/cookie'
 import { streamSSE } from 'hono/streaming'
-import { attemptDebugDir, debugRoot, KEPT_WORKSPACE_FILE, parseAttemptKey } from '../debug/files.ts'
-import { evalSlug } from '../ids.ts'
+import { attemptDebugDir, debugRoot, parseAttemptKey } from '../debug/files.ts'
+import { scratchDir } from '../history/files.ts'
+import { readTree, writeTar } from '../tarball.ts'
 import { type AnalysisIndex, sortAnalyses } from '../view/analysis.ts'
 import {
   DEBUG_LOG,
@@ -25,7 +27,13 @@ import { artifactType, parseDataPath, RUN_ID } from '../view/paths.ts'
 import { readableDebugRequest } from '../view/record.ts'
 import type { StudioAppFiles } from './app.ts'
 import { listLive, liveTranscript } from './live.ts'
-import { fileInside, listHeaders, resolveFile, type StudioSource } from './source.ts'
+import {
+  fileInside,
+  listHeaders,
+  resolveFile,
+  type StudioSource,
+  snapshotInside,
+} from './source.ts'
 
 export const COOKIE = 'reeval_studio_token'
 
@@ -196,8 +204,6 @@ export function createStudioApp(options: StudioServerOptions) {
     const dir = attemptDebugDir(source.root, runId, attempt.evalId, attempt.cell, attempt.n)
     return fileInside(base, relative(base, dir).split(sep), [name])
   }
-  const sizeOf = async (file: string | null) =>
-    file === null ? null : ((await stat(file).catch(() => null))?.size ?? null)
   const readText = async (file: string | null) =>
     file === null ? null : readFile(file, 'utf8').catch(() => null)
   app.get('/api/debug/:runId', async (c) => {
@@ -211,21 +217,8 @@ export function createStudioApp(options: StudioServerOptions) {
         readableDebugRequest,
       ),
       trace: (await file(TRACE_FILE)) !== null,
-      workspace: await sizeOf(await file(KEPT_WORKSPACE_FILE)),
     }
     return c.json(view, 200, { 'Cache-Control': 'no-cache' })
-  })
-  app.get('/api/debug/:runId/workspace', async (c) => {
-    const key = c.req.query('attempt')
-    const file = await debugFile(c.req.param('runId'), key, KEPT_WORKSPACE_FILE)
-    if (!file) return c.text('No kept workspace for this attempt', 404)
-    const attempt = parseAttemptKey(key ?? '')
-    const name = `${c.req.param('runId')}-${evalSlug(attempt?.evalId ?? 'eval')}-${evalSlug(attempt?.cell ?? 'cell')}-${attempt?.n ?? 1}-workspace.tar.gz`
-    return sendFile(c, file, {
-      'Cache-Control': 'no-cache',
-      'Content-Type': 'application/gzip',
-      'Content-Disposition': `attachment; filename="${name}"`,
-    })
   })
   app.get('/api/debug/:runId/trace', async (c) => {
     const file = await debugFile(c.req.param('runId'), c.req.query('attempt'), TRACE_FILE)
@@ -235,6 +228,40 @@ export function createStudioApp(options: StudioServerOptions) {
       'Content-Type': 'text/plain; charset=utf-8',
       'Content-Security-Policy': 'sandbox',
     })
+  })
+
+  // Snapshots, from the run's directory in .reeval/runs whether or not it was recorded: a
+  // compressed one as it is, a directory as a tar.gz made now. Only the runs folder is resolved,
+  // so a symlinked run or attempt folder is never read through.
+  app.get('/api/snapshot/:runId', async (c) => {
+    const runId = c.req.param('runId')
+    const parts = (c.req.query('path') ?? '').split('/')
+    const name = parts.at(-1) ?? ''
+    if (
+      !RUN_ID.test(runId) ||
+      parts.length < 3 ||
+      parts.at(-2) !== 'snapshots' ||
+      parts.some((p) => !p || p === '.' || p === '..' || p.includes('\\') || p.includes('\0'))
+    ) {
+      return c.text('Bad snapshot path', 400)
+    }
+    const found = await snapshotInside(scratchDir(source.root), [runId], parts)
+    if (!found) return c.text('No such snapshot', 404)
+    const file = `${runId}-${parts
+      .filter((p) => p !== 'snapshots')
+      .join('-')
+      .replace(/\.tar\.gz$/, '')}.tar.gz`
+    const headers = {
+      'Cache-Control': 'no-cache',
+      'Content-Type': 'application/gzip',
+      'Content-Disposition': `attachment; filename="${file.replace(/[^A-Za-z0-9._-]/g, '_')}"`,
+    }
+    if (found.file) {
+      if (!name.endsWith('.tar.gz')) return c.text('No such snapshot', 404)
+      return sendFile(c, found.path, headers)
+    }
+    const body = gzipSync(writeTar(await readTree(found.path)))
+    return c.body(new Uint8Array(body), 200, { ...headers, 'Content-Length': String(body.length) })
   })
 
   app.get('*', async (c) => {

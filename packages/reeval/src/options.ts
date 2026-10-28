@@ -8,7 +8,7 @@ import { compareProblem } from './contract/compare.ts'
 import { sandboxProblem } from './contract/docker.ts'
 import { harnessProblem } from './contract/harness.ts'
 import { judgeProblem } from './contract/judge.ts'
-import { gateProblem } from './contract/plain.ts'
+import { gateProblem, snapshotProblem } from './contract/plain.ts'
 import {
   isEvaluationModel,
   questionOptionsProblem,
@@ -70,9 +70,11 @@ import type {
   QuestionOptions,
   QuestionStateOptions,
   ResolvedProfile,
+  ResolvedSnapshot,
   Revision,
   SandboxDescriptor,
   SandboxWarning,
+  SnapshotOption,
 } from './types.ts'
 
 /** Every eval/group option key `checkOptions` accepts. The feature matrix holds each to an inventory entry. */
@@ -90,7 +92,7 @@ export const EVAL_OPTION_KEYS = [
   'question',
   'questions',
   'timeout',
-  'keepWorkspace',
+  'snapshot',
   'tags',
   'revision',
   'pin',
@@ -115,10 +117,23 @@ const SUGGEST: Record<string, string> = {
   version: 'revision',
   rev: 'revision',
   pins: 'pin',
-  workspace: 'keepWorkspace',
-  keepWorkspaces: 'keepWorkspace',
+  workspace: 'snapshot',
+  snapshots: 'snapshot',
   passRate: 'gate',
   threshold: 'gate',
+}
+
+/**
+ * `snapshot` over the levels above: the shorthand sets `when`, the object sets the fields it
+ * names, and `compress` carries through either.
+ */
+export function mergeSnapshot(
+  outer: ResolvedSnapshot,
+  inner: SnapshotOption | undefined,
+): ResolvedSnapshot {
+  if (inner === undefined) return outer
+  if (typeof inner !== 'object') return { ...outer, when: inner }
+  return { when: inner.when ?? outer.when, compress: inner.compress ?? outer.compress }
 }
 
 /** Throws unless `value` is `'all'` or `{ passRate }` with a rate in (0, 1]. */
@@ -263,11 +278,8 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
       `revision in ${where} must be a whole number or a non-empty string, e.g. revision: 2 (got ${JSON.stringify(o.revision)})`,
     )
   }
-  if (o.keepWorkspace !== undefined && typeof o.keepWorkspace !== 'boolean') {
-    throw new UsageError(
-      `keepWorkspace in ${where} is true or false (got ${JSON.stringify(o.keepWorkspace)})`,
-    )
-  }
+  const snapshotIssue = snapshotProblem(o.snapshot, where)
+  if (snapshotIssue) throw new UsageError(snapshotIssue)
   if (o.env !== undefined) checkEnv(o.env, where, UsageError)
   if (o.egress !== undefined) checkEgress(o.egress, where, UsageError)
   const judgeIssue = o.judge !== undefined && judgeProblem(o.judge, { at: 'options', where })
@@ -571,7 +583,7 @@ export type Resolved = {
   /** Asked after the attempts; empty without any, or once a profile's limit leaves nothing to pair. */
   questions: PlannedQuestion[]
   timeout: Duration | undefined
-  keepWorkspace: boolean
+  snapshot: ResolvedSnapshot
   tags: string[]
   /** The innermost level's `revision`, if any sets one. */
   revision: Revision | undefined
@@ -624,7 +636,7 @@ function applyLevel(
   if (options.runs !== undefined) out.runs = options.runs
   if (options.gate !== undefined) out.gate = options.gate
   if (options.timeout !== undefined) out.timeout = options.timeout
-  if (options.keepWorkspace !== undefined) out.keepWorkspace = options.keepWorkspace
+  out.snapshot = mergeSnapshot(out.snapshot, options.snapshot)
   if (options.revision !== undefined) out.revision = options.revision
   Object.assign(out.env, options.env)
   out.judge = mergeJudge(out.judge, options.judge)

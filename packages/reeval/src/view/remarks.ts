@@ -26,7 +26,7 @@ export const REMARK_KINDS: Record<Remark['kind'], { severity: 'concern' | 'sugge
   'slow-mcp-start': { severity: 'concern' },
   'proxy-only-egress': { severity: 'concern' },
   'setup-process-secret': { severity: 'concern' },
-  'workspace-too-large': { severity: 'concern' },
+  'snapshot-too-large': { severity: 'concern' },
 }
 
 /** A remark about the eval's quality, not about the agent. */
@@ -44,7 +44,7 @@ export type Remark = {
     | 'slow-mcp-start'
     | 'proxy-only-egress'
     | 'setup-process-secret'
-    | 'workspace-too-large'
+    | 'snapshot-too-large'
   /** Fixed by kind (`REMARK_KINDS`). */
   severity: 'concern' | 'suggestion'
   /** One plain sentence: what's wrong. */

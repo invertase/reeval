@@ -20,6 +20,7 @@ import type {
   SecretTemplate,
   SkillPlacement,
   SkillSource,
+  SnapshotOption,
   SubstituteIn,
 } from '../types.ts'
 import {
@@ -95,6 +96,13 @@ const host = z.string().superRefine((value, ctx) => {
 export const gatePolicySchema = z.union([
   z.literal('all'),
   z.strictObject({ passRate: z.number().gt(0).max(1) }),
+])
+
+const snapshotWhen = z.union([z.boolean(), z.literal('turns')])
+
+export const snapshotOptionSchema = z.union([
+  snapshotWhen,
+  z.strictObject({ when: snapshotWhen.optional(), compress: z.boolean().optional() }),
 ])
 
 export const egressPolicySchema = z.union([
@@ -278,6 +286,7 @@ export const gitWorkspaceSchema = z.strictObject({
 
 export type _SameAsSchema = [
   Assert<Same<z.infer<typeof gatePolicySchema>, GatePolicy>>,
+  Assert<Same<z.infer<typeof snapshotOptionSchema>, SnapshotOption>>,
   Assert<Same<z.infer<typeof egressPolicySchema>, EgressPolicy>>,
   Assert<Same<z.infer<typeof substituteInSchema>, SubstituteIn>>,
   Assert<Same<z.infer<typeof secretSchema>, Secret>>,
@@ -339,6 +348,29 @@ const GATE_SHAPE =
 /** reeval's sentence for a gate that isn't one, or undefined. */
 export const gateProblem = (value: unknown, where: string) =>
   refusal(gatePolicySchema, value, () => `gate in ${where} ${GATE_SHAPE} (got ${got(value)})`)
+
+const SNAPSHOT_SHAPE =
+  "is true (after the checks), 'turns' (after each c.send too), false, or { when, compress }, e.g. snapshot: { compress: true }"
+
+/** reeval's sentence for a `snapshot` that isn't one, or undefined. */
+export function snapshotProblem(value: unknown, where: string): string | undefined {
+  if (value === undefined) return undefined
+  return refusal(snapshotOptionSchema, value, () => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return `snapshot in ${where} ${SNAPSHOT_SHAPE} (got ${got(value)})`
+    }
+    const key = Object.keys(value).find((k) => k !== 'when' && k !== 'compress')
+    if (key !== undefined) {
+      const near = closest(key, ['when', 'compress'])
+      return `Unknown snapshot key "${key}" in ${where}.${near ? ` Did you mean "${near}"?` : ''} snapshot ${SNAPSHOT_SHAPE}`
+    }
+    const { when, compress } = value as { when?: unknown; compress?: unknown }
+    if (compress !== undefined && typeof compress !== 'boolean') {
+      return `snapshot.compress in ${where} is true or false (got ${got(compress)})`
+    }
+    return `snapshot.when in ${where} is true, 'turns' or false (got ${got(when)})`
+  })
+}
 
 const EGRESS_SHAPE = `is 'proxy' (the default), 'allow-all', 'deny-all', or { allow: ['api.example.com', '*.example.org'] }`
 

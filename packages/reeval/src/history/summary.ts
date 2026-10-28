@@ -246,4 +246,10 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
     a.files.judgeInput && `[judge input](${a.files.judgeInput.path})`,
   ].filter(Boolean)
   if (links.length) lines.push(`- Files: ${links.join(' · ')}`)
+  const snapshots = (a.snapshots ?? []).map((s) =>
+    s.path ? `[${s.name}](${s.path})` : `${s.name} not taken: ${cell(s.skipped?.message ?? '')}`,
+  )
+  if (snapshots.length) {
+    lines.push(`- Snapshots (in .reeval/runs, never recorded): ${snapshots.join(' · ')}`)
+  }
 }

@@ -1,13 +1,11 @@
-// The run-history commands: record, history, show, compare, checkout, workspace.
+// The run-history commands: record, history, show, compare, checkout.
 import { existsSync } from 'node:fs'
-import { readdir, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { gunzipSync } from 'node:zlib'
-import { attemptDebugDir, KEPT_WORKSPACE_FILE, parseAttemptKey } from './debug/files.ts'
 import { git, gitText } from './git.ts'
 import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
-import type { ArtifactLevel, AttemptRecord, HistoryEntry, RunRecord } from './history/types.ts'
+import type { ArtifactLevel, HistoryEntry } from './history/types.ts'
 import {
   type CompareRow,
   compare,
@@ -21,12 +19,10 @@ import {
   stackChanges,
   unreachable,
 } from './history/views.ts'
-import { evalSlug, fromCwd, sha256 } from './ids.ts'
+import { fromCwd, sha256 } from './ids.ts'
 import { readRemarks, runRemarksFile } from './remarks/files.ts'
-import { extractTar, readTar } from './tarball.ts'
 import type { ResolvedConfig } from './types.ts'
 import { renderCompare, renderCompareMarkdown } from './ui/compare-layout.ts'
-import { formatBytes } from './view/debug.ts'
 import { suiteResult } from './view/suite.ts'
 
 export type HistoryFlags = {
@@ -39,7 +35,6 @@ export type HistoryFlags = {
   limit?: string
   'fail-on-regression'?: boolean
   verbose?: boolean[]
-  run?: string
 }
 
 export class CommandError extends Error {
@@ -338,132 +333,5 @@ export async function checkoutCommand(ctx: Ctx, args: string[]): Promise<number>
   ctx.out(
     `checked out ${sha.slice(0, 12)} into ${rel(target)}${applied}.\nRemove it with: git worktree remove ${rel(target)}`,
   )
-  return 0
-}
-
-/**
- * The attempt `ref` names in `run`: its key, its `<cell>#<n>` id, or part of its cell key or of
- * its key (`changelog#2`: part, then the attempt's number), the first that matches one attempt;
- * with no `ref`, the run's only attempt.
- */
-export function pickAttempt(run: RunRecord, ref: string | undefined): AttemptRecord {
-  const attempts = run.evals.flatMap((e) => e.attempts)
-  const list = (as: AttemptRecord[]) =>
-    `${as
-      .slice(0, 20)
-      .map((a) => `  ${a.key}`)
-      .join('\n')}${as.length > 20 ? `\n  … ${as.length - 20} more` : ''}`
-  if (ref === undefined) {
-    const [only, ...more] = attempts
-    if (only && !more.length) return only
-    throw new CommandError(
-      only
-        ? `${run.runId} has ${attempts.length} attempts; name one (its key, <cell>#<n> or part of its key):\n${list(attempts)}`
-        : `${run.runId} has no attempts`,
-    )
-  }
-  const exact = attempts.filter((a) => a.key === ref)
-  const byId = attempts.filter((a) => a.id === ref)
-  const numbered = /^(.*)#(\d+)$/.exec(ref)
-  const needle = (numbered ? (numbered[1] ?? '') : ref).toLowerCase()
-  const part = (text: (a: AttemptRecord) => string) =>
-    attempts.filter(
-      (a) => (!numbered || a.n === Number(numbered[2])) && text(a).toLowerCase().includes(needle),
-    )
-  for (const found of [exact, byId, part((a) => a.cell), part((a) => a.key)]) {
-    const [only, ...more] = found
-    if (only && !more.length) return only
-    if (only) {
-      throw new CommandError(
-        `"${ref}" matches ${found.length} attempts in ${run.runId}; name one:\n${list(found)}`,
-      )
-    }
-  }
-  throw new CommandError(`No attempt "${ref}" in ${run.runId}. Its attempts:\n${list(attempts)}`)
-}
-
-const attemptMatches = (run: RunRecord, ref: string | undefined) => {
-  try {
-    pickAttempt(run, ref)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/** Writes an attempt's kept final workspace out of `.reeval/debug` into a directory. */
-export async function workspaceCommand(ctx: Ctx, args: string[]): Promise<number> {
-  const { root } = ctx.config
-  const runRef = ctx.flags.run === 'last' ? 'latest' : ctx.flags.run
-  const entry = resolveRun(await allRuns(ctx.config), runRef ?? 'latest')
-  const run = await recordOf(ctx.config, entry)
-  const all = run.evals.flatMap((e) => e.attempts)
-  const [only] = all
-  // With one argument and one attempt, an argument that names no attempt is the directory.
-  const lone =
-    args.length === 1 && all.length === 1 && only && !attemptMatches(run, args[0])
-      ? only
-      : undefined
-  const attempt = lone ?? pickAttempt(run, args[0])
-  const dir = lone ? args[0] : args[1]
-  const kept = attempt.keptWorkspace
-  if (!kept) {
-    throw new CommandError(
-      `${run.runId} kept no workspace for ${attempt.key}: keepWorkspace was false, the sandbox was gone first (a timeout or a cancel), or the attempt never started one`,
-    )
-  }
-  if (kept.skipped || !kept.sha256) {
-    throw new CommandError(
-      `${run.runId} didn't keep ${attempt.key}'s workspace: ${kept.skipped?.message ?? 'no archive'}`,
-    )
-  }
-  const key = parseAttemptKey(attempt.key)
-  if (!key) throw new CommandError(`${attempt.key} isn't an attempt key`)
-  const file = join(
-    attemptDebugDir(root, run.runId, key.evalId, key.cell, key.n),
-    KEPT_WORKSPACE_FILE,
-  )
-  const bytes = await readFile(file).catch((error: NodeJS.ErrnoException) => {
-    if (error.code !== 'ENOENT') throw error
-    return null
-  })
-  if (!bytes) {
-    throw new CommandError(
-      `${rel(file)} is gone. A kept workspace stays in .reeval/debug on the machine that ran the attempt, for the newest ${ctx.config.debug.keep} runs (debug.keep), until reeval clean removes it.`,
-    )
-  }
-  if (sha256(bytes) !== kept.sha256) {
-    throw new CommandError(`${rel(file)} doesn't match the hash in the record`)
-  }
-  const target = resolve(
-    dir ??
-      join(
-        root,
-        '.reeval',
-        'workspaces',
-        run.runId,
-        evalSlug(key.evalId),
-        evalSlug(key.cell),
-        String(key.n),
-      ),
-  )
-  if (existsSync(target)) {
-    const inside = await readdir(target).catch(() => null)
-    if (!inside) throw new CommandError(`${rel(target)} exists and isn't a directory`)
-    if (inside.length) throw new CommandError(`${rel(target)} already exists and isn't empty`)
-  }
-  const skipped = await extractTar(readTar(gunzipSync(bytes)), target)
-  const lines = [
-    `wrote the final workspace of ${key.evalId} [${attempt.id}]`,
-    `  into ${rel(target).startsWith('..') ? target : rel(target)}`,
-    `  ${kept.files} files, ${formatBytes(kept.bytes)} compressed`,
-  ]
-  if (kept.excluded.length) lines.push(`  left out: ${kept.excluded.join(', ')}`)
-  if (kept.masked.length) lines.push(`  secret-looking values masked in: ${kept.masked.join(', ')}`)
-  if (kept.dropped.length) {
-    lines.push(`  left out for holding a secret-looking value: ${kept.dropped.join(', ')}`)
-  }
-  if (skipped.length) lines.push(`  not written here: ${skipped.join(', ')}`)
-  ctx.out(lines.join('\n'))
   return 0
 }

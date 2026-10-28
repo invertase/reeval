@@ -22,7 +22,7 @@ description: "Options set how evaluations run. Each key is accepted in set place
 | [`capture`](#capture) | ✓ | ✓ | ✓ |  |
 | [`question`](#question) | ✓ | ✓ | ✓ |  |
 | [`timeout`](#timeout) | ✓ | ✓ | ✓ |  |
-| [`keepWorkspace`](#keepworkspace) | ✓ | ✓ | ✓ |  |
+| [`snapshot`](#snapshot) | ✓ | ✓ | ✓ |  |
 | [`concurrency`](#concurrency) | ✓ |  |  |  |
 | [`record`](#record) | ✓ |  |  |  |
 | [`history`](#history) | ✓ |  |  |  |
@@ -661,10 +661,10 @@ For more information about screenshots, see [Check an app](/evaluations/task/app
   Milliseconds, or a number with `ms`, `s`, `m`, or `h`, above zero. The default is `'15m'`.
 </Property>
 
-## `keepWorkspace`
+## `snapshot`
 
-<Property name="keepWorkspace" type="boolean" optional>
-  Whether each attempt keeps its final workspace in `.reeval/debug` for `reeval workspace`. The default is `true`.
+<Property name="snapshot" type="boolean | 'turns' | { when?: boolean | 'turns'; compress?: boolean }" optional>
+  When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after the checks, `'turns'` after each `c.send` too, `false` never. `compress: true` writes each as a `.tar.gz` instead of a directory. The default is `true`.
 </Property>
 
 ## `concurrency`

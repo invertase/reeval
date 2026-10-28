@@ -13,7 +13,6 @@ import type {
   ExecTry,
   FileChange,
   JudgeArtifactRef,
-  KeptWorkspace,
   McpStartup,
   Outcome,
   PhaseTimings,
@@ -21,6 +20,7 @@ import type {
   Revision,
   SandboxWarning,
   SetupProcess,
+  Snapshot,
   StartRetry,
   TokenUsage,
   TurnStatus,
@@ -256,13 +256,14 @@ export type AttemptRecord = {
    */
   setupProcesses?: SetupProcess[]
   /**
-   * The attempt's final workspace, kept as `workspace.tar.gz` in its `.reeval/debug` directory on
-   * the machine that ran it (`reeval workspace` writes it out), or why it wasn't: its sha256 and
-   * size, its file count, the directories left out by name, the files whose secret-looking values
-   * were masked and the binary ones left out for holding one. Absent with `keepWorkspace: false`,
-   * and when the sandbox was gone first (a timeout or a cancel).
+   * Copies of the attempt's workspace in its directory in `.reeval/runs` on the machine that ran
+   * it (never in the history folder), in the order taken: `turn-<n>` after each `c.send` with
+   * `snapshot: 'turns'`, then `final` after the checks. Each has its form, path and size, its
+   * file count, the directories left out by name, the files whose secret-looking values were
+   * masked and the binary ones left out for holding one, or why it wasn't taken. Absent with
+   * `snapshot: false`, and when the sandbox was gone first (a timeout or a cancel).
    */
-  keptWorkspace?: KeptWorkspace
+  snapshots?: Snapshot[]
   /**
    * Each foreground `c.exec`: its last try's exit code, and `durationMs` over all its tries. With
    * `retries`, `tries` has each try's `{ exitCode, durationMs }` and the log each try's output.

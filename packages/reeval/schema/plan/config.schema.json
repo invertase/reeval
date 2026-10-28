@@ -2019,10 +2019,6 @@
           "description": "Defaults for `c.judge()`, merged field by field over the config's.",
           "$ref": "#/$defs/ConfigJudgeData"
         },
-        "keepWorkspace": {
-          "description": "Whether each attempt keeps its final workspace; replaces the config's.",
-          "type": "boolean"
-        },
         "question": {
           "description": "Defaults for every question, merged over the config's.",
           "$ref": "#/$defs/QuestionOptions"
@@ -2036,6 +2032,42 @@
         "sandbox": {
           "description": "The default machine when the resolved environment omits `sandbox`.",
           "$ref": "#/$defs/SandboxDescriptor"
+        },
+        "snapshot": {
+          "description": "When each attempt's workspace is copied; merged over the config's.",
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "const": "turns"
+                }
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "compress": {
+                  "type": "boolean"
+                },
+                "when": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "const": "turns"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
         },
         "timeout": {
           "description": "Per attempt.",
@@ -2201,10 +2233,6 @@
           "description": "Defaults for `c.judge()`, merged field by field down the cascade.",
           "$ref": "#/$defs/ConfigJudgeData"
         },
-        "keepWorkspace": {
-          "description": "Whether each attempt keeps its final workspace, as `workspace.tar.gz` in its `.reeval/debug` directory, for `reeval workspace` to write out. Default `true`.",
-          "type": "boolean"
-        },
         "profiles": {
           "description": "Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`.",
           "type": "object",
@@ -2244,6 +2272,42 @@
             }
           },
           "additionalProperties": false
+        },
+        "snapshot": {
+          "description": "When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.",
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "const": "turns"
+                }
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "compress": {
+                  "type": "boolean"
+                },
+                "when": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "const": "turns"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
         },
         "timeout": {
           "description": "Per attempt; default `'15m'`.",
@@ -2549,6 +2613,28 @@
           "additionalProperties": false
         }
       ]
+    },
+    "SnapshotOptions": {
+      "description": "`snapshot` as an object, merged field by field over the levels above.",
+      "type": "object",
+      "properties": {
+        "compress": {
+          "description": "Write each as `<name>.tar.gz` instead of a directory. Default `false`.",
+          "type": "boolean"
+        },
+        "when": {
+          "description": "`true` after the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.",
+          "anyOf": [
+            {
+              "const": "turns"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "required": []
     },
     "SubstituteIn": {
       "description": "`header` values, the `query` string, or the request `body`.",

@@ -6,7 +6,7 @@ const sandbox =
     ? docker()
     : fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
 
-export const keptWorkspace = defineEnvironment('kept-workspace', {
+export const snapshots = defineEnvironment('snapshot-turns', {
   sandbox,
   files: { 'app/start.js': 'export const start = 1\n' },
   setup: [

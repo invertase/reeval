@@ -1449,11 +1449,11 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/history.test.ts', 'reeval/test/results.test.ts'],
   },
   {
-    id: 'history.kept-workspace',
+    id: 'history.snapshots',
     area: 'Records and studio',
-    name: "`keepWorkspace` (default on): each attempt's final workspace kept in `.reeval/debug` without dependency and cache directories, masked and capped, and `reeval workspace` writing it out",
-    fixtures: ['run/kept-workspace'],
-    unit: ['reeval/test/kept-workspace.test.ts', 'reeval/test/remarks.test.ts'],
+    name: "`snapshot` (default on): each attempt's final workspace, and with `'turns'` one after each send, in its directory in `.reeval/runs` as a directory or with `compress` a tar.gz, without dependency and cache directories, masked, capped and pruned with debug data",
+    fixtures: ['run/snapshots', 'run/snapshot-turns'],
+    unit: ['reeval/test/snapshots.test.ts', 'reeval/test/remarks.test.ts'],
   },
   {
     id: 'compare.fail-on-regression',

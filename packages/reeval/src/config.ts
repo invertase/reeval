@@ -38,7 +38,7 @@ import {
 } from './judge/index.ts'
 import { defaultIncludeGlobs } from './language-runner/adapter.ts'
 import { isObjectLike } from './object.ts'
-import { checkHarnesses, checkOptions, profileJudge } from './options.ts'
+import { checkHarnesses, checkOptions, mergeSnapshot, profileJudge } from './options.ts'
 import { badCharacterAt } from './redact.ts'
 import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
@@ -76,7 +76,7 @@ const CONFIG_KEYS = [
   'capture',
   'question',
   'timeout',
-  'keepWorkspace',
+  'snapshot',
   'concurrency',
   'record',
   'history',
@@ -100,7 +100,7 @@ const DEFAULTS_KEYS = [
   'capture',
   'question',
   'timeout',
-  'keepWorkspace',
+  'snapshot',
 ]
 const LIMIT_KEYS = ['runs', 'compare', 'harness']
 
@@ -660,7 +660,7 @@ export function resolveConfig(
     capture: user.capture ?? {},
     question: user.question ?? {},
     timeoutMs: parseDuration(user.timeout ?? '15m'),
-    keepWorkspace: user.keepWorkspace ?? true,
+    snapshot: mergeSnapshot({ when: true, compress: false }, user.snapshot),
     concurrency:
       user.concurrency === undefined
         ? undefined

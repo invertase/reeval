@@ -1,7 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Download, Globe, ScrollText } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { type DebugView, formatBytes, formatDuration, workspaceApiPath } from 'reeval/view'
+import {
+  type AttemptRecord,
+  type DebugView,
+  formatBytes,
+  formatDuration,
+  snapshotApiPath,
+} from 'reeval/view'
 import { EmptyState, ErrorState, RowsSkeleton } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -163,15 +169,64 @@ function Trace({ runId, attemptKey }: { runId: string; attemptKey: string }) {
   )
 }
 
-/** The attempt's local debug data: its phase timeline, gateway requests, kept workspace and raw trace. */
+/** Each snapshot with a download (a directory comes as a tar.gz), or why it wasn't taken. */
+function Snapshots({
+  runId,
+  snapshots,
+}: {
+  runId: string
+  snapshots: NonNullable<AttemptRecord['snapshots']>
+}) {
+  if (!snapshots.length) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        None: <code className="font-mono">snapshot</code> was off, or the sandbox was gone first.
+      </p>
+    )
+  }
+  return (
+    <ul className="space-y-2">
+      {snapshots.map((s) => (
+        <li key={s.name} className="flex flex-wrap items-center gap-3 text-sm">
+          {s.path ? (
+            <Button asChild variant="outline" size="sm">
+              <a href={snapshotApiPath(runId, s.path)} download>
+                <Download />
+                {s.name}
+              </a>
+            </Button>
+          ) : (
+            <span className="font-mono">{s.name}</span>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {s.path ? (
+              <>
+                {s.files} files, {formatBytes(s.bytes)} ·{' '}
+                <code className="font-mono">
+                  .reeval/runs/{runId}/{s.path}
+                </code>
+              </>
+            ) : (
+              (s.skipped?.message ?? 'not taken')
+            )}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** The attempt's local debug data: its phase timeline, gateway requests, snapshots and raw trace. */
 export function Debug({
   runId,
   attemptKey,
   view,
+  snapshots,
 }: {
   runId: string
   attemptKey: string
   view: DebugView
+  snapshots: AttemptRecord['snapshots']
 }) {
   return (
     <div className="space-y-6">
@@ -188,25 +243,8 @@ export function Debug({
         <Requests requests={view.requests} />
       </section>
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold">Final workspace</h3>
-        {view.workspace ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <Button asChild variant="outline" size="sm">
-              <a href={workspaceApiPath(runId, attemptKey)} download>
-                <Download />
-                workspace.tar.gz ({formatBytes(view.workspace)})
-              </a>
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Or write it into a directory with <code className="font-mono">reeval workspace</code>.
-            </p>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No kept workspace: <code className="font-mono">keepWorkspace</code> was off, the sandbox
-            was gone first, or it was over the size cap.
-          </p>
-        )}
+        <h3 className="text-sm font-semibold">Snapshots</h3>
+        <Snapshots runId={runId} snapshots={snapshots ?? []} />
       </section>
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Raw trace</h3>

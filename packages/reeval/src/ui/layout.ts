@@ -234,6 +234,11 @@ function evidence(c: Colors, cell: CellResult, indent: number, more = true): Ite
     items.push({ indent, cells: [errorKind(err), t(errorText(err), c.dim)] })
   }
   items.push(...retriedItems(c, cell, indent))
+  const [snapshot, ...others] = cell.snapshots ?? []
+  if (snapshot && items.length) {
+    const more = others.length ? ` (+${others.length} more in summary.md)` : ''
+    items.push({ indent, cells: ['snapshot', t(`${snapshot}${more}`, c.dim)] })
+  }
   const passed = cell.checks.filter((k) => !failing(k) && !k.retried).length
   if (more && passed && items.length) {
     items.push({ indent, free: t(`+${passed} more passed`, c.dim) })

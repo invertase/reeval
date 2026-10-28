@@ -6,10 +6,12 @@ import { syncBuiltinESMExports } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { before, describe, mock, test } from 'node:test'
+import { gunzipSync, gzipSync } from 'node:zlib'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { appFiles } from '../src/studio/app.ts'
 import { COOKIE, createStudioApp } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
+import { readTar, writeTar } from '../src/tarball.ts'
 import type { AnalysisNote } from '../src/view/analysis.ts'
 import {
   activityLabel,
@@ -37,11 +39,11 @@ import {
   runOutcome,
   runRows,
   shardPath,
+  snapshotApiPath,
   splitPatch,
   traceApiPath,
   transcriptItems,
   uniqueJudgeLabels,
-  workspaceApiPath,
 } from '../src/view/index.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, runCli } from './helpers.ts'
 import { e2eNewlineAnswer, realAttempts } from './support/real-runs.ts'
@@ -1069,16 +1071,6 @@ describe('studio server', () => {
     assert.equal(trace.headers.get('content-security-policy'), 'sandbox')
     assert.match(await trace.text(), /^\{"kind":"trace",/)
 
-    assert.ok((pass.workspace ?? 0) > 0, 'the passing attempt kept its workspace')
-    const kept = await get(`/${workspaceApiPath(passed.runId, passed.key)}`)
-    assert.equal(kept.status, 200)
-    assert.equal(kept.headers.get('content-type'), 'application/gzip')
-    assert.match(
-      kept.headers.get('content-disposition') ?? '',
-      /^attachment; filename=".+-workspace\.tar\.gz"$/,
-    )
-    assert.deepEqual([...new Uint8Array(await kept.arrayBuffer()).subarray(0, 2)], [0x1f, 0x8b])
-
     for (const [runId, key] of [
       [passed.runId, `${passed.key}0`],
       [passed.runId, 'evals/hello.eval.ts › greet › writes hello'],
@@ -1097,7 +1089,40 @@ describe('studio server', () => {
     )
     assert.equal(await view(linked, failed.key), null)
     assert.equal((await get(`/${traceApiPath(linked, failed.key)}`)).status, 404)
-    assert.equal((await get(`/${workspaceApiPath(linked, failed.key)}`)).status, 404)
+  })
+
+  test('serves a snapshot as a tar.gz: a directory packed now, a compressed one as it is', async () => {
+    const run = records.get(headers[0]?.runId as string) as RunRecord
+    const final = run.evals[0]?.attempts[0]?.snapshots?.find((s) => s.name === 'final')
+    assert.ok(final?.path, 'the attempt has its final snapshot')
+    const packed = await get(`/${snapshotApiPath(run.runId, final.path)}`)
+    assert.equal(packed.status, 200)
+    assert.equal(packed.headers.get('content-type'), 'application/gzip')
+    assert.match(
+      packed.headers.get('content-disposition') ?? '',
+      new RegExp(`^attachment; filename="${run.runId}-[\\w.-]+-1-final\\.tar\\.gz"$`),
+    )
+    const entries = readTar(gunzipSync(Buffer.from(await packed.arrayBuffer())))
+    assert.equal(entries.filter((e) => e.type === 'file').length, final.files)
+
+    const runDir = join(dir, '.reeval/runs', run.runId)
+    const tarPath = final.path.replace(/final$/, 'turn-1.tar.gz')
+    writeFileSync(join(runDir, tarPath), gzipSync(writeTar(entries)))
+    const asIs = await get(`/${snapshotApiPath(run.runId, tarPath)}`)
+    assert.equal(asIs.status, 200)
+    assert.deepEqual(Buffer.from(await asIs.arrayBuffer()), readFileSync(join(runDir, tarPath)))
+
+    for (const bad of ['../x/snapshots/final', 'final', `${final.path}/..`, 'a//snapshots/final']) {
+      assert.equal((await get(`/${snapshotApiPath(run.runId, bad)}`)).status, 400, bad)
+    }
+    assert.equal((await get(`/${snapshotApiPath('not-a-run', final.path)}`)).status, 400)
+    assert.equal(
+      (await get(`/${snapshotApiPath(run.runId, final.path.replace(/final$/, 'nope'))}`)).status,
+      404,
+    )
+    const linked = '20990105T000000Z_abc1234_x_a1b2'
+    await symlink(runDir, join(dir, '.reeval/runs', linked), 'dir')
+    assert.equal((await get(`/${snapshotApiPath(linked, final.path)}`)).status, 404)
   })
 
   test("without the scratch source, unrecorded runs aren't served", async () => {

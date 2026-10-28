@@ -21,7 +21,6 @@ reeval analyze           one checked LLM reading of a run; --vs none for this
                          run only; --context for your own agent
 reeval studio            reeval studio build --out site
 reeval image build [--dry-run] [--profile <p>]     reeval clean
-reeval workspace [attempt] [dir] [--run <run>]   an attempt's final workspace, written out
 reeval mcp               the history as read-only MCP tools
 reeval doctor            Docker, keys and images, with fixes (--json, --online)
 ```
@@ -31,12 +30,14 @@ reeval doctor            Docker, keys and images, with fixes (--json, --online)
 - The result blocks name each failed check with its message. Then `.reeval/runs/<run>/summary.md` and each attempt's
   directory (`transcript.jsonl`, `diff.patch`, `checks/<n>.log`, `judge-input.json`,
   `setup.log`). `reeval run -v` prints a timestamped trace per attempt; `.reeval/debug/` keeps it.
-- `reeval workspace 'fix-bug#2' [dir]` writes that attempt's whole final workspace (the app the
-  agent built, not only its diff) into a directory, to read or run it; the attempt is its key,
-  `<cell>#<n>` or part of its key, and `--run latest~1` picks an earlier run. Every attempt keeps
-  it by default, without `node_modules/`, `.git/` and caches, up to 10 MB compressed, in
-  `.reeval/debug` (the last `debug.keep` runs, 20 by default); `keepWorkspace: false` turns it
-  off. An attempt that timed out or was canceled keeps none.
+- Each attempt's directory in `.reeval/runs/<run>/` has `snapshots/final/`: its whole final
+  workspace after the checks (the app the agent built, not only its diff), to read or run. A failed
+  attempt's result block prints its path. `snapshot: 'turns'` on an eval also keeps
+  `snapshots/turn-<n>/` after each `c.send`; `snapshot: { compress: true }` writes
+  `<name>.tar.gz` instead; `snapshot: false` turns it off. Snapshots leave out `node_modules/`,
+  `.git/` and caches, are capped (50 MB as a directory, 10 MB compressed), never go into the
+  history folder, and are kept for the last `debug.keep` runs (20 by default) until `reeval clean`.
+  An attempt that timed out or was canceled has none.
 - `reeval query "SELECT … FROM failing_attempts"`: each failed attempt and infra error with its
   cell, skill and `first_failed_check` (the label of the first check that failed).
 - `reeval query lift` and `reeval query effort` list every variant cell's lift and effort from
@@ -73,13 +74,13 @@ model), and the one questions without their own model use. `reeval init` sets it
 `AI_GATEWAY_API_KEY` only with `gateway: [vercel()]`).
 
 `reeval run` ends with `Remarks:` when an eval itself needs work, with no model: `flaky-check`,
-`slow-mcp-start`, `proxy-only-egress`, `setup-process-secret` and `workspace-too-large` (concerns,
+`slow-mcp-start`, `proxy-only-egress`, `setup-process-secret` and `snapshot-too-large` (concerns,
 at most three), and
 with `-v` `too-few-tries` and `check-never-fails` (suggestions). They go in `remarks.json` beside
 the run, which `reeval record` copies into the history folder. Each names the source line to change (`fix  <file:line>`).
 Act on them: raise `runs`, tighten or remove the check, bake the MCP server's dependencies into
 the image, or set `egress: 'allow-all'` on an eval that needs raw TCP. Each prints once per eval
-version (`slow-mcp-start`, `proxy-only-egress`, `setup-process-secret` and `workspace-too-large`
+version (`slow-mcp-start`, `proxy-only-egress`, `setup-process-secret` and `snapshot-too-large`
 every run); an edit
 re-arms it.
 One the cap or a run without `-v` hid isn't spent: the next `reeval run -v` prints it.

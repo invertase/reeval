@@ -36,7 +36,7 @@ config API like any other project.
 | `before-insights` | The fake harness on `scripts/output/project`, with its choose family (`recommends Genkit for $task`), from before a run's `insights.json` |
 | `with-insights` | The same recipe with the `insights.json` `reeval analyze --insights` wrote on the recipe's fake analysis model: each eval's intent, answer, row sentences, findings and named tools, and the headline, from `insights-v1`, before `validation.drops`. The output goldens with insights render it |
 | `with-remarks` | Three recorded fake-harness runs whose `insights.json` holds only deterministic remarks (`model: 'none'`): `too-few-tries`, `slow-mcp-start` on a server that answers after two seconds, and `flaky-check` once the history has two mixed runs, with each remark's `firstSeenRun` |
-| `before-kept-workspace` | The corpus project's fake-harness runs from before `evals[].attempts[].keptWorkspace` (the attempt's final workspace, kept in `.reeval/debug` for `reeval workspace`) |
+| `before-snapshots` | The corpus project's fake-harness runs from before `evals[].attempts[].snapshots` (copies of the attempt's workspace in `.reeval/runs`) |
 | `real-contract` | The same nightly run: the harness contract on Cursor, Claude Code and Codex, one run each of six behaviours that pass and six canaries that fail, with transcripts, raw transcripts and diffs. Copied from the contract projects' `.reeval/runs`, since the contract never records |
 
 What reads them:

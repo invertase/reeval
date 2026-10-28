@@ -3,7 +3,7 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
-// A record corpus entry (from before evals[].attempts[].keptWorkspace (the attempt's final workspace kept in .reeval/debug)), recorded by reeval 0.15.1 at 0fd30fc8.
+// A record corpus entry (from before evals[].attempts[].snapshots (copies of the attempt's workspace in .reeval/runs)), recorded by reeval 0.15.1 at 0fd30fc8.
 // Don't re-record it: test/corpus.test.ts reads it to prove this shape still loads.
 export default defineConfig({
   harness: fakeHarness(),

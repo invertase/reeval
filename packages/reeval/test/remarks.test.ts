@@ -282,39 +282,48 @@ describe('remark thresholds', () => {
     assert.equal(both?.evidence.length, 2)
   })
 
-  test('workspace-too-large: an attempt over the cap kept no workspace, not one kept or off', async () => {
+  test('snapshot-too-large: an attempt over the cap took no snapshot, not one taken or off', async () => {
     const record = only(await rules(), 'serves')
-    const kept = (...causes: Array<'size' | 'error' | null | undefined>) => {
+    const taken = (
+      form: 'dir' | 'tar.gz',
+      ...causes: Array<'size' | 'error' | null | undefined>
+    ) => {
       const copy = structuredClone(record)
       for (const [i, a] of (copy.evals[0]?.attempts ?? []).entries()) {
         const cause = causes[i]
-        if (cause === undefined) delete a.keptWorkspace
+        if (cause === undefined) delete a.snapshots
         else {
-          a.keptWorkspace = {
-            sha256: null,
-            bytes: 0,
-            files: 0,
-            excluded: [],
-            masked: [],
-            dropped: [],
-            skipped: cause && { cause, message: `the workspace is 12.0 MB compressed (${cause})` },
-          }
+          a.snapshots = [
+            {
+              name: 'final',
+              form,
+              path: cause ? null : 'x/1/snapshots/final',
+              bytes: 0,
+              files: 0,
+              excluded: [],
+              masked: [],
+              dropped: [],
+              skipped: cause && { cause, message: `the workspace is 60.0 MB (${cause})` },
+            },
+          ]
         }
       }
       return copy
     }
-    assert.deepEqual(kinds(kept(null), NO_HISTORY), [], 'kept')
-    assert.deepEqual(kinds(kept(undefined), NO_HISTORY), [], 'keepWorkspace: false')
-    assert.deepEqual(kinds(kept('error'), NO_HISTORY), [], 'an archive the sandbox failed')
-    const [remark] = raise(kept('size'), NO_HISTORY)
-    assert.equal(remark?.kind, 'workspace-too-large')
+    assert.deepEqual(kinds(taken('dir', null), NO_HISTORY), [], 'taken')
+    assert.deepEqual(kinds(taken('dir', undefined), NO_HISTORY), [], 'snapshot: false')
+    assert.deepEqual(kinds(taken('dir', 'error'), NO_HISTORY), [], 'an archive the sandbox failed')
+    const [remark] = raise(taken('dir', 'size'), NO_HISTORY)
+    assert.equal(remark?.kind, 'snapshot-too-large')
     assert.equal(remark?.severity, 'concern')
-    assert.equal(
-      remark?.text,
-      'reeval kept no final workspace: the workspace is 12.0 MB compressed (size).',
+    assert.equal(remark?.text, 'reeval took no final snapshot: the workspace is 60.0 MB (size).')
+    assert.match(
+      remark?.fix.edit ?? '',
+      /, set snapshot: \{ compress: true \} for the larger cap, or set snapshot: false on the eval$/,
     )
-    assert.match(remark?.fix.edit ?? '', /or set keepWorkspace: false on the eval$/)
     assert.equal(remark?.evidence.length, 1)
+    const [packed] = raise(taken('tar.gz', 'size'), NO_HISTORY)
+    assert.doesNotMatch(packed?.fix.edit ?? '', /compress/)
   })
 })
 

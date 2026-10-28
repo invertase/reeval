@@ -39,9 +39,7 @@ import {
   LABEL,
 } from '@reeval/sandbox-docker'
 import { pngSize, stubPng } from '../src/capture/stub.ts'
-import { attemptDebugDir, KEPT_WORKSPACE_FILE, parseAttemptKey } from '../src/debug/files.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import { sha256 } from '../src/ids.ts'
 import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
@@ -2694,28 +2692,61 @@ export const features: Feature[] = [
     },
   },
   {
-    dir: 'run/kept-workspace',
+    dir: 'run/snapshots',
     tiers: ['fake', 'docker'],
-    env: 'kept-workspace',
+    env: 'snapshots',
     canary: /expected 'export const built = true\\n' to be 'something else'/,
     record: ({ run, project }) => {
+      const at = (path: string | null | undefined) =>
+        join(project, '.reeval', 'runs', run.runId, ...(path ?? '').split('/'))
       const kept = landed(run)
-      assert.ok(kept?.keptWorkspace, 'lands kept its workspace')
-      assert.equal(kept.keptWorkspace.skipped, null)
-      assert.deepEqual(kept.keptWorkspace.excluded, ['node_modules/'])
-      const key = parseAttemptKey(kept.key)
-      assert.ok(key)
-      const archive = readFileSync(
-        join(attemptDebugDir(project, run.runId, key.evalId, key.cell, key.n), KEPT_WORKSPACE_FILE),
+      const [final, ...more] = kept?.snapshots ?? []
+      assert.equal(more.length, 0, 'lands took only its final snapshot')
+      assert.equal(final?.name, 'final')
+      assert.equal(final?.form, 'dir')
+      assert.equal(final?.skipped, null)
+      assert.deepEqual(final?.excluded, ['node_modules/'])
+      assert.equal(
+        readFileSync(join(at(final?.path), 'app', 'built.js'), 'utf8'),
+        'export const built = true\n',
       )
-      assert.equal(sha256(archive), kept.keptWorkspace.sha256)
-      const files = readTar(gunzipSync(archive))
+      assert.equal(existsSync(join(at(final?.path), 'node_modules')), false)
+      const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]
+      assert.equal(canary?.snapshots, undefined, 'snapshot: false takes none')
+    },
+  },
+  {
+    dir: 'run/snapshot-turns',
+    tiers: ['fake', 'docker'],
+    env: 'snapshot-turns',
+    canary: /expected 'export const built = true\\n' to be 'something else'/,
+    record: ({ run, project }) => {
+      const at = (path: string | null | undefined) =>
+        join(project, '.reeval', 'runs', run.runId, ...(path ?? '').split('/'))
+      const names = (name: string) =>
+        (run.evals.find((e) => e.name === name)?.attempts[0]?.snapshots ?? []).map((s) => [
+          s.name,
+          s.form,
+          s.path?.split('/').at(-1),
+        ])
+      assert.deepEqual(names('lands'), [
+        ['turn-1', 'tar.gz', 'turn-1.tar.gz'],
+        ['final', 'tar.gz', 'final.tar.gz'],
+      ])
+      const turn = landed(run)?.snapshots?.[0]
+      const files = readTar(gunzipSync(readFileSync(at(turn?.path))))
         .filter((e) => e.type === 'file')
         .map((e) => e.path)
         .sort()
       assert.deepEqual(files, ['app/built.js', 'app/start.js'])
-      const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]
-      assert.equal(canary?.keptWorkspace, undefined, 'keepWorkspace: false keeps none')
+      assert.deepEqual(
+        names('canary'),
+        [
+          ['turn-1', 'dir', 'turn-1'],
+          ['final', 'dir', 'final'],
+        ],
+        "'turns' alone takes directories",
+      )
     },
   },
   {

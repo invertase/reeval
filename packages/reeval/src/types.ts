@@ -1704,10 +1704,10 @@ type EvalOptionFields = {
   /** Per attempt. */
   timeout?: Duration
   /**
-   * Whether each attempt keeps its final workspace, as `workspace.tar.gz` in its `.reeval/debug`
-   * directory, for `reeval workspace` to write out. Default `true`.
+   * When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
+   * the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
    */
-  keepWorkspace?: boolean
+  snapshot?: SnapshotOption
   /** Labels for `--tag` and profiles to select by; a group's are added to its evals'. */
   tags?: string[]
   /**
@@ -1820,8 +1820,8 @@ export type ProfileDefaults = {
   capture?: CaptureOptions
   /** Defaults for every question, merged over the config's. */
   question?: QuestionOptions
-  /** Whether each attempt keeps its final workspace; replaces the config's. */
-  keepWorkspace?: boolean
+  /** When each attempt's workspace is copied; merged over the config's. */
+  snapshot?: SnapshotOption
 }
 
 /** Over every eval, and it can only narrow; `pin` on a group or eval skips it. */
@@ -1964,10 +1964,10 @@ export type ReevalConfig = {
   /** Defaults for every question: the model that answers it and what it's shown of each attempt. Merged down the cascade. */
   question?: QuestionOptions
   /**
-   * Whether each attempt keeps its final workspace, as `workspace.tar.gz` in its `.reeval/debug`
-   * directory, for `reeval workspace` to write out. Default `true`.
+   * When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
+   * the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
    */
-  keepWorkspace?: boolean
+  snapshot?: SnapshotOption
   /** How many attempts run at once. `--concurrency` and `REEVAL_CONCURRENCY` override it. */
   concurrency?: number
   /** When runs are copied into the history folder: `reeval record` only, in CI, or on every run. */
@@ -2125,7 +2125,7 @@ export type ResolvedConfig = {
   timeoutMs: number
   capture: CaptureOptions
   question: QuestionOptions
-  keepWorkspace: boolean
+  snapshot: ResolvedSnapshot
   /** The config's own `concurrency`; see `resolveConcurrency` for the run's. */
   concurrency: number | undefined
   record: RecordMode
@@ -2520,18 +2520,26 @@ export type EvalRecord = {
    * `usage`, effort, compare or lift.
    */
   captureUse?: CaptureUseSpend
-  /** See `AttemptRecord.keptWorkspace`. */
-  keptWorkspace?: KeptWorkspace
+  /** See `AttemptRecord.snapshots`. */
+  snapshots?: Snapshot[]
 }
 
 /**
- * The attempt's final workspace, kept as `workspace.tar.gz` in its `.reeval/debug` directory
- * (never recorded into the history folder), or why it wasn't.
+ * A copy of the attempt's workspace, taken in the sandbox (never recorded into the history
+ * folder), or why it wasn't.
  */
-export type KeptWorkspace = {
-  /** sha256 of `workspace.tar.gz`; null when none was kept. */
-  sha256: string | null
-  /** Its size; 0 when none was kept. */
+export type Snapshot = {
+  /** `final` after the checks, or `turn-<n>` after the nth `c.send`. */
+  name: string
+  /** A plain directory, or a gzipped tarball with `snapshot: { compress: true }`. */
+  form: 'dir' | 'tar.gz'
+  /**
+   * Where it is, relative to the run's directory in `.reeval/runs`:
+   * `<eval>/<cell>/<n>/snapshots/<name>` (with `.tar.gz` when compressed); null when it wasn't
+   * taken.
+   */
+  path: string | null
+  /** Its size on disk: the directory's files, or the tarball; 0 when it wasn't taken. */
   bytes: number
   /** Regular files and symbolic links in it. */
   files: number
@@ -2542,11 +2550,25 @@ export type KeptWorkspace = {
   /** Binary files left out because they held a secret-looking value, at most 50. */
   dropped: string[]
   /**
-   * Why none was kept: `size` when the compressed archive was over the cap, `error` when the
-   * sandbox couldn't archive it; null when it was kept.
+   * Why it wasn't taken: `size` when the workspace was over its form's cap, `error` when the
+   * sandbox couldn't archive it; null when it was.
    */
   skipped: { cause: 'size' | 'error'; message: string } | null
 }
+
+/** `snapshot`: the shorthand, or the object that also picks the form. */
+export type SnapshotOption = boolean | 'turns' | SnapshotOptions
+
+/** `snapshot` as an object, merged field by field over the levels above. */
+export type SnapshotOptions = {
+  /** `true` after the checks, `'turns'` after each `c.send` too, `false` never. Default `true`. */
+  when?: boolean | 'turns'
+  /** Write each as `<name>.tar.gz` instead of a directory. Default `false`. */
+  compress?: boolean
+}
+
+/** `snapshot` once every level is merged. */
+export type ResolvedSnapshot = { when: boolean | 'turns'; compress: boolean }
 
 /** How a saved PNG was produced. Persist the live window, not the string `'full-page'`. */
 export type CaptureArtifactMeta = {

@@ -22,9 +22,9 @@ import type {
 /**
  * Kept out of the options hash: `tags` (selection), `runs` and `timeout` (how much and how long,
  * not what an attempt measures), `revision`'s own part, the gate, which compare reads as a
- * policy change, and `keepWorkspace`, what reeval keeps after the attempt.
+ * policy change, and `snapshot`, what reeval keeps after the attempt.
  */
-const UNHASHED = new Set(['tags', 'runs', 'timeout', 'revision', 'gate', 'keepWorkspace'])
+const UNHASHED = new Set(['tags', 'runs', 'timeout', 'revision', 'gate', 'snapshot'])
 
 /**
  * The `sources` fingerprint part. An attempt without a source (one kept from a record that had

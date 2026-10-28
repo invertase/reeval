@@ -58,8 +58,6 @@ class EvalOptions(TypedDict, total=False):
     gate: Literal["all"] | Mapping[str, float]
     harness: Harness | Sequence[Harness] | Mapping[str, Any]
     judge: JudgeDefaults
-    keep_workspace: bool
-    """Whether each attempt keeps its final workspace for `reeval workspace`. Default `True`."""
     pin: Sequence[str]
     question: Mapping[str, Any]
     questions: Sequence[Mapping[str, Any]]
@@ -67,6 +65,10 @@ class EvalOptions(TypedDict, total=False):
     names what it's shown: `{"question": …, "diff": True}`, at least one input."""
     runs: int
     sandbox: DockerSandbox | Mapping[str, Any]
+    snapshot: bool | Literal["turns"] | Mapping[str, Any]
+    """When each attempt's workspace is copied into its directory in `.reeval/runs`: `True` after
+    the checks, `"turns"` after each `send` too, `False` never, or `{"when": …, "compress": True}`
+    for `<name>.tar.gz` files. Default `True`."""
     revision: int | str
     """The eval's version, in its fingerprint: bump it when a helper, a constant outside the body
     or a fixture changes what it measures. A group's applies to evals inside that set none."""

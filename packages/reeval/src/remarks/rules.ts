@@ -52,7 +52,7 @@ const KIND_ORDER: Remark['kind'][] = [
   'slow-mcp-start',
   'proxy-only-egress',
   'setup-process-secret',
-  'workspace-too-large',
+  'snapshot-too-large',
   'too-few-tries',
   'check-never-fails',
 ]
@@ -445,39 +445,40 @@ function setupProcessSecret(e: EvalResult, entries: EvalEntry[], ctx: RemarkCont
 }
 
 /**
- * workspace-too-large (concern): an attempt's final workspace was over the cap compressed, without
- * its dependency and cache directories, so reeval kept none. One per eval.
+ * snapshot-too-large (concern): an attempt's workspace was over its snapshot form's cap, without
+ * its dependency and cache directories, so reeval took no snapshot of it. One per eval.
  */
-function workspaceTooLarge(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext): Candidate[] {
+function snapshotTooLarge(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext): Candidate[] {
   const cellPaths = new Map<string, string>()
   for (const u of units(e)) for (const c of u.cells) cellPaths.set(`${u.id}\0${c.key}`, c.path)
   const hits = entries.flatMap((entry) =>
-    entry.attempts.flatMap((attempt) =>
-      attempt.keptWorkspace?.skipped?.cause === 'size'
-        ? [{ entry, attempt, message: attempt.keptWorkspace.skipped.message }]
-        : [],
-    ),
+    entry.attempts.flatMap((attempt) => {
+      const over = attempt.snapshots?.find((s) => s.skipped?.cause === 'size')
+      return over ? [{ entry, attempt, over }] : []
+    }),
   )
   const [first] = hits
   if (!first) return []
   const tried = entries.reduce(
-    (n, entry) => n + entry.attempts.filter((a) => a.keptWorkspace).length,
+    (n, entry) => n + entry.attempts.filter((a) => a.snapshots?.length).length,
     0,
   )
   const ofTries = tried > 1 ? ` in ${hits.length} of ${tried} tries` : ''
+  const larger =
+    first.over.form === 'dir' ? ', set snapshot: { compress: true } for the larger cap' : ''
   return [
     {
-      id: remarkId('workspace-too-large', e.path, first.entry),
+      id: remarkId('snapshot-too-large', e.path, first.entry),
       evalId: e.path,
-      kind: 'workspace-too-large',
+      kind: 'snapshot-too-large',
       severity: 'concern',
-      text: `reeval kept no final workspace${ofTries}: ${first.message}.`,
+      text: `reeval took no ${first.over.name} snapshot${ofTries}: ${first.over.skipped?.message}.`,
       evidence: hits.map(
         (h) => `${cellPaths.get(`${h.entry.id}\0${h.attempt.cell}`) ?? h.entry.id}#${h.attempt.n}`,
       ),
       fix: {
         at: ctx.locate(first.entry, null),
-        edit: 'have the task leave generated files in a directory reeval leaves out (node_modules/, .cache/), or set keepWorkspace: false on the eval',
+        edit: `have the task leave generated files in a directory reeval leaves out (node_modules/, .cache/)${larger}, or set snapshot: false on the eval`,
       },
     },
   ]
@@ -503,7 +504,7 @@ export function deterministicRemarks(
         ...slowMcpStart(e, own, ctx),
         ...proxyOnlyEgress(e, own, ctx),
         ...setupProcessSecret(e, own, ctx),
-        ...workspaceTooLarge(e, own, ctx),
+        ...snapshotTooLarge(e, own, ctx),
         ...tooFewTries(e, first, ctx),
         ...checkNeverFails(e, entries, ctx),
       )

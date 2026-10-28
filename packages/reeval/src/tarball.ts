@@ -1,7 +1,16 @@
-// A small tar reader and writer for kept workspaces: it reads what GNU tar, BSD tar and BusyBox
+// A small tar reader and writer for snapshots: it reads what GNU tar, BSD tar and BusyBox
 // write (ustar, GNU long names, pax headers) and writes ustar with pax headers for long paths.
 // Paths that are absolute or climb out with `..` never come out of `readTar`.
-import { lstat, mkdir, symlink, utimes, writeFile } from 'node:fs/promises'
+import {
+  lstat,
+  mkdir,
+  readdir,
+  readFile,
+  readlink,
+  symlink,
+  utimes,
+  writeFile,
+} from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
 
 export type TarEntry =
@@ -231,4 +240,21 @@ export async function extractTar(entries: TarEntry[], dir: string): Promise<stri
   }
   for (const [path, mtime] of times) await utimes(path, mtime, mtime).catch(() => {})
   return skipped
+}
+
+/** The tree under `dir` as entries, in a stable order; a symbolic link is kept as one, never followed. */
+export async function readTree(dir: string, prefix = ''): Promise<TarEntry[]> {
+  const entries: TarEntry[] = []
+  for (const name of (await readdir(dir)).sort()) {
+    const full = join(dir, name)
+    const path = prefix ? `${prefix}/${name}` : name
+    const info = await lstat(full)
+    const meta = { path, mode: info.mode & 0o7777, mtime: Math.floor(info.mtimeMs / 1000) }
+    if (info.isSymbolicLink())
+      entries.push({ type: 'symlink', ...meta, target: await readlink(full) })
+    else if (info.isDirectory()) {
+      entries.push({ type: 'dir', ...meta }, ...(await readTree(full, path)))
+    } else if (info.isFile()) entries.push({ type: 'file', ...meta, data: await readFile(full) })
+  }
+  return entries
 }

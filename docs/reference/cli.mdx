@@ -111,14 +111,15 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
 
 ## `reeval clean`
 
-The `reeval clean` command deletes local debug data, and leaves the `.reeval/runs/` directory. `--keep` defaults to 0. `--images` prunes every Docker and Podman store that answers.
+The `reeval clean` command deletes local debug data and the attempts' snapshots, and leaves the rest of the `.reeval/runs/` directory. `--keep` defaults to 0. `--images` prunes every Docker and Podman store that answers.
 
-The command prints `Removed debug data for <n> runs (<size>) from <directory>`, or `No debug data to remove in <directory>`. With `--images`, it then prints how many images it removed, or `No leftover images to remove`.
+The command prints `Removed debug data and snapshots for <n> runs (<size>) from <directory> and .reeval/runs`, or `No debug data or snapshots to remove in <directory> or .reeval/runs`. With `--images`, it then prints how many images it removed, or `No leftover images to remove`.
 
 [//]: # (generated:cli-help:clean)
 
 ```text
-reeval clean                  Remove local debug data (.reeval/debug); --keep <n> keeps the newest n runs
+reeval clean                  Remove local debug data (.reeval/debug) and snapshots (in .reeval/runs);
+                              --keep <n> keeps the newest n runs'
   --images                    Also remove the Docker images reeval built that nothing tags any more,
                               and the intermediate -base tags of from builds
 ```
@@ -191,20 +192,6 @@ reeval checkout [run] [dir]   A git worktree at the run's commit, with its workt
 ```
 
 [//]: # (/generated:cli-help:checkout)
-
-## `reeval workspace`
-
-[//]: # (generated:cli-help:workspace)
-
-```text
-reeval workspace [attempt] [dir]
-                              An attempt's kept final workspace, written into dir (default:
-                              .reeval/workspaces/<run>/…); attempt is its key, <cell>#<n> or
-                              part of its key, and may be left out when the run has one attempt
-  --run <run>                 A run id, latest or latest~N (default: latest)
-```
-
-[//]: # (/generated:cli-help:workspace)
 
 ## `reeval query`
 

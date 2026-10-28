@@ -1,26 +1,29 @@
-// The attempt's final workspace, kept at teardown as `workspace.tar.gz` in its `.reeval/debug`
-// directory: archived in the sandbox, then filtered and masked on the host and written again,
-// so what lands on disk went through the same secret masking as everything else reeval writes.
-import { mkdir, writeFile } from 'node:fs/promises'
+// Snapshots of the attempt's workspace: archived in the sandbox, then filtered and masked on the
+// host and written as a directory or a `.tar.gz` beside the attempt's staging record, so what
+// lands on disk went through the same secret masking as everything else reeval writes. The run's
+// assembly moves them into the attempt's directory in `.reeval/runs`.
+import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { OPAQUE_OUTPUT } from '@reeval/sandbox-docker'
 import { shellQuote } from '@reeval/sandbox-docker/process'
 import { debugLog } from '../debug/attempt.ts'
-import { KEPT_WORKSPACE_FILE } from '../debug/files.ts'
-import { sha256 } from '../ids.ts'
+import { recordFileName } from '../ids.ts'
 import { findSecrets, redactSecrets } from '../redact.ts'
 import type { Sandbox } from '../sandbox/index.ts'
-import { readTar, type TarEntry, writeTar } from '../tarball.ts'
-import type { KeptWorkspace } from '../types.ts'
-import { formatBytes } from '../view/debug.ts'
+import { extractTar, readTar, type TarEntry, writeTar } from '../tarball.ts'
+import type { Snapshot } from '../types.ts'
+import { type DebugPhase, formatBytes } from '../view/debug.ts'
+import type { Attempt } from './state.ts'
 
-/** The most a kept workspace may be, compressed; a larger one isn't kept. */
-export const KEPT_WORKSPACE_LIMIT = 10 * 2 ** 20
-/** The most it may be uncompressed, which the host holds in memory to mask it. */
-export const KEPT_WORKSPACE_RAW_LIMIT = 200 * 2 ** 20
-/** How long archiving may take before the attempt's teardown goes on without it. */
-const ARCHIVE_TIMEOUT_MS = 120_000
+/** The most a snapshot directory's files may add up to; a larger one isn't taken. */
+export const SNAPSHOT_DIR_LIMIT = 50 * 2 ** 20
+/** The most a compressed snapshot may be. */
+export const SNAPSHOT_TAR_LIMIT = 10 * 2 ** 20
+/** The most a compressed snapshot may be uncompressed, which the host holds in memory to mask. */
+export const SNAPSHOT_RAW_LIMIT = 200 * 2 ** 20
+/** How long one snapshot may take before the attempt goes on without it. */
+const SNAPSHOT_TIMEOUT_MS = 120_000
 
 /** Installed dependencies, caches and git's objects: left out by directory name, at any depth. */
 export const EXCLUDED_DIRS = [
@@ -112,20 +115,35 @@ const NEEDS_TAR =
 
 const listed = (paths: string[]) => paths.slice(0, LISTED)
 
+export type SnapshotLimits = {
+  /** The directory form's cap on its files. */
+  dir: number
+  /** The compressed form's cap on the tarball. */
+  tar: number
+  /** The compressed form's cap uncompressed. */
+  raw: number
+}
+
+const LIMITS: SnapshotLimits = {
+  dir: SNAPSHOT_DIR_LIMIT,
+  tar: SNAPSHOT_TAR_LIMIT,
+  raw: SNAPSHOT_RAW_LIMIT,
+}
+
+type Taken = Omit<Snapshot, 'name' | 'path' | 'form'>
+
 /**
- * Archives the sandbox's workspace and returns what to record and the bytes to write, or why
- * none: over `limit` compressed or `rawLimit` uncompressed, or an archive the sandbox couldn't
- * make.
+ * Archives the sandbox's workspace and returns what to record and the masked entries to write,
+ * or why none: over its form's cap, or an archive the sandbox couldn't make.
  */
 export async function archiveWorkspace(
   box: Sandbox,
   signal: AbortSignal,
-  limit = KEPT_WORKSPACE_LIMIT,
-  rawLimit = KEPT_WORKSPACE_RAW_LIMIT,
-): Promise<{ kept: KeptWorkspace; archive: Buffer | null }> {
+  compress: boolean,
+  limits: SnapshotLimits = LIMITS,
+): Promise<{ taken: Taken; entries: TarEntry[] | null }> {
   const none = (cause: 'size' | 'error', message: string, dirs: string[] = []) => ({
-    kept: {
-      sha256: null,
+    taken: {
       bytes: 0,
       files: 0,
       excluded: listed(dirs),
@@ -133,7 +151,7 @@ export async function archiveWorkspace(
       dropped: [],
       skipped: { cause, message },
     },
-    archive: null,
+    entries: null,
   })
   const names = EXCLUDED_DIRS.map((d) => `-name ${shellQuote(d)}`).join(' -o ')
   const tar = tarCommand(box.workdir)
@@ -147,22 +165,23 @@ export async function archiveWorkspace(
     .filter(Boolean)
     .map((p) => redactSecrets(`${p.replace(/^\.\//, '')}/`))
   const rawBytes = Number(raw.trim())
-  const bytes = Number(size.trim())
-  if (sized.exitCode !== 0 || !(rawBytes > 0) || !(bytes > 0)) {
+  const gzBytes = Number(size.trim())
+  if (sized.exitCode !== 0 || !(rawBytes > 0) || !(gzBytes > 0)) {
     return none('error', `couldn't archive the workspace: ${(sized.stderr || sized.stdout).trim()}`)
   }
   const without = dirs.length ? dirs.join(', ') : 'its dependency and cache directories'
+  const rawLimit = compress ? limits.raw : limits.dir
   if (rawBytes > rawLimit) {
     return none(
       'size',
-      `the workspace is ${formatBytes(rawBytes)} without ${without}, over the ${formatBytes(rawLimit)} cap`,
+      `the workspace is ${formatBytes(rawBytes)} without ${without}, over the ${formatBytes(rawLimit)} cap${compress ? '' : ` (compressed, the cap is ${formatBytes(limits.tar)})`}`,
       dirs,
     )
   }
-  if (bytes > limit) {
+  if (compress && gzBytes > limits.tar) {
     return none(
       'size',
-      `the workspace is ${formatBytes(bytes)} compressed without ${without}, over the ${formatBytes(limit)} cap`,
+      `the workspace is ${formatBytes(gzBytes)} compressed without ${without}, over the ${formatBytes(limits.tar)} cap`,
       dirs,
     )
   }
@@ -183,68 +202,96 @@ export async function archiveWorkspace(
       ? gunzipSync(fetched, { maxOutputLength: rawLimit + 2 ** 20 })
       : fetched
   const clean = cleanArchive(plain)
-  const archive = gzipSync(writeTar(clean.entries))
-  if (archive.length > limit) {
-    return none(
-      'size',
-      `the workspace is ${formatBytes(archive.length)} compressed, over the ${formatBytes(limit)} cap`,
-    )
-  }
   const all = [...new Set([...dirs, ...clean.excluded])].sort()
   return {
-    kept: {
-      sha256: sha256(archive),
-      bytes: archive.length,
+    taken: {
+      bytes: 0,
       files: clean.entries.filter((e) => e.type !== 'dir').length,
       excluded: listed(all),
       masked: listed(clean.masked),
       dropped: listed(clean.dropped),
       skipped: null,
     },
-    archive,
+    entries: clean.entries,
   }
 }
 
+/** Where an attempt's snapshots wait, beside its staging record, until the run is assembled. */
+export const snapshotSidecar = (stagingDir: string, key: string) =>
+  join(stagingDir, 'evals', recordFileName(key).replace(/\.json$/, '.snapshots'))
+
 /**
- * Keeps the workspace into `dir` (the attempt's debug directory); never fails the attempt.
- * Undefined when `signal` (the attempt's) stopped it.
+ * Takes snapshot `name` of the workspace into the attempt's sidecar and adds it to the record;
+ * never fails the attempt. Adds nothing when the attempt's signal stopped it.
  */
-export async function keepWorkspace(
+export async function takeSnapshot(
+  a: Attempt,
   box: Sandbox,
-  dir: string,
-  signal: AbortSignal,
-  timeoutMs = ARCHIVE_TIMEOUT_MS,
-): Promise<KeptWorkspace | undefined> {
+  name: string,
+  phase: DebugPhase,
+  limits: SnapshotLimits = LIMITS,
+  timeoutMs = SNAPSHOT_TIMEOUT_MS,
+): Promise<void> {
+  const { compress } = a.spec.snapshot
+  const form = compress ? 'tar.gz' : 'dir'
+  const dir = a.snapshotDir
+  const target = join(dir, compress ? `${name}.tar.gz` : name)
   const timeout = AbortSignal.timeout(timeoutMs)
-  const failed = (message: string): KeptWorkspace => {
-    debugLog('teardown', `didn't keep the workspace: ${message}`)
-    return {
-      sha256: null,
+  const add = (taken: Taken) => {
+    a.record.snapshots ??= []
+    a.record.snapshots.push({ name, form, path: null, ...taken })
+  }
+  const failed = (message: string) => {
+    debugLog(phase, `no ${name} snapshot: ${message}`)
+    add({
       bytes: 0,
       files: 0,
       excluded: [],
       masked: [],
       dropped: [],
       skipped: { cause: 'error', message: `couldn't archive the workspace: ${message}` },
-    }
+    })
   }
   try {
-    const { kept, archive } = await archiveWorkspace(box, AbortSignal.any([signal, timeout]))
-    if (archive) {
-      await mkdir(dir, { recursive: true })
-      await writeFile(join(dir, KEPT_WORKSPACE_FILE), archive)
-      const masked = kept.masked.length ? ` · masked ${kept.masked.length}` : ''
-      debugLog(
-        'teardown',
-        `kept the workspace: ${kept.files} files, ${formatBytes(kept.bytes)} → ${KEPT_WORKSPACE_FILE}${masked}${kept.excluded.length ? ` · left out ${kept.excluded.join(', ')}` : ''}`,
-      )
-    } else {
-      debugLog('teardown', `didn't keep the workspace: ${kept.skipped?.message}`)
+    const { taken, entries } = await archiveWorkspace(
+      box,
+      AbortSignal.any([a.signal, timeout]),
+      compress,
+      limits,
+    )
+    if (!entries) {
+      debugLog(phase, `no ${name} snapshot: ${taken.skipped?.message}`)
+      add(taken)
+      return
     }
-    return kept
+    await rm(target, { recursive: true, force: true })
+    await mkdir(dir, { recursive: true })
+    if (compress) {
+      const archive = gzipSync(writeTar(entries))
+      if (archive.length > limits.tar) {
+        const message = `the workspace is ${formatBytes(archive.length)} compressed, over the ${formatBytes(limits.tar)} cap`
+        debugLog(phase, `no ${name} snapshot: ${message}`)
+        add({ ...taken, files: 0, skipped: { cause: 'size', message } })
+        return
+      }
+      await writeFile(target, archive)
+      taken.bytes = archive.length
+    } else {
+      const skipped = await extractTar(entries, target)
+      taken.bytes = entries.reduce((n, e) => n + (e.type === 'file' ? e.data.length : 0), 0)
+      taken.dropped = listed([...taken.dropped, ...skipped])
+    }
+    const masked = taken.masked.length ? ` · masked ${taken.masked.length}` : ''
+    const left = taken.excluded.length ? ` · left out ${taken.excluded.join(', ')}` : ''
+    debugLog(
+      phase,
+      `${name} snapshot: ${taken.files} files, ${formatBytes(taken.bytes)} (${form})${masked}${left}`,
+    )
+    add(taken)
   } catch (error) {
-    if (signal.aborted) return undefined
+    await rm(target, { recursive: true, force: true }).catch(() => {})
+    if (a.signal.aborted) return
     if (timeout.aborted) return failed(`it took over ${Math.round(timeoutMs / 1000)}s`)
-    return failed(error instanceof Error ? error.message : String(error))
+    failed(error instanceof Error ? error.message : String(error))
   }
 }
