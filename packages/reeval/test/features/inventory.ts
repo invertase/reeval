@@ -1697,9 +1697,14 @@ export const inventory: InventoryFeature[] = [
       'ui/capture-use-click',
       'ui/capture-use-wait',
       'ui/capture-use-timeout',
+      'ui/capture-use-history',
     ],
     plan: ['capture/options'],
-    unit: ['reeval/test/capture.test.ts', 'reeval/test/capture-use.test.ts'],
+    unit: [
+      'reeval/test/capture.test.ts',
+      'reeval/test/capture-use.test.ts',
+      'reeval/test/ai-sdk-warnings.test.ts',
+    ],
   },
   {
     id: 'studio',

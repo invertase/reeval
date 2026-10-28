@@ -211,7 +211,7 @@
 | `reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them | ✓ 1 | — | — | — | — | — |
 | A run's notes in `.reeval/analysis/<run>/notes/`: the studio's Analysis tab shows them with the cached `reeval analyze` document | ✓ 1 | — | — | — | — | — |
 | `c.capture()`, `c.serve` and `c.exec({ background })` | ✓ 3 | ✓ 1 | ● 10 | ● 11 | — | — |
-| `c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`) | ✓ 2 | ✓ 1 | ● 3 | ● 4 | — | — |
+| `c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`) | ✓ 3 | ✓ 1 | ● 3 | ● 5 | — | — |
 | `reeval studio` and `reeval studio build` | ✓ 1 | — | — | — | — | ◐ 1 (1 without a canary) |
 | The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.reeval/debug`, in `reeval studio` only | ✓ 2 | — | — | — | — | — |
 | Runs in progress in `reeval studio`: `reeval run`'s `.reeval/staging/<run>/live.json`, a `Running N/M` row and progress bar, attempts filling in with their transcripts, `Stopped` for a killed run, and the record replacing it | ✓ 2 | — | — | — | — | — |

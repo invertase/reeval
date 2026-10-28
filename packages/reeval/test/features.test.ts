@@ -268,6 +268,58 @@ before(async () => {
 })
 after(() => registry.close())
 
+/**
+ * A scripted vision model on Anthropic's Messages API, for `ui/capture-use-history`: it picks each
+ * move of the fixture's sign-up from the moves its prompt lists, so a driver that sends no history
+ * gets the first move every time.
+ */
+const scriptedVision = { url: '', prompts: [] as string[] }
+const SIGN_UP_MOVES: Array<[string, object]> = [
+  ['click', { x: 200, y: 115 }],
+  ['type', { text: 'ada@example.com' }],
+  ['click', { x: 200, y: 165 }],
+  ['type', { text: 'Test1234!' }],
+  ['click', { x: 200, y: 215 }],
+  ['done', {}],
+]
+const visionModel = createServer((req, res) => {
+  let body = ''
+  req.on('data', (chunk) => {
+    body += chunk
+  })
+  req.on('end', () => {
+    const { messages } = JSON.parse(body) as {
+      messages: Array<{ content: string | Array<{ type: string; text?: string }> }>
+    }
+    const text = messages
+      .flatMap((m) =>
+        typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content,
+      )
+      .flatMap((part) => (part.type === 'text' && part.text ? [part.text] : []))
+      .join('\n')
+    scriptedVision.prompts.push(text)
+    const [name, input] = SIGN_UP_MOVES[text.match(/^\d+\. /gm)?.length ?? 0] ?? ['done', {}]
+    res.setHeader('content-type', 'application/json')
+    res.end(
+      JSON.stringify({
+        id: `msg_${scriptedVision.prompts.length}`,
+        type: 'message',
+        role: 'assistant',
+        model: 'scripted-vision',
+        content: [{ type: 'tool_use', id: `toolu_${scriptedVision.prompts.length}`, name, input }],
+        stop_reason: 'tool_use',
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    )
+  })
+})
+before(async () => {
+  await new Promise<void>((resolve) => visionModel.listen(0, '127.0.0.1', resolve))
+  scriptedVision.url = `http://127.0.0.1:${(visionModel.address() as AddressInfo).port}/v1`
+})
+after(() => visionModel.close())
+
 /** `npm pack` of `cwd` into `out`: the tarball's name. */
 function npmPack(cwd: string, out: string): string {
   const r = spawnTool('npm', ['pack', '--silent', '--pack-destination', out], {
@@ -2665,6 +2717,23 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'ui/capture-use-history',
+    tiers: ['docker'],
+    env: 'ui',
+    hostEnv: () => ({ ANTHROPIC_API_KEY: 'fixture-key', ANTHROPIC_BASE_URL: scriptedVision.url }),
+    canary: /expected 'ada@example\.com' to be 'nobody'/,
+    record: ({ run }) => {
+      const art = landed(run)?.files.artifacts?.[0]
+      assert.deepEqual(art?.capture?.use, { model: 'anthropic/scripted-vision', moves: 5 })
+      assert.ok(
+        scriptedVision.prompts.some((p) =>
+          /^5\. click \{"x":200,"y":215\} → the page changed, now at \/welcome$/m.test(p),
+        ),
+        'the model saw its submit move take the page to /welcome',
+      )
+    },
+  },
+  {
     dir: 'ui/capture-use-timeout',
     tiers: ['docker'],
     env: 'ui',
@@ -2672,10 +2741,11 @@ export const features: Feature[] = [
       outcome: 'fail',
       error: {
         kind: 'assertion',
-        message: /c\.capture\(\) timed out on "fake\[0\]"/,
+        message:
+          /c\.capture\(\) timed out on "fake\[0\]" \(instruction 1 of 1, after 1 move\): it used all of its 10s timeout\. Raise timeout on the call or capture\.timeout\./,
       },
     },
-    canary: /expected 'c\.capture\(\) timed out on "fake\[0\]"' to be 'still loading'/,
+    canary: /expected 'c\.capture\(\) timed out on "fake\[0\]" \(i…' to be 'still loading'/,
     record: ({ run }) => {
       assert.equal(landed(run)?.files.artifacts, undefined)
     },

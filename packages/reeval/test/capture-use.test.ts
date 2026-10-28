@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { crc32, deflateSync } from 'node:zlib'
 import { fakeInstructions } from '../src/capture/fake-instructions.ts'
 import {
   dispatchInput,
@@ -7,6 +8,7 @@ import {
   parseInstructions,
   resolveWait,
 } from '../src/capture/index.ts'
+import { CARET_PIXELS, pageChanged } from '../src/capture/png.ts'
 import { stubPng } from '../src/capture/stub.ts'
 import { normalizesPoints, runJourney, scalePoints } from '../src/capture/use.ts'
 import type { CaptureUseAction } from '../src/types.ts'
@@ -199,4 +201,228 @@ test('runJourney times out before the saved screenshot', async () => {
     /timed out on "never done"/,
   )
   assert.equal(saved, 0)
+})
+
+type Prompt = Array<{ role: string; content: unknown }>
+
+/** The text of the prompt's user message: the goal, the page and the moves so far. */
+const userText = (prompt: Prompt) =>
+  ((prompt.find((m) => m.role === 'user')?.content ?? []) as Array<{ type: string; text?: string }>)
+    .filter((p) => p.type === 'text')
+    .map((p) => p.text)
+    .join('\n')
+
+/** A model that answers each call with `next(prompt text)`, as one tool call. */
+function scriptedModel(next: (text: string) => [string, object], prompts: string[] = []) {
+  let calls = 0
+  return {
+    specificationVersion: 'v4',
+    provider: 'stub',
+    modelId: 'stub',
+    supportedUrls: {},
+    doGenerate: async (options: { prompt: Prompt; abortSignal?: AbortSignal }) => {
+      const text = userText(options.prompt)
+      prompts.push(text)
+      const [toolName, input] = next(text)
+      return {
+        content: [
+          { type: 'tool-call', toolCallId: `c${calls++}`, toolName, input: JSON.stringify(input) },
+        ],
+        finishReason: { unified: 'tool-calls', raw: 'tool_use' },
+        usage: {
+          inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 1, text: 1, reasoning: 0 },
+        },
+        warnings: [],
+      }
+    },
+    doStream: async () => {
+      throw new Error('the stub model does not stream')
+    },
+  }
+}
+
+/**
+ * A 100×100 RGB PNG, white but for `painted` black pixels on its even rows. Each odd row repeats
+ * the row above through the Up filter, so each painted pixel shows twice.
+ */
+function pagePng(painted: number): Buffer {
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data])
+    const out = Buffer.alloc(12 + data.length)
+    out.writeUInt32BE(data.length, 0)
+    body.copy(out, 4)
+    out.writeUInt32BE(crc32(body), 8 + data.length)
+    return out
+  }
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(100, 0)
+  ihdr.writeUInt32BE(100, 4)
+  ihdr[8] = 8
+  ihdr[9] = 2
+  const rows = Buffer.alloc(100 * 301, 0xff)
+  for (let y = 1; y < 100; y += 2) rows.fill(0, y * 301, (y + 1) * 301).writeUInt8(2, y * 301)
+  for (let i = 0; i < painted; i++) {
+    const at = 2 * Math.floor(i / 100) * 301 + 1 + (i % 100) * 3
+    rows.fill(0, at, at + 3)
+  }
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(rows)),
+    chunk('IEND', Buffer.alloc(0)),
+  ])
+}
+
+test('pageChanged ignores a caret-sized difference, and reads bytes it cannot decode', () => {
+  assert.equal(pageChanged(pagePng(0), pagePng(0)), false)
+  assert.equal(pageChanged(pagePng(0), pagePng(CARET_PIXELS / 2)), false)
+  assert.equal(pageChanged(pagePng(0), pagePng(CARET_PIXELS / 2 + 1)), true)
+  assert.equal(pageChanged(pagePng(0), stubPng('x', 1, '/', window)), true)
+  const corrupt = Buffer.from(pagePng(0))
+  corrupt.fill(0, 41, 45)
+  assert.equal(pageChanged(pagePng(0), corrupt), true)
+})
+
+/** A session whose screenshot changes with each move when `changes` is set, at a path per move. */
+function scriptedSession(changes: boolean, paths: (moves: number) => string = () => '/sign-up') {
+  const dispatched: CaptureUseAction[] = []
+  return {
+    dispatched,
+    session: {
+      window,
+      cdp: {
+        on() {},
+        send: async (method: string) =>
+          method === 'Page.getNavigationHistory'
+            ? { currentIndex: 0, entries: [{ url: `http://127.0.0.1${paths(dispatched.length)}` }] }
+            : {},
+      },
+      async navigate() {
+        return { loaderId: 'n' }
+      },
+      async wait() {},
+      async screenshot() {
+        return pagePng(changes ? dispatched.length * 200 : 0)
+      },
+      async dispatch(action: CaptureUseAction) {
+        dispatched.push(action)
+      },
+    },
+  }
+}
+
+/** The sign-up form's moves, in order: what a model that reads its history makes. */
+const SIGN_UP: Array<[string, object]> = [
+  ['click', { x: 180, y: 130 }],
+  ['type', { text: 'ada@example.com' }],
+  ['click', { x: 180, y: 165 }],
+  ['type', { text: 'Test1234!' }],
+  ['click', { x: 120, y: 200 }],
+  ['done', {}],
+]
+
+/** Picks the next sign-up move from the moves the prompt lists, so it repeats move 1 without them. */
+const fromHistory = (text: string): [string, object] =>
+  text.startsWith('Goal: Open the profile')
+    ? ['done', {}]
+    : (SIGN_UP[text.match(/^\d+\. /gm)?.length ?? 0] ?? ['done', {}])
+
+const journey = (
+  session: ReturnType<typeof scriptedSession>['session'],
+  model: unknown,
+  instructions: string[],
+  remaining: () => number = () => 10_000,
+) =>
+  runJourney(session, 'http://127.0.0.1/sign-up', {
+    wait: { ms: 0 },
+    timeoutMs: 10_000,
+    budgetMs: 60_000,
+    fullPage: false,
+    instructions,
+    use: { model: 'anthropic/claude-sonnet-5' },
+    remaining,
+    loadModel: async () => model,
+  })
+
+test('runJourney gives the model its moves and their effect, so a multi-step form finishes', async () => {
+  const prompts: string[] = []
+  const { session, dispatched } = scriptedSession(true, (n) => (n >= 5 ? '/profile' : '/sign-up'))
+  const result = await journey(session, scriptedModel(fromHistory, prompts), [
+    'Create an account and submit the form',
+    'Open the profile',
+  ])
+  assert.deepEqual(
+    dispatched.map((a) => a.type),
+    ['click', 'type', 'click', 'type', 'click'],
+  )
+  assert.equal(result.moves, 5)
+  assert.match(
+    prompts[0] ?? '',
+    /^Goal: Create an account and submit the form\nThis is instruction 1 of 2\.\nThe page is at \/sign-up\.\nYou have made no moves/,
+  )
+  assert.match(prompts[5] ?? '', /^1\. click \{"x":180,"y":130\} → the page changed$/m)
+  assert.match(
+    prompts[5] ?? '',
+    /^5\. click \{"x":120,"y":200\} → the page changed, now at \/profile$/m,
+  )
+  assert.match(
+    prompts[6] ?? '',
+    /instruction 2 of 2\. Already done: "Create an account and submit the form"\.\nThe page is at \/profile\./,
+  )
+})
+
+test('runJourney stops a model that repeats a move that changes nothing, after nudging it', async () => {
+  const prompts: string[] = []
+  const { session } = scriptedSession(false)
+  await assert.rejects(
+    journey(
+      session,
+      scriptedModel(() => ['click', { x: 180, y: 130 }], prompts),
+      ['Fill in the form'],
+    ),
+    /^Error: c\.capture\(\) instruction 1 of 1 "Fill in the form" repeated click \{"x":180,"y":130\} 4 times without the page changing$/,
+  )
+  assert.equal(prompts.length, 4)
+  assert.doesNotMatch(prompts[1] ?? '', /Do not repeat it/)
+  assert.match(
+    prompts[2] ?? '',
+    /2\. click \{"x":180,"y":130\} → the page did not change\nYour last moves repeated the same action without changing the page\. Do not repeat it/,
+  )
+})
+
+test('runJourney names the instruction, the moves and the timeout when a model call outlives the budget', async () => {
+  const { session } = scriptedSession(true)
+  let calls = 0
+  const slow = {
+    ...scriptedModel(fromHistory),
+    doGenerate: (options: { abortSignal?: AbortSignal; prompt: Prompt }) =>
+      calls++ < 2
+        ? scriptedModel(fromHistory).doGenerate(options)
+        : new Promise((_, reject) =>
+            options.abortSignal?.addEventListener('abort', () =>
+              reject(options.abortSignal?.reason),
+            ),
+          ),
+  }
+  // AbortSignal.timeout's timer doesn't hold the event loop open; a run's other work does.
+  const alive = setInterval(() => {}, 50)
+  const start = Date.now()
+  try {
+    await assert.rejects(
+      journey(session, slow, ['Open the profile', 'Create an account and submit the form'], () =>
+        Math.max(0, 300 - (Date.now() - start)),
+      ),
+      (error: Error) => {
+        assert.equal(error.name, 'Error')
+        assert.equal(
+          error.message,
+          'c.capture() timed out on "Create an account and submit the form" (instruction 2 of 2, after 1 move): it used all of its 1m 00s timeout. Raise timeout on the call or capture.timeout.',
+        )
+        return true
+      },
+    )
+  } finally {
+    clearInterval(alive)
+  }
 })
