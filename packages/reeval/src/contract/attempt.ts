@@ -392,7 +392,7 @@ export const judgeCallDataSchema = z
     on: judgeOnSchema
       .optional()
       .describe(
-        'The turn `task`, `output` and `transcript` read instead of the latest: an earlier turn, or a value graded as the output.',
+        'The turn `task`, `output`, `transcript` and `diff` read instead of the latest: an earlier turn, or a value graded as the output.',
       ),
     artifacts: z
       .union([z.literal(true), z.array(z.union([nonEmpty, captureSchema]))])

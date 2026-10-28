@@ -769,7 +769,7 @@ class EvalOptionsDataCompare(TypedDict):
     judge: NotRequired[ConfigJudgeOptions]
     # Keys a profile's `limit` may not narrow for this group or eval.
     pin: NotRequired[list[PinnableKey]]
-    # Defaults for every question: `model`, and `state` merged key by key, down the cascade.
+    # The model every question that names none of its own is answered by, down the cascade.
     question: NotRequired[QuestionOptions]
     # What a language model is asked about the attempts, always a list; they never change pass,
     # fail or the exit code. A question with `across` picks between pairs of attempts once they
@@ -844,7 +844,7 @@ class EvalOptionsDataCompare2(TypedDict):
     judge: NotRequired[ConfigJudgeOptions]
     # Keys a profile's `limit` may not narrow for this group or eval.
     pin: NotRequired[list[PinnableKey]]
-    # Defaults for every question: `model`, and `state` merged key by key, down the cascade.
+    # The model every question that names none of its own is answered by, down the cascade.
     question: NotRequired[QuestionOptions]
     # What a language model is asked about the attempts, always a list; they never change pass,
     # fail or the exit code. A question with `across` picks between pairs of attempts once they
@@ -903,7 +903,7 @@ class EvalOptionsData3(TypedDict):
     judge: NotRequired[ConfigJudgeOptions]
     # Keys a profile's `limit` may not narrow for this group or eval.
     pin: NotRequired[list[PinnableKey]]
-    # Defaults for every question: `model`, and `state` merged key by key, down the cascade.
+    # The model every question that names none of its own is answered by, down the cascade.
     question: NotRequired[QuestionOptions]
     # What a language model is asked about the attempts, always a list; they never change pass,
     # fail or the exit code. A question with `across` picks between pairs of attempts once they
@@ -1263,8 +1263,8 @@ class JudgeCallData(TypedDict):
     maxConcurrent: NotRequired[int]
     # `'provider/model'`, or a fake judge with a numeric score.
     model: NotRequired[str | FakeJudgeData]
-    # The turn `task`, `output` and `transcript` read instead of the latest: an earlier turn, or
-    # a value graded as the output.
+    # The turn `task`, `output`, `transcript` and `diff` read instead of the latest: an earlier
+    # turn, or a value graded as the output.
     on: NotRequired[JudgeCallDataOnTurn | JudgeCallDataOnValue]
     output: NotRequired[bool]
     # AI SDK provider options for the judge's calls, keyed by provider.

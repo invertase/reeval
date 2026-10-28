@@ -706,7 +706,7 @@ export type Stack = {
     threshold: number
     /** Changes when reeval, the AI SDK or the provider adapter (and so the judge prompt) change. */
     version: string
-    /** The config's default judge inputs, every key resolved. A config sets none (each `c.judge()` call names its own), so it's set only on records whose config did. */
+    /** The config's default judge inputs, every key resolved. Unset when the config names none, which reeval requires: each `c.judge()` call names its own. */
     state?: ResolvedJudgeStateOptions
   }
   /** Union of every attempt's context files. */

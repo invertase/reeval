@@ -1587,12 +1587,14 @@ evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('Is it 
     assert.deepEqual(judged, { empty: 0, 'over one': 0, fine: 1 })
   })
 
-  test("c.judge refuses an unknown option, no input, a command it hasn't run and on without output", async () => {
+  test("c.judge refuses an unknown option, no input, a command it hasn't run, on without output and artifacts with no captures", async () => {
     const p = await project('judge-state-call', {
       'reeval.config.ts': fakeConfig(),
       'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('unknown', async (c) => { await c.send('go'); await c.judge('ok?', { dif: true } as never) })
 evaluate('nothing', async (c) => { await c.send('go'); await c.judge('ok?', { threshold: 0.5 } as never) })
+evaluate('no options', async (c) => { await c.send('go'); await (c.judge as (q: string) => Promise<unknown>)('ok?') })
+evaluate('no captures', async (c) => { await c.send('go'); await c.judge('ok?', { artifacts: true }) })
 evaluate('not run', async (c) => { await c.send('go'); await c.judge('ok?', { checks: ['npm tset'] }) })
 evaluate('on off', async (c) => { await c.send('go'); await c.judge('ok?', { on: 'x', diff: true }) })
 evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('ok?', { output: true })).toPass() })
@@ -1602,6 +1604,14 @@ evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('ok?', 
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(r.stdout, /Unknown judge option "dif" in c\.judge\(\)\. Did you mean "diff"\?/)
     assert.match(r.stdout, /c\.judge\(\) shows the judge nothing: turn on at least one input/)
+    assert.match(
+      r.stdout,
+      /c\.judge\(\) options must be an object such as \{ diff: true \} \(got undefined\)/,
+    )
+    assert.match(
+      r.stdout,
+      /c\.judge\(\) artifacts: true shows the judge nothing yet: this attempt has no captures/,
+    )
     assert.match(
       r.stdout,
       /c\.judge\(\) checks names a command this attempt hasn't run: "npm tset"/,
@@ -1614,7 +1624,15 @@ evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('ok?', 
       readRun(p.dir).evals.map((e) => [e.name, e.attempts[0]?.judgements.length]),
     )
     // The canary: a valid call is judged, so a count of 0 means the bad ones never reached it.
-    assert.deepEqual(judged, { unknown: 0, nothing: 0, 'not run': 0, 'on off': 0, fine: 1 })
+    assert.deepEqual(judged, {
+      unknown: 0,
+      nothing: 0,
+      'no options': 0,
+      'no captures': 0,
+      'not run': 0,
+      'on off': 0,
+      fine: 1,
+    })
   })
 
   test('the judge gets all of what its inputs select, however big', async () => {

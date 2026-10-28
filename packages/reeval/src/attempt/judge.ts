@@ -1,5 +1,5 @@
 import type { JudgeOn } from '../contract/attempt.ts'
-import { judgeProblem } from '../contract/judge.ts'
+import { INPUT_KEYS, inputsOn, judgeProblem, NO_JUDGE_INPUT } from '../contract/judge.ts'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { workspaceFiles } from '../diff.ts'
 import { getRunContext, SUBJECT } from '../engine/runtime.ts'
@@ -158,13 +158,8 @@ export function judgeCaller(
   const ask = async (
     order: number,
     question: string,
-    { on, ...call }: Omit<JudgeCallFields, 'on'> & { on?: JudgeOn } = {},
+    { on, ...call }: Omit<JudgeCallFields, 'on'> & { on?: JudgeOn },
   ): Promise<Verdict | JudgeFailure> => {
-    if (typeof question !== 'string' || !question.trim()) {
-      throw new Error(
-        `c.judge() needs a question: a non-empty string (got ${JSON.stringify(question)})`,
-      )
-    }
     const problem = judgeProblem(call, { at: 'call' })
     if (problem) throw new Error(problem)
     const badArts = badJudgeArtifacts(call.artifacts)
@@ -217,6 +212,11 @@ export function judgeCaller(
     // Masked as the record will be, so judge-input.json is what the model was sent.
     const state = redactValue(stateOf(draft))
     const resolved = resolveJudgeArtifacts(artifacts, a.artifactBlobs)
+    if (artifacts === true && !resolved.length && inputsOn(call, INPUT_KEYS).length === 1) {
+      throw new Error(
+        'c.judge() artifacts: true shows the judge nothing yet: this attempt has no captures. Call c.capture() first, or turn on another input.',
+      )
+    }
     const refs = artifactRefsOf(resolved)
     const decide = decideState(state, filePartsOf(resolved))
     const input: JudgeInput = {
@@ -316,7 +316,16 @@ export function judgeCaller(
     }
   }
   // A verdict names its question in `expect(verdict).toPass()`'s default label.
-  return async (question, { on, ...options } = {} as JudgeCallOptions) => {
+  return async (question, given: JudgeCallOptions) => {
+    if (typeof question !== 'string' || !question.trim()) {
+      throw new Error(
+        `c.judge() needs a question: a non-empty string (got ${JSON.stringify(question)})`,
+      )
+    }
+    if (given === null || typeof given !== 'object' || Array.isArray(given)) {
+      throw new Error(judgeProblem(given, { at: 'call' }) ?? NO_JUDGE_INPUT)
+    }
+    const { on, ...options } = given
     const order = a.judgeCalls++
     const call = on === undefined ? options : { ...options, on: judgeOn(a.turns, on) }
     return Object.defineProperty(await ask(order, question, call), SUBJECT, { value: question })

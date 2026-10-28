@@ -69,7 +69,7 @@
   the question needs all three. The diff leaves out dependencies, build output (`dist/`,
   `.next/`, top-level `build/` and `out/`), lockfiles, `*.map`, `*.tsbuildinfo` and minified
   files.
-- `on` and `turns` select what `task`, `output` and `transcript` read and show nothing alone:
+- `on` and `turns` select what `task`, `output`, `transcript` and `diff` read and show nothing alone:
   `on: turn` grades an earlier turn, `on: value` grades any value as the output (with
   `output: true`), and `turns: 'all'` adds every turn before the graded one. `judge-input.json`
   records each call's `stateOptions` (every input, `false` when off) and the `state` it sent.

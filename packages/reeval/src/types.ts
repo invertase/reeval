@@ -348,7 +348,7 @@ export type JudgeInputs = {
 
 /** What a judge call's inputs read: which turn, and whether the turns before it too. */
 export type JudgeSubject = {
-  /** The turn `task`, `output` and `transcript` read instead of the latest, or a value used as the output. */
+  /** The turn `task`, `output`, `transcript` and `diff` read instead of the latest, or a value used as the output. */
   on?: Turn | JSONValue
   /**
    * `'all'`: every turn up to the graded one under `turns`, each with its task, output and (with

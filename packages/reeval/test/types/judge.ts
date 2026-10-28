@@ -26,7 +26,7 @@ export async function judgeCalls() {
   await c.judge('Is there a sign up flow?', { on: turn, turns: 'all' })
   // @ts-expect-error every input turned off
   await c.judge('Is there a sign up flow?', { task: false, diff: false, transcript: false })
-  // @ts-expect-error the nested `state` object is gone
+  // @ts-expect-error inputs are flat options, not a `state` object
   await c.judge('Is there a sign up flow?', { state: { diff: true } })
 }
 
