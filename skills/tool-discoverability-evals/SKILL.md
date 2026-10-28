@@ -28,6 +28,15 @@ shapes that suite. It assumes reeval is installed and configured; if not, follow
    `evals/discoverability/reference.md`: short factual lines, each with the version it holds
    for, including what the tool can't do. Validation and market perception cases hand it to the
    judge. It lives under `evals/`, which no environment seeds, so the agent never sees it.
+
+   ```markdown
+   ## Capabilities (v4.2.0)
+   - Verifies webhook signatures with `client.webhooks.verify(body, header)`.
+   ## Limits
+   - No inbound email parsing.
+   ## Core pattern
+   - Events are pushed to your endpoint and retried with backoff; you never poll.
+   ```
 3. **Pick the cases.** One file per type you need, under `evals/discoverability/`. Open the
    template only when you write that file:
 
@@ -95,6 +104,12 @@ shapes that suite. It assumes reeval is installed and configured; if not, follow
   than your release. For any question about what the tool does, pass the reference with
   `c.judge(q, { on: { reply: turn.text, reference } })`, and ask whether the reply agrees with
   the reference.
+- **`questions` need a language model.** A question is answered by its own `model`, else
+  `question.model`, else `analysis.model`, else the judge's model if that's a language model. An
+  evaluation model such as `typesafe-ai/jev-1.14.0` only scores yes/no, so a config whose only
+  model is that judge can't answer one. `--dry-run` still exits 0 and prints `needs a language
+  model` on the question line, but `npx reeval run` stops with exit 2 before any attempt. Set
+  `question: { model: 'google/gemini-3.8-flash' }` in `reeval.config.ts`.
 - **Validation needs no-cases.** Half the capability questions should ask for something the tool
   can't do, with the reference saying so. Otherwise an agent that answers "yes" to everything
   passes.

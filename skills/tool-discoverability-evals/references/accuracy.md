@@ -72,3 +72,19 @@ evaluate(
   reeval skill's environments reference.
 - The canary writes the deprecated call or an invented option and must fail `typechecks` or
   `no deprecated call`; the oracle writes a correct handler another way than you would.
+- To ask whether a skill, a docs file or an MCP server fixes a failing case, derive a variant
+  from `sdkApp` and compare: `sdkApp` stays the control, and the case runs in both.
+
+  ```ts
+  const withSkill = sdkApp.extendEnvironment('with-skill', ({ skill }) => ({
+    skills: [skill.local('../../skills/acme-sdk')],
+    // or files: { 'docs/acme.md': file('./acme.md') } with ({ file }),
+    // or mcp: { acme: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) } with ({ mcp })
+  }))
+
+  evaluate(
+    'writes a working acme-sdk webhook handler',
+    { ...suite, environment: sdkApp, compare: { variants: [withSkill] } },
+    async (c) => { /* the same body */ },
+  )
+  ```
