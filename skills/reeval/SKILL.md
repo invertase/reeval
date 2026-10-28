@@ -220,7 +220,8 @@ group('hello', () => {
 - Matchers: `await expect(turn).toHaveFile(path, pattern?)`,
   `expect(await c.exec(cmd)).toSucceed()` (or `await expect(c.exec(cmd)).toSucceed()`),
   `expect(await c.judge(q)).toPass()`, plus Vitest's. Each takes only its own subject:
-  `toPass()` on an exec result is a type error, so typecheck evals with `tsc --noEmit`.
+  `toPass()` on an exec result is a type error, so typecheck evals (`tsc --noEmit`, with
+  `typescript` installed).
   Transcript matchers (sync, no `await`): `expect(turn | c).toHaveCalledSkill(name)`,
   `toHaveCalledMcp(server, tool, input?)`, `toHaveCalledTool(name | RegExp, input?)`,
   `toHaveRun(command?)`, `toHaveEdited(path?)`, `toHaveSearched(query?)`,

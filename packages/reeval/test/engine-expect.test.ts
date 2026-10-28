@@ -543,23 +543,30 @@ describe('unawaited assertions', () => {
   })
 
   test("the hint names the eval's line, and the error's stack is where the eval called it", async () => {
-    const file = join(process.cwd(), 'evals', 'build.eval.ts')
-    const site = [
-      'Error',
+    const dir = join(process.cwd(), 'my evals (x)')
+    const file = join(dir, 'build.eval.ts')
+    const stackOf = (...frames: string[]) => ['Error', ...frames].join('\n')
+    const at = (stack: string): Pending[] => [
+      { ...pendingOf(Promise.resolve()), site: Object.assign(new Error(), { stack }) },
+    ]
+    const hint = (line: number) =>
+      `expect(…).toHaveFile() at my evals (x)/build.eval.ts:${line} wasn't awaited. Its check is async: write \`await expect(…).toHaveFile()\`.`
+    const bare = stackOf(
       '    at tracked (/pkg/dist/expect.js:1:1)',
       '    at <anonymous>',
-      `    at file://${pathToFileURL(join(process.cwd(), 'evals', 'other.ts')).pathname}:3:1`,
-      `    at ${pathToFileURL(file).href}:12:5`,
-    ].join('\n')
-    const hint =
-      "expect(…).toHaveFile() at evals/build.eval.ts:12 wasn't awaited. Its check is async: write `await expect(…).toHaveFile()`."
-    const missed = (): Pending[] => [{ ...pendingOf(Promise.resolve()), site }]
-    const error = await unawaitedError(missed(), file)
-    assert.equal(error?.message, hint)
-    assert.equal(error?.stack, `AssertionError: ${hint}\n${site.split('\n').slice(1).join('\n')}`)
-    const byUrl = await unawaitedError(missed(), pathToFileURL(file).href)
-    assert.equal(byUrl?.message, hint)
-    const elsewhere = await unawaitedError(missed(), join(process.cwd(), 'evals', 'x.eval.ts'))
+      `    at ${pathToFileURL(join(dir, 'other.ts')).href}:3:1`,
+      `    at async ${pathToFileURL(file).href}:12:5`,
+    )
+    const error = await unawaitedError(at(bare), file)
+    assert.equal(error?.message, hint(12))
+    assert.equal(
+      error?.stack,
+      `AssertionError: ${hint(12)}\n${bare.split('\n').slice(1).join('\n')}`,
+    )
+    assert.equal((await unawaitedError(at(bare), pathToFileURL(file).href))?.message, hint(12))
+    const inCall = stackOf(`    at Object.body (${file}:7:3)`)
+    assert.equal((await unawaitedError(at(inCall), file))?.message, hint(7))
+    const elsewhere = await unawaitedError(at(bare), join(dir, 'x.eval.ts'))
     assert.match(elsewhere?.message ?? '', /^expect\(…\)\.toHaveFile\(\) wasn't awaited/)
     const unknown = await unawaitedError([pendingOf(Promise.resolve())], file)
     assert.match(unknown?.message ?? '', /^expect\(…\)\.toHaveFile\(\) wasn't awaited/)
@@ -570,7 +577,7 @@ describe('unawaited assertions', () => {
     await withAttemptExpect(createExpect(task()), pending, async () => {
       await expect(Promise.resolve(1)).resolves.toBe(1)
     })
-    assert.match(pending[0]?.site ?? '', /engine-expect\.test\.ts:\d+:\d+/)
+    assert.match(pending[0]?.site?.stack ?? '', /engine-expect\.test\.ts:\d+:\d+/)
   })
 
   test('a failure that is not an Error gets the hint alone', async () => {

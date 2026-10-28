@@ -2300,7 +2300,13 @@ export const features: Feature[] = [
       const recorded = (name: string) =>
         run.evals.find((e) => e.name === name)?.attempts[0]?.assertions
       assert.deepEqual(recorded('lands'), [
-        { label: 'builds', labelled: true, matcher: 'toSucceed', status: 'pass', soft: false },
+        {
+          label: 'toSucceed echo built',
+          labelled: false,
+          matcher: 'toSucceed',
+          status: 'pass',
+          soft: false,
+        },
       ])
       assert.equal(recorded('canary')?.[0]?.status, 'fail')
     },

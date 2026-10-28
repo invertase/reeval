@@ -16,7 +16,7 @@ import {
   searched,
   type ToolInputMatch,
 } from './assert.ts'
-import { isObjectLike } from './object.ts'
+import { isObjectLike, isThenable } from './object.ts'
 import type { ExecResult, JudgeFailure, Verdict } from './types.ts'
 
 /** How the matcher was called: `not` is `expect(…).not`, which a matcher may answer itself. */
@@ -52,9 +52,6 @@ const show = (value: unknown): string => {
     return String(value)
   }
 }
-
-const isThenable = (value: unknown): value is PromiseLike<unknown> =>
-  isObjectLike(value) && typeof value.then === 'function'
 
 function succeeded(actual: unknown): Result {
   const r = actual as ExecResult
@@ -135,7 +132,7 @@ export const MATCHERS = {
     },
   ),
 
-  // Synchronous on a result; only `c.exec()`'s promise, unawaited, makes it async.
+  // Synchronous on a result; only `c.exec()`'s promise makes it async.
   toSucceed: matcher((actual, _: []): Result | Promise<Result> =>
     isThenable(actual) ? Promise.resolve(actual).then(succeeded) : succeeded(actual),
   ),

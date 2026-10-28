@@ -1,6 +1,13 @@
 // Which subjects each of reeval's matchers takes, as the published types say: `types.test.ts`
 // typechecks this file against dist/, so each `@ts-expect-error` must stay an error.
-import { type AttemptContext, evaluate, expect } from 'reeval'
+import { type AttemptContext, type ExecResult, evaluate, expect } from 'reeval'
+
+// A subject typed by a type parameter can't be told apart: name its type on `expect`.
+export function succeeds<R extends ExecResult>(result: R) {
+  // @ts-expect-error a constrained type parameter is not resolved
+  expect(result).toSucceed()
+  expect<ExecResult>(result).toSucceed()
+}
 
 evaluate('matchers', async (c: AttemptContext) => {
   const turn = await c.send('write greet.js')
@@ -40,6 +47,9 @@ evaluate('matchers', async (c: AttemptContext) => {
   expect(c).toHaveCalledSkill('greet')
   expect(c).toHaveCalledMcp('docs', 'search')
   expect(turn).toHaveCalledTool(/read/)
+  const polled: Promise<void> = expect.poll(() => c).toHaveRun('npm test')
+  await polled
+  await expect(c.send('again')).resolves.toHaveEdited('greet.js')
   // @ts-expect-error a turn is not a verdict
   expect(turn).toPass()
   // @ts-expect-error nor an exec result

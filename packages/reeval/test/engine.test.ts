@@ -1791,7 +1791,10 @@ evaluate('huge diff', async () => {
     )
     // A check that would pass still fails its eval unawaited, and it finished before teardown.
     assert.equal(byName['unawaited pass']?.trial.outcome, 'fail', out)
-    assert.match(byName['unawaited pass']?.error?.message ?? '', /toSucceed\(\) at evals\/exec\.eval\.ts:\d+ wasn't awaited/)
+    assert.match(
+      byName['unawaited pass']?.error?.message ?? '',
+      /toSucceed\(\) at evals\/exec\.eval\.ts:\d+ wasn't awaited/,
+    )
     assert.equal(byName['unawaited pass']?.trial.checks[0]?.exitCode, 0, 'the check completed')
     assert.equal(byName.awaited?.trial.outcome, 'pass', out)
     assert.equal(run.summary.fail, 2)

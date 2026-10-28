@@ -20,8 +20,9 @@ import {
   setState,
   type Tester,
 } from '@vitest/expect'
-import { relativeFile } from '../ids.ts'
+import { fromCwd } from '../ids.ts'
 import type { MATCHERS, MatcherArgs, MatcherName } from '../matchers.ts'
+import { isThenable } from '../object.ts'
 import type { AttemptContext, ExecResult, JudgeFailure, Turn, Verdict } from '../types.ts'
 import { comparable } from './errors.ts'
 
@@ -100,25 +101,25 @@ declare module '@vitest/expect' {
     toHaveFile: On<T, 'toHaveFile', (path: string, pattern?: RegExp | string) => Promise<void>>
     /** The command exited 0. Async only on `c.exec()`'s promise; an awaited result is checked at once. */
     toSucceed: On<T, 'toSucceed', () => T extends PromiseLike<unknown> ? Promise<void> : R>
-    toHaveSearched: On<T, 'toHaveSearched', (query?: RegExp | string) => void>
-    toHaveFetched: On<T, 'toHaveFetched', (url?: RegExp | string) => void>
-    toHaveCalledSkill: On<T, 'toHaveCalledSkill', (name: string) => void>
+    toHaveSearched: On<T, 'toHaveSearched', (query?: RegExp | string) => R>
+    toHaveFetched: On<T, 'toHaveFetched', (url?: RegExp | string) => R>
+    toHaveCalledSkill: On<T, 'toHaveCalledSkill', (name: string) => R>
     toHaveCalledMcp: On<
       T,
       'toHaveCalledMcp',
-      (server: string, tool: string, input?: string | RegExp | Record<string, unknown>) => void
+      (server: string, tool: string, input?: string | RegExp | Record<string, unknown>) => R
     >
     toHaveCalledTool: On<
       T,
       'toHaveCalledTool',
-      (name: string | RegExp, input?: string | RegExp | Record<string, unknown>) => void
+      (name: string | RegExp, input?: string | RegExp | Record<string, unknown>) => R
     >
-    toHaveRun: On<T, 'toHaveRun', (command?: RegExp | string) => void>
-    toHaveEdited: On<T, 'toHaveEdited', (path?: RegExp | string) => void>
+    toHaveRun: On<T, 'toHaveRun', (command?: RegExp | string) => R>
+    toHaveEdited: On<T, 'toHaveEdited', (path?: RegExp | string) => R>
     toHaveChanged: On<
       T,
       'toHaveChanged',
-      (paths?: string | RegExp | ReadonlyArray<string | RegExp>) => void
+      (paths?: string | RegExp | ReadonlyArray<string | RegExp>) => R
     >
     /** The judge's verdict passed. */
     toPass: On<T, 'toPass', () => R>
@@ -467,15 +468,10 @@ export type Pending = {
   assertion: string
   settled: Promise<unknown>
   observed: boolean
-  /** The stack where the eval called the matcher. */
-  site?: string
+  /** Made where the eval called the matcher; its stack is read only when it wasn't awaited. */
+  site?: Error
 }
 const currentPending = new AsyncLocalStorage<Pending[]>()
-
-const isThenable = (value: unknown): value is PromiseLike<unknown> =>
-  typeof value === 'object' &&
-  value !== null &&
-  typeof (value as Promise<unknown>).then === 'function'
 
 /**
  * Wraps an assertion chain so each promise one of its matchers returns is tracked: an eval that
@@ -497,7 +493,7 @@ function tracked<T extends object>(assertion: T, pending: Pending[], path: strin
               (error: unknown) => error ?? new Error(`${name}() failed`),
             ),
             observed: false,
-            site: new Error().stack,
+            site: new Error(),
           }
           pending.push(entry)
           const observe = <R>(fn: (p: Promise<unknown>) => R) => {
@@ -572,10 +568,13 @@ export function attemptRecordings(): RawAssertion[] {
 function lineIn(site: string | undefined, file: string): string | undefined {
   const want = comparable(file.startsWith('file:') ? fileURLToPath(file) : file)
   for (const frame of site?.split('\n').slice(1) ?? []) {
-    const at = /\(?((?:file:\/\/)?[^\s()]+?):(\d+):\d+\)?$/.exec(frame.trim())
-    if (!at?.[1]) continue
-    const path = at[1].startsWith('file:') ? fileURLToPath(at[1]) : at[1]
-    if (comparable(path) === want) return `${relativeFile(process.cwd(), path)}:${at[2]}`
+    // `at fn (path:line:col)` or `at path:line:col`; a path may have spaces and parentheses.
+    const at = /\((.+):(\d+):\d+\)$|^at (?:async )?(.+):(\d+):\d+$/.exec(frame.trim())
+    if (!at) continue
+    const [, inCall, callLine, bare, bareLine] = at
+    const found = (inCall ?? bare) as string
+    const path = found.startsWith('file:') ? fileURLToPath(found) : found
+    if (comparable(path) === want) return `${fromCwd(path)}:${callLine ?? bareLine}`
   }
   return undefined
 }
@@ -596,7 +595,8 @@ export async function unawaitedError(
     0,
     outcomes.findIndex((o) => o !== undefined),
   )
-  const where = file && lineIn(missed[i]?.site, file)
+  const site = missed[i]?.site?.stack
+  const where = file && lineIn(site, file)
   const hint = `${missed[i]?.assertion}${where ? ` at ${where}` : ''} wasn't awaited. Its check is async: write \`await ${missed[i]?.assertion}\`.`
   const failure = outcomes[i]
   if (failure instanceof Error) {
@@ -605,7 +605,6 @@ export async function unawaitedError(
   }
   const error = new Error(hint)
   error.name = 'AssertionError'
-  const site = missed[i]?.site
   if (site) error.stack = `AssertionError: ${hint}\n${site.split('\n').slice(1).join('\n')}`
   return error
 }

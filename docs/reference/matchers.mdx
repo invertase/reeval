@@ -36,6 +36,8 @@ error TS2349: This expression is not callable.
   Type 'WrongSubject<"toPass() takes the verdict from await c.judge()">' has no call signatures.
 ```
 
+In a generic helper, TypeScript can't resolve a subject typed by a type parameter, such as `<R extends ExecResult>(r: R)`. Name the type on `expect`: `expect<ExecResult>(r).toSucceed()`.
+
 <Info>
 TypeScript can't flag a missing `await`. A linter with type information can: typescript-eslint's `@typescript-eslint/no-floating-promises` rule flags an unawaited `toHaveFile()` or `expect(c.exec(…)).toSucceed()`.
 </Info>
