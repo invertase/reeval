@@ -135,7 +135,7 @@ export type CaptureUse = { model: string } | { fake: CaptureUseScript }
 export type CaptureOptions = {
   /** The window and saved PNG size, or `'full-page'`. Default 1280×720. */
   viewport?: Viewport
-  /** How long to poll before failing. Default `'60s'`. */
+  /** How long to poll before failing; a 502, 503 or 504 is polled past until then. Default `'60s'`. */
   timeout?: Duration
   /** `false` refuses the host `chrome-headless-shell` binary. `c.capture()` then throws. */
   browser?: boolean

@@ -8,6 +8,8 @@ export const SERVE_TIMEOUT_MS = 120_000
  */
 export const SETTLE_MS = 3_000
 const POLL_MS = 200
+/** How many of the command's last lines an error shows. */
+const OUTPUT_LINES = 20
 
 /** A TCP listener in the sandbox's network namespace, from `/proc/net/tcp` or `tcp6`. */
 export type Listener = { port: number; address: string }
@@ -119,12 +121,15 @@ export function decide(s: ServeState): ServeDecision {
   return late ? { kind: 'timeout', ports } : { kind: 'wait' }
 }
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI colors start with ESC
+const plain = (output: string) => output.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
+
 /** The URLs `output` prints on one of `ports`, as Vite's `Local: http://localhost:5173/`. */
 export function printedUrls(output: string, ports: number[]): { url: string; port: number }[] {
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI colors
-  const plain = output.replace(/\x1b\[[0-9;]*m/g, '')
   const found = new Map<string, number>()
-  for (const m of plain.matchAll(/https?:\/\/(?:\[[0-9a-f:]+\]|[^\s/:[\]]+):(\d+)[^\s'"]*/gi)) {
+  for (const m of plain(output).matchAll(
+    /https?:\/\/(?:\[[0-9a-f:]+\]|[^\s/:[\]]+):(\d+)[^\s'"]*/gi,
+  )) {
     const port = Number(m[1])
     if (ports.includes(port) && !found.has(m[0])) found.set(m[0], port)
   }
@@ -155,7 +160,7 @@ export type ServeWatch = {
   /** The ports that listened before the command started. */
   before: ReadonlySet<number>
   probe(): Promise<ServeProbe>
-  /** The last lines the command printed, for an error. */
+  /** What the command printed, or its end, for an error. */
   output(): Promise<string>
   signal?: AbortSignal
   timeoutMs?: number
@@ -190,9 +195,14 @@ export async function awaitListening(command: string, w: ServeWatch): Promise<Se
   const started = Date.now()
   let last = ''
   let changed = started
-  const output = async () => (await w.output().catch(() => '')).trim()
+  const output = async () => plain(await w.output().catch(() => ''))
   const fail = async (why: string, out?: string) => {
-    const tail = out ?? (await output())
+    const tail = (out ?? (await output()))
+      .trimEnd()
+      .split('\n')
+      .slice(-OUTPUT_LINES)
+      .join('\n')
+      .trim()
     return new Error(
       `c.serve(${JSON.stringify(command)}) ${why}${tail ? `. Its last output:\n${tail}` : ''}`,
     )

@@ -170,6 +170,34 @@ test('awaitListening fails with the last output, naming the ports and the hint',
   )
 })
 
+test('awaitListening finds a URL printed before its last lines and shows them without colors', async () => {
+  const noise = Array.from({ length: 30 }, (_, i) => `\x1b[2mline ${i}\x1b[22m`).join('\n')
+  await assert.rejects(
+    awaitListening('npm run dev & npm run storybook', {
+      want: 4000,
+      given: false,
+      before: new Set(),
+      probe: async () => ({
+        proc: true,
+        alive: true,
+        listeners: on([5173, '::1'], [6006, '127.0.0.1']),
+      }),
+      output: async () =>
+        `  ➜  Local:   \x1b[36mhttp://localhost:\x1b[1m5173\x1b[22m/\x1b[39m\n${noise}\n`,
+      timeoutMs: 60_000,
+    }),
+    (error: Error) => {
+      assert.match(
+        error.message,
+        /It printed http:\/\/localhost:5173\/\. Pass .*, 5173\)\. Its last output:\nline 10\n/,
+      )
+      assert.ok(!error.message.includes('\x1b'))
+      assert.ok(!error.message.includes('line 9\n'))
+      return true
+    },
+  )
+})
+
 test('awaitListening names the new ports when a given port never listens', async () => {
   await assert.rejects(
     awaitListening('redis-server & npm start', {

@@ -200,7 +200,7 @@ export async function serveCommand(
     before,
     signal: a.signal,
     probe: () => look(pid),
-    output: async () => (await box.exec(`tail -n 20 ${log} 2>/dev/null`)).stdout,
+    output: async () => (await box.exec(`tail -c 65536 ${log} 2>/dev/null`)).stdout,
     ...(tables ? { hostListening: async () => '' } : {}),
   }).catch(async (error: Error) => {
     await handle.kill()
