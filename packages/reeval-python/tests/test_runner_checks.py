@@ -112,7 +112,8 @@ def _host(tmp_path: Path, **kwargs: bool) -> Host:
 
 
 def _records(host: Host) -> list[dict[str, object]]:
-    return [c for c in host.calls() if c["op"] == "record"]
+    """The record calls, less each one's `at` (its file and line), which test_checks covers."""
+    return [{k: v for k, v in c.items() if k != "at"} for c in host.calls() if c["op"] == "record"]
 
 
 def test_an_async_body_records_awaited_compares_and_its_traceback_ends_in_the_eval(

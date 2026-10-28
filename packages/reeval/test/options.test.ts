@@ -69,7 +69,7 @@ group('g', { runs: 2 }, () => {
     assert.match(r.stdout, /^\[writes#2 bad\] ▶ evals\/m\.eval\.ts › g › writes ok\.txt$/m)
     assert.match(
       r.stdout,
-      /^fail {13}g › writes ok\.txt\n {2}harness {14}pass\n {2}good {17}2 of 2\n {2}bad {18}0 of 2\n {4}toHaveFile ok\.txt {2}0 of 2\n/m,
+      /^fail {13}g › writes ok\.txt\n {2}harness {14}pass\n {2}good {17}2 of 2\n {2}bad {18}0 of 2\n {4}toHaveFile ok\.txt {2}0 of 2 {2}evals\/m\.eval\.ts:6\n/m,
     )
     assert.match(r.stdout, /^1 fail$/m)
     const thirds = await project('matrix-thirds', {

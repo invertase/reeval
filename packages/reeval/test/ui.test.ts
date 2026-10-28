@@ -363,6 +363,85 @@ describe('plain renderer', () => {
     )
   })
 
+  test('every failed check prints with its line, and GitHub Actions annotates each one', () => {
+    const checked: EvalResult = {
+      ...defaultResult,
+      meta: {
+        outcome: 'fail',
+        errorKind: 'assertion',
+        judgements: [],
+        recordPath: '',
+        failedChecks: [
+          {
+            label: 'toBe 2',
+            at: 'evals/hello.eval.ts:31',
+            message: 'expected 1 to be 2 // Object.is equality',
+          },
+          {
+            label: 'tests pass',
+            at: 'evals/hello.eval.ts:33',
+            message: 'tests pass: expected command to succeed, exit code 1',
+          },
+          { label: 'names it', message: 'names it: expected 1 to be 3' },
+        ],
+      },
+    }
+    const events = interleaved.map((e) =>
+      e.type === 'eval-end' && e.result === defaultResult ? { ...e, result: checked } : e,
+    )
+    const out = render(events, options({ githubActions: true, logPrefix: 'none' })).split('\n')
+    const at = out.indexOf('  ❯ evals/hello.eval.ts:31:20')
+    assert.deepEqual(out.slice(at + 1, at + 6), [
+      ' ✗ tests pass  evals/hello.eval.ts:33  expected command to succeed, exit code 1',
+      ' ✗ names it  expected 1 to be 3',
+      '::error file=evals/hello.eval.ts,line=31,title=evals/hello.eval.ts › greet module › adds a default name in a follow-up turn%3A toBe 2::expected 1 to be 2 // Object.is equality',
+      '::error file=evals/hello.eval.ts,line=33,title=evals/hello.eval.ts › greet module › adds a default name in a follow-up turn%3A tests pass::tests pass: expected command to succeed, exit code 1',
+      out[at + 5],
+    ])
+    assert.doesNotMatch(out[at + 5] ?? '', /^::error/, 'one annotation per check, not the attempt')
+  })
+
+  test("the attempt's own error is annotated too when it isn't one of its failed checks", () => {
+    const long = `expected ${'x'.repeat(600)} to be 2`
+    const thrown: EvalResult = {
+      ...defaultResult,
+      errors: ['Error: user code bug'],
+      formattedErrors: ['Error: user code bug\n ❯ evals/hello.eval.ts:40:9'],
+      meta: {
+        outcome: 'fail',
+        errorKind: 'assertion',
+        judgements: [],
+        recordPath: '',
+        failedChecks: [
+          { label: 'soft one', at: 'evals/hello.eval.ts:31', message: 'soft one: no' },
+        ],
+      },
+    }
+    const clipped: EvalResult = {
+      ...defaultResult,
+      errors: [long],
+      formattedErrors: [long],
+      meta: {
+        outcome: 'fail',
+        errorKind: 'assertion',
+        judgements: [],
+        recordPath: '',
+        failedChecks: [{ label: 'long', message: `${long.slice(0, 499)}…` }],
+      },
+    }
+    for (const [result, annotations, listed] of [
+      [thrown, 2, 1],
+      [clipped, 1, 0],
+    ] as const) {
+      const events = interleaved.map((e) =>
+        e.type === 'eval-end' && e.result === defaultResult ? { ...e, result } : e,
+      )
+      const out = render(events, options({ githubActions: true, logPrefix: 'none' }))
+      assert.equal(out.match(/^::error /gm)?.length, annotations, out)
+      assert.equal(out.match(/^ ✗ /gm)?.length ?? 0, listed, 'the error is not listed again')
+    }
+  })
+
   test('errors-only prints detail for failing attempts only', () => {
     const out = render(interleaved, options({ outputLogs: 'errors-only', logOrder: 'stream' }))
     assert.doesNotMatch(out, /\[creates#1 cursor\] {2}\+/)

@@ -197,7 +197,7 @@ describe('one matcher table', () => {
           matcher,
           args,
           not,
-          soft: false,
+          soft: true,
           ...(label ? { label } : {}),
         } as ExpectCall
         replies.push(recorded(await expectCall(c, calls, call)))

@@ -180,6 +180,7 @@ export const assertionRecordSchema = z.strictObject({
   matcher: z.string(),
   status: z.enum(['pass', 'fail', 'error']),
   soft: z.boolean(),
+  at: z.string().optional(),
   message: z.string().optional(),
   durationMs: z.number().optional(),
 })
@@ -405,6 +406,13 @@ export const judgeCallDataSchema = z
     "`c.judge()`'s options as data: the judge options, with the model by name or a fake judge's numeric score, the inputs it shows the judge (at least one turned on) and `on`.",
   )
 
+const callSiteSchema = z
+  .strictObject({
+    file: nonEmpty.describe('The eval file: absolute, or relative to the project root.'),
+    line: z.number().int().min(1).describe('From 1.'),
+  })
+  .describe("Where the eval made the call, which the record names beside the check's outcome.")
+
 export const attemptCallSchema = z
   .discriminatedUnion('op', [
     z
@@ -481,8 +489,11 @@ export const attemptCallSchema = z
         not: z.boolean().describe('Called as `expect(…).not`.'),
         soft: z
           .boolean()
-          .describe('Called as `expect.soft`: a failure fails the attempt at its end.'),
+          .describe(
+            'Called as `expect`: a failure fails the attempt at its end and the body carries on. False for `expect.require`, whose failure the runner raises, ending the body.',
+          ),
         label: z.string().optional().describe("`expect`'s second argument."),
+        at: callSiteSchema.optional(),
         poll: z
           .strictObject({
             interval: millisSchema.optional().describe('Milliseconds between tries. Default 50.'),
@@ -545,7 +556,10 @@ export const attemptCallSchema = z
         soft: z
           .boolean()
           .optional()
-          .describe('A failure fails the attempt at its end, as `expect.soft`. Default false.'),
+          .describe(
+            "The body carried on after a failure, as after an `expect`. Default false: the check raised, as Python's `assert` does.",
+          ),
+        at: callSiteSchema.optional(),
       })
       .describe(
         "A check the eval's own language made, such as Python's `assert`: recorded as a matcher call is, so it's named, counted and compared the same. Replies with its record.",
@@ -702,7 +716,7 @@ export const attemptDoneSchema = z
     type: z.literal('done'),
     error: attemptErrorSchema
       .optional()
-      .describe('What the body threw, if it threw. A failed `expect` (not soft) is one.'),
+      .describe('What the body threw, if it threw. A failed `expect.require` is one.'),
   })
   .describe(
     "The runner to reeval: the eval's body has finished. The attempt's checks and record follow.",

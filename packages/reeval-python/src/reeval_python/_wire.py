@@ -48,8 +48,12 @@ class AntigravityHarnessDescriptor(TypedDict):
     startTimeout: NotRequired[Duration]
 
 
-# One `expect` or `expect.soft` matcher call an attempt made.
+# One `expect` or `expect.require` matcher call an attempt made, or a check another language
+# made.
 class AssertionRecord(TypedDict):
+    # `path:line` of the call in the eval file, relative to the project root, when reeval saw
+    # it.
+    at: NotRequired[str]
     # Async matchers only (`toHaveFile`, `toSucceed`, `.resolves`, `expect.poll`).
     durationMs: NotRequired[float]
     # `label` is the supplied `expect` label. Without one, it is the matcher plus its first
@@ -62,6 +66,8 @@ class AssertionRecord(TypedDict):
     matcher: str
     # Why it failed or couldn't answer, cut at 1 KB.
     message: NotRequired[str]
+    # A failure didn't end the eval's body: an `expect`. False for `expect.require` and for a
+    # check that threw, such as Python's `assert`, which end the body when they fail.
     soft: bool
     # `error`: the matcher couldn't answer (a subject it can't read, an event the harness
     # doesn't report).
@@ -152,6 +158,14 @@ class AttemptCallWriteFile(TypedDict):
     path: str
 
 
+# Where the eval made the call, which the record names beside the check's outcome.
+class AttemptCallExpectAt(TypedDict):
+    # The eval file: absolute, or relative to the project root.
+    file: str
+    # From 1.
+    line: int
+
+
 # `expect.poll`: reeval re-reads the subject and retries the matcher until it passes, recording
 # only the final outcome. The subject must be one reeval can re-read: the attempt, a command or
 # a file.
@@ -167,6 +181,7 @@ AttemptCallExpect = TypedDict(
     "AttemptCallExpect",
     {
         "args": "list[MatcherArg]",
+        "at": "NotRequired[AttemptCallExpectAt]",
         "label": "NotRequired[str]",
         "matcher": "str",
         "not": "bool",
@@ -178,9 +193,19 @@ AttemptCallExpect = TypedDict(
 )
 
 
+# Where the eval made the call, which the record names beside the check's outcome.
+class AttemptCallRecordAt(TypedDict):
+    # The eval file: absolute, or relative to the project root.
+    file: str
+    # From 1.
+    line: int
+
+
 # A check the eval's own language made, such as Python's `assert`: recorded as a matcher call
 # is, so it's named, counted and compared the same. Replies with its record.
 class AttemptCallRecord(TypedDict):
+    # Where the eval made the call, which the record names beside the check's outcome.
+    at: NotRequired[AttemptCallRecordAt]
     # The check's own name, the same whether it passes or fails.
     label: NotRequired[str]
     # What made the check in the eval's language, e.g. `assert`.
@@ -188,7 +213,8 @@ class AttemptCallRecord(TypedDict):
     # Why it failed.
     message: NotRequired[str]
     op: Literal["record"]
-    # A failure fails the attempt at its end, as `expect.soft`. Default false.
+    # The body carried on after a failure, as after an `expect`. Default false: the check
+    # raised, as Python's `assert` does.
     soft: NotRequired[bool]
     status: Literal["pass", "fail"]
     # What it checked, as the eval wrote it (`result.ok`): names the check when it has no label.
@@ -211,7 +237,7 @@ AttemptCall: TypeAlias = "AttemptCallSend | AttemptCallExec | AttemptCallServe |
 
 # The runner to reeval: the eval's body has finished. The attempt's checks and record follow.
 class AttemptDone(TypedDict):
-    # What the body threw, if it threw. A failed `expect` (not soft) is one.
+    # What the body threw, if it threw. A failed `expect.require` is one.
     error: NotRequired[AttemptError]
     type: Literal["done"]
 

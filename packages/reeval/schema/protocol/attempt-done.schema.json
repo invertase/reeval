@@ -9,7 +9,7 @@
       "type": "object",
       "properties": {
         "error": {
-          "description": "What the body threw, if it threw. A failed `expect` (not soft) is one.",
+          "description": "What the body threw, if it threw. A failed `expect.require` is one.",
           "$ref": "#/$defs/AttemptError"
         },
         "type": {

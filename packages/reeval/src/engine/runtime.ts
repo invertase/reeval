@@ -25,7 +25,7 @@ export type TestHandle = {
   unawaited(): Promise<Error | undefined>
   /** What `expect.assertions` or `expect.hasAssertions` left unmet. */
   expectError(): Error | undefined
-  /** The attempt's `expect` and `expect.soft` matcher calls that have settled, in call order. */
+  /** The attempt's `expect` and `expect.require` matcher calls that have settled, in call order. */
   assertions(): RawAssertion[]
 }
 

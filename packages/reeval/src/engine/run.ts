@@ -131,6 +131,7 @@ async function runTest(
     type: 'test',
     name: test.name,
     fullTestName: [...test.groups, test.name].join(' > '),
+    file,
   }
   const own = createExpect(task)
   const pending: Pending[] = []

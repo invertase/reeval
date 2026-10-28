@@ -217,6 +217,25 @@
                 "$ref": "#/$defs/MatcherArg"
               }
             },
+            "at": {
+              "description": "Where the eval made the call, which the record names beside the check's outcome.",
+              "type": "object",
+              "properties": {
+                "file": {
+                  "description": "The eval file: absolute, or relative to the project root.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "line": {
+                  "description": "From 1.",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["file", "line"],
+              "additionalProperties": false
+            },
             "label": {
               "description": "`expect`'s second argument.",
               "type": "string"
@@ -254,7 +273,7 @@
               "additionalProperties": false
             },
             "soft": {
-              "description": "Called as `expect.soft`: a failure fails the attempt at its end.",
+              "description": "Called as `expect`: a failure fails the attempt at its end and the body carries on. False for `expect.require`, whose failure the runner raises, ending the body.",
               "type": "boolean"
             },
             "subject": {
@@ -268,6 +287,25 @@
           "description": "A check the eval's own language made, such as Python's `assert`: recorded as a matcher call is, so it's named, counted and compared the same. Replies with its record.",
           "type": "object",
           "properties": {
+            "at": {
+              "description": "Where the eval made the call, which the record names beside the check's outcome.",
+              "type": "object",
+              "properties": {
+                "file": {
+                  "description": "The eval file: absolute, or relative to the project root.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "line": {
+                  "description": "From 1.",
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["file", "line"],
+              "additionalProperties": false
+            },
             "label": {
               "description": "The check's own name, the same whether it passes or fails.",
               "type": "string"
@@ -286,7 +324,7 @@
               "const": "record"
             },
             "soft": {
-              "description": "A failure fails the attempt at its end, as `expect.soft`. Default false.",
+              "description": "The body carried on after a failure, as after an `expect`. Default false: the check raised, as Python's `assert` does.",
               "type": "boolean"
             },
             "status": {

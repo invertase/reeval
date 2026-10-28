@@ -1344,9 +1344,20 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'assert.named-checks',
     area: 'Judges and matchers',
-    name: "Named check results: `expect(value, 'label')`, every `expect` and `expect.soft` recorded per attempt, tallied per cell, and checks that don't discriminate in a compare",
+    name: "Named check results: `expect(value, 'label')`, every `expect` and `expect.require` recorded per attempt, tallied per cell, and checks that don't discriminate in a compare",
     fixtures: ['assert/labeled', 'compare/check-not-run'],
     unit: ['reeval/test/engine-expect.test.ts', 'reeval/test/checks.test.ts'],
+  },
+  {
+    id: 'assert.soft-default',
+    area: 'Judges and matchers',
+    name: "Checks don't stop the eval: a failed `expect` is recorded and the body carries on, a failed `expect.require` ends it, and the result lists every failed check with its label and line",
+    fixtures: ['assert/soft-default', 'output/not-run'],
+    unit: [
+      'reeval/test/engine-expect.test.ts',
+      'reeval/test/engine.test.ts',
+      'reeval/test/ui.test.ts',
+    ],
   },
   {
     id: 'assert',

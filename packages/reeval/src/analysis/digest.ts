@@ -53,7 +53,7 @@ export type DigestAttempt = {
   outcome: AttemptRecord['outcome']
   tools: number
   agentS: number
-  /** Assertions (`expect` and `expect.soft`) passed over those that settled. */
+  /** Assertions (`expect` and `expect.require`) passed over those that settled. */
   checks?: string
   /** The labels of the assertions that failed or couldn't answer. */
   failed?: string[]

@@ -955,7 +955,7 @@ function liftOf(control: CellRecord, variant: CellRecord, pooled: boolean): Lift
 /**
  * Each cell's checks: every label any attempt of the eval recorded, tallied over the cell's
  * counted attempts (pass or fail). An attempt that counted without reaching a label, because
- * a hard `expect` before it failed, counts it `notRun`.
+ * an `expect.require` or a thrown error before it ended the body, counts it `notRun`.
  */
 function checkTallies(entry: EvalEntry): void {
   const labels = [

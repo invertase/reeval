@@ -268,7 +268,7 @@ export type AttemptRecord = {
     /** Every try, in order, when it was given `retries`; its log has each try's output. */
     tries?: ExecTry[]
   }>
-  /** Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none. */
+  /** Every `expect` and `expect.require` matcher call that settled, in call order; unset with none. */
   assertions?: AssertionRecord[]
   /** Files under a dependency directory, such as the `node_modules/` directory or `.venv/` directory, collapse to one entry with `count`. */
   changedFiles: Array<FileChange & { count?: number }>

@@ -13,4 +13,5 @@ async def expect_(c):
     ready = expect.poll(lambda: c.read_file("ready.txt"), interval=0.05, timeout=10)
     await ready.to_be("ready\n")
     await expect.poll(c, "the server is ready", timeout=10).to_have_file("ready.txt")
-    await expect.soft("draft", "the copy is final").to_be("final")
+    await expect("draft", "the copy is final").to_be("final")
+    await c.read_file("greet.js")

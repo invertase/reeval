@@ -2244,10 +2244,44 @@ export const features: Feature[] = [
           labelled: true,
           matcher: 'toHaveFile',
           status: 'pass',
-          soft: false,
+          soft: true,
+          at: 'evals/lands.eval.ts:7',
         },
       ])
       assert.equal(recorded('canary')?.[0]?.status, 'fail')
+    },
+  },
+  {
+    dir: 'assert/soft-default',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    lands: {
+      outcome: 'fail',
+      error: { kind: 'assertion', message: /^gate: expected command to succeed, exit code 3/ },
+    },
+    canary: /carried on past a failed expect/,
+    record: ({ run, stdout }) => {
+      const lands = run.evals.find((e) => e.name === 'lands')?.attempts[0]
+      assert.deepEqual(
+        lands?.assertions?.map((x) => [x.label, x.status, x.soft, x.at]),
+        [
+          ['says nope', 'fail', true, 'evals/lands.eval.ts:8'],
+          ['is the second', 'fail', true, 'evals/lands.eval.ts:9'],
+          ['writes the marker', 'pass', true, 'evals/lands.eval.ts:10'],
+          ['gate', 'fail', false, 'evals/lands.eval.ts:11'],
+        ],
+        'every failed expect is recorded, and nothing runs after the failed expect.require',
+      )
+      const block = blockOf(stdout, 'lands')
+      for (const [label, line] of [
+        ['says nope', 8],
+        ['is the second', 9],
+        ['gate', 11],
+      ])
+        assert.match(
+          block,
+          new RegExp(`^ {2}${label} +failed {2}evals/lands\\.eval\\.ts:${line}$`, 'm'),
+        )
     },
   },
   {
@@ -2291,7 +2325,8 @@ export const features: Feature[] = [
           labelled: false,
           matcher: 'toSucceed',
           status: 'pass',
-          soft: false,
+          soft: true,
+          at: 'evals/lands.eval.ts:7',
         },
       ])
       assert.equal(recorded('canary')?.[0]?.status, 'fail')
@@ -2664,7 +2699,7 @@ export const features: Feature[] = [
       assert.equal(blockOf(stdout, 'lands'), 'pass             lands')
       assert.equal(
         blockOf(stdout, 'canary'),
-        'fail             canary\n  second try       failed\n    expected 1 to be 2 // Object.is equality',
+        'fail             canary\n  second try       failed  evals/canary.eval.ts:5\n    expected 1 to be 2 // Object.is equality',
       )
       assert.ok(stdout.endsWith('\n1 fail · 1 pass\n'), stdout)
     },
@@ -2735,7 +2770,7 @@ export const features: Feature[] = [
       )
       assert.match(
         blockOf(stdout, 'canary'),
-        /\n {2}writer {12}1 of 1\n {2}idler {13}0 of 1\n {4}writes out\.txt {2}failed\n {6}expected file out\.txt to exist$/,
+        /\n {2}writer {12}1 of 1\n {2}idler {13}0 of 1\n {4}writes out\.txt {2}failed {2}evals\/canary\.eval\.ts:7\n {6}expected file out\.txt to exist$/,
       )
     },
   },
@@ -2798,7 +2833,7 @@ export const features: Feature[] = [
       )
       assert.match(
         stdout,
-        /\n {17}canary %s\n {2}pass {2}red {8}1 of 1\n {2}fail {2}green {6}0 of 1\n {4}is red {9}failed\n {6}expected 'green' to be 'red'/,
+        /\n {17}canary %s\n {2}pass {2}red {8}1 of 1\n {2}fail {2}green {6}0 of 1\n {4}is red {9}failed {2}evals\/canary\.eval\.ts:5\n {6}expected 'green' to be 'red'/,
       )
       assert.match(stdout, /\n1 fail · 3 pass\n/)
     },
@@ -2991,7 +3026,7 @@ export const features: Feature[] = [
       assert.deepEqual(
         assertions('caught expect'),
         [['missing file', 'fail']],
-        'a failed expect the body catches is a failed check, recorded with its own message',
+        'a failed expect.require the body catches is a failed check, recorded with its own message',
       )
       assert.deepEqual(
         assertions('assert retries'),

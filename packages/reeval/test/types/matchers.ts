@@ -16,7 +16,7 @@ evaluate('matchers', async (c: AttemptContext) => {
 
   expect(result).toSucceed()
   expect(result).not.toSucceed()
-  expect.soft(result).toSucceed()
+  expect.require(result).toSucceed()
   // @ts-expect-error a settled result is checked at once: no promise to await
   void expect(result).toSucceed().then
   await expect(c.exec('npm test')).toSucceed()
@@ -31,7 +31,7 @@ evaluate('matchers', async (c: AttemptContext) => {
 
   expect(verdict).toPass()
   expect(verdict).not.toPass()
-  expect.soft(verdict).toPass()
+  expect.require(verdict).toPass()
   // @ts-expect-error a verdict is not an exec result
   expect(verdict).toSucceed()
   // @ts-expect-error toPass takes the awaited verdict

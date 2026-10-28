@@ -16,15 +16,17 @@ group(
     evaluate('fixes the config and the eval', async (c) => {
       const turn = await c.send(task)
       const { exitCode, plan } = await dryRun(c)
-      expect.soft(exitCode, 'reeval run --dry-run exits 0').toBe(0)
-      expect
-        .soft(plan?.totals, 'plans 2 cells and 6 attempts')
-        .toMatchObject({ evals: 1, cells: 2, attempts: 6 })
+      expect(exitCode, 'reeval run --dry-run exits 0').toBe(0)
+      expect(plan?.totals, 'plans 2 cells and 6 attempts').toMatchObject({
+        evals: 1,
+        cells: 2,
+        attempts: 6,
+      })
       const variant = plan?.evals[0]?.cells.find((cell) => cell.role === 'variant')
-      expect.soft(variant?.environment, 'with-docs is the variant').toBe('with-docs')
-      await expect.soft(c.exec(runsOnFake), 'passes on the fake config').toSucceed()
-      expect.soft(c, 'leaves docs/ alone').not.toHaveChanged(['docs/**'])
-      expect.soft(turn.text, 'names the missing await').toMatch(/await/i)
+      expect(variant?.environment, 'with-docs is the variant').toBe('with-docs')
+      await expect(c.exec(runsOnFake), 'passes on the fake config').toSucceed()
+      expect(c, 'leaves docs/ alone').not.toHaveChanged(['docs/**'])
+      expect(turn.text, 'names the missing await').toMatch(/await/i)
     })
   },
 )

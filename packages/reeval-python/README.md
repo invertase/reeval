@@ -59,24 +59,33 @@ as in Python, and is recorded with its message and both sides of a comparison as
 (`greet.py exists: assert 1 == 2`). An `AssertionError` the body catches isn't a failed check, so
 a retry loop can assert; one the escaping error carries (each failure in a `TaskGroup`'s
 `ExceptionGroup`, or one an error was raised from or while handling) is. Use typed results (`ExecResult.ok`, `Verdict.passed`, `Turn.text`, …) and `c.file(path)`
-for quick checks. Keep `expect` for reeval matchers (`to_have_file`, `to_succeed`, soft checks,
+for quick checks. Keep `expect` for reeval matchers (`to_have_file`, `to_succeed`, checks that carry on,
 labels) — Playwright-style.
 
-#### What a caught failure counts as
+#### Checks carry on; `expect.require` is a gate
 
-A failed `expect` is a check the moment it fails: reeval records it before
-`ReevalAssertionError` reaches the body. One the body catches still fails the attempt when the
-body ends, as `expect.soft` does, and its error says the eval caught it. A plain `assert` the body
-catches records nothing, as in Python.
+A failed `expect` is recorded and the body carries on, so every later check and judge still runs;
+the attempt fails when the body ends. `expect.require` raises `ReevalAssertionError` instead, for a
+gate the rest depends on:
+
+```python
+c.send("Add a sign-up page")
+expect.require(c.exec("npm run build"), "builds").to_succeed()  # stops here if the build fails
+expect(c.exec("npm test"), "tests pass").to_succeed()  # recorded, carries on
+```
+
+reeval records a failed `expect.require` before the error reaches the body. One the body catches
+still fails the attempt when the body ends, and its error says the eval caught it. A plain
+`assert` the body catches records nothing, as in Python.
 
 | The body catches | Recorded | Fails the attempt |
 |---|---|---|
-| a failed `expect(…)` | a failed check | yes, when the body ends |
+| a failed `expect.require(…)` | a failed check | yes, when the body ends |
 | a failed `assert` | nothing | no |
 | neither (it escapes) | a failed check | yes |
 
 So retry with `expect.poll`, which retries the matcher and records only its final outcome, or with
-a plain `assert` or `if` in the loop, never `expect` in `try`/`except`:
+a plain `assert` or `if` in the loop, never `expect.require` in `try`/`except`:
 
 ```python
 # Retries the command until it succeeds, for up to 10 seconds: one check.

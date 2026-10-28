@@ -79,9 +79,13 @@
       "required": ["bytes", "mediaType", "name", "path", "sha256"]
     },
     "AssertionRecord": {
-      "description": "One `expect` or `expect.soft` matcher call an attempt made.",
+      "description": "One `expect` or `expect.require` matcher call an attempt made, or a check another language made.",
       "type": "object",
       "properties": {
+        "at": {
+          "description": "`path:line` of the call in the eval file, relative to the project root, when reeval saw it.",
+          "type": "string"
+        },
         "durationMs": {
           "description": "Async matchers only (`toHaveFile`, `toSucceed`, `.resolves`, `expect.poll`).",
           "type": "number"
@@ -103,6 +107,7 @@
           "type": "string"
         },
         "soft": {
+          "description": "A failure didn't end the eval's body: an `expect`. False for `expect.require` and for a check that threw, such as Python's `assert`, which end the body when they fail.",
           "type": "boolean"
         },
         "status": {
@@ -298,7 +303,7 @@
           }
         },
         "assertions": {
-          "description": "Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none.",
+          "description": "Every `expect` and `expect.require` matcher call that settled, in call order; unset with none.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/AssertionRecord"

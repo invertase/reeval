@@ -11,7 +11,7 @@ from stdio_host import Host
 
 EVALS = """
 import time
-from reeval_python import evaluate, expect, soft
+from reeval_python import aio, evaluate, expect
 
 
 @evaluate("sleeps then calls")
@@ -28,8 +28,21 @@ def calls(c):
 
 @evaluate("soft then more")
 def soft_then_more(c):
-    soft(c.exec("false")).to_succeed()
+    expect(c.exec("false")).to_succeed()
     c.exec("echo still-running")
+
+
+@evaluate("require stops")
+def require_stops(c):
+    expect(c.exec("echo first")).to_succeed()
+    expect.require(c.exec("false"), "builds").to_succeed()
+    c.exec("echo never")
+
+
+@evaluate("require poll stops")
+async def require_poll_stops(c):
+    await aio.expect.require.poll(lambda: c.exec("false"), timeout=0.1).to_succeed()
+    await c.exec("echo never")
 
 
 @evaluate("writes and judges")
@@ -119,3 +132,31 @@ def test_a_body_the_runner_cancels_without_an_abort_ends_with_an_error() -> None
             "error": {"name": "TimeoutError", "message": "Eval timed out after 1s"},
         },
     ]
+
+
+def test_a_failed_require_ends_the_body_with_its_message(host: Host) -> None:
+    host.start("require stops")
+    assert host.done()["error"]["message"] == "expected command to succeed"
+    commands = [c.get("command") for c in host.calls() if c["op"] == "exec"]
+    assert commands == ["echo first", "false"]
+    expects = [c for c in host.calls() if c["op"] == "expect"]
+    assert [(c["soft"], c.get("label")) for c in expects] == [(True, None), (False, "builds")]
+    assert all(c["at"]["file"].endswith("x.eval.py") for c in expects), expects
+    assert [c["at"]["line"] for c in expects] == [26, 27]
+
+
+def test_a_failed_require_poll_ends_the_body(host: Host) -> None:
+    host.start("require poll stops")
+    assert host.done()["error"]["message"] == "expected command to succeed"
+    [call] = [c for c in host.calls() if c["op"] == "expect"]
+    assert (call["soft"], call["poll"]) == (False, {"timeout": 100})
+    assert [c for c in host.calls() if c["op"] == "exec"] == []
+
+
+def test_expect_has_no_soft() -> None:
+    from reeval_python import expect as sync_expect
+    from reeval_python.aio import expect as async_expect
+
+    assert not hasattr(sync_expect, "soft")
+    assert not hasattr(async_expect, "soft")
+    assert not hasattr(sync_expect.require, "require")

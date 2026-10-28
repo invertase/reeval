@@ -81,7 +81,7 @@ describe('runTests', () => {
 
   test('a body that throws fails with its serialized error; one that passes carries its record', async () => {
     const collected = await tests(
-      ['fails', {}, async () => expect(1).toBe(2)],
+      ['fails', {}, async () => expect.require(1).toBe(2)],
       [
         'passes',
         {},
@@ -217,7 +217,7 @@ describe('runTests', () => {
     }
   })
 
-  test('unawaited assertions, expect.soft and expect.assertions reach the handle', async () => {
+  test('unawaited assertions, a recorded failure and expect.assertions reach the handle', async () => {
     let missed: Error | undefined
     let soft: unknown
     let counted: Error | undefined
@@ -234,7 +234,7 @@ describe('runTests', () => {
         'soft',
         {},
         async (h) => {
-          expect.soft(1).toBe(2)
+          expect(1).toBe(2)
           assert.equal(await h.unawaited(), undefined)
           soft = h.assertions()[0]?.error
         },
