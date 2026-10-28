@@ -74,6 +74,10 @@ class EvalOptions(TypedDict, total=False):
     """Attempts per cell, or `{"best_of": n}`, which gates each cell on its majority. Not on a
     compared eval."""
     sandbox: DockerSandbox | Mapping[str, Any]
+    snapshot: bool | Literal["turns"] | Mapping[str, Any]
+    """When each attempt's workspace is copied into its directory in `.reeval/runs`: `True` after
+    the checks, `"turns"` after each `send` too, `False` never, or `{"when": …, "compress": True}`
+    for `<name>.tar.gz` files. Default `True`."""
     revision: int | str
     """The eval's version, in its fingerprint: bump it when a helper, a constant outside the body
     or a fixture changes what it measures. A group's applies to evals inside that set none."""

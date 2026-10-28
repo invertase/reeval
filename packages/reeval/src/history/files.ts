@@ -314,14 +314,15 @@ const readIfThere = (path: string) =>
   })
 
 /**
- * Claims the run, then writes `<dir>/<runId>/` (artifacts), then `<dir>/<runId>.json` (the
- * record). The record lands last and create-only, so a reader never sees a half-written run, and
+ * Claims the run, then writes `<dir>/<runId>/` (artifacts, and the snapshots `moves` brings in
+ * by renaming), then `<dir>/<runId>.json` (the record). The record lands last and create-only, so a reader never sees a half-written run, and
  * a run is never rewritten, except an interrupted or budget-stopped one by its resumed run.
  */
 export async function writeRun(
   dir: string,
   record: RunRecord,
   artifacts: Map<string, Uint8Array>,
+  moves: Map<string, string> = new Map(),
 ): Promise<WrittenRun> {
   const recordPath = recordFile(dir, record.runId)
   const artifactDir = artifacts.size > 0 ? runDir(dir, record.runId) : null
@@ -334,7 +335,7 @@ export async function writeRun(
   await mkdir(dir, { recursive: true })
   const release = await claimRun(dir, record.runId)
   try {
-    return await writeClaimed(dir, record.runId, bytes, artifacts)
+    return await writeClaimed(dir, record.runId, bytes, artifacts, moves)
   } finally {
     await release()
   }
@@ -345,6 +346,7 @@ async function writeClaimed(
   runId: string,
   bytes: Buffer,
   artifacts: Map<string, Uint8Array>,
+  moves: Map<string, string>,
 ): Promise<WrittenRun> {
   const recordPath = recordFile(dir, runId)
   const artifactDir = artifacts.size > 0 ? runDir(dir, runId) : null
@@ -362,6 +364,11 @@ async function writeClaimed(
         const file = join(staging, ...path.split('/'))
         await mkdir(dirname(file), { recursive: true })
         await writeFile(file, content)
+      }
+      for (const [path, source] of moves) {
+        const target = join(staging, ...path.split('/'))
+        await mkdir(dirname(target), { recursive: true })
+        await rename(source, target)
       }
     }
     if (existing) await rm(recordPath, { force: true })

@@ -5,7 +5,7 @@ import { AttemptDebug, withDebug } from '../debug/attempt.ts'
 import { attemptDebugDir } from '../debug/files.ts'
 import { getRunContext, type TestHandle } from '../engine/runtime.ts'
 import { TimeoutError } from '../errors.ts'
-import { attemptId, evalId, evalSlug, relativeFile } from '../ids.ts'
+import { attemptId, attemptKey, evalId, evalSlug, relativeFile } from '../ids.ts'
 import { redactSecrets } from '../redact.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { AttemptContext, EvalFn } from '../types.ts'
@@ -18,6 +18,7 @@ import { prepareEnvironment } from './environment.ts'
 import { judgeCaller } from './judge.ts'
 import { attemptError, recordEgress, recordFailure, recordOom, writeRecord } from './record.ts'
 import { startSession } from './session.ts'
+import { snapshotSidecar, takeSnapshot } from './snapshot.ts'
 import { type AttemptSpec, createAttempt, evalTimer } from './state.ts'
 import { turnSender } from './turns.ts'
 
@@ -54,15 +55,21 @@ async function attemptBody(
   let clock: ReturnType<typeof evalTimer> | undefined
   // The environment and image are prepared on the test's signal; the eval timer starts after,
   // and pauses while the sandbox starts.
-  const a = createAttempt(spec, testSignal, progress, async (a, who) => {
-    debug.log('container', `starting the sandbox and session for ${who}`)
-    clock?.pause()
-    try {
-      return await a.timed('setupMs', () => startSession(a, runId))
-    } finally {
-      clock?.resume()
-    }
-  })
+  const a = createAttempt(
+    spec,
+    testSignal,
+    progress,
+    async (a, who) => {
+      debug.log('container', `starting the sandbox and session for ${who}`)
+      clock?.pause()
+      try {
+        return await a.timed('setupMs', () => startSession(a, runId))
+      } finally {
+        clock?.resume()
+      }
+    },
+    snapshotSidecar(stagingDir, attemptKey(id, spec.cell.key, spec.n)),
+  )
   const destroy = () => void a.sandbox?.destroy()
   testSignal.addEventListener('abort', destroy, { once: true })
 
@@ -137,6 +144,9 @@ async function attemptBody(
     recordEgress(a, sandbox)
     // A timeout or cancel has already removed the container, so there's nothing left to read.
     oom = a.signal.aborted ? undefined : await recordOom(a, sandbox)
+    if (sandbox && spec.snapshot.when && !a.signal.aborted) {
+      await takeSnapshot(a, sandbox, 'final', 'teardown')
+    }
     await sandbox?.destroy()
     if (sandbox) {
       debug.log(

@@ -1028,6 +1028,20 @@
                 }
               ]
             },
+            "snapshot": {
+              "description": "When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SnapshotOptions"
+                },
+                {
+                  "const": "turns"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
             "tags": {
               "description": "Labels for `--tag` and profiles to select by; a group's are added to its evals'.",
               "type": "array",
@@ -1340,6 +1354,20 @@
                 }
               ]
             },
+            "snapshot": {
+              "description": "When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SnapshotOptions"
+                },
+                {
+                  "const": "turns"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            },
             "tags": {
               "description": "Labels for `--tag` and profiles to select by; a group's are added to its evals'.",
               "type": "array",
@@ -1586,6 +1614,20 @@
                 },
                 {
                   "$ref": "#/$defs/FakeSandboxDescriptor"
+                }
+              ]
+            },
+            "snapshot": {
+              "description": "When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SnapshotOptions"
+                },
+                {
+                  "const": "turns"
+                },
+                {
+                  "type": "boolean"
                 }
               ]
             },
@@ -3129,6 +3171,28 @@
           "additionalProperties": false
         }
       ]
+    },
+    "SnapshotOptions": {
+      "description": "`snapshot` as an object, merged field by field over the levels above.",
+      "type": "object",
+      "properties": {
+        "compress": {
+          "description": "Write each as `<name>.tar.gz` instead of a directory. Default `false`.",
+          "type": "boolean"
+        },
+        "when": {
+          "description": "`true` after the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.",
+          "anyOf": [
+            {
+              "const": "turns"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "required": []
     },
     "SubstituteIn": {
       "description": "`header` values, the `query` string, or the request `body`.",

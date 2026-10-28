@@ -46,6 +46,7 @@
             "proxy-only-egress",
             "setup-process-secret",
             "slow-mcp-start",
+            "snapshot-too-large",
             "too-few-tries"
           ]
         },

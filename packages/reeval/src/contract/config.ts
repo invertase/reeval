@@ -20,7 +20,12 @@ import { environmentDataSchema, sandboxDescriptorSchema } from './environment.ts
 import { gatewayEntryDataSchema } from './gateway.ts'
 import { harnessDescriptorSchema } from './harness.ts'
 import { configJudgeDataSchema } from './judge.ts'
-import { egressPolicySchema, envVarsSchema, gatePolicySchema } from './plain.ts'
+import {
+  egressPolicySchema,
+  envVarsSchema,
+  gatePolicySchema,
+  snapshotOptionSchema,
+} from './plain.ts'
 import { questionOptionsSchema } from './questions.ts'
 import {
   type Assert,
@@ -88,6 +93,7 @@ export const profileDefaultsDataSchema = z.strictObject({
   timeout: durationSchema.optional(),
   capture: captureOptionsSchema.optional(),
   question: questionOptionsSchema.optional(),
+  snapshot: snapshotOptionSchema.optional(),
 })
 
 export const profileLimitSchema = z.strictObject({
@@ -146,6 +152,7 @@ export const reevalConfigDataSchema = z.strictObject({
   timeout: durationSchema.optional(),
   capture: captureOptionsSchema.optional(),
   question: questionOptionsSchema.optional(),
+  snapshot: snapshotOptionSchema.optional(),
   concurrency: count().optional(),
   record: recordMode.optional(),
   history: historyConfigSchema.optional(),

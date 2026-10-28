@@ -1469,6 +1469,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/history.test.ts', 'reeval/test/results.test.ts'],
   },
   {
+    id: 'history.snapshots',
+    area: 'Records and studio',
+    name: "`snapshot` (default on): each attempt's final workspace, and with `'turns'` one after each send, in its directory in `.reeval/runs` as a directory or with `compress` a tar.gz, without dependency and cache directories, masked, capped and pruned with debug data",
+    fixtures: ['run/snapshots', 'run/snapshot-turns'],
+    unit: ['reeval/test/snapshots.test.ts', 'reeval/test/remarks.test.ts'],
+  },
+  {
     id: 'compare.fail-on-regression',
     area: 'Records and studio',
     name: '`reeval compare --fail-on-regression`',

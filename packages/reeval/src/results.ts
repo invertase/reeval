@@ -54,14 +54,14 @@ export async function writeScratchRun(
   input: AssembleInput,
   landed?: () => void,
 ): Promise<WrittenRun & { record: RunRecord; remarks: RunRemarks | null }> {
-  const { record, artifacts } = await assembleRun(input)
+  const { record, artifacts, moves } = await assembleRun(input)
   const remarks = input.interrupted
     ? null
     : await runRemarks(input.ctx.config, record, (input.ctx.verbosity ?? 0) > 0)
   if (remarks) artifacts.set(REMARKS_FILE, Buffer.from(`${JSON.stringify(remarks, null, 2)}\n`))
   artifacts.set('summary.md', Buffer.from(renderSummary(record, { remarks })))
   const scratch = scratchDir(input.ctx.config.root)
-  const written = await writeRun(scratch, record, artifacts)
+  const written = await writeRun(scratch, record, artifacts, moves)
   landed?.()
   await rm(input.ctx.stagingDir, { recursive: true, force: true })
   return { ...written, record, remarks }

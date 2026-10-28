@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type {
   AskedAttemptAnswer,
@@ -48,6 +48,7 @@ import type {
   QuestionScreenshot,
   ResolvedGateway,
   RunContext,
+  Snapshot,
   TranscriptEvent,
   WebEventType,
 } from '../types.ts'
@@ -155,6 +156,8 @@ export type AssembledRun = {
   record: RunRecord
   /** Artifact files keyed by path inside the run's artifact directory. */
   artifacts: Map<string, Uint8Array>
+  /** Snapshots to move into the run's artifact directory, by their path there, from where they wait. */
+  moves: Map<string, string>
 }
 
 /** Keeps evidence readable without letting one `cat` of a lockfile dominate the record. */
@@ -220,6 +223,17 @@ const JSON_FILE = /\.(?:json|jsonl|ndjson)$/
 /** Collects artifact files, redacting before anything is hashed. */
 class Artifacts {
   readonly files = new Map<string, Uint8Array>()
+  readonly moves = new Map<string, string>()
+
+  /**
+   * A snapshot at `source` placed at `path`, or null when it isn't there: its name and size are
+   * already in the record, and its files are never masked again or read into memory.
+   */
+  async move(path: string, source: string): Promise<string | null> {
+    if (!(await stat(source).catch(() => null))) return null
+    this.moves.set(path, source)
+    return path
+  }
 
   /** JSON and JSON Lines files are masked inside their strings only, so they stay valid. */
   add(path: string, content: string): FileRef {
@@ -706,12 +720,24 @@ async function addPreviousAttempt(
   for (const q of kept.answers ?? []) {
     answers.push(q.input ? { ...q, input: await copyRef(q.input, previousArtifacts, out) } : q)
   }
+  const { snapshots: keptSnapshots, ...rest } = kept
+  const snapshots = keptSnapshots
+    ? await placeSnapshots(
+        keptSnapshots,
+        (s) => ({
+          to: s.path ?? '',
+          from: previousArtifacts && s.path && join(previousArtifacts, ...s.path.split('/')),
+        }),
+        out,
+      )
+    : []
   entry.attempts.push({
-    ...kept,
+    ...rest,
     seq: null,
     files,
     checks,
     ...(answers.length ? { answers } : {}),
+    ...(snapshots.length ? { snapshots } : {}),
   })
   if (measured.has(cellRecord)) return
   measured.add(cellRecord)
@@ -833,6 +859,32 @@ async function addAttempt(
   })
 }
 
+/** A snapshot's file or directory name: `final`, or `final.tar.gz` compressed. */
+const fileOf = (s: Snapshot) => (s.form === 'tar.gz' ? `${s.name}.tar.gz` : s.name)
+
+/**
+ * The attempt's snapshots with their paths in the run's directory, each moved there from where
+ * `place` says it waits; one whose files are gone (a resumed run's, from a run that kept none)
+ * is dropped.
+ */
+async function placeSnapshots(
+  snapshots: Snapshot[],
+  place: (s: Snapshot) => { to: string; from: string | null | undefined },
+  out: Artifacts,
+): Promise<Snapshot[]> {
+  const placed: Snapshot[] = []
+  for (const s of snapshots) {
+    if (s.skipped) {
+      placed.push({ ...s, path: null })
+      continue
+    }
+    const { to, from } = place(s)
+    const path = from ? await out.move(to, from) : null
+    if (path) placed.push({ ...s, path })
+  }
+  return placed
+}
+
 /** Turns, timings, activity, verdicts, checks and changed files, with their artifact files. */
 async function attemptEvidence(
   record: EvalRecord | null,
@@ -849,6 +901,7 @@ async function attemptEvidence(
     | 'judgements'
     | 'startRetries'
     | 'setupProcesses'
+    | 'snapshots'
     | 'checks'
     | 'changedFiles'
     | 'files'
@@ -889,6 +942,16 @@ async function attemptEvidence(
     }
     if (artifacts.length) files.artifacts = artifacts
   }
+  const snapshots = record?.snapshots
+    ? await placeSnapshots(
+        record.snapshots,
+        (s) => ({
+          to: `${dir}/snapshots/${fileOf(s)}`,
+          from: stagingRecord && join(stagingRecord.replace(/\.json$/, '.snapshots'), fileOf(s)),
+        }),
+        out,
+      )
+    : []
   const judgments: JudgmentRecord[] = (record?.judgements ?? []).map(({ call, ...j }, i) => ({
     ...j,
     key: judgmentKey(call ?? i, j.question),
@@ -923,6 +986,7 @@ async function attemptEvidence(
     judgements: judgments,
     ...(record?.startRetries?.length ? { startRetries: record.startRetries } : {}),
     ...(record?.setupProcesses?.length ? { setupProcesses: record.setupProcesses } : {}),
+    ...(snapshots.length ? { snapshots } : {}),
     ...(record?.assertions?.length ? { assertions: record.assertions } : {}),
     checks: (record?.checks ?? []).map((c, i) => ({
       command: c.command,
@@ -1292,5 +1356,5 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       ? { errors: engine.unhandledErrors.map((e) => redactSecrets(e)) }
       : {}),
   }
-  return { record, artifacts: out.files }
+  return { record, artifacts: out.files, moves: out.moves }
 }

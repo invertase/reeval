@@ -818,6 +818,9 @@ class EvalOptionsDataCompare(TypedDict):
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
     sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
+    # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
+    # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
+    snapshot: NotRequired[SnapshotOptions | Literal["turns"] | bool]
     # Labels for `--tag` and profiles to select by; a group's are added to its evals'.
     tags: NotRequired[list[str]]
     # Per attempt.
@@ -898,6 +901,9 @@ class EvalOptionsDataCompare2(TypedDict):
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
     sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
+    # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
+    # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
+    snapshot: NotRequired[SnapshotOptions | Literal["turns"] | bool]
     # Labels for `--tag` and profiles to select by; a group's are added to its evals'.
     tags: NotRequired[list[str]]
     # Per attempt.
@@ -962,6 +968,9 @@ class EvalOptionsData3(TypedDict):
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
     sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
+    # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
+    # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
+    snapshot: NotRequired[SnapshotOptions | Literal["turns"] | bool]
     # Labels for `--tag` and profiles to select by; a group's are added to its evals'.
     tags: NotRequired[list[str]]
     # Per attempt.
@@ -1735,6 +1744,14 @@ class SkillSourceSkill5(TypedDict):
 
 # Skills to place for the agent, made by the `skill` helper.
 SkillSource: TypeAlias = "SkillSourceSkill | SkillSourceSkill2 | SkillSourceSkill3 | SkillSourceSkill4 | SkillSourceSkill5"
+
+
+# `snapshot` as an object, merged field by field over the levels above.
+class SnapshotOptions(TypedDict):
+    # Write each as `<name>.tar.gz` instead of a directory. Default `false`.
+    compress: NotRequired[bool]
+    # `true` after the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
+    when: NotRequired[Literal["turns"] | bool]
 
 
 # `header` values, the `query` string, or the request `body`.

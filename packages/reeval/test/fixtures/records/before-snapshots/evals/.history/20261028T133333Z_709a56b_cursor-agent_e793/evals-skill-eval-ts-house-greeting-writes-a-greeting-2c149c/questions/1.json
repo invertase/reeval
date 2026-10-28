@@ -1,0 +1,127 @@
+{
+  "question": "Which greeting reads more like our house style?",
+  "model": "fake",
+  "stateOptions": {
+    "task": true,
+    "output": false,
+    "files": false,
+    "diff": true,
+    "transcript": false,
+    "turns": "all",
+    "checks": false
+  },
+  "calls": [
+    {
+      "cut": "within",
+      "harness": "fake",
+      "run": 1,
+      "a": "plain",
+      "b": "with-house-greeting",
+      "swapped": false,
+      "labels": {
+        "A": "plain",
+        "B": "with-house-greeting"
+      },
+      "system": "You compare two attempts by coding agents at the same task and answer one question about them.\nEach attempt is shown as the changes it made to the project, as a unified diff, labeled A or B. The labels are assigned at random: which attempt comes first says nothing about it.\nJudge only by the question, from what is shown. Answer A or B for the attempt the question favors, or tie when what is shown doesn't separate them on it. Give a short reason for the pick.",
+      "prompt": "Question: Which greeting reads more like our house style?\n\nThe task both attempts were given:\n<task>\nWrite greet.js that greets in our house style.\n</task>\n\n<attempt label=\"A\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..95c8e2c\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Hello, ' + name + '!'\ndiff --git a/package.json b/package.json\nnew file mode 100644\nindex 0000000..5ffd980\n--- /dev/null\n+++ b/package.json\n@@ -0,0 +1 @@\n+{ \"type\": \"module\" }\n\n</diff>\n</attempt>\n\n<attempt label=\"B\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..8f6cfcf\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Ahoy, ' + name + '!'\n\n</diff>\n</attempt>"
+    },
+    {
+      "cut": "within",
+      "harness": "fake",
+      "run": 1,
+      "a": "plain",
+      "b": "with-house-greeting",
+      "swapped": true,
+      "labels": {
+        "A": "with-house-greeting",
+        "B": "plain"
+      },
+      "system": "You compare two attempts by coding agents at the same task and answer one question about them.\nEach attempt is shown as the changes it made to the project, as a unified diff, labeled A or B. The labels are assigned at random: which attempt comes first says nothing about it.\nJudge only by the question, from what is shown. Answer A or B for the attempt the question favors, or tie when what is shown doesn't separate them on it. Give a short reason for the pick.",
+      "prompt": "Question: Which greeting reads more like our house style?\n\nThe task both attempts were given:\n<task>\nWrite greet.js that greets in our house style.\n</task>\n\n<attempt label=\"A\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..8f6cfcf\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Ahoy, ' + name + '!'\n\n</diff>\n</attempt>\n\n<attempt label=\"B\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..95c8e2c\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Hello, ' + name + '!'\ndiff --git a/package.json b/package.json\nnew file mode 100644\nindex 0000000..5ffd980\n--- /dev/null\n+++ b/package.json\n@@ -0,0 +1 @@\n+{ \"type\": \"module\" }\n\n</diff>\n</attempt>"
+    },
+    {
+      "cut": "within",
+      "harness": "fake",
+      "run": 2,
+      "a": "plain",
+      "b": "with-house-greeting",
+      "swapped": false,
+      "labels": {
+        "A": "plain",
+        "B": "with-house-greeting"
+      },
+      "system": "You compare two attempts by coding agents at the same task and answer one question about them.\nEach attempt is shown as the changes it made to the project, as a unified diff, labeled A or B. The labels are assigned at random: which attempt comes first says nothing about it.\nJudge only by the question, from what is shown. Answer A or B for the attempt the question favors, or tie when what is shown doesn't separate them on it. Give a short reason for the pick.",
+      "prompt": "Question: Which greeting reads more like our house style?\n\nThe task both attempts were given:\n<task>\nWrite greet.js that greets in our house style.\n</task>\n\n<attempt label=\"A\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..95c8e2c\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Hello, ' + name + '!'\ndiff --git a/package.json b/package.json\nnew file mode 100644\nindex 0000000..5ffd980\n--- /dev/null\n+++ b/package.json\n@@ -0,0 +1 @@\n+{ \"type\": \"module\" }\n\n</diff>\n</attempt>\n\n<attempt label=\"B\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..8f6cfcf\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Ahoy, ' + name + '!'\n\n</diff>\n</attempt>"
+    },
+    {
+      "cut": "within",
+      "harness": "fake",
+      "run": 2,
+      "a": "plain",
+      "b": "with-house-greeting",
+      "swapped": true,
+      "labels": {
+        "A": "with-house-greeting",
+        "B": "plain"
+      },
+      "system": "You compare two attempts by coding agents at the same task and answer one question about them.\nEach attempt is shown as the changes it made to the project, as a unified diff, labeled A or B. The labels are assigned at random: which attempt comes first says nothing about it.\nJudge only by the question, from what is shown. Answer A or B for the attempt the question favors, or tie when what is shown doesn't separate them on it. Give a short reason for the pick.",
+      "prompt": "Question: Which greeting reads more like our house style?\n\nThe task both attempts were given:\n<task>\nWrite greet.js that greets in our house style.\n</task>\n\n<attempt label=\"A\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..8f6cfcf\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Ahoy, ' + name + '!'\n\n</diff>\n</attempt>\n\n<attempt label=\"B\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..95c8e2c\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Hello, ' + name + '!'\ndiff --git a/package.json b/package.json\nnew file mode 100644\nindex 0000000..5ffd980\n--- /dev/null\n+++ b/package.json\n@@ -0,0 +1 @@\n+{ \"type\": \"module\" }\n\n</diff>\n</attempt>"
+    },
+    {
+      "cut": "within",
+      "harness": "fake",
+      "run": 3,
+      "a": "plain",
+      "b": "with-house-greeting",
+      "swapped": false,
+      "labels": {
+        "A": "plain",
+        "B": "with-house-greeting"
+      },
+      "system": "You compare two attempts by coding agents at the same task and answer one question about them.\nEach attempt is shown as the changes it made to the project, as a unified diff, labeled A or B. The labels are assigned at random: which attempt comes first says nothing about it.\nJudge only by the question, from what is shown. Answer A or B for the attempt the question favors, or tie when what is shown doesn't separate them on it. Give a short reason for the pick.",
+      "prompt": "Question: Which greeting reads more like our house style?\n\nThe task both attempts were given:\n<task>\nWrite greet.js that greets in our house style.\n</task>\n\n<attempt label=\"A\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..95c8e2c\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Hello, ' + name + '!'\ndiff --git a/package.json b/package.json\nnew file mode 100644\nindex 0000000..5ffd980\n--- /dev/null\n+++ b/package.json\n@@ -0,0 +1 @@\n+{ \"type\": \"module\" }\n\n</diff>\n</attempt>\n\n<attempt label=\"B\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..8f6cfcf\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Ahoy, ' + name + '!'\n\n</diff>\n</attempt>"
+    },
+    {
+      "cut": "within",
+      "harness": "fake",
+      "run": 3,
+      "a": "plain",
+      "b": "with-house-greeting",
+      "swapped": true,
+      "labels": {
+        "A": "with-house-greeting",
+        "B": "plain"
+      },
+      "system": "You compare two attempts by coding agents at the same task and answer one question about them.\nEach attempt is shown as the changes it made to the project, as a unified diff, labeled A or B. The labels are assigned at random: which attempt comes first says nothing about it.\nJudge only by the question, from what is shown. Answer A or B for the attempt the question favors, or tie when what is shown doesn't separate them on it. Give a short reason for the pick.",
+      "prompt": "Question: Which greeting reads more like our house style?\n\nThe task both attempts were given:\n<task>\nWrite greet.js that greets in our house style.\n</task>\n\n<attempt label=\"A\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..8f6cfcf\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Ahoy, ' + name + '!'\n\n</diff>\n</attempt>\n\n<attempt label=\"B\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..95c8e2c\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Hello, ' + name + '!'\ndiff --git a/package.json b/package.json\nnew file mode 100644\nindex 0000000..5ffd980\n--- /dev/null\n+++ b/package.json\n@@ -0,0 +1 @@\n+{ \"type\": \"module\" }\n\n</diff>\n</attempt>"
+    },
+    {
+      "cut": "within",
+      "harness": "fake",
+      "run": 4,
+      "a": "plain",
+      "b": "with-house-greeting",
+      "swapped": false,
+      "labels": {
+        "A": "plain",
+        "B": "with-house-greeting"
+      },
+      "system": "You compare two attempts by coding agents at the same task and answer one question about them.\nEach attempt is shown as the changes it made to the project, as a unified diff, labeled A or B. The labels are assigned at random: which attempt comes first says nothing about it.\nJudge only by the question, from what is shown. Answer A or B for the attempt the question favors, or tie when what is shown doesn't separate them on it. Give a short reason for the pick.",
+      "prompt": "Question: Which greeting reads more like our house style?\n\nThe task both attempts were given:\n<task>\nWrite greet.js that greets in our house style.\n</task>\n\n<attempt label=\"A\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..95c8e2c\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Hello, ' + name + '!'\ndiff --git a/package.json b/package.json\nnew file mode 100644\nindex 0000000..5ffd980\n--- /dev/null\n+++ b/package.json\n@@ -0,0 +1 @@\n+{ \"type\": \"module\" }\n\n</diff>\n</attempt>\n\n<attempt label=\"B\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..8f6cfcf\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Ahoy, ' + name + '!'\n\n</diff>\n</attempt>"
+    },
+    {
+      "cut": "within",
+      "harness": "fake",
+      "run": 4,
+      "a": "plain",
+      "b": "with-house-greeting",
+      "swapped": true,
+      "labels": {
+        "A": "with-house-greeting",
+        "B": "plain"
+      },
+      "system": "You compare two attempts by coding agents at the same task and answer one question about them.\nEach attempt is shown as the changes it made to the project, as a unified diff, labeled A or B. The labels are assigned at random: which attempt comes first says nothing about it.\nJudge only by the question, from what is shown. Answer A or B for the attempt the question favors, or tie when what is shown doesn't separate them on it. Give a short reason for the pick.",
+      "prompt": "Question: Which greeting reads more like our house style?\n\nThe task both attempts were given:\n<task>\nWrite greet.js that greets in our house style.\n</task>\n\n<attempt label=\"A\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..8f6cfcf\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Ahoy, ' + name + '!'\n\n</diff>\n</attempt>\n\n<attempt label=\"B\">\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..95c8e2c\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Hello, ' + name + '!'\ndiff --git a/package.json b/package.json\nnew file mode 100644\nindex 0000000..5ffd980\n--- /dev/null\n+++ b/package.json\n@@ -0,0 +1 @@\n+{ \"type\": \"module\" }\n\n</diff>\n</attempt>"
+    }
+  ]
+}

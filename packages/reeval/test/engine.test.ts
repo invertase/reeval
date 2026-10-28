@@ -1064,18 +1064,17 @@ evaluate('passes', async () => {})
     const [plan, ...out] = r.stdout.trimEnd().split('\n')
     assert.match(plan ?? '', /^plan {2}(?:run \S+ · )?2 evals · 2 cells · 2 attempts · ~/)
     assert.match(out[0] ?? '', /^reeval run: \S+ · 1 eval file$/)
-    assert.deepEqual(out.slice(1, 8), [
+    assert.deepEqual(out.slice(1, 5), [
       '',
       'fail             agent eval',
       '  toPass ok?       failed  evals/agent.eval.ts:6',
       '    judge score 0.30 is below 0.8 for "ok?" (fake)',
-      '',
-      'pass             passes',
-      '',
     ])
-    assert.match(out[8] ?? '', /^\d+m?s · results \.reeval\/runs\/[^/]+\/summary\.md$/)
-    assert.deepEqual(out.slice(9), ['1 fail · 1 pass'])
-    assert.ok(existsSync(join(p.dir, (out[8] ?? '').replace(/^.* · results /, ''))))
+    assert.match(out[5] ?? '', /^ {2}snapshot {9}\.reeval\/runs\/\S+\/1\/snapshots\/final$/)
+    assert.deepEqual(out.slice(6, 9), ['', 'pass             passes', ''])
+    assert.match(out[9] ?? '', /^\d+m?s · results \.reeval\/runs\/[^/]+\/summary\.md$/)
+    assert.deepEqual(out.slice(10), ['1 fail · 1 pass'])
+    assert.ok(existsSync(join(p.dir, (out[9] ?? '').replace(/^.* · results /, ''))))
     assert.ok(!r.stdout.includes('\x1b['))
   })
 

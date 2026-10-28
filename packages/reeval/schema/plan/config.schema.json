@@ -2049,6 +2049,42 @@
           "description": "The default machine when the resolved environment omits `sandbox`.",
           "$ref": "#/$defs/SandboxDescriptor"
         },
+        "snapshot": {
+          "description": "When each attempt's workspace is copied; merged over the config's.",
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "const": "turns"
+                }
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "compress": {
+                  "type": "boolean"
+                },
+                "when": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "const": "turns"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
         "timeout": {
           "description": "Per attempt.",
           "$ref": "#/$defs/Duration"
@@ -2268,6 +2304,42 @@
             }
           },
           "additionalProperties": false
+        },
+        "snapshot": {
+          "description": "When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.",
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "const": "turns"
+                }
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "compress": {
+                  "type": "boolean"
+                },
+                "when": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "const": "turns"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
         },
         "timeout": {
           "description": "Per attempt; default `'15m'`.",
@@ -2573,6 +2645,28 @@
           "additionalProperties": false
         }
       ]
+    },
+    "SnapshotOptions": {
+      "description": "`snapshot` as an object, merged field by field over the levels above.",
+      "type": "object",
+      "properties": {
+        "compress": {
+          "description": "Write each as `<name>.tar.gz` instead of a directory. Default `false`.",
+          "type": "boolean"
+        },
+        "when": {
+          "description": "`true` after the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.",
+          "anyOf": [
+            {
+              "const": "turns"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "required": []
     },
     "SubstituteIn": {
       "description": "`header` values, the `query` string, or the request `body`.",

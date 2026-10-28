@@ -214,6 +214,11 @@ export type CellResult = {
   effortDiffers: boolean
   /** Why attempts failed or errored where no check says: a timeout, an infra error, a throw. */
   errors: CellError[]
+  /**
+   * Where each failed attempt's final snapshot is, from the project's root
+   * (`.reeval/runs/<run>/…/snapshots/final`); absent when none has one.
+   */
+  snapshots?: string[]
   /** Web searches and fetches per counted attempt; null where the harness can't report them. */
   searches: Array<number | null>
   fetches: Array<number | null>
@@ -591,6 +596,11 @@ function cellsOf(
     )
     const lift = cell.lift
     const interval = lift ? { low: lift.interval.lo, high: lift.interval.hi } : null
+    const snapshots = ran.flatMap((a) => {
+      const final = a.outcome === 'fail' || a.outcome === 'infra_error'
+      const path = final && a.snapshots?.find((s) => s.name === 'final')?.path
+      return path ? [`.reeval/runs/${record.runId}/${path}`] : []
+    })
     return {
       path,
       key: cell.key,
@@ -623,6 +633,7 @@ function cellsOf(
       effort: effortOf(e, cell),
       effortDiffers: cell.role === 'variant' && effortDiffers(e, cell, baseline),
       errors: errorsOf(e, cell),
+      ...(snapshots.length ? { snapshots } : {}),
       searches: attempts.map((a) => a.activity.webSearches),
       fetches: attempts.map((a) => a.activity.webFetches),
       ...(upstreams.length ? { upstreams } : {}),
