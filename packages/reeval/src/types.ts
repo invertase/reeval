@@ -112,10 +112,23 @@ export type Wait = CaptureWait | { ms: number }
 
 export type CaptureInstruction = string | { wait: Wait }
 
+/** The keys a capture's driver presses. In a focused `<select>`, the arrows change the choice. */
+export type CaptureKey =
+  | 'Tab'
+  | 'Enter'
+  | 'Escape'
+  | 'Backspace'
+  | 'Space'
+  | 'ArrowUp'
+  | 'ArrowDown'
+  | 'ArrowLeft'
+  | 'ArrowRight'
+
 export type CaptureUseAction =
   | { type: 'click'; x: number; y: number }
-  | { type: 'type'; text: string }
-  | { type: 'key'; key: 'Tab' | 'Enter' }
+  /** `replace` selects what the focused field holds first, so the text replaces it. */
+  | { type: 'type'; text: string; replace?: boolean }
+  | { type: 'key'; key: CaptureKey }
   | { type: 'scroll'; x: number; y: number; dy: number }
   | { type: 'drag'; x: number; y: number; toX: number; toY: number }
   | { type: 'hover'; x: number; y: number }

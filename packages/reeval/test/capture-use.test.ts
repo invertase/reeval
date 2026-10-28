@@ -10,7 +10,7 @@ import {
 } from '../src/capture/index.ts'
 import { CARET_PIXELS, pageChanged } from '../src/capture/png.ts'
 import { stubPng } from '../src/capture/stub.ts'
-import { normalizesPoints, runJourney, scalePoints } from '../src/capture/use.ts'
+import { actionFromTool, normalizesPoints, runJourney, scalePoints } from '../src/capture/use.ts'
 import type { CaptureUseAction } from '../src/types.ts'
 
 const window = { width: 1280, height: 720 }
@@ -73,6 +73,25 @@ test('dispatchInput sends CDP Input events and never Runtime.evaluate', async ()
   sent.length = 0
   await dispatchInput(cdp, { type: 'type', text: 'hi' }, window)
   assert.deepEqual(sent, [{ method: 'Input.insertText', params: { text: 'hi' } }])
+  sent.length = 0
+  await dispatchInput(cdp, { type: 'type', text: 'grace', replace: true }, window)
+  assert.deepEqual(
+    sent.map((s) => [s.method, s.params?.type, s.params?.commands ?? s.params?.text]),
+    [
+      ['Input.dispatchKeyEvent', 'keyDown', ['selectAll']],
+      ['Input.dispatchKeyEvent', 'keyUp', undefined],
+      ['Input.insertText', undefined, 'grace'],
+    ],
+  )
+  sent.length = 0
+  await dispatchInput(cdp, { type: 'key', key: 'ArrowDown' }, window)
+  assert.deepEqual(
+    sent.map((s) => [s.params?.type, s.params?.key, s.params?.windowsVirtualKeyCode]),
+    [
+      ['keyDown', 'ArrowDown', 40],
+      ['keyUp', 'ArrowDown', 40],
+    ],
+  )
 })
 
 /** A language model that calls `click` at (x, y), then `done`, and records its system prompts. */
@@ -388,6 +407,43 @@ test('runJourney stops a model that repeats a move that changes nothing, after n
   assert.match(
     prompts[2] ?? '',
     /2\. click \{"x":180,"y":130\} → the page did not change\nYour last moves repeated the same action without changing the page\. Do not repeat it/,
+  )
+})
+
+test('actionFromTool reads a point packed into x, and refuses input that names no action', () => {
+  assert.deepEqual(actionFromTool('click', { x: '217,163' }), { type: 'click', x: 217, y: 163 })
+  assert.deepEqual(actionFromTool('click', { x: '217', y: 163 }), { type: 'click', x: 217, y: 163 })
+  assert.deepEqual(actionFromTool('click', { x: 'here' }), {
+    refused: 'it had no numeric x and y',
+  })
+  assert.deepEqual(actionFromTool('scroll', { x: 1, y: 2 }), { refused: 'it had no numeric dy' })
+  assert.deepEqual(actionFromTool('drag', { x: 1, y: 2, toX: 3 }), {
+    refused: 'it had no numeric toX and toY',
+  })
+  assert.deepEqual(actionFromTool('type', {}), { refused: 'it had no text' })
+  assert.match(
+    (actionFromTool('key', { key: 'F5' }) as { refused: string }).refused,
+    /^the key is not one of Tab, Enter/,
+  )
+})
+
+test('runJourney tells the model a move it could not make, and goes on', async () => {
+  const prompts: string[] = []
+  const { session, dispatched } = scriptedSession(true)
+  const result = await journey(
+    session,
+    scriptedModel((text) => {
+      const n = text.match(/^\d+\. /gm)?.length ?? 0
+      return n === 0 ? ['click', { x: 'the email field' }] : (SIGN_UP[n - 1] ?? ['done', {}])
+    }, prompts),
+    ['Create an account and submit the form'],
+  )
+  assert.equal(dispatched.length, 5)
+  assert.equal(dispatched[0]?.type, 'click')
+  assert.equal(result.moves, 6)
+  assert.match(
+    prompts[1] ?? '',
+    /^1\. click \{"x":"the email field"\} → not made: it had no numeric x and y$/m,
   )
 })
 

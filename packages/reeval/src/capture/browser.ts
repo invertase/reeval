@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { CaptureUseAction, CaptureWait, CaptureWindow, Wait } from '../types.ts'
+import type { CaptureKey, CaptureUseAction, CaptureWait, CaptureWindow, Wait } from '../types.ts'
 import { unzip } from './zip.ts'
 
 const isMs = (wait: Wait): wait is { ms: number } => typeof wait === 'object' && wait !== null
@@ -75,6 +75,36 @@ export function mapPagePoint(
   }
 }
 
+type KeyEvent = {
+  key: string
+  code: string
+  windowsVirtualKeyCode: number
+  text?: string
+  modifiers?: number
+  commands?: string[]
+}
+
+const KEYS: Record<CaptureKey, KeyEvent> = {
+  Tab: { key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 },
+  Enter: { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 },
+  Escape: { key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 },
+  Backspace: { key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 },
+  Space: { key: ' ', code: 'Space', windowsVirtualKeyCode: 32, text: ' ' },
+  ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', windowsVirtualKeyCode: 38 },
+  ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 },
+  ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 },
+  ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 },
+}
+
+/** `CaptureKey` names, for the driver's tool schema. */
+export const CAPTURE_KEYS = Object.keys(KEYS) as [CaptureKey, ...CaptureKey[]]
+
+async function pressKey(cdp: CdpClient, event: KeyEvent): Promise<void> {
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', ...event })
+  const { text: _text, commands: _commands, ...up } = event
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', ...up })
+}
+
 export async function dispatchInput(
   cdp: CdpClient,
   action: CaptureUseAction,
@@ -84,24 +114,21 @@ export async function dispatchInput(
 ): Promise<number> {
   if (action.type === 'done') return scrollY
   if (action.type === 'type') {
-    await cdp.send('Input.insertText', { text: action.text })
+    if (action.replace) {
+      await pressKey(cdp, {
+        key: 'a',
+        code: 'KeyA',
+        windowsVirtualKeyCode: 65,
+        modifiers: 2,
+        commands: ['selectAll'],
+      })
+      if (!action.text) await pressKey(cdp, KEYS.Backspace)
+    }
+    if (action.text) await cdp.send('Input.insertText', { text: action.text })
     return scrollY
   }
   if (action.type === 'key') {
-    const key = action.key
-    const vk = key === 'Tab' ? 9 : 13
-    await cdp.send('Input.dispatchKeyEvent', {
-      type: 'keyDown',
-      key,
-      code: key,
-      windowsVirtualKeyCode: vk,
-    })
-    await cdp.send('Input.dispatchKeyEvent', {
-      type: 'keyUp',
-      key,
-      code: key,
-      windowsVirtualKeyCode: vk,
-    })
+    await pressKey(cdp, KEYS[action.key])
     return scrollY
   }
   if (action.type === 'scroll') {

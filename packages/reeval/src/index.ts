@@ -25,6 +25,7 @@ export type {
   Capture,
   CaptureCall,
   CaptureInstruction,
+  CaptureKey,
   CaptureOptions,
   CaptureUse,
   CaptureUseAction,

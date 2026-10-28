@@ -13,7 +13,7 @@ import type {
   Wait,
 } from '../types.ts'
 import { addUsage } from '../usage.ts'
-import { type ChromeSession, navigateAndWait } from './browser.ts'
+import { CAPTURE_KEYS, type ChromeSession, navigateAndWait } from './browser.ts'
 import { pageChanged } from './png.ts'
 import { pngSize } from './stub.ts'
 
@@ -88,29 +88,48 @@ function asUsage(value: {
   return { input, output, cacheRead: 0, cacheWrite: 0, reasoning: null }
 }
 
-function actionFromTool(name: string, input: Record<string, unknown>): CaptureUseAction {
+const finite = (value: unknown): number | undefined => {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+  return Number.isFinite(n) ? n : undefined
+}
+
+/** The point at `x`/`y`, or both packed into one as `"217,163"`, which models sometimes send. */
+function point(input: Record<string, unknown>, x: string, y: string): [number, number] | undefined {
+  const packed = typeof input[x] === 'string' ? (input[x] as string).split(',') : []
+  const px = finite(packed.length === 2 ? packed[0] : input[x])
+  const py = finite(packed.length === 2 ? packed[1] : input[y])
+  return px === undefined || py === undefined ? undefined : [px, py]
+}
+
+/** The action a tool call asks for, or why it can't be made. */
+export function actionFromTool(
+  name: string,
+  input: Record<string, unknown>,
+): CaptureUseAction | { refused: string } {
   if (name === 'done') return { type: 'done' }
-  if (name === 'type') return { type: 'type', text: String(input.text ?? '') }
-  if (name === 'key') return { type: 'key', key: input.key === 'Tab' ? 'Tab' : 'Enter' }
+  if (name === 'type') {
+    if (typeof input.text !== 'string') return { refused: 'it had no text' }
+    return { type: 'type', text: input.text, ...(input.replace === true ? { replace: true } : {}) }
+  }
+  if (name === 'key') {
+    const key = CAPTURE_KEYS.find((k) => k === input.key)
+    if (!key) return { refused: `the key is not one of ${CAPTURE_KEYS.join(', ')}` }
+    return { type: 'key', key }
+  }
+  const at = point(input, 'x', 'y')
+  if (!at) return { refused: 'it had no numeric x and y' }
+  const [x, y] = at
   if (name === 'scroll') {
-    return {
-      type: 'scroll',
-      x: Number(input.x),
-      y: Number(input.y),
-      dy: Number(input.dy),
-    }
+    const dy = finite(input.dy)
+    return dy === undefined ? { refused: 'it had no numeric dy' } : { type: 'scroll', x, y, dy }
   }
   if (name === 'drag') {
-    return {
-      type: 'drag',
-      x: Number(input.x),
-      y: Number(input.y),
-      toX: Number(input.toX),
-      toY: Number(input.toY),
-    }
+    const to = point(input, 'toX', 'toY')
+    if (!to) return { refused: 'it had no numeric toX and toY' }
+    return { type: 'drag', x, y, toX: to[0], toY: to[1] }
   }
-  if (name === 'hover') return { type: 'hover', x: Number(input.x), y: Number(input.y) }
-  return { type: 'click', x: Number(input.x), y: Number(input.y) }
+  if (name === 'hover') return { type: 'hover', x, y }
+  return { type: 'click', x, y }
 }
 
 /**
@@ -149,7 +168,7 @@ export const systemPrompt = (normalized: boolean) =>
     normalized
       ? `Coordinates are normalized to 0-${NORMALIZED} on the full-page image: x and toX across its width, y and toY down its height. A scroll's dy is in CSS pixels.`
       : 'Coordinates are CSS pixels on the full-page image.'
-  } Each turn you get the goal, your earlier moves with what each did, and a fresh screenshot. Click a field before typing into it, and do not repeat a move that already worked. Call done when the goal is met. Do not mention CDP.`
+  } Each turn you get the goal, your earlier moves with what each did, and a fresh screenshot. Click a field before typing into it, and do not repeat a move that already worked. A dropdown (select) never opens in the screenshot: click it once, then press ArrowDown or ArrowUp until it shows the option you want. Call done when the goal is met. Do not mention CDP.`
 
 const useTools = {
   click: tool({
@@ -157,12 +176,14 @@ const useTools = {
     inputSchema: z.object({ x: z.number(), y: z.number() }),
   }),
   type: tool({
-    description: 'Insert text into the focused field. Click the field first.',
-    inputSchema: z.object({ text: z.string() }),
+    description:
+      'Insert text into the focused field. Click the field first. Set replace to true to replace what the field already holds instead of adding to it.',
+    inputSchema: z.object({ text: z.string(), replace: z.boolean().optional() }),
   }),
   key: tool({
-    description: 'Press Tab or Enter.',
-    inputSchema: z.object({ key: z.enum(['Tab', 'Enter']) }),
+    description:
+      'Press a key in the focused element. In a dropdown (select), click it, then ArrowDown or ArrowUp to change the choice. Space toggles a focused checkbox.',
+    inputSchema: z.object({ key: z.enum(CAPTURE_KEYS) }),
   }),
   scroll: tool({
     description: 'Wheel-scroll a constrained scroller at (x, y).',
@@ -216,7 +237,15 @@ const unfinished = (step: Step) =>
   )
 
 /** One move the model made, and what it did to the page once the next screenshot showed it. */
-type Move = { said: string; key: string; from?: string; changed?: boolean; url?: string }
+type Move = {
+  said: string
+  key: string
+  from?: string
+  changed?: boolean
+  url?: string
+  /** Why the move wasn't made: its input didn't name an action. */
+  refused?: string
+}
 
 /** The page's path and query on the journey's origin, or its whole URL elsewhere. */
 async function currentUrl(session: ChromeSession, origin: string): Promise<string | undefined> {
@@ -260,8 +289,9 @@ export function goalPrompt(
   }
   lines.push('Your moves for this goal so far, oldest first. The screenshot shows the page now.')
   moves.forEach((m, i) => {
-    const effect =
-      m.changed === undefined
+    const effect = m.refused
+      ? ` → not made: ${m.refused}`
+      : m.changed === undefined
         ? ''
         : m.changed
           ? ` → the page changed${m.url && m.url !== m.from ? `, now at ${m.url}` : ''}`
@@ -270,7 +300,7 @@ export function goalPrompt(
   })
   if (stuckMoves(moves) >= CAPTURE_USE_NUDGE_AT) {
     lines.push(
-      'Your last moves repeated the same action without changing the page. Do not repeat it: if the goal is met, call done; otherwise try a different action.',
+      `Your last moves repeated the same action without changing the page. Do not repeat it: if the goal is met, call done; otherwise try a different action.${moves.at(-1)?.said.startsWith('click ') ? ' If you clicked a dropdown (select), it is focused now: press ArrowDown or ArrowUp to change it.' : ''}`,
     )
   }
   return lines.join('\n')
@@ -304,7 +334,7 @@ async function runModelGoal(
     const last = made.at(-1)
     if (last && before) {
       last.url = url
-      last.changed = pageChanged(before, ephemeral) || url !== last.from
+      last.changed = !last.refused && (pageChanged(before, ephemeral) || url !== last.from)
     }
     before = ephemeral
     if (stuckMoves(made) >= CAPTURE_USE_STUCK_AT) {
@@ -338,14 +368,17 @@ async function runModelGoal(
     })
     usage = addUsage(usage, asUsage(result.usage ?? {}))
     const call = result.toolCalls?.[0]
-    let chosen = call
-      ? actionFromTool(call.toolName, (call.input ?? {}) as Record<string, unknown>)
-      : undefined
-    if (!call || !chosen) {
+    if (!call) {
       throw new Error(`c.capture() instruction ${JSON.stringify(goal)} returned no action`)
     }
     const said = `${call.toolName} ${JSON.stringify(call.input ?? {})}`
-    if (normalized) chosen = scalePoints(chosen, page)
+    const asks = actionFromTool(call.toolName, (call.input ?? {}) as Record<string, unknown>)
+    if ('refused' in asks) {
+      debugLog('check', `capture use ${said} on ${JSON.stringify(goal)} not made: ${asks.refused}`)
+      made.push({ said, key: said, from: url, refused: asks.refused })
+      continue
+    }
+    const chosen = normalized ? scalePoints(asks, page) : asks
     debugLog(
       'check',
       `capture use ${said} on ${JSON.stringify(goal)} · ${formatDuration(Date.now() - asked)}`,
