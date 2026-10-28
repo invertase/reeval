@@ -19,9 +19,6 @@ shapes that suite. It assumes reeval is installed and configured; if not, follow
 [../setup/SKILL.md](../setup/SKILL.md) first. For the authoring API, follow
 [../reeval/SKILL.md](../reeval/SKILL.md) and the docs it links.
 
-Read [README.md](README.md) for the background (why the repo is part of the prompt, what each
-prompt type tests) when you need it, not while writing a case.
-
 ## Procedure
 
 1. **Pin the subject.** Write down the tool's package name and current version, the job it does
