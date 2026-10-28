@@ -535,7 +535,7 @@
           ]
         },
         "serves": {
-          "description": "Each `c.serve` call that listened, in call order: `{ command, port, portEnv, detected, address, readyMs }`. `port` is where it listens; `detected` is true when that isn't the `PORT` it was given (`portEnv`), so reeval found the port from the command's own listening sockets. Absent when the attempt served nothing.",
+          "description": "Each `c.serve` call that listened, in call order: `{ command, port, portEnv, detected, address, readyMs }`. `port` is where it listens; `detected` is true when that isn't the `PORT` it was given (`portEnv`), so reeval took the one port that started listening after the command did. Absent when the attempt served nothing.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ServeRecord"
@@ -3029,7 +3029,7 @@
           "type": "string"
         },
         "detected": {
-          "description": "It listened on a port other than `PORT`, which reeval found from its sockets and took.",
+          "description": "It listened on a port other than `PORT`, the one that started listening after it did.",
           "type": "boolean"
         },
         "port": {

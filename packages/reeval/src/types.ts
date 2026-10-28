@@ -438,9 +438,9 @@ export type AttemptContext = {
   ): Promise<ExecResult | BackgroundHandle>
   /**
    * Starts `command` in the background with `PORT` set to `port`, or to a port reeval allocates,
-   * and returns once the command's own processes listen. Without `port`, a command that listens
-   * on one other port instead (Vite's 5173) gets that one; several others, none of them `PORT`,
-   * or an exit first, throw with its last output.
+   * and returns once it listens. Without `port`, a command that listens on one new port instead
+   * (Vite's 5173) gets that one; several new ports, none of them `PORT`, or an exit first, throw
+   * with its last output.
    */
   serve(command: string, port?: number): Promise<ServeHandle>
   /**
@@ -2464,7 +2464,7 @@ export type ServeRecord = {
   port: number
   /** The `PORT` it was given: the port the eval passed, or the one reeval allocated. */
   portEnv: number
-  /** It listened on a port other than `PORT`, which reeval found from its sockets and took. */
+  /** It listened on a port other than `PORT`, the one that started listening after it did. */
   detected: boolean
   /** The address it listens on there, e.g. `127.0.0.1`, `::1` or `0.0.0.0`; empty when the sandbox can't tell. */
   address: string

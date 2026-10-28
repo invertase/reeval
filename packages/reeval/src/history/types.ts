@@ -274,8 +274,8 @@ export type AttemptRecord = {
   /**
    * Each `c.serve` call that listened, in call order: `{ command, port, portEnv, detected,
    * address, readyMs }`. `port` is where it listens; `detected` is true when that isn't the
-   * `PORT` it was given (`portEnv`), so reeval found the port from the command's own listening
-   * sockets. Absent when the attempt served nothing.
+   * `PORT` it was given (`portEnv`), so reeval took the one port that started listening after
+   * the command did. Absent when the attempt served nothing.
    */
   serves?: ServeRecord[]
   /**
