@@ -10,7 +10,9 @@ evaluate(
       {
         question: 'Which reply is clearer?',
         across: 'environment',
-        state: { diff: false, output: true, turns: 'last', checks: ['cat out.txt'] },
+        output: true,
+        turns: 'last',
+        checks: ['cat out.txt'],
       },
     ],
   },

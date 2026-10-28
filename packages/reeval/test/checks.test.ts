@@ -30,8 +30,8 @@ const styled = defineEnvironment('styled', ({ skill }) => ({
 }))
 evaluate('greets', { compare: { baseline: plain, variants: [styled] }, runs: 2 }, async (c) => {
   await c.send('go')
-  await expect.soft(c, 'writes ok.txt').toHaveFile('ok.txt')
-  await expect(c, 'house style').toHaveFile('styled.txt', /Ahoy/)
+  await expect(c, 'writes ok.txt').toHaveFile('ok.txt')
+  await expect.require(c, 'house style').toHaveFile('styled.txt', /Ahoy/)
   await expect(c.exec('test -f ok.txt')).toSucceed()
 })
 `,
@@ -57,7 +57,7 @@ describe('named check results', () => {
         ['writes ok.txt', true, 'toHaveFile', 'pass', true],
         ['house style', true, 'toHaveFile', 'fail', false],
       ],
-      'the control stops at its hard failure',
+      'the control stops at its failed expect.require',
     )
     assert.match(
       control?.assertions?.[1]?.message ?? '',
@@ -110,8 +110,8 @@ describe('named check results', () => {
     )
     assert.deepEqual(counts, [
       { status: 'fail', soft: 0, n: 2 },
-      { status: 'pass', soft: 0, n: 4 },
-      { status: 'pass', soft: 1, n: 4 },
+      { status: 'pass', soft: 0, n: 2 },
+      { status: 'pass', soft: 1, n: 6 },
     ])
 
     const agent = await runCli(p.dir, ['run'], { env: { REEVAL_UI: 'agent' } })
@@ -125,7 +125,7 @@ describe('named check results', () => {
 evaluate('writes', { runs: 2 }, async (c) => {
   await c.send('go')
   for (const name of ['ok.txt', 'ok.txt']) await expect(c).toHaveFile(name)
-  expect(await c.judge('Is it ok?')).toPass()
+  expect(await c.judge('Is it ok?', { diff: true })).toPass()
 })
 `,
     })

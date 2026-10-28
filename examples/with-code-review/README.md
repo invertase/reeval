@@ -2,7 +2,7 @@
 
 **Shows:** a review that finds a planted bug and changes nothing. `page()` in `src/page.js` is off
 by one; the agent reviews `src/` and replies. `not.toHaveChanged()` with no paths fails on any
-edit, and a judge reads the reply (the judge's default state includes the agent's final message)
+edit, and a judge reads the reply (the call turns on `output`, the agent's final message)
 to say whether it found the bug.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root

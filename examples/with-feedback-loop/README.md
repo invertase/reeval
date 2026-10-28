@@ -3,7 +3,8 @@
 **Shows:** a build, review and revise session. The agent adds `listNotes()` in one turn, then gets
 review feedback in a second `c.send` on the same session: page by cursor, not page number. The eval
 checks the second turn edited `src/notes.js` (`toHaveEdited`), runs the tests, and asks a judge that
-sees both turns (`state: { turns: 'all' }`) whether the revision did what the review asked.
+sees both turns' prompts and the diff (`{ task: true, diff: true, turns: 'all' }`) whether the
+revision did what the review asked.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. A real agent needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code, which also
@@ -27,20 +28,13 @@ on Claude Code, with a real judge, and `--profile <name>` on any other agent in
 one profile you need.
 
 **What to look at:** the judge's state in the attempt's `judge-input.json`, under
-`.reeval/runs/<run>/`. Each turn's prompt and reply is there, and the diff covers the whole session:
+`.reeval/runs/<run>/`. Each turn's prompt is there, and the diff covers the whole session:
 
 ```json
 "turns": [
-  {
-    "task": "Add listNotes() to src/notes.js: it returns the notes ten at a time. …",
-    "output": "listNotes({ page }) returns ten notes a page, with a test."
-  },
-  {
-    "task": "Review feedback: page by cursor, not by page number. …",
-    "output": "listNotes({ cursor }) pages by cursor now; tests updated."
-  }
+  { "task": "Add listNotes() to src/notes.js: it returns the notes ten at a time. …" },
+  { "task": "Review feedback: page by cursor, not by page number. …" }
 ],
-"files": ["modified src/notes.js", "added test/notes.test.js"],
 "diff": { "$ref": "diff.patch", "sha256": "b6f97ad9…" }
 ```
 

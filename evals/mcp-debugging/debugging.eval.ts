@@ -96,18 +96,19 @@ group('debugs a run', () => {
       await c.send(fixTask)
 
       const answer = parseAnswer(await c.readFile('answer.json'))
-      expect.soft(answer.cause, 'names the cause').toBe(cause)
-      await expect
-        .soft(c.exec('node_modules/.bin/reeval run --ui plain'), 'reeval run passes')
-        .toSucceed()
+      expect(answer.cause, 'names the cause').toBe(cause)
+      await expect(
+        c.exec('node_modules/.bin/reeval run --ui plain'),
+        'reeval run passes',
+      ).toSucceed()
 
-      expect.soft(c, 'leaves the agent under test alone').not.toHaveChanged(['reeval.config.ts'])
+      expect(c, 'leaves the agent under test alone').not.toHaveChanged(['reeval.config.ts'])
       const source = (await c.readFile(file)) ?? ''
       const weakened = [
         ...keeps.filter((keep) => !keep.test(source)).map(String),
         ...(source.match(/\.(skip|todo|only)\(|gate:|passRate/g) ?? []),
       ]
-      expect.soft(weakened, 'keeps the checks').toEqual([])
+      expect(weakened, 'keeps the checks').toEqual([])
     })
   }
 })
@@ -132,14 +133,14 @@ One eval has started failing intermittently. Find which eval, the commit that ma
 Write answer.json: {"eval": "<eval name>", "commit": "<its sha>", "cause": "<check or agent>"}.`)
 
     const answer = parseAnswer(await c.readFile('answer.json'))
-    expect.soft(named([answer.eval], ['builds the report']), 'names the eval').toHaveLength(1)
+    expect(named([answer.eval], ['builds the report']), 'names the eval').toHaveLength(1)
     const truth = await c.exec(`git log --format=%H --grep='^update evals (batch 5)$'`)
     const given = await c.exec(
       `git rev-parse --verify --quiet '${String(answer.commit ?? '')}^{commit}'`,
     )
-    expect.soft(given.stdout.trim(), 'names the commit').toBe(truth.stdout.trim())
-    expect.soft(answer.cause, 'names the cause').toBe('check')
-    expect.soft(await touchedRecords(c), 'leaves the history alone').toEqual([])
+    expect(given.stdout.trim(), 'names the commit').toBe(truth.stdout.trim())
+    expect(answer.cause, 'names the cause').toBe('check')
+    expect(await touchedRecords(c), 'leaves the history alone').toEqual([])
   })
 
   evaluate('regression', study('regression', toolkit), async (c) => {
@@ -151,14 +152,12 @@ Write answer.json: {"regressed": ["<eval name>", …]}.`)
 
     const answer = parseAnswer(await c.readFile('answer.json'))
     const regressed = ['pads a string', 'removes duplicates']
-    expect.soft(named(answer.regressed, regressed), 'finds each regression').toEqual(regressed)
-    expect
-      .soft(
-        named(answer.regressed, ['clamps a number', 'chunks an array', 'sums a list']),
-        'names nothing else',
-      )
-      .toEqual([])
-    expect.soft(await touchedRecords(c), 'leaves the history alone').toEqual([])
+    expect(named(answer.regressed, regressed), 'finds each regression').toEqual(regressed)
+    expect(
+      named(answer.regressed, ['clamps a number', 'chunks an array', 'sums a list']),
+      'names nothing else',
+    ).toEqual([])
+    expect(await touchedRecords(c), 'leaves the history alone').toEqual([])
   })
 
   evaluate('is-new', study('is-new', toolkit), async (c) => {
@@ -170,22 +169,20 @@ Write answer.json: {"new": ["<eval name>", …], "old": ["<eval name>", …]}.`)
 
     const answer = parseAnswer(await c.readFile('answer.json'))
     const old = ['clamps a number', 'builds the report']
-    expect
-      .soft(named(answer.new, ['title-cases a phrase', ...old]), 'finds the new failure')
-      .toEqual(['title-cases a phrase'])
-    expect.soft(named(answer.old, old), 'finds the old failures').toEqual(old)
-    expect.soft(await touchedRecords(c), 'leaves the history alone').toEqual([])
+    expect(named(answer.new, ['title-cases a phrase', ...old]), 'finds the new failure').toEqual([
+      'title-cases a phrase',
+    ])
+    expect(named(answer.old, old), 'finds the old failures').toEqual(old)
+    expect(await touchedRecords(c), 'leaves the history alone').toEqual([])
   })
 
   evaluate('big-record', study('big-record', { base: 'catalog' }), async (c) => {
     await c.send(`${fixTask}\n\nIts runs are large: 82 attempts each.`)
 
     const answer = parseAnswer(await c.readFile('answer.json'))
-    expect.soft(answer.cause, 'names the cause').toBe('check-path')
-    await expect
-      .soft(c.exec('node_modules/.bin/reeval run --ui plain'), 'reeval run passes')
-      .toSucceed()
-    expect.soft(c, 'leaves the agent under test alone').not.toHaveChanged(['reeval.config.ts'])
+    expect(answer.cause, 'names the cause').toBe('check-path')
+    await expect(c.exec('node_modules/.bin/reeval run --ui plain'), 'reeval run passes').toSucceed()
+    expect(c, 'leaves the agent under test alone').not.toHaveChanged(['reeval.config.ts'])
     const source = (await c.readFile('evals/export.eval.ts')) ?? ''
     const weakened = [
       ...[/toHaveFile\(\s*'lib\/export\.js'/, /c\.exec\(joinsRows\)/]
@@ -193,6 +190,6 @@ Write answer.json: {"new": ["<eval name>", …], "old": ["<eval name>", …]}.`)
         .map(String),
       ...(source.match(/\.(skip|todo|only)\(|gate:|passRate/g) ?? []),
     ]
-    expect.soft(weakened, 'keeps the checks').toEqual([])
+    expect(weakened, 'keeps the checks').toEqual([])
   })
 })

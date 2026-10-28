@@ -56,6 +56,7 @@ export function assertionRecords(raw: readonly RawAssertion[]): AssertionRecord[
       matcher: r.matcher,
       status: r.status,
       soft: r.soft,
+      ...(r.at ? { at: r.at } : {}),
       ...(r.status === 'pass' ? {} : { message: clipped(text(r.error), MESSAGE_LIMIT) }),
       ...(r.durationMs === undefined ? {} : { durationMs: r.durationMs }),
     }
@@ -67,7 +68,7 @@ export const CAUGHT_HINT =
 
 /**
  * What fails the attempt at its end for the checks that failed without ending the body: the first
- * that didn't pass, an `expect.soft` as what it threw, a hard check the eval caught with
+ * that didn't pass, an `expect` as what it failed with, an `expect.require` the eval caught with
  * `CAUGHT_HINT` after its message.
  */
 export function checkFailure(raw: readonly RawAssertion[]): Error | undefined {

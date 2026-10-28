@@ -45,8 +45,8 @@ test('judge on a turn grades that turn of the attempt', async () => {
   const { asked, judge } = attempt([first, second])
   await judge({ on: { turn: 0 } })
   assert.equal(asked.pop()?.on, first)
-  await judge()
-  assert.deepEqual(asked.pop(), {})
+  await judge({ diff: true })
+  assert.deepEqual(asked.pop(), { diff: true })
 })
 
 test("judge on a turn the attempt doesn't have is a usage error", async () => {

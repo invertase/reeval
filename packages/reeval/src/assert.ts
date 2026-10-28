@@ -6,6 +6,14 @@ import type { AttemptContext, FileChange, TranscriptEvent, Turn, WebEventType } 
 export type Result = { pass: boolean; message: () => string }
 
 /** A check the turn's harness can't answer either way, e.g. a web fetch it never reports. */
+/**
+ * A matcher handed a subject it can't read, such as `toHaveEdited(1)`: recorded as `error`, an
+ * answer it couldn't give, so the eval's own `TypeError`s stay errors that end the attempt.
+ */
+export function subjectError(message: string): TypeError {
+  return Object.assign(new TypeError(message), { [Symbol.for('reeval.subjectError')]: true })
+}
+
 export class HarnessCapabilityError extends Error {
   override name = 'HarnessCapabilityError'
 }
@@ -31,7 +39,7 @@ export function transcriptSubject(actual: unknown, matcher: string): Subject {
       unreported: [...new Set(actual.turns.flatMap((t) => t.unreported))],
     }
   }
-  throw new TypeError(`${matcher}() expects a turn from c.send(), or c`)
+  throw subjectError(`${matcher}() expects a turn from c.send(), or c`)
 }
 
 const matches = (value: string, pattern: RegExp | string | undefined) =>
@@ -243,7 +251,7 @@ const hasDiff = (value: unknown): value is Pick<Turn, 'diff'> =>
 function changedFiles(actual: unknown): FileChange[] {
   if (hasDiff(actual)) return actual.diff.files
   if (isContext(actual)) return actual.turns.at(-1)?.diff.files ?? []
-  throw new TypeError('toHaveChanged() expects a turn from c.send(), or c')
+  throw subjectError('toHaveChanged() expects a turn from c.send(), or c')
 }
 
 /** A glob also matches every file under the directory it names, so `test` is `test/**` too. */

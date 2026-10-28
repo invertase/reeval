@@ -16,6 +16,7 @@ import type {
 import {
   attemptAxes,
   debugLines,
+  errorCheck,
   failureLines,
   formatDuration,
   offset,
@@ -81,6 +82,12 @@ function locate(result: EvalResult): { line: string; col: string } | undefined {
   const file = result.file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const match = new RegExp(`❯ ${file}:(\\d+):(\\d+)`).exec(text)
   return match?.[1] && match[2] ? { line: match[1], col: match[2] } : undefined
+}
+
+/** `evals/a.eval.ts:7` as its file and line. */
+const splitAt = (at: string): [string, string] => {
+  const i = at.lastIndexOf(':')
+  return [at.slice(0, i), at.slice(i + 1)]
 }
 
 export class PlainRenderer implements Renderer {
@@ -319,10 +326,27 @@ export class PlainRenderer implements Renderer {
     if (githubActions && failed && !ungated && !result.meta?.prepare) {
       const which = result.attempt?.label ? ` [${result.attempt.label}]` : ''
       const title = ghEscape(`${result.id}${which}`, true)
-      const message = ghEscape(failureLines(colors(false), result, { max: ERROR_LINES }).join('\n'))
-      const at = locate(result)
-      const where = at ? `,line=${at.line},col=${at.col}` : ''
-      this.#write(`::error file=${ghEscape(result.file, true)}${where},title=${title}::${message}`)
+      const checks = (result.meta?.failedChecks ?? []).filter((x) => x.at)
+      // An `expect` failure doesn't end the body: each failed check is annotated on its own line.
+      for (const x of checks) {
+        const [file, line] = splitAt(x.at as string)
+        const label = ghEscape(`${result.id}${which}: ${x.label}`, true)
+        this.#write(
+          `::error file=${ghEscape(file, true)},line=${line},title=${label}::${ghEscape(x.message)}`,
+        )
+      }
+      // The attempt's own error, unless it's one of those checks.
+      const shown = errorCheck(result)
+      if (!shown?.at) {
+        const message = ghEscape(
+          failureLines(colors(false), result, { max: ERROR_LINES }).join('\n'),
+        )
+        const at = locate(result)
+        const where = at ? `,line=${at.line},col=${at.col}` : ''
+        this.#write(
+          `::error file=${ghEscape(result.file, true)}${where},title=${title}::${message}`,
+        )
+      }
     }
   }
 

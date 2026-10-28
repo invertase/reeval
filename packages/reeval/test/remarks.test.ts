@@ -36,7 +36,7 @@ const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
 evaluate('${name}', { runs: ${runs}, compare: { baseline: plain, variants: [marked] } }, async (c) => {
   await c.send('go')
   const wins = c.attempt.cell.role === 'variant' ? ${variant} : ${base}
-  expect.soft(c.attempt.n <= wins, 'uses the marker').toBe(true)
+  expect(c.attempt.n <= wins, 'uses the marker').toBe(true)
 })
 `
 
@@ -47,7 +47,7 @@ ${names
   .map(
     (name) => `evaluate('${name}', { runs: ${runs} }, async (c) => {
   await c.send('go')
-  expect.soft(c.attempt.n, 'lands heads').toBe(1)
+  expect(c.attempt.n, 'lands heads').toBe(1)
 })`,
   )
   .join('\n')}
@@ -387,7 +387,7 @@ evaluate.each([{ id: 'a' }, { id: 'b' }])(
   { runs: 2, compare: { baseline: plain, variants: [marked] } },
   async (c) => {
     await c.send('go')
-    expect.soft(c.attempt.cell.role === 'variant', 'uses the marker').toBe(true)
+    expect(c.attempt.cell.role === 'variant', 'uses the marker').toBe(true)
   },
 )
 `,
@@ -505,11 +505,11 @@ evaluate.each([{ id: 'a' }, { id: 'b' }])(
       'evals/coin.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('steady', { runs: 3 }, async (c) => {
   await c.send('go')
-  expect.soft(1, 'lands heads').toBe(1)
+  expect(1, 'lands heads').toBe(1)
 })
 evaluate('coin', { runs: 3 }, async (c) => {
   await c.send('go')
-  expect.soft(c.attempt.n, 'lands heads').toBe(1)
+  expect(c.attempt.n, 'lands heads').toBe(1)
 })
 `,
     })

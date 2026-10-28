@@ -18,7 +18,7 @@ Every example takes the real agents in [`profiles.ts`](./profiles.ts) by name: `
 | Example | Shows |
 |---|---|
 | [`with-checks`](./with-checks) | Deterministic checks on what the agent left behind |
-| [`with-soft-checks`](./with-soft-checks) | Soft checks, so every requirement reports after one fails |
+| [`with-checks-and-gates`](./with-checks-and-gates) | Every check reports after one fails; `expect.require` stops at a gate |
 | [`with-hidden-tests`](./with-hidden-tests) | Grading with a test the agent never saw |
 | [`with-guarded-files`](./with-guarded-files) | Failing an agent that changes files it should leave alone |
 | [`with-transcript-matchers`](./with-transcript-matchers) | Checking what the agent did, not only what it left |

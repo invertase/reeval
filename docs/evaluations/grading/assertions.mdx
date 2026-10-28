@@ -26,10 +26,8 @@ evaluate('adds a separators option', { environment: camelcase }, async (c) => {
 
 Without a label, the row reads `toHaveFile readme.md`. `c.readFile` returns the file text, or `null` when the path is missing:
 
-```ts title="with-soft-checks.eval.ts"
-expect
-  .soft(await c.readFile('test/math.test.js'), 'tests divide')
-  .toContain('divide(')
+```ts title="with-checks-and-gates.eval.ts"
+expect(await c.readFile('test/math.test.js'), 'tests divide').toContain('divide(')
 ```
 
 ## Run the project's tests
@@ -63,13 +61,13 @@ expect(turn, 'installed nothing').not.toHaveRun(/npm (install|i)\b/)
 
 `toHaveSearched` and `toHaveFetched` throw `HarnessCapabilityError` when the harness does not report web searches or web fetches.
 
-## Use soft and polled assertions
+## Use required and polled assertions
 
-`expect.soft` records a failure and runs the later assertions. The attempt fails at the end on the first soft assertion that did not pass. In the `evals/camelcase.eval.ts` file, make both file assertions soft, so each attempt reports both:
+`expect` records a failure and runs the later assertions. The attempt fails at the end on the first assertion that did not pass. `expect.require` ends the body at its failure. In the `evals/camelcase.eval.ts` file, both file assertions report on each attempt:
 
 ```ts title="evals/camelcase.eval.ts"
-await expect.soft(c, 'readme documents it').toHaveFile('readme.md', /separators/)
-await expect.soft(c, 'tests cover it').toHaveFile('test.js', /separators/)
+await expect(c, 'readme documents it').toHaveFile('readme.md', /separators/)
+await expect(c, 'tests cover it').toHaveFile('test.js', /separators/)
 ```
 
 `expect.poll` calls a function until the matcher passes, every 50 milliseconds, for at most 1000 milliseconds. It then fails with the last error. Await it. Pass `{ interval, timeout }` in milliseconds to change the wait. `message` sets the label:
@@ -86,10 +84,10 @@ Match the attempt error to a fix:
 |---|---|---|
 | `expected file readme.md to exist` | `toHaveFile` found no file at that path. | Use the path the prompt names. |
 | `expected command to succeed, exit code 1` | `exitCode` was not 0. The message includes the tail of `stderr` and `stdout`. | Read that tail, then change the command or the task. |
-| `expect(…).toHaveFile() wasn't awaited` | An async matcher ran without `await`. | Put `await` before `toHaveFile`, `toSucceed`, or `expect.poll`. |
+| `expect(…).toHaveFile() … wasn't awaited` | An async matcher ran without `await`. | Put `await` before `toHaveFile`, `toSucceed`, or `expect.poll`. |
 | `toHaveSearched() can't check this turn: its harness doesn't report web searches` | The matcher threw `HarnessCapabilityError`. | Check the reply or a file, or use a harness that reports web searches. |
 | `toHaveEdited() expects a turn from c.send(), or c` | The matcher did not receive `c` or a turn. | Pass `c` or the turn that `c.send` returned. |
 
 ## Reference
 
-For more information about every matcher, `expect.soft`, and `expect.poll`, see [Matchers](/reference/matchers).
+For more information about every matcher, `expect.require`, and `expect.poll`, see [Matchers](/reference/matchers).

@@ -131,6 +131,7 @@ async function runTest(
     type: 'test',
     name: test.name,
     fullTestName: [...test.groups, test.name].join(' > '),
+    file,
   }
   const own = createExpect(task)
   const pending: Pending[] = []
@@ -148,7 +149,7 @@ async function runTest(
         },
         progress: (progress) => reporter.progress(index, progress),
         debug: (line) => reporter.debug(index, line),
-        unawaited: () => unawaitedError(pending),
+        unawaited: () => unawaitedError(pending, file),
         expectError: () => attemptExpectError(own),
         assertions: () => rawAssertions(task),
       }),

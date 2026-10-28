@@ -37,7 +37,7 @@ const HISTORY = 'evals/.history'
 const agent = (name = 'agent') => `import { evaluate, expect } from 'reeval'
 evaluate('${name}', async (c) => {
   await c.send('write hello.txt')
-  expect(await c.judge('Did it write hello.txt?')).toPass()
+  expect(await c.judge('Did it write hello.txt?', { diff: true })).toPass()
 })
 `
 const failing = `import { evaluate, expect } from 'reeval'
@@ -247,7 +247,7 @@ evaluate(
   {
     runs: 2,
     compare: { baseline, variants: [variant] },
-    questions: [{ question: 'Which page looks better?', across: 'environment', artifacts: ['landing'] }],
+    questions: [{ question: 'Which page looks better?', across: 'environment', task: true, artifacts: ['landing'] }],
   },
   async (c) => {
     await c.send('write the page')
@@ -663,30 +663,16 @@ evaluate(
     assert.equal(run.profile?.defaults.sandbox, 'fake')
   })
 
-  test("the config's judge.state is in the record and the fingerprint; its defaults change neither", async () => {
-    const run = async (name: string, judge: string) => {
-      const p = await project(name, {
-        'evals/agent.eval.ts': agent(),
-        'reeval.config.ts': fakeConfig({ harness: harness(), judge }),
-      })
-      const r = await runCli(p.dir)
-      assert.equal(r.code, 0, r.stdout + r.stderr)
-      return readRun(p.dir).run
-    }
-    const plain = await run('state-none', '{ model: fakeJudge({ score: 0.9 }) }')
-    const defaults = await run(
-      'state-defaults',
-      '{ model: fakeJudge({ score: 0.9 }), state: { diff: true } }',
-    )
-    const narrowed = await run(
-      'state-diff',
-      "{ model: fakeJudge({ score: 0.9 }), state: { diff: ['src/'] } }",
-    )
-    const part = (r: typeof plain) => r.evals[0]?.cells[0]?.fingerprintParts.judge
-    assert.equal(part(defaults), part(plain), 'the defaults are the same measurement')
-    assert.equal(defaults.stack.judge.state, undefined)
-    assert.notEqual(part(narrowed), part(plain), 'a narrower judge is a new measurement')
-    assert.deepEqual(narrowed.stack.judge.state?.diff, ['src/'])
+  test("the config's judge names no inputs, so the record's stack has no judge.state", async () => {
+    const p = await project('state-none', {
+      'evals/agent.eval.ts': agent(),
+      'reeval.config.ts': fakeConfig({ harness: harness() }),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run } = readRun(p.dir)
+    assert.equal(run.stack.judge.state, undefined)
+    assert.ok(run.evals[0]?.cells[0]?.fingerprintParts.judge)
   })
 
   test("the cell's gateway is in the record, and direct leaves the fingerprint as it was", async () => {
@@ -855,7 +841,7 @@ import { prompt } from './helpers.ts'
 const unused = 1
 evaluate('agent', { revision: ${revision}, runs: ${runs}, tags: [${tags}]${extra} }, async (c) => {
   await c.send(${prompt})
-  expect(await c.judge('Did it write hello.txt?')).toPass()
+  expect(await c.judge('Did it write hello.txt?', { diff: true })).toPass()
 })
 evaluate('sibling', async (c) => {
   await c.send('${sibling}')
@@ -1307,7 +1293,10 @@ evaluate('slow', async (c) => {
     // Canary: a real pass → fail in the same interrupted head still regresses and fails the check.
     await interrupted({ REEVAL_TEST_BREAK: '1' })
     const regressed = await compareCode('--fail-on-regression')
-    assert.match(regressed.out, /^regressed {8}flips\n(.*\n){2} {2}returns ok {7}pass → fail$/m)
+    assert.match(
+      regressed.out,
+      /^regressed {8}flips\n(.*\n){2} {2}returns ok {7}pass → fail +evals\/a\.eval\.ts:5$/m,
+    )
     assert.match(regressed.out, /^can't compare {4}slow$/m)
     assert.match(regressed.out, /^1 regressed · 1 can't compare$/m)
     assert.equal(regressed.code, 1, regressed.out)
@@ -1337,7 +1326,7 @@ const one = defineEnvironment('tools', { sandbox, env: { FLAVOR: 'one' } })
 const two = defineEnvironment('tools', { sandbox, env: { FLAVOR: 'two' } })
 evaluate('uses one', { environment: one, runs: 3 }, async (c) => {
   await c.send('x')
-  expect(await c.judge('Is it fine?')).toPass()
+  expect(await c.judge('Is it fine?', { diff: true })).toPass()
 })
 evaluate('uses two', { environment: two }, async (c) => { await c.send('x') })
 evaluate('uses none', async (c) => { await c.send('x') })

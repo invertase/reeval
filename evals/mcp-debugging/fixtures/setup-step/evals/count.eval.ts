@@ -9,6 +9,6 @@ group('users', { environment: fixtures }, () => {
   evaluate('counts the users', async (c) => {
     await c.send('Write count.js, which prints how many users data/users.json has.')
     const run = await c.exec('node count.js')
-    expect.soft(run.stdout.trim(), 'prints 3').toBe('3')
+    expect(run.stdout.trim(), 'prints 3').toBe('3')
   })
 })

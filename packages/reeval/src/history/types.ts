@@ -277,7 +277,7 @@ export type AttemptRecord = {
     /** Every try, in order, when it was given `retries`; its log has each try's output. */
     tries?: ExecTry[]
   }>
-  /** Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none. */
+  /** Every `expect` and `expect.require` matcher call that settled, in call order; unset with none. */
   assertions?: AssertionRecord[]
   /** Files under a dependency directory, such as the `node_modules/` directory or `.venv/` directory, collapse to one entry with `count`. */
   changedFiles: Array<FileChange & { count?: number }>
@@ -473,7 +473,7 @@ export type FingerprintParts = {
   environment: string | null
   image: string | null
   agentCli: string | null
-  /** Over the judge's model, threshold, and version, and the config's `state` when it sets one. */
+  /** Over the judge's model, threshold and version. */
   judge: string
   /** Over the attempt's context files. */
   context: string
@@ -715,7 +715,7 @@ export type Stack = {
     threshold: number
     /** Changes when reeval, the AI SDK or the provider adapter (and so the judge prompt) change. */
     version: string
-    /** What the judge sees by default, every key resolved; absent when the config and profile leave `state` at its defaults. */
+    /** The config's default judge inputs, every key resolved. Unset when the config names none, which reeval requires: each `c.judge()` call names its own. */
     state?: ResolvedJudgeStateOptions
   }
   /** Union of every attempt's context files. */

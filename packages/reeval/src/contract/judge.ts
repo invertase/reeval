@@ -1,7 +1,8 @@
-// The judge options' contract: `state` (what the judge is given beside the question), the model,
-// threshold, provider options and concurrency. Their data form is the config's (a model by name or
-// a fake judge); groups, evals and `c.judge()` also take an AI SDK model object, which only
-// TypeScript can hold, so the authored schemas accept any model and the cascade checks it later.
+// The judge options' contract: the model, threshold, provider options and concurrency, and
+// `c.judge()`'s inputs (what one call shows the judge beside the question). Their data form is the
+// config's (a model by name or a fake judge); groups, evals and `c.judge()` also take an AI SDK
+// model object, which only TypeScript can hold, so the authored schemas accept any model and the
+// cascade checks it later.
 import { z } from 'zod'
 import { badJudgeArtifacts } from '../judge/artifacts.ts'
 import { checkModelString } from '../judge/index.ts'
@@ -10,25 +11,61 @@ import type {
   ConfigJudgeData,
   FakeJudgeData,
   JSONValue,
-  JudgeCallOptions,
+  JudgeCallFields,
+  JudgeInputs,
   JudgeModel,
   JudgeOptions,
-  JudgeStateOptions,
+  JudgeSubject,
   Turn,
 } from '../types.ts'
 import { GATEWAY_NAMES, gatewayDescriptorSchema, gatewayNameSchema } from './gateway.ts'
 import { type Assert, type Issue, jsonValueSchema, nonEmpty, type Same } from './shared.ts'
 
-export const judgeStateSchema = z.strictObject({
+/** The inputs every judge call and question shares; `c.judge()` adds `contents` and its own `artifacts`. */
+export const sharedInputFields = {
   task: z.boolean().optional(),
   output: z.boolean().optional(),
   files: z.boolean().optional(),
   diff: z.union([z.boolean(), z.array(nonEmpty()).min(1)]).optional(),
-  contents: z.array(nonEmpty()).optional(),
   transcript: z.union([z.boolean(), z.enum(['tools', 'full'])]).optional(),
-  turns: z.enum(['last', 'all']).optional(),
   checks: z.union([z.boolean(), z.array(nonEmpty())]).optional(),
+}
+
+export const turnsSchema = z.enum(['last', 'all'])
+
+const { task, output, files, diff, transcript, checks } = sharedInputFields
+
+export const judgeInputsSchema = z.strictObject({
+  task,
+  output,
+  files,
+  diff,
+  contents: z.array(nonEmpty()).optional(),
+  transcript,
+  checks,
+  artifacts: z.union([z.literal(true), z.array(z.custom<Capture | string>())]).optional(),
 })
+
+const judgeSubjectSchema = z.strictObject({
+  on: z.custom<Turn | JSONValue>().optional(),
+  turns: turnsSchema.optional(),
+})
+
+export const INPUT_KEYS = Object.keys(judgeInputsSchema.shape) as Array<keyof JudgeInputs>
+
+/** True when an input's value turns it on: not `false`, unset or an empty list. */
+export const inputOn = (value: unknown): boolean =>
+  value !== undefined && value !== false && !(Array.isArray(value) && value.length === 0)
+
+/** The input keys an options object turns on, in `keys`' order. */
+export const inputsOn = (value: Record<string, unknown>, keys: readonly string[]): string[] =>
+  keys.filter((k) => inputOn(value[k]))
+
+/** `a`, `b` and `c` as prose: "a, b or c". */
+export const orList = (items: readonly string[]): string =>
+  items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} or ${items.at(-1)}`
+
+export const NO_JUDGE_INPUT = `c.judge() shows the judge nothing: turn on at least one input, such as { diff: true } or { contents: ['src/**'] }. The inputs are ${orList(INPUT_KEYS)}.`
 
 export const judgeFields = {
   threshold: z
@@ -38,7 +75,6 @@ export const judgeFields = {
     .optional(),
   providerOptions: z.record(z.string(), z.record(z.string(), jsonValueSchema)).optional(),
   maxConcurrent: z.number().int().min(1).optional(),
-  state: judgeStateSchema.optional(),
   gateway: z.union([gatewayNameSchema, gatewayDescriptorSchema]).optional(),
 }
 
@@ -61,24 +97,24 @@ export const judgeOptionsSchema = z.strictObject({
   ...judgeFields,
 })
 
-export const judgeCallSchema = judgeOptionsSchema.extend({
-  on: z.custom<Turn | JSONValue>().optional(),
-  artifacts: z.union([z.literal(true), z.array(z.custom<Capture | string>())]).optional(),
-})
+export const judgeCallSchema = judgeOptionsSchema
+  .extend(judgeInputsSchema.shape)
+  .extend(judgeSubjectSchema.shape)
 
 export type _SameAsSchema = [
-  Assert<Same<z.infer<typeof judgeStateSchema>, JudgeStateOptions>>,
-  Assert<Same<keyof z.infer<typeof judgeStateSchema>, keyof JudgeStateOptions>>,
+  Assert<Same<z.infer<typeof judgeInputsSchema>, JudgeInputs>>,
+  Assert<Same<keyof z.infer<typeof judgeInputsSchema>, keyof JudgeInputs>>,
+  Assert<Same<z.infer<typeof judgeSubjectSchema>, JudgeSubject>>,
   Assert<Same<z.infer<typeof fakeJudgeDataSchema>, FakeJudgeData>>,
   Assert<Same<z.infer<typeof configJudgeDataSchema>, ConfigJudgeData>>,
   Assert<Same<keyof z.infer<typeof configJudgeDataSchema>, keyof ConfigJudgeData>>,
   Assert<Same<z.infer<typeof judgeOptionsSchema>, JudgeOptions>>,
   Assert<Same<keyof z.infer<typeof judgeOptionsSchema>, keyof JudgeOptions>>,
-  Assert<Same<z.infer<typeof judgeCallSchema>, JudgeCallOptions>>,
-  Assert<Same<keyof z.infer<typeof judgeCallSchema>, keyof JudgeCallOptions>>,
+  Assert<Same<z.infer<typeof judgeCallSchema>, JudgeCallFields>>,
+  Assert<Same<keyof z.infer<typeof judgeCallSchema>, keyof JudgeCallFields>>,
 ]
 
-export const STATE_KEYS = Object.keys(judgeStateSchema.shape) as Array<keyof JudgeStateOptions>
+const CALL_ONLY_KEYS = [...INPUT_KEYS, 'on', 'turns']
 
 /**
  * Where judge options are checked, which decides the sentence: an eval's or group's options
@@ -90,14 +126,7 @@ export type JudgeSite =
   | { at: 'config'; path: string; file: string }
   | { at: 'call' }
 
-const JUDGE_HINTS: Record<string, string> = {
-  see: 'state',
-  shows: 'state',
-  show: 'state',
-  input: 'state',
-}
-
-const VALUES: Record<keyof JudgeStateOptions, string> = {
+const VALUES: Record<Exclude<keyof JudgeInputs, 'artifacts'> | 'turns', string> = {
   task: 'true or false',
   output: 'true or false',
   files: 'true or false',
@@ -145,7 +174,8 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
         ? ` in ${site.where}`
         : ` in ${site.path === 'judge' ? '' : `${site.path.replace(/\.judge$/, '')} in `}${site.file}`
   if (typeof judge !== 'object' || judge === null || Array.isArray(judge)) {
-    return `${field()} must be an object such as { threshold: 0.8 } (got ${shown(judge)})`
+    const example = site.at === 'call' ? '{ diff: true }' : '{ threshold: 0.8 }'
+    return `${field()} must be an object such as ${example} (got ${shown(judge)})`
   }
   const value = judge as Record<string, unknown>
   const model = value.model as { kind?: unknown; score?: unknown } | string | null | undefined
@@ -160,7 +190,9 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
         ? configJudgeDataSchema
         : judgeOptionsSchema
   const parsed = schema.safeParse(judge)
-  if (parsed.success) return undefined
+  if (parsed.success) {
+    return site.at === 'call' && !inputsOn(value, INPUT_KEYS).length ? NO_JUDGE_INPUT : undefined
+  }
   // The rest of a numeric fake judge (its score's range, a stray key) is left to the config's data
   // check, which names the file it's in.
   const numericFake =
@@ -192,31 +224,20 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
     const name = (key as (Issue & { keys: string[] }) | undefined)?.keys[0]
     if (name === undefined) return undefined
     const allowed = Object.keys(schema.shape)
-    const hint =
-      JUDGE_HINTS[name] ??
-      ((STATE_KEYS as string[]).includes(name) ? `state.${name}` : nearest(name, allowed))
+    const hint = nearest(name, allowed)
     const why =
-      site.at !== 'call' && (name === 'on' || name === 'artifacts')
+      site.at !== 'call' && CALL_ONLY_KEYS.includes(name)
         ? ` ${name} is per call: c.judge(question, { ${name} }).`
         : hint
           ? ` Did you mean "${hint}"?`
           : ''
     return `Unknown judge option "${name}"${loc}.${why}`
   }
-  const stateProblem = () => {
-    const issue = issues.find((i) => i.path[0] === 'state')
+  const inputProblem = () => {
+    const issue = issues.find((i) => typeof i.path[0] === 'string' && i.path[0] in VALUES)
     if (!issue) return undefined
-    const { state } = value
-    if (typeof state !== 'object' || state === null || Array.isArray(state)) {
-      return `${field('state')} must be an object such as { transcript: 'tools' } (got ${shown(state)})`
-    }
-    if (issue.code === 'unrecognized_keys' && issue.path.length === 1) {
-      const key = issue.keys[0] ?? ''
-      const hint = nearest(key, STATE_KEYS)
-      return `Unknown judge.state key "${key}"${loc}.${hint ? ` Did you mean "${hint}"?` : ''}`
-    }
-    const key = issue.path[1] as keyof JudgeStateOptions
-    return `${field(`state.${String(key)}`)} must be ${VALUES[key]} (got ${shown((state as JudgeStateOptions)[key])})`
+    const key = issue.path[0] as keyof typeof VALUES
+    return `${field(key)} must be ${VALUES[key]} (got ${shown(value[key])})`
   }
   const providerOptionsProblem = () =>
     at('providerOptions')
@@ -229,20 +250,13 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
       ? `${field('gateway')} names a gateway in the config's gateway list: ${GATEWAY_NAMES.map((g) => `'${g}'`).join(' or ')}, or is its helper (got ${shown(value.gateway)})`
       : undefined
   if (site.at === 'config') {
-    order.push(
-      modelProblem,
-      keyProblem,
-      stateProblem,
-      providerOptionsProblem,
-      thresholdProblem,
-      gatewayProblem,
-    )
+    order.push(modelProblem, keyProblem, providerOptionsProblem, thresholdProblem, gatewayProblem)
   } else if (site.at === 'call') {
     order.push(
       thresholdProblem,
       maxConcurrentProblem,
       keyProblem,
-      stateProblem,
+      inputProblem,
       providerOptionsProblem,
       artifactsProblem,
       gatewayProblem,
@@ -252,7 +266,6 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
       maxConcurrentProblem,
       thresholdProblem,
       keyProblem,
-      stateProblem,
       providerOptionsProblem,
       gatewayProblem,
     )

@@ -380,7 +380,7 @@ evaluate(
   {
     runs: 2,
     compare: { baseline: base, variants: [skilled], minLift: 0.5 },
-    questions: [{ question: 'Which is cleaner?', across: 'environment' }],
+    questions: [{ question: 'Which is cleaner?', across: 'environment', diff: true }],
   },
   async (c) => { await c.send('go') },
 )

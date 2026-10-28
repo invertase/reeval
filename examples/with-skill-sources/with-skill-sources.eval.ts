@@ -26,6 +26,6 @@ evaluate('lists the skills it was given', { environment: skilled }, async (c) =>
   )
 
   for (const name of ['brand-guidelines', 'doc-coauthoring', 'eval-rubric', 'release-notes']) {
-    expect.soft(turn.text, name).toContain(name)
+    expect(turn.text, name).toContain(name)
   }
 })

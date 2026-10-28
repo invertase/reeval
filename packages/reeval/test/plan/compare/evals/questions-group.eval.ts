@@ -6,7 +6,9 @@ group(
   'asked by the group',
   {
     compare: { baseline: base, variants: [skilled] },
-    questions: [{ question: 'Which handles state more cleanly?', across: 'environment' }],
+    questions: [
+      { question: 'Which handles state more cleanly?', across: 'environment', diff: true },
+    ],
   },
   () => {
     evaluate('inherits the question', async () => {})
@@ -18,7 +20,7 @@ group(
     )
     evaluate(
       'replaces the questions',
-      { questions: ['What did the agent change?'] },
+      { questions: [{ question: 'What did the agent change?', diff: true }] },
       async () => {},
     )
     evaluate('asks none', { questions: [] }, async () => {})
@@ -27,7 +29,7 @@ group(
 // A skipped eval asks nothing, so the pairwise question it inherits needs nothing to vary.
 group(
   "pairs its evals' compares",
-  { questions: [{ question: 'Which is shorter?', across: 'environment' }] },
+  { questions: [{ question: 'Which is shorter?', across: 'environment', diff: true }] },
   () => {
     evaluate('compares', { compare: { baseline: base, variants: [skilled] } }, async () => {})
     evaluate.skip('skipped without a compare', async () => {})

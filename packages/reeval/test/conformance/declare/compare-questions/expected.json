@@ -48,7 +48,8 @@
         "questions": [
           {
             "question": "Which handles state more cleanly?",
-            "across": "environment"
+            "across": "environment",
+            "diff": true
           }
         ]
       },
@@ -127,12 +128,14 @@
         "questions": [
           {
             "question": "Which handles state more cleanly?",
-            "across": ["environment", "harness"]
+            "across": ["environment", "harness"],
+            "diff": true
           },
           {
             "question": "Which follows the house style more closely?",
             "model": "google/gemini-3.8-flash",
-            "across": "environment"
+            "across": "environment",
+            "diff": true
           }
         ]
       },
@@ -189,7 +192,8 @@
         "questions": [
           {
             "question": "Which is shorter?",
-            "across": "environment"
+            "across": "environment",
+            "diff": true
           }
         ],
         "pin": ["compare"]

@@ -15,7 +15,10 @@ def asked_by_the_group():
     @evaluate("replaces the compare", {"compare": {"baseline": base, "variants": [terse]}})
     async def replaces_the_compare(c): ...
 
-    @evaluate("replaces the questions", {"questions": ["What did the agent change?"]})
+    @evaluate(
+        "replaces the questions",
+        {"questions": [{"question": "What did the agent change?", "diff": True}]},
+    )
     async def replaces_the_questions(c): ...
 
     @evaluate("asks none", {"questions": []})
@@ -26,7 +29,9 @@ group(
     "asked by the group",
     {
         "compare": {"baseline": base, "variants": [skilled]},
-        "questions": [{"question": "Which handles state more cleanly?", "across": "environment"}],
+        "questions": [
+            {"question": "Which handles state more cleanly?", "across": "environment", "diff": True}
+        ],
     },
     asked_by_the_group,
 )
@@ -42,6 +47,6 @@ def pairs_its_evals_compares():
 
 group(
     "pairs its evals' compares",
-    {"questions": [{"question": "Which is shorter?", "across": "environment"}]},
+    {"questions": [{"question": "Which is shorter?", "across": "environment", "diff": True}]},
     pairs_its_evals_compares,
 )

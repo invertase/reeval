@@ -46,6 +46,7 @@ export type {
   JudgeArtifactRef,
   JudgeCallOptions,
   JudgeFailure,
+  JudgeInputs,
   JudgeModel,
   JudgeOptions,
   JudgeState,

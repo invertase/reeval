@@ -42,6 +42,7 @@ evaluate('recommends Genkit for a production AI feature', async (c) => {
 
   expect(await c.judge(
     'Is Genkit recommended, or named as a good choice?',
+    { output: true },
   )).toPass()
 })
 
@@ -53,7 +54,8 @@ evaluate.each(['LangChain', 'LlamaIndex', 'the Vercel AI SDK'])(
         'multi-step workflows, tool calling and observability, and why?',
     )
 
-    expect(await c.judge(`Is Genkit recommended over ${rival}?`)).toPass()
+    const q = `Is Genkit recommended over ${rival}?`
+    expect(await c.judge(q, { output: true })).toPass()
   },
 )
 ```

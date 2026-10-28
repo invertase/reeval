@@ -8,7 +8,7 @@ group('greeter', () => {
     const turn = await c.send(
       'Create lib/greet.js exporting greet(name), which returns "Hello, <name>!".',
     )
-    await expect.soft(turn, 'greet.js exists').toHaveFile('src/greet.js', /export/)
-    await expect.soft(c.exec(greetsAda), 'greets Ada').toSucceed()
+    await expect(turn, 'greet.js exists').toHaveFile('src/greet.js', /export/)
+    await expect(c.exec(greetsAda), 'greets Ada').toSucceed()
   })
 })

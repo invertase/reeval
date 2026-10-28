@@ -32,7 +32,7 @@ For more information about which hosts a sandbox can reach, see [Egress](/config
 
 `kind` is `reeval-run`, and `schemaVersion` is `1`. `git` is null outside a Git repository, or when that repository has no commits. `author` is `ci` on a CI run, and otherwise a slug of the Git user name. `config.concurrency` is how many attempts run together, and `config.configHash` omits it.
 
-For more information about the keys on `stack.judge.state`, see [the `judge` option](/reference/options#judge).
+For more information about the keys on `stack.judge.state`, see [`c.judge()`](/reference/attempt-context#cjudge).
 
 [//]: # (generated:record-types)
 
@@ -583,7 +583,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 <Property name="agentCli" type="string | null"></Property>
 
 <Property name="judge" type="string">
-  Over the judge's model, threshold, and version, and the config's `state` when it sets one.
+  Over the judge's model, threshold and version.
 </Property>
 
 <Property name="context" type="string">
@@ -705,7 +705,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="assertions" type="AssertionRecord[]" optional>
-  Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none.
+  Every `expect` and `expect.require` matcher call that settled, in call order; unset with none.
 </Property>
 
 <Property name="changedFiles" type="Array<FileChange &amp; {count?: number}>">
@@ -1048,9 +1048,9 @@ On a CI run, `RunRecord.runner` has `kind` `ci` and `provider` `github`, `gitlab
 
 ## `AssertionRecord`
 
-An `AssertionRecord` is one settled `expect` or `expect.soft` call on `AttemptRecord.assertions`. `checks` on that attempt lists each `c.exec` command.
+An `AssertionRecord` is one settled `expect` or `expect.require` call on `AttemptRecord.assertions`. `checks` on that attempt lists each `c.exec` command.
 
-`label` is the supplied `expect` label. Without one, it is the matcher plus its first argument or named subject, cut at 60 characters. Repeats get ` #2`, ` #3`, and later suffixes. `labelled` is true when the evaluation supplies a label. `matcher` is the matcher path. `status` is `pass`, `fail`, or `error`. `soft` marks `expect.soft`. `message` is cut at 1 KB. `durationMs` is set on async matchers only.
+`label` is the supplied `expect` label. Without one, it is the matcher plus its first argument or named subject, cut at 60 characters. Repeats get ` #2`, ` #3`, and later suffixes. `labelled` is true when the evaluation supplies a label. `matcher` is the matcher path. `status` is `pass`, `fail`, or `error`. `soft` is false for `expect.require`. `at` is the call's `path:line`. `message` is cut at 1 KB. `durationMs` is set on async matchers only.
 
 ## `StartRetry`
 
@@ -1066,9 +1066,9 @@ A `StartRetry` is one entry of `AttemptRecord.startRetries`. `error` is `<harnes
 
 ## `CompareAnswer`
 
-`EvalEntry.answers` holds one `CompareAnswer` per pairwise question. `outcome` and `passRate` do not depend on it. `question`, `model`, and `resolvedModel` identify the question and the model. `votes` holds `PairVote` values, and `rates` holds `wins` out of `n` per `cut` and `name`. `error` is set when the model call fails. `artifacts` is `true` or capture names. `input` is a `FileRef` for the `questions/<n>.json` file. `stateOptions` is the state each side showed.
+`EvalEntry.answers` holds one `CompareAnswer` per pairwise question. `outcome` and `passRate` do not depend on it. `question`, `model`, and `resolvedModel` identify the question and the model. `votes` holds `PairVote` values, and `rates` holds `wins` out of `n` per `cut` and `name`. `error` is set when the model call fails. `artifacts` is `true` or capture names. `input` is a `FileRef` for the `questions/<n>.json` file. `stateOptions` is the inputs each side showed.
 
-For more information about `stateOptions`, see [the `question` option](/reference/options#question).
+For more information about each input, see [the `questions` option](/reference/options#questions).
 
 ## `PairVote`
 

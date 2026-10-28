@@ -170,7 +170,7 @@ describe('one matcher table', () => {
       .find((text) => text.includes('interface Matchers<'))
     assert.ok(declaration, 'a .d.ts in dist/ declares the Matchers interface')
     const body = declaration.slice(declaration.indexOf('interface Matchers<')).split('\n  }\n')[0]
-    const names = [...(body ?? '').matchAll(/^ {4}(\w+)\(/gm)].map((m) => m[1])
+    const names = [...(body ?? '').matchAll(/^ {4}(\w+)[(:]/gm)].map((m) => m[1])
     assert.deepEqual(names, Object.keys(MATCHERS))
   })
 
@@ -197,7 +197,7 @@ describe('one matcher table', () => {
           matcher,
           args,
           not,
-          soft: false,
+          soft: true,
           ...(label ? { label } : {}),
         } as ExpectCall
         replies.push(recorded(await expectCall(c, calls, call)))
@@ -517,8 +517,22 @@ describe('toSucceed', () => {
     assert.doesNotMatch(r.message(), /line 10\n/)
   })
 
+  test('answers an awaited result at once, and only a promise later', async () => {
+    const result = { exitCode: 1, stdout: '', stderr: '' }
+    const now = matchers.toSucceed(result)
+    assert.ok(!(now instanceof Promise))
+    assert.equal(now.pass, false)
+    const later = matchers.toSucceed(Promise.resolve(result))
+    assert.ok(later instanceof Promise)
+    assert.equal((await later).pass, false)
+  })
+
   test('rejects something that is not an exec result', async () => {
-    await assert.rejects(matchers.toSucceed('nope'), /toSucceed\(\) expects run\.exec/)
+    assert.throws(() => matchers.toSucceed('nope'), /toSucceed\(\) expects a c\.exec\(\) result/)
+    await assert.rejects(
+      async () => matchers.toSucceed(Promise.resolve('nope')),
+      /toSucceed\(\) expects a c\.exec\(\) result/,
+    )
   })
 })
 

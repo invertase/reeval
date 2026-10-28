@@ -19,7 +19,11 @@ group(
   {
     compare: { baseline: plain, variants: [withHouseGreeting] },
     questions: [
-      { question: 'Which greet.js reads more like our house style?', across: 'environment' },
+      {
+        question: 'Which greet.js reads more like our house style?',
+        across: 'environment',
+        diff: true,
+      },
     ],
     pin: ['compare'],
   },
@@ -31,8 +35,8 @@ group(
       )
       // Soft checks all run on a control that misses, so the summary can say which ones
       // separated the variant from the control and which pass on both.
-      await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)
-      await expect.soft(c, 'adds package.json').toHaveFile('package.json', /"module"/)
+      await expect(c, 'exports greet').toHaveFile('greet.js', /export/)
+      await expect(c, 'adds package.json').toHaveFile('package.json', /"module"/)
       await expect(c.exec(greetAda), 'house greeting').toSucceed()
     })
   },

@@ -10,7 +10,7 @@ const clampCheck = readFileSync(new URL('./hidden/clamp.mjs', import.meta.url), 
 evaluate('adds a clamp function', { environment: math }, async (c) => {
   await c.send('Add a clamp(n, min, max) function to src/math.js, with a test.')
 
-  await expect.soft(c.exec('node --test'), 'its tests pass').toSucceed()
+  await expect(c.exec('node --test'), 'its tests pass').toSucceed()
   await c.writeFile('clamp.check.mjs', clampCheck)
   await expect(c.exec('node clamp.check.mjs'), 'clamp clamps').toSucceed()
 })

@@ -106,8 +106,8 @@ const styled = defineEnvironment('styled', ({ skill }) => ({
 }))
 evaluate('greets', { compare: { baseline: plain, variants: [styled] }, runs: 2 }, async (c) => {
   await c.send('go')
-  await expect.soft(c, 'writes ok.txt').toHaveFile('ok.txt')
-  await expect.soft(c, 'house style').toHaveFile('styled.txt', /Ahoy/)
+  await expect(c, 'writes ok.txt').toHaveFile('ok.txt')
+  await expect(c, 'house style').toHaveFile('styled.txt', /Ahoy/)
 })
 `,
     })
@@ -154,8 +154,8 @@ evaluate('greets', { compare: { baseline: plain, variants: [styled] }, runs: 2 }
       'evals/s.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('steady', { runs: 2 }, async (c) => {
   await c.send('go')
-  expect.soft(1, 'always one').toBe(1)
-  expect.soft(process.env.FLIP, 'flips').toBeUndefined()
+  expect(1, 'always one').toBe(1)
+  expect(process.env.FLIP, 'flips').toBeUndefined()
 })
 `,
     })
@@ -694,7 +694,7 @@ evaluate('flaky', { runs: 3, gate: { passRate: 0.5 } }, async (c) => {
 })
 evaluate('judged', async (c) => {
   await c.send(prompt)
-  expect(await c.judge('Is it fine?')).toPass()
+  expect(await c.judge('Is it fine?', { diff: true })).toPass()
 })
 `,
     })

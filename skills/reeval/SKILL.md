@@ -26,7 +26,7 @@ compare a skill, fix a config, read a failure. Read a reference file when the ta
 | Read | When the task involves |
 |---|---|
 | [references/config.md](references/config.md) | Harness factories and their keys, `effort`, judge models, `reeval.yaml`, path rules, where the sandbox comes from, imports, the options cascade |
-| [references/evals.md](references/evals.md) | `evaluate.each` and families, `c.serve`, `c.writeFile` hidden tests, judge `state`, the judge's input size, judge errors, every matcher |
+| [references/evals.md](references/evals.md) | `evaluate.each` and families, `c.serve`, `c.writeFile` hidden tests, the judge's inputs, the judge's input size, judge errors, every matcher |
 | [references/capture.md](references/capture.md) | Web UIs: `c.capture()` screenshots, `instructions` journeys, `artifacts` on judges and questions |
 | [references/compare.md](references/compare.md) | `compare` beyond the example below: baselines, gates, lift and effort, labeled checks, `questions`, `skill_files` |
 | [references/environments.md](references/environments.md) | Environments: skills, files, rules, MCP servers, `git()` workspaces, `directory()`, Docker sandboxes, secrets, egress |
@@ -174,8 +174,8 @@ group('hello', () => {
     const turn = await c.send('Create hello.txt containing "hello".')
     await expect(turn).toHaveFile('hello.txt', /hello/) // async: await it
     await expect(c.exec('grep -q hello hello.txt')).toSucceed()
-    const q = 'Did the agent create hello.txt with the right content?'
-    expect(await c.judge(q)).toPass()
+    const q = 'Does hello.txt contain the right content?'
+    expect(await c.judge(q, { contents: ['hello.txt'] })).toPass()
   })
 })
 ```
@@ -188,7 +188,8 @@ group('hello', () => {
   (`recommends Genkit for a production AI feature`, not `genkit test 2`), so the results and
   `reeval analyze` read in those terms.
 - `await c.send(prompt)` runs one agent turn and returns a `Turn` (`text`, `status`, `diff`,
-  `transcript`). Call it again for multi-turn; `c.judge(q, { on: firstTurn })` grades an earlier one.
+  `transcript`). Call it again for multi-turn;
+  `c.judge(q, { on: firstTurn, task: true, output: true })` grades an earlier one.
 - `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`. A check that can fail on a
   transient (a hidden test that calls a model or a network service) gets
   `c.exec(cmd, { retries: 2 })`: any non-zero exit runs it again, and the record and output say
@@ -196,15 +197,17 @@ group('hello', () => {
   `await c.readFile(path)` the text or `null` (`~/` for home). `await c.writeFile(path, text)` places a file after a turn (a hidden
   test the agent never saw). Web apps: `c.serve` and `c.capture` in
   [references/capture.md](references/capture.md).
-- `await c.judge(question, { threshold?, model?, on?, state?, artifacts? })`: by
-  default the judge sees the prompt, the final message, the changed files and the diff, not what
-  the agent ran. `state` picks what it's given (`{ state: { diff: ['src/'] } }`,
-  `{ state: { transcript: 'tools' } }`, …; all keys in [references/evals.md](references/evals.md)).
-  Prefer deterministic checks for what can be checked; use the judge for quality, with plain
+- `await c.judge(question, options)`: the judge sees only the inputs the call turns on, and it
+  needs at least one (there are no defaults, here or in any config): `task`, `output`, `files`,
+  `diff` (`true` or patterns), `contents` (files whole), `transcript` (`true`, `'tools'`,
+  `'full'`), `checks`, `artifacts`. Pick what the question needs: code → `{ diff: ['src/**'] }`
+  or `{ contents: ['README.md'] }`, the agent's answer → `{ output: true }`, how it worked →
+  `{ transcript: 'tools' }`. `on` and `turns` only select; details in
+  [references/evals.md](references/evals.md). Prefer deterministic checks for what can be checked; use the judge for quality, with plain
   yes/no questions that don't name one specific way of doing it.
 - A failed judge call doesn't throw: `c.judge()` returns `{ verdict: 'error', score: null, error }`,
   the later judges and checks still run, and the attempt fails as a judge error at the end.
-  Write `expect.soft(await c.judge(q), name).toPass()` to see every judge's result.
+  `expect(await c.judge(q, { diff: true }), name).toPass()` records each judge's result and carries on.
 - Make the eval trustworthy. Before a real run, swap in the fake harness, and only the harness,
   so the eval runs in its real sandbox (its `docker()` image, `install`, egress and brokered
   secrets): an oracle `fakeHarness` that does the task right must pass, and a canary that cheats
@@ -216,19 +219,26 @@ group('hello', () => {
   Keep grading out of the agent's reach: place hidden tests after the turn with `c.writeFile`, and guard seeded files
   with `expect(await c.readFile(path)).toBe(original)` or `expect(c).not.toHaveChanged(['test/**'])`.
   When the behavior is the outcome, judge the program's output, not the diff:
-  `c.judge(q, { on: (await c.exec('node app.js')).stdout })`.
+  `c.judge(q, { on: (await c.exec('node app.js')).stdout, output: true })`.
 - Give the environment a `.gitignore` in `files` (the project's isn't copied in): an agent that
   runs a build otherwise fills the judge's diff with its output.
 - Matchers: `await expect(turn).toHaveFile(path, pattern?)`,
-  `await expect(c.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`, plus Vitest's.
+  `expect(await c.exec(cmd)).toSucceed()` (or `await expect(c.exec(cmd)).toSucceed()`),
+  `expect(await c.judge(q, { diff: true })).toPass()`, plus Vitest's. Each takes only its own subject:
+  `toPass()` on an exec result is a type error, so typecheck evals (`tsc --noEmit`, with
+  `typescript` installed).
   Transcript matchers (sync, no `await`): `expect(turn | c).toHaveCalledSkill(name)`,
   `toHaveCalledMcp(server, tool, input?)`, `toHaveCalledTool(name | RegExp, input?)`,
   `toHaveRun(command?)`, `toHaveEdited(path?)`, `toHaveSearched(query?)`,
   `toHaveFetched(url?)`. `expect(c).not.toHaveChanged(globs)` guards files (it reads the diff;
   `toHaveEdited` reads the transcript, so don't use it as a guard). Label requirements with
-  `expect`'s second argument: `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`.
-- A failed `expect` fails the attempt even when the eval catches it (TypeScript `try`/`catch`,
-  Python `try`/`except`), at the end like `expect.soft`. To wait for something, use
+  `expect`'s second argument: `await expect(c, 'exports greet').toHaveFile('greet.js', /export/)`.
+- Checks don't stop the eval: a failed `expect` is recorded, the body carries on, and the attempt
+  fails at its end, with every failed check listed by label and line. Use `expect.require` for
+  gates, such as a build the later checks depend on: its failure ends the body there
+  (`await expect.require(c.exec('npm run build'), 'builds').toSucceed()`). A caught
+  `expect.require` still fails the attempt. Thrown errors (the body's own, a dead sandbox, a
+  timeout) still end the attempt. To wait for something, use
   `expect.poll(() => c.exec(cmd), { timeout: 10_000 }).toSucceed()` (Python
   `expect.poll(lambda: c.exec(cmd), timeout=10).to_succeed()`), never `expect` in a retry loop. A
   caught plain Python `assert` records nothing, so `assert` or `if` in a loop also works.
@@ -277,10 +287,11 @@ group(
 - Only variant cells gate by default; a control's misses don't fail the run. Below four tries a
   side each variant's effect reads `can't tell yet`; from four, the block adds an effort table
   (median tools, time, tokens per arm), which often shows a skill's effect first. In a compare,
-  prefer `expect.soft` with labels for independent requirements.
-- `questions: ['How did the agent pick its greeting?']` beside `compare` asks a model about each
-  attempt as it ends (`choices: ['yes', 'no']` for a pick); an entry with
-  `across: 'environment'` asks which side did better, pair by pair, after the run. Questions
+  keep independent requirements as labeled `expect`s, not `expect.require`, so each gets a verdict.
+- `questions: [{ question: 'How did the agent pick its greeting?', transcript: true }]` beside
+  `compare` asks a model about each attempt as it ends (`choices: ['yes', 'no']` for a pick); an
+  entry with `across: 'environment'` (and, say, `diff: true`) asks which side did better, pair by
+  pair, after the run. Each entry turns on at least one input, as on `c.judge()`, except `contents`. Questions
   never gate and need a language model. Details, gates,
   `minLift` and `reeval query skill_files` (which skill files each attempt opened) are in
   [references/compare.md](references/compare.md).
@@ -327,7 +338,8 @@ server: [references/cli.md](references/cli.md).
 | `import { baseline }` | `baseline` is a field of `compare`, not an export |
 | `repeat: 3` / `times` | `runs: 3` |
 | Judge model `'gemini-3.8-flash'` | `'google/gemini-3.8-flash'` |
-| Forgetting `await` on `toHaveFile`/`toSucceed` | `await expect(...)` |
+| Forgetting `await` on `toHaveFile`, or on `toSucceed` given `c.exec()`'s promise | `await expect(...)` |
+| `toPass()` on `c.exec()`'s result | `toSucceed()`; `toPass()` is for `await c.judge()` |
 | `cursor()` with `fakeSandbox()` | Use `fakeHarness()` or `docker()` |
 | Test file named `*.test.ts` | `*.eval.ts` under `evals/` |
 

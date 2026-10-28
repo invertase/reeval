@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { judgeProblem } from '../src/contract/judge.ts'
+import { judgeProblem, NO_JUDGE_INPUT } from '../src/contract/judge.ts'
 import { withInputSize } from '../src/judge/size.ts'
 import { type Draft, stateOf } from '../src/judge/state.ts'
 import { mergeJudge, resolveStateOptions } from '../src/judge/state-options.ts'
@@ -82,34 +82,30 @@ test('the transcript renders one compact entry per event, by mode', () => {
   assert.ok(full[2]?.includes('x'.repeat(400)), 'full leaves tool output whole')
 })
 
-test('state resolves every key to its default, and merges key by key', () => {
-  assert.deepEqual(resolveStateOptions(undefined), {
-    task: true,
-    output: true,
-    files: true,
-    diff: true,
-    contents: [],
+test("a call's inputs resolve every key, off unless it turns it on", () => {
+  assert.deepEqual(resolveStateOptions({ contents: ['src/**'] }), {
+    task: false,
+    output: false,
+    files: false,
+    diff: false,
+    contents: ['src/**'],
     transcript: false,
     turns: 'last',
     checks: false,
   })
-  assert.deepEqual(resolveStateOptions({}), resolveStateOptions(undefined))
-  const merged = mergeJudge(
-    { threshold: 0.7, state: { diff: ['src/'], transcript: 'tools' } },
-    { state: { contents: ['a.md'], transcript: false } },
-  )
-  assert.deepEqual(merged, {
-    threshold: 0.7,
-    state: { diff: ['src/'], transcript: false, contents: ['a.md'] },
-  })
+  assert.deepEqual(resolveStateOptions({ diff: true, turns: 'all' }).turns, 'all')
   assert.deepEqual(mergeJudge({ threshold: 0.7 }, { threshold: 0.9 }), { threshold: 0.9 })
+  assert.deepEqual(mergeJudge({ threshold: 0.7, model: 'google/g' }, { model: 'openai/o' }), {
+    threshold: 0.7,
+    model: 'openai/o',
+  })
 })
 
-test('judge options name an unknown key, a misspelled state key and a bad value', () => {
+test('judge options keep the inputs to the call, and a call names at least one', () => {
   const loc = { at: 'options', where: 'evals/a.eval.ts › lands' } as const
   assert.equal(
     judgeProblem({ diff: ['src/'] }, loc),
-    'Unknown judge option "diff" in evals/a.eval.ts › lands. Did you mean "state.diff"?',
+    'Unknown judge option "diff" in evals/a.eval.ts › lands. diff is per call: c.judge(question, { diff }).',
   )
   assert.equal(
     judgeProblem({ thresold: 0.5 }, loc),
@@ -119,7 +115,14 @@ test('judge options name an unknown key, a misspelled state key and a bad value'
     judgeProblem({ on: 'x' }, loc),
     'Unknown judge option "on" in evals/a.eval.ts › lands. on is per call: c.judge(question, { on }).',
   )
-  assert.equal(judgeProblem({ on: 'x', artifacts: [] }, { at: 'call' }), undefined)
+  assert.equal(
+    judgeProblem({ state: { diff: true } }, loc),
+    'Unknown judge option "state" in evals/a.eval.ts › lands.',
+  )
+  assert.equal(judgeProblem({ output: true, on: 'x', artifacts: [] }, { at: 'call' }), undefined)
+  assert.equal(judgeProblem({ on: 'x', artifacts: [] }, { at: 'call' }), NO_JUDGE_INPUT)
+  assert.equal(judgeProblem({}, { at: 'call' }), NO_JUDGE_INPUT)
+  assert.equal(judgeProblem({ threshold: 0.5, diff: false }, { at: 'call' }), NO_JUDGE_INPUT)
   assert.equal(
     judgeProblem({ threshold: 2, maxConcurrent: 0 }, { at: 'call' }),
     'c.judge() threshold must be between 0 and 1 (got 2)',
@@ -133,23 +136,23 @@ test('judge options name an unknown key, a misspelled state key and a bad value'
     'c.judge() artifacts must be true or a list of capture handles or names (got "form")',
   )
   assert.equal(
-    judgeProblem({ model: { kind: 'fake-judge', score: () => 1 } }, { at: 'call' }),
+    judgeProblem({ model: { kind: 'fake-judge', score: () => 1 }, task: true }, { at: 'call' }),
     undefined,
   )
   assert.equal(
-    judgeProblem({ state: { contnets: ['a'] } }, loc),
-    'Unknown judge.state key "contnets" in evals/a.eval.ts › lands. Did you mean "contents"?',
+    judgeProblem({ contnets: ['a'] }, { at: 'call' }),
+    'Unknown judge option "contnets" in c.judge(). Did you mean "contents"?',
   )
   assert.equal(
-    judgeProblem({ state: { turns: 'first' } }, loc),
-    `judge.state.turns in evals/a.eval.ts › lands must be 'last' or 'all' (got "first")`,
+    judgeProblem({ diff: true, turns: 'first' }, { at: 'call' }),
+    `c.judge() turns must be 'last' or 'all' (got "first")`,
   )
   assert.equal(
-    judgeProblem({ state: { diff: [] } }, loc),
-    'judge.state.diff in evals/a.eval.ts › lands must be true, false or a non-empty list of patterns (got [])',
+    judgeProblem({ diff: [] }, { at: 'call' }),
+    'c.judge() diff must be true, false or a non-empty list of patterns (got [])',
   )
   assert.equal(
-    judgeProblem({ state: { contents: ['**', '!dist/'], checks: true } }, loc),
+    judgeProblem({ contents: ['**', '!dist/'], checks: true }, { at: 'call' }),
     undefined,
   )
 })
@@ -157,7 +160,7 @@ test('judge options name an unknown key, a misspelled state key and a bad value'
 const patch = (path: string, body: string) =>
   `diff --git a/${path} b/${path}\nnew file mode 100644\n--- /dev/null\n+++ b/${path}\n@@ -0,0 +1 @@\n+${body}\n`
 
-test("a provider error keeps the provider's message and names the state keys that were on, largest first", () => {
+test("a provider error keeps the provider's message and names the inputs that were on, largest first", () => {
   const state = stateOf({
     all: false,
     turns: [{ task: 'do it', output: 'done', transcript: 't'.repeat(8000) }],
@@ -170,7 +173,7 @@ test("a provider error keeps the provider's message and names the state keys tha
   assert.deepEqual(rest, [])
   assert.match(
     hint ?? '',
-    /^The judge's input was ~7k tokens \(estimated\): diff 5k, of which big\.ts is 5k; transcript 2k\. Narrow state\.diff, state\.transcript, state\.files, state\.task or state\.output\.$/,
+    /^The judge's input was ~7k tokens \(estimated\): diff 5k, of which big\.ts is 5k; transcript 2k\. Narrow diff, transcript, files, task or output\.$/,
   )
 })
 

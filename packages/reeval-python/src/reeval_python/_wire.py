@@ -48,8 +48,12 @@ class AntigravityHarnessDescriptor(TypedDict):
     startTimeout: NotRequired[Duration]
 
 
-# One `expect` or `expect.soft` matcher call an attempt made.
+# One `expect` or `expect.require` matcher call an attempt made, or a check another language
+# made.
 class AssertionRecord(TypedDict):
+    # `path:line` of the call in the eval file, relative to the project root, when reeval saw
+    # it.
+    at: NotRequired[str]
     # Async matchers only (`toHaveFile`, `toSucceed`, `.resolves`, `expect.poll`).
     durationMs: NotRequired[float]
     # `label` is the supplied `expect` label. Without one, it is the matcher plus its first
@@ -62,6 +66,8 @@ class AssertionRecord(TypedDict):
     matcher: str
     # Why it failed or couldn't answer, cut at 1 KB.
     message: NotRequired[str]
+    # A failure didn't end the eval's body: an `expect`. False for `expect.require` and for a
+    # check that threw, such as Python's `assert`, which end the body when they fail.
     soft: bool
     # `error`: the matcher couldn't answer (a subject it can't read, an event the harness
     # doesn't report).
@@ -152,6 +158,14 @@ class AttemptCallWriteFile(TypedDict):
     path: str
 
 
+# Where the eval made the call, which the record names beside the check's outcome.
+class AttemptCallExpectAt(TypedDict):
+    # The eval file: absolute, or relative to the project root.
+    file: str
+    # From 1.
+    line: int
+
+
 # `expect.poll`: reeval re-reads the subject and retries the matcher until it passes, recording
 # only the final outcome. The subject must be one reeval can re-read: the attempt, a command or
 # a file.
@@ -167,6 +181,7 @@ AttemptCallExpect = TypedDict(
     "AttemptCallExpect",
     {
         "args": "list[MatcherArg]",
+        "at": "NotRequired[AttemptCallExpectAt]",
         "label": "NotRequired[str]",
         "matcher": "str",
         "not": "bool",
@@ -178,9 +193,19 @@ AttemptCallExpect = TypedDict(
 )
 
 
+# Where the eval made the call, which the record names beside the check's outcome.
+class AttemptCallRecordAt(TypedDict):
+    # The eval file: absolute, or relative to the project root.
+    file: str
+    # From 1.
+    line: int
+
+
 # A check the eval's own language made, such as Python's `assert`: recorded as a matcher call
 # is, so it's named, counted and compared the same. Replies with its record.
 class AttemptCallRecord(TypedDict):
+    # Where the eval made the call, which the record names beside the check's outcome.
+    at: NotRequired[AttemptCallRecordAt]
     # The check's own name, the same whether it passes or fails.
     label: NotRequired[str]
     # What made the check in the eval's language, e.g. `assert`.
@@ -188,7 +213,8 @@ class AttemptCallRecord(TypedDict):
     # Why it failed.
     message: NotRequired[str]
     op: Literal["record"]
-    # A failure fails the attempt at its end, as `expect.soft`. Default false.
+    # The body carried on after a failure, as after an `expect`. Default false: the check
+    # raised, as Python's `assert` does.
     soft: NotRequired[bool]
     status: Literal["pass", "fail"]
     # What it checked, as the eval wrote it (`result.ok`): names the check when it has no label.
@@ -199,8 +225,8 @@ class AttemptCallRecord(TypedDict):
 # failed.
 class AttemptCallJudge(TypedDict):
     op: Literal["judge"]
-    options: NotRequired[JudgeCallData]
-    # A yes/no question about the graded turn or value.
+    options: JudgeCallData
+    # A yes/no question about the inputs `options` turns on.
     question: str
 
 
@@ -211,7 +237,7 @@ AttemptCall: TypeAlias = "AttemptCallSend | AttemptCallExec | AttemptCallServe |
 
 # The runner to reeval: the eval's body has finished. The attempt's checks and record follow.
 class AttemptDone(TypedDict):
-    # What the body threw, if it threw. A failed `expect` (not soft) is one.
+    # What the body threw, if it threw. A failed `expect.require` is one.
     error: NotRequired[AttemptError]
     type: Literal["done"]
 
@@ -516,9 +542,6 @@ class ConfigJudgeOptions(TypedDict):
     model: NotRequired[FakeJudgeModel | str]
     # AI SDK provider options for the judge's calls, keyed by provider.
     providerOptions: NotRequired[dict[str, dict[str, JSONValue]]]
-    # The judge's state: what the judge is given beside the question, not the workspace's or the
-    # attempt's state. Merged key by key down the cascade.
-    state: NotRequired[JudgeStateOptions]
     # Minimum score (0–1) for a `pass` verdict.
     threshold: NotRequired[float]
 
@@ -775,7 +798,7 @@ class EvalOptionsDataCompare(TypedDict):
     keepWorkspace: NotRequired[bool]
     # Keys a profile's `limit` may not narrow for this group or eval.
     pin: NotRequired[list[PinnableKey]]
-    # Defaults for every question: `model`, and `state` merged key by key, down the cascade.
+    # The model every question that names none of its own is answered by, down the cascade.
     question: NotRequired[QuestionOptions]
     # What a language model is asked about the attempts, always a list; they never change pass,
     # fail or the exit code. A question with `across` picks between pairs of attempts once they
@@ -853,7 +876,7 @@ class EvalOptionsDataCompare2(TypedDict):
     keepWorkspace: NotRequired[bool]
     # Keys a profile's `limit` may not narrow for this group or eval.
     pin: NotRequired[list[PinnableKey]]
-    # Defaults for every question: `model`, and `state` merged key by key, down the cascade.
+    # The model every question that names none of its own is answered by, down the cascade.
     question: NotRequired[QuestionOptions]
     # What a language model is asked about the attempts, always a list; they never change pass,
     # fail or the exit code. A question with `across` picks between pairs of attempts once they
@@ -915,7 +938,7 @@ class EvalOptionsData3(TypedDict):
     keepWorkspace: NotRequired[bool]
     # Keys a profile's `limit` may not narrow for this group or eval.
     pin: NotRequired[list[PinnableKey]]
-    # Defaults for every question: `model`, and `state` merged key by key, down the cascade.
+    # The model every question that names none of its own is answered by, down the cascade.
     question: NotRequired[QuestionOptions]
     # What a language model is asked about the attempts, always a list; they never change pass,
     # fail or the exit code. A question with `across` picks between pairs of attempts once they
@@ -1258,12 +1281,16 @@ class JudgeCallDataOnValue(TypedDict):
 
 
 # `c.judge()`'s options as data: the judge options, with the model by name or a fake judge's
-# numeric score, plus the call-only `on` and `artifacts`.
+# numeric score, the inputs it shows the judge (at least one turned on) and `on`.
 class JudgeCallData(TypedDict):
     # Captures this call sends the judge as image file parts: a capture `c.capture` returned, or
     # its name, or `true` for every capture so far. The provider that cannot take files fails
     # the call.
     artifacts: NotRequired[Literal[True] | list[str | Capture]]
+    checks: NotRequired[bool | list[str]]
+    contents: NotRequired[list[str]]
+    diff: NotRequired[bool | list[str]]
+    files: NotRequired[bool]
     # The gateway the judge's calls go through, by name or by its helper. It skips the config's
     # `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.
     gateway: NotRequired[Literal["direct", "vercel", "openrouter", "vertex"] | JudgeCallDataGatewayDirect | JudgeCallDataGatewayVercel | JudgeCallDataGatewayOpenrouter | JudgeCallDataGatewayVertex]
@@ -1271,15 +1298,17 @@ class JudgeCallData(TypedDict):
     maxConcurrent: NotRequired[int]
     # `'provider/model'`, or a fake judge with a numeric score.
     model: NotRequired[str | FakeJudgeData]
-    # What to grade instead of the latest turn: an earlier turn, or a value.
+    # The turn `task`, `output`, `transcript` and `diff` read instead of the latest: an earlier
+    # turn, or a value graded as the output.
     on: NotRequired[JudgeCallDataOnTurn | JudgeCallDataOnValue]
+    output: NotRequired[bool]
     # AI SDK provider options for the judge's calls, keyed by provider.
     providerOptions: NotRequired[dict[str, dict[str, JSONValue]]]
-    # The judge's state: what the judge is given beside the question, not the workspace's or the
-    # attempt's state. Merged key by key down the cascade.
-    state: NotRequired[JudgeStateOptions]
+    task: NotRequired[bool]
     # Minimum score (0–1) for a `pass` verdict.
     threshold: NotRequired[float]
+    transcript: NotRequired[bool | Literal["tools", "full"]]
+    turns: NotRequired[Literal["last", "all"]]
 
 
 # What `c.judge()` returns when the call failed (the provider's error, after any retries): the
@@ -1296,35 +1325,6 @@ class JudgeFailure(TypedDict):
     score: None
     threshold: float
     verdict: Literal["error"]
-
-
-# What the judge is given: each key is a key of the state in `judge-input.json`. An unset key
-# keeps its default, which is what the judge gets with no `state` option at all.
-class JudgeStateOptions(TypedDict):
-    # `c.exec` results so far; a list shows only those commands, as passed to `c.exec`. Default
-    # false.
-    checks: NotRequired[bool | list[str]]
-    # Workspace files shown whole, as they are now, changed or not: exact paths or
-    # gitignore-style patterns (`'**'`, `'src/**'`; the last match wins, `!` excludes) over the
-    # files git sees in the workspace. A missing exact path is `null`; a pattern that matches
-    # nothing adds nothing. These files leave the diff. Default none.
-    contents: NotRequired[list[str]]
-    # The diff since the eval started. A list is gitignore-style patterns over workspace paths:
-    # the last matching pattern wins and `!` excludes. Default true.
-    diff: NotRequired[bool | list[str]]
-    # `status path` lines for the changed files, under `diff`'s patterns. Default true.
-    files: NotRequired[bool]
-    # The graded turn's final message, or `on`'s value. Default true.
-    output: NotRequired[bool]
-    # The graded turn's prompt. Default true.
-    task: NotRequired[bool]
-    # The graded turn's transcript as text lines: `true` is messages and tool calls with tool
-    # output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output.
-    # Default false.
-    transcript: NotRequired[bool | Literal["tools", "full"]]
-    # `'all'`: every turn up to the graded one under `turns`, each with its task, output and
-    # (with `transcript`) transcript. Default `'last'`.
-    turns: NotRequired[Literal["last", "all"]]
 
 
 # One argument to a matcher: a JSON value, a regular expression as `{ regexp, flags? }`, or a
@@ -1575,65 +1575,46 @@ class PluginSourcePlugin4(TypedDict):
 PluginSource: TypeAlias = "PluginSourcePlugin | PluginSourcePlugin2 | PluginSourcePlugin3 | PluginSourcePlugin4"
 
 
-class QuestionQuestion(TypedDict):
-    # The factor it varies when pairing, or both: `'environment'` holds the harness, `'harness'`
-    # holds the environment. Unset, it's asked of each attempt on its own.
-    across: NotRequired[PairFactor | list[PairFactor]]
-    # Each attempt's own captures, by name; `true` sends all of them. Replaces
-    # `question.artifacts`.
-    artifacts: NotRequired[Literal[True] | list[str]]
-    # The answers a question asked of each attempt picks from, with a short reason.
-    choices: NotRequired[list[str]]
-    # `'provider/model'` that answers it, over the cascaded `question.model`.
-    model: NotRequired[str]
-    question: str
-    # What it's shown of each attempt, over the cascaded `question.state`, key by key.
-    state: NotRequired[QuestionStateOptions]
-
-
 # A question a language model answers after the attempts: its text, or the text and its options.
 # With `across`, it picks between two attempts that differ only in that factor, in both orders;
 # without it, it's asked of each attempt on its own. Without a model, the cascaded
 # `question.model` answers, else `analysis.model`, else the judge's when it's a language model.
-# `state` and `artifacts` choose what it's shown of each attempt.
-Question: TypeAlias = "str | QuestionQuestion"
-
-
-# Defaults for every question: `model` and `artifacts` replaced, `state` merged key by key.
-class QuestionOptions(TypedDict):
-    # Each attempt's own captures, by name; `true` sends all of them. Default none.
+# It's shown only the inputs it turns on, at least one.
+class Question(TypedDict):
+    # The factor it varies when pairing, or both: `'environment'` holds the harness, `'harness'`
+    # holds the environment. Unset, it's asked of each attempt on its own.
+    across: NotRequired[PairFactor | list[PairFactor]]
+    # Each attempt's own captures, by name; `true` sends all of them.
     artifacts: NotRequired[Literal[True] | list[str]]
-    # `'provider/model'` that answers every question below it without its own `model`.
-    model: NotRequired[str]
-    # What it's shown of each attempt.
-    state: NotRequired[QuestionStateOptions]
-
-
-# What a question is shown of each attempt: the keys of `judge.state` but `contents` (the
-# attempts' workspaces are gone when questions are asked). An unset key keeps its default: a
-# pairwise question shows the task and the diff; one asked of each attempt also shows the final
-# message and the transcript.
-class QuestionStateOptions(TypedDict):
-    # `c.exec` results; a list shows only those commands, as passed to `c.exec`. Default false.
+    # `c.exec` results; a list shows only those commands, as passed to `c.exec`.
     checks: NotRequired[bool | list[str]]
+    # The answers a question asked of each attempt picks from, with a short reason.
+    choices: NotRequired[list[str]]
     # The diff since the eval started. A list is gitignore-style patterns over workspace paths:
-    # the last matching pattern wins and `!` excludes. Default true.
+    # the last matching pattern wins and `!` excludes.
     diff: NotRequired[bool | list[str]]
-    # `status path` lines for the changed files, under `diff`'s patterns. Default false.
+    # `status path` lines for the changed files, under `diff`'s patterns.
     files: NotRequired[bool]
-    # The final message: the agent's own account of its work. Default false in a pair, true per
-    # attempt.
+    # `'provider/model'` that answers it, over the cascaded `question.model`.
+    model: NotRequired[str]
+    # The final message: the agent's own account of its work.
     output: NotRequired[bool]
-    # The prompts the attempt was sent, once for both sides when they match. Default true.
+    question: str
+    # The prompts the attempt was sent, once for both sides when they match.
     task: NotRequired[bool]
     # The transcript as text lines: `true` is messages and tool calls with tool output clipped,
     # `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each
-    # harness's tools, so a pair of two harnesses isn't blind. Default false in a pair, true per
-    # attempt.
+    # harness's tools, so a pair of two harnesses isn't blind.
     transcript: NotRequired[bool | Literal["tools", "full"]]
     # `'all'`: every turn under `turns`, each with its task, output and (with `transcript`)
     # transcript; `'last'`: the last turn only. Default `'all'`.
     turns: NotRequired[Literal["last", "all"]]
+
+
+# Defaults for every question below it. What a question is shown is its own, never a default.
+class QuestionOptions(TypedDict):
+    # `'provider/model'` that answers every question below it without its own `model`.
+    model: NotRequired[str]
 
 
 SandboxDescriptor: TypeAlias = "FakeSandboxDescriptor | DockerSandboxDescriptor"

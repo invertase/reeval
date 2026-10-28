@@ -73,7 +73,7 @@ type Assertion = NonNullable<AttemptRecord['assertions']>[number]
 const STATUS_ICON = { pass: CircleCheck, fail: CircleX, error: CircleAlert } as const
 const STATUS_TONE = { pass: 'text-pass', fail: 'text-fail', error: 'text-infra' } as const
 
-/** Each `expect` the eval made, in call order, with why it failed. */
+/** Each `expect` the eval made, in call order, with its line and why it failed. */
 function Assertions({ assertions }: { assertions: Assertion[] }) {
   return (
     <section className="space-y-2" data-assertions>
@@ -86,12 +86,21 @@ function Assertions({ assertions }: { assertions: Assertion[] }) {
               <div className="flex items-center gap-3">
                 <Icon className={cn('size-4 shrink-0', STATUS_TONE[x.status])} />
                 <span className="min-w-0 flex-1 truncate text-sm">{x.label}</span>
-                {x.soft ? (
-                  <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                    soft
+                {x.soft ? null : (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] text-muted-foreground"
+                    title="A failure here ends the eval's body"
+                  >
+                    require
                   </Badge>
-                ) : null}
+                )}
                 <code className="font-mono text-xs text-muted-foreground">{x.matcher}</code>
+                {x.at ? (
+                  <code className="font-mono text-xs text-muted-foreground" data-at>
+                    {x.at}
+                  </code>
+                ) : null}
                 {x.durationMs !== undefined ? (
                   <span className="tabular w-14 text-right text-xs text-muted-foreground">
                     {formatDuration(x.durationMs)}

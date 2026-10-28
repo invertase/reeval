@@ -92,11 +92,11 @@ import { fakeSandbox } from 'reeval/sandbox'
 const sandbox = fakeSandbox()
 const plain = defineEnvironment('plain', { sandbox })
 const other = defineEnvironment('other', { sandbox })
-group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other] }, questions: [{ question: 'Which wrote hello.txt?', across: 'environment' }], runs: 2 } : {}, () => {
+group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other] }, questions: [{ question: 'Which wrote hello.txt?', across: 'environment', task: true, diff: true }], runs: 2 } : {}, () => {
   evaluate('writes hello', async (c) => {
     await c.send('write hello.txt')
     await expect(c.exec('test -f hello.txt')).toSucceed()
-    expect(await c.judge('Did it write hello.txt?')).toPass()
+    expect(await c.judge('Did it write hello.txt?', { diff: true })).toPass()
   })
 })
 `

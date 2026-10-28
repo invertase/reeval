@@ -9,7 +9,7 @@ evaluate('fetches a page from an allowed host', { egress }, async (c) => {
   )
 
   const run = await c.exec('node title.js')
-  await expect(run).toSucceed()
+  expect(run).toSucceed()
   expect(run.stdout.trim()).toBe('Example Domain')
   expect((await c.exec('curl -sS https://example.org')).exitCode, 'other hosts').not.toBe(0)
 })

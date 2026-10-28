@@ -48,7 +48,8 @@
         "questions": [
           {
             "question": "Which handles state more cleanly?",
-            "across": "environment"
+            "across": "environment",
+            "diff": true
           }
         ]
       },
@@ -134,7 +135,12 @@
           "name": "replaces the questions",
           "mode": "run",
           "options": {
-            "questions": ["What did the agent change?"]
+            "questions": [
+              {
+                "question": "What did the agent change?",
+                "diff": true
+              }
+            ]
           },
           "body": "b4",
           "source": {
@@ -163,7 +169,8 @@
         "questions": [
           {
             "question": "Which is shorter?",
-            "across": "environment"
+            "across": "environment",
+            "diff": true
           }
         ]
       },

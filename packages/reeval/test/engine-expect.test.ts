@@ -1,7 +1,10 @@
 // The standalone `expect` (engine/expect.ts): Vitest's matchers from @vitest/expect, routed to the
 // attempt that asserts, with reeval's shims for the runner state @vitest/expect expects.
 import assert from 'node:assert/strict'
+import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { subjectError } from '../src/assert.ts'
 import { assertionRecords, checkFailure } from '../src/attempt/assertions.ts'
 import {
   attemptExpectError,
@@ -10,6 +13,7 @@ import {
   type ExpectTask,
   expect,
   extendExpect,
+  lineIn,
   type Pending,
   rawAssertions,
   SUBJECT,
@@ -94,18 +98,153 @@ describe('standalone expect', () => {
     fails(() => attemptRecordings(), /only called inside an attempt/)
   })
 
-  test('expect.soft records a failure on the attempt and carries on', () => {
+  test('expect records a failure on the attempt and carries on; expect.require throws it', () => {
     const t = task()
     const own = createExpect(t)
-    assert.equal(own.soft(1).toBe(2), undefined)
-    own.soft(3).toBe(3)
-    assert.equal(attemptExpectError(own), undefined, 'a soft failure is not a count error')
+    assert.equal(own(1).toBe(2), undefined)
+    own(3).toBe(3)
+    assert.equal(attemptExpectError(own), undefined, 'a recorded failure is not a count error')
     const error = checkFailure(rawAssertions(t))
     assert.ok(error instanceof Error)
     assert.equal(error.name, 'AssertionError')
     assert.match(error.message, /expected 1 to be 2/)
-    // Without an attempt, soft has nowhere to record.
-    fails(() => createExpect().soft(1).toBe(2), /expect\.soft\(\) can only be used inside a test/)
+    fails(() => own.require(4, 'gate').toBe(5), /gate: expected 4 to be 5/)
+    own.require(6).not.toBe(7)
+    assert.deepEqual(
+      records(t).map((x) => [x.label, x.status, x.soft]),
+      [
+        ['toBe 2', 'fail', true],
+        ['toBe 3', 'pass', true],
+        ['gate', 'fail', false],
+        ['not.toBe 7', 'pass', false],
+      ],
+    )
+    assert.equal((own as unknown as Record<string, unknown>).soft, undefined, 'no expect.soft')
+    // Without an attempt there's nowhere to record a failure, so it throws.
+    fails(() => createExpect()(1).toBe(2), /expected 1 to be 2/)
+    fails(() => createExpect().require(1).toBe(2), /expected 1 to be 2/)
+  })
+
+  test("an expect inside a poll's function throws, so the poll tries again", async () => {
+    const t = task()
+    const own = createExpect(t)
+    let n = 0
+    await own
+      .poll(
+        () => {
+          n++
+          own(n, 'inner').toBeGreaterThan(2)
+          return n
+        },
+        { interval: 5, timeout: 1000 },
+      )
+      .toBeGreaterThan(0)
+    let m = 0
+    await own
+      .poll(() => own.poll(() => ++m, { interval: 5, timeout: 5, message: 'nested' }).toBe(3), {
+        interval: 5,
+        timeout: 1000,
+      })
+      .toBeTruthy()
+    assert.deepEqual(
+      records(t).map((x) => [x.label, x.status]),
+      [
+        ['poll.toBeGreaterThan 0', 'pass'],
+        ['inner', 'pass'],
+        ['poll.toBeTruthy', 'pass'],
+        ['nested', 'pass'],
+      ],
+      'only the try that held is kept',
+    )
+    assert.equal(checkFailure(rawAssertions(t)), undefined)
+  })
+
+  test('a failed Chai method chains on, as a passing one does', () => {
+    const t = task()
+    const own = createExpect(t) as unknown as (value: unknown) => {
+      to: { include: (v: unknown) => { and: { include: (v: unknown) => unknown } } }
+    }
+    own([1]).to.include(2).and.include(3)
+    assert.deepEqual(
+      records(t).map((x) => [x.matcher, x.status]),
+      [
+        ['include', 'fail'],
+        ['include', 'fail'],
+      ],
+    )
+  })
+
+  test('an error that is not the matcher failing ends the body even under expect', async () => {
+    const t = task()
+    const own = createExpect(t)
+    const gone = Object.assign(new Error('the sandbox is gone'), { name: 'InfraError' })
+    await assert.rejects(
+      () => own(Promise.reject(gone)).resolves.toBe(1) as never,
+      /promise rejected "InfraError: the sandbox is gone" instead of resolving/,
+    )
+    extendExpect({
+      toReachTheSandbox: () => {
+        throw gone
+      },
+      toReachItLater: async () => {
+        throw gone
+      },
+    })
+    const reach = own(1) as unknown as Record<'toReachTheSandbox' | 'toReachItLater', () => unknown>
+    fails(() => reach.toReachTheSandbox(), /the sandbox is gone/)
+    await assert.rejects(() => reach.toReachItLater() as never, /the sandbox is gone/)
+    // A rejection that is itself a failed check is the matcher's own, and is recorded.
+    const failed = Object.assign(new Error('nested'), { __vitest_error_context__: {} })
+    await own(Promise.reject(failed), 'nested').resolves.toBe(1)
+    await own(Promise.reject('not an Error'), 'plain').resolves.toBe(1)
+    await own(Promise.resolve(1), 'rejects').rejects.toThrow()
+    assert.deepEqual(
+      records(t).map((x) => [x.label, x.status]),
+      [
+        ['resolves.toBe 1', 'fail'],
+        ['toReachTheSandbox', 'fail'],
+        ['toReachItLater', 'fail'],
+        ['nested', 'fail'],
+        ['plain', 'fail'],
+        ['rejects', 'fail'],
+      ],
+    )
+  })
+
+  test("each matcher call records its line in the eval file, when it's called from there", async () => {
+    const file = fileURLToPath(import.meta.url)
+    const t: ExpectTask = { ...task(), file }
+    const own = createExpect(t)
+    const line = (offset: number) =>
+      `test/engine-expect.test.ts:${Number(new Error().stack?.split('\n')[2]?.match(/:(\d+):\d+\)?$/)?.[1]) + offset}`
+    const here = line(1)
+    own(1).toBe(1)
+    const later = line(1)
+    await own(Promise.resolve(1)).resolves.toBe(2)
+    const polled = line(1)
+    await own.poll(() => 1, { interval: 5, timeout: 10 }).toBe(2)
+    // From a file it isn't, there's no line; a task without a file records none either.
+    createExpect({ ...task(), file: pathToFileURL('/elsewhere.eval.ts').href })(1).toBe(1)
+    createExpect(task())(1).toBe(1)
+    assert.deepEqual(
+      records(t).map((x) => x.at),
+      [here, later, polled],
+    )
+    const stack = [
+      'Error',
+      '    at new Promise (<anonymous>)',
+      '    at f (/x/a.eval.ts:3:4)',
+      '    at async /x/my evals (v2)/c.eval.ts:7:1',
+      '    at g (/x/my evals (v2)/d.eval.ts:9:2)',
+    ].join('\n')
+    assert.equal(
+      lineIn(stack, '/x/b.eval.ts'),
+      undefined,
+      'a frame without a line, and another file',
+    )
+    assert.match(lineIn(stack, pathToFileURL('/x/a.eval.ts').href) ?? '', /a\.eval\.ts:3$/)
+    assert.match(lineIn(stack, '/x/my evals (v2)/c.eval.ts') ?? '', /\(v2\)\/c\.eval\.ts:7$/)
+    assert.match(lineIn(stack, '/x/my evals (v2)/d.eval.ts') ?? '', /\(v2\)\/d\.eval\.ts:9$/)
   })
 
   test('expect.poll retries until the matcher passes', async () => {
@@ -190,10 +329,10 @@ describe('assertions recorded on the attempt', () => {
     const own = createExpect(t)
     own(1, 'one').toBe(1)
     own(1).not.toBe(2)
-    assert.throws(() => own(1).toBe(2), /expected 1 to be 2/)
+    assert.throws(() => own.require(1).toBe(2), /expected 1 to be 2/)
     own('x', '').toBe('x')
     await own(Promise.resolve(3)).resolves.toBe(3)
-    await assert.rejects(() => own(Promise.resolve(3), 'three').resolves.toBe(4) as never)
+    await own(Promise.resolve(3), 'three').resolves.toBe(4)
     own('abc').to.equal('abc').and.have.length(3)
     own('abc').to.have.length.of.at.least(2)
     assert.equal(typeof own([1]).to.include.name, 'string')
@@ -202,8 +341,8 @@ describe('assertions recorded on the attempt', () => {
     assert.deepEqual(
       records(t).map(({ durationMs, ...x }) => x),
       [
-        { label: 'one', labelled: true, matcher: 'toBe', status: 'pass', soft: false },
-        { label: 'not.toBe 2', labelled: false, matcher: 'not.toBe', status: 'pass', soft: false },
+        { label: 'one', labelled: true, matcher: 'toBe', status: 'pass', soft: true },
+        { label: 'not.toBe 2', labelled: false, matcher: 'not.toBe', status: 'pass', soft: true },
         {
           label: 'toBe 2',
           labelled: false,
@@ -212,25 +351,25 @@ describe('assertions recorded on the attempt', () => {
           soft: false,
           message: 'expected 1 to be 2 // Object.is equality',
         },
-        { label: 'toBe x', labelled: false, matcher: 'toBe', status: 'pass', soft: false },
+        { label: 'toBe x', labelled: false, matcher: 'toBe', status: 'pass', soft: true },
         {
           label: 'resolves.toBe 3',
           labelled: false,
           matcher: 'resolves.toBe',
           status: 'pass',
-          soft: false,
+          soft: true,
         },
         {
           label: 'three',
           labelled: true,
           matcher: 'resolves.toBe',
           status: 'fail',
-          soft: false,
+          soft: true,
           message: 'three: expected 3 to be 4 // Object.is equality',
         },
-        { label: 'equal abc', labelled: false, matcher: 'equal', status: 'pass', soft: false },
-        { label: 'length 3', labelled: false, matcher: 'length', status: 'pass', soft: false },
-        { label: 'least 2', labelled: false, matcher: 'least', status: 'pass', soft: false },
+        { label: 'equal abc', labelled: false, matcher: 'equal', status: 'pass', soft: true },
+        { label: 'length 3', labelled: false, matcher: 'length', status: 'pass', soft: true },
+        { label: 'least 2', labelled: false, matcher: 'least', status: 'pass', soft: true },
       ],
     )
     const timed = records(t).filter((x) => x.durationMs !== undefined)
@@ -243,14 +382,18 @@ describe('assertions recorded on the attempt', () => {
     assert.notEqual(records(t)[0]?.label, 'toBe 1')
   })
 
-  test('a soft matcher records its own outcome, fails the attempt at the end and carries on', async () => {
+  test('a failed expect records its own outcome, fails the attempt at the end and carries on', async () => {
     const t = task()
     const own = createExpect(t)
-    own.soft(1, 'first').toBe(2)
-    own.soft(2).toBe(2)
-    await own.soft(Promise.resolve(1), 'later').resolves.toBe(5)
-    await own.soft(Promise.resolve(1)).resolves.toBe(1)
-    own.soft(3).toBe(4)
+    own(1, 'first').toBe(2)
+    own(2).toBe(2)
+    await own(Promise.resolve(1), 'later').resolves.toBe(5)
+    await own(Promise.resolve(1)).resolves.toBe(1)
+    own(3).toBe(4)
+    await assert.rejects(
+      () => own.require(Promise.resolve(1), 'gate').resolves.toBe(5) as never,
+      /gate: expected 1 to be 5/,
+    )
     assert.deepEqual(
       records(t).map((x) => [x.label, x.status, x.soft]),
       [
@@ -259,9 +402,10 @@ describe('assertions recorded on the attempt', () => {
         ['later', 'fail', true],
         ['resolves.toBe 1', 'pass', true],
         ['toBe 4', 'fail', true],
+        ['gate', 'fail', false],
       ],
     )
-    const soft = rawAssertions(t).filter((x) => x.status === 'fail')
+    const soft = rawAssertions(t).filter((x) => x.status === 'fail' && x.soft)
     assert.equal(soft.length, 3)
     assert.ok(soft.every((x) => x.error instanceof Error))
     assert.match(checkFailure(rawAssertions(t))?.message ?? '', /first: expected 1 to be 2/)
@@ -270,7 +414,10 @@ describe('assertions recorded on the attempt', () => {
   test("a matcher that can't answer is an error, not a failure; a thrown non-Error keeps its text", () => {
     extendExpect({
       toBeReported: () => {
-        throw new TypeError('toBeReported() expects a turn')
+        throw subjectError('toBeReported() expects a turn')
+      },
+      toBeTyped: () => {
+        throw new TypeError("Cannot read properties of undefined (reading 'x')")
       },
       toBeAnswered: () => {
         const error = new Error("the harness doesn't report it")
@@ -287,9 +434,16 @@ describe('assertions recorded on the attempt', () => {
     const t = task()
     const own = createExpect(t) as unknown as (
       value: unknown,
-    ) => Record<'toBeReported' | 'toBeAnswered' | 'toThrowNull' | 'toThrowText', () => void>
-    assert.throws(() => own(1).toBeReported(), TypeError)
-    assert.throws(() => own(1).toBeAnswered(), /doesn't report/)
+    ) => Record<
+      'toBeReported' | 'toBeAnswered' | 'toBeTyped' | 'toThrowNull' | 'toThrowText',
+      () => void
+    >
+    own(1).toBeReported()
+    own(1).toBeAnswered()
+    const required = (own as unknown as { require: typeof own }).require
+    assert.throws(() => required(1).toBeReported(), TypeError)
+    // The eval's own TypeError, or a thrown non-Error, isn't the matcher's answer: it ends the body.
+    assert.throws(() => own(1).toBeTyped(), /reading 'x'/)
     assert.throws(() => own(1).toThrowNull())
     assert.throws(() => own(1).toThrowText())
     assert.deepEqual(
@@ -297,6 +451,8 @@ describe('assertions recorded on the attempt', () => {
       [
         ['error', 'toBeReported() expects a turn'],
         ['error', "the harness doesn't report it"],
+        ['error', 'toBeReported() expects a turn'],
+        ['fail', "Cannot read properties of undefined (reading 'x')"],
         ['fail', 'null'],
         ['fail', 'plain text'],
       ],
@@ -364,15 +520,36 @@ describe('assertions recorded on the attempt', () => {
     const own = createExpect(t)
     let n = 0
     await own.poll(() => ++n, { interval: 5, timeout: 1000 }).toBe(3)
+    assert.equal(
+      await own.poll(() => 'no', { interval: 5, timeout: 30, message: 'ready' }).toBe('yes'),
+      undefined,
+    )
     await assert.rejects(
       () =>
-        own.poll(() => 'no', { interval: 5, timeout: 30, message: 'ready' }).toBe('yes') as never,
+        own.require
+          .poll(() => 'no', { interval: 5, timeout: 30, message: 'gate' })
+          .toBe('yes') as never,
+      /gate: expected 'no' to be 'yes'/,
+    )
+    await assert.rejects(
+      () =>
+        own
+          .poll(
+            () => {
+              throw new Error('the sandbox is gone')
+            },
+            { interval: 5, timeout: 20, message: 'thrown' },
+          )
+          .toBe(1) as never,
+      /the sandbox is gone/,
     )
     assert.deepEqual(
-      records(t).map((x) => [x.label, x.matcher, x.status]),
+      records(t).map((x) => [x.label, x.matcher, x.status, x.soft]),
       [
-        ['poll.toBe 3', 'poll.toBe', 'pass'],
-        ['ready', 'poll.toBe', 'fail'],
+        ['poll.toBe 3', 'poll.toBe', 'pass', true],
+        ['ready', 'poll.toBe', 'fail', true],
+        ['gate', 'poll.toBe', 'fail', false],
+        ['thrown', 'poll.toBe', 'fail', true],
       ],
     )
     assert.ok((records(t)[0]?.durationMs ?? -1) >= 0)
@@ -386,8 +563,8 @@ describe('assertions recorded on the attempt', () => {
       .poll(
         () => {
           n++
-          own.soft(n, 'soft inner').toBeGreaterThan(1)
-          own(n, 'inner').toBeGreaterThan(2)
+          own(n, 'soft inner').toBeGreaterThan(1)
+          own.require(n, 'inner').toBeGreaterThan(2)
           return n
         },
         { interval: 5, timeout: 1000 },
@@ -401,19 +578,21 @@ describe('assertions recorded on the attempt', () => {
     }
     await own.poll(outer, { interval: 5, timeout: 1000 }).toBe(2)
     const inner = () =>
-      own.poll(() => 'no', { interval: 5, timeout: 20, message: 'inner gave up' }).toBe('yes')
+      own.require
+        .poll(() => 'no', { interval: 5, timeout: 20, message: 'inner gave up' })
+        .toBe('yes')
     await assert.rejects(
       () =>
-        own
+        own.require
           .poll(inner, { interval: 5, timeout: 30, message: 'outer gave up' })
           .toBe(undefined) as never,
     )
     await assert.rejects(
       () =>
-        own
+        own.require
           .poll(
             () => {
-              own('no', 'last').toBe('yes')
+              own.require('no', 'last').toBe('yes')
             },
             { interval: 5, timeout: 30, message: 'gave up' },
           )
@@ -447,17 +626,21 @@ describe('expect routed to the attempt', () => {
       assert.equal(typeof expect.not, 'object', 'non-function properties pass through')
       void expect(Promise.resolve(1)).resolves.toBe(1)
       await expect(Promise.resolve(2)).resolves.toBe(2)
-      expect.soft(1).toBe(2)
+      expect(1).toBe(2)
       void expect.poll(() => 1, { interval: 5, timeout: 20 }).toBe(1)
+      void expect.require(Promise.resolve(1)).resolves.toBe(1)
+      void expect.require.poll(() => 1, { interval: 5, timeout: 20 }).toBe(1)
       assert.equal(expect.any(Number).asymmetricMatch(1), true)
     })
-    assert.equal(own.getState().assertionCalls, 5)
+    assert.equal(own.getState().assertionCalls, 7)
     assert.deepEqual(
       pending.map((p) => [p.assertion, p.observed]),
       [
         ['expect(…).resolves.toBe()', false],
         ['expect(…).resolves.toBe()', true],
         ['expect.poll(…).toBe()', false],
+        ['expect.require(…).resolves.toBe()', false],
+        ['expect.require.poll(…).toBe()', false],
       ],
     )
     assert.match(checkFailure(rawAssertions(t))?.message ?? '', /expected 1 to be 2/)
@@ -538,6 +721,44 @@ describe('unawaited assertions', () => {
       error?.message ?? '',
       /^expected file a\.txt to exist\n\nexpect\(…\)\.toHaveFile\(\) wasn't awaited/,
     )
+  })
+
+  test("the hint names the eval's line, and the error's stack is where the eval called it", async () => {
+    const dir = join(process.cwd(), 'my evals (x)')
+    const file = join(dir, 'build.eval.ts')
+    const stackOf = (...frames: string[]) => ['Error', ...frames].join('\n')
+    const at = (stack: string): Pending[] => [
+      { ...pendingOf(Promise.resolve()), site: Object.assign(new Error(), { stack }) },
+    ]
+    const hint = (line: number) =>
+      `expect(…).toHaveFile() at my evals (x)/build.eval.ts:${line} wasn't awaited. Its check is async: write \`await expect(…).toHaveFile()\`.`
+    const bare = stackOf(
+      '    at tracked (/pkg/dist/expect.js:1:1)',
+      '    at <anonymous>',
+      `    at ${pathToFileURL(join(dir, 'other.ts')).href}:3:1`,
+      `    at async ${pathToFileURL(file).href}:12:5`,
+    )
+    const error = await unawaitedError(at(bare), file)
+    assert.equal(error?.message, hint(12))
+    assert.equal(
+      error?.stack,
+      `AssertionError: ${hint(12)}\n${bare.split('\n').slice(1).join('\n')}`,
+    )
+    assert.equal((await unawaitedError(at(bare), pathToFileURL(file).href))?.message, hint(12))
+    const inCall = stackOf(`    at Object.body (${file}:7:3)`)
+    assert.equal((await unawaitedError(at(inCall), file))?.message, hint(7))
+    const elsewhere = await unawaitedError(at(bare), join(dir, 'x.eval.ts'))
+    assert.match(elsewhere?.message ?? '', /^expect\(…\)\.toHaveFile\(\) wasn't awaited/)
+    const unknown = await unawaitedError([pendingOf(Promise.resolve())], file)
+    assert.match(unknown?.message ?? '', /^expect\(…\)\.toHaveFile\(\) wasn't awaited/)
+  })
+
+  test('a tracked matcher keeps the stack it was called from', async () => {
+    const pending: Pending[] = []
+    await withAttemptExpect(createExpect(task()), pending, async () => {
+      await expect(Promise.resolve(1)).resolves.toBe(1)
+    })
+    assert.match(pending[0]?.site?.stack ?? '', /engine-expect\.test\.ts:\d+:\d+/)
   })
 
   test('a failure that is not an Error gets the hint alone', async () => {

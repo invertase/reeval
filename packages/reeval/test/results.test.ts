@@ -27,7 +27,10 @@ import {
   questionRequest,
   stagedAttempt,
 } from '../src/compare/questions.ts'
-import { DEFAULT_QUESTION_STATE } from '../src/compare/state.ts'
+import { resolveQuestionState } from '../src/compare/state.ts'
+
+const TASK_AND_DIFF = resolveQuestionState({ task: true, diff: true })
+
 import type { EngineEval } from '../src/engine/node.ts'
 import { defineEnvironment } from '../src/environment.ts'
 import { TimeoutError } from '../src/errors.ts'
@@ -585,6 +588,7 @@ describe('compare question pairs', () => {
       pairs,
       maxInputTokens: 20_000,
       maxOutputTokens: 100,
+      state: { task: true, diff: true },
     })
 
   test('4 harnesses × 2 arms × N runs is 4N within pairs and 6N across pairs', () => {
@@ -678,13 +682,13 @@ describe('compare question pairs', () => {
         'always picking the first slot picks each side once',
       )
       const [first, second] = [
-        blindPair('Which is cleaner?', pair, false, 20_000),
-        blindPair('Which is cleaner?', pair, true, 20_000),
+        blindPair('Which is cleaner?', pair, false, 20_000, { state: TASK_AND_DIFF }),
+        blindPair('Which is cleaner?', pair, true, 20_000, { state: TASK_AND_DIFF }),
       ]
       assert.deepEqual(first.a, second.b)
       assert.deepEqual(first.b, second.a)
       assert.ok(first.a.diff?.includes(`+${pair.a.harness}`), 'a pair is two diffs')
-      assert.deepEqual(Object.keys(first.a), ['diff'], 'by default a side is its diff alone')
+      assert.deepEqual(Object.keys(first.a), ['diff'], 'a side is its diff, the task shared')
     }
   })
 
@@ -696,6 +700,7 @@ describe('compare question pairs', () => {
       { ...pair, a: { ...pair.a, diff: '+one\n' }, b: { ...pair.b, diff: '+two\n' } },
       false,
       20_000,
+      { state: TASK_AND_DIFF },
     )
     for (const name of ['secret-harness', 'arm-x', 'arm-y', 'run 1', 'baseline', 'variant']) {
       assert.ok(!blind.prompt.includes(name), `${name} is not in the prompt`)
@@ -704,7 +709,7 @@ describe('compare question pairs', () => {
     assert.match(blind.prompt, /<task>\nWrite the file\.\n<\/task>/)
   })
 
-  test('state chooses what each side shows; output and files stay out by default', () => {
+  test('each side shows only the inputs the question turns on', () => {
     const [pair] = pairsOf([side('h', 'arm-x', 1), side('h', 'arm-y', 1)])
     assert.ok(pair)
     const two = {
@@ -719,22 +724,21 @@ describe('compare question pairs', () => {
       },
       b: { ...pair.b, turns: [{ prompt: 'Write the file.', text: 'Done.' }] },
     }
-    const plain = blindPair('Which?', two, false, 20_000)
-    assert.ok(!plain.prompt.includes('beautifully'), 'no final message by default')
-    assert.ok(!plain.prompt.includes('<files>'), 'no file list by default')
+    const plain = blindPair('Which?', two, false, 20_000, { state: TASK_AND_DIFF })
+    assert.ok(!plain.prompt.includes('beautifully'), 'no final message unless output is on')
+    assert.ok(!plain.prompt.includes('<files>'), 'no file list unless files is on')
     assert.match(
       plain.prompt,
       /<turn n="1">\n<task>\nWrite the file\./,
       'prompts differ: each side has its own',
     )
     const shown = blindPair('Which?', two, false, 20_000, {
-      state: {
-        ...DEFAULT_QUESTION_STATE,
+      state: resolveQuestionState({
+        task: true,
         output: true,
-        diff: false,
         turns: 'last',
         checks: ['npm test'],
-      },
+      }),
     })
     assert.deepEqual(shown.a, {
       task: 'Now test it.',
@@ -750,14 +754,17 @@ describe('compare question pairs', () => {
     assert.ok(!shown.prompt.includes('<diff>'))
   })
 
-  test('canary: state off drops a part the default shows', () => {
+  test('canary: an input left off is not shown', () => {
     const [pair] = pairsOf([side('h', 'x', 1), side('h', 'y', 1)])
     assert.ok(pair)
     const blind = blindPair('Which?', pair, false, 20_000, {
-      state: { ...DEFAULT_QUESTION_STATE, diff: false, output: true },
+      state: resolveQuestionState({ task: true, output: true }),
     })
     assert.equal(blind.a.diff, undefined)
-    assert.notEqual(blind.a.diff, blindPair('Which?', pair, false, 20_000).a.diff)
+    assert.notEqual(
+      blind.a.diff,
+      blindPair('Which?', pair, false, 20_000, { state: TASK_AND_DIFF }).a.diff,
+    )
   })
 
   test("artifacts send each side's own capture of that name, labeled by position", async () => {
@@ -776,7 +783,7 @@ describe('compare question pairs', () => {
     ])
     assert.ok(pair)
     const both = blindPair('Which?', pair, false, 20_000, {
-      state: DEFAULT_QUESTION_STATE,
+      state: TASK_AND_DIFF,
       artifacts: true,
     })
     assert.deepEqual(both.a.artifacts, [
@@ -786,7 +793,7 @@ describe('compare question pairs', () => {
       assert.ok(!both.prompt.includes(name), `${name} is not in the prompt`)
     }
     const named = blindPair('Which?', pair, true, 20_000, {
-      state: DEFAULT_QUESTION_STATE,
+      state: TASK_AND_DIFF,
       artifacts: ['home-of-arm-x'],
     })
     assert.deepEqual(named.b.artifacts, [
@@ -794,7 +801,7 @@ describe('compare question pairs', () => {
     ])
     assert.deepEqual(named.a.artifacts, [{ label: 'Attempt A, screenshot 1 of 1', missing: true }])
     const request = questionRequest(
-      blindInput('Which?', pair, true, 20_000, { state: DEFAULT_QUESTION_STATE, artifacts: true }),
+      blindInput('Which?', pair, true, 20_000, { state: TASK_AND_DIFF, artifacts: true }),
     )
     assert.ok('messages' in request)
     assert.deepEqual(
@@ -805,13 +812,19 @@ describe('compare question pairs', () => {
       "the prompt, then each side's screenshot after its label, in the order shown",
     )
     assert.match(request.system, /screenshots of its work/)
-    assert.ok(!('messages' in questionRequest(blindInput('Which?', pair, false, 20_000))))
+    assert.ok(
+      !(
+        'messages' in
+        questionRequest(blindInput('Which?', pair, false, 20_000, { state: TASK_AND_DIFF }))
+      ),
+    )
     const answer = await answerQuestion({
       question: 'Which page is clearer?',
       model: { kind: 'fake-analysis', vote: 'A' },
       pairs: [pair],
       maxInputTokens: 20_000,
       maxOutputTokens: 100,
+      state: { task: true },
       artifacts: ['home-of-arm-x'],
     })
     assert.deepEqual(answer.artifacts, ['home-of-arm-x'])
@@ -834,7 +847,7 @@ describe('compare question pairs', () => {
     })
     assert.equal(
       missing.error,
-      'question "Which page is clearer?" state.checks names a command no paired attempt ran: "npm tset"',
+      'question "Which page is clearer?" checks names a command no paired attempt ran: "npm tset"',
     )
     assert.deepEqual(missing.votes, [])
   })
@@ -956,7 +969,7 @@ describe('compare question pairs', () => {
     assert.deepEqual(answer, {
       question: 'Which is cleaner?',
       model: 'fake',
-      stateOptions: DEFAULT_QUESTION_STATE,
+      stateOptions: TASK_AND_DIFF,
       votes: [],
       rates: [],
       error: 'quota exceeded',
@@ -1036,6 +1049,7 @@ describe('compare questions over real-harness runs (real-e2e-pairs)', () => {
       pairs,
       maxInputTokens: 20_000,
       maxOutputTokens: 100,
+      state: { task: true, diff: true },
     })
     assert.equal(seen.length, pairs.length * 2)
     const names = [

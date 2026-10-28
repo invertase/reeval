@@ -69,7 +69,10 @@ describe('engine', () => {
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
-    assert.match(r.stdout, /^fail {13}math\n {2}toBe 2 {11}failed\n {4}expected 1 to be 2/m)
+    assert.match(
+      r.stdout,
+      /^fail {13}math\n {2}toBe 2 {11}failed {2}evals\/math\.eval\.ts:3\n {4}expected 1 to be 2/m,
+    )
     assert.doesNotMatch(r.stdout + r.stderr, /vitest/i)
     const [e] = readRun(p.dir).evals
     assert.equal(e?.outcome, 'fail')
@@ -678,7 +681,7 @@ evaluate('flaky load', async () => {})
 const broken = defineEnvironment('broken', { setup: ['exit 7'] })
 evaluate('swallowed', { environment: broken }, async (c) => {
   await c.readFile('x').catch(() => null)
-  expect.soft(await c.exec('true').catch(() => ({ exitCode: 1 }))).toBeTruthy()
+  expect(await c.exec('true').catch(() => ({ exitCode: 1 }))).toBeTruthy()
 })
 evaluate('concurrent', { environment: broken }, async (c) => {
   await Promise.allSettled([c.readFile('a'), c.exec('true'), c.writeFile('b', 'c')])
@@ -770,7 +773,7 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (c) => {
   await expect(c.exec('cat hello.txt')).toSucceed()
   expect(turn.diff.files).toEqual(expect.arrayContaining([{ path: 'hello.txt', status: 'added' }]))
   expect(turn.text).toMatch(/hello/)
-  expect(await c.judge('Did it write hello.txt?')).toPass()
+  expect(await c.judge('Did it write hello.txt?', { task: true, diff: true })).toPass()
 `),
     })
     const r = await runCli(p.dir, ['run', '--output-logs', 'full'])
@@ -879,19 +882,19 @@ import { fakeJudge } from 'reeval/judge'
 group('strict', { judge: { threshold: 0.95 } }, () => {
   evaluate('group threshold', async (c) => {
     await c.send('x')
-    expect(await c.judge('from group')).toMatchObject({ verdict: 'fail', score: 0.9, threshold: 0.95 })
+    expect(await c.judge('from group', { diff: true })).toMatchObject({ verdict: 'fail', score: 0.9, threshold: 0.95 })
   })
   evaluate('eval model', { judge: { model: fakeJudge({ score: 0.5 }) } }, async (c) => {
     await c.send('x')
-    expect(await c.judge('from eval')).toMatchObject({ verdict: 'fail', score: 0.5, threshold: 0.95 })
-    expect(await c.judge('from call', { threshold: 0.4 })).toMatchObject({ verdict: 'pass', score: 0.5 })
+    expect(await c.judge('from eval', { diff: true })).toMatchObject({ verdict: 'fail', score: 0.5, threshold: 0.95 })
+    expect(await c.judge('from call', { threshold: 0.4, diff: true })).toMatchObject({ verdict: 'pass', score: 0.5 })
   })
 })
 evaluate('on a value', async (c) => {
   const first = await c.send('first')
   await c.send('second')
-  expect(await c.judge('custom', { on: 'some output' })).toMatchObject({ verdict: 'pass' })
-  expect(await c.judge('earlier turn', { on: first })).toMatchObject({ verdict: 'pass' })
+  expect(await c.judge('custom', { output: true, on: 'some output' })).toMatchObject({ verdict: 'pass' })
+  expect(await c.judge('earlier turn', { task: true, on: first })).toMatchObject({ verdict: 'pass' })
 })
 `,
     })
@@ -908,12 +911,12 @@ const lookalike = { prompt: 'fake', text: 'fake', transcript: [], diff: { files:
 evaluate('on', async (c) => {
   const first = await c.send('first')
   await c.send('second')
-  await c.judge('turn?', { on: first })
-  await c.judge('value?', { on: lookalike })
+  await c.judge('turn?', { task: true, output: true, on: first })
+  await c.judge('value?', { task: true, output: true, on: lookalike })
 })
 evaluate('copy', async (c) => {
   const first = await c.send('first')
-  await c.judge('copy?', { on: { ...first } })
+  await c.judge('copy?', { task: true, output: true, on: { ...first } })
 })
 `,
     })
@@ -1050,7 +1053,7 @@ evaluate('fails', async (c) => {
   test('agent mode prints the plan and the result blocks only, with no color', async () => {
     const p = await project('agent-mode', {
       'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
-      'evals/agent.eval.ts': `${agentEval(`expect(await c.judge('ok?')).toPass()`)}
+      'evals/agent.eval.ts': `${agentEval(`expect(await c.judge('ok?', { diff: true })).toPass()`)}
 evaluate('passes', async () => {})
 `,
     })
@@ -1064,7 +1067,7 @@ evaluate('passes', async () => {})
     assert.deepEqual(out.slice(1, 8), [
       '',
       'fail             agent eval',
-      '  toPass ok?       failed',
+      '  toPass ok?       failed  evals/agent.eval.ts:6',
       '    judge score 0.30 is below 0.8 for "ok?" (fake)',
       '',
       'pass             passes',
@@ -1079,20 +1082,23 @@ evaluate('passes', async () => {})
   test('a failing judge fails the eval as a judge error', async () => {
     const p = await project('judge-fail', {
       'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
-      'evals/agent.eval.ts': agentEval(`expect(await c.judge('ok?')).toPass()`),
+      'evals/agent.eval.ts': agentEval(`expect(await c.judge('ok?', { diff: true })).toPass()`),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
     assert.match(r.stdout, /judge {2}fail 0\.30/)
     assert.match(
       r.stdout,
-      /^fail {13}agent eval\n {2}toPass ok\? {7}failed\n {4}judge score 0\.30 is below 0\.8/m,
+      /^fail {13}agent eval\n {2}toPass ok\? {7}failed {2}evals\/agent\.eval\.ts:6\n {4}judge score 0\.30 is below 0\.8/m,
     )
     const [e] = readRun(p.dir).evals
     assert.equal(e?.trial.judgements[0]?.verdict, 'fail')
     assert.equal(e?.error?.kind, 'judge')
     const shown = await runCli(p.dir, ['show'])
-    assert.match(shown.stdout, /^ {2}toPass ok\? {7}failed\n {4}judge score 0\.30 is below 0\.8/m)
+    assert.match(
+      shown.stdout,
+      /^ {2}toPass ok\? {7}failed {2}evals\/agent\.eval\.ts:6\n {4}judge score 0\.30 is below 0\.8/m,
+    )
     const summary = readRun(p.dir).read('summary.md')
     const attempts = summary.slice(summary.indexOf('## Attempts'))
     assert.match(attempts, /Judge \*\*fail\*\* 0\.30/)
@@ -1133,11 +1139,11 @@ const gemini = createGoogleGenerativeAI({ baseURL: 'http://127.0.0.1:${port}/v1b
 group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test') } }, () => {
   evaluate('friendly', async (c) => {
     await c.send('greet me')
-    expect(await c.judge('Is the greeting friendly?')).toPass()
+    expect(await c.judge('Is the greeting friendly?', { task: true, output: true })).toPass()
   })
   evaluate('canary', async (c) => {
     await c.send('greet me')
-    expect(await c.judge('Is the greeting in French?')).toPass()
+    expect(await c.judge('Is the greeting in French?', { task: true, output: true })).toPass()
   })
 })
 `,
@@ -1168,7 +1174,9 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
   test('a judge that errors fails the eval as a judge error', async () => {
     const p = await project('judge-error', {
       'reeval.config.ts': fakeConfig(),
-      'evals/agent.eval.ts': agentEval(`await c.judge('ok?', { model: 'no-provider' })`),
+      'evals/agent.eval.ts': agentEval(
+        `await c.judge('ok?', { model: 'no-provider', diff: true })`,
+      ),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
@@ -1189,11 +1197,11 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     const p = await project('judge-soft', {
       'reeval.config.ts': fakeConfig(),
       'evals/agent.eval.ts': agentEval(`
-  const failed = await c.judge('first?', { model: 'no-provider' })
+  const failed = await c.judge('first?', { model: 'no-provider', diff: true })
   expect(failed).toMatchObject({ verdict: 'error', score: null, question: 'first?' })
-  expect.soft(failed, 'an errored judge fails .not.toPass() too').not.toPass()
-  expect.soft(await c.judge('second?')).toPass()
-  await expect.soft(c.exec('echo checked')).toSucceed()
+  expect(failed, 'an errored judge fails .not.toPass() too').not.toPass()
+  expect(await c.judge('second?', { diff: true })).toPass()
+  await expect(c.exec('echo checked')).toSucceed()
 `),
     })
     const r = await runCli(p.dir)
@@ -1230,17 +1238,17 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     const p = await project('judge-call-order', {
       'reeval.config.ts': fakeConfig({ harness: `{ files: { 'a.txt': 'hi\\n' } }` }),
       'evals/agent.eval.ts': agentEval(`
-  await c.judge('foreign?', { on: { exec() {} } as never }).catch(() => {})
-  await c.judge('failed?', { model: 'no-provider' })
+  await c.judge('foreign?', { output: true, on: { exec() {} } as never }).catch(() => {})
+  await c.judge('failed?', { model: 'no-provider', diff: true })
   const [style, greets] = await Promise.all([
-    c.judge('style?', { state: { contents: ['a.txt'] } }),
-    c.judge('greets?'),
+    c.judge('style?', { contents: ['a.txt'] }),
+    c.judge('greets?', { diff: true }),
   ])
-  expect.soft(style).toPass()
-  expect.soft(greets).toPass()
+  expect(style).toPass()
+  expect(greets).toPass()
   await Promise.all([
-    c.judge('late?', { model: 'no-provider', state: { contents: ['a.txt'] } }),
-    c.judge('early?', { model: 'no-provider' }),
+    c.judge('late?', { model: 'no-provider', contents: ['a.txt'] }),
+    c.judge('early?', { model: 'no-provider', diff: true }),
   ])
 `),
     })
@@ -1273,8 +1281,8 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     const p = await project('judge-unasserted', {
       'reeval.config.ts': fakeConfig(),
       'evals/agent.eval.ts': agentEval(`
-  await c.judge('first?', { model: 'no-provider' })
-  await c.judge('again?', { model: 'no-provider' })
+  await c.judge('first?', { model: 'no-provider', diff: true })
+  await c.judge('again?', { model: 'no-provider', diff: true })
   await c.exec('echo after')
 `),
     })
@@ -1296,23 +1304,23 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
       'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('unasserted', async (c) => {
   await c.send('go')
-  await c.judge('nice?')
+  await c.judge('nice?', { diff: true })
   await expect(c.exec('exit 3'), 'tests pass').toSucceed()
 })
 evaluate('asserted not', async (c) => {
   await c.send('go')
-  expect(await c.judge('nice?')).not.toPass()
-  await expect.soft(c.exec('exit 3'), 'tests pass').toSucceed()
+  expect(await c.judge('nice?', { diff: true })).not.toPass()
+  await expect(c.exec('exit 3'), 'tests pass').toSucceed()
 })
 evaluate('judge first', async (c) => {
   await c.send('go')
-  expect.soft(await c.judge('nice?')).toPass()
-  await expect.soft(c.exec('exit 3'), 'tests pass').toSucceed()
+  expect(await c.judge('nice?', { diff: true })).toPass()
+  await expect(c.exec('exit 3'), 'tests pass').toSucceed()
 })
 evaluate('canary', async (c) => {
   await c.send('go')
   await expect(c.exec('exit 0'), 'tests pass').toSucceed()
-  expect.soft(await c.judge('nice?')).toPass()
+  expect(await c.judge('nice?', { diff: true })).toPass()
 })
 `,
     })
@@ -1342,25 +1350,25 @@ evaluate('canary', async (c) => {
       'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('check then judge', async (c) => {
   await c.send('go')
-  await expect.soft(c.exec('exit 3'), 'tests pass').toSucceed()
-  expect(await c.judge('nice?')).toPass()
+  await expect(c.exec('exit 3'), 'tests pass').toSucceed()
+  expect(await c.judge('nice?', { diff: true })).toPass()
 })
 evaluate('judge then erroring check', async (c) => {
   await c.send('go')
-  expect.soft(await c.judge('nice?')).toPass()
-  await expect.soft(42 as never, 'tests pass').toSucceed()
+  expect(await c.judge('nice?', { diff: true })).toPass()
+  await expect(42 as never, 'tests pass').toSucceed()
 })
 evaluate('caught check', async (c) => {
   await c.send('go')
   try {
-    await expect(c.exec('exit 3'), 'optional').toSucceed()
+    await expect.require(c.exec('exit 3'), 'optional').toSucceed()
   } catch {}
-  expect(await c.judge('nice?')).toPass()
+  expect(await c.judge('nice?', { diff: true })).toPass()
 })
 evaluate('caught check alone', async (c) => {
   await c.send('go')
   try {
-    await expect(c.exec('exit 3'), 'optional').toSucceed()
+    await expect.require(c.exec('exit 3'), 'optional').toSucceed()
   } catch {}
 })
 `,
@@ -1386,20 +1394,19 @@ evaluate('caught check alone', async (c) => {
     assert.match(r.stdout, /Error: tests pass: expected command to succeed/)
   })
 
-  test('judge state cascades key by key from the config to the call; build output is dropped', async () => {
+  test('each call shows only its own inputs, diff narrowed by its patterns; build output is dropped', async () => {
     const p = await project('judge-scope', {
       'reeval.config.ts': fakeConfig({
         harness: `{ files: { 'src/app.ts': 'export const app = 1\\n', 'notes.md': 'notes\\n', 'dist/app.js': 'bundle\\n' } }`,
-        judge: `{ model: fakeJudge({ score: 0.9 }), state: { diff: ['src/'] } }`,
       }),
       'evals/scope.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 import { fakeSandbox } from 'reeval/sandbox'
 const env = defineEnvironment('scoped', { sandbox: fakeSandbox(), files: { 'README.md': 'the readme\\n' } })
 evaluate('scope', { environment: env }, async (c) => {
   await c.send('go')
-  expect(await c.judge('from the config')).toPass()
-  expect(await c.judge('from the call', { state: { diff: true, contents: ['README.md', './src/app.ts'] } })).toPass()
-  expect(await c.judge('a missing file', { state: { contents: ['gone.txt'] } })).toPass()
+  expect(await c.judge('narrowed', { files: true, diff: ['src/'] })).toPass()
+  expect(await c.judge('in full', { files: true, diff: true, contents: ['README.md', './src/app.ts'] })).toPass()
+  expect(await c.judge('a missing file', { contents: ['gone.txt'] })).toPass()
 })
 `,
     })
@@ -1410,8 +1417,8 @@ evaluate('scope', { environment: env }, async (c) => {
     assert.match(String(fromConfig?.state.diff), /\+export const app = 1/)
     assert.doesNotMatch(String(fromConfig?.state.diff), /notes|dist/)
     assert.deepEqual(fromConfig?.dropped, [
-      'dist/app.js: not in state.diff',
-      'notes.md: not in state.diff',
+      "dist/app.js: not in diff's patterns",
+      "notes.md: not in diff's patterns",
     ])
     assert.equal(fromConfig?.state.contents, undefined)
 
@@ -1433,11 +1440,8 @@ evaluate('scope', { environment: env }, async (c) => {
     assert.deepEqual(fromCall?.dropped, ['dist/ (1 file): build output'])
 
     assert.deepEqual(missing?.state.contents, { 'gone.txt': null })
-    assert.deepEqual(
-      missing?.state.files,
-      ['added src/app.ts'],
-      'the config state.diff still applies',
-    )
+    assert.equal(missing?.state.files, undefined, 'files is off unless the call turns it on')
+    assert.equal(missing?.state.diff, undefined)
   })
 
   test("a provider's error keeps its wording and names what filled the judge's input", async () => {
@@ -1459,7 +1463,7 @@ import { createTypeSafeAi } from '${typesafe}'
 const jev = createTypeSafeAi({ baseURL: 'http://127.0.0.1:${port}/v1', apiKey: 'reeval-test-key' })
 evaluate('agent eval', async (c) => {
   await c.send('go')
-  expect.soft(await c.judge('Is it done?', { model: jev.evaluationModel('jev-under-test') })).toPass()
+  expect(await c.judge('Is it done?', { model: jev.evaluationModel('jev-under-test'), diff: true })).toPass()
 })
 `,
       })
@@ -1469,7 +1473,7 @@ evaluate('agent eval', async (c) => {
       assert.equal(e?.error?.kind, 'judge')
       assert.match(
         e?.error?.message ?? '',
-        /\{"error_type":"max_tokens_exceeded"\}\nThe judge's input was ~\d+ tokens \(estimated\): [^\n]*\. Narrow (state\.\w+, )*state\.\w+ or state\.\w+\.$/,
+        /\{"error_type":"max_tokens_exceeded"\}\nThe judge's input was ~\d+ tokens \(estimated\): diff \d+\. Narrow diff\.$/,
       )
       assert.equal(judgeInputs(e)[0]?.retries, undefined, 'not retried')
     } finally {
@@ -1507,7 +1511,7 @@ evaluate('agent eval', async (c) => {
           'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('agent eval', async (c) => {
   await c.send('go')
-  expect.soft(await c.judge('Is it done?', { model: '${model}' })).toPass()
+  expect(await c.judge('Is it done?', { model: '${model}', diff: true })).toPass()
 })
 `,
         })
@@ -1543,7 +1547,7 @@ const flaky = {
 }
 evaluate('agent eval', async (c) => {
   await c.send('x')
-  expect(await c.judge('ok?', { model: flaky })).toPass()
+  expect(await c.judge('ok?', { model: flaky, diff: true })).toPass()
 })
 `,
     })
@@ -1561,7 +1565,7 @@ evaluate('agent eval', async (c) => {
     const p = await project('judge-early', {
       'reeval.config.ts': fakeConfig(),
       'evals/j.eval.ts': `import { evaluate } from 'reeval'
-evaluate('early', async (c) => { await c.judge('?') })
+evaluate('early', async (c) => { await c.judge('?', { diff: true }) })
 `,
     })
     const r = await runCli(p.dir)
@@ -1573,9 +1577,9 @@ evaluate('early', async (c) => { await c.judge('?') })
     const p = await project('judge-bad-call', {
       'reeval.config.ts': fakeConfig(),
       'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('empty', async (c) => { await c.send('go'); await c.judge('  ') })
-evaluate('over one', async (c) => { await c.send('go'); await c.judge('Is it ok?', { threshold: 2 }) })
-evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('Is it ok?', { threshold: 0.5 })).toPass() })
+evaluate('empty', async (c) => { await c.send('go'); await c.judge('  ', { diff: true }) })
+evaluate('over one', async (c) => { await c.send('go'); await c.judge('Is it ok?', { threshold: 2, diff: true }) })
+evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('Is it ok?', { threshold: 0.5, diff: true })).toPass() })
 `,
     })
     const r = await runCli(p.dir)
@@ -1589,35 +1593,55 @@ evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('Is it 
     assert.deepEqual(judged, { empty: 0, 'over one': 0, fine: 1 })
   })
 
-  test("c.judge refuses an unknown option, a command it hasn't run and on without state.output", async () => {
+  test("c.judge refuses an unknown option, no input, a command it hasn't run, on without output and artifacts with no captures", async () => {
     const p = await project('judge-state-call', {
       'reeval.config.ts': fakeConfig(),
       'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('unknown', async (c) => { await c.send('go'); await c.judge('ok?', { diff: ['src/'] } as never) })
-evaluate('not run', async (c) => { await c.send('go'); await c.judge('ok?', { state: { checks: ['npm tset'] } }) })
-evaluate('on off', async (c) => { await c.send('go'); await c.judge('ok?', { on: 'x', state: { output: false } }) })
-evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('ok?', { state: { output: false } })).toPass() })
+evaluate('unknown', async (c) => { await c.send('go'); await c.judge('ok?', { dif: true } as never) })
+evaluate('nothing', async (c) => { await c.send('go'); await c.judge('ok?', { threshold: 0.5 } as never) })
+evaluate('no options', async (c) => { await c.send('go'); await (c.judge as (q: string) => Promise<unknown>)('ok?') })
+evaluate('no captures', async (c) => { await c.send('go'); await c.judge('ok?', { artifacts: true }) })
+evaluate('not run', async (c) => { await c.send('go'); await c.judge('ok?', { checks: ['npm tset'] }) })
+evaluate('on off', async (c) => { await c.send('go'); await c.judge('ok?', { on: 'x', diff: true }) })
+evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('ok?', { output: true })).toPass() })
 `,
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /Unknown judge option "dif" in c\.judge\(\)\. Did you mean "diff"\?/)
+    assert.match(r.stdout, /c\.judge\(\) shows the judge nothing: turn on at least one input/)
     assert.match(
       r.stdout,
-      /Unknown judge option "diff" in c\.judge\(\)\. Did you mean "state\.diff"\?/,
+      /c\.judge\(\) options must be an object such as \{ diff: true \} \(got undefined\)/,
     )
     assert.match(
       r.stdout,
-      /c\.judge\(\) state\.checks names a command this attempt hasn't run: "npm tset"/,
+      /c\.judge\(\) artifacts: true shows the judge nothing yet: this attempt has no captures/,
     )
-    assert.match(r.stdout, /c\.judge\(\) on gives the output, but state\.output is false/)
+    assert.match(
+      r.stdout,
+      /c\.judge\(\) checks names a command this attempt hasn't run: "npm tset"/,
+    )
+    assert.match(
+      r.stdout,
+      /c\.judge\(\) on gives a value to grade as the output, but output is off/,
+    )
     const judged = Object.fromEntries(
       readRun(p.dir).evals.map((e) => [e.name, e.attempts[0]?.judgements.length]),
     )
     // The canary: a valid call is judged, so a count of 0 means the bad ones never reached it.
-    assert.deepEqual(judged, { unknown: 0, 'not run': 0, 'on off': 0, fine: 1 })
+    assert.deepEqual(judged, {
+      unknown: 0,
+      nothing: 0,
+      'no options': 0,
+      'no captures': 0,
+      'not run': 0,
+      'on off': 0,
+      fine: 1,
+    })
   })
 
-  test('the judge gets all of what state selects, however big', async () => {
+  test('the judge gets all of what its inputs select, however big', async () => {
     const big = 'x'.repeat(400_000)
     const p = await project('judge-big-input', {
       'reeval.config.ts': fakeConfig({ harness: `{ files: { 'big.txt': '${big}' } }` }),
@@ -1627,7 +1651,7 @@ evaluate('big', async (c) => {
   await c.send('x'.repeat(40_000))
   let size = 0
   const look = fakeJudge({ score: (s) => ((size = JSON.stringify(s).length), 1) })
-  expect(await c.judge('ok?', { model: look, state: { contents: ['**'] } })).toPass()
+  expect(await c.judge('ok?', { model: look, task: true, contents: ['**'] })).toPass()
   expect(size).toBeGreaterThan(440_000)
 })
 `,
@@ -1652,7 +1676,7 @@ evaluate('unknown name', async (c) => {
 })
 evaluate('fine', async (c) => {
   await c.send('go')
-  expect(await c.judge('ok?')).toPass()
+  expect(await c.judge('ok?', { diff: true })).toPass()
 })
 `,
     })
@@ -1787,11 +1811,14 @@ evaluate('huge diff', async () => {
     assert.match(byName['agent eval']?.error?.message ?? '', /expected file missing\.txt to exist/)
     assert.match(
       byName['agent eval']?.error?.message ?? '',
-      /expect\(…\)\.toHaveFile\(\) wasn't awaited\. Its check is async: write `await expect\(…\)\.toHaveFile\(\)`/,
+      /expect\(…\)\.toHaveFile\(\) at evals\/file\.eval\.ts:\d+ wasn't awaited\. Its check is async: write `await expect\(…\)\.toHaveFile\(\)`/,
     )
     // A check that would pass still fails its eval unawaited, and it finished before teardown.
     assert.equal(byName['unawaited pass']?.trial.outcome, 'fail', out)
-    assert.match(byName['unawaited pass']?.error?.message ?? '', /toSucceed\(\) wasn't awaited/)
+    assert.match(
+      byName['unawaited pass']?.error?.message ?? '',
+      /toSucceed\(\) at evals\/exec\.eval\.ts:\d+ wasn't awaited/,
+    )
     assert.equal(byName['unawaited pass']?.trial.checks[0]?.exitCode, 0, 'the check completed')
     assert.equal(byName.awaited?.trial.outcome, 'pass', out)
     assert.equal(run.summary.fail, 2)
@@ -1802,12 +1829,12 @@ evaluate('huge diff', async () => {
     )
   })
 
-  test('expect.soft, expect.poll and expect.assertions work inside an attempt', async () => {
+  test('a failed expect, expect.poll and expect.assertions work inside an attempt', async () => {
     const p = await project('expect-extras', {
       'reeval.config.ts': fakeConfig(),
       'evals/x.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('soft', async () => {
-  expect.soft(1).toBe(2)
+  expect(1).toBe(2)
   expect(3).toBe(3)
 })
 evaluate('counted', async () => {

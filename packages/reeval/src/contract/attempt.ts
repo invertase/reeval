@@ -34,7 +34,8 @@ import {
   fakeJudgeDataSchema,
   judgeFields,
   judgeModelNameSchema,
-  judgeStateSchema,
+  sharedInputFields,
+  turnsSchema,
 } from './judge.ts'
 import { type Assert, dataProblem, durationSchema, jsonValueSchema, type Same } from './shared.ts'
 
@@ -179,6 +180,7 @@ export const assertionRecordSchema = z.strictObject({
   matcher: z.string(),
   status: z.enum(['pass', 'fail', 'error']),
   soft: z.boolean(),
+  at: z.string().optional(),
   message: z.string().optional(),
   durationMs: z.number().optional(),
 })
@@ -385,9 +387,14 @@ export const judgeCallDataSchema = z
       .optional()
       .describe("`'provider/model'`, or a fake judge with a numeric score."),
     ...judgeFields,
+    ...sharedInputFields,
+    contents: z.array(nonEmpty).optional(),
+    turns: turnsSchema.optional(),
     on: judgeOnSchema
       .optional()
-      .describe('What to grade instead of the latest turn: an earlier turn, or a value.'),
+      .describe(
+        'The turn `task`, `output`, `transcript` and `diff` read instead of the latest: an earlier turn, or a value graded as the output.',
+      ),
     artifacts: z
       .union([z.literal(true), z.array(z.union([nonEmpty, captureSchema]))])
       .optional()
@@ -396,8 +403,15 @@ export const judgeCallDataSchema = z
       ),
   })
   .describe(
-    "`c.judge()`'s options as data: the judge options, with the model by name or a fake judge's numeric score, plus the call-only `on` and `artifacts`.",
+    "`c.judge()`'s options as data: the judge options, with the model by name or a fake judge's numeric score, the inputs it shows the judge (at least one turned on) and `on`.",
   )
+
+const callSiteSchema = z
+  .strictObject({
+    file: nonEmpty.describe('The eval file: absolute, or relative to the project root.'),
+    line: z.number().int().min(1).describe('From 1.'),
+  })
+  .describe("Where the eval made the call, which the record names beside the check's outcome.")
 
 export const attemptCallSchema = z
   .discriminatedUnion('op', [
@@ -475,8 +489,11 @@ export const attemptCallSchema = z
         not: z.boolean().describe('Called as `expect(…).not`.'),
         soft: z
           .boolean()
-          .describe('Called as `expect.soft`: a failure fails the attempt at its end.'),
+          .describe(
+            'Called as `expect`: a failure fails the attempt at its end and the body carries on. False for `expect.require`, whose failure the runner raises, ending the body.',
+          ),
         label: z.string().optional().describe("`expect`'s second argument."),
+        at: callSiteSchema.optional(),
         poll: z
           .strictObject({
             interval: millisSchema.optional().describe('Milliseconds between tries. Default 50.'),
@@ -539,7 +556,10 @@ export const attemptCallSchema = z
         soft: z
           .boolean()
           .optional()
-          .describe('A failure fails the attempt at its end, as `expect.soft`. Default false.'),
+          .describe(
+            "The body carried on after a failure, as after an `expect`. Default false: the check raised, as Python's `assert` does.",
+          ),
+        at: callSiteSchema.optional(),
       })
       .describe(
         "A check the eval's own language made, such as Python's `assert`: recorded as a matcher call is, so it's named, counted and compared the same. Replies with its record.",
@@ -547,8 +567,8 @@ export const attemptCallSchema = z
     z
       .strictObject({
         op: z.literal('judge'),
-        question: nonEmpty.describe('A yes/no question about the graded turn or value.'),
-        options: judgeCallDataSchema.optional(),
+        question: nonEmpty.describe('A yes/no question about the inputs `options` turns on.'),
+        options: judgeCallDataSchema,
       })
       .describe(
         '`c.judge(question, options)`. Replies with its verdict, or a judge failure when the provider failed.',
@@ -696,7 +716,7 @@ export const attemptDoneSchema = z
     type: z.literal('done'),
     error: attemptErrorSchema
       .optional()
-      .describe('What the body threw, if it threw. A failed `expect` (not soft) is one.'),
+      .describe('What the body threw, if it threw. A failed `expect.require` is one.'),
   })
   .describe(
     "The runner to reeval: the eval's body has finished. The attempt's checks and record follow.",
@@ -716,7 +736,6 @@ const OTHER_KEYS = [
   'matchedBy',
   'answers',
   ...Object.keys(judgeCallDataSchema.shape),
-  ...Object.keys(judgeStateSchema.shape),
   ...Object.keys(captureSchema.shape),
   ...Object.keys(captureCallDataSchema.shape),
   'port',
@@ -778,7 +797,6 @@ export const ATTEMPT_SCHEMAS: Record<string, z.ZodType> = {
   ExecRetry: execRetrySchema,
   AssertionRecord: assertionRecordSchema,
   JudgeCallData: judgeCallDataSchema,
-  JudgeStateOptions: judgeStateSchema,
   FakeJudgeData: fakeJudgeDataSchema,
   Verdict: verdictSchema,
   JudgeFailure: judgeFailureSchema,
@@ -809,7 +827,6 @@ export const ATTEMPT_TYPES = [
   'ExecResult',
   'ExecRetry',
   'AssertionRecord',
-  'JudgeStateOptions',
   'FakeJudgeData',
   'Verdict',
   'JudgeFailure',

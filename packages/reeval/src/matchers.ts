@@ -14,9 +14,10 @@ import {
   type Result,
   ran,
   searched,
+  subjectError,
   type ToolInputMatch,
 } from './assert.ts'
-import { isObjectLike } from './object.ts'
+import { isObjectLike, isThenable } from './object.ts'
 import type { ExecResult, JudgeFailure, Verdict } from './types.ts'
 
 /** How the matcher was called: `not` is `expect(…).not`, which a matcher may answer itself. */
@@ -50,6 +51,19 @@ const show = (value: unknown): string => {
     return JSON.stringify(value) ?? String(value)
   } catch {
     return String(value)
+  }
+}
+
+function succeeded(actual: unknown): Result {
+  const r = actual as ExecResult
+  if (typeof r?.exitCode !== 'number') throw subjectError('toSucceed() expects a c.exec() result')
+  return {
+    pass: r.exitCode === 0,
+    message: () =>
+      r.exitCode === 0
+        ? 'expected command to fail'
+        : `expected command to succeed, exit code ${r.exitCode}\n` +
+          `--- stderr ---\n${tail(r.stderr)}\n--- stdout ---\n${tail(r.stdout)}`,
   }
 }
 
@@ -106,7 +120,7 @@ export const MATCHERS = {
 
   toHaveFile: matcher(
     async (actual, [path, pattern]: [path: string, pattern?: RegExp | string]) => {
-      if (!hasFiles(actual)) throw new TypeError('toHaveFile() expects a turn from c.send(), or c')
+      if (!hasFiles(actual)) throw subjectError('toHaveFile() expects a turn from c.send(), or c')
       const content = await actual.readFile(path)
       if (content === null) return { pass: false, message: () => `expected file ${path} to exist` }
       if (pattern === undefined) return { pass: true, message: () => `expected no file at ${path}` }
@@ -119,18 +133,10 @@ export const MATCHERS = {
     },
   ),
 
-  toSucceed: matcher(async (actual, _: []) => {
-    const r = (await actual) as ExecResult
-    if (typeof r?.exitCode !== 'number') throw new TypeError('toSucceed() expects run.exec(...)')
-    return {
-      pass: r.exitCode === 0,
-      message: () =>
-        r.exitCode === 0
-          ? 'expected command to fail'
-          : `expected command to succeed, exit code ${r.exitCode}\n` +
-            `--- stderr ---\n${tail(r.stderr)}\n--- stdout ---\n${tail(r.stdout)}`,
-    }
-  }),
+  // Synchronous on a result; only `c.exec()`'s promise makes it async.
+  toSucceed: matcher((actual, _: []): Result | Promise<Result> =>
+    isThenable(actual) ? Promise.resolve(actual).then(succeeded) : succeeded(actual),
+  ),
 
   toHaveSearched: matcher((actual, [query]: [query?: RegExp | string]) => searched(actual, query)),
 
@@ -165,7 +171,7 @@ export const MATCHERS = {
       }
     }
     const v = actual as Verdict
-    if (typeof v?.score !== 'number') throw new TypeError('toPass() expects a c.judge() verdict')
+    if (typeof v?.score !== 'number') throw subjectError('toPass() expects a c.judge() verdict')
     const score = v.score.toFixed(2)
     return {
       pass: v.verdict === 'pass',

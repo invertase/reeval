@@ -15,6 +15,6 @@ evaluate('reads a repo from the GitHub API', { environment: github }, async (c) 
   )
 
   const run = await c.exec('node repo.js')
-  await expect(run).toSucceed()
+  expect(run).toSucceed()
   expect(run.stdout.trim()).toBe('nodejs/node')
 })

@@ -801,7 +801,7 @@ async function executeRun(
           ...(gateway === 'vertex' ? { vertex: vertexSettingsIn(scope.gateways) } : {}),
           ...(q.across !== undefined ? { across: q.across } : {}),
           ...(q.choices ? { choices: q.choices } : {}),
-          ...(q.state ? { state: q.state } : {}),
+          state: q.state,
           ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
         }
       })

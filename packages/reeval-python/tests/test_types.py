@@ -66,7 +66,7 @@ from reeval_python import aio
 
 @evaluate("ok", {"runs": 2, "timeout": timedelta(minutes=5)})
 async def ok(c: AttemptContext) -> None:
-    await c.judge("did it work?", threshold=0.5)
+    await c.judge("did it work?", threshold=0.5, diff=True)
     await aio.expect.poll(lambda: c.read_file("x"), timeout=1.5).to_be("y")
 
 

@@ -47,8 +47,8 @@ function isJudges(a: Attempt, error: unknown, raw: readonly RawAssertion[]): boo
 
 /**
  * The error that fails the attempt: a judge's gives way to the first other check that didn't hold
- * (an `expect.soft`, or a hard check the eval caught), whichever came first, so the attempt fails
- * as that check.
+ * (an `expect`, or an `expect.require` the eval caught), whichever came first, so the attempt
+ * fails as that check.
  */
 export function attemptError(a: Attempt, error: unknown, raw: readonly RawAssertion[]): unknown {
   if (!isJudges(a, error, raw)) return error
@@ -183,9 +183,23 @@ export async function writeRecord(a: Attempt, stagingDir: string, id: string): P
       question: clip(j.question, 200),
     })),
     turnErrors: turnErrors(record.turns.map((t) => t.transcript)),
+    ...failedChecks(record),
     ...(record.error?.prepare
       ? { prepare: { ref: record.error.prepare.ref, stage: record.error.prepare.stage } }
       : {}),
+  }
+}
+
+/** The record's checks that didn't pass, for the terminal; unset when all did. */
+function failedChecks(record: EvalRecord): Pick<EvalMeta, 'failedChecks'> {
+  const failed = (record.assertions ?? []).filter((x) => x.status !== 'pass')
+  if (!failed.length) return {}
+  return {
+    failedChecks: failed.map((x) => ({
+      label: x.label,
+      ...(x.at ? { at: x.at } : {}),
+      message: clip(x.message?.split('\n')[0] ?? '', 500),
+    })),
   }
 }
 

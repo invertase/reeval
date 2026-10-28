@@ -14,11 +14,11 @@ const failing = project('slug', 'debug', ['./node_modules/.bin/reeval run --ui p
 group('debug a failing check', { compare: { ...channels(failing), gate: 'none' } }, () => {
   evaluate('finds and fixes the failing check', async (c) => {
     const turn = await c.send(task)
-    await expect.soft(c.exec(runsOnFake), 'passes on the fake config').toSucceed()
-    expect.soft(c, 'leaves the config alone').not.toHaveChanged(['reeval.config.ts'])
+    await expect(c.exec(runsOnFake), 'passes on the fake config').toSucceed()
+    expect(c, 'leaves the config alone').not.toHaveChanged(['reeval.config.ts'])
     const source = (await c.readFile('evals/slug.eval.ts')) ?? ''
-    expect.soft(source, 'keeps the check').toMatch(/trims punctuation/)
-    expect.soft(source, 'expects a single hyphen').toMatch(/ahoy-ada/)
-    expect.soft(turn.text, 'names the failed check').toMatch(/trims punctuation/)
+    expect(source, 'keeps the check').toMatch(/trims punctuation/)
+    expect(source, 'expects a single hyphen').toMatch(/ahoy-ada/)
+    expect(turn.text, 'names the failed check').toMatch(/trims punctuation/)
   })
 })

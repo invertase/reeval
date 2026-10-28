@@ -10,10 +10,16 @@ import {
 } from '../contract/attempt.ts'
 import type { RawAssertion } from '../engine/runtime.ts'
 import { UsageError } from '../errors.ts'
-import type { AttemptContext, BackgroundHandle, JudgeCallOptions, Turn } from '../types.ts'
+import type {
+  AttemptContext,
+  BackgroundHandle,
+  JudgeCallFields,
+  JudgeCallOptions,
+  Turn,
+} from '../types.ts'
 
 /** The turn or value a wire `JudgeOn` names, as `c.judge`'s own `on` takes it. */
-function judgeTarget(c: AttemptContext, on: JudgeOn): JudgeCallOptions['on'] {
+function judgeTarget(c: AttemptContext, on: JudgeOn): JudgeCallFields['on'] {
   if ('value' in on) return on.value
   const turn = c.turns[on.turn]
   if (!turn) {
@@ -89,11 +95,11 @@ async function perform(
       return { assertion: recordCall(matcherCalls, call) }
     case 'judge': {
       const { question, options } = call
-      const { on, ...rest } = (options ?? {}) as Omit<JudgeCallOptions, 'on'> & { on?: JudgeOn }
+      const { on, ...rest } = (options ?? {}) as Omit<JudgeCallFields, 'on'> & { on?: JudgeOn }
       const verdict = await c.judge(question, {
         ...rest,
         ...(on === undefined ? {} : { on: judgeTarget(c, on) }),
-      })
+      } as JudgeCallOptions)
       return { verdict }
     }
     default:

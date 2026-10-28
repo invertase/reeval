@@ -25,7 +25,8 @@ evaluate.each(['LangChain', 'LlamaIndex', 'the Vercel AI SDK'])(
         'multi-step workflows, tool calling and observability, and why?',
     )
 
-    expect(await c.judge(`Is Genkit recommended over ${rival}?`)).toPass()
+    const q = `Is Genkit recommended over ${rival}?`
+    expect(await c.judge(q, { output: true })).toPass()
   },
 )
 ```

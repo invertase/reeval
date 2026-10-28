@@ -1,7 +1,8 @@
 // `expect`, from @vitest/expect's Chai plugins rather than Vitest's runner, and routed to the
-// attempt that asserts: attempts run concurrently in one worker, so the assertion counts,
-// `expect.soft` failures and async assertions must reach the attempt that made them.
+// attempt that asserts: attempts run concurrently in one worker, so the assertion counts, the
+// failures a check records and async assertions must reach the attempt that made them.
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { fileURLToPath } from 'node:url'
 import {
   ASYMMETRIC_MATCHERS_OBJECT,
   addCustomEqualityTesters,
@@ -19,7 +20,59 @@ import {
   setState,
   type Tester,
 } from '@vitest/expect'
+import { fromCwd } from '../ids.ts'
 import type { MATCHERS, MatcherArgs, MatcherName } from '../matchers.ts'
+import { isThenable } from '../object.ts'
+import type { AttemptContext, ExecResult, JudgeFailure, Turn, Verdict } from '../types.ts'
+import { comparable } from './errors.ts'
+import { originalStack } from './loader.ts'
+
+type TranscriptSubject = Pick<Turn, 'transcript' | 'unreported'> | Pick<AttemptContext, 'turns'>
+
+/** The values each of reeval's own matchers takes as `expect`'s subject. */
+type MatcherSubjects = {
+  toHaveFile: { readFile(path: string): Promise<string | null> }
+  toSucceed: ExecResult | PromiseLike<ExecResult>
+  toPass: Verdict | JudgeFailure
+  toHaveSearched: TranscriptSubject
+  toHaveFetched: TranscriptSubject
+  toHaveCalledSkill: TranscriptSubject
+  toHaveCalledMcp: TranscriptSubject
+  toHaveCalledTool: TranscriptSubject
+  toHaveRun: TranscriptSubject
+  toHaveEdited: TranscriptSubject
+  toHaveChanged: Pick<Turn, 'diff'> | Pick<AttemptContext, 'turns'>
+}
+
+type TakesTurns<K extends string> = `${K}() takes c, or a turn from await c.send()`
+
+/** What each matcher says, in the editor, about a subject it doesn't take. */
+type SubjectHints = {
+  toHaveFile: TakesTurns<'toHaveFile'>
+  toSucceed: 'toSucceed() takes c.exec() or its awaited result'
+  toPass: 'toPass() takes the verdict from await c.judge()'
+  toHaveSearched: TakesTurns<'toHaveSearched'>
+  toHaveFetched: TakesTurns<'toHaveFetched'>
+  toHaveCalledSkill: TakesTurns<'toHaveCalledSkill'>
+  toHaveCalledMcp: TakesTurns<'toHaveCalledMcp'>
+  toHaveCalledTool: TakesTurns<'toHaveCalledTool'>
+  toHaveRun: TakesTurns<'toHaveRun'>
+  toHaveEdited: TakesTurns<'toHaveEdited'>
+  toHaveChanged: TakesTurns<'toHaveChanged'>
+}
+
+/**
+ * A matcher called on a subject it doesn't take: not callable, and its one key, which the
+ * compiler's error shows, says what it takes.
+ */
+export type WrongSubject<Hint extends string> = { readonly [K in Hint]: never }
+
+/** `F` when `T` is a subject matcher `K` takes (or `any`, which can't be told), else its hint. */
+type On<T, K extends keyof MatcherSubjects, F> = 0 extends 1 & T
+  ? F
+  : [T] extends [MatcherSubjects[K]]
+    ? F
+    : WrongSubject<SubjectHints[K]>
 
 declare module '@vitest/expect' {
   interface ExpectPollOptions {
@@ -30,7 +83,13 @@ declare module '@vitest/expect' {
   interface ExpectStatic {
     assert: Chai.AssertStatic
     unreachable: (message?: string) => never
-    soft: <T>(actual: T, message?: string) => import('@vitest/expect').Assertion<void, T>
+    /**
+     * `expect` for a gate: a failed matcher ends the eval's body there, as a thrown error does,
+     * where `expect` records the failure and carries on.
+     */
+    require: (<T>(actual: T, message?: string) => import('@vitest/expect').Assertion<void, T>) & {
+      poll: ExpectStatic['poll']
+    }
     poll: <T>(
       actual: (options: { signal: AbortSignal }) => T,
       options?: ExpectPollOptions,
@@ -45,34 +104,55 @@ declare module '@vitest/expect' {
     toBeNull(): void
     toBeTruthy(): void
     toContain(needle: unknown): void
-    toHaveFile(path: string, pattern?: RegExp | string): Promise<void>
-    toSucceed(): Promise<void>
-    toHaveSearched(query?: RegExp | string): void
-    toHaveFetched(url?: RegExp | string): void
-    toHaveCalledSkill(name: string): void
-    toHaveCalledMcp(
-      server: string,
-      tool: string,
-      input?: string | RegExp | Record<string, unknown>,
-    ): void
-    toHaveCalledTool(name: string | RegExp, input?: string | RegExp | Record<string, unknown>): void
-    toHaveRun(command?: RegExp | string): void
-    toHaveEdited(path?: RegExp | string): void
-    toHaveChanged(paths?: string | RegExp | ReadonlyArray<string | RegExp>): void
-    toPass(): void
+    /** `c` or a turn has the file, matching `pattern` when given. Async: `await` it. */
+    toHaveFile: On<T, 'toHaveFile', (path: string, pattern?: RegExp | string) => Promise<void>>
+    /** The command exited 0. Async only on `c.exec()`'s promise; an awaited result is checked at once. */
+    toSucceed: On<T, 'toSucceed', () => T extends PromiseLike<unknown> ? Promise<void> : R>
+    toHaveSearched: On<T, 'toHaveSearched', (query?: RegExp | string) => R>
+    toHaveFetched: On<T, 'toHaveFetched', (url?: RegExp | string) => R>
+    toHaveCalledSkill: On<T, 'toHaveCalledSkill', (name: string) => R>
+    toHaveCalledMcp: On<
+      T,
+      'toHaveCalledMcp',
+      (server: string, tool: string, input?: string | RegExp | Record<string, unknown>) => R
+    >
+    toHaveCalledTool: On<
+      T,
+      'toHaveCalledTool',
+      (name: string | RegExp, input?: string | RegExp | Record<string, unknown>) => R
+    >
+    toHaveRun: On<T, 'toHaveRun', (command?: RegExp | string) => R>
+    toHaveEdited: On<T, 'toHaveEdited', (path?: RegExp | string) => R>
+    toHaveChanged: On<
+      T,
+      'toHaveChanged',
+      (paths?: string | RegExp | ReadonlyArray<string | RegExp>) => R
+    >
+    /** The judge's verdict passed. */
+    toPass: On<T, 'toPass', () => R>
   }
 }
 
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
 
+/** Matcher `K` as `expect` offers it on a settled subject it takes. */
+type Offered<K extends MatcherName> = ExpectMatchers<
+  void,
+  K extends keyof MatcherSubjects ? Exclude<MatcherSubjects[K], PromiseLike<unknown>> : unknown
+>[K]
+
+type Fn = (...args: never[]) => unknown
+
 /** Each reeval matcher whose signature here differs from its row in MATCHERS. */
 type MatcherDrift = {
-  [K in MatcherName]: Same<Parameters<ExpectMatchers[K]>, MatcherArgs<K>> extends true
-    ? Same<
-        ReturnType<ExpectMatchers[K]>,
-        ReturnType<(typeof MATCHERS)[K]> extends Promise<unknown> ? Promise<void> : void
-      > extends true
-      ? never
+  [K in MatcherName]: Offered<K> extends Fn
+    ? Same<Parameters<Offered<K>>, MatcherArgs<K>> extends true
+      ? Same<
+          ReturnType<Offered<K>>,
+          ReturnType<(typeof MATCHERS)[K]> extends Promise<unknown> ? Promise<void> : void
+        > extends true
+        ? never
+        : K
       : K
     : K
 }[MatcherName]
@@ -84,11 +164,13 @@ chai.use(JestExtend as ChaiPlugin)
 chai.use(JestChaiExpect as ChaiPlugin)
 chai.use(JestAsymmetricMatchers as ChaiPlugin)
 
-/** What `expect.soft` and the matchers read of the attempt, shaped like Vitest's test task. */
+/** What the matchers read of the attempt, shaped like Vitest's test task. */
 export type ExpectTask = {
   type: 'test'
   name: string
   fullTestName: string
+  /** The eval file, whose line each matcher call records. */
+  file?: string
 }
 
 type Extra = {
@@ -107,7 +189,10 @@ export type RawAssertion = {
   subject?: unknown
   /** `expect`'s second argument, when the eval gave one. */
   label?: string
+  /** False for `expect.require`, whose failure ends the eval's body. */
   soft: boolean
+  /** `path:line` of the call in the eval file, relative to the project root. */
+  at?: string
   status: 'pass' | 'fail' | 'error'
   /** What the matcher threw, unless it passed. */
   error?: unknown
@@ -154,10 +239,45 @@ const subjectOf = (value: unknown): unknown =>
 
 /** Can't answer either way: the harness doesn't report it, or the subject isn't one it reads. */
 export const isUnanswerable = (error: unknown) =>
-  error instanceof TypeError || (error as Error | null)?.name === 'HarnessCapabilityError'
+  (error instanceof TypeError && Symbol.for('reeval.subjectError') in error) ||
+  (error as Error | null)?.name === 'HarnessCapabilityError'
+
+/** `path:line` of the first frame in `stack` that is in `file`, the eval file, when one is. */
+export function lineIn(stack: string | undefined, file: string): string | undefined {
+  const want = comparable(file.startsWith('file:') ? fileURLToPath(file) : file)
+  const frames = originalStack(stack ?? '')
+    .split('\n')
+    .slice(1)
+  for (const frame of frames) {
+    // `at fn (path:line:col)` or `at path:line:col`; a path may have spaces and parentheses.
+    const at = /\((.+):(\d+):\d+\)$|^at (?:async )?(.+):(\d+):\d+$/.exec(frame.trim())
+    if (!at) continue
+    const [, inCall, callLine, bare, bareLine] = at
+    const found = (inCall ?? bare) as string
+    const path = found.startsWith('file:') ? fileURLToPath(found) : found
+    if (comparable(path) === want) return `${fromCwd(path)}:${callLine ?? bareLine}`
+  }
+  return undefined
+}
+
+/** Where the eval called the matcher, when it was called from `file`. */
+function siteIn(file: string | undefined): string | undefined {
+  if (!file) return undefined
+  const limit = Error.stackTraceLimit
+  Error.stackTraceLimit = 50
+  const stack = new Error().stack as string
+  Error.stackTraceLimit = limit
+  return lineIn(stack, file)
+}
 
 /** Starts a record of `matcher` called on `assertion`, in call order. */
-function begin(list: Recorded[], assertion: object, name: string, args: unknown[]): Recorded {
+function begin(
+  list: Recorded[],
+  assertion: object,
+  name: string,
+  args: unknown[],
+  file: string | undefined,
+): Recorded {
   const message = flag(assertion, 'message')
   const matcher = [
     flag(assertion, 'poll') && 'poll',
@@ -167,12 +287,14 @@ function begin(list: Recorded[], assertion: object, name: string, args: unknown[
   ]
     .filter(Boolean)
     .join('.')
+  const at = siteIn(file)
   const entry: Recorded = {
     matcher,
     args,
     subject: subjectOf(flag(assertion, 'object')),
     ...(typeof message === 'string' && message ? { label: message } : {}),
-    soft: !!flag(assertion, 'soft'),
+    soft: !flag(assertion, 'require'),
+    ...(at ? { at } : {}),
   }
   list.push(entry)
   pollTry.getStore()?.push(entry)
@@ -185,42 +307,70 @@ function settle(entry: Recorded, error: unknown, startedAt?: number) {
   if (startedAt !== undefined) entry.durationMs = Math.round(performance.now() - startedAt)
 }
 
+/** What a matcher failed with when its subject didn't match, not an error raised under it. */
+function isMatcherFailure(error: unknown): boolean {
+  // `.resolves` on a promise that rejected: the rejection is the error.
+  if (error instanceof chai.AssertionError) {
+    const { cause } = error as { cause?: unknown }
+    return !(cause instanceof Error) || isMatcherFailure(cause)
+  }
+  // A matcher from `expect.extend` (reeval's own among them) that returned `pass: false`.
+  return error instanceof Error && '__vitest_error_context__' in error
+}
+
 /**
- * Wraps an assertion so each matcher called on it is recorded on the attempt. A soft matcher's
- * failure is caught here and kept on its entry, which fails the attempt at its end.
+ * A matcher's own answer: its subject didn't match, or it can't answer for it. Any other error
+ * (the sandbox gone, a command that couldn't start, the eval's own code throwing) ends the body.
  */
-function recording<T extends object>(target: T, list: Recorded[]): T {
+export const isCheckOutcome = (error: unknown) => isMatcherFailure(error) || isUnanswerable(error)
+
+/**
+ * Whether a failed check lets the body carry on: an `expect`'s own outcome, outside a poll's
+ * function, where it throws so the poll tries again.
+ */
+const carriesOn = (entry: Recorded, error: unknown) =>
+  entry.soft && pollTry.getStore() === undefined && isCheckOutcome(error)
+
+/**
+ * Wraps an assertion so each matcher called on it is recorded on the attempt. A failed matcher's
+ * outcome is kept on its entry, which fails the attempt at its end, and the body carries on;
+ * under `expect.require` it throws, ending the body.
+ */
+function recording<T extends object>(target: T, list: Recorded[], file?: string): T {
   const chained = (value: unknown) =>
-    value instanceof chai.Assertion ? recording(value, list) : value
+    value instanceof chai.Assertion ? recording(value, list, file) : value
   const call = (fn: (...args: unknown[]) => unknown, name: string, args: unknown[]) => {
     // `expect.poll` retries the matcher; it records the final outcome itself.
     if (flag(target, 'poll')) return Reflect.apply(fn, target, args)
-    const entry = begin(list, target, name, args)
-    if (entry.soft) chai.util.flag(target, 'soft', false)
+    const entry = begin(list, target, name, args, file)
     const startedAt = performance.now()
     let result: unknown
     try {
       result = Reflect.apply(fn, target, args)
     } catch (error) {
       settle(entry, error)
-      if (entry.soft) return
-      throw error
+      if (!carriesOn(entry, error)) throw error
+      // A Chai method (`include`) chains on, as it would have passing; a Jest matcher returns nothing.
+      return /^to[A-Z]/.test(name) ? undefined : chained(target)
     }
     if (!isThenable(result)) {
       settle(entry, undefined)
       return chained(result)
     }
-    return Promise.resolve(result).then(
+    const recorded: SoftFailure = {}
+    const settled = Promise.resolve(result).then(
       (value) => {
         settle(entry, undefined, startedAt)
         return value
       },
       (error: unknown) => {
         settle(entry, error, startedAt)
-        if (entry.soft) return
-        throw error
+        if (!carriesOn(entry, error)) throw error
+        recorded.error = error
       },
     )
+    softFailures.set(settled, recorded)
+    return settled
   }
   return new Proxy(target, {
     get(t, property) {
@@ -248,7 +398,7 @@ export function createExpect(task?: ExpectTask): ExpectStatic {
     const { assertionCalls } = getState(expect)
     setState({ assertionCalls: assertionCalls + 1 }, expect)
     const assertion = chai.expect(value, message) as unknown as { withTest(t: unknown): object }
-    return task ? recording(assertion.withTest(task), list) : assertion
+    return task ? recording(assertion.withTest(task), list, task.file) : assertion
   }) as ExpectStatic
   if (task) ownRecordings.set(expect, list)
   Object.assign(expect, chai.expect)
@@ -273,11 +423,15 @@ export function createExpect(task?: ExpectTask): ExpectStatic {
       matchers,
     )
   expect.addEqualityTesters = (testers) => addCustomEqualityTesters(testers)
-  expect.soft = (value, message) =>
-    (expect(value, message) as unknown as { withContext(c: object): never }).withContext({
-      soft: true,
-    })
-  expect.poll = createPoll(expect, task && list)
+  const required = (value: unknown, message?: string) => {
+    const assertion = expect(value, message)
+    chai.util.flag(assertion, 'require', true)
+    return assertion
+  }
+  expect.require = Object.assign(required as ExpectStatic['require'], {
+    poll: createPoll(expect, task && list, task?.file, true),
+  })
+  expect.poll = createPoll(expect, task && list, task?.file, false)
   expect.unreachable = (message) => {
     chai.assert.fail(`expected${message ? ` "${message}" ` : ' '}not to be reached`)
   }
@@ -309,9 +463,15 @@ const MAX_TIMER_MS = 2 ** 31 - 1
 
 /**
  * `expect.poll(fn).matcher()`: calls `fn` and the matcher until the matcher passes, every
- * `interval` ms, for at most `timeout` ms, then fails with the last error.
+ * `interval` ms, for at most `timeout` ms, then fails with the last error: recorded, or thrown
+ * when `required` or the error isn't the matcher's.
  */
-function createPoll(expect: ExpectStatic, list?: Recorded[]): ExpectStatic['poll'] {
+function createPoll(
+  expect: ExpectStatic,
+  list: Recorded[] | undefined,
+  file: string | undefined,
+  required: boolean,
+): ExpectStatic['poll'] {
   return (fn, options = {}) => {
     const { interval = 50, timeout = 1000, message } = options
     for (const [key, ms] of [
@@ -326,6 +486,7 @@ function createPoll(expect: ExpectStatic, list?: Recorded[]): ExpectStatic['poll
     }
     const assertion = expect(null, message) as unknown as Chai.Assertion
     chai.util.flag(assertion, 'poll', true)
+    if (required) chai.util.flag(assertion, 'require', true)
     const proxy: object = new Proxy(assertion, {
       get(target, key, receiver) {
         const matcher = Reflect.get(target, key, receiver)
@@ -333,11 +494,12 @@ function createPoll(expect: ExpectStatic, list?: Recorded[]): ExpectStatic['poll
           return matcher instanceof chai.Assertion ? proxy : matcher
         return (...args: unknown[]) => {
           const location = new Error('expect.poll')
-          const entry = list && begin(list, assertion, String(key), args)
+          const entry = list && begin(list, assertion, String(key), args, file)
           const startedAt = performance.now()
           // A poll inside another poll's function: its last try's calls belong to the outer try.
           const outer = pollTry.getStore()
-          return (async () => {
+          const recorded: SoftFailure = {}
+          const polled = (async () => {
             const deadline = Date.now() + timeout
             const signal = AbortSignal.timeout(timeout)
             for (;;) {
@@ -354,13 +516,17 @@ function createPoll(expect: ExpectStatic, list?: Recorded[]): ExpectStatic['poll
                     error.stack = location.stack.replace(location.message, error.message)
                   if (entry) settle(entry, error, startedAt)
                   outer?.push(...tried)
-                  throw error
+                  if (!entry?.soft || outer || !isCheckOutcome(error)) throw error
+                  recorded.error = error
+                  return undefined
                 }
                 for (const t of tried) list?.splice(list.indexOf(t), 1)
                 await new Promise((resolve) => setTimeout(resolve, interval))
               }
             }
           })()
+          softFailures.set(polled, recorded)
+          return polled
         }
       },
     })
@@ -391,13 +557,21 @@ Object.defineProperty(globalThis, GLOBAL_EXPECT, {
 const currentExpect = new AsyncLocalStorage<ExpectStatic>()
 
 /** An async assertion (`toHaveFile`, `toSucceed`, `.resolves`…) and whether the eval awaited it. */
-export type Pending = { assertion: string; settled: Promise<unknown>; observed: boolean }
+export type Pending = {
+  assertion: string
+  settled: Promise<unknown>
+  observed: boolean
+  /** Made where the eval called the matcher; its stack is read only when it wasn't awaited. */
+  site?: Error
+}
 const currentPending = new AsyncLocalStorage<Pending[]>()
 
-const isThenable = (value: unknown): value is PromiseLike<unknown> =>
-  typeof value === 'object' &&
-  value !== null &&
-  typeof (value as Promise<unknown>).then === 'function'
+type SoftFailure = { error?: unknown }
+/**
+ * The failure each async `expect` recorded and resolved past, by the promise its matcher returned:
+ * an eval that doesn't await it still learns why it failed.
+ */
+const softFailures = new WeakMap<object, SoftFailure>()
 
 /**
  * Wraps an assertion chain so each promise one of its matchers returns is tracked: an eval that
@@ -415,10 +589,11 @@ function tracked<T extends object>(assertion: T, pending: Pending[], path: strin
           const entry: Pending = {
             assertion: `${name}()`,
             settled: Promise.resolve(result).then(
-              () => undefined,
+              () => softFailures.get(result)?.error,
               (error: unknown) => error ?? new Error(`${name}() failed`),
             ),
             observed: false,
+            site: new Error(),
           }
           pending.push(entry)
           const observe = <R>(fn: (p: Promise<unknown>) => R) => {
@@ -450,7 +625,7 @@ const track = (assertion: unknown, path: string) => {
 }
 
 /** Assertions that return a chain, so the chain's async matchers are tracked too. */
-const CHAINS: Record<string, string> = { soft: 'expect.soft(…)', poll: 'expect.poll(…)' }
+const CHAINS: Record<string, string> = { require: 'expect.require(…)', poll: 'expect.poll(…)' }
 
 export const expect: ExpectStatic = new Proxy(globalExpect, {
   apply: (target, thisArg, args) =>
@@ -462,10 +637,16 @@ export const expect: ExpectStatic = new Proxy(globalExpect, {
     if (typeof value !== 'function' || property === 'assert') return value
     const chain = CHAINS[property as string]
     // Not `bind`: it reads `length`, which Chai's proxied methods reject.
-    return (...args: unknown[]) => {
+    const method = (...args: unknown[]) => {
       const result = Reflect.apply(value, bound, args)
       return chain ? track(result, chain) : result
     }
+    if (property !== 'require') return method
+    const poll = (bound as ExpectStatic).require.poll
+    return Object.assign(method, {
+      poll: (...args: Parameters<typeof poll>) =>
+        track(Reflect.apply(poll, bound, args), 'expect.require.poll(…)'),
+    })
   },
 })
 
@@ -491,9 +672,12 @@ export function attemptRecordings(): RawAssertion[] {
 
 /**
  * Waits for the async assertions the eval started but didn't await, and returns the error that
- * fails the attempt: the first one's failure, or that it wasn't awaited.
+ * fails the attempt: the first one's failure, or that it wasn't awaited, with the eval's line.
  */
-export async function unawaitedError(pending: Pending[]): Promise<Error | undefined> {
+export async function unawaitedError(
+  pending: Pending[],
+  file?: string,
+): Promise<Error | undefined> {
   const missed = pending.filter((p) => !p.observed)
   if (missed.length === 0) return undefined
   for (const p of missed) p.observed = true
@@ -502,7 +686,9 @@ export async function unawaitedError(pending: Pending[]): Promise<Error | undefi
     0,
     outcomes.findIndex((o) => o !== undefined),
   )
-  const hint = `${missed[i]?.assertion} wasn't awaited. Its check is async: write \`await ${missed[i]?.assertion}\`.`
+  const site = missed[i]?.site?.stack
+  const where = file && lineIn(site, file)
+  const hint = `${missed[i]?.assertion}${where ? ` at ${where}` : ''} wasn't awaited. Its check is async: write \`await ${missed[i]?.assertion}\`.`
   const failure = outcomes[i]
   if (failure instanceof Error) {
     failure.message = `${failure.message}\n\n${hint}`
@@ -510,6 +696,7 @@ export async function unawaitedError(pending: Pending[]): Promise<Error | undefi
   }
   const error = new Error(hint)
   error.name = 'AssertionError'
+  if (site) error.stack = `AssertionError: ${hint}\n${site.split('\n').slice(1).join('\n')}`
   return error
 }
 

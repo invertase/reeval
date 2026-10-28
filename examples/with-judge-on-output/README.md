@@ -1,8 +1,8 @@
 # with-judge-on-output
 
 **Shows:** judging what the program prints, not the diff. The agent writes `summary.js` for an
-`orders.csv`, the eval runs it, and `c.judge(question, { on: run.stdout })` asks whether the output
-has the right count and total.
+`orders.csv`, the eval runs it, and `c.judge(question, { on: run.stdout, output: true })` asks
+whether the output has the right count and total.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. A real agent needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code, which
@@ -25,18 +25,15 @@ in [`examples/profiles.ts`](../profiles.ts).
 one profile you need.
 
 **What to look at:** the attempt's `judge-input.json`, under `.reeval/runs/<run>/`. The program's
-output stands in for the agent's final message, as `output`; the task, files and diff stay.
+output stands in for the agent's final message, as `output`, and it's the only input.
 
 ```text
     "question": "Does it say there are 3 orders totaling 50?",
     …
     "state": {
-      "task": "Write summary.js. It prints how many orders orders.csv has, and their total.",
-      "output": "3 orders, total 50.00\n",
-      "files": [
-        "added summary.js"
-      ],
-      …
+      "output": "3 orders, total 50.00\n"
+    },
+    …
 ```
 
 | File | What it is |
