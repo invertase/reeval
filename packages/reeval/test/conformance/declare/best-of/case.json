@@ -1,0 +1,5 @@
+{
+  "eval": "plan/best-of/evals/b.eval.ts",
+  "plan": "plan/best-of/expected/default.txt",
+  "args": []
+}

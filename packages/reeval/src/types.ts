@@ -1664,8 +1664,28 @@ export type CellGate = GatePolicy | 'none'
 /** A compare object: `baseline` and `variants`. Same as `CompareOptions`. */
 export type CompareSpec<E = Environment> = CompareOptions<E>
 
+type OddDigit = '1' | '3' | '5' | '7' | '9'
+
+/**
+ * `N` when it's an odd whole number of 3 or more, else a sentence the compiler shows as the type
+ * it expected. A `number` that isn't a literal stays `number`: only planning can check it.
+ */
+export type OddAtLeast3<N extends number> = number extends N
+  ? N
+  : `${N}` extends `-${string}` | `${string}.${string}` | `${string}e${string}` | '1'
+    ? 'an odd whole number of 3 or more, e.g. 3 or 5'
+    : `${N}` extends `${string}${OddDigit}`
+      ? N
+      : 'an odd whole number of 3 or more, e.g. 3 or 5'
+
+/**
+ * Attempts per cell: a fixed count, or `{ bestOf }`, an odd number of 3 or more, which stops a
+ * cell once one side (pass or fail) has a majority: `{ bestOf: 5 }` runs 3 to 5 attempts.
+ */
+export type Runs<N extends number = number> = number | { bestOf: OddAtLeast3<N> }
+
 /** Options other than `environment` and `compare`, which are exclusive of each other. */
-type EvalOptionFields = {
+type EvalOptionFields<N extends number = number> = {
   /** Which agents run the eval; each harness is its own cell. */
   harness?: HarnessOption
   /**
@@ -1674,11 +1694,12 @@ type EvalOptionFields = {
    */
   sandbox?: SandboxDescriptor
   /**
-   * Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
-   * whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
-   * included.
+   * Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once
+   * a majority of its `n` attempts agree and gates it on that majority; not on a compared eval.
+   * Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach
+   * a verdict, and anything else runs once, a pooled `evaluate.each` case included.
    */
-  runs?: number
+  runs?: Runs<N>
   /** How each cell's attempts decide its outcome; default `'all'`. */
   gate?: GatePolicy
   /** Variables and secrets for the sandbox, merged by name down the cascade. */
@@ -1752,8 +1773,10 @@ type EnvironmentOrCompare<E> =
       compare: CompareSpec<E> & { baseline?: undefined }
     }
 
-export type EvalOptions = EvalOptionFields & EnvironmentOrCompare<Environment>
-export type GroupOptions = EvalOptions
+/** `N` is `runs.bestOf` as written, so an even or fractional literal is a type error. */
+export type EvalOptions<N extends number = number> = EvalOptionFields<N> &
+  EnvironmentOrCompare<Environment>
+export type GroupOptions<N extends number = number> = EvalOptions<N>
 
 /**
  * `EvalOptions` in their data forms, as JSON carries them: the harness as data, the judge's model
@@ -1799,8 +1822,8 @@ export type ProfileDefaults = {
   sandbox?: SandboxDescriptor
   /** What every eval runs in when it names no environment. */
   environment?: Environment
-  /** Attempts per cell. */
-  runs?: number
+  /** Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more). */
+  runs?: Runs
   /** How each cell's attempts decide its outcome. */
   gate?: GatePolicy
   /** Variables and secrets for the sandbox, merged by name over the config's. */
@@ -1937,8 +1960,11 @@ export type ReevalConfig = {
   sandbox?: SandboxDescriptor
   /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
   environment?: Environment
-  /** Attempts per cell; unset, a compare with variants runs 4 a side and anything else once. */
-  runs?: number
+  /**
+   * Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more); unset, a compare with
+   * variants runs 4 a side and anything else once.
+   */
+  runs?: Runs
   /** How each cell's attempts decide its outcome; default `'all'`. */
   gate?: GatePolicy
   /** Variables and secrets for the sandbox, merged by name down the cascade. */
@@ -2104,7 +2130,7 @@ export type ResolvedConfig = {
   sandbox: SandboxDescriptor
   environment: Environment | undefined
   /** Unset leaves each eval its default: 4 for a compare with variants, otherwise 1. */
-  runs: number | undefined
+  runs: Runs | undefined
   /** Unset means `'all'`; kept unset so the plan can hint when `runs > 1`. */
   gate: GatePolicy | undefined
   env: EnvVars
@@ -2547,7 +2573,10 @@ export type EvalPlan = {
   compare?: EvalCompareMeta
   /** The eval's questions, answered after its attempts; unset without any, or when a profile dropped them all. */
   questions?: PlannedQuestion[]
+  /** Attempts per cell; with `bestOf`, the most a cell runs. */
   runs: number
+  /** Set by `runs: { bestOf }`: each cell stops once a majority of this many attempts agree. */
+  bestOf?: number
   /** The eval's gate policy, or undefined when it was left at the default (`'all'`). */
   gate?: GatePolicy
   attempts: number
@@ -2614,6 +2643,11 @@ export type AttemptMeta = {
   gate: CellGate
   /** Set on variant attempts whose compare has a `minLift`. */
   minLift?: number
+  /**
+   * Set by `runs: { bestOf }`: past the majority's first attempts, this one runs only when the
+   * cell's earlier attempts haven't reached a majority.
+   */
+  bestOf?: number
   /** The secrets this attempt brokers, as `NAME → host, host`. */
   brokered: string[]
   /**

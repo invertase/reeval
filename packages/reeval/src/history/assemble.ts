@@ -17,7 +17,14 @@ import { attemptId, attemptKey, evalSlug, recordFileName, sha256 } from '../ids.
 import { judgeModelName } from '../judge/index.ts'
 import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
 import { mergeJudge } from '../judge/state-options.ts'
-import { harnessId, plannedSandboxes, profileJudge, sandboxId } from '../options.ts'
+import {
+  harnessId,
+  majorityOf,
+  plannedSandboxes,
+  profileJudge,
+  runsOf,
+  sandboxId,
+} from '../options.ts'
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactJsonText, redactSecrets, redactSplitSecrets } from '../redact.ts'
@@ -552,12 +559,14 @@ function cellOf(
   gate: CellGate,
   harness: HarnessDescriptor | undefined,
   gateway?: ResolvedGateway,
+  bestOf?: number,
 ): CellRecord {
   let found = entry.cells.find((c) => c.key === cell.key)
   if (!found) {
     found = {
       ...cell,
       ...(gateway ? { gateway: gateway.name } : {}),
+      ...(bestOf !== undefined ? { bestOf } : {}),
       fingerprint: '',
       fingerprintParts: EMPTY_PARTS,
       environmentDigest: null,
@@ -648,6 +657,7 @@ async function addPreviousAttempt(
     e.attempt?.gate ?? beforeCell?.gate ?? 'all',
     e.attempt?.harness,
     e.attempt?.gateway,
+    e.attempt ? e.attempt.bestOf : beforeCell?.bestOf,
   )
   if (created && beforeCell && !e.attempt) {
     cellRecord.harnessKind = beforeCell.harnessKind
@@ -763,6 +773,7 @@ async function addAttempt(
     e.attempt?.gate ?? 'all',
     e.attempt?.harness,
     e.attempt?.gateway,
+    e.attempt?.bestOf,
   )
   if (e.attempt?.minLift !== undefined) minLifts.set(cellRecord, e.attempt.minLift)
   if (record?.environment?.overrides.length && cellRecord.overrides.length === 0) {
@@ -991,10 +1002,30 @@ function discrimination(control: CellRecord, variant: CellRecord): void {
   }
 }
 
+/**
+ * Marks a best-of cell's attempts past its majority's first: `added` for one that ran, `skipped`
+ * for one the majority before it left unrun.
+ */
+function markBestOf(cell: CellRecord, attempts: AttemptRecord[]): void {
+  if (cell.bestOf === undefined) return
+  const majority = majorityOf(cell.bestOf)
+  let pass = 0
+  let fail = 0
+  for (const a of attempts.filter((x) => x.cell === cell.key).sort((x, y) => x.n - y.n)) {
+    if (a.n > majority) {
+      if (a.outcome !== 'skipped') a.bestOf = 'added'
+      else if (pass >= majority || fail >= majority) a.bestOf = 'skipped'
+    }
+    if (a.outcome === 'pass') pass++
+    if (a.outcome === 'fail') fail++
+  }
+}
+
 /** Per-cell and per-eval counts, pass rates, lift, outcomes and fingerprints, once every attempt is in. */
 function rollUp(evals: EvalEntry[]): void {
   for (const entry of evals) {
     for (const c of entry.cells) {
+      markBestOf(c, entry.attempts)
       const outcomes = entry.attempts.filter((a) => a.cell === c.key).map((a) => a.outcome)
       c.runs = outcomes.length
       c.pass = outcomes.filter((o) => o === 'pass').length
@@ -1217,7 +1248,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
               sandbox:
                 (profile.defaults.environment || profile.defaults.sandbox) &&
                 sandboxId(profileSandbox(config, profile.defaults)),
-              runs: profile.defaults.runs,
+              ...(profile.defaults.runs !== undefined ? runsOf(profile.defaults.runs) : {}),
               timeout: profile.defaults.timeout,
               env: profile.defaults.env && Object.keys(profile.defaults.env).sort(),
             }),
@@ -1236,7 +1267,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     config: {
       sandbox: plannedSandboxes(input.plan.sandboxes, profileSandbox(config, profile?.defaults)),
       environment: config.environment?.name ?? null,
-      runs: config.runs ?? 1,
+      ...(config.runs !== undefined ? runsOf(config.runs) : { runs: 1 }),
       judgeModel,
       threshold: runJudge.threshold,
       timeoutMs: config.timeoutMs,

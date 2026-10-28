@@ -148,6 +148,12 @@ export type AttemptRecord = {
   cell: string
   /** Run number within the cell, from 1. */
   n: number
+  /**
+   * In a `runs: { bestOf }` cell: `added` when it ran past the majority's first attempts (the
+   * earlier ones split, or an infra error left them short), `skipped` when it didn't run because
+   * the earlier ones already had a majority. Unset on the attempts that always run.
+   */
+  bestOf?: 'added' | 'skipped'
   /** Start order across the run, from 1; null for attempts that never started. */
   seq: number | null
   startedAt: string | null
@@ -504,6 +510,11 @@ export type CellRecord = Cell & {
   gate: CellGate
   /** Environment keys the variant replaced on the control's (or a child on its parent's). */
   overrides: string[]
+  /**
+   * Set by `runs: { bestOf }`: the cell stopped once a majority of this many attempts agreed, and
+   * gates on that majority. `runs` still counts every planned attempt, the skipped ones included.
+   */
+  bestOf?: number
   runs: number
   pass: number
   fail: number
@@ -593,7 +604,10 @@ export type RunRecord = {
       harness?: string[]
       environment?: string
       sandbox?: string
+      /** With `bestOf`, the most attempts a cell runs. */
       runs?: number
+      /** Set by `defaults.runs: { bestOf }`. */
+      bestOf?: number
       timeout?: string | number
       env?: string[]
     }
@@ -622,8 +636,13 @@ export type RunRecord = {
   config: {
     sandbox: string
     environment: string | null
-    /** The config's `runs`; 1 when it sets none, though a compare's cells then run 4 each. */
+    /**
+     * The config's `runs` (with `bestOf`, the most a cell runs); 1 when it sets none, though a
+     * compare's cells then run 4 each.
+     */
     runs: number
+    /** Set by the config's `runs: { bestOf }`. */
+    bestOf?: number
     judgeModel: string | null
     threshold: number
     timeoutMs: number

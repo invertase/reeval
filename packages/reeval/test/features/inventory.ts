@@ -94,6 +94,26 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/unit.test.ts', 'reeval/test/options.test.ts'],
   },
   {
+    id: 'runs.best-of',
+    area: 'Config and selection',
+    name: '`runs: { bestOf }`: each cell stops once a majority of its attempts agree, gates on that majority and marks the attempts it added or skipped; refused on a compare and when not odd and 3 or more',
+    plan: [
+      'best-of/default',
+      'best-of/runs-override',
+      'best-of/limited',
+      'best-of/profile-defaults',
+      'best-of/yaml',
+      'best-of/yaml-limited',
+    ],
+    fixtures: ['run/best-of'],
+    unit: [
+      'reeval/test/best-of.test.ts',
+      'reeval/test/engine-run.test.ts',
+      'reeval/test/refusals.test.ts',
+      'reeval/test/conformance.test.ts',
+    ],
+  },
+  {
     id: 'matrix.cascade',
     area: 'Config and selection',
     name: 'Option cascade through groups and evals; harness edits (`{ add }`, `{ only }`, functions)',

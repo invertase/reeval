@@ -60,7 +60,9 @@ export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {})
     plan.profile ? `profile ${plan.profile.name} (${plan.profile.reason})` : 'no profile',
     `${totals.evals} evals${totals.skipped ? ` (${totals.skipped} skipped)` : ''}`,
     `${totals.cells} cells`,
-    `${totals.attempts} attempts`,
+    totals.fewest === totals.attempts
+      ? `${totals.attempts} attempts`
+      : `${totals.fewest}–${totals.attempts} attempts`,
   ]
   const caps = [
     budget.attempts === null ? '' : `attempts ${budget.attempts}`,
@@ -87,7 +89,7 @@ export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {})
           : c.gate === 'all'
             ? 'gated'
             : `gated passRate ${c.gate.passRate}`,
-        `×${c.runs}`,
+        c.bestOf === undefined ? `×${c.runs}` : `best of ${c.bestOf}`,
         [
           c.minLift === undefined ? '' : `minLift ${c.minLift}`,
           i === 0 && e.family

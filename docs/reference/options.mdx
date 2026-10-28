@@ -550,8 +550,8 @@ For more information about environments, see [Define an environment](/configurat
 
 `runs` is the number of attempts in each cell.
 
-<Property name="runs" type="number" optional>
-  A whole number of at least 1, and 1 by default. `--runs` replaces it after a profile `limit`, pinned or not.
+<Property name="runs" type="number | { bestOf: number }" optional>
+  A whole number of at least 1, and 1 by default, or `{ bestOf: n }` with `n` odd and at least 3, which stops each cell once pass or fail has a majority of `n` and gates on that majority. `bestOf` is refused on an evaluation with `compare`. `--runs` replaces it after a profile `limit`, pinned or not.
 </Property>
 
 ## `gate`

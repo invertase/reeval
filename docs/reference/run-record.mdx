@@ -70,7 +70,7 @@ For more information about the keys on `stack.judge.state`, see [`c.judge()`](/r
   Each environment the run applied, fingerprinted; secret values are never included.
 </Property>
 
-<Property name="profile" type="{name: string; reason: string; defaults: {harness?: string[]; environment?: string; sandbox?: string; runs?: number; timeout?: string | number; env?: string[]}; limit: {runs?: number; compare?: false | {maxVariants: number}; harness?: string[]}} | null">
+<Property name="profile" type="{name: string; reason: string; defaults: {harness?: string[]; environment?: string; sandbox?: string; runs?: number; bestOf?: number; timeout?: string | number; env?: string[]}; limit: {runs?: number; compare?: false | {maxVariants: number}; harness?: string[]}} | null">
   The profile the run was sized with, and why it was chosen.
 </Property>
 
@@ -80,7 +80,7 @@ For more information about the keys on `stack.judge.state`, see [`c.judge()`](/r
 
 <Property name="budget" type="{attempts?: number; duration?: string | number} | null"></Property>
 
-<Property name="config" type="{sandbox: string; environment: string | null; runs: number; judgeModel: string | null; threshold: number; timeoutMs: number; concurrency: number; configHash: string}">
+<Property name="config" type="{sandbox: string; environment: string | null; runs: number; bestOf?: number; judgeModel: string | null; threshold: number; timeoutMs: number; concurrency: number; configHash: string}">
   The run's settings. `sandbox` is the id of each sandbox the planned attempts ran on, after the profile's defaults, joined with `, `.
 </Property>
 
@@ -352,6 +352,10 @@ Also has every field of `Cell`.
   Environment keys the variant replaced on the control's (or a child on its parent's).
 </Property>
 
+<Property name="bestOf" type="number" optional>
+  Set by `runs: { bestOf }`: the cell stopped once a majority of this many attempts agreed, and gates on that majority. `runs` still counts every planned attempt, the skipped ones included.
+</Property>
+
 <Property name="runs" type="number"></Property>
 
 <Property name="pass" type="number"></Property>
@@ -614,6 +618,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="n" type="number">
   Run number within the cell, from 1.
+</Property>
+
+<Property name="bestOf" type="'added' | 'skipped'" optional>
+  In a `runs: { bestOf }` cell: `added` when it ran past the majority's first attempts (the earlier ones split, or an infra error left them short), `skipped` when it didn't run because the earlier ones already had a majority. Unset on the attempts that always run.
 </Property>
 
 <Property name="seq" type="number | null">

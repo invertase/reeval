@@ -57,7 +57,7 @@ For more information about `pin`, see [Options reference](/reference/options#pin
 ### `runs`
 
 <Property name="runs" type="number" optional>
-  A whole number of at least 1. reeval lowers `runs` only when the resolved value is higher. `--runs` replaces `runs` after the cap, including when `pin` lists `runs`.
+  A whole number of at least 1. reeval lowers `runs` only when the resolved value is higher, and turns a `{ bestOf: n }` with `n` above it into this fixed count. `--runs` replaces `runs` after the cap, including when `pin` lists `runs`.
 </Property>
 
 ### `compare`

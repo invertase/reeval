@@ -1,0 +1,1183 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261027T093027Z_nogit_cursor-agent_sapx",
+  "status": "complete",
+  "startedAt": "2026-10-27T09:30:27.092Z",
+  "endedAt": "2026-10-27T09:30:27.877Z",
+  "durationMs": 785,
+  "author": "cursor-agent",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.14.0",
+    "node": "22.23.4",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.4"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.12",
+      "@reeval/harness-opencode": "0.2.10",
+      "@reeval/harness-goose": "0.1.6",
+      "@reeval/harness-pi": "0.2.8",
+      "@reeval/harness-cursor-sdk": "0.1.6",
+      "@ai-sdk/harness-claude-code": "1.0.160-patch.b17cde50",
+      "@reeval/harness-codex": "0.1.9",
+      "@reeval/harness-fx": "0.1.1",
+      "@reeval/harness-grok-build": "0.1.5",
+      "ai": "7.0.145",
+      "@ai-sdk/harness": "1.0.156",
+      "@ai-sdk/anthropic": "4.0.83",
+      "@ai-sdk/google": "4.0.100",
+      "@ai-sdk/openai": "4.0.97",
+      "@ai-sdk/typesafe-ai": "3.0.22"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "7390a72b715f"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [],
+  "profile": null,
+  "plan": {
+    "evals": 3,
+    "cells": 3,
+    "attempts": 11,
+    "estimateMs": 11000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "fake",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "2952bb4861eca2c963ff2e1cbef4e3f6d9fd51d851fe499614a74c757a8741e0"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 3,
+    "attempts": 11,
+    "pass": 5,
+    "fail": 4,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 2
+  },
+  "evals": [
+    {
+      "id": "bo.eval.ts › agrees",
+      "key": "bo.eval.ts › agrees",
+      "slug": "bo-eval-ts-agrees-39efc8",
+      "file": "bo.eval.ts",
+      "group": [],
+      "name": "agrees",
+      "tags": [],
+      "fingerprint": "2f46fe5c499cc9065e6b48801c3de870d241ae125b10882f5eb2a27d715264a7",
+      "sources": [
+        {
+          "path": "bo.eval.ts",
+          "sha256": "77b98c3aaca3888e028d4f7c35121f8a735ed9fa5d846694316004f1eb75f95e"
+        }
+      ],
+      "source": {
+        "body": "be65b0615d03a76cc1f9aeb01bbf04818310ce9d48f8882da77ca5b1dc40b47b",
+        "options": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "bestOf": 3,
+          "fingerprint": "c15dc0b3fed444d343d2016b9f76147721cf1993fd08dbf0bb002c65e6f33de0",
+          "fingerprintParts": {
+            "sources": "b9715b1bcd80be865c5194339ea371f2cb5d0e2cd81256dc72ac42bcbf0226e1",
+            "harness": "7d88bdaf883f0f243401c80c8deaabd3890c5f7d2f0c98b6a9e2eecd7528e938",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "afc85a9c56b6c53fd72ebe705e62e44e3aa2f8bfaeb0cfc406bbe5e2f93220ef",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+            "gate": "passRate 0.5"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": {
+            "passRate": 0.5
+          },
+          "overrides": [],
+          "runs": 3,
+          "pass": 2,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 1,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toBe 1",
+              "pass": 2,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "bo.eval.ts › agrees # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-10-27T09:30:27.721Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 66,
+          "turns": [
+            {
+              "prompt": "hi",
+              "status": "completed",
+              "startedAt": "2026-10-27T09:30:27.746Z",
+              "durationMs": 1,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "ok"
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 23,
+            "agentMs": 0,
+            "diffMs": 17,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toBe 1",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": false
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "bo-eval-ts-agrees-39efc8/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "0e2d003686e0e138fafec489056b2650e0f40aebd7f7792a36f0c3aae5b86246",
+              "bytes": 384
+            },
+            "diff": {
+              "path": "bo-eval-ts-agrees-39efc8/fake-fake-70e87d/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        },
+        {
+          "key": "bo.eval.ts › agrees # fake/-/fake#2",
+          "id": "fake/-/fake#2",
+          "cell": "fake/-/fake",
+          "n": 2,
+          "seq": 2,
+          "startedAt": "2026-10-27T09:30:27.726Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 54,
+          "turns": [
+            {
+              "prompt": "hi",
+              "status": "completed",
+              "startedAt": "2026-10-27T09:30:27.750Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "ok"
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 22,
+            "agentMs": 0,
+            "diffMs": 15,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toBe 1",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": false
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "bo-eval-ts-agrees-39efc8/fake-fake-70e87d/2/transcript.jsonl",
+              "sha256": "0acfb7599b958606430cc72ea8bc46e4c0d5722d4d35e1fa72455d47d6fab5c7",
+              "bytes": 384
+            },
+            "diff": {
+              "path": "bo-eval-ts-agrees-39efc8/fake-fake-70e87d/2/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        },
+        {
+          "key": "bo.eval.ts › agrees # fake/-/fake#3",
+          "id": "fake/-/fake#3",
+          "cell": "fake/-/fake",
+          "n": 3,
+          "seq": null,
+          "startedAt": null,
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": null,
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "skipped",
+          "error": null,
+          "durationMs": 67,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 0,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": null
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {},
+          "bestOf": "skipped"
+        }
+      ]
+    },
+    {
+      "id": "bo.eval.ts › splits",
+      "key": "bo.eval.ts › splits",
+      "slug": "bo-eval-ts-splits-5310c2",
+      "file": "bo.eval.ts",
+      "group": [],
+      "name": "splits",
+      "tags": [],
+      "fingerprint": "1c6f6f81df744fd0f21750e1f0a097f2e4d2e3a0b2ece743ad60c574eed6736c",
+      "sources": [
+        {
+          "path": "bo.eval.ts",
+          "sha256": "77b98c3aaca3888e028d4f7c35121f8a735ed9fa5d846694316004f1eb75f95e"
+        }
+      ],
+      "source": {
+        "body": "f46e23e81ec32b2f79053a45c3d20ef1176d46e7fd4a73499cccbf96d62e189f",
+        "options": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 0.6666666666666666,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "bestOf": 3,
+          "fingerprint": "6d8849168a7aaab7566e67ba1708124ec824be1079cb7b4f7ed3bc04ea64de54",
+          "fingerprintParts": {
+            "sources": "f01b1d4aae2a85df9c98a6ac6b76a5532f80e9d238ed7f6acfd331cea48ebd01",
+            "harness": "7d88bdaf883f0f243401c80c8deaabd3890c5f7d2f0c98b6a9e2eecd7528e938",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "afc85a9c56b6c53fd72ebe705e62e44e3aa2f8bfaeb0cfc406bbe5e2f93220ef",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+            "gate": "passRate 0.5"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": {
+            "passRate": 0.5
+          },
+          "overrides": [],
+          "runs": 3,
+          "pass": 2,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0.6666666666666666,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toBe 1",
+              "pass": 2,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "bo.eval.ts › splits # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 3,
+          "startedAt": "2026-10-27T09:30:27.728Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 57,
+          "turns": [
+            {
+              "prompt": "hi",
+              "status": "completed",
+              "startedAt": "2026-10-27T09:30:27.761Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "ok"
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 33,
+            "agentMs": 0,
+            "diffMs": 9,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toBe 1",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": false
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "bo-eval-ts-splits-5310c2/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "b22015fed819abc5a85fd30a7638b1d9652a2aade3a758781aa994434e4f9098",
+              "bytes": 384
+            },
+            "diff": {
+              "path": "bo-eval-ts-splits-5310c2/fake-fake-70e87d/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        },
+        {
+          "key": "bo.eval.ts › splits # fake/-/fake#2",
+          "id": "fake/-/fake#2",
+          "cell": "fake/-/fake",
+          "n": 2,
+          "seq": 4,
+          "startedAt": "2026-10-27T09:30:27.729Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected +0 to be 1 // Object.is equality"
+          },
+          "durationMs": 66,
+          "turns": [
+            {
+              "prompt": "hi",
+              "status": "completed",
+              "startedAt": "2026-10-27T09:30:27.752Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "ok"
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 23,
+            "agentMs": 0,
+            "diffMs": 17,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toBe 1",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "fail",
+              "soft": false,
+              "message": "expected +0 to be 1 // Object.is equality"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "bo-eval-ts-splits-5310c2/fake-fake-70e87d/2/transcript.jsonl",
+              "sha256": "f03e5f67e717b64b78de63c5607ecf3a2c9463f49137b5d32ed596ad11c75d1e",
+              "bytes": 384
+            },
+            "diff": {
+              "path": "bo-eval-ts-splits-5310c2/fake-fake-70e87d/2/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        },
+        {
+          "key": "bo.eval.ts › splits # fake/-/fake#3",
+          "id": "fake/-/fake#3",
+          "cell": "fake/-/fake",
+          "n": 3,
+          "seq": 8,
+          "startedAt": "2026-10-27T09:30:27.798Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 36,
+          "turns": [
+            {
+              "prompt": "hi",
+              "status": "completed",
+              "startedAt": "2026-10-27T09:30:27.812Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "ok"
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 13,
+            "agentMs": 0,
+            "diffMs": 10,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toBe 1",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": false
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "bo-eval-ts-splits-5310c2/fake-fake-70e87d/3/transcript.jsonl",
+              "sha256": "5f415eb84b944cbd6f810417c4d0a0f368aa7aa1c8d2cae9a29c1124acea0f2b",
+              "bytes": 384
+            },
+            "diff": {
+              "path": "bo-eval-ts-splits-5310c2/fake-fake-70e87d/3/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "bestOf": "added"
+        }
+      ]
+    },
+    {
+      "id": "bo.eval.ts › fails twice",
+      "key": "bo.eval.ts › fails twice",
+      "slug": "bo-eval-ts-fails-twice-40f2c2",
+      "file": "bo.eval.ts",
+      "group": [],
+      "name": "fails twice",
+      "tags": [],
+      "fingerprint": "a5354258453ab760596e3d0bc8a481dee6d6de01fff82e411d9c7b71ad299f35",
+      "sources": [
+        {
+          "path": "bo.eval.ts",
+          "sha256": "77b98c3aaca3888e028d4f7c35121f8a735ed9fa5d846694316004f1eb75f95e"
+        }
+      ],
+      "source": {
+        "body": "b5bc844ceff1f0be4b7d9a3bd2b3bb5640b4f6ca0af203fcd9928f63f08f4d47",
+        "options": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0.25,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "bestOf": 5,
+          "fingerprint": "721e9153ef036786655298cfe42cedc6aaf8507fdd467c16b224c451d1713ad9",
+          "fingerprintParts": {
+            "sources": "7b95265890f137444dac20db00c0f68d7c9322b3671f5b0f467e58c5d4a84768",
+            "harness": "7d88bdaf883f0f243401c80c8deaabd3890c5f7d2f0c98b6a9e2eecd7528e938",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "afc85a9c56b6c53fd72ebe705e62e44e3aa2f8bfaeb0cfc406bbe5e2f93220ef",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+            "gate": "passRate 0.5"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": {
+            "passRate": 0.5
+          },
+          "overrides": [],
+          "runs": 5,
+          "pass": 1,
+          "fail": 3,
+          "infraError": 0,
+          "skipped": 1,
+          "passRate": 0.25,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "toBe 1",
+              "pass": 1,
+              "fail": 3,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "bo.eval.ts › fails twice # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 5,
+          "startedAt": "2026-10-27T09:30:27.781Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected +0 to be 1 // Object.is equality"
+          },
+          "durationMs": 49,
+          "turns": [
+            {
+              "prompt": "hi",
+              "status": "completed",
+              "startedAt": "2026-10-27T09:30:27.800Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "ok"
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 17,
+            "agentMs": 0,
+            "diffMs": 8,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toBe 1",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "fail",
+              "soft": false,
+              "message": "expected +0 to be 1 // Object.is equality"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "bo-eval-ts-fails-twice-40f2c2/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "fd4c326693e22c24860961879146382b43aad2542d7512e37681b7b6cf629415",
+              "bytes": 384
+            },
+            "diff": {
+              "path": "bo-eval-ts-fails-twice-40f2c2/fake-fake-70e87d/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        },
+        {
+          "key": "bo.eval.ts › fails twice # fake/-/fake#2",
+          "id": "fake/-/fake#2",
+          "cell": "fake/-/fake",
+          "n": 2,
+          "seq": 6,
+          "startedAt": "2026-10-27T09:30:27.783Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 44,
+          "turns": [
+            {
+              "prompt": "hi",
+              "status": "completed",
+              "startedAt": "2026-10-27T09:30:27.806Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "ok"
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 22,
+            "agentMs": 0,
+            "diffMs": 12,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toBe 1",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": false
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "bo-eval-ts-fails-twice-40f2c2/fake-fake-70e87d/2/transcript.jsonl",
+              "sha256": "1ec8d1ec403e5cee223b2050d3a31b51298f682814ba9419a89adc9299a80be1",
+              "bytes": 384
+            },
+            "diff": {
+              "path": "bo-eval-ts-fails-twice-40f2c2/fake-fake-70e87d/2/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        },
+        {
+          "key": "bo.eval.ts › fails twice # fake/-/fake#3",
+          "id": "fake/-/fake#3",
+          "cell": "fake/-/fake",
+          "n": 3,
+          "seq": 7,
+          "startedAt": "2026-10-27T09:30:27.789Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected +0 to be 1 // Object.is equality"
+          },
+          "durationMs": 45,
+          "turns": [
+            {
+              "prompt": "hi",
+              "status": "completed",
+              "startedAt": "2026-10-27T09:30:27.809Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "ok"
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 20,
+            "agentMs": 0,
+            "diffMs": 9,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toBe 1",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "fail",
+              "soft": false,
+              "message": "expected +0 to be 1 // Object.is equality"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "bo-eval-ts-fails-twice-40f2c2/fake-fake-70e87d/3/transcript.jsonl",
+              "sha256": "047a1b0bce179edb1ebfb743cc063cd061725dc71138db59bb7073cf6b2a11d8",
+              "bytes": 384
+            },
+            "diff": {
+              "path": "bo-eval-ts-fails-twice-40f2c2/fake-fake-70e87d/3/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        },
+        {
+          "key": "bo.eval.ts › fails twice # fake/-/fake#4",
+          "id": "fake/-/fake#4",
+          "cell": "fake/-/fake",
+          "n": 4,
+          "seq": 9,
+          "startedAt": "2026-10-27T09:30:27.835Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected +0 to be 1 // Object.is equality"
+          },
+          "durationMs": 27,
+          "turns": [
+            {
+              "prompt": "hi",
+              "status": "completed",
+              "startedAt": "2026-10-27T09:30:27.847Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "ok"
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 12,
+            "agentMs": 0,
+            "diffMs": 7,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toBe 1",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "fail",
+              "soft": false,
+              "message": "expected +0 to be 1 // Object.is equality"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "bo-eval-ts-fails-twice-40f2c2/fake-fake-70e87d/4/transcript.jsonl",
+              "sha256": "a2150a08e0de392b7354b6ec423fc9c4c5096e42e6edf257ffbc3084cd4da14b",
+              "bytes": 384
+            },
+            "diff": {
+              "path": "bo-eval-ts-fails-twice-40f2c2/fake-fake-70e87d/4/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          },
+          "bestOf": "added"
+        },
+        {
+          "key": "bo.eval.ts › fails twice # fake/-/fake#5",
+          "id": "fake/-/fake#5",
+          "cell": "fake/-/fake",
+          "n": 5,
+          "seq": null,
+          "startedAt": null,
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": null,
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "skipped",
+          "error": null,
+          "durationMs": 146,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 0,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": null
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {},
+          "bestOf": "skipped"
+        }
+      ]
+    }
+  ]
+}

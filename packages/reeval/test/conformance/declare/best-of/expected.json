@@ -1,0 +1,77 @@
+{
+  "children": [
+    {
+      "type": "eval",
+      "name": "best of 3",
+      "mode": "run",
+      "options": {
+        "runs": {
+          "bestOf": 3
+        }
+      },
+      "body": "b1",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
+    },
+    {
+      "type": "eval",
+      "name": "best of 5 over a gate",
+      "mode": "run",
+      "options": {
+        "runs": {
+          "bestOf": 5
+        },
+        "gate": "all"
+      },
+      "body": "b2",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
+    },
+    {
+      "type": "group",
+      "name": "best of 3 for the group",
+      "mode": "run",
+      "options": {
+        "runs": {
+          "bestOf": 3
+        }
+      },
+      "children": [
+        {
+          "type": "eval",
+          "name": "inherits it",
+          "mode": "run",
+          "options": {},
+          "body": "b4",
+          "source": {
+            "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+          }
+        },
+        {
+          "type": "eval",
+          "name": "a fixed count of its own",
+          "mode": "run",
+          "options": {
+            "runs": 2
+          },
+          "body": "b5",
+          "source": {
+            "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+          }
+        }
+      ]
+    },
+    {
+      "type": "eval",
+      "name": "fixed",
+      "mode": "run",
+      "options": {},
+      "body": "b3",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
+    }
+  ]
+}

@@ -774,6 +774,10 @@ class EvalOptionsDataCompareHarnessOnly(TypedDict):
     only: list[str] | str
 
 
+class EvalOptionsDataCompareRunsBestOf(TypedDict):
+    bestOf: float
+
+
 class EvalOptionsDataCompare(TypedDict):
     # Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the
     # value.
@@ -806,10 +810,11 @@ class EvalOptionsDataCompare(TypedDict):
     # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
     # the evals inside it that set none.
     revision: NotRequired[float | str]
-    # Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
-    # whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
-    # included.
-    runs: NotRequired[float]
+    # Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell
+    # once a majority of its `n` attempts agree and gates it on that majority; not on a compared
+    # eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift
+    # can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.
+    runs: NotRequired[float | EvalOptionsDataCompareRunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
     sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
@@ -851,6 +856,10 @@ class EvalOptionsDataCompare2HarnessOnly(TypedDict):
     only: list[str] | str
 
 
+class EvalOptionsDataCompare2RunsBestOf(TypedDict):
+    bestOf: float
+
+
 class EvalOptionsDataCompare2(TypedDict):
     # Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the
     # value.
@@ -881,10 +890,11 @@ class EvalOptionsDataCompare2(TypedDict):
     # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
     # the evals inside it that set none.
     revision: NotRequired[float | str]
-    # Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
-    # whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
-    # included.
-    runs: NotRequired[float]
+    # Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell
+    # once a majority of its `n` attempts agree and gates it on that majority; not on a compared
+    # eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift
+    # can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.
+    runs: NotRequired[float | EvalOptionsDataCompare2RunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
     sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
@@ -908,6 +918,10 @@ class EvalOptionsData3HarnessAdd(TypedDict):
 
 class EvalOptionsData3HarnessOnly(TypedDict):
     only: list[str] | str
+
+
+class EvalOptionsData3RunsBestOf(TypedDict):
+    bestOf: float
 
 
 class EvalOptionsData3(TypedDict):
@@ -940,10 +954,11 @@ class EvalOptionsData3(TypedDict):
     # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
     # the evals inside it that set none.
     revision: NotRequired[float | str]
-    # Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest
-    # whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case
-    # included.
-    runs: NotRequired[float]
+    # Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell
+    # once a majority of its `n` attempts agree and gates it on that majority; not on a compared
+    # eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift
+    # can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.
+    runs: NotRequired[float | EvalOptionsData3RunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harness`. Not an environment: it does not invent skills, files or a name.
     sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
@@ -1905,6 +1920,7 @@ WebEventType: TypeAlias = "Literal[\"web-search\", \"web-fetch\"]"
 CAMEL_KEYS: frozenset[str] = frozenset(
     {
         "atMs",
+        "bestOf",
         "cacheRead",
         "cacheWrite",
         "costUsd",

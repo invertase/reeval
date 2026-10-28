@@ -137,16 +137,20 @@ function verdict(c: Colors, e: Pick<EvalResult, 'outcome' | 'todo' | 'cells'>): 
 
 /**
  * `3 of 4`, with the attempts that didn't count named: `2 of 3 · 1 infra error · 1 skipped`. A
- * canceled attempt is recorded as a fail, but the agent didn't fail it, so it's named apart.
+ * canceled attempt is recorded as a fail, but the agent didn't fail it, so it's named apart, and
+ * a best-of cell names the attempts its majority made unneeded: `0 of 3 · 2 not needed (best of 5)`.
  */
 function cellCount(cell: CellResult): string {
   const canceled = canceledOf(cell)
   const counted = countedOf(cell)
+  const notNeeded = cell.notNeeded ?? 0
+  const skipped = cell.skipped - notNeeded
   const parts = [
     counted > 0 ? `${cell.passed} of ${counted}` : '',
     cell.infraError ? plural(cell.infraError, 'infra error') : '',
     canceled ? `${canceled} canceled` : '',
-    cell.skipped ? `${cell.skipped} skipped` : '',
+    skipped ? `${skipped} skipped` : '',
+    notNeeded ? `${notNeeded} not needed (best of ${cell.bestOf})` : '',
   ].filter(Boolean)
   if (!parts.length) return 'not run'
   return parts.join(' · ')
@@ -428,9 +432,8 @@ function cellsBody(
 function resultsBody(c: Colors, cell: CellResult, indent: number): string[] {
   if (clean(cell)) return table(retriedItems(c, cell, indent))
   const items: Item[] = []
-  if (cell.attempts > 1) {
-    items.push({ indent, cells: [plural(cell.attempts, 'try', 'tries'), cellCount(cell)] })
-  }
+  const tries = cell.attempts - (cell.notNeeded ?? 0)
+  if (tries > 1) items.push({ indent, cells: [plural(tries, 'try', 'tries'), cellCount(cell)] })
   return table([...items, ...evidence(c, cell, indent)])
 }
 

@@ -2024,10 +2024,26 @@
           "$ref": "#/$defs/QuestionOptions"
         },
         "runs": {
-          "description": "Attempts per cell.",
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9007199254740991
+          "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more).",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "object",
+              "properties": {
+                "bestOf": {
+                  "type": "integer",
+                  "minimum": 3,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["bestOf"],
+              "additionalProperties": false
+            }
+          ]
         },
         "sandbox": {
           "description": "The default machine when the resolved environment omits `sandbox`.",
@@ -2217,10 +2233,26 @@
           "enum": ["manual", "ci", "always"]
         },
         "runs": {
-          "description": "Attempts per cell; unset, a compare with variants runs 4 a side and anything else once.",
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9007199254740991
+          "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more); unset, a compare with variants runs 4 a side and anything else once.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "object",
+              "properties": {
+                "bestOf": {
+                  "type": "integer",
+                  "minimum": 3,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["bestOf"],
+              "additionalProperties": false
+            }
+          ]
         },
         "sandbox": {
           "description": "The default machine when the resolved environment omits `sandbox`. Not an environment: it does not invent skills, files or a name. Implicit `docker()` when nobody sets one.",
