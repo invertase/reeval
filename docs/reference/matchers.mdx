@@ -20,27 +20,14 @@ await expect(c.exec('npm test'), 'tests pass').toSucceed()
 ```
 
 <Property name="actual" type="unknown" required>
-  The subject. Each matcher names the subjects it accepts. On any other subject, the matcher is a type error in the editor and throws a `TypeError` when the eval runs.
+  The subject. Each matcher names the subjects it accepts and throws a `TypeError` on any other.
 </Property>
 
 <Property name="label" type="string" optional>
   The assertion's name in the output and the run record. Without a label, the name is the matcher and its first argument, such as `toHaveEdited src/user.test.ts`, or the command or question the subject carries. A repeated name gets a ` #2` or ` #3` suffix.
 </Property>
 
-`.not` inverts the matcher. `toHaveFile()` returns a promise, and so does `toSucceed()` on the promise `c.exec()` returns. On an awaited exec result, `toSucceed()` checks at once. An unawaited asynchronous assertion fails the attempt and names the assertion and its line, such as ``expect(…).toHaveFile() at evals/user.eval.ts:12 wasn't awaited``.
-
-A reeval matcher on a subject it doesn't take doesn't typecheck. The error names the subjects the matcher takes:
-
-```text
-error TS2349: This expression is not callable.
-  Type 'WrongSubject<"toPass() takes the verdict from await c.judge()">' has no call signatures.
-```
-
-In a generic helper, TypeScript can't resolve a subject typed by a type parameter, such as `<R extends ExecResult>(r: R)`. Name the type on `expect`: `expect<ExecResult>(r).toSucceed()`.
-
-<Info>
-TypeScript can't flag a missing `await`. A linter with type information can: typescript-eslint's `@typescript-eslint/no-floating-promises` rule flags an unawaited `toHaveFile()` or `expect(c.exec(…)).toSucceed()`.
-</Info>
+`.not` inverts the matcher. `toHaveFile()` returns a promise, and `toSucceed()` does on `c.exec()`'s promise. An unawaited asynchronous assertion fails the attempt and names the assertion.
 
 ## `expect.soft()`
 
@@ -104,10 +91,9 @@ When an existing file does not match `pattern`, the failure message ends with it
 
 ## `toSucceed()`
 
-`toSucceed()` passes when the command's `exitCode` is `0`. The subject is the result of `c.exec()`, or its promise. On a result, `toSucceed()` checks at once. On the promise, it returns a promise to `await`.
+`toSucceed()` passes when the command's `exitCode` is `0`. The subject is the result of `c.exec()`, or its promise.
 
 ```ts
-    expect(await c.exec('npm run build'), 'builds').toSucceed()
     await expect(c.exec('npx vitest run'), 'tests pass').toSucceed()
 ```
 
@@ -115,7 +101,7 @@ The failure message names the exit code and ends with the last 20 lines of `stde
 
 ## `toPass()`
 
-`toPass()` passes when the judge's `verdict` is `'pass'`. The subject is the verdict `c.judge()` resolves to, so await the call first.
+`toPass()` passes when the judge's `verdict` is `'pass'`. The subject is the verdict `c.judge()` returns.
 
 ```ts
     const verdict = await c.judge('Does the test cover a missing user?')
