@@ -88,7 +88,7 @@ The `ServeHandle` has `kill()`, as a `BackgroundHandle` does, and this field:
   The port the process listens on.
 </Property>
 
-The call returns once the process listens on `PORT` or, without `port`, on the one other port it listens on instead. It throws if the process listens only on other ports than that, exits first, or doesn't listen within 60 seconds.
+The call returns once something listens on `PORT`. Without `port`, it also returns when the process listens on one other port instead, held for 3 seconds; it throws when the process holds several other ports. It throws when the process exits first or nothing listens within 120 seconds.
 
 ## `c.capture()`
 

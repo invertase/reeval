@@ -2,13 +2,19 @@ import { connect } from 'node:net'
 import { shellQuote } from '@reeval/sandbox-docker/process'
 
 /** How long `c.serve` waits for the command to listen on a port. */
-export const SERVE_TIMEOUT_MS = 60_000
-/** How long the ports must stay the same before one that isn't `PORT` is taken. */
-export const SETTLE_MS = 1_000
+export const SERVE_TIMEOUT_MS = 120_000
+/**
+ * How long the command's ports must stay the same before one that isn't `PORT` is taken, so a
+ * side port (a debugger, an HMR socket) that binds first doesn't win over `PORT` binding later.
+ */
+export const SETTLE_MS = 3_000
 const POLL_MS = 200
 
-/** A TCP listener in the sandbox's network namespace, from `/proc/net/tcp` or `tcp6`. */
-export type Listener = { port: number; address: string; inode: string }
+/**
+ * A TCP listener in the sandbox's network namespace, from `/proc/net/tcp` or `tcp6`; `own` when
+ * the served command's process tree holds its socket.
+ */
+export type Listener = { port: number; address: string; inode: string; own: boolean }
 
 /** One look at the served command's process tree and what it listens on. */
 export type ServeProbe =
@@ -23,7 +29,7 @@ export type ServeProbe =
  */
 export function probeScript(pid: string, tag?: string): string {
   const tagged = tag
-    ? `for e in $procs; do p=\${e%%:*}; grep -qsxzF ${shellQuote(tag)} /proc/$p/environ && case "$todo" in *" $p "*) ;; *) todo="$todo$p " ;; esac; done`
+    ? `for e in $procs; do p=\${e%%:*}; tr '\\0' '\\n' < /proc/$p/environ 2>/dev/null | grep -qxF ${shellQuote(tag)} && case "$todo" in *" $p "*) ;; *) todo="$todo$p " ;; esac; done`
     : ''
   return `[ -r /proc/net/tcp ] || { kill -0 ${pid} 2>/dev/null && echo noproc 1 || echo noproc 0; exit 0; }
 procs=
@@ -54,7 +60,8 @@ for t in tcp tcp6; do
   while read -r _ local _ st _ _ _ _ _ inode _; do
     [ "$st" = 0A ] && echo "listen $local $inode"
   done < /proc/net/$t
-done`
+done
+exit 0`
 }
 
 /** `0100007F` → `127.0.0.1`; 32 hex digits → an IPv6 address. Each 32-bit word is host-endian. */
@@ -96,32 +103,37 @@ export function parseProbe(stdout: string): ServeProbe {
   const listeners: Listener[] = []
   for (const l of lines) {
     const m = /^listen ([0-9A-F]+):([0-9A-F]{4}) (\d+)$/i.exec(l.trim())
-    if (!m || !sockets.has(m[3] as string)) continue
+    if (!m) continue
     const address = procAddress(m[1] as string)
     if (reachable(address)) {
-      listeners.push({ port: Number.parseInt(m[2] as string, 16), address, inode: m[3] as string })
+      const inode = m[3] as string
+      listeners.push({
+        port: Number.parseInt(m[2] as string, 16),
+        address,
+        inode,
+        own: sockets.has(inode),
+      })
     }
   }
   return { proc: true, alive: tree !== '', listeners }
 }
 
-/** The ports in `listeners`, ascending, once each. */
+/** The ports the command's own processes listen on, ascending, once each. */
 export const portsOf = (listeners: Listener[]) =>
-  [...new Set(listeners.map((l) => l.port))].sort((a, b) => a - b)
+  [...new Set(listeners.filter((l) => l.own).map((l) => l.port))].sort((a, b) => a - b)
 
 /** What `c.serve` found: the port it serves on, or why there's none to pick. */
 export type ServeDecision =
   | { kind: 'wait' }
   | { kind: 'port'; port: number; address: string }
   | { kind: 'several'; ports: number[] }
-  | { kind: 'other'; ports: number[] }
   | { kind: 'exited' }
-  | { kind: 'timeout' }
+  | { kind: 'timeout'; ports: number[] }
 
 export type ServeState = {
   /** `PORT`, or the port the eval passed. */
   want: number
-  /** The eval passed `want`: the command must listen on it. */
+  /** The eval passed `want`: the command must listen on it, and no other port is taken. */
   given: boolean
   probe: ServeProbe & { proc: true }
   /** Since the listening ports last changed, or the command started. */
@@ -136,23 +148,26 @@ const addressFor = (listeners: Listener[], port: number) => {
   return all.find((a) => !a.includes(':')) ?? all.find((a) => a === '::') ?? all[0] ?? ''
 }
 
+/**
+ * `want` is taken whoever listens on it: reeval allocated it, or the eval named it, and a
+ * command that forks its server away (`node server.js &`, a daemon) leaves no tree to own it.
+ */
 export function decide(s: ServeState): ServeDecision {
   const { listeners, alive } = s.probe
   const ports = portsOf(listeners)
-  if (ports.includes(s.want)) {
+  if (listeners.some((l) => l.port === s.want)) {
     return { kind: 'port', port: s.want, address: addressFor(listeners, s.want) }
   }
   if (!alive) return { kind: 'exited' }
   const late = s.elapsedMs >= s.timeoutMs
-  if (ports.length && (s.stableMs >= SETTLE_MS || late)) {
-    if (s.given) return { kind: 'other', ports }
+  if (!s.given && ports.length && (s.stableMs >= SETTLE_MS || late)) {
     if (ports.length === 1) {
       const port = ports[0] as number
       return { kind: 'port', port, address: addressFor(listeners, port) }
     }
     return { kind: 'several', ports }
   }
-  return late ? { kind: 'timeout' } : { kind: 'wait' }
+  return late ? { kind: 'timeout', ports } : { kind: 'wait' }
 }
 
 /** Whether something on the host accepts a TCP connection on `port`, IPv4 or IPv6 loopback. */
@@ -181,30 +196,31 @@ export type ServeWatch = {
   output(): Promise<string>
   signal?: AbortSignal
   timeoutMs?: number
-  /** Where the fake sandbox runs, without `/proc`: whether the host accepts on a port. */
+  /**
+   * Without `/proc`: the address the port accepts on, or undefined while nothing does. The
+   * fake sandbox asks the host; a container with no `/proc` takes `want` on trust (`''`).
+   */
   hostListening?: (port: number) => Promise<string | undefined>
 }
 
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, ms)
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer)
-        resolve()
-      },
-      { once: true },
-    )
+    const done = () => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', done)
+      resolve()
+    }
+    const timer = setTimeout(done, ms)
+    signal?.addEventListener('abort', done, { once: true })
   })
 
 const listOf = (ports: number[]) =>
   ports.length > 1 ? `${ports.slice(0, -1).join(', ')} and ${ports.at(-1)}` : String(ports[0])
 
 /**
- * Polls the served command until it listens: on `want` when its tree does, else on its one other
- * port once the ports have settled. Throws, with the command's last output, when it listens on
- * several other ports, exits, or listens on nothing in time.
+ * Polls the served command until something listens on `want`, or, without a given port, until
+ * its own processes have settled on one other port. Throws, with the command's last output, when
+ * they settle on several others, it exits, or nothing listens in time.
  */
 export async function awaitListening(command: string, w: ServeWatch): Promise<ServeFound> {
   const timeoutMs = w.timeoutMs ?? SERVE_TIMEOUT_MS
@@ -224,7 +240,8 @@ export async function awaitListening(command: string, w: ServeWatch): Promise<Se
     const now = Date.now()
     if (!probe.proc) {
       const address = await (w.hostListening ?? hostListening)(w.want)
-      if (address) return { port: w.want, address, detected: false, readyMs: now - started }
+      if (address !== undefined)
+        return { port: w.want, address, detected: false, readyMs: now - started }
       if (!probe.alive) throw await fail(`exited before it listened on ${w.want}`)
       if (now - started >= timeoutMs) {
         throw await fail(
@@ -258,14 +275,14 @@ export async function awaitListening(command: string, w: ServeWatch): Promise<Se
           `listens on ports ${listOf(d.ports)}, and not on PORT (${w.want}). Pass the one it serves on: ${portHint(d.ports[0] as number)}`,
         )
       }
-      if (d.kind === 'other') {
-        throw await fail(
-          `listens on ${d.ports.length > 1 ? 'ports' : 'port'} ${listOf(d.ports)}, not on the port passed (${w.want})`,
-        )
-      }
       if (d.kind === 'exited') throw await fail('exited before it listened on a port')
       if (d.kind === 'timeout') {
-        throw await fail(`didn't listen on a port within ${timeoutMs / 1000}s`)
+        const on = d.ports.length
+          ? `; it listens on ${d.ports.length > 1 ? 'ports' : 'port'} ${listOf(d.ports)}`
+          : ''
+        throw await fail(
+          `didn't listen on ${w.given ? `the port passed (${w.want})` : 'a port'} within ${timeoutMs / 1000}s${on}`,
+        )
       }
     }
     await sleep(POLL_MS, w.signal)

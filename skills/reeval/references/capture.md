@@ -15,7 +15,8 @@ evaluate('builds the sign-in page', async (c) => {
   that ignores `PORT` and listens on one port of its own (`npm run dev` on Vite's 5173, IPv4 or
   IPv6 loopback) gets that port as `handle.port`; no `--port` flags needed. Several ports, none
   of them `PORT`, throw with the list: pass the one to use, `c.serve('npm run dev', 5173)`. An
-  exit, or nothing listening in 60 s, throws with its last output. `c.exec(cmd, { background:
+  exit, or nothing listening in 120 s, throws with its last output. With `port`, only that
+  port counts. `c.exec(cmd, { background:
   true })` starts a command without a port or the wait and returns `{ kill() }`.
 - `await c.capture(port | server, { name?, path?,
   wait?, instructions?, viewport?, model? })` screenshots the tunneled port into

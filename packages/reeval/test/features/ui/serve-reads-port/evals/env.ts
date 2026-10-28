@@ -14,7 +14,7 @@ const server = `import http from 'node:http'
 http.createServer((_, res) => res.end('side')).listen(0, '127.0.0.1')
 setTimeout(() => {
   http.createServer((_, res) => res.end('main')).listen(Number(process.env.PORT), '127.0.0.1')
-}, 300)
+}, 1500)
 `
 
 const probe = `const [port] = process.argv.slice(2)

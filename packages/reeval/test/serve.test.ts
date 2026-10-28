@@ -25,7 +25,7 @@ test('procAddress reads /proc/net/tcp and tcp6 addresses', () => {
   assert.equal(procAddress('000080FE00000000FF005450B6AD1DFE'), 'fe80::5054:ff:fe1d:adb6')
 })
 
-test("parseProbe keeps the tree's own reachable listeners", () => {
+test('parseProbe keeps reachable listeners, marking the ones the tree holds', () => {
   const probe = parseProbe(
     [
       'tree 10 11',
@@ -43,20 +43,21 @@ test("parseProbe keeps the tree's own reachable listeners", () => {
     proc: true,
     alive: true,
     listeners: [
-      { port: 5173, address: '127.0.0.1', inode: '100' },
-      { port: 5173, address: '::1', inode: '101' },
+      { port: 5173, address: '127.0.0.1', inode: '100', own: true },
+      { port: 5173, address: '::1', inode: '101', own: true },
+      { port: 22, address: '0.0.0.0', inode: '999', own: false },
     ],
   })
   assert.deepEqual(parseProbe('tree\nlisten 0100007F:1435 100'), {
     proc: true,
     alive: false,
-    listeners: [],
+    listeners: [{ port: 5173, address: '127.0.0.1', inode: '100', own: false }],
   })
   assert.deepEqual(parseProbe('noproc 1\n'), { proc: false, alive: true })
 })
 
 const on = (...ports: Array<[number, string]>): Listener[] =>
-  ports.map(([port, address], i) => ({ port, address, inode: String(i) }))
+  ports.map(([port, address], i) => ({ port, address, inode: String(i), own: true }))
 const state = (listeners: Listener[], more: Partial<Parameters<typeof decide>[0]> = {}) => ({
   want: 4000,
   given: false,
@@ -83,14 +84,43 @@ test('decide takes PORT at once, and one other port only once the ports settle',
     kind: 'several',
     ports: [5173, 24678],
   })
-  assert.deepEqual(decide(state(on([5173, '::1']), { given: true, stableMs: SETTLE_MS })), {
-    kind: 'other',
-    ports: [5173],
-  })
   assert.deepEqual(decide(state([], { probe: { proc: true, alive: false, listeners: [] } })), {
     kind: 'exited',
   })
-  assert.deepEqual(decide(state([], { elapsedMs: 60_000 })), { kind: 'timeout' })
+  assert.deepEqual(decide(state([], { elapsedMs: 60_000 })), { kind: 'timeout', ports: [] })
+})
+
+test('decide waits only for a given port, whatever else binds first', () => {
+  const side = on([6379, '127.0.0.1'])
+  assert.deepEqual(decide(state(side, { given: true, stableMs: 30_000, elapsedMs: 30_000 })), {
+    kind: 'wait',
+  })
+  assert.deepEqual(decide(state(side, { given: true, elapsedMs: 60_000 })), {
+    kind: 'timeout',
+    ports: [6379],
+  })
+  assert.deepEqual(decide(state([...side, ...on([4000, '127.0.0.1'])], { given: true })), {
+    kind: 'port',
+    port: 4000,
+    address: '127.0.0.1',
+  })
+})
+
+test('decide takes PORT from a process outside the tree, as a backgrounded server is', () => {
+  const forked = { port: 4000, address: '127.0.0.1', inode: '7', own: false }
+  const probe = { proc: true as const, alive: false, listeners: [forked] }
+  assert.deepEqual(decide(state([], { probe })), {
+    kind: 'port',
+    port: 4000,
+    address: '127.0.0.1',
+  })
+  const elsewhere = { ...forked, port: 5173 }
+  assert.deepEqual(
+    decide(
+      state([], { probe: { ...probe, alive: true, listeners: [elsewhere] }, stableMs: SETTLE_MS }),
+    ),
+    { kind: 'wait' },
+  )
 })
 
 test('awaitListening fails with the last output, naming the ports and the hint', async () => {
@@ -124,6 +154,22 @@ test('awaitListening fails with the last output, naming the ports and the hint',
   )
 })
 
+test('awaitListening names the other ports when a given port never listens', async () => {
+  await assert.rejects(
+    awaitListening('redis-server & npm start', {
+      want: 3000,
+      given: true,
+      probe: async () => ({ proc: true, alive: true, listeners: on([6379, '127.0.0.1']) }),
+      output: async () => '',
+      timeoutMs: 300,
+    }),
+    {
+      message:
+        'c.serve("redis-server & npm start") didn\'t listen on the port passed (3000) within 0.3s; it listens on port 6379',
+    },
+  )
+})
+
 test('awaitListening without /proc waits for PORT on the host', async () => {
   let tries = 0
   const found = await awaitListening('npm start', {
@@ -153,13 +199,15 @@ test("the probe script finds a process tree's listeners from /proc", { skip: lin
     const probe = parseProbe(out.stdout)
     assert.ok(probe.proc && probe.alive)
     assert.deepEqual(
-      probe.listeners.map((l) => [l.port, l.address]),
+      probe.listeners.filter((l) => l.own).map((l) => [l.port, l.address]),
       [[port, '::1']],
     )
     const other = parseProbe(
       spawnSync('sh', ['-c', probeScript('999999999')], { encoding: 'utf8' }).stdout,
     )
-    assert.deepEqual(other, { proc: true, alive: false, listeners: [] })
+    assert.deepEqual(other.proc && other.alive, false)
+    assert.ok(other.proc && other.listeners.every((l) => !l.own))
+    assert.equal(spawnSync('sh', ['-c', probeScript(String(child.pid))]).status, 0)
   } finally {
     process.kill(-(child.pid as number), 'SIGKILL')
   }

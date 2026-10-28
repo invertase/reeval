@@ -18,6 +18,7 @@ import {
 import { stubPng } from '../capture/stub.ts'
 import { captureUseSpend, runJourney } from '../capture/use.ts'
 import { debugLog } from '../debug/attempt.ts'
+import { untraced } from '../debug/docker.ts'
 import { getRunContext } from '../engine/runtime.ts'
 import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
 import { openRouterFallbacks } from '../gateway/openrouter-models.ts'
@@ -193,9 +194,11 @@ export async function serveCommand(
     given: port !== undefined,
     signal: a.signal,
     probe: async () =>
-      parseProbe((await box.exec(probeScript(pid, tag), { signal: a.signal })).stdout),
+      parseProbe(
+        (await untraced(() => box.exec(probeScript(pid, tag), { signal: a.signal }))).stdout,
+      ),
     output: async () => (await box.exec(`tail -n 20 ${log} 2>/dev/null`)).stdout,
-    ...(a.spec.sandbox.kind === 'fake' ? {} : { hostListening: async () => undefined }),
+    ...(a.spec.sandbox.kind === 'fake' ? {} : { hostListening: async () => '' }),
   }).catch(async (error: Error) => {
     await handle.kill()
     throw error
@@ -209,11 +212,12 @@ export async function serveCommand(
     readyMs: found.readyMs,
   }
   a.record.serves = [...(a.record.serves ?? []), serve]
+  const at = found.address ? `${found.address} ` : ''
   debugLog(
     'check',
     found.detected
-      ? `c.serve ${command}: listening on ${found.address} port ${found.port}, not PORT ${want}; using ${found.port}`
-      : `c.serve ${command}: listening on ${found.address} port ${found.port} after ${found.readyMs}ms`,
+      ? `c.serve ${command}: listening on ${at}port ${found.port}, not PORT ${want}; using ${found.port}`
+      : `c.serve ${command}: listening on ${at}port ${found.port} after ${found.readyMs}ms`,
   )
   return { ...handle, port: found.port }
 }
