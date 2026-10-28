@@ -1,8 +1,5 @@
 import { inflateSync } from 'node:zlib'
 
-/** Pixels that may differ between two shots of a page nothing changed: a blinking caret's. */
-export const CARET_PIXELS = 48
-
 type Pixels = { width: number; height: number; channels: number; data: Buffer }
 
 const CHANNELS: Record<number, number> = { 0: 1, 2: 3, 4: 2, 6: 4 }
@@ -50,9 +47,16 @@ function pixels(png: Buffer): Pixels | undefined {
   return { width, height, channels, data }
 }
 
+/** The diff samples every `SAMPLE`th pixel across and down. */
+const SAMPLE = 4
+/** A sampled pixel differs when a channel moves more than this, so antialiasing doesn't count. */
+const CHANNEL_DELTA = 32
+/** The share of sampled pixels that must differ: a caret at any font size is below it. */
+export const VIEW_CHANGE = 0.002
+
 /**
- * Whether `after` shows a different page than `before`: more than a caret's pixels differ, or the
- * size does. Bytes decide when either PNG is one this can't read.
+ * Whether `after` looks different from `before`, two viewport shots: more than `VIEW_CHANGE` of
+ * the sampled pixels differ, or the size does. Bytes decide when either PNG is one this can't read.
  */
 export function pageChanged(before: Buffer, after: Buffer): boolean {
   if (before.equals(after)) return false
@@ -66,14 +70,20 @@ export function pageChanged(before: Buffer, after: Buffer): boolean {
   }
   if (!a || !b) return true
   if (a.width !== b.width || a.height !== b.height || a.channels !== b.channels) return true
+  const stride = a.width * a.channels
+  let sampled = 0
   let differ = 0
-  for (let i = 0; i < a.data.length; i += a.channels) {
-    if (
-      a.data.compare(b.data, i, i + a.channels, i, i + a.channels) !== 0 &&
-      ++differ > CARET_PIXELS
-    ) {
-      return true
+  for (let y = 0; y < a.height; y += SAMPLE) {
+    for (let x = 0; x < a.width; x += SAMPLE) {
+      sampled++
+      const at = y * stride + x * a.channels
+      for (let c = 0; c < a.channels; c++) {
+        if (Math.abs((a.data[at + c] ?? 0) - (b.data[at + c] ?? 0)) > CHANNEL_DELTA) {
+          differ++
+          break
+        }
+      }
     }
   }
-  return false
+  return differ > sampled * VIEW_CHANGE
 }

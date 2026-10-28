@@ -64,6 +64,8 @@ test('a capture journey and a judge given its capture send nothing deprecated', 
       return png
     },
     async dispatch(_: CaptureUseAction) {},
+    busy: () => false,
+    dialogs: () => [],
   }
   const journey = await runJourney(session, 'http://127.0.0.1/', {
     wait: { ms: 0 },

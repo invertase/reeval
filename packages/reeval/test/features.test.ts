@@ -272,7 +272,8 @@ after(() => registry.close())
 /**
  * A scripted vision model on Anthropic's Messages API, for `ui/capture-use-history`: it picks each
  * move of the fixture's sign-up from the moves its prompt lists, so a driver that sends no history
- * gets the first move every time.
+ * gets the first move every time. As `scripted-stuck`, for `ui/capture-use-stuck`, it clicks the
+ * same empty spot every time.
  */
 const scriptedVision = { url: '', prompts: [] as string[] }
 const SIGN_UP_MOVES: Array<[string, object]> = [
@@ -289,7 +290,8 @@ const visionModel = createServer((req, res) => {
     body += chunk
   })
   req.on('end', () => {
-    const { messages } = JSON.parse(body) as {
+    const { model, messages } = JSON.parse(body) as {
+      model: string
       messages: Array<{ content: string | Array<{ type: string; text?: string }> }>
     }
     const text = messages
@@ -299,7 +301,10 @@ const visionModel = createServer((req, res) => {
       .flatMap((part) => (part.type === 'text' && part.text ? [part.text] : []))
       .join('\n')
     scriptedVision.prompts.push(text)
-    const [name, input] = SIGN_UP_MOVES[text.match(/^\d+\. /gm)?.length ?? 0] ?? ['done', {}]
+    const [name, input] =
+      model === 'scripted-stuck'
+        ? ['click', { x: 600, y: 600 }]
+        : (SIGN_UP_MOVES[text.match(/^\d+\. /gm)?.length ?? 0] ?? ['done', {}])
     res.setHeader('content-type', 'application/json')
     res.end(
       JSON.stringify({
@@ -2694,10 +2699,11 @@ export const features: Feature[] = [
       outcome: 'fail',
       error: {
         kind: 'assertion',
-        message: /c\.capture\(\) timed out waiting for networkAlmostIdle/,
+        message:
+          /c\.capture\(\) timed out on loading the page with wait: "idle": it used all of its 5s timeout/,
       },
     },
-    canary: /expected 'c\.capture\(\) timed out waiting for net…' to be 'still loading'/,
+    canary: /expected 'c\.capture\(\) timed out on loading the …' to be 'still loading'/,
     record: ({ run }) => {
       assert.equal(landed(run)?.files.artifacts, undefined)
     },
@@ -2786,9 +2792,32 @@ export const features: Feature[] = [
       assert.deepEqual(art?.capture?.use, { model: 'anthropic/scripted-vision', moves: 5 })
       assert.ok(
         scriptedVision.prompts.some((p) =>
-          /^5\. click \{"x":200,"y":215\} → the page changed, now at \/welcome$/m.test(p),
+          /^5\. click \{"x":200,"y":215\} → now at \/welcome(;|$)/m.test(p),
         ),
         'the model saw its submit move take the page to /welcome',
+      )
+    },
+  },
+  {
+    dir: 'ui/capture-use-stuck',
+    tiers: ['docker'],
+    env: 'ui',
+    hostEnv: () => ({ ANTHROPIC_API_KEY: 'fixture-key', ANTHROPIC_BASE_URL: scriptedVision.url }),
+    lands: {
+      outcome: 'fail',
+      error: {
+        kind: 'assertion',
+        message:
+          /c\.capture\(\) instruction 1 of 1 "Open the menu" repeated click \{"x":600,"y":600\} 5 times and nothing changed/,
+      },
+    },
+    canary: /expected 'c\.capture\(\) instruction 1 of 1 "Open …' to be 'still open'/,
+    record: () => {
+      assert.ok(
+        scriptedVision.prompts.some((p) =>
+          p.includes('Your last moves repeated the same action and nothing changed.'),
+        ),
+        'the model was nudged before the capture stopped',
       )
     },
   },

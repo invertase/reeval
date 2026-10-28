@@ -1712,6 +1712,7 @@ export const inventory: InventoryFeature[] = [
       'ui/capture-use-wait',
       'ui/capture-use-timeout',
       'ui/capture-use-history',
+      'ui/capture-use-stuck',
     ],
     plan: ['capture/options'],
     unit: [

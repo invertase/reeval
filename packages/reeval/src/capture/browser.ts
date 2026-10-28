@@ -86,7 +86,7 @@ type KeyEvent = {
 
 const KEYS: Record<CaptureKey, KeyEvent> = {
   Tab: { key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 },
-  Enter: { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 },
+  Enter: { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' },
   Escape: { key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 },
   Backspace: { key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 },
   Space: { key: ' ', code: 'Space', windowsVirtualKeyCode: 32, text: ' ' },
@@ -128,7 +128,13 @@ export async function dispatchInput(
     return scrollY
   }
   if (action.type === 'key') {
-    await pressKey(cdp, KEYS[action.key])
+    const event = KEYS[action.key]
+    if (!event) {
+      throw new Error(
+        `c.capture() can't press ${JSON.stringify(action.key)}: use one of ${CAPTURE_KEYS.join(', ')}`,
+      )
+    }
+    await pressKey(cdp, event)
     return scrollY
   }
   if (action.type === 'scroll') {
@@ -275,6 +281,7 @@ export function listenForCaptureWait(
 /** Chromium's `networkAlmostIdle` rule: at most two requests in flight for 500ms. */
 export const NETWORK_QUIET_MS = 500
 const QUIET_IN_FLIGHT = 2
+const FRESH_REQUEST_MS = 2000
 
 /** How long a screenshot waits, in tries, for a page that has no layout yet. */
 const SCREENSHOT_TRIES = 20
@@ -293,13 +300,13 @@ function requestId(msg: unknown): string | undefined {
 export function trackNetwork(
   cdp: Pick<CdpClient, 'on'>,
   quietMs = NETWORK_QUIET_MS,
-): { quiet(timeoutMs: number): Promise<void> } {
-  const inFlight = new Set<string>()
+): { quiet(timeoutMs: number): Promise<void>; fresh(): boolean } {
+  const inFlight = new Map<string, number>()
   let changed: (() => void) | undefined
   cdp.on('Network.requestWillBeSent', (msg) => {
     const id = requestId(msg)
     if (id === undefined) return
-    inFlight.add(id)
+    inFlight.set(id, Date.now())
     changed?.()
   })
   const end = (msg: unknown) => {
@@ -310,6 +317,12 @@ export function trackNetwork(
   cdp.on('Network.loadingFinished', end)
   cdp.on('Network.loadingFailed', end)
   return {
+    /** A request started in the last `FRESH_REQUEST_MS` is still in flight; a long poll is not fresh. */
+    fresh() {
+      const since = Date.now() - FRESH_REQUEST_MS
+      for (const started of inFlight.values()) if (started >= since) return true
+      return false
+    },
     quiet(timeoutMs) {
       return new Promise<void>((resolve, reject) => {
         let settle: ReturnType<typeof setTimeout> | undefined
@@ -630,6 +643,8 @@ async function disposeChrome(child: ChildProcess, userData: string): Promise<voi
   removeChromeProfile(userData)
 }
 
+type DialogOpening = { type?: string; message?: string; defaultPrompt?: string }
+
 export type ChromeSession = {
   cdp: CdpClient
   window: CaptureWindow
@@ -638,6 +653,10 @@ export type ChromeSession = {
   wait(wait: Wait, timeoutMs: number, nav?: { loaderId?: string }): Promise<void>
   screenshot(fullPage: boolean): Promise<Buffer>
   dispatch(action: CaptureUseAction, page?: { width: number; height: number }): Promise<void>
+  /** A frame is loading, or a request started in the last two seconds is in flight. */
+  busy(): boolean
+  /** The dialogs (`alert "hi"`) the page opened since the last call, each accepted. */
+  dialogs(): string[]
 }
 
 /** One Chrome process, one tab. `fn` must not keep the session after it returns. */
@@ -671,6 +690,24 @@ export async function withChrome<T>(
       await cdp.send('Page.enable')
       await cdp.send('Page.setLifecycleEventsEnabled', { enabled: true })
       const network = trackNetwork(cdp)
+      const loading = new Set<string>()
+      const frame = (msg: unknown) => {
+        const body = msg as { params?: { frameId?: string }; frameId?: string }
+        return (body.params ?? body).frameId ?? ''
+      }
+      cdp.on('Page.frameStartedLoading', (msg) => loading.add(frame(msg)))
+      cdp.on('Page.frameStoppedLoading', (msg) => loading.delete(frame(msg)))
+      cdp.on('Page.frameDetached', (msg) => loading.delete(frame(msg)))
+      // An open dialog blocks every Input and Page call, so each one is accepted as it opens.
+      const opened: string[] = []
+      cdp.on('Page.javascriptDialogOpening', (msg) => {
+        const body = msg as { params?: DialogOpening } & DialogOpening
+        const { type = 'dialog', message = '', defaultPrompt = '' } = body.params ?? body
+        opened.push(`${type} ${JSON.stringify(message.slice(0, 60))}`)
+        cdp
+          .send('Page.handleJavaScriptDialog', { accept: true, promptText: defaultPrompt })
+          .catch(() => {})
+      })
       await cdp.send('Network.enable')
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: window.width,
@@ -715,6 +752,12 @@ export async function withChrome<T>(
         },
         async dispatch(action, page) {
           scrollY = await dispatchInput(cdp, action, window, page, scrollY)
+        },
+        busy() {
+          return loading.size > 0 || network.fresh()
+        },
+        dialogs() {
+          return opened.splice(0)
         },
       }
       return await fn(session)

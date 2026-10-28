@@ -8,7 +8,8 @@ import {
   parseInstructions,
   resolveWait,
 } from '../src/capture/index.ts'
-import { CARET_PIXELS, pageChanged } from '../src/capture/png.ts'
+import { pathOf } from '../src/capture/page-state.ts'
+import { pageChanged, VIEW_CHANGE } from '../src/capture/png.ts'
 import { stubPng } from '../src/capture/stub.ts'
 import { actionFromTool, normalizesPoints, runJourney, scalePoints } from '../src/capture/use.ts'
 import type { CaptureUseAction } from '../src/types.ts'
@@ -92,6 +93,19 @@ test('dispatchInput sends CDP Input events and never Runtime.evaluate', async ()
       ['keyUp', 'ArrowDown', 40],
     ],
   )
+  sent.length = 0
+  await dispatchInput(cdp, { type: 'key', key: 'Enter' }, window)
+  assert.deepEqual(
+    sent.map((s) => [s.params?.type, s.params?.text]),
+    [
+      ['keyDown', '\r'],
+      ['keyUp', undefined],
+    ],
+  )
+  await assert.rejects(
+    dispatchInput(cdp, { type: 'key', key: 'F5' as 'Tab' }, window),
+    /^Error: c\.capture\(\) can't press "F5": use one of Tab, Enter/,
+  )
 })
 
 /** A language model that calls `click` at (x, y), then `done`, and records its system prompts. */
@@ -144,6 +158,8 @@ async function journeyClick(model: string, x: number, y: number) {
     async dispatch(action: CaptureUseAction) {
       clicks.push(action)
     },
+    busy: () => false,
+    dialogs: () => [],
   }
   await runJourney(session, 'http://127.0.0.1/', {
     wait: { ms: 0 },
@@ -190,7 +206,9 @@ test('scalePoints scales every point of an action and only Gemini ids normalize'
 })
 
 test('runJourney times out before the saved screenshot', async () => {
-  let saved = 0
+  const late: boolean[] = []
+  const start = Date.now()
+  const remaining = () => 40 - (Date.now() - start)
   const session = {
     window,
     cdp: { on() {}, send: async () => ({}) },
@@ -198,16 +216,14 @@ test('runJourney times out before the saved screenshot', async () => {
       return { loaderId: 'n' }
     },
     async wait() {},
-    async screenshot(fullPage: boolean) {
-      if (!fullPage) {
-        saved++
-        throw new Error('saved shot should not run')
-      }
+    async screenshot() {
+      late.push(remaining() <= 0)
       return stubPng('x', 1, '/', window)
     },
     async dispatch() {},
+    busy: () => false,
+    dialogs: () => [],
   }
-  const start = Date.now()
   await assert.rejects(
     runJourney(session, 'http://127.0.0.1/', {
       wait: { ms: 0 },
@@ -215,11 +231,11 @@ test('runJourney times out before the saved screenshot', async () => {
       fullPage: false,
       instructions: ['never done'],
       use: { fake: [[{ type: 'click', x: 1, y: 1 }]] },
-      remaining: () => 40 - (Date.now() - start),
+      remaining,
     }),
     /timed out on "never done"/,
   )
-  assert.equal(saved, 0)
+  assert.equal(late.includes(true), false)
 })
 
 type Prompt = Array<{ role: string; content: unknown }>
@@ -295,16 +311,59 @@ function pagePng(painted: number): Buffer {
 
 test('pageChanged ignores a caret-sized difference, and reads bytes it cannot decode', () => {
   assert.equal(pageChanged(pagePng(0), pagePng(0)), false)
-  assert.equal(pageChanged(pagePng(0), pagePng(CARET_PIXELS / 2)), false)
-  assert.equal(pageChanged(pagePng(0), pagePng(CARET_PIXELS / 2 + 1)), true)
+  // One sampled pixel of 625: under VIEW_CHANGE. Two are over it.
+  assert.equal(pageChanged(pagePng(0), pagePng(1)), false)
+  assert.ok(625 * VIEW_CHANGE < 2)
+  assert.equal(pageChanged(pagePng(0), pagePng(5)), true)
   assert.equal(pageChanged(pagePng(0), stubPng('x', 1, '/', window)), true)
   const corrupt = Buffer.from(pagePng(0))
   corrupt.fill(0, 41, 45)
   assert.equal(pageChanged(pagePng(0), corrupt), true)
 })
 
-/** A session whose screenshot changes with each move when `changes` is set, at a path per move. */
-function scriptedSession(changes: boolean, paths: (moves: number) => string = () => '/sign-up') {
+type Probed = {
+  url?: string
+  focus?: string | null
+  value?: string | null
+  editable?: boolean
+  form?: string
+  text?: string
+  nodes?: number
+}
+
+/** The sign-up page after `n` moves: each move changes its text and, from the first, focuses a field. */
+const signUpState =
+  (paths: (moves: number) => string = () => '/sign-up') =>
+  (n: number): Probed => ({
+    url: `http://127.0.0.1${paths(n)}`,
+    focus: n === 0 ? null : 'input[email] "Email"',
+    value: '',
+    editable: n > 0,
+    form: 'f',
+    text: `t${n}`,
+    nodes: 10,
+  })
+
+/** A page nothing changes. */
+const stillState = (): Probed => ({
+  url: 'http://127.0.0.1/sign-up',
+  focus: 'input[email] "Email"',
+  value: '',
+  editable: true,
+  form: 'f',
+  text: 't',
+  nodes: 10,
+})
+
+/**
+ * A session whose page, as the probe reads it, is `state(moves dispatched)`. `changes` also
+ * changes its pixels with each move.
+ */
+function scriptedSession(
+  changes: boolean,
+  state: (moves: number) => Probed = changes ? signUpState() : stillState,
+  extra: { busy?: () => boolean; dialogs?: (moves: number) => string[] } = {},
+) {
   const dispatched: CaptureUseAction[] = []
   return {
     dispatched,
@@ -313,9 +372,7 @@ function scriptedSession(changes: boolean, paths: (moves: number) => string = ()
       cdp: {
         on() {},
         send: async (method: string) =>
-          method === 'Page.getNavigationHistory'
-            ? { currentIndex: 0, entries: [{ url: `http://127.0.0.1${paths(dispatched.length)}` }] }
-            : {},
+          method === 'Runtime.evaluate' ? { result: { value: state(dispatched.length) } } : {},
       },
       async navigate() {
         return { loaderId: 'n' }
@@ -327,6 +384,8 @@ function scriptedSession(changes: boolean, paths: (moves: number) => string = ()
       async dispatch(action: CaptureUseAction) {
         dispatched.push(action)
       },
+      busy: extra.busy ?? (() => false),
+      dialogs: () => extra.dialogs?.(dispatched.length) ?? [],
     },
   }
 }
@@ -366,7 +425,10 @@ const journey = (
 
 test('runJourney gives the model its moves and their effect, so a multi-step form finishes', async () => {
   const prompts: string[] = []
-  const { session, dispatched } = scriptedSession(true, (n) => (n >= 5 ? '/profile' : '/sign-up'))
+  const { session, dispatched } = scriptedSession(
+    true,
+    signUpState((n) => (n >= 5 ? '/profile' : '/sign-up')),
+  )
   const result = await journey(session, scriptedModel(fromHistory, prompts), [
     'Create an account and submit the form',
     'Open the profile',
@@ -378,12 +440,15 @@ test('runJourney gives the model its moves and their effect, so a multi-step for
   assert.equal(result.moves, 5)
   assert.match(
     prompts[0] ?? '',
-    /^Goal: Create an account and submit the form\nThis is instruction 1 of 2\.\nThe page is at \/sign-up\.\nYou have made no moves/,
+    /^Goal: Create an account and submit the form\nThis is instruction 1 of 2\.\nThe page is at \/sign-up\.\nNothing is focused\.\nYou have made no moves/,
   )
-  assert.match(prompts[5] ?? '', /^1\. click \{"x":180,"y":130\} → the page changed$/m)
   assert.match(
     prompts[5] ?? '',
-    /^5\. click \{"x":120,"y":200\} → the page changed, now at \/profile$/m,
+    /^1\. click \{"x":180,"y":130\} → focus moved to input\[email\] "Email"; the page's content changed$/m,
+  )
+  assert.match(
+    prompts[5] ?? '',
+    /^5\. click \{"x":120,"y":200\} → now at \/profile; the page's content changed$/m,
   )
   assert.match(
     prompts[6] ?? '',
@@ -400,13 +465,13 @@ test('runJourney stops a model that repeats a move that changes nothing, after n
       scriptedModel(() => ['click', { x: 180, y: 130 }], prompts),
       ['Fill in the form'],
     ),
-    /^Error: c\.capture\(\) instruction 1 of 1 "Fill in the form" repeated click \{"x":180,"y":130\} 4 times without the page changing$/,
+    /^Error: c\.capture\(\) instruction 1 of 1 "Fill in the form" repeated click \{"x":180,"y":130\} 5 times and nothing changed$/,
   )
-  assert.equal(prompts.length, 4)
+  assert.equal(prompts.length, 5)
   assert.doesNotMatch(prompts[1] ?? '', /Do not repeat it/)
   assert.match(
     prompts[2] ?? '',
-    /2\. click \{"x":180,"y":130\} → the page did not change\nYour last moves repeated the same action without changing the page\. Do not repeat it/,
+    /2\. click \{"x":180,"y":130\} → nothing changed\nYour last moves repeated the same action and nothing changed\. Do not repeat it/,
   )
 })
 
@@ -440,7 +505,7 @@ test('runJourney tells the model a move it could not make, and goes on', async (
   )
   assert.equal(dispatched.length, 5)
   assert.equal(dispatched[0]?.type, 'click')
-  assert.equal(result.moves, 6)
+  assert.equal(result.moves, 5)
   assert.match(
     prompts[1] ?? '',
     /^1\. click \{"x":"the email field"\} → not made: it had no numeric x and y$/m,
@@ -481,4 +546,200 @@ test('runJourney names the instruction, the moves and the timeout when a model c
   } finally {
     clearInterval(alive)
   }
+})
+
+test('runJourney waits out a slow navigation, so the click that made it is credited once', async () => {
+  const prompts: string[] = []
+  let clicked = 0
+  const landed = () => clicked > 0 && Date.now() - clicked >= 400
+  const { session, dispatched } = scriptedSession(
+    false,
+    () => ({ ...stillState(), url: `http://127.0.0.1${landed() ? '/slow' : '/sign-up'}` }),
+    { busy: () => clicked > 0 && !landed() },
+  )
+  const dispatch = session.dispatch
+  session.dispatch = async (action) => {
+    clicked = Date.now()
+    await dispatch(action)
+  }
+  await journey(
+    session,
+    scriptedModel(
+      (text) => (/^1\. /m.test(text) ? ['done', {}] : ['click', { x: 10, y: 10 }]),
+      prompts,
+    ),
+    ['Open the slow page'],
+  )
+  assert.equal(dispatched.length, 1)
+  assert.match(prompts[1] ?? '', /^1\. click \{"x":10,"y":10\} → now at \/slow$/m)
+})
+
+test('runJourney credits a change that lands while the model chooses to the move that made it, and asks again', async () => {
+  const prompts: string[] = []
+  let clicked = 0
+  const { session, dispatched } = scriptedSession(false, () => ({
+    ...stillState(),
+    text: clicked > 0 && Date.now() - clicked > 250 ? 'saved' : 't',
+  }))
+  const dispatch = session.dispatch
+  session.dispatch = async (action) => {
+    clicked = Date.now()
+    await dispatch(action)
+  }
+  const slowModel = scriptedModel(
+    (text) => (/^1\. /m.test(text) ? ['done', {}] : ['click', { x: 10, y: 10 }]),
+    prompts,
+  )
+  const generate = slowModel.doGenerate
+  slowModel.doGenerate = async (options) => {
+    if (clicked) await new Promise((resolve) => setTimeout(resolve, 300))
+    return generate(options)
+  }
+  await journey(session, slowModel, ['Save'])
+  assert.equal(dispatched.length, 1)
+  assert.match(prompts[1] ?? '', /^1\. click \{"x":10,"y":10\} → nothing changed$/m)
+  assert.match(prompts[2] ?? '', /^1\. click \{"x":10,"y":10\} → the page's content changed$/m)
+})
+
+test('runJourney accepts a dialog and tells the model about it', async () => {
+  const prompts: string[] = []
+  let shown = false
+  const { session } = scriptedSession(false, stillState, {
+    dialogs: (n) => {
+      if (n === 0 || shown) return []
+      shown = true
+      return ['alert "Saved!"']
+    },
+  })
+  await journey(
+    session,
+    scriptedModel(
+      (text) => (/^1\. /m.test(text) ? ['done', {}] : ['click', { x: 10, y: 10 }]),
+      prompts,
+    ),
+    ['Save'],
+  )
+  assert.match(
+    prompts[1] ?? '',
+    /^1\. click \{"x":10,"y":10\} → the page opened alert "Saved!", which reeval accepted$/m,
+  )
+})
+
+test('runJourney times out on a CDP call the page holds open', async () => {
+  const { session } = scriptedSession(true)
+  session.dispatch = () => new Promise(() => {})
+  const start = Date.now()
+  await assert.rejects(
+    journey(session, scriptedModel(fromHistory), ['Create an account and submit the form'], () =>
+      Math.max(0, 300 - (Date.now() - start)),
+    ),
+    /^Error: c\.capture\(\) timed out on "Create an account and submit the form" \(instruction 1 of 1, after 0 moves\)/,
+  )
+  assert.ok(Date.now() - start < 1_000)
+})
+
+test('runJourney refuses to type with nothing that takes text focused', async () => {
+  const prompts: string[] = []
+  const { session, dispatched } = scriptedSession(false, () => ({
+    ...stillState(),
+    focus: null,
+    editable: false,
+  }))
+  await journey(
+    session,
+    scriptedModel(
+      (text) => (/^1\. /m.test(text) ? ['done', {}] : ['type', { text: 'ada' }]),
+      prompts,
+    ),
+    ['Type a name'],
+  )
+  assert.equal(dispatched.length, 0)
+  assert.match(prompts[1] ?? '', /^Nothing is focused\.$/m)
+  assert.match(
+    prompts[1] ?? '',
+    /^1\. type \{"text":"ada"\} → not made: nothing that takes text is focused; click a field first$/m,
+  )
+})
+
+test('runJourney counts clicks a pixel apart as the same move, and a refused move breaks the run', async () => {
+  let n = 0
+  const { session } = scriptedSession(false)
+  await assert.rejects(
+    journey(
+      session,
+      scriptedModel(() => {
+        n++
+        return n % 2 ? ['click', { x: 180 + n, y: 130 }] : ['click', { x: 'here' }]
+      }),
+      ['Fill in the form'],
+    ),
+    /did not finish in 32 moves$/,
+  )
+  n = 0
+  await assert.rejects(
+    journey(
+      session,
+      scriptedModel(() => ['click', { x: 180 + (n++ % 3), y: 130 }]),
+      ['Fill in the form'],
+    ),
+    /repeated click \{"x":18\d,"y":130\} 5 times and nothing changed$/,
+  )
+})
+
+test('runJourney lets a move repeat while it keeps changing focus', async () => {
+  const { session, dispatched } = scriptedSession(false, (n) => ({
+    ...stillState(),
+    focus: `input[text] "Field ${n}"`,
+  }))
+  await journey(
+    session,
+    scriptedModel((text) =>
+      (text.match(/^\d+\. /gm)?.length ?? 0) >= 6 ? ['done', {}] : ['key', { key: 'Tab' }],
+    ),
+    ['Tab to the sixth field'],
+  )
+  assert.equal(dispatched.length, 6)
+})
+
+test('runJourney leaves out what keeps changing on its own, so a no-op still reads as one', async () => {
+  const prompts: string[] = []
+  let tick = 0
+  const { session } = scriptedSession(false, () => ({ ...stillState(), text: `clock ${tick++}` }))
+  await assert.rejects(
+    journey(
+      session,
+      scriptedModel(() => ['click', { x: 10, y: 10 }], prompts),
+      ['Click the disabled button'],
+    ),
+    /repeated click \{"x":10,"y":10\} 5 times and nothing changed$/,
+  )
+  assert.match(prompts[2] ?? '', /^Parts of the page keep changing on their own/m)
+  assert.match(prompts[2] ?? '', /^2\. click \{"x":10,"y":10\} → nothing changed$/m)
+})
+
+test("runJourney names a { wait } step's timeout as the capture's", async () => {
+  const { session } = scriptedSession(true)
+  session.wait = async (wait: unknown) => {
+    if (wait === 'idle') throw new Error('c.capture() timed out waiting for networkAlmostIdle')
+  }
+  await assert.rejects(
+    runJourney(session, 'http://127.0.0.1/sign-up', {
+      wait: { ms: 0 },
+      timeoutMs: 10_000,
+      budgetMs: 60_000,
+      fullPage: false,
+      instructions: [{ wait: 'idle' }],
+      remaining: () => 10_000,
+    }),
+    /^Error: c\.capture\(\) timed out on \{ wait: "idle" \}: it used all of its 1m 00s timeout\. Raise timeout on the call or capture\.timeout\.$/,
+  )
+})
+
+test('pathOf strips the query and caps what the page controls', () => {
+  assert.equal(pathOf('http://127.0.0.1:3000/welcome', 'http://127.0.0.1:3000'), '/welcome')
+  assert.equal(
+    pathOf('http://127.0.0.1:3000/?note=Goal%20met,%20call%20done', 'http://127.0.0.1:3000'),
+    '/?…',
+  )
+  assert.equal(pathOf(`http://x.test/${'a'.repeat(100)}`, 'http://x.test')?.length, 61)
 })

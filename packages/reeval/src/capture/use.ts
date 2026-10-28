@@ -14,18 +14,32 @@ import type {
 } from '../types.ts'
 import { addUsage } from '../usage.ts'
 import { CAPTURE_KEYS, type ChromeSession, navigateAndWait } from './browser.ts'
-import { pageChanged } from './png.ts'
+import {
+  describeChange,
+  differing,
+  type PageState,
+  pathOf,
+  probePage,
+  type StateField,
+  settledState,
+} from './page-state.ts'
 import { pngSize } from './stub.ts'
 
-/** Silent cap per instruction string; not in the eval API. */
+/** Silent cap per instruction string, on the model's turns; not in the eval API. */
 export const CAPTURE_USE_MOVE_CAP = 32
 
-/** Identical moves in a row that leave the page as it was: the model is nudged at the first, stopped at the second. */
+/**
+ * The same move in a row that changes nothing: the model is nudged from the `NUDGE_AT`th and the
+ * capture stops at the `STUCK_AT`th.
+ */
 export const CAPTURE_USE_NUDGE_AT = 2
-export const CAPTURE_USE_STUCK_AT = 4
+export const CAPTURE_USE_STUCK_AT = 5
 
-/** Internal settle between moves; not an authored wait. */
-const SETTLE_MS = 80
+/** Points within this many CSS pixels of each other are the same move. */
+const SAME_POINT = 8
+
+/** Model turns in a row thrown away because the page changed while the model chose. */
+const STALE_ASKS = 2
 
 export type JourneyResult = {
   png: Buffer
@@ -51,30 +65,56 @@ export type JourneyOptions = {
 }
 
 /** Where a journey is, for the messages that stop it. */
-type Step = { goal: string; index: number; total: number; moves: number; budgetMs: number }
+type Step = { goal: string; index: number; total: number; moves: number }
 
-function timedOut(budgetMs: number, detail: string, step?: Step): Error {
+/** The capture's budget, and what the journey is doing when it runs out. */
+type Clock = { budgetMs: number; remaining: () => number; detail: string; step?: Step }
+
+function timedOut(clock: Clock): Error {
+  const { step } = clock
   const where = step
     ? ` (instruction ${step.index} of ${step.total}, after ${plural(step.moves, 'move')})`
     : ''
   return new Error(
-    `c.capture() timed out on ${detail}${where}: it used all of its ${formatDuration(budgetMs)} timeout. Raise timeout on the call or capture.timeout.`,
+    `c.capture() timed out on ${clock.detail}${where}: it used all of its ${formatDuration(clock.budgetMs)} timeout. Raise timeout on the call or capture.timeout.`,
   )
 }
 
-function remainingOrThrow(
-  remaining: () => number,
-  budgetMs: number,
-  detail: string,
-  step?: Step,
-): number {
-  const left = remaining()
-  if (left <= 0) throw timedOut(budgetMs, detail, step)
+function check(clock: Clock): number {
+  const left = clock.remaining()
+  if (left <= 0) throw timedOut(clock)
   return left
 }
 
-async function settle(): Promise<void> {
-  await new Promise<void>((resolve) => setTimeout(resolve, SETTLE_MS))
+/** `work()`, or the timeout once the budget runs out first: a page can hold any CDP call open. */
+function race<T>(clock: Clock, work: () => Promise<T>): Promise<T> {
+  const left = clock.remaining()
+  if (left <= 0) return Promise.reject(timedOut(clock))
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const out = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(timedOut(clock)), left)
+  })
+  return Promise.race([work(), out]).finally(() => clearTimeout(timer))
+}
+
+/** `session` with every call raced against the clock, and its own waits' timeouts named as the budget's. */
+function onClock(session: ChromeSession, clock: Clock): ChromeSession {
+  const own = (error: unknown) => {
+    throw /c\.capture\(\) timed out/.test(String(error)) ? timedOut(clock) : error
+  }
+  return {
+    window: session.window,
+    cdp: {
+      on: (method, fn) => session.cdp.on(method, fn),
+      send: (method, params) => race(clock, () => session.cdp.send(method, params)),
+    },
+    navigate: (url) => race(clock, () => session.navigate(url)),
+    wait: (wait, ms, nav) => race(clock, () => session.wait(wait, ms, nav).catch(own)),
+    screenshot: (fullPage) => race(clock, () => session.screenshot(fullPage)),
+    dispatch: (action, page) => race(clock, () => session.dispatch(action, page)),
+    busy: () => session.busy(),
+    dialogs: () => session.dialogs(),
+  }
 }
 
 function asUsage(value: {
@@ -168,7 +208,7 @@ export const systemPrompt = (normalized: boolean) =>
     normalized
       ? `Coordinates are normalized to 0-${NORMALIZED} on the full-page image: x and toX across its width, y and toY down its height. A scroll's dy is in CSS pixels.`
       : 'Coordinates are CSS pixels on the full-page image.'
-  } Each turn you get the goal, your earlier moves with what each did, and a fresh screenshot. Click a field before typing into it, and do not repeat a move that already worked. A dropdown (select) never opens in the screenshot: click it once, then press ArrowDown or ArrowUp until it shows the option you want. Call done when the goal is met. Do not mention CDP.`
+  } Each turn you get the goal, what has focus, your earlier moves with what each did, and a fresh screenshot. Click a field before typing into it, and do not repeat a move that already worked. A dropdown (select) never opens in the screenshot: click it once, press ArrowDown or ArrowUp until it shows the option you want, then press Enter to choose it. Call done when the goal is met. Do not mention CDP.`
 
 const useTools = {
   click: tool({
@@ -182,7 +222,7 @@ const useTools = {
   }),
   key: tool({
     description:
-      'Press a key in the focused element. In a dropdown (select), click it, then ArrowDown or ArrowUp to change the choice. Space toggles a focused checkbox.',
+      'Press a key in the focused element. In a dropdown (select), click it, press ArrowDown or ArrowUp to the option, then Enter to choose it. Space toggles a focused checkbox.',
     inputSchema: z.object({ key: z.enum(CAPTURE_KEYS) }),
   }),
   scroll: tool({
@@ -212,12 +252,14 @@ async function runFakeScript(
   session: ChromeSession,
   script: CaptureUseAction[],
   step: Step,
-  remaining: () => number,
+  clock: Clock,
+  volatile: Set<StateField>,
 ): Promise<number> {
   const goal = step.goal
   let moves = 0
   for (const action of script) {
-    remainingOrThrow(remaining, step.budgetMs, JSON.stringify(goal), { ...step, moves })
+    clock.step = { ...step, moves }
+    check(clock)
     if (action.type === 'done') return moves
     if (moves >= CAPTURE_USE_MOVE_CAP) throw unfinished(step)
     const ephemeral = await session.screenshot(true)
@@ -225,10 +267,13 @@ async function runFakeScript(
     debugTrace('check', 'capture-use', { goal, action, page }, `capture use ${action.type}`)
     await session.dispatch(action, page)
     moves++
-    await settle()
+    await settledState(session, volatile, clock.remaining)
   }
-  while (remaining() > 0) await settle()
-  throw timedOut(step.budgetMs, JSON.stringify(goal), { ...step, moves })
+  clock.step = { ...step, moves }
+  while (clock.remaining() > 0) {
+    await new Promise((resolve) => setTimeout(resolve, Math.min(100, clock.remaining())))
+  }
+  throw timedOut(clock)
 }
 
 const unfinished = (step: Step) =>
@@ -236,45 +281,97 @@ const unfinished = (step: Step) =>
     `c.capture() instruction ${step.index} of ${step.total} ${JSON.stringify(step.goal)} did not finish in ${CAPTURE_USE_MOVE_CAP} moves`,
   )
 
-/** One move the model made, and what it did to the page once the next screenshot showed it. */
+/** One move the model asked for, and what it did once the page settled. */
 type Move = {
   said: string
+  /** Equal for the same move: same tool, same input, points on a `SAME_POINT` grid. */
   key: string
-  from?: string
-  changed?: boolean
-  url?: string
-  /** Why the move wasn't made: its input didn't name an action. */
+  /** Why the move wasn't made: its input didn't name an action, or it can't land. */
   refused?: string
+  before?: PageState
+  after?: PageState
+  dialogs: string[]
+  changed?: boolean
+  effect?: string
 }
 
-/** The page's path and query on the journey's origin, or its whole URL elsewhere. */
-async function currentUrl(session: ChromeSession, origin: string): Promise<string | undefined> {
-  const history = (await session.cdp.send('Page.getNavigationHistory').catch(() => undefined)) as
-    | { currentIndex?: number; entries?: Array<{ url?: string }> }
-    | undefined
-  const url = history?.entries?.[history.currentIndex ?? -1]?.url
-  if (!url) return undefined
-  return url.startsWith(`${origin}/`) ? url.slice(origin.length) : url
+const grid = (n: number) => Math.round(n / SAME_POINT)
+
+function moveKey(action: CaptureUseAction): string {
+  switch (action.type) {
+    case 'click':
+    case 'hover':
+      return JSON.stringify([action.type, grid(action.x), grid(action.y)])
+    case 'scroll':
+      return JSON.stringify([action.type, grid(action.x), grid(action.y), action.dy])
+    case 'drag':
+      return JSON.stringify([
+        action.type,
+        grid(action.x),
+        grid(action.y),
+        grid(action.toX),
+        grid(action.toY),
+      ])
+    default:
+      return JSON.stringify(action)
+  }
 }
 
-/** The identical moves at the end of `moves` that each left the page as it was. */
+/** Sets what `move` did, from its page before and `after`. */
+function settleMove(
+  move: Move,
+  after: PageState,
+  origin: string,
+  volatile: ReadonlySet<StateField>,
+): void {
+  move.after = after
+  const fields = move.before ? differing(move.before, after, volatile) : []
+  const notes = move.before ? describeChange(after, fields, origin) : []
+  for (const dialog of move.dialogs) notes.push(`the page opened ${dialog}, which reeval accepted`)
+  move.changed = fields.length > 0 || move.dialogs.length > 0
+  move.effect = notes.length ? notes.join('; ') : 'nothing changed'
+}
+
+/** The same move made, unchanged, at the end of `moves`: a refused move ends the run. */
 function stuckMoves(moves: readonly Move[]): number {
   const last = moves.at(-1)
   let n = 0
   for (let i = moves.length - 1; i >= 0; i--) {
     const move = moves[i]
-    if (move?.key !== last?.key || move?.changed !== false) break
+    if (!move || move.refused || move.key !== last?.key || move.changed !== false) break
     n++
   }
   return n
 }
 
-/** The goal, where the journey is, and the moves so far with what each did. */
+/** What the model reads about the page now: where it is and what has focus. */
+function stateLines(now: PageState, origin: string, volatile: ReadonlySet<StateField>): string[] {
+  const lines: string[] = []
+  const path = pathOf(now.url, origin)
+  if (path) lines.push(`The page is at ${path}.`)
+  if (now.focus === null) lines.push('Nothing is focused.')
+  else if (now.focus) {
+    lines.push(`Focused: ${now.focus}${now.value ? `, holding ${JSON.stringify(now.value)}` : ''}.`)
+    if (now.focus.startsWith('select')) {
+      lines.push(
+        'A dropdown never opens in the screenshot: press ArrowDown or ArrowUp to the option, then Enter; it holds the new option only after Enter.',
+      )
+    }
+  }
+  if (volatile.has('text') || volatile.has('nodes') || volatile.has('view')) {
+    lines.push('Parts of the page keep changing on their own, so the effects below leave them out.')
+  }
+  return lines
+}
+
+/** The goal, where the journey is, the page now, and the moves so far with what each did. */
 export function goalPrompt(
   step: Pick<Step, 'goal' | 'index' | 'total'>,
   earlier: readonly string[],
-  url: string | undefined,
+  now: PageState,
   moves: readonly Move[],
+  origin: string,
+  volatile: ReadonlySet<StateField> = new Set(),
 ): string {
   const lines = [`Goal: ${step.goal}`]
   if (step.total > 1) {
@@ -282,25 +379,19 @@ export function goalPrompt(
       `This is instruction ${step.index} of ${step.total}.${earlier.length ? ` Already done: ${earlier.map((g) => JSON.stringify(g)).join(', ')}.` : ''}`,
     )
   }
-  if (url) lines.push(`The page is at ${url}.`)
+  lines.push(...stateLines(now, origin, volatile))
   if (!moves.length) {
     lines.push('You have made no moves for this goal yet.')
     return lines.join('\n')
   }
   lines.push('Your moves for this goal so far, oldest first. The screenshot shows the page now.')
   moves.forEach((m, i) => {
-    const effect = m.refused
-      ? ` → not made: ${m.refused}`
-      : m.changed === undefined
-        ? ''
-        : m.changed
-          ? ` → the page changed${m.url && m.url !== m.from ? `, now at ${m.url}` : ''}`
-          : ' → the page did not change'
-    lines.push(`${i + 1}. ${m.said}${effect}`)
+    const effect = m.refused ? `not made: ${m.refused}` : (m.effect ?? '')
+    lines.push(`${i + 1}. ${m.said}${effect ? ` → ${effect}` : ''}`)
   })
   if (stuckMoves(moves) >= CAPTURE_USE_NUDGE_AT) {
     lines.push(
-      `Your last moves repeated the same action without changing the page. Do not repeat it: if the goal is met, call done; otherwise try a different action.${moves.at(-1)?.said.startsWith('click ') ? ' If you clicked a dropdown (select), it is focused now: press ArrowDown or ArrowUp to change it.' : ''}`,
+      'Your last moves repeated the same action and nothing changed. Do not repeat it: if the goal is met, call done; otherwise try a different action.',
     )
   }
   return lines.join('\n')
@@ -311,83 +402,132 @@ type Goal = {
   earlier: readonly string[]
   origin: string
   modelName: string
-  remaining: () => number
+  clock: Clock
+  volatile: Set<StateField>
+  /** No move has been made yet in the journey. */
+  pristine: boolean
   loadModel: (name: string) => Promise<unknown>
 }
 
 async function runModelGoal(
   session: ChromeSession,
-  { step, earlier, origin, modelName, remaining, loadModel }: Goal,
+  { step, earlier, origin, modelName, clock, volatile, pristine, loadModel }: Goal,
 ): Promise<{ moves: number; usage: TokenUsage | null }> {
   const { goal } = step
   const model = await loadModel(modelName)
   const normalized = normalizesPoints(modelName)
   const made: Move[] = []
+  let dispatched = 0
   let usage: TokenUsage | null = null
-  let before: Buffer | undefined
+  let now = await probePage(session)
+  let stale = 0
   while (made.length < CAPTURE_USE_MOVE_CAP) {
-    const at = { ...step, moves: made.length }
-    remainingOrThrow(remaining, step.budgetMs, JSON.stringify(goal), at)
-    const ephemeral = await session.screenshot(true)
-    const page = pngSize(ephemeral)
-    const url = await currentUrl(session, origin)
+    clock.step = { ...step, moves: dispatched }
+    check(clock)
     const last = made.at(-1)
-    if (last && before) {
-      last.url = url
-      last.changed = !last.refused && (pageChanged(before, ephemeral) || url !== last.from)
+    if (last?.after) {
+      // A change that lands after the move settled is still that move's.
+      const late = await probePage(session)
+      last.dialogs.push(...session.dialogs())
+      if (differing(last.after, late, volatile).length || last.dialogs.length) {
+        settleMove(last, late, origin, volatile)
+      }
+      now = late
     }
-    before = ephemeral
-    if (stuckMoves(made) >= CAPTURE_USE_STUCK_AT) {
+    const stuck = stuckMoves(made)
+    if (stuck >= CAPTURE_USE_STUCK_AT) {
       throw new Error(
-        `c.capture() instruction ${step.index} of ${step.total} ${JSON.stringify(goal)} repeated ${last?.said} ${CAPTURE_USE_STUCK_AT} times without the page changing`,
+        `c.capture() instruction ${step.index} of ${step.total} ${JSON.stringify(goal)} repeated ${last?.said} ${CAPTURE_USE_STUCK_AT} times and nothing changed`,
       )
     }
-    debugTrace('check', 'capture-shot', { goal, bytes: ephemeral.length, page, url }, false)
-    const signal = AbortSignal.timeout(
-      remainingOrThrow(remaining, step.budgetMs, JSON.stringify(goal), at),
+    const ephemeral = await session.screenshot(true)
+    const page = pngSize(ephemeral)
+    debugTrace(
+      'check',
+      'capture-shot',
+      { goal, bytes: ephemeral.length, page, url: now.url },
+      false,
     )
+    const signal = AbortSignal.timeout(check(clock))
     const asked = Date.now()
-    const result = await generateText({
-      model: model as never,
-      system: systemPrompt(normalized),
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: goalPrompt(step, earlier, url, made) },
-            { type: 'file', mediaType: 'image/png', data: ephemeral },
-          ],
-        },
-      ],
-      tools: useTools,
-      toolChoice: 'required',
-      stopWhen: stepCountIs(1),
-      abortSignal: signal,
-    }).catch((error: unknown) => {
-      throw signal.aborted ? timedOut(step.budgetMs, JSON.stringify(goal), at) : error
+    const result = await race(clock, () =>
+      generateText({
+        model: model as never,
+        system: systemPrompt(normalized),
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: goalPrompt(step, earlier, now, made, origin, volatile) },
+              { type: 'file', mediaType: 'image/png', data: ephemeral },
+            ],
+          },
+        ],
+        tools: useTools,
+        toolChoice: 'required',
+        stopWhen: stepCountIs(1),
+        abortSignal: signal,
+      }),
+    ).catch((error: unknown) => {
+      throw signal.aborted ? timedOut(clock) : error
     })
     usage = addUsage(usage, asUsage(result.usage ?? {}))
     const call = result.toolCalls?.[0]
     if (!call) {
       throw new Error(`c.capture() instruction ${JSON.stringify(goal)} returned no action`)
     }
-    const said = `${call.toolName} ${JSON.stringify(call.input ?? {})}`
-    const asks = actionFromTool(call.toolName, (call.input ?? {}) as Record<string, unknown>)
+    const input = (call.input ?? {}) as Record<string, unknown>
+    const said = `${call.toolName} ${JSON.stringify(input)}`
+    // The page changed while the model chose, so its move answers a page that's gone: a save
+    // still landing invites a second submit. Credit the change and ask again, a bounded number of times.
+    const fresh = await probePage(session)
+    const opened = session.dialogs()
+    const moved = differing(now, fresh, volatile)
+    if (!last) {
+      // Before the journey's first move, whatever changes changes on its own.
+      if (pristine) for (const f of moved) if (f !== 'url' && f !== 'focus') volatile.add(f)
+    } else if ((moved.length || opened.length) && stale < STALE_ASKS) {
+      stale++
+      if (!last.refused) {
+        last.dialogs.push(...opened)
+        settleMove(last, fresh, origin, volatile)
+      }
+      now = fresh
+      debugLog(
+        'check',
+        `capture use ${said} on ${JSON.stringify(goal)} not made: the page changed while the model chose`,
+      )
+      continue
+    }
+    stale = 0
+    let asks = actionFromTool(call.toolName, input)
+    if (!('refused' in asks) && asks.type === 'type' && now.editable === false) {
+      asks = { refused: 'nothing that takes text is focused; click a field first' }
+    }
+    const logged =
+      !('refused' in asks) && asks.type === 'type' && now.focus?.includes('[password]')
+        ? `type ${JSON.stringify({ ...input, text: '•'.repeat(String(input.text ?? '').length) })}`
+        : said
+    const latency = formatDuration(Date.now() - asked)
     if ('refused' in asks) {
-      debugLog('check', `capture use ${said} on ${JSON.stringify(goal)} not made: ${asks.refused}`)
-      made.push({ said, key: said, from: url, refused: asks.refused })
+      debugLog(
+        'check',
+        `capture use ${logged} on ${JSON.stringify(goal)} not made: ${asks.refused} · ${latency}`,
+      )
+      made.push({ said, key: said, refused: asks.refused, dialogs: [] })
       continue
     }
     const chosen = normalized ? scalePoints(asks, page) : asks
-    debugLog(
-      'check',
-      `capture use ${said} on ${JSON.stringify(goal)} · ${formatDuration(Date.now() - asked)}`,
-    )
+    debugLog('check', `capture use ${logged} on ${JSON.stringify(goal)} · ${latency}`)
     debugTrace('check', 'capture-use', { goal, action: chosen, page }, `capture use ${chosen.type}`)
-    if (chosen.type === 'done') return { moves: made.length, usage }
+    if (chosen.type === 'done') return { moves: dispatched, usage }
+    const move: Move = { said, key: moveKey(asks), before: now, dialogs: [] }
+    made.push(move)
     await session.dispatch(chosen, page)
-    made.push({ said, key: JSON.stringify(chosen), from: url })
-    await settle()
+    dispatched++
+    now = await settledState(session, volatile, clock.remaining)
+    move.dialogs.push(...session.dialogs())
+    settleMove(move, now, origin, volatile)
   }
   throw unfinished(step)
 }
@@ -397,40 +537,48 @@ async function runModelGoal(
  * Throws before `screenshot` when the budget or move cap is hit.
  */
 export async function runJourney(
-  session: ChromeSession,
+  raw: ChromeSession,
   url: string,
   options: JourneyOptions,
 ): Promise<JourneyResult> {
   const { wait, timeoutMs, fullPage, instructions, use, remaining } = options
-  const budgetMs = options.budgetMs ?? timeoutMs
+  const clock: Clock = {
+    budgetMs: options.budgetMs ?? timeoutMs,
+    remaining,
+    detail: wait === 'idle' ? 'loading the page with wait: "idle"' : 'loading the page',
+  }
+  const session = onClock(raw, clock)
   const origin = new URL(url).origin
-  remainingOrThrow(remaining, budgetMs, 'navigate')
-  await navigateAndWait(session, url, wait, Math.min(timeoutMs, remaining()))
+  const volatile = new Set<StateField>()
+  check(clock)
+  await navigateAndWait(session, url, wait, Math.min(timeoutMs, remaining())).catch(
+    (error: unknown) => {
+      throw /c\.capture\(\) timed out/.test(String(error)) ? timedOut(clock) : error
+    },
+  )
   const goals = instructions.filter((s): s is string => typeof s === 'string')
   let moves = 0
   let usage: TokenUsage | null = null
   let stringIndex = 0
   for (const instruction of instructions) {
     if (typeof instruction !== 'string') {
-      remainingOrThrow(remaining, budgetMs, 'wait')
+      clock.detail = `{ wait: ${JSON.stringify(instruction.wait)} }`
+      clock.step = undefined
+      check(clock)
       await session.wait(instruction.wait, remaining(), undefined)
       continue
     }
-    const step: Step = {
-      goal: instruction,
-      index: stringIndex + 1,
-      total: goals.length,
-      moves: 0,
-      budgetMs,
-    }
-    remainingOrThrow(remaining, budgetMs, JSON.stringify(instruction), step)
+    const step: Step = { goal: instruction, index: stringIndex + 1, total: goals.length, moves: 0 }
+    clock.detail = JSON.stringify(instruction)
+    clock.step = step
+    check(clock)
     debugLog(
       'check',
       `capture instruction ${step.index} of ${step.total} ${JSON.stringify(instruction)}`,
     )
     if (use && 'fake' in use) {
       const script = use.fake[stringIndex] ?? []
-      moves += await runFakeScript(session, script, step, remaining)
+      moves += await runFakeScript(session, script, step, clock, volatile)
     } else if (use && 'model' in use) {
       if (!options.loadModel) {
         throw new Error('c.capture() instructions need a model loader')
@@ -440,16 +588,19 @@ export async function runJourney(
         earlier: goals.slice(0, stringIndex),
         origin,
         modelName: use.model,
-        remaining,
+        clock,
+        volatile,
+        pristine: moves === 0,
         loadModel: options.loadModel,
       })
       moves += ran.moves
       usage = addUsage(usage, ran.usage)
     }
     stringIndex++
-    await settle()
   }
-  remainingOrThrow(remaining, budgetMs, 'screenshot')
+  clock.detail = 'the final screenshot'
+  clock.step = undefined
+  check(clock)
   const png = await session.screenshot(fullPage)
   return {
     png,
