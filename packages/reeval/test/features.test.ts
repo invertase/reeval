@@ -2712,6 +2712,17 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'ui/capture-sandbox-loopback',
+    tiers: ['docker', 'podman'],
+    env: 'ui',
+    canary: /expected '' to be 'ip,name'/,
+    record: ({ run }) => {
+      const [api, page] = landed(run)?.serves ?? []
+      assert.equal(api?.port, 9099)
+      assert.equal(landed(run)?.files.artifacts?.[0]?.capture?.port, page?.port)
+    },
+  },
+  {
     dir: 'ui/capture-use-wait',
     tiers: ['docker'],
     env: 'ui',

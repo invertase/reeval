@@ -15,6 +15,7 @@ import {
   resolveCaptureCall,
   withChrome,
 } from '../capture/index.ts'
+import { startLoopbackProxy } from '../capture/loopback.ts'
 import { stubPng } from '../capture/stub.ts'
 import { captureUseSpend, runJourney } from '../capture/use.ts'
 import { debugLog } from '../debug/attempt.ts'
@@ -237,10 +238,11 @@ export async function capturePage(
     throw new Error(`c.capture() reused the name "${resolved.name}"`)
   }
   const box = await sandboxFor(a, 'c.capture()')
-  if (!box.getPortEndpoint) {
+  const tunnel = box.getPortEndpoint?.bind(box)
+  if (!tunnel) {
     throw new Error('c.capture() needs a sandbox that can tunnel a port')
   }
-  const { url: origin } = await box.getPortEndpoint({
+  const { url: origin } = await tunnel({
     port: resolved.port,
     protocol: 'http',
   })
@@ -257,9 +259,16 @@ export async function capturePage(
   let moves = 0
   const png = fake
     ? stubPng(resolved.name, resolved.port, resolved.path, resolved.viewport)
-    : await shot(a, pageUrl(origin, resolved.path), { ...resolved, use }, remaining, (n) => {
-        moves = n
-      })
+    : await shot(
+        a,
+        pageUrl(origin, resolved.path),
+        { ...resolved, use },
+        remaining,
+        (n) => {
+          moves = n
+        },
+        (port) => tunnel({ port, protocol: 'http' }).then((t) => t.url),
+      )
   const digest = sha256(png)
   const file = {
     path: `artifacts/${resolved.name}.png`,
@@ -299,6 +308,7 @@ async function shot(
   resolved: ResolvedCaptureCall & { use?: CaptureUse },
   remaining: () => number,
   onMoves: (n: number) => void,
+  tunnel: (port: number) => Promise<string>,
 ): Promise<Buffer> {
   const cache = cacheDir()
   const bin = await ensureChrome(cache, {
@@ -306,7 +316,11 @@ async function shot(
     signal: a.signal,
     onProgress: (p) => a.report({ kind: 'browser-download', ...p }),
   })
-  return withChrome(bin, resolved.window, remaining(), async (session) => {
+  // The browser runs on the host: the page's own loopback requests (an emulator, an API on
+  // another port) mean the sandbox's, so they go through its tunnels.
+  const proxy = await startLoopbackProxy({ tunnel, direct: [Number(new URL(url).port)] })
+  const browser = { proxy: proxy.address }
+  return withChrome(bin, resolved.window, remaining(), browser, async (session) => {
     const result = await runJourney(session, url, {
       wait: resolved.wait,
       timeoutMs: remaining(),
@@ -337,6 +351,14 @@ async function shot(
         : spend
     }
     return result.png
+  }).finally(async () => {
+    await proxy.close()
+    if (proxy.reached.length) {
+      debugLog(
+        'check',
+        `c.capture ${resolved.name}: the page reached sandbox port ${proxy.reached.join(', ')} through its tunnel`,
+      )
+    }
   })
 }
 

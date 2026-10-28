@@ -27,6 +27,9 @@ evaluate('builds the sign-in page', async (c) => {
   a journey of goal strings and `{ wait }` beats (`{ wait: 'idle' }` waits for the
   network to go quiet from that beat, so it covers a click that only fetches) — no
   selectors; the model clicks pixels. `viewport: 'full-page'` is the saved shot (default window + tall PNG).
+  The browser runs on the host, but the page's requests to `localhost`, `127.0.0.1` or `[::1]`
+  on any port reach the sandbox's, so an emulator started in `setup` (Firebase Auth on 9099)
+  needs no proxy or `connectAuthEmulator` change.
 - `capture.model` cascades like `question`; the call may override. Default is
   `analysis.model`, else the attempt's judge model (a profile's, group's or eval's),
   whichever is first a language model; never Jev. Gemini's 0–1000 points are scaled to the screenshot. Fixture evals import

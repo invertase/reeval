@@ -92,7 +92,7 @@ The call returns once something listens on `PORT`. Without `port`, it also retur
 
 ## `c.capture()`
 
-`c.capture(target, options?)` opens a path on a sandbox port in a host browser, saves a PNG, and returns a `Capture`.
+`c.capture(target, options?)` opens a path on a sandbox port in a host browser, saves a PNG, and returns a `Capture`. The page's requests to a loopback address (`localhost`, `127.0.0.1`, `[::1]`) on any port go to that port in the sandbox, through a tunnel reeval opens on the first request; other requests leave from the host.
 
 ```ts
 const shot = await c.capture(app, { path: '/login', wait: 'idle' })
