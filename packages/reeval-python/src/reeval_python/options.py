@@ -47,6 +47,13 @@ class JudgeOptions(JudgeDefaults, total=False):
 JUDGE_INPUTS = ("task", "output", "files", "diff", "contents", "transcript", "checks", "artifacts")
 
 
+class BestOf(TypedDict):
+    """`runs={"best_of": 5}`: stop each cell once a majority of its 5 attempts agree."""
+
+    best_of: int
+    """Odd, 3 or more."""
+
+
 class EvalOptions(TypedDict, total=False):
     """Options for an eval or a group; a group's cascade to the evals inside it."""
 
@@ -63,7 +70,9 @@ class EvalOptions(TypedDict, total=False):
     questions: Sequence[Mapping[str, Any]]
     """Asked of each attempt, or between attempts with `across`; `[]` clears the group's. Each
     names what it's shown: `{"question": …, "diff": True}`, at least one input."""
-    runs: int
+    runs: int | BestOf
+    """Attempts per cell, or `{"best_of": n}`, which gates each cell on its majority. Not on a
+    compared eval."""
     sandbox: DockerSandbox | Mapping[str, Any]
     snapshot: bool | Literal["turns"] | Mapping[str, Any]
     """When each attempt's workspace is copied into its directory in `.reeval/runs`: `True` after

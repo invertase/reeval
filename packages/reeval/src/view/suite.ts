@@ -190,6 +190,10 @@ export type CellResult = {
   /** Infrastructure errors, which are neither passes nor fails. */
   infraError: number
   skipped: number
+  /** Set by `runs: { bestOf }`: the cell stopped once a majority of this many attempts agreed. */
+  bestOf?: number
+  /** Of `skipped`, the attempts a best-of cell's majority left unrun. */
+  notNeeded?: number
   fingerprint: string
   /** The skill sources and files the cell's environment placed, as written. */
   context: string[]
@@ -614,6 +618,12 @@ function cellsOf(
       failed: cell.fail,
       infraError: cell.infraError,
       skipped: cell.skipped,
+      ...(cell.bestOf !== undefined
+        ? {
+            bestOf: cell.bestOf,
+            notNeeded: ran.filter((a) => a.bestOf === 'skipped').length,
+          }
+        : {}),
       fingerprint: cell.fingerprint,
       context: contextOf(record, cell),
       checks: checksOf(e, cell, baseline, path, declared),

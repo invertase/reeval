@@ -72,10 +72,12 @@ import type {
   ResolvedProfile,
   ResolvedSnapshot,
   Revision,
+  Runs,
   SandboxDescriptor,
   SandboxWarning,
   SnapshotOption,
 } from './types.ts'
+import { gateLabel } from './view/gate.ts'
 
 /** Every eval/group option key `checkOptions` accepts. The feature matrix holds each to an inventory entry. */
 export const EVAL_OPTION_KEYS = [
@@ -109,6 +111,7 @@ const SUGGEST: Record<string, string> = {
   repeats: 'runs',
   iterations: 'runs',
   trials: 'runs',
+  bestOf: 'runs',
   secrets: 'env',
   vars: 'env',
   network: 'egress',
@@ -242,6 +245,46 @@ const isRevision = (value: unknown): value is Revision =>
   (typeof value === 'number' && Number.isSafeInteger(value)) ||
   (typeof value === 'string' && value.trim() !== '')
 
+/** `runs: 3` or `runs: { bestOf: 5 }`, refused in the words of whichever it was meant to be. */
+function checkRuns(runs: unknown, where: string): void {
+  if (typeof runs === 'number' && Number.isInteger(runs) && runs >= 1) return
+  if (typeof runs === 'number') {
+    throw new UsageError(
+      `runs in ${where} must be a whole number of at least 1 (got ${JSON.stringify(runs)})`,
+    )
+  }
+  if (!isObjectLike(runs)) {
+    throw new UsageError(
+      `runs in ${where} must be a whole number of at least 1, or { bestOf: n } (got ${JSON.stringify(runs)})`,
+    )
+  }
+  const extra = Object.keys(runs).find((k) => k !== 'bestOf')
+  if (extra !== undefined) {
+    throw new UsageError(
+      `runs in ${where} takes { bestOf: n } only (got the key "${extra}"), e.g. runs: { bestOf: 3 }`,
+    )
+  }
+  const { bestOf } = runs
+  if (!(Number.isInteger(bestOf) && (bestOf as number) >= 3 && (bestOf as number) % 2 === 1)) {
+    throw new UsageError(
+      `runs.bestOf in ${where} must be an odd whole number of 3 or more, so one side always has a majority, e.g. runs: { bestOf: 3 } (got ${JSON.stringify(bestOf)})`,
+    )
+  }
+}
+
+/** The most attempts `runs` plans a cell, and its `bestOf` when it has one. */
+export const runsOf = (runs: Runs): { runs: number; bestOf?: number } =>
+  typeof runs === 'number' ? { runs } : { runs: runs.bestOf, bestOf: runs.bestOf }
+
+/**
+ * A best-of cell's gate: half or more of its counted attempts pass, which is its majority once it
+ * has one (an infra error counts on neither side).
+ */
+export const MAJORITY_GATE: GatePolicy = { passRate: 0.5 }
+
+/** How many of a best-of cell's attempts always run: the majority. */
+export const majorityOf = (bestOf: number) => (bestOf + 1) / 2
+
 /** Throws on keys that aren't options, and on values of the wrong shape, suggesting a fix. */
 export function checkOptions(options: object, where: string, allowed = KNOWN): void {
   for (const key of Object.keys(options)) {
@@ -259,11 +302,7 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     throw new UsageError(`Unknown option "${key}" in ${where}.${hint}`)
   }
   const o = options as EvalOptions
-  if (o.runs !== undefined && !(Number.isInteger(o.runs) && o.runs >= 1)) {
-    throw new UsageError(
-      `runs in ${where} must be a whole number of at least 1 (got ${JSON.stringify(o.runs)})`,
-    )
-  }
+  if (o.runs !== undefined) checkRuns(o.runs, where)
   if (o.gate !== undefined) checkGate(o.gate, where)
   if (
     o.tags !== undefined &&
@@ -570,7 +609,10 @@ export type Resolved = {
   sandbox: SandboxDescriptor
   environment: Environment | undefined
   compare: NormalizedCompare | undefined
+  /** Attempts per cell; with `bestOf`, the most a cell runs. */
   runs: number
+  /** Set by `runs: { bestOf }`, which `runs` then equals. */
+  bestOf: number | undefined
   /** Unset means `'all'`. */
   gate: GatePolicy | undefined
   env: EnvVars
@@ -633,7 +675,11 @@ function applyLevel(
   if (options.sandbox !== undefined) out.sandbox = options.sandbox
   if (options.environment !== undefined) out.environment = options.environment
   if (options.compare !== undefined) out.compare = normalizeCompare(options.compare)
-  if (options.runs !== undefined) out.runs = options.runs
+  if (options.runs !== undefined) {
+    const { runs, bestOf } = runsOf(options.runs)
+    out.runs = runs
+    out.bestOf = bestOf
+  }
   if (options.gate !== undefined) out.gate = options.gate
   if (options.timeout !== undefined) out.timeout = options.timeout
   out.snapshot = mergeSnapshot(out.snapshot, options.snapshot)
@@ -813,8 +859,10 @@ export function cascade(
       !pinned('runs') &&
       (out.runs ?? 1) > limit.runs
     ) {
-      notes.push(`runs ${out.runs} → ${limit.runs} (${tag})`)
+      const was = out.bestOf !== undefined ? `best of ${out.bestOf}` : String(out.runs)
+      notes.push(`runs ${was} → ${limit.runs} (${tag})`)
       out.runs = limit.runs
+      out.bestOf = undefined
       out.sources = { ...out.sources, runs: `profiles.${profile.name}.limit` }
     }
     const pins = out.pin.filter((k) =>
@@ -843,6 +891,23 @@ export function cascade(
     if (off) notes.push(`${plural(off)} off (profile ${profile.name})`)
     if (narrowed) notes.push(`${plural(narrowed)} narrowed (profile ${profile.name})`)
     out.questions = kept
+  }
+  // --runs replaces the runs outright, so a best-of it replaces can't be refused.
+  if (options.runs !== undefined) out.bestOf = undefined
+  // After a profile's limit, which may turn the compare off or the best-of into a fixed count.
+  if (out.bestOf !== undefined && out.compare?.variants.length) {
+    const from = out.sources?.runs ?? 'the config'
+    const set = from === where ? '' : ` from ${from}`
+    throw new UsageError(
+      `${where} compares environments, so it can't take runs: { bestOf: ${out.bestOf} }${set}: a lift needs the same number of attempts on each side, and best-of stops each cell on its own. Set a fixed count on it, e.g. runs: 4.`,
+    )
+  }
+  if (out.bestOf !== undefined) {
+    // The majority decides a best-of cell, so no other gate can.
+    if (out.gate !== undefined && gateLabel(out.gate) !== gateLabel(MAJORITY_GATE)) {
+      notes.push(`gate ${gateLabel(out.gate)} → majority (runs.bestOf)`)
+    }
+    out.gate = MAJORITY_GATE
   }
   defaultRuns(out, notes, options)
   const resolved: Resolved = { ...out, runs: options.runs ?? out.runs ?? 1 }
@@ -898,6 +963,8 @@ export type PlannedAttempt = {
   egress: PlannedEgress
   gate: CellGate
   minLift?: number
+  /** Set by `runs: { bestOf }`. */
+  bestOf?: number
   n: number
   label: string
   /** The `vertex()` settings its harness runs on, when it resolved to Vertex AI. */
@@ -1033,6 +1100,7 @@ export function expand(resolved: Resolved, vertex?: VertexSettings): PlannedAtte
           ...(cell.role === 'variant' && compare?.minLift !== undefined
             ? { minLift: compare.minLift }
             : {}),
+          ...(resolved.bestOf !== undefined ? { bestOf: resolved.bestOf } : {}),
           n,
           label,
           ...(onVertex ? { vertex: onVertex } : {}),
@@ -1224,6 +1292,7 @@ export function evalPlan(
       : {}),
     ...(!skip && resolved.questions.length ? { questions: resolved.questions } : {}),
     runs: resolved.runs,
+    ...(resolved.bestOf !== undefined ? { bestOf: resolved.bestOf } : {}),
     ...(resolved.gate !== undefined ? { gate: resolved.gate } : {}),
     attempts: skip ? 0 : attempts.length,
     notes,

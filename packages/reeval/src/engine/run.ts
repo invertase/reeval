@@ -73,7 +73,7 @@ export type RunOptions = {
   /** Aborts every attempt: the run was canceled. */
   signal: AbortSignal
   reporter: Reporter
-  /** Called once every attempt that runs has asked for its lease. */
+  /** Called once every attempt that runs has asked for its lease, or is awaiting its `ready`. */
   onReady: () => void
 }
 
@@ -92,6 +92,7 @@ export async function runTests(
   for (const test of tests) {
     if (!select.has(test.index) || test.mode !== 'run') {
       options.reporter.result(test.index, { state: 'skipped', errors: [], durationMs: 0 })
+      test.options.settled?.({ state: 'skipped' })
       continue
     }
     settled.push(runTest(test, options, bodies))
@@ -108,9 +109,20 @@ async function runTest(
 ): Promise<void> {
   const { index, options } = test
   const calledAt = Date.now()
-  const skip = () =>
+  const skip = () => {
     reporter.result(index, { state: 'skipped', errors: [], durationMs: Date.now() - calledAt })
+    options.settled?.({ state: 'skipped' })
+  }
   if (signal.aborted) return skip()
+  if (options.ready) {
+    let go: boolean
+    try {
+      go = await options.ready()
+    } catch (error) {
+      return fail(error)
+    }
+    if (!go || signal.aborted) return skip()
+  }
   let lease: Lease | undefined
   if (options.gate) {
     const { limits, rank } = options.gate
@@ -157,16 +169,20 @@ async function runTest(
   )
   bodies.add(body)
   const release = () => lease?.release()
-  body.then(release, release)
+  const cleanedUp = body.then(release, release)
+  let state: WireResult['state'] = 'passed'
   try {
     await (options.timeout ? withTimeout(body, options.timeout, timeout) : body)
     finish({ state: 'passed', errors: [] })
   } catch (error) {
     finish({ state: 'failed', errors: [serializeError(error)] })
   }
+  // A timeout reports the attempt failed before its body has cleaned up and set its last meta.
+  bodies.add(cleanedUp.then(() => options.settled?.({ state, ...(meta ? { meta } : {}) })))
 
   function finish(result: Omit<WireResult, 'durationMs'>) {
     reported = true
+    state = result.state
     reporter.result(index, {
       ...result,
       durationMs: Date.now() - startedAt,
@@ -180,6 +196,7 @@ async function runTest(
       errors: [serializeError(error)],
       durationMs: Date.now() - calledAt,
     })
+    options.settled?.({ state: 'failed' })
   }
 }
 

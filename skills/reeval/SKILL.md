@@ -129,6 +129,10 @@ export default defineConfig({
   `environment`, `env`, `judge`, `runs`, `gate`, `timeout`, `tags`, …) and inner levels win;
   `compare` is for groups and evals only. Options are plain objects, never functions. Unknown
   keys are errors with a hint (`repeat` → "Did you mean runs?").
+- `runs: { bestOf: 5 }` (odd, 3 or more) stops each cell once pass or fail has a majority (3 to 5
+  attempts) and gates on it, replacing `gate`. Use it to settle a flaky pass/fail for less than a
+  fixed count; not on an eval with `compare` (refused: lift needs equal attempts), and a cell
+  only reaches `flaky_cells`' 6-attempt `flaky` in one run from `bestOf: 7`.
 - An eval's fingerprint reads its own body, options, `evaluate.each` case and `revision`, not
   helpers, constants outside the body or fixtures. After changing one of those in a way that
   changes what the eval measures, bump `revision` (`{ revision: 2 }`, on the eval or its group)

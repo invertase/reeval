@@ -42,6 +42,19 @@ import {
 
 const count = () => z.number().int().min(1)
 
+/** `runs`: a count, or `{ bestOf }` with an odd count of 3 or more. */
+const runs = () =>
+  z.union([
+    count(),
+    z.strictObject({
+      bestOf: z
+        .number()
+        .int()
+        .min(3)
+        .refine((n) => n % 2 === 1, 'must be odd'),
+    }),
+  ])
+
 export const captureWindowSchema = z.strictObject({
   width: count(),
   height: count(),
@@ -72,7 +85,7 @@ export const profileDefaultsDataSchema = z.strictObject({
   harness: harnessList.optional(),
   sandbox: sandboxDescriptorSchema.optional(),
   environment: environmentDataSchema.optional(),
-  runs: count().optional(),
+  runs: runs().optional(),
   gate: gatePolicySchema.optional(),
   env: envVarsSchema.optional(),
   egress: egressPolicySchema.optional(),
@@ -131,7 +144,7 @@ export const reevalConfigDataSchema = z.strictObject({
   harness: harnessList.optional(),
   sandbox: sandboxDescriptorSchema.optional(),
   environment: environmentDataSchema.optional(),
-  runs: count().optional(),
+  runs: runs().optional(),
   gate: gatePolicySchema.optional(),
   env: envVarsSchema.optional(),
   egress: egressPolicySchema.optional(),

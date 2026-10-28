@@ -18,13 +18,14 @@ from reeval_python.environment import (
 )
 from reeval_python.errors import ReevalAssertionError, ReevalCallError
 from reeval_python.expect import Expectation, expect
-from reeval_python.options import EvalOptions, JudgeDefaults, JudgeOptions
+from reeval_python.options import BestOf, EvalOptions, JudgeDefaults, JudgeOptions
 from reeval_python.types import BackgroundHandle, Diff, ExecResult, FileChange, Turn, Verdict
 
 __all__ = [
     "DEFAULT_EGRESS_ALLOW",
     "AttemptContext",
     "BackgroundHandle",
+    "BestOf",
     "Diff",
     "DockerSandbox",
     "Environment",

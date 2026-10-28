@@ -1937,8 +1937,21 @@
           "$ref": "#/$defs/QuestionOptions"
         },
         "runs": {
-          "description": "Attempts per cell.",
-          "type": "number"
+          "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more).",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "bestOf": {
+                  "type": "number"
+                }
+              },
+              "required": ["bestOf"]
+            }
+          ]
         },
         "sandbox": {
           "description": "The default machine when the resolved environment omits `sandbox`.",
@@ -2275,7 +2288,20 @@
         },
         "runs": {
           "description": "Unset leaves each eval its default: 4 for a compare with variants, otherwise 1.",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "bestOf": {
+                  "type": "number"
+                }
+              },
+              "required": ["bestOf"]
+            }
+          ]
         },
         "sandbox": {
           "description": "The default machine when the resolved environment omits `sandbox`. `defineConfig({ sandbox })` sets it; profile defaults, groups and evals cascade over it. Implicit `docker()` when nobody sets one.",

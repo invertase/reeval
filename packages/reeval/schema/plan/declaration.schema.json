@@ -1001,8 +1001,21 @@
               ]
             },
             "runs": {
-              "description": "Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
-              "type": "number"
+              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "bestOf": {
+                      "type": "number"
+                    }
+                  },
+                  "required": ["bestOf"]
+                }
+              ]
             },
             "sandbox": {
               "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harness`. Not an environment: it does not invent skills, files or a name.",
@@ -1314,8 +1327,21 @@
               ]
             },
             "runs": {
-              "description": "Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
-              "type": "number"
+              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "bestOf": {
+                      "type": "number"
+                    }
+                  },
+                  "required": ["bestOf"]
+                }
+              ]
             },
             "sandbox": {
               "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harness`. Not an environment: it does not invent skills, files or a name.",
@@ -1564,8 +1590,21 @@
               ]
             },
             "runs": {
-              "description": "Attempts per cell. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
-              "type": "number"
+              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "bestOf": {
+                      "type": "number"
+                    }
+                  },
+                  "required": ["bestOf"]
+                }
+              ]
             },
             "sandbox": {
               "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harness`. Not an environment: it does not invent skills, files or a name.",

@@ -2750,6 +2750,47 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'run/best-of',
+    tiers: ['fake'],
+    env: 'best-of',
+    canary: /expected 'ahoy' to be 'hello'/,
+    evals: {
+      lands: {
+        outcome: 'pass',
+        attempts: ['fake/best-of/fake#1', 'fake/best-of/fake#2', 'fake/best-of/fake#3'],
+        error: { kind: 'assertion', message: /expected 'ahoy' to be 'hello'/ },
+        clean: ['fake/best-of/fake#1', 'fake/best-of/fake#3'],
+      },
+      canary: {
+        outcome: 'fail',
+        attempts: ['fake/best-of/fake#1', 'fake/best-of/fake#2', 'fake/best-of/fake#3'],
+        error: { kind: 'assertion', message: /expected 'ahoy' to be 'hello'/ },
+        clean: ['fake/best-of/fake#3'],
+      },
+    },
+    record: ({ run, stdout }) => {
+      const marks = (name: string) =>
+        run.evals
+          .find((e) => e.name === name)
+          ?.attempts.map((a) => [a.n, a.outcome, a.bestOf ?? null])
+      assert.deepEqual(marks('lands'), [
+        [1, 'pass', null],
+        [2, 'fail', null],
+        [3, 'pass', 'added'],
+      ])
+      assert.deepEqual(marks('canary'), [
+        [1, 'fail', null],
+        [2, 'fail', null],
+        [3, 'skipped', 'skipped'],
+      ])
+      for (const cell of run.evals.flatMap((e) => e.cells)) {
+        assert.equal(cell.bestOf, 3)
+        assert.deepEqual(cell.gate, { passRate: 0.5 })
+      }
+      assert.match(blockOf(stdout, 'canary'), /1 not needed \(best of 3\)/)
+    },
+  },
+  {
     dir: 'output/none',
     tiers: ['fake'],
     env: '-',
