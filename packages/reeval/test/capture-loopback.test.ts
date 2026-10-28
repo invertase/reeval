@@ -69,8 +69,22 @@ test('isLoopbackHost names the addresses a page means the sandbox by', () => {
   for (const host of ['localhost', 'LOCALHOST', 'app.localhost', '127.0.0.1', '127.1.2.3', '::1']) {
     assert.ok(isLoopbackHost(host), host)
   }
-  assert.ok(isLoopbackHost('[::1]'))
-  for (const host of ['example.com', '10.0.0.1', '128.0.0.1', 'localhost.example.com', '::2']) {
+  for (const host of ['[::1]', 'localhost.', 'app.localhost.', '127.0.0.1.', '0.0.0.0', '[::]']) {
+    assert.ok(isLoopbackHost(host), host)
+  }
+  for (const host of ['[::ffff:7f00:1]', '::ffff:7f12:3456', '::ffff:127.0.0.1']) {
+    assert.ok(isLoopbackHost(host), host)
+  }
+  for (const host of [
+    'example.com',
+    'example.com.',
+    '10.0.0.1',
+    '128.0.0.1',
+    'localhost.example.com',
+    '::2',
+    '::ffff:a00:1',
+    '::ffff:10.0.0.1',
+  ]) {
     assert.ok(!isLoopbackHost(host), host)
   }
 })
@@ -134,7 +148,7 @@ test('a WebSocket upgrade in absolute form reaches the sandbox port', async () =
   assert.match(reply, /x-from: sandbox \/hmr/)
 })
 
-test('a port the sandbox cannot tunnel is a 502, and is asked for again next time', async () => {
+test('a port the sandbox cannot tunnel fails like a refused one, and is asked for again', async () => {
   let calls = 0
   const proxy = await startLoopbackProxy({
     tunnel: async (port) => {
@@ -144,7 +158,166 @@ test('a port the sandbox cannot tunnel is a 502, and is asked for again next tim
     direct: [],
   })
   closers.push(() => proxy.close())
-  assert.equal((await viaProxy(proxy.address, 'http://127.0.0.1:9099/')).status, 502)
+  await assert.rejects(viaProxy(proxy.address, 'http://127.0.0.1:9099/'), /socket hang up/)
   assert.match(await viaConnect(proxy.address, 'localhost:9099'), /^HTTP\/1\.1 502/)
   assert.equal(calls, 2)
+  assert.deepEqual(proxy.reached, [])
+})
+
+test('a tunnel with nothing behind it drops a plain request, and is not named as reached', async () => {
+  // The gateway's tunnel accepts, then closes once the sandbox side refuses.
+  const hollow = net.createServer((socket) => socket.destroy())
+  await new Promise<void>((ok) => hollow.listen(0, '127.0.0.1', ok))
+  closers.push(() => new Promise((ok) => hollow.close(ok)))
+  const at = (hollow.address() as net.AddressInfo).port
+  const proxy = await startLoopbackProxy({
+    tunnel: async () => `http://127.0.0.1:${at}`,
+    direct: [],
+  })
+  closers.push(() => proxy.close())
+  await assert.rejects(
+    viaProxy(proxy.address, 'http://127.0.0.1:9097/'),
+    /socket hang up|ECONNRESET/,
+  )
+  assert.deepEqual(proxy.reached, [])
+})
+
+/** A sandbox-side server that counts its open sockets and streams `/stream` until closed. */
+async function counting(): Promise<{ port: number; open: () => number }> {
+  let open = 0
+  const s = http.createServer((req, res) => {
+    if (req.url === '/stream') {
+      res.writeHead(200)
+      const timer = setInterval(() => res.write('tick\n'), 20)
+      res.once('close', () => clearInterval(timer))
+      return
+    }
+    res.end(JSON.stringify(req.rawHeaders))
+  })
+  s.on('connection', (socket) => {
+    open++
+    socket.once('close', () => open--)
+  })
+  await new Promise<void>((ok) => s.listen(0, '127.0.0.1', ok))
+  closers.push(() => new Promise((ok) => s.close(ok)))
+  return { port: (s.address() as net.AddressInfo).port, open: () => open }
+}
+
+const settle = (ms = 100) => new Promise((ok) => setTimeout(ok, ms))
+
+test('a plain request the page abandons, or one in flight at close(), is torn down upstream', async () => {
+  const sandbox = await counting()
+  const proxy = await startLoopbackProxy({
+    tunnel: async () => `http://127.0.0.1:${sandbox.port}`,
+    direct: [],
+  })
+  const [host, port] = proxy.address.split(':')
+  const stream = () =>
+    new Promise<http.ClientRequest>((ok) => {
+      const req = http.request({
+        host,
+        port: Number(port),
+        path: 'http://127.0.0.1:9099/stream',
+        headers: { host: '127.0.0.1:9099' },
+        agent: false,
+      })
+      req.on('error', () => {})
+      req.on('response', (res) => res.once('data', () => ok(req)))
+      req.end()
+    })
+  ;(await stream()).destroy()
+  await settle()
+  assert.equal(sandbox.open(), 0, 'abandoned by the page')
+  await stream()
+  assert.equal(sandbox.open(), 1)
+  await proxy.close()
+  await settle()
+  assert.equal(sandbox.open(), 0, 'in flight at close()')
+})
+
+test('close() while a tunnel is still opening leaves no socket behind', async () => {
+  const sandbox = await counting()
+  let release!: () => void
+  const gate = new Promise<void>((ok) => {
+    release = ok
+  })
+  const proxy = await startLoopbackProxy({
+    tunnel: async () => {
+      await gate
+      return `http://127.0.0.1:${sandbox.port}`
+    },
+    direct: [],
+  })
+  const [host, port] = proxy.address.split(':')
+  const client = net.connect({ host, port: Number(port) })
+  client.on('error', () => {})
+  client.write('CONNECT localhost:9099 HTTP/1.1\r\nhost: localhost:9099\r\n\r\n')
+  await settle(50)
+  await proxy.close()
+  release()
+  await settle()
+  assert.equal(sandbox.open(), 0)
+})
+
+test('a page that resets while its CONNECT or upgrade is opening does not crash the worker', async () => {
+  const sandbox = await counting()
+  let release!: () => void
+  const gate = new Promise<void>((ok) => {
+    release = ok
+  })
+  const proxy = await startLoopbackProxy({
+    tunnel: async () => {
+      await gate
+      return `http://127.0.0.1:${sandbox.port}`
+    },
+    direct: [],
+  })
+  closers.push(() => proxy.close())
+  const [host, port] = proxy.address.split(':')
+  const requests = [
+    'CONNECT localhost:9099 HTTP/1.1\r\nhost: localhost:9099\r\n\r\n',
+    'GET http://localhost:9098/ HTTP/1.1\r\nhost: localhost:9098\r\nconnection: upgrade\r\nupgrade: test\r\n\r\n',
+  ]
+  for (const request of requests) {
+    const client = net.connect({ host, port: Number(port) })
+    client.on('error', () => {})
+    await new Promise((ok) => client.once('connect', ok))
+    client.write(request)
+    await settle(50)
+    client.resetAndDestroy()
+  }
+  await settle(50)
+  release()
+  await settle()
+  assert.equal(sandbox.open(), 0)
+})
+
+test('both paths forward the raw headers, repeats included, without proxy-*', async () => {
+  const sandbox = await counting()
+  const proxy = await startLoopbackProxy({
+    tunnel: async () => `http://127.0.0.1:${sandbox.port}`,
+    direct: [],
+  })
+  closers.push(() => proxy.close())
+  const [host, port] = proxy.address.split(':')
+  const reply = await new Promise<string>((ok, fail) => {
+    const socket = net.connect({ host, port: Number(port) })
+    let text = ''
+    socket.on('data', (d) => {
+      text += d
+    })
+    socket.on('end', () => ok(text))
+    socket.on('error', fail)
+    socket.write(
+      'GET http://127.0.0.1:9099/h HTTP/1.1\r\nHost: 127.0.0.1:9099\r\nX-Twice: a\r\nX-Twice: b\r\nProxy-Connection: keep-alive\r\nConnection: close\r\n\r\n',
+    )
+  })
+  const body = JSON.parse(reply.slice(reply.indexOf('\r\n\r\n') + 4)) as string[]
+  assert.deepEqual(
+    body.filter((_, i) => i % 2 === 0 && /^x-twice$/i.test(body[i] ?? '')).length,
+    2,
+    'both X-Twice lines',
+  )
+  assert.ok(!body.some((h) => /^proxy-/i.test(h)))
+  assert.deepEqual(proxy.reached, [9099])
 })

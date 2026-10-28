@@ -356,7 +356,7 @@ async function shot(
     if (proxy.reached.length) {
       debugLog(
         'check',
-        `c.capture ${resolved.name}: the page reached sandbox port ${proxy.reached.join(', ')} through its tunnel`,
+        `c.capture ${resolved.name}: sandbox port ${proxy.reached.join(', ')} answered the page through its tunnel`,
       )
     }
   })
