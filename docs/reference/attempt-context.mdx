@@ -92,7 +92,7 @@ The call returns when the process starts, not when it listens.
 
 ## `c.capture()`
 
-`c.capture(target, options?)` opens a path on a sandbox port in a host browser, saves a PNG, and returns a `Capture`.
+`c.capture(target, options?)` opens a path on a sandbox port in a host browser, saves a PNG, and returns a `Capture`. The browser reaches only that port.
 
 ```ts
 const shot = await c.capture(app, { path: '/login', wait: 'idle' })
@@ -115,7 +115,7 @@ const shot = await c.capture(app, { path: '/login', wait: 'idle' })
 </Property>
 
 <Property name="options.timeout" type="Duration" optional>
-  How long reeval waits for the port and the page, replacing the cascaded `timeout` (default `'60s'`).
+  How long reeval waits for the port, then for the whole capture: the page, every instruction's moves and `{ wait }` steps. It replaces the cascaded `timeout` (default `'60s'`).
 </Property>
 
 <Property name="options.wait" type="'load' | 'idle' | { ms: number }" optional>
