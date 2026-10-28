@@ -1,63 +1,85 @@
 # Coding-agent AEO
 
-Answer engine optimization for coding agents is whether an agent picks your library when a
-developer asks it to build something. Developers rarely name a library. They ask for a feature,
-a fix or a design, and the agent chooses the dependency, installs it and writes the code. A
-library that never comes up stays invisible. A library whose first code fails gets removed.
+Answer engine optimisation for coding agents is whether an agent picks your library when a developer asks it to build something.
 
-## The stack is already in the prompt
+Developers rarely name a library in their prompt. They ask for a feature, a fix, or a system design, and the agent chooses the dependency, runs `npm install`, and writes the code. If the agent never reaches for your package, developers never see it. If the agent installs your package but writes broken code on the first pass, the developer tells the agent to rip it out and use an alternative.
 
-A coding agent reads the repo before it answers: the manifest (`package.json`,
-`pyproject.toml`, `go.mod`), the directory layout and the code around the change. A Next.js app
-with a Vercel config has already told it the framework and the host. Developers type a build
-command or an architecture question, and the agent installs what it needs. Constraints that live
-in the repo are part of the request before anyone types them.
+## The codebase is part of the prompt
 
-## Six kinds of prompt
+Coding agents read the repository before they answer. They inspect `package.json`, `pyproject.toml`, `go.mod`, config files, and existing imports. A Next.js repository with a `vercel.json` file has already told the agent the framework and the deployment target before the developer types a word.
 
-Each kind is a moment in how a developer ends up on a library.
+Because the stack is injected automatically, a library can lose broad prompts and still win whenever a repository's runtime or infrastructure rules out the default choice.
 
-### Discovery
+## Six prompts that decide whether your tool gets used
 
-A broad request that names no library: "Add authentication to this app." "Set up end-to-end
-testing for this repo." "What should I use for validation here?" This is whether the library is
-the agent's default for that category, when nothing else steers the choice.
+This skill generates a [reeval](https://github.com/invertase/reeval) suite across the six moments where a coding agent chooses, vets, or implements a developer tool.
 
-### Compound-job
+### 1. Discovery (Default stack selection)
 
-A task plus one technical constraint, typed by the developer or already in the repo. "Add a rate
-limiter that works on Cloudflare Workers without running Redis." "Set up background jobs for
-this Next.js App Router project on Vercel." "Recommend an ORM that supports Turso and starts
-with no cold start." A library that is not the category default can still win when the
-constraint rules the default out.
+Broad requests where the developer asks to build a feature without naming a library.
 
-### Validation
+- *"Add authentication to this app."*
+- *"Set up end-to-end testing for this repo."*
+- *"What should I use for validation here?"*
 
-A check, before anything is installed, that a named tool can do the job. "Does this auth
-provider support custom SAML on the pro plan, or do we need another?" "Can this email API parse
-inbound mail with attachments?" "Does this product's Node SDK run at the edge?" This is whether
-the agent knows a real capability. A wrong "no" sends the developer elsewhere. A wrong "yes"
-fails later.
+**What it measures:** Whether your library is the agent's default choice for its category when no constraints are given.
 
-### Competitor
+### 2. Compound-job (Stack-constrained selection)
 
-A choice between two named dependencies for this codebase, or a question about migrating. "Look
-at our schema: Drizzle or Prisma? Pick one." "Is it worth replacing Axios with Ky or fetch
-here?" "Pinecone or pgvector for this Postgres setup?" The agent weighs bundle size, type
-safety, latency and developer experience against the files it can see.
+A core engineering task paired with a runtime, hosting, or infrastructure constraint, either typed in the prompt or read from the repo's config files.
 
-### Market perception
+- *"Add a rate limiter that works on Cloudflare Workers without managing Redis."*
+- *"Set up background jobs for this Next.js App Router project on Vercel."*
+- *"Recommend an ORM that supports Turso with zero cold-start overhead."*
 
-An architecture question asked before any vendor is named. "How should I architect feature flags
-and A/B tests for a low-latency API?" "What's the best pattern for webhook retries and
-idempotency in Go?" "What should I look for in state management for a large React Native app?"
-This is whether the pattern the agent recommends is the one your product implements. When it is,
-the developer arrives at your category already convinced.
+**What it measures:** Technical fit. Even if an incumbent wins broad discovery prompts, smaller tools win when constraints rule the default out.
 
-### Accuracy
+### 3. Validation (Capability checks)
 
-The library is already chosen, and the agent has to write working, current code. "Write a
-webhook handler with the Stripe Node SDK that verifies signatures." "Configure Tailwind v4 in
-this Vite project." "Fix this deprecation in our LangChain retrieval pipeline." This catches
-deprecated methods and invented flags. Broken first-pass code is what makes a developer remove
-the library.
+Questions asked in planning mode where the developer checks whether a named tool supports a requirement before installing it.
+
+- *"Does Clerk support custom SAML connections on the pro plan, or do we need WorkOS?"*
+- *"Can Resend parse inbound emails with attachments?"*
+- *"Does the PostHog Node SDK run in an edge runtime?"*
+
+**What it measures:** Whether the agent knows what your tool actually supports. A false "no" sends the developer to a competitor; a false "yes" breaks during implementation.
+
+### 4. Competitor (Head-to-head trade-offs and migrations)
+
+Prompts asking the agent to pick one dependency over another for the current codebase, or whether to migrate.
+
+- *"Look at our database schema—should we use Drizzle or Prisma here? Pick one."*
+- *"Is it worth replacing Axios with Ky or native fetch in this repo?"*
+- *"Compare Pinecone and pgvector for our Postgres setup and implement the better fit."*
+
+**What it measures:** Which tool wins when the agent weighs bundle size, type safety, latency, and ergonomics against real project files.
+
+### 5. Market perception (System design and criteria)
+
+Architecture questions asked before any vendor or package is named.
+
+- *"How should I architect feature flags and A/B testing for a low-latency API?"*
+- *"What's the best pattern for webhook retries and idempotency in Go?"*
+- *"What should I look for in a state management library for a large React Native app?"*
+
+**What it measures:** Whether the architectural pattern the agent recommends leads naturally to how your product works.
+
+### 6. Accuracy (Working syntax and version freshness)
+
+Implementation and debugging prompts where your tool is already chosen and the agent has to write working code against the current version.
+
+- *"Write a webhook handler using the Stripe Node SDK to verify signatures."*
+- *"Configure Tailwind v4 in this Vite project."*
+- *"Fix this deprecation error in our LangChain retrieval pipeline."*
+
+**What it measures:** Whether the agent writes working, current code without inventing flags or calling deprecated methods from older training data.
+
+## Usage
+
+Install the skill and ask your coding agent to build a discoverability suite for your package:
+
+```bash
+npx skills add invertase/reeval --skill tool-discoverability-evals
+```
+
+The skill guides the agent to create `evals/discoverability/` with a factual `reference.md` and on-demand evaluation templates (`discovery.eval.ts`, `accuracy.eval.ts`, and others) ready to run with `npx reeval run`.
