@@ -40,6 +40,15 @@ export type ShapeSchema = {
 // biome-ignore lint/suspicious/noExplicitAny: the unstable API's classes aren't worth importing
 type Any = any
 
+/**
+ * Types whose JSON shape is another type's: an at-least-one-input rule that only the compiler and
+ * the Zod refinement hold, which a JSON Schema object can't say without listing every variant.
+ */
+const SHAPE_OF: Record<string, string> = {
+  Question: 'QuestionFields',
+  JudgeCallOptions: 'JudgeCallFields',
+}
+
 const canonical = (s: Schema) => JSON.stringify(s)
 const byCanonical = (a: Schema, b: Schema) => canonical(a).localeCompare(canonical(b))
 
@@ -50,10 +59,18 @@ class Generator {
 
   readonly checker: Any
   readonly srcDir: string
+  readonly typeNamed: (name: string) => Any
 
-  constructor(checker: Any, srcDir: string) {
+  constructor(checker: Any, srcDir: string, typeNamed: (name: string) => Any) {
     this.checker = checker
     this.srcDir = srcDir
+    this.typeNamed = typeNamed
+  }
+
+  /** The type whose properties `symbol`'s def lists: its own, or its `SHAPE_OF` type's. */
+  #shapeOf(symbol: Any, type: Any): Any {
+    const other = SHAPE_OF[symbol.name]
+    return other ? this.checker.getDeclaredTypeOfSymbol(this.typeNamed(other)) : type
   }
 
   /** A symbol's TSDoc comment on one line, for `description`. */
@@ -80,7 +97,7 @@ class Generator {
   /** A type alias's or interface's own def, even where `schema` would inline it (a union alias). */
   def(symbol: Any): Schema {
     const description = this.#doc(symbol)
-    const inline = this.#inline(this.checker.getDeclaredTypeOfSymbol(symbol))
+    const inline = this.#inline(this.#shapeOf(symbol, this.checker.getDeclaredTypeOfSymbol(symbol)))
     return description ? { description, ...inline } : inline
   }
 
@@ -98,7 +115,8 @@ class Generator {
       this.#named.set(type.id, key)
       this.defs.set(key, {})
       const description = this.#doc(symbol)
-      this.defs.set(key, description ? { description, ...this.#inline(type) } : this.#inline(type))
+      const inline = this.#inline(this.#shapeOf(symbol, type))
+      this.defs.set(key, description ? { description, ...inline } : inline)
     }
     return { $ref: `#/$defs/${key}` }
   }
@@ -176,6 +194,12 @@ type Project = {
   exported: (file: string, name: string) => Any
 }
 
+const typeNamedIn = (project: Project) => (name: string) => {
+  const symbol = project.exported('src/types.ts', name)
+  if (!symbol) throw new Error(`src/types.ts doesn't export ${name}`)
+  return symbol
+}
+
 /** Runs `use` on packages/reeval's program, through TypeScript's API. */
 function withProject<T>(use: (project: Project) => T): T {
   const api = new API({ cwd: PACKAGE_DIR })
@@ -211,7 +235,7 @@ export function generate(
     for (const shape of shapes) {
       const symbol = exported(shape.file, shape.type)
       if (!symbol) throw new Error(`${shape.file} doesn't export ${shape.type}`)
-      const gen = new Generator(checker, srcDir)
+      const gen = new Generator(checker, srcDir, typeNamedIn(project))
       const root = gen.schema(checker.getDeclaredTypeOfSymbol(symbol))
       const plan = !SHAPES.includes(shape as PersistedShape)
       if (plan) for (const name of gen.defs.keys()) typed.add(name)
@@ -245,7 +269,7 @@ export function generate(
 const DOC_TYPE_FILES = ['src/types.ts', 'src/declaration.ts']
 
 function typeDefsIn(project: Project, types: Record<string, string>): Record<string, Schema> {
-  const gen = new Generator(project.checker, project.srcDir)
+  const gen = new Generator(project.checker, project.srcDir, typeNamedIn(project))
   return Object.fromEntries(
     Object.entries(types).map(([key, type]) => {
       const symbol = DOC_TYPE_FILES.map((file) => project.exported(file, type)).find(Boolean)

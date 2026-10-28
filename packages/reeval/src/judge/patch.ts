@@ -56,7 +56,7 @@ export type JudgeDiffOptions = {
  * The diff text and changed files the judge can actually grade. Source files are kept whole;
  * dependencies, build output, lockfiles, binaries, source maps, build info and minified files are
  * each replaced by a marker naming them (a directory by one marker with its file count), and paths
- * `patterns` (`state.diff`'s) leave out are gone. `git apply` skips the marker lines.
+ * `patterns` (`diff`'s) leave out are gone. `git apply` skips the marker lines.
  */
 export function judgeDiff(
   diff: { patch: string; files: Array<{ path: string; status: string }> },
@@ -65,7 +65,8 @@ export function judgeDiff(
   const included = patterns?.length ? globFilter(patterns) : () => true
   const dropped: string[] = []
   const files = diff.files.filter((f) => included(f.path))
-  for (const f of diff.files) if (!included(f.path)) dropped.push(`${f.path}: not in state.diff`)
+  for (const f of diff.files)
+    if (!included(f.path)) dropped.push(`${f.path}: not in diff's patterns`)
   const deps = collapse(files, (f) => f.path, DEPENDENCY_DIR)
   const built = collapse(deps.kept, (f) => f.path, BUILD_DIR)
   const fileLines = [

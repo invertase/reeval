@@ -5,7 +5,12 @@
       "name": "asked of each attempt",
       "mode": "run",
       "options": {
-        "questions": ["How did the agent find the failing test?"]
+        "questions": [
+          {
+            "question": "How did the agent find the failing test?",
+            "transcript": true
+          }
+        ]
       },
       "body": "b1",
       "source": {
@@ -24,7 +29,8 @@
         "questions": [
           {
             "question": "Did the agent run the tests first?",
-            "choices": ["yes", "no"]
+            "choices": ["yes", "no"],
+            "transcript": "tools"
           }
         ]
       },
@@ -79,10 +85,14 @@
           ]
         },
         "questions": [
-          "What did the agent read first?",
+          {
+            "question": "What did the agent read first?",
+            "transcript": "tools"
+          },
           {
             "question": "Which is cleaner?",
-            "across": "environment"
+            "across": "environment",
+            "diff": true
           }
         ]
       },
@@ -99,7 +109,8 @@
         "questions": [
           {
             "question": "Which agent explained its change better?",
-            "across": "harness"
+            "across": "harness",
+            "diff": true
           }
         ]
       },

@@ -104,7 +104,9 @@ The failure message names the exit code and ends with the last 20 lines of `stde
 `toPass()` passes when the judge's `verdict` is `'pass'`. The subject is the verdict `c.judge()` returns.
 
 ```ts
-    const verdict = await c.judge('Does the test cover a missing user?')
+    const verdict = await c.judge('Does the test cover a missing user?', {
+      diff: true,
+    })
     expect(verdict).toPass()
 ```
 

@@ -10,6 +10,7 @@ evaluate('summarizes the orders', { environment: orders }, async (c) => {
   expect(run.exitCode).toBe(0)
   const verdict = await c.judge('Does it say there are 3 orders totaling 50?', {
     on: run.stdout,
+    output: true,
   })
   expect(verdict).toPass()
 })

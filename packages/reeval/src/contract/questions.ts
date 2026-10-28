@@ -2,7 +2,8 @@
 // what it's shown of each attempt, and the cascading `question` defaults.
 import { z } from 'zod'
 import { isObjectLike } from '../object.ts'
-import type { PairFactor, Question, QuestionOptions, QuestionStateOptions } from '../types.ts'
+import type { PairFactor, QuestionFields, QuestionInputs, QuestionOptions } from '../types.ts'
+import { inputsOn, orList, sharedInputFields, turnsSchema } from './judge.ts'
 import { type Assert, closest, nonEmpty, type Same } from './shared.ts'
 
 export const pairFactorSchema = z.enum(['environment', 'harness'])
@@ -10,17 +11,14 @@ export const pairFactorSchema = z.enum(['environment', 'harness'])
 /** Evaluation models score yes/no questions only, so they can't answer a question. */
 export const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
 
-export const questionStateSchema = z.strictObject({
-  task: z.boolean().optional(),
-  output: z.boolean().optional(),
-  files: z.boolean().optional(),
-  diff: z.union([z.boolean(), z.array(nonEmpty()).min(1)]).optional(),
-  transcript: z.union([z.boolean(), z.enum(['tools', 'full'])]).optional(),
-  turns: z.enum(['last', 'all']).optional(),
-  checks: z.union([z.boolean(), z.array(nonEmpty())]).optional(),
-})
-
 const questionArtifactsSchema = z.union([z.literal(true), z.array(nonEmpty()).min(1)])
+
+const questionInputFields = {
+  ...sharedInputFields,
+  artifacts: questionArtifactsSchema.optional(),
+}
+
+export const questionInputsSchema = z.strictObject(questionInputFields)
 
 const questionModelSchema = z
   .string()
@@ -29,9 +27,9 @@ const questionModelSchema = z
 
 export const questionOptionsSchema = z.strictObject({
   model: questionModelSchema.optional(),
-  state: questionStateSchema.optional(),
-  artifacts: questionArtifactsSchema.optional(),
 })
+
+export const QUESTION_INPUT_KEYS = Object.keys(questionInputFields) as Array<keyof QuestionInputs>
 
 /** The first item a list holds twice. */
 const twice = (items: unknown[]) => items.find((k, i) => items.indexOf(k) !== i)
@@ -47,25 +45,25 @@ const acrossSchema = z.union([
 
 const choicesSchema = z.array(nonEmpty()).min(2).superRefine(unique)
 
-const questionObjectSchema = z
+export const questionSchema = z
   .strictObject({
     question: nonEmpty(),
     model: questionModelSchema.optional(),
     across: acrossSchema.optional(),
     choices: choicesSchema.optional(),
-    state: questionStateSchema.optional(),
-    artifacts: questionArtifactsSchema.optional(),
+    turns: turnsSchema.optional(),
+    ...questionInputFields,
   })
   .superRefine((q, ctx) => {
     if (q.across !== undefined && q.choices !== undefined) {
       ctx.addIssue({ code: 'custom', path: ['choices'], message: 'with across' })
     }
+    if (!inputsOn(q, QUESTION_INPUT_KEYS).length) {
+      ctx.addIssue({ code: 'custom', message: 'no input' })
+    }
   })
 
-export const questionSchema = z.union([nonEmpty(), questionObjectSchema])
-
-const questionText = (q: unknown) =>
-  typeof q === 'string' ? q : (q as { question: string }).question
+const questionText = (q: unknown) => (q as { question: string }).question
 
 export const questionsSchema = z.array(questionSchema).superRefine((list, ctx) => {
   if (twice(list.map(questionText)) !== undefined) {
@@ -75,21 +73,21 @@ export const questionsSchema = z.array(questionSchema).superRefine((list, ctx) =
 
 export type _SameAsSchema = [
   Assert<Same<z.infer<typeof pairFactorSchema>, PairFactor>>,
-  Assert<Same<z.infer<typeof questionSchema>, Question>>,
-  Assert<Same<z.infer<typeof questionStateSchema>, QuestionStateOptions>>,
-  Assert<Same<keyof z.infer<typeof questionStateSchema>, keyof QuestionStateOptions>>,
+  Assert<Same<z.infer<typeof questionSchema>, QuestionFields>>,
+  Assert<Same<keyof z.infer<typeof questionSchema>, keyof QuestionFields>>,
+  Assert<Same<z.infer<typeof questionInputsSchema>, QuestionInputs>>,
   Assert<Same<z.infer<typeof questionOptionsSchema>, QuestionOptions>>,
 ]
 
-const QUESTION_EXAMPLE = `questions: ['How did the agent find the failing test?']`
+const QUESTION_EXAMPLE = `questions: [{ question: 'How did the agent find the failing test?', transcript: true }]`
 const ACROSS_HINT = `'environment' (vary the environment, same harness) or 'harness' (vary the harness, same environment)`
 const ACROSS_MEAN =
   ' Did you mean "across"? It is the factor a pairwise question varies: across: \'environment\'.'
-const QUESTION_KEYS = Object.keys(questionObjectSchema.shape)
-const QUESTION_SHAPE = '{ question, model?, across?, choices?, state?, artifacts? }'
-const STATE_KEYS = Object.keys(questionStateSchema.shape) as Array<keyof QuestionStateOptions>
+const QUESTION_KEYS = Object.keys(questionSchema.shape)
+const INPUTS = orList(QUESTION_INPUT_KEYS)
+const QUESTION_SHAPE = `{ question, model?, across?, choices?, turns? } with at least one of ${INPUTS}`
 
-const STATE_VALUES: Record<keyof QuestionStateOptions, string> = {
+const VALUES: Record<Exclude<keyof QuestionInputs, 'artifacts'> | 'turns', string> = {
   task: 'true or false',
   output: 'true or false',
   files: 'true or false',
@@ -108,37 +106,28 @@ const describe = (value: unknown) => {
   return JSON.stringify(value) ?? String(value)
 }
 
-/**
- * What's wrong with a question's `state` or `artifacts`, as one sentence, or undefined. `name`
- * turns a key into how the sentence names it: `question.state` on the option,
- * `questions "…" state` on an entry.
- */
-function questionPartsProblem(
+/** What's wrong with an entry's inputs and `turns`, as one sentence, or undefined. */
+function questionInputsProblem(
   value: Record<string, unknown>,
-  name: (key: string) => string,
+  at: string,
   where: string,
 ): string | undefined {
-  const { state, artifacts } = value
-  if (state !== undefined) {
-    if (!isObjectLike(state) || Array.isArray(state)) {
-      return `${name('state')} in ${where} must be an object such as { transcript: 'tools' } (got ${describe(state)})`
+  for (const [key, v] of Object.entries(value)) {
+    if (key === 'artifacts') {
+      if (!questionArtifactsSchema.safeParse(v).success) {
+        return `${at} artifacts in ${where} must be true or a non-empty list of capture names (got ${describe(v)})`
+      }
+      continue
     }
-    for (const [key, v] of Object.entries(state)) {
-      if (key === 'contents') {
-        return `${name('state.contents')} in ${where} can't be set: questions are asked after the attempts, when their workspaces are gone. Narrow state.diff instead.`
-      }
-      const schema = questionStateSchema.shape[key as keyof QuestionStateOptions]
-      if (!schema) {
-        const hint = closest(key, STATE_KEYS)
-        return `Unknown ${name('state')} key "${key}" in ${where}.${hint ? ` Did you mean "${hint}"?` : ''}`
-      }
-      if (!schema.safeParse(v).success) {
-        return `${name(`state.${key}`)} in ${where} must be ${STATE_VALUES[key as keyof QuestionStateOptions]} (got ${describe(v)})`
-      }
+    if (!(key in VALUES)) continue
+    const schema =
+      key === 'turns' ? turnsSchema : sharedInputFields[key as keyof typeof sharedInputFields]
+    if (!schema.safeParse(v).success) {
+      return `${at} ${key} in ${where} must be ${VALUES[key as keyof typeof VALUES]} (got ${describe(v)})`
     }
   }
-  if (artifacts !== undefined && !questionArtifactsSchema.safeParse(artifacts).success) {
-    return `${name('artifacts')} in ${where} must be true or a non-empty list of capture names (got ${describe(artifacts)})`
+  if (!inputsOn(value, QUESTION_INPUT_KEYS).length) {
+    return `${at} in ${where} shows the model nothing: turn on at least one of ${INPUTS}, e.g. { question: '…', diff: true }.`
   }
   return undefined
 }
@@ -146,16 +135,16 @@ function questionPartsProblem(
 /** What's wrong with the `question` option set in `where`, as one sentence, or undefined. */
 export function questionOptionsProblem(value: unknown, where: string): string | undefined {
   if (!isObjectLike(value) || Array.isArray(value)) {
-    return `question in ${where} is { model?, state?, artifacts? } (got ${describe(value)}), e.g. question: { model: 'google/gemini-3.8-flash' }`
+    return `question in ${where} is { model? } (got ${describe(value)}), e.g. question: { model: 'google/gemini-3.8-flash' }`
   }
   const keys = Object.keys(questionOptionsSchema.shape)
   for (const key of Object.keys(value)) {
     if (keys.includes(key)) continue
-    if (key === 'across' || key === 'choices') {
-      return `Unknown question option "${key}" in ${where}. ${key} goes on each questions entry, { question, ${key} }: it says what kind of question that entry is.`
+    if (key === 'across' || key === 'choices' || key === 'turns' || key in questionInputFields) {
+      return `Unknown question option "${key}" in ${where}. ${key} goes on each questions entry, { question, ${key} }: what a question is and what it's shown are its own.`
     }
     const hint = closest(key, keys)
-    return `Unknown question option "${key}" in ${where}.${hint ? ` Did you mean "${hint}"?` : ''} question takes model, state and artifacts.`
+    return `Unknown question option "${key}" in ${where}.${hint ? ` Did you mean "${hint}"?` : ''} question takes model.`
   }
   const { model } = value as { model?: unknown }
   if (model !== undefined && typeof model === 'string' && isEvaluationModel(model)) {
@@ -164,7 +153,7 @@ export function questionOptionsProblem(value: unknown, where: string): string | 
   if (model !== undefined && !questionModelSchema.safeParse(model).success) {
     return `question.model in ${where} is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${describe(model)})`
   }
-  return questionPartsProblem(value, (key) => `question.${key}`, where)
+  return undefined
 }
 
 /** What's wrong with an entry's `across`, or undefined. */
@@ -202,15 +191,15 @@ function choicesProblem(question: string, choices: unknown, where: string): stri
   return `${at} is a list of at least two answers, e.g. choices: ['the test', 'the code'] (got ${describe(choices)})`
 }
 
-/** One question's sentence: the union refuses it whole, so the branch it meant says why. */
+/** One question's sentence. */
 function questionProblem(item: unknown, where: string): string {
-  if (typeof item === 'string') {
-    return `questions in ${where} has an empty string. Ask something, e.g. ${QUESTION_EXAMPLE}.`
-  }
   if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-    return `questions in ${where} takes strings or ${QUESTION_SHAPE} (got ${describe(item)}), e.g. ${QUESTION_EXAMPLE}.`
+    return `questions in ${where} takes ${QUESTION_SHAPE} (got ${describe(item)}), e.g. ${QUESTION_EXAMPLE}.`
   }
   const unknown = Object.keys(item).filter((k) => !QUESTION_KEYS.includes(k))
+  if (unknown.includes('contents')) {
+    return `questions in ${where} can't set contents: questions are asked after the attempts, when their workspaces are gone. Narrow diff instead.`
+  }
   if (unknown.length) {
     const hint = unknown.some((k) => k === 'cut' || k === 'cuts') ? ACROSS_MEAN : ''
     return `questions in ${where} takes ${QUESTION_SHAPE} (got ${unknown.map((k) => `"${k}"`).join(', ')}).${hint}`
@@ -231,11 +220,7 @@ function questionProblem(item: unknown, where: string): string {
   if (across !== undefined && choices !== undefined) {
     return `questions "${text}" in ${where} sets both across and choices. choices are the answers a question asked of each attempt picks from, and across makes it pick between two attempts instead: drop choices to vote between pairs, or drop across to ask each attempt.`
   }
-  const parts = questionPartsProblem(
-    item as Record<string, unknown>,
-    (key) => `questions "${text}" ${key}`,
-    where,
-  )
+  const parts = questionInputsProblem(item as Record<string, unknown>, `questions "${text}"`, where)
   if (parts) return parts
   if (typeof model === 'string' && isEvaluationModel(model)) {
     return `questions "${text}" in ${where} names ${model}, an evaluation model: it scores yes/no questions and can't answer a question. Use a language model, e.g. 'google/gemini-3.8-flash'.`

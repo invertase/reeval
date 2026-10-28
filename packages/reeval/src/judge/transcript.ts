@@ -1,12 +1,12 @@
 import { isObjectLike } from '../object.ts'
 import { cutOutsideSecrets } from '../redact.ts'
 import { clip, formatDuration } from '../text.ts'
-import type { JudgeStateOptions, TranscriptEvent } from '../types.ts'
+import type { JudgeInputs, TranscriptEvent } from '../types.ts'
 
 /** Tool output and input beyond this many characters are clipped unless the judge sees `'full'`. */
 export const TOOL_OUTPUT_CHARS = 300
 
-type Mode = Exclude<JudgeStateOptions['transcript'], false | undefined>
+type Mode = Exclude<JudgeInputs['transcript'], false | undefined>
 
 const text = (value: unknown) =>
   typeof value === 'string' ? value : (JSON.stringify(value) ?? String(value))

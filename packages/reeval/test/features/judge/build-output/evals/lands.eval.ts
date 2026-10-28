@@ -13,7 +13,7 @@ evaluate('lands', { environment: app }, async (c) => {
       return 1
     },
   })
-  await c.judge('Did the agent write the app?', { model: look })
+  await c.judge('Did the agent write the app?', { model: look, diff: true })
   expect(diff.match(/^(?:\+export .*|\[reeval: .*\])$/gm)).toEqual([
     '[reeval: dropped dist/ (1 file): build output]',
     '[reeval: dropped public/vendor.js: minified, a line of 1616 characters]',

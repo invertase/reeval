@@ -49,9 +49,7 @@
           {
             "question": "Which agent verified its work?",
             "across": "harness",
-            "state": {
-              "transcript": "tools"
-            }
+            "transcript": "tools"
           }
         ]
       },
@@ -109,9 +107,7 @@
           {
             "question": "Which arm verified its work?",
             "across": "environment",
-            "state": {
-              "transcript": "tools"
-            }
+            "transcript": "tools"
           }
         ]
       },
@@ -125,11 +121,6 @@
       "name": "screenshots",
       "mode": "run",
       "options": {
-        "question": {
-          "state": {
-            "diff": false
-          }
-        },
         "compare": {
           "baseline": {
             "kind": "environment",
@@ -185,10 +176,18 @@
     },
     {
       "type": "eval",
-      "name": "each attempt by default",
+      "name": "each attempt with the transcript",
       "mode": "run",
       "options": {
-        "questions": ["What did the agent check before it finished?"]
+        "questions": [
+          {
+            "question": "What did the agent check before it finished?",
+            "task": true,
+            "output": true,
+            "diff": true,
+            "transcript": true
+          }
+        ]
       },
       "body": "b4",
       "source": {
@@ -203,9 +202,9 @@
         "questions": [
           {
             "question": "What did the agent say it did?",
-            "state": {
-              "transcript": false
-            }
+            "task": true,
+            "output": true,
+            "diff": true
           }
         ]
       },

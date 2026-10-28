@@ -15,5 +15,5 @@ evaluate('writes slugify', async (c) => {
   await expect
     .soft(c.exec(slugifies('  Ahoy, Ada!  ', 'ahoy--ada')), 'trims punctuation')
     .toSucceed()
-  expect(await c.judge('Is slugify short and readable?')).toPass()
+  expect(await c.judge('Is slugify short and readable?', { contents: ['src/slug.js'] })).toPass()
 })

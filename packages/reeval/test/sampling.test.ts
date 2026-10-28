@@ -72,6 +72,7 @@ describe('sampling parameters on anthropic/* models', () => {
           b: side('skilled'),
         },
       ],
+      state: { task: true, diff: true },
       maxInputTokens: 10_000,
       maxOutputTokens: 100,
     })

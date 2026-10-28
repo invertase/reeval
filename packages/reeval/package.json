@@ -69,7 +69,7 @@
   "scripts": {
     "build": "tsdown --config-loader native",
     "features:matrix": "node --experimental-strip-types --no-warnings --import ./test/support/tables-only.mjs test/support/feature-matrix.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/types",
     "schema:check": "node --experimental-strip-types --no-warnings scripts/schema/check.ts",
     "schema:update": "node --experimental-strip-types --no-warnings scripts/schema/check.ts --update",
     "sdk-types": "node --experimental-strip-types --no-warnings scripts/sdk-types.ts",

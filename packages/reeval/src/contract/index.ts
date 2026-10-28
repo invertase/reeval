@@ -56,7 +56,7 @@ import {
   opencodeHarnessSchema,
   piHarnessSchema,
 } from './harness.ts'
-import { configJudgeDataSchema, fakeJudgeDataSchema, judgeStateSchema } from './judge.ts'
+import { configJudgeDataSchema, fakeJudgeDataSchema } from './judge.ts'
 import {
   egressPolicySchema,
   envValueSchema,
@@ -74,12 +74,7 @@ import {
   skillSourceSchema,
   substituteInSchema,
 } from './plain.ts'
-import {
-  pairFactorSchema,
-  questionOptionsSchema,
-  questionSchema,
-  questionStateSchema,
-} from './questions.ts'
+import { pairFactorSchema, questionOptionsSchema, questionSchema } from './questions.ts'
 import { durationSchema, jsonValueSchema } from './shared.ts'
 
 /**
@@ -112,9 +107,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   OpenRouterGatewayDescriptor: openrouterGatewaySchema,
   VertexGatewayDescriptor: vertexGatewaySchema,
   GatewayEntryData: gatewayEntryDataSchema,
-  JudgeStateOptions: judgeStateSchema,
   Question: questionSchema,
-  QuestionStateOptions: questionStateSchema,
   QuestionOptions: questionOptionsSchema,
   PairFactor: pairFactorSchema,
   GatePolicy: gatePolicySchema,

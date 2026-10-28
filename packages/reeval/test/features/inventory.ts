@@ -157,14 +157,9 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'compare.questions.state',
     area: 'Config and selection',
-    name: "Questions' `state` and `artifacts`, and the `question` option: the model that answers and what each side shows, cascaded",
+    name: "What a question shows: only the inputs each entry turns on (task, output, files, diff, transcript, checks, artifacts), at least one, over `turns`, refused at plan time otherwise; and the `question` option's cascaded model",
     plan: ['compare/questions-state', 'compare/questions-model'],
-    fixtures: [
-      'compare/question-default',
-      'compare/question-state',
-      'compare/question-cascade',
-      'compare/question-artifacts',
-    ],
+    fixtures: ['compare/question-explicit', 'compare/question-state', 'compare/question-artifacts'],
     unit: [
       'reeval/test/results.test.ts',
       'reeval/test/compare-questions.test.ts',
@@ -1265,17 +1260,17 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'judge.scope',
     area: 'Judges and matchers',
-    name: 'What the judge is given: `judge.state` (task, output, files, diff patterns, contents by path or pattern, transcript, turns, checks) merged key by key from the config to the call; build output, source maps, build info and minified files dropped from its diff',
+    name: 'What the judge is given: only the inputs each `c.judge()` call turns on (task, output, files, diff patterns, contents by path or pattern, transcript, checks, artifacts), over `turns`; none by default, and a call that turns none on fails before any model call (a compile error in TypeScript); build output, source maps, build info and minified files dropped from its diff',
     fixtures: [
       'judge/build-output',
-      'judge/state-diff',
-      'judge/state-contents',
-      'judge/state-contents-glob',
-      'judge/state-off',
-      'judge/state-transcript',
-      'judge/state-turns',
-      'judge/state-checks',
-      'judge/state-cascade',
+      'judge/input-diff',
+      'judge/input-contents',
+      'judge/input-contents-glob',
+      'judge/inputs-explicit',
+      'judge/no-input',
+      'judge/input-transcript',
+      'judge/input-turns',
+      'judge/input-checks',
     ],
     unit: [
       'reeval/test/unit.test.ts',
@@ -1294,7 +1289,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'judge.input-size',
     area: 'Judges and matchers',
-    name: "A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `state` keys that were on, largest first; reeval sends what `state` selects, uncut",
+    name: "A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the inputs that were on, largest first; reeval sends what the call turns on, uncut",
     unit: [
       'reeval/test/unit.test.ts',
       'reeval/test/judge-state.test.ts',

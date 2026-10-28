@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { commandSummary } from '../cli-spec.ts'
 import { headToHeadLines, pairTallies, sampleReasons, splitsLabel } from '../compare/pairs.ts'
-import { DEFAULT_QUESTION_STATE, questionShows } from '../compare/state.ts'
+import { questionShows, UNRECORDED_QUESTION_STATE } from '../compare/state.ts'
 import type { HistoryDb } from '../history/db.ts'
 import { FLAKY_MIN_ATTEMPTS } from '../history/facts.ts'
 import { TOOL_CLASSES } from '../history/tool-class.ts'
@@ -885,7 +885,7 @@ export async function buildDigestKeepingDropped(
           eval: tagOf(e.key),
           question: clip(a.question, 120),
           model: a.resolvedModel ?? a.model,
-          shows: questionShows(a.stateOptions ?? DEFAULT_QUESTION_STATE, a.artifacts),
+          shows: questionShows(a.stateOptions ?? UNRECORDED_QUESTION_STATE, a.artifacts),
           votes: a.votes.length,
           ties,
           ...(a.rates.length

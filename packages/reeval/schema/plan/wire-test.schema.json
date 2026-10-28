@@ -1316,7 +1316,7 @@
       "required": ["auto", "policy"]
     },
     "PlannedQuestion": {
-      "description": "A question as planned: its text, the model it names itself, if any, the factors it varies when it's pairwise, its choices, and what it's shown of each attempt, cascaded, when set.",
+      "description": "A question as planned: its text, the model it names itself, if any, the factors it varies when it's pairwise, its choices, and the inputs it's shown of each attempt.",
       "type": "object",
       "properties": {
         "across": {
@@ -1363,10 +1363,11 @@
           "type": "string"
         },
         "state": {
+          "description": "The inputs it turns on, besides `artifacts`.",
           "$ref": "#/$defs/QuestionStateOptions"
         }
       },
-      "required": ["n", "question"]
+      "required": ["n", "question", "state"]
     },
     "PluginMarketplace": {
       "description": "A Claude Code marketplace: the source that holds its `.claude-plugin/marketplace.json`.",
@@ -1748,71 +1749,66 @@
       ]
     },
     "QuestionStateOptions": {
-      "description": "What a question is shown of each attempt: the keys of `judge.state` but `contents` (the attempts' workspaces are gone when questions are asked). An unset key keeps its default: a pairwise question shows the task and the diff; one asked of each attempt also shows the final message and the transcript.",
+      "description": "A planned question's inputs but `artifacts`, and `turns`: what `compare` resolves.",
       "type": "object",
       "properties": {
         "checks": {
-          "description": "`c.exec` results; a list shows only those commands, as passed to `c.exec`. Default false.",
+          "description": "`c.exec` results; a list shows only those commands, as passed to `c.exec`.",
           "anyOf": [
-            {
-              "type": "boolean"
-            },
             {
               "type": "array",
               "items": {
-                "type": "string",
-                "pattern": "\\S"
+                "type": "string"
               }
+            },
+            {
+              "type": "boolean"
             }
           ]
         },
         "diff": {
-          "description": "The diff since the eval started. A list is gitignore-style patterns over workspace paths: the last matching pattern wins and `!` excludes. Default true.",
+          "description": "The diff since the eval started. A list is gitignore-style patterns over workspace paths: the last matching pattern wins and `!` excludes.",
           "anyOf": [
             {
-              "type": "boolean"
-            },
-            {
-              "minItems": 1,
               "type": "array",
               "items": {
-                "type": "string",
-                "pattern": "\\S"
+                "type": "string"
               }
+            },
+            {
+              "type": "boolean"
             }
           ]
         },
         "files": {
-          "description": "`status path` lines for the changed files, under `diff`'s patterns. Default false.",
+          "description": "`status path` lines for the changed files, under `diff`'s patterns.",
           "type": "boolean"
         },
         "output": {
-          "description": "The final message: the agent's own account of its work. Default false in a pair, true per attempt.",
+          "description": "The final message: the agent's own account of its work.",
           "type": "boolean"
         },
         "task": {
-          "description": "The prompts the attempt was sent, once for both sides when they match. Default true.",
+          "description": "The prompts the attempt was sent, once for both sides when they match.",
           "type": "boolean"
         },
         "transcript": {
-          "description": "The transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses isn't blind. Default false in a pair, true per attempt.",
+          "description": "The transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses isn't blind.",
           "anyOf": [
             {
-              "type": "boolean"
+              "enum": ["full", "tools"]
             },
             {
-              "type": "string",
-              "enum": ["tools", "full"]
+              "type": "boolean"
             }
           ]
         },
         "turns": {
           "description": "`'all'`: every turn under `turns`, each with its task, output and (with `transcript`) transcript; `'last'`: the last turn only. Default `'all'`.",
-          "type": "string",
-          "enum": ["last", "all"]
+          "enum": ["all", "last"]
         }
       },
-      "additionalProperties": false
+      "required": []
     },
     "ResolvedGateway": {
       "description": "Where a cell's harness resolved in the `gateway` list, and the entries before it that couldn't serve it.",

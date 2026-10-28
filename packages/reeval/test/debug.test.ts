@@ -43,7 +43,7 @@ const env = defineEnvironment('traced', {
 evaluate('traces every phase', { environment: env }, async (c) => {
   await c.send('write out.txt')
   await expect(c.exec('test -f out.txt')).toSucceed()
-  expect(await c.judge('Did it write out.txt?')).toPass()
+  expect(await c.judge('Did it write out.txt?', { diff: true })).toPass()
 })
 `
 const failing = `import { evaluate, expect } from 'reeval'

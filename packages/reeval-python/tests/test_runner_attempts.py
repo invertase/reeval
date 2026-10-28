@@ -35,7 +35,7 @@ def soft_then_more(c):
 @evaluate("writes and judges")
 async def writes_and_judges(c):
     await c.write_file("data.bin", bytes([0, 1]))
-    await c.judge("q")
+    await c.judge("q", diff=True)
 """
 
 
@@ -79,12 +79,12 @@ def test_a_soft_failure_lets_the_body_go_on(host: Host) -> None:
     assert commands == ["false", "echo still-running"]
 
 
-def test_bytes_go_as_base64_and_a_judge_without_options_sends_none(host: Host) -> None:
+def test_bytes_go_as_base64_and_a_judge_sends_its_inputs(host: Host) -> None:
     host.start("writes and judges")
     assert "error" not in host.done()
     assert host.calls() == [
         {"op": "writeFile", "path": "data.bin", "contents": "AAE=", "encoding": "base64"},
-        {"op": "judge", "question": "q"},
+        {"op": "judge", "question": "q", "options": {"diff": True}},
     ]
 
 

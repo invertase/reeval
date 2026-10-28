@@ -294,7 +294,7 @@ export default defineConfig({
 import { traced } from './trace.ts'
 evaluate('a', { runs: 5 }, async (c) => {
   await traced(\`a#\${c.attempt.n}\`, () => c.send('go'))
-  expect(await c.judge('ok?')).toPass()
+  expect(await c.judge('ok?', { diff: true })).toPass()
 })
 `,
     })

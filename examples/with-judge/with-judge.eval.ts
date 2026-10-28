@@ -13,6 +13,7 @@ evaluate('adds divide with a helpful error', { environment: math }, async (c) =>
   await expect(c.exec('node --test')).toSucceed()
   const verdict = await c.judge(
     'Would the error divide throws when b is 0 tell a caller what they did wrong?',
+    { diff: true },
   )
   expect(verdict).toPass()
 })

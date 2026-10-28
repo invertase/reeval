@@ -103,4 +103,5 @@ export const e2eNewlineAnswer = (): Promise<CompareAnswer> =>
     pairs: pairsOf(e2ePairSides()),
     maxInputTokens: 20_000,
     maxOutputTokens: 100,
+    state: { task: true, diff: true },
   })

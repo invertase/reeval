@@ -12,6 +12,6 @@ evaluate('canary', { environment: app }, async (c) => {
       return 1
     },
   })
-  await c.judge('Did the agent write the app?', { model: look })
+  await c.judge('Did the agent write the app?', { model: look, diff: true })
   expect(diff).toContain('var bundle')
 })

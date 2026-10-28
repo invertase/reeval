@@ -1,13 +1,13 @@
 profile one (--profile) · 4 evals · 5 cells · 12 attempts
 hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
 evals/questions-attempts.eval.ts › asked of each attempt               a/-/docker        control          gated               ×1  harnesses 2 → 1 (profile one)
-                                                                       question: How did the agent find the failing test? · shows task, output, diff, transcript · each attempt · 1 attempt · no language model
+                                                                       question: How did the agent find the failing test? · shows transcript · each attempt · 1 attempt · no language model
 evals/questions-attempts.eval.ts › with choices                        a/-/docker        control          gated passRate 0.5  ×2  harnesses 2 → 1 (profile one)
-                                                                       question: Did the agent run the tests first? · shows task, output, diff, transcript · each attempt · 2 attempts · yes / no · no language model
+                                                                       question: Did the agent run the tests first? · shows transcript · each attempt · 2 attempts · yes / no · no language model
 evals/questions-attempts.eval.ts › beside a compare                    a/base/docker     control          ungated             ×4  harnesses 2 → 1 (profile one) · runs 4 (compare default)
                                                                        a/skilled/docker  variant skilled  gated               ×4
-                                                                       question: What did the agent read first? · shows task, output, diff, transcript · each attempt · 8 attempts · no language model
-                                                                       question: Which is cleaner? · shows task, diff · environment · 4 pairs · no language model
+                                                                       question: What did the agent read first? · shows transcript · each attempt · 8 attempts · no language model
+                                                                       question: Which is cleaner? · shows diff · environment · 4 pairs · no language model
 evals/questions-attempts.eval.ts › across harnesses without a compare  a/-/docker        control          gated               ×1  harnesses 2 → 1 (profile one) · 1 pairwise question off (profile one)
 excluded: —
 image docker · cursor · 4 evals

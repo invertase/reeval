@@ -28,7 +28,7 @@ export type PairAttempt = {
   run: number
   /** The workspace changes, as a unified diff; empty when the agent changed nothing. */
   diff: string
-  /** The changed files, for `state.files`; unset where only the patch is known. */
+  /** The changed files, for `files`; unset where only the patch is known. */
   files?: FileChange[]
   /** Passed, or failed only on a judge: its deterministic checks held. */
   checksPassed: boolean

@@ -12,5 +12,5 @@ evaluate('follows the handler conventions', { environment: notes }, async (c) =>
   await expect(c.exec('node --test')).toSucceed()
   const question = 'Does deleteNote, and its tests, follow every rule in docs/conventions.md?'
   const contents = ['src/notes.js', 'test/notes.test.js', 'docs/**']
-  expect(await c.judge(question, { state: { contents } })).toPass()
+  expect(await c.judge(question, { contents })).toPass()
 })

@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { pairFactors } from './compare/pairs.ts'
-import { mergeQuestion, showsNothing, withQuestionDefaults } from './compare/state.ts'
+import { mergeQuestion, withQuestionDefaults } from './compare/state.ts'
 import { compareProblem } from './contract/compare.ts'
 import { sandboxProblem } from './contract/docker.ts'
 import { harnessProblem } from './contract/harness.ts'
@@ -68,6 +68,7 @@ import type {
   PlannedQuestion,
   Question,
   QuestionOptions,
+  QuestionStateOptions,
   ResolvedProfile,
   Revision,
   SandboxDescriptor,
@@ -512,19 +513,21 @@ export type NormalizedCompare = {
 }
 
 const plannedQuestions = (value: Question[]): PlannedQuestion[] =>
-  value.map((q, i) =>
-    typeof q === 'string'
-      ? { n: i + 1, question: q }
-      : {
-          n: i + 1,
-          question: q.question,
-          ...(q.model !== undefined ? { model: q.model } : {}),
-          ...(q.across !== undefined ? { across: q.across } : {}),
-          ...(q.choices ? { choices: q.choices } : {}),
-          ...(q.state ? { state: q.state } : {}),
-          ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
-        },
-  )
+  value.map((q, i) => {
+    const { question, model, across, choices, artifacts, ...rest } = q
+    const state = Object.fromEntries(
+      Object.entries(rest).filter(([, v]) => v !== undefined),
+    ) as QuestionStateOptions
+    return {
+      n: i + 1,
+      question,
+      ...(model !== undefined ? { model } : {}),
+      ...(across !== undefined ? { across } : {}),
+      ...(choices ? { choices } : {}),
+      state,
+      ...(artifacts !== undefined ? { artifacts } : {}),
+    }
+  })
 
 /** Whether the eval's matrix varies each factor a pairwise question can vary. */
 const variesBy = (r: Pick<Resolved, 'compare' | 'harness'>): Record<PairFactor, boolean> => ({
@@ -680,12 +683,6 @@ export function cascade(
   }
   if (out.questions.length) {
     out.questions = out.questions.map((q) => withQuestionDefaults(q, out.question))
-    const blank = out.questions.find(showsNothing)
-    if (blank) {
-      throw new UsageError(
-        `questions "${blank.question}" in ${where} shows the model nothing: every state key is off and it sends no artifacts. Turn on a state key, such as state: { diff: true }, or send artifacts.`,
-      )
-    }
   }
   checkUnique(out.harness, where)
   // A harness list only a profile's defaults set may narrow the config's, which drops a question
@@ -1234,7 +1231,7 @@ function questionWarnings(resolved: Resolved): string[] {
     .filter((q) => pairFactors(q.across).includes('harness') && q.state?.transcript)
     .map(
       (q) =>
-        `question "${q.question}" shows state.transcript, which names each harness's tools, so its harness pairs aren't blind. Ask it with across: 'environment', or leave the transcript out.`,
+        `question "${q.question}" shows the transcript, which names each harness's tools, so its harness pairs aren't blind. Ask it with across: 'environment', or leave the transcript out.`,
     )
 }
 

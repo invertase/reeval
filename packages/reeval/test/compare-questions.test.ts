@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { DEFAULT_ATTEMPT_QUESTION_STATE, DEFAULT_QUESTION_STATE } from '../src/compare/state.ts'
+import { resolveQuestionState } from '../src/compare/state.ts'
 import type { QuestionCall } from '../src/types.ts'
 import { fakeConfig, noSignals, project, readRun, runCli } from './helpers.ts'
 
@@ -25,7 +25,7 @@ evaluate('asks', { runs: 1, compare: { baseline: base, variants: [skilled] }, qu
 })
 `,
   })
-  const PAIRWISE = `[{ question: 'Which is cleaner?', across: 'environment' }]`
+  const PAIRWISE = `[{ question: 'Which is cleaner?', across: 'environment', task: true, diff: true }]`
   const OK = `fakeHarness({ files: { 'ok.txt': 'yes' } })`
   const noKeys = {
     ANTHROPIC_API_KEY: '',
@@ -118,8 +118,8 @@ evaluate('asks', { runs: 1, compare: { baseline: base, variants: [skilled] }, qu
       'evals/q.eval.ts': `import { evaluate } from 'reeval'
 import { base, skilled } from './envs.ts'
 const compare = { baseline: base, variants: [skilled] }
-evaluate('own model', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment', model: 'anthropic/claude-sonnet-5' }] }, async () => {})
-evaluate('cascade', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment' }, { question: 'Which is shorter?', across: 'environment', model: 'openai/gpt-5.5' }] }, async () => {})
+evaluate('own model', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment', task: true, diff: true, model: 'anthropic/claude-sonnet-5' }] }, async () => {})
+evaluate('cascade', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment', task: true, diff: true }, { question: 'Which is shorter?', across: 'environment', task: true, diff: true, model: 'openai/gpt-5.5' }] }, async () => {})
 `,
     })
     const dry = await runCli(p.dir, ['run', '--dry-run', '--json'], { env: noKeys })
@@ -202,9 +202,9 @@ const body = async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 }
-evaluate('two questions', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment' }, { question: 'Which is shorter?', across: 'environment' }] }, body)
-evaluate('reasons', { runs: 1, compare, questions: [{ question: 'Which reads better?', across: 'environment' }] }, body)
-evaluate('three arms', { compare: { baseline: none, variants: [current, next], gate: 'none' }, questions: [{ question: 'Which delivers a better user experience?', across: 'environment' }], runs: 3 }, body)
+evaluate('two questions', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment', task: true, diff: true }, { question: 'Which is shorter?', across: 'environment', task: true, diff: true }] }, body)
+evaluate('reasons', { runs: 1, compare, questions: [{ question: 'Which reads better?', across: 'environment', task: true, diff: true }] }, body)
+evaluate('three arms', { compare: { baseline: none, variants: [current, next], gate: 'none' }, questions: [{ question: 'Which delivers a better user experience?', across: 'environment', task: true, diff: true }], runs: 3 }, body)
 `,
     })
     const dry = await runCli(p.dir, ['run', '--dry-run'])
@@ -328,7 +328,7 @@ const body = async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 }
-evaluate('asks', { compare, questions: [{ question: 'Which is cleaner?', across: ['environment', 'harness'] }] }, body)
+evaluate('asks', { compare, questions: [{ question: 'Which is cleaner?', across: ['environment', 'harness'], task: true, diff: true }] }, body)
 evaluate('plain', { compare }, body)
 `,
       'evals/pairs.eval.ts': `import { evaluate, expect } from 'reeval'
@@ -336,15 +336,15 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
 import { base, skilled } from './envs.ts'
 const compare = { baseline: base, variants: [skilled] }
-evaluate('across environment', { compare, questions: [{ question: 'Which is tidier?', across: 'environment' }] }, async (c) => {
+evaluate('across environment', { compare, questions: [{ question: 'Which is tidier?', across: 'environment', task: true, diff: true }] }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
 for (const judged of [false, true]) {
-  const options = { compare, harness: fakeHarness({ files: { 'ok.txt': 'yes' } }), runs: 1, judge: { model: fakeJudge({ score: 0.2 }) }, questions: [{ question: 'Which is neater?', across: 'environment' }] }
+  const options = { compare, harness: fakeHarness({ files: { 'ok.txt': 'yes' } }), runs: 1, judge: { model: fakeJudge({ score: 0.2 }) }, questions: [{ question: 'Which is neater?', across: 'environment', task: true, diff: true }] }
   evaluate(judged ? 'failed checks, judged' : 'failed checks', options, async (c) => {
     await c.send('go')
-    if (judged) await c.judge('Is it nice?')
+    if (judged) await c.judge('Is it nice?', { diff: true })
     await expect(c.exec('exit 1'), 'tests pass').toSucceed()
   })
 }
@@ -357,10 +357,10 @@ const body = async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 }
-evaluate('choices', { compare, questions: [{ question: 'Did it write ok.txt?', choices: ['yes', 'no'] }] }, body)
-evaluate('free text', { compare, questions: ['What did it write?'] }, body)
-evaluate('unrun command', { compare, questions: [{ question: 'What did it run?', state: { checks: ['npm tset'] } }] }, body)
-const one = { harness: fakeHarness({ files: { 'ok.txt': 'yes' } }), runs: 1, questions: ['What did it do?'] }
+evaluate('choices', { compare, questions: [{ question: 'Did it write ok.txt?', choices: ['yes', 'no'], task: true, output: true, diff: true, transcript: true }] }, body)
+evaluate('free text', { compare, questions: [{ question: 'What did it write?', task: true, output: true, diff: true, transcript: true }] }, body)
+evaluate('unrun command', { compare, questions: [{ question: 'What did it run?', checks: ['npm tset'] }] }, body)
+const one = { harness: fakeHarness({ files: { 'ok.txt': 'yes' } }), runs: 1, questions: [{ question: 'What did it do?', task: true, output: true, diff: true, transcript: true }] }
 evaluate('passes', one, async (c) => {
   await c.send('go')
 })
@@ -477,7 +477,10 @@ evaluate('broken agent', { ...one, harness: fakeHarness({ failWith: 'agent CLI f
       assert.equal(choice, harness === 'bad' ? 'no' : 'yes', `${harness} answered ${choice}`)
     }
     const [first] = chose.attempts[0]?.answers ?? []
-    assert.deepEqual(first?.stateOptions, DEFAULT_ATTEMPT_QUESTION_STATE)
+    assert.deepEqual(
+      first?.stateOptions,
+      resolveQuestionState({ task: true, output: true, diff: true, transcript: true }),
+    )
     assert.equal(first?.text, 'read the diff')
     assert.match(first?.input?.path ?? '', /\/1\/questions\/1\.json$/)
     assert.equal(
@@ -522,8 +525,7 @@ evaluate('broken agent', { ...one, harness: fakeHarness({ failWith: 'agent CLI f
     assert.match(r.stdout, /^ {2}question {2}What did it write\?\n {4}\S+ +saw (ok|no)\.txt$/m)
 
     // A per-attempt question naming a command no attempt ran is warned about once.
-    const unrun =
-      'question "What did it run?" state.checks names a command no attempt ran: "npm tset"'
+    const unrun = 'question "What did it run?" checks names a command no attempt ran: "npm tset"'
     assert.deepEqual(
       r.stdout.split('\n').filter((l) => l.includes('names a command no attempt ran')),
       [
@@ -589,7 +591,7 @@ const body = async (c) => {
   await expect(c).toHaveFile('ok.txt')
 }
 evaluate('asks', { runs: 1, compare, questions: ${PAIRWISE} }, body)
-evaluate('describes', { runs: 1, compare, questions: ['What did it write?'] }, body)
+evaluate('describes', { runs: 1, compare, questions: [{ question: 'What did it write?', task: true, output: true, diff: true, transcript: true }] }, body)
 `,
     })
     const r = await runCli(p.dir)
@@ -609,7 +611,7 @@ evaluate('describes', { runs: 1, compare, questions: ['What did it write?'] }, b
     assert.deepEqual(answer, {
       question: 'Which is cleaner?',
       model: 'fake',
-      stateOptions: DEFAULT_QUESTION_STATE,
+      stateOptions: resolveQuestionState({ task: true, diff: true }),
       votes: [],
       rates: [],
       error: 'the model is over quota',
@@ -648,7 +650,7 @@ evaluate('describes', { runs: 1, compare, questions: ['What did it write?'] }, b
       const p = await project('questions-sigint', {
         'reeval.config.ts': fakeConfig({ harness: `{ files: { 'ok.txt': 'yes' } }` }),
         ...asks(
-          `[{ question: 'Which is cleaner?', across: 'environment', model: 'openai/gpt-5.6-luna' }, { question: 'What did it write?', model: 'openai/gpt-5.6-luna' }]`,
+          `[{ question: 'Which is cleaner?', across: 'environment', task: true, diff: true, model: 'openai/gpt-5.6-luna' }, { question: 'What did it write?', transcript: true, model: 'openai/gpt-5.6-luna' }]`,
         ),
       })
       let poll: ReturnType<typeof setInterval> | undefined

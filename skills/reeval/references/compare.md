@@ -83,7 +83,7 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   After a run, `reeval query "SELECT eval_key, label, verdict FROM check_discrimination WHERE verdict
   LIKE 'both-%'"` and rework or drop those checks: they measure nothing about the variant.
   Changing a label changes the eval's fingerprint. Label judges too
-  (`expect.soft(await c.judge(q), 'Social OAuth').toPass()`): the label replaces the clipped
+  (`expect.soft(await c.judge(q, { diff: true }), 'Social OAuth').toPass()`): the label replaces the clipped
   question in judge rates, `reeval show`, `summary.md` and the digest.
 
 ## `questions`
@@ -93,10 +93,18 @@ evaluate('greets in the house style', {
   compare: { baseline: plain, variants: [houseStyle] },
   questions: [
     // asked of each attempt as it ends: free text, or a pick from choices
-    'How did the agent pick its greeting?',
-    { question: 'Does greet.js handle a missing name?', choices: ['yes', 'no'] },
+    { question: 'How did the agent pick its greeting?', transcript: true },
+    {
+      question: 'Does greet.js handle a missing name?',
+      diff: true,
+      choices: ['yes', 'no'],
+    },
     // pairwise: which side did better, after the run
-    { question: 'Which greet.js reads more like our house style?', across: 'environment' },
+    {
+      question: 'Which greet.js reads more like our house style?',
+      across: 'environment',
+      diff: true,
+    },
     {
       question: 'Which sign-in page matches the mock?',
       across: 'environment',
@@ -107,14 +115,15 @@ evaluate('greets in the house style', {
 ```
 
 - `questions` sits beside `compare`, on an eval or a group (never the config or a
-  profile), and works without a `compare` too. It's always a list of strings and
-  `{ question, across?, choices?, model?, state?, artifacts? }`. An eval's list
-  replaces its group's.
+  profile), and works without a `compare` too. It's always a list of objects:
+  `{ question, across?, choices?, model?, turns?, …inputs }`, with at least one input
+  turned on (`task`, `output`, `files`, `diff`, `transcript`, `checks`, `artifacts`;
+  no `contents`, the workspaces are gone). There are no default inputs: an entry with
+  none exits 2 at plan time. An eval's list replaces its group's.
 - **No `across`: asked of each attempt** as it ends with a pass or a fail (infra
   errors and skipped attempts aren't asked), while the run goes on. `choices`
   (two or more) makes the model pick one, with a reason; the result block prints
-  the tally (`yes 8 · no 4`), else the first few answers. It shows the task,
-  final message, diff and transcript by default. Answers land on
+  the tally (`yes 8 · no 4`), else the first few answers. Answers land on
   `evals[].attempts[].answers` and in `reeval query attempt_answers` (with the
   attempt's outcome, `harness`, `environment` and `role`, so you can split
   answers by harness, arm or pass/fail).
@@ -136,14 +145,12 @@ evaluate('greets in the house style', {
   included) when it's a language model (not `typesafe-ai/*`); with none, `reeval run` exits 2 at plan
   time while `--dry-run` still lists them. Keep deterministic checks for pass or
   fail.
-- A pair's sides show their task and diff by default. An entry's `state` takes
-  the judge's keys but `contents` (`{ diff: ['src/**'] }`,
-  `{ transcript: 'tools', checks: ['npm test'] }`); keep `output` off for pairwise
-  questions, since the more confident summary wins on wording. For UI evals,
-  `artifacts: ['sign-in']` (or `true`) sends each attempt's own capture of that
-  name as an image. The `question` option (`{ model?, state?, artifacts? }`,
-  config → profile → group → eval → entry, `state` key by key) sets defaults;
-  `judge.state` never reaches questions. A pairwise question showing
+- Each side shows only the entry's inputs (`diff: ['src/**']`,
+  `transcript: 'tools', checks: ['npm test']`); `turns` defaults to `'all'`. Keep
+  `output` off for pairwise questions, since the more confident summary wins on
+  wording. For UI evals, `artifacts: ['sign-in']` (or `true`) sends each attempt's
+  own capture of that name as an image. The `question` option takes only `model`
+  (config → profile → group → eval → entry). A pairwise question showing
   `transcript` across harnesses warns (tool names unblind them): ask it with
   `across: 'environment'`.
 - Pairwise questions are answered on the host once all of an eval's attempts

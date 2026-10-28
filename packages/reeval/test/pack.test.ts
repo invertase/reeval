@@ -54,7 +54,7 @@ async function makeApp(dir: string, pkg: string) {
     `import { evaluate, expect } from '${pkg}'
 evaluate('hello', async (c) => {
   await c.send('say hi')
-  expect(await c.judge('Did it say hi?')).toPass()
+  expect(await c.judge('Did it say hi?', { diff: true })).toPass()
 })
 `,
   )

@@ -9,7 +9,7 @@ evaluate(
       {
         question: 'Which agent verified its work?',
         across: 'harness',
-        state: { transcript: 'tools' },
+        transcript: 'tools',
       },
     ],
   },
@@ -23,7 +23,7 @@ evaluate(
       {
         question: 'Which arm verified its work?',
         across: 'environment',
-        state: { transcript: 'tools' },
+        transcript: 'tools',
       },
     ],
   },
@@ -32,7 +32,6 @@ evaluate(
 evaluate(
   'screenshots',
   {
-    question: { state: { diff: false } },
     compare: { baseline: base, variants: [skilled] },
     questions: [
       { question: 'Which page looks better?', across: 'environment', artifacts: ['landing'] },
@@ -41,12 +40,26 @@ evaluate(
   async () => {},
 )
 evaluate(
-  'each attempt by default',
-  { questions: ['What did the agent check before it finished?'] },
+  'each attempt with the transcript',
+  {
+    questions: [
+      {
+        question: 'What did the agent check before it finished?',
+        task: true,
+        output: true,
+        diff: true,
+        transcript: true,
+      },
+    ],
+  },
   async () => {},
 )
 evaluate(
   'each attempt without the transcript',
-  { questions: [{ question: 'What did the agent say it did?', state: { transcript: false } }] },
+  {
+    questions: [
+      { question: 'What did the agent say it did?', task: true, output: true, diff: true },
+    ],
+  },
   async () => {},
 )

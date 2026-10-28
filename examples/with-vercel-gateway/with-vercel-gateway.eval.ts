@@ -8,6 +8,6 @@ evaluate('adds a tested multiply function', { environment: math }, async (c) => 
 
   await expect(c).toHaveFile('src/math.js', /export function multiply/)
   await expect(c.exec('node --test')).toSucceed()
-  const verdict = await c.judge('Does the new test check multiply, not add?')
+  const verdict = await c.judge('Does the new test check multiply, not add?', { diff: true })
   expect(verdict).toPass()
 })

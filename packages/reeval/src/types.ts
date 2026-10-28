@@ -302,11 +302,6 @@ export type JudgeOptions = {
   /** The most judge calls to this model's provider at once, across the run. */
   maxConcurrent?: number
   /**
-   * The judge's state: what the judge is given beside the question, not the workspace's or the
-   * attempt's state. Merged key by key down the cascade.
-   */
-  state?: JudgeStateOptions
-  /**
    * The gateway the judge's calls go through, by name or by its helper. It skips the config's
    * `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.
    */
@@ -314,44 +309,67 @@ export type JudgeOptions = {
 }
 
 /**
- * What the judge is given: each key is a key of the state in `judge-input.json`. An unset key
- * keeps its default, which is what the judge gets with no `state` option at all.
+ * What one `c.judge()` call shows the judge beside the question. Every input is off unless the
+ * call turns it on, and a call turns on at least one; each is a key of the state in
+ * `judge-input.json`, or the captures sent as file parts.
  */
-export type JudgeStateOptions = {
-  /** The graded turn's prompt. Default true. */
+export type JudgeInputs = {
+  /** The graded turn's prompt. */
   task?: boolean
-  /** The graded turn's final message, or `on`'s value. Default true. */
+  /** The graded turn's final message, or `on`'s value. */
   output?: boolean
-  /** `status path` lines for the changed files, under `diff`'s patterns. Default true. */
+  /** `status path` lines for the changed files, under `diff`'s patterns. */
   files?: boolean
   /**
    * The diff since the eval started. A list is gitignore-style patterns over workspace paths:
-   * the last matching pattern wins and `!` excludes. Default true.
+   * the last matching pattern wins and `!` excludes.
    */
   diff?: boolean | string[]
   /**
    * Workspace files shown whole, as they are now, changed or not: exact paths or gitignore-style
    * patterns (`'**'`, `'src/**'`; the last match wins, `!` excludes) over the files git sees in
    * the workspace. A missing exact path is `null`; a pattern that matches nothing adds nothing.
-   * These files leave the diff. Default none.
+   * These files leave the diff.
    */
   contents?: string[]
   /**
    * The graded turn's transcript as text lines: `true` is messages and tool calls with tool
    * output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output.
-   * Default false.
    */
   transcript?: boolean | 'tools' | 'full'
+  /** `c.exec` results so far; a list shows only those commands, as passed to `c.exec`. */
+  checks?: boolean | string[]
+  /**
+   * Captures sent as file parts: `c.capture()` handles or their names, or `true` for every
+   * capture so far. Jev takes PNG captures; a provider that cannot take files fails the call.
+   */
+  artifacts?: true | Array<Capture | string>
+}
+
+/** What a judge call's inputs read: which turn, and whether the turns before it too. */
+export type JudgeSubject = {
+  /** The turn `task`, `output` and `transcript` read instead of the latest, or a value used as the output. */
+  on?: Turn | JSONValue
   /**
    * `'all'`: every turn up to the graded one under `turns`, each with its task, output and (with
    * `transcript`) transcript. Default `'last'`.
    */
   turns?: 'last' | 'all'
-  /** `c.exec` results so far; a list shows only those commands, as passed to `c.exec`. Default false. */
-  checks?: boolean | string[]
 }
 
-/** `JudgeStateOptions` with every key set: what one judge call saw. */
+/** One input turned on: `true`, a mode or a non-empty selection, not `false`. */
+type OneInput<I, K extends keyof I> = { [P in K]-?: Exclude<I[P], false | undefined> }
+
+/** At least one of `I`'s keys turned on. */
+export type AtLeastOneInput<I> = { [K in keyof I]-?: OneInput<I, K> }[keyof I]
+
+/** `c.judge()`'s options, before the at-least-one-input rule that `JudgeCallOptions` adds. */
+export type JudgeCallFields = JudgeOptions & JudgeInputs & JudgeSubject
+
+/** `c.judge()`'s options: the judge options, the inputs (at least one) and what they read. */
+export type JudgeCallOptions = JudgeCallFields & AtLeastOneInput<JudgeInputs>
+
+/** The inputs one judge call saw, every key set (`false` when off); `artifacts` is recorded apart. */
 export type ResolvedJudgeStateOptions = {
   task: boolean
   output: boolean
@@ -361,17 +379,6 @@ export type ResolvedJudgeStateOptions = {
   transcript: boolean | 'tools' | 'full'
   turns: 'last' | 'all'
   checks: boolean | string[]
-}
-
-export type JudgeCallOptions = JudgeOptions & {
-  /** What to grade instead of the latest turn: another turn, or a value used as the output. */
-  on?: Turn | JSONValue
-  /**
-   * Captures this call sends the judge as file parts: `c.capture()` handles or their names, or
-   * `true` for every capture so far. Call-only: the bytes are on this attempt. Jev takes PNG
-   * captures; a provider that cannot take files fails the call.
-   */
-  artifacts?: true | Array<Capture | string>
 }
 
 export type Verdict = {
@@ -414,10 +421,11 @@ export type AttemptContext = {
   /** Sends the next turn of this eval's agent session. */
   send(prompt: string): Promise<Turn>
   /**
-   * Asks the judge a yes/no question about the latest turn (or `options.on`).
-   * `options.artifacts` is a list of `c.capture()` handles or names, or `true` for all of them.
+   * Asks the judge a yes/no question about what `options` turns on, and nothing else: at least
+   * one of `task`, `output`, `files`, `diff`, `contents`, `transcript`, `checks` or `artifacts`.
+   * They read the latest turn, or `options.on`.
    */
-  judge(question: string, options?: JudgeCallOptions): Promise<Verdict | JudgeFailure>
+  judge(question: string, options: JudgeCallOptions): Promise<Verdict | JudgeFailure>
   /**
    * Runs `command` in the sandbox. With `retries`, a non-zero exit runs it again, up to that
    * many extra times, `interval` ms apart; it resolves with the last try.
@@ -1422,60 +1430,60 @@ export type CompareOptions<E = Environment> = {
  * With `across`, it picks between two attempts that differ only in that factor, in both orders;
  * without it, it's asked of each attempt on its own. Without a model, the cascaded
  * `question.model` answers, else `analysis.model`, else the judge's when it's a language model.
- * `state` and `artifacts` choose what it's shown of each attempt.
+ * It's shown only the inputs it turns on, at least one.
  */
-export type Question =
-  | string
-  | {
-      question: string
-      /** `'provider/model'` that answers it, over the cascaded `question.model`. */
-      model?: string
-      /**
-       * The factor it varies when pairing, or both: `'environment'` holds the harness,
-       * `'harness'` holds the environment. Unset, it's asked of each attempt on its own.
-       */
-      across?: PairFactor | PairFactor[]
-      /** The answers a question asked of each attempt picks from, with a short reason. */
-      choices?: string[]
-      /** What it's shown of each attempt, over the cascaded `question.state`, key by key. */
-      state?: QuestionStateOptions
-      /** Each attempt's own captures, by name; `true` sends all of them. Replaces `question.artifacts`. */
-      artifacts?: true | string[]
-    }
+export type Question = QuestionFields & AtLeastOneInput<QuestionInputs>
 
-/**
- * What a question is shown of each attempt: the keys of `judge.state` but `contents` (the
- * attempts' workspaces are gone when questions are asked). An unset key keeps its default: a
- * pairwise question shows the task and the diff; one asked of each attempt also shows the final
- * message and the transcript.
- */
-export type QuestionStateOptions = {
-  /** The prompts the attempt was sent, once for both sides when they match. Default true. */
-  task?: boolean
-  /** The final message: the agent's own account of its work. Default false in a pair, true per attempt. */
-  output?: boolean
-  /** `status path` lines for the changed files, under `diff`'s patterns. Default false. */
-  files?: boolean
+/** A question's options, before the at-least-one-input rule that `Question` adds. */
+export type QuestionFields = QuestionInputs & {
+  question: string
+  /** `'provider/model'` that answers it, over the cascaded `question.model`. */
+  model?: string
   /**
-   * The diff since the eval started. A list is gitignore-style patterns over workspace paths:
-   * the last matching pattern wins and `!` excludes. Default true.
+   * The factor it varies when pairing, or both: `'environment'` holds the harness,
+   * `'harness'` holds the environment. Unset, it's asked of each attempt on its own.
    */
-  diff?: boolean | string[]
-  /**
-   * The transcript as text lines: `true` is messages and tool calls with tool output clipped,
-   * `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each
-   * harness's tools, so a pair of two harnesses isn't blind. Default false in a pair, true per
-   * attempt.
-   */
-  transcript?: boolean | 'tools' | 'full'
+  across?: PairFactor | PairFactor[]
+  /** The answers a question asked of each attempt picks from, with a short reason. */
+  choices?: string[]
   /**
    * `'all'`: every turn under `turns`, each with its task, output and (with `transcript`)
    * transcript; `'last'`: the last turn only. Default `'all'`.
    */
   turns?: 'last' | 'all'
-  /** `c.exec` results; a list shows only those commands, as passed to `c.exec`. Default false. */
-  checks?: boolean | string[]
 }
+
+/**
+ * What a question is shown of each attempt: `c.judge()`'s inputs but `contents` (the attempts'
+ * workspaces are gone when questions are asked). Every input is off unless the question turns it
+ * on, and a question turns on at least one.
+ */
+export type QuestionInputs = {
+  /** The prompts the attempt was sent, once for both sides when they match. */
+  task?: boolean
+  /** The final message: the agent's own account of its work. */
+  output?: boolean
+  /** `status path` lines for the changed files, under `diff`'s patterns. */
+  files?: boolean
+  /**
+   * The diff since the eval started. A list is gitignore-style patterns over workspace paths:
+   * the last matching pattern wins and `!` excludes.
+   */
+  diff?: boolean | string[]
+  /**
+   * The transcript as text lines: `true` is messages and tool calls with tool output clipped,
+   * `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each
+   * harness's tools, so a pair of two harnesses isn't blind.
+   */
+  transcript?: boolean | 'tools' | 'full'
+  /** `c.exec` results; a list shows only those commands, as passed to `c.exec`. */
+  checks?: boolean | string[]
+  /** Each attempt's own captures, by name; `true` sends all of them. */
+  artifacts?: true | string[]
+}
+
+/** A planned question's inputs but `artifacts`, and `turns`: what `compare` resolves. */
+export type QuestionStateOptions = Omit<QuestionInputs, 'artifacts'> & Pick<QuestionFields, 'turns'>
 
 /** `QuestionStateOptions` with every key set: what each side of one question showed. */
 export type ResolvedQuestionStateOptions = {
@@ -1488,19 +1496,15 @@ export type ResolvedQuestionStateOptions = {
   checks: boolean | string[]
 }
 
-/** Defaults for every question: `model` and `artifacts` replaced, `state` merged key by key. */
+/** Defaults for every question below it. What a question is shown is its own, never a default. */
 export type QuestionOptions = {
   /** `'provider/model'` that answers every question below it without its own `model`. */
   model?: string
-  /** What it's shown of each attempt. */
-  state?: QuestionStateOptions
-  /** Each attempt's own captures, by name; `true` sends all of them. Default none. */
-  artifacts?: true | string[]
 }
 
 /**
  * A question as planned: its text, the model it names itself, if any, the factors it varies when
- * it's pairwise, its choices, and what it's shown of each attempt, cascaded, when set.
+ * it's pairwise, its choices, and the inputs it's shown of each attempt.
  */
 export type PlannedQuestion = {
   /** Its place in the eval's `questions`, from 1, kept when a profile drops one before it. */
@@ -1510,7 +1514,8 @@ export type PlannedQuestion = {
   /** Set on a pairwise question; unset, it's asked of each attempt. */
   across?: PairFactor | PairFactor[]
   choices?: string[]
-  state?: QuestionStateOptions
+  /** The inputs it turns on, besides `artifacts`. */
+  state: QuestionStateOptions
   artifacts?: true | string[]
 }
 
@@ -1550,7 +1555,7 @@ export type CompareAnswer = {
   model: string
   /** The model id the provider says served the calls, when it reports one. */
   resolvedModel?: string
-  /** What each side showed, every key resolved; unset on answers from before questions took `state`, which showed the defaults. */
+  /** The inputs each side showed, every key resolved; unset on answers recorded before reeval wrote it, which showed the task and the diff. */
   stateOptions?: ResolvedQuestionStateOptions
   /** The captures it sent of each side, as asked: `true` for all, or their names. */
   artifacts?: true | string[]
@@ -1687,7 +1692,7 @@ type EvalOptionFields = {
   judge?: JudgeOptions
   /** Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the value. */
   capture?: CaptureOptions
-  /** Defaults for every question: `model`, and `state` merged key by key, down the cascade. */
+  /** The model every question that names none of its own is answered by, down the cascade. */
   question?: QuestionOptions
   /**
    * What a language model is asked about the attempts, always a list; they never change pass,
@@ -1878,12 +1883,12 @@ export type BlindAttempt = {
   attempt: BlindSide
 }
 
-/** A turn of one side, with the keys its question's `state` turned on. */
+/** A turn of one side, with the inputs its question turned on. */
 export type BlindTurn = { task?: string; output?: string; transcript?: string }
 
 /**
- * One side of a blinded pair, or the attempt a per-attempt question is asked of: only the keys
- * its question's `state` turned on. With `turns: 'all'`, `task`, `output` and `transcript` are
+ * One side of a blinded pair, or the attempt a per-attempt question is asked of: only the inputs
+ * its question turned on. With `turns: 'all'`, `task`, `output` and `transcript` are
  * under `turns`; a task both sides of a pair share is the pair's prompt's, not either side's.
  */
 export type BlindSide = BlindTurn & {
@@ -2380,7 +2385,7 @@ export type AttemptImage = {
 export type JudgeInput = {
   question: string
   model: string
-  /** The call's `state` option, every key resolved; `state` is what that gave the judge. */
+  /** The inputs the call turned on, every key resolved; `state` is what they gave the judge. */
   stateOptions?: ResolvedJudgeStateOptions
   state: { [key: string]: JSONValue }
   /** Captures sent as file parts; refs only, never the PNG bytes. */

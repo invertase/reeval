@@ -2,7 +2,7 @@
 
 **Shows:** a pairwise question asked about screenshots. Both arms add a "Sign up" button; the
 variant has a brand skill. Each attempt captures its page as `home`, and the question
-(`across: 'environment'`, with `artifacts: ['home']`) sends each side's own screenshot beside its diff, so the vote can rest on
+(`across: 'environment'`, with `diff: true` and `artifacts: ['home']`) sends each side's own screenshot beside its diff, so the vote can rest on
 how the page looks.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root

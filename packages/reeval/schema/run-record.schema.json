@@ -956,7 +956,7 @@
           "type": "string"
         },
         "stateOptions": {
-          "description": "What each side showed, every key resolved; unset on answers from before questions took `state`, which showed the defaults.",
+          "description": "The inputs each side showed, every key resolved; unset on answers recorded before reeval wrote it, which showed the task and the diff.",
           "$ref": "#/$defs/ResolvedQuestionStateOptions"
         },
         "votes": {
@@ -1843,7 +1843,7 @@
           ]
         },
         "judge": {
-          "description": "Over the judge's model, threshold, and version, and the config's `state` when it sets one.",
+          "description": "Over the judge's model, threshold and version.",
           "type": "string"
         },
         "sources": {
@@ -2366,7 +2366,7 @@
       "required": ["cause", "class", "log", "ref", "setBy", "stage"]
     },
     "ResolvedJudgeStateOptions": {
-      "description": "`JudgeStateOptions` with every key set: what one judge call saw.",
+      "description": "The inputs one judge call saw, every key set (`false` when off); `artifacts` is recorded apart.",
       "type": "object",
       "properties": {
         "checks": {
@@ -3182,7 +3182,7 @@
               }
             },
             "state": {
-              "description": "What the judge sees by default, every key resolved; absent when the config and profile leave `state` at its defaults.",
+              "description": "The config's default judge inputs, every key resolved. A config sets none (each `c.judge()` call names its own), so it's set only on records whose config did.",
               "$ref": "#/$defs/ResolvedJudgeStateOptions"
             },
             "threshold": {
