@@ -46,7 +46,7 @@ shapes that suite. It assumes reeval is installed and configured; if not, follow
    [Environments](https://github.com/invertase/reeval/blob/main/docs/configuration/environments/index.mdx)).
    Each fixture is a small project of the right kind (`package.json`, a source file or two, a
    `.gitignore`) that states its stack the way a real repo does: in its manifest, config files
-   and code, not in a README sentence aimed at the agent.
+   and code, not in a note written to steer the agent.
 5. **Write each case from its template,** swapping in the tool, the job, the rivals and the
    fixture. Use `evaluate.each` with six or more phrasings per type, so one prompt's wording
    doesn't decide the result (see
