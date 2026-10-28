@@ -276,6 +276,10 @@ export function listenForCaptureWait(
 export const NETWORK_QUIET_MS = 500
 const QUIET_IN_FLIGHT = 2
 
+/** How long a screenshot waits, in tries, for a page that has no layout yet. */
+const SCREENSHOT_TRIES = 20
+const SCREENSHOT_RETRY_MS = 100
+
 function requestId(msg: unknown): string | undefined {
   const body = msg as { params?: { requestId?: string }; requestId?: string }
   return (body.params ?? body).requestId
@@ -693,12 +697,21 @@ export async function withChrome<T>(
           return waitForPage(cdp, wait, waitMs, nav)
         },
         async screenshot(fullPage) {
-          const shot = (await cdp.send('Page.captureScreenshot', {
-            format: 'png',
-            captureBeyondViewport: fullPage,
-          })) as { data?: string }
-          if (!shot.data) throw new Error('Page.captureScreenshot returned no data')
-          return Buffer.from(shot.data, 'base64')
+          for (let tries = 1; ; tries++) {
+            try {
+              const shot = (await cdp.send('Page.captureScreenshot', {
+                format: 'png',
+                captureBeyondViewport: fullPage,
+              })) as { data?: string }
+              if (!shot.data) throw new Error('Page.captureScreenshot returned no data')
+              return Buffer.from(shot.data, 'base64')
+            } catch (error) {
+              // A page mid-navigation has no layout yet, and Chrome refuses to shoot it.
+              const unlaid = /Cannot take screenshot with 0 (width|height)/.test(String(error))
+              if (!unlaid || tries >= SCREENSHOT_TRIES) throw error
+              await new Promise((resolve) => setTimeout(resolve, SCREENSHOT_RETRY_MS))
+            }
+          }
         },
         async dispatch(action, page) {
           scrollY = await dispatchInput(cdp, action, window, page, scrollY)
