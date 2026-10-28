@@ -12,7 +12,7 @@ skilled = base.extend("skilled", {"env": {"MODE": "skilled"}})
             {
                 "question": "Which agent verified its work?",
                 "across": "harness",
-                "state": {"transcript": "tools"},
+                "transcript": "tools",
             }
         ],
     },
@@ -28,7 +28,7 @@ async def transcript_across_harnesses(c): ...
             {
                 "question": "Which arm verified its work?",
                 "across": "environment",
-                "state": {"transcript": "tools"},
+                "transcript": "tools",
             }
         ],
     },
@@ -39,7 +39,6 @@ async def transcript_within_a_harness(c): ...
 @evaluate(
     "screenshots",
     {
-        "question": {"state": {"diff": False}},
         "compare": {"baseline": base, "variants": [skilled]},
         "questions": [
             {
@@ -54,13 +53,33 @@ async def screenshots(c): ...
 
 
 @evaluate(
-    "each attempt by default", {"questions": ["What did the agent check before it finished?"]}
+    "each attempt with the transcript",
+    {
+        "questions": [
+            {
+                "question": "What did the agent check before it finished?",
+                "task": True,
+                "output": True,
+                "diff": True,
+                "transcript": True,
+            }
+        ]
+    },
 )
-async def each_attempt_by_default(c): ...
+async def each_attempt_with_the_transcript(c): ...
 
 
 @evaluate(
     "each attempt without the transcript",
-    {"questions": [{"question": "What did the agent say it did?", "state": {"transcript": False}}]},
+    {
+        "questions": [
+            {
+                "question": "What did the agent say it did?",
+                "task": True,
+                "output": True,
+                "diff": True,
+            }
+        ]
+    },
 )
 async def each_attempt_without_the_transcript(c): ...

@@ -4,7 +4,10 @@ base = define_environment("base", {"env": {"MODE": "base"}})
 skilled = base.extend("skilled", {"env": {"MODE": "skilled"}})
 
 
-@evaluate("asked of each attempt", {"questions": ["How did the agent find the failing test?"]})
+@evaluate(
+    "asked of each attempt",
+    {"questions": [{"question": "How did the agent find the failing test?", "transcript": True}]},
+)
 async def asked_of_each_attempt(c): ...
 
 
@@ -13,7 +16,13 @@ async def asked_of_each_attempt(c): ...
     {
         "runs": 2,
         "gate": {"pass_rate": 0.5},
-        "questions": [{"question": "Did the agent run the tests first?", "choices": ["yes", "no"]}],
+        "questions": [
+            {
+                "question": "Did the agent run the tests first?",
+                "choices": ["yes", "no"],
+                "transcript": "tools",
+            }
+        ],
     },
 )
 async def with_choices(c): ...
@@ -24,8 +33,8 @@ async def with_choices(c): ...
     {
         "compare": {"baseline": base, "variants": [skilled]},
         "questions": [
-            "What did the agent read first?",
-            {"question": "Which is cleaner?", "across": "environment"},
+            {"question": "What did the agent read first?", "transcript": "tools"},
+            {"question": "Which is cleaner?", "across": "environment", "diff": True},
         ],
     },
 )
@@ -34,6 +43,14 @@ async def beside_a_compare(c): ...
 
 @evaluate(
     "across harnesses without a compare",
-    {"questions": [{"question": "Which agent explained its change better?", "across": "harness"}]},
+    {
+        "questions": [
+            {
+                "question": "Which agent explained its change better?",
+                "across": "harness",
+                "diff": True,
+            }
+        ]
+    },
 )
 async def across_harnesses_without_a_compare(c): ...

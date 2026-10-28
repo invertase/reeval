@@ -2,7 +2,7 @@
 
 **Shows:** testing what reaches the judge, without a key. The agent adds `multiply(a, b)` and
 documents it in the README, and the judge is `fakeJudge({ score: (state) => … })`: it scores 1
-only when `state: { contents: ['README.md'] }` delivered a README that mentions `multiply`.
+only when `{ contents: ['README.md'] }` delivered a README that mentions `multiply`.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. A real agent needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code), Docker,

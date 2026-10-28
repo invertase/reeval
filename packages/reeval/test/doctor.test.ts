@@ -551,7 +551,7 @@ evaluate('a', async () => {})
     )
     await writeFile(
       join(none.root, 'evals/support/grade.ts'),
-      "export const grade = async (c) => { await c.judge('ok?') }\n",
+      "export const grade = async (c) => { await c.judge('ok?', { diff: true }) }\n",
     )
     assert.deepEqual(await judgeCallers(none), ['evals/graded.eval.ts'])
     const unset = await checkJudge(none, deps(), false, '.env.local')

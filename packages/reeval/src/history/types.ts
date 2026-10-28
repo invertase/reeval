@@ -464,7 +464,7 @@ export type FingerprintParts = {
   environment: string | null
   image: string | null
   agentCli: string | null
-  /** Over the judge's model, threshold, and version, and the config's `state` when it sets one. */
+  /** Over the judge's model, threshold and version. */
   judge: string
   /** Over the attempt's context files. */
   context: string
@@ -706,7 +706,7 @@ export type Stack = {
     threshold: number
     /** Changes when reeval, the AI SDK or the provider adapter (and so the judge prompt) change. */
     version: string
-    /** What the judge sees by default, every key resolved; absent when the config and profile leave `state` at its defaults. */
+    /** The config's default judge inputs, every key resolved. Unset when the config names none, which reeval requires: each `c.judge()` call names its own. */
     state?: ResolvedJudgeStateOptions
   }
   /** Union of every attempt's context files. */

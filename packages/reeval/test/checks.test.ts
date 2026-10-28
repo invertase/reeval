@@ -125,7 +125,7 @@ describe('named check results', () => {
 evaluate('writes', { runs: 2 }, async (c) => {
   await c.send('go')
   for (const name of ['ok.txt', 'ok.txt']) await expect(c).toHaveFile(name)
-  expect(await c.judge('Is it ok?')).toPass()
+  expect(await c.judge('Is it ok?', { diff: true })).toPass()
 })
 `,
     })

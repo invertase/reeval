@@ -12,7 +12,7 @@ export function succeeds<R extends ExecResult>(result: R) {
 evaluate('matchers', async (c: AttemptContext) => {
   const turn = await c.send('write greet.js')
   const result = await c.exec('npm run build')
-  const verdict = await c.judge('Is it polite?')
+  const verdict = await c.judge('Is it polite?', { output: true })
 
   expect(result).toSucceed()
   expect(result).not.toSucceed()
@@ -35,7 +35,7 @@ evaluate('matchers', async (c: AttemptContext) => {
   // @ts-expect-error a verdict is not an exec result
   expect(verdict).toSucceed()
   // @ts-expect-error toPass takes the awaited verdict
-  expect(c.judge('Is it polite?')).toPass()
+  expect(c.judge('Is it polite?', { output: true })).toPass()
 
   await expect(c).toHaveFile('greet.js', /greet/)
   await expect(turn).not.toHaveFile('secret.txt')

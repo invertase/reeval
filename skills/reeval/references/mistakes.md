@@ -17,8 +17,11 @@ Each row is a mistake, what reeval says and the fix.
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |
 | `opencode({ model: 'gemini-3.8-flash' })` | `an OpenCode model id names its provider` (exit 2) | `'google/gemini-3.8-flash'` |
 | No `judge.model` anywhere | `c.judge() has no model` | Set one, or `fakeJudge()` |
-| The judge's provider refuses a big input | The provider's message, then `The judge's input was ~…k tokens (estimated): diff …, of which …` | Add a `.gitignore` to the environment, or `state: { diff: ['src/'] }` |
-| `diff` or `contents` on a judge, outside `state` | `Unknown judge option "diff" … Did you mean "state.diff"?` | `state: { diff: […] }`, `state: { contents: […] }` |
+| The judge's provider refuses a big input | The provider's message, then `The judge's input was ~…k tokens (estimated): diff …, of which …` | Add a `.gitignore` to the environment, or narrow the call: `{ diff: ['src/'] }` |
+| `c.judge(q)` with no inputs, expecting the judge to see the task, answer and diff by default | `c.judge() shows the judge nothing: turn on at least one input, …` (TypeScript refuses it too) | There are no default inputs: turn on what the question needs, `{ diff: true }`, `{ contents: ['README.md'] }`, `{ output: true }`, `{ transcript: 'tools' }` |
+| `c.judge(q, { on: value })` alone | `c.judge() shows the judge nothing: …`, or with another input `… on gives a value to grade as the output, but output is off. Pass output: true.` | `{ on: value, output: true }`; `on` and `turns` only select |
+| An input (`diff`, `contents`, …) on a config, profile, group or eval `judge` | `Unknown judge option "diff" in …. diff is per call: c.judge(question, { diff }).` | Put it on each `c.judge()` call |
+| A question as a string, or with no input | `questions … takes { question, model?, across?, choices?, turns? } with at least one of task, output, …` / `… shows the model nothing: …` (exit 2) | `{ question: 'Which is cleaner?', across: 'environment', diff: true }` |
 | `cursor()` with `fakeSandbox()` | real harnesses need `docker()` | Use `fakeHarness()` or `docker()` |
 | Forgetting `await` on `toHaveFile`, or on `toSucceed` given `c.exec()`'s promise | ``expect(…).toHaveFile() at <file>:<line> wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)`; `expect(await c.exec(cmd)).toSucceed()` needs no `await` |
 | `toPass()` on an exec result, `toSucceed()` on a verdict | a type error, ``Type 'WrongSubject<"toPass() takes the verdict from await c.judge()">' has no call signatures`` | `toSucceed()` for `c.exec()`, `toPass()` for `await c.judge()` |

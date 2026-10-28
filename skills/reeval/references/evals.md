@@ -4,7 +4,7 @@
 
 - Families: `evaluate.each`
 - The attempt: `c.send`, `c.exec`, `c.serve`, files
-- The judge: options, `state`, input size, errors
+- The judge: inputs, input size, errors
 - Trustworthy evals
 - Matchers
 
@@ -25,7 +25,8 @@
 ## The attempt: `c.send`, `c.exec`, `c.serve`, files
 
 - `await c.send(prompt)` runs one agent turn and returns a `Turn` (`text`, `status`, `diff`,
-  `transcript`). Call it again for multi-turn; `c.judge(q, { on: firstTurn })` grades an earlier one.
+  `transcript`). Call it again for multi-turn;
+  `c.judge(q, { on: firstTurn, task: true, output: true })` grades an earlier one.
 - `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`; `c.exec(cmd, { background: true })`
   starts it without waiting and returns `{ kill() }`. `c.exec(cmd, { retries: 2, interval: 2000 })`
   runs a command that exits non-zero again, up to 2 more times 2 s apart, and resolves with the
@@ -43,31 +44,48 @@
   `c.attempt.cell.role` is
   `'control'` or `'variant'`.
 
-## The judge: options, `state`, input size, errors
+## The judge: inputs, input size, errors
 
-- `await c.judge(question, { threshold?, model?, on?, state?, artifacts? })`: by
-  default the judge sees the prompt, the final message, the changed files and the diff, not what
-  the agent ran. The diff leaves out dependencies, build output (`dist/`, `.next/`, top-level
-  `build/` and `out/`), lockfiles, `*.map`, `*.tsbuildinfo` and minified files. `state` picks
-  what the judge is given (its state, not the workspace's), keyed by `judge-input.json`'s state fields:
-  `{ state: { diff: ['src/', '!**/*.test.ts'] } }` (gitignore-style, last match wins) narrows the
-  diff; `{ state: { contents: ['README.md', 'src/**'] } }` shows files whole, changed or not;
-  `{ state: { transcript: 'tools' } }` adds the turn's tool calls; `{ state: { checks: ['npm test'] } }`
-  adds that `c.exec` result; `turns: 'all'` gives every turn; `task: false` and `output: false`
-  leave those out. `state` cascades like every other option, key by key. `artifacts`
-  is call-only: `true` for every capture so far, or `c.capture()` handles or names, sent as file parts. Ask about facts in the
-  picture, not whether it "looks great". Jev (`typesafe-ai/jev-1.14.0`) takes PNG captures; a
-  provider that cannot take files fails that call.
-  Prefer deterministic checks for what can be checked; use the judge for quality, with plain
-  yes/no questions that don't name one specific way of doing it.
+- `await c.judge(question, options)`: the judge sees the question and only the inputs the call
+  turns on. Every input is off until the call sets it, and a call needs at least one (`true`, a
+  mode or a non-empty list); there are no defaults, and the config, profile, group and eval
+  `judge` take only `model`, `threshold`, `providerOptions`, `maxConcurrent` and `gateway`.
+  With none, `c.judge()` throws before any model call, and TypeScript refuses it.
+
+  | Input | Shows |
+  |---|---|
+  | `task: true` | the graded turn's prompt |
+  | `output: true` | the graded turn's final message, or `on`'s value |
+  | `files: true` | `status path` lines for the changed files, under `diff`'s patterns |
+  | `diff: true` / `['src/**', '!**/*.test.ts']` | the diff since the eval started (gitignore-style, last match wins) |
+  | `contents: ['README.md', 'src/**']` | files whole, changed or not; they leave the diff |
+  | `transcript: true` / `'tools'` / `'full'` | the turn's transcript: clipped, tool calls only, everything |
+  | `checks: true` / `['npm test']` | `c.exec` results, or those commands' |
+  | `artifacts: true` / `[shot, 'home']` | captures, sent as file parts |
+
+  Pick the inputs the question needs, usually one or two: a question about code reads `diff` or
+  `contents`, one about the agent's answer `output`, one about how it worked `transcript`, one
+  about a screenshot `artifacts`. Spell out `{ task: true, output: true, diff: true }` only when
+  the question needs all three. The diff leaves out dependencies, build output (`dist/`,
+  `.next/`, top-level `build/` and `out/`), lockfiles, `*.map`, `*.tsbuildinfo` and minified
+  files.
+- `on` and `turns` select what `task`, `output`, `transcript` and `diff` read and show nothing alone:
+  `on: turn` grades an earlier turn, `on: value` grades any value as the output (with
+  `output: true`), and `turns: 'all'` adds every turn before the graded one. `judge-input.json`
+  records each call's `stateOptions` (every input, `false` when off) and the `state` it sent.
+- Ask about facts in a captured picture, not whether it "looks great". Jev
+  (`typesafe-ai/jev-1.14.0`) takes PNG captures; a provider that cannot take files fails that
+  call. Prefer deterministic checks for what can be checked; use the judge for quality, with
+  plain yes/no questions that don't name one specific way of doing it.
 - Give the environment a `.gitignore` in `files` (the project's isn't copied in): an agent that
-  runs a build otherwise fills the judge's diff with its output. reeval sends everything `state`
-  selects, uncut, and knows no model's limit: a provider error keeps the provider's wording and
-  adds one line with the input's estimated size, biggest files and the `state` keys that were on,
-  largest first; narrow one, e.g. `state: { diff: ['src/'] }`.
+  runs a build otherwise fills the judge's diff with its output. reeval sends every input the
+  call turns on, uncut, and knows no model's limit: a provider error keeps the provider's wording
+  and adds one line with the input's estimated size, biggest files and the inputs that were on,
+  largest first; narrow one, e.g. `{ diff: ['src/'] }`.
 - A failed judge call doesn't throw: `c.judge()` returns `{ verdict: 'error', score: null, error }`,
   the later judges and checks still run, and the attempt fails as a judge error at the end.
-  Write `expect.soft(await c.judge(q), name).toPass()` to see every judge's result.
+  Write `expect.soft(await c.judge(q, { diff: true }), name).toPass()` to see every judge's
+  result.
 
 ## Trustworthy evals
 
@@ -124,7 +142,7 @@ them, seed tests in `files` only when the agent should see them, and guard seede
 with `expect(await c.readFile(path)).toBe(original)`. `not.toHaveEdited(path)` is not a guard:
 a read of the file trips it and a script's write slips past. When the behavior is the
 outcome, judge the program's output, not the diff:
-`c.judge(q, { on: (await c.exec('node app.js')).stdout })`. Checks run in the agent's
+`c.judge(q, { on: (await c.exec('node app.js')).stdout, output: true })`. Checks run in the agent's
 container as the same user, which suits AX evals but isn't a sealed verifier.
 
 ## Matchers
@@ -157,5 +175,5 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
   `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`. Every matcher call
   is recorded (`evals[].attempts[].assertions`; unlabeled ones get `<matcher> <first arg>`).
   Changing a label changes the eval's fingerprint. Label judges too
-  (`expect.soft(await c.judge(q), 'Social OAuth').toPass()`): the label replaces the clipped
+  (`expect.soft(await c.judge(q, { diff: true }), 'Social OAuth').toPass()`): the label replaces the clipped
   question in judge rates, `reeval show`, `summary.md` and the digest.

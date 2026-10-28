@@ -49,7 +49,7 @@ from reeval_python import SyncAttemptContext, evaluate, expect
 def lands(c: SyncAttemptContext) -> None:
     c.send("Create greet.py that prints hi")
     assert c.exec("test -f greet.py").ok
-    expect(c.judge("Does greet.py print hi?")).to_pass()
+    expect(c.judge("Does greet.py print hi?", contents=["greet.py"])).to_pass()
 ```
 
 Plain `assert` is first-class, as in pytest: each one in an eval file is a check in the run
@@ -111,6 +111,13 @@ misspelled key such as `runz`. They take reeval's keys in snake_case at any dept
 duration is seconds or a `timedelta`: `{"timeout": 90}`, `docker(start_timeout=timedelta(minutes=2))`,
 `expect.poll(…, timeout=10)`. `docker()`, `fake_harness()`, `fake_judge()` and `plugin.*` return
 values to pass as options, not data to edit.
+
+`c.judge` takes the inputs the judge reads as keywords, and needs at least one: `diff=True`,
+`contents=["src/**"]`, `output=True` with `on=result`, and so on. With none it raises `TypeError`.
+
+```python
+expect(c.judge("Is it valid JSON?", on=result, output=True)).to_pass()
+```
 
 ### `def` and `async def` bodies
 

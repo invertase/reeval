@@ -589,7 +589,7 @@ export function resolveConfig(
   }
   if ('questions' in user) {
     throw new UsageError(
-      `questions can't be set in ${file}: each is about one eval's task. Put them on the group or eval they ask about; question: { model, state, artifacts } in ${file} sets every question's defaults.`,
+      `questions can't be set in ${file}: each is about one eval's task. Put them on the group or eval they ask about; question: { model } in ${file} sets every question's model.`,
     )
   }
   checkOptions(user, file, CONFIG_KEYS)

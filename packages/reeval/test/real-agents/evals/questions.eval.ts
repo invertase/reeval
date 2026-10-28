@@ -25,8 +25,10 @@ evaluate(
       {
         question: 'Which greet.js handles a missing or empty name better?',
         across: ['environment', 'harness'],
+        task: true,
+        diff: true,
       },
-      { question: 'Does greet.js handle a missing name?', choices: ['yes', 'no'] },
+      { question: 'Does greet.js handle a missing name?', choices: ['yes', 'no'], diff: true },
     ],
   },
   async (c) => {

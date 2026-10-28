@@ -11,6 +11,8 @@ evaluate('writes a README for the package', { environment: math, judge: jev }, a
   await c.send('Write a README.md for this package: what it is and how to call add.')
 
   await expect(c).toHaveFile('README.md', /add\(/)
-  const verdict = await c.judge('Could a new user call add correctly from README.md alone?')
+  const verdict = await c.judge('Could a new user call add correctly from README.md alone?', {
+    contents: ['README.md', 'src/math.js'],
+  })
   expect(verdict).toPass()
 })

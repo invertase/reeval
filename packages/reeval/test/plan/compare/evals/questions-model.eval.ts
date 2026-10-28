@@ -7,7 +7,7 @@ const across = 'environment' as const
 group('reviews', { question: { model: 'google/gemini-3.8-flash' } }, () => {
   evaluate(
     'from the group',
-    { compare, questions: [{ question: 'Which is cleaner?', across }] },
+    { compare, questions: [{ question: 'Which is cleaner?', across, diff: true }] },
     async () => {},
   )
   evaluate(
@@ -15,7 +15,7 @@ group('reviews', { question: { model: 'google/gemini-3.8-flash' } }, () => {
     {
       question: { model: 'openai/gpt-5.5' },
       compare,
-      questions: [{ question: 'Which is shorter?', across }],
+      questions: [{ question: 'Which is shorter?', across, diff: true }],
     },
     async () => {},
   )
@@ -24,13 +24,15 @@ group('reviews', { question: { model: 'google/gemini-3.8-flash' } }, () => {
     {
       question: { model: 'openai/gpt-5.5' },
       compare,
-      questions: [{ question: 'Which is safer?', model: 'anthropic/claude-sonnet-5', across }],
+      questions: [
+        { question: 'Which is safer?', model: 'anthropic/claude-sonnet-5', across, diff: true },
+      ],
     },
     async () => {},
   )
 })
 evaluate(
   'no question model',
-  { compare, questions: [{ question: 'Which is clearer?', across }] },
+  { compare, questions: [{ question: 'Which is clearer?', across, diff: true }] },
   async () => {},
 )

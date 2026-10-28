@@ -82,7 +82,7 @@ reeval exits with code 2 for anything but a list of id strings. Descriptors belo
 
 ## `judge`
 
-`defaults.judge` wins field by field over the profile `judge`, and that result wins over the config `judge`. `state` merges key by key. Each group merges over that result, outermost first, and then the evaluation does.
+`defaults.judge` wins field by field over the profile `judge`, and that result wins over the config `judge`. Each group merges over that result, outermost first, and then the evaluation does.
 
 <Property name="judge" type="ConfigJudgeOptions" optional>
   The same fields as `defaults.judge`.

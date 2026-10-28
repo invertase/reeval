@@ -18,5 +18,5 @@ evaluate('revises the paging after review', { environment: notes }, async (c) =>
   await expect(c).toHaveFile('src/notes.js', /nextCursor/)
   await expect(c.exec('node --test')).toSucceed()
   const question = 'Did the second turn do what the review asked, and keep the tests?'
-  expect(await c.judge(question, { state: { turns: 'all' } })).toPass()
+  expect(await c.judge(question, { task: true, diff: true, turns: 'all' })).toPass()
 })

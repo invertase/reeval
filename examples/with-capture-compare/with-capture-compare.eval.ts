@@ -14,6 +14,7 @@ evaluate(
       {
         question: 'Which Sign up button is blue with white text and rounded corners?',
         across: 'environment',
+        diff: true,
         artifacts: ['home'],
       },
     ],

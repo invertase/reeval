@@ -130,7 +130,8 @@ Each eval:
   decides (where the test goes): check those with a glob or the one path the rule allows.
 - **Deterministic checks first:** a file's content, a command's exit code, a script that imports
   the agent's code. Label each requirement with `expect.soft(x, 'label')`. Add a judge
-  (`c.judge`) only for what no check can see, and then add `judge:` to the config.
+  (`c.judge`) only for what no check can see, with the inputs its question reads
+  (`{ diff: ['src/**'] }`, `{ output: true }`), and then add `judge:` to the config.
 - **A name that states the question:** `stores invoice totals in cents with the billing skill`,
   not `billing test`. The results and `reeval analyze` read in its terms.
 - **Small:** leave `runs` unset: a compare runs 4 a cell (8 attempts), the fewest for a lift

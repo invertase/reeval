@@ -26,7 +26,7 @@
 | `compare.harness` | ✓ 1 | ✓ 1 | — | — | — | — |
 | `compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control | ✓ 1 | ✓ 3 | ● 2 | ● 2 | — | — |
 | `questions` with `across`: pairwise questions in the plan, answered after the run with win rates | ✓ 4 | ✓ 5 | — | — | — | ◐ 1 (1 without a canary) |
-| Questions' `state` and `artifacts`, and the `question` option: the model that answers and what each side shows, cascaded | ✓ 3 | ✓ 2 | ● 4 | ● 1 | — | — |
+| What a question shows: only the inputs each entry turns on (task, output, files, diff, transcript, checks, artifacts), at least one, over `turns`, refused at plan time otherwise; and the `question` option's cascaded model | ✓ 3 | ✓ 2 | ● 3 | ● 1 | — | — |
 | `questions` without `across`: asked of each attempt as it ends, free text or `choices`, in `evals[].attempts[].answers` | ✓ 2 | ✓ 2 | ● 1 | ● 1 | — | — |
 | `gate` (`'all'`, `{ passRate }`) and `compare.gate` | ✓ 2 | — | — | — | — | — |
 | The default-gate hint: printed for an eval whose gated cells run more than once at the default gate, not for a study whose cells are all `gate: 'none'` | ✓ 1 | ✓ 2 | — | — | — | — |
@@ -157,9 +157,9 @@
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | Judge verdicts, errors, option cascade and retries | ✓ 2 | — | — | — | — | — |
 | Model routing for reeval's own calls (judge, analysis, compare questions): `anthropic/*`, `google/*`, `openai/*` and `typesafe-ai/*` call their provider directly when its key is set, which wins over the AI Gateway; any other prefix goes through the Gateway; a missing or malformed key names the model, its prefix and every key that works, at plan time, in `reeval doctor` and at call time | ✓ 6 | — | — | — | — | — |
-| What the judge is given: `judge.state` (task, output, files, diff patterns, contents by path or pattern, transcript, turns, checks) merged key by key from the config to the call; build output, source maps, build info and minified files dropped from its diff | ✓ 4 | — | ● 9 | — | — | — |
+| What the judge is given: only the inputs each `c.judge()` call turns on (task, output, files, diff patterns, contents by path or pattern, transcript, checks, artifacts), over `turns`; none by default, and a call that turns none on fails before any model call (a compile error in TypeScript); build output, source maps, build info and minified files dropped from its diff | ✓ 4 | — | ● 9 | — | — | — |
 | `c.judge({ artifacts })` sends captures as AI SDK file parts (`true` sends every one); JSON-only calls stay an object | ✓ 2 | — | ● 2 | ● 2 | — | — |
-| A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `state` keys that were on, largest first; reeval sends what `state` selects, uncut | ✓ 3 | — | — | — | — | — |
+| A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the inputs that were on, largest first; reeval sends what the call turns on, uncut | ✓ 3 | — | — | — | — | — |
 | A failed judge call returns `verdict: "error"`, is recorded, and fails the attempt after its body, so the judges and checks after it still run | ✓ 1 | — | — | — | — | — |
 | A real judge model call | ✓ 1 | — | — | — | — | — |
 | `toHaveFile`, `toSucceed` and `toPass` | ✓ 2 | — | — | — | — | — |

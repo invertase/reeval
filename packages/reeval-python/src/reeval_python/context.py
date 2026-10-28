@@ -21,11 +21,33 @@ from reeval_python._wire import (
 )
 from reeval_python.errors import ReevalAssertionError, ReevalCallError
 from reeval_python.expect import bind_expect, tracked
-from reeval_python.options import JudgeOptions
+from reeval_python.options import JUDGE_INPUTS, JudgeOptions
 from reeval_python.types import BackgroundHandle, ExecResult, Turn, Verdict
 from reeval_python.wire import Patterns, json_value, options_to_wire, seconds, wire_args
 
 _UNSET: Any = object()
+
+NO_JUDGE_INPUT = (
+    "c.judge() shows the judge nothing: turn on at least one input, such as diff=True or "
+    "contents=['src/**']. The inputs are "
+    + ", ".join(JUDGE_INPUTS[:-1])
+    + f" or {JUDGE_INPUTS[-1]}."
+)
+
+
+def _input_on(value: object) -> bool:
+    return (
+        value is not None
+        and value is not False
+        and not (isinstance(value, (list, tuple)) and not value)
+    )
+
+
+def _shows_something(options: JudgeOptions) -> None:
+    """Refuses a call that turns no input on, before it reaches reeval or a model."""
+    if not any(_input_on(options.get(key)) for key in JUDGE_INPUTS):
+        raise TypeError(NO_JUDGE_INPUT)
+
 
 SendFn = Callable[[AttemptCall], Awaitable[dict[str, Any]]]
 
@@ -234,8 +256,10 @@ class AttemptContext:
         self, question: str, *, on: object = _UNSET, **options: Unpack[JudgeOptions]
     ) -> Coroutine[Any, Any, Verdict]:
         """Ask the judge a yes/no question about the latest turn, or `on` an earlier turn or
-        a value: an `ExecResult`, a `Verdict` or any JSON value, `None` included."""
+        a value: an `ExecResult`, a `Verdict` or any JSON value, `None` included. It's shown only
+        the inputs the call turns on, at least one: `c.judge("…", diff=True)`."""
         _not_describing("c.judge")
+        _shows_something(options)
         return tracked(self._judge(question, on, dict(options)), "c.judge()")
 
     async def _judge(self, question: str, on: object, options: dict[str, Any]) -> Verdict:
@@ -245,9 +269,11 @@ class AttemptContext:
             wire_opts["on"] = (
                 {"turn": on.index} if isinstance(on, Turn) else {"value": json_value(on, accepted)}
             )
-        call: AttemptCallJudge = {"op": "judge", "question": question}
-        if wire_opts:
-            call["options"] = cast(JudgeCallData, wire_opts)
+        call: AttemptCallJudge = {
+            "op": "judge",
+            "question": question,
+            "options": cast(JudgeCallData, wire_opts),
+        }
         reply = await self._call(call)
         return Verdict._from_wire(cast(dict[str, Any], reply["verdict"]))  # pyright: ignore[reportPrivateUsage]
 
@@ -383,8 +409,10 @@ class SyncAttemptContext:
         self, question: str, *, on: object = _UNSET, **options: Unpack[JudgeOptions]
     ) -> Verdict:
         """Ask the judge a yes/no question about the latest turn, or `on` an earlier turn or
-        a value: an `ExecResult`, a `Verdict` or any JSON value, `None` included."""
+        a value: an `ExecResult`, a `Verdict` or any JSON value, `None` included. It's shown only
+        the inputs the call turns on, at least one: `c.judge("…", diff=True)`."""
         _not_describing("c.judge")
+        _shows_something(options)
         return self._run(self._ctx._judge(question, on, dict(options)))  # pyright: ignore[reportPrivateUsage]
 
     def bind_expect(self) -> None:

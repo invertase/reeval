@@ -42,7 +42,7 @@ description: "Options set how evaluations run. Each key is accepted in set place
 
 reeval applies the `reeval.config.ts` file, then the selected profile's `defaults`, then each enclosing `group()`, outermost first, then the `evaluate()` call. A profile `limit` then narrows `runs`, `compare`, and `harness`, except the keys in `pin`.
 
-A later level replaces most keys, `compare` whole. `env` merges by name, `judge` and `question` field by field with `state` key by key, `capture` shallowly, and `tags` and `pin` keep every value. `--runs` then replaces `runs`. `--tag` filters which evaluations run, and `--concurrency` caps the attempts running at once; neither changes an evaluation's options.
+A later level replaces most keys, `compare` whole. `env` merges by name, `judge` and `question` field by field, `capture` shallowly, and `tags` and `pin` keep every value. `--runs` then replaces `runs`. `--tag` filters which evaluations run, and `--concurrency` caps the attempts running at once; neither changes an evaluation's options.
 
 For more information about overriding an option, see [Group evaluations](/evaluations/task/groups#see-how-options-cascade).
 
@@ -589,7 +589,7 @@ For more information about the automatic hosts, see [Egress](/configuration/envi
 `judge` is the defaults for `c.judge()`.
 
 <Property name="judge" type="JudgeOptions" optional>
-  A profile's `judge` applies under its `defaults.judge`. reeval refuses `on` and `artifacts` here.
+  A profile's `judge` applies under its `defaults.judge`. reeval refuses the inputs, `on`, and `turns` here: each `c.judge()` call sets its own.
 </Property>
 
 <Property name="judge.model" type="string | JudgeModel" optional>
@@ -610,42 +610,6 @@ For more information about the automatic hosts, see [Egress](/configuration/envi
 
 <Property name="judge.gateway" type="GatewayName | GatewayDescriptor" optional>
   The gateway the judge's calls go through: `'direct'`, `'vercel'`, `'openrouter'`, or the helper from `{{ pkg }}/gateway`. It skips the config's `gateway` fallback. reeval refuses a gateway that is not in the `gateway` list or cannot serve the judge model.
-</Property>
-
-<Property name="judge.state" type="JudgeStateOptions" optional>
-  What the judge is given beside the question.
-</Property>
-
-<Property name="judge.state.task" type="boolean" optional>
-  The graded turn's prompt. The default is `true`.
-</Property>
-
-<Property name="judge.state.output" type="boolean" optional>
-  The final message, or the value of `on`. The default is `true`.
-</Property>
-
-<Property name="judge.state.files" type="boolean" optional>
-  `status path` lines for the changed files. The default is `true`.
-</Property>
-
-<Property name="judge.state.diff" type="boolean | string[]" optional>
-  The diff from the start of the evaluation, or a non-empty list of gitignore-style patterns over workspace paths. The last matching pattern wins, and `!` excludes. The default is `true`.
-</Property>
-
-<Property name="judge.state.contents" type="string[]" optional>
-  Whole workspace files, as paths or patterns, left out of the diff. The default is none.
-</Property>
-
-<Property name="judge.state.transcript" type="boolean | 'tools' | 'full'" optional>
-  The transcript has three enabled modes: `true` clips tool output, `'tools'` is tool calls only, and `'full'` is everything. The default is `false`.
-</Property>
-
-<Property name="judge.state.turns" type="'last' | 'all'" optional>
-  `'last'` is the graded turn, and `'all'` every turn up to it. The default is `'last'`.
-</Property>
-
-<Property name="judge.state.checks" type="boolean | string[]" optional>
-  `c.exec` results, or a list of the commands to show. The default is `false`.
 </Property>
 
 For more information about judging, see [Judge agent work](/evaluations/grading/judgments).
@@ -681,47 +645,11 @@ For more information about screenshots, see [Check an app](/evaluations/task/app
 `question` is the defaults for every question in `questions`.
 
 <Property name="question" type="QuestionOptions" optional>
-  reeval refuses a question showing nothing but `turns` and no `artifacts`.
+  reeval refuses the inputs and `turns` here: each entry in `questions` sets its own.
 </Property>
 
 <Property name="question.model" type="string" optional>
   A `'provider/model'` string, below a question's own `model` and above `analysis.model`, then a judge language model. reeval refuses an evaluation model.
-</Property>
-
-<Property name="question.state" type="QuestionStateOptions" optional>
-  The keys of `judge.state` without `contents`, which reeval refuses because the workspaces are gone. An unset key keeps its default: pairwise questions (`across`) show the task and the diff; questions asked of each attempt also show the final message and the transcript.
-</Property>
-
-<Property name="question.state.task" type="boolean" optional>
-  The prompts the attempt was sent, once for both sides when they match. The default is `true`.
-</Property>
-
-<Property name="question.state.output" type="boolean" optional>
-  The final message. Default `false` in a pair, `true` per attempt.
-</Property>
-
-<Property name="question.state.files" type="boolean" optional>
-  `status path` lines for the changed files, under the patterns in `diff`. The default is `false`.
-</Property>
-
-<Property name="question.state.diff" type="boolean | string[]" optional>
-  The diff from the start of the evaluation. A list is gitignore-style patterns over workspace paths. The last matching pattern wins, and `!` excludes. The default is `true`.
-</Property>
-
-<Property name="question.state.transcript" type="boolean | 'tools' | 'full'" optional>
-  The transcript as text lines. `true` is messages and tool calls with tool output clipped, `'tools'` is tool calls only, and `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses is not blind. Default `false` in a pair, `true` per attempt.
-</Property>
-
-<Property name="question.state.turns" type="'last' | 'all'" optional>
-  `'all'` is every turn, and `'last'` is the last turn. The default is `'all'`.
-</Property>
-
-<Property name="question.state.checks" type="boolean | string[]" optional>
-  `c.exec` results. A list names the commands to show, as passed to `c.exec`. The default is `false`.
-</Property>
-
-<Property name="question.artifacts" type="true | string[]" optional>
-  Each side's captures as `true` or a non-empty list of non-empty capture names, below a question's own `artifacts`. The default is none.
 </Property>
 
 ## `timeout`
@@ -871,7 +799,7 @@ For more information about comparisons, see [Measure lift against a baseline](/r
 `questions` lists what a language model is asked about the attempts after they end.
 
 <Property name="questions" type="Question[]" optional>
-  Strings, or objects with `question`, `model`, `across`, `choices`, `state`, and `artifacts`. A list replaces the inherited one, so `[]` asks none. Questions never change pass, fail, or the exit code.
+  Objects with `question`, `model`, `across`, `choices`, `turns`, and at least one input: `task`, `output`, `files`, `diff`, `transcript`, `checks`, or `artifacts`. reeval refuses an entry with no input. A list replaces the inherited one, so `[]` asks none. Questions never change pass, fail, or the exit code.
 </Property>
 
 <Property name="questions[].across" type="'environment' | 'harness' | Array<'environment' | 'harness'>" optional>
@@ -880,6 +808,38 @@ For more information about comparisons, see [Measure lift against a baseline](/r
 
 <Property name="questions[].choices" type="string[]" optional>
   The answers a question asked of each attempt picks from, with a short reason.
+</Property>
+
+<Property name="questions[].turns" type="'last' | 'all'" optional>
+  `'all'` shows every turn's task, output, and transcript, and `'last'` the last turn's. The default is `'all'`.
+</Property>
+
+<Property name="questions[].task" type="boolean" optional>
+  The prompts the attempt was sent, once for both sides when they match.
+</Property>
+
+<Property name="questions[].output" type="boolean" optional>
+  The final message.
+</Property>
+
+<Property name="questions[].files" type="boolean" optional>
+  `status path` lines for the changed files, under the patterns in `diff`.
+</Property>
+
+<Property name="questions[].diff" type="boolean | string[]" optional>
+  The diff from the start of the evaluation. A list is gitignore-style patterns over workspace paths. The last matching pattern wins, and `!` excludes.
+</Property>
+
+<Property name="questions[].transcript" type="boolean | 'tools' | 'full'" optional>
+  The transcript as text lines. `true` is messages and tool calls with tool output clipped, `'tools'` is tool calls only, and `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses is not blind.
+</Property>
+
+<Property name="questions[].checks" type="boolean | string[]" optional>
+  `c.exec` results. A list names the commands to show, as passed to `c.exec`.
+</Property>
+
+<Property name="questions[].artifacts" type="true | string[]" optional>
+  Each side's captures as `true` or a non-empty list of non-empty capture names.
 </Property>
 
 For more information about questions, see [Ask questions across attempts](/evaluations/grading/questions).

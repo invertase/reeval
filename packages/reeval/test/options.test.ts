@@ -248,7 +248,7 @@ evaluate('other', async () => {})
       'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('judged', async (c) => {
   await c.send('x')
-  expect(await c.judge('ok?')).toPass()
+  expect(await c.judge('ok?', { diff: true })).toPass()
 })
 `,
     })
@@ -679,7 +679,7 @@ describe('profiles', () => {
       'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('judged', async (c) => {
   await c.send('x')
-  expect(await c.judge('Did it?')).toPass()
+  expect(await c.judge('Did it?', { diff: true })).toPass()
 })
 `,
     })
@@ -714,12 +714,12 @@ evaluate('judged', async (c) => {
       'evals/j.eval.ts': `import { evaluate, expect, group } from 'reeval'
 evaluate('own judge', { judge: { model: 'anthropic/claude-sonnet-5' } }, async (c) => {
   await c.send('x')
-  expect(await c.judge('Did it?')).toPass()
+  expect(await c.judge('Did it?', { diff: true })).toPass()
 })
 group('judged', { judge: { model: 'openai/gpt-6-luna', gateway: 'vercel' } }, () => {
   evaluate('group judge', async (c) => {
     await c.send('x')
-    expect(await c.judge('Did it?')).toPass()
+    expect(await c.judge('Did it?', { diff: true })).toPass()
   })
 })
 `,
@@ -783,7 +783,7 @@ group('judged', { judge: { model: 'openai/gpt-6-luna', gateway: 'vercel' } }, ()
         'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('judged', async (c) => {
   await c.send('x')
-  expect(await c.judge('Did it?')).toPass()
+  expect(await c.judge('Did it?', { diff: true })).toPass()
 })
 `,
       })
@@ -998,18 +998,14 @@ describe('common mistakes', { concurrency: 4 }, () => {
       [
         'a question that shows the model nothing',
         () =>
-          group('g', { question: { state: { task: false } } }, () => {
+          group('g', { question: { model: 'google/gemini-3.8-flash' } }, () => {
             evaluate(
               'e',
-              {
-                questions: [
-                  { question: 'Q', state: { diff: false, output: false, transcript: false } },
-                ],
-              },
+              { questions: [{ question: 'Q', diff: false, output: false, transcript: false }] },
               async () => {},
             )
           }),
-        /questions "Q" in evaluate\("g › e"\) shows the model nothing: every state key is off and it sends no artifacts\. Turn on a state key, such as state: \{ diff: true \}, or send artifacts\./,
+        /questions "Q" in evaluate\("g › e"\) shows the model nothing: turn on at least one of task, output, files, diff, transcript, checks or artifacts, e\.g\. \{ question: '…', diff: true \}\./,
       ],
       [
         'a variant with its own checks',
@@ -1057,7 +1053,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
         () =>
           evaluate(
             'e',
-            { questions: [{ question: 'Which?', across: 'environment' }] },
+            { questions: [{ question: 'Which?', across: 'environment', diff: true }] },
             async () => {},
           ),
         /questions "Which\?" in evaluate\("e"\) varies the environment \(across: 'environment'\), but evaluate\("e"\) runs one environment, so it has no pairs to ask\. Add compare: \{ variants: \[\.\.\.\] \}, or leave out across to ask each attempt on its own\./,
@@ -1069,7 +1065,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
             'e',
             {
               compare: { baseline: a, variants: [b] },
-              questions: [{ question: 'Which?', across: ['environment', 'harness'] }],
+              questions: [{ question: 'Which?', across: ['environment', 'harness'], diff: true }],
             },
             async () => {},
           ),
@@ -1147,12 +1143,12 @@ describe('common mistakes', { concurrency: 4 }, () => {
         /Invalid duration "1000h"\. A duration is at most 596h \(2147483647ms\), the longest timer Node can set\./,
       ],
       [
-        'a judge.state.diff pattern as one string on a group',
+        'a judge diff on a group',
         () =>
-          group('g', { judge: { state: { diff: 'src/' as never } } }, () => {
+          group('g', { judge: { diff: ['src/'] } as never }, () => {
             evaluate('e', async () => {})
           }),
-        /judge\.state\.diff in group\("g"\) must be true, false or a non-empty list of patterns \(got "src\/"\)/,
+        /Unknown judge option "diff" in group\("g"\)\. diff is per call: c\.judge\(question, \{ diff \}\)\./,
       ],
       [
         'a file path that climbs out of the home directory',
@@ -1383,29 +1379,19 @@ describe('common mistakes', { concurrency: 4 }, () => {
         /harness\.maxConcurrent in reeval\.config\.ts must be a whole number of at least 1 \(got 0\)/,
       ],
       [
-        'a judge diff option outside state',
+        'a judge diff option in the config',
         { judge: { model: fakeJudge({ score: 0.9 }), diff: ['src/'] } },
-        /Unknown judge option "diff" in reeval\.config\.ts\. Did you mean "state\.diff"\?/,
+        /Unknown judge option "diff" in reeval\.config\.ts\. diff is per call: c\.judge\(question, \{ diff \}\)\./,
       ],
       [
-        'a judge contents option outside state',
+        'a judge contents option in the config',
         { judge: { model: fakeJudge({ score: 0.9 }), contents: ['README.md'] } },
-        /Unknown judge option "contents" in reeval\.config\.ts\. Did you mean "state\.contents"\?/,
+        /Unknown judge option "contents" in reeval\.config\.ts\. contents is per call: c\.judge\(question, \{ contents \}\)\./,
       ],
       [
-        'a misspelled judge.state key',
-        { judge: { model: fakeJudge({ score: 0.9 }), state: { transcipt: true } } },
-        /Unknown judge\.state key "transcipt" in reeval\.config\.ts\. Did you mean "transcript"\?/,
-      ],
-      [
-        'a judge.state.transcript that is not a mode',
-        { judge: { model: fakeJudge({ score: 0.9 }), state: { transcript: 'all' } } },
-        /judge\.state\.transcript in reeval\.config\.ts must be true, false, 'tools' or 'full' \(got "all"\)/,
-      ],
-      [
-        'judge.state as a list',
-        { judge: { model: fakeJudge({ score: 0.9 }), state: ['transcript'] } },
-        /judge\.state in reeval\.config\.ts must be an object such as \{ transcript: 'tools' \} \(got \["transcript"\]\)/,
+        'a judge.state in the config',
+        { judge: { model: fakeJudge({ score: 0.9 }), state: { transcript: true } } },
+        /Unknown judge option "state" in reeval\.config\.ts\./,
       ],
       [
         'keeping no debug runs',
@@ -1550,7 +1536,7 @@ evaluate('e', { environment: defineEnvironment('review', ({ plugin }) => ({ plug
       'reeval.unbrokered.config.ts': bad(`secrets: { unbrokered: 'error' },`),
       'evals/o.eval.ts': `import { evaluate } from 'reeval'\nevaluate('e', { runs: 2 }, async () => {})\n`,
       'evals/j.eval.ts': `import { evaluate } from 'reeval'
-evaluate('judged', async (c) => { await c.send('x'); await c.judge('ok?') })
+evaluate('judged', async (c) => { await c.send('x'); await c.judge('ok?', { diff: true }) })
 `,
       'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'

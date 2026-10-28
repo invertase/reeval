@@ -12,8 +12,8 @@ evaluate('adds a readable average function', { environment: math }, async (c) =>
 
   await expect(c).toHaveFile('src/math.js', /export function average/)
   await expect(c.exec('node --test')).toSucceed()
-  const claude = await c.judge(question, { model: 'anthropic/claude-sonnet-5' })
+  const claude = await c.judge(question, { model: 'anthropic/claude-sonnet-5', diff: true })
   expect.soft(claude, 'Claude agrees').toPass()
-  const gemini = await c.judge(question, { model: 'google/gemini-3.8-flash' })
+  const gemini = await c.judge(question, { model: 'google/gemini-3.8-flash', diff: true })
   expect.soft(gemini, 'Gemini agrees').toPass()
 })

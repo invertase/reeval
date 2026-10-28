@@ -1,22 +1,22 @@
 no profile · 5 evals · 16 cells · 52 attempts
-warning: question "Which agent verified its work?" shows state.transcript, which names each harness's tools, so its harness pairs aren't blind. Ask it with across: 'environment', or leave the transcript out.
+warning: question "Which agent verified its work?" shows the transcript, which names each harness's tools, so its harness pairs aren't blind. Ask it with across: 'environment', or leave the transcript out.
 hint: 3 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
 evals/questions-state.eval.ts › transcript across harnesses          a/base/docker     control          ungated  ×4  runs 4 (compare default)
                                                                      a/skilled/docker  variant skilled  gated    ×4
                                                                      b/base/docker     control          ungated  ×4
                                                                      b/skilled/docker  variant skilled  gated    ×4
-                                                                     question: Which agent verified its work? · shows task, diff, transcript · harness · 8 pairs · no language model
+                                                                     question: Which agent verified its work? · shows transcript · harness · 8 pairs · no language model
 evals/questions-state.eval.ts › transcript within a harness          a/base/docker     control          ungated  ×4  runs 4 (compare default)
                                                                      a/skilled/docker  variant skilled  gated    ×4
                                                                      b/base/docker     control          ungated  ×4
                                                                      b/skilled/docker  variant skilled  gated    ×4
-                                                                     question: Which arm verified its work? · shows task, diff, transcript · environment · 8 pairs · no language model
+                                                                     question: Which arm verified its work? · shows transcript · environment · 8 pairs · no language model
 evals/questions-state.eval.ts › screenshots                          a/base/docker     control          ungated  ×4  runs 4 (compare default)
                                                                      a/skilled/docker  variant skilled  gated    ×4
                                                                      b/base/docker     control          ungated  ×4
                                                                      b/skilled/docker  variant skilled  gated    ×4
-                                                                     question: Which page looks better? · shows task, artifacts · environment · 8 pairs · no language model
-evals/questions-state.eval.ts › each attempt by default              a/-/docker        control          gated    ×1
+                                                                     question: Which page looks better? · shows artifacts · environment · 8 pairs · no language model
+evals/questions-state.eval.ts › each attempt with the transcript     a/-/docker        control          gated    ×1
                                                                      b/-/docker        control          gated    ×1
                                                                      question: What did the agent check before it finished? · shows task, output, diff, transcript · each attempt · 2 attempts · no language model
 evals/questions-state.eval.ts › each attempt without the transcript  a/-/docker        control          gated    ×1

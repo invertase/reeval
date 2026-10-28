@@ -694,7 +694,7 @@ evaluate('flaky', { runs: 3, gate: { passRate: 0.5 } }, async (c) => {
 })
 evaluate('judged', async (c) => {
   await c.send(prompt)
-  expect(await c.judge('Is it fine?')).toPass()
+  expect(await c.judge('Is it fine?', { diff: true })).toPass()
 })
 `,
     })

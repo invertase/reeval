@@ -140,11 +140,11 @@ For more information about the cascaded defaults, see [the `capture` option](/re
 
 ## `c.judge()`
 
-`c.judge(question, options?)` asks a yes or no question about the last turn and returns a `Verdict`, or a `JudgeFailure` when the provider fails.
+`c.judge(question, options)` asks a yes or no question about the last turn, shown only the inputs `options` turns on, at least one, and returns a `Verdict`, or a `JudgeFailure` when the provider fails.
 
 ```ts
 const verdict = await c.judge('Does the test read like a specification?', {
-  state: { contents: ['src/user.test.ts'] },
+  contents: ['src/user.test.ts'],
 })
 ```
 
@@ -152,12 +152,44 @@ const verdict = await c.judge('Does the test read like a specification?', {
   A non-empty yes or no question.
 </Property>
 
-<Property name="options.on" type="Turn | JSONValue" optional>
-  A turn this attempt sent, graded instead of the last, or any other value, graded as the output.
+<Property name="options.task" type="boolean" optional>
+  The graded turn's prompt.
+</Property>
+
+<Property name="options.output" type="boolean" optional>
+  The final message, or the value of `on`.
+</Property>
+
+<Property name="options.files" type="boolean" optional>
+  `status path` lines for the changed files.
+</Property>
+
+<Property name="options.diff" type="boolean | string[]" optional>
+  The diff from the start of the evaluation, or a non-empty list of gitignore-style patterns over workspace paths. The last matching pattern wins, and `!` excludes.
+</Property>
+
+<Property name="options.contents" type="string[]" optional>
+  Whole workspace files, as paths or patterns, left out of the diff.
+</Property>
+
+<Property name="options.transcript" type="boolean | 'tools' | 'full'" optional>
+  The transcript has three enabled modes: `true` clips tool output, `'tools'` is tool calls only, and `'full'` is everything.
+</Property>
+
+<Property name="options.checks" type="boolean | string[]" optional>
+  `c.exec` results, or a list of the commands to show.
 </Property>
 
 <Property name="options.artifacts" type="true | Array<Capture | string>" optional>
   Captures sent as PNG file parts, by handle or name, or `true` for all so far.
+</Property>
+
+<Property name="options.on" type="Turn | JSONValue" optional>
+  A turn this attempt sent, graded instead of the last, or any other value, graded as the output, which needs `output: true`.
+</Property>
+
+<Property name="options.turns" type="'last' | 'all'" optional>
+  `'last'` is the graded turn, and `'all'` every turn up to it. The default is `'last'`.
 </Property>
 
 <Property name="options.model" type="string | JudgeModel" optional>
@@ -180,11 +212,7 @@ const verdict = await c.judge('Does the test read like a specification?', {
   The gateway for this call, skipping the config list's fallback.
 </Property>
 
-<Property name="options.state" type="JudgeStateOptions" optional>
-  What the judge sees, with the keys and defaults of [`judge.state`](/reference/options#judge).
-</Property>
-
-A field on the call replaces the cascaded field, and `state` merges key by key. A `Verdict` has these fields:
+A field on the call replaces the cascaded field. A `Verdict` has these fields:
 
 <Property name="verdict" type="'pass' | 'fail'" required>
   `pass` when `score` is at least `threshold`.

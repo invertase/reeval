@@ -18,6 +18,7 @@ import {
   execOptionsProblem,
 } from '../../src/contract/attempt.ts'
 import { declarationProblem } from '../../src/contract/declaration.ts'
+import { judgeProblem } from '../../src/contract/judge.ts'
 import type { DeclaredNode } from '../../src/declaration.ts'
 import { useEngine } from '../../src/engine/runtime.ts'
 import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
@@ -224,6 +225,11 @@ const request =
     const problem = attemptRequestProblem({ id, call })
     if (problem) throw new UsageError(problem)
   }
+/** What a c.judge() call's options are checked against before it asks the model. */
+const judgeCall = (options: unknown) => () => {
+  const problem = judgeProblem(options, { at: 'call' })
+  if (problem) throw new UsageError(problem)
+}
 const execOptions = (options: unknown) => () => {
   const problem = execOptionsProblem(options)
   if (problem) throw new UsageError(problem)
@@ -519,17 +525,45 @@ export const CASES: Record<string, Case[]> = {
     ['threshold above 1', options({ judge: { threshold: 2 } })],
     ['threshold a string', options({ judge: { threshold: '0.5' } })],
     ['maxConcurrent 0', options({ judge: { maxConcurrent: 0 } })],
-    ['diff outside state', options({ judge: { diff: ['src/'] } })],
-    ['contents outside state', options({ judge: { contents: ['a.ts'] } })],
+    ['diff outside a call', options({ judge: { diff: ['src/'] } })],
+    ['contents outside a call', options({ judge: { contents: ['a.ts'] } })],
+    ['artifacts outside a call', options({ judge: { artifacts: true } })],
     ['on outside a call', options({ judge: { on: 'x' } })],
-    ['state not an object', options({ judge: { state: 'tools' } })],
-    ['state with a typo', options({ judge: { state: { transcrpt: true } } })],
-    ['state.diff empty', options({ judge: { state: { diff: [] } } })],
-    ['state.diff with an empty pattern', options({ judge: { state: { diff: ['src/', ' '] } } })],
-    ['state.contents not a list', options({ judge: { state: { contents: 'a.ts' } } })],
-    ['state.transcript unknown', options({ judge: { state: { transcript: 'all' } } })],
-    ['state.turns unknown', options({ judge: { state: { turns: 'first' } } })],
-    ['state.checks a string', options({ judge: { state: { checks: 'npm test' } } })],
+    ['turns outside a call', options({ judge: { turns: 'all' } })],
+    ['state', options({ judge: { state: { diff: true } } })],
+    ['call: no options', judgeCall(undefined)],
+    ['call: empty options', judgeCall({})],
+    ['call: only a model and threshold', judgeCall({ model: 'google/g', threshold: 0.5 })],
+    ['call: only on and turns', judgeCall({ on: { turn: 0 }, turns: 'all' })],
+    ['call: every input off', judgeCall({ task: false, diff: false, transcript: false })],
+    ['call: an empty contents list', judgeCall({ contents: [] })],
+    ['call: state', judgeCall({ state: { diff: true } })],
+    ['call: a typo', judgeCall({ dif: true })],
+    ['call: diff empty', judgeCall({ diff: [] })],
+    ['call: diff with an empty pattern', judgeCall({ diff: ['src/', ' '] })],
+    ['call: contents not a list', judgeCall({ contents: 'a.ts' })],
+    ['call: transcript unknown', judgeCall({ transcript: 'all' })],
+    ['call: turns unknown', judgeCall({ diff: true, turns: 'first' })],
+    ['call: checks a string', judgeCall({ checks: 'npm test' })],
+    ['good: call with contents', judgeCall({ contents: ['src/**/*.tsx'] })],
+    ['good: call with artifacts', judgeCall({ artifacts: ['home'] })],
+    [
+      'good: call with every option',
+      judgeCall({
+        model: 'google/g',
+        threshold: 0.7,
+        task: true,
+        output: true,
+        files: true,
+        diff: ['src/**'],
+        contents: ['a.ts'],
+        transcript: 'tools',
+        checks: ['npm test'],
+        artifacts: true,
+        turns: 'all',
+        on: { turn: 0 },
+      }),
+    ],
     ['a typo', options({ judge: { treshold: 0.5 } })],
     ['not an object', options({ judge: 'google/gemini-3.8-flash' })],
     ['maxConcurrent fractional', options({ judge: { maxConcurrent: 1.5 } })],
@@ -545,7 +579,7 @@ export const CASES: Record<string, Case[]> = {
         judge: {
           threshold: 0.5,
           maxConcurrent: 2,
-          state: { diff: ['src/**'], transcript: 'tools', turns: 'all', checks: ['npm test'] },
+          providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
         },
       }),
     ],
@@ -558,7 +592,8 @@ export const CASES: Record<string, Case[]> = {
     ['config: threshold above 1', config({ judge: { threshold: 1.5 } })],
     ['config: fake judge', config({ judge: { model: { kind: 'fake-judge', score: 0.9 } } })],
     ['config: a typo', config({ judge: { modle: 'google/gemini-3.8-flash' } })],
-    ['config: state.contents with an empty path', config({ judge: { state: { contents: [''] } } })],
+    ['config: state', config({ judge: { state: { contents: ['a.ts'] } } })],
+    ['config: diff', config({ judge: { diff: true } })],
     ['config: good', config({ judge: { model: 'google/gemini-3.8-flash', threshold: 0.7 } })],
   ],
   compare: [
@@ -605,45 +640,67 @@ export const CASES: Record<string, Case[]> = {
   ],
   questions: [
     ['not a list', options({ questions: 'Which?' })],
-    ['a question that is empty', options({ questions: [' '] })],
+    ['a question that is a string', options({ questions: ['Which is cleaner?'] })],
+    ['a question that is empty', options({ questions: [{ question: ' ', diff: true }] })],
     ['a question that is a number', options({ questions: [3] })],
     ['a question with an unknown key', options({ questions: [{ question: 'Q', by: 'm' }] })],
     ['a question with cuts', options({ questions: [{ question: 'Q', cuts: 'x' }] })],
-    ['a question without its text', options({ questions: [{ model: 'google/g' }] })],
+    ['a question without its text', options({ questions: [{ model: 'google/g', diff: true }] })],
+    ['a question with no input', options({ questions: [{ question: 'Q' }] })],
+    [
+      'a pairwise question with no input',
+      options({ questions: [{ question: 'Q', across: 'environment', model: 'google/g' }] }),
+    ],
+    [
+      'a question with every input off',
+      options({ questions: [{ question: 'Q', task: false, diff: false, transcript: false }] }),
+    ],
+    ['a question with only turns', options({ questions: [{ question: 'Q', turns: 'last' }] })],
     [
       'a question model without a provider',
-      options({ questions: [{ question: 'Q', model: 'g' }] }),
+      options({ questions: [{ question: 'Q', diff: true, model: 'g' }] }),
     ],
     [
       'a question model that is an evaluation model',
-      options({ questions: [{ question: 'Q', model: 'typesafe-ai/jev-1.14.0' }] }),
+      options({ questions: [{ question: 'Q', diff: true, model: 'typesafe-ai/jev-1.14.0' }] }),
     ],
-    ['across unknown', options({ questions: [{ question: 'Q', across: 'cell' }] })],
-    ['across an empty list', options({ questions: [{ question: 'Q', across: [] }] })],
-    ['across twice', options({ questions: [{ question: 'Q', across: ['harness', 'harness'] }] })],
-    ['choices a string', options({ questions: [{ question: 'Q', choices: 'yes' }] })],
-    ['choices of one', options({ questions: [{ question: 'Q', choices: ['yes'] }] })],
-    ['choices twice', options({ questions: [{ question: 'Q', choices: ['yes', 'yes'] }] })],
+    ['across unknown', options({ questions: [{ question: 'Q', diff: true, across: 'cell' }] })],
+    ['across an empty list', options({ questions: [{ question: 'Q', diff: true, across: [] }] })],
+    [
+      'across twice',
+      options({ questions: [{ question: 'Q', diff: true, across: ['harness', 'harness'] }] }),
+    ],
+    ['choices a string', options({ questions: [{ question: 'Q', diff: true, choices: 'yes' }] })],
+    ['choices of one', options({ questions: [{ question: 'Q', diff: true, choices: ['yes'] }] })],
+    [
+      'choices twice',
+      options({ questions: [{ question: 'Q', diff: true, choices: ['yes', 'yes'] }] }),
+    ],
     [
       'choices with an empty answer',
-      options({ questions: [{ question: 'Q', choices: ['yes', ''] }] }),
+      options({ questions: [{ question: 'Q', diff: true, choices: ['yes', ''] }] }),
     ],
     [
       'choices with across',
-      options({ questions: [{ question: 'Q', across: 'environment', choices: ['a', 'b'] }] }),
-    ],
-    ['a question twice', options({ questions: ['Q', { question: 'Q' }] })],
-    [
-      'a question state with contents',
-      options({ questions: [{ question: 'Q', state: { contents: ['a'] } }] }),
+      options({
+        questions: [{ question: 'Q', diff: true, across: 'environment', choices: ['a', 'b'] }],
+      }),
     ],
     [
-      'a question state with an unknown key',
-      options({ questions: [{ question: 'Q', state: { dif: true } }] }),
+      'a question twice',
+      options({
+        questions: [
+          { question: 'Q', diff: true },
+          { question: 'Q', task: true },
+        ],
+      }),
     ],
+    ['a question with contents', options({ questions: [{ question: 'Q', contents: ['a'] }] })],
+    ['a question with state', options({ questions: [{ question: 'Q', state: { diff: true } }] })],
+    ['a question with a bad diff', options({ questions: [{ question: 'Q', diff: [] }] })],
     [
-      'a question state with a bad turns',
-      options({ questions: [{ question: 'Q', state: { turns: 'first' } }] }),
+      'a question with a bad turns',
+      options({ questions: [{ question: 'Q', diff: true, turns: 'first' }] }),
     ],
     ['artifacts an empty list', options({ questions: [{ question: 'Q', artifacts: [] }] })],
     ['artifacts false', options({ questions: [{ question: 'Q', artifacts: false }] })],
@@ -657,17 +714,15 @@ export const CASES: Record<string, Case[]> = {
     ['the question option with a model object', options({ question: { model: { kind: 'x' } } })],
     ['the question option with across', options({ question: { across: 'harness' } })],
     ['the question option with choices', options({ question: { choices: ['a', 'b'] } })],
-    ['the question option with an unknown key', options({ question: { stat: {} } })],
+    ['the question option with an unknown key', options({ question: { modle: 'google/g' } })],
+    ['the question option with state', options({ question: { state: { diff: true } } })],
+    ['the question option with an input', options({ question: { transcript: true } })],
+    ['the question option with turns', options({ question: { turns: 'all' } })],
     [
-      'the question option with an unknown state key',
-      options({ question: { state: { transcripts: true } } }),
-    ],
-    [
-      'good: question state and artifacts',
+      'good: question inputs and artifacts',
       options({
-        question: { state: { checks: ['npm test'] } },
         questions: [
-          { question: 'Q', state: { diff: false, output: true }, artifacts: ['home'] },
+          { question: 'Q', output: true, checks: ['npm test'], artifacts: ['home'] },
           { question: 'R', artifacts: true, across: 'environment' },
         ],
       }),
@@ -677,13 +732,14 @@ export const CASES: Record<string, Case[]> = {
       options({
         compare: { variants: [e2] },
         questions: [
-          'Q',
-          { question: 'R', model: 'google/g', across: ['environment', 'harness'] },
-          { question: 'S', choices: ['yes', 'no'] },
+          { question: 'Q', transcript: 'tools', turns: 'last' },
+          { question: 'R', model: 'google/g', across: ['environment', 'harness'], diff: true },
+          { question: 'S', choices: ['yes', 'no'], task: true, output: true },
         ],
       }),
     ],
-    ['config: questions', config({ questions: ['Q'] })],
+    ['config: questions', config({ questions: [{ question: 'Q', diff: true }] })],
+    ['config: question with an input', config({ question: { diff: true } })],
   ],
   plain: [
     ['gate a number', options({ gate: 0.8 })],
@@ -1427,7 +1483,8 @@ export const CASES: Record<string, Case[]> = {
     ],
     ['yaml: a fake judge above 1', yaml('judge:\n  model:\n    kind: fake-judge\n    score: 2\n')],
     ['yaml: a judge model without a provider', yaml('judge:\n  model: jev\n')],
-    ['yaml: a typo in judge.state', yaml('judge:\n  state:\n    transcrpt: true\n')],
+    ['yaml: judge.state', yaml('judge:\n  state:\n    transcript: true\n')],
+    ['yaml: an input on judge', yaml('judge:\n  diff: true\n')],
     [
       'yaml: providerOptions as data',
       yaml(
@@ -1472,8 +1529,8 @@ export const CASES: Record<string, Case[]> = {
     ['yaml: a budget with a typo', yaml('budget: { attempt: 3 }\n')],
     ['yaml: question with a model', yaml('question: { model: google/g }\n')],
     ['yaml: question with a bare model', yaml('question: { model: gemini }\n')],
-    ['yaml: question state contents', yaml('question:\n  state: { contents: [a] }\n')],
-    ['yaml: question good', yaml('question:\n  state: { output: true, diff: false }\n')],
+    ['yaml: question state', yaml('question:\n  state: { output: true }\n')],
+    ['yaml: question with an input', yaml('question: { diff: true }\n')],
     [
       'yaml: good',
       yaml(`include: ['evals/**/*.eval.ts']
@@ -1490,7 +1547,6 @@ egress: { allow: [api.example.com] }
 judge:
   model: { kind: fake-judge, score: 0.9 }
   threshold: 0.7
-  state: { transcript: tools }
 capture: { viewport: full-page, timeout: 30s }
 concurrency: 2
 record: manual
@@ -2102,9 +2158,14 @@ environment:
       'judge with a threshold above 1',
       request({ op: 'judge', question: 'ok?', options: { threshold: 2 } }),
     ],
+    ['judge without options', request({ op: 'judge', question: 'ok?' })],
     [
-      'judge with a state typo',
-      request({ op: 'judge', question: 'ok?', options: { state: { transcrpt: true } } }),
+      'judge with state',
+      request({ op: 'judge', question: 'ok?', options: { state: { transcript: true } } }),
+    ],
+    [
+      'judge with a transcript typo',
+      request({ op: 'judge', question: 'ok?', options: { transcript: 'tool' } }),
     ],
     [
       'judge on a turn that is not an index',
@@ -2243,7 +2304,10 @@ environment:
     ],
     ['poll with a typo', request(expectCall({ poll: { timout: 5000 } }))],
     ['good: send', request({ op: 'send', prompt: 'Write greet.js.' })],
-    ['good: judge', request({ op: 'judge', question: 'Does greet.js export greet?' })],
+    [
+      'good: judge',
+      request({ op: 'judge', question: 'Does greet.js export greet?', options: { diff: true } }),
+    ],
     [
       'good: judge with options',
       request({
@@ -2253,7 +2317,9 @@ environment:
           model: 'google/gemini-3.8-flash',
           threshold: 0.7,
           providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
-          state: { transcript: 'tools', turns: 'all', checks: ['npm test'] },
+          transcript: 'tools',
+          turns: 'all',
+          checks: ['npm test'],
           on: { turn: 0 },
           artifacts: [
             'home',
@@ -2273,7 +2339,11 @@ environment:
       request({
         op: 'judge',
         question: 'Is it polite?',
-        options: { model: { kind: 'fake-judge', score: 0.9 }, on: { value: { text: 'Hi' } } },
+        options: {
+          model: { kind: 'fake-judge', score: 0.9 },
+          output: true,
+          on: { value: { text: 'Hi' } },
+        },
       }),
     ],
     ['good: exec', request({ op: 'exec', command: 'node greet.js' })],

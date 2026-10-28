@@ -34,7 +34,8 @@ import {
   fakeJudgeDataSchema,
   judgeFields,
   judgeModelNameSchema,
-  judgeStateSchema,
+  sharedInputFields,
+  turnsSchema,
 } from './judge.ts'
 import { type Assert, dataProblem, durationSchema, jsonValueSchema, type Same } from './shared.ts'
 
@@ -385,9 +386,14 @@ export const judgeCallDataSchema = z
       .optional()
       .describe("`'provider/model'`, or a fake judge with a numeric score."),
     ...judgeFields,
+    ...sharedInputFields,
+    contents: z.array(nonEmpty).optional(),
+    turns: turnsSchema.optional(),
     on: judgeOnSchema
       .optional()
-      .describe('What to grade instead of the latest turn: an earlier turn, or a value.'),
+      .describe(
+        'The turn `task`, `output`, `transcript` and `diff` read instead of the latest: an earlier turn, or a value graded as the output.',
+      ),
     artifacts: z
       .union([z.literal(true), z.array(z.union([nonEmpty, captureSchema]))])
       .optional()
@@ -396,7 +402,7 @@ export const judgeCallDataSchema = z
       ),
   })
   .describe(
-    "`c.judge()`'s options as data: the judge options, with the model by name or a fake judge's numeric score, plus the call-only `on` and `artifacts`.",
+    "`c.judge()`'s options as data: the judge options, with the model by name or a fake judge's numeric score, the inputs it shows the judge (at least one turned on) and `on`.",
   )
 
 export const attemptCallSchema = z
@@ -547,8 +553,8 @@ export const attemptCallSchema = z
     z
       .strictObject({
         op: z.literal('judge'),
-        question: nonEmpty.describe('A yes/no question about the graded turn or value.'),
-        options: judgeCallDataSchema.optional(),
+        question: nonEmpty.describe('A yes/no question about the inputs `options` turns on.'),
+        options: judgeCallDataSchema,
       })
       .describe(
         '`c.judge(question, options)`. Replies with its verdict, or a judge failure when the provider failed.',
@@ -716,7 +722,6 @@ const OTHER_KEYS = [
   'matchedBy',
   'answers',
   ...Object.keys(judgeCallDataSchema.shape),
-  ...Object.keys(judgeStateSchema.shape),
   ...Object.keys(captureSchema.shape),
   ...Object.keys(captureCallDataSchema.shape),
   'port',
@@ -778,7 +783,6 @@ export const ATTEMPT_SCHEMAS: Record<string, z.ZodType> = {
   ExecRetry: execRetrySchema,
   AssertionRecord: assertionRecordSchema,
   JudgeCallData: judgeCallDataSchema,
-  JudgeStateOptions: judgeStateSchema,
   FakeJudgeData: fakeJudgeDataSchema,
   Verdict: verdictSchema,
   JudgeFailure: judgeFailureSchema,
@@ -809,7 +813,6 @@ export const ATTEMPT_TYPES = [
   'ExecResult',
   'ExecRetry',
   'AssertionRecord',
-  'JudgeStateOptions',
   'FakeJudgeData',
   'Verdict',
   'JudgeFailure',

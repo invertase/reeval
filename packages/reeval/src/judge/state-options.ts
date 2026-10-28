@@ -1,30 +1,23 @@
-import { STATE_KEYS } from '../contract/judge.ts'
-import type { JudgeOptions, JudgeStateOptions, ResolvedJudgeStateOptions } from '../types.ts'
+import type { JudgeCallFields, JudgeOptions, ResolvedJudgeStateOptions } from '../types.ts'
 
-export const DEFAULT_STATE: ResolvedJudgeStateOptions = {
-  task: true,
-  output: true,
-  files: true,
-  diff: true,
-  contents: [],
-  transcript: false,
-  turns: 'last',
-  checks: false,
+/**
+ * What one call turned on, every key set (`false` when off), in the record's key order, so equal
+ * selections serialize the same.
+ */
+export function resolveStateOptions(call: JudgeCallFields): ResolvedJudgeStateOptions {
+  return {
+    task: call.task ?? false,
+    output: call.output ?? false,
+    files: call.files ?? false,
+    diff: call.diff ?? false,
+    contents: call.contents ?? [],
+    transcript: call.transcript ?? false,
+    turns: call.turns ?? 'last',
+    checks: call.checks ?? false,
+  }
 }
 
-/** Every key set, in `STATE_KEYS` order, so equal selections serialize the same. */
-export function resolveStateOptions(
-  state: JudgeStateOptions | undefined,
-): ResolvedJudgeStateOptions {
-  const out = {} as Record<keyof JudgeStateOptions, unknown>
-  for (const key of STATE_KEYS) out[key] = state?.[key] ?? DEFAULT_STATE[key]
-  return out as ResolvedJudgeStateOptions
-}
-
-/** `inner` over `outer`, field by field, and `state` key by key. */
+/** `inner` over `outer`, field by field. */
 export function mergeJudge<T extends JudgeOptions>(outer: T, inner: Partial<T> | undefined): T {
-  if (!inner) return outer
-  const out = { ...outer, ...inner }
-  if (outer.state || inner.state) out.state = { ...outer.state, ...inner.state }
-  return out
+  return inner ? { ...outer, ...inner } : outer
 }

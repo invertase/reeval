@@ -12,11 +12,12 @@ evaluate(
   {
     compare: { baseline: math, variants: [withErrors] },
     // across makes it pairwise: asked of every pair of arms whose attempts passed their
-    // checks. It never gates.
+    // checks, with each side's diff. It never gates.
     questions: [
       {
         question: 'Which divide() says more clearly what went wrong when b is 0?',
         across: 'environment',
+        diff: true,
       },
     ],
   },

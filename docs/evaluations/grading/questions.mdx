@@ -12,7 +12,13 @@ For more information about grading one attempt, see [Assertions](/evaluations/gr
 In the evaluation's options, add `questions`. This excerpt pairs Claude Code's attempts with Codex's in the same environment:
 
 ```ts title="with-compare-harness.eval.ts"
-questions: [{ question: 'Which multiply() is easier to read?', across: 'harness' }],
+questions: [
+  {
+    question: 'Which multiply() is easier to read?',
+    across: 'harness',
+    diff: true,
+  },
+],
 ```
 
 `across: 'harness'` pairs agents in the same environment, and `across: 'environment'` pairs every two environments on the same agent, the baseline first. reeval asks about each pair of attempts that passed their assertions, in both orders, with the sides unlabeled. After the run, the block prints each side's wins as `won W of N`. For a runnable project, see [`with-compare-harness`](https://github.com/invertase/reeval/tree/main/examples/with-compare-harness). For more information about asking each attempt on its own without `across`, see [the `questions` option](/reference/options#questions).
@@ -48,7 +54,7 @@ npx reeval run --dry-run
 Under the evaluation, a `question` line names the question, when reeval asks it, what each side shows, the pairing, the number of pairs, and the model. This is the line the `with-compare-harness` example printed:
 
 ```text
-  question 1/1  Which multiply() is easier to read? · after the run · shows task, diff · harness · 1 pair · anthropic/claude-sonnet-5
+  question 1/1  Which multiply() is easier to read? · after the run · shows diff · harness · 1 pair · anthropic/claude-sonnet-5
 ```
 
 To ask the question, run the same command without `--dry-run`.
@@ -59,4 +65,4 @@ To ask the question, run the same command without `--dry-run`.
 
 ## Reference
 
-For more information about the model that answers, the state each side shows, and its captures, see [the `question` option](/reference/options#question) and [the `questions` option](/reference/options#questions).
+For more information about the model that answers, the inputs each side shows, and its captures, see [the `question` option](/reference/options#question) and [the `questions` option](/reference/options#questions).

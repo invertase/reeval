@@ -2,7 +2,7 @@
 
 **Shows:** following a docs file you seeded. The environment adds `docs/conventions.md` to the
 package with `files` and `file()`, the agent adds a `deleteNote` handler, and a judge given the
-handler, its tests and the docs whole (`state: { contents }`) says whether every rule was followed.
+handler, its tests and the docs whole (`{ contents }`) says whether every rule was followed.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. A real agent needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code, which also
@@ -25,14 +25,10 @@ runs the same eval on Claude Code, with a real judge, and `--profile <name>` on 
 one profile you need.
 
 **What to look at:** the judge's state in the attempt's `judge-input.json`, under
-`.reeval/runs/<run>/`. The three files are there whole, and leave the diff:
+`.reeval/runs/<run>/`. The three files are there whole, and nothing else:
 
 ```json
 "state": {
-  "task": "Add a deleteNote(id) handler to src/notes.js, following docs/conventions.md.",
-  "output": "deleteNote returns 204 with a null body, or 404 not_found, and has tests for both.",
-  "files": ["modified src/notes.js", "modified test/notes.test.js"],
-  "diff": "",
   "contents": {
     "docs/conventions.md": "# Handler conventions\n\n- A handler takes plain arguments and …",
     "src/notes.js": "…",

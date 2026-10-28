@@ -1,5 +1,5 @@
 import type { JudgeOn } from '../contract/attempt.ts'
-import { judgeProblem } from '../contract/judge.ts'
+import { INPUT_KEYS, inputsOn, judgeProblem, NO_JUDGE_INPUT } from '../contract/judge.ts'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { workspaceFiles } from '../diff.ts'
 import { getRunContext, SUBJECT } from '../engine/runtime.ts'
@@ -25,6 +25,7 @@ import { clip, formatDuration } from '../text.ts'
 import type {
   AttemptContext,
   JSONValue,
+  JudgeCallFields,
   JudgeCallOptions,
   JudgeFailure,
   JudgeInput,
@@ -65,7 +66,7 @@ type StateSources = {
 }
 
 /**
- * The judge's state for what the `state` option chose: the graded turn's task and output (or every turn's),
+ * The judge's state for the inputs the call turned on: the graded turn's task and output (or every turn's),
  * its changed files and diff as `judgeDiff` shows them, files whole, `c.exec` results and the
  * transcript.
  */
@@ -126,7 +127,7 @@ function checksShown(
     const missing = which.find((command) => !ran.some((r) => r.command === command))
     if (missing !== undefined) {
       throw new Error(
-        `c.judge() state.checks names a command this attempt hasn't run: ${JSON.stringify(missing)}`,
+        `c.judge() checks names a command this attempt hasn't run: ${JSON.stringify(missing)}`,
       )
     }
   }
@@ -157,13 +158,8 @@ export function judgeCaller(
   const ask = async (
     order: number,
     question: string,
-    { on, ...call }: Omit<JudgeCallOptions, 'on'> & { on?: JudgeOn } = {},
+    { on, ...call }: Omit<JudgeCallFields, 'on'> & { on?: JudgeOn },
   ): Promise<Verdict | JudgeFailure> => {
-    if (typeof question !== 'string' || !question.trim()) {
-      throw new Error(
-        `c.judge() needs a question: a non-empty string (got ${JSON.stringify(question)})`,
-      )
-    }
     const problem = judgeProblem(call, { at: 'call' })
     if (problem) throw new Error(problem)
     const badArts = badJudgeArtifacts(call.artifacts)
@@ -176,18 +172,32 @@ export function judgeCaller(
           : 'c.judge() has no turn to grade: call c.send() first',
       )
     }
-    const options = mergeJudge(a.spec.judge, call)
+    const wanted = resolveStateOptions(call)
+    if (on && 'value' in on && !wanted.output) {
+      throw new Error(
+        'c.judge() on gives a value to grade as the output, but output is off. Pass output: true.',
+      )
+    }
+    const {
+      task: _task,
+      output: _output,
+      files: _files,
+      diff: _diff,
+      contents: _contents,
+      transcript: _transcript,
+      turns: _turns,
+      checks: _checks,
+      artifacts,
+      ...callJudge
+    } = call
+    const options = mergeJudge(a.spec.judge, callJudge)
     const { model } = options
     if (model === undefined) {
       const message = noJudgeModel(getRunContext().config.file)
       a.judgeThrown.add(message)
       throw new Error(message)
     }
-    const wanted = resolveStateOptions(options.state)
-    if (on && 'value' in on && !wanted.output) {
-      throw new Error('c.judge() on gives the output, but state.output is false')
-    }
-    const { state: _state, maxConcurrent, ...judgeOptions } = options
+    const { maxConcurrent, ...judgeOptions } = options
     const output = on && 'value' in on ? on.value : subject.text
     const { draft, dropped } = await draftState({
       turns: a.turns,
@@ -201,7 +211,12 @@ export function judgeCaller(
     const name = judgeModelName(model)
     // Masked as the record will be, so judge-input.json is what the model was sent.
     const state = redactValue(stateOf(draft))
-    const resolved = resolveJudgeArtifacts(call.artifacts, a.artifactBlobs)
+    const resolved = resolveJudgeArtifacts(artifacts, a.artifactBlobs)
+    if (artifacts === true && !resolved.length && inputsOn(call, INPUT_KEYS).length === 1) {
+      throw new Error(
+        'c.judge() artifacts: true shows the judge nothing yet: this attempt has no captures. Call c.capture() first, or turn on another input.',
+      )
+    }
     const refs = artifactRefsOf(resolved)
     const decide = decideState(state, filePartsOf(resolved))
     const input: JudgeInput = {
@@ -301,7 +316,16 @@ export function judgeCaller(
     }
   }
   // A verdict names its question in `expect(verdict).toPass()`'s default label.
-  return async (question, { on, ...options } = {}) => {
+  return async (question, given: JudgeCallOptions) => {
+    if (typeof question !== 'string' || !question.trim()) {
+      throw new Error(
+        `c.judge() needs a question: a non-empty string (got ${JSON.stringify(question)})`,
+      )
+    }
+    if (given === null || typeof given !== 'object' || Array.isArray(given)) {
+      throw new Error(judgeProblem(given, { at: 'call' }) ?? NO_JUDGE_INPUT)
+    }
+    const { on, ...options } = given
     const order = a.judgeCalls++
     const call = on === undefined ? options : { ...options, on: judgeOn(a.turns, on) }
     return Object.defineProperty(await ask(order, question, call), SUBJECT, { value: question })

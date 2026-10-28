@@ -19,7 +19,11 @@ group(
   {
     compare: { baseline: plain, variants: [withHouseGreeting] },
     questions: [
-      { question: 'Which greet.js reads more like our house style?', across: 'environment' },
+      {
+        question: 'Which greet.js reads more like our house style?',
+        across: 'environment',
+        diff: true,
+      },
     ],
     pin: ['compare'],
   },
