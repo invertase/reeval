@@ -2513,6 +2513,64 @@ export const features: Feature[] = [
     canary: /expected 'down' to be 'up'/,
   },
   {
+    dir: 'ui/serve-own-port',
+    tiers: ['docker', 'podman'],
+    env: 'ui',
+    canary: /expected 'vite' to be 'reads PORT'/,
+    record: ({ run }) => {
+      const [serve, ...more] = landed(run)?.serves ?? []
+      assert.ok(serve, 'serves names the c.serve call')
+      assert.deepEqual(more, [])
+      assert.equal(serve.command, 'node vite.mjs')
+      assert.equal(serve.detected, true)
+      assert.equal(serve.address, '::1')
+      assert.equal(serve.port, 5173)
+      assert.notEqual(serve.portEnv, 5173)
+      assert.equal(landed(run)?.files.artifacts?.[0]?.capture?.port, serve.port)
+    },
+  },
+  {
+    dir: 'ui/serve-reads-port',
+    tiers: ['fake', 'docker', 'podman'],
+    env: 'ui',
+    canary: /expected 'main' to be 'side'/,
+    record: ({ run }) => {
+      const serve = landed(run)?.serves?.[0]
+      assert.ok(serve, 'serves names the c.serve call')
+      assert.equal(serve.port, serve.portEnv)
+      assert.equal(serve.detected, false)
+    },
+  },
+  {
+    dir: 'ui/serve-two-ports',
+    tiers: ['docker', 'podman'],
+    env: 'ui',
+    lands: {
+      outcome: 'fail',
+      error: {
+        kind: 'assertion',
+        message:
+          /c\.serve\("node server\.mjs"\) listens on ports 4173 and 5173, and not on PORT \(\d+\)\. It printed http:\/\/localhost:5173\/\. Pass the one it serves on: c\.serve\("node server\.mjs", 5173\)/,
+      },
+    },
+    canary: /expected 'c\.serve\("node server\.mjs"\) listens on…' to be 'picked one'/,
+    record: ({ run }) => assert.equal(landed(run)?.serves, undefined),
+  },
+  {
+    dir: 'ui/serve-exits',
+    tiers: ['fake', 'docker', 'podman'],
+    env: 'ui',
+    lands: {
+      outcome: 'fail',
+      error: {
+        kind: 'assertion',
+        message:
+          /c\.serve\("node server\.mjs"\) exited before it listened on .*\. Its last output:\n[\s\S]*Error: Cannot find module vite/,
+      },
+    },
+    canary: /expected 'c\.serve\("node server\.mjs"\) exited bef…' to be 'served'/,
+  },
+  {
     dir: 'ui/capture-browser-false',
     tiers: ['fake', 'docker'],
     env: 'plain',

@@ -1,0 +1,437 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261028T144604Z_nogit_cursor-agent_6bgc",
+  "status": "complete",
+  "startedAt": "2026-10-28T14:46:04.780Z",
+  "endedAt": "2026-10-28T14:46:06.766Z",
+  "durationMs": 1986,
+  "author": "cursor-agent",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.15.1",
+    "node": "22.23.4",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.4"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.12",
+      "@reeval/harness-opencode": "0.2.10",
+      "@reeval/harness-goose": "0.1.6",
+      "@reeval/harness-pi": "0.2.8",
+      "@reeval/harness-cursor-sdk": "0.1.6",
+      "@ai-sdk/harness-claude-code": "1.0.160-patch.b17cde50",
+      "@reeval/harness-codex": "0.1.9",
+      "@reeval/harness-fx": "0.1.3",
+      "@reeval/harness-grok-build": "0.1.6",
+      "ai": "7.0.145",
+      "@ai-sdk/harness": "1.0.156",
+      "@ai-sdk/anthropic": "4.0.83",
+      "@ai-sdk/google": "4.0.100",
+      "@ai-sdk/openai": "4.0.97",
+      "@ai-sdk/typesafe-ai": "3.0.22"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "717433497d3f"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "servers",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:1ef26df592161a45da724392a2dcc710bd04faf8e80d9267fcfdd1ea5d5fd68a",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "reads-port.mjs",
+          "sha256": "7bb382b00a161cebca2dcc11eebdd25cf4eae011f27e6b70a0c2af457b2b04b4"
+        },
+        {
+          "path": "own-port.mjs",
+          "sha256": "e0d8e01ce342036c706e761df44602fbe8b71e87e9e169226e5966e69bc5cfb3"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "proxy"
+    }
+  ],
+  "profile": null,
+  "plan": {
+    "evals": 2,
+    "cells": 2,
+    "attempts": 2,
+    "estimateMs": 2000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "fake",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "471f0ad6c2a2a83da7966c6c6a6b2fd8104a9f125d6138ce272d832b6deeddc2"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 2,
+    "attempts": 2,
+    "pass": 2,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/serve.eval.ts › serves on PORT",
+      "key": "evals/serve.eval.ts › serves on PORT",
+      "slug": "evals-serve-eval-ts-serves-on-port-24ce2a",
+      "file": "evals/serve.eval.ts",
+      "group": [],
+      "name": "serves on PORT",
+      "tags": [],
+      "fingerprint": "9b5329bc9425ecd30bb91b8e2e1aadc060806b86fe261ca6e4c53f4eb4f761af",
+      "sources": [
+        {
+          "path": "evals/serve.eval.ts",
+          "sha256": "be55e8ce34c1a62ca6ced2ddf113c6a9730ac2d7ad5594f50db7c7e21d324d92"
+        }
+      ],
+      "source": {
+        "body": "668803889e9124d01bb84a6272f10e9665fb995b212d8e229aec14315fe27fef",
+        "options": "93e856f2e72dacc11a184ba4bda04b3f455e5a978e5f0d8bdd4f0fd0971ac76d"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/servers/fake",
+          "harness": "fake",
+          "environment": "servers",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "afb68c7d7af3fdbcd052f291511e8455e69844a1cd518e1c7f7a233370a343b9",
+          "fingerprintParts": {
+            "sources": "c44fc57a77f591beeeb0b1632cfe03f6a4467075d26c0f332e313ad52a6d252e",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:1ef26df592161a45da724392a2dcc710bd04faf8e80d9267fcfdd1ea5d5fd68a",
+            "image": null,
+            "agentCli": null,
+            "judge": "7af145e54e2ae40826ffbd54da3e17813c3a2e466081acf50ef6ea710fc862c1",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:1ef26df592161a45da724392a2dcc710bd04faf8e80d9267fcfdd1ea5d5fd68a",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toBe port",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/serve.eval.ts › serves on PORT # fake/servers/fake#1",
+          "id": "fake/servers/fake#1",
+          "cell": "fake/servers/fake",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-10-28T14:46:05.413Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 287,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 22,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 10,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": null
+          },
+          "judgements": [],
+          "serves": [
+            {
+              "command": "node reads-port.mjs",
+              "port": 43027,
+              "portEnv": 43027,
+              "detected": false,
+              "address": "127.0.0.1",
+              "readyMs": 228
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toBe port",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": false
+            }
+          ],
+          "checks": [
+            {
+              "command": "curl -s 127.0.0.1:43027",
+              "exitCode": 0,
+              "durationMs": 10,
+              "log": {
+                "path": "evals-serve-eval-ts-serves-on-port-24ce2a/fake-servers-fake-87e09b/1/checks/1.log",
+                "sha256": "bde7a3d2a93e01f496f07da4df568f3555f11d8ca64069f4d849ae6a209a100d",
+                "bytes": 60
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/serve.eval.ts › serves on its own port",
+      "key": "evals/serve.eval.ts › serves on its own port",
+      "slug": "evals-serve-eval-ts-serves-on-its-own-port-19dcc6",
+      "file": "evals/serve.eval.ts",
+      "group": [],
+      "name": "serves on its own port",
+      "tags": [],
+      "fingerprint": "2137f5f43bf2db36d5dec10535740f87503bb2cb5b77c01e452a9adc0483737c",
+      "sources": [
+        {
+          "path": "evals/serve.eval.ts",
+          "sha256": "be55e8ce34c1a62ca6ced2ddf113c6a9730ac2d7ad5594f50db7c7e21d324d92"
+        }
+      ],
+      "source": {
+        "body": "3cdaf5bf4fd629b2976bd8735e02dc90ea36a97b2a33308bdb0529e626ca6b19",
+        "options": "93e856f2e72dacc11a184ba4bda04b3f455e5a978e5f0d8bdd4f0fd0971ac76d"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/servers/fake",
+          "harness": "fake",
+          "environment": "servers",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "8d899e4d8bcfc8f44c72d4842395e6d88f728ac7e8a7d1fad4625416b7fed21a",
+          "fingerprintParts": {
+            "sources": "0fed735625bc589e7eccd25b1a51369d0d7f965cc0a1fc33a2054cafb63d14d9",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:1ef26df592161a45da724392a2dcc710bd04faf8e80d9267fcfdd1ea5d5fd68a",
+            "image": null,
+            "agentCli": null,
+            "judge": "7af145e54e2ae40826ffbd54da3e17813c3a2e466081acf50ef6ea710fc862c1",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:1ef26df592161a45da724392a2dcc710bd04faf8e80d9267fcfdd1ea5d5fd68a",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toBe own",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/serve.eval.ts › serves on its own port # fake/servers/fake#1",
+          "id": "fake/servers/fake#1",
+          "cell": "fake/servers/fake",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-10-28T14:46:05.416Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 1342,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 21,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 10,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": null
+          },
+          "judgements": [],
+          "serves": [
+            {
+              "command": "node own-port.mjs",
+              "port": 35675,
+              "portEnv": 44727,
+              "detected": true,
+              "address": "::1",
+              "readyMs": 1292
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toBe own",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": false
+            }
+          ],
+          "checks": [
+            {
+              "command": "curl -s -g '[::1]:35675'",
+              "exitCode": 0,
+              "durationMs": 10,
+              "log": {
+                "path": "evals-serve-eval-ts-serves-on-its-own-port-19dcc6/fake-servers-fake-87e09b/1/checks/1.log",
+                "sha256": "5d0c6388634ca06d9a38f2b7d0eb3fbab97caaec062a7d397dd59c182efe30b0",
+                "bytes": 60
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    }
+  ]
+}

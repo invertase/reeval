@@ -455,6 +455,14 @@ describe('egress gateway in Docker', {
     assert.equal(reopened.url, url)
     assert.equal(await retry(() => get(reopened.url)), 'bridge ok')
     await server.kill()
+
+    // A server on IPv6 loopback alone, as Vite is where `localhost` resolves to ::1 first.
+    const v6 = await s.spawn({
+      command: `node -e "require('http').createServer((q, r) => r.end('v6 ok')).listen(43213, '::1')"`,
+    })
+    const six = await s.getPortEndpoint({ port: 43213, protocol: 'http' })
+    assert.equal(await retry(() => get(six.url)), 'v6 ok')
+    await v6.kill()
   })
 
   test('without the gateway the bridge port is published, and an unpublished port is an error', async () => {

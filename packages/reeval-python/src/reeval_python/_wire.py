@@ -106,7 +106,7 @@ class AttemptCallExec(TypedDict):
     retries: NotRequired[int]
 
 
-# `c.serve(command, port?)`: a background process and its port.
+# `c.serve(command, port?)`: a background process, once it listens, and its port.
 class AttemptCallServe(TypedDict):
     # A shell command; `PORT` is set to the port.
     command: str
@@ -278,7 +278,7 @@ class AttemptReplyServe(TypedDict):
     id: str
     ok: Literal[True]
     op: Literal["serve"]
-    # The container port it was given.
+    # The container port it listens on.
     port: float
 
 
@@ -441,7 +441,8 @@ class CaptureOptions(TypedDict):
     # Vision model for `instructions`. Cascades like `question`. Default is `analysis.model`,
     # else the attempt's judge model, whichever is first a language model; never Jev.
     model: NotRequired[str]
-    # How long to poll before failing. Default `'60s'`.
+    # How long to poll before failing; a 502, 503 or 504 is polled past until then. Default
+    # `'60s'`.
     timeout: NotRequired[Duration]
     # The window and saved PNG size, or `'full-page'`. Default 1280×720.
     viewport: NotRequired[CaptureWindow | Literal["full-page"]]

@@ -19,6 +19,7 @@ import type {
   ResolvedJudgeStateOptions,
   Revision,
   SandboxWarning,
+  ServeRecord,
   SetupProcess,
   Snapshot,
   StartRetry,
@@ -270,6 +271,13 @@ export type AttemptRecord = {
    * `snapshot: false`, and when the sandbox was gone first (a timeout or a cancel).
    */
   snapshots?: Snapshot[]
+  /**
+   * Each `c.serve` call that listened, in call order: `{ command, port, portEnv, detected,
+   * address, readyMs }`. `port` is where it listens; `detected` is true when that isn't the
+   * `PORT` it was given (`portEnv`), so reeval took the one port that started listening after
+   * the command did. Absent when the attempt served nothing.
+   */
+  serves?: ServeRecord[]
   /**
    * Each foreground `c.exec`: its last try's exit code, and `durationMs` over all its tries. With
    * `retries`, `tries` has each try's `{ exitCode, durationMs }` and the log each try's output.

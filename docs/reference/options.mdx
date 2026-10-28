@@ -628,7 +628,8 @@ For more information about judging, see [Judge agent work](/evaluations/grading/
 </Property>
 
 <Property name="capture.timeout" type="Duration" optional>
-  How long to poll before failing, above zero. The default is `'60s'`.
+  How long to poll before failing, above zero. The default is `'60s'`. A 502, 503 or 504
+  response is polled past until then, and captured if it's still the answer.
 </Property>
 
 <Property name="capture.browser" type="boolean" optional>

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
 import { test } from 'node:test'
 import {
   listenForCaptureWait,
+  pollHttp,
   resolveCaptureCall,
   resolveCaptureWait,
   trackNetwork,
@@ -144,4 +146,24 @@ test('trackNetwork quiet times out naming networkAlmostIdle', async () => {
   const network = trackNetwork(cdp, 50)
   for (const requestId of ['a', 'b', 'c']) cdp.emit('Network.requestWillBeSent', { requestId })
   await assert.rejects(network.quiet(30), /c\.capture\(\) timed out waiting for networkAlmostIdle/)
+})
+
+test('pollHttp polls past a 503 while the server starts, and takes one at the deadline', async () => {
+  let hits = 0
+  const server = createServer((_, res) => {
+    hits++
+    res.writeHead(hits < 3 ? 503 : 200).end()
+  })
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
+  const { port } = server.address() as { port: number }
+  try {
+    await pollHttp(`http://127.0.0.1:${port}/`, 10_000)
+    assert.equal(hits, 3)
+    hits = -1_000
+    const started = Date.now()
+    await pollHttp(`http://127.0.0.1:${port}/`, 400)
+    assert.ok(Date.now() - started >= 400)
+  } finally {
+    server.close()
+  }
 })

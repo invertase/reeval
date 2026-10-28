@@ -257,8 +257,22 @@ export function forwarderMain(
     Duplex: io.Duplex,
     parity: 1,
     send: (f) => io.output.write(f),
+    // IPv4 loopback first, then IPv6's, for a server bound to `::1` alone.
     onOpen(stream, port) {
-      linkStreams(io.net.connect({ port, host: '127.0.0.1', allowHalfOpen: true }), stream)
+      const attempt = (hosts: string[]) => {
+        const socket = io.net.connect({ port, host: hosts[0], allowHalfOpen: true })
+        const refused = (error: NodeJS.ErrnoException) => {
+          if (error.code === 'ECONNREFUSED' && hosts.length > 1) attempt(hosts.slice(1))
+          else stream.destroy()
+        }
+        socket.once('error', refused)
+        socket.once('connect', () => {
+          socket.off('error', refused)
+          if (stream.destroyed) socket.destroy()
+          else linkStreams(socket, stream)
+        })
+      }
+      attempt(['127.0.0.1', '::1'])
     },
     onError(message) {
       io.error(`reeval egress forwarder: ${message}`)

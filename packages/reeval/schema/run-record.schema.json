@@ -534,6 +534,13 @@
             }
           ]
         },
+        "serves": {
+          "description": "Each `c.serve` call that listened, in call order: `{ command, port, portEnv, detected, address, readyMs }`. `port` is where it listens; `detected` is true when that isn't the `PORT` it was given (`portEnv`), so reeval took the one port that started listening after the command did. Absent when the attempt served nothing.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ServeRecord"
+          }
+        },
         "setupProcesses": {
           "description": "Processes the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in their environment, so they hold its real value while the agent works and the agent, as the same user, can read it from them. Found by the secret's variable name, so a copy under another name or in a command's arguments isn't. At most 20, each `{ command, secrets }`: its command line, masked and cut at 200 characters, and those secrets' names. Absent when there were none.",
           "type": "array",
@@ -3008,6 +3015,37 @@
         }
       },
       "required": ["file", "kind", "level", "message", "where"]
+    },
+    "ServeRecord": {
+      "description": "One `c.serve` call that listened.",
+      "type": "object",
+      "properties": {
+        "address": {
+          "description": "The address it listens on there, e.g. `127.0.0.1`, `::1` or `0.0.0.0`; empty when the sandbox can't tell.",
+          "type": "string"
+        },
+        "command": {
+          "description": "The command as the eval passed it.",
+          "type": "string"
+        },
+        "detected": {
+          "description": "It listened on a port other than `PORT`, the one that started listening after it did.",
+          "type": "boolean"
+        },
+        "port": {
+          "description": "The port it listens on, which the handle and `c.capture` use.",
+          "type": "number"
+        },
+        "portEnv": {
+          "description": "The `PORT` it was given: the port the eval passed, or the one reeval allocated.",
+          "type": "number"
+        },
+        "readyMs": {
+          "description": "From the command's start until it listened.",
+          "type": "number"
+        }
+      },
+      "required": ["address", "command", "detected", "port", "portEnv", "readyMs"]
     },
     "SetupProcess": {
       "description": "A process the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in its environment: it holds the real value while the agent works.",

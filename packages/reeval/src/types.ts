@@ -135,7 +135,7 @@ export type CaptureUse = { model: string } | { fake: CaptureUseScript }
 export type CaptureOptions = {
   /** The window and saved PNG size, or `'full-page'`. Default 1280×720. */
   viewport?: Viewport
-  /** How long to poll before failing. Default `'60s'`. */
+  /** How long to poll before failing; a 502, 503 or 504 is polled past until then. Default `'60s'`. */
   timeout?: Duration
   /** `false` refuses the host `chrome-headless-shell` binary. `c.capture()` then throws. */
   browser?: boolean
@@ -151,7 +151,7 @@ export type BackgroundHandle = {
   kill(): Promise<void>
 }
 
-/** `c.serve`: a background process plus the port it was given or allocated. */
+/** `c.serve`: a background process plus the port it listens on. */
 export type ServeHandle = BackgroundHandle & { port: number }
 
 /** What `c.capture()` returns: the PNG is also in the attempt record under `artifacts/`. */
@@ -437,8 +437,10 @@ export type AttemptContext = {
     options?: ExecRetry & { background?: boolean },
   ): Promise<ExecResult | BackgroundHandle>
   /**
-   * Starts `command` in the background and returns its port. A given `port` is used; omit it
-   * and reeval allocates one. Sets `PORT` so a bash string can use `$PORT`.
+   * Starts `command` in the background with `PORT` set to `port`, or to a port reeval allocates,
+   * and returns once it listens. Without `port`, a command that listens on one new port instead
+   * (Vite's 5173) gets that one; several new ports, none of them `PORT`, or an exit first, throw
+   * with its last output.
    */
   serve(command: string, port?: number): Promise<ServeHandle>
   /**
@@ -2454,6 +2456,22 @@ export type SetupProcess = {
   secrets: string[]
 }
 
+/** One `c.serve` call that listened. */
+export type ServeRecord = {
+  /** The command as the eval passed it. */
+  command: string
+  /** The port it listens on, which the handle and `c.capture` use. */
+  port: number
+  /** The `PORT` it was given: the port the eval passed, or the one reeval allocated. */
+  portEnv: number
+  /** It listened on a port other than `PORT`, the one that started listening after it did. */
+  detected: boolean
+  /** The address it listens on there, e.g. `127.0.0.1`, `::1` or `0.0.0.0`; empty when the sandbox can't tell. */
+  address: string
+  /** From the command's start until it listened. */
+  readyMs: number
+}
+
 /** One `expect` or `expect.require` matcher call an attempt made, or a check another language made. */
 export type AssertionRecord = {
   /**
@@ -2521,6 +2539,8 @@ export type EvalRecord = {
   setup?: Array<{ run: string; exitCode: number | null; durationMs: number; output: string }>
   /** See `AttemptRecord.setupProcesses`. */
   setupProcesses?: SetupProcess[]
+  /** See `AttemptRecord.serves`. */
+  serves?: ServeRecord[]
   egress?: EgressRecord
   /** See `AttemptRecord.servedModels`. */
   servedModels?: string[] | null

@@ -170,7 +170,8 @@ export async function startGateway(
   }
 
   const proxyUrl = `http://127.0.0.1:${PROXY_PORT}`
-  const noProxy = 'localhost,127.0.0.1,::1'
+  // Node's fetch matches an IPv6 URL's host with its brackets, curl without.
+  const noProxy = 'localhost,127.0.0.1,::1,[::1]'
   return {
     env: {
       HTTPS_PROXY: proxyUrl,

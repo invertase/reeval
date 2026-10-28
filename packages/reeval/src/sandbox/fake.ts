@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, win32 } from 'node:path'
 import type { EgressCapabilities } from '@reeval/sandbox-docker'
 import { run, shellQuote } from '@reeval/sandbox-docker/process'
+import { hostListening } from '../attempt/serve.ts'
 import { UsageError } from '../errors.ts'
 import type { FakeSandboxDescriptor } from '../types.ts'
 import type { Sandbox } from './types.ts'
@@ -154,8 +155,9 @@ export async function createFakeSandbox(
     },
     home: base,
     readFile: (path) => readFile(resolve(path), 'utf8').catch(() => null),
+    // A server bound to `::1` alone (Vite's `localhost` on some hosts) isn't on 127.0.0.1.
     getPortEndpoint: async ({ port, protocol = 'http' }) => ({
-      url: `${protocol === 'ws' ? 'ws' : 'http'}://127.0.0.1:${port}`,
+      url: `${protocol === 'ws' ? 'ws' : 'http'}://${(await hostListening(port)) === '::1' ? '[::1]' : '127.0.0.1'}:${port}`,
     }),
     async writeFile(path, content) {
       const target = resolve(path)

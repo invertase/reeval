@@ -109,7 +109,7 @@
           "pattern": "\\/"
         },
         "timeout": {
-          "description": "How long to poll before failing. Default `'60s'`.",
+          "description": "How long to poll before failing; a 502, 503 or 504 is polled past until then. Default `'60s'`.",
           "$ref": "#/$defs/Duration"
         },
         "viewport": {

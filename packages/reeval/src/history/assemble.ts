@@ -902,6 +902,7 @@ async function attemptEvidence(
     | 'startRetries'
     | 'setupProcesses'
     | 'snapshots'
+    | 'serves'
     | 'checks'
     | 'changedFiles'
     | 'files'
@@ -987,6 +988,7 @@ async function attemptEvidence(
     ...(record?.startRetries?.length ? { startRetries: record.startRetries } : {}),
     ...(record?.setupProcesses?.length ? { setupProcesses: record.setupProcesses } : {}),
     ...(snapshots.length ? { snapshots } : {}),
+    ...(record?.serves?.length ? { serves: record.serves } : {}),
     ...(record?.assertions?.length ? { assertions: record.assertions } : {}),
     checks: (record?.checks ?? []).map((c, i) => ({
       command: c.command,
