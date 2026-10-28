@@ -31,7 +31,7 @@ times, and the question pairs Claude Code's attempts with Codex's run by run:
 plan  run … · 1 eval · 3 cells · 12 attempts · ~36m 00s serial (~9m 00s at concurrency 4)
 eval                                                       harnesses  variants  runs  attempts  notes
 with-compare-harness.eval.ts › documents the new function  2          1         4     12        runs 4 (compare default)
-  question 1/1  Which multiply() is easier to read? · after the run · shows task, diff · harness · 4 pairs · anthropic/claude-sonnet-5
+  question 1/1  Which multiply() is easier to read? · after the run · shows diff · harness · 4 pairs · anthropic/claude-sonnet-5
 ```
 
 `pnpm reeval run --dry-run --json` lists the cells: `claude-code:claude-sonnet-5/math/docker`
@@ -46,4 +46,4 @@ with-compare-harness.eval.ts › documents the new function  2          1       
 | [`reeval.config.ts`](./reeval.config.ts) | The question's model, and the profiles from `../profiles.ts` |
 
 The [Options](../../docs/reference/options.mdx) reference page covers `compare.harness` and
-`questions`' `across`, and the [Questions](../../docs/guide/questions.mdx) guide covers pairing.
+`questions`' `across`, and the [Ask questions across attempts](../../docs/evaluations/grading/questions.mdx) page covers pairing.

@@ -13,16 +13,20 @@ group(
   {
     compare: { baseline: plain, variants: [withHouseGreeting] },
     questions: [
-      { question: 'Which greeting reads more like our house style?', across: 'environment' },
-      { question: 'Which greeting handles a missing name?', across: 'environment' },
-      { question: 'Does the greeting use the house style?', choices: ['yes', 'no'] },
+      {
+        question: 'Which greeting reads more like our house style?',
+        across: 'environment',
+        diff: true,
+      },
+      { question: 'Which greeting handles a missing name?', across: 'environment', diff: true },
+      { question: 'Does the greeting use the house style?', choices: ['yes', 'no'], diff: true },
       'How did the agent pick its greeting?',
     ],
   },
   () => {
     evaluate('writes a greeting', async (c) => {
       await c.send('Write greet.js that greets in our house style.')
-      await expect.soft(c, 'writes greet.js').toHaveFile('greet.js')
+      await expect(c, 'writes greet.js').toHaveFile('greet.js')
       await expect(c).toHaveFile('greet.js')
     })
   },

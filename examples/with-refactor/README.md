@@ -2,8 +2,8 @@
 
 **Shows:** a refactor that keeps behavior. Two modules parse records with the same loop, and the
 agent moves it into `src/parse.js`. The tests must stay green and unchanged
-(`not.toHaveChanged`), and a judge reads only the diff under `src/` (`state: { diff: ['src/**'] }`)
-to say whether the duplication is gone.
+(`not.toHaveChanged`), and a judge reads only the diff under `src/` (`{ diff: ['src/**'] }`) to
+say whether the duplication is gone.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. A real agent needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code, which also
@@ -30,9 +30,6 @@ one profile you need.
 
 ```json
 "state": {
-  "task": "src/users.js and src/orders.js parse records the same way. …",
-  "output": "I moved the parsing into parseRecord() in src/parse.js; …",
-  "files": ["modified src/orders.js", "added src/parse.js", "modified src/users.js"],
   "diff": { "$ref": "diff.patch", "sha256": "7d3ae9b4…" }
 }
 ```
@@ -44,5 +41,5 @@ one profile you need.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace: `parse.js` and both modules using it |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, and the real agents from `../profiles.ts` |
 
-What the judge sees, and how to narrow it, is in the [Judges](../../docs/reference/judges.mdx)
+The judge's inputs, and how to narrow each, are in the [Judge agent work](../../docs/evaluations/grading/judgments.mdx)
 reference.

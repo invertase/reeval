@@ -1,11 +1,11 @@
 from reeval_python import evaluate, expect
 
 
-# A failed expect the body catches still fails the attempt, as expect.soft does when the body ends.
+# A failed expect.require the body catches still fails the attempt, as a failed expect does.
 @evaluate("caught expect")
 def caught_expect(c):
     try:
-        expect(c.exec("test -f missing.txt"), "missing file").to_succeed()
+        expect.require(c.exec("test -f missing.txt"), "missing file").to_succeed()
     except AssertionError:
         pass
 

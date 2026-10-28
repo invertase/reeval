@@ -1,35 +1,13 @@
 ---
-title: Options
-description: Every option groups, evals, profiles and the config accept, and how each one inherits.
+title: "Options reference"
+description: "Options set how evaluations run. Each key is accepted in set places, and its value cascades down to each evaluation."
 ---
 
-`defineConfig`, `group` and `evaluate` take the same options. They cascade config → profile `defaults` → outer group → inner group → eval, then the profile's `limit` narrows them, then `--runs` overrides.
-
-```ts title="evals/skill.eval.ts"
-group(
-  'house greeting',
-  {
-    compare: { baseline: plain, variants: [withHouseGreeting] },
-    runs: 2,
-    pin: ['compare'],
-  },
-  () => {
-    evaluate(
-      'greets in the house style',
-      { timeout: '10m', tags: ['skills'] },
-      async (c) => {
-        // …
-      },
-    )
-  },
-)
-```
-
-## Where each key is accepted
+## Where each option is accepted
 
 [//]: # (generated:option-keys)
 
-| Key | `reeval.config.ts` | Profile `defaults` | Group or eval | Profile `limit` |
+| Key | `reeval.config.ts` | Profile `defaults` | Group or evaluation | Profile `limit` |
 |---|---|---|---|---|
 | [`include`](#include) | ✓ |  |  |  |
 | [`gateway`](#gateway) | ✓ |  |  |  |
@@ -56,125 +34,828 @@ group(
 | [`compare`](#compare) |  |  | ✓ | ✓ |
 | [`questions`](#questions) |  |  | ✓ |  |
 | [`tags`](#tags) |  |  | ✓ |  |
-| [`revision`](#revision) |  |  | ✓ |  |
 | [`pin`](#pin) |  |  | ✓ |  |
 
 [//]: # (/generated:option-keys)
 
-Config-only keys are on [defineConfig](/reference/config); `profiles` and `defaultProfile` are on [Profiles and budgets](/reference/profiles). Options are plain objects: a function in the options position is an error, and an unknown key is exit 2 with a hint (`Unknown option "repeat" in evaluate("e"). Did you mean "runs"?`).
+## The cascade
 
-## Options
+reeval applies the `reeval.config.ts` file, then the selected profile's `defaults`, then each enclosing `group()`, outermost first, then the `evaluate()` call. A profile `limit` then narrows `runs`, `compare`, and `harness`, except the keys in `pin`.
 
-<Property name="harness" type="Harness | Harness[] | { add } | { only } | ((inherited: Harness[]) => Harness[])">
-  Which agents run the eval. **Replaces** the inherited value. The only list: each harness is its own cell. An edit changes the inherited list instead: `{ add: cursor({ model: 'composer-2' }) }` appends one or a list, `{ only: 'cursor:composer-2.5' }` keeps the inherited harnesses with these ids (one or a list), and a function gets the list and returns a new one, `(h) => [...h, cursor({ model: 'composer-2' })]`. An empty list, two harnesses with the same id, or an `only` id nothing inherited has, is an error. Default `cursor({ model: 'composer-2.5' })`.
+A later level replaces most keys, `compare` whole. `env` merges by name, `judge` and `question` field by field, `capture` shallowly, and `tags` and `pin` keep every value. `--runs` then replaces `runs`. `--tag` filters which evaluations run, and `--concurrency` caps the attempts running at once; neither changes an evaluation's options.
+
+For more information about overriding an option, see [Group evaluations](/evaluations/task/groups#see-how-options-cascade).
+
+## `include`
+
+`include` lists the glob patterns for evaluation files, relative to the `reeval.config.ts` file's directory.
+
+<Property name="include" type="string[]" optional>
+  The default is `evals/**/*.eval.ts` and `evals/**/*.eval.py`.
 </Property>
 
-<Property name="sandbox" type="SandboxDescriptor">
-  The default machine when the resolved environment omits `sandbox`. **Replaces**. Cascades config → profile `defaults` → group → eval. Not an environment: it does not invent skills, files or a name. A named environment is a total override and does not inherit the config environment's sandbox. `.extend()` keeps the parent environment's sandbox when the child omits it. Default `docker()`.
+## `gateway`
+
+`gateway` lists the gateways that serve model calls, in order of preference.
+
+<Property name="gateway" type="GatewayDescriptor[]" optional>
+  Helpers from `{{ pkg }}/gateway`: `direct()` is each provider's own key, `vercel()` is Vercel AI Gateway, and `openrouter()` is OpenRouter. The default is `[direct()]`. Each harness and judge model takes the first gateway that can serve it. reeval refuses a gateway listed twice, and a plan where no listed gateway can serve a model.
 </Property>
 
-<Property name="environment" type="Environment">
-  What the eval runs in, from `defineEnvironment`. **Replaces**. One environment, never a list. Used only when the eval or compare arm did not name an environment; a named env is a total override (no skills, files or sandbox from this one). Beside or above a compare without a `baseline`, it's the control — including a default `environment` on the config. Default none: the attempt uses the cascaded `sandbox` option, else implicit Docker.
+A selected profile's [`gateway`](/reference/profiles#gateway) replaces this list.
+
+A harness or a judge that names its own `gateway` skips the list's fallback. For more information about pinning a gateway, see [Route models through a gateway](/configuration/gateways#pin-one-gateway).
+
+### `openrouter()` options
+
+`openrouter()` takes one option. `direct()` and `vercel()` take none.
+
+<Property name="fallbacks" type="boolean" optional>
+  Lets OpenRouter fail over to another upstream provider when the one it picked can't serve a call. The default is `false`, so reeval's own calls, the judge, analysis, questions, and captures, send `allow_fallbacks: false`. The harnesses' calls take OpenRouter's own routing either way. The plan notes where it is on.
 </Property>
 
-<Property name="compare" type="{ baseline?, variants, gate?, minLift?, harness? }">
-  A control and other environments, each run on its own and reported as lift. **Replaces**. Groups and evals only: it's refused in `reeval.config.ts`. `compare: false` is not a value here. A profile turns compare off with `limit.compare: false`, which runs the control alone. `compare` does not layer.
+For more information about OpenRouter, see [Route through OpenRouter](/configuration/gateways/openrouter).
 
-  - `baseline`: the control, an environment from `defineEnvironment`. With it, `environment` can't sit on the same object, and an inherited one is not applied as files, skills or variables. A named arm that omits `sandbox` uses the cascaded `sandbox` option, else implicit Docker; it does not inherit the config environment's sandbox. `.extend()` keeps the parent environment's sandbox when the child omits it. Without a `baseline`, the control is the cascaded `environment` (the same object's, a group's or the config's), else an empty environment named `baseline`. That empty control uses the first variant's sandbox when the variant sets one, so the compare is the same machine without the variant's files, not implicit Docker versus Node 24. A variant with the control's name is an error. The record's `evals[].compare` names the control and, for an omitted baseline, sets `from` to `environment` or `empty`.
-  - `variants`: the other environments. Each cell runs that environment alone.
-  - `gate`: `'variants'` (default) gates only variant cells; `'all'` gates the control too; `'none'` only reports.
-  - `minLift`: a number from -1 to 1. A variant cell fails when its lift interval's lower bound is below it. On a pooled `evaluate.each`, it gates the family's paired lift over the cases, not each case's lift.
-  - `harness`: harness ids to compare on; the others run the control only. An id the eval doesn't run is an error. A profile's `limit.harness` that drops every listed id turns the compare off, as `limit.compare: false` does.
+## `harness`
+
+`harness` names the agents that run an evaluation, one cell each.
+
+<Property name="harness" type="HarnessOption | string[]" optional>
+  The config and profile defaults accept a descriptor or list, which replaces inherited harnesses. Groups and evaluations also accept `{ add }`, `{ only }`, or, in TypeScript, a function of the inherited list. A profile `limit` lists allowed ids. reeval refuses `add` beside `only`, an empty resolved list, an unknown `only` id, and repeated ids among the resolved descriptors.
 </Property>
 
-<Property name="runs" type="number | { bestOf: number }">
-  Attempts per cell, a whole number of at least 1, or `{ bestOf: n }`. **Replaces**. `reeval run --runs n` overrides every level, pins included, and turns a best-of into `n` fixed attempts. Default 1, except a `compare` with variants, which runs 4 per cell: the fewest counted tries a side a lift verdict needs, so a default compare can say `helped` or `made it worse` rather than `can't tell yet`. The plan notes `runs 4 (compare default)`, and its attempts and estimate include them. Any level that sets `runs`, `runs: 1` included, replaces the default; a profile's `limit.runs` caps it, and a compare that `limit.compare` turns off runs once. A case of a pooled `evaluate.each` runs once, since its lift pools over the cases.
+The default is:
 
-  `{ bestOf: n }` stops each cell once one side, pass or fail, has a majority of `n`: `n` is odd and 3 or more, anything else exits 2 (`runs.bestOf in evaluate("e") must be an odd whole number of 3 or more, … (got 4)`). The cell gates on that majority (`gate: { passRate: 0.5 }`), and a `gate` set anywhere else is replaced, with a plan note.
+```ts
+harness: cursor({ model: 'composer-2.5' })
+```
 
-  | `bestOf` | Attempts |
-  |---|---|
-  | 3 | 2, and a 3rd only when they split |
-  | 5 | 3 to 5 |
-  | 7 | 4 to 7 |
+For more information about harness forms, see [Choose an agent](/configuration/agents).
 
-  A cell's first `(n + 1) / 2` attempts start together; each later one waits until every earlier attempt of its cell has ended, and runs only while neither side has a majority. Other cells keep running meanwhile. An infra error counts on neither side, and a cell never runs more than `n`. The plan shows the range (`2–3 attempts`), and the budget and time estimate use the most. The record marks the attempt the majority added (`bestOf: 'added'`) and each one it left unrun (`bestOf: 'skipped'`, outcome `skipped`), and sets `bestOf` on the cell; the output names those `not needed (best of 5)`.
+### Harness factory options
 
-  Refused on an eval that compares environments, wherever the best-of came from: a lift needs the same attempts on each side. A profile's `limit.runs` below `n` makes it that fixed count, with a note. [`flaky_cells`](/reference/cli/query) calls a cell flaky from 6 counted attempts, pooled over comparable runs, so in one run only a best of 7 or more can reach it; a smaller one that split reports `mixed`. In TypeScript, an inline even, decimal or below-3 literal is a type error, and a value typed `number` is checked when the run is planned. In YAML, `runs: { bestOf: 5 }`; in Python, `{"runs": {"best_of": 5}}`.
+Each factory in this table runs an agent and requires `model`. All but `fx()` take an optional `effort`. reeval refuses a missing `model`, an `effort` the harness doesn't take, or an unknown option at plan time with exit code 2. For `id`, `maxConcurrent`, `startTimeout`, and `gateway`, see [Set the harness options](/configuration/agents#set-the-harness-options).
+
+`fakeHarness()` runs no agent, so it is not in the table. It is for tests and dry runs, takes no `model`, and records an optional `effort` on the cell without sending it anywhere.
+
+| Factory | `model` | `effort` |
+|---|---|---|
+| `cursor()` | A model id `Cursor.models.list()` returns for the key. | Mapped onto the catalog parameter the model names, `reasoning_effort` or `effort`. A model with no such parameter refuses it. |
+| `claudeCode()` | A model id or alias the `claude` CLI accepts. | `low`, `medium`, `high`, `xhigh`, or `max`, for the Agent SDK `/effort` control. The Claude Code UI labels `xhigh` as Extra. reeval refuses any other value. |
+| `antigravity()` | A slug `agy models` lists for the key, such as `<model>-medium`. A `-low`, `-medium`, or `-high` suffix sets effort in the slug. | Passed as `agy --effort`, such as `low`, `medium`, `high`, or `max`. The cell's `effort` field copies it. |
+| `codex()` | An OpenAI model id with no provider prefix, passed as `--model`. | Written as `model_reasoning_effort` in `~/.codex/config.toml`: `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`. |
+| `goose()` | A model id with no provider prefix, run on Goose's `google` provider, using letters, digits, `_`, `.`, and `-`. | Passed as `GOOSE_THINKING_EFFORT`: `off`, `low`, `medium`, `high`, or `max`. |
+| `grokBuild()` | An xAI model id with no provider prefix, using letters, digits, and `._-`. | For a model that takes one, such as `low`, `medium`, or `high`. Set as `default_reasoning_effort` in Grok Build's `config.toml` file. |
+| `opencode()` | `<provider>/<model>`. The part before the first `/` picks the provider and its key. reeval refuses a bare id, an unknown provider, or a provider whose key it can't broker. | A value the provider takes. Set as `options.thinking` on an `anthropic/` model and as `options.reasoningEffort` on every other provider. |
+| `pi()` | A Gemini model id with no provider prefix, which pi runs on its `google` provider. | Passed as pi's `--thinking` flag: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. |
+| `fx()` | A Vercel AI Gateway id, `<provider>/<model>`, or a bare OpenAI model id. | Not accepted. |
+
+<Property name="params" type="Record<string, string>" optional>
+  `cursor()` only. Parameter ids mapped to string values, such as `{ fast: 'true' }`. An unset parameter takes the default variant in Cursor's model catalog, which reeval sends on the request. `fast` is `'false'` when the model accepts it and `params` leaves it unset.
 </Property>
 
-<Property name="gate" type="'all' | { passRate: number }">
-  How a cell passes. **Replaces**. `'all'` (default) is `{ passRate: 1 }`: every counted attempt must pass. `{ passRate: 0.8 }` passes when at least 80% of passes and fails are passes. Infra errors don't count; a cell is `infra_error` only when nothing counted.
+### Common harness options
+
+Every factory takes these options beside `model`.
+
+<Property name="id" type="string" optional>
+  Cell id. Defaults to the harness name followed by the model, such as `claude-code:<model>`, with `[effort=<value>]` added when `effort` is set. An id with a `/`, such as the `<provider>/<model>` id of `opencode`, keeps only the part after its last `/`, so `google/gemini-3.8-flash` gives `opencode:gemini-3.8-flash`. The id uses letters, digits, and `._:@+-=[]`.
 </Property>
 
-<Property name="env" type="Record<string, string | Secret>">
-  Variables for the sandbox. **Merges by variable name**. Secrets come from a `defineConfig` or `defineEnvironment` callback's `secret` helper; a literal string under a secret-looking name is refused.
+<Property name="maxConcurrent" type="number" optional>
+  The most attempts of this harness that run at the same time, across the run. A whole number of at least 1.
 </Property>
 
-<Property name="egress" type="'proxy' | 'allow-all' | 'deny-all' | { allow: string[] }">
-  Where the sandbox may connect. **Replaces**. An environment's `egress` sits between the profile `defaults` and the groups. Default `'proxy'`. See [Egress](/reference/egress).
+<Property name="startTimeout" type="Duration" optional>
+  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
 </Property>
 
-<Property name="judge" type="{ model?, threshold?, maxConcurrent?, providerOptions? }">
-  Judge settings. **Merges field by field**, so overriding `threshold` keeps the model. No default model; `threshold` defaults to 0.8. See [Judges](/reference/judges).
+<Property name="gateway" type="GatewayName | GatewayDescriptor" optional>
+  The gateway this harness's model calls go through: `'direct'`, `'vercel'`, or `'openrouter'`, or the descriptor that `direct()`, `vercel()`, or `openrouter()` from `{{ pkg }}/gateway` returns. It skips the config's `gateway` fallback, and the plan refuses a gateway that isn't listed or can't serve the harness. For more information about routing, see [Route models through a gateway](/configuration/gateways).
 </Property>
 
-<Property name="questions" type="Array<string | { question, across?, choices?, model?, state?, artifacts? }>">
-  Questions a model answers about the eval's attempts. **Replaces**: an eval's list replaces its group's. Groups and evals only: refused in `reeval.config.ts` and not a profile default. Questions annotate and never change pass, fail or the exit code. See [Questions](/guide/questions).
+### Gateway support by harness
 
-  - `question`: the question. A plain string is an entry with no other keys.
-  - `across`: `'environment'`, `'harness'`, or a list of those. Set, the question is pairwise: after every attempt of the eval ends, the attempts that passed are paired by varying those factors and holding the others, and each pair is voted on in both orders. Unset, the question is asked of each attempt as it ends with a pass or a fail (four calls at a time; infra errors, skipped and cancelled attempts aren't asked). A factor the eval's matrix doesn't vary exits 2; one a profile's limit narrows to a single level drops the question with a note.
-  - `choices`: two or more distinct, non-empty answers the model picks one of, with a short reason. Per-attempt questions only: with `across` it exits 2. Without it, the answer is free text.
-  - `model`: a `'provider/model'` language model. Without one, the cascaded [`question.model`](#question) answers, else `analysis.model`, else the run's judge model (a profile's over the config's) when it's a language model. `reeval run` exits 2 at plan time when a question has no language model or would get an evaluation model.
-  - `state` and `artifacts`: what the model is shown, over the cascaded [`question`](#question) option.
+✅ means the gateway routes the harness and its `effort`. ⚠️ means it routes the harness, but a harness with `effort` set takes the next gateway in the list, and a pinned one stops the plan.
 
-  `--dry-run` names each question, what it shows, and how many attempts or pairs it will ask (assuming every attempt passes its checks). An empty list asks none, so an eval can clear its group's. An empty string, a value that isn't a list, an unknown entry key and the same question twice are errors. Per-attempt answers land in `evals[].attempts[].answers` and `reeval query attempt_answers`; pairwise ones in `evals[].answers`, `votes` and `question_pairs`.
+| Harness | `vercel()` | `openrouter()` |
+| --- | --- | --- |
+| Cursor | ❌ | ❌ |
+| Claude Code | ✅ | ⚠️ |
+| Codex | ✅ | ✅ |
+| Antigravity | ❌ | ❌ |
+| OpenCode | ⚠️ | ⚠️ |
+| Goose | ⚠️ | ⚠️ |
+| pi | ❌ | ❌ |
+| fx | ✅ | ❌ |
+| Grok Build | ⚠️ | ⚠️ |
+
+Cursor's agent calls only Cursor's API, and Antigravity's CLI calls only Google's. reeval runs pi on its Gemini key, and fx on `vercel()` or OpenAI's API.
+
+### Harness behavior
+
+Each value of `harness` reads the environment's `rules`, `skills`, and `mcp` servers from its own places and records its own events. Each row is one harness. The harness pages hold each one's key and plugins.
+
+#### Support by harness
+
+[//]: # (generated:harness-matrix)
+
+| Harness | Key | Key brokered | Rules file | Skills: workspace | Skills: home | MCP stdio | MCP `http` | MCP `sse` | Tokens | Served model | Web search events | Web fetch events | Sandbox |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| [Cursor](/configuration/agents/cursor) | `CURSOR_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Claude Code](/configuration/agents/claude-code) | `ANTHROPIC_API_KEY` | ✓ | `CLAUDE.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Antigravity](/configuration/agents/antigravity) | `GEMINI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [OpenCode](/configuration/agents/opencode) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Goose](/configuration/agents/goose) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ | `docker()` |
+| [pi](/configuration/agents/pi) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
+| [Codex](/configuration/agents/codex) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [fx](/configuration/agents/fx) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Grok Build](/configuration/agents/grok-build) | `XAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | `docker()` |
+
+[//]: # (/generated:harness-matrix)
+
+#### Rules and skills
+
+[//]: # (generated:harness-layout)
+
+| Harness | Rules file | Workspace skills directory | Home skills directory |
+|---|---|---|---|
+| Cursor | `AGENTS.md` | `.cursor/skills` | `~/.agents/skills` |
+| Claude Code | `CLAUDE.md` | `.claude/skills` | `~/.claude/skills` |
+| Antigravity | `AGENTS.md` | `.agents/skills` | `~/.gemini/config/skills` |
+| OpenCode | `AGENTS.md` | `.opencode/skills` | `~/.config/opencode/skills` |
+| Goose | `AGENTS.md` | `.goose/skills` | `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills` |
+| pi | `AGENTS.md` | `.pi/skills` | `~/.pi/agent/skills` |
+| Codex | `AGENTS.md` | `.agents/skills` | `~/.agents/skills` |
+| fx | `AGENTS.md` | `.fx/skills` | `~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills` |
+| Grok Build | `AGENTS.md` | `.grok/skills` | `~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/skills` |
+
+[//]: # (/generated:harness-layout)
+
+- Codex reads the `~/.codex/AGENTS.md` file before the workspace rules file. It reads workspace skills from the working directory up to the repo root.
+- Goose and Grok Build also read the `.agents/skills` and `.claude/skills` directories in the workspace. OpenCode reads them in the workspace and in the home directory.
+- Grok Build ignores an untrusted folder's rules and skills, so reeval marks the workspace trusted. pi loads workspace skills because the harness trusts the project.
+
+For more information about writing rules and placing skills, see [Add project rules](/configuration/environments/rules) and [Give the agent skills](/configuration/environments/skills).
+
+#### MCP servers
+
+- **Cursor:** `stdio`, `http`, and `sse`, as `{ type: 'stdio', command, args, env }` or `{ type, url, headers }`.
+- **Claude Code:** `stdio`, `http`, and `sse`, in the shape of the `.mcp.json` file: `{ type: 'stdio', command, args, env }` or `{ type, url, headers }`.
+- **Antigravity:** `stdio`, `http`, and `sse`, in the `~/.gemini/config/mcp_config.json` file. A `stdio` server is `command`, `args`, and `env`, and an `http` or `sse` server is `serverUrl` and `headers`.
+- **Codex:** `stdio` and `http`, under `[mcp_servers]` in the `~/.codex/config.toml` file. A `stdio` server is `command`, `args`, and `env`, and an `http` server is `url` and `http_headers`. A call is named `mcp__<server>__<tool>`. An `sse` server fails at plan time with exit code 2.
+- **OpenCode:** `stdio` and `http`, written as `{ type: 'local', command: [command, ...args], environment }` or `{ type: 'remote', url, headers, oauth: false }` in OpenCode's configuration. Code Mode is off, so the agent calls the tools directly, and the first prompt waits until every server has connected. reeval refuses an `sse` server at plan time with exit code 2.
+- **Goose:** `stdio` and `http`, written as enabled extensions in the `.config/goose/config.yaml` file under the private home directory `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home`. A `stdio` server is `cmd`, `args`, and `envs`, and an `http` server is `uri` and `headers`, with type `streamable_http`. Goose keys each extension by dropping whitespace, replacing every character outside letters, digits, `_`, and `-` with `_`, and lower-casing the name. reeval refuses an `sse` server, or two servers that share a key, at plan time with exit code 2.
+- **pi:** `stdio` and `http`, in the `~/.pi/agent/mcp.json` file with direct exposure, so the model and the transcript name each tool `mcp__<server>__<tool>`. reeval escapes `$` and a leading `!` in `env` and header values, so each value reaches the server as written. reeval refuses an `sse` server, or a server name with characters other than letters, digits, `_`, and `-`, at plan time with exit code 2.
+- **fx:** `stdio`, `http`, and `sse`, passed on the ACP `session/new` call: a `stdio` server as `command`, `args`, and `env`, and an `http` or `sse` server as `type`, `url`, and `headers`. fx's `http` and `sse` servers, like its web tools, don't go through the relay. fx names an MCP call `mcp_<server>_<tool>`, which the transcript renames `mcp__<server>__<tool>`, so [`toHaveCalledMcp()`](/reference/matchers#tohavecalledmcp) matches it.
+- **Grok Build:** `stdio`, `http`, and `sse`, passed on the ACP `session/new` call like fx. Grok Build calls a server's tool through its `use_tool` tool, which the transcript names `mcp__<server>__<tool>`, so [`toHaveCalledMcp()`](/reference/matchers#tohavecalledmcp) matches it.
+
+For more information about placing MCP servers, see [Connect MCP servers](/configuration/environments/mcp-servers).
+
+#### Token usage
+
+Each turn's `usage` is null when the harness reports no tokens.
+
+- **Cursor:** `input` excludes cache reads and writes, so the prompt total is `input` plus `cacheRead` plus `cacheWrite`. `reasoning` is part of `output`.
+- **Claude Code:** tokens on each turn.
+- **Antigravity:** `input` excludes cache reads, `cacheRead` holds those reads, and `cacheWrite` is 0. `output` includes thinking tokens, and `reasoning` holds that count.
+- **Codex:** one `usage` for the turn. `input` is uncached input, and `cacheRead` and `cacheWrite` hold cached input. `reasoning` is part of `output`.
+- **OpenCode:** one total for the whole turn.
+- **Goose:** always null. The adapter drops the session token count, which covers the last model call and would undercount the turn.
+- **pi:** the sum of each model call's tokens, reasoning tokens included.
+- **fx:** summed over the turn's model calls. `reasoning` is part of `output`.
+- **Grok Build:** summed over the turn's model calls. `input` excludes cache reads, so the prompt total is `input` plus `cacheRead`. `cacheWrite` records cache creation tokens, and `reasoning` is part of `output`.
+
+For more information about the token fields, see [`TokenUsage`](/reference/run-record#tokenusage).
+
+#### Served models
+
+- **Cursor:** each turn's `model` is the served model with its parameters, in the form `model[param=value]`. The attempt's `servedModels` is null, because the API requests name no model.
+- **Claude Code:** each turn's `model` is the model id Claude Code reports. `servedModels` is null, because the API requests name no model.
+- **Antigravity:** each turn's `model` is the model the CLI reports at the start of the turn, or else the last brokered request's model. `servedModels` lists the model id in each brokered path `/v1beta/models/<model>:streamGenerateContent`, which can include a model the CLI calls for a title or a checkpoint.
+- **Codex:** the egress gateway reads the served model and effort from the response body. The turn's `model` and `servedModels` hold `<model>` or `<model>[effort=<value>]`. `servedEffort` is the reasoning effort in that label, and `effort` is the factory value, or null when unset.
+- **OpenCode:** the stream names no model, so each turn's `model` is the model on the turn's last brokered request. `servedModels` comes from the request URL for a provider whose model path names the model (`amazon-bedrock/`, `google/`, `ofox/`, `opencode/` and `opencode-go/`) and from the response body for every other provider, with `[effort=<value>]` when the response names an effort.
+- **Goose:** each turn's `model` is the model id from the last brokered `POST /v1beta/models/<model>:streamGenerateContent` request in the turn, or null when that turn made none. `servedModels` lists every such id.
+- **pi:** each turn's `model` is the model pi names on its first assistant message. `servedModels` comes from the brokered request URL, without an effort suffix.
+- **fx:** fx names no model over ACP, so the egress gateway reads the served model from each response, such as the dated snapshot OpenAI answers `gpt-5.5` with. On Vercel AI Gateway, a stream that names no model, such as Gemini's, leaves `servedModels` null and records the model each call asked for in `askedModels`.
+- **Grok Build:** the stream names no model, so each turn's `model` and `servedModels` come from the model xAI's responses name.
+
+For more information about the attempt fields, see [`AttemptRecord`](/reference/run-record#attemptrecord).
+
+#### Web search and fetch events
+
+A turn's `unreported` list names the events a harness can't report, and the matchers refuse a turn that lists their event.
+
+- **Cursor:** records both. The SDK's stream leaves those calls out, so reeval recovers them from the stored conversation. A turn reeval can't recover lists the event on `unreported`.
+- **Claude Code:** records both. A `webSearch` call records `query` and `references`, and a `webFetch` or `WebFetch` call records `url`. `ok` is false when a call fails.
+- **Antigravity:** records both, with `unreported` empty.
+- **Codex:** records both, with `unreported` empty. A search stores its text on `query`, and an `open_page` or `find_in_page` action with a URL is a fetch. Both run on OpenAI's side, and the transcript keeps each event under a restricted egress policy.
+- **OpenCode:** records both, with `unreported` empty. A search runs on a hosted MCP server at `mcp.exa.ai`, which needs no key and is one of the harness's automatic egress hosts.
+- **Goose:** records neither, and `unreported` is empty.
+- **pi:** records neither. Its built-in tools are `bash`, `read`, `write`, and `edit`, so the matchers fail on a pi turn.
+- **fx:** records both, from fx's `web_search` and `web_fetch` tools. A search stores its text on `query`.
+- **Grok Build:** records searches, which run through its `web_search` tool on xAI's Responses API at `api.x.ai`, one of the harness's automatic egress hosts. It records no fetches, so `toHaveFetched()` fails on a Grok Build turn.
+
+For more information about the matchers, see [`toHaveSearched()`](/reference/matchers#tohavesearched) and [`toHaveFetched()`](/reference/matchers#tohavefetched). For more information about the automatic hosts, see [Block non-automatic hosts](/configuration/environments/egress#block-non-automatic-hosts).
+
+#### OpenCode providers
+
+`opencode()` runs on any provider whose key OpenCode sends in a header on known hosts. The part of the model id before the first `/` picks the provider. reeval reads the provider's variable from the `Key` column, swaps it into the `Header` on each request to the `Hosts`, and refuses it anywhere else. A host with a `{NAME}` placeholder takes that variable from the host too, or the provider's default. For more information about the harness, see [OpenCode harness](/configuration/agents/opencode).
+
+[//]: # (generated:opencode-providers)
+
+| Provider | Model ids | Key | Header | Hosts |
+|---|---|---|---|---|
+| 302.AI | `302ai/…` | `302AI_API_KEY` | `Authorization: Bearer` | `api.302.ai` |
+| Abacus | `abacus/…` | `ABACUS_API_KEY` | `Authorization: Bearer` | `routellm.abacus.ai` |
+| abliteration.ai | `abliteration-ai/…` | `ABLIT_KEY` | `Authorization: Bearer` | `api.abliteration.ai` |
+| above.dev | `above/…` | `ABOVE_API_KEY` | `Authorization: Bearer` | `api.above.dev` |
+| AgentRouter | `agentrouter/…` | `AGENTROUTER_API_KEY` | `Authorization: Bearer`, `x-api-key` | `agentrouter.org` |
+| Agnes AI | `agnes/…` | `AGNES_API_KEY` | `Authorization: Bearer` | `apihub.agnes-ai.com` |
+| AI-ROUTER | `ai-router/…` | `AI_ROUTER_API_KEY` | `Authorization: Bearer` | `api.ai-router.dev` |
+| AI21 Labs | `ai21/…` | `AI21_API_KEY` | `Authorization: Bearer` | `api.ai21.com` |
+| ai& | `aiand/…` | `AIAND_API_KEY` | `Authorization: Bearer` | `api.aiand.com` |
+| AI/ML API | `aimlapi/…` | `AIMLAPI_API_KEY` | `Authorization: Bearer` | `api.aimlapi.com` |
+| ainetcafe | `ainetcafe/…` | `AINETCAFE_API_KEY` | `Authorization: Bearer` | `microquickjs.com` |
+| Aixy | `aixy/…` | `AIXY_API_KEY` | `Authorization: Bearer`, `x-api-key` | `api.aixy-gateway.com` |
+| AKI.IO | `aki-io/…` | `AKI_IO_API_KEY` | `Authorization: Bearer` | `aki.io` |
+| Alibaba | `alibaba/…` | `DASHSCOPE_API_KEY` | `Authorization: Bearer` | `dashscope-intl.aliyuncs.com` |
+| Alibaba (China) | `alibaba-cn/…` | `DASHSCOPE_API_KEY` | `Authorization: Bearer` | `dashscope.aliyuncs.com` |
+| Alibaba Coding Plan | `alibaba-coding-plan/…` | `ALIBABA_CODING_PLAN_API_KEY` | `Authorization: Bearer` | `coding-intl.dashscope.aliyuncs.com` |
+| Alibaba Coding Plan (China) | `alibaba-coding-plan-cn/…` | `ALIBABA_CODING_PLAN_API_KEY` | `Authorization: Bearer` | `coding.dashscope.aliyuncs.com` |
+| Alibaba Token Plan | `alibaba-token-plan/…` | `ALIBABA_TOKEN_PLAN_API_KEY` | `Authorization: Bearer` | `token-plan.ap-southeast-1.maas.aliyuncs.com` |
+| Alibaba Token Plan (China) | `alibaba-token-plan-cn/…` | `ALIBABA_TOKEN_PLAN_API_KEY` | `Authorization: Bearer` | `token-plan.cn-beijing.maas.aliyuncs.com` |
+| Amazon Bedrock | `amazon-bedrock/…` | `AWS_BEARER_TOKEN_BEDROCK` | `Authorization: Bearer` | `bedrock-mantle.{AWS_REGION}.api.aws`, `bedrock-runtime.{AWS_REGION}.amazonaws.com` |
+| Ambient | `ambient/…` | `AMBIENT_API_KEY` | `Authorization: Bearer` | `api.ambient.xyz` |
+| AMD | `amd/…` | `AMD_API_KEY` | `Authorization: Bearer` | `developer.amd.com.cn` |
+| Anthropic | `anthropic/…` | `ANTHROPIC_API_KEY` | `x-api-key` | `api.anthropic.com` |
+| AnyAPI | `anyapi/…` | `ANYAPI_API_KEY` | `Authorization: Bearer` | `api.anyapi.ai` |
+| Arcee | `arcee/…` | `ARCEE_API_KEY` | `Authorization: Bearer` | `api.arcee.ai` |
+| Auriko | `auriko/…` | `AURIKO_API_KEY` | `Authorization: Bearer` | `api.auriko.ai` |
+| Bailing | `bailing/…` | `BAILING_API_TOKEN` | `Authorization: Bearer` | `api.tbox.cn` |
+| Baseten | `baseten/…` | `BASETEN_API_KEY` | `Authorization: Bearer` | `inference.baseten.co` |
+| Bee by HEOSSI | `bee/…` | `BEE_API_KEY` | `Authorization: Bearer` | `api.bee.heossi.com` |
+| Berget.AI | `berget/…` | `BERGET_API_KEY` | `Authorization: Bearer` | `api.berget.ai` |
+| Blue Claw | `blueclaw/…` | `BLUECLAW_API_KEY` | `Authorization: Bearer` | `openai.blueclaw.network` |
+| Bothub | `bothub/…` | `BOTHUB_API_KEY` | `Authorization: Bearer` | `openai.bothub.ru` |
+| Boundless | `boundless/…` | `BOUNDLESS_API_KEY` | `Authorization: Bearer` | `api.inference.boundless.network` |
+| Cerebras | `cerebras/…` | `CEREBRAS_API_KEY` | `Authorization: Bearer` | `api.cerebras.ai` |
+| Chutes | `chutes/…` | `CHUTES_API_KEY` | `Authorization: Bearer` | `llm.chutes.ai` |
+| Clarifai | `clarifai/…` | `CLARIFAI_PAT` | `Authorization: Bearer` | `api.clarifai.com` |
+| Claudinio | `claudinio/…` | `CLAUDINIO_API_KEY` | `Authorization: Bearer` | `api.claudin.io` |
+| ClinePass | `cline-pass/…` | `CLINE_API_KEY` | `Authorization: Bearer` | `api.cline.bot` |
+| CloudFerro Sherlock | `cloudferro-sherlock/…` | `CLOUDFERRO_SHERLOCK_API_KEY` | `Authorization: Bearer` | `api-sherlock.cloudferro.com` |
+| Cohere | `cohere/…` | `COHERE_API_KEY` | `Authorization: Bearer` | `api.cohere.ai`, `api.cohere.com` |
+| CommandCode | `commandcode/…` | `CMD_API_KEY` | `Authorization: Bearer`, `x-api-key` | `api.commandcode.ai` |
+| CoralBricks | `coralbricks/…` | `CORAL_API_KEY` | `Authorization: Bearer` | `inference.coralbricks.ai` |
+| Cortecs | `cortecs/…` | `CORTECS_API_KEY` | `Authorization: Bearer` | `api.cortecs.ai` |
+| CrossModel | `crossmodel/…` | `CROSSMODEL_API_KEY` | `Authorization: Bearer` | `api.crossmodel.ai` |
+| Crusoe | `crusoe/…` | `CRUSOE_API_KEY` | `Authorization: Bearer` | `api.inference.crusoecloud.com` |
+| DaoXE | `daoxe/…` | `DAOXE_API_KEY` | `Authorization: Bearer` | `daoxe.com` |
+| Deep Infra | `deepinfra/…` | `DEEPINFRA_API_KEY` | `Authorization: Bearer` | `api.deepinfra.com` |
+| DeepSeek | `deepseek/…` | `DEEPSEEK_API_KEY` | `Authorization: Bearer` | `api.deepseek.com` |
+| DigitalOcean | `digitalocean/…` | `DIGITALOCEAN_ACCESS_TOKEN` | `Authorization: Bearer` | `inference.do-ai.run` |
+| DInference | `dinference/…` | `DINFERENCE_API_KEY` | `Authorization: Bearer` | `api.dinference.com` |
+| D.Run (China) | `drun/…` | `DRUN_API_KEY` | `Authorization: Bearer` | `chat.d.run` |
+| EBCloud | `ebcloud/…` | `EBCLOUD_API_KEY` | `Authorization: Bearer` | `maas-api.ebcloud.com` |
+| Echo | `echo/…` | `ECHO_API_KEY` | `Authorization: Bearer` | `echo.tracerml.ai` |
+| Eden AI | `edenai/…` | `EDENAI_API_KEY` | `Authorization: Bearer` | `api.edenai.run` |
+| EmpirioLabs AI | `empiriolabs/…` | `EMPIRIOLABS_API_KEY` | `Authorization: Bearer` | `api.empiriolabs.ai` |
+| engy | `engy/…` | `ENGY_API_KEY` | `Authorization: Bearer` | `api.engy.ai` |
+| evroc | `evroc/…` | `EVROC_API_KEY` | `Authorization: Bearer` | `models.think.evroc.com` |
+| FastRouter | `fastrouter/…` | `FASTROUTER_API_KEY` | `Authorization: Bearer` | `go.fastrouter.ai` |
+| Fireworks AI | `fireworks-ai/…` | `FIREWORKS_API_KEY` | `Authorization: Bearer` | `api.fireworks.ai` |
+| FreeModel | `freemodel/…` | `FREEMODEL_API_KEY` | `x-api-key`, `Authorization: Bearer` | `api.freemodel.dev`, `cc.freemodel.dev` |
+| Friendli | `friendli/…` | `FRIENDLI_TOKEN` | `Authorization: Bearer` | `api.friendli.ai` |
+| FrogBot | `frogbot/…` | `FROGBOT_API_KEY` | `Authorization: Bearer` | `app.frogbot.ai` |
+| GMI Cloud | `gmicloud/…` | `GMICLOUD_API_KEY` | `Authorization: Bearer` | `api.gmi-serving.com` |
+| Google | `google/…` | `GOOGLE_GENERATIVE_AI_API_KEY` | `x-goog-api-key` | `generativelanguage.googleapis.com` |
+| GreenPT | `greenpt/…` | `GREENPT_API_KEY` | `Authorization: Bearer` | `api.greenpt.ai` |
+| Groq | `groq/…` | `GROQ_API_KEY` | `Authorization: Bearer` | `api.groq.com` |
+| Helicone | `helicone/…` | `HELICONE_API_KEY` | `Authorization: Bearer` | `ai-gateway.helicone.ai` |
+| Hetzner | `hetzner/…` | `HETZNER_API_KEY` | `Authorization: Bearer` | `inference.hetzner.com` |
+| HPC-AI | `hpc-ai/…` | `HPC_AI_API_KEY` | `Authorization: Bearer` | `api.hpc-ai.com` |
+| Hugging Face | `huggingface/…` | `HF_TOKEN` | `Authorization: Bearer` | `router.huggingface.co` |
+| Charm Hyper | `hyper/…` | `HYPER_API_KEY` | `Authorization: Bearer` | `hyper.charm.land` |
+| Impossibl | `impossibl/…` | `IMPOSSIBL_API_KEY` | `Authorization: Bearer` | `api.impossibl.com` |
+| Inception | `inception/…` | `INCEPTION_API_KEY` | `Authorization: Bearer` | `api.inceptionlabs.ai` |
+| Inceptron | `inceptron/…` | `INCEPTRON_API_KEY` | `Authorization: Bearer` | `api.inceptron.io` |
+| Inco | `inco/…` | `INCO_API_KEY` | `Authorization: Bearer` | `api.inco.ai` |
+| Infer by Flow7 | `infer/…` | `INFER_API_KEY` | `Authorization: Bearer` | `infer.flow7.org` |
+| Inference | `inference/…` | `INFERENCE_API_KEY` | `Authorization: Bearer` | `inference.net` |
+| InferX | `inferx/…` | `INFERX_API_KEY` | `Authorization: Bearer` | `model.inferx.net` |
+| IO.NET | `io-net/…` | `IOINTELLIGENCE_API_KEY` | `Authorization: Bearer` | `api.intelligence.io.solutions` |
+| IteraCompute | `iteracompute/…` | `ITERACOMPUTE_API_KEY` | `Authorization: Bearer` | `api.iteracompute.com` |
+| Jalapeno Cloud | `jalapeno/…` | `JALAPENO_API_KEY` | `Authorization: Bearer` | `api.jalapeno-cloud.ai` |
+| Jiekou.AI | `jiekou/…` | `JIEKOU_API_KEY` | `Authorization: Bearer` | `api.jiekou.ai` |
+| Kenari | `kenari/…` | `KENARI_API_KEY` | `Authorization: Bearer` | `kenari.id` |
+| Kilo Gateway | `kilo/…` | `KILO_API_KEY` | `Authorization: Bearer` | `api.kilo.ai` |
+| Kimi For Coding (kimi.com) | `kimi-code-plan-cn/…` | `KIMI_API_KEY` | `Authorization: Bearer` | `api.kimi.com` |
+| Kimi For Coding (kimi.ai) | `kimi-code-plan-global/…` | `KIMI_API_KEY` | `Authorization: Bearer` | `api.kimi.ai` |
+| klokintegration.se | `klokintegration/…` | `KLOKINTEGRATION_API_KEY` | `Authorization: Bearer` | `api-gw.klok.ipaas.se` |
+| Kosmik Compute | `kosmik/…` | `KOSMIK_API_KEY` | `Authorization: Bearer` | `api.koscompute.com` |
+| KUAE Cloud Coding Plan | `kuae-cloud-coding-plan/…` | `KUAE_API_KEY` | `Authorization: Bearer` | `coding-plan-endpoint.kuaecloud.net` |
+| Liquid Inference | `liquid/…` | `LIQUID_API_KEY` | `Authorization: Bearer` | `router.inference.ai.exchange` |
+| DevPass (LLM Gateway) | `llmgateway/…` | `LLMGATEWAY_API_KEY` | `Authorization: Bearer` | `api.llmgateway.io` |
+| LLM Gateway | `llmgateway-providers/…` | `LLMGATEWAY_API_KEY` | `Authorization: Bearer` | `api.llmgateway.io` |
+| LLM Tech | `llmtech/…` | `LLMTECH_API_KEY` | `Authorization: Bearer` | `api.llmtech.eu` |
+| LLMTR | `llmtr/…` | `LLMTR_API_KEY` | `Authorization: Bearer` | `llmtr.com` |
+| LongCat | `longcat/…` | `LONGCAT_API_KEY` | `Authorization: Bearer` | `api.longcat.chat` |
+| LowRouter | `lowrouter/…` | `LOWROUTER_API_KEY` | `Authorization: Bearer` | `api.lowrouter.ai` |
+| LucidQuery | `lucidquery/…` | `LUCIDQUERY_API_KEY` | `Authorization: Bearer` | `api.lucidquery.com` |
+| Meganova | `meganova/…` | `MEGANOVA_API_KEY` | `Authorization: Bearer` | `api.meganova.ai` |
+| Melious | `melious/…` | `MELIOUS_API_KEY` | `Authorization: Bearer` | `api.melious.ai` |
+| Meta | `meta/…` | `META_MODEL_API_KEY` | `Authorization: Bearer` | `api.meta.ai` |
+| MiniMax (minimax.io) | `minimax/…` | `MINIMAX_API_KEY` | `Authorization: Bearer` | `api.minimax.io` |
+| MiniMax (minimax.cn) | `minimax-cn/…` | `MINIMAX_API_KEY` | `Authorization: Bearer` | `api.minimax.cn` |
+| MiniMax Token Plan (minimax.cn) | `minimax-cn-coding-plan/…` | `MINIMAX_API_KEY` | `Authorization: Bearer` | `api.minimax.cn` |
+| MiniMax Token Plan (minimax.io) | `minimax-coding-plan/…` | `MINIMAX_API_KEY` | `Authorization: Bearer` | `api.minimax.io` |
+| Mistral | `mistral/…` | `MISTRAL_API_KEY` | `Authorization: Bearer` | `api.mistral.ai` |
+| Mixlayer | `mixlayer/…` | `MIXLAYER_API_KEY` | `Authorization: Bearer` | `models.mixlayer.ai` |
+| Moark | `moark/…` | `MOARK_API_KEY` | `Authorization: Bearer` | `moark.com` |
+| Modal | `modal/…` | `MODAL_PROXY_TOKEN` | `Authorization: Bearer` | `inference.us-west.modal.direct` |
+| Model Oracle AI | `model-oracle-ai/…` | `MODEL_ORACLE_API_KEY` | `Authorization: Bearer` | `api.modeloracle.com` |
+| Modelis | `modelis/…` | `MODELIS_API_KEY` | `Authorization: Bearer` | `modelishub.com` |
+| ModelScope | `modelscope/…` | `MODELSCOPE_API_KEY` | `Authorization: Bearer` | `api-inference.modelscope.cn` |
+| Moonshot AI | `moonshotai/…` | `MOONSHOT_API_KEY` | `Authorization: Bearer` | `api.moonshot.ai` |
+| Moonshot AI (China) | `moonshotai-cn/…` | `MOONSHOT_API_KEY` | `Authorization: Bearer` | `api.moonshot.cn` |
+| NaN | `nan/…` | `NAN_API_KEY` | `Authorization: Bearer` | `api.nan.builders` |
+| NanoGPT | `nano-gpt/…` | `NANO_GPT_API_KEY` | `Authorization: Bearer` | `nano-gpt.com` |
+| NEAR AI Cloud | `nearai/…` | `NEARAI_API_KEY` | `Authorization: Bearer` | `cloud-api.near.ai` |
+| Nebius Token Factory | `nebius/…` | `NEBIUS_API_KEY` | `Authorization: Bearer` | `api.tokenfactory.nebius.com` |
+| NeoSmith | `neosmith/…` | `NEOSMITH_API_KEY` | `Authorization: Bearer` | `router.neosmith.ai` |
+| Neuralwatt | `neuralwatt/…` | `NEURALWATT_API_KEY` | `Authorization: Bearer` | `api.neuralwatt.com` |
+| Nova | `nova/…` | `NOVA_API_KEY` | `Authorization: Bearer` | `api.nova.amazon.com` |
+| Novita AI | `novita-ai/…` | `NOVITA_API_KEY` | `Authorization: Bearer` | `api.novita.ai` |
+| Nvidia | `nvidia/…` | `NVIDIA_API_KEY` | `Authorization: Bearer` | `integrate.api.nvidia.com` |
+| OCI Generative AI | `oci/…` | `OCI_GENAI_API_KEY` | `Authorization: Bearer` | `inference.generativeai.us-chicago-1.oci.oraclecloud.com` |
+| Ofox | `ofox/…` | `OFOX_API_KEY` | `Authorization: Bearer`, `x-goog-api-key`, `x-api-key` | `api.ofox.ai` |
+| Ollama Cloud | `ollama-cloud/…` | `OLLAMA_API_KEY` | `Authorization: Bearer` | `ollama.com` |
+| OpenAI | `openai/…` | `OPENAI_API_KEY` | `Authorization: Bearer` | `api.openai.com` |
+| OpenCode Console | `opencode/…` | `OPENCODE_API_KEY` | `Authorization: Bearer`, `x-goog-api-key`, `x-api-key` | `opencode.ai` |
+| OpenCode Go | `opencode-go/…` | `OPENCODE_API_KEY` | `Authorization: Bearer`, `x-goog-api-key`, `x-api-key` | `opencode.ai` |
+| OpenReason | `openreason/…` | `OPENREASON_API_KEY` | `Authorization: Bearer` | `api.openreason.app` |
+| OpenRouter | `openrouter/…` | `OPENROUTER_API_KEY` | `Authorization: Bearer` | `openrouter.ai` |
+| Opper | `opper/…` | `OPPER_API_KEY` | `Authorization: Bearer` | `api.opper.ai` |
+| OrcaRouter | `orcarouter/…` | `ORCAROUTER_API_KEY` | `Authorization: Bearer` | `api.orcarouter.ai` |
+| OVHcloud AI Endpoints | `ovhcloud/…` | `OVHCLOUD_API_KEY` | `Authorization: Bearer` | `oai.endpoints.kepler.ai.cloud.ovh.net` |
+| Pareto Inference | `pareto/…` | `PARETO_API_KEY` | `Authorization: Bearer` | `api.paretoinference.com` |
+| Pendra | `pendra/…` | `PENDRA_API_KEY` | `Authorization: Bearer` | `api.pendra.ai` |
+| Perplexity Agent | `perplexity-agent/…` | `PERPLEXITY_API_KEY` | `Authorization: Bearer` | `api.perplexity.ai` |
+| Pioneer | `pioneer/…` | `PIONEER_API_KEY` | `Authorization: Bearer` | `api.fastino.ai` |
+| Poe | `poe/…` | `POE_API_KEY` | `Authorization: Bearer` | `api.poe.com` |
+| Poolside | `poolside/…` | `POOLSIDE_API_KEY` | `Authorization: Bearer` | `inference.poolside.ai` |
+| Prime Inference | `prime/…` | `PRIME_API_KEY` | `Authorization: Bearer` | `api.pinference.ai` |
+| QiHang | `qihang-ai/…` | `QIHANG_API_KEY` | `Authorization: Bearer` | `api.qhaigc.net` |
+| Qiniu | `qiniu-ai/…` | `QINIU_API_KEY` | `Authorization: Bearer` | `api.qnaigc.com` |
+| Reflection | `reflection/…` | `REFLECTION_API_KEY` | `Authorization: Bearer` | `api.reflection.ai` |
+| Regolo AI | `regolo-ai/…` | `REGOLO_API_KEY` | `Authorization: Bearer` | `api.regolo.ai` |
+| Requesty | `requesty/…` | `REQUESTY_API_KEY` | `Authorization: Bearer` | `router.requesty.ai` |
+| routing.run | `routing-run/…` | `ROUTING_RUN_API_KEY` | `Authorization: Bearer` | `api.routing.run` |
+| RunInfra | `runinfra/…` | `RUNINFRA_GATEWAY_KEY` | `Authorization: Bearer` | `api.runinfra.ai` |
+| Sakana AI | `sakana/…` | `SAKANA_API_KEY` | `Authorization: Bearer` | `api.sakana.ai` |
+| SambaNova | `sambanova/…` | `SAMBANOVA_API_KEY` | `Authorization: Bearer` | `api.sambanova.ai` |
+| Sarvam AI | `sarvam/…` | `SARVAM_API_KEY` | `Authorization: Bearer` | `api.sarvam.ai` |
+| Scaleway | `scaleway/…` | `SCALEWAY_API_KEY` | `Authorization: Bearer` | `api.scaleway.ai` |
+| SCNet Token Plan | `scnet-token-plan/…` | `SCNET_API_KEY` | `Authorization: Bearer` | `api.scnet.cn` |
+| SCX.ai | `scx-ai/…` | `SCX_API_KEY` | `Authorization: Bearer` | `api.scx.ai` |
+| SenseNova (China) | `sensenova/…` | `SENSENOVA_API_KEY` | `Authorization: Bearer` | `token.sensenova.cn` |
+| SiliconFlow | `siliconflow/…` | `SILICONFLOW_API_KEY` | `Authorization: Bearer` | `api.siliconflow.com` |
+| SiliconFlow (China) | `siliconflow-cn/…` | `SILICONFLOW_CN_API_KEY` | `Authorization: Bearer` | `api.siliconflow.cn` |
+| STACKIT | `stackit/…` | `STACKIT_API_KEY` | `Authorization: Bearer` | `api.openai-compat.model-serving.eu01.onstackit.cloud` |
+| Standard Compute | `standardcompute/…` | `STANDARDCOMPUTE_API_KEY` | `Authorization: Bearer` | `api.stdcmpt.com` |
+| StepFun (China) | `stepfun/…` | `STEPFUN_API_KEY` | `Authorization: Bearer` | `api.stepfun.com` |
+| StepFun (Global) | `stepfun-ai/…` | `STEPFUN_API_KEY` | `Authorization: Bearer` | `api.stepfun.ai` |
+| StepFun Step Plan (Global) | `stepfun-ai-step-plan/…` | `STEPFUN_API_KEY` | `Authorization: Bearer` | `api.stepfun.ai` |
+| StepFun Step Plan (China) | `stepfun-step-plan/…` | `STEPFUN_API_KEY` | `Authorization: Bearer` | `api.stepfun.com` |
+| Subconscious | `subconscious/…` | `SUBCONSCIOUS_API_KEY` | `x-api-key` | `api.subconscious.dev` |
+| submodel | `submodel/…` | `SUBMODEL_INSTAGEN_ACCESS_KEY` | `Authorization: Bearer` | `llm.submodel.ai` |
+| Synthetic | `synthetic/…` | `SYNTHETIC_API_KEY` | `Authorization: Bearer` | `api.synthetic.new` |
+| Tempr Gateway | `tempr/…` | `TEMPR_API_KEY` | `Authorization: Bearer` | `api.temprhq.io` |
+| Tencent Coding Plan (China) | `tencent-coding-plan/…` | `TENCENT_CODING_PLAN_API_KEY` | `Authorization: Bearer` | `api.lkeap.cloud.tencent.com` |
+| Tencent Token Plan | `tencent-token-plan/…` | `TENCENT_TOKEN_PLAN_API_KEY` | `Authorization: Bearer` | `api.lkeap.cloud.tencent.com` |
+| Tencent TokenHub | `tencent-tokenhub/…` | `TENCENT_TOKENHUB_API_KEY` | `Authorization: Bearer` | `tokenhub.tencentmaas.com` |
+| TensorX | `tensorx/…` | `TENSORX_API_KEY` | `Authorization: Bearer` | `api.tensorx.ai` |
+| The Grid AI | `the-grid-ai/…` | `THEGRID_API_KEY` | `Authorization: Bearer` | `api.thegrid.ai` |
+| Thinking Machines | `thinkingmachines/…` | `TINKER_API_KEY` | `x-api-key` | `tinker.thinkingmachines.dev` |
+| Tinfoil | `tinfoil/…` | `TINFOIL_API_KEY` | `Authorization: Bearer` | `inference.tinfoil.sh` |
+| Together AI | `togetherai/…` | `TOGETHER_API_KEY` | `Authorization: Bearer` | `api.together.xyz` |
+| TokenGo | `tokengo/…` | `TOKENGO_API_KEY` | `Authorization: Bearer` | `api.tokengo.com` |
+| TokenRouter | `tokenrouter/…` | `TOKENROUTER_API_KEY` | `Authorization: Bearer` | `api.tokenrouter.com` |
+| TrustedRouter | `trustedrouter/…` | `TRUSTEDROUTER_API_KEY` | `Authorization: Bearer` | `api.trustedrouter.com` |
+| Umans AI | `umans-ai/…` | `UMANS_AI_API_KEY` | `Authorization: Bearer` | `api.code.umans.ai` |
+| Umans AI Coding Plan | `umans-ai-coding-plan/…` | `UMANS_AI_CODING_PLAN_API_KEY` | `Authorization: Bearer` | `api.code.umans.ai` |
+| UnoRouter | `unorouter/…` | `UNOROUTER_API_KEY` | `Authorization: Bearer` | `api.unorouter.com` |
+| Upstage | `upstage/…` | `UPSTAGE_API_KEY` | `Authorization: Bearer` | `api.upstage.ai` |
+| Vancine | `vancine/…` | `VANCINE_API_KEY` | `Authorization: Bearer` | `vancine.com` |
+| Venice AI | `venice/…` | `VENICE_API_KEY` | `Authorization: Bearer` | `api.venice.ai` |
+| Vercel AI Gateway | `vercel/…` | `AI_GATEWAY_API_KEY` | `Authorization: Bearer` | `ai-gateway.vercel.sh` |
+| Vispark | `vispark/…` | `VISPARK_LAB_API_KEY` | `Authorization: Bearer` | `api.lab.vispark.in` |
+| Vivgrid | `vivgrid/…` | `VIVGRID_API_KEY` | `x-api-key`, `Authorization: Bearer` | `api.vivgrid.com` |
+| Volcengine Ark | `volcengine/…` | `ARK_API_KEY` | `Authorization: Bearer` | `ark.cn-beijing.volces.com` |
+| Volcengine Ark Coding Plan | `volcengine-coding-plan/…` | `ARK_CODING_PLAN_API_KEY` | `Authorization: Bearer` | `ark.cn-beijing.volces.com` |
+| Vultr | `vultr/…` | `VULTR_API_KEY` | `Authorization: Bearer` | `api.vultrinference.com` |
+| Wafer | `wafer.ai/…` | `WAFER_API_KEY` | `Authorization: Bearer` | `pass.wafer.ai` |
+| Wallaby | `wallaby/…` | `WALLABY_API_KEY` | `Authorization: Bearer` | `api.wallabytoken.com` |
+| CoreWeave | `wandb/…` | `WANDB_API_KEY` | `Authorization: Bearer` | `api.inference.wandb.ai` |
+| xAI | `xai/…` | `XAI_API_KEY` | `Authorization: Bearer` | `api.x.ai` |
+| Xiaomi | `xiaomi/…` | `XIAOMI_API_KEY` | `Authorization: Bearer` | `api.xiaomimimo.com` |
+| Xiaomi Token Plan (Europe) | `xiaomi-token-plan-ams/…` | `XIAOMI_API_KEY` | `Authorization: Bearer` | `token-plan-ams.xiaomimimo.com` |
+| Xiaomi Token Plan (China) | `xiaomi-token-plan-cn/…` | `XIAOMI_API_KEY` | `Authorization: Bearer` | `token-plan-cn.xiaomimimo.com` |
+| Xiaomi Token Plan (Singapore) | `xiaomi-token-plan-sgp/…` | `XIAOMI_API_KEY` | `Authorization: Bearer` | `token-plan-sgp.xiaomimimo.com` |
+| Xpersona | `xpersona/…` | `XPERSONA_API_KEY` | `Authorization: Bearer` | `www.xpersona.co` |
+| Z.AI | `zai/…` | `ZHIPU_API_KEY` | `Authorization: Bearer` | `api.z.ai` |
+| Z.AI Coding Plan | `zai-coding-plan/…` | `ZHIPU_API_KEY` | `Authorization: Bearer` | `api.z.ai` |
+| Zeldoc | `zeldoc/…` | `ZELDOC_API_KEY` | `Authorization: Bearer` | `api.zeldoc.ai` |
+| Zenifra | `zenifra/…` | `ZENIFRA_AI_KEY` | `Authorization: Bearer` | `ai.zenifra.com` |
+| ZenMux | `zenmux/…` | `ZENMUX_API_KEY` | `x-api-key`, `Authorization: Bearer` | `zenmux.ai` |
+| Zhipu AI | `zhipuai/…` | `ZHIPU_API_KEY` | `Authorization: Bearer` | `open.bigmodel.cn` |
+| Zhipu AI Coding Plan | `zhipuai-coding-plan/…` | `ZHIPU_API_KEY` | `Authorization: Bearer` | `open.bigmodel.cn` |
+
+[//]: # (/generated:opencode-providers)
+
+## `sandbox`
+
+`sandbox` is where an attempt runs when its environment names none.
+
+<Property name="sandbox" type="SandboxDescriptor" optional>
+  A descriptor from a sandbox factory, with `maxConcurrent` a whole number of at least 1. The default is `docker()`. An empty baseline in a comparison without `compare.baseline` or `environment` uses the first variant's sandbox when that variant sets one.
 </Property>
 
-<Property name="question" type="{ model?, state?, artifacts? }">
-  The model that answers a question, and what it shows. **Merges**: `state` key by key, `model` and `artifacts` replaced. Cascades config → profile `defaults` → group → eval → the [`questions`](#questions) entry. `judge.state` never reaches a question.
+For more information about sandbox factories, see [Choose a sandbox](/configuration/sandboxes). For the factories' own options, see [`docker()`](#docker).
 
-  - `model`: the `'provider/model'` language model that answers every question below it that names no `model` of its own. An entry's `model` wins; without either, `analysis.model` answers, else the run's judge model (a profile's over the config's) when it's a language model. An evaluation model or a string without a provider exits 2. Its key is checked before the run like the entry's.
-  - `state`: the judge's [`state`](/reference/judges#state) keys, per attempt or side, except `contents` (a question runs after its attempts' workspaces are gone). The defaults differ from the judge's. A per-attempt question shows `task`, `output`, `diff` and `transcript` (`files: false`, `turns: 'all'`, `checks: false`). A pairwise one shows `task: true`, `output: false`, `files: false`, `diff: true`, `transcript: false`, `turns: 'all'`, `checks: false`: side by side, the more confident summary would win on wording. A task both sides were given goes in the prompt once; different prompts go in each side. `checks` names a command, and an attempt that didn't run it shows it as not run.
-  - `artifacts`: `true` for every capture each attempt took, in capture order, or a non-empty list of capture names. Each attempt sends its own capture of that name as a PNG file part; in a pair, each side's is labelled only by its position (`Attempt A, screenshot 1 of 1`). A name an attempt lacks is `not captured` there. Default none.
+## `docker()`
 
-  A question that shows nothing (every key off and no `artifacts`) exits 2. A pairwise one that shows `transcript` and pairs two harnesses gets a plan warning: the tool names say which agent each side is. `across` and `choices` are per entry, not here. The answer records `stateOptions` and `artifacts`, and each vote the captures each named side sent. A name or command no paired attempt has fails that answer with `error`.
+`docker()` and `podman()` take these options. Each limit applies to one container, and reeval passes them to the container engine's run command (`docker run` or `podman run`) as `--memory`, `--memory-swap`, `--cpus`, and `--pids-limit`. For more information, see [Docker sandbox](/configuration/sandboxes/docker).
+
+<Property name="docker.id" type="string" optional>
+  The last segment of the cell key. The default begins with the engine's name, `docker`, or `podman` for `podman()`. It is `<engine>` alone, `<engine>:<image>` when `image` or `from` names another image, or `<engine>:<name>` for a `dockerfile`, where the name is the file's, or its directory's for a file named `Dockerfile`. A hash of `install` follows.
 </Property>
 
-<Property name="capture" type="{ viewport?, timeout?, browser?, model? }">
-  Camera defaults for `c.capture()`. **Shallow-merged**; a level that sets `viewport` replaces the whole value. `viewport` is `{ width, height }` in CSS pixels (default 1280×720) or `'full-page'`. `timeout` is how long to poll before failing (default `'60s'`). `browser: false` refuses the host `chrome-headless-shell` binary: `c.capture()` then throws. `model` is the vision model; it cascades like `question`. Without it, `analysis.model` drives the journey, else the attempt's judge model (a profile's, group's or eval's over the config's), whichever is first a language model; never an evaluation model such as Jev. A Gemini model's points come back normalised to 0–1000, and reeval scales them to the screenshot. `wait` and `instructions` are call-only. `port` is not an option here: pass it as the first argument to `c.capture`. See [The attempt context](/reference/attempt-context) and [Capturing UI](/recipes/capturing-ui).
+<Property name="docker.maxConcurrent" type="number" optional>
+  The most containers reeval runs at once across the run, whatever their image. A whole number of at least 1. The run's `concurrency` option still caps attempts overall.
 </Property>
 
-<Property name="timeout" type="number | string">
-  Per attempt: milliseconds, or `'500ms'`, `'90s'`, `'15m'`, `'1h'`, at most `'596h'`. **Replaces**. Image builds and setup steps don't count, and the clock starts when the attempt gets a concurrency slot. Default `'15m'`.
+<Property name="docker.root" type="boolean" optional>
+  Runs the agent, the setup commands, and the assertions as root, with the capabilities `apt-get` needs, instead of the unprivileged `reeval` user. Defaults to `false`.
 </Property>
 
-<Property name="tags" type="string[]">
-  Labels for `reeval run --tag`. **Union** of every level.
+<Property name="docker.capabilities" type="string[]" optional>
+  Linux capabilities to add back, such as `['NET_RAW']`, with or without the `CAP_` prefix. The container drops every other capability and runs with `no-new-privileges`.
 </Property>
 
-<Property name="revision" type="number | string">
-  The eval's version, part of its [`sources` fingerprint](/concepts/fingerprints#what-sources-covers): a whole number or a non-empty string, compared exactly. **Replaces**. Bump it when a helper, a constant outside the body or a fixture changes what the eval measures, which the fingerprint doesn't read; `reeval compare` then says `changed  revision 2 → 3`. A group's applies to the evals inside it that set none. In Python, `{"revision": 2}`.
+<Property name="docker.image" type="string" optional>
+  An image that already has the harness baked in. reeval uses it as is. At most one of `image`, `from`, and `dockerfile`; without one, the container runs reeval's own image for the harness.
 </Property>
 
-<Property name="pin" type="Array<'harness' | 'runs' | 'compare'>">
-  Keys a profile's `limit` may not narrow here. **Union**. Anything else is an error.
+<Property name="docker.from" type="string" optional>
+  A Debian or Ubuntu based toolchain image, such as `python:3.12-slim`. reeval bakes Node, Git, and the harness on top on first use and caches the result. The image needs `apt-get` and glibc.
 </Property>
 
-## Precedence, top wins
+<Property name="docker.dockerfile" type="string | URL" optional>
+  A Dockerfile, relative to the file that calls `docker()`, absolute, or a `file:` URL. reeval builds it from its directory with `REEVAL_BASE` set to its sandbox image and caches the result by content hash. To layer on that image, start the Dockerfile with `ARG REEVAL_BASE` and `FROM ${REEVAL_BASE}`. A Dockerfile that starts from another Debian or Ubuntu image gets the harness baked on, as for `from`.
+</Property>
 
-| Level | Where |
-|---|---|
-| `--runs` | The command line (runs only) |
-| Profile `limit` | Narrows only, unless the key is pinned |
-| Eval | `evaluate(name, options, fn)` |
-| Inner group, then outer group | `group(name, options, fn)` |
-| Environment `egress` | For `egress` only |
-| Profile `defaults` | Fills in what nothing else set |
-| Config | `reeval.config.ts` |
+<Property name="docker.install" type="(string | { run: string; timeout?: Duration })[]" optional>
+  Shell commands baked onto the base image in one cached layer. They run as root from `/`, in order, and see neither secrets nor the workspace. `install` combines with `from`, not with `dockerfile`: put those commands in the Dockerfile as `RUN` lines.
+</Property>
 
-## Related
+<Property name="docker.memory" type="string | number" optional>
+  The container's memory: `'4g'`, `'512m'`, or a byte count. Defaults to `'4g'`.
+</Property>
 
-- [Options and inheritance](/concepts/options)
-- [defineConfig](/reference/config)
-- [Profiles and budgets](/reference/profiles)
+<Property name="docker.swap" type="string | number" optional>
+  Swap on top of `memory`, in the same units. Defaults to as much as `memory`; `0` makes `memory` the hard ceiling. A host without swap has none to give.
+</Property>
+
+<Property name="docker.cpus" type="number" optional>
+  The CPUs the container may use, fractions allowed. Defaults to `2`, capped at the Docker host's count.
+</Property>
+
+<Property name="docker.pids" type="number" optional>
+  Processes and threads at once. Defaults to `1024`.
+</Property>
+
+## `environment`
+
+`environment` is what an evaluation runs in, and the baseline of a `compare` without `compare.baseline`.
+
+<Property name="environment" type="Environment" optional>
+  One environment from `defineEnvironment()`. reeval refuses a list, and `environment` beside `compare.baseline`.
+</Property>
+
+For more information about environments, see [Define an environment](/configuration/environments).
+
+## `runs`
+
+`runs` is the number of attempts in each cell.
+
+<Property name="runs" type="number | { bestOf: number }" optional>
+  A whole number of at least 1, and 1 by default, or `{ bestOf: n }` with `n` odd and at least 3, which stops each cell once pass or fail has a majority of `n` and gates on that majority. `bestOf` is refused on an evaluation with `compare`. `--runs` replaces it after a profile `limit`, pinned or not.
+</Property>
+
+## `gate`
+
+`gate` is how a cell's attempts decide its outcome.
+
+<Property name="gate" type="'all' | { passRate: number }" optional>
+  `'all'` (the default) passes when every counted outcome is `pass`. `{ passRate }` passes when at least that share of `pass` and `fail` outcomes passes, above 0 and at most 1. When no outcome counts, the cell takes its worst attempt outcome.
+</Property>
+
+## `env`
+
+`env` is the variables and secrets the sandbox gets.
+
+<Property name="env" type="Record<string, string | Secret>" optional>
+  Names use letters, digits, and `_`, not starting with a digit. A value is a string or a secret; reeval refuses a literal string under a secret-looking name. `env` merges by name: the config, a profile, a group, and an evaluation merge in first, and an environment's own value takes precedence.
+</Property>
+
+## `egress`
+
+`egress` is where the sandbox may connect. An environment accepts it too.
+
+<Property name="egress" type="'proxy' | 'allow-all' | 'deny-all' | { allow: string[] }" optional>
+  `'proxy'` (the default) allows any host over HTTP and HTTPS through the egress gateway, `'allow-all'` also allows raw TCP and UDP around the gateway, `'deny-all'` blocks all but the automatic hosts, and `{ allow }` adds hosts to them. A group or an evaluation overrides the environment, which overrides the inherited policy.
+</Property>
+
+A plain `allow` entry matches that host only. A `*.` entry matches every subdomain, not the apex domain itself, and never an IP address. The gateway carries HTTP and HTTPS only, so SSH and database clients get no network under every policy but `'allow-all'`. Under `'allow-all'`, raw traffic leaves the sandbox directly, unfiltered and unrecorded, and the record marks the attempt's egress `partial`.
+
+Spread [`DEFAULT_EGRESS_ALLOW`](/reference/authoring-api#defaultegressallow) into an `allow` list that still installs packages.
+
+For more information about the automatic hosts, see [Egress](/configuration/environments/egress).
+
+## `judge`
+
+`judge` is the defaults for `c.judge()`.
+
+<Property name="judge" type="JudgeOptions" optional>
+  A profile's `judge` applies under its `defaults.judge`. reeval refuses the inputs, `on`, and `turns` here: each `c.judge()` call sets its own.
+</Property>
+
+<Property name="judge.model" type="string | JudgeModel" optional>
+  A `'provider/model'` string, or a model object outside the `reeval.config.ts` file.
+</Property>
+
+<Property name="judge.threshold" type="number" optional>
+  The minimum passing score, from 0 to 1. The default is 0.8.
+</Property>
+
+<Property name="judge.providerOptions" type="Record<string, Record<string, JSONValue>>" optional>
+  Provider settings, keyed by provider.
+</Property>
+
+<Property name="judge.maxConcurrent" type="number" optional>
+  The maximum judge calls to this model's provider at once across the run, a whole number of at least 1.
+</Property>
+
+<Property name="judge.gateway" type="GatewayName | GatewayDescriptor" optional>
+  The gateway the judge's calls go through: `'direct'`, `'vercel'`, `'openrouter'`, or the helper from `{{ pkg }}/gateway`. It skips the config's `gateway` fallback. reeval refuses a gateway that is not in the `gateway` list or cannot serve the judge model.
+</Property>
+
+For more information about judging, see [Judge agent work](/evaluations/grading/judgments).
+
+## `capture`
+
+`capture` is the defaults for `c.capture()`.
+
+<Property name="capture" type="CaptureOptions" optional>
+  reeval refuses `instructions`, `wait`, `name`, and `path` here.
+</Property>
+
+<Property name="capture.viewport" type="{ width: number, height: number } | 'full-page'" optional>
+  Whole numbers above 0, or `'full-page'`. The default is 1280 by 720.
+</Property>
+
+<Property name="capture.timeout" type="Duration" optional>
+  How long to poll before failing, above zero. The default is `'60s'`.
+</Property>
+
+<Property name="capture.browser" type="boolean" optional>
+  `false` refuses the host browser, and `c.capture()` throws.
+</Property>
+
+<Property name="capture.model" type="string" optional>
+  The `'provider/model'` string behind `instructions`, or `analysis.model`, then a judge language model. reeval refuses an evaluation model.
+</Property>
+
+For more information about screenshots, see [Check an app](/evaluations/task/apps#set-the-viewport-and-browser).
+
+## `question`
+
+`question` is the defaults for every question in `questions`.
+
+<Property name="question" type="QuestionOptions" optional>
+  reeval refuses the inputs and `turns` here: each entry in `questions` sets its own.
+</Property>
+
+<Property name="question.model" type="string" optional>
+  A `'provider/model'` string, below a question's own `model` and above `analysis.model`, then a judge language model. reeval refuses an evaluation model.
+</Property>
+
+## `timeout`
+
+`timeout` is the limit on one attempt.
+
+<Property name="timeout" type="Duration" optional>
+  Milliseconds, or a number with `ms`, `s`, `m`, or `h`, above zero. The default is `'15m'`.
+</Property>
+
+## `concurrency`
+
+`concurrency` is the most attempts that run in parallel.
+
+<Property name="concurrency" type="number" optional>
+  A whole number of at least 1, below `--concurrency` and `REEVAL_CONCURRENCY`. The default is at least 1 and otherwise the smallest of 8, the CPU count, and the whole gigabytes of memory.
+</Property>
+
+## `record`
+
+`record` is when a run is copied into the history directory.
+
+<Property name="record" type="'manual' | 'ci' | 'always'" optional>
+  `'manual'` copies on `reeval record`, `'ci'` (the default) when `CI` is set and is not `false`, and `'always'` every run except an interrupted one; a duration-budget-stopped run is recorded. A profile may [replace it](/reference/profiles#record).
+</Property>
+
+## `history`
+
+`history` is the history directory and which evaluations keep artifacts there.
+
+<Property name="history" type="{ dir?: string, artifacts?: 'all' | 'failures' | 'none' }" optional>
+  `dir` defaults to the `.history` directory under the directory the `include` patterns share. `artifacts` is `'all'` (the default), `'failures'`, or `'none'`; `'failures'` keeps every attempt's artifacts for an evaluation whose outcome is `fail` or `infra_error`.
+</Property>
+
+## `budget`
+
+`budget` caps a run.
+
+<Property name="budget" type="{ attempts?: number, duration?: Duration }" optional>
+  `attempts` refuses a plan over the cap, unless `--force` is set, and must be a whole number of at least 1. From the first attempt's start, `duration` stops queued attempts from starting but lets running attempts finish. A profile's [`budget`](/reference/profiles#budget) merges over the config value. reeval refuses `usd` and `tokens`.
+</Property>
+
+## `profiles`
+
+`profiles` holds the named profiles.
+
+<Property name="profiles" type="Record<string, Profile>" optional>
+  Each name maps to an object with `defaults`, `limit`, `judge`, `budget`, `record`, `tags`, and `gateway`.
+</Property>
+
+For more information about each profile key, see [Profiles reference](/reference/profiles).
+
+## `defaultProfile`
+
+`defaultProfile` names the profile when neither `--profile` nor `REEVAL_PROFILE` names one.
+
+<Property name="defaultProfile" type="{ ci?: string, local?: string }" optional>
+  See [Profiles reference](/reference/profiles#defaultprofile).
+</Property>
+
+## `secrets`
+
+`secrets` is what reeval does with a secret that has no `hosts`.
+
+<Property name="secrets" type="{ unbrokered?: 'warn' | 'error' }" optional>
+  `'warn'` (the default) warns when an attempt would receive the real value. `'error'` fails the plan.
+</Property>
+
+For more information about brokering a secret, see [Secrets](/configuration/environments/secrets#broker-a-secret-to-a-host).
+
+## `debug`
+
+`debug` is the local debug data in the `.reeval/debug` directory.
+
+<Property name="debug" type="{ keep?: number, traceBufferMb?: number }" optional>
+  `keep` is how many runs to keep, a whole number of at least 1 and 20 by default. `traceBufferMb` is the megabytes of raw trace each attempt buffers, above 0 and 8 by default.
+</Property>
+
+## `analysis`
+
+`analysis` is the language model for insights, `reeval analyze`, and questions.
+
+<Property name="analysis" type="AnalysisConfig" optional>
+  The model, insights, token caps, and prompt text.
+</Property>
+
+<Property name="analysis.model" type="string" optional>
+  A `'provider/model'` string; reeval refuses an evaluation model. `reeval analyze` and questions fall back to a judge language model.
+</Property>
+
+<Property name="analysis.insights" type="boolean" optional>
+  Whether `reeval run` explains each result when `model` is set. The default is `true`; `--no-insights` turns it off.
+</Property>
+
+<Property name="analysis.maxTokens" type="number" optional>
+  Tokens one run's insights may use, a whole number of at least 1. The default is 250000; evaluations past it print without one.
+</Property>
+
+<Property name="analysis.instructions" type="string" optional>
+  Text added to the prompt.
+</Property>
+
+<Property name="analysis.maxInputTokens" type="number" optional>
+  The digest's cap, a whole number of at least 1000. The default is 20000; evidence is dropped to fit.
+</Property>
+
+<Property name="analysis.maxOutputTokens" type="number" optional>
+  The most tokens in an answer, a whole number of at least 500. The default is 8000.
+</Property>
+
+For more information about analysis, see [Analyze a run](/results/analyze#set-an-analysis-model).
+
+## `compare`
+
+`compare` runs the baseline and each variant with the same prompt and assertions.
+
+<Property name="compare" type="CompareOptions | false | { maxVariants: number }" optional>
+  A group or an evaluation refuses `false`. On a profile `limit`, `false` drops the variants and `{ maxVariants }` keeps the first that many, where `maxVariants` is a whole number of at least 0.
+</Property>
+
+<Property name="compare.baseline" type="Environment" optional>
+  The baseline. Without it, the cascaded `environment`, or an empty environment named `baseline`.
+</Property>
+
+<Property name="compare.variants" type="Environment[]" required>
+  A non-empty list. reeval refuses two variants with one name, or one named like the baseline.
+</Property>
+
+<Property name="compare.gate" type="'variants' | 'all' | 'none'" optional>
+  `'variants'` (the default) gates the variants only, `'all'` every cell, and `'none'` no cell.
+</Property>
+
+<Property name="compare.minLift" type="number" optional>
+  Lift from -1 to 1. A variant cell fails when its lift interval's lower end is below it. A family of pooled cases is gated on the family's pooled lift instead, and fails when the pooled interval's lower end is below it.
+</Property>
+
+<Property name="compare.harness" type="Array<string | HarnessDescriptor>" optional>
+  The harnesses to compare on; the others run the baseline only. reeval refuses an id the evaluation does not run.
+</Property>
+
+A family of pooled cases reports one `all cases` row that sums each cell's counts, with a lift paired by case. A paired outcome is `insufficient` below six discordant pairs or cases, so six cases with one attempt a side can read `helped` only when all six are discordant. A case still fails on its own assertions, and a failed case fails the family. The [`family_lift`](/reference/query-views#familylift) view lists each family's pooled lift.
+
+For more information about comparisons, see [Measure lift against a baseline](/results/compare/lift).
+
+## `questions`
+
+`questions` lists what a language model is asked about the attempts after they end.
+
+<Property name="questions" type="Question[]" optional>
+  Objects with `question`, `model`, `across`, `choices`, `turns`, and at least one input: `task`, `output`, `files`, `diff`, `transcript`, `checks`, or `artifacts`. reeval refuses an entry with no input. A list replaces the inherited one, so `[]` asks none. Questions never change pass, fail, or the exit code.
+</Property>
+
+<Property name="questions[].across" type="'environment' | 'harness' | Array<'environment' | 'harness'>" optional>
+  The factor a pairwise question varies: `'environment'` holds the harness, and `'harness'` holds the environment. reeval asks it about each pair of attempts that passed their assertions, in both orders. Without `across`, reeval asks the question of each attempt on its own.
+</Property>
+
+<Property name="questions[].choices" type="string[]" optional>
+  The answers a question asked of each attempt picks from, with a short reason.
+</Property>
+
+<Property name="questions[].turns" type="'last' | 'all'" optional>
+  `'all'` shows every turn's task, output, and transcript, and `'last'` the last turn's. The default is `'all'`.
+</Property>
+
+<Property name="questions[].task" type="boolean" optional>
+  The prompts the attempt was sent, once for both sides when they match.
+</Property>
+
+<Property name="questions[].output" type="boolean" optional>
+  The final message.
+</Property>
+
+<Property name="questions[].files" type="boolean" optional>
+  `status path` lines for the changed files, under the patterns in `diff`.
+</Property>
+
+<Property name="questions[].diff" type="boolean | string[]" optional>
+  The diff from the start of the evaluation. A list is gitignore-style patterns over workspace paths. The last matching pattern wins, and `!` excludes.
+</Property>
+
+<Property name="questions[].transcript" type="boolean | 'tools' | 'full'" optional>
+  The transcript as text lines. `true` is messages and tool calls with tool output clipped, `'tools'` is tool calls only, and `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses is not blind.
+</Property>
+
+<Property name="questions[].checks" type="boolean | string[]" optional>
+  `c.exec` results. A list names the commands to show, as passed to `c.exec`.
+</Property>
+
+<Property name="questions[].artifacts" type="true | string[]" optional>
+  Each side's captures as `true` or a non-empty list of non-empty capture names.
+</Property>
+
+For more information about questions, see [Ask questions across attempts](/evaluations/grading/questions).
+
+## `tags`
+
+`tags` labels an evaluation for `--tag` and a profile's `tags`.
+
+<Property name="tags" type="string[]" optional>
+  Labels from each group and the evaluation, without duplicates. A filter is a label, or `!` and a label to exclude; every filter has to match.
+</Property>
+
+## `pin`
+
+`pin` lists the keys a profile `limit` does not narrow.
+
+<Property name="pin" type="Array<'harness' | 'runs' | 'compare'>" optional>
+  Any of `harness`, `runs`, and `compare`, kept from enclosing groups. reeval refuses any other entry.
+</Property>

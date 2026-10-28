@@ -65,7 +65,8 @@ export function createChecks(a: Attempt) {
       ms: durationMs,
       ...(retries > 0 ? { try: tries.length, tries: retries + 1 } : {}),
     })
-    return r
+    // Names its command in `expect(await c.exec(…)).toSucceed()`'s default label.
+    return Object.defineProperty(r, SUBJECT, { value: command })
   }
   function exec(command: string, options?: ExecRetry & { background?: false }): Promise<ExecResult>
   function exec(command: string, options: { background: true }): Promise<BackgroundHandle>

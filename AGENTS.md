@@ -115,7 +115,7 @@ every project in `examples/` depends on it as `"reeval": "workspace:*"`.
 | `.agents/skills/add-a-language` | Repo skill for contributors adding the next language runtime: adapter checklist, transport v2, conformance and tier verification ([`SKILL.md`](./.agents/skills/add-a-language/SKILL.md)) |
 | `packages/reeval/src/evaluate.ts` | `evaluate` and `group`: they record the file's declaration tree (`declaration.ts`, JSON when its options are data) and register one test per attempt; `declareTree` declares a tree. `plan-eval.ts`'s pure `planEval` turns one declared eval into its tests: the options cascade, the matrix, the refusals and each attempt's gate, as data |
 | `packages/reeval/src/contract` | The plain-data contract another language's declaration tree carries: one Zod schema per shape (`docker.ts`, `harness.ts`, `compare.ts`, `plain.ts` for the gate, egress, secrets, skills, MCP servers, files and workspaces, `environment.ts`, `judge.ts` for the judge options and their `state`, `declaration.ts` for the tree `declareTree` takes), each validating the data and giving its JSON Schema. `attempt.ts` is the attempt protocol: the calls an eval's body makes on its attempt and reeval's replies, as a runner in another language would exchange them (in-process today), with their JSON Schema in `schema/protocol/`. `CONTRACT_SCHEMAS` (`index.ts`) names the `$def` each owns in `schema/plan/`; `shared.ts` has the duration schema and `refusal`, which turns a Zod issue into reeval's own sentence. Each module's `_SameAsSchema` holds the hand-written type to its schema, and `pnpm schema:check` holds the properties and required ones to the type. The type's TSDoc is the one copy of the docs: the schema snapshots take each description from it (`scripts/schema/zod.ts`), so a schema has no `.describe()` for what its type documents, and `schema:check` refuses one that repeats or contradicts the TSDoc; only the attempt protocol's own wording, where no type documents it, stays in `.describe()`. `test/refusals/` is the golden table of every refusal |
-| `packages/reeval/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, look up the image preflight prepared), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`, `debug.ts` (the plan and environment in the debug trace); `index.ts` runs them in order and tears down. `match.ts` is the attempt protocol's `expect` call, which runs the same `MATCHERS` rows (`src/matchers.ts`) the TypeScript `expect` does. `assertions.ts` turns the matcher calls either one made into the attempt's assertion records (labels, ` #n`, messages) and its `expect.soft` failure; the engine only hands it raw calls |
+| `packages/reeval/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, look up the image preflight prepared), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`, `debug.ts` (the plan and environment in the debug trace); `index.ts` runs them in order and tears down. `match.ts` is the attempt protocol's `expect` call, which runs the same `MATCHERS` rows (`src/matchers.ts`) the TypeScript `expect` does. `assertions.ts` turns the matcher calls either one made into the attempt's assertion records (labels, ` #n`, messages) and its failed-`expect` failure; the engine only hands it raw calls |
 | `packages/reeval/src/sandbox` | reeval's sandbox adapters (Docker and a fake), the provider prepare contract (`provider.ts`), preflight's generic layer (`preflight.ts`: check, prepare in parallel, retry, cache, scope or stop) and Docker's image preparation |
 | `packages/reeval/src/egress.ts` | Egress policies at plan time: the cascade, the automatic hosts, and what each sandbox can enforce |
 | `packages/reeval/src/harness` | The Cursor (`@reeval/harness-cursor-sdk`), Claude Code (`@ai-sdk/harness-claude-code`), Antigravity (`@reeval/harness-antigravity`), OpenCode (`@reeval/harness-opencode`), Goose (`@reeval/harness-goose`), pi (`@reeval/harness-pi`), Codex (`@reeval/harness-codex`), fx (`@reeval/harness-fx`) and Grok Build (`@reeval/harness-grok-build`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, the responses that name the served model, rules file, skill directories, MCP shape), and a fake harness |
@@ -179,7 +179,7 @@ with `scripts/binary-smoke.mjs` (nothing installed; Docker on linux-x64, Alpine 
 it from those files with `scripts/install.sh` or `scripts/install.ps1` (Windows PowerShell and
 pwsh), which check the binary starts before installing it, and uploads `reeval-<version>-<os>-<arch>` plus `SHA256SUMS` as one artifact. `release.yml`
 calls it for each npm release and uploads that artifact to the GitHub release, which is where the
-install scripts download from (docs: `docs/guide/binary.mdx`).
+install scripts download from.
 
 **The build.** [tsdown](https://tsdown.dev) bundles `reeval`
 (`packages/reeval/tsdown.config.mjs`) into chunks directly in `dist/`, with its `.d.ts`. The
@@ -565,7 +565,7 @@ pnpm reeval run --dry-run          # the plan, without running
    pnpm reeval run --profile claude-code
    ```
 
-The harness keys stay on the host (see [Secrets and egress](./docs/guide/secrets-and-egress.mdx)). reeval masks secret-looking values in
+The harness keys stay on the host (see [Secrets](./docs/configuration/environments/secrets.mdx) and [Egress](./docs/configuration/environments/egress.mdx)). reeval masks secret-looking values in
 everything it writes to `.reeval/`. A key with whitespace or a line break in it (pasted from a wrapped
 terminal line) stops the run with exit 2 naming it and the character, for the agents' and the
 judge's keys; a brokered secret that goes in a header fails its attempt the same way.
@@ -578,7 +578,7 @@ transcripts, the studio and the record) is in the user docs under [`docs/`](./do
 
 | Tab | For |
 |---|---|
-| [Guide](./docs/index.mdx) | Learning reeval in order, from a first eval to CI and analysis |
-| [Concepts](./docs/concepts/index.mdx) | How and why it works: the matrix, lift, brokering, egress |
-| [Recipes](./docs/recipes/index.mdx) | Complete solutions to common tasks |
-| [Reference](./docs/reference/index.mdx) | Every option, helper, command, flag, exit code and file format |
+| [Guide](./docs/overview.mdx) | Learning reeval in order, from a first eval to CI and analysis |
+| [Glossary](./docs/reference/glossary.mdx) | The words for a run and what a result reports |
+| [Recipes](./docs/evaluations/recipes) | Complete solutions to common tasks |
+| [Reference](./docs/reference) | Every option, helper, command, flag, exit code and file format |

@@ -1,0 +1,95 @@
+---
+title: "Measure docs"
+description: "See whether docs helped the agent pass an assertion."
+---
+
+You run one task on a baseline without the docs and on a variant that has them. The cells share the prompt and the assertions. For a runnable project that measures the same convention as a doc and as a skill, see [`with-two-variants`](https://github.com/invertase/reeval/tree/main/examples/with-two-variants).
+
+## Run one task with and without the docs
+
+<Steps>
+<Step title="Define the baseline and variant">
+
+In the `evals/environments.ts` file, define the baseline `plain` and the variant `with-docs`. The `plain` baseline sets no `rules`. The `with-docs` variant sets `rules`.
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const plain = defineEnvironment('plain', {
+  setup: ['npm install ai'],
+})
+
+export const withDocs = plain.extendEnvironment('with-docs', {
+  rules: `Call streamText from the Vercel AI SDK.
+Do not buffer the whole response.
+`,
+})
+```
+
+Both cells install the `ai` package. The rules text is the only change. The harness reads the rules text at the start of every attempt.
+
+</Step>
+<Step title="Add the docs">
+
+Replace the rules string with the docs. For more information about rules files, see [Add project rules](/configuration/environments/rules). For more information about placing a doc in the workspace instead, see [Place files](/configuration/environments/files).
+
+</Step>
+<Step title="Write the evaluation">
+
+In the `evals/stream.eval.ts` file, declare the evaluation:
+
+```ts title="evals/stream.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { plain, withDocs } from './environments.ts'
+
+evaluate(
+  'streams the chat reply',
+  { runs: 4, compare: { baseline: plain, variants: [withDocs] } },
+  async (c) => {
+    await c.send('Stream the chat reply from src/chat.ts.')
+    await expect(c, 'uses streamText').toHaveFile(
+      'src/chat.ts',
+      /streamText/,
+    )
+  },
+)
+```
+
+The rules text names `streamText` from the Vercel AI SDK. The prompt does not name `streamText`, so the assertion passes only when the docs lead the harness to call it.
+
+`runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect reads `can't tell yet`.
+
+</Step>
+<Step title="Run the comparison">
+
+Run the evaluation in the `evals/stream.eval.ts` file:
+
+```bash
+npx reeval run stream
+```
+
+</Step>
+<Step title="Read whether the docs helped">
+
+Read the block the run prints for the evaluation. When `with-docs` passes every attempt and `plain` passes none, the block reads like this. For more information about the outcomes and the tally, see [Read a run's output](/results/output).
+
+```text
+pass             streams the chat reply
+  arm              pass
+  plain            0 of 4
+  with-docs        4 of 4  helped
+  check            plain   with-docs
+  uses streamText  0 of 4  4 of 4
+    expected src/chat.ts to match /streamText/
+```
+
+The `with-docs` row reads `helped` because the `with-docs` variant passed the `uses streamText` assertion in 4 of 4 attempts, and the `plain` cell passed it in 0 of 4. The other effect words are `made it worse` and `can't tell yet`.
+
+If the `plain` baseline and the `with-docs` variant both pass, the harness already calls `streamText`, and this task cannot show what the docs changed. A baseline that already includes the docs measures nothing.
+
+</Step>
+</Steps>
+
+## Next
+
+For more information about gates and extra variants, see [Measure lift against a baseline](/results/compare/lift).

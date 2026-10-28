@@ -47,4 +47,4 @@ ok 1 - loadUsers reads the seeded users
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
 `setup` and the order an attempt applies an environment in are in the
-[defineEnvironment](../../docs/reference/environment.mdx) reference.
+[defineEnvironment](../../docs/reference/environment-helpers.mdx) reference.

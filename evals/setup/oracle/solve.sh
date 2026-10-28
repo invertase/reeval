@@ -20,7 +20,7 @@ import { plain, withSkill } from './environments.ts'
 evaluate('indexes foreign keys with the Postgres skill', { compare: { baseline: plain, variants: [withSkill] } }, async (c) => {
   await c.send('Write migrations/001_orders.sql creating customers and orders, orders.customer_id referencing customers.')
   const sql = ((await c.readFile('migrations/001_orders.sql')) ?? '').toLowerCase()
-  expect.soft(sql, 'indexes orders.customer_id').toMatch(/create index[^;]*on\s+orders\s*\(\s*customer_id/)
+  expect(sql, 'indexes orders.customer_id').toMatch(/create index[^;]*on\s+orders\s*\(\s*customer_id/)
 })
 EOF
 elif [ -d skills/firestore-rules-creation ]; then
@@ -33,7 +33,7 @@ const withSkill = plain.extendEnvironment('with-rules-skill', ({ skill }) => ({
 evaluate('locks down Firestore rules with the rules skill', { compare: { baseline: plain, variants: [withSkill] } }, async (c) => {
   await c.send('Write firestore.rules so each user can read and write only their own users/{uid} document.')
   const rules = (await c.readFile('firestore.rules')) ?? ''
-  expect.soft(rules, 'checks request.auth.uid').toMatch(/request\.auth\.uid\s*==\s*uid/)
+  expect(rules, 'checks request.auth.uid').toMatch(/request\.auth\.uid\s*==\s*uid/)
 })
 EOF
 elif [ -f GEMINI.md ]; then
@@ -52,8 +52,8 @@ import { evaluate, expect } from 'reeval'
 import { repo, withRules } from './environments.ts'
 evaluate('follows GEMINI.md on a user-facing CLI change', { compare: { baseline: repo, variants: [withRules] } }, async (c) => {
   await c.send('`firebase projects:list` should say how to create a project when the account has none.')
-  expect.soft(c, 'a CHANGELOG.md entry').toHaveChanged('CHANGELOG.md')
-  await expect.soft(c.exec('npx tsc --noEmit -p tsconfig.json'), 'compiles').toSucceed()
+  expect(c, 'a CHANGELOG.md entry').toHaveChanged('CHANGELOG.md')
+  await expect(c.exec('npx tsc --noEmit -p tsconfig.json'), 'compiles').toSucceed()
 })
 EOF
 else
@@ -64,8 +64,8 @@ const vite = defineEnvironment('vite', { files: { 'package.json': '{ "type": "mo
 evaluate('sets up Tailwind CSS v4 with its CSS import', { environment: vite }, async (c) => {
   await c.send('Add Tailwind CSS 4 to this project, with src/styles.css as the stylesheet.')
   const css = (await c.readFile('src/styles.css')) ?? ''
-  expect.soft(css, 'uses @import "tailwindcss"').toMatch(/@import\s+["']tailwindcss["']/)
-  expect.soft(css, 'no v3 @tailwind directives').not.toMatch(/@tailwind\s+base/)
+  expect(css, 'uses @import "tailwindcss"').toMatch(/@import\s+["']tailwindcss["']/)
+  expect(css, 'no v3 @tailwind directives').not.toMatch(/@tailwind\s+base/)
 })
 EOF
 fi

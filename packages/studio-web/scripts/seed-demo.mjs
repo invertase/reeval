@@ -83,9 +83,9 @@ evaluate(
     harness: (inherited) => inherited.map((h) => (h.kind === 'fake' ? { ...h, flakeRate: 0 } : h)),
     compare: { baseline: plain, variants: [withHouseGreeting] },
     questions: [
-      { question: 'Which greet.js reads more like our house style?', across: ['environment', 'harness'] },
-      { question: 'Which greet.js handles a missing name?', across: ['environment', 'harness'] },
-      { question: 'Does greet.js default a missing name?', choices: ['yes', 'no'] },
+      { question: 'Which greet.js reads more like our house style?', across: ['environment', 'harness'], diff: true },
+      { question: 'Which greet.js handles a missing name?', across: ['environment', 'harness'], diff: true },
+      { question: 'Does greet.js default a missing name?', choices: ['yes', 'no'], diff: true },
     ],
   },
   async (c) => {
@@ -109,7 +109,7 @@ export default defineConfig({
   include: ${JSON.stringify(include)},
   harness: [${harnesses.join(', ')}],
   sandbox: fakeSandbox(),
-  judge: { model: fakeJudge({ score: ${judge} }), state: { transcript: 'tools' } },
+  judge: { model: fakeJudge({ score: ${judge} }) },
   // Answers the pairwise questions: the attempt whose diff says Ahoy wins, then the one that
   // defaults the name. review.eval.ts's second question fails at the model. The per-attempt
   // question answers yes when the diff defaults the name.

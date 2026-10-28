@@ -15,6 +15,6 @@ evaluate.each(cases)('adds $fn to src/math.js', { environment: math }, async (c,
   await c.send(`Add a ${item.fn}(a, b) function to src/math.js.`)
 
   const run = await c.exec(`node ~/checks/call.mjs ${item.fn} ${item.a} ${item.b}`)
-  await expect(run).toSucceed()
+  expect(run).toSucceed()
   expect(run.stdout.trim()).toBe(item.want)
 })

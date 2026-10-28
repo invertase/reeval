@@ -51,5 +51,5 @@ pnpm reeval run --dry-run --json
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-`directory()`, its `glob` and `file()` are in the [Helpers](../../docs/reference/helpers.mdx)
+`directory()`, its `glob` and `file()` are in the [Environment helpers reference](../../docs/reference/environment-helpers.mdx)
 reference.

@@ -5,7 +5,9 @@ evaluate(
   'environment only',
   {
     compare: { baseline: base, variants: [skilled] },
-    questions: [{ question: 'Which handles state more cleanly?', across: 'environment' }],
+    questions: [
+      { question: 'Which handles state more cleanly?', across: 'environment', diff: true },
+    ],
   },
   async () => {},
 )
@@ -13,7 +15,7 @@ evaluate(
   'harness only',
   {
     compare: { baseline: base, variants: [skilled] },
-    questions: [{ question: 'Which agent is clearer?', across: 'harness' }],
+    questions: [{ question: 'Which agent is clearer?', across: 'harness', diff: true }],
   },
   async () => {},
 )
@@ -25,6 +27,7 @@ evaluate(
       {
         question: 'Which follows the house style more closely?',
         across: ['environment', 'harness'],
+        diff: true,
       },
     ],
   },

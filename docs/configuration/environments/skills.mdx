@@ -1,0 +1,43 @@
+---
+title: "Give the agent skills"
+description: "Place a skill where the harness loads it, and check the agent used it."
+---
+
+You place a skill on an environment so the harness can load it during an attempt. Each entry in `skills` comes from the `skill` helper. For more information about measuring whether a skill helped, see [Measure lift against a baseline](/results/compare/lift).
+
+## Add a skill
+
+In the `evals/environments.ts` file, place a skill from a host directory with `skill.local()`:
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const math = defineEnvironment('math', ({ directory, skill }) => ({
+  files: directory('./project'),
+  skills: [skill.local('./skills/jsdoc')],
+}))
+```
+
+Pass `math` as an evaluation's `environment`, as [Environments](/configuration/environments#define-and-use-an-environment) shows. To compare the environment with and without the skill, see [Measure lift against a baseline](/results/compare/lift).
+
+A skill directory holds a `SKILL.md` file. The frontmatter `name` is kebab-case, and `description` is required. When the frontmatter omits `name`, reeval uses the directory name. A `name` other than kebab-case, or a missing `description`, fails the attempt. Quote a frontmatter value that contains `": "`.
+
+## Use another source
+
+Place a skill from a repository with [`skill.git`](/reference/environment-helpers#skillgit), from skills.sh with [`skill.registry`](/reference/environment-helpers#skillregistry), from an npm package with [`skill.npm`](/reference/environment-helpers#skillnpm), or from a name, a description, and its content with [`skill.inline`](/reference/environment-helpers#skillinline). For a runnable project, see [`with-skill-sources`](https://github.com/invertase/reeval/tree/main/examples/with-skill-sources).
+
+## Check the agent used the skill
+
+`toHaveCalledSkill` fails the attempt when the agent never loads that skill. It passes when a tool named `skill`, `Skill`, or `load_skill` loads the name, or when the agent reads a file under `skills/<name>/`.
+
+To check every turn of the attempt, pass `c` after the final `c.send()` call. To check one turn, pass the turn returned by `c.send()`:
+
+```ts title="with-skill.eval.ts"
+const turn = await c.send('Add a multiply(a, b) function to src/math.js.')
+
+expect(turn).toHaveCalledSkill('jsdoc')
+```
+
+For a runnable project, see [`with-skill`](https://github.com/invertase/reeval/tree/main/examples/with-skill).
+
+For more information about this matcher, see [toHaveCalledSkill](/reference/matchers#tohavecalledskill).

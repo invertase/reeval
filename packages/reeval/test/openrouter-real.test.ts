@@ -43,7 +43,7 @@ export default defineConfig({
     'evals/greet.eval.ts': `import { evaluate } from 'reeval'
 evaluate('writes a greet(name) function', async (c) => {
   await c.send('Create greet.js exporting greet(name), which returns "Hello, <name>!".')
-  await c.judge('Does the workspace have a greet.js that greets by name?')
+  await c.judge('Does the workspace have a greet.js that greets by name?', { task: true, diff: true })
 })
 `,
   })

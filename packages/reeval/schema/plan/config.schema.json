@@ -273,10 +273,6 @@
             }
           }
         },
-        "state": {
-          "description": "The judge's state: what the judge is given beside the question, not the workspace's or the attempt's state. Merged key by key down the cascade.",
-          "$ref": "#/$defs/JudgeStateOptions"
-        },
         "threshold": {
           "description": "Minimum score (0–1) for a `pass` verdict.",
           "type": "number",
@@ -1389,81 +1385,6 @@
         }
       ]
     },
-    "JudgeStateOptions": {
-      "description": "What the judge is given: each key is a key of the state in `judge-input.json`. An unset key keeps its default, which is what the judge gets with no `state` option at all.",
-      "type": "object",
-      "properties": {
-        "checks": {
-          "description": "`c.exec` results so far; a list shows only those commands, as passed to `c.exec`. Default false.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "pattern": "\\S"
-              }
-            }
-          ]
-        },
-        "contents": {
-          "description": "Workspace files shown whole, as they are now, changed or not: exact paths or gitignore-style patterns (`'**'`, `'src/**'`; the last match wins, `!` excludes) over the files git sees in the workspace. A missing exact path is `null`; a pattern that matches nothing adds nothing. These files leave the diff. Default none.",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "pattern": "\\S"
-          }
-        },
-        "diff": {
-          "description": "The diff since the eval started. A list is gitignore-style patterns over workspace paths: the last matching pattern wins and `!` excludes. Default true.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "minItems": 1,
-              "type": "array",
-              "items": {
-                "type": "string",
-                "pattern": "\\S"
-              }
-            }
-          ]
-        },
-        "files": {
-          "description": "`status path` lines for the changed files, under `diff`'s patterns. Default true.",
-          "type": "boolean"
-        },
-        "output": {
-          "description": "The graded turn's final message, or `on`'s value. Default true.",
-          "type": "boolean"
-        },
-        "task": {
-          "description": "The graded turn's prompt. Default true.",
-          "type": "boolean"
-        },
-        "transcript": {
-          "description": "The graded turn's transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. Default false.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": ["tools", "full"]
-            }
-          ]
-        },
-        "turns": {
-          "description": "`'all'`: every turn up to the graded one under `turns`, each with its task, output and (with `transcript`) transcript. Default `'last'`.",
-          "type": "string",
-          "enum": ["last", "all"]
-        }
-      },
-      "additionalProperties": false
-    },
     "McpServer": {
       "description": "An MCP server the agent gets, made by the `mcp` helper: a command in the sandbox, or a URL.",
       "oneOf": [
@@ -2177,100 +2098,12 @@
       "additionalProperties": false
     },
     "QuestionOptions": {
-      "description": "Defaults for every question: `model` and `artifacts` replaced, `state` merged key by key.",
+      "description": "Defaults for every question below it. What a question is shown is its own, never a default.",
       "type": "object",
       "properties": {
-        "artifacts": {
-          "description": "Each attempt's own captures, by name; `true` sends all of them. Default none.",
-          "anyOf": [
-            {
-              "type": "boolean",
-              "const": true
-            },
-            {
-              "minItems": 1,
-              "type": "array",
-              "items": {
-                "type": "string",
-                "pattern": "\\S"
-              }
-            }
-          ]
-        },
         "model": {
           "description": "`'provider/model'` that answers every question below it without its own `model`.",
           "type": "string"
-        },
-        "state": {
-          "description": "What it's shown of each attempt.",
-          "$ref": "#/$defs/QuestionStateOptions"
-        }
-      },
-      "additionalProperties": false
-    },
-    "QuestionStateOptions": {
-      "description": "What a question is shown of each attempt: the keys of `judge.state` but `contents` (the attempts' workspaces are gone when questions are asked). An unset key keeps its default: a pairwise question shows the task and the diff; one asked of each attempt also shows the final message and the transcript.",
-      "type": "object",
-      "properties": {
-        "checks": {
-          "description": "`c.exec` results; a list shows only those commands, as passed to `c.exec`. Default false.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "pattern": "\\S"
-              }
-            }
-          ]
-        },
-        "diff": {
-          "description": "The diff since the eval started. A list is gitignore-style patterns over workspace paths: the last matching pattern wins and `!` excludes. Default true.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "minItems": 1,
-              "type": "array",
-              "items": {
-                "type": "string",
-                "pattern": "\\S"
-              }
-            }
-          ]
-        },
-        "files": {
-          "description": "`status path` lines for the changed files, under `diff`'s patterns. Default false.",
-          "type": "boolean"
-        },
-        "output": {
-          "description": "The final message: the agent's own account of its work. Default false in a pair, true per attempt.",
-          "type": "boolean"
-        },
-        "task": {
-          "description": "The prompts the attempt was sent, once for both sides when they match. Default true.",
-          "type": "boolean"
-        },
-        "transcript": {
-          "description": "The transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses isn't blind. Default false in a pair, true per attempt.",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": ["tools", "full"]
-            }
-          ]
-        },
-        "turns": {
-          "description": "`'all'`: every turn under `turns`, each with its task, output and (with `transcript`) transcript; `'last'`: the last turn only. Default `'all'`.",
-          "type": "string",
-          "enum": ["last", "all"]
         }
       },
       "additionalProperties": false

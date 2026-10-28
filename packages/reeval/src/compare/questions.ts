@@ -49,15 +49,13 @@ import {
   voteOf,
   voteReason,
 } from './pairs.ts'
-import { DEFAULT_QUESTION_STATE, resolveQuestionState, STOPPED_FIRST } from './state.ts'
+import { resolveQuestionState, STOPPED_FIRST } from './state.ts'
 
-/** What each side of a question shows: the resolved `state`, and the captures it asks for. */
+/** What each side of a question shows: the inputs it turns on, resolved, and the captures it asks for. */
 export type QuestionShows = {
   state: ResolvedQuestionStateOptions
   artifacts?: true | string[]
 }
-
-const DEFAULT_SHOWS: QuestionShows = { state: DEFAULT_QUESTION_STATE }
 
 const isOn = (value: unknown) => value !== false && !(Array.isArray(value) && !value.length)
 
@@ -82,7 +80,7 @@ function shownParts(shows: QuestionShows, taskEach: boolean): string[] {
 }
 
 /** The system prompt, naming the parts each attempt is shown as. */
-export function questionSystem(shows: QuestionShows = DEFAULT_SHOWS, taskEach = false): string {
+export function questionSystem(shows: QuestionShows, taskEach = false): string {
   const parts = shownParts(shows, taskEach)
   return `You compare two attempts by coding agents at the same task and answer one question about them.
 Each attempt is shown as ${listed(parts)}, labeled A or B. The labels are assigned at random: which attempt comes first says nothing about it.
@@ -260,7 +258,7 @@ export function blindInput(
   pair: Pair,
   swapped: boolean,
   maxInputTokens: number,
-  shows: QuestionShows = DEFAULT_SHOWS,
+  shows: QuestionShows,
 ): BlindInput {
   const [first, second] = slots(pair, swapped)
   const chars = Math.floor((maxInputTokens * CHARS_PER_TOKEN) / 2)
@@ -294,7 +292,7 @@ export const blindPair = (
   pair: Pair,
   swapped: boolean,
   maxInputTokens: number,
-  shows?: QuestionShows,
+  shows: QuestionShows,
 ): BlindPair => blindInput(question, pair, swapped, maxInputTokens, shows).blind
 
 export type QuestionModel = string | FakeAnalysisModel
@@ -394,8 +392,8 @@ export type AnswerOptions = {
   pairs: Pair[]
   maxInputTokens: number
   maxOutputTokens: number
-  /** What each side shows; the question defaults without it. */
-  state?: QuestionStateOptions
+  /** What each side shows: the inputs the question turned on. */
+  state: QuestionStateOptions
   /** Each side's own captures, by name, or `true` for all of them. */
   artifacts?: true | string[]
   /** Model calls at once (default 4). */
@@ -465,7 +463,7 @@ function missingEverywhere(
   if (Array.isArray(checks)) {
     const command = checks.find((c) => !sides.some((s) => s.checks?.some((r) => r.command === c)))
     if (command !== undefined) {
-      return `question "${question}" state.checks names a command no ${who} ran: ${JSON.stringify(command)}`
+      return `question "${question}" checks names a command no ${who} ran: ${JSON.stringify(command)}`
     }
   }
   if (Array.isArray(shows.artifacts)) {
@@ -486,7 +484,7 @@ function missingEverywhere(
 export async function answerQuestion(options: AnswerOptions): Promise<CompareAnswer> {
   const { question, model, pairs } = options
   const shows: QuestionShows = {
-    state: resolveQuestionState(options.state, true),
+    state: resolveQuestionState(options.state),
     ...(options.artifacts !== undefined ? { artifacts: options.artifacts } : {}),
   }
   const head = {
@@ -633,7 +631,7 @@ export type AttemptAnswerOptions = {
   attempt: PairAttempt
   maxInputTokens: number
   maxOutputTokens: number
-  state?: QuestionStateOptions
+  state: QuestionStateOptions
   artifacts?: true | string[]
   choices?: string[]
   signal?: AbortSignal
@@ -645,7 +643,7 @@ export async function answerAttempt(
 ): Promise<Omit<AskedAttemptAnswer, 'n'>> {
   const { question, model, attempt, choices } = options
   const shows: QuestionShows = {
-    state: resolveQuestionState(options.state, false),
+    state: resolveQuestionState(options.state),
     ...(options.artifacts !== undefined ? { artifacts: options.artifacts } : {}),
   }
   const head = {
@@ -866,7 +864,7 @@ export type EvalQuestions = {
     /** Set on a pairwise question; without it, the question is asked of each attempt. */
     across?: PairFactor | PairFactor[]
     choices?: string[]
-    state?: QuestionStateOptions
+    state: QuestionStateOptions
     artifacts?: true | string[]
   }>
 }
@@ -909,7 +907,7 @@ const unanswered = (q: RunnerQuestion, error: string): AskedAttemptAnswer => ({
   answer: {
     question: q.question,
     model: isFake(q.model) ? 'fake' : q.model,
-    stateOptions: resolveQuestionState(q.state, false),
+    stateOptions: resolveQuestionState(q.state),
     ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
     ...(q.choices ? { choices: q.choices } : {}),
     text: '',
@@ -978,7 +976,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
               attempt,
               maxInputTokens: options.maxInputTokens,
               maxOutputTokens: options.maxOutputTokens,
-              ...(q.state ? { state: q.state } : {}),
+              state: q.state,
               ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
               ...(q.choices ? { choices: q.choices } : {}),
               signal: controller.signal,
@@ -1007,7 +1005,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
     const sides = results.flatMap((r) => shown.get(r.key) ?? [])
     for (const q of eachOf(e)) {
       const shows: QuestionShows = {
-        state: resolveQuestionState(q.state, false),
+        state: resolveQuestionState(q.state),
         ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
       }
       const missing = sides.length && missingEverywhere(q.question, shows, sides, 'attempt')
@@ -1057,7 +1055,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
             pairs: pairsOf(staged, acrossOf(pairFactors(q.across))),
             maxInputTokens: options.maxInputTokens,
             maxOutputTokens: options.maxOutputTokens,
-            ...(q.state ? { state: q.state } : {}),
+            state: q.state,
             ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
             signal: controller.signal,
             calls,
@@ -1071,7 +1069,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
         const answer: CompareAnswer = {
           question: q.question,
           model: isFake(q.model) ? 'fake' : q.model,
-          stateOptions: resolveQuestionState(q.state, true),
+          stateOptions: resolveQuestionState(q.state),
           ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
           votes: [],
           rates: [],

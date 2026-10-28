@@ -16,5 +16,6 @@ evaluate('uses the Acme SDK correctly', { environment: app }, async (c) => {
 
   await c.writeFile('check-client.mjs', checkClient)
   await expect(c.exec('node check-client.mjs')).toSucceed()
-  expect(await c.judge('Does forecast() use client.retry rather than its own loop?')).toPass()
+  const question = 'Does forecast() use client.retry rather than its own loop?'
+  expect(await c.judge(question, { contents: ['src/forecast.js'] })).toPass()
 })

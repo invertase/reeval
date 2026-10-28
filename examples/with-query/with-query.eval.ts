@@ -12,7 +12,7 @@ evaluate(
   async (c) => {
     await c.send('Add a multiply(a, b) function to src/math.js.')
 
-    await expect.soft(c.exec('node --test'), 'tests pass').toSucceed()
+    await expect(c.exec('node --test'), 'tests pass').toSucceed()
     await expect(c, 'changelog entry').toHaveFile('CHANGELOG.md', /## Unreleased\s+- feat: /)
   },
 )

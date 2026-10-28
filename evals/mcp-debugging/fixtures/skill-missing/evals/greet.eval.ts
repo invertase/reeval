@@ -7,6 +7,6 @@ const greetsAda = `node -e "import('./greet.js').then((m) =>
 group('house style', { environment: plain }, () => {
   evaluate('greets in the house style', async (c) => {
     await c.send('Create greet.js exporting greet(name) in our house style.')
-    await expect.soft(c.exec(greetsAda), 'greets Ada in the house style').toSucceed()
+    await expect(c.exec(greetsAda), 'greets Ada in the house style').toSucceed()
   })
 })

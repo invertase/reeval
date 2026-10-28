@@ -1,0 +1,10 @@
+extends: existence
+message: "Write the product name as 'reeval', not '%s'."
+level: error
+ignorecase: false
+tokens:
+  - Reeval
+  - REEVAL
+  - ReEval
+  - ReEVAL
+  - Re-eval

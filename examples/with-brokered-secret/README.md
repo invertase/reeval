@@ -48,5 +48,5 @@ and git do.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent in Docker, and the real agents from `../profiles.ts` |
 
-[Credential brokering](../../docs/concepts/credential-brokering.mdx) explains how the swap works
+[Pass secrets](../../docs/configuration/environments/secrets.mdx) explains how the swap works
 and its limits.

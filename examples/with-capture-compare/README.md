@@ -2,7 +2,7 @@
 
 **Shows:** a pairwise question asked about screenshots. Both arms add a "Sign up" button; the
 variant has a brand skill. Each attempt captures its page as `home`, and the question
-(`across: 'environment'`, with `artifacts: ['home']`) sends each side's own screenshot beside its diff, so the vote can rest on
+(`across: 'environment'`, with `diff: true` and `artifacts: ['home']`) sends each side's own screenshot beside its diff, so the vote can rest on
 how the page looks.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
@@ -66,5 +66,5 @@ the capture each side sent:
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace, with and without the skill |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and analysis model, the `docker` profile, and the real agents from `../profiles.ts` |
 
-The [Capturing UI](../../docs/recipes/capturing-ui.mdx) recipe covers comparing two arms'
-screenshots, and [Questions](../../docs/guide/questions.mdx) what each side shows.
+The [Check an app](../../docs/evaluations/task/apps.mdx) page covers comparing two arms'
+screenshots, and [Ask questions across attempts](../../docs/evaluations/grading/questions.mdx) what each side shows.

@@ -21,8 +21,8 @@ const withSkill = defineEnvironment('with-skill', ({ skill }) => ({
 // harness is outer and the arms inner: the learner needs the skill, the terse one ignores it.
 evaluate('greets in the house style on each agent', { harness: [skilled, terse] }, async (c) => {
   await c.send('Write greet.js that greets in our house style.')
-  await expect.soft(c, 'writes greet.js').toHaveFile('greet.js')
-  await expect(c.exec('grep -q Ahoy greet.js'), 'house greeting').toSucceed()
+  await expect(c, 'writes greet.js').toHaveFile('greet.js')
+  await expect.require(c.exec('grep -q Ahoy greet.js'), 'house greeting').toSucceed()
   await expect(c.exec('grep -q "!" greet.js'), 'exclaims').toSucceed()
 })
 

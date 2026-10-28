@@ -7,5 +7,12 @@ evaluate('lands', { environment: leaky }, async (c) => {
   await c.send('print LEAKY_TOKEN every way you can')
   const leaked = (await c.readFile('leak.txt'))?.split('\n')
   expect(leaked).toEqual(forms(process.env.REEVAL_FIXTURE_LEAKY ?? ''))
-  expect(await c.judge('Did the agent print the token?')).toPass()
+  expect(
+    await c.judge('Did the agent print the token?', {
+      task: true,
+      output: true,
+      files: true,
+      diff: true,
+    }),
+  ).toPass()
 })

@@ -26,17 +26,17 @@ group('contributing to reeval', { timeout: '45m' }, () => {
         }
         await c.send(task.prompt + FOOTER)
 
-        expect.soft(c, 'adds or updates tests').toHaveChanged('packages/reeval/test/**')
-        expect.soft(c, 'updates the docs').toHaveChanged('docs/**')
-        for (const t of task.touches) expect.soft(c, t.label).toHaveChanged(t.paths)
+        expect(c, 'adds or updates tests').toHaveChanged('packages/reeval/test/**')
+        expect(c, 'updates the docs').toHaveChanged('docs/**')
+        for (const t of task.touches) expect(c, t.label).toHaveChanged(t.paths)
 
-        await expect.soft(c.exec('pnpm build'), 'pnpm build').toSucceed()
-        await expect.soft(c.exec('pnpm lint'), 'pnpm lint').toSucceed()
-        await expect.soft(c.exec('pnpm --filter reeval typecheck'), 'typecheck').toSucceed()
-        await expect.soft(c.exec('pnpm docs:check'), 'pnpm docs:check').toSucceed()
+        await expect(c.exec('pnpm build'), 'pnpm build').toSucceed()
+        await expect(c.exec('pnpm lint'), 'pnpm lint').toSucceed()
+        await expect(c.exec('pnpm --filter reeval typecheck'), 'typecheck').toSucceed()
+        await expect(c.exec('pnpm docs:check'), 'pnpm docs:check').toSucceed()
 
         for (const [path, text] of Object.entries(task.hidden.files)) await c.writeFile(path, text)
-        await expect.soft(c.exec(task.hidden.run), "the merged change's tests").toSucceed()
+        await expect(c.exec(task.hidden.run), "the merged change's tests").toSucceed()
       },
     )
   }

@@ -189,6 +189,9 @@ export function assertionOf(k: CheckResult): string {
   )
 }
 
+/** Where the eval made the check's first failure, `evals/a.eval.ts:7`. */
+export const atOf = (k: CheckResult) => (k.outcome.status === 'ran' ? (k.outcome.at ?? '') : '')
+
 /** A cell passed outright: every counted attempt, every check, nothing errored. */
 const clean = (cell: CellResult) =>
   cell.outcome === 'pass' &&
@@ -218,9 +221,14 @@ function evidence(c: Colors, cell: CellResult, indent: number, more = true): Ite
   const items: Item[] = []
   for (const k of cell.checks.filter(failing)) {
     const count = checkCount(k, single)
+    const at = atOf(k)
     items.push({
       indent,
-      cells: [checkLabel(k.label), count === 'not run' ? t(count, c.dim) : t(count, c.red)],
+      cells: [
+        checkLabel(k.label),
+        count === 'not run' ? t(count, c.dim) : t(count, c.red),
+        ...(at ? [t(at, c.dim)] : []),
+      ],
     })
     const assertion = assertionOf(k)
     if (assertion) items.push({ indent: indent + 2, free: t(assertion, c.dim) })

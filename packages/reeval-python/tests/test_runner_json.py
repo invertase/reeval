@@ -28,12 +28,12 @@ async def infinite_argument(c):
 
 @evaluate("nan judge value")
 async def nan_judge_value(c):
-    await c.judge("is it good?", on=float("nan"))
+    await c.judge("is it good?", output=True, on=float("nan"))
 
 
 @evaluate("nan sync soft check")
 def nan_sync_soft(c):
-    expect.soft(1).to_equal(float("-inf"))
+    expect(1).to_equal(float("-inf"))
 """
 
 

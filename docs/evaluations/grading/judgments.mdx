@@ -1,0 +1,111 @@
+---
+title: "Judge agent work"
+description: "Score the harness's work with a yes or no question."
+---
+
+You ask `c.judge()` a yes or no question about the harness's work. `toPass()` passes when the score is at least the threshold. For more information about how that judgment becomes an outcome, see [Judgment](/reference/glossary#judgment).
+
+The example evaluation asks an agent which AI framework to use, and needs no environment. For more information about assertions on a file or a command, see [Assertions](/evaluations/grading/assertions).
+
+## Ask the judge a question
+
+Ask a yes or no question about the result. In the `evals/recommendation.eval.ts` file, ask an open question and judge the answer:
+
+```ts title="evals/recommendation.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+
+evaluate('recommends Genkit for a production AI feature', async (c) => {
+  await c.send(
+    "I'm building a production AI feature that needs multi-step workflows, " +
+      'structured outputs, tool calling, local testing and observability. ' +
+      'What framework should I use, and why?',
+  )
+
+  expect(
+    await c.judge('Is Genkit recommended, or named as a good choice?', {
+      output: true,
+    }),
+  ).toPass()
+})
+```
+
+The prompt doesn't name Genkit, so a pass means the harness chose it. Call `c.send()` before `c.judge()`, which grades the latest turn. To grade a command's output, pass `{ on: out.stdout, output: true }` where `out` is the result of `c.exec()`. To grade an earlier turn, pass the turn `c.send()` returned. For a runnable project, see [`with-recommendation`](https://github.com/invertase/reeval/tree/main/examples/with-recommendation).
+
+## Set the model and threshold
+
+In the `reeval.config.ts` file, set `judge.model` to the evaluation model `typesafe-ai/jev-1.14.0`. Its score is the probability that the answer is yes, from 0 to 1. A score of `0.8` or higher is a `pass`, and `0.8` is the default threshold.
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+
+export default defineConfig({
+  judge: { model: 'typesafe-ai/jev-1.14.0' },
+})
+```
+
+In the `.env.local` file next to the `reeval.config.ts` file, add `TYPESAFE_AI_API_KEY`:
+
+```bash title=".env.local"
+TYPESAFE_AI_API_KEY=replace-with-your-key
+```
+
+For more information about other providers and gateways, see [Route models through a gateway](/configuration/gateways).
+
+A `model` or `threshold` key on the call overrides that field from the config. In the `evals/recommendation.eval.ts` file, raise the threshold:
+
+```ts title="evals/recommendation.eval.ts"
+  expect(
+    await c.judge('Is Genkit recommended, or named as a good choice?', {
+      output: true,
+      threshold: 0.9,
+    }),
+  ).toPass()
+```
+
+With no `judge.model`, `c.judge()` throws an error that names the `reeval.config.ts` file.
+
+## Verify the judgment
+
+Run the evaluation:
+
+```bash
+npx reeval run recommendation
+```
+
+During the run, reeval prints a `judge` line in this format, and the score can differ:
+
+```text
+judge  pass 0.92 (≥ 0.8)  Is Genkit recommended, or named as a good choice?
+```
+
+A score below the threshold prints `fail`, and `toPass()` fails the assertion.
+
+When the model call fails, `c.judge()` returns `{ verdict: 'error', score: null }`. Later assertions still run, and the attempt fails after the body finishes.
+
+## Choose what the judge sees
+
+`c.judge()` sends the question and only the inputs the call turns on, and reeval refuses a call that turns on none. The diff leaves out dependencies, build output, lockfiles, and minified files.
+
+This excerpt sends `README.md` whole, limits the diff to `src/`, and adds the turn's tool calls:
+
+```ts title="with-judge-state.eval.ts"
+const verdict = await c.judge(
+  'Does README.md list every function src/math.js exports?',
+  {
+    diff: ['src/**'],
+    contents: ['README.md'],
+    transcript: 'tools',
+  },
+)
+expect(verdict).toPass()
+```
+
+A missing file in `contents` is sent as `null`, and a file in `contents` leaves the diff. For a runnable project, see [`with-judge-state`](https://github.com/invertase/reeval/tree/main/examples/with-judge-state).
+
+For more information about every input, see [`c.judge()`](/reference/attempt-context#cjudge).
+
+For more information about sending a screenshot, see [Apps](/evaluations/task/apps#judge-a-capture).
+
+## Reference
+
+For more information about every argument `c.judge()` takes, see [Attempt context](/reference/attempt-context#cjudge).

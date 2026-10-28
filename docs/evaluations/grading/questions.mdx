@@ -1,0 +1,68 @@
+---
+title: "Ask questions across attempts"
+description: "Ask a language model about the attempts after they end, without changing the outcome."
+---
+
+A question asks a language model about the attempts after they end. Assertions and judgments grade one attempt. A question with `across` reads across attempts and asks which side did better. Questions never change pass, fail, or the exit code.
+
+For more information about grading one attempt, see [Assertions](/evaluations/grading/assertions) and [Judge agent work](/evaluations/grading/judgments).
+
+## Ask which side did better
+
+In the evaluation's options, add `questions`. This excerpt pairs Claude Code's attempts with Codex's in the same environment:
+
+```ts title="with-compare-harness.eval.ts"
+questions: [
+  {
+    question: 'Which multiply() is easier to read?',
+    across: 'harness',
+    diff: true,
+  },
+],
+```
+
+`across: 'harness'` pairs agents in the same environment, and `across: 'environment'` pairs every two environments on the same agent, the baseline first. reeval asks about each pair of attempts that passed their assertions, in both orders, with the sides unlabeled. After the run, the block prints each side's wins as `won W of N`. For a runnable project, see [`with-compare-harness`](https://github.com/invertase/reeval/tree/main/examples/with-compare-harness). For more information about asking each attempt on its own without `across`, see [the `questions` option](/reference/options#questions).
+
+## Set the question model
+
+In the `reeval.config.ts` file, set `question.model` to a language model. The model answers every question that doesn't set its own `model`. Without it, reeval falls back to `analysis.model`, then to the judge's language model. reeval refuses an evaluation model, which only scores yes-or-no questions.
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+
+export default defineConfig({
+  question: { model: 'anthropic/claude-sonnet-5' },
+})
+```
+
+In the `.env.local` file next to the `reeval.config.ts` file, add the key for the model's provider, such as `ANTHROPIC_API_KEY`:
+
+```bash title=".env.local"
+ANTHROPIC_API_KEY=replace-with-your-key
+```
+
+For more information about other providers and gateways, see [Route models through a gateway](/configuration/gateways).
+
+## Verify the plan
+
+The `reeval run --dry-run` command plans the run without starting a sandbox or a harness, so it needs no API key. Plan the run:
+
+```bash
+npx reeval run --dry-run
+```
+
+Under the evaluation, a `question` line names the question, when reeval asks it, what each side shows, the pairing, the number of pairs, and the model. This is the line the `with-compare-harness` example printed:
+
+```text
+  question 1/1  Which multiply() is easier to read? · after the run · shows diff · harness · 1 pair · anthropic/claude-sonnet-5
+```
+
+To ask the question, run the same command without `--dry-run`.
+
+## Read the answers
+
+`npx reeval query question_pairs` lists the wins, ties, and splits of each pairwise question. `attempt_answers` lists each attempt's answer. For more information about both views, see [Query views](/reference/query-views).
+
+## Reference
+
+For more information about the model that answers, the inputs each side shows, and its captures, see [the `question` option](/reference/options#question) and [the `questions` option](/reference/options#questions).

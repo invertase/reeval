@@ -50,5 +50,4 @@ times, enough for the verdict.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace: `src/math.js`, and the test with the skill |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-[Leave out the baseline](../../docs/guide/compare.mdx#leave-out-the-baseline) in the Compare and
-lift guide covers where the control comes from.
+[Measure lift against a baseline](../../docs/results/compare/lift.mdx) covers where the control comes from.

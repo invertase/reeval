@@ -265,10 +265,10 @@ export type JudgeState =
   | JudgeJsonState
   | Array<{ type: 'json'; value: JudgeJsonState } | JudgeFilePart>
 
-/** A capture this judge call sent as a file part. Bytes live in `artifacts/<name>.png`. */
+/** A capture this judge call sent as a file part. Bytes live in the `artifacts/<name>.png` file. */
 export type JudgeArtifactRef = {
   name: string
-  /** `artifacts/<name>.png` under the attempt directory. */
+  /** The `artifacts/<name>.png` path under the attempt directory. */
   path: string
   sha256: string
   bytes: number
@@ -302,11 +302,6 @@ export type JudgeOptions = {
   /** The most judge calls to this model's provider at once, across the run. */
   maxConcurrent?: number
   /**
-   * The judge's state: what the judge is given beside the question, not the workspace's or the
-   * attempt's state. Merged key by key down the cascade.
-   */
-  state?: JudgeStateOptions
-  /**
    * The gateway the judge's calls go through, by name or by its helper. It skips the config's
    * `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.
    */
@@ -314,44 +309,67 @@ export type JudgeOptions = {
 }
 
 /**
- * What the judge is given: each key is a key of the state in `judge-input.json`. An unset key
- * keeps its default, which is what the judge gets with no `state` option at all.
+ * What one `c.judge()` call shows the judge beside the question. Every input is off unless the
+ * call turns it on, and a call turns on at least one; each is a key of the state in
+ * `judge-input.json`, or the captures sent as file parts.
  */
-export type JudgeStateOptions = {
-  /** The graded turn's prompt. Default true. */
+export type JudgeInputs = {
+  /** The graded turn's prompt. */
   task?: boolean
-  /** The graded turn's final message, or `on`'s value. Default true. */
+  /** The graded turn's final message, or `on`'s value. */
   output?: boolean
-  /** `status path` lines for the changed files, under `diff`'s patterns. Default true. */
+  /** `status path` lines for the changed files, under `diff`'s patterns. */
   files?: boolean
   /**
    * The diff since the eval started. A list is gitignore-style patterns over workspace paths:
-   * the last matching pattern wins and `!` excludes. Default true.
+   * the last matching pattern wins and `!` excludes.
    */
   diff?: boolean | string[]
   /**
    * Workspace files shown whole, as they are now, changed or not: exact paths or gitignore-style
    * patterns (`'**'`, `'src/**'`; the last match wins, `!` excludes) over the files git sees in
    * the workspace. A missing exact path is `null`; a pattern that matches nothing adds nothing.
-   * These files leave the diff. Default none.
+   * These files leave the diff.
    */
   contents?: string[]
   /**
    * The graded turn's transcript as text lines: `true` is messages and tool calls with tool
    * output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output.
-   * Default false.
    */
   transcript?: boolean | 'tools' | 'full'
+  /** `c.exec` results so far; a list shows only those commands, as passed to `c.exec`. */
+  checks?: boolean | string[]
+  /**
+   * Captures sent as file parts: `c.capture()` handles or their names, or `true` for every
+   * capture so far. Jev takes PNG captures; a provider that cannot take files fails the call.
+   */
+  artifacts?: true | Array<Capture | string>
+}
+
+/** What a judge call's inputs read: which turn, and whether the turns before it too. */
+export type JudgeSubject = {
+  /** The turn `task`, `output`, `transcript` and `diff` read instead of the latest, or a value used as the output. */
+  on?: Turn | JSONValue
   /**
    * `'all'`: every turn up to the graded one under `turns`, each with its task, output and (with
    * `transcript`) transcript. Default `'last'`.
    */
   turns?: 'last' | 'all'
-  /** `c.exec` results so far; a list shows only those commands, as passed to `c.exec`. Default false. */
-  checks?: boolean | string[]
 }
 
-/** `JudgeStateOptions` with every key set: what one judge call saw. */
+/** One input turned on: `true`, a mode or a non-empty selection, not `false`. */
+type OneInput<I, K extends keyof I> = { [P in K]-?: Exclude<I[P], false | undefined> }
+
+/** At least one of `I`'s keys turned on. */
+export type AtLeastOneInput<I> = { [K in keyof I]-?: OneInput<I, K> }[keyof I]
+
+/** `c.judge()`'s options, before the at-least-one-input rule that `JudgeCallOptions` adds. */
+export type JudgeCallFields = JudgeOptions & JudgeInputs & JudgeSubject
+
+/** `c.judge()`'s options: the judge options, the inputs (at least one) and what they read. */
+export type JudgeCallOptions = JudgeCallFields & AtLeastOneInput<JudgeInputs>
+
+/** The inputs one judge call saw, every key set (`false` when off); `artifacts` is recorded apart. */
 export type ResolvedJudgeStateOptions = {
   task: boolean
   output: boolean
@@ -361,17 +379,6 @@ export type ResolvedJudgeStateOptions = {
   transcript: boolean | 'tools' | 'full'
   turns: 'last' | 'all'
   checks: boolean | string[]
-}
-
-export type JudgeCallOptions = JudgeOptions & {
-  /** What to grade instead of the latest turn: another turn, or a value used as the output. */
-  on?: Turn | JSONValue
-  /**
-   * Captures this call sends the judge as file parts: `c.capture()` handles or their names, or
-   * `true` for every capture so far. Call-only: the bytes are on this attempt. Jev takes PNG
-   * captures; a provider that cannot take files fails the call.
-   */
-  artifacts?: true | Array<Capture | string>
 }
 
 export type Verdict = {
@@ -414,10 +421,11 @@ export type AttemptContext = {
   /** Sends the next turn of this eval's agent session. */
   send(prompt: string): Promise<Turn>
   /**
-   * Asks the judge a yes/no question about the latest turn (or `options.on`).
-   * `options.artifacts` is a list of `c.capture()` handles or names, or `true` for all of them.
+   * Asks the judge a yes/no question about what `options` turns on, and nothing else: at least
+   * one of `task`, `output`, `files`, `diff`, `contents`, `transcript`, `checks` or `artifacts`.
+   * They read the latest turn, or `options.on`.
    */
-  judge(question: string, options?: JudgeCallOptions): Promise<Verdict | JudgeFailure>
+  judge(question: string, options: JudgeCallOptions): Promise<Verdict | JudgeFailure>
   /**
    * Runs `command` in the sandbox. With `retries`, a non-zero exit runs it again, up to that
    * many extra times, `interval` ms apart; it resolves with the last try.
@@ -1422,60 +1430,60 @@ export type CompareOptions<E = Environment> = {
  * With `across`, it picks between two attempts that differ only in that factor, in both orders;
  * without it, it's asked of each attempt on its own. Without a model, the cascaded
  * `question.model` answers, else `analysis.model`, else the judge's when it's a language model.
- * `state` and `artifacts` choose what it's shown of each attempt.
+ * It's shown only the inputs it turns on, at least one.
  */
-export type Question =
-  | string
-  | {
-      question: string
-      /** `'provider/model'` that answers it, over the cascaded `question.model`. */
-      model?: string
-      /**
-       * The factor it varies when pairing, or both: `'environment'` holds the harness,
-       * `'harness'` holds the environment. Unset, it's asked of each attempt on its own.
-       */
-      across?: PairFactor | PairFactor[]
-      /** The answers a question asked of each attempt picks from, with a short reason. */
-      choices?: string[]
-      /** What it's shown of each attempt, over the cascaded `question.state`, key by key. */
-      state?: QuestionStateOptions
-      /** Each attempt's own captures, by name; `true` sends all of them. Replaces `question.artifacts`. */
-      artifacts?: true | string[]
-    }
+export type Question = QuestionFields & AtLeastOneInput<QuestionInputs>
 
-/**
- * What a question is shown of each attempt: the keys of `judge.state` but `contents` (the
- * attempts' workspaces are gone when questions are asked). An unset key keeps its default: a
- * pairwise question shows the task and the diff; one asked of each attempt also shows the final
- * message and the transcript.
- */
-export type QuestionStateOptions = {
-  /** The prompts the attempt was sent, once for both sides when they match. Default true. */
-  task?: boolean
-  /** The final message: the agent's own account of its work. Default false in a pair, true per attempt. */
-  output?: boolean
-  /** `status path` lines for the changed files, under `diff`'s patterns. Default false. */
-  files?: boolean
+/** A question's options, before the at-least-one-input rule that `Question` adds. */
+export type QuestionFields = QuestionInputs & {
+  question: string
+  /** `'provider/model'` that answers it, over the cascaded `question.model`. */
+  model?: string
   /**
-   * The diff since the eval started. A list is gitignore-style patterns over workspace paths:
-   * the last matching pattern wins and `!` excludes. Default true.
+   * The factor it varies when pairing, or both: `'environment'` holds the harness,
+   * `'harness'` holds the environment. Unset, it's asked of each attempt on its own.
    */
-  diff?: boolean | string[]
-  /**
-   * The transcript as text lines: `true` is messages and tool calls with tool output clipped,
-   * `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each
-   * harness's tools, so a pair of two harnesses isn't blind. Default false in a pair, true per
-   * attempt.
-   */
-  transcript?: boolean | 'tools' | 'full'
+  across?: PairFactor | PairFactor[]
+  /** The answers a question asked of each attempt picks from, with a short reason. */
+  choices?: string[]
   /**
    * `'all'`: every turn under `turns`, each with its task, output and (with `transcript`)
    * transcript; `'last'`: the last turn only. Default `'all'`.
    */
   turns?: 'last' | 'all'
-  /** `c.exec` results; a list shows only those commands, as passed to `c.exec`. Default false. */
-  checks?: boolean | string[]
 }
+
+/**
+ * What a question is shown of each attempt: `c.judge()`'s inputs but `contents` (the attempts'
+ * workspaces are gone when questions are asked). Every input is off unless the question turns it
+ * on, and a question turns on at least one.
+ */
+export type QuestionInputs = {
+  /** The prompts the attempt was sent, once for both sides when they match. */
+  task?: boolean
+  /** The final message: the agent's own account of its work. */
+  output?: boolean
+  /** `status path` lines for the changed files, under `diff`'s patterns. */
+  files?: boolean
+  /**
+   * The diff since the eval started. A list is gitignore-style patterns over workspace paths:
+   * the last matching pattern wins and `!` excludes.
+   */
+  diff?: boolean | string[]
+  /**
+   * The transcript as text lines: `true` is messages and tool calls with tool output clipped,
+   * `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each
+   * harness's tools, so a pair of two harnesses isn't blind.
+   */
+  transcript?: boolean | 'tools' | 'full'
+  /** `c.exec` results; a list shows only those commands, as passed to `c.exec`. */
+  checks?: boolean | string[]
+  /** Each attempt's own captures, by name; `true` sends all of them. */
+  artifacts?: true | string[]
+}
+
+/** A planned question's inputs but `artifacts`, and `turns`: what `compare` resolves. */
+export type QuestionStateOptions = Omit<QuestionInputs, 'artifacts'> & Pick<QuestionFields, 'turns'>
 
 /** `QuestionStateOptions` with every key set: what each side of one question showed. */
 export type ResolvedQuestionStateOptions = {
@@ -1488,19 +1496,15 @@ export type ResolvedQuestionStateOptions = {
   checks: boolean | string[]
 }
 
-/** Defaults for every question: `model` and `artifacts` replaced, `state` merged key by key. */
+/** Defaults for every question below it. What a question is shown is its own, never a default. */
 export type QuestionOptions = {
   /** `'provider/model'` that answers every question below it without its own `model`. */
   model?: string
-  /** What it's shown of each attempt. */
-  state?: QuestionStateOptions
-  /** Each attempt's own captures, by name; `true` sends all of them. Default none. */
-  artifacts?: true | string[]
 }
 
 /**
  * A question as planned: its text, the model it names itself, if any, the factors it varies when
- * it's pairwise, its choices, and what it's shown of each attempt, cascaded, when set.
+ * it's pairwise, its choices, and the inputs it's shown of each attempt.
  */
 export type PlannedQuestion = {
   /** Its place in the eval's `questions`, from 1, kept when a profile drops one before it. */
@@ -1510,7 +1514,8 @@ export type PlannedQuestion = {
   /** Set on a pairwise question; unset, it's asked of each attempt. */
   across?: PairFactor | PairFactor[]
   choices?: string[]
-  state?: QuestionStateOptions
+  /** The inputs it turns on, besides `artifacts`. */
+  state: QuestionStateOptions
   artifacts?: true | string[]
 }
 
@@ -1550,7 +1555,7 @@ export type CompareAnswer = {
   model: string
   /** The model id the provider says served the calls, when it reports one. */
   resolvedModel?: string
-  /** What each side showed, every key resolved; unset on answers from before questions took `state`, which showed the defaults. */
+  /** The inputs each side showed, every key resolved; unset on answers recorded before reeval wrote it, which showed the task and the diff. */
   stateOptions?: ResolvedQuestionStateOptions
   /** The captures it sent of each side, as asked: `true` for all, or their names. */
   artifacts?: true | string[]
@@ -1708,7 +1713,7 @@ type EvalOptionFields<N extends number = number> = {
   judge?: JudgeOptions
   /** Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the value. */
   capture?: CaptureOptions
-  /** Defaults for every question: `model`, and `state` merged key by key, down the cascade. */
+  /** The model every question that names none of its own is answered by, down the cascade. */
   question?: QuestionOptions
   /**
    * What a language model is asked about the attempts, always a list; they never change pass,
@@ -1901,12 +1906,12 @@ export type BlindAttempt = {
   attempt: BlindSide
 }
 
-/** A turn of one side, with the keys its question's `state` turned on. */
+/** A turn of one side, with the inputs its question turned on. */
 export type BlindTurn = { task?: string; output?: string; transcript?: string }
 
 /**
- * One side of a blinded pair, or the attempt a per-attempt question is asked of: only the keys
- * its question's `state` turned on. With `turns: 'all'`, `task`, `output` and `transcript` are
+ * One side of a blinded pair, or the attempt a per-attempt question is asked of: only the inputs
+ * its question turned on. With `turns: 'all'`, `task`, `output` and `transcript` are
  * under `turns`; a task both sides of a pair share is the pair's prompt's, not either side's.
  */
 export type BlindSide = BlindTurn & {
@@ -2211,9 +2216,9 @@ export type TurnRecord = Pick<
 
 /**
  * One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start order), timed by
- * reeval's MCP timer, which every stdio server runs through. An agent CLI that runs a process per
- * turn (Antigravity, pi, Codex) starts its servers on every turn; one that keeps a session starts
- * them once, on the first. A server that doesn't answer within 60s fails the attempt as an infra
+ * reeval's MCP timer, which every stdio server runs through. An agent CLI that starts one process
+ * per turn starts its servers on every turn; a CLI that keeps a session starts them on the first
+ * turn only. A server that doesn't answer within 60s fails the attempt as an infra
  * error naming it; one whose client closes it first doesn't. `mcpStartup` is absent when the
  * environment has no stdio MCP server, or the sandbox has no `node` to run the timer.
  */
@@ -2227,7 +2232,7 @@ export type McpStartup = {
   ms: number | null
 }
 
-/** Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` reading changes. */
+/** The duration of each evaluation phase, in ms. `agentMs` is the harness turns; `diffMs` reading changes. */
 export type PhaseTimings = {
   setupMs: number
   agentMs: number
@@ -2239,16 +2244,28 @@ export type PhaseTimings = {
 export type CellRole = 'control' | 'variant'
 
 /**
- * One cell of an eval: a harness, an environment (`-` when none is set) and that environment's
- * image (`sandbox` id: tag, dockerfile and install). With `compare`, the control is `baseline`
- * (or the cascaded environment, or an empty `baseline`) and each variant is that environment on
- * its own, including its sandbox.
+ * A cell of an evaluation combines a harness, an environment (`-` when none is set), and that
+ * environment's sandbox id. With `compare`, the control is `baseline` (or the cascaded
+ * environment, or an empty `baseline`) and each variant is that environment on its own,
+ * including its sandbox.
  */
 export type Cell = {
+  /** The harness id, the environment name, and the sandbox id, joined with `/`. */
   key: string
+  /**
+   * The harness id: `id` when set, otherwise `<kind>:<model>` (`<kind>` alone without a model),
+   * with `[effort=<value>]` appended whenever `effort` is set.
+   */
   harness: string
-  /** The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix). */
+  /** The environment's own name, also on a variant cell (`with-skill`, with no prefix). */
   environment: string
+  /**
+   * The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts with
+   * the engine (`docker` by default). It adds `:` and the sanitized final component of `image` or
+   * `from`, or for `dockerfile` the sanitized filename (the parent directory name when that
+   * filename is `Dockerfile` and a parent is present). Non-empty `install` steps append `+` and an
+   * eight-character hash.
+   */
   sandbox: string
   role: CellRole
   /** The variant's name, for variant cells. */
@@ -2289,9 +2306,9 @@ export type EnvironmentRecord = {
   name: string
   /** The previous `extendEnvironment` layer's name, else null. */
   parent: string | null
-  /** Keys a later layer replaced, e.g. `env.KEY`, `skills.genkit`, `mcp.docs`, `rules`. */
+  /** Keys a later layer replaced, for example `env.KEY`, `skills.typescript`, `mcp.docs`, or `rules`. */
   overrides: string[]
-  /** Covers every field but the rules file's path; secret names are included, values never are. The image is the sandbox's. */
+  /** Covers every field but the rules file's path; secret names are included; values never are. The image is the sandbox's. */
   digest: string
   setup: string[]
   skills: Array<{
@@ -2305,7 +2322,7 @@ export type EnvironmentRecord = {
     /** The plugin the skill came with; unset for a skill from `skills`. */
     plugin?: string
   }>
-  /** Every MCP server, a plugin's as `<plugin>:<server>`. */
+  /** The names of the MCP servers the agent was given. */
   mcp: string[]
   /** The plugins placed, each with what it placed; in the digest. Unset when there are none. */
   plugins?: PluginRecord[]
@@ -2327,9 +2344,9 @@ export type EnvironmentRecord = {
   /** The policy the attempt ran under, from the options and the environment; in the digest unless `proxy`. */
   egress: EgressPolicy
   /**
-   * The git repository the workspace started as: the repo as written (a local one relative to the
-   * project root), the ref and path asked for (null when unset), the commit the ref resolved to
-   * and the hash of the tree that was copied in, which is in the digest.
+   * This records the Git repository the workspace started as: the repo as written (a local one
+   * relative to the project root), the ref and path asked for (null when unset), the commit the
+   * ref resolved to, and the hash of the tree that was copied in, which is in the digest.
    */
   workspace?: {
     source: string
@@ -2347,8 +2364,8 @@ export type EnvironmentRecord = {
  * and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox
  * can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between
  * the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the
- * harness always tries (its CLI's telemetry, say), kept out of `blocked` so a real block stands
- * out.
+ * harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked` contains
+ * only unexpected refusals.
  */
 export type EgressRecord = {
   policy: EgressPolicy
@@ -2377,7 +2394,7 @@ export type AttemptImage = {
   /** Content-addressed image id (`sha256:…`). */
   id: string
   agentCli: string | null
-  /** The harness image `install` and plugin builds were baked onto: `ref` itself without either. */
+  /** The harness image the `install` layers were baked onto: `ref` itself without any. */
   base: string
   /** The `docker({ install })` commands, in order. */
   install: string[]
@@ -2394,7 +2411,7 @@ export type AttemptImage = {
 export type JudgeInput = {
   question: string
   model: string
-  /** The call's `state` option, every key resolved; `state` is what that gave the judge. */
+  /** The inputs the call turned on, every key resolved; `state` is what they gave the judge. */
   stateOptions?: ResolvedJudgeStateOptions
   state: { [key: string]: JSONValue }
   /** Captures sent as file parts; refs only, never the PNG bytes. */
@@ -2424,11 +2441,11 @@ export type SetupProcess = {
   secrets: string[]
 }
 
-/** One `expect` or `expect.soft` matcher call an attempt made. */
+/** One `expect` or `expect.require` matcher call an attempt made, or a check another language made. */
 export type AssertionRecord = {
   /**
-   * `expect`'s second argument, or `<matcher> <first argument>` (or the command `c.exec` ran, or
-   * the judge's question), cut at 60 characters; ` #2`, ` #3` on repeats within the attempt.
+   * `label` is the supplied `expect` label. Without one, it is the matcher plus its first
+   * argument or named subject, cut at 60 characters. Repeats get ` #2`, ` #3`, and later suffixes.
    */
   label: string
   /** The eval gave the label. */
@@ -2437,7 +2454,13 @@ export type AssertionRecord = {
   matcher: string
   /** `error`: the matcher couldn't answer (a subject it can't read, an event the harness doesn't report). */
   status: 'pass' | 'fail' | 'error'
+  /**
+   * A failure didn't end the eval's body: an `expect`. False for `expect.require` and for a check
+   * that threw, such as Python's `assert`, which end the body when they fail.
+   */
   soft: boolean
+  /** `path:line` of the call in the eval file, relative to the project root, when reeval saw it. */
+  at?: string
   /** Why it failed or couldn't answer, cut at 1 KB. */
   message?: string
   /** Async matchers only (`toHaveFile`, `toSucceed`, `.resolves`, `expect.poll`). */
@@ -2462,7 +2485,7 @@ export type EvalRecord = {
         tries?: Array<ExecResult & { durationMs: number }>
       }
   >
-  /** Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none. */
+  /** Every `expect` and `expect.require` matcher call that settled, in call order; unset with none. */
   assertions?: AssertionRecord[]
   /**
    * In call order, with `retries` when transient provider errors were retried on the way to the
@@ -2575,16 +2598,20 @@ export type EvalPlan = {
 }
 
 /**
- * A sandbox with more privilege than the default `reeval` user: `docker({ root: true })`, or
- * `docker({ capabilities })`. One per level that set such a sandbox, however many evals inherit it.
+ * A `SandboxWarning` describes a sandbox with more privilege than the default `reeval` user:
+ * `docker({ root: true })` or `docker({ capabilities })`. One per level that set such a sandbox,
+ * however many evaluations inherit it.
  */
 export type SandboxWarning = {
   kind: 'root' | 'capabilities'
   /** Which level set the sandbox. */
   level: 'config' | 'profile' | 'group' | 'eval'
-  /** That level as reeval names it: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("installs deps")`. */
+  /**
+   * The value is the level as reeval names it: the `reeval.config.ts` file, `profiles.pr.defaults`,
+   * `group("net")`, or `evaluate("installs deps")`.
+   */
   where: string
-  /** The eval file that sets it, for a group or eval; null for the config or a profile. */
+  /** The evaluation file that sets it, for a group or evaluation; null for the config or a profile. */
   file: string | null
   /** The capabilities added back, for `capabilities`. */
   capabilities?: string[]
@@ -2677,6 +2704,8 @@ export type EvalMeta = {
   judgements: Array<Pick<Verdict, 'verdict' | 'score' | 'threshold'> & { question: string }>
   /** Each turn that ended in an error, as `turn 2 error: <message>`, so a failure shows why. */
   turnErrors?: string[]
+  /** Each check that failed or couldn't answer, in call order, its message's first line. */
+  failedChecks?: Array<{ label: string; at?: string; message: string }>
   /** Its sandbox couldn't be prepared: reported once per sandbox, and it has no artifacts. */
   prepare?: { ref: string | null; stage: string }
 }

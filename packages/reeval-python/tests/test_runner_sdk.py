@@ -58,13 +58,18 @@ async def bare(c):
 @evaluate("judges an exec result")
 async def judges(c):
     result = await c.exec("true")
-    await c.judge("clean?", on=result)
-    await c.judge("null?", on=None)
+    await c.judge("clean?", on=result, output=True)
+    await c.judge("null?", on=None, output=True)
 
 
 @evaluate("judges a set")
 async def judges_a_set(c):
-    await c.judge("set?", on={1, 2})
+    await c.judge("set?", on={1, 2}, output=True)
+
+
+@evaluate("judges nothing")
+async def judges_nothing(c):
+    await c.judge("anything?", threshold=0.5, diff=False)
 
 
 @evaluate("catches the abort")
@@ -152,6 +157,17 @@ def test_judge_on_a_value_that_is_not_json_fails_where_it_was_passed(host: Host)
     error = host.done()["error"]
     assert error["name"] == "TypeError"
     assert "judge(on=…) takes" in error["message"]
+    assert host.calls() == []
+
+
+def test_judge_that_turns_no_input_on_fails_before_it_reaches_reeval(host: Host) -> None:
+    host.start("judges nothing")
+    error = host.done()["error"]
+    assert error["name"] == "TypeError"
+    assert "shows the judge nothing" in error["message"]
+    assert (
+        "task, output, files, diff, contents, transcript, checks or artifacts" in error["message"]
+    )
     assert host.calls() == []
 
 

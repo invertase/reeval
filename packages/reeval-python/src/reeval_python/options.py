@@ -22,14 +22,29 @@ class JudgeDefaults(TypedDict, total=False):
     max_concurrent: int
     model: str | FakeJudge
     provider_options: Mapping[str, Mapping[str, Any]]
-    state: Mapping[str, Any]
     threshold: float
 
 
 class JudgeOptions(JudgeDefaults, total=False):
-    """`c.judge()`'s options: the judge defaults, plus the captures it sends."""
+    """`c.judge()`'s options: the judge defaults, and what the call shows the judge.
 
+    Every input is off unless the call turns it on, and a call turns on at least one of `task`,
+    `output`, `files`, `diff`, `contents`, `transcript`, `checks` or `artifacts`. `turns` says
+    whether they read every turn up to the graded one (`"all"`) or that turn alone.
+    """
+
+    task: bool
+    output: bool
+    files: bool
+    diff: bool | Sequence[str]
+    contents: Sequence[str]
+    transcript: bool | Literal["tools", "full"]
+    checks: bool | Sequence[str]
     artifacts: Literal[True] | Sequence[str]
+    turns: Literal["last", "all"]
+
+
+JUDGE_INPUTS = ("task", "output", "files", "diff", "contents", "transcript", "checks", "artifacts")
 
 
 class BestOf(TypedDict):
@@ -52,8 +67,9 @@ class EvalOptions(TypedDict, total=False):
     judge: JudgeDefaults
     pin: Sequence[str]
     question: Mapping[str, Any]
-    questions: Sequence[str | Mapping[str, Any]]
-    """Asked of each attempt, or between attempts with `across`; `[]` clears the group's."""
+    questions: Sequence[Mapping[str, Any]]
+    """Asked of each attempt, or between attempts with `across`; `[]` clears the group's. Each
+    names what it's shown: `{"question": …, "diff": True}`, at least one input."""
     runs: int | BestOf
     """Attempts per cell, or `{"best_of": n}`, which gates each cell on its majority. Not on a
     compared eval."""

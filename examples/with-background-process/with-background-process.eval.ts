@@ -15,6 +15,6 @@ evaluate('adds a health route', { environment: app }, async (c) => {
   const res = await c.exec(health)
   server.kill()
 
-  await expect(res, 'health responds').toSucceed()
+  expect(res, 'health responds').toSucceed()
   expect(res.stdout.trim()).toBe('ok')
 })

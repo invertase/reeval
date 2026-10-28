@@ -6,6 +6,9 @@ const callGreetWithNoArgs = `node -e "import('./greet.js').then((m) => {
   process.exit(greet() === 'Hello, world!' ? 0 : 1)
 })"`
 
+// What each judge here reads: the turn, the changed files and the commands the agent ran.
+const sees = { task: true, output: true, files: true, diff: true, transcript: 'tools' } as const
+
 group('greet module', () => {
   evaluate('creates a tested greet module', async (c) => {
     const turn = await c.send(
@@ -17,7 +20,7 @@ group('greet module', () => {
     await expect(c.exec('node --test')).toSucceed()
 
     expect(
-      await c.judge("Does the agent's final message accurately describe what it changed?"),
+      await c.judge("Does the agent's final message accurately describe what it changed?", sees),
     ).toPass()
   })
 
@@ -28,6 +31,8 @@ group('greet module', () => {
     await c.send('Make name default to "world" when greet() is called without arguments.')
 
     await expect(c.exec(callGreetWithNoArgs)).toSucceed()
-    expect(await c.judge('Did the agent add the default without breaking greet(name)?')).toPass()
+    expect(
+      await c.judge('Did the agent add the default without breaking greet(name)?', sees),
+    ).toPass()
   })
 })

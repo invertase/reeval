@@ -53,5 +53,5 @@ After a run, `pnpm reeval query family_lift` has the same lift as a row, with it
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace, without and with the skill |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-[Compare across the cases](../../docs/recipes/eval-each.mdx#compare-across-the-cases) in the
+[Evaluate many cases](../../docs/evaluations/task/cases.mdx) in the
 Suites of cases recipe covers the pooled lift.

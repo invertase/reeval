@@ -31,8 +31,9 @@ evaluate('builds the sign-in page', async (c) => {
 - The `capture` option shallow-merges camera defaults (`viewport`, `timeout`, `browser`,
   `model`, the vision model) down the cascade; `viewport` replaces the value, and the port is
   not an option.
-- On a judge, `artifacts` is call-only: `true` for every capture so far, or `c.capture()`
-  handles or names, sent as file parts. Ask about facts in the picture, not whether it "looks
+- On a judge, `artifacts` is an input like `diff`, set on the call: `true` for every capture
+  so far, or `c.capture()` handles or names, sent as file parts. Alone, the judge sees only the
+  pictures. Ask about facts in the picture, not whether it "looks
   great". Jev (`typesafe-ai/jev-1.14.0`) takes PNG captures; a provider that cannot take files
   fails that call.
 - On a question, `artifacts: ['sign-in']` (or `true`) sends each attempt's own capture of that

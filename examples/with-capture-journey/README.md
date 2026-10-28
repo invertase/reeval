@@ -65,5 +65,5 @@ the capture's 32-move cap.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, the `docker` profile, and the real agents from `../profiles.ts` |
 
-The [Capturing UI](../../docs/recipes/capturing-ui.mdx) recipe covers `instructions`, the journey's
+The [Check an app](../../docs/evaluations/task/apps.mdx) page covers `instructions`, the journey's
 model and waits.

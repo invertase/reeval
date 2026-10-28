@@ -1,0 +1,49 @@
+---
+title: "Run models without Vertex AI"
+description: "Run Gemini and Claude models with a provider key through direct(), or through the Vercel AI Gateway or OpenRouter."
+---
+
+Run Gemini and Claude models on a provider key with `direct()`, or through a routing gateway with `vercel()` or `openrouter()`. Google Cloud's Vertex AI takes a service account, which the sandbox can't hold without exposing it. The steps below move an OpenCode Gemini model off Vertex AI onto Google's own API.
+
+## Credential
+
+The egress gateway swaps a key in a header, and Vertex AI takes a service account instead, so it can't keep that credential out of the sandbox. Use the provider's key. In the `.env.local` file next to the `reeval.config.ts` file, add Google's key:
+
+```bash title=".env.local"
+GOOGLE_GENERATIVE_AI_API_KEY=replace-with-your-key
+```
+
+For the key each other harness reads, such as `GEMINI_API_KEY` for Antigravity or `ANTHROPIC_API_KEY` for Claude Code, see [Choose an agent](/configuration/agents).
+
+## Helper
+
+Import `direct()` from `{{ pkg }}/gateway`. In the `reeval.config.ts` file, set the `gateway` option:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { direct } from '{{ pkg }}/gateway'
+import { opencode } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  gateway: [direct()],
+  harness: opencode({ model: 'google/gemini-3.8-flash' }),
+})
+```
+
+To route through a gateway key instead, use [`vercel()`](/configuration/gateways/vercel-ai-gateway) on `AI_GATEWAY_API_KEY` or [`openrouter()`](/configuration/gateways/openrouter) on `OPENROUTER_API_KEY`. For more information about combining gateways, see [Route models through a gateway](/configuration/gateways).
+
+## Harnesses and models
+
+The model id names OpenCode's `google` provider, not `google-vertex`. An OpenCode model on the `google-vertex` provider fails at plan time with exit code 2 on `direct()`:
+
+```text
+UsageError: … on opencode:gemini-3.8-flash: no gateway in the list can serve it (direct: reeval can't run OpenCode on Vertex (google-vertex): it takes a service account (Vertex refuses API keys for most models), not a key in a header, so the gateway can't keep its key out of the sandbox) …
+```
+
+Plan the run to check that `direct()` serves the model:
+
+```bash
+npx reeval run --dry-run
+```
+
+On `vercel()`, OpenCode runs any `<provider>/<model>` id that Vercel serves, and the call goes to the Vercel AI Gateway, not to a Google Cloud project. For more information about OpenCode's providers, see [OpenCode harness](/configuration/agents/opencode).

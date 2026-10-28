@@ -9,7 +9,9 @@ terse = base.extend("terse", {"env": {"MODE": "terse"}})
     "one question",
     {
         "compare": {"baseline": base, "variants": [skilled]},
-        "questions": [{"question": "Which handles state more cleanly?", "across": "environment"}],
+        "questions": [
+            {"question": "Which handles state more cleanly?", "across": "environment", "diff": True}
+        ],
     },
 )
 async def one_question(c): ...
@@ -20,11 +22,16 @@ async def one_question(c): ...
     {
         "compare": {"baseline": base, "variants": [skilled, terse]},
         "questions": [
-            {"question": "Which handles state more cleanly?", "across": ["environment", "harness"]},
+            {
+                "question": "Which handles state more cleanly?",
+                "across": ["environment", "harness"],
+                "diff": True,
+            },
             {
                 "question": "Which follows the house style more closely?",
                 "model": "google/gemini-3.8-flash",
                 "across": "environment",
+                "diff": True,
             },
         ],
     },
@@ -36,7 +43,7 @@ async def two_questions(c): ...
     "pinned",
     {
         "compare": {"baseline": base, "variants": [skilled]},
-        "questions": [{"question": "Which is shorter?", "across": "environment"}],
+        "questions": [{"question": "Which is shorter?", "across": "environment", "diff": True}],
         "pin": ["compare"],
     },
 )

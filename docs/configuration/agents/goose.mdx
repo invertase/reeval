@@ -1,0 +1,58 @@
+---
+title: "Goose harness"
+description: "The Goose harness runs Goose in the sandbox on a Gemini API key and records its events."
+---
+
+`goose()` runs Goose (`goose acp`) in the sandbox. For more information about the sandbox, see [Choose a sandbox](/configuration/sandboxes).
+
+## `GOOGLE_GENERATIVE_AI_API_KEY`
+
+`goose()` reads `GOOGLE_GENERATIVE_AI_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
+
+Goose reads that value as `GOOGLE_API_KEY`. The gateway brokers the key in the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` and `GET /v1beta/models` at `generativelanguage.googleapis.com`. A restricted egress policy allows `generativelanguage.googleapis.com`.
+
+When the API rejects the key, the attempt error begins with `The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key in the environment or .env.local`.
+
+For more information about keeping API keys on the host, see [Keep API keys on the host](/configuration/environments/secrets#keep-api-keys-on-the-host).
+
+For more information about the variable, see [`GOOGLE_GENERATIVE_AI_API_KEY`](/reference/environment-variables#googlegenerativeaiapikey).
+
+Goose requests `models.dev` in every session to refresh its model catalog, and no setting turns that request off. A restricted egress policy refuses `models.dev` and records it on `egress.expectedBlocked`.
+
+For more information about blocked requests, see [Read blocked requests](/configuration/environments/egress#read-blocked-requests).
+
+## `goose()`
+
+`goose()` is exported from `{{ pkg }}/harness`. The following configuration passes it as the `harness` option:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { goose } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: goose({
+    model: 'gemini-3.8-flash',
+    effort: 'high',
+  }),
+})
+```
+
+`model` is required. For what each field takes, see [Harness factory options](/reference/options#harness-factory-options).
+
+
+
+In the sandbox, Goose runs with a private home, with telemetry, the keyring, and session naming off.
+
+For more information about model ids and effort values, see [Set the agent's model](/configuration/agents/model). For rules, skills, MCP servers, usage, served models, and web events, see [Harness behavior](/reference/options#harness-behavior).
+
+## `plugins`
+
+reeval adds each plugin's skills to the home skills directory and writes its MCP servers as enabled extensions in `config.yaml`.
+
+[//]: # (generated:harness-plugins:goose)
+
+- Takes `skills` and `mcp`, and refuses a plugin that keeps `agents`, `commands`, `hooks` and `rules`: narrow it with `only`, or leave it out of the cell.
+
+[//]: # (/generated:harness-plugins:goose)
+
+For more information about plugins, see [Environment helpers reference](/reference/environment-helpers#pluginlocal).

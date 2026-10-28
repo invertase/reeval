@@ -52,5 +52,5 @@ If the eval doesn't call `kill()`, teardown stops the server.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-`c.exec` and its `background` option are in the [attempt context](../../docs/reference/attempt-context.mdx)
+`c.exec` and its `background` option are in the [Attempt context reference](../../docs/reference/attempt-context.mdx)
 reference.

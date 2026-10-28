@@ -42,9 +42,9 @@ evaluate(
         'with a customer id, an issue date and the invoice total.',
     )
     const sql = ((await c.readFile(migration)) ?? '').toLowerCase()
-    expect.soft(sql, 'creates invoices').toMatch(/create table[^;]*invoices/)
-    expect.soft(sql, 'total in integer cents').toMatch(/\btotal\w*_cents\s+(big)?int/)
-    expect.soft(sql, 'a currency column').toMatch(/\bcurrency\w*\s+(char|varchar)\s*\(\s*3/)
+    expect(sql, 'creates invoices').toMatch(/create table[^;]*invoices/)
+    expect(sql, 'total in integer cents').toMatch(/\btotal\w*_cents\s+(big)?int/)
+    expect(sql, 'a currency column').toMatch(/\bcurrency\w*\s+(char|varchar)\s*\(\s*3/)
   },
 )
 ```
@@ -177,9 +177,9 @@ evaluate(
   { compare: { baseline: repo, variants: [withRules] } },
   async (c) => {
     await c.send('`acme deploy` should stop with a clear error when no region is set.')
-    expect.soft(c, 'a CHANGELOG.md entry').toHaveChanged('CHANGELOG.md')
-    expect.soft(c, 'a test beside the code').toHaveChanged('src/**/*.test.ts')
-    await expect.soft(c.exec('npx tsc --noEmit'), 'compiles').toSucceed()
+    expect(c, 'a CHANGELOG.md entry').toHaveChanged('CHANGELOG.md')
+    expect(c, 'a test beside the code').toHaveChanged('src/**/*.test.ts')
+    await expect(c.exec('npx tsc --noEmit'), 'compiles').toSucceed()
   },
 )
 ```
@@ -244,9 +244,9 @@ evaluate(
   { compare: { baseline: zod, variants: [withZodSkill] } },
   async (c) => {
     await c.send('Create user.js exporting a zod schema User with a required email field.')
-    await expect.soft(c.exec(accepts), 'validates emails').toSucceed()
+    await expect(c.exec(accepts), 'validates emails').toSucceed()
     const src = (await c.readFile('user.js')) ?? ''
-    expect.soft(src, 'uses z.email()').toMatch(/z\.email\(/)
+    expect(src, 'uses z.email()').toMatch(/z\.email\(/)
   },
 )
 ```

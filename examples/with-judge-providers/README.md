@@ -2,7 +2,7 @@
 
 **Shows:** judges on different providers, each called with its provider's own key. The agent adds
 `average(xs)`, and the same question goes to `anthropic/claude-sonnet-5` and
-`google/gemini-3.8-flash`, picked per call with `model`, each a labeled `expect.soft` check.
+`google/gemini-3.8-flash`, picked per call with `model`, each a labeled `expect` check, behind an `expect.require` gate on the tests.
 
 **Needs:** `ANTHROPIC_API_KEY` and `GOOGLE_GENERATIVE_AI_API_KEY` in `.env.local`, even for the fake
 agent; in this repo, run `pnpm install && pnpm build` at the root first. A real agent also needs
@@ -48,4 +48,4 @@ one profile you need.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-Providers and their keys are in [Providers and keys](../../docs/reference/judges.mdx#providers-and-keys).
+Providers and their keys are in [Judge agent work](../../docs/evaluations/grading/judgments.mdx).

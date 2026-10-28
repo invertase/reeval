@@ -49,7 +49,7 @@ from reeval_python import SyncAttemptContext, evaluate, expect
 def lands(c: SyncAttemptContext) -> None:
     c.send("Create greet.py that prints hi")
     assert c.exec("test -f greet.py").ok
-    expect(c.judge("Does greet.py print hi?")).to_pass()
+    expect(c.judge("Does greet.py print hi?", contents=["greet.py"])).to_pass()
 ```
 
 Plain `assert` is first-class, as in pytest: each one in an eval file is a check in the run
@@ -59,24 +59,33 @@ as in Python, and is recorded with its message and both sides of a comparison as
 (`greet.py exists: assert 1 == 2`). An `AssertionError` the body catches isn't a failed check, so
 a retry loop can assert; one the escaping error carries (each failure in a `TaskGroup`'s
 `ExceptionGroup`, or one an error was raised from or while handling) is. Use typed results (`ExecResult.ok`, `Verdict.passed`, `Turn.text`, …) and `c.file(path)`
-for quick checks. Keep `expect` for reeval matchers (`to_have_file`, `to_succeed`, soft checks,
+for quick checks. Keep `expect` for reeval matchers (`to_have_file`, `to_succeed`, checks that carry on,
 labels) — Playwright-style.
 
-#### What a caught failure counts as
+#### Checks carry on; `expect.require` is a gate
 
-A failed `expect` is a check the moment it fails: reeval records it before
-`ReevalAssertionError` reaches the body. One the body catches still fails the attempt when the
-body ends, as `expect.soft` does, and its error says the eval caught it. A plain `assert` the body
-catches records nothing, as in Python.
+A failed `expect` is recorded and the body carries on, so every later check and judge still runs;
+the attempt fails when the body ends. `expect.require` raises `ReevalAssertionError` instead, for a
+gate the rest depends on:
+
+```python
+c.send("Add a sign-up page")
+expect.require(c.exec("npm run build"), "builds").to_succeed()  # stops here if the build fails
+expect(c.exec("npm test"), "tests pass").to_succeed()  # recorded, carries on
+```
+
+reeval records a failed `expect.require` before the error reaches the body. One the body catches
+still fails the attempt when the body ends, and its error says the eval caught it. A plain
+`assert` the body catches records nothing, as in Python.
 
 | The body catches | Recorded | Fails the attempt |
 |---|---|---|
-| a failed `expect(…)` | a failed check | yes, when the body ends |
+| a failed `expect.require(…)` | a failed check | yes, when the body ends |
 | a failed `assert` | nothing | no |
 | neither (it escapes) | a failed check | yes |
 
 So retry with `expect.poll`, which retries the matcher and records only its final outcome, or with
-a plain `assert` or `if` in the loop, never `expect` in `try`/`except`:
+a plain `assert` or `if` in the loop, never `expect.require` in `try`/`except`:
 
 ```python
 # Retries the command until it succeeds, for up to 10 seconds: one check.
@@ -111,6 +120,13 @@ misspelled key such as `runz`. They take reeval's keys in snake_case at any dept
 duration is seconds or a `timedelta`: `{"timeout": 90}`, `docker(start_timeout=timedelta(minutes=2))`,
 `expect.poll(…, timeout=10)`. `docker()`, `fake_harness()`, `fake_judge()` and `plugin.*` return
 values to pass as options, not data to edit.
+
+`c.judge` takes the inputs the judge reads as keywords, and needs at least one: `diff=True`,
+`contents=["src/**"]`, `output=True` with `on=result`, and so on. With none it raises `TypeError`.
+
+```python
+expect(c.judge("Is it valid JSON?", on=result, output=True)).to_pass()
+```
 
 ### `def` and `async def` bodies
 

@@ -107,7 +107,7 @@ def greet(c):
 @evaluate("judged")
 def judged(c):
     c.send("Write greet.py, which prints hi")
-    verdict = c.judge("Does greet.py print hi?")
+    verdict = c.judge("Does greet.py print hi?", contents=["greet.py"])
     assert verdict.passed, f"judge score {verdict.score}"
 `,
   'canary.eval.py': `from reeval_python import evaluate, expect

@@ -54,4 +54,4 @@ The plan line says which profile applied and why, and the notes say what its `li
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, `pr` and `nightly`, and the real agents from `../profiles.ts` |
 
-Profiles, limits and budgets are in the [Sizing runs](../../docs/guide/profiles.mdx) guide.
+Profiles, limits and budgets are in the [Size runs with profiles](../../docs/evaluations/runs/profiles.mdx) page.

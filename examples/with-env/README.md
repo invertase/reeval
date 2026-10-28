@@ -44,4 +44,4 @@ in it needs `secret.fromEnv`, and a literal there stops the run.
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
 `env` and how `extendEnvironment` merges it are in the
-[defineEnvironment](../../docs/reference/environment.mdx) reference.
+[defineEnvironment](../../docs/reference/environment-helpers.mdx) reference.

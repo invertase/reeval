@@ -5,15 +5,19 @@
   "$ref": "#/$defs/AttemptReply",
   "$defs": {
     "AssertionRecord": {
-      "description": "One `expect` or `expect.soft` matcher call an attempt made.",
+      "description": "One `expect` or `expect.require` matcher call an attempt made, or a check another language made.",
       "type": "object",
       "properties": {
+        "at": {
+          "description": "`path:line` of the call in the eval file, relative to the project root, when reeval saw it.",
+          "type": "string"
+        },
         "durationMs": {
           "description": "Async matchers only (`toHaveFile`, `toSucceed`, `.resolves`, `expect.poll`).",
           "type": "number"
         },
         "label": {
-          "description": "`expect`'s second argument, or `<matcher> <first argument>` (or the command `c.exec` ran, or the judge's question), cut at 60 characters; ` #2`, ` #3` on repeats within the attempt.",
+          "description": "`label` is the supplied `expect` label. Without one, it is the matcher plus its first argument or named subject, cut at 60 characters. Repeats get ` #2`, ` #3`, and later suffixes.",
           "type": "string"
         },
         "labelled": {
@@ -29,6 +33,7 @@
           "type": "string"
         },
         "soft": {
+          "description": "A failure didn't end the eval's body: an `expect`. False for `expect.require` and for a check that threw, such as Python's `assert`, which end the body when they fail.",
           "type": "boolean"
         },
         "status": {
@@ -503,7 +508,7 @@
       "additionalProperties": false
     },
     "JudgeArtifactRef": {
-      "description": "A capture this judge call sent as a file part. Bytes live in `artifacts/<name>.png`.",
+      "description": "A capture this judge call sent as a file part. Bytes live in the `artifacts/<name>.png` file.",
       "type": "object",
       "properties": {
         "bytes": {
@@ -517,7 +522,7 @@
           "type": "string"
         },
         "path": {
-          "description": "`artifacts/<name>.png` under the attempt directory.",
+          "description": "The `artifacts/<name>.png` path under the attempt directory.",
           "type": "string"
         },
         "sha256": {

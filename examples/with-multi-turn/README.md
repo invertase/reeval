@@ -55,5 +55,5 @@ fail             extends multiply in a follow-up turn
 | [`fake-agent/`](./fake-agent) | What the fake agent writes on each turn |
 | [`reeval.config.ts`](./reeval.config.ts) | The scripted fake agent, and the real agents from `../profiles.ts` |
 
-Turns, `c.turns` and each turn's diff are in the [Multi-turn evals](../../docs/guide/multi-turn.mdx)
+Turns, `c.turns` and each turn's diff are in the [Read each turn](../../docs/evaluations/task/turns.mdx)
 guide.

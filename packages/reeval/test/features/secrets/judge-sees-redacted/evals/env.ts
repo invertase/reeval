@@ -33,7 +33,8 @@ export async function judgeSaw(c: AttemptContext, name: string) {
   })
   await c.judge('Did the agent print its token?', {
     model: look,
-    state: { checks: true, transcript: 'full', diff: false },
+    checks: true,
+    transcript: 'full',
   })
   writeFileSync(new URL(`../judge-saw-${name}.json`, import.meta.url), JSON.stringify(state))
   return state

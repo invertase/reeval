@@ -56,4 +56,4 @@ one profile you need.
 | [`fake-agent/`](./fake-agent) | What the scripted agent writes |
 | [`reeval.config.ts`](./reeval.config.ts) | The script, and the real agents from `../profiles.ts` |
 
-Every option and step is in the [fakeHarness()](../../docs/reference/harness/fake.mdx) reference.
+Every option and step is in the [Options reference](../../docs/reference/options.mdx).

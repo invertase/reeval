@@ -286,7 +286,6 @@ export const planQuestions = (
   skip?: string,
 ): PlanQuestion[] =>
   (skip ? [] : (questions ?? [])).map((q) => {
-    const pairwise = q.across !== undefined
     return {
       question: q.question,
       model: q.model ?? questionModel,
@@ -294,7 +293,7 @@ export const planQuestions = (
         ? { across: pairFactors(q.across), pairs: pairsOf(sides, acrossOf(q.across)).length }
         : { attempts: sides.length }),
       ...(q.choices ? { choices: q.choices } : {}),
-      shows: questionShows(resolveQuestionState(q.state, pairwise), q.artifacts),
+      shows: questionShows(resolveQuestionState(q.state), q.artifacts),
     }
   })
 

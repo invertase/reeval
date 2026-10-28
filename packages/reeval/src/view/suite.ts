@@ -263,10 +263,10 @@ export type CheckResult = {
 }
 
 /**
- * `not run`: no counted attempt reached the check, because a hard `expect` before it failed or
+ * `not run`: no counted attempt reached the check, because an `expect.require` before it failed or
  * none counted. That is not a failure, and is never `0 of N`. `ran`: counts over the counted attempts that
  * reached it (`errored` ones couldn't answer), with `notRun` for those that didn't, and the
- * first failure's message.
+ * first failure's message and `path:line`.
  */
 export type CheckOutcome =
   | { status: 'not run' }
@@ -277,6 +277,7 @@ export type CheckOutcome =
       errored: number
       notRun: number
       assertion: string | null
+      at: string | null
     }
 
 /**
@@ -413,9 +414,9 @@ function checksOf(
     const answered = attempts
       .flatMap((a) => a.assertions ?? [])
       .filter((x) => x.label === k.label && x.message)
-    const assertion =
-      (answered.find((x) => x.status === 'fail') ?? answered.find((x) => x.status === 'error'))
-        ?.message ?? null
+    const shown =
+      answered.find((x) => x.status === 'fail') ?? answered.find((x) => x.status === 'error')
+    const assertion = shown?.message ?? null
     // A baseline with no counted attempt records no checks: it never ran this one.
     const control = baseline
       ? (baseline.checks?.find((x) => x.label === k.label) ?? {
@@ -456,6 +457,7 @@ function checksOf(
               errored: k.error,
               notRun: k.notRun,
               assertion,
+              at: shown?.at ?? null,
             },
       effect: control ? checkEffect(k, control) : null,
       judge: first

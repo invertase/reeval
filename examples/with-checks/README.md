@@ -40,4 +40,4 @@ fail             adds a tested multiply function
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-Checks and matchers are in the [Writing evals](../../docs/guide/writing-evals.mdx) guide.
+Checks and matchers are in the [Evaluate](../../docs/evaluations/evaluate.mdx) page.

@@ -1,0 +1,180 @@
+---
+title: "Overview"
+description: "Evaluate how coding agents discover and use developer tools."
+---
+
+## Introduction
+
+**reeval** is an open-source evaluation runner built for developer tools, including SDKs, CLIs, MCP servers, skills, and documentation.
+
+It runs coding agents inside isolated sandboxes, then grades their output using assertions and LLM judgments. Run identical prompted tasks across a baseline and a variant (your change) to compare whether it improves or regresses pass rates, tokens, and time.
+
+The evaluation is code, committed alongside the tool, skill, or doc you are changing. The result is reproducible evidence you can share in pull requests, docs, or release notes.
+
+Ask a coding agent to set reeval up with the setup skill:
+
+```bash
+npx skills add https://github.com/invertase/reeval --skill setup
+```
+
+To set it up by hand, install reeval:
+
+```bash
+npm install -D reeval
+```
+
+<Card title="Quick start" href="/getting-started/quickstart">
+  Set up a project and run a baseline against a variant.
+</Card>
+
+## How reeval works
+
+Agents, environments, and attempts multiply into sandboxes: each attempt of each agent in each environment runs in its own sandbox. Grading reads the workspace in each sandbox. reeval then measures the results, compares them with the baseline and with past runs, and analyzes them.
+
+<Image
+  theme="light"
+  src="/assets/mental-model-v26-light.png"
+  alt="Agents, environments, and attempts configure the run, and each attempt runs in its own sandbox with the agent, the environment, the task, and a workspace. Grading reads each workspace, and the results are measured, compared with the baseline and past runs, and analyzed."
+  width={828}
+/>
+<Image
+  theme="dark"
+  src="/assets/mental-model-v26-dark.png"
+  alt="Agents, environments, and attempts configure the run, and each attempt runs in its own sandbox with the agent, the environment, the task, and a workspace. Grading reads each workspace, and the results are measured, compared with the baseline and past runs, and analyzed."
+  width={828}
+/>
+
+## Run an evaluation
+
+The following evaluation asks an agent for a page in Anthropic's brand. The baseline runs without Anthropic's `brand-guidelines` skill, and the variant runs with it. The environments go in one file:
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from 'reeval'
+
+export const page = defineEnvironment('page', ({ directory }) => ({
+  files: directory('./project'),
+}))
+
+export const withSkill = page.extendEnvironment(
+  'brand-guidelines',
+  ({ skill }) => ({
+    skills: [
+      skill.git('github:anthropics/skills', {
+        ref: 'dbd4588f9e1033efb41dad4bef2f7947c8993d44',
+        path: 'skills',
+        only: ['brand-guidelines'],
+      }),
+    ],
+  }),
+)
+```
+
+The evaluation goes in its own file:
+
+```ts title="evals/brand.eval.ts"
+import { evaluate, expect } from 'reeval'
+import { page, withSkill } from './environments.ts'
+
+evaluate(
+  "styles the page in Anthropic's brand",
+  {
+    environment: page,
+    compare: { variants: [withSkill] },
+    runs: 4,
+    gate: { passRate: 0.75 },
+  },
+  async (c) => {
+    await c.send(
+      "Give index.html Anthropic's look: write styles.css with Anthropic's " +
+        'brand colors and fonts, and link it from index.html.',
+    )
+
+    await expect(c, 'links styles.css').toHaveFile(
+      'index.html',
+      /href="styles\.css"/,
+    )
+    await expect(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
+    await expect(c, 'brand fonts').toHaveFile(
+      'styles.css',
+      /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/,
+    )
+  },
+)
+```
+
+The prompt never names the color or the fonts, so those assertions pass only when the agent knows them. `reeval run` prints the outcome for each side:
+
+```text
+pass             styles the page in Anthropic's brand
+  arm               pass
+  page              0 of 4
+  brand-guidelines  4 of 4  helped
+  check             page    brand-guidelines
+  brand orange      0 of 4  4 of 4
+    expected styles.css to match /#d97757/i
+  brand fonts       0 of 4  4 of 4
+    expected styles.css to match /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/
+  +1 more passed
+```
+
+The variant passed in 4 of 4 attempts and the baseline in none, so the skill `helped`.
+
+## What you can find out
+
+<CardGroup cols={2}>
+  <Card title="How each agent handles a tool" href="/evaluations/recipes/compare-harnesses">
+    Run the same task on each agent and compare the results.
+  </Card>
+  <Card title="Which tools agents choose" href="/evaluations/recipes/test-recommendations">
+    Prompt for an outcome without naming a tool, and judge what the agent picks.
+  </Card>
+  <Card title="Whether an MCP server helps" href="/evaluations/recipes/measure-mcp-servers">
+    Run one task with and without the server, and read the effect.
+  </Card>
+  <Card title="Whether docs help" href="/evaluations/recipes/measure-your-docs">
+    Run one task with and without the docs, and read the effect.
+  </Card>
+  <Card title="Whether agents can use an SDK" href="/evaluations/recipes/test-an-sdk">
+    Ask the agent to build with the SDK, then run a hidden check.
+  </Card>
+  <Card title="Regressions before release" href="/evaluations/recipes/gate-pull-requests">
+    Fail a pull request when this run regresses against a past run.
+  </Card>
+</CardGroup>
+
+## Explore the docs
+
+### Configuration
+
+<CardGroup cols={2}>
+  <Card title="Agents" href="/configuration/agents">Pick the harness and model that each evaluation runs on.</Card>
+  <Card title="Environments" href="/configuration/environments">Set the files, skills, rules, and servers each attempt starts with.</Card>
+  <Card title="Attempts" href="/evaluations/runs/running#set-the-attempts">Set how many times each agent runs in each environment.</Card>
+  <Card title="Sandboxes" href="/configuration/sandboxes">Run each attempt in a fresh container on the host.</Card>
+</CardGroup>
+
+### Evaluation
+
+<CardGroup cols={2}>
+  <Card title="Task" href="/evaluations/evaluate">Write the prompt that the agent works on in each attempt.</Card>
+  <Card title="Workspace" href="/results/inspection/debugging#read-the-workspace-and-artifacts">Open the artifacts and the transcript that an attempt leaves behind.</Card>
+</CardGroup>
+
+<CardGroup cols={3}>
+  <Card title="Assertions" href="/evaluations/grading/assertions">Check the files, commands, and strings that each attempt produces.</Card>
+  <Card title="Judgments" href="/evaluations/grading/judgments">Grade the agent's work with an LLM judge's yes or no.</Card>
+  <Card title="Questions" href="/evaluations/grading/questions">Ask a model what the attempts show when taken together.</Card>
+</CardGroup>
+
+### Results
+
+<CardGroup cols={2}>
+  <Card title="Measure" href="/results/measure">Read pass rate, tokens, tool calls, turns, cost, and time.</Card>
+  <Card title="Lift" href="/results/compare/lift">See whether the variant did better than the baseline.</Card>
+  <Card title="Past runs" href="/results/compare/past-runs">Catch regressions by comparing this run with earlier ones.</Card>
+  <Card title="Analyze" href="/results/analyze">Read the answers to the questions, then the insights.</Card>
+</CardGroup>
+
+## Next steps
+
+Install reeval and run a comparison of a baseline and a variant in [Quick start](/getting-started/quickstart).

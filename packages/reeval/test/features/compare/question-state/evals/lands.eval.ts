@@ -1,7 +1,7 @@
 import { evaluate, expect } from 'reeval'
 import { baseline, variant } from './env.ts'
 
-// state picks the parts: the last turn's reply and one check's result, no diff and no first turn.
+// The inputs pick the parts: the last turn's reply and one check's result, no diff and no first turn.
 evaluate(
   'lands',
   {
@@ -10,7 +10,9 @@ evaluate(
       {
         question: 'Which reply is clearer?',
         across: 'environment',
-        state: { diff: false, output: true, turns: 'last', checks: ['cat out.txt'] },
+        output: true,
+        turns: 'last',
+        checks: ['cat out.txt'],
       },
     ],
   },

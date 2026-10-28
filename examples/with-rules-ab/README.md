@@ -53,6 +53,5 @@ The eval sets no `runs`, so the compare runs each arm four times, the fewest for
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace; its changelog step is in `reeval.config.ts` |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and its rules-following step, and the real agents from `../profiles.ts` |
 
-[Two stacks, not a layer](../../docs/guide/compare.mdx#two-stacks-not-a-layer) in the Compare and
-lift guide covers naming both arms, and
-[Write rules and files](../../docs/guide/environments.mdx#write-rules-and-files) covers `rules`.
+[Measure lift against a baseline](../../docs/results/compare/lift.mdx) covers naming both arms, and
+[Add project rules](../../docs/configuration/environments/rules.mdx) covers `rules`.

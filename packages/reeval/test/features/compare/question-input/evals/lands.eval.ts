@@ -7,7 +7,12 @@ evaluate(
   {
     compare: { baseline, variants: [variant] },
     questions: [
-      { question: 'Which page looks better?', across: 'environment', artifacts: ['landing'] },
+      {
+        question: 'Which page looks better?',
+        across: 'environment',
+        task: true,
+        artifacts: ['landing'],
+      },
     ],
   },
   async (c) => {

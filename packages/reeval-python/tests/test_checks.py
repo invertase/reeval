@@ -6,10 +6,11 @@ import asyncio
 import contextvars
 import inspect
 import linecache
+import os
 import traceback
 import unittest
 import warnings
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -49,9 +50,16 @@ def _run(*args: Any) -> tuple[list[dict[str, Any]], BaseException | None]:
     return calls, raised
 
 
+def _unsited(call: Any) -> Any:
+    """A record call less its `at`, the file and line its assert is on."""
+    return {k: v for k, v in call.items() if k != "at"} if isinstance(call, dict) else call
+
+
 def test_passing_asserts_record_at_once_named_by_their_test() -> None:
     calls, raised = _run(["a", "b"], "a", True)
     assert raised is None
+    sample = os.path.abspath("sample.eval.py")
+    assert [c.pop("at") for c in calls] == [{"file": sample, "line": n} for n in (3, 4, 5, 6)]
     assert calls == [
         {"op": "record", "matcher": "assert", "subject": "flag", "status": "pass"},
         {"op": "record", "matcher": "assert", "subject": "len(items) == 2", "status": "pass"},
@@ -65,7 +73,7 @@ def test_a_failed_compare_shows_both_sides_and_its_message() -> None:
     assert isinstance(raised, AssertionError)
     assert str(raised) == "z is missing: assert 'z' in ['a', 'b']"
     assert [c["status"] for c in calls] == ["pass", "pass"], "a failure isn't recorded yet"
-    assert failed_check(raised) == {
+    assert _unsited(failed_check(raised)) == {
         "op": "record",
         "matcher": "assert",
         "subject": "name in items",
@@ -88,7 +96,7 @@ def test_outside_an_attempt_assert_raises_as_python_does() -> None:
     scope: dict[str, Any] = {ASSERT_HOOK: check}
     with pytest.raises(AssertionError, match=r"^assert 1 == 2$") as raised:
         exec(compile_eval("assert 1 == 2\n", "top.eval.py"), scope)  # noqa: S102
-    assert failed_check(raised.value) == {
+    assert _unsited(failed_check(raised.value)) == {
         "op": "record",
         "matcher": "assert",
         "subject": "1 == 2",
@@ -104,7 +112,7 @@ def test_an_assert_outside_an_eval_file_is_recorded_by_its_line() -> None:
     exec(compile(source, "helper.py", "exec"), scope)  # noqa: S102
     with pytest.raises(AssertionError) as raised:
         scope["helper"](False)
-    assert unrecorded_failure(raised.value) == {
+    assert _unsited(unrecorded_failure(raised.value)) == {
         "op": "record",
         "matcher": "assert",
         "subject": "ok",
@@ -288,6 +296,19 @@ def test_a_failure_the_body_catches_is_not_a_check() -> None:
     )
     calls, raised, _ = _body(source)
     assert raised is None
-    assert calls == [
+    assert [_unsited(c) for c in calls] == [
         {"op": "record", "matcher": "assert", "subject": "2 == 2", "status": "pass"},
     ]
+
+
+def test_call_site_is_the_eval_files_frame_when_a_helper_makes_the_call() -> None:
+    from reeval_python.expect import call_site
+
+    def helper() -> object:
+        return call_site()
+
+    scope: dict[str, object] = {"helper": helper}
+    path = os.path.abspath("evals/site.eval.py")
+    exec(compile("\n\nsite = helper()\n", path, "exec"), scope)  # noqa: S102
+    assert scope["site"] == {"file": path, "line": 3}
+    assert cast("dict[str, object]", helper())["file"] == os.path.abspath(__file__)

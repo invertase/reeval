@@ -1,0 +1,9 @@
+extends: existence
+message: "Write 'evaluation' in prose; '%s' belongs in code only."
+level: warning
+ignorecase: false
+nonword: true
+# The lookarounds skip paths such as *.eval.ts and evals/**, which an HTML
+# block (a <Property> body with no blank line) leaves as plain text.
+tokens:
+  - (?<![\w./*-])[Ee]vals?\b(?!\.\w|/|[\w-])

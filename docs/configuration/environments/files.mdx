@@ -1,0 +1,53 @@
+---
+title: "Place files"
+description: "Give the agent the files an evaluation starts from."
+---
+
+You set `files` on an environment to put source in the workspace before the agent starts. A destination path is relative to the workspace, uses forward slashes, and never contains `..`. To write into the home directory, start a path with `~/`.
+
+## Write a file
+
+Set `files` to an object of destination paths and contents. A string is written into the sandbox as that file.
+
+In the `evals/environments.ts` file, define the environment:
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const csv = defineEnvironment('csv', ({ directory, file }) => ({
+  files: {
+    ...directory('./project', { glob: ['!NOTES.md'] }),
+    'data/people.csv': file('./data/people.csv'),
+    '.gitignore': 'node_modules/\n',
+  },
+}))
+```
+
+The `.gitignore` entry writes that string to the workspace. For a runnable project, see [`with-fixture`](https://github.com/invertase/reeval/tree/main/examples/with-fixture).
+
+## Copy a host file
+
+When the content already exists on the host, pass a host path to `file`, as the `data/people.csv` entry does. A relative path resolves from the file that calls `file`. reeval uses an absolute path as given.
+
+A destination that starts with `~/` goes in the home directory, outside the workspace and its diff:
+
+```ts title="with-multi-turn.eval.ts"
+files: {
+  ...directory('./project'),
+  '~/checks/call.mjs': file('./checks/call.mjs'),
+},
+```
+
+## Copy a directory
+
+Pass a host directory to `directory` to copy the files in it, as the `./project` entry does. Here `glob` leaves out the maintainer notes in `NOTES.md`.
+
+To copy into a subdirectory, pass `into`, such as `directory('./fixtures', { into: 'src' })`. `into` is the destination directory. A value that starts with `~/` places the files under the home directory. `into` uses forward slashes and doesn't contain `..`.
+
+By default, `directory` leaves out paths such as the `node_modules/` directory, and always leaves out the `.git` directory. A later entry in `files` replaces a copied file. For more information about pattern order, anchoring, and the default ignores, see [the directory helper](/reference/environment-helpers#directory).
+
+## Reference
+
+For more information about `file`, see [the file helper](/reference/environment-helpers#file).
+
+For more information about `directory`, see [the directory helper](/reference/environment-helpers#directory).

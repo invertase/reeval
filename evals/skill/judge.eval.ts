@@ -16,15 +16,15 @@ group(
     evaluate('writes a judged eval', async (c) => {
       await c.send(task)
       const source = (await c.readFile('evals/readme.eval.ts')) ?? ''
-      expect.soft(source, 'writes evals/readme.eval.ts').not.toBe('')
-      await expect.soft(c.exec(typechecks), 'typechecks').toSucceed()
+      expect(source, 'writes evals/readme.eval.ts').not.toBe('')
+      await expect(c.exec(typechecks), 'typechecks').toSucceed()
       const { plan } = await dryRun(c)
-      expect.soft(plan?.totals.evals, 'plans one eval').toBe(1)
-      await expect.soft(c.exec(runsOnFake), 'passes on the fake config').toSucceed()
-      expect.soft(source, 'asks the judge').toMatch(/\.judge\(/)
-      expect.soft(source, 'labels the judge check').toMatch(/['"`]explains usage['"`]/)
-      expect.soft(source, 'checks README.md deterministically').toMatch(/README\.md/)
-      expect.soft(source, 'checks --help').toMatch(/--help/)
+      expect(plan?.totals.evals, 'plans one eval').toBe(1)
+      await expect(c.exec(runsOnFake), 'passes on the fake config').toSucceed()
+      expect(source, 'asks the judge').toMatch(/\.judge\(/)
+      expect(source, 'labels the judge check').toMatch(/['"`]explains usage['"`]/)
+      expect(source, 'checks README.md deterministically').toMatch(/README\.md/)
+      expect(source, 'checks --help').toMatch(/--help/)
     })
   },
 )
