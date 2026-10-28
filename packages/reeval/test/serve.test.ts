@@ -7,6 +7,7 @@ import {
   decide,
   type Listener,
   parseProbe,
+  printedUrls,
   probeScript,
   procAddress,
   SETTLE_MS,
@@ -25,50 +26,44 @@ test('procAddress reads /proc/net/tcp and tcp6 addresses', () => {
   assert.equal(procAddress('000080FE00000000FF005450B6AD1DFE'), 'fe80::5054:ff:fe1d:adb6')
 })
 
-test('parseProbe keeps reachable listeners, marking the ones the tree holds', () => {
+test('parseProbe keeps the reachable LISTEN rows of /proc/net/tcp and tcp6', () => {
   const probe = parseProbe(
     [
-      'tree 10 11',
-      "lrwx------ 1 u u 64 Oct 28 10:00 3 -> 'socket:[100]'",
-      'lrwx------ 1 u u 64 Oct 28 10:00 4 -> socket:[101]',
-      'lrwx------ 1 u u 64 Oct 28 10:00 5 -> socket:[102]',
-      'lr-x------ 1 u u 64 Oct 28 10:00 6 -> /dev/null',
-      'listen 0100007F:1435 100',
-      'listen 00000000000000000000000001000000:1435 101',
-      'listen 020011AC:0050 102',
-      'listen 00000000:0016 999',
+      'alive',
+      '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode',
+      '   0: 0100007F:1435 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 100 1',
+      '   1: 020011AC:0050 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 102 1',
+      '   2: 0100007F:1435 0100007F:C350 01 00000000:00000000 00:00000000 00000000  1000        0 103 1',
+      '  sl  local_address                         remote_address                        st',
+      '   0: 00000000000000000000000001000000:1435 00000000000000000000000000000000:0000 0A 0 0 0 0 0 101',
     ].join('\n'),
   )
   assert.deepEqual(probe, {
     proc: true,
     alive: true,
     listeners: [
-      { port: 5173, address: '127.0.0.1', inode: '100', own: true },
-      { port: 5173, address: '::1', inode: '101', own: true },
-      { port: 22, address: '0.0.0.0', inode: '999', own: false },
+      { port: 5173, address: '127.0.0.1' },
+      { port: 5173, address: '::1' },
     ],
   })
-  assert.deepEqual(parseProbe('tree\nlisten 0100007F:1435 100'), {
-    proc: true,
-    alive: false,
-    listeners: [{ port: 5173, address: '127.0.0.1', inode: '100', own: false }],
-  })
-  assert.deepEqual(parseProbe('noproc 1\n'), { proc: false, alive: true })
+  assert.deepEqual(parseProbe(''), { proc: true, alive: false, listeners: [] })
+  assert.deepEqual(parseProbe('alive\nnoproc\n'), { proc: false, alive: true })
 })
 
 const on = (...ports: Array<[number, string]>): Listener[] =>
-  ports.map(([port, address], i) => ({ port, address, inode: String(i), own: true }))
+  ports.map(([port, address]) => ({ port, address }))
 const state = (listeners: Listener[], more: Partial<Parameters<typeof decide>[0]> = {}) => ({
   want: 4000,
   given: false,
   probe: { proc: true as const, alive: true, listeners },
+  before: new Set<number>(),
   stableMs: 0,
   elapsedMs: 0,
   timeoutMs: 60_000,
   ...more,
 })
 
-test('decide takes PORT at once, and one other port only once the ports settle', () => {
+test('decide takes PORT at once, and one new port only once the ports settle', () => {
   assert.deepEqual(decide(state(on([9229, '127.0.0.1'], [4000, '::'], [4000, '0.0.0.0']))), {
     kind: 'port',
     port: 4000,
@@ -90,6 +85,15 @@ test('decide takes PORT at once, and one other port only once the ports settle',
   assert.deepEqual(decide(state([], { elapsedMs: 60_000 })), { kind: 'timeout', ports: [] })
 })
 
+test('decide ignores the ports that listened before the command started', () => {
+  const listeners = on([22, '0.0.0.0'], [6379, '127.0.0.1'], [5173, '::1'])
+  assert.deepEqual(decide(state(listeners, { before: new Set([22, 6379]), stableMs: SETTLE_MS })), {
+    kind: 'port',
+    port: 5173,
+    address: '::1',
+  })
+})
+
 test('decide waits only for a given port, whatever else binds first', () => {
   const side = on([6379, '127.0.0.1'])
   assert.deepEqual(decide(state(side, { given: true, stableMs: 30_000, elapsedMs: 30_000 })), {
@@ -106,44 +110,56 @@ test('decide waits only for a given port, whatever else binds first', () => {
   })
 })
 
-test('decide takes PORT from a process outside the tree, as a backgrounded server is', () => {
-  const forked = { port: 4000, address: '127.0.0.1', inode: '7', own: false }
-  const probe = { proc: true as const, alive: false, listeners: [forked] }
+test('decide takes the one new port once the command exits, as a daemon that forked leaves it', () => {
+  const probe = { proc: true as const, alive: false, listeners: on([5173, '127.0.0.1']) }
   assert.deepEqual(decide(state([], { probe })), {
     kind: 'port',
-    port: 4000,
+    port: 5173,
     address: '127.0.0.1',
   })
-  const elsewhere = { ...forked, port: 5173 }
-  assert.deepEqual(
-    decide(
-      state([], { probe: { ...probe, alive: true, listeners: [elsewhere] }, stableMs: SETTLE_MS }),
-    ),
-    { kind: 'wait' },
-  )
+})
+
+test('printedUrls finds the URLs on the given ports, past ANSI colors', () => {
+  const vite =
+    '  \x1b[32m➜\x1b[39m  \x1b[1mLocal\x1b[22m:   \x1b[36mhttp://localhost:\x1b[1m5173\x1b[22m/\x1b[39m\n' +
+    '  ➜  Network: http://[::1]:5173/\n  ➜  Local:   http://localhost:5173/\n  debugger on ws://127.0.0.1:9229'
+  assert.deepEqual(printedUrls(vite, [4173, 5173, 9229]), [
+    { url: 'http://localhost:5173/', port: 5173 },
+    { url: 'http://[::1]:5173/', port: 5173 },
+  ])
+  assert.deepEqual(printedUrls('http://localhost:3000', [5173]), [])
 })
 
 test('awaitListening fails with the last output, naming the ports and the hint', async () => {
   const probes: ServeProbe[] = [
-    { proc: true, alive: true, listeners: on([5173, '127.0.0.1'], [24678, '127.0.0.1']) },
+    { proc: true, alive: true, listeners: on([4173, '127.0.0.1'], [5173, '127.0.0.1']) },
   ]
+  const watch = { want: 4000, given: false, before: new Set<number>(), timeoutMs: 60_000 }
   await assert.rejects(
     awaitListening('npm run dev', {
-      want: 4000,
-      given: false,
+      ...watch,
       probe: async () => probes[0] as ServeProbe,
-      output: async () => '  VITE ready\n',
-      timeoutMs: 60_000,
+      output: async () => '  ➜  Local:   http://localhost:5173/\n',
     }),
     {
       message:
-        'c.serve("npm run dev") listens on ports 5173 and 24678, and not on PORT (4000). Pass the one it serves on: c.serve("npm run dev", 5173). Its last output:\nVITE ready',
+        'c.serve("npm run dev") listens on ports 4173 and 5173, and not on PORT (4000). It printed http://localhost:5173/. Pass the one it serves on: c.serve("npm run dev", 5173). Its last output:\n➜  Local:   http://localhost:5173/',
     },
   )
   await assert.rejects(
     awaitListening('npm run dev', {
-      want: 4000,
-      given: false,
+      ...watch,
+      probe: async () => probes[0] as ServeProbe,
+      output: async () => '',
+    }),
+    {
+      message:
+        'c.serve("npm run dev") listens on ports 4173 and 5173, and not on PORT (4000). Pass the one it serves on: c.serve("npm run dev", 4173)',
+    },
+  )
+  await assert.rejects(
+    awaitListening('npm run dev', {
+      ...watch,
       probe: async () => ({ proc: true, alive: false, listeners: [] }),
       output: async () => 'sh: vite: not found',
     }),
@@ -154,18 +170,19 @@ test('awaitListening fails with the last output, naming the ports and the hint',
   )
 })
 
-test('awaitListening names the other ports when a given port never listens', async () => {
+test('awaitListening names the new ports when a given port never listens', async () => {
   await assert.rejects(
     awaitListening('redis-server & npm start', {
       want: 3000,
       given: true,
+      before: new Set(),
       probe: async () => ({ proc: true, alive: true, listeners: on([6379, '127.0.0.1']) }),
       output: async () => '',
       timeoutMs: 300,
     }),
     {
       message:
-        'c.serve("redis-server & npm start") didn\'t listen on the port passed (3000) within 0.3s; it listens on port 6379',
+        'c.serve("redis-server & npm start") didn\'t listen on the port passed (3000) within 0.3s; port 6379 started listening',
     },
   )
 })
@@ -175,6 +192,7 @@ test('awaitListening without /proc waits for PORT on the host', async () => {
   const found = await awaitListening('npm start', {
     want: 4000,
     given: false,
+    before: new Set(),
     probe: async () => ({ proc: false, alive: true }),
     output: async () => '',
     hostListening: async () => (++tries > 2 ? '127.0.0.1' : undefined),
@@ -183,32 +201,37 @@ test('awaitListening without /proc waits for PORT on the host', async () => {
   assert.equal(found.detected, false)
 })
 
-test("the probe script finds a process tree's listeners from /proc", { skip: linux }, async () => {
+test('the probe script reads the listeners from /proc and whether the pid runs', {
+  skip: linux,
+}, async () => {
   const child = spawn(
-    'sh',
+    'node',
     [
-      '-c',
-      `node -e "require('net').createServer().listen(0, '::1', function () { console.log(this.address().port) })"`,
+      '-e',
+      "require('net').createServer().listen(0, '::1', function () { console.log(this.address().port) })",
     ],
-    { stdio: ['ignore', 'pipe', 'inherit'], detached: true },
+    { stdio: ['ignore', 'pipe', 'inherit'] },
   )
   try {
     const [line] = (await once(child.stdout, 'data')) as [Buffer]
     const port = Number(line.toString().trim())
-    const out = spawnSync('sh', ['-c', probeScript(String(child.pid))], { encoding: 'utf8' })
-    const probe = parseProbe(out.stdout)
+    const probe = parseProbe(
+      spawnSync('sh', ['-c', probeScript(String(child.pid))]).stdout.toString(),
+    )
     assert.ok(probe.proc && probe.alive)
+    assert.ok(probe.listeners.some((l) => l.port === port && l.address === '::1'))
+    const gone = parseProbe(spawnSync('sh', ['-c', probeScript('999999999')]).stdout.toString())
+    assert.equal(gone.alive, false)
     assert.deepEqual(
-      probe.listeners.filter((l) => l.own).map((l) => [l.port, l.address]),
-      [[port, '::1']],
+      parseProbe(
+        spawnSync('sh', ['-c', probeScript(String(process.pid), false)]).stdout.toString(),
+      ),
+      {
+        proc: false,
+        alive: true,
+      },
     )
-    const other = parseProbe(
-      spawnSync('sh', ['-c', probeScript('999999999')], { encoding: 'utf8' }).stdout,
-    )
-    assert.deepEqual(other.proc && other.alive, false)
-    assert.ok(other.proc && other.listeners.every((l) => !l.own))
-    assert.equal(spawnSync('sh', ['-c', probeScript(String(child.pid))]).status, 0)
   } finally {
-    process.kill(-(child.pid as number), 'SIGKILL')
+    child.kill('SIGKILL')
   }
 })

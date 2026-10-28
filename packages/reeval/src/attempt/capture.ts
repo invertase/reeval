@@ -112,8 +112,6 @@ type Started = {
   handle: BackgroundHandle
   /** The shell around the command. */
   pid: string
-  /** Docker only: a variable every process the command starts inherits. */
-  tag?: string
   /** Where the command's stdout and stderr go. */
   log: string
 }
@@ -174,12 +172,12 @@ async function launch(
     },
   }
   a.backgrounds.push(handle)
-  return { handle, pid, log, ...(docker ? { tag: `${BG_TAG}=${tag}` } : {}) }
+  return { handle, pid, log }
 }
 
 /**
- * Starts `command` with `PORT` set and returns once its own processes listen: on `PORT` (or
- * `port`), else on the one other port they settle on, which it records.
+ * Starts `command` with `PORT` set and returns once it listens: on `PORT` (or `port`), else on
+ * the one port that wasn't listening before it started, which it records.
  */
 export async function serveCommand(
   a: Attempt,
@@ -187,18 +185,23 @@ export async function serveCommand(
   port?: number,
 ): Promise<ServeHandle> {
   const want = port ?? (await allocatePort())
-  const { handle, pid, tag, log } = await launch(a, command, 'c.serve()', { PORT: String(want) })
   const box = await sandboxFor(a, 'c.serve()')
+  const tables = a.spec.sandbox.kind !== 'fake'
+  const look = (pid?: string) =>
+    untraced(() => box.exec(probeScript(pid, tables), { signal: a.signal })).then((r) =>
+      parseProbe(r.stdout),
+    )
+  const first = await look()
+  const before = new Set(first.proc ? first.listeners.map((l) => l.port) : [])
+  const { handle, pid, log } = await launch(a, command, 'c.serve()', { PORT: String(want) })
   const found = await awaitListening(command, {
     want,
     given: port !== undefined,
+    before,
     signal: a.signal,
-    probe: async () =>
-      parseProbe(
-        (await untraced(() => box.exec(probeScript(pid, tag), { signal: a.signal }))).stdout,
-      ),
+    probe: () => look(pid),
     output: async () => (await box.exec(`tail -n 20 ${log} 2>/dev/null`)).stdout,
-    ...(a.spec.sandbox.kind === 'fake' ? {} : { hostListening: async () => '' }),
+    ...(tables ? { hostListening: async () => '' } : {}),
   }).catch(async (error: Error) => {
     await handle.kill()
     throw error

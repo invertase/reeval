@@ -1,21 +1,15 @@
 import { defineEnvironment } from 'reeval'
-import { docker, fakeSandbox, podman } from 'reeval/sandbox'
+import { docker, podman } from 'reeval/sandbox'
 
-const tier = process.env.REEVAL_FIXTURE_SANDBOX
-const inContainer = tier === 'docker' || tier === 'podman'
-const sandbox =
-  tier === 'podman'
-    ? podman()
-    : tier === 'docker'
-      ? docker()
-      : fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
+const sandbox = process.env.REEVAL_FIXTURE_SANDBOX === 'podman' ? podman() : docker()
 
-// Ignores PORT and listens on two ports of its own, so neither is the one to pick. In a container
-// they're 5173 and 24678; on the shared host any free ones.
-const [app, hmr] = inContainer ? [5173, 24678] : [0, 0]
+// Ignores PORT and listens on two ports of its own, so neither is the one to pick, and prints
+// the URL of one in Vite's colors.
 const server = `import http from 'node:http'
-http.createServer((_, res) => res.end('app')).listen(${app}, '127.0.0.1')
-http.createServer((_, res) => res.end('hmr')).listen(${hmr}, '127.0.0.1')
+http.createServer((_, res) => res.end('preview')).listen(4173, '127.0.0.1')
+http.createServer((_, res) => res.end('app')).listen(5173, '::1', () => {
+  console.log('  \\x1b[32m➜\\x1b[39m  \\x1b[1mLocal\\x1b[22m:   \\x1b[36mhttp://localhost:\\x1b[1m5173\\x1b[22m/\\x1b[39m')
+})
 `
 
 export const ui = defineEnvironment('ui', {
