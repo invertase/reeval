@@ -16,6 +16,7 @@ import { contextTaker } from './context.ts'
 import { tracePlan } from './debug.ts'
 import { prepareEnvironment } from './environment.ts'
 import { judgeCaller } from './judge.ts'
+import { keepWorkspace } from './keep-workspace.ts'
 import { attemptError, recordEgress, recordFailure, recordOom, writeRecord } from './record.ts'
 import { startSession } from './session.ts'
 import { type AttemptSpec, createAttempt, evalTimer } from './state.ts'
@@ -137,6 +138,10 @@ async function attemptBody(
     recordEgress(a, sandbox)
     // A timeout or cancel has already removed the container, so there's nothing left to read.
     oom = a.signal.aborted ? undefined : await recordOom(a, sandbox)
+    if (sandbox && spec.keepWorkspace && !a.signal.aborted) {
+      const kept = await keepWorkspace(sandbox, debug.dir, AbortSignal.timeout(120_000))
+      if (kept) a.record.keptWorkspace = kept
+    }
     await sandbox?.destroy()
     if (sandbox) {
       debug.log(

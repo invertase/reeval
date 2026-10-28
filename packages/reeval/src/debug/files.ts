@@ -5,6 +5,9 @@ import { evalSlug, RUN_ID } from '../ids.ts'
 /** Local debug data, one directory per run. Gitignored with `.reeval/`, never recorded. */
 export const debugRoot = (root: string) => join(root, '.reeval', 'debug')
 
+/** An attempt's kept final workspace, in its debug directory. */
+export const KEPT_WORKSPACE_FILE = 'workspace.tar.gz'
+
 /** Where one attempt's debug data goes: the same layout as its artifacts in the run. */
 export const attemptDebugDir = (
   root: string,

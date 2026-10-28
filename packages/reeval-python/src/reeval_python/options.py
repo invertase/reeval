@@ -43,6 +43,8 @@ class EvalOptions(TypedDict, total=False):
     gate: Literal["all"] | Mapping[str, float]
     harness: Harness | Sequence[Harness] | Mapping[str, Any]
     judge: JudgeDefaults
+    keep_workspace: bool
+    """Whether each attempt keeps its final workspace for `reeval workspace`. Default `True`."""
     pin: Sequence[str]
     question: Mapping[str, Any]
     questions: Sequence[str | Mapping[str, Any]]

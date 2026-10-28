@@ -23,7 +23,7 @@ import type { AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
-import { gzipSync } from 'node:zlib'
+import { gunzipSync, gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@reeval/harness-antigravity'
 import { CODEX_CLI_VERSION } from '@reeval/harness-codex'
 import { FX_CLI_VERSION } from '@reeval/harness-fx'
@@ -39,7 +39,10 @@ import {
   LABEL,
 } from '@reeval/sandbox-docker'
 import { pngSize, stubPng } from '../src/capture/stub.ts'
+import { attemptDebugDir, KEPT_WORKSPACE_FILE, parseAttemptKey } from '../src/debug/files.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { sha256 } from '../src/ids.ts'
+import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
@@ -2640,6 +2643,31 @@ export const features: Feature[] = [
     record: ({ run }) => {
       assert.equal(run.evals.find((e) => e.name === 'lands')?.family, undefined)
       assert.equal(run.families, undefined, 'one case is not a family')
+    },
+  },
+  {
+    dir: 'run/kept-workspace',
+    tiers: ['fake', 'docker'],
+    env: 'kept-workspace',
+    canary: /expected 'export const built = true\\n' to be 'something else'/,
+    record: ({ run, project }) => {
+      const kept = landed(run)
+      assert.ok(kept?.keptWorkspace, 'lands kept its workspace')
+      assert.equal(kept.keptWorkspace.skipped, null)
+      assert.deepEqual(kept.keptWorkspace.excluded, ['node_modules/'])
+      const key = parseAttemptKey(kept.key)
+      assert.ok(key)
+      const archive = readFileSync(
+        join(attemptDebugDir(project, run.runId, key.evalId, key.cell, key.n), KEPT_WORKSPACE_FILE),
+      )
+      assert.equal(sha256(archive), kept.keptWorkspace.sha256)
+      const files = readTar(gunzipSync(archive))
+        .filter((e) => e.type === 'file')
+        .map((e) => e.path)
+        .sort()
+      assert.deepEqual(files, ['app/built.js', 'app/start.js'])
+      const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]
+      assert.equal(canary?.keptWorkspace, undefined, 'keepWorkspace: false keeps none')
     },
   },
   {

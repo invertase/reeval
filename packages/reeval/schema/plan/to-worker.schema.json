@@ -2011,6 +2011,10 @@
           "description": "Defaults for `c.judge()`, merged field by field over the config's.",
           "$ref": "#/$defs/ConfigJudgeOptions"
         },
+        "keepWorkspace": {
+          "description": "Whether each attempt keeps its final workspace; replaces the config's.",
+          "type": "boolean"
+        },
         "question": {
           "description": "Defaults for every question, merged over the config's.",
           "$ref": "#/$defs/QuestionOptions"
@@ -2406,6 +2410,9 @@
           },
           "required": ["threshold"]
         },
+        "keepWorkspace": {
+          "type": "boolean"
+        },
         "optionKeys": {
           "description": "The keys the config sets, for `reeval report`'s config shape.",
           "type": "array",
@@ -2468,6 +2475,7 @@
         "history",
         "include",
         "judge",
+        "keepWorkspace",
         "profiles",
         "question",
         "record",

@@ -474,6 +474,10 @@
             "$ref": "#/$defs/JudgmentRecord"
           }
         },
+        "keptWorkspace": {
+          "description": "The attempt's final workspace, kept as `workspace.tar.gz` in its `.reeval/debug` directory on the machine that ran it (`reeval workspace` writes it out), or why it wasn't: its sha256 and size, its file count, the directories left out by name, the files whose secret-looking values were masked and the binary ones left out for holding one. Absent with `keepWorkspace: false`, and when the sandbox was gone first (a timeout or a cancel).",
+          "$ref": "#/$defs/KeptWorkspace"
+        },
         "key": {
           "description": "`<eval key> # <cell key>#<n>`: unique in the run.",
           "type": "string"
@@ -2027,6 +2031,73 @@
         }
       },
       "required": ["key", "model", "question", "score", "threshold", "verdict"]
+    },
+    "KeptWorkspace": {
+      "description": "The attempt's final workspace, kept as `workspace.tar.gz` in its `.reeval/debug` directory (never recorded into the history folder), or why it wasn't.",
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "description": "Its size; 0 when none was kept.",
+          "type": "number"
+        },
+        "dropped": {
+          "description": "Binary files left out because they held a secret-looking value, at most 50.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "excluded": {
+          "description": "Directories left out by name, such as `node_modules/` and `.git/`, at most 50.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "files": {
+          "description": "Regular files and symbolic links in it.",
+          "type": "number"
+        },
+        "masked": {
+          "description": "Text files whose secret-looking values were masked, at most 50.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sha256": {
+          "description": "sha256 of `workspace.tar.gz`; null when none was kept.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "skipped": {
+          "description": "Why none was kept: `size` when the compressed archive was over the cap, `error` when the sandbox couldn't archive it; null when it was kept.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "cause": {
+                  "enum": ["error", "size"]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": ["cause", "message"]
+            }
+          ]
+        }
+      },
+      "required": ["bytes", "dropped", "excluded", "files", "masked", "sha256", "skipped"]
     },
     "Lift": {
       "description": "A variant cell's pass@1 against the control's, on the same harness and sandbox.",

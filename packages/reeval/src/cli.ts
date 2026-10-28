@@ -63,6 +63,7 @@ const HISTORY_COMMANDS = {
   show: 1,
   compare: 1,
   checkout: 1,
+  workspace: 1,
   query: 1,
   analyze: 1,
 }
@@ -173,6 +174,8 @@ async function run(argv: string[]): Promise<number> {
         return commands.compareCommand(ctx, filters)
       case 'checkout':
         return commands.checkoutCommand(ctx, filters)
+      case 'workspace':
+        return commands.workspaceCommand(ctx, filters)
       case 'query': {
         const { queryCommand } = await import('./query.ts')
         return queryCommand({ ...ctx, err: (s: string) => console.error(dim(s)) }, filters)

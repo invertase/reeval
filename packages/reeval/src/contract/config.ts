@@ -75,6 +75,7 @@ export const profileDefaultsDataSchema = z.strictObject({
   timeout: durationSchema.optional(),
   capture: captureOptionsSchema.optional(),
   question: questionOptionsSchema.optional(),
+  keepWorkspace: z.boolean().optional(),
 })
 
 export const profileLimitSchema = z.strictObject({
@@ -133,6 +134,7 @@ export const reevalConfigDataSchema = z.strictObject({
   timeout: durationSchema.optional(),
   capture: captureOptionsSchema.optional(),
   question: questionOptionsSchema.optional(),
+  keepWorkspace: z.boolean().optional(),
   concurrency: count().optional(),
   record: recordMode.optional(),
   history: historyConfigSchema.optional(),

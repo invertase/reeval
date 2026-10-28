@@ -192,6 +192,24 @@ reeval checkout [run] [dir]   A git worktree at the run's commit, with its workt
 
 [//]: # (/generated:cli-help:checkout)
 
+## `reeval workspace`
+
+The `reeval workspace` command writes an attempt's kept final workspace, the whole tree the agent left and not only its diff, into a directory, so you can read it or run it. The attempt is its key, its `<cell>#<n>` id, or part of its cell key or key (`changelog#2`), and you can leave it out when the run has one attempt. `--run` takes `latest`, `latest~N`, a run id or a unique prefix, and defaults to `latest`.
+
+[//]: # (generated:cli-help:workspace)
+
+```text
+reeval workspace [attempt] [dir]
+                              An attempt's kept final workspace, written into dir (default:
+                              .reeval/workspaces/<run>/…); attempt is its key, <cell>#<n> or
+                              part of its key, and may be left out when the run has one attempt
+  --run <run>                 A run id, latest or latest~N (default: latest)
+```
+
+[//]: # (/generated:cli-help:workspace)
+
+The workspace comes from `workspace.tar.gz` in the attempt's `.reeval/debug` directory, so it exists only on the machine that ran the attempt, for the newest [`debug.keep`](/reference/options#debug) runs. The command refuses a directory that isn't empty, and writes nothing through a symbolic link. For what each attempt keeps, see [`keepWorkspace`](/reference/options#keepworkspace).
+
 ## `reeval query`
 
 The `reeval query` command runs read-only SQL over recorded and scratch runs. With no argument, the command lists every view and table with example statements. `--run` takes `last`, `latest`, a run id, or a unique prefix of one. `--schema` lists every view, table, and column.

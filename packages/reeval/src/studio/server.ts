@@ -6,7 +6,8 @@ import { Readable } from 'node:stream'
 import { type Context, Hono } from 'hono'
 import { getCookie, setCookie } from 'hono/cookie'
 import { streamSSE } from 'hono/streaming'
-import { attemptDebugDir, debugRoot, parseAttemptKey } from '../debug/files.ts'
+import { attemptDebugDir, debugRoot, KEPT_WORKSPACE_FILE, parseAttemptKey } from '../debug/files.ts'
+import { evalSlug } from '../ids.ts'
 import { type AnalysisIndex, sortAnalyses } from '../view/analysis.ts'
 import {
   DEBUG_LOG,
@@ -195,6 +196,8 @@ export function createStudioApp(options: StudioServerOptions) {
     const dir = attemptDebugDir(source.root, runId, attempt.evalId, attempt.cell, attempt.n)
     return fileInside(base, relative(base, dir).split(sep), [name])
   }
+  const sizeOf = async (file: string | null) =>
+    file === null ? null : ((await stat(file).catch(() => null))?.size ?? null)
   const readText = async (file: string | null) =>
     file === null ? null : readFile(file, 'utf8').catch(() => null)
   app.get('/api/debug/:runId', async (c) => {
@@ -208,8 +211,21 @@ export function createStudioApp(options: StudioServerOptions) {
         readableDebugRequest,
       ),
       trace: (await file(TRACE_FILE)) !== null,
+      workspace: await sizeOf(await file(KEPT_WORKSPACE_FILE)),
     }
     return c.json(view, 200, { 'Cache-Control': 'no-cache' })
+  })
+  app.get('/api/debug/:runId/workspace', async (c) => {
+    const key = c.req.query('attempt')
+    const file = await debugFile(c.req.param('runId'), key, KEPT_WORKSPACE_FILE)
+    if (!file) return c.text('No kept workspace for this attempt', 404)
+    const attempt = parseAttemptKey(key ?? '')
+    const name = `${c.req.param('runId')}-${evalSlug(attempt?.cell ?? 'attempt')}-${attempt?.n ?? 1}-workspace.tar.gz`
+    return sendFile(c, file, {
+      'Cache-Control': 'no-cache',
+      'Content-Type': 'application/gzip',
+      'Content-Disposition': `attachment; filename="${name}"`,
+    })
   })
   app.get('/api/debug/:runId/trace', async (c) => {
     const file = await debugFile(c.req.param('runId'), c.req.query('attempt'), TRACE_FILE)

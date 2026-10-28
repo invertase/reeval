@@ -80,6 +80,8 @@ npx reeval run
 5. Read failures in the summary, then `.reeval/runs/<run>/summary.md` and each attempt's directory
    (`transcript.jsonl`, `diff.patch`, `checks/<n>.log`, `judge-input.json`, `setup.log`).
    `npx reeval run -v` prints a timestamped trace per attempt; `.reeval/debug/` keeps it.
+   `npx reeval workspace '<cell>#<n>'` writes an attempt's whole final workspace into a
+   directory, to read or run what the agent built.
    `npx reeval query "SELECT … FROM failing_attempts"` names each failed attempt's first failed
    check (more views in [references/cli.md](references/cli.md)).
 

@@ -1,0 +1,15 @@
+{
+  "question": "How did the agent pick its greeting?",
+  "model": "fake",
+  "stateOptions": {
+    "task": true,
+    "output": true,
+    "files": false,
+    "diff": true,
+    "transcript": true,
+    "turns": "all",
+    "checks": false
+  },
+  "system": "You answer one question about an attempt by a coding agent at a task.\nThe attempt is shown as the prompts it was sent, its final message, its transcript and the changes it made to the project, as a unified diff.\nAnswer only from what is shown. Answer it in a few sentences.",
+  "prompt": "Question: How did the agent pick its greeting?\n\n<attempt>\n<turn n=\"1\">\n<task>\nWrite greet.js that greets in our house style.\n</task>\n<output>\nI wrote greet.js.\n</output>\n<transcript>\nmessage: Working on: Write greet.js that greets in our house style.\ntool shell: ls → ok · 0ms\n  package.json\nedit greet.js (create, +1 −0) · 84ms\nedit package.json (create, +1 −0) · 117ms\nmessage: I wrote greet.js.\n</transcript>\n</turn>\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..95c8e2c\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Hello, ' + name + '!'\ndiff --git a/package.json b/package.json\nnew file mode 100644\nindex 0000000..5ffd980\n--- /dev/null\n+++ b/package.json\n@@ -0,0 +1 @@\n+{ \"type\": \"module\" }\n\n</diff>\n</attempt>"
+}

@@ -696,6 +696,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   Processes the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in their environment, so they hold its real value while the agent works and the agent, as the same user, can read it from them. Found by the secret's variable name, so a copy under another name or in a command's arguments isn't. At most 20, each `{ command, secrets }`: its command line, masked and cut at 200 characters, and those secrets' names. Absent when there were none.
 </Property>
 
+<Property name="keptWorkspace" type="KeptWorkspace" optional>
+  The attempt's final workspace, kept as `workspace.tar.gz` in its `.reeval/debug` directory on the machine that ran it (`reeval workspace` writes it out), or why it wasn't: its sha256 and size, its file count, the directories left out by name, the files whose secret-looking values were masked and the binary ones left out for holding one. Absent with `keepWorkspace: false`, and when the sandbox was gone first (a timeout or a cancel).
+</Property>
+
 <Property name="checks" type="Array<{command: string; exitCode: number; durationMs: number; log?: FileRef; retries?: number; tries?: ExecTry[]}>">
   Each foreground `c.exec`: its last try's exit code, and `durationMs` over all its tries. With `retries`, `tries` has each try's `{ exitCode, durationMs }` and the log each try's output.
 </Property>

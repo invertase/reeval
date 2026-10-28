@@ -22,6 +22,7 @@ description: "Options set how evaluations run. Each key is accepted in set place
 | [`capture`](#capture) | ✓ | ✓ | ✓ |  |
 | [`question`](#question) | ✓ | ✓ | ✓ |  |
 | [`timeout`](#timeout) | ✓ | ✓ | ✓ |  |
+| [`keepWorkspace`](#keepworkspace) | ✓ | ✓ | ✓ |  |
 | [`concurrency`](#concurrency) | ✓ |  |  |  |
 | [`record`](#record) | ✓ |  |  |  |
 | [`history`](#history) | ✓ |  |  |  |
@@ -730,6 +731,14 @@ For more information about screenshots, see [Check an app](/evaluations/task/app
 
 <Property name="timeout" type="Duration" optional>
   Milliseconds, or a number with `ms`, `s`, `m`, or `h`, above zero. The default is `'15m'`.
+</Property>
+
+## `keepWorkspace`
+
+`keepWorkspace` is whether each attempt keeps its final workspace, for [`reeval workspace`](/reference/cli#reeval-workspace) to write out.
+
+<Property name="keepWorkspace" type="boolean" optional>
+  The default is `true`. At teardown, after the checks, reeval archives the sandbox's workspace into `workspace.tar.gz` in the attempt's `.reeval/debug` directory, kept for the newest `debug.keep` runs. It leaves out `.git`, `node_modules`, `.venv`, `__pycache__`, `.cache`, `.next`, `.turbo` and the other dependency and cache directories at any depth, masks secret-looking values in text files and drops binary files that hold one. An archive over 10 MB compressed isn't kept, which the `workspace-too-large` remark reports. An attempt that timed out or was canceled keeps none. The record's `keptWorkspace` says what was kept.
 </Property>
 
 ## `concurrency`

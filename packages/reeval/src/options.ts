@@ -89,6 +89,7 @@ export const EVAL_OPTION_KEYS = [
   'question',
   'questions',
   'timeout',
+  'keepWorkspace',
   'tags',
   'revision',
   'pin',
@@ -113,6 +114,8 @@ const SUGGEST: Record<string, string> = {
   version: 'revision',
   rev: 'revision',
   pins: 'pin',
+  workspace: 'keepWorkspace',
+  keepWorkspaces: 'keepWorkspace',
   passRate: 'gate',
   threshold: 'gate',
 }
@@ -228,12 +231,15 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   for (const key of Object.keys(options)) {
     if (allowed.includes(key)) continue
     const near = SUGGEST[key] ?? closest(key, allowed)
+    const value = (options as Record<string, unknown>)[key]
     const hint =
       key === 'pool'
         ? ' pool is an option of evaluate.each, beside the cases: evaluate.each(cases, { pool: false }).'
-        : near
-          ? ` Did you mean "${near}"?`
-          : ''
+        : key === 'workspace' && typeof value !== 'boolean'
+          ? " workspace is an environment's starting tree: defineEnvironment(name, { workspace: git(…) })."
+          : near
+            ? ` Did you mean "${near}"?`
+            : ''
     throw new UsageError(`Unknown option "${key}" in ${where}.${hint}`)
   }
   const o = options as EvalOptions
@@ -254,6 +260,11 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   if (o.revision !== undefined && !isRevision(o.revision)) {
     throw new UsageError(
       `revision in ${where} must be a whole number or a non-empty string, e.g. revision: 2 (got ${JSON.stringify(o.revision)})`,
+    )
+  }
+  if (o.keepWorkspace !== undefined && typeof o.keepWorkspace !== 'boolean') {
+    throw new UsageError(
+      `keepWorkspace in ${where} is true or false (got ${JSON.stringify(o.keepWorkspace)})`,
     )
   }
   if (o.env !== undefined) checkEnv(o.env, where, UsageError)
@@ -557,6 +568,7 @@ export type Resolved = {
   /** Asked after the attempts; empty without any, or once a profile's limit leaves nothing to pair. */
   questions: PlannedQuestion[]
   timeout: Duration | undefined
+  keepWorkspace: boolean
   tags: string[]
   /** The innermost level's `revision`, if any sets one. */
   revision: Revision | undefined
@@ -609,6 +621,7 @@ function applyLevel(
   if (options.runs !== undefined) out.runs = options.runs
   if (options.gate !== undefined) out.gate = options.gate
   if (options.timeout !== undefined) out.timeout = options.timeout
+  if (options.keepWorkspace !== undefined) out.keepWorkspace = options.keepWorkspace
   if (options.revision !== undefined) out.revision = options.revision
   Object.assign(out.env, options.env)
   out.judge = mergeJudge(out.judge, options.judge)

@@ -71,16 +71,20 @@ export type DebugView = {
   requests: DebugRequest[]
   /** Whether `trace.ndjson` was kept. */
   trace: boolean
+  /** The size of the kept final workspace, `workspace.tar.gz`; null when there's none. */
+  workspace?: number | null
 }
 
 /**
  * The studio server's debug API (`reeval studio` only): an attempt's DebugView (null when it has no
- * local data), and its raw trace.
+ * local data), its raw trace and its kept final workspace.
  */
 export const debugApiPath = (runId: string, attemptKey: string) =>
   `api/debug/${runId}?attempt=${encodeURIComponent(attemptKey)}`
 export const traceApiPath = (runId: string, attemptKey: string) =>
   `api/debug/${runId}/trace?attempt=${encodeURIComponent(attemptKey)}`
+export const workspaceApiPath = (runId: string, attemptKey: string) =>
+  `api/debug/${runId}/workspace?attempt=${encodeURIComponent(attemptKey)}`
 
 const PHASE_WIDTH = Math.max(...DEBUG_PHASES.map((p) => p.length))
 

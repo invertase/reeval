@@ -975,6 +975,10 @@
               "description": "Defaults for `c.judge()`, merged field by field down the cascade.",
               "$ref": "#/$defs/ConfigJudgeOptions"
             },
+            "keepWorkspace": {
+              "description": "Whether each attempt keeps its final workspace, as `workspace.tar.gz` in its `.reeval/debug` directory, for `reeval workspace` to write out. Default `true`.",
+              "type": "boolean"
+            },
             "pin": {
               "description": "Keys a profile's `limit` may not narrow for this group or eval.",
               "type": "array",
@@ -1274,6 +1278,10 @@
               "description": "Defaults for `c.judge()`, merged field by field down the cascade.",
               "$ref": "#/$defs/ConfigJudgeOptions"
             },
+            "keepWorkspace": {
+              "description": "Whether each attempt keeps its final workspace, as `workspace.tar.gz` in its `.reeval/debug` directory, for `reeval workspace` to write out. Default `true`.",
+              "type": "boolean"
+            },
             "pin": {
               "description": "Keys a profile's `limit` may not narrow for this group or eval.",
               "type": "array",
@@ -1509,6 +1517,10 @@
             "judge": {
               "description": "Defaults for `c.judge()`, merged field by field down the cascade.",
               "$ref": "#/$defs/ConfigJudgeOptions"
+            },
+            "keepWorkspace": {
+              "description": "Whether each attempt keeps its final workspace, as `workspace.tar.gz` in its `.reeval/debug` directory, for `reeval workspace` to write out. Default `true`.",
+              "type": "boolean"
             },
             "pin": {
               "description": "Keys a profile's `limit` may not narrow for this group or eval.",

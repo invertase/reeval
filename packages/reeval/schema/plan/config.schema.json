@@ -2098,6 +2098,10 @@
           "description": "Defaults for `c.judge()`, merged field by field over the config's.",
           "$ref": "#/$defs/ConfigJudgeData"
         },
+        "keepWorkspace": {
+          "description": "Whether each attempt keeps its final workspace; replaces the config's.",
+          "type": "boolean"
+        },
         "question": {
           "description": "Defaults for every question, merged over the config's.",
           "$ref": "#/$defs/QuestionOptions"
@@ -2363,6 +2367,10 @@
         "judge": {
           "description": "Defaults for `c.judge()`, merged field by field down the cascade.",
           "$ref": "#/$defs/ConfigJudgeData"
+        },
+        "keepWorkspace": {
+          "description": "Whether each attempt keeps its final workspace, as `workspace.tar.gz` in its `.reeval/debug` directory, for `reeval workspace` to write out. Default `true`.",
+          "type": "boolean"
         },
         "profiles": {
           "description": "Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`.",

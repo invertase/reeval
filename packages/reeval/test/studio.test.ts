@@ -41,6 +41,7 @@ import {
   traceApiPath,
   transcriptItems,
   uniqueJudgeLabels,
+  workspaceApiPath,
 } from '../src/view/index.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, runCli } from './helpers.ts'
 import { e2eNewlineAnswer, realAttempts } from './support/real-runs.ts'
@@ -1068,6 +1069,16 @@ describe('studio server', () => {
     assert.equal(trace.headers.get('content-security-policy'), 'sandbox')
     assert.match(await trace.text(), /^\{"kind":"trace",/)
 
+    assert.ok((pass.workspace ?? 0) > 0, 'the passing attempt kept its workspace')
+    const kept = await get(`/${workspaceApiPath(passed.runId, passed.key)}`)
+    assert.equal(kept.status, 200)
+    assert.equal(kept.headers.get('content-type'), 'application/gzip')
+    assert.match(
+      kept.headers.get('content-disposition') ?? '',
+      /^attachment; filename=".+-workspace\.tar\.gz"$/,
+    )
+    assert.deepEqual([...new Uint8Array(await kept.arrayBuffer()).subarray(0, 2)], [0x1f, 0x8b])
+
     for (const [runId, key] of [
       [passed.runId, `${passed.key}0`],
       [passed.runId, 'evals/hello.eval.ts › greet › writes hello'],
@@ -1086,6 +1097,7 @@ describe('studio server', () => {
     )
     assert.equal(await view(linked, failed.key), null)
     assert.equal((await get(`/${traceApiPath(linked, failed.key)}`)).status, 404)
+    assert.equal((await get(`/${workspaceApiPath(linked, failed.key)}`)).status, 404)
   })
 
   test("without the scratch source, unrecorded runs aren't served", async () => {

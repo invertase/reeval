@@ -76,6 +76,7 @@ const CONFIG_KEYS = [
   'capture',
   'question',
   'timeout',
+  'keepWorkspace',
   'concurrency',
   'record',
   'history',
@@ -99,6 +100,7 @@ const DEFAULTS_KEYS = [
   'capture',
   'question',
   'timeout',
+  'keepWorkspace',
 ]
 const LIMIT_KEYS = ['runs', 'compare', 'harness']
 
@@ -658,6 +660,7 @@ export function resolveConfig(
     capture: user.capture ?? {},
     question: user.question ?? {},
     timeoutMs: parseDuration(user.timeout ?? '15m'),
+    keepWorkspace: user.keepWorkspace ?? true,
     concurrency:
       user.concurrency === undefined
         ? undefined

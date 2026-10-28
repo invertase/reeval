@@ -839,6 +839,7 @@ async function attemptEvidence(
     | 'judgements'
     | 'startRetries'
     | 'setupProcesses'
+    | 'keptWorkspace'
     | 'checks'
     | 'changedFiles'
     | 'files'
@@ -913,6 +914,7 @@ async function attemptEvidence(
     judgements: judgments,
     ...(record?.startRetries?.length ? { startRetries: record.startRetries } : {}),
     ...(record?.setupProcesses?.length ? { setupProcesses: record.setupProcesses } : {}),
+    ...(record?.keptWorkspace ? { keptWorkspace: record.keptWorkspace } : {}),
     ...(record?.assertions?.length ? { assertions: record.assertions } : {}),
     checks: (record?.checks ?? []).map((c, i) => ({
       command: c.command,

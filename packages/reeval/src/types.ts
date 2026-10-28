@@ -1698,6 +1698,11 @@ type EvalOptionFields = {
   questions?: Question[]
   /** Per attempt. */
   timeout?: Duration
+  /**
+   * Whether each attempt keeps its final workspace, as `workspace.tar.gz` in its `.reeval/debug`
+   * directory, for `reeval workspace` to write out. Default `true`.
+   */
+  keepWorkspace?: boolean
   /** Labels for `--tag` and profiles to select by; a group's are added to its evals'. */
   tags?: string[]
   /**
@@ -1810,6 +1815,8 @@ export type ProfileDefaults = {
   capture?: CaptureOptions
   /** Defaults for every question, merged over the config's. */
   question?: QuestionOptions
+  /** Whether each attempt keeps its final workspace; replaces the config's. */
+  keepWorkspace?: boolean
 }
 
 /** Over every eval, and it can only narrow; `pin` on a group or eval skips it. */
@@ -1951,6 +1958,11 @@ export type ReevalConfig = {
   capture?: CaptureOptions
   /** Defaults for every question: the model that answers it and what it's shown of each attempt. Merged down the cascade. */
   question?: QuestionOptions
+  /**
+   * Whether each attempt keeps its final workspace, as `workspace.tar.gz` in its `.reeval/debug`
+   * directory, for `reeval workspace` to write out. Default `true`.
+   */
+  keepWorkspace?: boolean
   /** How many attempts run at once. `--concurrency` and `REEVAL_CONCURRENCY` override it. */
   concurrency?: number
   /** When runs are copied into the history folder: `reeval record` only, in CI, or on every run. */
@@ -2108,6 +2120,7 @@ export type ResolvedConfig = {
   timeoutMs: number
   capture: CaptureOptions
   question: QuestionOptions
+  keepWorkspace: boolean
   /** The config's own `concurrency`; see `resolveConcurrency` for the run's. */
   concurrency: number | undefined
   record: RecordMode
@@ -2496,6 +2509,32 @@ export type EvalRecord = {
    * `usage`, effort, compare or lift.
    */
   captureUse?: CaptureUseSpend
+  /** See `AttemptRecord.keptWorkspace`. */
+  keptWorkspace?: KeptWorkspace
+}
+
+/**
+ * The attempt's final workspace, kept as `workspace.tar.gz` in its `.reeval/debug` directory
+ * (never recorded into the history folder), or why it wasn't.
+ */
+export type KeptWorkspace = {
+  /** sha256 of `workspace.tar.gz`; null when none was kept. */
+  sha256: string | null
+  /** Its size; 0 when none was kept. */
+  bytes: number
+  /** Regular files and symbolic links in it. */
+  files: number
+  /** Directories left out by name, such as `node_modules/` and `.git/`, at most 50. */
+  excluded: string[]
+  /** Text files whose secret-looking values were masked, at most 50. */
+  masked: string[]
+  /** Binary files left out because they held a secret-looking value, at most 50. */
+  dropped: string[]
+  /**
+   * Why none was kept: `size` when the compressed archive was over the cap, `error` when the
+   * sandbox couldn't archive it; null when it was kept.
+   */
+  skipped: { cause: 'size' | 'error'; message: string } | null
 }
 
 /** How a saved PNG was produced. Persist the live window, not the string `'full-page'`. */

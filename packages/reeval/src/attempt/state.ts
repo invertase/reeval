@@ -27,6 +27,7 @@ export type AttemptSpec = PlannedAttempt & {
   env: EnvVars
   judge: JudgeOptions
   capture: CaptureOptions
+  keepWorkspace: boolean
   /** Which level set each option; unset means the config or its default. */
   sources: Partial<Record<string, string>>
   /** What the profile's limit changed. */

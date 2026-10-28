@@ -5,7 +5,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import type { Flags } from '../cli-spec.ts'
 import { configPathFor, loadConfig } from '../config.ts'
-import { attemptDebugDir, parseAttemptKey } from '../debug/files.ts'
+import { attemptDebugDir, KEPT_WORKSPACE_FILE, parseAttemptKey } from '../debug/files.ts'
 import type { DoctorReport } from '../doctor.ts'
 import { inCI, loadEnvFiles } from '../env.ts'
 import { environmentSandbox, profileSandbox } from '../environment.ts'
@@ -258,6 +258,8 @@ export async function collectReport(
         if (!key) continue
         const dir = attemptDebugDir(root, record.runId, key.evalId, key.cell, key.n)
         for (const file of filesIn(dir)) {
+          // The agent's code, not a log: a report never sends it.
+          if (file === KEPT_WORKSPACE_FILE) continue
           const path = join(dir, file)
           const size = statSync(path).size
           if (bytes + size > MAX_ATTACHED_BYTES) continue

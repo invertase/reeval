@@ -172,14 +172,20 @@ describe('local debug data', () => {
     for (const phase of PHASES) {
       assert.match(log, new RegExp(`^\\d{4}-\\d{2}-\\d{2}T[\\d:.]+Z ${phase}\\s`, 'm'), phase)
     }
-    assert.deepEqual(files(dir), ['debug.log'], 'a passing attempt keeps no trace')
+    assert.deepEqual(
+      files(dir),
+      ['debug.log', 'workspace.tar.gz'],
+      'a passing attempt keeps no trace, and its final workspace',
+    )
 
     const history = join(p.dir, 'evals', '.history')
     assert.deepEqual(recordedRuns(p.dir), [run.runId])
     const recorded = files(history)
     assert.ok(recorded.length > 1, 'twin: the history has the run and its artifacts')
     assert.deepEqual(
-      recorded.filter((f) => /debug\.log|trace\.ndjson|requests\.ndjson/.test(f)),
+      recorded.filter((f) =>
+        /debug\.log|trace\.ndjson|requests\.ndjson|workspace\.tar\.gz/.test(f),
+      ),
       [],
     )
     for (const f of recorded) {

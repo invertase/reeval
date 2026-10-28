@@ -51,7 +51,7 @@ const testTitles = (source: string) =>
 const refusalMentions = (text: string, key: string) => {
   const lower = text.toLowerCase()
   if (key.includes('.')) return lower.includes(key.toLowerCase())
-  return lower.includes(`${key} in `)
+  return lower.includes(`${key.toLowerCase()} in `)
 }
 
 /** Every EVAL_OPTION_KEYS entry and plan/refusal coverage for cascade options. */

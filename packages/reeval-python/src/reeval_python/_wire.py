@@ -770,6 +770,9 @@ class EvalOptionsDataCompare(TypedDict):
     harness: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsDataCompareHarnessAdd | EvalOptionsDataCompareHarnessOnly]
     # Defaults for `c.judge()`, merged field by field down the cascade.
     judge: NotRequired[ConfigJudgeOptions]
+    # Whether each attempt keeps its final workspace, as `workspace.tar.gz` in its
+    # `.reeval/debug` directory, for `reeval workspace` to write out. Default `true`.
+    keepWorkspace: NotRequired[bool]
     # Keys a profile's `limit` may not narrow for this group or eval.
     pin: NotRequired[list[PinnableKey]]
     # Defaults for every question: `model`, and `state` merged key by key, down the cascade.
@@ -845,6 +848,9 @@ class EvalOptionsDataCompare2(TypedDict):
     harness: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsDataCompare2HarnessAdd | EvalOptionsDataCompare2HarnessOnly]
     # Defaults for `c.judge()`, merged field by field down the cascade.
     judge: NotRequired[ConfigJudgeOptions]
+    # Whether each attempt keeps its final workspace, as `workspace.tar.gz` in its
+    # `.reeval/debug` directory, for `reeval workspace` to write out. Default `true`.
+    keepWorkspace: NotRequired[bool]
     # Keys a profile's `limit` may not narrow for this group or eval.
     pin: NotRequired[list[PinnableKey]]
     # Defaults for every question: `model`, and `state` merged key by key, down the cascade.
@@ -904,6 +910,9 @@ class EvalOptionsData3(TypedDict):
     harness: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsData3HarnessAdd | EvalOptionsData3HarnessOnly]
     # Defaults for `c.judge()`, merged field by field down the cascade.
     judge: NotRequired[ConfigJudgeOptions]
+    # Whether each attempt keeps its final workspace, as `workspace.tar.gz` in its
+    # `.reeval/debug` directory, for `reeval workspace` to write out. Default `true`.
+    keepWorkspace: NotRequired[bool]
     # Keys a profile's `limit` may not narrow for this group or eval.
     pin: NotRequired[list[PinnableKey]]
     # Defaults for every question: `model`, and `state` merged key by key, down the cascade.
@@ -1933,6 +1942,7 @@ CAMEL_KEYS: frozenset[str] = frozenset(
         "failWith",
         "flakeRate",
         "ignoreAbort",
+        "keepWorkspace",
         "matchedBy",
         "maxConcurrent",
         "mediaType",

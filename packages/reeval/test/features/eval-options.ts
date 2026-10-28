@@ -28,6 +28,7 @@ export const EVAL_OPTION_SPECS: EvalOptionSpec[] = [
   { key: 'question', featureId: 'compare.questions.state', plan: true, refusals: true },
   { key: 'question.model', featureId: 'compare.questions.state', plan: true, refusals: true },
   { key: 'timeout', featureId: 'cancel' },
+  { key: 'keepWorkspace', featureId: 'history.kept-workspace', refusals: true },
   { key: 'tags', featureId: 'selection.tags', plan: true },
   { key: 'revision', featureId: 'history.revision', plan: true, refusals: true },
   { key: 'pin', featureId: 'profiles', plan: true },

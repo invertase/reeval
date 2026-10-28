@@ -2,8 +2,8 @@
 // fix. Concerns only and at most `REMARK_CAP` of them; `verbose` adds the rest and the
 // suggestions. A remark prints until a run has printed it, so once you've seen it a run on the
 // same source prints nothing, except a slow MCP start, a connection that never reached the egress
-// gateway or a setup process holding a checks secret, which print in every run they happen. With
-// none to print there's no heading.
+// gateway, a setup process holding a checks secret or a workspace too large to keep, which print
+// in every run they happen. With none to print there's no heading.
 import { clip } from '../text.ts'
 import type { Remark, RunRemarks } from '../view/remarks.ts'
 import type { SuiteResult } from '../view/suite.ts'
@@ -17,6 +17,7 @@ const EVERY_RUN: readonly Remark['kind'][] = [
   'slow-mcp-start',
   'proxy-only-egress',
   'setup-process-secret',
+  'workspace-too-large',
 ]
 
 /** Whether a remark may print in this run: no earlier run printed it, or it's one of `EVERY_RUN`. */

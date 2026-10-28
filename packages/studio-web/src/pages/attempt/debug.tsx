@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Globe, ScrollText } from 'lucide-react'
+import { ChevronRight, Download, Globe, ScrollText } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { type DebugView, formatBytes, formatDuration } from 'reeval/view'
+import { type DebugView, formatBytes, formatDuration, workspaceApiPath } from 'reeval/view'
 import { EmptyState, ErrorState, RowsSkeleton } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -163,7 +163,7 @@ function Trace({ runId, attemptKey }: { runId: string; attemptKey: string }) {
   )
 }
 
-/** The attempt's local debug data: its phase timeline, gateway requests and raw trace. */
+/** The attempt's local debug data: its phase timeline, gateway requests, kept workspace and raw trace. */
 export function Debug({
   runId,
   attemptKey,
@@ -186,6 +186,27 @@ export function Debug({
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Network requests</h3>
         <Requests requests={view.requests} />
+      </section>
+      <section className="space-y-2">
+        <h3 className="text-sm font-semibold">Final workspace</h3>
+        {view.workspace ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Button asChild variant="outline" size="sm">
+              <a href={workspaceApiPath(runId, attemptKey)} download>
+                <Download />
+                workspace.tar.gz ({formatBytes(view.workspace)})
+              </a>
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Or write it into a directory with <code className="font-mono">reeval workspace</code>.
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No kept workspace: <code className="font-mono">keepWorkspace</code> was off, the sandbox
+            was gone first, or it was over the size cap.
+          </p>
+        )}
       </section>
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Raw trace</h3>
