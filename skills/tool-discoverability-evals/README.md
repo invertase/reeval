@@ -1,6 +1,6 @@
 # Coding-agent AEO
 
-Answer engine optimisation for coding agents is whether an agent picks your library when a developer asks it to build something.
+Answer engine optimization for coding agents is whether an agent picks your library when a developer asks it to build something.
 
 Developers rarely name a library in their prompt. They ask for a feature, a fix, or a system design, and the agent chooses the dependency, runs `npm install`, and writes the code. If the agent never reaches for your package, developers never see it. If the agent installs your package but writes broken code on the first pass, the developer tells the agent to rip it out and use an alternative.
 
