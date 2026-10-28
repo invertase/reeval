@@ -2,6 +2,7 @@
 // attempt that asserts: attempts run concurrently in one worker, so the assertion counts,
 // `expect.soft` failures and async assertions must reach the attempt that made them.
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { fileURLToPath } from 'node:url'
 import {
   ASYMMETRIC_MATCHERS_OBJECT,
   addCustomEqualityTesters,
@@ -19,7 +20,58 @@ import {
   setState,
   type Tester,
 } from '@vitest/expect'
+import { fromCwd } from '../ids.ts'
 import type { MATCHERS, MatcherArgs, MatcherName } from '../matchers.ts'
+import { isThenable } from '../object.ts'
+import type { AttemptContext, ExecResult, JudgeFailure, Turn, Verdict } from '../types.ts'
+import { comparable } from './errors.ts'
+
+type TranscriptSubject = Pick<Turn, 'transcript' | 'unreported'> | Pick<AttemptContext, 'turns'>
+
+/** The values each of reeval's own matchers takes as `expect`'s subject. */
+type MatcherSubjects = {
+  toHaveFile: { readFile(path: string): Promise<string | null> }
+  toSucceed: ExecResult | PromiseLike<ExecResult>
+  toPass: Verdict | JudgeFailure
+  toHaveSearched: TranscriptSubject
+  toHaveFetched: TranscriptSubject
+  toHaveCalledSkill: TranscriptSubject
+  toHaveCalledMcp: TranscriptSubject
+  toHaveCalledTool: TranscriptSubject
+  toHaveRun: TranscriptSubject
+  toHaveEdited: TranscriptSubject
+  toHaveChanged: Pick<Turn, 'diff'> | Pick<AttemptContext, 'turns'>
+}
+
+type TakesTurns<K extends string> = `${K}() takes c, or a turn from await c.send()`
+
+/** What each matcher says, in the editor, about a subject it doesn't take. */
+type SubjectHints = {
+  toHaveFile: TakesTurns<'toHaveFile'>
+  toSucceed: 'toSucceed() takes c.exec() or its awaited result'
+  toPass: 'toPass() takes the verdict from await c.judge()'
+  toHaveSearched: TakesTurns<'toHaveSearched'>
+  toHaveFetched: TakesTurns<'toHaveFetched'>
+  toHaveCalledSkill: TakesTurns<'toHaveCalledSkill'>
+  toHaveCalledMcp: TakesTurns<'toHaveCalledMcp'>
+  toHaveCalledTool: TakesTurns<'toHaveCalledTool'>
+  toHaveRun: TakesTurns<'toHaveRun'>
+  toHaveEdited: TakesTurns<'toHaveEdited'>
+  toHaveChanged: TakesTurns<'toHaveChanged'>
+}
+
+/**
+ * A matcher called on a subject it doesn't take: not callable, and its one key, which the
+ * compiler's error shows, says what it takes.
+ */
+export type WrongSubject<Hint extends string> = { readonly [K in Hint]: never }
+
+/** `F` when `T` is a subject matcher `K` takes (or `any`, which can't be told), else its hint. */
+type On<T, K extends keyof MatcherSubjects, F> = 0 extends 1 & T
+  ? F
+  : [T] extends [MatcherSubjects[K]]
+    ? F
+    : WrongSubject<SubjectHints[K]>
 
 declare module '@vitest/expect' {
   interface ExpectPollOptions {
@@ -45,34 +97,55 @@ declare module '@vitest/expect' {
     toBeNull(): void
     toBeTruthy(): void
     toContain(needle: unknown): void
-    toHaveFile(path: string, pattern?: RegExp | string): Promise<void>
-    toSucceed(): Promise<void>
-    toHaveSearched(query?: RegExp | string): void
-    toHaveFetched(url?: RegExp | string): void
-    toHaveCalledSkill(name: string): void
-    toHaveCalledMcp(
-      server: string,
-      tool: string,
-      input?: string | RegExp | Record<string, unknown>,
-    ): void
-    toHaveCalledTool(name: string | RegExp, input?: string | RegExp | Record<string, unknown>): void
-    toHaveRun(command?: RegExp | string): void
-    toHaveEdited(path?: RegExp | string): void
-    toHaveChanged(paths?: string | RegExp | ReadonlyArray<string | RegExp>): void
-    toPass(): void
+    /** `c` or a turn has the file, matching `pattern` when given. Async: `await` it. */
+    toHaveFile: On<T, 'toHaveFile', (path: string, pattern?: RegExp | string) => Promise<void>>
+    /** The command exited 0. Async only on `c.exec()`'s promise; an awaited result is checked at once. */
+    toSucceed: On<T, 'toSucceed', () => T extends PromiseLike<unknown> ? Promise<void> : R>
+    toHaveSearched: On<T, 'toHaveSearched', (query?: RegExp | string) => R>
+    toHaveFetched: On<T, 'toHaveFetched', (url?: RegExp | string) => R>
+    toHaveCalledSkill: On<T, 'toHaveCalledSkill', (name: string) => R>
+    toHaveCalledMcp: On<
+      T,
+      'toHaveCalledMcp',
+      (server: string, tool: string, input?: string | RegExp | Record<string, unknown>) => R
+    >
+    toHaveCalledTool: On<
+      T,
+      'toHaveCalledTool',
+      (name: string | RegExp, input?: string | RegExp | Record<string, unknown>) => R
+    >
+    toHaveRun: On<T, 'toHaveRun', (command?: RegExp | string) => R>
+    toHaveEdited: On<T, 'toHaveEdited', (path?: RegExp | string) => R>
+    toHaveChanged: On<
+      T,
+      'toHaveChanged',
+      (paths?: string | RegExp | ReadonlyArray<string | RegExp>) => R
+    >
+    /** The judge's verdict passed. */
+    toPass: On<T, 'toPass', () => R>
   }
 }
 
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
 
+/** Matcher `K` as `expect` offers it on a settled subject it takes. */
+type Offered<K extends MatcherName> = ExpectMatchers<
+  void,
+  K extends keyof MatcherSubjects ? Exclude<MatcherSubjects[K], PromiseLike<unknown>> : unknown
+>[K]
+
+type Fn = (...args: never[]) => unknown
+
 /** Each reeval matcher whose signature here differs from its row in MATCHERS. */
 type MatcherDrift = {
-  [K in MatcherName]: Same<Parameters<ExpectMatchers[K]>, MatcherArgs<K>> extends true
-    ? Same<
-        ReturnType<ExpectMatchers[K]>,
-        ReturnType<(typeof MATCHERS)[K]> extends Promise<unknown> ? Promise<void> : void
-      > extends true
-      ? never
+  [K in MatcherName]: Offered<K> extends Fn
+    ? Same<Parameters<Offered<K>>, MatcherArgs<K>> extends true
+      ? Same<
+          ReturnType<Offered<K>>,
+          ReturnType<(typeof MATCHERS)[K]> extends Promise<unknown> ? Promise<void> : void
+        > extends true
+        ? never
+        : K
       : K
     : K
 }[MatcherName]
@@ -391,13 +464,14 @@ Object.defineProperty(globalThis, GLOBAL_EXPECT, {
 const currentExpect = new AsyncLocalStorage<ExpectStatic>()
 
 /** An async assertion (`toHaveFile`, `toSucceed`, `.resolves`…) and whether the eval awaited it. */
-export type Pending = { assertion: string; settled: Promise<unknown>; observed: boolean }
+export type Pending = {
+  assertion: string
+  settled: Promise<unknown>
+  observed: boolean
+  /** Made where the eval called the matcher; its stack is read only when it wasn't awaited. */
+  site?: Error
+}
 const currentPending = new AsyncLocalStorage<Pending[]>()
-
-const isThenable = (value: unknown): value is PromiseLike<unknown> =>
-  typeof value === 'object' &&
-  value !== null &&
-  typeof (value as Promise<unknown>).then === 'function'
 
 /**
  * Wraps an assertion chain so each promise one of its matchers returns is tracked: an eval that
@@ -419,6 +493,7 @@ function tracked<T extends object>(assertion: T, pending: Pending[], path: strin
               (error: unknown) => error ?? new Error(`${name}() failed`),
             ),
             observed: false,
+            site: new Error(),
           }
           pending.push(entry)
           const observe = <R>(fn: (p: Promise<unknown>) => R) => {
@@ -489,11 +564,29 @@ export function attemptRecordings(): RawAssertion[] {
   return list as RawAssertion[]
 }
 
+/** `file:line` of the first frame in `site` that is in `file`, the eval file, when one is. */
+function lineIn(site: string | undefined, file: string): string | undefined {
+  const want = comparable(file.startsWith('file:') ? fileURLToPath(file) : file)
+  for (const frame of site?.split('\n').slice(1) ?? []) {
+    // `at fn (path:line:col)` or `at path:line:col`; a path may have spaces and parentheses.
+    const at = /\((.+):(\d+):\d+\)$|^at (?:async )?(.+):(\d+):\d+$/.exec(frame.trim())
+    if (!at) continue
+    const [, inCall, callLine, bare, bareLine] = at
+    const found = (inCall ?? bare) as string
+    const path = found.startsWith('file:') ? fileURLToPath(found) : found
+    if (comparable(path) === want) return `${fromCwd(path)}:${callLine ?? bareLine}`
+  }
+  return undefined
+}
+
 /**
  * Waits for the async assertions the eval started but didn't await, and returns the error that
- * fails the attempt: the first one's failure, or that it wasn't awaited.
+ * fails the attempt: the first one's failure, or that it wasn't awaited, with the eval's line.
  */
-export async function unawaitedError(pending: Pending[]): Promise<Error | undefined> {
+export async function unawaitedError(
+  pending: Pending[],
+  file?: string,
+): Promise<Error | undefined> {
   const missed = pending.filter((p) => !p.observed)
   if (missed.length === 0) return undefined
   for (const p of missed) p.observed = true
@@ -502,7 +595,9 @@ export async function unawaitedError(pending: Pending[]): Promise<Error | undefi
     0,
     outcomes.findIndex((o) => o !== undefined),
   )
-  const hint = `${missed[i]?.assertion} wasn't awaited. Its check is async: write \`await ${missed[i]?.assertion}\`.`
+  const site = missed[i]?.site?.stack
+  const where = file && lineIn(site, file)
+  const hint = `${missed[i]?.assertion}${where ? ` at ${where}` : ''} wasn't awaited. Its check is async: write \`await ${missed[i]?.assertion}\`.`
   const failure = outcomes[i]
   if (failure instanceof Error) {
     failure.message = `${failure.message}\n\n${hint}`
@@ -510,6 +605,7 @@ export async function unawaitedError(pending: Pending[]): Promise<Error | undefi
   }
   const error = new Error(hint)
   error.name = 'AssertionError'
+  if (site) error.stack = `AssertionError: ${hint}\n${site.split('\n').slice(1).join('\n')}`
   return error
 }
 

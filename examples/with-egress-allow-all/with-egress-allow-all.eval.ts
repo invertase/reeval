@@ -9,6 +9,6 @@ evaluate('reads an SSH banner over raw TCP', { egress: 'allow-all' }, async (c) 
   )
 
   const run = await c.exec('bash banner.sh')
-  await expect(run).toSucceed()
+  expect(run).toSucceed()
   expect(run.stdout).toMatch(/^SSH-2\.0-/)
 })

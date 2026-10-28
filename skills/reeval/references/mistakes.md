@@ -20,7 +20,8 @@ Each row is a mistake, what reeval says and the fix.
 | The judge's provider refuses a big input | The provider's message, then `The judge's input was ~…k tokens (estimated): diff …, of which …` | Add a `.gitignore` to the environment, or `state: { diff: ['src/'] }` |
 | `diff` or `contents` on a judge, outside `state` | `Unknown judge option "diff" … Did you mean "state.diff"?` | `state: { diff: […] }`, `state: { contents: […] }` |
 | `cursor()` with `fakeSandbox()` | real harnesses need `docker()` | Use `fakeHarness()` or `docker()` |
-| Forgetting `await` on `toHaveFile`/`toSucceed` | ``… wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)` |
+| Forgetting `await` on `toHaveFile`, or on `toSucceed` given `c.exec()`'s promise | ``expect(…).toHaveFile() at <file>:<line> wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)`; `expect(await c.exec(cmd)).toSucceed()` needs no `await` |
+| `toPass()` on an exec result, `toSucceed()` on a verdict | a type error, ``Type 'WrongSubject<"toPass() takes the verdict from await c.judge()">' has no call signatures`` | `toSucceed()` for `c.exec()`, `toPass()` for `await c.judge()` |
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |
 | `workspace: 'https://…'` | `must come from the git helper` | `({ git }) => ({ workspace: git('https://…', { ref }) })` |
 | `async` environment callback | returned a Promise | Return synchronously; fetch in a `setup` step |

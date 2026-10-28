@@ -86,7 +86,7 @@ Match the attempt error to a fix:
 |---|---|---|
 | `expected file readme.md to exist` | `toHaveFile` found no file at that path. | Use the path the prompt names. |
 | `expected command to succeed, exit code 1` | `exitCode` was not 0. The message includes the tail of `stderr` and `stdout`. | Read that tail, then change the command or the task. |
-| `expect(…).toHaveFile() wasn't awaited` | An async matcher ran without `await`. | Put `await` before `toHaveFile`, `toSucceed`, or `expect.poll`. |
+| `expect(…).toHaveFile() … wasn't awaited` | An async matcher ran without `await`. | Put `await` before `toHaveFile`, `toSucceed`, or `expect.poll`. |
 | `toHaveSearched() can't check this turn: its harness doesn't report web searches` | The matcher threw `HarnessCapabilityError`. | Check the reply or a file, or use a harness that reports web searches. |
 | `toHaveEdited() expects a turn from c.send(), or c` | The matcher did not receive `c` or a turn. | Pass `c` or the turn that `c.send` returned. |
 

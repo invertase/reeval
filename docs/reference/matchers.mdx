@@ -27,7 +27,7 @@ await expect(c.exec('npm test'), 'tests pass').toSucceed()
   The assertion's name in the output and the run record. Without a label, the name is the matcher and its first argument, such as `toHaveEdited src/user.test.ts`, or the command or question the subject carries. A repeated name gets a ` #2` or ` #3` suffix.
 </Property>
 
-`.not` inverts the matcher. `toHaveFile()` and `toSucceed()` return promises. An unawaited asynchronous assertion fails the attempt and names the assertion.
+`.not` inverts the matcher. `toHaveFile()` returns a promise, and `toSucceed()` does on `c.exec()`'s promise. An unawaited asynchronous assertion fails the attempt and names the assertion.
 
 ## `expect.soft()`
 
