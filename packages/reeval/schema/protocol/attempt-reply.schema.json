@@ -150,7 +150,7 @@
                   "const": "serve"
                 },
                 "port": {
-                  "description": "The container port it was given.",
+                  "description": "The container port it listens on.",
                   "type": "number"
                 }
               },

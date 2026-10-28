@@ -22,6 +22,7 @@ description: "Options set how evaluations run. Each key is accepted in set place
 | [`capture`](#capture) | ✓ | ✓ | ✓ |  |
 | [`question`](#question) | ✓ | ✓ | ✓ |  |
 | [`timeout`](#timeout) | ✓ | ✓ | ✓ |  |
+| [`snapshot`](#snapshot) | ✓ | ✓ | ✓ |  |
 | [`concurrency`](#concurrency) | ✓ |  |  |  |
 | [`record`](#record) | ✓ |  |  |  |
 | [`history`](#history) | ✓ |  |  |  |
@@ -627,7 +628,9 @@ For more information about judging, see [Judge agent work](/evaluations/grading/
 </Property>
 
 <Property name="capture.timeout" type="Duration" optional>
-  How long to wait for the port, then for the whole capture, its instructions included. Above zero. The default is `'60s'`.
+  How long to wait for the port, then for the whole capture, its instructions included. Above
+  zero. The default is `'60s'`. A 502, 503 or 504 response is polled past until then, and
+  captured if it's still the answer.
 </Property>
 
 <Property name="capture.browser" type="boolean" optional>
@@ -658,6 +661,12 @@ For more information about screenshots, see [Check an app](/evaluations/task/app
 
 <Property name="timeout" type="Duration" optional>
   Milliseconds, or a number with `ms`, `s`, `m`, or `h`, above zero. The default is `'15m'`.
+</Property>
+
+## `snapshot`
+
+<Property name="snapshot" type="boolean | 'turns' | { when?: boolean | 'turns'; compress?: boolean }" optional>
+  When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after the checks, `'turns'` after each `c.send` too, `false` never. `compress: true` writes each as a `.tar.gz` instead of a directory. The default is `true`.
 </Property>
 
 ## `concurrency`

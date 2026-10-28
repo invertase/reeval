@@ -23,7 +23,7 @@ import type { AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
-import { gzipSync } from 'node:zlib'
+import { gunzipSync, gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@reeval/harness-antigravity'
 import { CODEX_CLI_VERSION } from '@reeval/harness-codex'
 import { FX_CLI_VERSION } from '@reeval/harness-fx'
@@ -40,6 +40,7 @@ import {
 } from '@reeval/sandbox-docker'
 import { pngSize, stubPng } from '../src/capture/stub.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { readTar } from '../src/tarball.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
@@ -2564,6 +2565,64 @@ export const features: Feature[] = [
     canary: /expected 'down' to be 'up'/,
   },
   {
+    dir: 'ui/serve-own-port',
+    tiers: ['docker', 'podman'],
+    env: 'ui',
+    canary: /expected 'vite' to be 'reads PORT'/,
+    record: ({ run }) => {
+      const [serve, ...more] = landed(run)?.serves ?? []
+      assert.ok(serve, 'serves names the c.serve call')
+      assert.deepEqual(more, [])
+      assert.equal(serve.command, 'node vite.mjs')
+      assert.equal(serve.detected, true)
+      assert.equal(serve.address, '::1')
+      assert.equal(serve.port, 5173)
+      assert.notEqual(serve.portEnv, 5173)
+      assert.equal(landed(run)?.files.artifacts?.[0]?.capture?.port, serve.port)
+    },
+  },
+  {
+    dir: 'ui/serve-reads-port',
+    tiers: ['fake', 'docker', 'podman'],
+    env: 'ui',
+    canary: /expected 'main' to be 'side'/,
+    record: ({ run }) => {
+      const serve = landed(run)?.serves?.[0]
+      assert.ok(serve, 'serves names the c.serve call')
+      assert.equal(serve.port, serve.portEnv)
+      assert.equal(serve.detected, false)
+    },
+  },
+  {
+    dir: 'ui/serve-two-ports',
+    tiers: ['docker', 'podman'],
+    env: 'ui',
+    lands: {
+      outcome: 'fail',
+      error: {
+        kind: 'assertion',
+        message:
+          /c\.serve\("node server\.mjs"\) listens on ports 4173 and 5173, and not on PORT \(\d+\)\. It printed http:\/\/localhost:5173\/\. Pass the one it serves on: c\.serve\("node server\.mjs", 5173\)/,
+      },
+    },
+    canary: /expected 'c\.serve\("node server\.mjs"\) listens on…' to be 'picked one'/,
+    record: ({ run }) => assert.equal(landed(run)?.serves, undefined),
+  },
+  {
+    dir: 'ui/serve-exits',
+    tiers: ['fake', 'docker', 'podman'],
+    env: 'ui',
+    lands: {
+      outcome: 'fail',
+      error: {
+        kind: 'assertion',
+        message:
+          /c\.serve\("node server\.mjs"\) exited before it listened on .*\. Its last output:\n[\s\S]*Error: Cannot find module vite/,
+      },
+    },
+    canary: /expected 'c\.serve\("node server\.mjs"\) exited bef…' to be 'served'/,
+  },
+  {
     dir: 'ui/capture-browser-false',
     tiers: ['fake', 'docker'],
     env: 'plain',
@@ -2761,6 +2820,64 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'run/snapshots',
+    tiers: ['fake', 'docker'],
+    env: 'snapshots',
+    canary: /expected 'export const built = true\\n' to be 'something else'/,
+    record: ({ run, project }) => {
+      const at = (path: string | null | undefined) =>
+        join(project, '.reeval', 'runs', run.runId, ...(path ?? '').split('/'))
+      const kept = landed(run)
+      const [final, ...more] = kept?.snapshots ?? []
+      assert.equal(more.length, 0, 'lands took only its final snapshot')
+      assert.equal(final?.name, 'final')
+      assert.equal(final?.form, 'dir')
+      assert.equal(final?.skipped, null)
+      assert.deepEqual(final?.excluded, ['node_modules/'])
+      assert.equal(
+        readFileSync(join(at(final?.path), 'app', 'built.js'), 'utf8'),
+        'export const built = true\n',
+      )
+      assert.equal(existsSync(join(at(final?.path), 'node_modules')), false)
+      const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]
+      assert.equal(canary?.snapshots, undefined, 'snapshot: false takes none')
+    },
+  },
+  {
+    dir: 'run/snapshot-turns',
+    tiers: ['fake', 'docker'],
+    env: 'snapshot-turns',
+    canary: /expected 'export const built = true\\n' to be 'something else'/,
+    record: ({ run, project }) => {
+      const at = (path: string | null | undefined) =>
+        join(project, '.reeval', 'runs', run.runId, ...(path ?? '').split('/'))
+      const names = (name: string) =>
+        (run.evals.find((e) => e.name === name)?.attempts[0]?.snapshots ?? []).map((s) => [
+          s.name,
+          s.form,
+          s.path?.split('/').at(-1),
+        ])
+      assert.deepEqual(names('lands'), [
+        ['turn-1', 'tar.gz', 'turn-1.tar.gz'],
+        ['final', 'tar.gz', 'final.tar.gz'],
+      ])
+      const turn = landed(run)?.snapshots?.[0]
+      const files = readTar(gunzipSync(readFileSync(at(turn?.path))))
+        .filter((e) => e.type === 'file')
+        .map((e) => e.path)
+        .sort()
+      assert.deepEqual(files, ['app/built.js', 'app/start.js'])
+      assert.deepEqual(
+        names('canary'),
+        [
+          ['turn-1', 'dir', 'turn-1'],
+          ['final', 'dir', 'final'],
+        ],
+        "'turns' alone takes directories",
+      )
+    },
+  },
+  {
     dir: 'run/best-of',
     tiers: ['fake'],
     env: 'best-of',
@@ -2881,7 +2998,7 @@ export const features: Feature[] = [
       )
       assert.match(
         blockOf(stdout, 'canary'),
-        /\n {2}writer {12}1 of 1\n {2}idler {13}0 of 1\n {4}writes out\.txt {2}failed {2}evals\/canary\.eval\.ts:7\n {6}expected file out\.txt to exist$/,
+        /\n {2}writer {12}1 of 1\n {2}idler {13}0 of 1\n {4}writes out\.txt {2}failed {2}evals\/canary\.eval\.ts:7\n {6}expected file out\.txt to exist\n {4}snapshot {8}\.reeval\/runs\/\S+\/snapshots\/final$/,
       )
     },
   },

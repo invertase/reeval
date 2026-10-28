@@ -331,7 +331,12 @@ export function AttemptPage() {
           </TabsContent>
           {debug ? (
             <TabsContent value="debug">
-              <Debug runId={runId} attemptKey={attempt.key} view={debug} />
+              <Debug
+                runId={runId}
+                attemptKey={attempt.key}
+                view={debug}
+                snapshots={attempt.snapshots}
+              />
             </TabsContent>
           ) : null}
         </div>

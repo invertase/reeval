@@ -175,7 +175,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
     flags: ['keep', 'images'],
     positionals: 0,
     help: `
-  reeval clean                  Remove local debug data (.reeval/debug); --keep <n> keeps the newest n runs
+  reeval clean                  Remove local debug data (.reeval/debug) and snapshots (in .reeval/runs);
+                                --keep <n> keeps the newest n runs'
     --images                    Also remove the Docker images reeval built that nothing tags any more,
                                 and the intermediate -base tags of from builds`,
   },

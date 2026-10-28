@@ -68,3 +68,14 @@ process holds the value: a copy under another name or in a command's arguments i
 about what happened in the run, so it prints in every run it happens.
 **Fix:** broker the secret with the hosts the process sends it to, so it holds a placeholder, or
 start the process from `c.exec` after the agent's turn.
+
+## `snapshot-too-large`
+
+Concern. An attempt's workspace was over its `snapshot` form's cap (as a directory, 50 MB of
+files; with `snapshot: { compress: true }`, 10 MB compressed or 200 MB uncompressed; either way
+without `node_modules/`, `.git/`, `.cache/` and the other dependency and cache directories), so
+reeval took no snapshot of it. The attempt's `snapshots[].skipped` gives the size and the
+directories left out. It's about what happened in the run, so it prints in every run it happens.
+**Fix:** have the task write generated files (build output, downloads, datasets) into a directory
+reeval leaves out, compress the snapshots for the larger cap, or set `snapshot: false` on the eval
+when nobody reads its workspace.

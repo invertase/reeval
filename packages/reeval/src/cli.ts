@@ -209,7 +209,10 @@ async function confirm(question: string): Promise<boolean> {
   }
 }
 
-/** `reeval clean`: removes local debug data, all of it or all but the newest `--keep` runs. */
+/**
+ * `reeval clean`: removes local debug data and snapshots, all of them or all but the newest
+ * `--keep` runs'.
+ */
 async function cleanCommand(flags: Flags, configPath: string | undefined): Promise<number> {
   const config = await loadConfig(configPath, 'clean')
   let keep = 0
@@ -225,8 +228,8 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
   const where = fromCwd(debugRoot(config.root)) || '.'
   console.log(
     runs.length
-      ? `Removed debug data for ${runs.length} run${runs.length === 1 ? '' : 's'} (${formatBytes(bytes)}) from ${where}`
-      : `No debug data to remove in ${where}`,
+      ? `Removed debug data and snapshots for ${runs.length} run${runs.length === 1 ? '' : 's'} (${formatBytes(bytes)}) from ${where} and .reeval/runs`
+      : `No debug data or snapshots to remove in ${where} or .reeval/runs`,
   )
   if (flags.images) {
     const { dockerAvailable, pruneImages } = await import('@reeval/sandbox-docker')

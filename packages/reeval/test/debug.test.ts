@@ -179,7 +179,7 @@ describe('local debug data', () => {
     const recorded = files(history)
     assert.ok(recorded.length > 1, 'twin: the history has the run and its artifacts')
     assert.deepEqual(
-      recorded.filter((f) => /debug\.log|trace\.ndjson|requests\.ndjson/.test(f)),
+      recorded.filter((f) => /debug\.log|trace\.ndjson|requests\.ndjson|snapshots[\\/]/.test(f)),
       [],
     )
     for (const f of recorded) {
@@ -459,15 +459,15 @@ evaluate('prints its headers', { environment: env }, async (c) => {
     assert.equal(some.code, 0, some.stderr)
     assert.match(
       some.stdout,
-      /^Removed debug data for 1 run \(\d+(\.\d)? [KM]?B\) from \.reeval\/debug$/m,
+      /^Removed debug data and snapshots for 1 run \(\d+(\.\d)? [KM]?B\) from \.reeval\/debug and \.reeval\/runs$/m,
     )
     assert.deepEqual(runs(), ids.slice(2))
     const all = await runCli(p.dir, ['clean'])
-    assert.match(all.stdout, /^Removed debug data for 1 run /m)
+    assert.match(all.stdout, /^Removed debug data and snapshots for 1 run /m)
     assert.deepEqual(runs(), [])
     assert.match(
       (await runCli(p.dir, ['clean'])).stdout,
-      /^No debug data to remove in \.reeval\/debug$/m,
+      /^No debug data or snapshots to remove in \.reeval\/debug or \.reeval\/runs$/m,
     )
     assert.equal(readRun(p.dir).run.runId, ids[2], 'scratch runs are left alone')
     const bad = await runCli(p.dir, ['clean', '--keep', 'x'])

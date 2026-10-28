@@ -1,0 +1,25 @@
+{
+  "kind": "reeval-remarks",
+  "schemaVersion": 1,
+  "runId": "20261028T133333Z_709a56b_cursor-agent_e793",
+  "createdAt": "2026-10-28T13:34:01.391Z",
+  "remarks": [
+    {
+      "id": "29db8ea90664c530abed184326114f50ba4c0efa4c59f8603537f07bb145c3a7",
+      "evalId": "evals%2Fcases.eval.ts › greets %25s",
+      "kind": "too-few-tries",
+      "severity": "suggestion",
+      "text": "With-house-greeting passed 1 of 1 try and plain 0 of 1: too few tries to tell whether the difference holds.",
+      "evidence": [
+        "evals%2Fcases.eval.ts › greets %25s/Ada/fake+with-house-greeting+docker",
+        "evals%2Fcases.eval.ts › greets %25s/Ada/fake+plain+docker"
+      ],
+      "fix": {
+        "at": "source:evals/cases.eval.ts#L11",
+        "edit": "set runs: 4 or more, so each side counts at least 4 tries"
+      },
+      "firstSeenRun": "20261028T133333Z_709a56b_cursor-agent_e793",
+      "printed": false
+    }
+  ]
+}

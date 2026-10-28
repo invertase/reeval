@@ -534,11 +534,25 @@
             }
           ]
         },
+        "serves": {
+          "description": "Each `c.serve` call that listened, in call order: `{ command, port, portEnv, detected, address, readyMs }`. `port` is where it listens; `detected` is true when that isn't the `PORT` it was given (`portEnv`), so reeval took the one port that started listening after the command did. Absent when the attempt served nothing.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ServeRecord"
+          }
+        },
         "setupProcesses": {
           "description": "Processes the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in their environment, so they hold its real value while the agent works and the agent, as the same user, can read it from them. Found by the secret's variable name, so a copy under another name or in a command's arguments isn't. At most 20, each `{ command, secrets }`: its command line, masked and cut at 200 characters, and those secrets' names. Absent when there were none.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SetupProcess"
+          }
+        },
+        "snapshots": {
+          "description": "Copies of the attempt's workspace in its directory in `.reeval/runs` on the machine that ran it (never in the history folder), in the order taken: `turn-<n>` after each `c.send` with `snapshot: 'turns'`, then `final` after the checks. Each has its form, path and size, its file count, the directories left out by name, the files whose secret-looking values were masked and the binary ones left out for holding one, or why it wasn't taken. Absent with `snapshot: false`, and when the sandbox was gone first (a timeout or a cancel).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Snapshot"
           }
         },
         "startedAt": {
@@ -3002,6 +3016,37 @@
       },
       "required": ["file", "kind", "level", "message", "where"]
     },
+    "ServeRecord": {
+      "description": "One `c.serve` call that listened.",
+      "type": "object",
+      "properties": {
+        "address": {
+          "description": "The address it listens on there, e.g. `127.0.0.1`, `::1` or `0.0.0.0`; empty when the sandbox can't tell.",
+          "type": "string"
+        },
+        "command": {
+          "description": "The command as the eval passed it.",
+          "type": "string"
+        },
+        "detected": {
+          "description": "It listened on a port other than `PORT`, the one that started listening after it did.",
+          "type": "boolean"
+        },
+        "port": {
+          "description": "The port it listens on, which the handle and `c.capture` use.",
+          "type": "number"
+        },
+        "portEnv": {
+          "description": "The `PORT` it was given: the port the eval passed, or the one reeval allocated.",
+          "type": "number"
+        },
+        "readyMs": {
+          "description": "From the command's start until it listened.",
+          "type": "number"
+        }
+      },
+      "required": ["address", "command", "detected", "port", "portEnv", "readyMs"]
+    },
     "SetupProcess": {
       "description": "A process the setup steps left running in a Docker sandbox with a `to: 'checks'` secret without `hosts` in its environment: it holds the real value while the agent works.",
       "type": "object",
@@ -3023,6 +3068,91 @@
     "SkillPlacement": {
       "description": "`harness` (default): the agent's own skills, via its adapter. `workspace`: its repo skill dir.",
       "enum": ["harness", "workspace"]
+    },
+    "Snapshot": {
+      "description": "A copy of the attempt's workspace, taken in the sandbox (never recorded into the history folder), or why it wasn't.",
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "description": "Its size on disk: the directory's files, or the tarball; 0 when it wasn't taken.",
+          "type": "number"
+        },
+        "dropped": {
+          "description": "Binary files left out because they held a secret-looking value, at most 50.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "excluded": {
+          "description": "Directories left out by name, such as `node_modules/` and `.git/`, at most 50.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "files": {
+          "description": "Regular files and symbolic links in it.",
+          "type": "number"
+        },
+        "form": {
+          "description": "A plain directory, or a gzipped tarball with `snapshot: { compress: true }`.",
+          "enum": ["dir", "tar.gz"]
+        },
+        "masked": {
+          "description": "Text files whose secret-looking values were masked, at most 50.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "name": {
+          "description": "`final` after the checks, or `turn-<n>` after the nth `c.send`.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Where it is, relative to the run's directory in `.reeval/runs`: `<eval>/<cell>/<n>/snapshots/<name>` (with `.tar.gz` when compressed); null when it wasn't taken.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "skipped": {
+          "description": "Why it wasn't taken: `size` when the workspace was over its form's cap, `error` when the sandbox couldn't archive it; null when it was.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "cause": {
+                  "enum": ["error", "size"]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": ["cause", "message"]
+            }
+          ]
+        }
+      },
+      "required": [
+        "bytes",
+        "dropped",
+        "excluded",
+        "files",
+        "form",
+        "masked",
+        "name",
+        "path",
+        "skipped"
+      ]
     },
     "Stack": {
       "description": "These fields describe what ran and graded the agents: the machine, images, harnesses, and judge.",

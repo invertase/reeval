@@ -47,6 +47,25 @@ export async function fileInside(
   }
 }
 
+/** Like `fileInside`, for a snapshot: a file (a `.tar.gz`) or a directory. */
+export async function snapshotInside(
+  base: string,
+  dirs: string[],
+  rest: string[],
+): Promise<{ path: string; file: boolean } | null> {
+  try {
+    const [realBase, real] = await Promise.all([
+      realpath(base),
+      realpath(join(base, ...dirs, ...rest)),
+    ])
+    if (!real.startsWith(join(realBase, ...dirs) + sep)) return null
+    const info = await stat(real)
+    return info.isFile() || info.isDirectory() ? { path: real, file: info.isFile() } : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * The file a record or artifact path names, or null. A run resolves to the history folder first,
  * then `.reeval/runs/`; the real path must stay inside that folder's directory for the run, so

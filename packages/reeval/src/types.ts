@@ -148,7 +148,7 @@ export type CaptureUse = { model: string } | { fake: CaptureUseScript }
 export type CaptureOptions = {
   /** The window and saved PNG size, or `'full-page'`. Default 1280×720. */
   viewport?: Viewport
-  /** How long to poll before failing. Default `'60s'`. */
+  /** How long to poll before failing; a 502, 503 or 504 is polled past until then. Default `'60s'`. */
   timeout?: Duration
   /** `false` refuses the host `chrome-headless-shell` binary. `c.capture()` then throws. */
   browser?: boolean
@@ -164,7 +164,7 @@ export type BackgroundHandle = {
   kill(): Promise<void>
 }
 
-/** `c.serve`: a background process plus the port it was given or allocated. */
+/** `c.serve`: a background process plus the port it listens on. */
 export type ServeHandle = BackgroundHandle & { port: number }
 
 /** What `c.capture()` returns: the PNG is also in the attempt record under `artifacts/`. */
@@ -450,8 +450,10 @@ export type AttemptContext = {
     options?: ExecRetry & { background?: boolean },
   ): Promise<ExecResult | BackgroundHandle>
   /**
-   * Starts `command` in the background and returns its port. A given `port` is used; omit it
-   * and reeval allocates one. Sets `PORT` so a bash string can use `$PORT`.
+   * Starts `command` in the background with `PORT` set to `port`, or to a port reeval allocates,
+   * and returns once it listens. Without `port`, a command that listens on one new port instead
+   * (Vite's 5173) gets that one; several new ports, none of them `PORT`, or an exit first, throw
+   * with its last output.
    */
   serve(command: string, port?: number): Promise<ServeHandle>
   /**
@@ -1737,6 +1739,11 @@ type EvalOptionFields<N extends number = number> = {
   questions?: Question[]
   /** Per attempt. */
   timeout?: Duration
+  /**
+   * When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
+   * the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
+   */
+  snapshot?: SnapshotOption
   /** Labels for `--tag` and profiles to select by; a group's are added to its evals'. */
   tags?: string[]
   /**
@@ -1851,6 +1858,8 @@ export type ProfileDefaults = {
   capture?: CaptureOptions
   /** Defaults for every question, merged over the config's. */
   question?: QuestionOptions
+  /** When each attempt's workspace is copied; merged over the config's. */
+  snapshot?: SnapshotOption
 }
 
 /** Over every eval, and it can only narrow; `pin` on a group or eval skips it. */
@@ -1995,6 +2004,11 @@ export type ReevalConfig = {
   capture?: CaptureOptions
   /** Defaults for every question: the model that answers it and what it's shown of each attempt. Merged down the cascade. */
   question?: QuestionOptions
+  /**
+   * When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
+   * the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
+   */
+  snapshot?: SnapshotOption
   /** How many attempts run at once. `--concurrency` and `REEVAL_CONCURRENCY` override it. */
   concurrency?: number
   /** When runs are copied into the history folder: `reeval record` only, in CI, or on every run. */
@@ -2152,6 +2166,7 @@ export type ResolvedConfig = {
   timeoutMs: number
   capture: CaptureOptions
   question: QuestionOptions
+  snapshot: ResolvedSnapshot
   /** The config's own `concurrency`; see `resolveConcurrency` for the run's. */
   concurrency: number | undefined
   record: RecordMode
@@ -2454,6 +2469,22 @@ export type SetupProcess = {
   secrets: string[]
 }
 
+/** One `c.serve` call that listened. */
+export type ServeRecord = {
+  /** The command as the eval passed it. */
+  command: string
+  /** The port it listens on, which the handle and `c.capture` use. */
+  port: number
+  /** The `PORT` it was given: the port the eval passed, or the one reeval allocated. */
+  portEnv: number
+  /** It listened on a port other than `PORT`, the one that started listening after it did. */
+  detected: boolean
+  /** The address it listens on there, e.g. `127.0.0.1`, `::1` or `0.0.0.0`; empty when the sandbox can't tell. */
+  address: string
+  /** From the command's start until it listened. */
+  readyMs: number
+}
+
 /** One `expect` or `expect.require` matcher call an attempt made, or a check another language made. */
 export type AssertionRecord = {
   /**
@@ -2521,6 +2552,8 @@ export type EvalRecord = {
   setup?: Array<{ run: string; exitCode: number | null; durationMs: number; output: string }>
   /** See `AttemptRecord.setupProcesses`. */
   setupProcesses?: SetupProcess[]
+  /** See `AttemptRecord.serves`. */
+  serves?: ServeRecord[]
   egress?: EgressRecord
   /** See `AttemptRecord.servedModels`. */
   servedModels?: string[] | null
@@ -2546,7 +2579,55 @@ export type EvalRecord = {
    * `usage`, effort, compare or lift.
    */
   captureUse?: CaptureUseSpend
+  /** See `AttemptRecord.snapshots`. */
+  snapshots?: Snapshot[]
 }
+
+/**
+ * A copy of the attempt's workspace, taken in the sandbox (never recorded into the history
+ * folder), or why it wasn't.
+ */
+export type Snapshot = {
+  /** `final` after the checks, or `turn-<n>` after the nth `c.send`. */
+  name: string
+  /** A plain directory, or a gzipped tarball with `snapshot: { compress: true }`. */
+  form: 'dir' | 'tar.gz'
+  /**
+   * Where it is, relative to the run's directory in `.reeval/runs`:
+   * `<eval>/<cell>/<n>/snapshots/<name>` (with `.tar.gz` when compressed); null when it wasn't
+   * taken.
+   */
+  path: string | null
+  /** Its size on disk: the directory's files, or the tarball; 0 when it wasn't taken. */
+  bytes: number
+  /** Regular files and symbolic links in it. */
+  files: number
+  /** Directories left out by name, such as `node_modules/` and `.git/`, at most 50. */
+  excluded: string[]
+  /** Text files whose secret-looking values were masked, at most 50. */
+  masked: string[]
+  /** Binary files left out because they held a secret-looking value, at most 50. */
+  dropped: string[]
+  /**
+   * Why it wasn't taken: `size` when the workspace was over its form's cap, `error` when the
+   * sandbox couldn't archive it; null when it was.
+   */
+  skipped: { cause: 'size' | 'error'; message: string } | null
+}
+
+/** `snapshot`: the shorthand, or the object that also picks the form. */
+export type SnapshotOption = boolean | 'turns' | SnapshotOptions
+
+/** `snapshot` as an object, merged field by field over the levels above. */
+export type SnapshotOptions = {
+  /** `true` after the checks, `'turns'` after each `c.send` too, `false` never. Default `true`. */
+  when?: boolean | 'turns'
+  /** Write each as `<name>.tar.gz` instead of a directory. Default `false`. */
+  compress?: boolean
+}
+
+/** `snapshot` once every level is merged. */
+export type ResolvedSnapshot = { when: boolean | 'turns'; compress: boolean }
 
 /** How a saved PNG was produced. Persist the live window, not the string `'full-page'`. */
 export type CaptureArtifactMeta = {

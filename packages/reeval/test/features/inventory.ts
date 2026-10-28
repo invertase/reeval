@@ -1469,6 +1469,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/history.test.ts', 'reeval/test/results.test.ts'],
   },
   {
+    id: 'history.snapshots',
+    area: 'Records and studio',
+    name: "`snapshot` (default on): each attempt's final workspace, and with `'turns'` one after each send, in its directory in `.reeval/runs` as a directory or with `compress` a tar.gz, without dependency and cache directories, masked, capped and pruned with debug data",
+    fixtures: ['run/snapshots', 'run/snapshot-turns'],
+    unit: ['reeval/test/snapshots.test.ts', 'reeval/test/remarks.test.ts'],
+  },
+  {
     id: 'compare.fail-on-regression',
     area: 'Records and studio',
     name: '`reeval compare --fail-on-regression`',
@@ -1685,6 +1692,13 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/capture.test.ts',
       'reeval/test/capture-wait.test.ts',
     ],
+  },
+  {
+    id: 'ui.serve.port',
+    area: 'Records and studio',
+    name: '`c.serve` waits until the command listens, takes `PORT` or the one port that started listening after it (IPv4 or IPv6 loopback), records it in `serves`, and fails on several new ports (with the URLs it printed), an exit or a timeout with the last output',
+    fixtures: ['ui/serve-own-port', 'ui/serve-reads-port', 'ui/serve-two-ports', 'ui/serve-exits'],
+    unit: ['reeval/test/serve.test.ts'],
   },
   {
     id: 'ui.capture.use',

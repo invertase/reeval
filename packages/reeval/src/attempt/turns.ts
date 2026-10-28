@@ -11,6 +11,7 @@ import {
   mcpTimeoutMessage,
   timedOutServer,
 } from './mcp-startup.ts'
+import { takeSnapshot } from './snapshot.ts'
 import type { Attempt } from './state.ts'
 
 /** How long a turn gets to stop once its attempt is aborted, before reeval stops waiting for it. */
@@ -221,6 +222,8 @@ export function turnSender(
     a.signal.throwIfAborted()
     const diff: Diff = await a.timed('diffMs', () => diffSinceSnapshot(box, a.signal))
     a.record.diff = diff
+    if (a.spec.snapshot.when === 'turns')
+      await takeSnapshot(a, box, `turn-${turnNumber}`, 'harness')
     const data: TurnData = { prompt, ...result, diff }
     const turn: Turn = Object.freeze({ ...data, ...checks })
     a.turns.push(turn)

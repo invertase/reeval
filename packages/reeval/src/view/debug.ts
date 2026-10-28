@@ -81,6 +81,9 @@ export const debugApiPath = (runId: string, attemptKey: string) =>
   `api/debug/${runId}?attempt=${encodeURIComponent(attemptKey)}`
 export const traceApiPath = (runId: string, attemptKey: string) =>
   `api/debug/${runId}/trace?attempt=${encodeURIComponent(attemptKey)}`
+/** A snapshot from the run's directory in `.reeval/runs`, as a tar.gz (`reeval studio` only). */
+export const snapshotApiPath = (runId: string, path: string) =>
+  `api/snapshot/${runId}?path=${encodeURIComponent(path)}`
 
 const PHASE_WIDTH = Math.max(...DEBUG_PHASES.map((p) => p.length))
 

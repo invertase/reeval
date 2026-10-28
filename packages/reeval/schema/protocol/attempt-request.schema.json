@@ -80,7 +80,7 @@
           "additionalProperties": false
         },
         {
-          "description": "`c.serve(command, port?)`: a background process and its port.",
+          "description": "`c.serve(command, port?)`: a background process, once it listens, and its port.",
           "type": "object",
           "properties": {
             "command": {

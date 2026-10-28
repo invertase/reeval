@@ -50,7 +50,8 @@ Usage:
                                 skip completed attempts, restart in-flight ones. Without a ref, the
                                 newest resumable (Stopped staging, or an interrupted/budget scratch),
                                 not assembled latest. Ref is a run id or unique prefix
-  reeval clean                  Remove local debug data (.reeval/debug); --keep <n> keeps the newest n runs
+  reeval clean                  Remove local debug data (.reeval/debug) and snapshots (in .reeval/runs);
+                                --keep <n> keeps the newest n runs'
     --images                    Also remove the Docker images reeval built that nothing tags any more,
                                 and the intermediate -base tags of from builds
   reeval record [run...]        Copy runs (default: latest) from .reeval/runs into the history folder

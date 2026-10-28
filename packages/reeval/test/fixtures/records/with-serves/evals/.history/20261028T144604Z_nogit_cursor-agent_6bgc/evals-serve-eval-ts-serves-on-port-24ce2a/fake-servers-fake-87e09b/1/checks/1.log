@@ -1,0 +1,5 @@
+$ curl -s 127.0.0.1:43027
+exit 0
+--- stdout
+port
+--- stderr
