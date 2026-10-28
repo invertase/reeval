@@ -199,6 +199,7 @@ async function runModelGoal(
   const normalized = normalizesPoints(modelName)
   let moves = 0
   let usage: TokenUsage | null = null
+  const history: string[] = []
   while (moves < CAPTURE_USE_MOVE_CAP) {
     remainingOrThrow(remaining, JSON.stringify(goal))
     const ephemeral = await session.screenshot(true)
@@ -212,7 +213,13 @@ async function runModelGoal(
         {
           role: 'user',
           content: [
-            { type: 'text', text: goal },
+            {
+              type: 'text',
+              text:
+                process.env.REEVAL_CAPTURE_HISTORY && history.length
+                  ? `${goal}\n\nYour moves so far for this goal, oldest first (the screenshot shows the page after the last one):\n${history.map((h, i) => `${i + 1}. ${h}`).join('\n')}`
+                  : goal,
+            },
             { type: 'image', image: ephemeral },
           ],
         },
@@ -233,6 +240,7 @@ async function runModelGoal(
     debugTrace('check', 'capture-use', { goal, action: chosen, page }, `capture use ${chosen.type}`)
     if (chosen.type === 'done') return { moves, usage }
     await session.dispatch(chosen, page)
+    history.push(JSON.stringify(call?.input ? { tool: call.toolName, ...(call.input as object) } : chosen))
     moves++
     await settle()
   }
