@@ -14,6 +14,7 @@ import {
   type Result,
   ran,
   searched,
+  subjectError,
   type ToolInputMatch,
 } from './assert.ts'
 import { isObjectLike, isThenable } from './object.ts'
@@ -55,7 +56,7 @@ const show = (value: unknown): string => {
 
 function succeeded(actual: unknown): Result {
   const r = actual as ExecResult
-  if (typeof r?.exitCode !== 'number') throw new TypeError('toSucceed() expects a c.exec() result')
+  if (typeof r?.exitCode !== 'number') throw subjectError('toSucceed() expects a c.exec() result')
   return {
     pass: r.exitCode === 0,
     message: () =>
@@ -119,7 +120,7 @@ export const MATCHERS = {
 
   toHaveFile: matcher(
     async (actual, [path, pattern]: [path: string, pattern?: RegExp | string]) => {
-      if (!hasFiles(actual)) throw new TypeError('toHaveFile() expects a turn from c.send(), or c')
+      if (!hasFiles(actual)) throw subjectError('toHaveFile() expects a turn from c.send(), or c')
       const content = await actual.readFile(path)
       if (content === null) return { pass: false, message: () => `expected file ${path} to exist` }
       if (pattern === undefined) return { pass: true, message: () => `expected no file at ${path}` }
@@ -170,7 +171,7 @@ export const MATCHERS = {
       }
     }
     const v = actual as Verdict
-    if (typeof v?.score !== 'number') throw new TypeError('toPass() expects a c.judge() verdict')
+    if (typeof v?.score !== 'number') throw subjectError('toPass() expects a c.judge() verdict')
     const score = v.score.toFixed(2)
     return {
       pass: v.verdict === 'pass',

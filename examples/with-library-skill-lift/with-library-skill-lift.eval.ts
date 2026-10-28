@@ -24,8 +24,8 @@ evaluate(
         'fonts, and link it from index.html.',
     )
 
-    await expect.soft(c, 'links styles.css').toHaveFile('index.html', /href="styles\.css"/)
-    await expect.soft(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
+    await expect(c, 'links styles.css').toHaveFile('index.html', /href="styles\.css"/)
+    await expect(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
     await expect(c, 'brand fonts').toHaveFile('styles.css', /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/)
   },
 )

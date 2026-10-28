@@ -8,7 +8,7 @@ group('modules', { runs: 2 }, () => {
     const turn = await c.send(
       'Write lib/export.js exporting toCsv(rows), joining rows with commas.',
     )
-    await expect.soft(turn, 'export.js exists').toHaveFile('lib/export.js', /toCsv/)
-    await expect.soft(c.exec(joinsRows), 'joins rows').toSucceed()
+    await expect(turn, 'export.js exists').toHaveFile('lib/export.js', /toCsv/)
+    await expect(c.exec(joinsRows), 'joins rows').toSucceed()
   })
 })

@@ -12,6 +12,8 @@ from __future__ import annotations
 import ast
 import itertools
 import linecache
+import os
+import sys
 import traceback
 import warnings
 from collections.abc import Callable
@@ -86,6 +88,8 @@ def check(
         "subject": subject,
         "status": "pass",
     }
+    frame = sys._getframe(1)  # pyright: ignore[reportPrivateUsage]
+    call["at"] = {"file": os.path.abspath(frame.f_code.co_filename), "line": frame.f_lineno}
     if value:
         recorder = _recorder.get()
         if recorder is not None:
@@ -141,13 +145,16 @@ def unrecorded_failure(exc: AssertionError) -> AttemptCallRecord:
         if node is not None:
             subject = _subject(ast.get_source_segment(source, node.test) or ast.unparse(node.test))
     message = str(exc) or (f"assert {subject}" if subject != "AssertionError" else subject)
-    return {
+    call: AttemptCallRecord = {
         "op": "record",
         "matcher": "assert",
         "subject": subject,
         "status": "fail",
         "message": message,
     }
+    if frames and frames[-1].lineno is not None:
+        call["at"] = {"file": os.path.abspath(frames[-1].filename), "line": frames[-1].lineno}
+    return call
 
 
 def escaped_failures(exc: BaseException) -> list[AttemptCallRecord]:

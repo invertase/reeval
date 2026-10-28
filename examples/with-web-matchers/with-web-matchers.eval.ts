@@ -6,7 +6,7 @@ evaluate('reads the docs before it answers', async (c) => {
       'the Node.js version that added it in ANSWER.md.',
   )
 
-  expect.soft(turn, 'searched').toHaveSearched(/parseArgs/i)
-  expect.soft(turn, 'read the docs').toHaveFetched(/nodejs\.org/)
+  expect(turn, 'searched').toHaveSearched(/parseArgs/i)
+  expect(turn, 'read the docs').toHaveFetched(/nodejs\.org/)
   await expect(c, 'answer').toHaveFile('ANSWER.md', /18\.3\.0|16\.17\.0/)
 })

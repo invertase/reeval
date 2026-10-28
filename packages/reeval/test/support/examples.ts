@@ -68,7 +68,7 @@ const ownSandbox = (sandbox: string): Partial<Example> => ({
 export const EXAMPLES: Record<string, Example> = {
   // Writing evals
   'with-checks': { run: { 'fake/math/fake': pass(1) } },
-  'with-soft-checks': { run: { 'fake/math/fake': pass(1) } },
+  'with-checks-and-gates': { run: { 'fake/math/fake': pass(1) } },
   'with-hidden-tests': { run: { 'fake/slugify/fake': pass(1) } },
   'with-guarded-files': { run: { 'fake/math/fake': pass(1) }, profiles: { canary: fakePlan } },
   'with-transcript-matchers': { run: { 'fake/math/fake': pass(1) } },

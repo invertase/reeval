@@ -446,7 +446,7 @@ evaluate('writes hello.txt', { compare: { baseline: plain, variants: [bye] } }, 
   process.stdout.write('a direct write\\n')
   await c.send('write hello.txt')
   await expect(c.exec('test -f hello.txt'), 'hello.txt exists').toSucceed()
-  await expect(c.exec('test -f bye.txt'), 'has bye.txt').toSucceed()
+  await expect.require(c.exec('test -f bye.txt'), 'has bye.txt').toSucceed()
   await expect(c.exec('false'), 'fails after').toSucceed()
 })
 `,

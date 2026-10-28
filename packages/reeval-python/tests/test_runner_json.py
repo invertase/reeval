@@ -33,7 +33,7 @@ async def nan_judge_value(c):
 
 @evaluate("nan sync soft check")
 def nan_sync_soft(c):
-    expect.soft(1).to_equal(float("-inf"))
+    expect(1).to_equal(float("-inf"))
 """
 
 

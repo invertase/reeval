@@ -171,7 +171,7 @@ CREATE TABLE context_reads (
 CREATE TABLE mcp_startup (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, turn INTEGER NOT NULL, server TEXT NOT NULL, ms INTEGER
 );
--- Every expect / expect.soft matcher call each attempt made, in call order (seq from 1).
+-- Every expect / expect.require matcher call each attempt made, in call order (seq from 1).
 CREATE TABLE assertions (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, eval_key TEXT NOT NULL, cell_key TEXT NOT NULL,
   seq INTEGER NOT NULL, label TEXT NOT NULL, labelled INTEGER, matcher TEXT, status TEXT,
@@ -316,7 +316,7 @@ CREATE VIEW check_discrimination AS
 
 -- Each check (expect label) per cell per run, on every cell (control and variant alike), over the
 -- cell's counted attempts. rate = pass / (pass + fail): an error (the matcher couldn't answer) and
--- a not-run (a hard expect before it failed) are left out; null when neither passed nor failed.
+-- a not-run (an expect.require or a thrown error before it ended the body) are left out; null when neither passed nor failed.
 CREATE VIEW check_rates AS
   SELECT k.run_id, k.eval_key, k.cell_key, c.harness, c.environment, c.role, k.label, k.pass,
     k.fail, k.error, k.not_run, CAST(k.pass AS REAL) / NULLIF(k.pass + k.fail, 0) AS rate

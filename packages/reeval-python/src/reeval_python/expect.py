@@ -1,19 +1,22 @@
 """`expect` for `def` bodies: reeval's matchers, with snake_case names, each a blocking call.
 
 `reeval_python.aio.expect` is the same for `async def` bodies, where each matcher is awaited.
-reeval runs the matcher on what the eval hands it and records the check.
+reeval runs the matcher on what the eval hands it and records the check. A failed `expect`
+fails the attempt and the body carries on; `expect.require` raises, ending the body there.
 """
 
 from __future__ import annotations
 
 import itertools
+import os
 import re
+import sys
 from collections.abc import Callable, Coroutine, Sequence
 from contextvars import ContextVar
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
 
-from reeval_python._wire import AttemptCallExpectPoll, MatcherSubject
+from reeval_python._wire import AttemptCallExpectAt, AttemptCallExpectPoll, MatcherSubject
 from reeval_python.wire import seconds, subject_for_matcher
 
 if TYPE_CHECKING:
@@ -93,6 +96,25 @@ def _bound(what: str, sync: bool) -> SubmitFn:
     return submit
 
 
+_PACKAGE = os.path.dirname(os.path.abspath(__file__)) + os.sep
+
+
+def call_site(depth: int = 1) -> AttemptCallExpectAt | None:
+    """Where the eval made the call: its frame in a `.eval.py` file, as a helper in another file
+    is called from one, else the first frame outside reeval_python."""
+    frame = sys._getframe(depth)  # pyright: ignore[reportPrivateUsage]
+    first: AttemptCallExpectAt | None = None
+    while frame is not None:
+        name = frame.f_code.co_filename
+        file = os.path.abspath(name)
+        if not file.startswith(_PACKAGE) and not name.startswith("<"):
+            if file.endswith(".eval.py"):
+                return {"file": file, "line": frame.f_lineno}
+            first = first or {"file": file, "line": frame.f_lineno}
+        frame = frame.f_back
+    return first
+
+
 def _given(*args: Any) -> list[Any]:
     """A matcher's arguments up to the first one left out, as reeval reads them."""
     out: list[Any] = []
@@ -114,7 +136,7 @@ class _Matchers(Generic[R]):
         *,
         label: str | None = None,
         not_: bool = False,
-        soft: bool = False,
+        soft: bool = True,
         poll: AttemptCallExpectPoll | None = None,
     ) -> None:
         self._subject = subject
@@ -150,6 +172,9 @@ class _Matchers(Generic[R]):
         }
         if self._poll is not None:
             fields["poll"] = self._poll
+        at = call_site()
+        if at is not None:
+            fields["at"] = at
         return fields
 
     def to_be(self, expected: Any) -> R:
@@ -222,19 +247,16 @@ class AsyncExpectation(_Matchers[Coroutine[Any, Any, None]]):
 E = TypeVar("E", bound=_Matchers[Any])
 
 
-class _Expect(Generic[E]):
-    def __init__(self, make: type[E], sync: bool) -> None:
+class _Checks(Generic[E]):
+    def __init__(self, make: type[E], sync: bool, *, soft: bool) -> None:
         self._make = make
         self._sync = sync
+        self._soft = soft
+        self._name = "expect" if soft else "expect.require"
 
     def __call__(self, actual: Any, label: str | None = None) -> E:
-        submit = _bound("expect()", self._sync)
-        return self._make(subject_for_matcher(actual), submit, label=label)
-
-    def soft(self, actual: Any, label: str | None = None) -> E:
-        """A check whose failure fails the attempt once the body is done, not here."""
-        submit = _bound("expect.soft()", self._sync)
-        return self._make(subject_for_matcher(actual), submit, label=label, soft=True)
+        submit = _bound(f"{self._name}()", self._sync)
+        return self._make(subject_for_matcher(actual), submit, label=label, soft=self._soft)
 
     def poll(
         self,
@@ -252,22 +274,33 @@ class _Expect(Generic[E]):
         """
         from reeval_python.context import AttemptContext, SyncAttemptContext, describe
 
-        submit = _bound("expect.poll()", self._sync)
+        where = f"{self._name}.poll"
+        submit = _bound(f"{where}()", self._sync)
         if isinstance(actual, AttemptContext | SyncAttemptContext):
             subject: MatcherSubject = {"attempt": True}
         elif callable(actual):
             subject = describe(actual)
         else:
             raise TypeError(
-                "expect.poll takes c, or a function that reads a file or runs a command, e.g. "
-                "expect.poll(lambda: c.read_file('ready.txt')): a value never changes"
+                f"{where} takes c, or a function that reads a file or runs a command, e.g. "
+                f"{where}(lambda: c.read_file('ready.txt')): a value never changes"
             )
         poll: AttemptCallExpectPoll = {}
         if interval is not None:
-            poll["interval"] = _ms(interval, "expect.poll(interval=…)")
+            poll["interval"] = _ms(interval, f"{where}(interval=…)")
         if timeout is not None:
-            poll["timeout"] = _ms(timeout, "expect.poll(timeout=…)")
-        return self._make(subject, submit, label=label, poll=poll)
+            poll["timeout"] = _ms(timeout, f"{where}(timeout=…)")
+        return self._make(subject, submit, label=label, soft=self._soft, poll=poll)
+
+
+class _Expect(_Checks[E]):
+    """`expect(actual, label)`: a failed matcher fails the attempt, and the body carries on."""
+
+    def __init__(self, make: type[E], sync: bool) -> None:
+        super().__init__(make, sync, soft=True)
+        self.require: _Checks[E] = _Checks(make, sync, soft=False)
+        """`expect.require(actual, label)`, for a gate: a failed matcher raises
+        `ReevalAssertionError`, ending the body there, as `assert` does."""
 
 
 def _ms(value: timedelta | float, where: str) -> float:
@@ -278,8 +311,3 @@ def _ms(value: timedelta | float, where: str) -> float:
 
 
 expect: _Expect[Expectation] = _Expect(Expectation, sync=True)
-
-
-def soft(actual: Any, label: str | None = None) -> Expectation:
-    """`expect.soft(actual, label)`."""
-    return expect.soft(actual, label)

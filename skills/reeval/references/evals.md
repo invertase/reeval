@@ -84,8 +84,8 @@
   largest first; narrow one, e.g. `{ diff: ['src/'] }`.
 - A failed judge call doesn't throw: `c.judge()` returns `{ verdict: 'error', score: null, error }`,
   the later judges and checks still run, and the attempt fails as a judge error at the end.
-  Write `expect.soft(await c.judge(q, { diff: true }), name).toPass()` to see every judge's
-  result.
+  `expect(await c.judge(q, { diff: true }), name).toPass()` records each judge's result and
+  carries on.
 
 ## Trustworthy evals
 
@@ -155,7 +155,7 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
 - Transcript matchers (sync, no `await`): `expect(turn | c).toHaveCalledSkill(name)`,
   `toHaveCalledMcp(server, tool, input?)`, `toHaveCalledTool(name | RegExp, input?)`,
   `toHaveRun(command?)`, `toHaveEdited(path?)`, `toHaveSearched(query?)`,
-  `toHaveFetched(url?)`. `.not` and `expect.soft` are Vitest's. `toHaveCalledSkill`
+  `toHaveFetched(url?)`. `.not` is Vitest's. `toHaveCalledSkill`
   is opened or loaded (a `skill` / `load_skill` tool, or a Read/`sed` of
   `skills/<name>/`), not "followed". MCP is `toHaveCalledMcp(server, tool)`
   (the names in `mcp.<server>`); `toHaveCalledTool('mcp__<server>__<tool>')` is
@@ -167,13 +167,17 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
   'package.json'])` (sync): it reads the workspace diff, so a shell or subprocess write counts
   and a read doesn't. Strings are globs (a directory matches everything under it), RegExps work,
   and a turn means up to that turn. `toHaveEdited` reads the transcript; don't use it as a guard.
-- A failed `expect` the eval catches still fails the attempt, when the body ends, as
-  `expect.soft` does; its error says the eval caught it. Wait or retry with `expect.poll`
+- Checks don't stop the eval: a failed `expect` is recorded and the body carries on, so every
+  later check and judge still runs; the attempt fails at its end. Use `expect.require` for gates:
+  its failure ends the body there (`await expect.require(c.exec('npm run build'), 'builds')
+  .toSucceed()`, `expect.require.poll(…)` for one that waits). One the eval catches still fails
+  the attempt, and its error says the eval caught it. Only matcher failures carry on: an error
+  the body throws, a dead sandbox or a timeout ends the attempt. Wait or retry with `expect.poll`
   (`await expect.poll(() => c.exec(cmd), { timeout: 10_000 }).toSucceed()`), which records one
   check with its final outcome, not with `expect` in a `try` loop.
 - **Label each requirement** with `expect`'s second argument:
-  `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`. Every matcher call
+  `await expect(c, 'exports greet').toHaveFile('greet.js', /export/)`. Every matcher call
   is recorded (`evals[].attempts[].assertions`; unlabeled ones get `<matcher> <first arg>`).
   Changing a label changes the eval's fingerprint. Label judges too
-  (`expect.soft(await c.judge(q, { diff: true }), 'Social OAuth').toPass()`): the label replaces the clipped
+  (`expect(await c.judge(q, { diff: true }), 'Social OAuth').toPass()`): the label replaces the clipped
   question in judge rates, `reeval show`, `summary.md` and the digest.

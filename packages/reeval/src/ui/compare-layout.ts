@@ -27,6 +27,7 @@ import {
 import { type Colors, colors, type Paint } from './colors.ts'
 import {
   assertionOf,
+  atOf,
   checkCount,
   checkLabel,
   errorKind,
@@ -250,9 +251,14 @@ function regressedItems(c: Colors, base: CellResult, head: CellResult, indent: n
     const counts = answered(h) > 1 || answered(b) > 1
     const was = stateOf(b) === 'fail' && !counts ? null : sideText(b, counts)
     const now = sideText(h, counts)
+    const at = h ? atOf(h) : ''
     items.push({
       indent,
-      cells: [checkLabel(label), t(was ? `${was} → ${now}` : now, c.red)],
+      cells: [
+        checkLabel(label),
+        t(was ? `${was} → ${now}` : now, c.red),
+        ...(at ? [t(at, c.dim)] : []),
+      ],
     })
     const assertion = h ? assertionOf(h) : ''
     if (assertion) items.push({ indent: indent + 2, free: t(assertion, c.dim) })

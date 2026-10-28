@@ -161,7 +161,33 @@ export function failureLines(
   const turns = (e.meta?.turnErrors ?? [])
     .filter((t) => !message.includes(t.replace(/^turn \d+ error: /, '')))
     .map((t) => c.yellow(t))
-  return [...failureBody(c, e, outcome, message, options), ...turns]
+  return [...failureBody(c, e, outcome, message, options), ...otherChecks(c, e), ...turns]
+}
+
+type FailedCheck = NonNullable<NonNullable<EvalResult['meta']>['failedChecks']>[number]
+
+/** The failed check the attempt's error is, when it is one. */
+export function errorCheck(e: EvalResult): FailedCheck | undefined {
+  const message = e.errors[0] ?? ''
+  // A record's message is its first line, clipped with a trailing `…`.
+  return (e.meta?.failedChecks ?? []).find(
+    (x) => x.message && message.includes(x.message.replace(/…$/, '')),
+  )
+}
+
+/** The failed checks the error isn't, each with its line: an `expect` failure doesn't end the body. */
+function otherChecks(c: Colors, e: EvalResult): string[] {
+  const shown = errorCheck(e)
+  return (e.meta?.failedChecks ?? [])
+    .filter((x) => x !== shown)
+    .map((x) => {
+      const why = x.message.startsWith(`${x.label}: `)
+        ? x.message.slice(x.label.length + 2)
+        : x.message
+      return [c.red(`✗ ${x.label}`), x.at && c.dim(x.at), why && c.dim(why)]
+        .filter(Boolean)
+        .join('  ')
+    })
 }
 
 function failureBody(

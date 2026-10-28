@@ -10,14 +10,14 @@ evaluate('writes greet.js', async (c) => {
 
 evaluate('greets in French', async (c) => {
   await c.send('Write greet.js that greets in French.')
-  await expect.soft(c, 'writes greet.js').toHaveFile('greet.js')
-  await expect(c.exec('grep -q Bonjour greet.js'), 'french greeting').toSucceed()
+  await expect(c, 'writes greet.js').toHaveFile('greet.js')
+  await expect.require(c.exec('grep -q Bonjour greet.js'), 'french greeting').toSucceed()
   await expect(c.exec('grep -q Salut greet.js'), 'informal greeting').toSucceed()
 })
 
 evaluate('explains why greet.js fails', { runs: 2 }, async (c) => {
   await c.send('Why does greet.js fail?')
-  await expect.soft(c, 'writes greet.js').toHaveFile('greet.js')
+  await expect(c, 'writes greet.js').toHaveFile('greet.js')
   await expect(
     c.attempt.n === 1 ? 'the name is null' : 'Docker is down',
     'names the root cause',

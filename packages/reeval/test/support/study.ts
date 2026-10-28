@@ -110,9 +110,9 @@ group(
   () => {
     evaluate('ships a complete auth experience', async (c) => {
       await c.send('Ship a complete authentication experience for this app.')
-      await expect.soft(c.exec('test -s src/App.tsx'), 'build').toSucceed()
+      await expect(c.exec('test -s src/App.tsx'), 'build').toSucceed()
       for (const [name, q, has] of RUBRIC) {
-        expect.soft(await c.judge(q, { model: judgeOf(has), diff: true }), name).toPass()
+        expect(await c.judge(q, { model: judgeOf(has), diff: true }), name).toPass()
       }
     })
   },

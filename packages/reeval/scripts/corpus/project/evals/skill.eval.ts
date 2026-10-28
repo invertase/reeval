@@ -26,7 +26,7 @@ group(
   () => {
     evaluate('writes a greeting', async (c) => {
       await c.send('Write greet.js that greets in our house style.')
-      await expect.soft(c, 'writes greet.js').toHaveFile('greet.js')
+      await expect(c, 'writes greet.js').toHaveFile('greet.js')
       await expect(c).toHaveFile('greet.js')
     })
   },

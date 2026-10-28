@@ -205,7 +205,7 @@ group('hello', () => {
   yes/no questions that don't name one specific way of doing it.
 - A failed judge call doesn't throw: `c.judge()` returns `{ verdict: 'error', score: null, error }`,
   the later judges and checks still run, and the attempt fails as a judge error at the end.
-  Write `expect.soft(await c.judge(q, { diff: true }), name).toPass()` to see every judge's result.
+  `expect(await c.judge(q, { diff: true }), name).toPass()` records each judge's result and carries on.
 - Make the eval trustworthy. Before a real run, swap in the fake harness, and only the harness,
   so the eval runs in its real sandbox (its `docker()` image, `install`, egress and brokered
   secrets): an oracle `fakeHarness` that does the task right must pass, and a canary that cheats
@@ -230,9 +230,13 @@ group('hello', () => {
   `toHaveRun(command?)`, `toHaveEdited(path?)`, `toHaveSearched(query?)`,
   `toHaveFetched(url?)`. `expect(c).not.toHaveChanged(globs)` guards files (it reads the diff;
   `toHaveEdited` reads the transcript, so don't use it as a guard). Label requirements with
-  `expect`'s second argument: `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`.
-- A failed `expect` fails the attempt even when the eval catches it (TypeScript `try`/`catch`,
-  Python `try`/`except`), at the end like `expect.soft`. To wait for something, use
+  `expect`'s second argument: `await expect(c, 'exports greet').toHaveFile('greet.js', /export/)`.
+- Checks don't stop the eval: a failed `expect` is recorded, the body carries on, and the attempt
+  fails at its end, with every failed check listed by label and line. Use `expect.require` for
+  gates, such as a build the later checks depend on: its failure ends the body there
+  (`await expect.require(c.exec('npm run build'), 'builds').toSucceed()`). A caught
+  `expect.require` still fails the attempt. Thrown errors (the body's own, a dead sandbox, a
+  timeout) still end the attempt. To wait for something, use
   `expect.poll(() => c.exec(cmd), { timeout: 10_000 }).toSucceed()` (Python
   `expect.poll(lambda: c.exec(cmd), timeout=10).to_succeed()`), never `expect` in a retry loop. A
   caught plain Python `assert` records nothing, so `assert` or `if` in a loop also works.
@@ -281,7 +285,7 @@ group(
 - Only variant cells gate by default; a control's misses don't fail the run. Below four tries a
   side each variant's effect reads `can't tell yet`; from four, the block adds an effort table
   (median tools, time, tokens per arm), which often shows a skill's effect first. In a compare,
-  prefer `expect.soft` with labels for independent requirements.
+  keep independent requirements as labeled `expect`s, not `expect.require`, so each gets a verdict.
 - `questions: [{ question: 'How did the agent pick its greeting?', transcript: true }]` beside
   `compare` asks a model about each attempt as it ends (`choices: ['yes', 'no']` for a pick); an
   entry with `across: 'environment'` (and, say, `diff: true`) asks which side did better, pair by

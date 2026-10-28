@@ -80,7 +80,7 @@ For more information about families and the `all cases` row, see [`compare`](/re
 
 ## `EvalFn`
 
-`EvalFn` is the type of the body `evaluate()` takes: `(c: AttemptContext) => Promise<void>`. The attempt fails when it throws, rejects, or leaves an `expect.soft` failure.
+`EvalFn` is the type of the body `evaluate()` takes: `(c: AttemptContext) => Promise<void>`. The attempt fails when it throws, rejects, or leaves a failed `expect`.
 
 For more information about `AttemptContext` and the types the methods of `c` take and return, see [Attempt context reference](/reference/attempt-context).
 
@@ -177,7 +177,7 @@ For more information about `EnvironmentSpec`, `EnvironmentHelpers`, each field's
 
 ## `expect()`
 
-`expect(actual, label?)` checks `actual` and records an assertion. For more information about its matchers, `expect.soft()`, and `expect.poll()`, see [Matchers reference](/reference/matchers#expect).
+`expect(actual, label?)` checks `actual` and records an assertion. For more information about its matchers, `expect.require()`, and `expect.poll()`, see [Matchers reference](/reference/matchers#expect).
 
 ## `DEFAULT_EGRESS_ALLOW`
 
@@ -216,7 +216,7 @@ import { evaluate, expect, HarnessCapabilityError } from '{{ pkg }}'
   Names the matcher, the event type, and the alternatives.
 </Property>
 
-Uncaught, it fails the attempt, and the record lists the assertion with status `error` rather than `fail`. With `expect.soft()`, the attempt still fails at its end.
+Uncaught, it fails the attempt, and the record lists the assertion with status `error` rather than `fail`. With `expect()`, the attempt still fails at its end.
 
 For more information about the two matchers, see [Matchers reference](/reference/matchers#tohavesearched).
 

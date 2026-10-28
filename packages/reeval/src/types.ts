@@ -2415,7 +2415,7 @@ export type SetupProcess = {
   secrets: string[]
 }
 
-/** One `expect` or `expect.soft` matcher call an attempt made. */
+/** One `expect` or `expect.require` matcher call an attempt made, or a check another language made. */
 export type AssertionRecord = {
   /**
    * `label` is the supplied `expect` label. Without one, it is the matcher plus its first
@@ -2428,7 +2428,13 @@ export type AssertionRecord = {
   matcher: string
   /** `error`: the matcher couldn't answer (a subject it can't read, an event the harness doesn't report). */
   status: 'pass' | 'fail' | 'error'
+  /**
+   * A failure didn't end the eval's body: an `expect`. False for `expect.require` and for a check
+   * that threw, such as Python's `assert`, which end the body when they fail.
+   */
   soft: boolean
+  /** `path:line` of the call in the eval file, relative to the project root, when reeval saw it. */
+  at?: string
   /** Why it failed or couldn't answer, cut at 1 KB. */
   message?: string
   /** Async matchers only (`toHaveFile`, `toSucceed`, `.resolves`, `expect.poll`). */
@@ -2453,7 +2459,7 @@ export type EvalRecord = {
         tries?: Array<ExecResult & { durationMs: number }>
       }
   >
-  /** Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none. */
+  /** Every `expect` and `expect.require` matcher call that settled, in call order; unset with none. */
   assertions?: AssertionRecord[]
   /**
    * In call order, with `retries` when transient provider errors were retried on the way to the
@@ -2664,6 +2670,8 @@ export type EvalMeta = {
   judgements: Array<Pick<Verdict, 'verdict' | 'score' | 'threshold'> & { question: string }>
   /** Each turn that ended in an error, as `turn 2 error: <message>`, so a failure shows why. */
   turnErrors?: string[]
+  /** Each check that failed or couldn't answer, in call order, its message's first line. */
+  failedChecks?: Array<{ label: string; at?: string; message: string }>
   /** Its sandbox couldn't be prepared: reported once per sandbox, and it has no artifacts. */
   prepare?: { ref: string | null; stage: string }
 }

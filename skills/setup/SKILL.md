@@ -129,7 +129,7 @@ Each eval:
   file the task is about (`src/projectId.ts`) so a check can read it, but not the files a rule
   decides (where the test goes): check those with a glob or the one path the rule allows.
 - **Deterministic checks first:** a file's content, a command's exit code, a script that imports
-  the agent's code. Label each requirement with `expect.soft(x, 'label')`. Add a judge
+  the agent's code. Label each requirement with `expect(x, 'label')`; a failed one is recorded and the eval carries on. Add a judge
   (`c.judge`) only for what no check can see, with the inputs its question reads
   (`{ diff: ['src/**'] }`, `{ output: true }`), and then add `judge:` to the config.
 - **A name that states the question:** `stores invoice totals in cents with the billing skill`,

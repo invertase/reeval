@@ -73,17 +73,17 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
 ## Labeled checks that discriminate
 
 - **Label each requirement** with `expect`'s second argument:
-  `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`. Every matcher call
+  `await expect(c, 'exports greet').toHaveFile('greet.js', /export/)`. Every matcher call
   is recorded (`evals[].attempts[].assertions`; unlabeled ones get `<matcher> <first arg>`).
-  In a compare, prefer `expect.soft` for independent requirements: a hard failure ends the
-  attempt, and the checks after it count as not run: a side that never reached a check reads
+  In a compare, keep independent requirements as `expect`, not `expect.require`: a failed
+  `expect.require` ends the attempt, and the checks after it count as not run: a side that never reached a check reads
   `not run` and the check gets no verdict, so it can't say which arm met it. The result block's
   check table puts a row per check under each arm (`house greeting  0 of 2  2 of 2`) with the
   first failure's message, and folds the checks that passed everywhere into `+2 more passed`.
   After a run, `reeval query "SELECT eval_key, label, verdict FROM check_discrimination WHERE verdict
   LIKE 'both-%'"` and rework or drop those checks: they measure nothing about the variant.
   Changing a label changes the eval's fingerprint. Label judges too
-  (`expect.soft(await c.judge(q, { diff: true }), 'Social OAuth').toPass()`): the label replaces the clipped
+  (`expect(await c.judge(q, { diff: true }), 'Social OAuth').toPass()`): the label replaces the clipped
   question in judge rates, `reeval show`, `summary.md` and the digest.
 
 ## `questions`

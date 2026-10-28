@@ -14,6 +14,7 @@ from reeval_python._wire import (
     AttemptCall,
     AttemptCallExec,
     AttemptCallExpect,
+    AttemptCallExpectAt,
     AttemptCallExpectPoll,
     AttemptCallJudge,
     JudgeCallData,
@@ -287,6 +288,7 @@ class AttemptContext:
         not_: bool,
         soft: bool,
         poll: AttemptCallExpectPoll | None = None,
+        at: AttemptCallExpectAt | None = None,
     ) -> None:
         patterns = Patterns()
         call: AttemptCallExpect = {
@@ -301,6 +303,8 @@ class AttemptContext:
             call["label"] = label
         if poll is not None:
             call["poll"] = {**poll}
+        if at is not None:
+            call["at"] = at
         reply = await self._call(call)
         # reeval asks for the strings it tested the patterns on; each round answers more. A
         # subject that changes on every read never runs out of new strings, so the rounds stop.
@@ -319,7 +323,7 @@ class AttemptContext:
                     f"{PATTERN_ROUNDS} times over: check it once it has stopped changing"
                 )
         assertion = cast(dict[str, Any], reply.get("assertion") or {})
-        if assertion.get("status") == "fail" and not soft:
+        if assertion.get("status") in ("fail", "error") and not soft:
             raise ReevalAssertionError(str(assertion.get("message") or "expect failed"))
 
     def bind_expect(self) -> None:

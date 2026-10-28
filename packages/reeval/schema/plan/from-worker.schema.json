@@ -644,6 +644,25 @@
             }
           ]
         },
+        "failedChecks": {
+          "description": "Each check that failed or couldn't answer, in call order, its message's first line.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["label", "message"]
+          }
+        },
         "judgements": {
           "type": "array",
           "items": {

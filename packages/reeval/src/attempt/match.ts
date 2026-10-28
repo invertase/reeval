@@ -2,9 +2,11 @@
 // attempt, turns its wire arguments back into the values `expect` takes, and runs the matcher's
 // row in MATCHERS, the code the TypeScript `expect` runs too. Its record comes from
 // assertions.ts, as the TypeScript `expect`'s do.
+import { resolve } from 'node:path'
 import type { AttemptCall } from '../contract/attempt.ts'
 import { isUnanswerable, type RawAssertion } from '../engine/runtime.ts'
 import { UsageError } from '../errors.ts'
+import { relativeFile } from '../ids.ts'
 import { isMatcherName, MATCHERS, type MatcherName, runMatcher } from '../matchers.ts'
 import type { AssertionRecord, AttemptContext } from '../types.ts'
 import { assertionRecords } from './assertions.ts'
@@ -116,6 +118,10 @@ function subjectOf(c: AttemptContext, subject: ExpectCall['subject']): unknown {
   return c.readFile(subject.readFile)
 }
 
+/** The call's `path:line`, relative to the project root, which the worker runs in. */
+const siteOf = (at: ExpectCall['at']) =>
+  at ? { at: `${relativeFile(process.cwd(), resolve(at.file))}:${at.line}` } : {}
+
 /** What the subject names itself by, as `c.exec`'s and `c.judge`'s results do in TypeScript. */
 function subjectName(subject: ExpectCall['subject']): string | undefined {
   if ('exec' in subject) return subject.exec
@@ -193,6 +199,7 @@ export async function match(
     ...(subject === undefined ? {} : { subject }),
     ...(call.label ? { label: call.label } : {}),
     soft: call.soft,
+    ...siteOf(call.at),
     status: outcome.status,
     ...(outcome.status === 'pass' ? {} : { error: outcome.error }),
     ...(outcome.async || call.poll
@@ -217,6 +224,7 @@ export async function expectCall(
     subject: subjectName(call.subject),
     ...(call.label ? { label: call.label } : {}),
     soft: call.soft,
+    ...siteOf(call.at),
     status: 'pass',
   }
   calls.push(slot)
@@ -248,6 +256,7 @@ export function recordCall(calls: RawAssertion[], call: RecordCall): AssertionRe
     ...(call.subject === undefined ? {} : { subject: call.subject }),
     ...(call.label === undefined ? {} : { label: call.label }),
     soft: call.soft ?? false,
+    ...siteOf(call.at),
     status: call.status,
     ...(call.status === 'pass' ? {} : { error: failure }),
   })
