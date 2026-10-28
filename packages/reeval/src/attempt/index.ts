@@ -139,7 +139,7 @@ async function attemptBody(
     // A timeout or cancel has already removed the container, so there's nothing left to read.
     oom = a.signal.aborted ? undefined : await recordOom(a, sandbox)
     if (sandbox && spec.keepWorkspace && !a.signal.aborted) {
-      const kept = await keepWorkspace(sandbox, debug.dir, AbortSignal.timeout(120_000))
+      const kept = await keepWorkspace(sandbox, debug.dir, a.signal)
       if (kept) a.record.keptWorkspace = kept
     }
     await sandbox?.destroy()

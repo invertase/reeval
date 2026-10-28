@@ -71,10 +71,10 @@ start the process from `c.exec` after the agent's turn.
 
 ## `workspace-too-large`
 
-Concern. An attempt's final workspace was over `keepWorkspace`'s 10 MB cap (compressed, without
-`node_modules/`, `.git/`, `.cache/` and the other dependency and cache directories), so reeval kept
-none and `reeval workspace` can't write it out. The attempt's `keptWorkspace.skipped` gives the size
-and the directories left out. It's about what happened in the run, so it prints in every run it
-happens. **Fix:** have the task write generated files (build output, downloads, datasets) into a
-directory reeval leaves out, or set `keepWorkspace: false` on the eval when nobody reads its
-workspace.
+Concern. An attempt's final workspace was over `keepWorkspace`'s cap (10 MB compressed or 200 MB
+uncompressed, without `node_modules/`, `.git/`, `.cache/` and the other dependency and cache
+directories), so reeval kept none and `reeval workspace` can't write it out. The attempt's
+`keptWorkspace.skipped` gives the size and the directories left out. It's about what happened in
+the run, so it prints in every run it happens. **Fix:** have the task write generated files (build
+output, downloads, datasets) into a directory reeval leaves out, or set `keepWorkspace: false` on
+the eval when nobody reads its workspace.

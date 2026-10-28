@@ -94,21 +94,6 @@ The workspace goes when the sandbox stops. reeval keeps what the agent left in i
 | `artifacts/<name>.png` | Screenshots from `c.capture()` |
 | `judge-input.json` | What each `c.judge()` call received |
 
-## Get the whole final workspace
-
-```text
-$ reeval workspace /tmp/kept
-wrote the final workspace of with-existing-codebase.eval.ts › adds a separators option [fake/camelcase/fake#1]
-  into /tmp/kept
-  14 files, 18.7 KB compressed
-  left out: .git/
-$ cd /tmp/kept && node --test
-…
-# pass 36
-```
-
-[`reeval workspace`](/reference/cli#reeval-workspace) writes the whole tree an attempt left, after its checks, into a directory to read or run. Name the attempt as `<cell>#<n>` when the run has several. Each attempt keeps it by default, without `.git` and `node_modules`; see [`keepWorkspace`](/reference/options#keepworkspace).
-
 ## Reference
 
 For more information about the `debug.keep` and `debug.traceBufferMb` options, see [`debug`](/reference/options#debug). For more information about the variables that change what reeval prints and writes, see [`REEVAL_DEBUG`](/reference/environment-variables#reevaldebug) and [`REEVAL_NO_REPORT_HINT`](/reference/environment-variables#reevalnoreporthint). For more information about a redacted bug report, see [reeval report](/reference/cli#reeval-report).

@@ -52,8 +52,19 @@ const clip = (raw: string, max: number) => {
   return `${text.slice(0, max)}… (${Math.max(0, text.length - max) + unread} more)`
 }
 
-/** Text as is (clipped), or a byte count for binary output such as a file read with `cat`. */
+/**
+ * The first line of a command's output that a trace counts but never shows, such as an archive
+ * encoded as text, which masking can't read into.
+ */
+export const OPAQUE_OUTPUT = '--opaque-output--'
+
+/** Text as is (clipped), or a byte count for binary or opaque output such as a file read with `cat`. */
 export function streamPreview(data: Buffer | string): string {
+  const head =
+    typeof data === 'string'
+      ? data.slice(0, OPAQUE_OUTPUT.length)
+      : data.subarray(0, OPAQUE_OUTPUT.length).toString('latin1')
+  if (head === OPAQUE_OUTPUT) return `<${data.length} bytes>`
   if (typeof data === 'string') return clip(data, MAX_STREAM)
   if (data.includes(0) || !isUtf8(data)) return `<${data.length} bytes>`
   return clip(data.toString('utf8'), MAX_STREAM)

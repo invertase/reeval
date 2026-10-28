@@ -8,7 +8,9 @@ import { readlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { gunzipSync } from 'node:zlib'
-import { archiveWorkspace, cleanArchive } from '../src/attempt/keep-workspace.ts'
+import { streamPreview } from '../../sandbox-docker/src/trace.ts'
+import { archiveWorkspace, cleanArchive, keepWorkspace } from '../src/attempt/keep-workspace.ts'
+import { optionsHash } from '../src/eval-source.ts'
 import type { Sandbox } from '../src/sandbox/index.ts'
 import { extractTar, readTar, safeTarPath, type TarEntry, writeTar } from '../src/tarball.ts'
 import { fakeConfig, project, readRun, runCli, tempDir } from './helpers.ts'
@@ -87,6 +89,32 @@ describe('tar', () => {
     assert.ok(skipped.includes('ok.txt'), skipped.join(', '))
     if (process.platform !== 'win32') assert.equal(await readlink(join(dir, 'out')), outside)
   })
+
+  test('extractTar skips an entry it cannot write instead of throwing', async () => {
+    const dir = tempDir('tar-clash')
+    const skipped = await extractTar(
+      [file('x', 'a file'), { type: 'dir', path: 'x', mode: 0o755, mtime: 0 }, file('x/y', 'no')],
+      dir,
+    )
+    assert.deepEqual(skipped, ['x', 'x/y'])
+    assert.equal(readFileSync(join(dir, 'x'), 'utf8'), 'a file')
+  })
+
+  test('readTar stops at a header whose size is not a whole number of bytes', () => {
+    const pax = (size: string) => {
+      const record = ` size=${size}\n`
+      const body = `${record.length + 2}${record}`
+      const tar = writeTar([file('PaxHeader', body)])
+      tar[156] = 'x'.charCodeAt(0)
+      let sum = 0
+      tar.fill(0x20, 148, 156)
+      for (const byte of tar.subarray(0, 512)) sum += byte
+      Buffer.from(`${sum.toString(8).padStart(6, '0')}\0 `).copy(tar, 148)
+      return tar.subarray(0, 1024)
+    }
+    const tar = Buffer.concat([pax('-1024'), pax('-1024'), writeTar([file('a', 'a')])])
+    assert.deepEqual(readTar(tar), [])
+  })
 })
 
 describe('cleanArchive', () => {
@@ -108,18 +136,30 @@ describe('cleanArchive', () => {
     assert.deepEqual(excluded.sort(), ['.cache/', '.git/', 'node_modules/', 'pkg/node_modules/'])
     assert.deepEqual(masked, ['.env'])
     assert.deepEqual(dropped, ['bin/blob'])
+    const named = cleanArchive(
+      writeTar([
+        file(`keys/${SECRET}.txt`, 'x'),
+        { type: 'symlink', path: 'link', mode: 0o777, mtime: 0, target: `/tmp/${SECRET}` },
+      ]),
+    )
+    assert.deepEqual(named.entries, [])
+    assert.deepEqual(named.dropped, ['keys/[REDACTED].txt', 'link'])
     const env = entries.find((e) => e.path === '.env')
     assert.ok(env?.type === 'file' && !env.data.toString().includes(SECRET))
   })
 })
 
 /** A sandbox on the host whose workspace is `dir`, enough for archiveWorkspace. */
-const hostBox = (dir: string): Sandbox =>
+const hostBox = (dir: string, env: NodeJS.ProcessEnv = process.env): Sandbox =>
   ({
     workdir: dir,
     execOwn: async (command: string) => {
       try {
-        const stdout = execFileSync('sh', ['-c', command], { encoding: 'utf8', maxBuffer: 1 << 26 })
+        const stdout = execFileSync('/bin/sh', ['-c', command], {
+          encoding: 'utf8',
+          maxBuffer: 1 << 26,
+          env,
+        })
         return { exitCode: 0, stdout, stderr: '' }
       } catch (error) {
         const e = error as { status?: number; stdout?: string; stderr?: string }
@@ -158,7 +198,54 @@ describe('archiveWorkspace', {
       big.kept.skipped?.message ?? '',
       /^the workspace is \d+(\.\d+)? KB compressed without node_modules\/, over the 16\.0 KB cap$/,
     )
+    const raw = await archiveWorkspace(hostBox(dir), signal, 2 ** 20, 32 * 1024)
+    assert.match(
+      raw.kept.skipped?.message ?? '',
+      /^the workspace is .+ without node_modules\/, over the 32\.0 KB cap$/,
+    )
   })
+
+  test('a sandbox without tar keeps none, saying so', async () => {
+    const dir = tempDir('archive-no-tar')
+    writeFileSync(join(dir, 'app.js'), 'x\n')
+    const r = await archiveWorkspace(
+      hostBox(dir, { PATH: '/nonexistent' }),
+      new AbortController().signal,
+    )
+    assert.deepEqual(r.kept.skipped, {
+      cause: 'error',
+      message: "couldn't archive the workspace: the sandbox has no tar",
+    })
+  })
+
+  test('archiving that outlasts its time is recorded; a stopped attempt records nothing', async () => {
+    const dir = tempDir('archive-slow')
+    const slow = {
+      workdir: dir,
+      execOwn: (_: string, { signal }: { signal?: AbortSignal } = {}) =>
+        new Promise((_resolve, reject) =>
+          signal?.addEventListener('abort', () => reject(new Error('aborted'))),
+        ),
+    } as unknown as Sandbox
+    // AbortSignal.timeout doesn't hold the event loop open.
+    const hold = setInterval(() => {}, 1000)
+    const late = await keepWorkspace(slow, join(dir, 'debug'), new AbortController().signal, 50)
+    clearInterval(hold)
+    assert.equal(late?.skipped?.message, "couldn't archive the workspace: it took over 0s")
+    const stop = new AbortController()
+    const stopped = keepWorkspace(slow, join(dir, 'debug'), stop.signal, 60_000)
+    stop.abort()
+    assert.equal(await stopped, undefined)
+  })
+
+  test("the archive's transfer shows in a trace as a byte count", () => {
+    assert.equal(streamPreview('--opaque-output--\nH4sIAAAA'), '<26 bytes>')
+    assert.equal(streamPreview('plain output\n'), 'plain output\n')
+  })
+})
+
+test("keepWorkspace isn't in the eval's fingerprint, so turning it off keeps runs comparable", () => {
+  assert.equal(optionsHash([{ keepWorkspace: false }]), optionsHash([{}]))
 })
 
 const WRITES = `{ files: {

@@ -447,8 +447,10 @@ export async function workspaceCommand(ctx: Ctx, args: string[]): Promise<number
         String(key.n),
       ),
   )
-  if (existsSync(target) && (await readdir(target)).length) {
-    throw new CommandError(`${rel(target)} already exists and isn't empty`)
+  if (existsSync(target)) {
+    const inside = await readdir(target).catch(() => null)
+    if (!inside) throw new CommandError(`${rel(target)} exists and isn't a directory`)
+    if (inside.length) throw new CommandError(`${rel(target)} already exists and isn't empty`)
   }
   const skipped = await extractTar(readTar(gunzipSync(bytes)), target)
   const lines = [

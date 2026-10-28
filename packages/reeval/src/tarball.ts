@@ -65,6 +65,7 @@ export function readTar(tar: Buffer): TarEntry[] {
     if (h.every((byte) => byte === 0)) break
     const type = String.fromCharCode(h[156] ?? 0)
     const size = pax.size !== undefined ? Number(pax.size) : octal(h, 124, 12)
+    if (!Number.isSafeInteger(size) || size < 0) break
     const data = tar.subarray(at + BLOCK, at + BLOCK + size)
     at += BLOCK + Math.ceil(size / BLOCK) * BLOCK
     if (type === 'L') {
@@ -181,47 +182,52 @@ export function writeTar(entries: TarEntry[]): Buffer {
 }
 
 /**
- * Writes `entries` under `dir`. An entry under a symbolic link an earlier entry made is skipped,
- * so nothing lands outside `dir`; so is a link the platform refuses (Windows without the right
- * to make one). Returns the paths it skipped.
+ * Writes `entries` under `dir`, never through a symbolic link: an entry whose parent on disk is a
+ * link or a file is skipped, as is one whose path exists already, so nothing lands outside `dir`
+ * even where the filesystem folds case. An entry the platform refuses (a name Windows can't hold,
+ * a link without the right to make one) is skipped too. Returns the paths it skipped.
  */
 export async function extractTar(entries: TarEntry[], dir: string): Promise<string[]> {
   const root = resolve(dir)
-  const links = new Set<string>()
   const skipped: string[] = []
-  const underLink = (path: string) => {
-    const parts = path.split('/')
-    for (let i = 1; i < parts.length; i++) if (links.has(parts.slice(0, i).join('/'))) return true
-    return false
-  }
   await mkdir(root, { recursive: true })
   const times: Array<[string, number]> = []
+  const parentsAreDirs = async (parts: string[]) => {
+    let at = root
+    for (const part of parts.slice(0, -1)) {
+      at = join(at, part)
+      const info = await lstat(at).catch(() => null)
+      if (!info) await mkdir(at)
+      else if (!info.isDirectory()) return false
+    }
+    return true
+  }
   for (const e of entries) {
-    const target = join(root, ...e.path.split('/'))
-    if (underLink(e.path) || !target.startsWith(root + sep) || links.has(e.path)) {
-      skipped.push(e.path)
-      continue
-    }
-    if (e.type === 'dir') {
-      await mkdir(target, { recursive: true })
-      continue
-    }
-    await mkdir(join(target, '..'), { recursive: true })
-    if (await lstat(target).catch(() => null)) {
-      skipped.push(e.path)
-      continue
-    }
-    if (e.type === 'symlink') {
-      try {
-        await symlink(e.target, target)
-        links.add(e.path)
-      } catch {
+    const parts = e.path.split('/')
+    const target = join(root, ...parts)
+    try {
+      if (!target.startsWith(root + sep) || !(await parentsAreDirs(parts))) {
         skipped.push(e.path)
+        continue
       }
-      continue
+      const existing = await lstat(target).catch(() => null)
+      if (e.type === 'dir') {
+        if (!existing) await mkdir(target)
+        else if (!existing.isDirectory()) skipped.push(e.path)
+        continue
+      }
+      if (existing) {
+        skipped.push(e.path)
+        continue
+      }
+      if (e.type === 'symlink') await symlink(e.target, target)
+      else {
+        await writeFile(target, e.data, { mode: e.mode & 0o777 || 0o644, flag: 'wx' })
+        times.push([target, e.mtime])
+      }
+    } catch {
+      skipped.push(e.path)
     }
-    await writeFile(target, e.data, { mode: e.mode & 0o777 || 0o644 })
-    times.push([target, e.mtime])
   }
   for (const [path, mtime] of times) await utimes(path, mtime, mtime).catch(() => {})
   return skipped

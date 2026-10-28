@@ -194,8 +194,6 @@ reeval checkout [run] [dir]   A git worktree at the run's commit, with its workt
 
 ## `reeval workspace`
 
-The `reeval workspace` command writes an attempt's kept final workspace, the whole tree the agent left and not only its diff, into a directory, so you can read it or run it. The attempt is its key, its `<cell>#<n>` id, or part of its cell key or key (`changelog#2`), and you can leave it out when the run has one attempt. `--run` takes `latest`, `latest~N`, a run id or a unique prefix, and defaults to `latest`.
-
 [//]: # (generated:cli-help:workspace)
 
 ```text
@@ -207,8 +205,6 @@ reeval workspace [attempt] [dir]
 ```
 
 [//]: # (/generated:cli-help:workspace)
-
-The workspace comes from `workspace.tar.gz` in the attempt's `.reeval/debug` directory, so it exists only on the machine that ran the attempt, for the newest [`debug.keep`](/reference/options#debug) runs. The command refuses a directory that isn't empty, and writes nothing through a symbolic link. For what each attempt keeps, see [`keepWorkspace`](/reference/options#keepworkspace).
 
 ## `reeval query`
 

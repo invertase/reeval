@@ -119,4 +119,4 @@ export {
   type SandboxLimits,
   type SessionOptions,
 } from './session.ts'
-export { type DockerCommand, onDockerCommand } from './trace.ts'
+export { type DockerCommand, OPAQUE_OUTPUT, onDockerCommand } from './trace.ts'

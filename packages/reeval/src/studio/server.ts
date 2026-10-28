@@ -220,7 +220,7 @@ export function createStudioApp(options: StudioServerOptions) {
     const file = await debugFile(c.req.param('runId'), key, KEPT_WORKSPACE_FILE)
     if (!file) return c.text('No kept workspace for this attempt', 404)
     const attempt = parseAttemptKey(key ?? '')
-    const name = `${c.req.param('runId')}-${evalSlug(attempt?.cell ?? 'attempt')}-${attempt?.n ?? 1}-workspace.tar.gz`
+    const name = `${c.req.param('runId')}-${evalSlug(attempt?.evalId ?? 'eval')}-${evalSlug(attempt?.cell ?? 'cell')}-${attempt?.n ?? 1}-workspace.tar.gz`
     return sendFile(c, file, {
       'Cache-Control': 'no-cache',
       'Content-Type': 'application/gzip',
