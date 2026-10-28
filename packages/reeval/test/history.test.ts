@@ -1432,7 +1432,10 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
       /No eval runs in a Docker sandbox/,
       "the config's fake sandbox, not the default docker()",
     )
-    assert.match((await ok(['clean'])).stdout, / from \.\.\/\.\.\/\.\.\/\.reeval\/debug$/m)
+    assert.match(
+      (await ok(['clean'])).stdout,
+      / from \.\.\/\.\.\/\.\.\/\.reeval\/debug and \.reeval\/runs$/m,
+    )
 
     assert.deepEqual(readdirSync(sub).sort(), ['.env.local', 'evals', 'marker.txt'])
     assert.equal((await ok(['run', '--dry-run', '--config', config])).code, 0)

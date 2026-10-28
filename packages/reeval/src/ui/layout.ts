@@ -79,8 +79,8 @@ const EFFECT: Record<Effect, string> = {
 }
 
 export type Text = { text: string; paint?: Paint }
-/** One row: its cells line up with the other rows of its table. */
-type Row = { indent: number; cells: Array<string | Text> }
+/** One row: its cells line up with the other rows of its table. A `loose` row's later cells don't widen their columns. */
+type Row = { indent: number; cells: Array<string | Text>; loose?: boolean }
 /** A line printed as it is, under a row. */
 type Free = { indent: number; free: string | Text }
 export type Item = Row | Free
@@ -104,6 +104,7 @@ export function table(items: Item[], width = LABEL): string[] {
   )
   const widths: number[] = []
   for (const r of rows) {
+    if (r.loose) continue
     r.cells.forEach((cell, i) => {
       if (i > 0) widths[i] = Math.max(widths[i] ?? 0, textOf(cell).length)
     })
@@ -241,7 +242,7 @@ function evidence(c: Colors, cell: CellResult, indent: number, more = true): Ite
   const [snapshot, ...others] = cell.snapshots ?? []
   if (snapshot && items.length) {
     const more = others.length ? ` (+${others.length} more in summary.md)` : ''
-    items.push({ indent, cells: ['snapshot', t(`${snapshot}${more}`, c.dim)] })
+    items.push({ indent, cells: ['snapshot', t(`${snapshot}${more}`, c.dim)], loose: true })
   }
   const passed = cell.checks.filter((k) => !failing(k) && !k.retried).length
   if (more && passed && items.length) {

@@ -2870,7 +2870,7 @@ export const features: Feature[] = [
       )
       assert.match(
         blockOf(stdout, 'canary'),
-        /\n {2}writer {12}1 of 1\n {2}idler {13}0 of 1\n {4}writes out\.txt {2}failed {2}evals\/canary\.eval\.ts:7\n {6}expected file out\.txt to exist$/,
+        /\n {2}writer {12}1 of 1\n {2}idler {13}0 of 1\n {4}writes out\.txt {2}failed {2}evals\/canary\.eval\.ts:7\n {6}expected file out\.txt to exist\n {4}snapshot {8}\.reeval\/runs\/\S+\/snapshots\/final$/,
       )
     },
   },
