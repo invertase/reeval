@@ -85,10 +85,10 @@ const app = await c.serve('npm start')
 The `ServeHandle` has `kill()`, as a `BackgroundHandle` does, and this field:
 
 <Property name="port" type="number" required>
-  The port passed in or allocated.
+  The port the process listens on.
 </Property>
 
-The call returns when the process starts, not when it listens.
+The call returns once the process listens on `PORT` or, without `port`, on the one other port it listens on instead. It throws if the process listens only on other ports than that, exits first, or doesn't listen within 60 seconds.
 
 ## `c.capture()`
 

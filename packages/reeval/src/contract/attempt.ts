@@ -440,7 +440,7 @@ export const attemptCallSchema = z
           .optional()
           .describe('The container port. Omit it and reeval allocates one.'),
       })
-      .describe('`c.serve(command, port?)`: a background process and its port.'),
+      .describe('`c.serve(command, port?)`: a background process, once it listens, and its port.'),
     z
       .strictObject({ op: z.literal('kill'), handle: handleId })
       .describe("`handle.kill()`: stops a background process. Killing one that's gone is fine."),
@@ -609,7 +609,7 @@ export const attemptReplySchema = z
         ok: z.literal(true),
         op: z.literal('serve'),
         handle: handleId,
-        port: z.number().describe('The container port it was given.'),
+        port: z.number().describe('The container port it listens on.'),
       }),
       z.strictObject({ id, ok: z.literal(true), op: z.literal('kill') }),
       z.strictObject({ id, ok: z.literal(true), op: z.literal('capture'), capture: captureSchema }),

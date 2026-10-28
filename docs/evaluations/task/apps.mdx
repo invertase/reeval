@@ -35,7 +35,7 @@ evaluate(
 
 ## Check the running app
 
-`c.exec` runs in the sandbox, so a request to `localhost` on the server's port reaches the app. `c.serve` returns as soon as the command starts, so retry until the server answers. In the `evals/sign-in.eval.ts` file, check the page over HTTP:
+`c.exec` runs in the sandbox, so a request to `localhost` on the server's port reaches the app. `c.serve` returns once the server listens. In the `evals/sign-in.eval.ts` file, check the page over HTTP:
 
 ```ts title="evals/sign-in.eval.ts"
 const url = `localhost:${app.port}/login`

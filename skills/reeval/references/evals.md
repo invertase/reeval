@@ -32,7 +32,8 @@
   runs a command that exits non-zero again, up to 2 more times 2 s apart, and resolves with the
   last try: for a check that can fail on a transient, such as a test calling a model. Any non-zero
   exit retries (reeval doesn't read the output), and a last failed try is a failed check. `await c.serve(cmd, port?)` is that plus a
-  port (`PORT` / `$PORT` on a bash string). `c.capture()` screenshots it: see
+  port (`PORT` / `$PORT` on a bash string), and returns once `cmd` listens, on `PORT` or the one
+  port it picked itself. `c.capture()` screenshots it: see
   [capture.md](capture.md).
 - `await c.readFile(path)` the text or `null` (`~/` for home). `await c.writeFile(path, text)`
   places a file after a turn (a hidden test the agent never saw) instead of seeding it in

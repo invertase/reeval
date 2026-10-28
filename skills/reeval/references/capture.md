@@ -10,9 +10,13 @@ evaluate('builds the sign-in page', async (c) => {
 })
 ```
 
-- `await c.serve(cmd, port?)` starts `cmd` in the background and returns a `ServeHandle` with a
-  port (`PORT` / `$PORT` on a bash string). `c.exec(cmd, { background: true })` is the same
-  without a port and returns `{ kill() }`.
+- `await c.serve(cmd, port?)` starts `cmd` in the background with `PORT` set (`$PORT` on a bash
+  string) and returns a `ServeHandle` once `cmd`'s own processes listen. Without `port`, a server
+  that ignores `PORT` and listens on one port of its own (`npm run dev` on Vite's 5173, IPv4 or
+  IPv6 loopback) gets that port as `handle.port`; no `--port` flags needed. Several ports, none
+  of them `PORT`, throw with the list: pass the one to use, `c.serve('npm run dev', 5173)`. An
+  exit, or nothing listening in 60 s, throws with its last output. `c.exec(cmd, { background:
+  true })` starts a command without a port or the wait and returns `{ kill() }`.
 - `await c.capture(port | server, { name?, path?,
   wait?, instructions?, viewport?, model? })` screenshots the tunneled port into
   `artifacts/<name>.png`. The first argument is the container port or a `ServeHandle`;

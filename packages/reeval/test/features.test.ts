@@ -98,6 +98,8 @@ type Feature = {
   prepare?: (dir: string) => void
   /** Needs POSIX file modes on the host, so the fake tier skips on Windows. */
   posixModes?: true
+  /** Reads the host's /proc, so the fake tier skips off Linux. */
+  linuxProc?: true
   /**
    * Every eval and attempt, when the defaults can't name them: several harnesses or a family's
    * cases. Fake tier only, where the ids are fixed.
@@ -2513,6 +2515,66 @@ export const features: Feature[] = [
     canary: /expected 'down' to be 'up'/,
   },
   {
+    dir: 'ui/serve-own-port',
+    tiers: ['fake', 'docker', 'podman'],
+    env: 'ui',
+    linuxProc: true,
+    canary: /expected 'vite' to be 'reads PORT'/,
+    record: ({ run, tier }) => {
+      const [serve, ...more] = landed(run)?.serves ?? []
+      assert.ok(serve, 'serves names the c.serve call')
+      assert.deepEqual(more, [])
+      assert.equal(serve.command, 'node vite.mjs')
+      assert.equal(serve.detected, true)
+      assert.equal(serve.address, '::1')
+      assert.notEqual(serve.port, serve.portEnv)
+      if (tier !== 'fake') assert.equal(serve.port, 5173)
+      assert.equal(landed(run)?.files.artifacts?.[0]?.capture?.port, serve.port)
+    },
+  },
+  {
+    dir: 'ui/serve-reads-port',
+    tiers: ['fake', 'docker', 'podman'],
+    env: 'ui',
+    canary: /expected 'main' to be 'side'/,
+    record: ({ run }) => {
+      const serve = landed(run)?.serves?.[0]
+      assert.ok(serve, 'serves names the c.serve call')
+      assert.equal(serve.port, serve.portEnv)
+      assert.equal(serve.detected, false)
+    },
+  },
+  {
+    dir: 'ui/serve-two-ports',
+    tiers: ['fake', 'docker', 'podman'],
+    env: 'ui',
+    linuxProc: true,
+    lands: {
+      outcome: 'fail',
+      error: {
+        kind: 'assertion',
+        message:
+          /c\.serve\("node server\.mjs"\) listens on ports \d+ and \d+, and not on PORT \(\d+\)\. Pass the one it serves on: c\.serve\("node server\.mjs", \d+\)/,
+      },
+    },
+    canary: /expected 'c\.serve\("node server\.mjs"\) listens on…' to be 'picked one'/,
+    record: ({ run }) => assert.equal(landed(run)?.serves, undefined),
+  },
+  {
+    dir: 'ui/serve-exits',
+    tiers: ['fake', 'docker', 'podman'],
+    env: 'ui',
+    lands: {
+      outcome: 'fail',
+      error: {
+        kind: 'assertion',
+        message:
+          /c\.serve\("node server\.mjs"\) exited before it listened on .*\. Its last output:\n[\s\S]*Error: Cannot find module vite/,
+      },
+    },
+    canary: /expected 'c\.serve\("node server\.mjs"\) exited bef…' to be 'served'/,
+  },
+  {
     dir: 'ui/capture-browser-false',
     tiers: ['fake', 'docker'],
     env: 'plain',
@@ -3243,10 +3305,17 @@ function attemptTrails(project: string): string {
 const FIXTURE_STOP_MS = { fake: 10_000, docker: 30_000, podman: 30_000, real: 30_000 } as const
 const FIXTURE_GRACE_MS = { fake: 5_000, docker: 20_000, podman: 20_000, real: 20_000 } as const
 
-function skipTier(tier: Tier, image?: BakedHarness, posixModes?: true): string | false {
+function skipTier(
+  tier: Tier,
+  image?: BakedHarness,
+  posixModes?: true,
+  linuxProc?: true,
+): string | false {
   if (only && !only.includes(tier)) return `REEVAL_FIXTURE_TIERS=${only.join(',')}`
   if (tier === 'fake' && posixModes && process.platform === 'win32')
     return 'Windows has no executable bit'
+  if (tier === 'fake' && linuxProc && process.platform !== 'linux')
+    return `${process.platform} has no /proc to read listening ports from`
   if (tier === 'real')
     return real ? false : 'set REEVAL_TEST_REAL=1 (and CURSOR_API_KEY) for real Cursor'
   if (tier === 'docker' && !requireDocker) {
@@ -3271,7 +3340,7 @@ function fixtureTests(tiers: Tier[]) {
         f.timeoutMs?.[tier] ??
         { fake: FAKE_TIMEOUT_MS, docker: 240_000, podman: 240_000, real: 600_000 }[tier]
       test(`${rowName(f)} [${tier}]`, {
-        skip: skipTier(tier, f.image, f.posixModes),
+        skip: skipTier(tier, f.image, f.posixModes, f.linuxProc),
         timeout,
       }, async (t) => {
         const row = realRowOf(f)

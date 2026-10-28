@@ -106,7 +106,7 @@ class AttemptCallExec(TypedDict):
     retries: NotRequired[int]
 
 
-# `c.serve(command, port?)`: a background process and its port.
+# `c.serve(command, port?)`: a background process, once it listens, and its port.
 class AttemptCallServe(TypedDict):
     # A shell command; `PORT` is set to the port.
     command: str
@@ -278,7 +278,7 @@ class AttemptReplyServe(TypedDict):
     id: str
     ok: Literal[True]
     op: Literal["serve"]
-    # The container port it was given.
+    # The container port it listens on.
     port: float
 
 

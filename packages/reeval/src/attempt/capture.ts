@@ -17,6 +17,7 @@ import {
 } from '../capture/index.ts'
 import { stubPng } from '../capture/stub.ts'
 import { captureUseSpend, runJourney } from '../capture/use.ts'
+import { debugLog } from '../debug/attempt.ts'
 import { getRunContext } from '../engine/runtime.ts'
 import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
 import { openRouterFallbacks } from '../gateway/openrouter-models.ts'
@@ -30,12 +31,14 @@ import type {
   CaptureCall,
   CaptureUse,
   ServeHandle,
+  ServeRecord,
 } from '../types.ts'
 import { addUsage } from '../usage.ts'
 import { asCheck, sandboxFor } from './checks.ts'
+import { awaitListening, parseProbe, probeScript } from './serve.ts'
 import type { Attempt } from './state.ts'
 
-const BG_LOG = '/tmp/reeval-bg.log'
+const BG_LOG = '/tmp/reeval-bg'
 const BG_TAG = 'REEVAL_BACKGROUND'
 
 export type CaptureArtifact = {
@@ -104,6 +107,16 @@ done
 kill -9 -${group} 2>/dev/null`
 }
 
+type Started = {
+  handle: BackgroundHandle
+  /** The shell around the command. */
+  pid: string
+  /** Docker only: a variable every process the command starts inherits. */
+  tag?: string
+  /** Where the command's stdout and stderr go. */
+  log: string
+}
+
 /** Starts `command` without waiting for exit. Teardown kills it if the eval didn't. */
 export async function startBackground(
   a: Attempt,
@@ -111,12 +124,22 @@ export async function startBackground(
   who: string,
   extraEnv: Record<string, string> = {},
 ): Promise<BackgroundHandle> {
+  return (await launch(a, command, who, extraEnv)).handle
+}
+
+async function launch(
+  a: Attempt,
+  command: string,
+  who: string,
+  extraEnv: Record<string, string>,
+): Promise<Started> {
   const box = await sandboxFor(a, who)
   // A shell of its own keeps a compound command's `&&`, `;` and redirects together, as in the
   // foreground; reeval's log only takes what the command leaves on stdout and stderr.
   const docker = a.spec.sandbox.kind === 'docker'
-  const wrapped = `${docker ? 'bash' : 'sh'} -c ${shellQuote(command)} >${BG_LOG} 2>&1 & echo $$ $!`
   const tag = randomUUID()
+  const log = `${BG_LOG}-${tag.slice(0, 8)}.log`
+  const wrapped = `${docker ? 'bash' : 'sh'} -c ${shellQuote(command)} >${log} 2>&1 & echo $$ $!`
   const r = await asCheck(a, () =>
     box.exec(wrapped, {
       signal: a.signal,
@@ -146,21 +169,53 @@ export async function startBackground(
       killed = true
       // Do not pass a.signal: after a timeout it is already aborted, and run() would skip the kill.
       // The tree first: Windows reads the Win32 pid from /proc/<pid>, gone once the pid is.
-      await box.exec(`${tree}; kill -9 ${pid} 2>/dev/null; true`).catch(() => {})
+      await box.exec(`${tree}; kill -9 ${pid} 2>/dev/null; rm -f ${log}; true`).catch(() => {})
     },
   }
   a.backgrounds.push(handle)
-  return handle
+  return { handle, pid, log, ...(docker ? { tag: `${BG_TAG}=${tag}` } : {}) }
 }
 
+/**
+ * Starts `command` with `PORT` set and returns once its own processes listen: on `PORT` (or
+ * `port`), else on the one other port they settle on, which it records.
+ */
 export async function serveCommand(
   a: Attempt,
   command: string,
   port?: number,
 ): Promise<ServeHandle> {
-  const bound = port ?? (await allocatePort())
-  const handle = await startBackground(a, command, 'c.serve()', { PORT: String(bound) })
-  return { ...handle, port: bound }
+  const want = port ?? (await allocatePort())
+  const { handle, pid, tag, log } = await launch(a, command, 'c.serve()', { PORT: String(want) })
+  const box = await sandboxFor(a, 'c.serve()')
+  const found = await awaitListening(command, {
+    want,
+    given: port !== undefined,
+    signal: a.signal,
+    probe: async () =>
+      parseProbe((await box.exec(probeScript(pid, tag), { signal: a.signal })).stdout),
+    output: async () => (await box.exec(`tail -n 20 ${log} 2>/dev/null`)).stdout,
+    ...(a.spec.sandbox.kind === 'fake' ? {} : { hostListening: async () => undefined }),
+  }).catch(async (error: Error) => {
+    await handle.kill()
+    throw error
+  })
+  const serve: ServeRecord = {
+    command,
+    port: found.port,
+    portEnv: want,
+    detected: found.detected,
+    address: found.address,
+    readyMs: found.readyMs,
+  }
+  a.record.serves = [...(a.record.serves ?? []), serve]
+  debugLog(
+    'check',
+    found.detected
+      ? `c.serve ${command}: listening on ${found.address} port ${found.port}, not PORT ${want}; using ${found.port}`
+      : `c.serve ${command}: listening on ${found.address} port ${found.port} after ${found.readyMs}ms`,
+  )
+  return { ...handle, port: found.port }
 }
 
 export async function capturePage(
