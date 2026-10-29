@@ -155,14 +155,23 @@ const SKIPPED = new Set([
   ...Object.getOwnPropertyNames(Object.prototype),
 ])
 
+/**
+ * A DOMException's prototype getters (`code` and its 25 legacy constants), which serializing
+ * copies onto the error: they say nothing its name doesn't.
+ */
+const DOM_EXCEPTION = new Set(Object.getOwnPropertyNames(DOMException.prototype))
+
 /** What else the error carries (a `code`, a response…), printed below the stack. */
 function errorProperties(e: SerializedError): Record<string, unknown> {
   const properties: Record<string, unknown> = Object.create(null)
   if (e.name === 'AssertionError') return properties
+  const domException = 'INDEX_SIZE_ERR' in e
   for (const key of Object.getOwnPropertyNames(e)) {
     if (key === 'stack') {
       if (e.stack != null && typeof e.stack !== 'string') properties.stack = e.stack
-    } else if (!SKIPPED.has(key)) properties[key] = e[key]
+    } else if (!SKIPPED.has(key) && !(domException && DOM_EXCEPTION.has(key))) {
+      properties[key] = e[key]
+    }
   }
   return properties
 }

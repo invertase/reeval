@@ -214,7 +214,7 @@
 | `c.capture()`, `c.serve` and `c.exec({ background })` | ✓ 3 | ✓ 1 | ● 10 | ● 11 | — | — |
 | `c.serve` waits until the command listens, takes `PORT` or the one port that started listening after it (IPv4 or IPv6 loopback), records it in `serves`, and fails on several new ports (with the URLs it printed), an exit or a timeout with the last output | ✓ 1 | — | ● 2 | ● 4 | ● 4 | — |
 | `c.capture()`'s page reaches sandbox ports at `localhost`, `127.0.0.1` and `[::1]`, through tunnels opened on its first request | ✓ 1 | — | — | ● 1 | ● 1 | — |
-| `c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`) | ✓ 2 | ✓ 1 | ● 3 | ● 4 | — | — |
+| `c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`) | ✓ 3 | ✓ 1 | ● 3 | ● 6 | — | — |
 | `reeval studio` and `reeval studio build` | ✓ 1 | — | — | — | — | ◐ 1 (1 without a canary) |
 | The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.reeval/debug`, in `reeval studio` only | ✓ 2 | — | — | — | — | — |
 | Runs in progress in `reeval studio`: `reeval run`'s `.reeval/staging/<run>/live.json`, a `Running N/M` row and progress bar, attempts filling in with their transcripts, `Stopped` for a killed run, and the record replacing it | ✓ 2 | — | — | — | — | — |

@@ -115,7 +115,7 @@ const shot = await c.capture(app, { path: '/login', wait: 'idle' })
 </Property>
 
 <Property name="options.timeout" type="Duration" optional>
-  How long reeval waits for the port and the page, replacing the cascaded `timeout` (default `'60s'`).
+  How long reeval waits for the port and the whole capture (the page, every instruction's moves and `{ wait }` steps), replacing the cascaded `timeout` (default `'60s'`).
 </Property>
 
 <Property name="options.wait" type="'load' | 'idle' | { ms: number }" optional>
