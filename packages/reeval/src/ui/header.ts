@@ -17,12 +17,17 @@ const LABEL = 9
 
 /**
  * `text` broken at spaces into lines of at most `width` columns, not counting color codes; a
- * longer word keeps a line.
+ * longer word keeps a line. A `·` stays with the word before it, so no line starts with one.
  */
 function wrap(text: string, width: number): string[] {
+  const words: string[] = []
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (word === '·' && words.length) words[words.length - 1] += ' ·'
+    else words.push(word)
+  }
   const lines: string[] = []
   let line = ''
-  for (const word of text.split(/\s+/).filter(Boolean)) {
+  for (const word of words) {
     if (line && stripAnsi(line).length + 1 + stripAnsi(word).length > width) {
       lines.push(line)
       line = word

@@ -722,6 +722,15 @@ describe('run header', () => {
     for (const line of stripAnsi(out).split('\n')) assert.ok(line.length <= 64, line)
   })
 
+  test('on a narrow terminal, a wrapped row never starts with a separator', () => {
+    const shown = (columns: number) =>
+      stripAnsi(draw([planEvent({ warnings: [], hints: [] })], rich, columns)).split('\n')
+    const scope = shown(36).filter((l) => l.startsWith(' '.repeat(16)))
+    assert.ok(scope.length > 1, 'the scope and estimate rows wrap')
+    for (const columns of [36, 40, 48, 60])
+      for (const line of shown(columns)) assert.doesNotMatch(line, /^\s*·/, line)
+  })
+
   test("the last line says how the attempts' logs will print", () => {
     const last = (output: OutputOptions) =>
       stripAnsi(draw(prepared.slice(2), output, 80)).split('\n')[0]
