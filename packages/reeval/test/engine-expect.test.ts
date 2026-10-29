@@ -230,10 +230,11 @@ describe('standalone expect', () => {
       records(t).map((x) => x.at),
       [here, later, polled],
     )
+    const a = fileURLToPath(pathToFileURL('/x/a.eval.ts'))
     const stack = [
       'Error',
       '    at new Promise (<anonymous>)',
-      '    at f (/x/a.eval.ts:3:4)',
+      `    at f (${a}:3:4)`,
       '    at async /x/my evals (v2)/c.eval.ts:7:1',
       '    at g (/x/my evals (v2)/d.eval.ts:9:2)',
     ].join('\n')
@@ -242,7 +243,7 @@ describe('standalone expect', () => {
       undefined,
       'a frame without a line, and another file',
     )
-    assert.match(lineIn(stack, pathToFileURL('/x/a.eval.ts').href) ?? '', /a\.eval\.ts:3$/)
+    assert.match(lineIn(stack, pathToFileURL(a).href) ?? '', /a\.eval\.ts:3$/)
     assert.match(lineIn(stack, '/x/my evals (v2)/c.eval.ts') ?? '', /\(v2\)\/c\.eval\.ts:7$/)
     assert.match(lineIn(stack, '/x/my evals (v2)/d.eval.ts') ?? '', /\(v2\)\/d\.eval\.ts:9$/)
   })
