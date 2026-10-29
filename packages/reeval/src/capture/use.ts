@@ -562,12 +562,13 @@ async function runModelGoal(
     const fresh = await probePage(session)
     const opened = session.dialogs()
     const moved = differing(now, fresh, volatile)
-    if (!last) {
+    if (!last && pristine) {
       // Before the journey's first move, whatever changes changes on its own.
-      if (pristine) for (const f of moved) if (f !== 'url' && f !== 'focus') volatile.add(f)
+      for (const f of moved) if (f !== 'url' && f !== 'focus') volatile.add(f)
     } else if ((moved.length || opened.length) && stale < STALE_ASKS) {
+      // With no move yet in this instruction, the change is the last instruction's still landing.
       stale++
-      if (!last.refused) {
+      if (last && !last.refused) {
         last.dialogs.push(...opened)
         settleMove(last, fresh, origin, volatile)
       }
@@ -607,7 +608,8 @@ async function runModelGoal(
     now = await settledState(session, volatile, clock.remaining)
     move.dialogs.push(...session.dialogs())
     settleMove(move, now, origin, volatile)
-    if (asks.final) return { moves: dispatched, usage, ended: 'final' }
+    // A final move that changed nothing most likely missed, so the model sees that and goes on.
+    if (asks.final && move.changed) return { moves: dispatched, usage, ended: 'final' }
   }
   clock.step = { ...step, moves: dispatched }
   throw unfinished(step, clock)

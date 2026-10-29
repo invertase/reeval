@@ -828,6 +828,68 @@ test('runJourney ends an instruction on the move the model marks final, so a sig
   assert.equal(prompts.length, 1)
 })
 
+test('runJourney asks again after a move marked final that changed nothing, since it most likely missed', async () => {
+  const prompts: string[] = []
+  const ended: string[] = []
+  const { session, dispatched } = scriptedSession(false)
+  await journey(
+    session,
+    scriptedModel(
+      (text) =>
+        /^1\. click \{"x":10,"y":10,"completesGoal":true\} → nothing changed$/m.test(text)
+          ? ['done', {}]
+          : ['click', { x: 10, y: 10, completesGoal: true }],
+      prompts,
+    ),
+    ['Save'],
+    undefined,
+    (shot) => {
+      ended.push(shot.ended)
+      return undefined
+    },
+  )
+  assert.equal(dispatched.length, 1)
+  assert.equal(prompts.length, 2)
+  assert.deepEqual(ended, ['done'])
+})
+
+test("runJourney asks again when the last instruction's final move is still landing as the next one starts", async () => {
+  const prompts: string[] = []
+  let submitted = 0
+  const landed = () => submitted > 0 && Date.now() - submitted > 250
+  const { session, dispatched } = scriptedSession(false, (n) => ({
+    ...stillState(),
+    url: `http://127.0.0.1${landed() ? '/profile' : '/sign-in'}`,
+    text: `t${n}`,
+  }))
+  const dispatch = session.dispatch
+  session.dispatch = async (action) => {
+    if (!submitted) submitted = Date.now()
+    await dispatch(action)
+  }
+  const model = scriptedModel(
+    (text) =>
+      text.startsWith('Goal: Submit')
+        ? ['click', { x: 200, y: 215, completesGoal: true }]
+        : /^The page is at \/profile\./m.test(text)
+          ? ['click', { ...SIGN_OUT, completesGoal: true }]
+          : ['click', { x: 300, y: 300 }],
+    prompts,
+  )
+  const generate = model.doGenerate
+  model.doGenerate = async (options) => {
+    if (submitted) await new Promise((resolve) => setTimeout(resolve, 300))
+    return generate(options)
+  }
+  await journey(session, model, ['Submit the form', 'Once the profile is visible, sign out'])
+  assert.deepEqual(
+    dispatched.map((a) => a.type === 'click' && a.x),
+    [200, SIGN_OUT.x],
+  )
+  assert.match(prompts[1] ?? '', /^The page is at \/sign-in\./m)
+  assert.match(prompts[2] ?? '', /^The page is at \/profile\./m)
+})
+
 test('runJourney tells the model its moves took the page away from where the goal started, so it can stop there', async () => {
   const prompts: string[] = []
   const { session, dispatched } = signOutApp()
