@@ -147,3 +147,28 @@ export async function settledState(
     prev = next
   }
 }
+
+/** How long a settled page is watched for a change still to come after a move that ends its instruction. */
+export const LATE_CHANGE_MS = 1000
+
+/**
+ * The page once a change that starts within `LATE_CHANGE_MS` of `settled` has settled too, or
+ * `settled`: an auth callback's redirect or a save's message often comes a beat after the
+ * request that made it, and the next instruction's first look must not be the page before it.
+ */
+export async function lateSettledState(
+  session: ChromeSession,
+  settled: PageState,
+  volatile: Set<StateField>,
+  left: () => number,
+): Promise<PageState> {
+  const until = Date.now() + Math.min(LATE_CHANGE_MS, left())
+  while (Date.now() < until) {
+    await new Promise((resolve) => setTimeout(resolve, Math.min(SETTLE_POLL_MS, left())))
+    const next = await probePage(session)
+    if (differing(settled, next, volatile).length || session.busy()) {
+      return settledState(session, volatile, left)
+    }
+  }
+  return settled
+}

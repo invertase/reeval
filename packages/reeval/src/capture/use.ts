@@ -19,6 +19,7 @@ import { CAPTURE_KEYS, type ChromeSession, navigateAndWait } from './browser.ts'
 import {
   describeChange,
   differing,
+  lateSettledState,
   type PageState,
   pathOf,
   probePage,
@@ -331,8 +332,11 @@ async function runFakeScript(
     debugTrace('check', 'capture-use', { goal, action, page }, `capture use ${action.type}`)
     await session.dispatch(action, page)
     moves++
-    await settledState(session, volatile, clock.remaining)
-    if (action.final) return { moves, ended: 'final' }
+    const settled = await settledState(session, volatile, clock.remaining)
+    if (action.final) {
+      await lateSettledState(session, settled, volatile, clock.remaining)
+      return { moves, ended: 'final' }
+    }
   }
   clock.step = { ...step, moves }
   while (clock.remaining() > 0) {
@@ -609,7 +613,10 @@ async function runModelGoal(
     move.dialogs.push(...session.dialogs())
     settleMove(move, now, origin, volatile)
     // A final move that changed nothing most likely missed, so the model sees that and goes on.
-    if (asks.final && move.changed) return { moves: dispatched, usage, ended: 'final' }
+    if (asks.final && move.changed) {
+      await lateSettledState(session, now, volatile, clock.remaining)
+      return { moves: dispatched, usage, ended: 'final' }
+    }
   }
   clock.step = { ...step, moves: dispatched }
   throw unfinished(step, clock)

@@ -134,7 +134,10 @@ export type CaptureUseMove = (
   | { type: 'drag'; x: number; y: number; toX: number; toY: number }
   | { type: 'hover'; x: number; y: number }
 ) & {
-  /** The move finishes its instruction: once the page settles, the journey goes on to the next. */
+  /**
+   * The move finishes its instruction: once the page settles, the journey goes on to the next.
+   * A model's final move that changed nothing on the page is asked about again instead.
+   */
   final?: boolean
 }
 

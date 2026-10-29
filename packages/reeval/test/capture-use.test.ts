@@ -853,21 +853,25 @@ test('runJourney asks again after a move marked final that changed nothing, sinc
   assert.deepEqual(ended, ['done'])
 })
 
-test("runJourney asks again when the last instruction's final move is still landing as the next one starts", async () => {
-  const prompts: string[] = []
+/** A sign-in form whose submit redirects to /profile `redirectMs` after the click, as an auth callback does. */
+function redirectingSignIn(redirectMs: number) {
   let submitted = 0
-  const landed = () => submitted > 0 && Date.now() - submitted > 250
-  const { session, dispatched } = scriptedSession(false, (n) => ({
+  const landed = () => submitted > 0 && Date.now() - submitted > redirectMs
+  const app = scriptedSession(false, (n) => ({
     ...stillState(),
     url: `http://127.0.0.1${landed() ? '/profile' : '/sign-in'}`,
     text: `t${n}`,
   }))
-  const dispatch = session.dispatch
-  session.dispatch = async (action) => {
+  const dispatch = app.session.dispatch
+  app.session.dispatch = async (action) => {
     if (!submitted) submitted = Date.now()
     await dispatch(action)
   }
-  const model = scriptedModel(
+  return { ...app, submitted: () => submitted }
+}
+
+const submitThenSignOut = (prompts: string[]) =>
+  scriptedModel(
     (text) =>
       text.startsWith('Goal: Submit')
         ? ['click', { x: 200, y: 215, completesGoal: true }]
@@ -876,9 +880,29 @@ test("runJourney asks again when the last instruction's final move is still land
           : ['click', { x: 300, y: 300 }],
     prompts,
   )
+
+test("runJourney waits for a final move's late change before the next instruction looks", async () => {
+  const prompts: string[] = []
+  const { session, dispatched } = redirectingSignIn(250)
+  await journey(session, submitThenSignOut(prompts), [
+    'Submit the form',
+    'Once the profile is visible, sign out',
+  ])
+  assert.deepEqual(
+    dispatched.map((a) => a.type === 'click' && a.x),
+    [200, SIGN_OUT.x],
+  )
+  assert.equal(prompts.length, 2)
+  assert.match(prompts[1] ?? '', /^The page is at \/profile\./m)
+})
+
+test("runJourney asks again when the last instruction's final move is still landing as the next one starts", async () => {
+  const prompts: string[] = []
+  const { session, dispatched, submitted } = redirectingSignIn(1600)
+  const model = submitThenSignOut(prompts)
   const generate = model.doGenerate
   model.doGenerate = async (options) => {
-    if (submitted) await new Promise((resolve) => setTimeout(resolve, 300))
+    if (submitted()) await new Promise((resolve) => setTimeout(resolve, 800))
     return generate(options)
   }
   await journey(session, model, ['Submit the form', 'Once the profile is visible, sign out'])
