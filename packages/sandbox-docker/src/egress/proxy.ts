@@ -277,6 +277,9 @@ const authorityOf = (host: string, port: number) => {
 
 const pathOnly = (path: string) => path.split('?')[0]
 
+/** Refused brokered requests recorded per method and path before the rest share an entry. */
+const REFUSED_PATHS = 20
+
 function reply(socket: Duplex, status: number, reason: string) {
   const text = http.STATUS_CODES[status] ?? ''
   socket.end(
@@ -395,12 +398,23 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     counting.delete(connection)
     unclaimed.delete(connection)
   }
+  /** Method and path pairs that have a refused request's entry of their own. */
+  let refusedPaths = 0
   /**
    * A request refused on a host the policy let through, one entry per method and path, counted
-   * per request. Its connection stays open for the requests after it, so its bytes still count.
+   * per request. Past the first `REFUSED_PATHS` pairs, the rest share one entry per host, so an
+   * agent walking ids in a path can't grow the record without bound. Its connection stays open
+   * for the requests after it, so its bytes still count.
    */
   const blockRequest = (target: Target, method: string, path: string, reason: string) => {
-    const key = `${target.host}:${target.port} ${method} ${path}`
+    const host = `${target.host}:${target.port}`
+    let key = `${host} ${method} ${path}`
+    if (!blocked.has(key)) {
+      if (refusedPaths >= REFUSED_PATHS) {
+        key = `${host} more`
+        reason = `more requests that carry a brokered credential off the endpoints reeval brokers it for, on paths past the first ${REFUSED_PATHS}`
+      } else refusedPaths++
+    }
     const entry = blocked.get(key) ?? {
       host: target.host,
       port: target.port,

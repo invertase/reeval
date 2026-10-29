@@ -995,6 +995,30 @@ describe('brokered endpoints through the proxy', () => {
     assert.equal(r.status, 200)
     assert.equal(JSON.parse(r.body).authorization, 'Bearer sk-not-brokered')
   })
+
+  test('past 20 refused paths, the rest share one entry, so the record stays bounded', async () => {
+    const own = await startProxy(
+      { mode: 'allow-all' },
+      { endpoints: [{ host: HOST, path: { exact: '/v1/messages' }, method: ['POST'] }] },
+    )
+    try {
+      own.proxy.addTransformations([hostWide])
+      for (let i = 0; i < 25; i++) {
+        const path = `/v1/files/file-${i}`
+        const r = await viaProxy(own, HOST, h1.port, { method: 'GET', path, headers: auth })
+        assert.equal(r.status, 403, path)
+      }
+      const blocked = own.proxy.traffic().blocked
+      assert.equal(blocked.length, 21)
+      const more = blocked.filter((b) => b.reason.startsWith('more requests'))
+      assert.deepEqual(
+        more.map((b) => [b.host, b.port, b.connections]),
+        [[HOST, h1.port, 5]],
+      )
+    } finally {
+      own.close()
+    }
+  })
 })
 
 describe('the harness key in responses', () => {
