@@ -1,9 +1,9 @@
 no profile · 3 evals · 5 cells · 5 attempts
 hint: gateway: fx:claude-sonnet-5 → vercel (direct can't serve it: fx runs a gateway id such as "anthropic/claude-sonnet-5" only through Vercel AI Gateway or OpenRouter)
-evals/a.eval.ts › both harnesses                          cursor:composer-2.5/-/docker                        control  gated  ×1  gateway: cursor:composer-2.5 → direct · gateway: fx:claude-sonnet-5 → vercel
+evals/a.eval.ts › both harnesses                          cursor:composer-2.5/-/docker                        control  gated  ×1  gateway: cursor:composer-2.5 → direct · gateway: fx:claude-sonnet-5 → vercel · effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · effort: fx:claude-sonnet-5 none (fx sends no effort of its own, and reeval adds one only on vertex()) · efforts differ: not checked on cursor:composer-2.5; none on fx:claude-sonnet-5
                                                           fx:claude-sonnet-5/-/docker                         control  gated  ×1
-evals/a.eval.ts › fx on OpenAI, own id                    fx-openai/-/docker                                  control  gated  ×1  gateway: fx-openai → direct
-evals/a.eval.ts › fx on a toolchain base, under deny-all  cursor:composer-2.5/python/docker:python:3.12-slim  control  gated  ×1  gateway: cursor:composer-2.5 → direct · gateway: fx:claude-sonnet-5 → vercel · egress "deny-all" + api2.cursor.sh, *.cursor.sh
+evals/a.eval.ts › fx on OpenAI, own id                    fx-openai/-/docker                                  control  gated  ×1  gateway: fx-openai → direct · effort: fx-openai none (fx sends no effort of its own, and reeval adds one only on vertex())
+evals/a.eval.ts › fx on a toolchain base, under deny-all  cursor:composer-2.5/python/docker:python:3.12-slim  control  gated  ×1  gateway: cursor:composer-2.5 → direct · gateway: fx:claude-sonnet-5 → vercel · effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · effort: fx:claude-sonnet-5 none (fx sends no effort of its own, and reeval adds one only on vertex()) · efforts differ: not checked on cursor:composer-2.5; none on fx:claude-sonnet-5 · egress "deny-all" + api2.cursor.sh, *.cursor.sh
                                                           fx:claude-sonnet-5/python/docker:python:3.12-slim   control  gated  ×1  egress "deny-all" + ai-gateway.vercel.sh
 excluded: —
 image docker · cursor · 1 evals

@@ -200,8 +200,9 @@ export type AttemptRecord = {
    */
   reportedCostUsd?: number
   /**
-   * The reasoning effort the harness factory asked for (`claudeCode({ effort: 'high' })`);
-   * null when the factory left it unset. Fast is not this.
+   * The reasoning effort reeval asked the harness for: the factory's
+   * (`claudeCode({ effort: 'high' })`), or `medium` where it set none and the harness and model
+   * take one; null when it ran with none. Fast is not this.
    */
   effort: string | null
   /**
@@ -526,8 +527,8 @@ export type CellRecord = Cell & {
   /** The configured harness model, when it has one. */
   model: string | null
   /**
-   * The reasoning effort the harness factory asked for; null when it left it unset.
-   * Fast is not this.
+   * The reasoning effort reeval asked the harness for: the factory's, or `medium` where it set
+   * none and the harness and model take one; null when it ran with none. Fast is not this.
    */
   effort: string | null
   /** How the attempts decide the cell's outcome; `'none'` when it doesn't fail the evaluation. */
@@ -710,7 +711,7 @@ export type Stack = {
   /** Exact versions of the packages that run and grade the agent. */
   packages: Record<string, string>
   /**
-   * For each harness, the record includes its configured `model` and requested `effort`,
+   * For each harness, the record includes its configured `model` and the `effort` it ran at,
    * `resolvedModels` (what it reported serving, with the variant it resolved), and
    * `resolvedEffort` (reasoning-effort suffixes those labels named). Fast (`[fast=true]`) is not
    * `resolvedEffort`.
@@ -721,8 +722,8 @@ export type Stack = {
     /** The configured model, when the harness has one. */
     model: string | null
     /**
-     * The reasoning effort the harness factory asked for; null when it left it unset.
-     * Fast is not this.
+     * The reasoning effort reeval asked the harness for: the factory's, or `medium` where it set
+     * none and the harness and model take one; null when it ran with none. Fast is not this.
      */
     effort: string | null
     /**

@@ -1,8 +1,8 @@
 no profile · 2 evals · 6 cells · 6 attempts
-evals/cost.eval.ts › greets         cursor:my-model/-/docker           control  gated  ×1
+evals/cost.eval.ts › greets         cursor:my-model/-/docker           control  gated  ×1  effort: cursor:my-model not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · effort: cursor:gpt-5.6-luna-high not checked against Cursor's model catalog (CURSOR_API_KEY isn't set)
                                     cursor:gpt-5.6-luna-high/-/docker  control  gated  ×1
                                     fake/-/docker                      control  gated  ×1
-evals/cost.eval.ts › fixes the bug  cursor:my-model/-/docker           control  gated  ×1
+evals/cost.eval.ts › fixes the bug  cursor:my-model/-/docker           control  gated  ×1  effort: cursor:my-model not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · effort: cursor:gpt-5.6-luna-high not checked against Cursor's model catalog (CURSOR_API_KEY isn't set)
                                     cursor:gpt-5.6-luna-high/-/docker  control  gated  ×1
                                     fake/-/docker                      control  gated  ×1
 excluded: —

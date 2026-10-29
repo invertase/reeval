@@ -1,9 +1,9 @@
 no profile · 3 evals · 5 cells · 5 attempts
-evals/a.eval.ts › both harnesses                                  cursor:composer-2.5/-/docker                        control  gated  ×1
-                                                                  grok-build:grok-4.6/-/docker                        control  gated  ×1
-evals/a.eval.ts › grok build only, own id and effort              gb/-/docker                                         control  gated  ×1
-evals/a.eval.ts › grok build on a toolchain base, under deny-all  cursor:composer-2.5/python/docker:python:3.12-slim  control  gated  ×1  egress "deny-all" + api2.cursor.sh, *.cursor.sh
-                                                                  grok-build:grok-4.6/python/docker:python:3.12-slim  control  gated  ×1  egress "deny-all" + api.x.ai
+evals/a.eval.ts › both harnesses                                  cursor:composer-2.5/-/docker                        control  gated  ×1  effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · efforts differ: not checked on cursor:composer-2.5; medium on grok-build:grok-4.6
+                                                                  grok-build:grok-4.6/-/docker                        control  gated  ×1  effort medium
+evals/a.eval.ts › grok build only, own id and effort              gb/-/docker                                         control  gated  ×1  effort high
+evals/a.eval.ts › grok build on a toolchain base, under deny-all  cursor:composer-2.5/python/docker:python:3.12-slim  control  gated  ×1  effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · efforts differ: not checked on cursor:composer-2.5; medium on grok-build:grok-4.6 · egress "deny-all" + api2.cursor.sh, *.cursor.sh
+                                                                  grok-build:grok-4.6/python/docker:python:3.12-slim  control  gated  ×1  effort medium · egress "deny-all" + api.x.ai
 excluded: —
 image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

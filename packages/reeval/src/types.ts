@@ -2890,4 +2890,15 @@ export type RunContext = {
   configFile?: string
   /** Attempt keys already finished when this run was resumed; workers register them as skip. */
   completed?: string[]
+  /**
+   * What Cursor's model catalog says of each planned Cursor model's effort, as preflight read it
+   * for the run's key; unset before then, or without a key.
+   */
+  cursorEfforts?: CursorEfforts
 }
+
+/**
+ * Cursor's model catalog on each model's effort: the parameter that names it, with the levels it
+ * lists, or null when it lists none.
+ */
+export type CursorEfforts = Record<string, { param: string; levels: string[] } | null>

@@ -353,8 +353,8 @@ export const harnesses: HarnessRow[] = [
     apiHost: 'api.openai.com',
     tokens: true,
     // The Responses API names the model, undated, and the effort Codex resolved for it; both come
-    // from the response, via the gateway. `effort=medium` is its catalog default: a model Codex's
-    // catalog doesn't list gets no effort (`effort=none`) and no apply_patch tool.
+    // from the response, via the gateway. `effort=medium` is reeval's default, which it writes as
+    // `model_reasoning_effort` so Codex's catalog default (`low` on gpt-5.6-sol) never applies.
     servedModel: /^gpt-5\.6-luna\[effort=medium\]$/,
     wireModel: /^gpt-5\.6-luna\[effort=medium\]$/,
   },

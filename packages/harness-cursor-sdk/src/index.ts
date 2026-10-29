@@ -39,7 +39,9 @@ export {
   type CursorSdkHarnessSettings,
   type CursorSdkSettingSource,
   createCursorSdk,
-  cursorEffortParamId,
+  cursorEffortParam,
+  cursorModelEntry,
+  cursorModelParams,
   withParams,
 } from './cursor-sdk-harness.ts'
 export {

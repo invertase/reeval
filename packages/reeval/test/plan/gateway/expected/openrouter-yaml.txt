@@ -1,6 +1,6 @@
 no profile · 2 evals · 3 cells · 3 attempts
 hint: gateway: cursor:composer-2.5 falls back to direct (openrouter can't serve it: Cursor's agent only calls Cursor's own API)
-evals/g.eval.ts › greets  codex:gpt-5.4-mini/-/docker   control  gated  ×1  gateway: codex:gpt-5.4-mini → openrouter · gateway: cursor:composer-2.5 → direct (fallback) · gateway: openrouter() fallbacks on: reeval's own calls may fail over to another upstream provider; the harnesses' calls take OpenRouter's own routing
+evals/g.eval.ts › greets  codex:gpt-5.4-mini/-/docker   control  gated  ×1  effort medium · gateway: codex:gpt-5.4-mini → openrouter · gateway: cursor:composer-2.5 → direct (fallback) · gateway: openrouter() fallbacks on: reeval's own calls may fail over to another upstream provider; the harnesses' calls take OpenRouter's own routing · effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · efforts differ: medium on codex:gpt-5.4-mini; not checked on cursor:composer-2.5
                           cursor:composer-2.5/-/docker  control  gated  ×1
 evals/g.eval.ts › pinned  b/-/docker                    control  gated  ×1  gateway: b → direct · gateway: openrouter() fallbacks on: reeval's own calls may fail over to another upstream provider; the harnesses' calls take OpenRouter's own routing
 excluded: —

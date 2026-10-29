@@ -1,5 +1,5 @@
 no profile · 1 evals · 2 cells · 2 attempts
-evals/every-part.eval.ts › loads the plugin  antigravity:gemini-3.8-flash-low/review/docker  control  gated  ×1  plugins review (skills, agents, commands, hooks, mcp, rules)
+evals/every-part.eval.ts › loads the plugin  antigravity:gemini-3.8-flash-low/review/docker  control  gated  ×1  effort: antigravity:gemini-3.8-flash-low none (the model id names its effort, low) · effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · efforts differ: none on antigravity:gemini-3.8-flash-low; not checked on cursor:composer-2.5 · plugins review (skills, agents, commands, hooks, mcp, rules)
                                              cursor:composer-2.5/review/docker               control  gated  ×1  plugins review (skills, agents, commands, hooks, mcp, rules)
 excluded: —
 image docker · antigravity · 1 evals

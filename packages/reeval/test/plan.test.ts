@@ -2,8 +2,10 @@
 // `reeval run --dry-run --json` on a directory under test/plan/ and compares the normalized matrix
 // with test/plan/<dir>/expected/<case>.txt. REEVAL_UPDATE_SNAPSHOTS=1 rewrites them; review the diff.
 import assert from 'node:assert/strict'
-import { readdirSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
+import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { fakeConfig, project, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
@@ -14,6 +16,27 @@ import { syncPythonFixtureProject } from './support/python-fixture.ts'
 const NO_DOCKER = { DOCKER_HOST: 'unix:///nonexistent/reeval-plan.sock' }
 /** The cost cases' Composer price, over a models.dev cache in the project, so none fetches it. */
 const PRICES = { REEVAL_PRICES: 'prices.json', XDG_CACHE_HOME: '.cache' }
+/** Cursor's model catalog for `test-key`, as the run reads it back from its cache within the hour. */
+const CURSOR_CATALOG = { CURSOR_API_KEY: 'test-key', XDG_CACHE_HOME: '.cache' }
+const cursorCatalog = (dir: string) => {
+  const name = createHash('sha256').update('test-key').digest('hex').slice(0, 16)
+  const option = (...values: string[]) => values.map((value) => ({ value }))
+  const items = [
+    { id: 'composer-2.5', parameters: [{ id: 'fast', values: option('false', 'true') }] },
+    {
+      id: 'gpt-5.6-luna',
+      parameters: [
+        { id: 'reasoning', values: option('low', 'medium', 'high') },
+        { id: 'fast', values: option('false', 'true') },
+      ],
+    },
+  ]
+  mkdirSync(join(dir, '.cache/reeval'), { recursive: true })
+  writeFileSync(
+    join(dir, `.cache/reeval/cursor-models-${name}.json`),
+    JSON.stringify({ fetchedAt: new Date().toISOString(), items }),
+  )
+}
 const modelsDev = async (dir: string) => {
   const { seedModelsDev } = await import('./support/cost.ts')
   seedModelsDev(dir)
@@ -187,6 +210,14 @@ export const cases: PlanCase[] = [
   { dir: 'fx', name: 'fx', args: [] },
   { dir: 'cursor', name: 'cursor', args: [] },
   { dir: 'effort', name: 'effort', args: [] },
+  { dir: 'default-effort', name: 'no-cursor-key', args: [] },
+  {
+    dir: 'default-effort',
+    name: 'cursor-catalog',
+    args: [],
+    env: CURSOR_CATALOG,
+    prepare: cursorCatalog,
+  },
   { dir: 'secrets', name: 'brokered', args: ['evals/s.eval.ts'] },
   {
     dir: 'secrets',
@@ -418,6 +449,22 @@ evaluate('routed', async () => {})
       assert.deepEqual(readdirSync(strict.dir).includes('.reeval'), false, 'nothing ran')
     })
   }
+
+  test("a Cursor effort or params its model catalog doesn't list exits 2 at plan time, naming the cell", async () => {
+    const p = await fixture('plan/default-effort')
+    cursorCatalog(p.dir)
+    for (const args of [['run', '--dry-run'], ['run']]) {
+      const r = await runCli(p.dir, [...args, '--config', 'reeval.refused.config.ts'], {
+        env: CURSOR_CATALOG,
+      })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /evaluate\("default effort"\) on cursor:composer-2\.5\[effort=medium\]: Cursor's model catalog lists no effort for composer-2\.5 \(it takes fast \('false', 'true'\)\), so drop cursor\(\{ effort: 'medium' \}\); Fast is params\.fast, not effort/,
+      )
+    }
+    assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
+  })
 
   test('a gateway reeval does not know exits 2 at plan time, naming the ones it does', async () => {
     const p = await project('gateway-unknown', {

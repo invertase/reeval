@@ -5,6 +5,7 @@ import { type CostedAttempt, type PlanCost, planCost } from './cost.ts'
 import type { ExcludedEval, PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
 import { fallbackHint } from './gateway/resolve.ts'
+import { harnessEffort } from './harness/effort.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
 import { majorityOf } from './options.ts'
@@ -538,6 +539,11 @@ export type PlanCell = Cell & {
   gateway?: ResolvedGateway
   gate: CellGate
   minLift?: number
+  /**
+   * The reasoning effort its harness runs at: the factory's, or `medium` where it sets none and
+   * the harness and model take one; null when it runs with none.
+   */
+  effort: string | null
   /** With `bestOf`, the most attempts the cell runs. */
   runs: number
   /** Set by `runs: { bestOf }`: the cell stops once a majority of this many agree. */
@@ -643,6 +649,7 @@ export function planDocument(
         ...(attempt.gateway ? { gateway: attempt.gateway } : {}),
         gate: attempt.gate,
         ...(attempt.minLift !== undefined ? { minLift: attempt.minLift } : {}),
+        effort: harnessEffort(attempt.harness) ?? null,
         runs: 1,
         ...(attempt.bestOf !== undefined ? { bestOf: attempt.bestOf } : {}),
         brokered: attempt.brokered,

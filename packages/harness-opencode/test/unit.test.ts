@@ -5,7 +5,6 @@ import {
   createOpenCode,
   OPENCODE_CLI_VERSION,
   openCodeConfig,
-  openCodeEffortBody,
   openCodeEnv,
 } from '../src/opencode-harness.ts'
 import {
@@ -13,6 +12,7 @@ import {
   OPENCODE_PNPM_LOCK,
   OPENCODE_PNPM_WORKSPACE,
 } from '../src/opencode-install.ts'
+import { openCodeEffortBody } from '../src/opencode-providers.ts'
 import { OPENCODE_BUILTIN_TOOLS } from '../src/opencode-tools.ts'
 import { VERSION } from '../src/version.ts'
 

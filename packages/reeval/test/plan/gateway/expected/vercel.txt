@@ -1,11 +1,11 @@
 no profile · 2 evals · 7 cells · 7 attempts
 hint: gateway: cursor:composer-2.5 falls back to direct (vercel can't serve it: Cursor's agent only calls Cursor's own API)
-evals/g.eval.ts › greets  claude-code:claude-sonnet-4-5/-/docker  control  gated  ×1  gateway: claude-code:claude-sonnet-4-5 → vercel · gateway: codex:gpt-5.4-mini → vercel · gateway: cursor:composer-2.5 → direct (fallback) · gateway: goose:gemini-3.8-flash → vercel · gateway: pi:gemini-3.8-flash → vercel · gateway: grok-build:grok-4.6 → vercel
-                          codex:gpt-5.4-mini/-/docker             control  gated  ×1
+evals/g.eval.ts › greets  claude-code:claude-sonnet-4-5/-/docker  control  gated  ×1  gateway: claude-code:claude-sonnet-4-5 → vercel · gateway: codex:gpt-5.4-mini → vercel · gateway: cursor:composer-2.5 → direct (fallback) · gateway: goose:gemini-3.8-flash → vercel · gateway: pi:gemini-3.8-flash → vercel · gateway: grok-build:grok-4.6 → vercel · effort: claude-code:claude-sonnet-4-5 none (Claude Code sends no effort to claude-sonnet-4-5) · effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · effort: goose:gemini-3.8-flash none (reeval doesn't send Goose's effort to gemini-3.8-flash through Vercel AI Gateway yet) · efforts differ: none on claude-code:claude-sonnet-4-5, goose:gemini-3.8-flash; medium on codex:gpt-5.4-mini, pi:gemini-3.8-flash, grok-build:grok-4.6; not checked on cursor:composer-2.5
+                          codex:gpt-5.4-mini/-/docker             control  gated  ×1  effort medium
                           cursor:composer-2.5/-/docker            control  gated  ×1
                           goose:gemini-3.8-flash/-/docker         control  gated  ×1
-                          pi:gemini-3.8-flash/-/docker            control  gated  ×1
-                          grok-build:grok-4.6/-/docker            control  gated  ×1
+                          pi:gemini-3.8-flash/-/docker            control  gated  ×1  effort medium
+                          grok-build:grok-4.6/-/docker            control  gated  ×1  effort medium
 evals/g.eval.ts › pinned  b/-/docker                              control  gated  ×1  gateway: b → direct
 excluded: —
 image docker · claude-code · 1 evals

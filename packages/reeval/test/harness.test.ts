@@ -1088,6 +1088,11 @@ describe('harness effort', () => {
     assert.equal(effortFromModelLabel('gpt-5.6-luna[effort=medium]'), 'medium')
     assert.equal(effortFromModelLabel('composer-2.5[fast=true]'), undefined)
     assert.equal(effortFromModelLabel('grok-4.7[reasoning_effort=high,fast=true]'), 'high')
+    assert.equal(
+      effortFromModelLabel('gpt-5.6-luna[context=1m,reasoning=medium,fast=false]'),
+      'medium',
+    )
+    assert.equal(effortFromModelLabel('claude-opus-5[thinking=true]'), undefined)
     assert.equal(servedEffortOf(['composer-2.5[fast=true]', 'gpt-5.6-luna[effort=low]']), 'low')
   })
 })
@@ -1104,7 +1109,7 @@ describe('the Cursor harness', () => {
     )
     assert.throws(
       () => cursor({ model: 'm', params: { fast: false } as never }),
-      /cursor\(\{ params \}\) maps parameter ids to string values/,
+      /cursor\(\{ params \}\) values are strings, as Cursor's model catalog lists them: write fast: 'false', not fast: false/,
     )
   })
 

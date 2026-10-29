@@ -254,6 +254,34 @@
       },
       "required": []
     },
+    "CursorEfforts": {
+      "description": "Cursor's model catalog on each model's effort: the parameter that names it, with the levels it lists, or null when it lists none.",
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "levels": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "param": {
+                "type": "string"
+              }
+            },
+            "required": ["levels", "param"]
+          }
+        ]
+      }
+    },
     "CursorHarnessDescriptor": {
       "description": "Cursor's agent through the Cursor TypeScript SDK's local runtime (`@reeval/harness-cursor-sdk`), made by `cursor()`. It reports each turn's tokens.",
       "type": "object",
@@ -2433,6 +2461,10 @@
         "configFile": {
           "description": "The config file, relative to the current directory, for the debug trace; unset without one.",
           "type": "string"
+        },
+        "cursorEfforts": {
+          "description": "What Cursor's model catalog says of each planned Cursor model's effort, as preflight read it for the run's key; unset before then, or without a key.",
+          "$ref": "#/$defs/CursorEfforts"
         },
         "profile": {
           "anyOf": [

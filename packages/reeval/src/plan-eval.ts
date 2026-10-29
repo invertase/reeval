@@ -29,6 +29,7 @@ import { resolveGateway } from './gateway/resolve.ts'
 import { vercelCredentialProblem } from './gateway/vercel.ts'
 import { type VertexSettings, vertexSettings } from './gateway/vertex.ts'
 import { refusedMcp, refusedPlugins } from './harness/agents.ts'
+import { withDefaultEffort } from './harness/default-effort.ts'
 import { attemptId, attemptKey, evalId, relativeFile } from './ids.ts'
 import {
   brokeredIn,
@@ -79,7 +80,7 @@ export type EvalDeclaration = {
 /** Where the eval is planned: the run, the eval file, and how many evals the file planned before it. */
 export type PlanContext = Pick<
   RunContext,
-  'config' | 'profile' | 'runs' | 'tags' | 'concurrency' | 'completed'
+  'config' | 'profile' | 'runs' | 'tags' | 'concurrency' | 'completed' | 'cursorEfforts'
 > & {
   /** The eval file's path, absolute. */
   file: string | undefined
@@ -172,39 +173,41 @@ function planTests(
   const routes = new Map<string, ResolvedGateway>()
   const gatewayNotes: string[] = []
   let vertex: VertexSettings | undefined
-  // Each harness carries the gateway it resolved to, so the worker, egress and brokering read it
-  // from the descriptor; direct leaves the descriptor as written.
+  // Each harness carries the gateway it resolved to and the effort it runs at, so the worker,
+  // egress and brokering read them from the descriptor; direct leaves the gateway unset.
   const routed = resolvedEval.skip
     ? resolved.harness
-    : resolved.harness.map((harness) => {
-        const route = resolveGateway(gateways, harness, where)
-        const hid = harnessId(harness)
-        if (gatewaySet || harness.gateway !== undefined) {
-          routes.set(hid, route)
-          gatewayNotes.push(
-            `gateway: ${hid} → ${route.name}${route.name === 'direct' && route.skipped.length ? ' (fallback)' : ''}`,
-          )
-        }
-        if (route.name === 'direct') return harness
-        if (harness.kind !== 'fake') {
-          try {
-            if (route.name === 'vercel') {
-              const problem = vercelCredentialProblem()
-              if (problem) throw new UsageError(problem)
-            }
-            if (route.name === 'vertex') {
-              const entry = gateways.find((g) => g.kind === 'vertex')
-              vertex ??= vertexSettings(entry?.kind === 'vertex' ? entry : {})
-            }
-          } catch (error) {
-            if (error instanceof UsageError) {
-              throw new UsageError(`${where} on ${hid}: ${error.message}`)
-            }
-            throw error
+    : resolved.harness
+        .map((harness) => {
+          const route = resolveGateway(gateways, harness, where)
+          const hid = harnessId(harness)
+          if (gatewaySet || harness.gateway !== undefined) {
+            routes.set(hid, route)
+            gatewayNotes.push(
+              `gateway: ${hid} → ${route.name}${route.name === 'direct' && route.skipped.length ? ' (fallback)' : ''}`,
+            )
           }
-        }
-        return { ...harness, gateway: route.name }
-      })
+          if (route.name === 'direct') return harness
+          if (harness.kind !== 'fake') {
+            try {
+              if (route.name === 'vercel') {
+                const problem = vercelCredentialProblem()
+                if (problem) throw new UsageError(problem)
+              }
+              if (route.name === 'vertex') {
+                const entry = gateways.find((g) => g.kind === 'vertex')
+                vertex ??= vertexSettings(entry?.kind === 'vertex' ? entry : {})
+              }
+            } catch (error) {
+              if (error instanceof UsageError) {
+                throw new UsageError(`${where} on ${hid}: ${error.message}`)
+              }
+              throw error
+            }
+          }
+          return { ...harness, gateway: route.name }
+        })
+        .map((harness) => withDefaultEffort(harness, ctx.cursorEfforts))
   const plannedAttempts = resolvedEval.skip ? [] : expand({ ...resolved, harness: routed }, vertex)
   let judge: AttemptMeta['judge']
   if (plannedAttempts.length) {

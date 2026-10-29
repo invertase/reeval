@@ -376,25 +376,51 @@ async function startSession(
 
 /**
  * Catalog parameter ids that name reasoning effort, not Fast. The live catalog picks the id
- * (`reasoning_effort` on one Grok listing, `effort` in others); this matches whichever it lists.
+ * (`reasoning` on GPT models, `reasoning_effort` on some Grok and Gemini listings, `effort` on
+ * Claude's); `thinking` names effort only when its values are levels, not `false`/`true`.
  */
-const EFFORT_PARAM_ID = /^(reasoning[_-])?effort$|^thinking([_-]effort)?$/i
+const EFFORT_PARAM_ID = /^(reasoning([_-]effort)?|effort|thinking([_-]effort)?)$/i
 
-/**
- * The catalog param id that names reasoning effort for `model`, or undefined when that entry
- * lists none. Fast (`fast`) never matches.
- */
-export function cursorEffortParamId(
+/** A catalog entry's parameters, each with the values it lists. */
+export function cursorModelParams(
+  entry: CursorSdkModelEntry | undefined,
+): Array<{ id: string; values: string[] }> {
+  const parameters = Array.isArray(entry?.parameters)
+    ? (entry.parameters as Array<{ id?: unknown; values?: Array<{ value?: unknown }> }>)
+    : []
+  return parameters.flatMap((p) =>
+    typeof p.id === 'string'
+      ? [
+          {
+            id: p.id,
+            values: (Array.isArray(p.values) ? p.values : [])
+              .map((v) => v?.value)
+              .filter((v): v is string => typeof v === 'string'),
+          },
+        ]
+      : [],
+  )
+}
+
+/** The catalog entry for `model`, by id or alias. */
+export function cursorModelEntry(
   catalog: readonly CursorSdkModelEntry[] | undefined,
   model: string,
-): string | undefined {
-  const entry = catalog?.find((m) => m.id === model || m.aliases?.includes(model))
-  const parameters = Array.isArray(entry?.parameters)
-    ? (entry.parameters as Array<{ id?: unknown }>)
-    : []
-  return parameters
-    .map((p) => p.id)
-    .find((id): id is string => typeof id === 'string' && EFFORT_PARAM_ID.test(id))
+): CursorSdkModelEntry | undefined {
+  return catalog?.find((m) => m.id === model || m.aliases?.includes(model))
+}
+
+/**
+ * The catalog parameter that names reasoning effort for `model`, with the levels it lists, or
+ * undefined when that entry lists none. Fast (`fast`) never matches.
+ */
+export function cursorEffortParam(
+  catalog: readonly CursorSdkModelEntry[] | undefined,
+  model: string,
+): { id: string; values: string[] } | undefined {
+  return cursorModelParams(cursorModelEntry(catalog, model)).find(
+    (p) => EFFORT_PARAM_ID.test(p.id) && !p.values.every((v) => v === 'false' || v === 'true'),
+  )
 }
 
 function mergeEffortParams(
@@ -404,7 +430,7 @@ function mergeEffortParams(
 ): Readonly<Record<string, string>> | undefined {
   const given = settings.modelParams
   if (!settings.effort) return given
-  const id = cursorEffortParamId(catalog, model)
+  const id = cursorEffortParam(catalog, model)?.id
   if (!id) {
     throw new Error(
       `Cursor's model catalog has no effort parameter for ${model}. Fast is params.fast, not effort.`,

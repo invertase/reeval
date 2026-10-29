@@ -37,7 +37,7 @@ import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { checkLimitHarness, harnessId, plannedSandboxes, plannedSandboxIds } from './options.ts'
 import type { RunPlan } from './plan.ts'
-import { preflight, type SandboxVersions } from './preflight.ts'
+import { PreflightInfraError, preflight, type SandboxVersions } from './preflight.ts'
 import { redactSecrets, registerSecret } from './redact.ts'
 import { logInvocation } from './report/invocations.ts'
 import { commandOf, redactArgv } from './report/scrub.ts'
@@ -52,7 +52,7 @@ import {
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
 import { clip } from './text.ts'
-import type { RunContext } from './types.ts'
+import type { CursorEfforts, RunContext } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
 import { runOutcome } from './view/model.ts'
@@ -639,6 +639,52 @@ function unmatchedFilter(config: StartedRun['config'], parts: string[]) {
 }
 
 /**
+ * Reads Cursor's model catalog for the planned Cursor cells, checks their `effort` and `params`
+ * against it (exit 2, naming the eval and cell), gives each the effort it runs at, and notes each
+ * eval's harnesses that run with none. A catalog that can't be read stops a run (exit 3), since
+ * every Cursor attempt needs it; a dry run notes it instead.
+ */
+async function planEfforts(
+  planned: PlannedItem[],
+  dryRun: boolean,
+): Promise<CursorEfforts | PreflightInfraError | undefined> {
+  const live = planned.filter((p) => !p.attempt.plan.skip)
+  const { effortNotes, withDefaultEffort } = await import('./harness/default-effort.ts')
+  let cursor: CursorEfforts | undefined
+  let unchecked = "CURSOR_API_KEY isn't set"
+  const key = process.env.CURSOR_API_KEY
+  if (key && live.some((p) => p.attempt.harness.kind === 'cursor')) {
+    const { checkCursorCatalog, cursorCatalog } = await import('./harness/cursor-catalog.ts')
+    const catalog = await cursorCatalog(key).catch((error: Error) => error)
+    if (catalog instanceof Error) {
+      unchecked = `its request failed: ${catalog.message}`
+      if (!dryRun) {
+        return new PreflightInfraError(
+          `Cursor's model catalog request failed (${catalog.message}), and every Cursor attempt needs it`,
+        )
+      }
+    } else {
+      cursor = checkCursorCatalog(live, catalog)
+      for (const p of planned) p.attempt.harness = withDefaultEffort(p.attempt.harness, cursor)
+    }
+  }
+  const byEval = new Map<string, PlannedItem[]>()
+  for (const p of live) byEval.set(p.id, [...(byEval.get(p.id) ?? []), p])
+  for (const items of byEval.values()) {
+    const notes = effortNotes(
+      items.map((p) => p.attempt.harness),
+      cursor,
+      unchecked,
+    )
+    for (const { attempt } of items) {
+      for (const note of notes)
+        if (!attempt.plan.notes.includes(note)) attempt.plan.notes.push(note)
+    }
+  }
+  return cursor
+}
+
+/**
  * Collects the evals and prints the plan; stops there for `--dry-run`, or on a budget, credential
  * or Docker problem (exit 2). Then runs the engine with live output and Ctrl-C handling.
  */
@@ -696,6 +742,12 @@ async function executeRun(
     toRun = skipped
     for (const p of skipped)
       for (const name of p.attempt.secretVars) registerSecret(process.env[name])
+    const efforts = await planEfforts(skipped, setup.dryRun)
+    if (efforts instanceof PreflightInfraError) {
+      preflightStop = efforts
+      return false
+    }
+    if (efforts) run.cursorEfforts = efforts
     const asks = skipped.some((p) => !p.attempt.plan.skip && p.attempt.plan.questions?.length)
     const models = asks ? await import('./analysis/model.ts') : undefined
     const judge = runJudgeModel(config, profile)

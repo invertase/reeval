@@ -1,9 +1,9 @@
 no profile · 3 evals · 5 cells · 5 attempts
-evals/a.eval.ts › both harnesses                             cursor:composer-2.5/-/docker                        control  gated  ×1
-                                                             codex:gpt-5.4-mini/-/docker                         control  gated  ×1
-evals/a.eval.ts › Codex only, own id                         cx/-/docker                                         control  gated  ×1
-evals/a.eval.ts › Codex on a toolchain base, under deny-all  cursor:composer-2.5/python/docker:python:3.12-slim  control  gated  ×1  egress "deny-all" + api2.cursor.sh, *.cursor.sh
-                                                             codex:gpt-5.4-mini/python/docker:python:3.12-slim   control  gated  ×1  egress "deny-all" + api.openai.com
+evals/a.eval.ts › both harnesses                             cursor:composer-2.5/-/docker                        control  gated  ×1  effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · efforts differ: not checked on cursor:composer-2.5; medium on codex:gpt-5.4-mini
+                                                             codex:gpt-5.4-mini/-/docker                         control  gated  ×1  effort medium
+evals/a.eval.ts › Codex only, own id                         cx/-/docker                                         control  gated  ×1  effort medium
+evals/a.eval.ts › Codex on a toolchain base, under deny-all  cursor:composer-2.5/python/docker:python:3.12-slim  control  gated  ×1  effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · efforts differ: not checked on cursor:composer-2.5; medium on codex:gpt-5.4-mini · egress "deny-all" + api2.cursor.sh, *.cursor.sh
+                                                             codex:gpt-5.4-mini/python/docker:python:3.12-slim   control  gated  ×1  effort medium · egress "deny-all" + api.openai.com
 excluded: —
 image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
