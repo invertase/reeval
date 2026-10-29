@@ -19,7 +19,11 @@ import {
 } from '../src/harness/default-effort.ts'
 import { antigravity, claudeCode, codex, cursor, fx, grokBuild, pi } from '../src/harness.ts'
 import { harnessId } from '../src/options.ts'
+import { effortSummary } from '../src/plan.ts'
 import type { CursorEfforts } from '../src/types.ts'
+import { colors } from '../src/ui/colors.ts'
+import type { RunHeader } from '../src/ui/events.ts'
+import { headerLines } from '../src/ui/header.ts'
 
 const values = (...vs: string[]) => vs.map((value) => ({ value }))
 const CATALOG = [
@@ -125,6 +129,36 @@ describe('the shared default effort', () => {
       withDefaultEffort(h),
     )
     assert.deepEqual(effortNotes(same, undefined, ''), [])
+  })
+})
+
+describe('the effort in the plan line and the run header', () => {
+  test('one effort names it; mixed ones count the harnesses at each; fake alone has none', () => {
+    assert.equal(effortSummary({ 'codex:a': 'medium', 'pi:b': 'medium' }), 'effort medium')
+    assert.equal(
+      effortSummary({ 'codex:a': 'medium', 'pi:b': 'medium', 'cursor:c': 'none', 'x:d': 'high' }),
+      'efforts medium on 2 harnesses, none on 1, high on 1',
+    )
+    assert.equal(effortSummary({}), undefined)
+  })
+
+  test('a harness shows its effort unless its id already names it', () => {
+    const lines = headerLines(
+      colors(false, 4),
+      {
+        ...({} as RunHeader),
+        version: '0.16.1',
+        runId: 'r',
+        dryRun: true,
+        harnesses: ['codex:a', 'codex:a[effort=high]'],
+        efforts: { 'codex:a': 'medium', 'codex:a[effort=high]': 'high' },
+        sandboxes: ['docker'],
+        judges: [],
+        budget: {},
+      },
+      100,
+    )
+    assert.ok(lines.includes('  ➜  Harnesses: codex:a (effort: medium), codex:a[effort=high]'))
   })
 })
 

@@ -5,6 +5,7 @@ import { type CostedAttempt, type PlanCost, planCost } from './cost.ts'
 import type { ExcludedEval, PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
 import { fallbackHint } from './gateway/resolve.ts'
+import { noDefaultEffort } from './harness/default-effort.ts'
 import { harnessEffort } from './harness/effort.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
@@ -16,6 +17,7 @@ import type {
   Budget,
   Cell,
   CellGate,
+  CursorEfforts,
   Duration,
   EvalPlan,
   FamilyMeta,
@@ -77,6 +79,12 @@ export type RunPlan = {
   harnessDescriptors: HarnessDescriptor[]
   /** The harness ids the planned attempts run on, for the run header. */
   harnesses: string[]
+  /**
+   * The effort each of those harnesses runs at, by id: its level, `none`, or `not checked` for
+   * a Cursor model whose catalog wasn't read. The fake harness has none.
+   */
+  efforts: Record<string, string>
+  /** The model that answers a question naming none; null when there's no language model. */
   /** The model that answers a question naming none; null when there's no language model. */
   questionModel: string | null
   /** The run this plan belongs to, minted or resumed before collect. */
@@ -132,6 +140,8 @@ export async function buildPlan(options: {
   judgeModel?: string | null
   /** Prices for the cost estimate, which only `--dry-run` shows; unset leaves it out. */
   prices?: Prices
+  /** What Cursor's catalog says of each Cursor model's effort; unset when it wasn't read. */
+  cursorEfforts?: CursorEfforts
 }): Promise<RunPlan> {
   const { planned } = options
   const records = await recentRecords([options.historyDir, scratchDir(options.root)], HISTORY_RUNS)
@@ -144,6 +154,8 @@ export async function buildPlan(options: {
   const sandboxes = new Map<string, SandboxDescriptor>()
   const descriptors = new Map<string, HarnessDescriptor>()
   const harnesses = new Set<string>()
+  // One harness id can run at two efforts when evals route it through different gateways.
+  const efforts = new Map<string, Set<string>>()
   // A filter can leave out some of an eval's cells: each row counts what it actually plans.
   const counted = new Map<
     string,
@@ -182,6 +194,15 @@ export async function buildPlan(options: {
     sandboxes.set(JSON.stringify(attempt.sandbox), attempt.sandbox)
     descriptors.set(JSON.stringify(attempt.harness), attempt.harness)
     harnesses.add(attempt.cell.harness)
+    if (attempt.harness.kind !== 'fake') {
+      const effort =
+        harnessEffort(attempt.harness) ??
+        (noDefaultEffort(attempt.harness, options.cursorEfforts) === 'unchecked'
+          ? 'not checked'
+          : 'none')
+      const seen = efforts.get(attempt.cell.harness) ?? new Set<string>()
+      efforts.set(attempt.cell.harness, seen.add(effort))
+    }
     const row = counted.get(id) ?? {
       harnesses: new Set(),
       variants: new Set(),
@@ -246,6 +267,7 @@ export async function buildPlan(options: {
     sandboxes: [...sandboxes.values()],
     harnessDescriptors: [...descriptors.values()],
     harnesses: [...harnesses],
+    efforts: Object.fromEntries([...efforts].map(([id, set]) => [id, [...set].join(' or ')])),
     questionModel: options.questionModel ?? null,
   }
 }
@@ -411,6 +433,8 @@ export function planLine(plan: RunPlan, config?: string, runId?: string): string
       ? `${plan.fewest}–${plan.attempts} attempts`
       : plural(plan.attempts, 'attempt'),
   )
+  const effort = effortSummary(plan.efforts)
+  if (effort) parts.push(effort)
   const serial = `~${formatDuration(plan.estimateMs)} serial`
   const parallel = Math.min(plan.concurrency, plan.attempts)
   parts.push(
@@ -427,6 +451,20 @@ export function planLine(plan: RunPlan, config?: string, runId?: string): string
   ].filter(Boolean)
   if (caps.length) parts.push(`budget ${caps.join(', ')}`)
   return `plan  ${parts.join(' · ')}`
+}
+
+/**
+ * `effort medium` when every harness runs at one effort, else `efforts medium on 3 harnesses, none
+ * on 1`; undefined when only the fake harness runs.
+ */
+export function effortSummary(efforts: Record<string, string>): string | undefined {
+  const on = new Map<string, number>()
+  for (const effort of Object.values(efforts)) on.set(effort, (on.get(effort) ?? 0) + 1)
+  if (on.size <= 1) return on.size ? `effort ${[...on.keys()][0]}` : undefined
+  const counts = [...on].map(([effort, n], i) =>
+    i === 0 ? `${effort} on ${plural(n, 'harness', 'harnesses')}` : `${effort} on ${n}`,
+  )
+  return `efforts ${counts.join(', ')}`
 }
 
 /** {@link planLine}'s facts and the run's setup, for a terminal's run header. */
@@ -451,6 +489,7 @@ export function runHeader(
     ...(plan.resume ? { resumed: plan.resume.completed } : {}),
     ...(plan.profile ? { profile: { name: plan.profile.name, reason: plan.profile.reason } } : {}),
     harnesses: plan.harnesses,
+    ...(Object.keys(plan.efforts).length ? { efforts: plan.efforts } : {}),
     judges: [...judges],
     files: new Set(live.map((p) => p.file)).size,
     evals: plan.evals,

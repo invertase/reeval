@@ -2,7 +2,7 @@ REEVAL v0.16.1
 
   ➜  Run:       20261029T144346Z_77bb468_elliot-hesp_72sn
   ➜  Profile:   smoke
-  ➜  Harness:   cursor:composer-2.5
+  ➜  Harness:   cursor:composer-2.5 (effort: none)
   ➜  Sandbox:   docker
   ➜  Scope:     1 eval file · 1 eval · 4 cells · 4 attempts (budget: 15 ✓)
   ➜  Est. Time: ~3m 48s (concurrency: 8) · ~15m 10s (serial)

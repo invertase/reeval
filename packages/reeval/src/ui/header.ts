@@ -49,7 +49,7 @@ export function headerLines(c: Colors, h: RunHeader, width: number): string[] {
     const joined = values.join(', ')
     // A list that doesn't fit on the line takes one line per item, under the first.
     const lines =
-      values.length > 1 && joined.length > valueWidth ? values : wrap(joined, valueWidth)
+      values.length > 1 && stripAnsi(joined).length > valueWidth ? values : wrap(joined, valueWidth)
     return lines.map((v, i) =>
       i === 0
         ? `  ${c.teal('➜')}  ${c.dim(`${key}:`)}${indent(KEY - key.length - 1)}${v}`
@@ -66,13 +66,25 @@ export function headerLines(c: Colors, h: RunHeader, width: number): string[] {
     ...row('Run', `${h.runId}${resumed}`),
     ...(h.config ? row('Config', h.config) : []),
     ...(h.profile ? row('Profile', `${h.profile.name}${reason}`) : []),
-    ...row(many('Harness', h.harnesses.length, 'Harnesses'), h.harnesses),
+    ...row(
+      many('Harness', h.harnesses.length, 'Harnesses'),
+      h.harnesses.map((id) => harness(c, h, id)),
+    ),
     ...row(many('Sandbox', h.sandboxes.length, 'Sandboxes'), h.sandboxes),
     ...(h.judges.length ? row(many('Judge', h.judges.length), h.judges) : []),
     ...row('Scope', scope(c, h)),
     ...row('Est. Time', estimate(c, h)),
     ...(h.record && !h.dryRun ? row('Record', h.record) : []),
   ]
+}
+
+/** A harness id, with the effort it runs at when the id doesn't name it. */
+function harness(c: Colors, h: RunHeader, id: string): string {
+  const effort = h.efforts?.[id]
+  if (effort === undefined || id.includes('[effort=')) return id
+  // Each word dimmed on its own, so a wrap between them leaves no color open.
+  const words = `(effort: ${effort})`.split(' ').map((w) => c.dim(w))
+  return `${id} ${words.join(' ')}`
 }
 
 function scope(c: Colors, h: RunHeader): string {

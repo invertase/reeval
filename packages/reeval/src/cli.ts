@@ -750,6 +750,7 @@ async function executeRun(
       questionModel: models?.questionModelLabel(config, judge) ?? null,
       judgeModel,
       ...(setup.dryRun ? { prices: await dryRunPrices(skipped, judgeModel) } : {}),
+      ...(efforts ? { cursorEfforts: efforts } : {}),
     })
     plan.runId = runId
     const cloud = ciRunner(process.env)
