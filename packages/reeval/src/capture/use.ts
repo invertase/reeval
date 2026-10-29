@@ -128,16 +128,25 @@ function asUsage(value: {
   return { input, output, cacheRead: 0, cacheWrite: 0, reasoning: null }
 }
 
+// A blank string is no number: `Number('')` is 0, which would click the page's top edge.
 const finite = (value: unknown): number | undefined => {
-  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+  const n =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim()
+        ? Number(value)
+        : NaN
   return Number.isFinite(n) ? n : undefined
 }
 
-/** The point at `x`/`y`, or both packed into one as `"217,163"`, which models sometimes send. */
+/**
+ * The point at `x`/`y`, or both packed into one as `"217,163"`, which models sometimes send. A
+ * half missing from the packed form (`"217,"`) is read from its own field.
+ */
 function point(input: Record<string, unknown>, x: string, y: string): [number, number] | undefined {
   const packed = typeof input[x] === 'string' ? (input[x] as string).split(',') : []
-  const px = finite(packed.length === 2 ? packed[0] : input[x])
-  const py = finite(packed.length === 2 ? packed[1] : input[y])
+  const px = packed.length === 2 ? (finite(packed[0]) ?? finite(input[x])) : finite(input[x])
+  const py = packed.length === 2 ? (finite(packed[1]) ?? finite(input[y])) : finite(input[y])
   return px === undefined || py === undefined ? undefined : [px, py]
 }
 

@@ -478,6 +478,24 @@ test('runJourney stops a model that repeats a move that changes nothing, after n
 test('actionFromTool reads a point packed into x, and refuses input that names no action', () => {
   assert.deepEqual(actionFromTool('click', { x: '217,163' }), { type: 'click', x: 217, y: 163 })
   assert.deepEqual(actionFromTool('click', { x: '217', y: 163 }), { type: 'click', x: 217, y: 163 })
+  assert.deepEqual(actionFromTool('click', { x: '639,', y: 163 }), {
+    type: 'click',
+    x: 639,
+    y: 163,
+  })
+  assert.deepEqual(actionFromTool('drag', { x: 1, y: 2, toX: '30,', toY: 40 }), {
+    type: 'drag',
+    x: 1,
+    y: 2,
+    toX: 30,
+    toY: 40,
+  })
+  assert.deepEqual(actionFromTool('click', { x: '639,' }), {
+    refused: 'it had no numeric x and y',
+  })
+  assert.deepEqual(actionFromTool('click', { x: '', y: '' }), {
+    refused: 'it had no numeric x and y',
+  })
   assert.deepEqual(actionFromTool('click', { x: 'here' }), {
     refused: 'it had no numeric x and y',
   })
