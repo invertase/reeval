@@ -35,7 +35,7 @@ import type { GitInfo } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
-import { checkLimitHarness, harnessId, plannedSandboxes } from './options.ts'
+import { checkLimitHarness, harnessId, plannedSandboxes, plannedSandboxIds } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
 import { redactSecrets, registerSecret } from './redact.ts'
@@ -339,10 +339,12 @@ async function runCommand(
   const stepStart = process.env.GITHUB_STEP_SUMMARY
   if (stepStart) await appendFile(stepStart, `run ${ctx.runId}\n`).catch(() => {})
   const { engineVersions } = await import('./engine/node.ts')
+  // The JSON plan is the only output of `--dry-run --json`; a run's JSON is the only stdout of
+  // `--json`, so its progress goes to stderr.
+  const terminal = setup.json && !setup.dryRun ? process.stderr : process.stdout
   const renderer = createRenderer({
-    // The JSON plan is the only output of `--dry-run --json`; a run's JSON is the only stdout of
-    // `--json`, so its progress goes to stderr.
-    out: setup.json ? (setup.dryRun ? { write: () => true } : process.stderr) : process.stdout,
+    out: setup.json && setup.dryRun ? { write: () => true } : terminal,
+    columns: terminal.columns,
     output: setup.output,
     verbosity: ctx.verbosity ?? 0,
     harness: setup.config.harness[0]?.kind ?? 'agent',
@@ -661,9 +663,8 @@ async function executeRun(
     }),
   ) as typeof ctx
   const { runEngine } = await import('./engine/node.ts')
-  const { buildPlan, checkAttemptBudget, planDocument, planLine, planTable } = await import(
-    './plan.ts'
-  )
+  const { buildPlan, checkAttemptBudget, planDocument, planLine, planTable, runHeader } =
+    await import('./plan.ts')
   let plan: RunPlan | undefined
   let sandboxVersions: SandboxVersions = { images: [] }
   let preflightStop: Error | undefined
@@ -753,7 +754,9 @@ async function executeRun(
       process.stdout.write(`${JSON.stringify(doc, null, 2)}\n`)
       return false
     }
-    const lines = [planLine(plan, setup.configElsewhere ? configFile : undefined, runId)]
+    const elsewhere = setup.configElsewhere ? configFile : undefined
+    const { scratchDir } = await import('./history/files.ts')
+    const lines: string[] = []
     if (setup.dryRun) {
       const todos = excluded.filter((e) => e.mode === 'todo').map((e) => e.id)
       lines.push(...planTable(plan, todos))
@@ -772,12 +775,22 @@ async function executeRun(
       const cost = plan.cost && costLine(plan.cost)
       if (cost) lines.push(cost)
     }
-    lines.push(...plan.warnings.map((w) => `warning: ${w}`))
-    lines.push(...plan.hints.map((h) => `hint: ${h}`))
     renderer.onEvent({
       type: 'plan',
       at: Date.now(),
-      lines,
+      line: planLine(plan, elsewhere, runId),
+      header: runHeader(plan, skipped, {
+        version,
+        runId,
+        dryRun: setup.dryRun,
+        config: elsewhere,
+        judge: judgeModel,
+        sandboxes: plannedSandboxIds(plan.sandboxes, profileSandbox(config, profile?.defaults)),
+        record: fromCwd(join(scratchDir(config.root), `${runId}.json`)),
+      }),
+      details: lines,
+      warnings: plan.warnings,
+      hints: plan.hints,
       sandboxWarnings: plan.sandboxWarnings,
     })
     if (setup.dryRun) return false

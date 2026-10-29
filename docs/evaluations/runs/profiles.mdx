@@ -35,10 +35,14 @@ To pick a profile, pass `--profile`:
 npx reeval run --profile nightly
 ```
 
-The relevant start of the plan line names the profile and its selection source:
+The header names the profile:
 
 ```text
-plan  profile nightly (--profile) · 5 evals · 13 cells · 35 attempts · …
+REEVAL v0.16.1  dry run
+
+  ➜  Run:       …
+  ➜  Profile:   nightly
+  …
 ```
 
 The `REEVAL_PROFILE` environment variable names a profile the same way. `--profile` takes precedence when both are set.
@@ -96,10 +100,10 @@ A profile's `budget` caps the plan and the run. Preview a run against its budget
 npx reeval run --profile pr --dry-run
 ```
 
-The relevant end of the plan line shows whether the plan fits:
+The header's `Scope` row shows whether the plan fits:
 
 ```text
-… · 6 attempts · budget 5 attempts ✗
+  ➜  Scope:     1 eval file · 1 eval · 1 cell · 6 attempts (budget: 5 ✗)
 ```
 
 A run over the cap stops before it starts:

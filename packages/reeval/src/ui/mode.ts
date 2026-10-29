@@ -18,6 +18,11 @@ export type OutputOptions = {
   logPrefix: LogPrefix
   outputLogs: OutputLogs
   color: boolean
+  /**
+   * The run header as a block, with glyphs: on a color TTY outside CI, unless `--ui` named the
+   * mode. Otherwise every line stays plain and greppable.
+   */
+  rich: boolean
   /** `::group::` blocks and `::error::` annotations. */
   githubActions: boolean
   /** A "still running" line after this much silence; 0 turns it off. */
@@ -131,6 +136,7 @@ export function resolveOutput(input: {
     logPrefix,
     outputLogs,
     color,
+    rich: statusLine && color,
     githubActions,
     heartbeatMs: mode === 'agent' ? 0 : parseHeartbeat(env.REEVAL_HEARTBEAT),
   }

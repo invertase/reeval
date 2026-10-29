@@ -1,0 +1,29 @@
+REEVAL v0.16.1  dry run
+
+  ➜  Run:       20261029T144346Z_77bb468_elliot-hesp_72sn
+                (resumed, 3 attempts done)
+  ➜  Config:    ../reeval.config.ts
+  ➜  Profile:   pr (auto: CI is set)
+  ➜  Harnesses: cursor:composer-2.5
+                claude-code:claude-sonnet-4-5
+                codex:gpt-5.1-codex
+  ➜  Sandboxes: docker, fake
+  ➜  Judge:     typesafe-ai/jev-1.14.0
+  ➜  Scope:     1 eval file · 1 eval (1 skipped) · 4 cells ·
+                3–20 attempts (budget: 15 ✗, 30m)
+  ➜  Est. Time: ~1m 54s (concurrency: 8) · ~15m 10s (serial)
+
+eval  harnesses  runs
+a     3          4
+
+  ⚠  Warning: skill.git(github:firebase/agent-skills) uses no
+              ref (the default branch): results aren't
+              comparable over time. Pin a tag or SHA (the
+              resolved commit is recorded either way).
+  ⚠  Warning: skill.git(github:firebase/firebaseui-web) uses no
+              ref (the default branch): results aren't
+              comparable over time. Pin a tag or SHA (the
+              resolved commit is recorded either way).
+  ⚠  Warning: the sandbox runs as root: give it a user, or set
+              root: true
+

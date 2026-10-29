@@ -5,6 +5,8 @@ export type Colors = {
   green: Paint
   red: Paint
   yellow: Paint
+  cyan: Paint
+  blue: Paint
   dim: Paint
   bold: Paint
   /** A stable color per attempt tag, cycling Turborepo's palette in order of first use. */
@@ -29,6 +31,8 @@ export function colors(enabled: boolean): Colors {
     green: paint(32),
     red: paint(31),
     yellow: paint(33),
+    cyan: paint(36),
+    blue: paint(34),
     dim: paint(2, 22),
     bold: paint(1, 22),
     tag(key) {

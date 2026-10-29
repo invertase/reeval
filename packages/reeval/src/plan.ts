@@ -28,6 +28,7 @@ import type {
   SandboxDescriptor,
   SandboxWarning,
 } from './types.ts'
+import type { RunHeader } from './ui/events.ts'
 import { EFFORT_MIN_RUNS } from './view/effort.ts'
 
 /**
@@ -425,6 +426,44 @@ export function planLine(plan: RunPlan, config?: string, runId?: string): string
   ].filter(Boolean)
   if (caps.length) parts.push(`budget ${caps.join(', ')}`)
   return `plan  ${parts.join(' · ')}`
+}
+
+/** {@link planLine}'s facts and the run's setup, for a terminal's run header. */
+export function runHeader(
+  plan: RunPlan,
+  planned: PlannedItem[],
+  run: Pick<RunHeader, 'version' | 'runId' | 'dryRun' | 'config' | 'sandboxes' | 'record'> & {
+    /** The run's own judge model, null when it has none. */
+    judge: string | null
+  },
+): RunHeader {
+  const live = planned.filter((p) => !p.attempt.plan.skip)
+  const judges = new Set(live.flatMap((p) => (p.attempt.judge ? [p.attempt.judge.model] : [])))
+  if (!judges.size && run.judge !== null) judges.add(run.judge)
+  return {
+    version: run.version,
+    runId: run.runId,
+    dryRun: run.dryRun,
+    sandboxes: run.sandboxes,
+    ...(run.config ? { config: run.config } : {}),
+    ...(run.dryRun || !run.record ? {} : { record: run.record }),
+    ...(plan.resume ? { resumed: plan.resume.completed } : {}),
+    ...(plan.profile ? { profile: { name: plan.profile.name, reason: plan.profile.reason } } : {}),
+    harnesses: plan.harnesses,
+    judges: [...judges],
+    files: new Set(live.map((p) => p.file)).size,
+    evals: plan.evals,
+    skipped: plan.rows.length - plan.evals,
+    cells: plan.cells,
+    attempts: plan.attempts,
+    fewest: plan.fewest,
+    budget: {
+      ...(plan.budget.attempts !== undefined ? { attempts: plan.budget.attempts } : {}),
+      ...(plan.budget.duration !== undefined ? { duration: `${plan.budget.duration}` } : {}),
+    },
+    estimateMs: plan.estimateMs,
+    concurrency: plan.concurrency,
+  }
 }
 
 /** `6–10` for a best-of eval's attempts, which stop once a majority agrees; else the count. */

@@ -14,6 +14,8 @@ export function createRenderer(options: {
   harness: string
   /** `-v` (1) or `-vv` (2): how debug lines' times read. */
   verbosity?: 0 | 1 | 2
+  /** The terminal's width, for the rich header. */
+  columns?: number
 }): Renderer {
   // Progress lines echo check commands and the agent's tool calls, which can hold a secret.
   const out: OutputStream = { write: (text) => options.out.write(redactSecrets(text)) }
