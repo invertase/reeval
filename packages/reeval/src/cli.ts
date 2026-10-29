@@ -345,6 +345,7 @@ async function runCommand(
   const renderer = createRenderer({
     out: setup.json && setup.dryRun ? { write: () => true } : terminal,
     columns: terminal.columns,
+    colorDepth: terminal.isTTY ? terminal.getColorDepth() : undefined,
     output: setup.output,
     verbosity: ctx.verbosity ?? 0,
     harness: setup.config.harness[0]?.kind ?? 'agent',

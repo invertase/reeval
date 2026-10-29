@@ -35,7 +35,9 @@ const indent = (n: number) => ' '.repeat(n)
 
 /** `REEVAL v0.16.1`, then the run's facts, one `➜ Key: value` line each. */
 export function headerLines(c: Colors, h: RunHeader, width: number): string[] {
-  const title = c.bold(c.cyan(`REEVAL v${h.version}`))
+  // A terminal that draws bold in the bright colors would wash a 16-color title out on white.
+  const name = `REEVAL v${h.version}`
+  const title = c.bold(c.depth === 4 ? name : c.teal(name))
   const valueWidth = width - GLYPH - KEY
   const row = (key: string, value: string | string[]) => {
     const values = typeof value === 'string' ? [value] : value
@@ -45,7 +47,7 @@ export function headerLines(c: Colors, h: RunHeader, width: number): string[] {
       values.length > 1 && joined.length > valueWidth ? values : wrap(joined, valueWidth)
     return lines.map((v, i) =>
       i === 0
-        ? `  ${c.cyan('➜')}  ${c.dim(`${key}:`)}${indent(KEY - key.length - 1)}${v}`
+        ? `  ${c.teal('➜')}  ${c.dim(`${key}:`)}${indent(KEY - key.length - 1)}${v}`
         : `${indent(GLYPH + KEY)}${v}`,
     )
   }
@@ -102,14 +104,18 @@ export function noteLines(
   width: number,
 ): string[] {
   const [glyph, label, paint]: [string, string, Paint] =
-    kind === 'hint'
-      ? ['ℹ', 'Hint:', (s) => c.bold(c.blue(s))]
-      : ['⚠', 'Warning:', kind === 'root' ? (s) => c.bold(c.red(s)) : (s) => c.bold(c.yellow(s))]
+    kind === 'hint' ? ['ℹ', 'Hint:', c.blue] : ['⚠', 'Warning:', kind === 'root' ? c.red : c.orange]
+  // 16 colors have no orange or blue that reads on both a light and a dark theme (yellow fades on
+  // white, blue on black): only the glyph is colored there, and the label is bold in the
+  // terminal's own text color.
+  const basic = { warning: c.yellow, hint: c.teal, root: c.red }[kind]
+  const lead =
+    c.depth === 4 && kind !== 'root'
+      ? `${basic(glyph)}  ${c.bold(label)}`
+      : c.bold(paint(`${glyph}  ${label}`))
   const at = GLYPH + LABEL
   return wrap(text, Math.max(20, width - at)).map((line, i) =>
-    i === 0
-      ? `  ${paint(`${glyph}  ${label}`)}${indent(LABEL - label.length)}${line}`
-      : `${indent(at)}${line}`,
+    i === 0 ? `  ${lead}${indent(LABEL - label.length)}${line}` : `${indent(at)}${line}`,
   )
 }
 
@@ -126,7 +132,7 @@ export function noticeLines(
   e: Extract<ReevalEvent, { type: 'notice' }>,
   width: number,
 ): string[] {
-  const glyph = { info: c.dim('ℹ'), warn: c.yellow('⚠'), error: c.red('✗') }[e.level]
+  const glyph = { info: c.dim('ℹ'), warn: c.orange('⚠'), error: c.red('✗') }[e.level]
   const lines = stepLines(glyph, e.text, width)
   return e.level === 'info' ? lines.map((l) => c.dim(l)) : lines
 }
@@ -142,7 +148,7 @@ export function prepareStepLines(
     const n = e.targets.length
     const names = e.targets.map((t) => t.label).join(', ')
     return stepLines(
-      c.cyan('◆'),
+      c.teal('◆'),
       `Preparing ${plural(n, 'sandbox', 'sandboxes')} (${names})...`,
       width,
     )
@@ -155,7 +161,7 @@ export function prepareStepLines(
   const who = outcome.target.setBy.join(', ')
   return [
     `  ${c.red('✗')}  ${outcome.target.label} failed to prepare ${c.dim(`(set by ${who}; only its attempts fail)`)}`,
-    ...tailLines(outcome.failure.message, max).map((l) => `${indent(GLYPH)}${c.yellow(l)}`),
+    ...tailLines(outcome.failure.message, max).map((l) => `${indent(GLYPH)}${c.orange(l)}`),
   ]
 }
 
@@ -169,5 +175,5 @@ export function startLine(c: Colors, output: OutputOptions): string {
         : output.logOrder === 'stream'
           ? 'Streaming logs...'
           : "Running; each attempt's logs print as it ends..."
-  return `  ${c.cyan('◆')}  ${text}`
+  return `  ${c.teal('◆')}  ${text}`
 }

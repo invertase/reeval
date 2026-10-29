@@ -5,7 +5,7 @@ import { describe, test } from 'node:test'
 import type { RunRecord } from '../src/history/types.ts'
 import type { AttemptMeta } from '../src/types.ts'
 import { AgentRenderer } from '../src/ui/agent.ts'
-import { colors, stripAnsi } from '../src/ui/colors.ts'
+import { type ColorDepth, colors, stripAnsi } from '../src/ui/colors.ts'
 import type { EvalResult, Progress, ReevalEvent, RunHeader } from '../src/ui/events.ts'
 import { progressLine } from '../src/ui/format.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
@@ -621,11 +621,16 @@ const prepared: ReevalEvent[] = [
 ]
 
 describe('run header', () => {
-  const draw = (events: ReevalEvent[], output: OutputOptions, columns: number) => {
+  const draw = (
+    events: ReevalEvent[],
+    output: OutputOptions,
+    columns: number,
+    depth: ColorDepth = 4,
+  ) => {
     let text = ''
     const renderer = new PlainRenderer({
       out: { write: (chunk: string) => (text += chunk) },
-      colors: colors(output.color),
+      colors: colors(output.color, depth),
       output,
       harness: 'cursor',
       now: () => T0,
@@ -637,10 +642,12 @@ describe('run header', () => {
     return text
   }
   const rich = options({ statusLine: true, color: true, rich: true, logOrder: 'stream' })
-  // test/fixtures/ui/<name>.txt, without color; REEVAL_UPDATE_SNAPSHOTS=1 rewrites them.
-  const golden = (name: string, text: string) => {
+  // test/fixtures/ui/<name>.txt, without color, or with its codes and ESC as ␛;
+  // REEVAL_UPDATE_SNAPSHOTS=1 rewrites them.
+  const golden = (name: string, text: string, keepColor = false) => {
     const file = join(pkgRoot, 'test/fixtures/ui', `${name}.txt`)
-    const plain = stripAnsi(text).replaceAll('\r\x1b[2K', '')
+    const shown = text.replaceAll('\r\x1b[2K', '')
+    const plain = keepColor ? shown.replaceAll('\x1b', '␛') : stripAnsi(shown)
     if (process.env.REEVAL_UPDATE_SNAPSHOTS) {
       mkdirSync(dirname(file), { recursive: true })
       writeFileSync(file, plain)
@@ -651,11 +658,29 @@ describe('run header', () => {
   test('on a color terminal: one block, its notes wrapped under their first word', () => {
     const out = draw([planEvent(), ...prepared], rich, 100)
     golden('header-run', out)
-    assert.ok(out.includes('\x1b[1m\x1b[36mREEVAL v0.16.1\x1b[39m\x1b[22m'), 'a bold cyan title')
-    assert.ok(out.includes('\x1b[1m\x1b[33m⚠  Warning:\x1b[39m\x1b[22m'), 'bold yellow warnings')
-    assert.ok(out.includes('\x1b[1m\x1b[34mℹ  Hint:\x1b[39m\x1b[22m'), 'bold blue hints')
+    assert.ok(
+      out.startsWith('\x1b[1mREEVAL v0.16.1\x1b[22m'),
+      'on 16 colors, a bold title in the text color',
+    )
+    assert.ok(
+      out.includes('\x1b[33m⚠\x1b[39m  \x1b[1mWarning:\x1b[22m'),
+      'on 16 colors, a yellow glyph and a bold label in the text color',
+    )
+    assert.ok(out.includes('\x1b[36mℹ\x1b[39m  \x1b[1mHint:\x1b[22m'), 'and a cyan glyph for hints')
     assert.ok(out.includes('\x1b[2mRun:\x1b[22m'), 'dim keys')
     for (const line of stripAnsi(out).split('\n')) assert.ok(line.length <= 100, line)
+  })
+
+  test('with 256 colors or truecolor, warnings are orange and the accents mid-tone', () => {
+    const at = (depth: ColorDepth) => draw([planEvent(), ...prepared], rich, 100, depth)
+    golden('header-run-256', at(8), true)
+    assert.ok(at(8).includes('\x1b[1m\x1b[38;5;166m⚠  Warning:\x1b[39m\x1b[22m'))
+    assert.ok(at(8).includes('\x1b[1m\x1b[38;5;33mℹ  Hint:\x1b[39m\x1b[22m'))
+    assert.ok(at(8).includes('\x1b[38;5;31m➜\x1b[39m'))
+    assert.ok(at(8).startsWith('\x1b[1m\x1b[38;5;31mREEVAL v0.16.1\x1b[39m\x1b[22m'))
+    assert.ok(at(24).includes('\x1b[1m\x1b[38;2;215;95;0m⚠  Warning:\x1b[39m\x1b[22m'))
+    assert.ok(at(24).includes('\x1b[38;2;0;135;175m◆\x1b[39m'))
+    assert.equal(stripAnsi(at(24)), stripAnsi(at(4)), 'only the colors differ')
   })
 
   test('lists wrap one per line, and a dry run shows its table, a root sandbox and a resume', () => {
