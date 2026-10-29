@@ -84,11 +84,25 @@ export const OPENROUTER_PROVIDER: CodexProvider = {
 }
 
 /**
- * The one request Codex sends the key on, `POST /v1/responses`, on its own provider (with
- * WebSockets off, so it's always HTTP). A gateway that enforces it refuses the key anywhere else.
+ * The Responses API, the one model request Codex sends the key on (with WebSockets off, so it's
+ * always HTTP), whose response names the model that served it.
+ */
+export const CODEX_MODEL_ENDPOINTS = [
+  { host: new URL(OPENAI_API_URL).hostname, path: { exact: '/v1/responses' }, method: ['POST'] },
+] as const
+
+/**
+ * Every request Codex sends the key on, on its own provider: the model calls, and its web search
+ * tool's `POST /v1/alpha/search`, which Codex calls itself rather than as a hosted tool of the
+ * model's. A gateway that enforces them refuses the key anywhere else.
  */
 export const CODEX_ENDPOINTS = [
-  { host: new URL(OPENAI_API_URL).hostname, path: { exact: '/v1/responses' }, method: ['POST'] },
+  ...CODEX_MODEL_ENDPOINTS,
+  {
+    host: new URL(OPENAI_API_URL).hostname,
+    path: { exact: '/v1/alpha/search' },
+    method: ['POST'],
+  },
 ] as const
 
 /**

@@ -1926,6 +1926,18 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/codex-web-search',
+    tiers: ['real'],
+    realHarness: 'codex',
+    env: 'closed',
+    canary: /expected no web searches, got \[/,
+    record: ({ run }) => {
+      const attempt = landed(run)
+      assert.ok((attempt?.activity.webSearches ?? 0) >= 1, 'the search is in the record')
+      assert.deepEqual(attempt?.egress?.blocked, [], 'nothing it needed was refused')
+    },
+  },
+  {
     dir: 'harness/opencode-provider-key',
     tiers: ['real'],
     realHarness: 'opencode-anthropic',

@@ -250,7 +250,7 @@ A turn's `unreported` list names the events a harness can't report, and the matc
 - **Cursor:** records both. The SDK's stream leaves those calls out, so reeval recovers them from the stored conversation. A turn reeval can't recover lists the event on `unreported`.
 - **Claude Code:** records both. A `webSearch` call records `query` and `references`, and a `webFetch` or `WebFetch` call records `url`. `ok` is false when a call fails.
 - **Antigravity:** records both, with `unreported` empty.
-- **Codex:** records both, with `unreported` empty. A search stores its text on `query`, and an `open_page` or `find_in_page` action with a URL is a fetch. Both run on OpenAI's side, and the transcript keeps each event under a restricted egress policy.
+- **Codex:** records both, with `unreported` empty. A search stores its text on `query`, and an `open_page` or `find_in_page` action with a URL is a fetch. Codex sends each to `POST api.openai.com/v1/alpha/search` on the brokered key, so the transcript keeps each event under a restricted egress policy.
 - **OpenCode:** records both, with `unreported` empty. A search runs on a hosted MCP server at `mcp.exa.ai`, which needs no key and is one of the harness's automatic egress hosts.
 - **Goose:** records neither, and `unreported` is empty.
 - **pi:** records neither. Its built-in tools are `bash`, `read`, `write`, and `edit`, so the matchers fail on a pi turn.
