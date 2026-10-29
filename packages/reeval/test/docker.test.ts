@@ -1066,6 +1066,8 @@ evaluate('stuck', { environment: box, timeout: '10m' }, async (c) => {
     let sent = 0
     const r = await runCli(p.dir, ['run', '--output-logs', 'full'], {
       ...slow,
+      // Under the test's own timeout, so a run that ignores the signal fails with its output.
+      deadlineMs: 180_000,
       onOutput: (stdout, pid) => {
         if (!stdout.includes('capturing now')) return false
         setTimeout(() => {

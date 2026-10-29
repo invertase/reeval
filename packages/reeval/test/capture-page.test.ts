@@ -279,22 +279,20 @@ test('a CDP call settles on its reply, its error, its deadline or the socket clo
   await assert.rejects(pending, /the capture closed its DevTools connection/)
 })
 
-test(
-  'canceling withChrome while the browser starts stops it at once, not at its budget',
-  { skip: process.platform === 'win32' && 'the stand-in browser is a shell script' },
-  async () => {
-    // A browser that never opens its DevTools port, so startup waits on it.
-    const dir = mkdtempSync(join(tmpdir(), 'reeval-stuck-chrome-'))
-    const bin = join(dir, 'chrome')
-    writeFileSync(bin, '#!/bin/sh\nexec sleep 600\n', { mode: 0o755 })
-    const canceled = new AbortController()
-    setTimeout(() => canceled.abort(new Error('the run was canceled')), 200)
-    const started = Date.now()
-    await assert.rejects(
-      withChrome(bin, { width: 800, height: 600 }, 60_000, {}, async () => 1, canceled.signal),
-      /the run was canceled/,
-    )
-    assert.ok(Date.now() - started < 10_000, `stopped after ${Date.now() - started}ms`)
-    rmSync(dir, { recursive: true, force: true })
-  },
-)
+test('canceling withChrome while the browser starts stops it at once, not at its budget', {
+  skip: process.platform === 'win32' && 'the stand-in browser is a shell script',
+}, async () => {
+  // A browser that never opens its DevTools port, so startup waits on it.
+  const dir = mkdtempSync(join(tmpdir(), 'reeval-stuck-chrome-'))
+  const bin = join(dir, 'chrome')
+  writeFileSync(bin, '#!/bin/sh\nexec sleep 600\n', { mode: 0o755 })
+  const canceled = new AbortController()
+  setTimeout(() => canceled.abort(new Error('the run was canceled')), 200)
+  const started = Date.now()
+  await assert.rejects(
+    withChrome(bin, { width: 800, height: 600 }, 60_000, {}, async () => 1, canceled.signal),
+    /the run was canceled/,
+  )
+  assert.ok(Date.now() - started < 10_000, `stopped after ${Date.now() - started}ms`)
+  rmSync(dir, { recursive: true, force: true })
+})
