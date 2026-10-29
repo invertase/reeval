@@ -1034,6 +1034,12 @@ class FakeHarnessDescriptorWithSkill(TypedDict):
 
 # A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`.
 class FakeHarnessDescriptor(TypedDict):
+    # In Docker, broker the key of the agent `layout` names (`OPENAI_API_KEY` for `codex`,
+    # Cursor's when unset) on that agent's endpoints, as its adapter does: the key stays on the
+    # host, and `exec` steps get a placeholder in its variable, which the egress gateway swaps
+    # in on those endpoints when sent as `Authorization: Bearer <placeholder>`, and refuses on
+    # any other request.
+    brokers: NotRequired[Literal[True]]
     # Simulated turn length, honors the abort signal.
     delayMs: NotRequired[float]
     # Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what

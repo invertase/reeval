@@ -1208,7 +1208,8 @@ export const features: Feature[] = [
     env: 'brokered',
     image: 'codex',
     hostEnv: { OPENAI_API_KEY: BROKERED_KEY },
-    canary: /expected 'reeval egress gateway: refused POST h…' not to contain 'carries a brokered credential'/,
+    canary:
+      /expected 'reeval egress gateway: refused POST h…' not to contain 'carries a brokered credential'/,
     record: ({ run, runDir, stdout }) => {
       const egress = landed(run)?.egress
       assert.deepEqual(egress?.blocked, [

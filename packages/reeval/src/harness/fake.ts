@@ -133,7 +133,10 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
             if ('exec' in step) {
               const time = at()
               debugLog('harness', `tool shell called: $ ${step.exec}`)
-              const r = await sandbox.exec(step.exec, { signal, ...(brokered && { env: brokered }) })
+              const r = await sandbox.exec(step.exec, {
+                signal,
+                ...(brokered && { env: brokered }),
+              })
               debugLog(
                 'harness',
                 `tool shell returned exit ${r.exitCode} in ${Date.now() - startedAt - time.atMs}ms`,
@@ -224,7 +227,10 @@ async function brokerKey(
       transform: { headers: { authorization: `Bearer ${key}` } },
     })),
   )
-  debugLog('harness', `${credential} is a placeholder for the fake agent, brokered on its endpoints`)
+  debugLog(
+    'harness',
+    `${credential} is a placeholder for the fake agent, brokered on its endpoints`,
+  )
   return { [credential]: placeholder }
 }
 

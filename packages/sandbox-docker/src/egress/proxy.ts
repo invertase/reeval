@@ -930,11 +930,12 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const url = `https://${target.host}${pathOnly(path)}`
     if (refused) {
       log(`reeval:egress ${method} ${url} HTTP/${version} refused (not a brokered endpoint)`)
+      const pathname = pathOnly(path) ?? path
       blockRequest(
         target,
         method,
-        pathOnly(path),
-        `${method} ${pathOnly(path)} carries a brokered credential, and it isn't one of the endpoints reeval brokers it for`,
+        pathname,
+        `${method} ${pathname} carries a brokered credential, and it isn't one of the endpoints reeval brokers it for`,
       )
       options.onRefused?.({ method, url })
       return {
