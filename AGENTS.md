@@ -317,18 +317,18 @@ Which features have fixtures on which tier is a generated matrix:
 ### CI and releases
 
 GitHub Actions runs on every PR, every merge-queue entry (`merge_group`), every push to `main`
-and nightly, on `ubuntu-24.04` with Node from `engines`, plus Windows and macOS on full runs
+and nightly, on `ubuntu-24.04` with Node from `engines`, plus macOS on full runs (the Windows jobs are off for now)
 (below). The Node 22.13 floor and the coverage report run on nightly, `workflow_dispatch`,
 release and `ci:full`. PRs and the queue get a deliberately light tier while PRs are many;
-`main` still runs Windows, macOS, Docker and npm 10.9, so a merge cannot skip those:
+`main` still runs macOS, Docker and npm 10.9, so a merge cannot skip those:
 
 | Event | Runs |
 |---|---|
-| PR, merge queue (light tier) | Always `lint, typecheck and docs`; on any code change, `unit and plan (1/4 … 4/4)`; each heavier job only when its paths change (`ci.yml`'s `changes` job, against the base, or the merge group's base): `features (fake)` for the engine, attempt, capture, sandbox, harness and ui code and the fixtures; `docker (…)` for sandbox-docker, the harness packages and reeval's sandbox, harness, attempt and capture code and the Docker tests; `studio` for studio-web and reeval's studio and view code; `packed install` for package manifests, the bundle config and what ships beside `dist/`; `engine coverage` for the engine and its tests; `launcher conformance` (Linux, macOS and Windows) for an SDK's `reeval` launcher and `test/conformance/launcher/`. Docs-only changes (`docs/`, `docs.json`, root-level `*.md`, `skills/`, `.agents/`) skip the unit shards, studio-web-only ones too. A change to `.github/`, the lockfile, the workspace, `patches/` or a `tsconfig` runs every Linux job. No coverage |
+| PR, merge queue (light tier) | Always `lint, typecheck and docs`; on any code change, `unit and plan (1/4 … 4/4)`; each heavier job only when its paths change (`ci.yml`'s `changes` job, against the base, or the merge group's base): `features (fake)` for the engine, attempt, capture, sandbox, harness and ui code and the fixtures; `docker (…)` for sandbox-docker, the harness packages and reeval's sandbox, harness, attempt and capture code and the Docker tests; `studio` for studio-web and reeval's studio and view code; `packed install` for package manifests, the bundle config and what ships beside `dist/`; `engine coverage` for the engine and its tests; `launcher conformance` (Linux and macOS) for an SDK's `reeval` launcher and `test/conformance/launcher/`. Docs-only changes (`docs/`, `docs.json`, root-level `*.md`, `skills/`, `.agents/`) skip the unit shards, studio-web-only ones too. A change to `.github/`, the lockfile, the workspace, `patches/` or a `tsconfig` runs every Linux job. No coverage |
 | PR, merge queue (full tier) | Every Linux job on any code change |
-| PR labeled `ci:full` | Everything, unscoped, including the Node 22.13 floor, Windows and macOS (`ci-full.yml` runs it once when the label is added; later pushes' own runs are full) |
-| `main` | Every Linux job, Windows, macOS and npm 10.9. No Node 22.13 floor (newest Node already ran on the PR) and no coverage report. Each SHA has its own concurrency group, so a burst of merges does not cancel pending runs |
-| nightly, `workflow_dispatch`, release | Everything: every Linux job, `extended.yml` (Node 22.13, Windows, macOS), npm 10.9's packed install and the coverage report |
+| PR labeled `ci:full` | Everything, unscoped, including the Node 22.13 floor and macOS (`ci-full.yml` runs it once when the label is added; later pushes' own runs are full) |
+| `main` | Every Linux job, macOS and npm 10.9. No Node 22.13 floor (newest Node already ran on the PR) and no coverage report. Each SHA has its own concurrency group, so a burst of merges does not cancel pending runs |
+| nightly, `workflow_dispatch`, release | Everything: every Linux job, `extended.yml` (Node 22.13, macOS), npm 10.9's packed install and the coverage report |
 
 **Switching the PR tier.** `ci.yml`'s `PR_TIER` picks the tier for PRs and the queue: `light` by
 default, or the `CI_PR_TIER` repository variable (Settings → Secrets and variables → Actions →
@@ -341,8 +341,8 @@ skipped, which passes. So the required set holds on either tier; rename or add j
 
 | Workflow | Jobs |
 |---|---|
-| `ci.yml` | `changes` (the scope), `lint, typecheck and docs` (`biome ci`, the build, typecheck, the schema check and both docs checks), `unit and plan (1/4 … 4/4)` (the newest Node that `engines` allows, in four `--test-shard`s, since a 2-vCPU runner runs one test file at a time; the first also runs the other packages' tests, where sandbox-docker's container tests skip), `features (fake)`, `docker (…)` with `REEVAL_TEST_REQUIRE_DOCKER=1` (reeval's Docker tier in five legs, split by `--test-name-pattern` and `--test-skip-pattern` on one regex so no test falls between them, and sandbox-docker's suite), `studio` (with the browser test), `engine coverage` (100% of the engine's files), `launcher conformance (<sdk>, <os>)` (each SDK's `reeval` launcher against `test/conformance/launcher/` on Linux, macOS and Windows), `packed install (npm 11)` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `(npm 10.9)`, `extended` (calls `extended.yml`), `coverage` (below) and `ci` (the gate) |
-| `extended.yml` | Called by `ci.yml` on `main`, nightly, on demand, on release and for `ci:full`: `windows (unit 1/6 … 6/6, tiers, packed)`, `macos (unit, tiers, packed)` in parallel, and `unit and plan (node 22.13, 1/4 … 4/4)` except on ordinary `main` pushes |
+| `ci.yml` | `changes` (the scope), `lint, typecheck and docs` (`biome ci`, the build, typecheck, the schema check and both docs checks), `unit and plan (1/4 … 4/4)` (the newest Node that `engines` allows, in four `--test-shard`s, since a 2-vCPU runner runs one test file at a time; the first also runs the other packages' tests, where sandbox-docker's container tests skip), `features (fake)`, `docker (…)` with `REEVAL_TEST_REQUIRE_DOCKER=1` (reeval's Docker tier in five legs, split by `--test-name-pattern` and `--test-skip-pattern` on one regex so no test falls between them, and sandbox-docker's suite), `studio` (with the browser test), `engine coverage` (100% of the engine's files), `launcher conformance (<sdk>, <os>)` (each SDK's `reeval` launcher against `test/conformance/launcher/` on Linux and macOS), `packed install (npm 11)` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `(npm 10.9)`, `extended` (calls `extended.yml`), `coverage` (below) and `ci` (the gate) |
+| `extended.yml` | Called by `ci.yml` on `main`, nightly, on demand, on release and for `ci:full`: `macos (unit, tiers, packed)` (its `windows (unit 1/6 … 6/6, tiers, packed)` jobs are off for now, `if: false`), and `unit and plan (node 22.13, 1/4 … 4/4)` except on ordinary `main` pushes |
 | `ci-full.yml` | On a PR labeled `ci:full`: `ci.yml`, unscoped, as `full / …` |
 | `cache-cleanup.yml` | After each `ci` run on `main`: deletes stale and non-`main` entries from the caches CI writes |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR; in the merge queue, every commit the merge group adds to `main` (the squash commits, whose subjects are the PR titles) |
@@ -350,7 +350,7 @@ skipped, which passes. So the required set holds on either tier; rename or add j
 | `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`REEVAL_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |
 | `release.yml` | release-please on `main`; on a release, `ci.yml` and `binary.yml` on the release commit (the tag, on a republish), then publishing to npm, `binary.yml`'s binaries uploaded to the GitHub release, and then its reeval-python sdist and wheels published to PyPI |
 
-- **Windows and macOS** (in `extended.yml`, so not on PRs without `ci:full`) run `scripts/ci-os.sh`: the unit and plan files (in six shards on
+- **Windows (off for now) and macOS** (in `extended.yml`, so not on PRs without `ci:full`) run `scripts/ci-os.sh`: the unit and plan files (in six shards on
   Windows; one job on macOS), `tiers` (typecheck, schema check, lint, the fake-tier fixtures, the studio and
   its browser test, the other packages) and `packed` (the pack test, then `reeval init` → `reeval run` →
   `reeval doctor` → `reeval studio build` in a fresh project from the tarball, and `reeval doctor`'s Docker

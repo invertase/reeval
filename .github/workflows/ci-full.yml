@@ -1,5 +1,5 @@
-# Labeling a PR `ci:full` runs ci.yml unscoped, with extended.yml (the Node 22.13 floor, Windows
-# and macOS), once, as `full / …`. From then on the label is on the PR, so each push's own ci.yml
+# Labeling a PR `ci:full` runs ci.yml unscoped, with extended.yml (the Node 22.13 floor and
+# macOS), once, as `full / …`. From then on the label is on the PR, so each push's own ci.yml
 # run is full. Adding any other label runs nothing here.
 name: ci-full
 

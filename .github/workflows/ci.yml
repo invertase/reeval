@@ -6,7 +6,7 @@
 #   light  lint, the build, typecheck and docs, and the unit and plan files in four shards, on every
 #          code change; each heavier job only when the files it tests change (the `changes` job).
 #   full   every Linux tier on every code change, as before the light tier.
-# `main` runs the Linux tiers plus Windows, macOS and npm 10.9. The Node 22.13 floor and the
+# `main` runs the Linux tiers plus macOS and npm 10.9 (Windows is off for now). The Node 22.13 floor and the
 # coverage report run on nightly, workflow_dispatch, release.yml's call and a PR labeled
 # `ci:full` (ci-full.yml): newest Node already ran on the PR, and coverage is report-only.
 #
@@ -498,7 +498,8 @@ jobs:
       fail-fast: false
       matrix:
         sdk: [python]
-        os: [ubuntu-24.04, macos-latest, windows-latest]
+        # windows-latest is off for now: no one runs reeval on Windows yet.
+        os: [ubuntu-24.04, macos-latest]
     steps:
       # Recorded runs' paths pass Windows' 260-character limit, which git keeps by default.
       - if: runner.os == 'Windows'
@@ -573,7 +574,7 @@ jobs:
           pnpm pack --pack-destination "$RUNNER_TEMP/dry-run"
           npm publish --dry-run --access public --tag ci "$RUNNER_TEMP"/dry-run/*.tgz
 
-  # Windows and macOS on every full run. The Node 22.13 floor is nightly / dispatch /
+  # macOS on every full run (Windows is off for now). The Node 22.13 floor is nightly / dispatch /
   # release / ci:full: every PR already ran the newest Node that engines allow.
   extended:
     name: extended
