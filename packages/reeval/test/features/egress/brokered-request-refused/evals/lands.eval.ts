@@ -5,6 +5,6 @@ import { agentSaw, brokered } from './env.ts'
 evaluate('lands', { environment: brokered }, async (c) => {
   const [body] = agentSaw(await c.send('search the web'))
   expect(body?.trim()).toBe(
-    "reeval egress gateway: refused POST https://api.openai.com/v1/alpha/search. It carries a brokered credential, and it isn't one of the endpoints reeval brokers it for.",
+    "reeval egress gateway: refused GET https://api.openai.com/v1/models. It carries a brokered credential, and it isn't one of the endpoints reeval brokers it for.",
   )
 })

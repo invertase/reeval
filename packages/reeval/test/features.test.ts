@@ -1209,7 +1209,7 @@ export const features: Feature[] = [
     image: 'codex',
     hostEnv: { OPENAI_API_KEY: BROKERED_KEY },
     canary:
-      /expected 'reeval egress gateway: refused POST h…' not to contain 'carries a brokered credential'/,
+      /expected 'reeval egress gateway: refused GET ht…' not to contain 'carries a brokered credential'/,
     record: ({ run, runDir, stdout }) => {
       const egress = landed(run)?.egress
       assert.deepEqual(egress?.blocked, [
@@ -1218,7 +1218,7 @@ export const features: Feature[] = [
           port: 443,
           connections: 1,
           reason:
-            "POST /v1/alpha/search carries a brokered credential, and it isn't one of the endpoints reeval brokers it for",
+            "GET /v1/models carries a brokered credential, and it isn't one of the endpoints reeval brokers it for",
         },
       ])
       assert.deepEqual(
@@ -1227,7 +1227,7 @@ export const features: Feature[] = [
         'the host was let through; the request on it was refused',
       )
       const warning =
-        "warning: the egress gateway refused POST https://api.openai.com/v1/alpha/search: it carries OPENAI_API_KEY's placeholder and isn't one of the endpoints reeval brokers it for"
+        "warning: the egress gateway refused GET https://api.openai.com/v1/models: it carries OPENAI_API_KEY's placeholder and isn't one of the endpoints reeval brokers it for"
       assert.equal(
         stdout.split('\n').filter((l) => l.includes(warning)).length,
         2,
