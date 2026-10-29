@@ -571,10 +571,14 @@ export class Cdp {
   }
 }
 
-function waitForPortFile(file: string, timeoutMs: number): Promise<number> {
+function waitForPortFile(file: string, timeoutMs: number, signal?: AbortSignal): Promise<number> {
   const deadline = Date.now() + timeoutMs
   return new Promise((resolve, reject) => {
     const tick = () => {
+      if (signal?.aborted) {
+        reject(signal.reason)
+        return
+      }
       if (existsSync(file)) {
         const line = readFileSync(file, 'utf8').split(/\r?\n/)[0]
         const port = Number(line)
@@ -599,10 +603,14 @@ export function pickPageDebuggerUrl(
   return targets.find((t) => t.webSocketDebuggerUrl && t.type !== 'browser')?.webSocketDebuggerUrl
 }
 
-async function pageDebuggerUrl(port: number, timeoutMs: number): Promise<string> {
+async function pageDebuggerUrl(
+  port: number,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<string> {
   const deadline = Date.now() + timeoutMs
   const listPages = async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/json/list`)
+    const res = await fetch(`http://127.0.0.1:${port}/json/list`, { signal })
     if (!res.ok) return undefined
     const list = (await res.json()) as Array<{ type?: string; webSocketDebuggerUrl?: string }>
     return pickPageDebuggerUrl(list)
@@ -612,14 +620,17 @@ async function pageDebuggerUrl(port: number, timeoutMs: number): Promise<string>
     if (url) return url
     if (Date.now() > deadline) break
     await new Promise((r) => setTimeout(r, 50))
+    signal?.throwIfAborted()
   }
-  const version = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()) as {
+  const version = (await (
+    await fetch(`http://127.0.0.1:${port}/json/version`, { signal })
+  ).json()) as {
     webSocketDebuggerUrl?: string
   }
   if (!version.webSocketDebuggerUrl) {
     throw new Error('chrome-headless-shell reported no DevTools URL')
   }
-  const browser = await cdpConnect(version.webSocketDebuggerUrl, timeoutMs)
+  const browser = await cdpConnect(version.webSocketDebuggerUrl, timeoutMs, signal)
   try {
     await browser.send('Target.createTarget', { url: 'about:blank' })
   } finally {
@@ -630,16 +641,28 @@ async function pageDebuggerUrl(port: number, timeoutMs: number): Promise<string>
   return created
 }
 
-async function cdpConnect(url: string, timeoutMs: number): Promise<Cdp> {
+async function cdpConnect(url: string, timeoutMs: number, signal?: AbortSignal): Promise<Cdp> {
+  signal?.throwIfAborted()
   const ws = new WebSocket(url)
   await new Promise<void>((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('CDP websocket timed out')), timeoutMs)
+    const abort = () => {
+      clearTimeout(t)
+      ws.close()
+      reject(signal?.reason)
+    }
+    const t = setTimeout(() => {
+      signal?.removeEventListener('abort', abort)
+      reject(new Error('CDP websocket timed out'))
+    }, timeoutMs)
+    signal?.addEventListener('abort', abort, { once: true })
     ws.addEventListener('open', () => {
       clearTimeout(t)
+      signal?.removeEventListener('abort', abort)
       resolve()
     })
     ws.addEventListener('error', () => {
       clearTimeout(t)
+      signal?.removeEventListener('abort', abort)
       reject(new Error('CDP websocket failed'))
     })
   })
@@ -752,8 +775,8 @@ export async function withChrome<T>(
   }
   signal?.addEventListener('abort', kill, { once: true })
   try {
-    const port = await waitForPortFile(join(userData, 'DevToolsActivePort'), timeoutMs)
-    const cdp = await cdpConnect(await pageDebuggerUrl(port, timeoutMs), timeoutMs)
+    const port = await waitForPortFile(join(userData, 'DevToolsActivePort'), timeoutMs, signal)
+    const cdp = await cdpConnect(await pageDebuggerUrl(port, timeoutMs, signal), timeoutMs, signal)
     cdp.callMs = () => deadline - Date.now()
     const abort = () => cdp.close()
     signal?.addEventListener('abort', abort, { once: true })
