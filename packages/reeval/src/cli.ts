@@ -37,7 +37,7 @@ import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { checkLimitHarness, harnessId, plannedSandboxes, plannedSandboxIds } from './options.ts'
 import type { RunPlan } from './plan.ts'
-import { PreflightInfraError, preflight, type SandboxVersions } from './preflight.ts'
+import { preflight, type SandboxVersions } from './preflight.ts'
 import { redactSecrets, registerSecret } from './redact.ts'
 import { logInvocation } from './report/invocations.ts'
 import { commandOf, redactArgv } from './report/scrub.ts'
@@ -641,13 +641,10 @@ function unmatchedFilter(config: StartedRun['config'], parts: string[]) {
 /**
  * Reads Cursor's model catalog for the planned Cursor cells, checks their `effort` and `params`
  * against it (exit 2, naming the eval and cell), gives each the effort it runs at, and notes each
- * eval's harnesses that run with none. A catalog that can't be read stops a run (exit 3), since
- * every Cursor attempt needs it; a dry run notes it instead.
+ * eval's harnesses that run with none. A catalog that can't be read leaves the Cursor cells
+ * unchecked and noted; each attempt then reports why it couldn't start.
  */
-async function planEfforts(
-  planned: PlannedItem[],
-  dryRun: boolean,
-): Promise<CursorEfforts | PreflightInfraError | undefined> {
+async function planEfforts(planned: PlannedItem[]): Promise<CursorEfforts | undefined> {
   const live = planned.filter((p) => !p.attempt.plan.skip)
   const { effortNotes, withDefaultEffort } = await import('./harness/default-effort.ts')
   let cursor: CursorEfforts | undefined
@@ -658,11 +655,6 @@ async function planEfforts(
     const catalog = await cursorCatalog(key).catch((error: Error) => error)
     if (catalog instanceof Error) {
       unchecked = `its request failed: ${catalog.message}`
-      if (!dryRun) {
-        return new PreflightInfraError(
-          `Cursor's model catalog request failed (${catalog.message}), and every Cursor attempt needs it`,
-        )
-      }
     } else {
       cursor = checkCursorCatalog(live, catalog)
       for (const p of planned) p.attempt.harness = withDefaultEffort(p.attempt.harness, cursor)
@@ -742,11 +734,7 @@ async function executeRun(
     toRun = skipped
     for (const p of skipped)
       for (const name of p.attempt.secretVars) registerSecret(process.env[name])
-    const efforts = await planEfforts(skipped, setup.dryRun)
-    if (efforts instanceof PreflightInfraError) {
-      preflightStop = efforts
-      return false
-    }
+    const efforts = await planEfforts(skipped)
     if (efforts) run.cursorEfforts = efforts
     const asks = skipped.some((p) => !p.attempt.plan.skip && p.attempt.plan.questions?.length)
     const models = asks ? await import('./analysis/model.ts') : undefined
