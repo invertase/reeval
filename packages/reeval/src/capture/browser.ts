@@ -659,11 +659,20 @@ export type ChromeSession = {
   dialogs(): string[]
 }
 
+/**
+ * Chrome's flags for `proxy`: every request goes to it, loopback ones included, which Chrome
+ * otherwise never proxies.
+ */
+export function proxyArgs(proxy: string | undefined): string[] {
+  return proxy ? [`--proxy-server=http://${proxy}`, '--proxy-bypass-list=<-loopback>'] : []
+}
+
 /** One Chrome process, one tab. `fn` must not keep the session after it returns. */
 export async function withChrome<T>(
   bin: string,
   window: CaptureWindow,
   timeoutMs: number,
+  options: { proxy?: string },
   fn: (session: ChromeSession) => Promise<T>,
 ): Promise<T> {
   const userData = mkdtempSync(join(tmpdir(), `reeval-chrome-${process.pid}-`))
@@ -679,6 +688,7 @@ export async function withChrome<T>(
       `--window-size=${window.width},${window.height}`,
       `--user-data-dir=${userData}`,
       '--remote-debugging-port=0',
+      ...proxyArgs(options.proxy),
       'about:blank',
     ],
     { stdio: ['ignore', 'ignore', 'pipe'] },

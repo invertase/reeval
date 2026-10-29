@@ -1701,6 +1701,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/serve.test.ts'],
   },
   {
+    id: 'ui.capture.loopback',
+    area: 'Records and studio',
+    name: "`c.capture()`'s page reaches sandbox ports at `localhost`, `127.0.0.1` and `[::1]`, through tunnels opened on its first request",
+    fixtures: ['ui/capture-sandbox-loopback'],
+    unit: ['reeval/test/capture-loopback.test.ts'],
+  },
+  {
     id: 'ui.capture.use',
     area: 'Records and studio',
     name: "`c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`)",
