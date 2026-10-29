@@ -1495,6 +1495,32 @@ describe('redacting serialized JSON', () => {
     assert.equal(redactKey('error', {}), 'error')
   })
 
+  test('digests: a short declared secret inside a hash is no leak, a long one is', () => {
+    registerSecret('1234')
+    const long = 'deadbeef0042c0de'
+    registerSecret(long)
+    const sha256 = '7149d5c7d4ab83f516a63b30599fdbb6ed0ff339581234eeafaf5297f47ff7ad'
+    const files = {
+      transcript: { path: 't.jsonl', sha256 },
+      image: { id: `sha256:${sha256}` },
+      seen: `ref ${sha256}`,
+    }
+    const out = JSON.parse(redactJson(files, 2, {}))
+    assert.deepEqual(out, {
+      ...files,
+      seen: 'ref 7149d5c7d4ab83f516a63b30599fdbb6ed0ff33958[REDACTED]eeafaf5297f47ff7ad',
+    })
+    assert.deepEqual(
+      scanText('run.json', JSON.stringify(files, null, 2)).map((f) => f.line),
+      [9],
+    )
+    // Twin: a declared secret of `MIN_FRAGMENT` or more characters is masked in a digest too.
+    const leaked = `${sha256.slice(0, 32)}${long}${sha256.slice(48)}`
+    assert.deepEqual(JSON.parse(redactJson({ sha256: leaked }, 2, {})), {
+      sha256: `${sha256.slice(0, 32)}[REDACTED]${sha256.slice(48)}`,
+    })
+  })
+
   test('a secret with characters JSON escapes is masked inside its string', () => {
     const quoted = 'reeval "quoted"\\secret\n9d1f'
     registerSecret(quoted)

@@ -187,8 +187,9 @@ type Secrets = {
   /** Whole values and their encoded forms, longest first. */
   forms: string[]
   /**
-   * The forms masked in a JSON key that reads as a field name: those of `MIN_FRAGMENT` or more
-   * characters, so a short declared secret (`error`, `text`) can't rename a record's fields.
+   * The forms masked in a JSON key that reads as a field name, or in a hex digest: those of
+   * `MIN_FRAGMENT` or more characters, so a short declared secret (`error`, `text`, `1234`) can't
+   * rename a record's fields or break its hashes.
    */
   keyForms: string[]
   /** Text shorter than this can't hold any form, window or token shape. */
@@ -418,9 +419,18 @@ export function mapJsonStrings(text: string, map: (value: string, key: boolean) 
 }
 
 const FIELD_NAME = /^[A-Za-z_$][\w$]*$/
+/**
+ * A string that is a hex digest (a file's `sha256`, an image id): a short declared secret
+ * (`1234`) turns up in one by chance, so only its `keyForms` are masked there.
+ */
+const DIGEST = /^(?:sha\d+:)?[0-9a-f]{32,}$/
 
 const redactLiteral = (secrets: Secrets) => (value: string, key: boolean) =>
-  redactWith(value, secrets, key && FIELD_NAME.test(value) ? secrets.keyForms : secrets.forms)
+  redactWith(
+    value,
+    secrets,
+    (key && FIELD_NAME.test(value)) || DIGEST.test(value) ? secrets.keyForms : secrets.forms,
+  )
 
 /**
  * `value` serialized (`JSON.stringify(value, null, space)`), with secrets masked as
