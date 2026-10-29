@@ -10,7 +10,8 @@ export function harnessEffort(h: HarnessDescriptor): string | undefined {
 
 /**
  * The reasoning effort a served-model label recorded, e.g. `gpt-5.6-luna[effort=medium]` →
- * `medium`. Fast (`[fast=true]`) is not effort and is ignored.
+ * `medium`, or Cursor's `[reasoning=medium]`. Fast (`[fast=true]`) and an on/off `thinking=true`
+ * are not effort and are ignored.
  */
 export function effortFromModelLabel(model: string | null | undefined): string | undefined {
   const inner = model?.match(/\[([^\]]+)]/)?.[1]
@@ -20,9 +21,9 @@ export function effortFromModelLabel(model: string | null | undefined): string |
     if (eq < 0) continue
     const key = part.slice(0, eq).trim()
     if (key === 'fast') continue
-    if (/^(?:reasoning_)?effort$|^thinking$/.test(key)) {
+    if (/^(?:reasoning[_-]?)?effort$|^reasoning$|^thinking$/.test(key)) {
       const value = part.slice(eq + 1).trim()
-      if (value) return value
+      if (value && value !== 'true' && value !== 'false') return value
     }
   }
   return undefined

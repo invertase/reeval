@@ -415,7 +415,7 @@
           "type": "number"
         },
         "effort": {
-          "description": "The reasoning effort the harness factory asked for (`claudeCode({ effort: 'high' })`); null when the factory left it unset. Fast is not this.",
+          "description": "The reasoning effort reeval asked the harness for: the factory's (`claudeCode({ effort: 'high' })`), or `medium` where it set none and the harness and model take one; null when reeval asked for none, leaving the CLI's own default. Fast is not this.",
           "anyOf": [
             {
               "type": "null"
@@ -776,7 +776,7 @@
           }
         },
         "effort": {
-          "description": "The reasoning effort the harness factory asked for; null when it left it unset. Fast is not this.",
+          "description": "The reasoning effort reeval asked the harness for: the factory's, or `medium` where it set none and the harness and model take one; null when reeval asked for none, leaving the CLI's own default. Fast is not this.",
           "anyOf": [
             {
               "type": "null"
@@ -3188,13 +3188,13 @@
           }
         },
         "harnesses": {
-          "description": "For each harness, the record includes its configured `model` and requested `effort`, `resolvedModels` (what it reported serving, with the variant it resolved), and `resolvedEffort` (reasoning-effort suffixes those labels named). Fast (`[fast=true]`) is not `resolvedEffort`.",
+          "description": "For each harness, the record includes its configured `model` and the `effort` it ran at, `resolvedModels` (what it reported serving, with the variant it resolved), and `resolvedEffort` (reasoning-effort suffixes those labels named). Fast (`[fast=true]`) is not `resolvedEffort`.",
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
               "effort": {
-                "description": "The reasoning effort the harness factory asked for; null when it left it unset. Fast is not this.",
+                "description": "The reasoning effort reeval asked the harness for: the factory's, or `medium` where it set none and the harness and model take one; null when reeval asked for none, leaving the CLI's own default. Fast is not this.",
                 "anyOf": [
                   {
                     "type": "null"

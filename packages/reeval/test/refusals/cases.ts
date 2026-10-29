@@ -386,8 +386,16 @@ export const CASES: Record<string, Case[]> = {
     ['claudeCode with a bad effort', any(claudeCode, { model: 'sonnet', effort: 'huge' })],
     ['claudeCode with an empty effort', any(claudeCode, { model: 'sonnet', effort: '' })],
     ['claudeCode with a typo', any(claudeCode, { model: 'sonnet', efort: 'high' })],
+    [
+      'claudeCode effort on a model that takes none',
+      any(claudeCode, { model: 'claude-haiku-4-5', effort: 'high' }),
+    ],
     ['antigravity without a model', any(antigravity, {})],
     ['antigravity effort a number', any(antigravity, { model: 'g', effort: 1 })],
+    [
+      'antigravity effort beside an id that names one',
+      any(antigravity, { model: 'gemini-3.8-flash-low', effort: 'medium' }),
+    ],
     ['opencode without a model', any(opencode, {})],
     ['opencode without a provider', any(opencode, { model: 'gemini-3.8-flash' })],
     ['opencode with an unknown provider', any(opencode, { model: 'nope/model' })],

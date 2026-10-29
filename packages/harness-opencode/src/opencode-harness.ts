@@ -19,6 +19,8 @@ import {
   OPENCODE_PNPM_WORKSPACE,
 } from './opencode-install.ts'
 import {
+  OPENCODE_VERTEX_PROVIDER,
+  openCodeEffortBody,
   openCodeProvider,
   providerEndpoints,
   providerTransformations,
@@ -50,34 +52,6 @@ export const OPENCODE_DENIED_TOOLS = ['question', 'browser'] as const
  * the config, the tool asks the user to pick one, which in an eval ends "Web search cancelled".
  */
 export const OPENCODE_WEB_SEARCH = { provider: 'exa', host: 'mcp.exa.ai' } as const
-
-/** Gemini's own thinking level, as Gemini's API takes it. */
-const geminiThinking = (effort: string) => ({ thinkingConfig: { thinkingLevel: effort } })
-
-/**
- * What OpenCode adds to the body of each call on `model` for `effort` (its config's per-model
- * `body`; OpenCode 2 has no per-model provider options), in the API's own field: Gemini's
- * `thinkingConfig` (Gemini's API and Vertex AI), Anthropic's `output_config.effort`, the Responses API's `reasoning.effort`,
- * OpenRouter's `reasoning.effort` (which it sends a Gemini model as its thinking level), and a
- * Gemini model's `thinkingConfig` under Vercel AI Gateway's `providerOptions` (Vercel's own effort
- * field maps every Gemini 3 level but `low` to `high`). Undefined for a provider whose field no
- * run has checked.
- */
-export function openCodeEffortBody(
-  model: string,
-  effort: string,
-): Record<string, unknown> | undefined {
-  const parts = splitModel(model)
-  if (parts?.provider === 'openrouter') return { reasoning: { effort } }
-  if (parts?.provider === 'google' || parts?.provider === OPENCODE_VERTEX_PROVIDER)
-    return { generationConfig: geminiThinking(effort) }
-  if (parts?.provider === 'anthropic') return { output_config: { effort } }
-  if (parts?.provider === 'openai') return { reasoning: { effort } }
-  if (parts?.provider === 'vercel' && splitModel(parts.model)?.provider === 'google') {
-    return { providerOptions: { google: geminiThinking(effort), vertex: geminiThinking(effort) } }
-  }
-  return undefined
-}
 
 /**
  * The config OpenCode runs with, as `OPENCODE_CONFIG_CONTENT` (not the
@@ -197,9 +171,6 @@ export type OpenCodeVertex = {
   readonly location: string
   readonly credentialsFile: string
 }
-
-/** OpenCode's provider for Vertex AI, which authenticates from Application Default Credentials. */
-export const OPENCODE_VERTEX_PROVIDER = 'google-vertex'
 
 /**
  * The requests OpenCode sends the model's provider's key on (see

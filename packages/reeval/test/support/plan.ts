@@ -91,6 +91,7 @@ export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {})
             : `gated passRate ${c.gate.passRate}`,
         c.bestOf === undefined ? `×${c.runs}` : `best of ${c.bestOf}`,
         [
+          c.effort && !c.key.includes('[effort=') ? `effort ${c.effort}` : '',
           c.minLift === undefined ? '' : `minLift ${c.minLift}`,
           i === 0 && e.family
             ? `family ${e.family.name} case ${e.family.case + 1}/${e.family.cases}`

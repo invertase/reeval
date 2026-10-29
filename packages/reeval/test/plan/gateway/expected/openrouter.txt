@@ -1,15 +1,15 @@
 no profile · 2 evals · 10 cells · 10 attempts
 hint: gateway: cursor:composer-2.5 falls back to direct (openrouter can't serve it: Cursor's agent only calls Cursor's own API)
 hint: gateway: antigravity:gemini-3.8-flash-low falls back to direct (openrouter can't serve it: Antigravity's CLI only calls Google's API, with a Gemini key, and OpenRouter has no Gemini API)
-evals/g.eval.ts › greets  claude-code:claude-haiku-4-5/-/docker      control  gated  ×1  gateway: claude-code:claude-haiku-4-5 → openrouter · gateway: codex:gpt-5.4-mini → openrouter · gateway: goose:gemini-3.8-flash → openrouter · gateway: opencode:gemini-3.8-flash → openrouter · gateway: grok-build:grok-4.6 → openrouter · gateway: cursor:composer-2.5 → direct (fallback) · gateway: antigravity:gemini-3.8-flash-low → direct (fallback) · gateway: fx:gpt-5.5 → openrouter · gateway: pi:gemini-3.8-flash → openrouter
-                          codex:gpt-5.4-mini/-/docker                control  gated  ×1
-                          goose:gemini-3.8-flash/-/docker            control  gated  ×1
-                          opencode:gemini-3.8-flash/-/docker         control  gated  ×1
-                          grok-build:grok-4.6/-/docker               control  gated  ×1
+evals/g.eval.ts › greets  claude-code:claude-haiku-4-5/-/docker      control  gated  ×1  gateway: claude-code:claude-haiku-4-5 → openrouter · gateway: codex:gpt-5.4-mini → openrouter · gateway: goose:gemini-3.8-flash → openrouter · gateway: opencode:gemini-3.8-flash → openrouter · gateway: grok-build:grok-4.6 → openrouter · gateway: cursor:composer-2.5 → direct (fallback) · gateway: antigravity:gemini-3.8-flash-low → direct (fallback) · gateway: fx:gpt-5.5 → openrouter · gateway: pi:gemini-3.8-flash → openrouter · effort: claude-code:claude-haiku-4-5 none (Claude Code sends no effort to claude-haiku-4-5) · effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set) · effort: antigravity:gemini-3.8-flash-low none (the model id names its effort, low) · effort: fx:gpt-5.5 none (fx sends no effort of its own, and reeval adds one only on vertex()) · efforts differ: none on claude-code:claude-haiku-4-5, antigravity:gemini-3.8-flash-low, fx:gpt-5.5; medium on codex:gpt-5.4-mini, goose:gemini-3.8-flash, opencode:gemini-3.8-flash, grok-build:grok-4.6, pi:gemini-3.8-flash; not checked on cursor:composer-2.5
+                          codex:gpt-5.4-mini/-/docker                control  gated  ×1  effort medium
+                          goose:gemini-3.8-flash/-/docker            control  gated  ×1  effort medium
+                          opencode:gemini-3.8-flash/-/docker         control  gated  ×1  effort medium
+                          grok-build:grok-4.6/-/docker               control  gated  ×1  effort medium
                           cursor:composer-2.5/-/docker               control  gated  ×1
                           antigravity:gemini-3.8-flash-low/-/docker  control  gated  ×1
                           fx:gpt-5.5/-/docker                        control  gated  ×1
-                          pi:gemini-3.8-flash/-/docker               control  gated  ×1
+                          pi:gemini-3.8-flash/-/docker               control  gated  ×1  effort medium
 evals/g.eval.ts › pinned  b/-/docker                                 control  gated  ×1  gateway: b → direct
 excluded: —
 image docker · claude-code · 1 evals

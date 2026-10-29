@@ -101,9 +101,9 @@ Each factory in this table runs an agent and requires `model`. All but `fx()` ta
 
 | Factory | `model` | `effort` |
 |---|---|---|
-| `cursor()` | A model id `Cursor.models.list()` returns for the key. | Mapped onto the catalog parameter the model names, `reasoning_effort` or `effort`. A model with no such parameter refuses it. |
-| `claudeCode()` | A model id or alias the `claude` CLI accepts. | `low`, `medium`, `high`, `xhigh`, or `max`, for the Agent SDK `/effort` control. The Claude Code UI labels `xhigh` as Extra. reeval refuses any other value. |
-| `antigravity()` | A slug `agy models` lists for the key, such as `<model>-medium`. A `-low`, `-medium`, or `-high` suffix sets effort in the slug. | Passed as `agy --effort`, such as `low`, `medium`, `high`, or `max`. The cell's `effort` field copies it. |
+| `cursor()` | A model id `Cursor.models.list()` returns for the key. | Mapped onto the catalog parameter the model names, `reasoning`, `reasoning_effort` or `effort`. A model with no such parameter refuses it at plan time. |
+| `claudeCode()` | A model id or alias the `claude` CLI accepts. | `low`, `medium`, `high`, `xhigh`, or `max`, for the Agent SDK `/effort` control. The Claude Code UI labels `xhigh` as Extra. reeval refuses any other value, and any value on a model Claude Code sends none to, such as `claude-haiku-4-5`. |
+| `antigravity()` | A slug `agy models` lists for the key, such as `<model>-medium`. A `-low`, `-medium`, or `-high` suffix sets effort in the slug, and reeval refuses `effort` beside one. | Passed as `agy --effort`, such as `low`, `medium`, `high`, or `max`. The cell's `effort` field copies it. |
 | `codex()` | An OpenAI model id with no provider prefix, passed as `--model`. | Written as `model_reasoning_effort` in `~/.codex/config.toml`: `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`. |
 | `goose()` | A model id with no provider prefix, run on Goose's `google` provider, using letters, digits, `_`, `.`, and `-`. | Passed as `GOOSE_THINKING_EFFORT`: `off`, `low`, `medium`, `high`, or `max`. |
 | `grokBuild()` | An xAI model id with no provider prefix, using letters, digits, and `._-`. | For a model that takes one, such as `low`, `medium`, or `high`. Set as `default_reasoning_effort` in Grok Build's `config.toml` file. |
@@ -234,7 +234,7 @@ For more information about the token fields, see [`TokenUsage`](/reference/run-r
 - **Cursor:** each turn's `model` is the served model with its parameters, in the form `model[param=value]`. The attempt's `servedModels` is null, because the API requests name no model.
 - **Claude Code:** each turn's `model` is the model id Claude Code reports. `servedModels` is null, because the API requests name no model.
 - **Antigravity:** each turn's `model` is the model the CLI reports at the start of the turn, or else the last brokered request's model. `servedModels` lists the model id in each brokered path `/v1beta/models/<model>:streamGenerateContent`, which can include a model the CLI calls for a title or a checkpoint.
-- **Codex:** the egress gateway reads the served model and effort from the response body. The turn's `model` and `servedModels` hold `<model>` or `<model>[effort=<value>]`. `servedEffort` is the reasoning effort in that label, and `effort` is the factory value, or null when unset.
+- **Codex:** the egress gateway reads the served model and effort from the response body. The turn's `model` and `servedModels` hold `<model>` or `<model>[effort=<value>]`. `servedEffort` is the reasoning effort in that label, and `effort` is the factory value, or `medium` when unset.
 - **OpenCode:** the stream names no model, so each turn's `model` is the model on the turn's last brokered request. `servedModels` comes from the request URL for a provider whose model path names the model (`amazon-bedrock/`, `google/`, `ofox/`, `opencode/` and `opencode-go/`) and from the response body for every other provider, with `[effort=<value>]` when the response names an effort.
 - **Goose:** each turn's `model` is the model id from the last brokered `POST /v1beta/models/<model>:streamGenerateContent` request in the turn, or null when that turn made none. `servedModels` lists every such id.
 - **pi:** each turn's `model` is the model pi names on its first assistant message. `servedModels` comes from the brokered request URL, without an effort suffix.

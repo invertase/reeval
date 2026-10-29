@@ -293,6 +293,13 @@ function explain(kind: HarnessDescriptor['kind']) {
       return `${factory}({ effort }) is the value that CLI takes, e.g. ${factory}({ effort: 'high' }) (got ${got(v)})`
     }
     if (key === 'params') {
+      const bad =
+        v && typeof v === 'object'
+          ? Object.entries(v).find(([, value]) => typeof value !== 'string')
+          : undefined
+      if (bad && (typeof bad[1] === 'boolean' || typeof bad[1] === 'number')) {
+        return `cursor({ params }) values are strings, as Cursor's model catalog lists them: write ${bad[0]}: '${bad[1]}', not ${bad[0]}: ${bad[1]}`
+      }
       return `cursor({ params }) maps parameter ids to string values, e.g. { fast: 'false' } (got ${got(v)})`
     }
     if (key === 'script') {
@@ -314,13 +321,61 @@ function explain(kind: HarnessDescriptor['kind']) {
 }
 
 /**
+ * Claude Code drops `effort` for these models and sends none (claude-code 2.1.290's
+ * `supportsEffort`): every `claude-3-` model, and the ones named.
+ */
+const CLAUDE_CODE_NO_EFFORT = new Set([
+  'claude-opus-4-0',
+  'claude-opus-4-1',
+  'claude-sonnet-4-0',
+  'claude-sonnet-4-5',
+  'claude-haiku-4-5',
+])
+
+/** `claude-haiku-4-5` from `claude-haiku-4-5@20251001` or `claude-haiku-4-5-20251001`. */
+const claudeBase = (model: string) =>
+  model
+    .toLowerCase()
+    .replace(/@.*$/, '')
+    .replace(/-\d{8}$/, '')
+
+/** Whether Claude Code sends an effort to `model`. */
+export const claudeCodeTakesEffort = (model: string): boolean => {
+  const base = claudeBase(model)
+  return !base.includes('claude-3-') && !CLAUDE_CODE_NO_EFFORT.has(base)
+}
+
+/** Antigravity model ids that name their effort, e.g. `gemini-3.8-flash-low`. */
+const ANTIGRAVITY_EFFORT_ID = /-(minimal|low|medium|high|max)$/
+
+/** The effort an Antigravity model id names, e.g. `low` for `gemini-3.8-flash-low`. */
+export const antigravityIdEffort = (model: string): string | undefined =>
+  model.match(ANTIGRAVITY_EFFORT_ID)?.[1]
+
+/** Why `value` sets an effort its model can't take, in its factory's words, or undefined. */
+function effortProblem(value: HarnessDescriptor): string | undefined {
+  if (value.kind === 'claude-code' && value.effort && !claudeCodeTakesEffort(value.model)) {
+    return `claudeCode({ effort }): Claude Code sends no effort to ${value.model}, so drop effort or run a model that takes one, e.g. claude-sonnet-5-5`
+  }
+  if (value.kind === 'antigravity' && value.effort) {
+    const named = antigravityIdEffort(value.model)
+    if (named) {
+      return `antigravity({ effort }): the model id ${value.model} names its effort (${named}), which the CLI refuses beside --effort; drop effort, or name the model without its -${named}`
+    }
+  }
+  return undefined
+}
+
+/**
  * What's wrong with a harness descriptor of a known kind, in the words its factory uses, or
  * undefined. `maxConcurrent` and `startTimeout` are left to the check that names where they were
  * set.
  */
 export function harnessProblem(value: HarnessDescriptor): string | undefined {
-  return refusal(SCHEMAS[value.kind], value, explain(value.kind), {
-    order: ORDER,
-    skip: ['maxConcurrent', 'startTimeout'],
-  })
+  return (
+    refusal(SCHEMAS[value.kind], value, explain(value.kind), {
+      order: ORDER,
+      skip: ['maxConcurrent', 'startTimeout'],
+    }) ?? effortProblem(value)
+  )
 }

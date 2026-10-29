@@ -1,5 +1,5 @@
 profile codex-pin (--profile) · 2 evals · 2 cells · 2 attempts
-evals/g.eval.ts › greets  codex:gpt-5.4-mini/-/docker  control  gated  ×1  gateway: codex:gpt-5.4-mini → vercel
+evals/g.eval.ts › greets  codex:gpt-5.4-mini/-/docker  control  gated  ×1  effort medium · gateway: codex:gpt-5.4-mini → vercel
 evals/g.eval.ts › pinned  b/-/docker                   control  gated  ×1  harness set by the eval · gateway: b → direct
 excluded: —
 image docker · codex · 1 evals

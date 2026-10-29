@@ -11,7 +11,7 @@ import type {
   HarnessDescriptor,
   ResolvedGateway,
 } from '../types.ts'
-import { ROUTING_GATEWAYS, type RoutingGatewayName } from './routes.ts'
+import { isRoutingGateway, ROUTING_GATEWAYS, type RoutingGatewayName } from './routes.ts'
 import { VERTEX_REFUSALS, VERTEX_ROUTES, vertexModelRefusalFor } from './vertex.ts'
 
 /** The config's list when it sets none: each provider's own key. */
@@ -59,6 +59,21 @@ function fxEffortRefusal(h: HarnessDescriptor, gateway: string): string | undefi
   const effort = harnessEffort(h)
   if (h.kind !== 'fx' || effort === undefined) return undefined
   return `fx sends no effort of its own, and reeval adds fx's effort (${JSON.stringify(effort)}) only to its calls on Vertex AI, not on ${gateway}: drop effort or run fx on vertex()`
+}
+
+/**
+ * Why `h` takes no effort on `gateway`, where an effort it set would be refused, or undefined
+ * when it can take one there.
+ */
+export function effortRefusedOn(h: HarnessDescriptor, gateway: string): string | undefined {
+  if (h.kind === 'fx' && gateway !== 'vertex') {
+    return `fx sends no effort of its own, and reeval adds one only on vertex()`
+  }
+  if (h.kind === 'fake' || !isRoutingGateway(gateway)) return undefined
+  const { name, unprovenEffort } = ROUTING_GATEWAYS[gateway]
+  return unprovenEffort[h.kind]?.(h.model)
+    ? `reeval doesn't send ${agentName(h)}'s effort to ${h.model} through ${name} yet`
+    : undefined
 }
 
 /** A routing gateway's entry: its route table decides whom it serves, and with what effort. */

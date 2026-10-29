@@ -568,6 +568,7 @@ const header: RunHeader = {
   dryRun: false,
   profile: { name: 'smoke', reason: '--profile' },
   harnesses: ['cursor:composer-2.5'],
+  efforts: { 'cursor:composer-2.5': 'none' },
   sandboxes: ['docker'],
   judges: [],
   files: 1,
@@ -585,7 +586,7 @@ const header: RunHeader = {
 const unpinned = (repo: string) =>
   `skill.git(github:firebase/${repo}) uses no ref (the default branch): results aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either way).`
 
-const PLAN_LINE = `plan  run ${header.runId} · profile smoke (--profile) · 1 eval · 4 cells · 4 attempts · ~15m 10s serial (~3m 48s at concurrency 8) · budget 15 attempts ✓`
+const PLAN_LINE = `plan  run ${header.runId} · profile smoke (--profile) · 1 eval · 4 cells · 4 attempts · effort none · ~15m 10s serial (~3m 48s at concurrency 8) · budget 15 attempts ✓`
 
 const planEvent = (over: Partial<Extract<ReevalEvent, { type: 'plan' }>> = {}): ReevalEvent => ({
   type: 'plan',
@@ -691,6 +692,11 @@ describe('run header', () => {
       config: '../reeval.config.ts',
       profile: { name: 'pr', reason: 'auto: CI is set' },
       harnesses: ['cursor:composer-2.5', 'claude-code:claude-sonnet-4-5', 'codex:gpt-5.1-codex'],
+      efforts: {
+        'cursor:composer-2.5': 'not checked',
+        'claude-code:claude-sonnet-4-5': 'none',
+        'codex:gpt-5.1-codex': 'medium',
+      },
       sandboxes: ['docker', 'fake'],
       judges: ['typesafe-ai/jev-1.14.0'],
       skipped: 1,

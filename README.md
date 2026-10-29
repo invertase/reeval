@@ -54,13 +54,13 @@ npx reeval run --dry-run  # smoke check: plans the run, no keys or sandbox
 REEVAL v0.16.1  dry run
 
   ➜  Run:       …
-  ➜  Harness:   cursor:composer-2.5
+  ➜  Harness:   cursor:composer-2.5 (effort: not checked)
   ➜  Sandbox:   docker
   ➜  Scope:     1 eval file · 1 eval · 1 cell · 1 attempt
   ➜  Est. Time: ~3m 00s (serial)
 
 eval                                    harnesses  variants  runs  attempts  notes
-evals/greet.eval.ts › creates greet.js  1          —         1     1
+evals/greet.eval.ts › creates greet.js  1          —         1     1         effort: cursor:composer-2.5 not checked against Cursor's model catalog (CURSOR_API_KEY isn't set)
 …
 ```
 

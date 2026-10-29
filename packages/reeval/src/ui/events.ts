@@ -95,6 +95,8 @@ export type RunHeader = {
   config?: string
   profile?: { name: string; reason: string }
   harnesses: string[]
+  /** The effort each harness runs at, by id (its level, `none` or `not checked`); unset with only the fake harness. */
+  efforts?: Record<string, string>
   sandboxes: string[]
   /** The judge models the planned attempts use. */
   judges: string[]
