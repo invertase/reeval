@@ -187,6 +187,55 @@ test("a thread whose running total restarted: a count that went down is the turn
   })
 })
 
+test('a web search that started and never completed is a failed search when the turn ends', () => {
+  const t = new CodexStreamTranslator({ workDir: '/reeval/workspace' })
+  const lines = [
+    { type: 'thread.started', thread_id: 't' },
+    { type: 'turn.started' },
+    {
+      type: 'item.started',
+      item: { id: 'ws_1', type: 'web_search', query: '', action: { type: 'other' } },
+    },
+    { type: 'item.started', item: { id: 'ws_2', type: 'web_search', query: 'q' } },
+    {
+      type: 'item.completed',
+      item: {
+        id: 'ws_2',
+        type: 'web_search',
+        query: 'q',
+        action: { type: 'search', query: 'reeval' },
+      },
+    },
+    { type: 'turn.completed', usage: { input_tokens: 10, output_tokens: 2 } },
+  ]
+  const parts = lines.flatMap((l) => t.push(JSON.stringify(l))).filter((p) => p.type !== 'raw')
+  const tools = parts.flatMap((p) =>
+    p.type === 'tool-call'
+      ? [['call', p.toolCallId, p.toolName, JSON.parse(p.input)]]
+      : p.type === 'tool-result'
+        ? [['result', p.toolCallId, p.result, p.isError ?? false]]
+        : [],
+  )
+  assert.deepEqual(tools, [
+    ['call', 'ws_2', 'webSearch', { query: 'reeval' }],
+    ['result', 'ws_2', {}, false],
+    ['call', 'ws_1', 'webSearch', { query: '' }],
+    ['result', 'ws_1', 'the web search never completed', true],
+  ])
+  const last = parts.findLastIndex((p) => p.type === 'tool-result')
+  assert.ok(
+    last < parts.findIndex((p) => p.type === 'finish-step'),
+    'the failed search is in the step',
+  )
+  // A process that dies mid-search fails it too.
+  const died = new CodexStreamTranslator({ workDir: '/reeval/workspace' })
+  died.push(
+    JSON.stringify({ type: 'item.started', item: { id: 'ws_3', type: 'web_search', query: 'x' } }),
+  )
+  const ended = died.end({ exitCode: 1 })
+  assert.ok(ended.some((p) => p.type === 'tool-result' && p.toolCallId === 'ws_3' && p.isError))
+})
+
 test('a real web turn: the page Codex opened is a web fetch of its URL, known when the item completes', () => {
   const { parts } = translate('web.ndjson')
   const calls = parts.flatMap((p) =>
