@@ -624,10 +624,9 @@ export type FakeHarnessDescriptor = {
     | 'grok-build'
   /**
    * In Docker, broker the key of the agent `layout` names (`OPENAI_API_KEY` for `codex`, Cursor's
-   * when unset) on that
-   * agent's endpoints, as its adapter does: the key stays on the host, and `exec` steps get a
-   * placeholder in its variable, which the egress gateway swaps in on those endpoints when sent
-   * as `Authorization: Bearer <placeholder>`, and refuses on any other request.
+   * when unset) on that agent's endpoints, as its adapter does: the key stays on the host, and
+   * `exec` steps get a placeholder in its variable, which the egress gateway swaps in on those
+   * endpoints when sent as `Authorization: Bearer <placeholder>`, and refuses on any other request.
    */
   brokers?: true
 }

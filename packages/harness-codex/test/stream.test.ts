@@ -234,6 +234,21 @@ test('a web search that started and never completed is a failed search when the 
   )
   const ended = died.end({ exitCode: 1 })
   assert.ok(ended.some((p) => p.type === 'tool-result' && p.toolCallId === 'ws_3' && p.isError))
+  // So does a failed turn, and the search completing after the turn adds nothing.
+  const failed = new CodexStreamTranslator({ workDir: '/reeval/workspace' })
+  const after = [
+    { type: 'item.started', item: { id: 'ws_4', type: 'web_search', query: 'y' } },
+    { type: 'turn.failed', error: { message: 'boom' } },
+    {
+      type: 'item.completed',
+      item: { id: 'ws_4', type: 'web_search', action: { type: 'search', query: 'y' } },
+    },
+  ].flatMap((l) => failed.push(JSON.stringify(l)))
+  assert.deepEqual(
+    after.flatMap((p) => (p.type === 'tool-result' ? [[p.toolCallId, p.isError]] : [])),
+    [['ws_4', true]],
+  )
+  assert.deepEqual(failed.end({ exitCode: 1 }), [])
 })
 
 test('a real web turn: the page Codex opened is a web fetch of its URL, known when the item completes', () => {
