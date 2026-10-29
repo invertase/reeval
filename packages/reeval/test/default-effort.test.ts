@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { cursorEffortParam } from '@reeval/harness-cursor-sdk'
 import { UsageError } from '../src/errors.ts'
-import { checkCursorCatalog, cursorCatalogProblem } from '../src/harness/cursor-catalog.ts'
+import {
+  checkCursorCatalog,
+  checkCursorPlan,
+  cursorCatalogProblem,
+} from '../src/harness/cursor-catalog.ts'
 import {
   DEFAULT_EFFORT,
   effortNotes,
@@ -180,5 +188,45 @@ describe("Cursor's model catalog at plan time", () => {
         'gpt-5.6-luna': { param: 'reasoning', levels: ['low', 'medium', 'high'] },
       },
     )
+  })
+
+  test('reads the catalog again when its cached copy refuses a cell, and notes a failed read', async () => {
+    const cache = mkdtempSync(join(tmpdir(), 'reeval-cursor-catalog-'))
+    const before = process.env.XDG_CACHE_HOME
+    process.env.XDG_CACHE_HOME = cache
+    try {
+      const reads: string[] = []
+      const serving = (items: unknown[], status = 200): typeof fetch =>
+        (async (url: string) => {
+          reads.push(url)
+          return new Response(JSON.stringify({ items }), { status })
+        }) as typeof fetch
+      const old = CATALOG.filter((m) => m.id !== 'gpt-5.6-luna')
+      const luna = [
+        { attempt: { name: 'e', groups: [], harness: cursor({ model: 'gpt-5.6-luna' }) } },
+      ]
+      const key = `key-${Date.now()}`
+      const hash = createHash('sha256').update(key).digest('hex').slice(0, 16)
+      mkdirSync(join(cache, 'reeval'))
+      writeFileSync(
+        join(cache, `reeval/cursor-models-${hash}.json`),
+        JSON.stringify({ fetchedAt: new Date().toISOString(), items: old }),
+      )
+      assert.deepEqual(await checkCursorPlan(key, luna, { fetch: serving(CATALOG) }), {
+        'gpt-5.6-luna': { param: 'reasoning', levels: ['low', 'medium', 'high'] },
+      })
+      assert.equal(reads.length, 1, 'the cached copy lacked gpt-5.6-luna, so it was read again')
+      assert.deepEqual(await checkCursorPlan(key, luna, { fetch: serving([]) }), {
+        'gpt-5.6-luna': { param: 'reasoning', levels: ['low', 'medium', 'high'] },
+      })
+      assert.equal(reads.length, 1, 'the fresh copy is cached')
+      const failed = await checkCursorPlan(`other-${key}`, luna, { fetch: serving([], 401) })
+      assert.ok(failed instanceof Error)
+      assert.equal(failed.message, 'HTTP 401')
+    } finally {
+      if (before === undefined) delete process.env.XDG_CACHE_HOME
+      else process.env.XDG_CACHE_HOME = before
+      rmSync(cache, { recursive: true, force: true })
+    }
   })
 })

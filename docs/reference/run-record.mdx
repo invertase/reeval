@@ -341,7 +341,7 @@ Also has every field of `Cell`.
 </Property>
 
 <Property name="effort" type="string | null">
-  The reasoning effort reeval asked the harness for: the factory's, or `medium` where it set none and the harness and model take one; null when it ran with none. Fast is not this.
+  The reasoning effort reeval asked the harness for: the factory's, or `medium` where it set none and the harness and model take one; null when reeval asked for none, leaving the CLI's own default. Fast is not this.
 </Property>
 
 <Property name="gate" type="CellGate">
@@ -663,7 +663,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="effort" type="string | null">
-  The reasoning effort reeval asked the harness for: the factory's (`claudeCode({ effort: 'high' })`), or `medium` where it set none and the harness and model take one; null when it ran with none. Fast is not this.
+  The reasoning effort reeval asked the harness for: the factory's (`claudeCode({ effort: 'high' })`), or `medium` where it set none and the harness and model take one; null when reeval asked for none, leaving the CLI's own default. Fast is not this.
 </Property>
 
 <Property name="servedEffort" type="string | null">

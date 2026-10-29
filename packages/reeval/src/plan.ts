@@ -541,7 +541,8 @@ export type PlanCell = Cell & {
   minLift?: number
   /**
    * The reasoning effort its harness runs at: the factory's, or `medium` where it sets none and
-   * the harness and model take one; null when it runs with none.
+   * the harness and model take one; null when reeval asks for none, leaving the CLI's own
+   * default.
    */
   effort: string | null
   /** With `bestOf`, the most attempts the cell runs. */

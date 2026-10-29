@@ -651,12 +651,12 @@ async function planEfforts(planned: PlannedItem[]): Promise<CursorEfforts | unde
   let unchecked = "CURSOR_API_KEY isn't set"
   const key = process.env.CURSOR_API_KEY
   if (key && live.some((p) => p.attempt.harness.kind === 'cursor')) {
-    const { checkCursorCatalog, cursorCatalog } = await import('./harness/cursor-catalog.ts')
-    const catalog = await cursorCatalog(key).catch((error: Error) => error)
-    if (catalog instanceof Error) {
-      unchecked = `its request failed: ${catalog.message}`
+    const { checkCursorPlan } = await import('./harness/cursor-catalog.ts')
+    const checked = await checkCursorPlan(key, live)
+    if (checked instanceof Error) {
+      unchecked = `its request failed: ${checked.message}`
     } else {
-      cursor = checkCursorCatalog(live, catalog)
+      cursor = checked
       for (const p of planned) p.attempt.harness = withDefaultEffort(p.attempt.harness, cursor)
     }
   }

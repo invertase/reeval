@@ -51,16 +51,26 @@ async function writeCached(key: string, items: CursorSdkModelEntry[], now: numbe
   } catch {}
 }
 
-/** The catalog `key` sees: the cached copy within the hour, else `GET /v1/models`. */
-export async function cursorCatalog(key: string, now = Date.now()): Promise<CursorSdkModelEntry[]> {
-  const cached = await readCached(key, now)
-  if (cached) return cached
+type CatalogOptions = { now?: number; fetch?: typeof fetch }
+
+/**
+ * The catalog `key` sees: the cached copy within the hour (unless `fresh`), else
+ * `GET /v1/models`. `cached` says which.
+ */
+export async function cursorCatalog(
+  key: string,
+  { now = Date.now(), fresh = false, fetch }: CatalogOptions & { fresh?: boolean } = {},
+): Promise<{ items: CursorSdkModelEntry[]; cached: boolean }> {
+  const cached = fresh ? null : await readCached(key, now)
+  if (cached) return { items: cached, cached: true }
   const items = await fetchCursorModelCatalog(
     { apiKey: key },
-    { signal: AbortSignal.timeout(15_000) },
-  )
+    { signal: AbortSignal.timeout(15_000), ...(fetch ? { fetch } : {}) },
+  ).catch((error: Error) => {
+    throw new Error(error.message.replace(/^Cursor's model catalog request failed: /, ''))
+  })
   await writeCached(key, items, now)
-  return items
+  return { items, cached: false }
 }
 
 const quoted = (values: readonly string[]) => values.map((v) => `'${v}'`).join(', ')
@@ -147,4 +157,27 @@ export function checkCursorCatalog(
     }
   }
   return cursorEfforts(models, catalog)
+}
+
+/**
+ * {@link checkCursorCatalog} against the catalog `key` sees. A cached copy can predate a model
+ * or level Cursor added since, so a cell it refuses is checked again against a fresh read. A
+ * catalog that can't be read is returned as the Error.
+ */
+export async function checkCursorPlan(
+  key: string,
+  planned: readonly Planned[],
+  options: CatalogOptions = {},
+): Promise<CursorEfforts | Error> {
+  const catalog = await cursorCatalog(key, options).catch((error: Error) => error)
+  if (catalog instanceof Error) return catalog
+  try {
+    return checkCursorCatalog(planned, catalog.items)
+  } catch (error) {
+    if (!catalog.cached) throw error
+    const fresh = await cursorCatalog(key, { ...options, fresh: true }).catch(() => {
+      throw error
+    })
+    return checkCursorCatalog(planned, fresh.items)
+  }
 }

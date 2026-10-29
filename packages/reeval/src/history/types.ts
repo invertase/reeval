@@ -202,7 +202,8 @@ export type AttemptRecord = {
   /**
    * The reasoning effort reeval asked the harness for: the factory's
    * (`claudeCode({ effort: 'high' })`), or `medium` where it set none and the harness and model
-   * take one; null when it ran with none. Fast is not this.
+   * take one; null when reeval asked for none, leaving the CLI's own default. Fast is not
+   * this.
    */
   effort: string | null
   /**
@@ -528,7 +529,8 @@ export type CellRecord = Cell & {
   model: string | null
   /**
    * The reasoning effort reeval asked the harness for: the factory's, or `medium` where it set
-   * none and the harness and model take one; null when it ran with none. Fast is not this.
+   * none and the harness and model take one; null when reeval asked for none, leaving the CLI's
+   * own default. Fast is not this.
    */
   effort: string | null
   /** How the attempts decide the cell's outcome; `'none'` when it doesn't fail the evaluation. */
@@ -723,7 +725,8 @@ export type Stack = {
     model: string | null
     /**
      * The reasoning effort reeval asked the harness for: the factory's, or `medium` where it set
-     * none and the harness and model take one; null when it ran with none. Fast is not this.
+     * none and the harness and model take one; null when reeval asked for none, leaving the
+     * CLI's own default. Fast is not this.
      */
     effort: string | null
     /**
