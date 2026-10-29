@@ -836,10 +836,10 @@ const readStaged = async (stagingDir: string, key: string): Promise<EvalRecord |
     await readFile(join(stagingDir, 'evals', recordFileName(key)), 'utf8').catch(() => 'null'),
   )
 
-/** A staged attempt's captures, read from the PNGs beside its record; a missing file is left out. */
 /** A capture's own PNG, not one of its instructions' screenshots. */
 const isCapture = (art: { capture?: { step?: unknown } }) => !art.capture?.step
 
+/** A staged attempt's captures, read from the PNGs beside its record; a missing file is left out. */
 async function stagedCaptures(stagingDir: string, key: string, record: EvalRecord | null) {
   const dir = join(stagingDir, 'evals', recordFileName(key).replace(/\.json$/, '.artifacts'))
   const read = await Promise.all(
