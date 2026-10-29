@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.16.0](https://github.com/invertase/reeval/compare/v0.15.1...v0.16.0) (2026-10-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* **history:** snapshot each attempt's workspace into its run directory ([#700](https://github.com/invertase/reeval/issues/700))
+* **expect:** make expect soft by default and add expect.require ([#701](https://github.com/invertase/reeval/issues/701))
+* **judge:** make every judge input explicit ([#702](https://github.com/invertase/reeval/issues/702))
+
+### Features
+
+* **capture:** route the page's loopback requests into the sandbox ([#706](https://github.com/invertase/reeval/issues/706)) ([7d4180e](https://github.com/invertase/reeval/commit/7d4180e270b9cb9579aef0676f28d14161a231e2))
+* **expect:** make expect soft by default and add expect.require ([#701](https://github.com/invertase/reeval/issues/701)) ([434f1b5](https://github.com/invertase/reeval/commit/434f1b57a7a03d447524a59f6f0f14abeeb8e9dd))
+* **history:** snapshot each attempt's workspace into its run directory ([#700](https://github.com/invertase/reeval/issues/700)) ([a5dfc23](https://github.com/invertase/reeval/commit/a5dfc2357c4fd9356ddd5705cc15bb8cd6eca81c))
+* **judge:** make every judge input explicit ([#702](https://github.com/invertase/reeval/issues/702)) ([e2e63a5](https://github.com/invertase/reeval/commit/e2e63a525003ddc59f042f70b913f614b8653969))
+* **runs:** add runs: { bestOf: n }, stopping each cell once a majority agrees ([#690](https://github.com/invertase/reeval/issues/690)) ([5518351](https://github.com/invertase/reeval/commit/5518351d308f443d330286b05b63a8b795fde105))
+* **serve:** find the port c.serve's command listens on and wait for it ([#703](https://github.com/invertase/reeval/issues/703)) ([697b92e](https://github.com/invertase/reeval/commit/697b92e4a511a8af53d0651574c3be8ab0254771))
+
+
+### Bug Fixes
+
+* **capture:** make interactive c.capture finish ordinary multi-step flows ([#705](https://github.com/invertase/reeval/issues/705)) ([fe8b36a](https://github.com/invertase/reeval/commit/fe8b36adcb71a9f18882024154625da5598f5cc9))
+* **expect:** type each matcher to its subject and check an awaited exec at once ([#699](https://github.com/invertase/reeval/issues/699)) ([c7e2238](https://github.com/invertase/reeval/commit/c7e2238579360b920db018979c8c4789965c4d41))
+* **fx:** bind the relay test to port 0 and wait for the port it listens on ([#693](https://github.com/invertase/reeval/issues/693)) ([a8ac5d3](https://github.com/invertase/reeval/commit/a8ac5d3e9c5bd981349200ec6314797d6f9dc07c))
+
 ## [0.15.1](https://github.com/invertase/reeval/compare/v0.15.0...v0.15.1) (2026-10-27)
 
 

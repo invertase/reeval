@@ -1,6 +1,6 @@
 {
   "name": "reeval",
-  "version": "0.15.1",
+  "version": "0.16.0",
   "description": "reeval: an eval runner for coding agents",
   "license": "Apache-2.0",
   "author": "Invertase <oss@invertase.io>",
