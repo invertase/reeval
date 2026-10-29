@@ -1,6 +1,6 @@
 [project]
 name = "reeval-python"
-version = "0.16.0"
+version = "0.16.1"
 description = "Python authoring SDK for reeval (*.eval.py eval files)"
 readme = "README.md"
 requires-python = ">=3.11"

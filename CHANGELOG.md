@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.1](https://github.com/invertase/reeval/compare/v0.16.0...v0.16.1) (2026-10-29)
+
+
+### Tests
+
+* hold the matcher-line and readTree symlink tests to Windows paths ([#708](https://github.com/invertase/reeval/issues/708)) ([6b06352](https://github.com/invertase/reeval/commit/6b063524c2972560ede3090fcfeadf8dc4c3a211))
+
 ## [0.16.0](https://github.com/invertase/reeval/compare/v0.15.1...v0.16.0) (2026-10-29)
 
 
