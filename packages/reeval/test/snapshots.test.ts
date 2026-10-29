@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { readlink } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { describe, test } from 'node:test'
 import { gunzipSync } from 'node:zlib'
 import { streamPreview } from '../../sandbox-docker/src/trace.ts'
@@ -125,7 +125,9 @@ describe('tar', () => {
     assert.equal(app?.type === 'file' && app.data.toString(), 'export {}\n')
     assert.ok(tree.some((e) => e.path === 'src' && e.type === 'dir'))
     const link = tree.find((e) => e.path === 'link')
-    if (link) assert.equal(link.type === 'symlink' && link.target, '/etc')
+    // Windows stores an absolute target on the current drive, as `D:\etc`.
+    const target = process.platform === 'win32' ? resolve('/etc') : '/etc'
+    if (link) assert.equal(link.type === 'symlink' && link.target, target)
   })
 
   test('readTar stops at a header whose size is not a whole number of bytes', () => {
