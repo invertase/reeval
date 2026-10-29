@@ -1798,6 +1798,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/ui.test.ts', 'reeval/test/engine.test.ts'],
   },
   {
+    id: 'output.run-header',
+    area: 'CLI and runner',
+    name: "The run header: on a color terminal outside CI, one block of the plan's facts with its warnings and hints wrapped to the width; elsewhere the plain plan line",
+    unit: ['reeval/test/ui.test.ts'],
+  },
+  {
     id: 'output.flags',
     area: 'CLI and runner',
     name: '`--log-order`, `--log-prefix` and `--output-logs` through `reeval run`',

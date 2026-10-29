@@ -84,6 +84,36 @@ export type CollectedEval = {
   skipped: boolean
 }
 
+/** What the plan line says, as the facts a terminal's run header lists one per line. */
+export type RunHeader = {
+  version: string
+  runId: string
+  dryRun: boolean
+  /** Attempts already completed in the run this one resumes. */
+  resumed?: number
+  /** The config file, when it isn't in the current directory. */
+  config?: string
+  profile?: { name: string; reason: string }
+  harnesses: string[]
+  sandboxes: string[]
+  /** The judge models the planned attempts use. */
+  judges: string[]
+  files: number
+  evals: number
+  /** Evals planned but skipped. */
+  skipped: number
+  cells: number
+  /** The most attempts the plan may start, and the fewest it starts (below with best-of). */
+  attempts: number
+  fewest: number
+  budget: { attempts?: number; duration?: string }
+  /** Serial: every attempt one after another. */
+  estimateMs: number
+  concurrency: number
+  /** Where the run's record lands; unset for `--dry-run`. */
+  record?: string
+}
+
 /** What a line about an attempt needs to name it. */
 export type AttemptRef = { id: string; key: string; attempt: AttemptMeta | undefined }
 
@@ -100,10 +130,22 @@ export type ReevalEvent =
       runId: string
     }
   /**
-   * The plan line (and, for `--dry-run`, its table), its warnings and hints, before anything runs;
-   * then each sandbox that runs as root or with capabilities added back.
+   * The plan, before anything runs: its line (a terminal shows `header` as a block instead), for
+   * `--dry-run` its table, its warnings and hints, then each sandbox that runs as root or with
+   * capabilities added back.
    */
-  | { type: 'plan'; at: number; lines: string[]; sandboxWarnings?: SandboxWarning[] }
+  | {
+      type: 'plan'
+      at: number
+      /** `plan  run … · 1 eval · 4 cells · …`. */
+      line: string
+      header: RunHeader
+      /** `--dry-run`'s table, image status and cost lines. */
+      details: string[]
+      warnings: string[]
+      hints: string[]
+      sandboxWarnings?: SandboxWarning[]
+    }
   /** Every attempt in a file, once it's collected (skipped ones too, so tags are stable). */
   | { type: 'collected'; at: number; file: string; evals: CollectedEval[] }
   | ({ type: 'eval-start'; at: number } & AttemptRef)

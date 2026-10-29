@@ -25,6 +25,7 @@ import {
   prepareLines,
   progressLine,
 } from './format.ts'
+import { headerLines, noteLines, noticeLines, prepareStepLines, startLine } from './header.ts'
 import type { OutputOptions } from './mode.ts'
 import { resultLines } from './result.ts'
 import { Tagger } from './tags.ts'
@@ -40,6 +41,8 @@ export type RendererOptions = {
   timers?: boolean
   /** `-v` (1) or `-vv` (2); `-vv` shows debug lines' times to the millisecond. */
   verbosity?: 0 | 1 | 2
+  /** The terminal's width, which a rich header's warnings and hints wrap to. */
+  columns?: number
 }
 
 /** `debug` lines carry their own timestamp instead of an offset. */
@@ -174,6 +177,11 @@ export class PlainRenderer implements Renderer {
     switch (e.type) {
       case 'run-start': {
         this.#runStartedAt = e.at
+        if (this.#o.output.rich) {
+          this.#write(startLine(c, this.#o.output))
+          this.#write('')
+          return
+        }
         const files = `${e.files} eval file${e.files === 1 ? '' : 's'}`
         const order = `${this.#o.output.logOrder} logs`
         const setup = `harness ${e.harness} · sandbox ${e.sandbox} · concurrency ${e.concurrency}`
@@ -181,9 +189,14 @@ export class PlainRenderer implements Renderer {
         return
       }
       case 'plan':
-        for (const [i, line] of e.lines.entries()) {
-          this.#write(line.startsWith('warning:') ? c.yellow(line) : i === 0 ? line : c.dim(line))
+        if (this.#o.output.rich) {
+          this.#richPlan(e)
+          return
         }
+        this.#write(e.line)
+        for (const line of e.details) this.#write(c.dim(line))
+        for (const w of e.warnings) this.#write(c.yellow(`warning: ${w}`))
+        for (const h of e.hints) this.#write(c.dim(`hint: ${h}`))
         for (const w of e.sandboxWarnings ?? []) this.#sandboxWarning(w)
         return
       case 'collected':
@@ -247,7 +260,10 @@ export class PlainRenderer implements Renderer {
         this.#drawStatus()
         return
       case 'prepare': {
-        for (const line of prepareLines(c, e, ERROR_LINES)) this.#write(line)
+        const lines = this.#o.output.rich
+          ? prepareStepLines(c, e, this.#columns, ERROR_LINES)
+          : prepareLines(c, e, ERROR_LINES)
+        for (const line of lines) this.#write(line)
         if (e.state === 'failed' && this.#o.output.githubActions) {
           const { target, failure } = e.outcome as Extract<typeof e.outcome, { ok: false }>
           const what = target.kind === 'workspace' ? 'The' : 'Sandbox'
@@ -257,6 +273,10 @@ export class PlainRenderer implements Renderer {
         return
       }
       case 'notice': {
+        if (this.#o.output.rich) {
+          for (const line of noticeLines(c, e, this.#columns)) this.#write(line)
+          return
+        }
         const paint = { info: c.dim, warn: c.yellow, error: c.red }[e.level]
         this.#write(paint(e.text))
         return
@@ -267,6 +287,34 @@ export class PlainRenderer implements Renderer {
         for (const line of resultLines(c, e, (this.#o.verbosity ?? 0) > 0)) this.#write(line)
         return
     }
+  }
+
+  get #columns() {
+    return this.#o.columns || 80
+  }
+
+  /** The plan as the rich header: its facts, `--dry-run`'s table, then each kind of note. */
+  #richPlan(e: Extract<ReevalEvent, { type: 'plan' }>) {
+    const c = this.#c
+    const width = this.#columns
+    for (const line of headerLines(c, e.header, width)) this.#write(line)
+    const sections = [
+      // Flush left: the table is about as wide as a terminal already.
+      e.details,
+      [
+        ...e.warnings.flatMap((w) => noteLines(c, 'warning', w, width)),
+        ...(e.sandboxWarnings ?? []).flatMap((w) =>
+          noteLines(c, w.kind === 'root' ? 'root' : 'warning', w.message, width),
+        ),
+      ],
+      e.hints.flatMap((h) => noteLines(c, 'hint', h, width)),
+    ]
+    for (const lines of sections) {
+      if (!lines.length) continue
+      this.#write('')
+      for (const line of lines) this.#write(line)
+    }
+    this.#write('')
   }
 
   #sandboxWarning(w: SandboxWarning) {

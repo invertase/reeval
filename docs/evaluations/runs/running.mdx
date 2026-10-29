@@ -3,7 +3,7 @@ title: "Run evaluations"
 description: "Run the evaluations in a project."
 ---
 
-`reeval run` runs the evaluations in a project. The command prints a plan line, starts the attempts, and ends with one block per evaluation.
+`reeval run` runs the evaluations in a project. The command prints the plan, starts the attempts, and ends with one block per evaluation.
 
 For more information about the result blocks, see [Read a run's output](/results/output).
 
@@ -46,10 +46,16 @@ npx reeval run --dry-run
 The command needs no API key. If you omit the run id, the counts and the estimate look like this:
 
 ```text
-plan  run … · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
+REEVAL v0.16.1  dry run
+
+  ➜  Run:       …
+  ➜  Harness:   cursor:composer-2.5
+  ➜  Sandbox:   docker
+  ➜  Scope:     1 eval file · 1 eval · 1 cell · 1 attempt
+  ➜  Est. Time: ~3m 00s (serial)
 ```
 
-A table under that line lists each evaluation. To print the same plan as one JSON document, pass `--json` as well:
+A table under that block lists each evaluation. To print the same plan as one JSON document, pass `--json` as well:
 
 ```bash
 npx reeval run --dry-run --json
@@ -108,7 +114,7 @@ npx reeval run --resume
 
 The command keeps the run id. It skips finished attempts. It runs the remaining attempts. With no id, the command continues the newest stopped, interrupted, or budget-stopped run saved under the `.reeval` directory.
 
-Pass the run id from the plan line, or a unique prefix of that id:
+Pass the run id from the plan, or a unique prefix of that id:
 
 ```bash
 npx reeval run --resume 20261022T172927Z

@@ -33,7 +33,10 @@ export class AgentRenderer implements Renderer {
   onEvent(e: ReevalEvent): void {
     switch (e.type) {
       case 'plan':
-        for (const line of e.lines) this.#write(line)
+        this.#write(e.line)
+        for (const line of e.details) this.#write(line)
+        for (const w of e.warnings) this.#write(`warning: ${w}`)
+        for (const h of e.hints) this.#write(`hint: ${h}`)
         for (const w of e.sandboxWarnings ?? []) this.#write(sandboxWarningLine(w))
         return
       case 'run-start':

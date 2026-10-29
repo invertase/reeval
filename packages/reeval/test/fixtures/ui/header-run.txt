@@ -1,0 +1,24 @@
+REEVAL v0.16.1
+
+  ➜  Run:       20261029T144346Z_77bb468_elliot-hesp_72sn
+  ➜  Profile:   smoke
+  ➜  Harness:   cursor:composer-2.5
+  ➜  Sandbox:   docker
+  ➜  Scope:     1 eval file · 1 eval · 4 cells · 4 attempts (budget: 15 ✓)
+  ➜  Est. Time: ~3m 48s (concurrency: 8) · ~15m 10s (serial)
+  ➜  Record:    .reeval/runs/20261029T144346Z_77bb468_elliot-hesp_72sn.json
+
+  ⚠  Warning: skill.git(github:firebase/agent-skills) uses no ref (the default branch): results
+              aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either
+              way).
+  ⚠  Warning: skill.git(github:firebase/firebaseui-web) uses no ref (the default branch): results
+              aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either
+              way).
+
+  ℹ  Hint:    1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort
+              will say can't tell yet (profile smoke's limit.runs caps it; --runs 4 replaces it)
+
+  ◆  Preparing 1 sandbox (docker)...
+  ✓  docker ready 12s
+  ◆  Streaming logs...
+

@@ -51,7 +51,14 @@ npx reeval run --dry-run  # smoke check: plans the run, no keys or sandbox
 ```
 
 ```text
-plan  run … · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
+REEVAL v0.16.1  dry run
+
+  ➜  Run:       …
+  ➜  Harness:   cursor:composer-2.5
+  ➜  Sandbox:   docker
+  ➜  Scope:     1 eval file · 1 eval · 1 cell · 1 attempt
+  ➜  Est. Time: ~3m 00s (serial)
+
 eval                                    harnesses  variants  runs  attempts  notes
 evals/greet.eval.ts › creates greet.js  1          —         1     1
 …

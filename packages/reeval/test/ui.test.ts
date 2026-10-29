@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { RunRecord } from '../src/history/types.ts'
 import type { AttemptMeta } from '../src/types.ts'
 import { AgentRenderer } from '../src/ui/agent.ts'
-import { colors } from '../src/ui/colors.ts'
-import type { EvalResult, Progress, ReevalEvent } from '../src/ui/events.ts'
+import { type ColorDepth, colors, stripAnsi } from '../src/ui/colors.ts'
+import type { EvalResult, Progress, ReevalEvent, RunHeader } from '../src/ui/events.ts'
 import { progressLine } from '../src/ui/format.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
@@ -213,6 +213,7 @@ const options = (overrides: Partial<OutputOptions> = {}): OutputOptions => ({
   logPrefix: 'task',
   outputLogs: 'full',
   color: false,
+  rich: false,
   githubActions: false,
   heartbeatMs: 60_000,
   ...overrides,
@@ -561,7 +562,211 @@ test('a check with retries says which try it ended on', () => {
   assert.equal(line(1, 2, 3), '$ npm test  exit 1 2s · failed on try 2 of 3')
 })
 
+const header: RunHeader = {
+  version: '0.16.1',
+  runId: '20261029T144346Z_77bb468_elliot-hesp_72sn',
+  dryRun: false,
+  profile: { name: 'smoke', reason: '--profile' },
+  harnesses: ['cursor:composer-2.5'],
+  sandboxes: ['docker'],
+  judges: [],
+  files: 1,
+  evals: 1,
+  skipped: 0,
+  cells: 4,
+  attempts: 4,
+  fewest: 4,
+  budget: { attempts: 15 },
+  estimateMs: 910_000,
+  concurrency: 8,
+  record: '.reeval/runs/20261029T144346Z_77bb468_elliot-hesp_72sn.json',
+}
+
+const unpinned = (repo: string) =>
+  `skill.git(github:firebase/${repo}) uses no ref (the default branch): results aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either way).`
+
+const PLAN_LINE = `plan  run ${header.runId} · profile smoke (--profile) · 1 eval · 4 cells · 4 attempts · ~15m 10s serial (~3m 48s at concurrency 8) · budget 15 attempts ✓`
+
+const planEvent = (over: Partial<Extract<ReevalEvent, { type: 'plan' }>> = {}): ReevalEvent => ({
+  type: 'plan',
+  at: T0,
+  line: PLAN_LINE,
+  header,
+  details: [],
+  warnings: [unpinned('agent-skills'), unpinned('firebaseui-web')],
+  hints: [
+    "1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (profile smoke's limit.runs caps it; --runs 4 replaces it)",
+  ],
+  ...over,
+})
+
+const prepared: ReevalEvent[] = [
+  { type: 'prepare', at: T0, state: 'start', targets: [{ label: 'docker' } as never] },
+  {
+    type: 'prepare',
+    at: s(12),
+    state: 'ready',
+    outcome: { ok: true, ms: 12_000, target: { label: 'docker' } } as never,
+  },
+  {
+    type: 'run-start',
+    at: s(12),
+    version: '0.16.1',
+    files: 1,
+    harness: 'cursor:composer-2.5',
+    sandbox: 'docker',
+    concurrency: 8,
+    runId: header.runId,
+  },
+]
+
+describe('run header', () => {
+  const draw = (
+    events: ReevalEvent[],
+    output: OutputOptions,
+    columns: number,
+    depth: ColorDepth = 4,
+  ) => {
+    let text = ''
+    const renderer = new PlainRenderer({
+      out: { write: (chunk: string) => (text += chunk) },
+      colors: colors(output.color, depth),
+      output,
+      harness: 'cursor',
+      now: () => T0,
+      timers: false,
+      columns,
+    })
+    for (const e of events) renderer.onEvent(e)
+    renderer.close()
+    return text
+  }
+  const rich = options({ statusLine: true, color: true, rich: true, logOrder: 'stream' })
+  // test/fixtures/ui/<name>.txt, without color, or with its codes and ESC as ␛;
+  // REEVAL_UPDATE_SNAPSHOTS=1 rewrites them.
+  const golden = (name: string, text: string, keepColor = false) => {
+    const file = join(pkgRoot, 'test/fixtures/ui', `${name}.txt`)
+    const shown = text.replaceAll('\r\x1b[2K', '')
+    const plain = keepColor ? shown.replaceAll('\x1b', '␛') : stripAnsi(shown)
+    if (process.env.REEVAL_UPDATE_SNAPSHOTS) {
+      mkdirSync(dirname(file), { recursive: true })
+      writeFileSync(file, plain)
+    }
+    assert.equal(plain, readFileSync(file, 'utf8'), name)
+  }
+
+  test('on a color terminal: one block, its notes wrapped under their first word', () => {
+    const out = draw([planEvent(), ...prepared], rich, 100)
+    golden('header-run', out)
+    assert.ok(
+      out.startsWith('\x1b[1mREEVAL v0.16.1\x1b[22m'),
+      'on 16 colors, a bold title in the text color',
+    )
+    assert.ok(
+      out.includes('\x1b[33m⚠\x1b[39m  \x1b[1mWarning:\x1b[22m'),
+      'on 16 colors, a yellow glyph and a bold label in the text color',
+    )
+    assert.ok(out.includes('\x1b[36mℹ\x1b[39m  \x1b[1mHint:\x1b[22m'), 'and a cyan glyph for hints')
+    assert.ok(out.includes('\x1b[2mRun:\x1b[22m'), 'dim keys')
+    for (const line of stripAnsi(out).split('\n')) assert.ok(line.length <= 100, line)
+  })
+
+  test('with 256 colors or truecolor, warnings are orange and the accents mid-tone', () => {
+    const at = (depth: ColorDepth) => draw([planEvent(), ...prepared], rich, 100, depth)
+    golden('header-run-256', at(8), true)
+    assert.ok(at(8).includes('\x1b[1m\x1b[38;5;166m⚠  Warning:\x1b[39m\x1b[22m'))
+    assert.ok(at(8).includes('\x1b[1m\x1b[38;5;33mℹ  Hint:\x1b[39m\x1b[22m'))
+    assert.ok(at(8).includes('\x1b[38;5;31m➜\x1b[39m'))
+    assert.ok(at(8).startsWith('\x1b[1m\x1b[38;5;31mREEVAL v0.16.1\x1b[39m\x1b[22m'))
+    assert.ok(at(24).includes('\x1b[1m\x1b[38;2;215;95;0m⚠  Warning:\x1b[39m\x1b[22m'))
+    assert.ok(at(24).includes('\x1b[38;2;0;135;175m◆\x1b[39m'))
+    assert.equal(stripAnsi(at(24)), stripAnsi(at(4)), 'only the colors differ')
+  })
+
+  test('lists wrap one per line, and a dry run shows its table, a root sandbox and a resume', () => {
+    const many = {
+      ...header,
+      dryRun: true,
+      resumed: 3,
+      config: '../reeval.config.ts',
+      profile: { name: 'pr', reason: 'auto: CI is set' },
+      harnesses: ['cursor:composer-2.5', 'claude-code:claude-sonnet-4-5', 'codex:gpt-5.1-codex'],
+      sandboxes: ['docker', 'fake'],
+      judges: ['typesafe-ai/jev-1.14.0'],
+      skipped: 1,
+      fewest: 3,
+      attempts: 20,
+      budget: { attempts: 15, duration: '30m' },
+    }
+    const out = draw(
+      [
+        planEvent({
+          header: many,
+          details: ['eval  harnesses  runs', 'a     3          4'],
+          hints: [],
+          sandboxWarnings: [
+            {
+              kind: 'root',
+              level: 'config',
+              where: 'reeval.config.ts',
+              file: null,
+              message: 'the sandbox runs as root: give it a user, or set root: true',
+            },
+          ],
+        }),
+      ],
+      rich,
+      64,
+    )
+    golden('header-dry-run', out)
+    for (const line of stripAnsi(out).split('\n')) assert.ok(line.length <= 64, line)
+  })
+
+  test('on a narrow terminal, a wrapped row never starts with a separator', () => {
+    const shown = (columns: number) =>
+      stripAnsi(draw([planEvent({ warnings: [], hints: [] })], rich, columns)).split('\n')
+    const scope = shown(36).filter((l) => l.startsWith(' '.repeat(16)))
+    assert.ok(scope.length > 1, 'the scope and estimate rows wrap')
+    for (const columns of [36, 40, 48, 60])
+      for (const line of shown(columns)) assert.doesNotMatch(line, /^\s*·/, line)
+  })
+
+  test("the last line says how the attempts' logs will print", () => {
+    const last = (output: OutputOptions) =>
+      stripAnsi(draw(prepared.slice(2), output, 80)).split('\n')[0]
+    assert.equal(last(rich), '  ◆  Streaming logs...')
+    assert.equal(
+      last({ ...rich, outputLogs: 'errors-only' }),
+      '  ◆  Running; logs print for failed attempts only...',
+    )
+    assert.equal(last({ ...rich, outputLogs: 'none' }), '  ◆  Running...')
+  })
+
+  test('off a terminal: the plan line, warning: and hint: lines, and the run line, as before', () => {
+    assert.equal(
+      draw([planEvent(), ...prepared], options({ logOrder: 'stream' }), 100),
+      lines(
+        PLAN_LINE,
+        `warning: ${unpinned('agent-skills')}`,
+        `warning: ${unpinned('firebaseui-web')}`,
+        "hint: 1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (profile smoke's limit.runs caps it; --runs 4 replaces it)",
+        'preparing 1 sandbox: docker',
+        '✓ docker ready 12s',
+        `reeval 0.16.1 · run ${header.runId} · 1 eval file · harness cursor:composer-2.5 · sandbox docker · concurrency 8 · stream logs`,
+      ),
+    )
+  })
+})
+
 describe('agent renderer', () => {
+  test('prints the plan as plain lines', () => {
+    let text = ''
+    const renderer = new AgentRenderer({ out: { write: (chunk: string) => (text += chunk) } })
+    renderer.onEvent(planEvent())
+    assert.match(text, /^plan {2}run .*\nwarning: skill\.git.*\nwarning: .*\nhint: 1 compare/)
+    assert.ok(!text.includes('\x1b['))
+  })
+
   test('prints nothing per attempt, then the result without color', () => {
     let text = ''
     const renderer = new AgentRenderer({ out: { write: (chunk: string) => (text += chunk) } })
@@ -645,6 +850,17 @@ describe('output mode', () => {
       () => resolve({}, true, undefined, { outputLogs: 'some' }),
       /--output-logs is one of full, errors-only, none, auto \(got some\)/,
     )
+  })
+
+  test('rich: the header block and glyphs only on a color terminal outside CI, unless --ui names the mode', () => {
+    assert.equal(resolve({}).rich, true)
+    assert.equal(resolve({ NO_COLOR: '1' }).rich, false)
+    assert.equal(resolve({ FORCE_COLOR: '0' }).rich, false)
+    assert.equal(resolve({ FORCE_COLOR: '1' }, false).rich, false, 'a pipe stays plain')
+    assert.equal(resolve({ CI: '1' }).rich, false)
+    assert.equal(resolve({ GITHUB_ACTIONS: 'true' }, false).rich, false)
+    assert.equal(resolve({}, true, 'cursor').rich, false)
+    assert.equal(resolve({}, true, undefined, { ui: 'plain' }).rich, false)
   })
 
   test('heartbeat: 60s by default, configurable, off for agents', () => {

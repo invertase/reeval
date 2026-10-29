@@ -1,0 +1,24 @@
+␛[1m␛[38;5;31mREEVAL v0.16.1␛[39m␛[22m
+
+  ␛[38;5;31m➜␛[39m  ␛[2mRun:␛[22m       20261029T144346Z_77bb468_elliot-hesp_72sn
+  ␛[38;5;31m➜␛[39m  ␛[2mProfile:␛[22m   smoke
+  ␛[38;5;31m➜␛[39m  ␛[2mHarness:␛[22m   cursor:composer-2.5
+  ␛[38;5;31m➜␛[39m  ␛[2mSandbox:␛[22m   docker
+  ␛[38;5;31m➜␛[39m  ␛[2mScope:␛[22m     1 eval file · 1 eval · 4 cells · 4 attempts (budget: 15 ␛[32m✓␛[39m)
+  ␛[38;5;31m➜␛[39m  ␛[2mEst. Time:␛[22m ~3m 48s ␛[2m(concurrency: 8)␛[22m · ~15m 10s ␛[2m(serial)␛[22m
+  ␛[38;5;31m➜␛[39m  ␛[2mRecord:␛[22m    .reeval/runs/20261029T144346Z_77bb468_elliot-hesp_72sn.json
+
+  ␛[1m␛[38;5;166m⚠  Warning:␛[39m␛[22m skill.git(github:firebase/agent-skills) uses no ref (the default branch): results
+              aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either
+              way).
+  ␛[1m␛[38;5;166m⚠  Warning:␛[39m␛[22m skill.git(github:firebase/firebaseui-web) uses no ref (the default branch): results
+              aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either
+              way).
+
+  ␛[1m␛[38;5;33mℹ  Hint:␛[39m␛[22m    1 compare runs once per cell; a verdict needs 4 runs a side, so its lift and effort
+              will say can't tell yet (profile smoke's limit.runs caps it; --runs 4 replaces it)
+
+  ␛[38;5;31m◆␛[39m  Preparing 1 sandbox (docker)...
+  ␛[32m✓␛[39m  docker ready ␛[2m12s␛[22m
+  ␛[38;5;31m◆␛[39m  Streaming logs...
+
