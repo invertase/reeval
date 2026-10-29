@@ -651,11 +651,11 @@ describe('toHaveStatus and toHaveNoPageErrors', () => {
       () => matchers.toHaveNoPageErrors({ exitCode: 0 }),
       /toHaveNoPageErrors\(\) expects a c\.capture\(\) result/,
     )
-    for (const bad of ['200', '6xx', '2XX']) {
+    for (const bad of ['200', '6xx', '2XX', 2, 99, 600, 200.5, Number.NaN]) {
       assert.throws(
         () => matchers.toHaveStatus(capture, bad as never),
         new RegExp(
-          `toHaveStatus\\(\\) expects a status number or a range from '1xx' to '5xx', got "${bad}"`,
+          `toHaveStatus\\(\\) expects a status from 100 to 599 or a range from '1xx' to '5xx', got ${JSON.stringify(bad)}`,
         ),
       )
     }

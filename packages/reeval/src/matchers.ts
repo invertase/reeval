@@ -184,9 +184,11 @@ export const MATCHERS = {
   toHaveStatus: matcher((actual, [status]: [status: number | StatusRange]): Result => {
     if (!isCapture(actual)) throw subjectError('toHaveStatus() expects a c.capture() result')
     const range = typeof status === 'string' && /^[1-5]xx$/.test(status) ? Number(status[0]) : 0
-    if (!range && !Number.isInteger(status)) {
+    const code =
+      typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599
+    if (!range && !code) {
       throw subjectError(
-        `toHaveStatus() expects a status number or a range from '1xx' to '5xx', got ${JSON.stringify(status)}`,
+        `toHaveStatus() expects a status from 100 to 599 or a range from '1xx' to '5xx', got ${JSON.stringify(status)}`,
       )
     }
     const pass =

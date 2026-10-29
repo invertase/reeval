@@ -208,15 +208,15 @@ export type CaptureFailedRequest = {
   error?: string
 }
 
+/** A class of HTTP status for `toHaveStatus()`: `'2xx'` is 200 to 299. */
+export type StatusRange = `${1 | 2 | 3 | 4 | 5}xx`
+
 /**
  * What the browser saw while it loaded and captured a page: `<name>.capture.json` beside the
  * capture's PNG, and these fields of the `Capture` that `c.capture()` returns. On the fake
  * sandbox, which has no browser, `status` and `finalUrl` come from an HTTP GET and the lists are
  * empty.
  */
-/** A class of HTTP status for `toHaveStatus()`: `'2xx'` is 200 to 299. */
-export type StatusRange = `${1 | 2 | 3 | 4 | 5}xx`
-
 export type CapturePage = {
   /**
    * The HTTP status of the main frame's latest document, after redirects. A full navigation
