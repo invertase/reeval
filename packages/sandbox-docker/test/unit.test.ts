@@ -228,6 +228,61 @@ describe('request transformations', () => {
     assert.equal(tagged.headers['x-tag'], undefined, 'and it does not apply off the endpoints')
   })
 
+  test('an exact path takes only that target as sent: no prefix, encoding or dot-segment way on', () => {
+    const bearer: RequestTransformation = {
+      match: {
+        host: 'api.openai.com',
+        headers: [{ key: { exact: 'authorization' }, value: { exact: `Bearer ${PLACEHOLDER}` } }],
+      },
+      transform: { headers: { authorization: `Bearer ${REAL}` } },
+    }
+    const endpoints: EndpointMatch[] = [
+      { host: 'api.openai.com', path: { exact: '/v1/responses' }, method: ['POST'] },
+      { host: 'api.openai.com', path: { exact: '/v1/alpha/search' }, method: ['POST'] },
+    ]
+    const call = (method: string, path: string, host = 'api.openai.com') =>
+      applyTransformations(
+        [bearer],
+        { host, method, path, headers: { authorization: `Bearer ${PLACEHOLDER}` } },
+        endpoints,
+      )
+    for (const path of ['/v1/responses', '/v1/alpha/search', '/v1/alpha/search?q=1']) {
+      const r = call('POST', path)
+      assert.equal(r.headers.authorization, `Bearer ${REAL}`, path)
+      assert.equal(r.refused, false, path)
+    }
+    const misses: Array<[string, string]> = [
+      ['GET', '/v1/alpha/search'],
+      ['PUT', '/v1/alpha/search'],
+      ['POST', '/v1/alpha/search/'],
+      ['POST', '/v1/alpha/searchX'],
+      ['POST', '/v1/alpha/search/x'],
+      ['POST', '/v1/alpha/search/../files'],
+      ['POST', '/v1/alpha/search%2F..%2Ffiles'],
+      ['POST', '/v1/alpha/%73earch'],
+      ['POST', '/V1/alpha/search'],
+      ['POST', '/v1//alpha/search'],
+      ['POST', '/v1/alpha'],
+      ['POST', '/v1/files'],
+      ['POST', '/v1/files/../alpha/search'],
+      ['POST', '/v1/files/%2e%2e/alpha/search'],
+      ['POST', '/v1/files/%2E%2E/responses'],
+      ['POST', '/v1/files\\..\\alpha\\search'],
+      ['POST', '/v1/alpha/./search'],
+      ['POST', '/v1/files#/../../v1/alpha/search'],
+      ['POST', '/v1/files?/../alpha/search'],
+    ]
+    for (const [method, path] of misses) {
+      const r = call(method, path)
+      assert.equal(r.refused, true, `${method} ${path}`)
+      assert.doesNotMatch(JSON.stringify(r.headers), new RegExp(REAL), `${method} ${path}`)
+    }
+    for (const host of ['api.openai.com.evil.example', 'evil.example', 'openai.com']) {
+      const r = call('POST', '/v1/alpha/search', host)
+      assert.doesNotMatch(JSON.stringify(r.headers), new RegExp(REAL), host)
+    }
+  })
+
   test('host, path, method and header value must all match', () => {
     const misses: Partial<OutboundRequest>[] = [
       { host: 'api3.cursor.sh' },
