@@ -2934,8 +2934,36 @@ export const features: Feature[] = [
       },
     },
     canary: /expected 'c\.capture\(\) timed out on "fake\[0\]" \(i…' to be 'still loading'/,
-    record: ({ run }) => {
-      assert.equal(landed(run)?.files.artifacts, undefined)
+    record: ({ run, runDir }) => {
+      const [step, ...rest] = landed(run)?.files.artifacts ?? []
+      assert.equal(rest.length, 0, 'no PNG of the capture itself')
+      assert.equal(step?.name, 'late.step-1')
+      assert.deepEqual(step?.capture?.step && { ...step.capture.step, ms: 0 }, {
+        of: 'late',
+        index: 1,
+        instruction: 'fake[0]',
+        moves: 1,
+        ms: 0,
+        ended: 'stopped',
+      })
+      assert.ok(pngSize(readFileSync(join(runDir, step.path))).width > 0)
+      assert.match(
+        landed(run)?.error?.message ?? '',
+        /The page as it stopped: artifacts\/late\.step-1\.png\.$/,
+      )
+    },
+  },
+  {
+    dir: 'ui/capture-use-final',
+    tiers: ['docker'],
+    env: 'ui',
+    canary: /expected 'no' to be 'yes'/,
+    record: ({ run, runDir }) => {
+      const [capture, step] = landed(run)?.files.artifacts ?? []
+      assert.deepEqual(capture?.capture?.use, { model: 'fake', moves: 1 })
+      assert.equal(step?.name, 'after.step-1')
+      assert.equal(step?.capture?.step?.ended, 'final')
+      assert.ok(pngSize(readFileSync(join(runDir, step.path))).width > 0)
     },
   },
   {

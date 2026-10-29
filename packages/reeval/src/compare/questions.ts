@@ -799,7 +799,7 @@ async function keptAttempt(
   for (const c of kept.checks) {
     checks.push({ command: c.command, exitCode: c.exitCode, ...logOutput(await text(c.log)) })
   }
-  const read = captures && artifacts ? (kept.files.artifacts ?? []) : []
+  const read = captures && artifacts ? (kept.files.artifacts ?? []).filter(isCapture) : []
   const shots = await Promise.all(
     read.map(async (a) => {
       const data = await readFile(path(a)).catch(() => null)
@@ -837,10 +837,13 @@ const readStaged = async (stagingDir: string, key: string): Promise<EvalRecord |
   )
 
 /** A staged attempt's captures, read from the PNGs beside its record; a missing file is left out. */
+/** A capture's own PNG, not one of its instructions' screenshots. */
+const isCapture = (art: { capture?: { step?: unknown } }) => !art.capture?.step
+
 async function stagedCaptures(stagingDir: string, key: string, record: EvalRecord | null) {
   const dir = join(stagingDir, 'evals', recordFileName(key).replace(/\.json$/, '.artifacts'))
   const read = await Promise.all(
-    (record?.artifacts ?? []).map(async ({ name }) => {
+    (record?.artifacts ?? []).filter(isCapture).map(async ({ name }) => {
       const data = await readFile(join(dir, `${name}.png`)).catch(() => null)
       return data ? [{ name, data: new Uint8Array(data) }] : []
     }),

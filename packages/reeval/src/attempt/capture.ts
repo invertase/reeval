@@ -17,7 +17,7 @@ import {
 } from '../capture/index.ts'
 import { startLoopbackProxy } from '../capture/loopback.ts'
 import { stubPng } from '../capture/stub.ts'
-import { captureUseSpend, runJourney } from '../capture/use.ts'
+import { captureUseSpend, runJourney, type StepShot } from '../capture/use.ts'
 import { debugLog } from '../debug/attempt.ts'
 import { untraced } from '../debug/docker.ts'
 import { getRunContext, SUBJECT } from '../engine/runtime.ts'
@@ -35,6 +35,7 @@ import type {
   CaptureCall,
   CapturePage,
   CapturePageFile,
+  CaptureStep,
   CaptureUse,
   ServeHandle,
   ServeRecord,
@@ -262,6 +263,26 @@ export async function capturePage(
   const started = Date.now()
   const remaining = () => Math.max(0, resolved.timeoutMs - (Date.now() - started))
   let moves = 0
+  const camera = {
+    port: resolved.port,
+    path: resolved.path,
+    viewport: resolved.window,
+    ...(resolved.fullPage ? { fullPage: true } : {}),
+  }
+  const steps: Array<{ name: string; png: Buffer; step: CaptureStep }> = []
+  const keepSteps = () => {
+    for (const { name, png, step } of steps) {
+      a.record.artifacts = a.record.artifacts ?? []
+      a.record.artifacts.push({
+        name,
+        mediaType: 'image/png',
+        sha256: sha256(png),
+        bytes: png.length,
+        capture: { ...camera, step },
+      })
+      a.stepBlobs.set(name, png)
+    }
+  }
   const url = pageUrl(origin, resolved.path)
   const { png, page } = fake
     ? {
@@ -278,7 +299,15 @@ export async function capturePage(
           moves = n
         },
         (port) => tunnel({ port, protocol: 'http' }).then((t) => t.url),
-      )
+        ({ png, ...step }) => {
+          const name = `${resolved.name}.step-${step.index}`
+          steps.push({ name, png, step: { of: resolved.name, ...step } })
+          return `artifacts/${name}.png`
+        },
+      ).catch((error: unknown) => {
+        keepSteps()
+        throw error
+      })
   tracePage(resolved.name, page)
   const facts: CapturePageFile = { schemaVersion: 1, ...page }
   const pageJson = `${redactJson(facts, 2)}\n`
@@ -291,10 +320,7 @@ export async function capturePage(
   }
   const goals = instructionGoals(resolved.instructions)
   const capture: CaptureArtifactMeta = {
-    port: resolved.port,
-    path: resolved.path,
-    viewport: resolved.window,
-    ...(resolved.fullPage ? { fullPage: true } : {}),
+    ...camera,
     ...(goals.length ? { instructions: goals } : {}),
     ...(use ? { use: { model: 'model' in use ? use.model : 'fake', moves } } : {}),
     ...(page.status ? { status: page.status } : {}),
@@ -314,6 +340,7 @@ export async function capturePage(
     capture,
   })
   a.artifactBlobs.set(resolved.name, png)
+  keepSteps()
   const taken: Capture = {
     name: resolved.name,
     port: resolved.port,
@@ -368,6 +395,7 @@ async function shot(
   remaining: () => number,
   onMoves: (n: number) => void,
   tunnel: (port: number) => Promise<string>,
+  onStep: (shot: StepShot) => string,
 ): Promise<{ png: Buffer; page: CapturePage }> {
   const cache = cacheDir()
   const bin = await ensureChrome(cache, {
@@ -393,6 +421,7 @@ async function shot(
         instructions: resolved.instructions,
         use: resolved.use,
         remaining,
+        onStep,
         loadModel: async (name) => {
           const { config, profile } = getRunContext()
           const scope = gatewayScope(config, profile)

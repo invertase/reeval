@@ -167,7 +167,7 @@ export async function writeRecord(a: Attempt, stagingDir: string, id: string): P
   await writeCaptureSidecars(
     stagingDir,
     recordFileName(attemptKey(id, spec.cell.key, spec.n)),
-    a.artifactBlobs,
+    new Map([...a.artifactBlobs, ...a.stepBlobs]),
     a.capturePages,
   )
   // Replaced whole: reeval studio reads it while the run goes on.

@@ -92,6 +92,8 @@ export type Attempt = {
   artifactBlobs: Map<string, Buffer>
   /** Each capture's `<name>.capture.json`, redacted, keyed by capture name; written beside its PNG. */
   capturePages: Map<string, string>
+  /** Each capture instruction's screenshot, by its artifact name: written beside the captures, never sent to a judge. */
+  stepBlobs: Map<string, Buffer>
   /** Where the attempt's snapshots are written, beside its staging record. */
   readonly snapshotDir: string
 }
@@ -152,6 +154,7 @@ export function createAttempt(
     backgrounds: [],
     artifactBlobs: new Map(),
     capturePages: new Map(),
+    stepBlobs: new Map(),
     snapshotDir,
   }
   return a

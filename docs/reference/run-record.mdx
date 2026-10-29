@@ -747,7 +747,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 <Property name="judgeInput" type="FileRef" optional></Property>
 
 <Property name="artifacts" type="ArtifactRef[]" optional>
-  PNGs from `c.capture()`, under the `artifacts/<name>.png` path.
+  PNGs from `c.capture()`, under the `artifacts/<name>.png` path, then the page as each of its instructions ended, `artifacts/<name>.step-<n>.png`, kept when the capture fails too.
 </Property>
 
 ### `ArtifactRef`
@@ -760,8 +760,34 @@ Also has every field of `FileRef`.
 
 <Property name="mediaType" type="'image/png'"></Property>
 
-<Property name="capture" type="{port: number; path: string; viewport?: {width: number; height: number}; fullPage?: boolean; instructions?: string[]; use?: {model: string; moves: number}; status?: number; pageErrors?: number; page?: FileRef}" optional>
+<Property name="capture" type="{port: number; path: string; viewport?: {width: number; height: number}; fullPage?: boolean; instructions?: string[]; use?: {model: string; moves: number}; status?: number; pageErrors?: number; page?: FileRef; step?: CaptureStep}" optional>
   Set when the file came from `c.capture()`.
+</Property>
+
+### `CaptureStep`
+
+One instruction of a capture, as it ended. Its screenshot is `artifacts/<name>.step-<index>.png`, beside the capture's own `artifacts/<name>.png`.
+
+<Property name="of" type="string">
+  The capture's name.
+</Property>
+
+<Property name="index" type="number">
+  Its place among the capture's goal strings, from 1.
+</Property>
+
+<Property name="instruction" type="string"></Property>
+
+<Property name="moves" type="number">
+  Moves made on the page for it.
+</Property>
+
+<Property name="ms" type="number">
+  Milliseconds from its first look at the page to its screenshot.
+</Property>
+
+<Property name="ended" type="'final' | 'done' | 'stopped'">
+  `final`: the model marked a move as finishing it. `done`: the model said the goal was met. `stopped`: it stopped the capture (its timeout, the move cap, a repeated move or an error).
 </Property>
 
 ### `JudgmentRecord`
