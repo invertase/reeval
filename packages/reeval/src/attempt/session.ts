@@ -415,6 +415,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     expectedBlocked: expectedBlockedFor(spec.harness, env.plugins.length > 0, spec.vertex)?.hosts,
     substitutions: env.substitutions,
     egress: spec.egress,
+    onWarning: (text) => a.report({ kind: 'warning', text }),
   })
   a.sandbox = box
   if (spec.sandbox.kind === 'fake') debugLog('container', `fake sandbox at ${box.workdir}`)

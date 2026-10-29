@@ -924,11 +924,54 @@ describe('brokered endpoints through the proxy', () => {
     assert.ok(gw.lines.some((l) => l.endsWith('refused (not a brokered endpoint)')))
   })
 
+  test('each refused request is recorded as blocked, per method and path, with no query', async () => {
+    const before = gw.proxy.traffic().blocked
+    assert.deepEqual(
+      before.map((b) => [b.host, b.port, b.connections, b.reason]),
+      [
+        ['GET', '/v1/models'],
+        ['POST', '/v1/files'],
+        ['GET', '/v1/messages'],
+      ].map(([method, path]) => [
+        HOST,
+        h1.port,
+        1,
+        `${method} ${path} carries a brokered credential, and it isn't one of the endpoints reeval brokers it for`,
+      ]),
+    )
+    const r = await viaProxy(gw, HOST, h1.port, {
+      method: 'GET',
+      path: '/v1/models?limit=1',
+      headers: auth,
+    })
+    assert.equal(r.status, 403)
+    const models = gw.proxy.traffic().blocked.filter((b) => b.reason.startsWith('GET /v1/models '))
+    assert.deepEqual(
+      models.map((b) => b.connections),
+      [2],
+      'the same request again counts on its entry',
+    )
+    // The host itself was let through: the connection is contacted, not blocked.
+    assert.ok(gw.proxy.traffic().contacted.some((c) => c.host === HOST && c.port === h1.port))
+  })
+
   test('the refusal holds over HTTP/2', async () => {
     seen.length = 0
     const r = await viaProxyH2(gw, HOST, h2.port, '/v1/files', `Bearer ${PLACEHOLDER}`)
     assert.equal(r.status, 403)
     assert.equal(seen.length, 0)
+    assert.deepEqual(
+      gw.proxy
+        .traffic()
+        .blocked.filter((b) => b.port === h2.port)
+        .map((b) => [b.connections, b.reason]),
+      [
+        [
+          1,
+          "POST /v1/files carries a brokered credential, and it isn't one of the endpoints reeval brokers it for",
+        ],
+      ],
+    )
   })
 
   test("a target that only normalizes to the endpoint is refused, since it's sent upstream as is", async () => {

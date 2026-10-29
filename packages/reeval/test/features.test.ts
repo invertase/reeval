@@ -144,6 +144,8 @@ function blockOf(stdout: string, name: string): string {
 
 const TOKEN = 'reeval-fixture-token-7c1d9a0b52e4'
 const AGENT_VALUE = 'reeval-fixture-agent-3f8e61b2a9d0'
+/** A made-up OpenAI key: the gateway refuses the request before any key goes upstream. */
+const BROKERED_KEY = 'sk-reeval-fixture-0b7e52c91d4a6f38'
 /** With characters each encoding changes: space, `/`, `+`, `"`, `&`, `?` and `=`. */
 const LEAKY = 'reeval leak/7c+1d"9a&b?0=e4f2'
 
@@ -1198,6 +1200,39 @@ export const features: Feature[] = [
         [['reeval-missing.invalid', 80, 1]],
       )
       assert.match(egress?.unresolved[0]?.reason ?? '', /^can't resolve reeval-missing\.invalid: /)
+    },
+  },
+  {
+    dir: 'egress/brokered-request-refused',
+    tiers: ['docker'],
+    env: 'brokered',
+    image: 'codex',
+    hostEnv: { OPENAI_API_KEY: BROKERED_KEY },
+    canary: /expected 'reeval egress gateway: refused POST h…' not to contain 'carries a brokered credential'/,
+    record: ({ run, runDir, stdout }) => {
+      const egress = landed(run)?.egress
+      assert.deepEqual(egress?.blocked, [
+        {
+          host: 'api.openai.com',
+          port: 443,
+          connections: 1,
+          reason:
+            "POST /v1/alpha/search carries a brokered credential, and it isn't one of the endpoints reeval brokers it for",
+        },
+      ])
+      assert.deepEqual(
+        egress?.contacted.map((h) => h.host),
+        ['api.openai.com'],
+        'the host was let through; the request on it was refused',
+      )
+      const warning =
+        "warning: the egress gateway refused POST https://api.openai.com/v1/alpha/search: it carries OPENAI_API_KEY's placeholder and isn't one of the endpoints reeval brokers it for"
+      assert.equal(
+        stdout.split('\n').filter((l) => l.includes(warning)).length,
+        2,
+        'one warning per attempt, on the terminal',
+      )
+      assert.equal(filesContaining(runDir, BROKERED_KEY), '')
     },
   },
   {

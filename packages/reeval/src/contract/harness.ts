@@ -184,6 +184,7 @@ export const fakeHarnessSchema = z.strictObject({
   maxConcurrent: z.number().optional(),
   startTimeout: durationSchema.optional(),
   layout: z.enum(FAKE_LAYOUTS).optional(),
+  brokers: z.literal(true).optional(),
 })
 
 const SCHEMAS = {

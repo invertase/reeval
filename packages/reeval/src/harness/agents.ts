@@ -1581,6 +1581,11 @@ export type Brokering = {
 }
 
 export function brokeringFor(h: HarnessDescriptor, vertex?: VertexSettings): Brokering | undefined {
+  if (h.kind === 'fake') {
+    if (!h.brokers) return undefined
+    const { credential, endpoints } = AGENTS[h.layout ?? 'cursor']
+    return { credential, endpoints }
+  }
   const agent = agentOf(h, vertex)
   if (!agent) return undefined
   const { credential, endpoints, tokens, servedModel, askedModel, modelResponses, upstream } = agent

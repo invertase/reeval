@@ -63,6 +63,8 @@ export type ProgressUpdate =
       ms: number
     }
   | { kind: 'cleanup' }
+  /** Something the attempt did that reeval stopped or changed, e.g. a refused brokered request. */
+  | { kind: 'warning'; text: string }
   | {
       kind: 'browser-download'
       name: string

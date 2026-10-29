@@ -988,6 +988,13 @@ export const inventory: InventoryFeature[] = [
     real: ['contract › real key never in the container'],
   },
   {
+    id: 'brokering.refused-request',
+    area: 'Sandbox',
+    name: "A request carrying the harness's brokered key off its endpoints: a 403 from the gateway, a `blocked` entry in the attempt's `egress` and a warning on the terminal",
+    fixtures: ['egress/brokered-request-refused'],
+    unit: ['sandbox-docker/test/proxy.test.ts', 'reeval/test/ui.test.ts'],
+  },
+  {
     id: 'harness.auth-hint',
     area: 'Harnesses',
     name: 'A refused harness key names its variable and how to fix it, and makes the attempt an infra error',
