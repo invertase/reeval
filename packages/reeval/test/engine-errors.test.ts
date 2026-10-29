@@ -6,6 +6,7 @@ import { join, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import { stripVTControlCharacters } from 'node:util'
 import { codeFrame, comparable, formatError, reevalFrames } from '../src/engine/errors.ts'
+import { serializeError } from '../src/engine/run.ts'
 import { tempDir } from './helpers.ts'
 
 const root = tempDir('errors')
@@ -31,6 +32,20 @@ const plain = (error: unknown, columns?: number) =>
 const stack = (...frames: string[]) => ['Error: x', ...frames.map((f) => `    at ${f}`)].join('\n')
 
 describe('formatError', () => {
+  test("a DOMException prints its name and message, not its prototype's constants", async () => {
+    const signal = AbortSignal.timeout(1)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const out = plain(serializeError(signal.reason))
+    assert.equal(out.trim(), 'TimeoutError: The operation was aborted due to timeout')
+    const enoent = plain({
+      name: 'Error',
+      message: 'gone',
+      code: 'ENOENT',
+      stack: stack(`${file}:5:17`),
+    })
+    assert.match(out + enoent, /code: 'ENOENT'/)
+  })
+
   test('message, diff, the stack with a code frame at the first project frame', () => {
     const out = plain({
       name: 'AssertionError',

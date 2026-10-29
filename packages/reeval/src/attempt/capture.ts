@@ -310,6 +310,7 @@ async function shot(
     const result = await runJourney(session, url, {
       wait: resolved.wait,
       timeoutMs: remaining(),
+      budgetMs: resolved.timeoutMs,
       fullPage: resolved.fullPage,
       instructions: resolved.instructions,
       use: resolved.use,
