@@ -1510,11 +1510,13 @@ describe('credential brokering per agent', () => {
       swapped: [
         ['POST', '/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse'],
         ['POST', '/v1beta/models/gemini-3.1-flash-lite-preview:streamGenerateContent?alt=sse'],
+        ['POST', '/v1beta/models/gemini-3.1-flash-lite-preview:generateContent'],
       ],
       refused: [
         ['GET', '/v1beta/models'],
         ['GET', '/v1beta/models/gemini-3.8-flash:streamGenerateContent'],
-        ['POST', '/v1beta/models/gemini-3.8-flash:generateContent'],
+        ['GET', '/v1beta/models/gemini-3.1-flash-lite-preview:generateContent'],
+        ['POST', '/v1beta/models/gemini-3.8-flash:countTokens'],
         ['POST', '/v1beta/files'],
         ['POST', '/upload/v1beta/files'],
         ['POST', '/v1beta/cachedContents'],

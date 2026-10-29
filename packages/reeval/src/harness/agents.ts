@@ -285,6 +285,15 @@ const GEMINI_ENDPOINTS = [
   },
 ] as const satisfies readonly EndpointMatch[]
 
+/** Antigravity's: its model calls, and the `:generateContent` call its `search_web` tool makes. */
+const ANTIGRAVITY_ENDPOINTS = [
+  {
+    host: 'generativelanguage.googleapis.com',
+    path: { regex: '^/v1beta/models/[^/]+:(?:streamGenerateContent|generateContent)$' },
+    method: ['POST'],
+  },
+] as const satisfies readonly EndpointMatch[]
+
 /** Goose's: the model call, and the model list it fetches with the key at the start of a turn. */
 const GOOSE_ENDPOINTS = [
   ...GEMINI_ENDPOINTS,
@@ -984,8 +993,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
     factory: 'antigravity',
     // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
     credential: 'GEMINI_API_KEY',
-    // The only request the CLI sends the key on (its main model, and a lite one for titles).
-    endpoints: GEMINI_ENDPOINTS,
+    // Its model calls (the main model, and a lite one for titles) and its web searches, which a
+    // lite model answers from Google Search.
+    endpoints: ANTIGRAVITY_ENDPOINTS,
     // The CLI opens both in every session. Neither `enableTelemetry: false` nor any other
     // setting or variable in the binary stops them.
     expectedBlocked: {
