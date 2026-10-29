@@ -989,6 +989,21 @@ describe('the Codex harness', () => {
       ],
     )
     assert.deepEqual(b?.modelResponses, CODEX_MODEL_ENDPOINTS)
+    const on = (method: string, path: string, host = 'api.openai.com') =>
+      onEndpoint(b?.endpoints ?? [], { method, host, path, headers: {} })
+    assert.ok(on('POST', '/v1/responses') && on('POST', '/v1/alpha/search'))
+    for (const [method, path, host] of [
+      ['GET', '/v1/alpha/search'],
+      ['POST', '/v1/alpha/searchX'],
+      ['POST', '/v1/alpha/search/'],
+      ['POST', '/v1/alpha/search/../files'],
+      ['POST', '/v1/files/../alpha/search'],
+      ['POST', '/v1/files/%2e%2e/alpha/search'],
+      ['POST', '/v1/files'],
+      ['POST', '/v1/alpha/search', 'api.openai.com.evil.example'],
+    ]) {
+      assert.equal(on(method, path, host), false, `${method} ${host ?? ''}${path}`)
+    }
     const served = (request: Parameters<ServedModel>[0]) => b?.servedModel?.(request)
     const at = { method: 'POST', host: 'api.openai.com', path: '/v1/responses' }
     assert.equal(

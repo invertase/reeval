@@ -1931,10 +1931,23 @@ export const features: Feature[] = [
     realHarness: 'codex',
     env: 'closed',
     canary: /expected no web searches, got \[/,
-    record: ({ run }) => {
+    record: ({ run, project }) => {
       const attempt = landed(run)
       assert.ok((attempt?.activity.webSearches ?? 0) >= 1, 'the search is in the record')
       assert.deepEqual(attempt?.egress?.blocked, [], 'nothing it needed was refused')
+      // An endpoint refusal is a 403 on an allowed host, so it's in the debug requests only.
+      const root = join(project, '.reeval', 'debug', run.runId)
+      const requests = readdirSync(root, { recursive: true, encoding: 'utf8' })
+        .filter((f) => f.startsWith('evals-lands') && f.endsWith('requests.ndjson'))
+        .flatMap((f) => readFileSync(join(root, f), 'utf8').trim().split('\n'))
+        .map((l) => JSON.parse(l) as { method: string; url: string; status?: number })
+      const searches = requests.filter((r) => r.url === 'https://api.openai.com/v1/alpha/search')
+      assert.ok(searches.length >= 1, JSON.stringify(requests))
+      assert.deepEqual(
+        searches.map((r) => [r.method, r.status]),
+        searches.map(() => ['POST', 200]),
+        'each search got the key and an answer',
+      )
     },
   },
   {
