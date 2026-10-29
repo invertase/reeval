@@ -167,8 +167,11 @@ export type BackgroundHandle = {
 /** `c.serve`: a background process plus the port it listens on. */
 export type ServeHandle = BackgroundHandle & { port: number }
 
-/** What `c.capture()` returns: the PNG is also in the attempt record under `artifacts/`. */
-export type Capture = {
+/**
+ * What `c.capture()` returns: the PNG is also in the attempt record under `artifacts/`, and the
+ * page facts in `artifacts/<name>.capture.json` beside it.
+ */
+export type Capture = CapturePage & {
   name: string
   /** Container port that was tunneled. */
   port: number
@@ -179,6 +182,66 @@ export type Capture = {
   /** `artifacts/<name>.png` under the attempt directory. */
   file: { path: string; sha256: string; bytes: number }
 }
+
+/** One message the page's console showed while it was captured. */
+export type CaptureConsoleMessage = {
+  level: 'error' | 'warning' | 'info' | 'log' | 'debug'
+  /** The message, at most 2000 characters, with the app's own URLs as paths. */
+  text: string
+  /**
+   * `console-api` for the page's `console.*` calls; otherwise the browser's own source, such as
+   * `network` (a request that failed), `javascript`, `security` or `deprecation`.
+   */
+  source: string
+  /** The script or resource it came from, as a path when it's on the app. */
+  url?: string
+}
+
+/** A request the page made that failed or answered 400 or above. */
+export type CaptureFailedRequest = {
+  method: string
+  /** As a path when it's on the app. */
+  url: string
+  /** The response's status; absent when no response came. */
+  status?: number
+  /** The browser's error, such as `net::ERR_CONNECTION_REFUSED`; absent when a response came. */
+  error?: string
+}
+
+/**
+ * What the browser saw while it loaded and captured a page: `<name>.capture.json` beside the
+ * capture's PNG, and these fields of the `Capture` that `c.capture()` returns. On the fake
+ * sandbox, which has no browser, `status` and `finalUrl` come from an HTTP GET and the lists are
+ * empty.
+ */
+/** A class of HTTP status for `toHaveStatus()`: `'2xx'` is 200 to 299. */
+export type StatusRange = `${1 | 2 | 3 | 4 | 5}xx`
+
+export type CapturePage = {
+  /**
+   * The HTTP status of the main frame's latest document, after redirects. A full navigation
+   * replaces it; a client-side route change keeps it. Absent when no response came.
+   */
+  status?: number
+  /** Where the page ended up, after redirects and client-side routing: a path on the app. */
+  finalUrl: string
+  /** Each message the console showed, in order; at most 100 of each level. */
+  console: CaptureConsoleMessage[]
+  /**
+   * The page errors: each uncaught exception and unhandled promise rejection, with its stack, at
+   * most 100.
+   */
+  errors: string[]
+  /** Requests that failed or answered 400 or above, in order, at most 100. */
+  failedRequests: CaptureFailedRequest[]
+  /** How many messages, errors and requests the caps left out; absent when none. */
+  dropped?: number
+}
+
+/** A capture's `artifacts/<name>.capture.json`: its page facts, versioned. */
+export type CapturePageFile = {
+  schemaVersion: 1
+} & CapturePage
 
 /**
  * Optional camera and path for `c.capture(port | ServeHandle, options?)`.
@@ -2639,6 +2702,12 @@ export type CaptureArtifactMeta = {
   /** Goal strings only; wait beats omitted. */
   instructions?: string[]
   use?: { model: string; moves: number }
+  /** The page's document status, as `Capture.status` has it. */
+  status?: number
+  /** How many page errors the page had; absent when none. */
+  pageErrors?: number
+  /** `artifacts/<name>.capture.json`: the page facts, a `CapturePage`. */
+  page?: FileRef
 }
 
 /** Attempt-level capture vision spend; not harness usage. */

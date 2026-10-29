@@ -168,6 +168,7 @@ export async function writeRecord(a: Attempt, stagingDir: string, id: string): P
     stagingDir,
     recordFileName(attemptKey(id, spec.cell.key, spec.n)),
     a.artifactBlobs,
+    a.capturePages,
   )
   // Replaced whole: reeval studio reads it while the run goes on.
   const tmp = `${recordPath}.${process.pid}.tmp`

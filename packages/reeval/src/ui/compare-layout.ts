@@ -36,6 +36,7 @@ import {
   HEAD,
   type Item,
   labeler,
+  pageErrorLines,
   renderBlocks,
   show,
   type Text,
@@ -355,9 +356,15 @@ function cellRows(row: CompareRow): Item[] {
   ]
 }
 
-/** The eval's own rows as `reeval run` prints them under its head: its evidence when it failed. */
-const resultBody = (c: Colors, e: EvalResult | undefined) =>
-  e && e.outcome !== 'pass' ? evalBlock(c, e).slice(1) : []
+/**
+ * The eval's own rows as `reeval run` prints them under its head: its evidence when it failed,
+ * else only its pointer to page errors.
+ */
+const resultBody = (c: Colors, e: EvalResult | undefined) => {
+  if (!e) return []
+  if (e.outcome !== 'pass') return evalBlock(c, e).slice(1)
+  return pageErrorLines(c, [...(e.cells ?? []), ...(e.cases ?? []).flatMap((k) => k.cells)], 2)
+}
 
 const liftShort = (l: HistoryCell['lift'] | undefined) =>
   l ? `${signed(l.points)} (${signed(l.lo)}…${signed(l.hi)})${l.withinNoise ? ' noise' : ''}` : '–'

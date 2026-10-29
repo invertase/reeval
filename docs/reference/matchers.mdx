@@ -112,6 +112,14 @@ The failure message names the exit code and ends with the last 20 lines of `stde
 
 A failed judge call answers nothing, so `toPass()` and `.not.toPass()` both fail. A failed judge call reports the question, model, and error. A fail verdict reports the score, threshold, question, and model. A negated pass verdict reports the score, threshold, and question.
 
+## `toHaveStatus()`
+
+`toHaveStatus(status)` passes when a `c.capture()` result's `status` is `status`, or is in its range when `status` is `'1xx'` to `'5xx'`.
+
+## `toHaveNoPageErrors()`
+
+`toHaveNoPageErrors()` passes when a `c.capture()` result's `errors` is empty.
+
 ## `toHaveChanged()`
 
 `toHaveChanged(paths?)` reads the workspace diff, including every write by a tool, shell command, or subprocess. The subject is a turn from `c.send()`, whose diff is cumulative over the turns before it, or `c`, which reads the latest turn's diff.

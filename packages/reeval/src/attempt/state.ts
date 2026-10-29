@@ -90,6 +90,8 @@ export type Attempt = {
   backgrounds: BackgroundHandle[]
   /** PNG bytes keyed by capture name; written as sidecars next to the staging JSON. */
   artifactBlobs: Map<string, Buffer>
+  /** Each capture's `<name>.capture.json`, redacted, keyed by capture name; written beside its PNG. */
+  capturePages: Map<string, string>
   /** Where the attempt's snapshots are written, beside its staging record. */
   readonly snapshotDir: string
 }
@@ -149,6 +151,7 @@ export function createAttempt(
     captureNames: new Set(),
     backgrounds: [],
     artifactBlobs: new Map(),
+    capturePages: new Map(),
     snapshotDir,
   }
   return a

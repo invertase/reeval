@@ -229,6 +229,11 @@ export type CellResult = {
   upstreams?: UpstreamCount[]
   /** The same for the cell's judge calls; absent when the gateway named none. */
   judgeUpstreams?: UpstreamCount[]
+  /**
+   * Each `c.capture()` in its attempts whose page had page errors, with the `.capture.json` that
+   * lists them (`.reeval/runs/<run>/…/artifacts/<name>.capture.json`); absent when none had any.
+   */
+  pageErrors?: Array<{ capture: string; errors: number; file: string }>
 }
 
 /** Summed per provider, in first-seen order. */
@@ -601,6 +606,19 @@ function cellsOf(
       const path = final && a.snapshots?.find((s) => s.name === 'final')?.path
       return path ? [`.reeval/runs/${record.runId}/${path}`] : []
     })
+    const pageErrors = ran.flatMap((a) =>
+      (a.files.artifacts ?? []).flatMap(({ name, capture }) =>
+        capture?.pageErrors && capture.page
+          ? [
+              {
+                capture: name,
+                errors: capture.pageErrors,
+                file: `.reeval/runs/${record.runId}/${capture.page.path}`,
+              },
+            ]
+          : [],
+      ),
+    )
     return {
       path,
       key: cell.key,
@@ -638,6 +656,7 @@ function cellsOf(
       fetches: attempts.map((a) => a.activity.webFetches),
       ...(upstreams.length ? { upstreams } : {}),
       ...(judgeUpstreams.length ? { judgeUpstreams } : {}),
+      ...(pageErrors.length ? { pageErrors } : {}),
     }
   })
 }

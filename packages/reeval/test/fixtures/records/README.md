@@ -39,6 +39,8 @@ config API like any other project.
 | `with-remarks` | Three recorded fake-harness runs whose `insights.json` holds only deterministic remarks (`model: 'none'`): `too-few-tries`, `slow-mcp-start` on a server that answers after two seconds, and `flaky-check` once the history has two mixed runs, with each remark's `firstSeenRun` |
 | `before-snapshots` | The corpus project's fake-harness runs from before `evals[].attempts[].snapshots` (copies of the attempt's workspace in `.reeval/runs`) |
 | `with-best-of` | The fake harness with `runs: { bestOf }`: `evals[].cells[].bestOf`, and `evals[].attempts[].bestOf` on the attempt the majority added to a split best of 3 and the one it left unrun in a best of 5 that failed, beside a best of 3 that agreed after two |
+| `before-capture-page` | The fake harness in Docker capturing a page that renders with console output, an uncaught error, an unhandled rejection and a missing script, a page that throws before it renders, and a path the server answers with its 404 page, from before `capture.page` |
+| `with-capture-page` | The same captures recorded with `capture.page`: each capture's `artifacts/<name>.capture.json` (status, final URL, console, page errors and failed requests), and `capture.status` and `capture.pageErrors` on the record |
 | `real-contract` | The same nightly run: the harness contract on Cursor, Claude Code and Codex, one run each of six behaviours that pass and six canaries that fail, with transcripts, raw transcripts and diffs. Copied from the contract projects' `.reeval/runs`, since the contract never records |
 
 What reads them:

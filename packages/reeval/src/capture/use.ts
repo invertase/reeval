@@ -114,6 +114,7 @@ function onClock(session: ChromeSession, clock: Clock): ChromeSession {
     dispatch: (action, page) => race(clock, () => session.dispatch(action, page)),
     busy: () => session.busy(),
     dialogs: () => session.dialogs(),
+    page: (origin) => session.page(origin),
   }
 }
 

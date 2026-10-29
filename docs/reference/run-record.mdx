@@ -760,7 +760,7 @@ Also has every field of `FileRef`.
 
 <Property name="mediaType" type="'image/png'"></Property>
 
-<Property name="capture" type="{port: number; path: string; viewport?: {width: number; height: number}; fullPage?: boolean; instructions?: string[]; use?: {model: string; moves: number}}" optional>
+<Property name="capture" type="{port: number; path: string; viewport?: {width: number; height: number}; fullPage?: boolean; instructions?: string[]; use?: {model: string; moves: number}; status?: number; pageErrors?: number; page?: FileRef}" optional>
   Set when the file came from `c.capture()`.
 </Property>
 

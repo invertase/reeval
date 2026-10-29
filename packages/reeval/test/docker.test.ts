@@ -1042,6 +1042,44 @@ evaluate('slow', { runs: 2 }, async (c) => { await c.send('wait') })
     },
   )
 
+  test('Ctrl-C mid-capture stops the browser and the run', docker, async () => {
+    // The page's script never answers, so its load never fires within the capture's budget.
+    const server = `import http from 'node:http'
+http.createServer((req, res) => {
+  if (req.url === '/never.js') return
+  res.writeHead(200, { 'content-type': 'text/html' })
+  res.end('<h1>stuck</h1><script>for (let i = 0; i < 1300; i++) console.log(i)</script><script src="/never.js"></script>')
+}).listen(Number(process.env.PORT), '127.0.0.1')
+`
+    const p = await project('docker-capture-sigint', {
+      'reeval.config.ts': config('{}'),
+      'evals/d.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
+const box = defineEnvironment('box', { sandbox: docker(), files: { 'server.mjs': ${JSON.stringify(server)} } })
+evaluate('stuck', { environment: box, timeout: '10m' }, async (c) => {
+  const server = await c.serve('node server.mjs')
+  console.log('capturing now')
+  await c.capture(server, { timeout: '5m' })
+})
+`,
+    })
+    let sent = 0
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'], {
+      ...slow,
+      onOutput: (stdout, pid) => {
+        if (!stdout.includes('capturing now')) return false
+        setTimeout(() => {
+          sent = Date.now()
+          process.kill(pid, 'SIGINT')
+        }, 3_000)
+        return true
+      },
+    })
+    assert.equal(r.code, 130, r.stdout + r.stderr)
+    assert.ok(sent > 0, 'the capture had started when the signal came')
+    assert.ok(Date.now() - sent < 60_000, 'the run stopped well before the capture budget')
+  })
+
   test(
     'Cursor attempts broker the key; without brokering the attempt fails closed',
     docker,

@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "status": 200,
+  "finalUrl": "/sign-up",
+  "console": [
+    {
+      "level": "log",
+      "text": "rendered",
+      "source": "console-api",
+      "url": "/sign-up"
+    },
+    {
+      "level": "warning",
+      "text": "auth is not configured",
+      "source": "console-api",
+      "url": "/sign-up"
+    },
+    {
+      "level": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "source": "network",
+      "url": "/missing.js"
+    }
+  ],
+  "errors": [
+    "Uncaught Error: late failure\n    at /sign-up:1:126",
+    "Uncaught (in promise) Error: no session\n    at /sign-up:1:183"
+  ],
+  "failedRequests": [
+    {
+      "method": "GET",
+      "url": "/missing.js",
+      "status": 404
+    }
+  ]
+}

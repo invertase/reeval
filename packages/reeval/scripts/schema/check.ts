@@ -9,6 +9,7 @@ import {
   MIGRATIONS,
   READ_DEFAULTS,
   readableAnalysis,
+  readableCapturePage,
   readableRecord,
   readableRemarks,
   readableTranscriptLine,
@@ -156,7 +157,7 @@ export function checkCorpus(current: Map<string, ShapeSchema>): string[] {
           .join('\n')}`,
       )
   }
-  const { records, transcripts, analyses, remarks } = corpus()
+  const { records, transcripts, analyses, remarks, capturePages } = corpus()
   const shape = (name: string) => current.get(name) as ShapeSchema
   for (const r of records) {
     report(r.file, validate(shape('run-record'), readableRecord(structuredClone(r.value) as never)))
@@ -175,6 +176,12 @@ export function checkCorpus(current: Map<string, ShapeSchema>): string[] {
   }
   for (const r of remarks) {
     report(r.file, validate(shape('remarks'), readableRemarks(structuredClone(r.value) as never)))
+  }
+  for (const p of capturePages) {
+    report(
+      p.file,
+      validate(shape('capture-page'), readableCapturePage(structuredClone(p.value) as never)),
+    )
   }
   if (!problems.length) return []
   return [

@@ -18,7 +18,8 @@ import {
   type ToolInputMatch,
 } from './assert.ts'
 import { isObjectLike, isThenable } from './object.ts'
-import type { ExecResult, JudgeFailure, Verdict } from './types.ts'
+import { plural } from './text.ts'
+import type { CapturePage, ExecResult, JudgeFailure, StatusRange, Verdict } from './types.ts'
 
 /** How the matcher was called: `not` is `expect(…).not`, which a matcher may answer itself. */
 export type MatcherFlags = { not: boolean }
@@ -65,6 +66,26 @@ function succeeded(actual: unknown): Result {
         : `expected command to succeed, exit code ${r.exitCode}\n` +
           `--- stderr ---\n${tail(r.stderr)}\n--- stdout ---\n${tail(r.stdout)}`,
   }
+}
+
+const isCapture = (value: unknown): value is CapturePage & { name?: string } =>
+  isObjectLike(value) &&
+  typeof value.finalUrl === 'string' &&
+  Array.isArray(value.errors) &&
+  Array.isArray(value.console)
+
+/** `capture "home" at /login`, or the URL alone for a capture with no name. */
+const captureAt = (c: CapturePage & { name?: string }) =>
+  typeof c.name === 'string' ? `capture "${c.name}" at ${c.finalUrl}` : c.finalUrl
+
+/** The first errors, each cut to its message and first frames; the rest counted. */
+const firstErrors = (c: CapturePage & { name?: string }, max = 5) => {
+  const shown = c.errors
+    .slice(0, max)
+    .map((e) => tail(e.split('\n').slice(0, 4).join('\n'), 4, 600))
+  const rest = c.errors.length - shown.length
+  const file = typeof c.name === 'string' ? ` in ${c.name}.capture.json` : ''
+  return [...shown, ...(rest > 0 ? [`… ${rest} more${file}`] : [])].join('\n')
 }
 
 export const MATCHERS = {
@@ -159,6 +180,40 @@ export const MATCHERS = {
   toHaveEdited: matcher((actual, [path]: [path?: RegExp | string]) => edited(actual, path)),
 
   toHaveChanged: matcher((actual, [paths]: [paths?: PathMatch]) => changed(actual, paths)),
+
+  toHaveStatus: matcher((actual, [status]: [status: number | StatusRange]): Result => {
+    if (!isCapture(actual)) throw subjectError('toHaveStatus() expects a c.capture() result')
+    const range = typeof status === 'string' && /^[1-5]xx$/.test(status) ? Number(status[0]) : 0
+    if (!range && !Number.isInteger(status)) {
+      throw subjectError(
+        `toHaveStatus() expects a status number or a range from '1xx' to '5xx', got ${JSON.stringify(status)}`,
+      )
+    }
+    const pass =
+      actual.status !== undefined &&
+      (range ? Math.floor(actual.status / 100) === range : actual.status === status)
+    return {
+      pass,
+      message: () =>
+        pass
+          ? `expected ${captureAt(actual)} not to answer ${status}`
+          : actual.status === undefined
+            ? `expected ${captureAt(actual)} to answer ${status}, but no response came`
+            : `expected ${captureAt(actual)} to answer ${status}, got ${actual.status}`,
+    }
+  }),
+
+  toHaveNoPageErrors: matcher((actual, _: []): Result => {
+    if (!isCapture(actual)) throw subjectError('toHaveNoPageErrors() expects a c.capture() result')
+    const pass = actual.errors.length === 0
+    return {
+      pass,
+      message: () =>
+        pass
+          ? `expected ${captureAt(actual)} to have page errors`
+          : `expected no page errors at ${captureAt(actual)}, got ${plural(actual.errors.length, 'page error')}: ${firstErrors(actual)}`,
+    }
+  }),
 
   toPass: matcher((actual, _: [], { not }): Result => {
     const failure = actual as JudgeFailure

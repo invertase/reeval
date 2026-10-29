@@ -29,10 +29,22 @@
                 "type": "string"
               }
             },
+            "page": {
+              "description": "`artifacts/<name>.capture.json` beside the PNG: what the browser saw, a `CapturePage`.",
+              "$ref": "#/$defs/FileRef"
+            },
+            "pageErrors": {
+              "description": "How many uncaught exceptions and unhandled rejections the page had; absent when none.",
+              "type": "number"
+            },
             "path": {
               "type": "string"
             },
             "port": {
+              "type": "number"
+            },
+            "status": {
+              "description": "The HTTP status of the page's document, after redirects; absent when no response came.",
               "type": "number"
             },
             "use": {

@@ -122,14 +122,19 @@ function subjectOf(c: AttemptContext, subject: ExpectCall['subject']): unknown {
 const siteOf = (at: ExpectCall['at']) =>
   at ? { at: `${relativeFile(process.cwd(), resolve(at.file))}:${at.line}` } : {}
 
-/** What the subject names itself by, as `c.exec`'s and `c.judge`'s results do in TypeScript. */
+/** What the subject names itself by, as `c.exec`'s, `c.judge`'s and `c.capture`'s results do in TypeScript. */
 function subjectName(subject: ExpectCall['subject']): string | undefined {
   if ('exec' in subject) return subject.exec
   if (!('value' in subject)) return undefined
-  const value = subject.value as { verdict?: unknown; question?: unknown } | null
-  return typeof value === 'object' && value !== null && 'verdict' in value
-    ? (value.question as string | undefined)
-    : undefined
+  const value = subject.value as {
+    verdict?: unknown
+    question?: unknown
+    finalUrl?: unknown
+    name?: unknown
+  } | null
+  if (typeof value !== 'object' || value === null) return undefined
+  if ('verdict' in value) return value.question as string | undefined
+  return 'finalUrl' in value && typeof value.name === 'string' ? value.name : undefined
 }
 
 async function once(

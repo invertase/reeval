@@ -211,7 +211,7 @@
 | `reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 1 | — | — | — | — | — |
 | `reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them | ✓ 1 | — | — | — | — | — |
 | A run's notes in `.reeval/analysis/<run>/notes/`: the studio's Analysis tab shows them with the cached `reeval analyze` document | ✓ 1 | — | — | — | — | — |
-| `c.capture()`, `c.serve` and `c.exec({ background })` | ✓ 3 | ✓ 1 | ● 10 | ● 11 | — | — |
+| `c.capture()`, `c.serve` and `c.exec({ background })` | ✓ 5 | ✓ 1 | ● 11 | ● 14 | — | — |
 | `c.serve` waits until the command listens, takes `PORT` or the one port that started listening after it (IPv4 or IPv6 loopback), records it in `serves`, and fails on several new ports (with the URLs it printed), an exit or a timeout with the last output | ✓ 1 | — | ● 2 | ● 4 | ● 4 | — |
 | `c.capture()`'s page reaches sandbox ports at `localhost`, `127.0.0.1` and `[::1]`, through tunnels opened on its first request | ✓ 1 | — | — | ● 1 | ● 1 | — |
 | `c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`) | ✓ 3 | ✓ 1 | ● 3 | ● 6 | — | — |

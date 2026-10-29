@@ -1,0 +1,739 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261029T001335Z_nogit_cursor-agent_y6rf",
+  "status": "complete",
+  "startedAt": "2026-10-29T00:13:35.542Z",
+  "endedAt": "2026-10-29T00:13:39.269Z",
+  "durationMs": 3727,
+  "author": "cursor-agent",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.15.1",
+    "node": "22.23.4",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.4"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:cursor-0.1.6",
+        "id": "sha256:56a1506c02b1fbed1b7510ce2917e5614dba14ae5d445179a67529fe7e0cb2e8",
+        "agentCli": "@cursor/sdk 1.0.40",
+        "base": "reeval-sandbox:cursor-0.1.6",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.12",
+      "@reeval/harness-opencode": "0.2.10",
+      "@reeval/harness-goose": "0.1.6",
+      "@reeval/harness-pi": "0.2.8",
+      "@reeval/harness-cursor-sdk": "0.1.6",
+      "@ai-sdk/harness-claude-code": "1.0.160-patch.b17cde50",
+      "@reeval/harness-codex": "0.1.9",
+      "@reeval/harness-fx": "0.1.3",
+      "@reeval/harness-grok-build": "0.1.6",
+      "ai": "7.0.145",
+      "@ai-sdk/harness": "1.0.156",
+      "@ai-sdk/anthropic": "4.0.83",
+      "@ai-sdk/google": "4.0.100",
+      "@ai-sdk/openai": "4.0.97",
+      "@ai-sdk/typesafe-ai": "3.0.22"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "717433497d3f"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "site",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:36d87a613ef60726ed620073fc8770eb765bf1f2808719b2611df2f279581a66",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "server.mjs",
+          "sha256": "12ea2e008e104686de7e1816b9272c5c82d81a00b166d9f025759dc803bdf9d5"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "proxy"
+    }
+  ],
+  "profile": null,
+  "plan": {
+    "evals": 3,
+    "cells": 3,
+    "attempts": 3,
+    "estimateMs": 9922,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "docker",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "49698a1eb3c154d97d66b4da8440530f97cb1c04b02b7e639025cfbf6b5ab60e"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 3,
+    "attempts": 3,
+    "pass": 3,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/pages.eval.ts › captures a page that renders",
+      "key": "evals/pages.eval.ts › captures a page that renders",
+      "slug": "evals-pages-eval-ts-captures-a-page-that-renders-96d33f",
+      "file": "evals/pages.eval.ts",
+      "group": [],
+      "name": "captures a page that renders",
+      "tags": [],
+      "fingerprint": "3517bbd0832035644297ba11f37d52a0c1d4ef3a2a506d0fa9cb6c035c1a7450",
+      "sources": [
+        {
+          "path": "evals/pages.eval.ts",
+          "sha256": "ca309051462c16c9a69e66a4ae8a6126e2f04491a1a48a9f61867480049aa093"
+        }
+      ],
+      "source": {
+        "body": "89e3d5a737e95fb4c9521fb5931f47c05b066fccd4d099280cf8093349e7f51d",
+        "options": "b300722a5b62f40fee64803b6129976c61c71a1dfea768095b7c904e86a83c32"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/site/docker",
+          "harness": "fake",
+          "environment": "site",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "221c3e9d14b0c175de6d40428c9a0eb9a692dbf456104a28f45ce842493f7d17",
+          "fingerprintParts": {
+            "sources": "91b7a68c172bc0b701e9a7e488dc91fc0892fc8224f8dc54f4ebc1a47ea754ed",
+            "harness": "69a68d4256d5ba144e12fa9f71a3218e0f9208800942afa7fd1eef96eff719ac",
+            "environment": "sha256:36d87a613ef60726ed620073fc8770eb765bf1f2808719b2611df2f279581a66",
+            "image": "sha256:56a1506c02b1fbed1b7510ce2917e5614dba14ae5d445179a67529fe7e0cb2e8",
+            "agentCli": "@cursor/sdk 1.0.40",
+            "judge": "7af145e54e2ae40826ffbd54da3e17813c3a2e466081acf50ef6ea710fc862c1",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:36d87a613ef60726ed620073fc8770eb765bf1f2808719b2611df2f279581a66",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toBeGreaterThan 0",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/pages.eval.ts › captures a page that renders # fake/site/docker#1",
+          "id": "fake/site/docker#1",
+          "cell": "fake/site/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-10-29T00:13:36.241Z",
+          "imageId": "sha256:56a1506c02b1fbed1b7510ce2917e5614dba14ae5d445179a67529fe7e0cb2e8",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 3023,
+          "turns": [
+            {
+              "prompt": "Build the sign-up page.",
+              "status": "completed",
+              "startedAt": "2026-10-29T00:13:38.120Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1877,
+            "agentMs": 0,
+            "diffMs": 119,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-pages-eval-ts-captures-a-page-that-renders-96d33f/fake-site-docker-a17d85/1/snapshots/final",
+              "bytes": 976,
+              "files": 1,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "serves": [
+            {
+              "command": "node server.mjs",
+              "port": 36321,
+              "portEnv": 36321,
+              "detected": false,
+              "address": "127.0.0.1",
+              "readyMs": 320
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toBeGreaterThan 0",
+              "labelled": false,
+              "matcher": "toBeGreaterThan",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/pages.eval.ts:39"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-pages-eval-ts-captures-a-page-that-renders-96d33f/fake-site-docker-a17d85/1/transcript.jsonl",
+              "sha256": "168baa43bb7011f3f4bd7c1c433f9cb6abcdaad4de67e25c75ff40ccee4c6591",
+              "bytes": 429
+            },
+            "diff": {
+              "path": "evals-pages-eval-ts-captures-a-page-that-renders-96d33f/fake-site-docker-a17d85/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            },
+            "artifacts": [
+              {
+                "path": "evals-pages-eval-ts-captures-a-page-that-renders-96d33f/fake-site-docker-a17d85/1/artifacts/sign-up.png",
+                "sha256": "3e1722fe6f3ba18a06200ae2e9f69269616404e379f1fcc1e5b3f25b9b1ba5db",
+                "bytes": 6623,
+                "name": "sign-up",
+                "mediaType": "image/png",
+                "capture": {
+                  "port": 36321,
+                  "path": "/sign-up",
+                  "viewport": {
+                    "width": 1280,
+                    "height": 720
+                  },
+                  "status": 200,
+                  "pageErrors": 2,
+                  "page": {
+                    "path": "evals-pages-eval-ts-captures-a-page-that-renders-96d33f/fake-site-docker-a17d85/1/artifacts/sign-up.capture.json",
+                    "sha256": "c96c21ba8ee38149c0b8713073e38c0a00dec8c95176bfdbb8b37c5e418522c8",
+                    "bytes": 781
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/pages.eval.ts › captures a page that throws",
+      "key": "evals/pages.eval.ts › captures a page that throws",
+      "slug": "evals-pages-eval-ts-captures-a-page-that-throws-01af2a",
+      "file": "evals/pages.eval.ts",
+      "group": [],
+      "name": "captures a page that throws",
+      "tags": [],
+      "fingerprint": "656f0dc22cd2503ecc44ca95aaf4229a758c31fd65610245fc574020d6643f3f",
+      "sources": [
+        {
+          "path": "evals/pages.eval.ts",
+          "sha256": "ca309051462c16c9a69e66a4ae8a6126e2f04491a1a48a9f61867480049aa093"
+        }
+      ],
+      "source": {
+        "body": "fffe6c5c1a4b338cb68587782d69ca2380cca24bc5c46b1fd8cbd1d0c97f5171",
+        "options": "b300722a5b62f40fee64803b6129976c61c71a1dfea768095b7c904e86a83c32"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/site/docker",
+          "harness": "fake",
+          "environment": "site",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "0c1fb7006e3eccf63b0cfb96cdef5b6fb38cb38da832907d716ceea728998726",
+          "fingerprintParts": {
+            "sources": "e8a351e2fa87684c85d1eca7a124a8126121da6aea3a8a3c927f5abfcc29cc2f",
+            "harness": "69a68d4256d5ba144e12fa9f71a3218e0f9208800942afa7fd1eef96eff719ac",
+            "environment": "sha256:36d87a613ef60726ed620073fc8770eb765bf1f2808719b2611df2f279581a66",
+            "image": "sha256:56a1506c02b1fbed1b7510ce2917e5614dba14ae5d445179a67529fe7e0cb2e8",
+            "agentCli": "@cursor/sdk 1.0.40",
+            "judge": "7af145e54e2ae40826ffbd54da3e17813c3a2e466081acf50ef6ea710fc862c1",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:36d87a613ef60726ed620073fc8770eb765bf1f2808719b2611df2f279581a66",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toBeGreaterThan 0",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/pages.eval.ts › captures a page that throws # fake/site/docker#1",
+          "id": "fake/site/docker#1",
+          "cell": "fake/site/docker",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-10-29T00:13:36.257Z",
+          "imageId": "sha256:56a1506c02b1fbed1b7510ce2917e5614dba14ae5d445179a67529fe7e0cb2e8",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 2799,
+          "turns": [
+            {
+              "prompt": "Build the sign-up page.",
+              "status": "completed",
+              "startedAt": "2026-10-29T00:13:38.114Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1857,
+            "agentMs": 0,
+            "diffMs": 129,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-pages-eval-ts-captures-a-page-that-throws-01af2a/fake-site-docker-a17d85/1/snapshots/final",
+              "bytes": 976,
+              "files": 1,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "serves": [
+            {
+              "command": "node server.mjs",
+              "port": 45597,
+              "portEnv": 45597,
+              "detected": false,
+              "address": "127.0.0.1",
+              "readyMs": 71
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toBeGreaterThan 0",
+              "labelled": false,
+              "matcher": "toBeGreaterThan",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/pages.eval.ts:46"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-pages-eval-ts-captures-a-page-that-throws-01af2a/fake-site-docker-a17d85/1/transcript.jsonl",
+              "sha256": "8763c555f7c38e44750527bd18a53f950703a9797edcd8354d8309ce0909a829",
+              "bytes": 429
+            },
+            "diff": {
+              "path": "evals-pages-eval-ts-captures-a-page-that-throws-01af2a/fake-site-docker-a17d85/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            },
+            "artifacts": [
+              {
+                "path": "evals-pages-eval-ts-captures-a-page-that-throws-01af2a/fake-site-docker-a17d85/1/artifacts/blank.png",
+                "sha256": "27abb4affaed83ae85739b62b71e5e860d2e6ee7b4fa91c915f5a3c26227b944",
+                "bytes": 4253,
+                "name": "blank",
+                "mediaType": "image/png",
+                "capture": {
+                  "port": 45597,
+                  "path": "/blank",
+                  "viewport": {
+                    "width": 1280,
+                    "height": 720
+                  },
+                  "status": 200,
+                  "pageErrors": 1,
+                  "page": {
+                    "path": "evals-pages-eval-ts-captures-a-page-that-throws-01af2a/fake-site-docker-a17d85/1/artifacts/blank.capture.json",
+                    "sha256": "c87258a16d4d1fef44b75786ecd21b41d72aeafc23e683da871d9d8d50f36c4f",
+                    "bytes": 201
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/pages.eval.ts › captures a missing page",
+      "key": "evals/pages.eval.ts › captures a missing page",
+      "slug": "evals-pages-eval-ts-captures-a-missing-page-a7187c",
+      "file": "evals/pages.eval.ts",
+      "group": [],
+      "name": "captures a missing page",
+      "tags": [],
+      "fingerprint": "7261a3f481ea7b9b92c8b38f0cc4c1fef43d90770b20c09af47099d62bcd8e07",
+      "sources": [
+        {
+          "path": "evals/pages.eval.ts",
+          "sha256": "ca309051462c16c9a69e66a4ae8a6126e2f04491a1a48a9f61867480049aa093"
+        }
+      ],
+      "source": {
+        "body": "c3dde32d3051b242079e19bb5b94a895fadefff3b3ba5177ae0a4b289565c48f",
+        "options": "b300722a5b62f40fee64803b6129976c61c71a1dfea768095b7c904e86a83c32"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/site/docker",
+          "harness": "fake",
+          "environment": "site",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "9a7f26e376a4242b9b9bc8830dd24ce096f619ce9a7df790c359188bfb7d312f",
+          "fingerprintParts": {
+            "sources": "2d32a962925401d8638900336e25bd68e9cb8f869e3e5973584e714b1d6ffc84",
+            "harness": "69a68d4256d5ba144e12fa9f71a3218e0f9208800942afa7fd1eef96eff719ac",
+            "environment": "sha256:36d87a613ef60726ed620073fc8770eb765bf1f2808719b2611df2f279581a66",
+            "image": "sha256:56a1506c02b1fbed1b7510ce2917e5614dba14ae5d445179a67529fe7e0cb2e8",
+            "agentCli": "@cursor/sdk 1.0.40",
+            "judge": "7af145e54e2ae40826ffbd54da3e17813c3a2e466081acf50ef6ea710fc862c1",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:36d87a613ef60726ed620073fc8770eb765bf1f2808719b2611df2f279581a66",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toBeGreaterThan 0",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/pages.eval.ts › captures a missing page # fake/site/docker#1",
+          "id": "fake/site/docker#1",
+          "cell": "fake/site/docker",
+          "n": 1,
+          "seq": 3,
+          "startedAt": "2026-10-29T00:13:36.258Z",
+          "imageId": "sha256:56a1506c02b1fbed1b7510ce2917e5614dba14ae5d445179a67529fe7e0cb2e8",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 2797,
+          "turns": [
+            {
+              "prompt": "Build the sign-up page.",
+              "status": "completed",
+              "startedAt": "2026-10-29T00:13:38.078Z",
+              "durationMs": 1,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1819,
+            "agentMs": 0,
+            "diffMs": 92,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 0
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-pages-eval-ts-captures-a-missing-page-a7187c/fake-site-docker-a17d85/1/snapshots/final",
+              "bytes": 976,
+              "files": 1,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "serves": [
+            {
+              "command": "node server.mjs",
+              "port": 34755,
+              "portEnv": 34755,
+              "detected": false,
+              "address": "127.0.0.1",
+              "readyMs": 63
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toBeGreaterThan 0",
+              "labelled": false,
+              "matcher": "toBeGreaterThan",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/pages.eval.ts:53"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-pages-eval-ts-captures-a-missing-page-a7187c/fake-site-docker-a17d85/1/transcript.jsonl",
+              "sha256": "ccc3720869c05cf11adab9ebb9e08367f9e2dd0637c5eb259f61178dd30599b9",
+              "bytes": 429
+            },
+            "diff": {
+              "path": "evals-pages-eval-ts-captures-a-missing-page-a7187c/fake-site-docker-a17d85/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            },
+            "artifacts": [
+              {
+                "path": "evals-pages-eval-ts-captures-a-missing-page-a7187c/fake-site-docker-a17d85/1/artifacts/login.png",
+                "sha256": "b8a191a16e03ba57a59232fc9bde39969454bf32995fa096cf3d2ac43cf99c83",
+                "bytes": 7892,
+                "name": "login",
+                "mediaType": "image/png",
+                "capture": {
+                  "port": 34755,
+                  "path": "/login",
+                  "viewport": {
+                    "width": 1280,
+                    "height": 720
+                  },
+                  "status": 404,
+                  "page": {
+                    "path": "evals-pages-eval-ts-captures-a-missing-page-a7187c/fake-site-docker-a17d85/1/artifacts/login.capture.json",
+                    "sha256": "ce7757b99b5a170982a4e2b0281e216406b33f69a1aa24c03aa262da9d6988b9",
+                    "bytes": 388
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -39,9 +39,11 @@ test("the Python SDK's matchers are reeval's, each under its snake_case name", (
   const methods = [...source.matchAll(/def (to_\w+)\(self[\s\S]*?self\._match\("(\w+)"/g)].map(
     ([, method, matcher]) => [method, matcher],
   )
+  // Their subject is a c.capture() result, which the Python SDK can't make yet.
+  const noSubject = new Set(['toHaveStatus', 'toHaveNoPageErrors'])
   assert.deepEqual(
     methods.map(([, matcher]) => matcher),
-    Object.keys(MATCHERS),
+    Object.keys(MATCHERS).filter((m) => !noSubject.has(m)),
   )
   for (const [method, matcher] of methods) {
     assert.equal(

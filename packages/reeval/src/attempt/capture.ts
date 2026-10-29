@@ -20,22 +20,27 @@ import { stubPng } from '../capture/stub.ts'
 import { captureUseSpend, runJourney } from '../capture/use.ts'
 import { debugLog } from '../debug/attempt.ts'
 import { untraced } from '../debug/docker.ts'
-import { getRunContext } from '../engine/runtime.ts'
+import { getRunContext, SUBJECT } from '../engine/runtime.ts'
 import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
 import { openRouterFallbacks } from '../gateway/openrouter-models.ts'
 import { vertexSettingsIn } from '../gateway/vertex.ts'
 import { sha256 } from '../ids.ts'
+import { redactJson } from '../redact.ts'
 import { cacheDir } from '../root.ts'
+import { plural } from '../text.ts'
 import type {
   BackgroundHandle,
   Capture,
   CaptureArtifactMeta,
   CaptureCall,
+  CapturePage,
+  CapturePageFile,
   CaptureUse,
   ServeHandle,
   ServeRecord,
 } from '../types.ts'
 import { addUsage } from '../usage.ts'
+import { pageLines } from '../view/capture.ts'
 import { asCheck, sandboxFor } from './checks.ts'
 import { awaitListening, parseProbe, probeScript } from './serve.ts'
 import type { Attempt } from './state.ts'
@@ -257,11 +262,16 @@ export async function capturePage(
   const started = Date.now()
   const remaining = () => Math.max(0, resolved.timeoutMs - (Date.now() - started))
   let moves = 0
-  const png = fake
-    ? stubPng(resolved.name, resolved.port, resolved.path, resolved.viewport)
+  const url = pageUrl(origin, resolved.path)
+  const { png, page } = fake
+    ? {
+        png: stubPng(resolved.name, resolved.port, resolved.path, resolved.viewport),
+        page: await fetchedPage(url, origin, remaining(), a.signal),
+      }
     : await shot(
         a,
-        pageUrl(origin, resolved.path),
+        origin,
+        url,
         { ...resolved, use },
         remaining,
         (n) => {
@@ -269,6 +279,10 @@ export async function capturePage(
         },
         (port) => tunnel({ port, protocol: 'http' }).then((t) => t.url),
       )
+  tracePage(resolved.name, page)
+  const facts: CapturePageFile = { schemaVersion: 1, ...page }
+  const pageJson = `${redactJson(facts, 2)}\n`
+  a.capturePages.set(resolved.name, pageJson)
   const digest = sha256(png)
   const file = {
     path: `artifacts/${resolved.name}.png`,
@@ -283,6 +297,13 @@ export async function capturePage(
     ...(resolved.fullPage ? { fullPage: true } : {}),
     ...(goals.length ? { instructions: goals } : {}),
     ...(use ? { use: { model: 'model' in use ? use.model : 'fake', moves } } : {}),
+    ...(page.status ? { status: page.status } : {}),
+    ...(page.errors.length ? { pageErrors: page.errors.length } : {}),
+    page: {
+      path: `artifacts/${resolved.name}.capture.json`,
+      sha256: sha256(pageJson),
+      bytes: Buffer.byteLength(pageJson),
+    },
   }
   a.record.artifacts = a.record.artifacts ?? []
   a.record.artifacts.push({
@@ -293,23 +314,61 @@ export async function capturePage(
     capture,
   })
   a.artifactBlobs.set(resolved.name, png)
-  return {
+  const taken: Capture = {
     name: resolved.name,
     port: resolved.port,
     path: resolved.path,
     viewport: resolved.viewport,
     file,
+    ...structuredClone(page),
   }
+  // Names it in a matcher's default label: `toHaveNoPageErrors home`.
+  return Object.defineProperty(taken, SUBJECT, { value: resolved.name })
+}
+
+/** The fake sandbox has no browser: the page's status and final URL from a GET, and no more. */
+async function fetchedPage(
+  url: string,
+  origin: string,
+  timeoutMs: number,
+  signal: AbortSignal,
+): Promise<CapturePage> {
+  const res = await fetch(url, {
+    signal: AbortSignal.any([AbortSignal.timeout(Math.max(1, timeoutMs)), signal]),
+  }).catch(() => undefined)
+  await res?.body?.cancel()
+  const base = origin.replace(/\/$/, '')
+  const final = res?.url || url
+  return {
+    ...(res ? { status: res.status } : {}),
+    finalUrl: final.startsWith(base) ? final.slice(base.length) || '/' : final,
+    console: [],
+    errors: [],
+    failedRequests: [],
+  }
+}
+
+/** The page's facts in the debug log, which `-v` prints: a summary, then a line each. */
+function tracePage(name: string, page: CapturePage) {
+  const counts = [
+    plural(page.errors.length, 'page error'),
+    plural(page.console.length, 'console message'),
+    plural(page.failedRequests.length, 'failed request'),
+  ]
+  const status = page.status ? ` (${page.status})` : ''
+  debugLog('check', `capture "${name}" at ${page.finalUrl}${status}: ${counts.join(' · ')}`)
+  for (const line of pageLines(page)) debugLog('check', `capture "${name}" ${line}`)
 }
 
 async function shot(
   a: Attempt,
+  origin: string,
   url: string,
   resolved: ResolvedCaptureCall & { use?: CaptureUse },
   remaining: () => number,
   onMoves: (n: number) => void,
   tunnel: (port: number) => Promise<string>,
-): Promise<Buffer> {
+): Promise<{ png: Buffer; page: CapturePage }> {
   const cache = cacheDir()
   const bin = await ensureChrome(cache, {
     cacheLabel: cacheLabel(cache),
@@ -320,39 +379,52 @@ async function shot(
   // another port) mean the sandbox's, so they go through its tunnels.
   const proxy = await startLoopbackProxy({ tunnel, direct: [Number(new URL(url).port)] })
   const browser = { proxy: proxy.address }
-  return withChrome(bin, resolved.window, remaining(), browser, async (session) => {
-    const result = await runJourney(session, url, {
-      wait: resolved.wait,
-      timeoutMs: remaining(),
-      budgetMs: resolved.timeoutMs,
-      fullPage: resolved.fullPage,
-      instructions: resolved.instructions,
-      use: resolved.use,
-      remaining,
-      loadModel: async (name) => {
-        const { config, profile } = getRunContext()
-        const scope = gatewayScope(config, profile)
-        const gateway = resolveModelGateway(name, undefined, scope, 'capture model')
-        return hostModel(name, gateway, 'capture model', {
-          fallbacks: openRouterFallbacks(scope.gateways),
-          ...(gateway === 'vertex' ? { vertex: vertexSettingsIn(scope.gateways) } : {}),
-        })
-      },
-    })
-    onMoves(result.moves)
-    const spend = captureUseSpend(result)
-    if (spend) {
-      const prev = a.record.captureUse
-      a.record.captureUse = prev
-        ? {
-            model: spend.model,
-            moves: prev.moves + spend.moves,
-            usage: addUsage(prev.usage, spend.usage),
-          }
-        : spend
-    }
-    return result.png
-  }).finally(async () => {
+  return withChrome(
+    bin,
+    resolved.window,
+    remaining(),
+    browser,
+    async (session) => {
+      const journey = runJourney(session, url, {
+        wait: resolved.wait,
+        timeoutMs: remaining(),
+        budgetMs: resolved.timeoutMs,
+        fullPage: resolved.fullPage,
+        instructions: resolved.instructions,
+        use: resolved.use,
+        remaining,
+        loadModel: async (name) => {
+          const { config, profile } = getRunContext()
+          const scope = gatewayScope(config, profile)
+          const gateway = resolveModelGateway(name, undefined, scope, 'capture model')
+          return hostModel(name, gateway, 'capture model', {
+            fallbacks: openRouterFallbacks(scope.gateways),
+            ...(gateway === 'vertex' ? { vertex: vertexSettingsIn(scope.gateways) } : {}),
+          })
+        },
+      })
+      // A wait that never ends is often the app failing: trace what the page said before throwing.
+      const result = await journey.catch(async (error: unknown) => {
+        const page = await session.page(origin).catch(() => undefined)
+        if (page) tracePage(resolved.name, page)
+        throw error
+      })
+      onMoves(result.moves)
+      const spend = captureUseSpend(result)
+      if (spend) {
+        const prev = a.record.captureUse
+        a.record.captureUse = prev
+          ? {
+              model: spend.model,
+              moves: prev.moves + spend.moves,
+              usage: addUsage(prev.usage, spend.usage),
+            }
+          : spend
+      }
+      return { png: result.png, page: await session.page(origin) }
+    },
+    a.signal,
+  ).finally(async () => {
     await proxy.close()
     if (proxy.reached.length) {
       debugLog(
@@ -368,9 +440,11 @@ export async function writeCaptureSidecars(
   stagingDir: string,
   recordFile: string,
   blobs: Map<string, Buffer>,
+  pages: Map<string, string>,
 ): Promise<void> {
   if (blobs.size === 0) return
   const dir = join(stagingDir, 'evals', recordFile.replace(/\.json$/, '.artifacts'))
   await mkdir(dir, { recursive: true })
   for (const [name, png] of blobs) await writeFile(join(dir, `${name}.png`), png)
+  for (const [name, json] of pages) await writeFile(join(dir, `${name}.capture.json`), json)
 }

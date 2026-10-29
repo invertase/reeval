@@ -105,6 +105,20 @@ describe('formatError', () => {
     assert.match(plain({ name: 'Error', message: 'm', code: 1 }), /^Error: m\n⎯{80}\n/)
   })
 
+  test("frames quoted in a multi-line message aren't the error's own", () => {
+    const message =
+      'expected no page errors, got 1 page error: Uncaught Error: boom\n    at /sign-up:1:5'
+    const out = plain({
+      name: 'AssertionError',
+      message,
+      stack: `AssertionError: ${message}\n    at ${file}:5:17`,
+    })
+    assert.doesNotMatch(out, /❯ .*sign-up/)
+    assert.match(out, /❯ evals\/a\.eval\.ts:5:17/)
+    const elsewhere = plain({ name: 'Error', message: 'a\nb', stack: stack(`${file}:5:3`) })
+    assert.match(elsewhere, /❯ evals\/a\.eval\.ts:5:3/)
+  })
+
   test('primitives, nameless, messageless and very long errors', () => {
     // As Vitest prints them: a thrown primitive has no name.
     assert.equal(plain('a string\nsecond line'), 'Unknown Error: a string')

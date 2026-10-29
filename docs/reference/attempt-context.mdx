@@ -130,10 +130,34 @@ const shot = await c.capture(app, { path: '/login', wait: 'idle' })
   The `'provider/model'` vision model for `instructions`, replacing the cascaded `capture.model`.
 </Property>
 
-The `Capture` echoes the resolved `name`, `port`, `path`, and `viewport`, and has this field:
+The `Capture` echoes the resolved `name`, `port`, `path`, and `viewport`, and has these fields:
 
 <Property name="file" type="{ path: string; sha256: string; bytes: number }" required>
   The PNG's `artifacts/<name>.png` path under the attempt directory, digest, and size.
+</Property>
+
+<Property name="status" type="number" optional>
+  The HTTP status of the main frame's latest document.
+</Property>
+
+<Property name="finalUrl" type="string" required>
+  The page's URL when captured.
+</Property>
+
+<Property name="console" type="Array<{ level; text; source; url? }>" required>
+  The console messages.
+</Property>
+
+<Property name="errors" type="string[]" required>
+  Uncaught exceptions and unhandled rejections.
+</Property>
+
+<Property name="failedRequests" type="Array<{ method; url; status?; error? }>" required>
+  Requests that failed or answered 400 or above.
+</Property>
+
+<Property name="dropped" type="number" optional>
+  Entries left out past the cap of 100.
 </Property>
 
 For more information about the cascaded defaults, see [the `capture` option](/reference/options#capture). For more information about serving and capturing an app, see [Apps](/evaluations/task/apps).

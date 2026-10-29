@@ -388,6 +388,20 @@ class AttemptStart(TypedDict):
     type: Literal["start"]
 
 
+class CaptureConsoleItem(TypedDict):
+    level: Literal["error", "warning", "info", "log", "debug"]
+    source: str
+    text: str
+    url: NotRequired[str]
+
+
+class CaptureFailedRequestsItem(TypedDict):
+    error: NotRequired[str]
+    method: str
+    status: NotRequired[float]
+    url: str
+
+
 # `artifacts/<name>.png` under the attempt directory.
 class CaptureFile(TypedDict):
     bytes: float
@@ -395,15 +409,30 @@ class CaptureFile(TypedDict):
     sha256: str
 
 
-# What `c.capture()` returns: the PNG is also in the attempt record under `artifacts/`.
+# What `c.capture()` returns: the PNG is also in the attempt record under `artifacts/`, and the
+# page facts in `artifacts/<name>.capture.json` beside it.
 class Capture(TypedDict):
+    # Each message the console showed, in order; at most 100 of each level.
+    console: list[CaptureConsoleItem]
+    # How many messages, errors and requests the caps left out; absent when none.
+    dropped: NotRequired[float]
+    # The page errors: each uncaught exception and unhandled promise rejection, with its stack,
+    # at most 100.
+    errors: list[str]
+    # Requests that failed or answered 400 or above, in order, at most 100.
+    failedRequests: list[CaptureFailedRequestsItem]
     # `artifacts/<name>.png` under the attempt directory.
     file: CaptureFile
+    # Where the page ended up, after redirects and client-side routing: a path on the app.
+    finalUrl: str
     name: str
     # Path on the app, as passed in.
     path: str
     # Container port that was tunneled.
     port: float
+    # The HTTP status of the main frame's latest document, after redirects. A full navigation
+    # replaces it; a client-side route change keeps it. Absent when no response came.
+    status: NotRequired[float]
     # What the author asked, including `'full-page'`.
     viewport: CaptureWindow | Literal["full-page"]
 
@@ -1946,6 +1975,8 @@ CAMEL_KEYS: frozenset[str] = frozenset(
         "durationMs",
         "exitCode",
         "failWith",
+        "failedRequests",
+        "finalUrl",
         "flakeRate",
         "ignoreAbort",
         "matchedBy",

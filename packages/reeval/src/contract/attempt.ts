@@ -10,7 +10,10 @@ import { MAX_TIMER_MS, TIMER_LIMIT } from '../duration.ts'
 import type {
   AssertionRecord,
   Capture,
+  CaptureConsoleMessage,
+  CaptureFailedRequest,
   CaptureInstruction,
+  CapturePage,
   CaptureWait,
   Cell,
   CellRole,
@@ -191,12 +194,38 @@ const turnIndex = z
   .min(0, 'must be a turn index, from 0')
   .describe("The turn's index, from 0.")
 
+const captureConsoleMessageSchema = z.strictObject({
+  level: z.enum(['error', 'warning', 'info', 'log', 'debug']),
+  text: z.string(),
+  source: z.string(),
+  url: z.string().optional(),
+})
+
+const captureFailedRequestSchema = z.strictObject({
+  method: z.string(),
+  url: z.string(),
+  status: z.number().optional(),
+  error: z.string().optional(),
+})
+
+const capturePageFields = {
+  status: z.number().optional(),
+  finalUrl: z.string(),
+  console: z.array(captureConsoleMessageSchema),
+  errors: z.array(z.string()),
+  failedRequests: z.array(captureFailedRequestSchema),
+  dropped: z.number().optional(),
+}
+
+const capturePageSchema = z.strictObject(capturePageFields)
+
 export const captureSchema = z.strictObject({
   name: z.string(),
   port: z.number(),
   path: z.string(),
   viewport: z.union([captureWindowSchema, z.literal('full-page')]),
   file: z.strictObject({ path: z.string(), sha256: z.string(), bytes: z.number() }),
+  ...capturePageFields,
 })
 
 export const judgeArtifactRefSchema = z.strictObject({
@@ -238,6 +267,9 @@ export type _SameAsSchema = [
   Assert<Same<z.infer<typeof cellSchema>, Cell>>,
   Assert<Same<z.infer<typeof cellRoleSchema>, CellRole>>,
   Assert<Same<z.infer<typeof captureSchema>, Capture>>,
+  Assert<Same<z.infer<typeof capturePageSchema>, CapturePage>>,
+  Assert<Same<z.infer<typeof captureConsoleMessageSchema>, CaptureConsoleMessage>>,
+  Assert<Same<z.infer<typeof captureFailedRequestSchema>, CaptureFailedRequest>>,
   Assert<Same<z.infer<typeof judgeArtifactRefSchema>, JudgeArtifactRef>>,
   Assert<Same<z.infer<typeof verdictSchema>, Verdict>>,
   Assert<Same<z.infer<typeof judgeFailureSchema>, JudgeFailure>>,

@@ -2516,6 +2516,69 @@ export const features: Feature[] = [
     },
   },
   {
+    // Docker only: the fake sandbox has no browser to report a console or page errors.
+    dir: 'ui/capture-page',
+    tiers: ['docker'],
+    env: 'ui',
+    args: ['-v'],
+    canary:
+      /expected no page errors at capture "home" at \/sign-up, got 2 page errors: Uncaught Error: late failure$/m,
+    record: ({ run, runDir, stdout }) => {
+      const art = landed(run)?.files.artifacts?.[0]
+      assert.equal(art?.capture?.status, 200)
+      assert.equal(art?.capture?.pageErrors, 2)
+      const ref = art?.capture?.page
+      assert.match(ref?.path ?? '', /artifacts\/home\.capture\.json$/)
+      const page = JSON.parse(readFileSync(join(runDir, ref?.path ?? ''), 'utf8'))
+      assert.equal(page.finalUrl, '/sign-up')
+      assert.equal(page.errors.length, 2)
+      assert.deepEqual(page.failedRequests, [{ method: 'GET', url: '/missing.js', status: 404 }])
+      assert.match(
+        blockOf(stdout, 'lands'),
+        new RegExp(
+          `^ {2}2 page errors in capture "home" → \\.reeval/runs/${run.runId}/.+/artifacts/home\\.capture\\.json$`,
+          'm',
+        ),
+      )
+      assert.match(
+        stdout,
+        /capture "home" at \/sign-up \(200\): 2 page errors · \d+ console messages · 1 failed request/,
+      )
+      assert.match(stdout, /capture "home" page error: Uncaught Error: late failure/)
+      assert.match(stdout, /capture "home" failed request: GET \/missing\.js → 404/)
+    },
+  },
+  {
+    // Docker only: the fake sandbox has no browser to log to.
+    dir: 'ui/capture-loud',
+    tiers: ['docker'],
+    env: 'ui',
+    canary: /expected capture "loud" at \/ to have page errors/,
+    record: ({ run, runDir }) => {
+      const art = landed(run)?.files.artifacts?.[0]
+      assert.equal(art?.capture?.pageErrors, undefined)
+      const page = JSON.parse(readFileSync(join(runDir, art?.capture?.page?.path ?? ''), 'utf8'))
+      assert.equal(page.schemaVersion, 1)
+      assert.equal(page.dropped, 1201)
+      assert.ok(page.console.every((m: { text: string }) => m.text.length <= 2001))
+    },
+  },
+  {
+    dir: 'ui/capture-status',
+    tiers: ['fake', 'docker'],
+    env: 'ui',
+    canary: /expected capture "old" at \/login to answer 200, got 404/,
+    record: ({ run, runDir, stdout }) => {
+      const art = landed(run)?.files.artifacts?.[0]
+      assert.equal(art?.capture?.status, 404)
+      assert.equal(art?.capture?.pageErrors, undefined)
+      const page = JSON.parse(readFileSync(join(runDir, art?.capture?.page?.path ?? ''), 'utf8'))
+      assert.equal(page.status, 404)
+      assert.equal(page.finalUrl, '/login')
+      assert.doesNotMatch(blockOf(stdout, 'lands'), /page error/)
+    },
+  },
+  {
     dir: 'ui/capture-concurrent',
     tiers: ['fake', 'docker'],
     env: 'ui',
