@@ -47,6 +47,9 @@ export type DockerSandbox = Sandbox & { readonly network: HarnessV1NetworkSandbo
 
 export const isDockerSandbox = (s: Sandbox): s is DockerSandbox => 'network' in s
 
+/** Distinct gateway warnings an attempt prints before one line says there are more. */
+const GATEWAY_WARNINGS = 5
+
 /**
  * The gateway's events as debug lines: one per request, with DNS decisions and headers traced.
  * Refused requests to the harness's expected hosts are traced only; teardown summarizes them.
@@ -137,10 +140,14 @@ export async function createDockerSandbox(
   }
   const warned = new Set<string>()
   const warn = (text: string) => {
-    if (warned.has(text)) return
+    if (warned.has(text) || warned.size > GATEWAY_WARNINGS) return
     warned.add(text)
-    if (options.onWarning) options.onWarning(text)
-    else console.warn(`warning: ${text}`)
+    const shown =
+      warned.size > GATEWAY_WARNINGS
+        ? 'the egress gateway has more warnings for this attempt, not shown; its egress.blocked lists the requests it refused'
+        : text
+    if (options.onWarning) options.onWarning(shown)
+    else console.warn(`warning: ${shown}`)
   }
   const started = performance.now()
   const { root, capabilities, memory, swap, cpus, pids } = descriptor

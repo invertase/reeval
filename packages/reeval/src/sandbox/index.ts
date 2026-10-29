@@ -20,7 +20,10 @@ export type SandboxOptions = {
   substitutions?: readonly BrokeredSecret[]
   /** Checked against the sandbox's capabilities at plan time. */
   egress: PlannedEgress
-  /** A gateway warning for the terminal (a refused brokered request), once per distinct text. */
+  /**
+   * A gateway warning for the terminal (a refused brokered request), once per distinct text, and
+   * a few per attempt at most.
+   */
   onWarning?: (text: string) => void
 }
 
