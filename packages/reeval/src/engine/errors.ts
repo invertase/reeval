@@ -80,7 +80,13 @@ function printError(
   if (e === null || (typeof e !== 'object' && typeof e !== 'function'))
     e = { message: String(error).split(/\n/g)[0], stack: String(error) }
   const hide = options.hide.map((dir) => comparable(dir))
-  const stacks = parseErrorStacktrace(e as Error, {
+  // Frames quoted in the message (a page's stack in `toHaveNoPageErrors`) aren't the error's own.
+  const head = `${e.name || 'Error'}: ${e.message ?? ''}`
+  const own =
+    typeof e.stack === 'string' && e.message?.includes('\n') && e.stack.startsWith(head)
+      ? { ...e, stack: e.stack.slice(head.length) }
+      : e
+  const stacks = parseErrorStacktrace(own as Error, {
     frameFilter: (_error, frame) =>
       !hide.some((dir) => comparable(frame.file).startsWith(dir)) &&
       !HIDDEN.some((dir) => comparable(frame.file).includes(dir)),

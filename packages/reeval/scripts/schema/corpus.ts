@@ -51,11 +51,13 @@ export function corpus(): {
   transcripts: string[]
   analyses: Array<{ file: string; value: Record<string, unknown> }>
   remarks: Array<{ file: string; value: Record<string, unknown> }>
+  capturePages: Array<{ file: string; value: Record<string, unknown> }>
 } {
   const records: Array<{ file: string; value: Record<string, unknown> }> = []
   const transcripts: string[] = []
   const analyses: Array<{ file: string; value: Record<string, unknown> }> = []
   const remarks: Array<{ file: string; value: Record<string, unknown> }> = []
+  const capturePages: Array<{ file: string; value: Record<string, unknown> }> = []
   const walk = (dir: string) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, e.name)
@@ -63,6 +65,8 @@ export function corpus(): {
       else if (e.name === 'transcript.jsonl') transcripts.push(path)
       else if (e.name === 'remarks.json') {
         remarks.push({ file: path, value: JSON.parse(readFileSync(path, 'utf8')) })
+      } else if (e.name.endsWith('.capture.json')) {
+        capturePages.push({ file: path, value: JSON.parse(readFileSync(path, 'utf8')) })
       } else if (e.name.endsWith('.json') && basename(dir) === 'analysis') {
         analyses.push({ file: path, value: JSON.parse(readFileSync(path, 'utf8')) })
       }
@@ -72,5 +76,5 @@ export function corpus(): {
     for (const run of entry.runs) records.push({ file: run.file, value: run.raw })
     walk(join(entry.dir, HISTORY_DIR))
   }
-  return { records, transcripts, analyses, remarks }
+  return { records, transcripts, analyses, remarks, capturePages }
 }

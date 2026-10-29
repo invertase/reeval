@@ -625,16 +625,28 @@ function upstreamLines(c: Colors, cells: CellResult[], indent: number): string[]
   })
 }
 
+/**
+ * One line pointing at the first capture whose page had page errors, and at the file that lists
+ * them; the eval's other such captures are counted.
+ */
+export function pageErrorLines(c: Colors, cells: CellResult[], indent: number): string[] {
+  const [first, ...rest] = cells.flatMap((cell) => cell.pageErrors ?? [])
+  if (!first) return []
+  const more = rest.length ? ` (+${plural(rest.length, 'more capture')})` : ''
+  const head = `${plural(first.errors, 'page error')} in capture "${first.capture}"`
+  return [`${' '.repeat(indent)}${c.yellow(head)} ${c.dim(`→ ${first.file}${more}`)}`]
+}
+
 /** One eval's block, laid out as `layout()` says for its shape. */
 export function evalBlock(c: Colors, e: EvalResult, verbose = false): string[] {
   const shape = layout(e.across, e.family, false)
   if (shape.family) {
-    const served = upstreamLines(
-      c,
-      (e.cases ?? []).flatMap((k) => k.cells),
-      2,
-    )
-    return [...familyBlock(c, e, shape.kind, verbose), ...served]
+    const all = (e.cases ?? []).flatMap((k) => k.cells)
+    return [
+      ...familyBlock(c, e, shape.kind, verbose),
+      ...upstreamLines(c, all, 2),
+      ...pageErrorLines(c, all, 2),
+    ]
   }
   const v = verdict(c, e)
   const name = `${e.group.length ? `${e.group.join(' › ')} › ` : ''}${e.name}`
@@ -643,7 +655,13 @@ export function evalBlock(c: Colors, e: EvalResult, verbose = false): string[] {
   if (e.todo || e.outcome === 'skipped' || !cells.length) return [head]
   const failed = e.outcome !== 'pass'
   const body = cellsBody(c, shape.kind, cells, 2, { failed, verbose, effects: true })
-  return [head, ...body, ...upstreamLines(c, cells, 2), ...questionLines(c, e.questions, 2)]
+  return [
+    head,
+    ...body,
+    ...upstreamLines(c, cells, 2),
+    ...pageErrorLines(c, cells, 2),
+    ...questionLines(c, e.questions, 2),
+  ]
 }
 
 /**

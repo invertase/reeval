@@ -6,6 +6,7 @@
 import type { RunRecord } from '../history/types.ts'
 import { SCHEMA_VERSION } from '../history/types.ts'
 import type { CliInvocation } from '../report/types.ts'
+import type { CapturePageFile } from '../types.ts'
 import type { AnalysisDoc, AnalysisNote } from './analysis.ts'
 import type { DebugRequest } from './debug.ts'
 import type { TranscriptLine } from './model.ts'
@@ -21,6 +22,7 @@ export type ShapeName =
   | 'debug-request'
   | 'live-progress'
   | 'cli-invocation'
+  | 'capture-page'
 
 /**
  * A field added after files were written without it, and what it reads as there. The path is
@@ -49,6 +51,7 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
   'debug-request': [],
   'live-progress': [],
   'cli-invocation': [],
+  'capture-page': [],
 }
 
 /**
@@ -63,6 +66,7 @@ export const SCHEMA_VERSIONS = {
   analysis: 1,
   'analysis-note': 1,
   remarks: 1,
+  'capture-page': 1,
 } as const
 
 /** A file from a newer reeval, whose schemaVersion this reeval doesn't know. */
@@ -161,3 +165,9 @@ export const readableDebugRequest = (request: DebugRequest): DebugRequest =>
 /** A line of `.reeval/cli.jsonl` as `reeval report` sees it. */
 export const readableCliInvocation = (entry: CliInvocation): CliInvocation =>
   fillDefaults('cli-invocation', entry)
+
+/** A capture's `<name>.capture.json` as the studio sees it; one from a newer reeval throws. */
+export const readableCapturePage = (
+  page: CapturePageFile,
+  what = 'This capture',
+): CapturePageFile => fillDefaults('capture-page', upgrade('capture-page', page, what))

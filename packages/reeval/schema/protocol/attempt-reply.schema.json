@@ -392,9 +392,67 @@
       ]
     },
     "Capture": {
-      "description": "What `c.capture()` returns: the PNG is also in the attempt record under `artifacts/`.",
+      "description": "What `c.capture()` returns: the PNG is also in the attempt record under `artifacts/`, and the page facts in `artifacts/<name>.capture.json` beside it.",
       "type": "object",
       "properties": {
+        "console": {
+          "description": "Each message the console showed, in order; at most 100 of each level.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "level": {
+                "type": "string",
+                "enum": ["error", "warning", "info", "log", "debug"]
+              },
+              "source": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["level", "source", "text"],
+            "additionalProperties": false
+          }
+        },
+        "dropped": {
+          "description": "How many messages, errors and requests the caps left out; absent when none.",
+          "type": "number"
+        },
+        "errors": {
+          "description": "The page errors: each uncaught exception and unhandled promise rejection, with its stack, at most 100.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "failedRequests": {
+          "description": "Requests that failed or answered 400 or above, in order, at most 100.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "method": {
+                "type": "string"
+              },
+              "status": {
+                "type": "number"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["method", "url"],
+            "additionalProperties": false
+          }
+        },
         "file": {
           "description": "`artifacts/<name>.png` under the attempt directory.",
           "type": "object",
@@ -412,6 +470,10 @@
           "required": ["bytes", "path", "sha256"],
           "additionalProperties": false
         },
+        "finalUrl": {
+          "description": "Where the page ended up, after redirects and client-side routing: a path on the app.",
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -421,6 +483,10 @@
         },
         "port": {
           "description": "Container port that was tunneled.",
+          "type": "number"
+        },
+        "status": {
+          "description": "The HTTP status of the main frame's latest document, after redirects. A full navigation replaces it; a client-side route change keeps it. Absent when no response came.",
           "type": "number"
         },
         "viewport": {
@@ -436,7 +502,17 @@
           ]
         }
       },
-      "required": ["file", "name", "path", "port", "viewport"],
+      "required": [
+        "console",
+        "errors",
+        "failedRequests",
+        "file",
+        "finalUrl",
+        "name",
+        "path",
+        "port",
+        "viewport"
+      ],
       "additionalProperties": false
     },
     "CaptureWindow": {

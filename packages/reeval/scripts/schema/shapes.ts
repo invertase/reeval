@@ -76,6 +76,13 @@ export const SHAPES: PersistedShape[] = [
     type: 'CliInvocation',
     where: 'One line of .reeval/cli.jsonl, the last reeval commands reeval report reads',
   },
+  {
+    name: 'capture-page',
+    file: 'src/types.ts',
+    type: 'CapturePageFile',
+    where: "What the browser saw on one c.capture(): an attempt's artifacts/<name>.capture.json",
+    versionField: 'schemaVersion',
+  },
 ]
 
 /** Where the plan shapes' snapshots live: `schema/plan/<name>.schema.json`. */

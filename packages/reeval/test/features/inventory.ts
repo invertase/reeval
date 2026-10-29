@@ -1675,6 +1675,9 @@ export const inventory: InventoryFeature[] = [
     name: '`c.capture()`, `c.serve` and `c.exec({ background })`',
     fixtures: [
       'ui/capture',
+      'ui/capture-page',
+      'ui/capture-loud',
+      'ui/capture-status',
       'ui/capture-concurrent',
       'ui/capture-unreachable',
       'ui/capture-browser-false',
@@ -1689,6 +1692,8 @@ export const inventory: InventoryFeature[] = [
     plan: ['capture/options'],
     unit: [
       'reeval/test/ui.test.ts',
+      'reeval/test/capture-page.test.ts',
+      'reeval/test/match.test.ts',
       'reeval/test/capture.test.ts',
       'reeval/test/capture-wait.test.ts',
     ],

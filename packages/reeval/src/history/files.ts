@@ -26,7 +26,14 @@ import {
 } from './ignore.ts'
 import { type Finding, findingLines, findingSummary, scanText } from './secret-scan.ts'
 import { renderSummary } from './summary.ts'
-import type { ArtifactLevel, AttemptRecord, FileRef, HistoryEntry, RunRecord } from './types.ts'
+import type {
+  ArtifactLevel,
+  ArtifactRef,
+  AttemptRecord,
+  FileRef,
+  HistoryEntry,
+  RunRecord,
+} from './types.ts'
 
 export class HistoryError extends Error {
   override name = 'HistoryError'
@@ -398,8 +405,12 @@ const failed = (x: { outcome: string }) => x.outcome === 'fail' || x.outcome ===
 const keeps = (x: { outcome: string }, level: ArtifactLevel) =>
   level === 'all' || (level === 'failures' && failed(x))
 
+/** Each capture's PNG, then the page facts beside it. */
+const withPages = (refs: ArtifactRef[]): FileRef[] =>
+  refs.flatMap((r) => (r.capture?.page ? [r, r.capture.page] : [r]))
+
 const attemptRefs = (a: AttemptRecord): FileRef[] => [
-  ...Object.values(a.files).flatMap((v) => (Array.isArray(v) ? v : v ? [v] : [])),
+  ...Object.values(a.files).flatMap((v) => (Array.isArray(v) ? withPages(v) : v ? [v] : [])),
   ...a.checks.flatMap((c) => (c.log ? [c.log] : [])),
   ...(a.answers ?? []).flatMap((q) => (q.input ? [q.input] : [])),
 ]
@@ -487,7 +498,7 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
         ...(diff ? { diff } : {}),
         ...(screenshots.length ? { artifacts: screenshots } : {}),
       }
-      for (const ref of [...(diff ? [diff] : []), ...screenshots]) await keep(ref)
+      for (const ref of [...(diff ? [diff] : []), ...withPages(screenshots)]) await keep(ref)
       for (const c of a.checks) delete c.log
       for (const q of a.answers ?? []) delete q.input
     }

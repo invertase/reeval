@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from CapturePageFile in src/types.ts by `pnpm schema:update`; don't edit. What the browser saw on one c.capture(): an attempt's artifacts/<name>.capture.json.",
+  "title": "CapturePageFile",
+  "$ref": "#/$defs/CapturePageFile",
+  "$defs": {
+    "CaptureConsoleMessage": {
+      "description": "One message the page's console showed while it was captured.",
+      "type": "object",
+      "properties": {
+        "level": {
+          "enum": ["debug", "error", "info", "log", "warning"]
+        },
+        "source": {
+          "description": "`console-api` for the page's `console.*` calls; otherwise the browser's own source, such as `network` (a request that failed), `javascript`, `security` or `deprecation`.",
+          "type": "string"
+        },
+        "text": {
+          "description": "The message, at most 2000 characters, with the app's own URLs as paths.",
+          "type": "string"
+        },
+        "url": {
+          "description": "The script or resource it came from, as a path when it's on the app.",
+          "type": "string"
+        }
+      },
+      "required": ["level", "source", "text"]
+    },
+    "CaptureFailedRequest": {
+      "description": "A request the page made that failed or answered 400 or above.",
+      "type": "object",
+      "properties": {
+        "error": {
+          "description": "The browser's error, such as `net::ERR_CONNECTION_REFUSED`; absent when a response came.",
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        },
+        "status": {
+          "description": "The response's status; absent when no response came.",
+          "type": "number"
+        },
+        "url": {
+          "description": "As a path when it's on the app.",
+          "type": "string"
+        }
+      },
+      "required": ["method", "url"]
+    },
+    "CapturePageFile": {
+      "description": "A capture's `artifacts/<name>.capture.json`: its page facts, versioned.",
+      "type": "object",
+      "properties": {
+        "console": {
+          "description": "Each message the console showed, in order; at most 100 of each level.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CaptureConsoleMessage"
+          }
+        },
+        "dropped": {
+          "description": "How many messages, errors and requests the caps left out; absent when none.",
+          "type": "number"
+        },
+        "errors": {
+          "description": "The page errors: each uncaught exception and unhandled promise rejection, with its stack, at most 100.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "failedRequests": {
+          "description": "Requests that failed or answered 400 or above, in order, at most 100.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CaptureFailedRequest"
+          }
+        },
+        "finalUrl": {
+          "description": "Where the page ended up, after redirects and client-side routing: a path on the app.",
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "status": {
+          "description": "The HTTP status of the main frame's latest document, after redirects. A full navigation replaces it; a client-side route change keeps it. Absent when no response came.",
+          "type": "number"
+        }
+      },
+      "required": ["console", "errors", "failedRequests", "finalUrl", "schemaVersion"]
+    }
+  },
+  "x-schemaVersion": 1
+}

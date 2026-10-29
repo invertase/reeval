@@ -11,7 +11,15 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { CaptureKey, CaptureUseAction, CaptureWait, CaptureWindow, Wait } from '../types.ts'
+import type {
+  CaptureKey,
+  CapturePage,
+  CaptureUseAction,
+  CaptureWait,
+  CaptureWindow,
+  Wait,
+} from '../types.ts'
+import { watchPage } from './page.ts'
 import { unzip } from './zip.ts'
 
 const isMs = (wait: Wait): wait is { ms: number } => typeof wait === 'object' && wait !== null
@@ -484,26 +492,43 @@ export async function ensureChrome(
 
 type CdpReply = { id?: number; method?: string; result?: unknown; error?: { message: string } }
 
-class Cdp {
-  #ws: WebSocket
-  #next = 0
-  #pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
-  #events = new Map<string, Array<(p: unknown) => void>>()
+/** The least time a CDP call gets, so the page facts still come after a screenshot near the deadline. */
+const CDP_CALL_MIN_MS = 1_000
 
-  constructor(ws: WebSocket) {
+/**
+ * A CDP connection whose every call settles: with the reply, at `callMs()` (at least
+ * `CDP_CALL_MIN_MS`), or when the socket closes. A blocked browser can't hold a capture past its
+ * budget.
+ */
+export class Cdp {
+  #ws: Pick<WebSocket, 'send' | 'close' | 'addEventListener'>
+  #next = 0
+  #pending = new Map<number, { reject: (e: Error) => void; settle: (msg: CdpReply) => void }>()
+  #events = new Map<string, Array<(p: unknown) => void>>()
+  #closed: Error | undefined
+  callMs: () => number = () => 30_000
+
+  constructor(ws: Pick<WebSocket, 'send' | 'close' | 'addEventListener'>) {
     this.#ws = ws
     ws.addEventListener('message', (ev) => {
-      const msg = JSON.parse(String(ev.data)) as CdpReply
+      const msg = JSON.parse(String((ev as MessageEvent).data)) as CdpReply
       if (msg.id !== undefined) {
-        const p = this.#pending.get(msg.id)
-        if (!p) return
-        this.#pending.delete(msg.id)
-        if (msg.error) p.reject(new Error(msg.error.message))
-        else p.resolve(msg.result)
+        this.#pending.get(msg.id)?.settle(msg)
         return
       }
       if (msg.method) for (const fn of this.#events.get(msg.method) ?? []) fn(msg)
     })
+    ws.addEventListener('close', () =>
+      this.#fail(new Error('the browser closed its DevTools connection')),
+    )
+    ws.addEventListener('error', () =>
+      this.#fail(new Error('the browser closed its DevTools connection')),
+    )
+  }
+
+  #fail(error: Error) {
+    this.#closed ??= error
+    for (const p of [...this.#pending.values()]) p.reject(this.#closed)
   }
 
   on(method: string, fn: (p: unknown) => void) {
@@ -513,12 +538,35 @@ class Cdp {
   }
 
   send(method: string, params?: Record<string, unknown>): Promise<unknown> {
+    if (this.#closed) return Promise.reject(this.#closed)
     const id = ++this.#next
-    this.#ws.send(JSON.stringify({ id, method, params }))
-    return new Promise((resolve, reject) => this.#pending.set(id, { resolve, reject }))
+    return new Promise((resolve, reject) => {
+      const done = () => {
+        clearTimeout(timer)
+        this.#pending.delete(id)
+      }
+      const ms = Math.max(CDP_CALL_MIN_MS, this.callMs())
+      const timer = setTimeout(() => {
+        done()
+        reject(new Error(`c.capture() timed out after ${ms}ms waiting for the browser (${method})`))
+      }, ms)
+      this.#pending.set(id, {
+        reject: (e) => {
+          done()
+          reject(e)
+        },
+        settle: (msg) => {
+          done()
+          if (msg.error) reject(new Error(msg.error.message))
+          else resolve(msg.result)
+        },
+      })
+      this.#ws.send(JSON.stringify({ id, method, params }))
+    })
   }
 
   close() {
+    this.#fail(new Error('the capture closed its DevTools connection'))
     this.#ws.close()
   }
 }
@@ -657,6 +705,8 @@ export type ChromeSession = {
   busy(): boolean
   /** The dialogs (`alert "hi"`) the page opened since the last call, each accepted. */
   dialogs(): string[]
+  /** What the tab saw so far, with URLs on `origin` as paths. */
+  page(origin: string): Promise<CapturePage>
 }
 
 /**
@@ -674,7 +724,10 @@ export async function withChrome<T>(
   timeoutMs: number,
   options: { proxy?: string },
   fn: (session: ChromeSession) => Promise<T>,
+  signal?: AbortSignal,
 ): Promise<T> {
+  signal?.throwIfAborted()
+  const deadline = Date.now() + timeoutMs
   const userData = mkdtempSync(join(tmpdir(), `reeval-chrome-${process.pid}-`))
   const child = spawn(
     bin,
@@ -691,14 +744,30 @@ export async function withChrome<T>(
       ...proxyArgs(options.proxy),
       'about:blank',
     ],
-    { stdio: ['ignore', 'ignore', 'pipe'] },
+    // Chrome writes the page's console to stderr; an unread pipe fills and blocks the browser.
+    { stdio: 'ignore' },
   )
+  const kill = () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+  }
+  signal?.addEventListener('abort', kill, { once: true })
   try {
     const port = await waitForPortFile(join(userData, 'DevToolsActivePort'), timeoutMs)
     const cdp = await cdpConnect(await pageDebuggerUrl(port, timeoutMs), timeoutMs)
+    cdp.callMs = () => deadline - Date.now()
+    const abort = () => cdp.close()
+    signal?.addEventListener('abort', abort, { once: true })
     try {
       await cdp.send('Page.enable')
       await cdp.send('Page.setLifecycleEventsEnabled', { enabled: true })
+      const watched = watchPage(cdp)
+      const tree = (await cdp.send('Page.getFrameTree')) as
+        | { frameTree?: { frame?: { id?: string } } }
+        | undefined
+      const mainFrame = tree?.frameTree?.frame?.id
+      if (mainFrame) watched.mainFrame(mainFrame)
+      await cdp.send('Runtime.enable')
+      await cdp.send('Log.enable')
       const network = trackNetwork(cdp)
       const loading = new Set<string>()
       const frame = (msg: unknown) => {
@@ -769,12 +838,35 @@ export async function withChrome<T>(
         dialogs() {
           return opened.splice(0)
         },
+        async page(origin) {
+          const history = (await cdp.send('Page.getNavigationHistory').catch(() => undefined)) as
+            | { currentIndex?: number; entries?: Array<{ url?: string }> }
+            | undefined
+          const url = history?.entries?.[history.currentIndex ?? -1]?.url ?? ''
+          return watched.facts(url, origin)
+        },
       }
-      return await fn(session)
+      const run = fn(session)
+      if (!signal) return await run
+      run.catch(() => {})
+      // A journey's waits are timers; canceling must not sit them out.
+      let stop = () => {}
+      const canceled = new Promise<never>((_, reject) => {
+        stop = () => reject(signal.reason)
+        if (signal.aborted) stop()
+        else signal.addEventListener('abort', stop, { once: true })
+      })
+      try {
+        return await Promise.race([run, canceled])
+      } finally {
+        signal.removeEventListener('abort', stop)
+      }
     } finally {
+      signal?.removeEventListener('abort', abort)
       cdp.close()
     }
   } finally {
+    signal?.removeEventListener('abort', kill)
     await disposeChrome(child, userData)
   }
 }

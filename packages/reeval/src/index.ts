@@ -82,6 +82,7 @@ export type {
   ServeHandle,
   SetupStep,
   SkillSource,
+  StatusRange,
   TranscriptEvent,
   Turn,
   TurnData,

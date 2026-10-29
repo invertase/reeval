@@ -702,7 +702,14 @@ async function addPreviousAttempt(
         const bytes = await readFile(join(previousArtifacts, ...art.path.split('/'))).catch(
           () => null,
         )
-        copied.push(bytes ? out.addBinary(art.path, bytes) : art)
+        const copy = { ...art, ...(bytes ? out.addBinary(art.path, bytes) : {}) }
+        if ('capture' in copy && copy.capture?.page) {
+          copy.capture = {
+            ...copy.capture,
+            page: await copyRef(copy.capture.page, previousArtifacts, out),
+          }
+        }
+        copied.push(copy)
       }
       if (copied.length) files[name] = copied as never
       continue
@@ -934,11 +941,23 @@ async function attemptEvidence(
     for (const art of record.artifacts) {
       const png = await readFile(join(sidecar, `${art.name}.png`)).catch(() => null)
       if (!png) continue
+      const page = await readFile(join(sidecar, `${art.name}.capture.json`), 'utf8').catch(
+        () => null,
+      )
+      let capture = art.capture
+      if (capture) {
+        // The staged `page` is relative to the attempt: placed again here, or dropped with its file.
+        const { page: _staged, ...meta } = capture
+        capture =
+          page === null
+            ? meta
+            : { ...meta, page: out.add(`${dir}/artifacts/${art.name}.capture.json`, page) }
+      }
       artifacts.push({
         ...out.addBinary(`${dir}/artifacts/${art.name}.png`, png),
         name: art.name,
         mediaType: art.mediaType,
-        capture: art.capture,
+        ...(capture ? { capture } : {}),
       })
     }
     if (artifacts.length) files.artifacts = artifacts

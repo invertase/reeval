@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "status": 200,
+  "finalUrl": "/blank",
+  "console": [],
+  "errors": [
+    "Uncaught Error: VITE_FIREBASE_API_KEY is not set\n    at /blank:1:51"
+  ],
+  "failedRequests": []
+}

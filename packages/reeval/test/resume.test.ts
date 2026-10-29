@@ -285,6 +285,41 @@ evaluate('leftover', async () => {})
     )
   })
 
+  test("keeps a kept attempt's capture and the page facts beside it", async () => {
+    const server = `require('node:http')
+  .createServer((_, res) => {
+    res.writeHead(404, { 'content-type': 'text/html' })
+    res.end('<h1>Not found</h1>')
+  })
+  .listen(Number(process.env.PORT), '127.0.0.1')`
+    const p = await project('resume-capture', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/shot.eval.ts': `
+import { defineEnvironment, evaluate } from 'reeval'
+const site = defineEnvironment('site', { files: { 'server.cjs': ${JSON.stringify(server)} } })
+evaluate('shot', { environment: site }, async (c) => {
+  await c.capture(await c.serve('node server.cjs'), { name: 'home', path: '/login' })
+})
+`,
+    })
+    const first = await runCli(p.dir, ['run', '--ui', 'plain'])
+    assert.equal(first.code, 0, first.stdout + first.stderr)
+    const { run } = readRun(p.dir)
+    const scratch = join(p.dir, '.reeval', 'runs', `${run.runId}.json`)
+    writeFileSync(scratch, JSON.stringify({ ...run, status: 'interrupted' }))
+    const r = await runCli(p.dir, ['run', '--resume', run.runId, '--ui', 'plain'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const resumed = readRun(p.dir)
+    const art = resumed.run.evals[0]?.attempts[0]?.files.artifacts?.[0]
+    assert.equal(art?.name, 'home')
+    assert.equal(art?.capture?.status, 404)
+    const page = art?.capture?.page
+    assert.match(page?.path ?? '', /artifacts\/home\.capture\.json$/)
+    const json = readFileSync(join(p.dir, '.reeval', 'runs', run.runId, page?.path ?? ''), 'utf8')
+    assert.equal(createHash('sha256').update(json).digest('hex'), page?.sha256)
+    assert.equal(JSON.parse(json).finalUrl, '/login')
+  })
+
   test('--dry-run does not write the pointer or move an interrupted scratch', async () => {
     const p = await project('resume-dry', twoEvals)
     const runId = '20260101T000000Z_nogit_int_dry1'

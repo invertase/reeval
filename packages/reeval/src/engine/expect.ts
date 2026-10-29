@@ -23,7 +23,15 @@ import {
 import { fromCwd } from '../ids.ts'
 import type { MATCHERS, MatcherArgs, MatcherName } from '../matchers.ts'
 import { isThenable } from '../object.ts'
-import type { AttemptContext, ExecResult, JudgeFailure, Turn, Verdict } from '../types.ts'
+import type {
+  AttemptContext,
+  CapturePage,
+  ExecResult,
+  JudgeFailure,
+  StatusRange,
+  Turn,
+  Verdict,
+} from '../types.ts'
 import { comparable } from './errors.ts'
 import { originalStack } from './loader.ts'
 
@@ -42,6 +50,8 @@ type MatcherSubjects = {
   toHaveRun: TranscriptSubject
   toHaveEdited: TranscriptSubject
   toHaveChanged: Pick<Turn, 'diff'> | Pick<AttemptContext, 'turns'>
+  toHaveStatus: CapturePage
+  toHaveNoPageErrors: CapturePage
 }
 
 type TakesTurns<K extends string> = `${K}() takes c, or a turn from await c.send()`
@@ -59,6 +69,8 @@ type SubjectHints = {
   toHaveRun: TakesTurns<'toHaveRun'>
   toHaveEdited: TakesTurns<'toHaveEdited'>
   toHaveChanged: TakesTurns<'toHaveChanged'>
+  toHaveStatus: 'toHaveStatus() takes the capture from await c.capture()'
+  toHaveNoPageErrors: 'toHaveNoPageErrors() takes the capture from await c.capture()'
 }
 
 /**
@@ -128,6 +140,10 @@ declare module '@vitest/expect' {
       'toHaveChanged',
       (paths?: string | RegExp | ReadonlyArray<string | RegExp>) => R
     >
+    /** The main frame's latest document answered `status`, after redirects. */
+    toHaveStatus: On<T, 'toHaveStatus', (status: number | StatusRange) => R>
+    /** The page had no uncaught exception or unhandled rejection. */
+    toHaveNoPageErrors: On<T, 'toHaveNoPageErrors', () => R>
     /** The judge's verdict passed. */
     toPass: On<T, 'toPass', () => R>
   }

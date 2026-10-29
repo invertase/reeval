@@ -254,6 +254,7 @@ describe('read defaults', () => {
       analysis: analyses.map((a) => a.value),
       'debug-request': [],
       'cli-invocation': [],
+      'capture-page': [],
     }
     for (const [name, defaults] of Object.entries(READ_DEFAULTS)) {
       for (const d of defaults) {

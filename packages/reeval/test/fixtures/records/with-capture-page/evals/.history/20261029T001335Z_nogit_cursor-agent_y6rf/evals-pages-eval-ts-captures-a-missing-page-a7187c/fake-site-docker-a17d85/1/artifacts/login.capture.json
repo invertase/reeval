@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "status": 404,
+  "finalUrl": "/login",
+  "console": [
+    {
+      "level": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "source": "network",
+      "url": "/login"
+    }
+  ],
+  "errors": [],
+  "failedRequests": [
+    {
+      "method": "GET",
+      "url": "/login",
+      "status": 404
+    }
+  ]
+}

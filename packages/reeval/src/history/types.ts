@@ -53,6 +53,12 @@ export type ArtifactRef = FileRef & {
     /** Goal strings only; wait beats omitted. */
     instructions?: string[]
     use?: { model: string; moves: number }
+    /** The HTTP status of the page's document, after redirects; absent when no response came. */
+    status?: number
+    /** How many uncaught exceptions and unhandled rejections the page had; absent when none. */
+    pageErrors?: number
+    /** `artifacts/<name>.capture.json` beside the PNG: what the browser saw, a `CapturePage`. */
+    page?: FileRef
   }
 }
 

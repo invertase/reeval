@@ -225,6 +225,11 @@ test('a served app, captured, polled and killed, round-trips through JSON unchan
     path: '/about',
     viewport: 'full-page',
     file: { path: 'artifacts/about.png', sha256: 'ab12', bytes: 2048 },
+    status: 200,
+    finalUrl: '/about',
+    console: [{ level: 'warning', text: 'slow', source: 'console-api', url: '/about' }],
+    errors: [],
+    failedRequests: [{ method: 'GET', url: '/missing.js', status: 404 }],
   }
   const poll = {
     op: 'expect',

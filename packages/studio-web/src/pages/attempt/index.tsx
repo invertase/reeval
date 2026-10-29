@@ -19,6 +19,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { debugQuery, recordQuery, useStudio } from '@/lib/data'
 import { plural, shortRunId } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { CapturePageFacts } from './capture-page'
 import { Checks } from './checks'
 import { Debug } from './debug'
 import { Diff } from './diff'
@@ -259,6 +260,7 @@ export function AttemptPage() {
                     className="w-full rounded-lg border bg-muted"
                   />
                   <figcaption className="text-xs text-muted-foreground">{art.name}</figcaption>
+                  <CapturePageFacts runId={record.runId} art={art} />
                 </figure>
               ) : null,
             )}

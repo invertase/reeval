@@ -23,7 +23,13 @@ import {
   SUBJECT,
 } from '../src/engine/expect.ts'
 import { MATCHERS, matchers } from '../src/matchers.ts'
-import type { AssertionRecord, AttemptContext, TranscriptEvent, Verdict } from '../src/types.ts'
+import type {
+  AssertionRecord,
+  AttemptContext,
+  Capture,
+  TranscriptEvent,
+  Verdict,
+} from '../src/types.ts'
 import { pkgRoot } from './helpers.ts'
 
 extendExpect(matchers)
@@ -89,9 +95,24 @@ const verdict: Verdict = {
   model: 'fake/judge',
 }
 
-/** A verdict as `c.judge` returns it, naming its question. */
+const capture: Capture = {
+  name: 'home',
+  port: 3000,
+  path: '/',
+  viewport: { width: 1280, height: 800 },
+  file: { path: 'artifacts/home.png', sha256: 'abc', bytes: 1 },
+  status: 404,
+  finalUrl: '/login',
+  console: [],
+  errors: ['Uncaught Error: boom\n    at /assets/index.js:1:2'],
+  failedRequests: [],
+}
+
+/** A verdict or capture as `c.judge` and `c.capture` return it, naming its question or name. */
 const named = (v: object) =>
-  Object.defineProperty({ ...v }, SUBJECT, { value: (v as Verdict).question })
+  Object.defineProperty({ ...v }, SUBJECT, {
+    value: 'verdict' in v ? (v as Verdict).question : (v as { name?: string }).name,
+  })
 
 const re = (regexp: string, flags?: string) => ({ regexp, ...(flags ? { flags } : {}) })
 
@@ -130,6 +151,13 @@ const CASES: Array<[keyof typeof MATCHERS, ExpectCall['subject'], unknown[], str
   ['toHaveChanged', { attempt: true }, [['src', re('\\.md$')]]],
   ['toHaveChanged', { turn: 0 }, ['docs']],
   ['toHaveChanged', { turn: 0 }, [`docs/${'x'.repeat(80)}`]],
+  ['toHaveStatus', { value: capture as never }, [404]],
+  ['toHaveStatus', { value: capture as never }, [200]],
+  ['toHaveStatus', { value: capture as never }, ['4xx']],
+  ['toHaveStatus', { value: capture as never }, ['2xx']],
+  ['toHaveStatus', { value: { nope: true } }, [200]],
+  ['toHaveNoPageErrors', { value: capture as never }, []],
+  ['toHaveNoPageErrors', { value: { ...capture, errors: [] } as never }, []],
   ['toPass', { value: verdict as never }, []],
   ['toPass', { value: { ...verdict, verdict: 'pass', score: 0.9 } as never }, []],
   ['toPass', { value: { nope: true } }, []],
@@ -561,6 +589,76 @@ describe('toPass', () => {
 
   test('rejects something that is not a verdict', () => {
     assert.throws(() => matchers.toPass({}), /toPass\(\) expects a c\.judge\(\) verdict/)
+  })
+})
+
+describe('toHaveStatus and toHaveNoPageErrors', () => {
+  test("compares the document's status, naming the capture and where it ended up", () => {
+    assert.equal(matchers.toHaveStatus(capture, 404).pass, true)
+    const r = matchers.toHaveStatus(capture, 200)
+    assert.equal(r.pass, false)
+    assert.equal(r.message(), 'expected capture "home" at /login to answer 200, got 404')
+    const none = matchers.toHaveStatus({ ...capture, status: undefined }, 200)
+    assert.equal(
+      none.message(),
+      'expected capture "home" at /login to answer 200, but no response came',
+    )
+  })
+
+  test('takes a range of statuses, from 1xx to 5xx', () => {
+    assert.equal(matchers.toHaveStatus(capture, '4xx').pass, true)
+    for (const status of [400, 499]) {
+      assert.equal(matchers.toHaveStatus({ ...capture, status }, '4xx').pass, true)
+    }
+    assert.equal(matchers.toHaveStatus({ ...capture, status: 500 }, '4xx').pass, false)
+    assert.equal(matchers.toHaveStatus({ ...capture, status: 101 }, '1xx').pass, true)
+    const r = matchers.toHaveStatus(capture, '2xx')
+    assert.equal(r.pass, false)
+    assert.equal(r.message(), 'expected capture "home" at /login to answer 2xx, got 404')
+    assert.equal(
+      matchers.toHaveStatus(capture, '4xx').message(),
+      'expected capture "home" at /login not to answer 4xx',
+    )
+    const none = matchers.toHaveStatus({ ...capture, status: undefined }, '2xx')
+    assert.equal(none.pass, false)
+    assert.equal(
+      none.message(),
+      'expected capture "home" at /login to answer 2xx, but no response came',
+    )
+  })
+
+  test('lists the first page errors, cut to their first frames, and counts the rest', () => {
+    const stack = 'Uncaught Error: boom\n    at a (/x.js:1:1)\n    at b\n    at c\n    at d'
+    const r = matchers.toHaveNoPageErrors({ ...capture, errors: Array(7).fill(stack) })
+    assert.equal(r.pass, false)
+    const lines = r.message().split('\n')
+    assert.equal(
+      lines[0],
+      'expected no page errors at capture "home" at /login, got 7 page errors: Uncaught Error: boom',
+    )
+    assert.equal(lines.filter((l) => l.endsWith('Uncaught Error: boom')).length, 5)
+    assert.ok(!r.message().includes('at d'))
+    assert.equal(lines.at(-1), '… 2 more in home.capture.json')
+    assert.equal(matchers.toHaveNoPageErrors({ ...capture, errors: [] }).pass, true)
+  })
+
+  test('rejects something that is not a capture', () => {
+    assert.throws(
+      () => matchers.toHaveStatus({}, 200),
+      /toHaveStatus\(\) expects a c\.capture\(\) result/,
+    )
+    assert.throws(
+      () => matchers.toHaveNoPageErrors({ exitCode: 0 }),
+      /toHaveNoPageErrors\(\) expects a c\.capture\(\) result/,
+    )
+    for (const bad of ['200', '6xx', '2XX', 2, 99, 600, 200.5, Number.NaN]) {
+      assert.throws(
+        () => matchers.toHaveStatus(capture, bad as never),
+        new RegExp(
+          `toHaveStatus\\(\\) expects a status from 100 to 599 or a range from '1xx' to '5xx', got ${JSON.stringify(bad)}`,
+        ),
+      )
+    }
   })
 })
 

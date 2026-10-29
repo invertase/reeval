@@ -61,6 +61,29 @@ evaluate('matchers', async (c: AttemptContext) => {
   // @ts-expect-error a turn's promise, not the turn
   await expect(c.send('again')).toHaveFile('greet.js')
 
+  const shot = await c.capture(3000, { path: '/sign-up' })
+  expect(shot).toHaveStatus(200)
+  expect(shot).not.toHaveStatus(404)
+  expect(shot).toHaveStatus('2xx')
+  expect(shot).not.toHaveStatus('5xx')
+  // @ts-expect-error there is no 6xx
+  expect(shot).toHaveStatus('6xx')
+  // @ts-expect-error a range is lower-case
+  expect(shot).toHaveStatus('2XX')
+  // @ts-expect-error nor a number as a string
+  expect(shot).toHaveStatus('200')
+  expect(shot).toHaveNoPageErrors()
+  expect.require(shot).toHaveNoPageErrors()
+  expect(shot.console.filter((m) => m.level === 'error')).toEqual([])
+  // @ts-expect-error toHaveStatus takes the awaited capture
+  expect(c.capture(3000)).toHaveStatus(200)
+  // @ts-expect-error an exec result is not a capture
+  expect(result).toHaveStatus(200)
+  // @ts-expect-error nor a turn
+  expect(turn).toHaveNoPageErrors()
+  // @ts-expect-error a capture is not an exec result
+  expect(shot).toSucceed()
+
   expect(result.exitCode).toBe(0)
   expect(turn.text).toContain('greet')
   expect(result.stdout).toMatch(/built/)
