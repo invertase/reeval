@@ -6,7 +6,12 @@ import type net from 'node:net'
 import { after, before, describe, test } from 'node:test'
 import type { HarnessV1RequestTransformation } from '@ai-sdk/harness'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
-import { PROXY_PORT, QUIET_PROXY_WARNING } from '../src/egress/gateway.ts'
+import {
+  PROBE_TIMEOUT_S,
+  PROXY_PORT,
+  QUIET_NODE,
+  QUIET_PROXY_WARNING,
+} from '../src/egress/gateway.ts'
 import type { NetworkPolicy } from '../src/egress/policy.ts'
 import type { Substitution } from '../src/egress/substitution.ts'
 import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
@@ -47,6 +52,20 @@ const oldNodeImage = () => {
       stdio: ['pipe', 'ignore', 'pipe'],
     })
     return OLD_NODE_IMAGE
+  } catch {
+    return undefined
+  }
+}
+
+/** reeval's image with a `node` first on PATH that hangs on the gateway's `node -e 0` check, and is Node otherwise. */
+const HANGING_NODE_IMAGE = `reeval-test-hanging-node:${DEFAULT_IMAGE.split(':')[1]}`
+const hangingNodeImage = () => {
+  try {
+    execFileSync(CLI, ['build', '-q', '-t', HANGING_NODE_IMAGE, '-'], {
+      input: `FROM ${DEFAULT_IMAGE}\nUSER root\nRUN printf '#!/bin/sh\\n[ "$*" = "-e 0" ] && sleep 60\\nexec /usr/local/bin/node "$@"\\n' > /usr/local/sbin/node && chmod 755 /usr/local/sbin/node\n`,
+      stdio: ['pipe', 'ignore', 'pipe'],
+    })
+    return HANGING_NODE_IMAGE
   } catch {
     return undefined
   }
@@ -474,6 +493,25 @@ describe('egress gateway in Docker', {
     const r = await sh(s, 'node -p process.title && /opt/old-node/node -p process.version')
     assert.equal(r.exitCode, 0, r.stderr)
     assert.deepEqual([r.stdout.split('\n'), r.stderr], [['from-image', 'v20.10.0', ''], ''])
+  })
+
+  test('a Node that hangs in the check: the gateway starts after its limit, adding nothing', async (t) => {
+    const image = hangingNodeImage()
+    if (!image) return t.skip(`couldn't build ${HANGING_NODE_IMAGE}`)
+    const started = Date.now()
+    const s = await open({ image, egress: egress() })
+    const took = Date.now() - started
+    assert.deepEqual(s.egress, { active: true })
+    assert.ok(took >= PROBE_TIMEOUT_S * 1000, `started in ${took}ms, before the limit`)
+    assert.ok(took < PROBE_TIMEOUT_S * 1000 + 10_000, `started in ${took}ms`)
+    const r = await sh(s, `node -p "process.env.NODE_OPTIONS ?? 'unset'"; ls ${QUIET_NODE} 2>&1`)
+    assert.match(r.stdout, /^unset\n.*No such file or directory/)
+    // Killed with its process group: the fake node's `sleep 60` isn't left in the container.
+    const sleeping = `for p in /proc/[0-9]*; do [ "$(tr '\\0' ' ' < "$p/cmdline" 2>/dev/null)" = 'sleep 60 ' ] && echo "$p"; done; true`
+    assert.equal(asRoot(s, sleeping).stdout, '')
+    // Twin: a `sleep 60` that is there is found.
+    asRoot(s, 'sleep 60 >/dev/null 2>&1 &')
+    assert.match(asRoot(s, sleeping).stdout, /^\/proc\/\d+\n$/)
   })
 
   // Node 20.10 has no env proxy and Node 24 doesn't warn, so neither gets the preload.

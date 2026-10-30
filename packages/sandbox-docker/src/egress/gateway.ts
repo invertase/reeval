@@ -3,6 +3,7 @@ import net from 'node:net'
 import { Duplex } from 'node:stream'
 import { docker } from '../docker-cli.ts'
 import { type Engine, engineEnv, engineSpec } from '../engine.ts'
+import { shellQuote } from '../process.ts'
 import { traceDocker } from '../trace.ts'
 import { createCertificateAuthority } from './cert.ts'
 import { createMux, forwarderScript, link } from './mux.ts'
@@ -30,10 +31,17 @@ const QUIET_NODE_SOURCE =
   '"use strict";const shown=process.listeners("warning");process.removeAllListeners("warning");process.on("warning",(w)=>{if(w&&w.code==="UNDICI-EHPA")return;for(const l of shown)l.call(process,w)})'
 export const QUIET_PROXY_WARNING = `--require=${QUIET_NODE}`
 const WARNS = 'reeval:proxy-warns'
+/**
+ * The whole check's limit. Both Node starts take 65–130 ms together, so only a Node that hangs
+ * reaches it; past it the check is killed (its process group with it) and nothing is added.
+ */
+export const PROBE_TIMEOUT_S = 3
 const nodeStart = (options: string) =>
   `NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:${PROXY_PORT} NODE_OPTIONS=${options} node -e 0 2>&1`
 /** Writes the preload only where the image's Node warns, and uses it only if Node then starts silently. */
-const WARNS_SCRIPT = `{ ${nodeStart("''")} | grep -q UNDICI-EHPA && mkdir -p "$(dirname ${QUIET_NODE})" && printf '%s\\n' '${QUIET_NODE_SOURCE}' > ${QUIET_NODE} && quiet=$(${nodeStart(QUIET_PROXY_WARNING)}) && [ -z "$quiet" ] && echo ${WARNS}; true; }`
+const PROBE = `loud=$(${nodeStart("''")}) && case "$loud" in *UNDICI-EHPA*) ;; *) exit 0 ;; esac && mkdir -p "$(dirname ${QUIET_NODE})" && printf '%s\\n' '${QUIET_NODE_SOURCE}' > ${QUIET_NODE} && quiet=$(${nodeStart(QUIET_PROXY_WARNING)}) && [ -z "$quiet" ] && echo ${WARNS}`
+/** Without `timeout` there's no limit to hold the check to, so it doesn't run. */
+const WARNS_SCRIPT = `{ command -v timeout >/dev/null && timeout -s KILL ${PROBE_TIMEOUT_S} sh -c ${shellQuote(PROBE)}; true; }`
 
 const READY_TIMEOUT_MS = 15_000
 
