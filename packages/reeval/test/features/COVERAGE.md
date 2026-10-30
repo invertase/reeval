@@ -135,7 +135,7 @@
 | `antigravity()`: its image, rules, skills, MCP shape and brokered Gemini key | ✓ 1 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `opencode()`: OpenCode 2 over ACP on a brokered provider's key, its image, config, rules, skills, tool names, web search and config MCP servers | ✓ 5 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `opencode({ model: '<provider>/<model>' })`: OpenCode on any provider whose key goes in a header on known hosts, with only that provider's key brokered, its hosts automatic and its served model recorded; the others refused at plan time | ✓ 5 | ✓ 2 | — | — | — | ● 1 |
-| `goose()`: Goose over ACP on a brokered Gemini key, its image, rules, skills, MCP extensions and tool names, with Vertex AI's variables set only for Goose on Vertex AI, so the eval's own reach the agent | ✓ 3 | ✓ 1 | ● 3 | ● 4 | — | ● 1 |
+| `goose()`: Goose over ACP on a brokered Gemini key, its image, rules, skills, MCP extensions and tool names, with Vertex AI's variables set only for Goose on Vertex AI, so the eval's own reach the agent | ✓ 4 | ✓ 1 | ● 3 | ● 4 | — | ● 1 |
 | `pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens and stdio and HTTP MCP servers | ✓ 4 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `codex()`: Codex in the sandbox (`codex exec --json`) on a brokered OpenAI key, with per-turn tokens, and the served model and effort from the gateway | ✓ 4 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `fx()`: fx over ACP on a brokered AI Gateway or OpenAI key, through a relay to the egress gateway, with per-turn tokens and its tool names | ✓ 2 | ✓ 1 | ● 3 | ● 4 | — | — |

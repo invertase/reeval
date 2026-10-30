@@ -1096,6 +1096,7 @@ export const inventory: InventoryFeature[] = [
     plan: ['goose/goose'],
     unit: [
       'reeval/test/harness.test.ts',
+      'reeval/test/docker.test.ts',
       'harness-goose/test/stream.test.ts',
       'harness-goose/test/unit.test.ts',
     ],

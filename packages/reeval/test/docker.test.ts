@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import {
@@ -1484,6 +1486,85 @@ evaluate('hi', async (c) => { await c.send('Reply with the word hi.') })
       const { run, evals } = readRun(p.dir)
       assert.equal(evals[0]?.trial.turns[0]?.status, 'error')
       assert.equal(liveContainers(run.runId), '')
+    },
+  )
+
+  test(
+    "Goose on Vertex AI gets the route's project, region and service account from its launcher, over the eval's own",
+    gooseImage,
+    async () => {
+      // A stand-in metadata server, the host's only Application Default Credentials: reeval mints
+      // a made-up token from it, which Vertex AI refuses (401) once the gateway adds it.
+      const token = 'reeval-test-host-token-0000'
+      const metadata = createServer((req, res) => {
+        res.setHeader('Metadata-Flavor', 'Google')
+        if (req.url?.includes('/token')) {
+          res.setHeader('content-type', 'application/json')
+          res.end(JSON.stringify({ access_token: token, expires_in: 3600, token_type: 'Bearer' }))
+        } else res.end(req.url?.includes('project-id') ? 'reeval-test-project' : '')
+      })
+      await new Promise<void>((resolve) => metadata.listen(0, '127.0.0.1', resolve))
+      try {
+        const { port } = metadata.address() as AddressInfo
+        const p = await project('docker-goose-vertex', {
+          'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { vertex } from 'reeval/gateway'
+import { goose } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
+export default defineConfig({
+  harness: goose({ model: 'gemini-3.8-flash' }),
+  gateway: [vertex({ project: 'reeval-test-project', location: 'global' })],
+  environment: defineEnvironment('box', {
+    sandbox: docker(),
+    egress: 'deny-all',
+    env: { GCP_PROJECT_ID: 'eval-project', GCP_LOCATION: 'eval-location' },
+  }),
+  timeout: '90s',
+})
+`,
+          'evals/d.eval.ts': String.raw`import { evaluate, expect } from 'reeval'
+evaluate('hi', async (c) => {
+  await c.send('Reply with the word hi.')
+  // Goose's own environment, read from /proc while its session is open.
+  const env = await c.exec(
+    "for p in /proc/[0-9]*; do case \"$(tr '\\0' ' ' < $p/cmdline 2>/dev/null)\" in */goose\\ acp*) tr '\\0' '\\n' < $p/environ;; esac; done",
+  )
+  const goose = env.stdout.split('\n').filter((l) => /^(GCP_|GOOGLE_APPLICATION|REEVAL_GOOSE)/.test(l))
+  expect(goose.sort()).toEqual([
+    'GCP_LOCATION=global',
+    'GCP_PROJECT_ID=reeval-test-project',
+    'GOOGLE_APPLICATION_CREDENTIALS=/reeval/google-adc.json',
+  ])
+  expect((await c.exec('printenv GCP_PROJECT_ID')).stdout.trim()).toBe('eval-project')
+})
+`,
+        })
+        const r = await runCli(p.dir, ['run', '--ui', 'plain', '-v'], {
+          env: {
+            GCE_METADATA_HOST: `127.0.0.1:${port}`,
+            METADATA_SERVER_DETECTION: 'assume-present',
+            CLOUDSDK_CONFIG: tempDir('docker-goose-vertex-gcloud'),
+          },
+          timeoutMs: 240_000,
+        })
+        const out = r.stdout + r.stderr
+        assert.equal(r.code, 0, out)
+        // Goose trades the service account's assertion at its token_uri, which the gateway answers.
+        assert.match(out, /gateway +POST https:\/\/oauth2\.googleapis\.com\/token → 200/)
+        // And calls the route's project and region, where the gateway adds the host's token.
+        assert.match(
+          out,
+          /gateway +POST https:\/\/aiplatform\.googleapis\.com\/v1beta1\/projects\/reeval-test-project\/locations\/global\/publishers\/google\/models\/gemini-3\.8-flash:streamGenerateContent → 401 .*substituted Google Cloud credentials \(authorization\)/,
+        )
+        assert.doesNotMatch(out, /eval-project\/locations|eval-location\//)
+        const { run, evals } = readRun(p.dir)
+        assert.equal(evals[0]?.trial.turns[0]?.status, 'error')
+        const leaked = spawnSync('grep', ['-rlsF', token, join(p.dir, '.reeval')])
+        assert.equal(leaked.stdout.toString().trim(), '', 'no file under .reeval has the token')
+        assert.equal(liveContainers(run.runId), '')
+      } finally {
+        metadata.close()
+      }
     },
   )
 
