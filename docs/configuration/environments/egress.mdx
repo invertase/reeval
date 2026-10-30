@@ -80,18 +80,6 @@ A refused request names the host and why it was blocked:
 
 The `allowed` list is every host the policy let through, the `allow` hosts and the automatic ones; it is `null` under `'proxy'` and `'allow-all'`. Hosts the harness's CLI always tries and never needs, such as its telemetry, are recorded in `expectedBlocked`; other refused requests remain in `blocked`. When you run `npx reeval run -v`, each blocked request also prints a `gateway` line as it happens. For more information, see [Debugging](/results/inspection/debugging).
 
-## Clients in the sandbox
-
-Every command in the sandbox gets the gateway as its proxy and its CA, so curl, git, Python and Node's `fetch` go through it without configuration:
-
-```bash
-HTTPS_PROXY=http://127.0.0.1:43128
-NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/reeval-egress.crt
-NODE_USE_ENV_PROXY=1
-```
-
-Node 22 warns that its proxy support is experimental on every start under `NODE_USE_ENV_PROXY`. Where the sandbox's Node does, reeval appends `--disable-warning=UNDICI-EHPA` to each command's `NODE_OPTIONS`, after any `NODE_OPTIONS` the image or the eval sets. Node 24 doesn't warn, and Node before 20.11 refuses the flag, so neither gets it.
-
 ## Choose another policy
 
 Pass `{ allow: [...DEFAULT_EGRESS_ALLOW, 'example.com'] }` when the agent needs a few more hosts and still installs packages. Pass `'allow-all'` on the evaluations that need raw TCP or UDP, such as SSH, not in the `reeval.config.ts` file. For runnable projects, see [`with-egress-allowlist`](https://github.com/invertase/reeval/tree/main/examples/with-egress-allowlist) and [`with-egress-allow-all`](https://github.com/invertase/reeval/tree/main/examples/with-egress-allow-all). For each policy's rules, see [`egress`](/reference/options#egress).
