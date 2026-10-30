@@ -70,7 +70,7 @@ export const OPENROUTER_PROVIDER: GrokProvider = {
 }
 /**
  * Where harness-placed skills go, under Grok's home. The bootstrap gives Grok a private home,
- * `~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home`, so this is under that.
+ * `~/.ai-sdk-harness/.harness-bootstrap/grok-build/home`, so this is under that.
  */
 export const GROK_HOME_SKILLS_DIR = '.grok/skills'
 /** The repo skill directory Grok reads (it also reads `.agents/skills` and `.claude/skills`). */

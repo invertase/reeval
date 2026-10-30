@@ -66,10 +66,10 @@ node -p \"JSON.parse(require('fs').readFileSync('node_modules/@cursor/sdk/packag
     opencode)
       latest=${REEVAL_DRIFT_OPENCODE_VERSION:-$(npm view @opencode/cli version)}
       swap="set -eu
-cd $bootstrap/opencode/implementation
+cd $bootstrap/opencode
 printf 'allowBuilds:\\n  %s: true\\n' \"'@opencode/cli@$latest'\" > pnpm-workspace.yaml
 pnpm add --save-exact --store-dir $bootstrap/opencode/.pnpm-store @opencode/cli@$latest >/dev/null
-expect \"$latest\" \"\$($bootstrap/opencode/implementation/node_modules/.bin/opencode --version)\""
+expect \"$latest\" \"\$($bootstrap/opencode/node_modules/.bin/opencode --version)\""
       ;;
     goose)
       tag=${REEVAL_DRIFT_GOOSE_VERSION:-}
@@ -77,7 +77,7 @@ expect \"$latest\" \"\$($bootstrap/opencode/implementation/node_modules/.bin/ope
         https://api.github.com/repos/aaif-goose/goose/releases/latest |
         node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).tag_name))')
       latest=${tag#v}
-      bin=$bootstrap/goose/implementation/home/.local/bin
+      bin=$bootstrap/goose/home/.local/bin
       swap="set -eu
 case \"\$(uname -m)\" in x86_64|amd64) arch=x86_64 ;; aarch64|arm64) arch=aarch64 ;; esac
 curl -fsSL --retry 3 -o /tmp/goose.tgz https://github.com/aaif-goose/goose/releases/download/$tag/goose-\$arch-unknown-linux-gnu.tar.gz
@@ -116,7 +116,7 @@ expect \"$latest\" \"\$(bin/codex --version)\""
         https://api.github.com/repos/vercel-labs/fx/releases/latest |
         node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).tag_name))')
       latest=${tag#v}
-      bin=$bootstrap/fx/implementation/home/.local/bin
+      bin=$bootstrap/fx/home/.local/bin
       swap="set -eu
 case \"\$(uname -m)\" in x86_64|amd64) arch=x86_64 ;; aarch64|arm64) arch=aarch64 ;; esac
 cd /tmp
@@ -135,7 +135,7 @@ expect \"$latest\" \"\$($bin/fx --version)\""
       new_label="grok $latest"
       x64=$(npm view "@xai-official/grok-linux-x64@$latest" dist.integrity)
       arm64=$(npm view "@xai-official/grok-linux-arm64@$latest" dist.integrity)
-      bin=$bootstrap/grok-build/implementation/home/.local/bin
+      bin=$bootstrap/grok-build/home/.local/bin
       swap="set -eu
 case \"\$(uname -m)\" in
   x86_64|amd64) arch=x64 sri=$x64 ;;

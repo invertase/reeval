@@ -1,6 +1,7 @@
 // Whether reeval still needs its patch to @ai-sdk/harness-claude-code (pnpm-workspace.yaml's
 // patchedDependencies): the newest adapter from npm, key-free. It replays a real captured turn
-// (packages/reeval/test/fixtures/claude-code-bridge/) through that version's own bridge.
+// (packages/reeval/test/fixtures/claude-code-bridge/) through that version's own bridge, as
+// captured and with a plugin's SessionStart hook reporting before system/init.
 //   Upstream reports the served model unpatched: it fixed the bug, so drop the patch (exit 1).
 //   The patch no longer applies, or applied doesn't report the model: rebase it (exit 1).
 //   Otherwise the patch is still needed and still works on the newest version (exit 0).
@@ -11,7 +12,10 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { appendFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { replayBridge } from '../../packages/reeval/test/support/claude-code-bridge.ts'
+import {
+  replayBridge,
+  withSessionStartHook,
+} from '../../packages/reeval/test/support/claude-code-bridge.ts'
 
 const NAME = '@ai-sdk/harness-claude-code'
 const root = resolve(import.meta.dirname, '../..')
@@ -31,10 +35,16 @@ const fixture = join(root, 'packages/reeval/test/fixtures/claude-code-bridge/edi
 const start = JSON.parse(readFileSync(`${fixture}.start.json`, 'utf8'))
 const messages = readFileSync(`${fixture}.sdk.jsonl`, 'utf8')
 const MODEL = 'claude-haiku-4-5'
-const servedModel = async (dir) =>
-  (await replayBridge({ bridge: join(dir, 'dist/bridge/index.mjs'), start, messages })).find(
-    (p) => p.type === 'stream-start',
-  )?.modelId
+/** The model the bridge in `dir` starts the stream with, or the first turn that lost it. */
+const servedModel = async (dir) => {
+  for (const turn of [messages, withSessionStartHook(messages)]) {
+    const bridge = join(dir, 'dist/bridge/index.mjs')
+    const parts = await replayBridge({ bridge, start, messages: turn })
+    const model = parts.find((p) => p.type === 'stream-start')?.modelId
+    if (model !== MODEL) return model
+  }
+  return MODEL
+}
 
 const report = (ok, line) => {
   console.log(line)

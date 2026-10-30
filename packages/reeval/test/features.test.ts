@@ -2217,7 +2217,7 @@ export const features: Feature[] = [
       const seen = (landed(run)?.context ?? []).map((c) => c.path)
       assert.ok(
         seen.includes(
-          '~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills/house-style/SKILL.md',
+          '~/.ai-sdk-harness/.harness-bootstrap/fx/home/.fx/skills/house-style/SKILL.md',
         ),
         JSON.stringify(seen),
       )
@@ -2251,7 +2251,7 @@ export const features: Feature[] = [
       const seen = (landed(run)?.context ?? []).map((c) => c.path)
       assert.ok(
         seen.includes(
-          '~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills/house-style/SKILL.md',
+          '~/.ai-sdk-harness/.harness-bootstrap/goose/home/.config/goose/skills/house-style/SKILL.md',
         ),
         JSON.stringify(seen),
       )

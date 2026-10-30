@@ -30,6 +30,27 @@ export function query({ prompt }) {
 }
 `
 
+/**
+ * `messages` (NDJSON) with a plugin's `SessionStart` hook reporting just before system/init, in
+ * the system hook_started and hook_response messages Claude Code sends for it.
+ */
+export function withSessionStartHook(messages: string): string {
+  const sdk = messages
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as { type: string; subtype?: string })
+  const init = sdk.findIndex((m) => m.type === 'system' && m.subtype === 'init')
+  const hook = { type: 'system', hook_id: 'h1', hook_name: 'SessionStart:startup' }
+  return [
+    ...sdk.slice(0, init),
+    { ...hook, subtype: 'hook_started' },
+    { ...hook, subtype: 'hook_response', output: 'hook-ran', exit_code: 0 },
+    ...sdk.slice(init),
+  ]
+    .map((m) => JSON.stringify(m))
+    .join('\n')
+}
+
 /** The bridge's parts for one turn of `messages`, started with `start`, up to `finish` or `error`. */
 export async function replayBridge(options: {
   bridge: string

@@ -57,6 +57,7 @@ import {
   applyTransformations,
   BAKED_HARNESSES,
   bakedAdapter,
+  HARNESS_PACKAGES,
   hostAllowed,
   onEndpoint,
 } from '@reeval/sandbox-docker'
@@ -110,7 +111,7 @@ import { turnThrough } from './support/harness-agent.ts'
 describe('where each harness reads what the environment gives it', () => {
   test('rules, repo skills and home skills go where each CLI reads them, in its own image', () => {
     const home = (kind: string, dir: string) =>
-      `.ai-sdk-harness/.harness-bootstrap/${kind}/implementation/home/${dir}`
+      `.ai-sdk-harness/.harness-bootstrap/${kind}/home/${dir}`
     type Row = [
       h: AgentHarnessDescriptor,
       rules: string,
@@ -2482,6 +2483,18 @@ const finishWith = (usage: unknown, modelId?: string): HarnessV1StreamPart[] => 
 ]
 
 describe('token usage and the served model, from any harness', () => {
+  test("an agent on harness-acp takes the gateway's model, not its stream-start's", () => {
+    for (const kind of BAKED_HARNESSES) {
+      const { name } = HARNESS_PACKAGES[kind]
+      const dir = name.startsWith('@reeval/') ? name.slice('@reeval/'.length) : undefined
+      const manifest = dir
+        ? JSON.parse(readFileSync(new URL(`../../${dir}/package.json`, import.meta.url), 'utf8'))
+        : {}
+      const onAcp = Object.hasOwn(manifest.dependencies ?? {}, '@ai-sdk/harness-acp')
+      assert.equal(AGENTS[kind].configuredModelOnStart === true, onAcp, kind)
+    }
+  })
+
   test('Antigravity: cache reads larger than input stay positive, and the model is kept', async () => {
     // A real gemini-3.8-flash turn's counts.
     const agy = antigravityUsage({
@@ -2576,7 +2589,7 @@ describe('token usage and the served model, from any harness', () => {
   })
 
   test('Claude Code: the API usage its bridge maps, cache creation as cache writes', async () => {
-    // harness-claude-code 1.0.160's bridge (`mapUsage`) on a real Messages API usage block:
+    // harness-claude-code 1.0.171's bridge (`mapUsage`) on a real Messages API usage block:
     // input_tokens 6, cache_creation_input_tokens 4210, cache_read_input_tokens 15022, output 311.
     const claude = {
       inputTokens: { total: 19238, noCache: 6, cacheRead: 15022, cacheWrite: 4210 },

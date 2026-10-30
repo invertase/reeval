@@ -245,6 +245,9 @@ test('the packed package installs into a clean project and runs reeval', {
     for (const name of listed.filter((n) => n.startsWith(`${dep}@`)))
       assert.ok(!inlinedInto(name)?.includes('dist'), `${dep} is a dependency, not inlined`)
   assert.match(extract(dir, tarball, 'dist/bridge/index.mjs'), /^\/\/ Modified by Invertase/)
+  // The Claude Code bootstrap installs its bridge from these, with its lockfile frozen.
+  for (const file of ['index.mjs', 'package.json', 'pnpm-lockfile.yaml', 'pnpm-workspace.yaml'])
+    assert.match(listing, new RegExp(`^package/dist/bridge/${file.replace('.', '\\.')}$`, 'm'))
 
   const app = await makeApp(dir, pkg)
   // --prefer-online: a stale cached packument misses versions published since, but tarballs

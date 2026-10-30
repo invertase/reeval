@@ -216,7 +216,9 @@ test('the launcher runs Goose beside it with the JSON variables added, and passe
   assert.equal(run.stdout, 'acp GCP_PROJECT_ID=p OTHER=kept\nunset\n')
   assert.equal(run.status, 3)
   assert.ok(
-    GOOSE_LAUNCHER_PATH.endsWith(`/implementation/home/.local/bin/${GOOSE_LAUNCHER_EXECUTABLE}`),
+    GOOSE_LAUNCHER_PATH.endsWith(
+      `/.harness-bootstrap/goose/home/.local/bin/${GOOSE_LAUNCHER_EXECUTABLE}`,
+    ),
   )
 })
 

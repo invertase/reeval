@@ -76,7 +76,7 @@ export const OPENROUTER_PROVIDER: GooseProvider = {
 }
 /**
  * Where harness-placed skills go, under Goose's home. The bootstrap gives Goose a private home,
- * `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home`, so this is under that.
+ * `~/.ai-sdk-harness/.harness-bootstrap/goose/home`, so this is under that.
  */
 export const GOOSE_HOME_SKILLS_DIR = '.config/goose/skills'
 /** The repo skill directory Goose reads (it also reads `.agents/skills` and `.claude/skills`). */

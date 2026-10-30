@@ -6,8 +6,7 @@ type Layout = NonNullable<FakeHarnessDescriptor['layout']>
 export const layout = process.env.REEVAL_FIXTURE_LAYOUT as Layout
 if (!layout) throw new Error('set REEVAL_FIXTURE_LAYOUT to the harness the fake agent mimics')
 
-const privateHome = (harness: string) =>
-  `~/.ai-sdk-harness/.harness-bootstrap/${harness}/implementation/home`
+const privateHome = (harness: string) => `~/.ai-sdk-harness/.harness-bootstrap/${harness}/home`
 
 /**
  * Where each harness's adapter puts a harness-placed skill, and a directory it must not be in:

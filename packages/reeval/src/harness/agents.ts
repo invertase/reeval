@@ -170,6 +170,12 @@ export type Agent = Layout & {
   /** Requests whose response body names the model that served them, for `servedModel`. */
   modelResponses?: readonly EndpointMatch[]
   /**
+   * Set for an agent on `@ai-sdk/harness-acp`, whose `stream-start` names the ACP session's model:
+   * the one the agent was configured with, not the one that served the turn. Its turns record
+   * what the gateway read from the model calls instead.
+   */
+  configuredModelOnStart?: true
+  /**
    * The upstream provider a gateway's response says served a call (OpenRouter's), and what it
    * charged; unset where the response names none.
    */
@@ -868,8 +874,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
   goose: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.goose/skills',
-    harnessSkillDir:
-      '.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills',
+    harnessSkillDir: '.ai-sdk-harness/.harness-bootstrap/goose/home/.config/goose/skills',
     pluginPlacement: 'flat',
   },
   // pi reads workspace skills only in a trusted project, which the adapter's --approve makes
@@ -896,7 +901,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
   fx: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.fx/skills',
-    harnessSkillDir: '.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills',
+    harnessSkillDir: '.ai-sdk-harness/.harness-bootstrap/fx/home/.fx/skills',
     pluginPlacement: 'flat',
   },
   // Grok's bootstrap gives it a private home, so its home skills are under that. It reads the
@@ -905,8 +910,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
   'grok-build': {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.grok/skills',
-    harnessSkillDir:
-      '.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/skills',
+    harnessSkillDir: '.ai-sdk-harness/.harness-bootstrap/grok-build/home/.grok/skills',
     pluginPlacement: 'namespaced',
   },
 }
@@ -1024,6 +1028,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: ['skills', 'agents', 'commands', 'mcp'],
     name: 'OpenCode',
     factory: 'opencode',
+    configuredModelOnStart: true,
     // Google's, for what names no model; forModel gives the model's provider's.
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     endpoints: GEMINI_ENDPOINTS,
@@ -1050,6 +1055,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: ['skills', 'mcp'],
     name: 'Goose',
     factory: 'goose',
+    configuredModelOnStart: true,
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     // The requests Goose sends the key on, with session naming off.
     endpoints: GOOSE_ENDPOINTS,
@@ -1154,6 +1160,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: ['skills', 'mcp'],
     name: 'fx',
     factory: 'fx',
+    configuredModelOnStart: true,
     // AI Gateway's, for what names no model; forModel gives the model's provider's.
     ...fxForModel('provider/model'),
     forModel: fxForModel,
@@ -1180,6 +1187,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginServersByName: true,
     name: 'Grok Build',
     factory: 'grokBuild',
+    configuredModelOnStart: true,
     credential: 'XAI_API_KEY',
     // The requests Grok sends the key on, with its summary, recap and title-refresh calls off.
     endpoints: XAI_ENDPOINTS,
