@@ -12,7 +12,7 @@ import {
   OPENCODE_PNPM_LOCK,
   OPENCODE_PNPM_WORKSPACE,
 } from '../src/opencode-install.ts'
-import { openCodeEffortBody } from '../src/opencode-providers.ts'
+import { openCodeEffortBody, openCodeEffortRefusal } from '../src/opencode-providers.ts'
 import { OPENCODE_BUILTIN_TOOLS } from '../src/opencode-tools.ts'
 import { VERSION } from '../src/version.ts'
 
@@ -104,6 +104,52 @@ test("effort goes in the request body's own field for the model's provider", () 
       models: { 'gpt-5.4-mini': { body: { reasoning: { effort: 'high' } } } },
     },
   })
+})
+
+test('effort is in no body for a model whose API answers it with a 400', () => {
+  for (const [model, api] of [
+    ['anthropic/claude-haiku-4-5', "Anthropic's API"],
+    ['anthropic/claude-sonnet-4-5-20250929', "Anthropic's API"],
+    ['anthropic/claude-3-7-sonnet-latest', "Anthropic's API"],
+    ['openai/gpt-4.1', "OpenAI's API"],
+    ['openai/gpt-5-chat-latest', "OpenAI's API"],
+    ['google/gemini-2.5-flash', "Gemini's API"],
+    ['google-vertex/gemini-2.5-pro', "Gemini's API"],
+    ['vercel/google/gemini-2.5-flash', "Gemini's API"],
+    ['google/gemma-4-31b-it', "Gemini's API"],
+    ['anthropic/claude-opus-4-20250514', "Anthropic's API"],
+    ['openai/gpt-5-pro', "OpenAI's API takes only effort high"],
+    ['openai/gpt-5-pro-2025-10-06', "OpenAI's API takes only effort high"],
+  ]) {
+    assert.ok(openCodeEffortRefusal(model, 'medium')?.startsWith(api), model)
+    assert.equal(openCodeEffortBody(model, 'medium'), undefined, model)
+  }
+  for (const model of [
+    'anthropic/claude-opus-4-5',
+    'anthropic/claude-opus-4-5-20251101',
+    'anthropic/claude-sonnet-4-6',
+    'openai/gpt-5-mini',
+    'openai/gpt-5.2-pro',
+    'openai/o3',
+    'openai/chat-latest',
+    'google/gemini-3-flash-preview',
+    'google/gemini-flash-latest',
+    'openrouter/anthropic/claude-haiku-4.5',
+    'openrouter/google/gemini-2.5-flash',
+    'openrouter/openai/gpt-4.1',
+  ]) {
+    assert.equal(openCodeEffortRefusal(model, 'medium'), undefined, model)
+  }
+  assert.equal(openCodeEffortRefusal('openai/gpt-5-pro', 'high'), undefined)
+  assert.throws(
+    () =>
+      createOpenCode({
+        auth: { ANTHROPIC_API_KEY: 'k' },
+        model: 'anthropic/claude-haiku-4-5',
+        effort: 'medium',
+      }),
+    /Anthropic's API takes no effort on claude-haiku-4-5/,
+  )
 })
 
 test('twin: effort on a provider with no checked field is refused, not dropped', () => {

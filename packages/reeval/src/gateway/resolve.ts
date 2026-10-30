@@ -1,6 +1,10 @@
 // Which gateway in the config's `gateway` list each harness's model calls go through: the first
 // entry that can serve it, or the one it pins. Pure, so the plan refuses before anything starts.
-import { resolveOpenCodeProvider } from '@reeval/harness-opencode/providers'
+import {
+  openCodeEffortBody,
+  openCodeEffortRefusal,
+  resolveOpenCodeProvider,
+} from '@reeval/harness-opencode/providers'
 import { UsageError } from '../errors.ts'
 import { AGENTS, isAgentKind } from '../harness/agents.ts'
 import { harnessEffort } from '../harness/effort.ts'
@@ -12,7 +16,12 @@ import type {
   ResolvedGateway,
 } from '../types.ts'
 import { isRoutingGateway, ROUTING_GATEWAYS, type RoutingGatewayName } from './routes.ts'
-import { VERTEX_REFUSALS, VERTEX_ROUTES, vertexModelRefusalFor } from './vertex.ts'
+import {
+  openCodeVertexId,
+  VERTEX_REFUSALS,
+  VERTEX_ROUTES,
+  vertexModelRefusalFor,
+} from './vertex.ts'
 
 /** The config's list when it sets none: each provider's own key. */
 export const DEFAULT_GATEWAYS: GatewayDescriptor[] = [{ kind: 'direct' }]
@@ -34,6 +43,12 @@ export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
       if (h.kind === 'opencode') {
         const resolved = resolveOpenCodeProvider(h.model, process.env)
         if ('error' in resolved) return resolved.error
+        const effort = harnessEffort(h)
+        const refused = openCodeEffortOn(h.model, 'direct', effort)
+        if (refused) return refused
+        if (effort !== undefined && !openCodeEffortBody(h.model, effort)) {
+          return `reeval sends OpenCode's effort (${JSON.stringify(effort)}) in no field ${h.model} is known to read: drop effort, or run a model on Google, Vertex AI, Anthropic, OpenAI or OpenRouter`
+        }
       }
       return undefined
     },
@@ -46,9 +61,31 @@ export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
       if (!VERTEX_ROUTES[h.kind]) {
         return VERTEX_REFUSALS[h.kind] ?? `reeval doesn't run ${agentName(h)} on Vertex AI yet`
       }
-      return vertexModelRefusalFor(h)
+      return (
+        vertexModelRefusalFor(h) ??
+        (h.kind === 'opencode' ? openCodeEffortOn(h.model, 'vertex', harnessEffort(h)) : undefined)
+      )
     },
   },
+}
+
+/** OpenCode's id for `model` on `gateway`, as that gateway's route writes it. */
+export function openCodeModelOn(model: string, gateway: string): string {
+  if (gateway === 'vertex') return openCodeVertexId(model)
+  return gateway === 'vercel' || gateway === 'openrouter' ? `${gateway}/${model}` : model
+}
+
+/** Why the API behind `gateway` answers OpenCode's `effort` on `model` with a 400, or undefined. */
+function openCodeEffortOn(
+  model: string,
+  gateway: string,
+  effort: string | undefined,
+): string | undefined {
+  const refused =
+    effort === undefined
+      ? undefined
+      : openCodeEffortRefusal(openCodeModelOn(model, gateway), effort)
+  return refused && `${refused}: drop effort, or run a model that takes one`
 }
 
 /**
@@ -93,7 +130,7 @@ function routingEntry(name: RoutingGatewayName): GatewayEntry {
       if (effort !== undefined && h.kind !== 'fake' && gateway.unprovenEffort[h.kind]?.(h.model)) {
         return `reeval doesn't send ${agentName(h)}'s effort (${JSON.stringify(effort)}) to ${h.model} through ${gateway.name} yet: nothing checks the model gets it as its own setting, so drop effort or run ${agentName(h)} on another gateway`
       }
-      return undefined
+      return h.kind === 'opencode' ? openCodeEffortOn(h.model, name, effort) : undefined
     },
   }
 }

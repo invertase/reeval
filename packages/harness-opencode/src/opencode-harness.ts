@@ -23,6 +23,7 @@ import {
   OPENCODE_PROVIDERS,
   OPENCODE_VERTEX_PROVIDER,
   openCodeEffortBody,
+  openCodeEffortRefusal,
   openCodeProvider,
   providerEndpoints,
   providerTransformations,
@@ -193,6 +194,10 @@ export const openCodeEndpoints = (model: string, env: Record<string, string | un
  */
 export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<OpenCodeBuiltinTools> {
   const route = settings.vertex ? vertexRoute(settings, settings.vertex) : keyRoute(settings)
+  const refused = settings.effort && openCodeEffortRefusal(settings.model, settings.effort)
+  if (refused) {
+    throw new Error(`OpenCode's effort: ${refused}; drop effort, or run a model that takes one`)
+  }
   if (settings.effort && !openCodeEffortBody(settings.model, settings.effort)) {
     throw new Error(
       `OpenCode's effort on ${settings.model} goes in no field reeval has checked the model reads; drop effort, or run a model on Google, Vertex AI, Anthropic, OpenAI or OpenRouter, or a Gemini model on Vercel AI Gateway`,

@@ -1852,6 +1852,46 @@ environment:
     ],
     ['route: fx with effort on direct', route([DIRECT], fx({ model: 'gpt-5.5', effort: 'low' }))],
     [
+      'route: opencode with effort in no known field on direct',
+      route([DIRECT], opencode({ model: 'cerebras/gpt-oss-120b', effort: 'high' })),
+    ],
+    [
+      'route: opencode with effort on an Anthropic model that takes none, on direct',
+      route([DIRECT], opencode({ model: 'anthropic/claude-haiku-4-5', effort: 'high' })),
+    ],
+    [
+      'route: opencode with effort on an OpenAI model that takes none, on direct',
+      route([DIRECT], opencode({ model: 'openai/gpt-4.1', effort: 'low' })),
+    ],
+    [
+      'route: opencode with an effort gpt-5-pro refuses, on direct',
+      route([DIRECT], opencode({ model: 'openai/gpt-5-pro', effort: 'medium' })),
+    ],
+    [
+      'route: opencode with the one effort gpt-5-pro takes, on direct',
+      route([DIRECT], opencode({ model: 'openai/gpt-5-pro', effort: 'high' })),
+    ],
+    [
+      'route: opencode with effort on a Gemini model that takes none, on direct',
+      route([DIRECT], opencode({ model: 'google/gemini-2.5-flash', effort: 'low' })),
+    ],
+    [
+      'route: opencode with effort on a Gemini model that takes none, on vercel',
+      route([VERCEL, OFF], opencode({ model: 'google/gemini-2.5-flash', effort: 'low' })),
+    ],
+    [
+      'route: opencode with effort on a Gemini model that takes none, on vertex',
+      route([VERTEX, OFF], opencode({ model: 'google/gemini-2.5-flash', effort: 'low' })),
+    ],
+    [
+      'route: opencode with effort on Gemini 2.5, which openrouter maps',
+      route([OPENROUTER, OFF], opencode({ model: 'google/gemini-2.5-flash', effort: 'low' })),
+    ],
+    [
+      'route: opencode with a claude model on vertex, direct off',
+      route([VERTEX, OFF], opencode({ model: 'anthropic/claude-haiku-4-5' })),
+    ],
+    [
       'route: fx with effort on vercel',
       route([VERCEL], fx({ model: 'google/gemini-3.8-flash', effort: 'low' })),
     ],
