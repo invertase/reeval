@@ -22,6 +22,7 @@ import { normalizeStream } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
 import { replayBridge } from './support/claude-code-bridge.ts'
 import { testDir } from './support/fixture.ts'
+import { turnThrough } from './support/harness-agent.ts'
 import {
   knownSignatures,
   nativeEvents,
@@ -287,7 +288,13 @@ const tokensOf = (usage: unknown) => {
 }
 
 /** Each harness's translator, fresh for one turn: the native events go back through it. */
-const translators: Record<string, () => { push(line: string): HarnessV1StreamPart[] }> = {
+const translators: Record<
+  string,
+  () => {
+    push(line: string): HarnessV1StreamPart[]
+    end(options: { exitCode: number; stderr?: string; aborted?: boolean }): HarnessV1StreamPart[]
+  }
+> = {
   antigravity: () => new AntigravityStreamTranslator({ turn: 1 }),
   cursor: () => new CursorSdkStreamTranslator({ workDir: '/reeval/workspace' }),
   pi: () => new PiStreamTranslator(),
@@ -355,6 +362,63 @@ for (const harness of Object.keys(translators))
       assert.notDeepEqual(essence(retranslate(lines) as never).calls, captured.calls)
     })
   })
+
+describe('replay: a turn cut short mid-step, through each adapter and HarnessAgent', () => {
+  /**
+   * The capture's native events up to its first tool result, the step it's in still open (no
+   * reply or usage after it), then the process's end, through today's translator.
+   */
+  const cutMidStep = (
+    harness: string,
+    end: { exitCode: number; stderr?: string; aborted?: boolean },
+  ) => {
+    const t = (translators[harness] as (typeof translators)[string])()
+    const parts: HarnessV1StreamPart[] = []
+    for (const e of nativeEvents(read(harness, 'edit-and-run.raw.jsonl'))) {
+      const out = t.push(JSON.stringify(e))
+      parts.push(...out)
+      if (out.some((p) => p.type === 'tool-result')) break
+    }
+    assert.ok(
+      parts.some((p) => p.type === 'tool-result'),
+      `${harness}: the capture has a tool result`,
+    )
+    return [...parts, ...t.end(end)]
+  }
+
+  for (const harness of Object.keys(translators)) {
+    test(`${harness}: a cancel ends the turn cleanly, its calls in the transcript`, async () => {
+      const { stream, error } = await turnThrough(
+        cutMidStep(harness, { exitCode: 137, aborted: true }),
+      )
+      assert.equal(error, null)
+      assert.ok(!stream.some((s) => s.part.type === 'error'), JSON.stringify(stream.at(-1)))
+      assert.equal(stream.at(-1)?.part.type, 'finish')
+      assert.ok(tools(normalizeStream(stream, 0)).length > 0)
+    })
+
+    test(`${harness}: a CLI that dies mid-step fails the turn with its own exit, not HarnessAgent's`, async () => {
+      const { stream, error } = await turnThrough(
+        cutMidStep(harness, { exitCode: 3, stderr: 'killed by the OOM killer' }),
+      )
+      assert.match(String(error), /exited with code 3 .*killed by the OOM killer/)
+      const errors = normalizeStream(stream, 0).flatMap((e) => (e.type === 'error' ? [e] : []))
+      assert.deepEqual(
+        errors.map((e) => e.message),
+        [error],
+      )
+      assert.ok(!normalizeStream(stream, 0).some((e) => e.type === 'retry'))
+    })
+  }
+
+  test("twin: a finish with the step's content still open is HarnessAgent's own error", async () => {
+    const parts = cutMidStep('antigravity', { exitCode: 137, aborted: true }).filter(
+      (p) => !(p.type === 'finish-step' && p.finishReason.raw === 'aborted'),
+    )
+    const { error } = await turnThrough(parts)
+    assert.match(String(error), /unclosed step content/)
+  })
+})
 
 // OpenCode's ACP events become parts inside @ai-sdk/harness-acp's bridge, so only the adapter's
 // own step replays: the names it gives calls the bridge couldn't name, and the output text it

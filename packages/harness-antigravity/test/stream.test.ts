@@ -158,6 +158,79 @@ describe('stream translation', () => {
     })
   })
 
+  /** The parts between the turn's last `finish-step` and its `finish` that are step content. */
+  const unclosed = (parts: HarnessV1StreamPart[]) => {
+    const last = parts.findLastIndex((p) => p.type === 'finish-step')
+    return parts
+      .slice(last + 1)
+      .filter((p) => !['finish', 'error', 'stream-start'].includes(p.type))
+      .map((p) => p.type)
+  }
+  // The real turn cut after its first tool's DONE: a call and its result, no reply after them.
+  const midStep = fixture('write-and-run.ndjson').split('\n').slice(0, 5).join('\n')
+
+  test('a turn aborted mid-step closes the step before it finishes, with no error', () => {
+    const { parts } = translate(midStep, { exitCode: 137, aborted: true })
+    assert.deepEqual(unclosed(parts), [])
+    assert.deepEqual(
+      parts.slice(-4).map((p) => p.type),
+      ['tool-call', 'tool-result', 'finish-step', 'finish'],
+    )
+    const step = parts.at(-2)
+    assert.deepEqual(step?.type === 'finish-step' && step.finishReason, {
+      unified: 'other',
+      raw: 'aborted',
+    })
+    assert.ok(!parts.some((p) => p.type === 'error'))
+  })
+
+  test("a CLI that crashes mid-step closes the step, then reports the exit as the turn's error", () => {
+    const { parts } = translate(midStep, { exitCode: 3, stderr: 'segfault\n' })
+    assert.deepEqual(unclosed(parts), [])
+    assert.deepEqual(
+      parts.slice(-3).map((p) => p.type),
+      ['finish-step', 'error', 'finish'],
+    )
+    const step = parts.at(-3)
+    // Not `error`: that's a retried model call to reeval.
+    assert.deepEqual(step?.type === 'finish-step' && step.finishReason, {
+      unified: 'other',
+      raw: 'exit 3',
+    })
+    const error = parts.at(-2)
+    assert.match(
+      String(error?.type === 'error' && (error.error as Error).message),
+      /exited with code 3 before reporting a result: segfault/,
+    )
+  })
+
+  test('a result after a tool step with no reply closes that step', () => {
+    for (const status of ['SUCCESS', 'ERROR']) {
+      const { parts } = translate(
+        [midStep, line({ event: 'result', result: { status, error: 'quota' } })].join('\n'),
+      )
+      assert.deepEqual(unclosed(parts), [], status)
+      const step = parts.findLast((p) => p.type === 'finish-step')
+      assert.deepEqual(step?.type === 'finish-step' && step.finishReason, {
+        unified: status === 'SUCCESS' ? 'stop' : 'other',
+        raw: status,
+      })
+    }
+  })
+
+  test('twin: a turn whose step closed adds no empty step', () => {
+    const { parts } = translate(fixture('write-and-run.ndjson'), { exitCode: 0 })
+    assert.equal(parts.filter((p) => p.type === 'finish-step').length, 3)
+    const aborted = translate(fixture('write-and-run.ndjson').split('\n').slice(0, 3).join('\n'), {
+      exitCode: 137,
+      aborted: true,
+    })
+    assert.ok(
+      !aborted.parts.some((p) => p.type === 'finish-step' && p.finishReason.raw === 'aborted'),
+      JSON.stringify(aborted.parts.map((p) => p.type)),
+    )
+  })
+
   test('a cached step: input_tokens excludes cache reads, so cacheRead can exceed it (CLI 1.2.11)', () => {
     // A real step from the skill capture: 8127 of its 12796 prompt tokens came from the cache.
     const u = toUsage({

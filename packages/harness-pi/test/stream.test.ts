@@ -289,6 +289,46 @@ test('a turn pi ended well is not undone by pi dying or the turn aborting while 
   }
 })
 
+/** The parts between the turn's last `finish-step` and its `finish` that are step content. */
+const unclosed = (parts: HarnessV1StreamPart[]) =>
+  parts
+    .slice(parts.findLastIndex((p) => p.type === 'finish-step') + 1)
+    .filter((p) => !['finish', 'error', 'stream-start'].includes(p.type))
+    .map((p) => p.type)
+
+test('a turn aborted or killed mid-step closes the step first: a tool result, no call after it', () => {
+  const lines = fixture('edit-and-run')
+  const midStep = lines.slice(0, at(lines, 'tool_execution_end') + 1)
+  for (const options of [{ exitCode: 143, aborted: true }, { exitCode: 137 }]) {
+    const t = new PiStreamTranslator()
+    const parts = [...midStep.flatMap((l) => t.push(l)), ...t.end(options)].filter(
+      (p) => p.type !== 'raw',
+    )
+    const name = JSON.stringify(options)
+    assert.deepEqual(unclosed(parts), [], name)
+    const raw = options.aborted ? 'aborted' : 'exit 137'
+    assert.deepEqual(
+      parts.slice(-3).map((p) => p.type),
+      options.aborted
+        ? ['tool-result', 'finish-step', 'finish']
+        : ['finish-step', 'error', 'finish'],
+      name,
+    )
+    const step = parts.findLast((p) => p.type === 'finish-step')
+    assert.deepEqual(step?.type === 'finish-step' && step.finishReason, { unified: 'other', raw })
+    const errors = parts.flatMap((p) => (p.type === 'error' ? [String(p.error)] : []))
+    assert.deepEqual(errors.length, options.aborted ? 0 : 1, name)
+    if (!options.aborted) assert.match(errors[0] ?? '', /pi exited with code 137/)
+  }
+})
+
+test('twin: a turn that ended on its last step adds no empty one', () => {
+  assert.equal(
+    translate(fixture('edit-and-run')).parts.filter((p) => p.type === 'finish-step').length,
+    5,
+  )
+})
+
 test("each stop reason pi ends a call with is that step's finish reason, pi's own kept raw", () => {
   const lastStep = (stopReason: string) => {
     const lines = fixture('edit-and-run').map((l) =>

@@ -122,6 +122,15 @@ const FINISH: Record<string, FinishReason['unified']> = {
 
 const TERMINAL_TOOL_STATES = new Set(['DONE', 'ERROR', 'CANCELED', 'CANCELLED'])
 
+/** Parts that add to a step's content: not the stream's framing, and not a block's end. */
+const isContent = (part: HarnessV1StreamPart) =>
+  !['raw', 'stream-start', 'finish', 'finish-step', 'error'].includes(part.type) &&
+  !part.type.endsWith('-end')
+
+/** Whether a step is open after `parts`: content opens one, a `finish-step` closes it. */
+const stepOpenAfter = (open: boolean, parts: readonly HarnessV1StreamPart[]) =>
+  parts.reduce((o, p) => (p.type === 'finish-step' ? false : o || isContent(p)), open)
+
 /**
  * Turns one `agy` process's NDJSON into harness stream parts, in order. The CLI reports no
  * tool-call ids, so a call is identified by its conversation and step index.
@@ -147,6 +156,8 @@ export class AntigravityStreamTranslator {
     { toolCallId: string; toolName: string; nativeName: string; dynamic: boolean }
   >()
   private pendingStep: AntigravityUsage | undefined
+  /** Content went out since the last `finish-step`, which `finish` must not leave open. */
+  private stepOpen = false
   private stepUsage = false
   /** The tokens of this turn's steps: the result's usage counts every earlier turn too. */
   private turnUsage: AntigravityUsage | undefined
@@ -183,6 +194,7 @@ export class AntigravityStreamTranslator {
       this.result(parts, event.result ?? {})
     }
     parts.push({ type: 'raw', rawValue: event })
+    this.stepOpen = stepOpenAfter(this.stepOpen, parts)
     return parts
   }
 
@@ -192,6 +204,7 @@ export class AntigravityStreamTranslator {
     const parts: HarnessV1StreamPart[] = []
     this.start(parts)
     this.closeBlocks(parts)
+    this.closeStep(parts, options.aborted ? 'aborted' : `exit ${options.exitCode}`)
     if (!options.aborted) {
       const detail = options.stderr?.trim()
       parts.push({
@@ -246,6 +259,20 @@ export class AntigravityStreamTranslator {
       usage: toUsage(this.pendingStep),
     })
     this.pendingStep = undefined
+  }
+
+  /**
+   * Ends the step a turn cut short (a tool's call and result with no reply after it): `finish`
+   * with step content still open fails the whole turn in `HarnessAgent`. It never ends as
+   * `error`, which says a failed model call was retried.
+   */
+  private closeStep(parts: HarnessV1StreamPart[], raw: string) {
+    if (!stepOpenAfter(this.stepOpen, parts)) return
+    parts.push({
+      type: 'finish-step',
+      finishReason: { unified: raw === 'SUCCESS' ? 'stop' : 'other', raw },
+      usage: toUsage(undefined),
+    })
   }
 
   private closeBlocks(parts: HarnessV1StreamPart[]) {
@@ -374,6 +401,7 @@ export class AntigravityStreamTranslator {
       })
     }
     const status = r.status ?? 'UNKNOWN'
+    this.closeStep(parts, status)
     if (status !== 'SUCCESS') {
       parts.push({
         type: 'error',
