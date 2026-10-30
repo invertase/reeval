@@ -9,7 +9,7 @@ description: "The Antigravity harness runs Google's Antigravity CLI in the sandb
 
 `antigravity()` reads `GEMINI_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
 
-The gateway brokers the key in the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` at `generativelanguage.googleapis.com`. A restricted egress policy allows `generativelanguage.googleapis.com`.
+The gateway brokers the key in the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` and `POST /v1beta/models/<model>:generateContent` at `generativelanguage.googleapis.com`. A restricted egress policy allows `generativelanguage.googleapis.com`.
 
 When the API rejects the key, the attempt error begins with `The API rejected GEMINI_API_KEY: set a valid key in the environment or .env.local`.
 

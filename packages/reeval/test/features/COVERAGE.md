@@ -143,7 +143,7 @@
 | `effort` on each harness factory: default id, requested vs served, and sent as the model's own setting | ✓ 7 | ✓ 1 | ● 1 | ● 1 | — | ◐ 1 (1 without a canary) |
 | An unset `effort` runs at `medium` on every harness and model that takes one, recorded and noted in the plan where it can't; Cursor's `effort` and `params` checked against its model catalog at plan time | ✓ 2 | ✓ 2 | — | — | — | — |
 | Token usage and the served model, per turn and totaled, from any harness | ✓ 1 | — | — | — | — | ◐ 3 (2 without a canary) |
-| Web search and fetch events (Cursor's recovered from its stored conversation), `turn.unreported`, `toHaveSearched` and `toHaveFetched` | ✓ 6 | — | — | — | — | ◐ 4 (1 without a canary) |
+| Web search and fetch events (Cursor's recovered from its stored conversation), `turn.unreported`, `toHaveSearched` and `toHaveFetched` | ✓ 7 | — | — | — | — | ◐ 5 (1 without a canary) |
 | `fakeHarness({ script })` and `layout` | ✓ 2 | — | ● 2 | ● 2 | — | — |
 | A turn the timeout cuts off is recorded as `aborted` | ✓ 1 | — | ● 1 | ● 1 | — | ● 1 |
 | Transcripts, normalized per harness | ✓ 3 | — | — | — | — | ● 1 |

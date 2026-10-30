@@ -120,7 +120,7 @@ test("the -v broker line names each brokered endpoint's path matcher", () => {
     return lines.filter((l) => l.startsWith('broker '))
   }
   assert.deepEqual(brokerLine('antigravity'), [
-    'broker GEMINI_API_KEY stays on the host · the gateway swaps it in on POST generativelanguage.googleapis.com (path ~ /^/v1beta/models/[^/]+:streamGenerateContent$/)',
+    'broker GEMINI_API_KEY stays on the host · the gateway swaps it in on POST generativelanguage.googleapis.com (path ~ /^/v1beta/models/[\\w.-]+:(?:streamGenerateContent|generateContent)$/)',
   ])
   assert.deepEqual(brokerLine('cursor'), [
     'broker CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key',

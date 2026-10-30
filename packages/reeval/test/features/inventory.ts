@@ -1199,9 +1199,11 @@ export const inventory: InventoryFeature[] = [
       'harness/cursor-web-fetch',
       'harness/opencode-web-search',
       'harness/codex-web-search',
+      'harness/antigravity-web-search',
     ],
     unit: [
       'reeval/test/harness.test.ts',
+      'harness-antigravity/test/unit.test.ts',
       'harness-cursor-sdk/test/stream.test.ts',
       'harness-cursor-sdk/test/unit.test.ts',
       'reeval/test/cursor-sdk-shape.test.ts',

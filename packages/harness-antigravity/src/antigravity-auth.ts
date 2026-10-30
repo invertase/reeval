@@ -49,9 +49,10 @@ export function resolveAntigravityCredentials(
 }
 
 /**
- * The model-request endpoint the CLI sends the key on: `POST /v1beta/models/<model>:
- * streamGenerateContent`. It also calls a lite model for titles and
- * checkpoints. Pass it as a gateway's endpoint allowlist to refuse the key anywhere else.
+ * The model-request endpoints the CLI sends the key on: `POST /v1beta/models/<model>:
+ * streamGenerateContent` for its turns (and a lite model's titles and checkpoints), and
+ * `:generateContent` for its `search_web` tool, which grounds a lite model's answer in Google
+ * Search. Pass them as a gateway's endpoint allowlist to refuse the key anywhere else.
  */
 export function antigravityEndpoints(baseUrl: string = GEMINI_API_URL) {
   const url = new URL(baseUrl)
@@ -59,7 +60,9 @@ export function antigravityEndpoints(baseUrl: string = GEMINI_API_URL) {
   return [
     {
       host: url.hostname,
-      path: { regex: `^${prefix}/v1beta/models/[^/]+:streamGenerateContent$` },
+      path: {
+        regex: `^${prefix}/v1beta/models/[\\w.-]+:(?:streamGenerateContent|generateContent)$`,
+      },
       method: ['POST'],
     },
   ] as const satisfies ReadonlyArray<

@@ -79,15 +79,24 @@ describe('auth', () => {
     for (const path of [
       '/v1beta/models/gemini-3.8-flash:streamGenerateContent',
       '/v1beta/models/gemini-3.1-flash-lite-preview:streamGenerateContent',
+      '/v1beta/models/gemini-3.1-flash-lite-preview:generateContent',
     ]) {
       assert.ok(re.test(path), path)
     }
     for (const path of [
       '/v1beta/models',
       '/v1beta/files',
-      '/v1beta/models/x:generateContent',
+      '/v1beta/models/x:countTokens',
+      '/v1beta/models/x:generateContentX',
+      '/v1beta/models/x:streamGenerateContent/',
       '/v1beta/models/a/b:streamGenerateContent',
+      '/v1beta/models/a/b:generateContent',
+      '/v1beta/models/x:countTokens:generateContent',
+      '/v1beta/models/x%2F..%2Ffiles:generateContent',
+      '/v1beta/models/x%3AgenerateContent',
+      '/v1beta/models/x:GenerateContent',
       '/upload/v1beta/models/x:streamGenerateContent',
+      '/upload/v1beta/models/x:generateContent',
     ]) {
       assert.ok(!re.test(path), path)
     }
