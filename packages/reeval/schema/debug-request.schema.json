@@ -49,6 +49,10 @@
             "type": "string"
           }
         },
+        "unresolved": {
+          "description": "Refused because its host's name didn't resolve, not by the policy.",
+          "const": false
+        },
         "url": {
           "type": "string"
         },

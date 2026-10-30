@@ -218,7 +218,7 @@ describe('remark thresholds', () => {
     assert.deepEqual(kinds(record, withHistory({ flaky: null, window })), [])
   })
 
-  test('proxy-only-egress: a connection error under proxy that reached no gateway, not under allow-all or a refusal', async () => {
+  test('proxy-only-egress: a connection error under proxy that reached no gateway, not under allow-all, a refusal or a failed lookup', async () => {
     const record = only(await rules(), 'migrates')
     const egressed = (egress: Partial<NonNullable<EvalEntry['attempts'][number]['egress']>>) => {
       const copy = structuredClone(record)
@@ -230,6 +230,7 @@ describe('remark thresholds', () => {
           contacted: [],
           blocked: [],
           expectedBlocked: [],
+          unresolved: [],
           ...egress,
         }
       }
@@ -247,6 +248,7 @@ describe('remark thresholds', () => {
     assert.deepEqual(kinds(egressed({ policy: 'allow-all', partial: true }), NO_HISTORY), [])
     const refused = { host: 'db.example.com', port: 443, connections: 1, reason: 'denied' }
     assert.deepEqual(kinds(egressed({ blocked: [refused] }), NO_HISTORY), [])
+    assert.deepEqual(kinds(egressed({ unresolved: [refused] }), NO_HISTORY), [])
     assert.deepEqual(kinds(egressed({ recorded: false }), NO_HISTORY), [])
   })
 

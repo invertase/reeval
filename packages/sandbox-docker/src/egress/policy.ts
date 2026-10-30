@@ -80,7 +80,9 @@ export const isRestricted = (policy: NetworkPolicy) => policy.mode !== 'allow-al
 
 export type Verdict =
   | { allowed: true; address: string }
-  | { allowed: false; reason: string; status: 403 | 502 }
+  | { allowed: false; reason: string; status: 403 }
+  /** The name didn't resolve: no policy refused it. */
+  | { allowed: false; reason: string; status: 502; unresolved: true }
 
 const blockList = (cidrs: readonly string[] = []) => {
   const list = new BlockList()
@@ -196,11 +198,14 @@ export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions 
       return {
         allowed: false,
         status: 502,
+        unresolved: true,
         reason: `can't resolve ${host}: ${(error as Error).message}`,
       }
     }
     const first = addresses[0]
-    if (!first) return { allowed: false, status: 502, reason: `${host} has no addresses` }
+    if (!first) {
+      return { allowed: false, status: 502, unresolved: true, reason: `${host} has no addresses` }
+    }
     const reached = addresses.flatMap(reaches)
     if (reached.some((a) => inList(always, a))) {
       return { allowed: false, status: 403, reason: `${host} is a loopback or link-local address` }

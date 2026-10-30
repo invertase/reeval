@@ -949,6 +949,7 @@ export const inventory: InventoryFeature[] = [
     fixtures: [
       'egress/allowed-host-reachable',
       'egress/blocked-host-recorded',
+      'egress/unresolved-host-recorded',
       'egress/deny-all',
       'egress/secret-hosts-allowed',
       'egress/harness-under-deny-all',

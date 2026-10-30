@@ -1170,7 +1170,35 @@ export const features: Feature[] = [
           },
         ],
         expectedBlocked: [],
+        unresolved: [],
       }),
+  },
+  {
+    dir: 'egress/unresolved-host-recorded',
+    tiers: ['docker', 'podman'],
+    env: 'proxied',
+    canary:
+      /expected 'reeval egress gateway can\\'t resolve …' to contain 'blocked by the reeval egress policy'/,
+    record: ({ run }) => {
+      const egress = landed(run)?.egress
+      assert.deepEqual(
+        egress?.blocked,
+        [
+          {
+            host: '169.254.169.254',
+            port: 80,
+            connections: 1,
+            reason: '169.254.169.254 is a loopback or link-local address',
+          },
+        ],
+        'only the policy refusal is blocked',
+      )
+      assert.deepEqual(
+        egress?.unresolved.map((h) => [h.host, h.port, h.connections]),
+        [['reeval-missing.invalid', 80, 1]],
+      )
+      assert.match(egress?.unresolved[0]?.reason ?? '', /^can't resolve reeval-missing\.invalid: /)
+    },
   },
   {
     dir: 'egress/expected-blocked',
@@ -1231,6 +1259,7 @@ export const features: Feature[] = [
         contacted: [],
         blocked: [],
         expectedBlocked: [],
+        unresolved: [],
       }),
   },
   {
@@ -1250,6 +1279,7 @@ export const features: Feature[] = [
         contacted: [],
         blocked: [],
         expectedBlocked: [],
+        unresolved: [],
       })
       const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]?.egress
       assert.equal(canary?.policy, 'proxy')

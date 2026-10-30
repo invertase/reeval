@@ -96,6 +96,7 @@ describe('recording runs into evals/.history', () => {
         contacted: [],
         blocked: [],
         expectedBlocked: [],
+        unresolved: [],
       },
       'the fake sandbox records no traffic, and the record says so',
     )

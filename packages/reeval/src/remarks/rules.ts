@@ -365,7 +365,7 @@ const failureText = (a: AttemptRecord) => [
 
 /**
  * proxy-only-egress (concern): an attempt under `proxy` failed with a connection error, and the
- * gateway refused nothing, so the connection never reached it: a raw TCP or UDP client (SSH, a
+ * gateway neither refused nor failed to resolve anything, so the connection never reached it: a raw TCP or UDP client (SSH, a
  * database driver), or one that ignores `HTTPS_PROXY`. One per eval.
  */
 function proxyOnlyEgress(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext): Candidate[] {
@@ -375,7 +375,8 @@ function proxyOnlyEgress(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext
     entry.attempts.flatMap((attempt) => {
       if (attempt.outcome !== 'fail' && attempt.outcome !== 'infra_error') return []
       const egress = attempt.egress
-      if (egress?.policy !== 'proxy' || !egress.recorded || egress.blocked.length) return []
+      if (egress?.policy !== 'proxy' || !egress.recorded) return []
+      if (egress.blocked.length || egress.unresolved.length) return []
       const error = failureText(attempt)
         .map((t) => CONNECTION_ERROR.exec(t)?.[0])
         .find(Boolean)

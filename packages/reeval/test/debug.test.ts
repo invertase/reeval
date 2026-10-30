@@ -8,6 +8,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { debugRoot } from '../src/debug/files.ts'
+import { requestLine } from '../src/view/debug.ts'
 import { fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts'
 
 /** Every file under `dir`, relative to it. */
@@ -474,4 +475,38 @@ evaluate('prints its headers', { environment: env }, async (c) => {
     assert.equal(bad.code, 2)
     assert.match(bad.stderr, /--keep must be a whole number \(got x\)/)
   })
+})
+
+test("the gateway line says a name that didn't resolve is unresolved, not blocked", () => {
+  const base = {
+    method: 'GET',
+    host: 'metadata.google.internal',
+    port: 80,
+    via: 'http' as const,
+    allowed: false,
+    sent: 0,
+    received: 0,
+    substituted: [],
+    ms: 3,
+  }
+  assert.equal(
+    requestLine({
+      ...base,
+      url: 'http://metadata.google.internal:80/',
+      status: 502,
+      reason: "can't resolve metadata.google.internal: getaddrinfo ENOTFOUND",
+      unresolved: true,
+    }),
+    "GET http://metadata.google.internal:80/ → 502 · unresolved: can't resolve metadata.google.internal: getaddrinfo ENOTFOUND · ↑0 B ↓0 B · 3ms · no key substituted",
+  )
+  assert.match(
+    requestLine({
+      ...base,
+      host: '169.254.169.254',
+      url: 'http://169.254.169.254:80/',
+      status: 403,
+      reason: '169.254.169.254 is a loopback or link-local address',
+    }),
+    / → 403 · blocked: 169\.254\.169\.254 is a loopback or link-local address · /,
+  )
 })

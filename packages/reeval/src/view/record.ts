@@ -43,6 +43,7 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
     { path: 'evals[].attempts[].servedEffort', empty: () => null },
     { path: 'evals[].attempts[].activity.stalledTools', empty: () => 0 },
     { path: 'evals[].attempts[].activity.maxToolMs', empty: () => null },
+    { path: 'evals[].attempts[].egress.unresolved', empty: () => [] },
   ],
   'transcript-line': [],
   analysis: [],

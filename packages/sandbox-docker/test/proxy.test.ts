@@ -1122,17 +1122,25 @@ describe('egress policy through the proxy', () => {
     }
   })
 
-  test('allow-all records what it lets through, and a name that never resolved as refused', async () => {
-    const gw = await startProxy({ mode: 'allow-all' }, {}, true)
+  test('allow-all records what it lets through, and a name that never resolved as unresolved', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy({ mode: 'allow-all' }, { onEvent: (e) => events.push(e) }, true)
     try {
       assert.ok((await connect(gw, HOST, h1.port)).ok)
-      assert.equal((await connect(gw, 'nxdomain.test', 443)).ok, false)
-      const { contacted, blocked } = gw.proxy.traffic()
+      const failed = await connect(gw, 'nxdomain.test', 443)
+      assert.deepEqual(
+        !failed.ok && [failed.status, failed.body.includes('egress policy')],
+        [502, false],
+        'a failed lookup is no policy block',
+      )
+      assert.match(!failed.ok ? failed.body : '', /can't resolve nxdomain\.test: ENOTFOUND/)
+      const { contacted, blocked, unresolved } = gw.proxy.traffic()
       assert.deepEqual(
         contacted.map((h) => h.host),
         [HOST],
       )
-      assert.deepEqual(blocked, [
+      assert.deepEqual(blocked, [])
+      assert.deepEqual(unresolved, [
         {
           host: 'nxdomain.test',
           port: 443,
@@ -1140,6 +1148,48 @@ describe('egress policy through the proxy', () => {
           reason: "can't resolve nxdomain.test: ENOTFOUND",
         },
       ])
+      assert.deepEqual(
+        events
+          .filter((e) => e.host === 'nxdomain.test')
+          .map((e) => [e.type, e.allowed, e.unresolved]),
+        [
+          ['dns', false, true],
+          ['request', false, true],
+        ],
+      )
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a policy block and a failed lookup land in their own lists', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(
+      { mode: 'custom', allowedHosts: ['nxdomain.test'] },
+      { onEvent: (e) => events.push(e) },
+    )
+    try {
+      const denied = await absolute(gw, `http://${OTHER}:${h1.port}/`)
+      assert.equal(denied.status, 403)
+      const missing = await absolute(gw, 'http://nxdomain.test/')
+      assert.equal(missing.status, 502)
+      assert.match(missing.body, /^reeval egress gateway can't resolve nxdomain\.test: ENOTFOUND/)
+      const { blocked, unresolved } = gw.proxy.traffic()
+      assert.deepEqual(
+        blocked.map((h) => [h.host, h.reason]),
+        [[OTHER, `${OTHER} isn't in the allowlist`]],
+      )
+      assert.deepEqual(
+        unresolved.map((h) => [h.host, h.port, h.connections]),
+        [['nxdomain.test', 80, 1]],
+      )
+      assert.deepEqual(
+        events.flatMap((e) => (e.type === 'request' ? [[e.host, e.status, e.unresolved]] : [])),
+        [
+          [OTHER, 403, undefined],
+          ['nxdomain.test', 502, true],
+        ],
+      )
     } finally {
       gw.close()
     }
@@ -1253,7 +1303,7 @@ describe('a port outside 1-65535', () => {
       const outOfRange = await absolute(gw, `http://${HOST}:99999/`)
       assert.equal(outOfRange.status, 400)
       assert.equal(seen.length, 0)
-      assert.deepEqual(gw.proxy.traffic(), { contacted: [], blocked: [] })
+      assert.deepEqual(gw.proxy.traffic(), { contacted: [], blocked: [], unresolved: [] })
     } finally {
       gw.close()
     }
