@@ -1,11 +1,11 @@
 /**
  * The gate's name, `executable` for `harness-acp`, which takes a bare name and runs
- * `<implementation>/node_modules/.bin/<executable>`: the gate goes beside OpenCode's own bin.
+ * `<bootstrap>/node_modules/.bin/<executable>`: the gate goes beside OpenCode's own bin.
  */
 export const OPENCODE_GATE_EXECUTABLE = 'reeval-opencode-gate'
 
 /** Where the gate goes, under the sandbox home. */
-export const OPENCODE_GATE_PATH = `.ai-sdk-harness/.harness-bootstrap/opencode/implementation/node_modules/.bin/${OPENCODE_GATE_EXECUTABLE}`
+export const OPENCODE_GATE_PATH = `.ai-sdk-harness/.harness-bootstrap/opencode/node_modules/.bin/${OPENCODE_GATE_EXECUTABLE}`
 
 /** The variable that names the MCP servers the gate waits for, as a JSON list. */
 export const OPENCODE_GATE_SERVERS_ENV = 'REEVAL_OPENCODE_MCP_SERVERS'

@@ -3,6 +3,6 @@ evals/g.eval.ts › routed  claude-code:claude-sonnet-4-5/-/docker  control  gat
                           codex:gpt-5.4-mini/-/docker             control  gated  ×1  effort medium
 excluded: —
 image docker · claude-code · 1 evals
-  base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:claude-code-1.0.171-patch.8cc1b324  (reeval's image: built when missing or when its base changed)
 image docker · codex · 1 evals
   base  reeval-sandbox:codex-0.1.9  (reeval's image: built when missing or when its base changed)

@@ -545,7 +545,9 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     oomKills: () => oomKills(id, engine, execUser(options)),
     run,
     runPrivileged,
-    async spawn(o) {
+    // The overloads type a `stdin: true` spawn's writable stdin, which this one refuses.
+    spawn: (async (o: Parameters<DockerSession['spawn']>[0]) => {
+      if (o.stdin) throw new Error(`A ${spec.name} sandbox process has no writable stdin`)
       const env = envFor(o.env)
       const marker = nextMarker()
       const args = execArgs(o.command, marker, o.workingDirectory, env)
@@ -573,7 +575,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
         wait: () => exited,
         kill,
       }
-    },
+    }) as unknown as DockerSession['spawn'],
     readBinaryFile,
     async readFile(o) {
       const bytes = await readBinaryFile(o)

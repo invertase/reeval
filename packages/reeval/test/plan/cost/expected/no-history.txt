@@ -8,7 +8,7 @@ excluded: —
 image docker · cursor · 2 evals
   base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 2 evals
-  base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:claude-code-1.0.171-patch.8cc1b324  (reeval's image: built when missing or when its base changed)
 cost  estimated $0.75–5.46 at prices.json over models.dev list prices, judge included · no history, rough
 prices prices.json over models.dev · unpriced — · past 0 runs, 0 attempts
   evals/cost.eval.ts › greets         cursor:composer-2.5/-/docker          composer-2.5     judge google/gemini-3.8-flash  typical  ×2  agent 606000–4040000 tokens $0.144–0.96  judge 0–124000 tokens $0–0.105

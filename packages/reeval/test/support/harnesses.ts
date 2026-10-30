@@ -278,11 +278,11 @@ export const harnesses: HarnessRow[] = [
     },
     image: 'goose',
     skillContext:
-      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     plugin: {
       parts: ['skills', 'mcp'],
       skillContext:
-        /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/plugin-probe\/SKILL\.md$/,
+        /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/plugin-probe\/SKILL\.md$/,
     },
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
@@ -367,11 +367,11 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'OPENAI_API_KEY', from: ['OPENAI_API_KEY'] },
     image: 'fx',
     skillContext:
-      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
     plugin: {
       parts: ['skills', 'mcp'],
       skillContext:
-        /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/plugin-probe\/SKILL\.md$/,
+        /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/home\/\.fx\/skills\/plugin-probe\/SKILL\.md$/,
     },
     autoHosts: ['api.openai.com'],
     apiHost: 'api.openai.com',
@@ -390,7 +390,7 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'fx',
     skillContext:
-      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['ai-gateway.vercel.sh'],
     apiHost: 'ai-gateway.vercel.sh',
     tokens: true,
@@ -412,7 +412,7 @@ export const harnesses: HarnessRow[] = [
     hostEnv: ['GOOGLE_CLOUD_PROJECT'],
     image: 'fx',
     skillContext:
-      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['aiplatform.googleapis.com'],
     apiHost: 'aiplatform.googleapis.com',
     tokens: true,
@@ -498,7 +498,7 @@ export const harnesses: HarnessRow[] = [
     hostEnv: ['GOOGLE_CLOUD_PROJECT'],
     image: 'goose',
     skillContext:
-      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['aiplatform.googleapis.com', 'oauth2.googleapis.com'],
     apiHost: 'aiplatform.googleapis.com',
     tokens: false,
@@ -534,7 +534,7 @@ export const harnesses: HarnessRow[] = [
     hostEnv: ['GOOGLE_CLOUD_PROJECT'],
     image: 'grok-build',
     skillContext:
-      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['aiplatform.googleapis.com'],
     apiHost: 'aiplatform.googleapis.com',
     tokens: true,
@@ -588,7 +588,7 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'goose',
     skillContext:
-      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['ai-gateway.vercel.sh'],
     apiHost: 'ai-gateway.vercel.sh',
     tokens: false,
@@ -603,7 +603,7 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'XAI_API_KEY', from: ['XAI_API_KEY'] },
     image: 'grok-build',
     skillContext:
-      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
     plugin: { parts: CLAUDE_FORMAT, skillContext: PLACED_PLUGIN_SKILL },
     autoHosts: ['api.x.ai'],
     apiHost: 'api.x.ai',
@@ -623,7 +623,7 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'grok-build',
     skillContext:
-      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['ai-gateway.vercel.sh'],
     apiHost: 'ai-gateway.vercel.sh',
     tokens: true,
@@ -691,7 +691,7 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
     image: 'goose',
     skillContext:
-      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['openrouter.ai'],
     apiHost: 'openrouter.ai',
     tokens: false,
@@ -730,7 +730,7 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
     image: 'grok-build',
     skillContext:
-      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['openrouter.ai'],
     apiHost: 'openrouter.ai',
     tokens: true,
@@ -749,7 +749,7 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
     image: 'fx',
     skillContext:
-      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['openrouter.ai'],
     apiHost: 'openrouter.ai',
     tokens: true,

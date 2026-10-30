@@ -10,7 +10,7 @@ export default defineConfig({
     script: [
       [
         {
-          exec: `grep -o 'PLOVER-[0-9]*' ~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills/house-style/SKILL.md > style.txt`,
+          exec: `grep -o 'PLOVER-[0-9]*' ~/.ai-sdk-harness/.harness-bootstrap/fx/home/.fx/skills/house-style/SKILL.md > style.txt`,
         },
         { reply: 'done' },
       ],

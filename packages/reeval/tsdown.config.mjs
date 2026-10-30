@@ -66,7 +66,7 @@ for (const name of Object.keys(pkg.devDependencies).filter((d) => d.startsWith('
  * `./bridge/` next to its code, which lands in a chunk at `dist/`'s top level.
  */
 const patched = ['@ai-sdk/harness-claude-code']
-const BRIDGE_FILES = ['index.mjs', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']
+const BRIDGE_FILES = ['index.mjs', 'package.json', 'pnpm-lockfile.yaml', 'pnpm-workspace.yaml']
 /** What the adapters' own build inlined into `bridge/index.mjs`, resolved from the adapter. */
 const BRIDGE_BUNDLES = ['@ai-sdk/harness']
 for (const name of patched) {

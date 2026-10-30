@@ -1670,7 +1670,7 @@ evaluate('hi', async (c) => {
   const environ = await c.exec('cat /proc/[0-9]*/environ | tr "\\\\0" "\\\\n"')
   expect(environ.stdout).not.toContain('not_a_real_key')
   const config = await c.exec(
-    'cat ~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/config.toml',
+    'cat ~/.ai-sdk-harness/.harness-bootstrap/grok-build/home/.grok/config.toml',
   )
   expect(config.stdout).toContain('session_summary = "grok-4.6"')
   expect(config.stdout).toContain('telemetry = false')

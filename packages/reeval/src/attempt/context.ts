@@ -45,7 +45,7 @@ const HOME_CONTEXT_PATHS = [
   '.reeval/plugins',
 ]
 /** Where the AI SDK adapters install their CLI; the CLI's `$HOME` is `home` under it. */
-const ADAPTER_HOMES = '"$HOME"/.ai-sdk-harness/.harness-bootstrap/*/implementation/home'
+const ADAPTER_HOMES = '"$HOME"/.ai-sdk-harness/.harness-bootstrap/*/home'
 
 /**
  * Skills, rules and MCP config the agent could load, with content hashes (never contents).
@@ -117,7 +117,7 @@ export function contextTaker(a: Attempt) {
   }
 }
 
-const ADAPTER_HOME = /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/[^/]+\/implementation\/home\//
+const ADAPTER_HOME = /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/[^/]+\/(?:implementation\/)?home\//
 
 const RETIRED_RUNTIME_STATE = new Set([
   '.cursor/cli-config.json',

@@ -185,11 +185,11 @@ Each value of `harness` reads the environment's `rules`, `skills`, and `mcp` ser
 | Claude Code | `CLAUDE.md` | `.claude/skills` | `~/.claude/skills` |
 | Antigravity | `AGENTS.md` | `.agents/skills` | `~/.gemini/config/skills` |
 | OpenCode | `AGENTS.md` | `.opencode/skills` | `~/.config/opencode/skills` |
-| Goose | `AGENTS.md` | `.goose/skills` | `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills` |
+| Goose | `AGENTS.md` | `.goose/skills` | `~/.ai-sdk-harness/.harness-bootstrap/goose/home/.config/goose/skills` |
 | pi | `AGENTS.md` | `.pi/skills` | `~/.pi/agent/skills` |
 | Codex | `AGENTS.md` | `.agents/skills` | `~/.agents/skills` |
-| fx | `AGENTS.md` | `.fx/skills` | `~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills` |
-| Grok Build | `AGENTS.md` | `.grok/skills` | `~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/skills` |
+| fx | `AGENTS.md` | `.fx/skills` | `~/.ai-sdk-harness/.harness-bootstrap/fx/home/.fx/skills` |
+| Grok Build | `AGENTS.md` | `.grok/skills` | `~/.ai-sdk-harness/.harness-bootstrap/grok-build/home/.grok/skills` |
 
 [//]: # (/generated:harness-layout)
 
@@ -206,7 +206,7 @@ For more information about writing rules and placing skills, see [Add project ru
 - **Antigravity:** `stdio`, `http`, and `sse`, in the `~/.gemini/config/mcp_config.json` file. A `stdio` server is `command`, `args`, and `env`, and an `http` or `sse` server is `serverUrl` and `headers`.
 - **Codex:** `stdio` and `http`, under `[mcp_servers]` in the `~/.codex/config.toml` file. A `stdio` server is `command`, `args`, and `env`, and an `http` server is `url` and `http_headers`. A call is named `mcp__<server>__<tool>`. An `sse` server fails at plan time with exit code 2.
 - **OpenCode:** `stdio` and `http`, written as `{ type: 'local', command: [command, ...args], environment }` or `{ type: 'remote', url, headers, oauth: false }` in OpenCode's configuration. Code Mode is off, so the agent calls the tools directly, and the first prompt waits until every server has connected. reeval refuses an `sse` server at plan time with exit code 2.
-- **Goose:** `stdio` and `http`, written as enabled extensions in the `.config/goose/config.yaml` file under the private home directory `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home`. A `stdio` server is `cmd`, `args`, and `envs`, and an `http` server is `uri` and `headers`, with type `streamable_http`. Goose keys each extension by dropping whitespace, replacing every character outside letters, digits, `_`, and `-` with `_`, and lower-casing the name. reeval refuses an `sse` server, or two servers that share a key, at plan time with exit code 2.
+- **Goose:** `stdio` and `http`, written as enabled extensions in the `.config/goose/config.yaml` file under the private home directory `~/.ai-sdk-harness/.harness-bootstrap/goose/home`. A `stdio` server is `cmd`, `args`, and `envs`, and an `http` server is `uri` and `headers`, with type `streamable_http`. Goose keys each extension by dropping whitespace, replacing every character outside letters, digits, `_`, and `-` with `_`, and lower-casing the name. reeval refuses an `sse` server, or two servers that share a key, at plan time with exit code 2.
 - **pi:** `stdio` and `http`, in the `~/.pi/agent/mcp.json` file with direct exposure, so the model and the transcript name each tool `mcp__<server>__<tool>`. reeval escapes `$` and a leading `!` in `env` and header values, so each value reaches the server as written. reeval refuses an `sse` server, or a server name with characters other than letters, digits, `_`, and `-`, at plan time with exit code 2.
 - **fx:** `stdio`, `http`, and `sse`, passed on the ACP `session/new` call: a `stdio` server as `command`, `args`, and `env`, and an `http` or `sse` server as `type`, `url`, and `headers`. fx's `http` and `sse` servers, like its web tools, don't go through the relay. fx names an MCP call `mcp_<server>_<tool>`, which the transcript renames `mcp__<server>__<tool>`, so [`toHaveCalledMcp()`](/reference/matchers#tohavecalledmcp) matches it.
 - **Grok Build:** `stdio`, `http`, and `sse`, passed on the ACP `session/new` call like fx. Grok Build calls a server's tool through its `use_tool` tool, which the transcript names `mcp__<server>__<tool>`, so [`toHaveCalledMcp()`](/reference/matchers#tohavecalledmcp) matches it.
@@ -235,11 +235,11 @@ For more information about the token fields, see [`TokenUsage`](/reference/run-r
 - **Claude Code:** each turn's `model` is the model id Claude Code reports. `servedModels` is null, because the API requests name no model.
 - **Antigravity:** each turn's `model` is the model the CLI reports at the start of the turn, or else the last brokered request's model. `servedModels` lists the model id in each brokered path `/v1beta/models/<model>:streamGenerateContent`, which can include a model the CLI calls for a title or a checkpoint.
 - **Codex:** the egress gateway reads the served model and effort from the response body. The turn's `model` and `servedModels` hold `<model>` or `<model>[effort=<value>]`. `servedEffort` is the reasoning effort in that label, and `effort` is the factory value, or `medium` when unset.
-- **OpenCode:** the stream names no model, so each turn's `model` is the model on the turn's last brokered request. `servedModels` comes from the request URL for a provider whose model path names the model (`amazon-bedrock/`, `google/`, `ofox/`, `opencode/` and `opencode-go/`) and from the response body for every other provider, with `[effort=<value>]` when the response names an effort.
+- **OpenCode:** the stream names only the model OpenCode was configured with, so each turn's `model` is the model on the turn's last brokered request. `servedModels` comes from the request URL for a provider whose model path names the model (`amazon-bedrock/`, `google/`, `ofox/`, `opencode/` and `opencode-go/`) and from the response body for every other provider, with `[effort=<value>]` when the response names an effort.
 - **Goose:** each turn's `model` is the model id from the last brokered `POST /v1beta/models/<model>:streamGenerateContent` request in the turn, or null when that turn made none. `servedModels` lists every such id.
 - **pi:** each turn's `model` is the model pi names on its first assistant message. `servedModels` comes from the brokered request URL, without an effort suffix.
-- **fx:** fx names no model over ACP, so the egress gateway reads the served model from each response, such as the dated snapshot OpenAI answers `gpt-5.5` with. On Vercel AI Gateway, a stream that names no model, such as Gemini's, leaves `servedModels` null and records the model each call asked for in `askedModels`.
-- **Grok Build:** the stream names no model, so each turn's `model` and `servedModels` come from the model xAI's responses name.
+- **fx:** fx names only its configured model over ACP, so the egress gateway reads the served model from each response, such as the dated snapshot OpenAI answers `gpt-5.5` with. On Vercel AI Gateway, a stream that names no model, such as Gemini's, leaves `servedModels` null and records the model each call asked for in `askedModels`.
+- **Grok Build:** the stream names only the configured model, so each turn's `model` and `servedModels` come from the model xAI's responses name.
 
 For more information about the attempt fields, see [`AttemptRecord`](/reference/run-record#attemptrecord).
 

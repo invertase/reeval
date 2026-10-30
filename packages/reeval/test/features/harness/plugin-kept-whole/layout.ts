@@ -12,7 +12,7 @@ if (!layout) throw new Error('set REEVAL_FIXTURE_LAYOUT to the harness the fake 
  */
 const OWN_SKILLS: Partial<Record<Layout, string>> = {
   codex: '~/.agents/skills',
-  'grok-build': '~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/skills',
+  'grok-build': '~/.ai-sdk-harness/.harness-bootstrap/grok-build/home/.grok/skills',
 }
 
 const own = OWN_SKILLS[layout]

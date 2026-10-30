@@ -17,14 +17,14 @@ export const HARNESS_PACKAGES: Record<
   { readonly name: string; readonly version: string; readonly patch?: string }
 > = {
   cursor: { name: '@reeval/harness-cursor-sdk', version: '0.1.7' },
-  'claude-code': { name: '@ai-sdk/harness-claude-code', version: '1.0.160', patch: 'b17cde50' },
+  'claude-code': { name: '@ai-sdk/harness-claude-code', version: '1.0.171', patch: '8cc1b324' },
   antigravity: { name: '@reeval/harness-antigravity', version: '0.1.12' },
-  opencode: { name: '@reeval/harness-opencode', version: '0.2.11' },
-  goose: { name: '@reeval/harness-goose', version: '0.1.8' },
+  opencode: { name: '@reeval/harness-opencode', version: '0.2.12' },
+  goose: { name: '@reeval/harness-goose', version: '0.1.9' },
   pi: { name: '@reeval/harness-pi', version: '0.2.8' },
   codex: { name: '@reeval/harness-codex', version: '0.1.9' },
-  fx: { name: '@reeval/harness-fx', version: '0.1.3' },
-  'grok-build': { name: '@reeval/harness-grok-build', version: '0.1.6' },
+  fx: { name: '@reeval/harness-fx', version: '0.1.4' },
+  'grok-build': { name: '@reeval/harness-grok-build', version: '0.1.7' },
 }
 
 /** A harness whose CLI an image can bake. */

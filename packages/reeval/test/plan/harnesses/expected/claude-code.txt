@@ -9,12 +9,12 @@ excluded: —
 image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 2 evals
-  base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:claude-code-1.0.171-patch.8cc1b324  (reeval's image: built when missing or when its base changed)
 image docker:tools · cursor · 1 evals
   dockerfile docker/tools/Dockerfile  reeval-dockerfile:tools-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
   harness                             reeval-dockerfile:tools-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.7)
 image docker:tools · claude-code · 1 evals
   dockerfile docker/tools/Dockerfile  reeval-dockerfile:tools-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
-  harness                             reeval-dockerfile:tools-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:claude-code-1.0.160-patch.b17cde50)
+  harness                             reeval-dockerfile:tools-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:claude-code-1.0.171-patch.8cc1b324)
 image docker:python:3.12-slim · claude-code · 1 evals
-  from python:3.12-slim  reeval-sandbox:claude-code-1.0.160-patch.b17cde50-python-3-12-slim-375f4a61  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+  from python:3.12-slim  reeval-sandbox:claude-code-1.0.171-patch.8cc1b324-python-3-12-slim-375f4a61  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

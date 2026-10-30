@@ -184,7 +184,8 @@ export function createAgentHarness(
       const off = interactiveTools(adapter as HarnessV1)
       const agent = new HarnessAgent({
         harness: observed(adapter as HarnessV1, (part) => {
-          if (part.type === 'stream-start' && part.modelId) servedModel = part.modelId
+          if (part.type === 'stream-start' && part.modelId && !catalog.configuredModelOnStart)
+            servedModel = part.modelId
           if (part.type === 'finish') finishMetadata = part.harnessMetadata
         }),
         model,

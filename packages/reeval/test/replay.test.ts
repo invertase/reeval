@@ -20,7 +20,7 @@ import { OpenCodeStreamTranslator } from '@reeval/harness-opencode'
 import { PiStreamTranslator } from '@reeval/harness-pi'
 import { normalizeStream } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
-import { replayBridge } from './support/claude-code-bridge.ts'
+import { replayBridge, withSessionStartHook } from './support/claude-code-bridge.ts'
 import { testDir } from './support/fixture.ts'
 import { turnThrough } from './support/harness-agent.ts'
 import {
@@ -1091,16 +1091,8 @@ describe('replay: the Claude Code bridge, from the SDK’s own messages', () => 
   test('a SessionStart hook reporting before system/init leaves the served model on the stream', async () => {
     // A plugin's SessionStart hook: Claude Code reports it in system hook_started and
     // hook_response messages, which can come before system/init.
-    const init = sdk.findIndex((m) => m.type === 'system' && m.subtype === 'init')
-    const hook = { type: 'system', hook_id: 'h1', hook_name: 'SessionStart:startup' }
-    const hooked = [
-      ...sdk.slice(0, init),
-      { ...hook, subtype: 'hook_started' },
-      { ...hook, subtype: 'hook_response', output: 'hook-ran', exit_code: 0 },
-      ...sdk.slice(init),
-    ]
     const replay = (bridge: string) =>
-      replayBridge({ bridge, start, messages: hooked.map((m) => JSON.stringify(m)).join('\n') })
+      replayBridge({ bridge, start, messages: withSessionStartHook(messages) })
     assert.deepEqual((await replay(shipped))[0], {
       type: 'stream-start',
       modelId: 'claude-haiku-4-5',
@@ -1120,7 +1112,7 @@ describe('replay: the Claude Code bridge, from the SDK’s own messages', () => 
     }
   })
 
-  test('twin: without the patch, command_lifecycle starts the stream and the model is lost', async () => {
+  test('twin: a bridge that starts the stream on command_lifecycle loses the model', async () => {
     const source = readFileSync(shipped, 'utf8')
     assert.ok(source.includes(fix), 'the shipped bridge has the patch')
     const dir = mkdtempSync(join(tmpdir(), 'reeval-unpatched-'))

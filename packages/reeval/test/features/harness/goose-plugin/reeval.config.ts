@@ -10,7 +10,7 @@ export default defineConfig({
     script: [
       [
         {
-          exec: 'cat ~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills/house-style/SKILL.md',
+          exec: 'cat ~/.ai-sdk-harness/.harness-bootstrap/goose/home/.config/goose/skills/house-style/SKILL.md',
         },
         { reply: 'read' },
       ],
