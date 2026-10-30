@@ -1195,6 +1195,57 @@ describe('egress policy through the proxy', () => {
     }
   })
 
+  test('a name that would not resolve is a policy block when the policy refuses it', async () => {
+    const policies: Array<[NetworkPolicy, string]> = [
+      [{ mode: 'deny-all' }, 'the policy denies all egress'],
+      [{ mode: 'custom', allowedHosts: [HOST] }, "nxdomain.test isn't in the allowlist"],
+    ]
+    for (const [policy, reason] of policies) {
+      const events: EgressEvent[] = []
+      const gw = await startProxy(policy, { onEvent: (e) => events.push(e) })
+      try {
+        const tunnel = await connect(gw, 'nxdomain.test', 443)
+        const plain = await absolute(gw, 'http://nxdomain.test/')
+        const secure = await absolute(gw, 'https://nxdomain.test/')
+        for (const refused of [
+          !tunnel.ok && { status: tunnel.status, body: tunnel.body },
+          plain,
+          secure,
+        ]) {
+          assert.equal(refused && refused.status, 403, policy.mode)
+          assert.match(refused ? refused.body : '', /blocked by the reeval egress policy/)
+        }
+        const { blocked, unresolved } = gw.proxy.traffic()
+        assert.deepEqual(unresolved, [], policy.mode)
+        assert.deepEqual(
+          blocked.map((h) => [h.host, h.port, h.connections, h.reason]),
+          [
+            ['nxdomain.test', 80, 1, reason],
+            ['nxdomain.test', 443, 2, reason],
+          ],
+        )
+        assert.ok(
+          events.every((e) => !('unresolved' in e)),
+          policy.mode,
+        )
+      } finally {
+        gw.close()
+      }
+    }
+    // A reserved address the policy refuses stays blocked whether it's a literal or a name.
+    const gw = await startProxy({ mode: 'allow-all' })
+    try {
+      assert.equal((await absolute(gw, 'http://10.0.0.1/')).status, 403)
+      assert.deepEqual(gw.proxy.traffic().unresolved, [])
+      assert.deepEqual(
+        gw.proxy.traffic().blocked.map((h) => h.host),
+        ['10.0.0.1'],
+      )
+    } finally {
+      gw.close()
+    }
+  })
+
   test('setPolicy takes effect for new connections', async () => {
     const gw = await startProxy({ mode: 'allow-all' })
     try {

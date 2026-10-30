@@ -39,7 +39,12 @@ import { contextFiles, dockerignoreMatcher } from '../src/dockerignore.ts'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import { requestedEffort } from '../src/egress/effort.ts'
 import { createMux, forwarderScript, link } from '../src/egress/mux.ts'
-import { createPolicyCheck, defaultAllowedHosts, hostAllowed } from '../src/egress/policy.ts'
+import {
+  createPolicyCheck,
+  defaultAllowedHosts,
+  hostAllowed,
+  type NetworkPolicy,
+} from '../src/egress/policy.ts'
 import {
   applyTransformations,
   decrypts,
@@ -649,6 +654,90 @@ describe('network policy', () => {
     )
     const verdict = await check('nope.invalid')
     assert.equal(!verdict.allowed && verdict.status, 502)
+  })
+
+  test('a policy block is never unresolved: the policy decides before a lookup can fail', async () => {
+    const asked: string[] = []
+    const answers: Record<string, string[]> = {
+      'example.com': ['93.184.216.34'],
+      'metadata.google.internal': ['169.254.169.254'],
+      'localtest.me': ['127.0.0.1'],
+      '10.0.0.1.nip.io': ['10.0.0.1'],
+      // getaddrinfo answers with the family that resolved when the other fails.
+      'v4only.rebind.test': ['10.0.0.1'],
+      'v6only.rebind.test': ['fd00:ec2::254'],
+      'mixed.rebind.test': ['8.8.8.8', '10.0.0.1'],
+      'mixed6.rebind.test': ['2606:4700::1', '::1'],
+    }
+    const resolve = async (host: string) => {
+      asked.push(host)
+      const found = answers[host]
+      if (!found) throw new Error(`getaddrinfo ENOTFOUND ${host}`)
+      return found
+    }
+    const blocks = (verdict: Awaited<ReturnType<ReturnType<typeof createPolicyCheck>>>) => {
+      assert.equal(verdict.allowed, false)
+      assert.equal(!verdict.allowed && verdict.status, 403)
+      assert.equal('unresolved' in verdict, false)
+    }
+    const RESOLVED = Object.keys(answers).filter((h) => h !== 'example.com')
+    const LITERALS = [
+      '169.254.169.254',
+      '[fd00:ec2::254]',
+      '127.0.0.1',
+      '[::1]',
+      '172.17.0.1',
+      '10.0.0.1',
+    ]
+    const cases: Array<[NetworkPolicy, string[]]> = [
+      [{ mode: 'deny-all' }, ['example.com', 'nope.invalid', ...RESOLVED, ...LITERALS]],
+      [
+        { mode: 'custom', allowedHosts: ['github.com', '*.github.com'] },
+        ['example.com', 'nope.invalid', 'metadata.google.internal', ...RESOLVED, ...LITERALS],
+      ],
+      [{ mode: 'custom', allowedHosts: [...RESOLVED, ...LITERALS] }, [...RESOLVED, ...LITERALS]],
+      [{ mode: 'custom', allowedHosts: ['*.rebind.test', '*.nip.io'] }, RESOLVED.slice(2)],
+      [{ mode: 'allow-all' }, [...RESOLVED, ...LITERALS]],
+    ]
+    for (const [policy, hosts] of cases) {
+      const check = createPolicyCheck(policy, { lookup: resolve })
+      for (const host of hosts) {
+        asked.length = 0
+        const verdict = await check(host)
+        blocks(verdict)
+        const unlisted =
+          policy.mode === 'deny-all' ||
+          (policy.mode === 'custom' && !hostAllowed(policy.allowedHosts ?? [], host))
+        if (unlisted || LITERALS.includes(host))
+          assert.deepEqual(asked, [], `no lookup for ${host}`)
+      }
+    }
+    // Twin: an allowed name whose lookup fails is unresolved, and resolves once DNS answers.
+    let failing = true
+    const flaky = createPolicyCheck(
+      { mode: 'custom', allowedHosts: ['flaky.example'] },
+      {
+        lookup: async (host) => {
+          if (failing) throw new Error(`getaddrinfo EAI_AGAIN ${host}`)
+          return ['93.184.216.34']
+        },
+      },
+    )
+    assert.deepEqual(await flaky('flaky.example'), {
+      allowed: false,
+      status: 502,
+      unresolved: true,
+      reason: "can't resolve flaky.example: getaddrinfo EAI_AGAIN flaky.example",
+    })
+    failing = false
+    assert.deepEqual(await flaky('flaky.example'), { allowed: true, address: '93.184.216.34' })
+    const empty = createPolicyCheck({ mode: 'allow-all' }, { lookup: async () => [] })
+    assert.deepEqual(await empty('empty.example'), {
+      allowed: false,
+      status: 502,
+      unresolved: true,
+      reason: 'empty.example has no addresses',
+    })
   })
 })
 
