@@ -273,3 +273,51 @@ test('a real web turn: the page Codex opened is a web fetch of its URL, known wh
   assert.equal(call?.type === 'tool-call' && call.toolName, 'webSearch')
   assert.deepEqual(call?.type === 'tool-call' && JSON.parse(call.input), { query: 'reeval evals' })
 })
+
+/** The parts between the turn's last `finish-step` and its `finish` that are step content. */
+const unclosed = (parts: HarnessV1StreamPart[]) =>
+  parts
+    .slice(parts.findLastIndex((p) => p.type === 'finish-step') + 1)
+    .filter((p) => !['finish', 'error', 'stream-start'].includes(p.type))
+    .map((p) => p.type)
+
+test('a turn aborted or killed mid-step closes the step before it finishes', () => {
+  // The real turn cut after its command completed: no reply and no `turn.completed`.
+  const midStep = fixture('failed-command.ndjson').slice(0, 4)
+  for (const options of [{ exitCode: 143, aborted: true }, { exitCode: 137 }]) {
+    const t = new CodexStreamTranslator({ workDir: '/reeval/workspace' })
+    const parts = [...midStep.flatMap((l) => t.push(l)), ...t.end(options)].filter(
+      (p) => p.type !== 'raw',
+    )
+    const name = JSON.stringify(options)
+    assert.deepEqual(unclosed(parts), [], name)
+    const step = parts.findLast((p) => p.type === 'finish-step')
+    assert.deepEqual(
+      step?.type === 'finish-step' && step.finishReason,
+      { unified: 'other', raw: options.aborted ? 'aborted' : 'exit 137' },
+      name,
+    )
+    const errors = parts.flatMap((p) => (p.type === 'error' ? [String(p.error)] : []))
+    assert.equal(errors.length, options.aborted ? 0 : 1, name)
+    if (!options.aborted) {
+      assert.match(errors[0] ?? '', /codex exited with code 137/)
+      assert.ok(
+        parts.indexOf(step as HarnessV1StreamPart) < parts.findIndex((p) => p.type === 'error'),
+      )
+    }
+  }
+})
+
+test('a failed turn with content closes its step before its error, and a completed one adds none', () => {
+  const t = new CodexStreamTranslator({ workDir: '/reeval/workspace' })
+  const failed = [
+    ...fixture('failed-command.ndjson').slice(0, 4),
+    JSON.stringify({ type: 'turn.failed', error: { message: 'quota' } }),
+  ]
+    .flatMap((l) => t.push(l))
+    .filter((p) => p.type !== 'raw')
+  assert.deepEqual(unclosed(failed), [])
+  assert.deepEqual(types(failed).slice(-3), ['finish-step', 'error', 'finish'])
+  const { parts } = translate('failed-command.ndjson')
+  assert.equal(parts.filter((p) => p.type === 'finish-step').length, 1)
+})

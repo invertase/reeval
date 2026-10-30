@@ -86,6 +86,15 @@ const UNIFIED: Record<string, FinishReason['unified']> = {
 
 const reason = (m: PiMessage) => m.errorMessage || 'pi reported a failed model call'
 
+/** Parts that add to a step's content: not the stream's framing, and not a block's end. */
+const isContent = (part: HarnessV1StreamPart) =>
+  !['raw', 'stream-start', 'finish', 'finish-step', 'error'].includes(part.type) &&
+  !part.type.endsWith('-end')
+
+/** Whether a step is open after `parts`: content opens one, a `finish-step` closes it. */
+const stepOpenAfter = (open: boolean, parts: readonly HarnessV1StreamPart[]) =>
+  parts.reduce((o, p) => (p.type === 'finish-step' ? false : o || isContent(p)), open)
+
 const text = (content: PiContent[] | undefined) =>
   (content ?? []).flatMap((c) => (c.type === 'text' && c.text ? [c.text] : [])).join('')
 
@@ -142,6 +151,8 @@ export class PiStreamTranslator {
    * only when it doesn't fail, so a failed call's tool calls are dropped.
    */
   private held: HarnessV1StreamPart[] | undefined
+  /** Content went out since the last `finish-step`, which `finish` must not leave open. */
+  private stepOpen = false
 
   /** Parts for one stdout line. Lines that aren't JSON events are passed through as raw. */
   push(line: string): HarnessV1StreamPart[] {
@@ -156,6 +167,7 @@ export class PiStreamTranslator {
     const parts: HarnessV1StreamPart[] = []
     if (!this.finished) this.translate(event, parts)
     parts.push({ type: 'raw', rawValue: event })
+    this.stepOpen = stepOpenAfter(this.stepOpen, parts)
     return parts
   }
 
@@ -174,6 +186,8 @@ export class PiStreamTranslator {
     this.close(this.held ?? parts)
     parts.push(...(this.held ?? []))
     this.held = undefined
+    const raw = options.aborted ? 'aborted' : `exit ${options.exitCode}`
+    this.closeStep(parts, raw)
     if (!options.aborted) {
       const detail = options.stderr?.trim()
       const failure = this.failure ?? this.ended?.failure
@@ -189,7 +203,7 @@ export class PiStreamTranslator {
         ),
       })
     }
-    this.finish(parts, options.aborted ? 'aborted' : `exit ${options.exitCode}`)
+    this.finish(parts, raw)
     return parts
   }
 
@@ -301,6 +315,7 @@ export class PiStreamTranslator {
     const failure = this.ended?.failure
     const compactionError = this.ended?.compactionError
     this.ended = undefined
+    this.closeStep(parts, failure ? 'error' : 'stop')
     if (failure)
       parts.push({
         type: 'error',
@@ -355,6 +370,20 @@ export class PiStreamTranslator {
   private close(parts: HarnessV1StreamPart[]) {
     if (this.open?.emitted) parts.push({ type: `${this.open.type}-end`, id: this.open.id })
     this.open = undefined
+  }
+
+  /**
+   * Ends the step a turn cut short (a tool's result with no call after it): `finish` with step
+   * content still open fails the whole turn in `HarnessAgent`. It never ends as `error`, which
+   * says a failed model call was retried.
+   */
+  private closeStep(parts: HarnessV1StreamPart[], raw: string) {
+    if (!stepOpenAfter(this.stepOpen, parts)) return
+    parts.push({
+      type: 'finish-step',
+      finishReason: { unified: raw === 'stop' ? 'stop' : 'other', raw },
+      usage: toUsage(undefined),
+    })
   }
 
   private finish(parts: HarnessV1StreamPart[], raw: string) {
