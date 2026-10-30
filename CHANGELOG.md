@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.17.1](https://github.com/invertase/reeval/compare/v0.17.0...v0.17.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* **antigravity:** map manage_task, agy 1.4.7's background-task tool ([#722](https://github.com/invertase/reeval/issues/722)) ([bf646ac](https://github.com/invertase/reeval/commit/bf646ac19acf119594e6a9d2b5059ee00810b966))
+* **cli:** keep the run record when a launcher passes Ctrl-C on, and say what a second press skips ([#730](https://github.com/invertase/reeval/issues/730)) ([4898cee](https://github.com/invertase/reeval/commit/4898cee69ea759e0d6e064eefc3d2016b65c7dc9))
+* **cursor:** record tool calls with no result as unfinished, not failed ([#731](https://github.com/invertase/reeval/issues/731)) ([b8d3c6e](https://github.com/invertase/reeval/commit/b8d3c6e97d3f79a13c9dfe35c7ef0937db2b9dd8))
+* **egress:** record and report a refused brokered request ([#717](https://github.com/invertase/reeval/issues/717)) ([ea08bb7](https://github.com/invertase/reeval/commit/ea08bb7046111cfdc504cbd1cfa3018f8a93920d))
+* **egress:** record names that don't resolve apart from policy blocks ([#729](https://github.com/invertase/reeval/issues/729)) ([0b330fe](https://github.com/invertase/reeval/commit/0b330fec298a65e472c57f22ccb01d6aa1747d50))
+* **goose:** keep the image's bootstrap at every effort, so Goose isn't reinstalled at each attempt ([#721](https://github.com/invertase/reeval/issues/721)) ([a010453](https://github.com/invertase/reeval/commit/a0104532e4eb6a5ebd2dccd4582e43bf047538cd))
+* **goose:** pass Vertex AI's variables through a launcher, so the eval's own reach the agent ([#725](https://github.com/invertase/reeval/issues/725)) ([2738106](https://github.com/invertase/reeval/commit/2738106146e9e96b07f091297f586433b4d720ba))
+* **harness:** broker Antigravity's web search endpoint so its searches land ([#718](https://github.com/invertase/reeval/issues/718)) ([9e6a7af](https://github.com/invertase/reeval/commit/9e6a7af90ab51a4e8805c98cab561cb6f9c1f588))
+* **harness:** close the open step before finish when a turn is cut short ([#726](https://github.com/invertase/reeval/issues/726)) ([0ca2a70](https://github.com/invertase/reeval/commit/0ca2a7053449409c67a0d629f226fe5587eec3fa))
+* **harness:** make a key the model API rejects in a turn an infra error ([#728](https://github.com/invertase/reeval/issues/728)) ([fda3b46](https://github.com/invertase/reeval/commit/fda3b46460dace322d8ae8e07e0650fa046673cb))
+* **harness:** send OpenCode no effort on a model whose API refuses one ([#724](https://github.com/invertase/reeval/issues/724)) ([f17d42f](https://github.com/invertase/reeval/commit/f17d42fff602b1e24b91a987543cb13e6a022c54))
+* **install:** install the binary that never ran, not the one the start check ran ([#733](https://github.com/invertase/reeval/issues/733)) ([a1da280](https://github.com/invertase/reeval/commit/a1da2801e4ffde0a2e2a62b6138db6286c82d367))
+* **opencode:** keep the image's bootstrap on every provider, so OpenCode isn't reinstalled at each attempt ([#723](https://github.com/invertase/reeval/issues/723)) ([366969f](https://github.com/invertase/reeval/commit/366969fcb6e9508f929db8f2e6debcf3fe7ce0fd))
+* stop a canceled capture waiting for chrome, and keep digests whole for short secrets ([#719](https://github.com/invertase/reeval/issues/719)) ([47dbcec](https://github.com/invertase/reeval/commit/47dbcec6959757d327bdc0eb783349551d730cf6))
+
 ## [0.17.0](https://github.com/invertase/reeval/compare/v0.16.1...v0.17.0) (2026-10-30)
 
 
