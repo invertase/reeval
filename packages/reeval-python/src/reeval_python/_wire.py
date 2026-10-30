@@ -1131,12 +1131,18 @@ class FakeScriptStepError(TypedDict):
     error: str
 
 
+class FakeScriptStepRefuseKey(TypedDict):
+    refuseKey: str
+
+
 # One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
 # the command's stdout, `write` as file edits, and `reply` is the turn's final message. `mcp`
 # (`'<server>/<tool>'`) starts the environment's stdio MCP server in the sandbox, as an agent
 # would, and calls the tool with no arguments; it's reported as `mcp__<server>__<tool>`. `error`
 # ends the turn there with status `error` and that message, as a provider error would.
-FakeScriptStep: TypeAlias = "FakeScriptStepExec | FakeScriptStepWrite | FakeScriptStepReply | FakeScriptStepMcp | FakeScriptStepError"
+# `refuseKey` ends it as the model API rejecting the key in that variable would, which makes the
+# attempt an infra error.
+FakeScriptStep: TypeAlias = "FakeScriptStepExec | FakeScriptStepWrite | FakeScriptStepReply | FakeScriptStepMcp | FakeScriptStepError | FakeScriptStepRefuseKey"
 
 
 class FileChange(TypedDict):
@@ -1986,6 +1992,7 @@ CAMEL_KEYS: frozenset[str] = frozenset(
         "passRate",
         "providerOptions",
         "readFile",
+        "refuseKey",
         "resolvedModel",
         "servedModel",
         "startHangs",

@@ -20,7 +20,7 @@ On OpenAI, reeval brokers the key on `POST https://api.openai.com/v1/chat/comple
 
 fx ignores `HTTPS_PROXY`, so it sends its model calls to a relay on `127.0.0.1:47823` in the sandbox, which sends them on through the egress gateway.
 
-When the API rejects the key, the attempt error begins with `The API rejected <KEY>: set a valid key in the environment or .env.local`.
+When the API rejects the key, the attempt is an infra error whose message begins with `The API rejected <KEY>: set a valid key in the environment or .env.local`.
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/configuration/environments/secrets#keep-api-keys-on-the-host).
 

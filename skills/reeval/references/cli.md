@@ -101,7 +101,7 @@ no hidden default harness or include.
 | 0 | Pass, and `--dry-run` |
 | 1 | A gated failure |
 | 2 | A usage or config error, including a filter that matches nothing |
-| 3 | An infra error |
+| 3 | An infra error, such as a sandbox that failed to start or a harness key the API rejected |
 | 130, 143 | Ctrl-C, SIGTERM |
 
 ## Recording runs

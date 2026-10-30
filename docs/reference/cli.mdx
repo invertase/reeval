@@ -348,7 +348,7 @@ Filters match file paths, evaluation names, and cell keys as `reeval run` filter
 
 [//]: # (/generated:exit-codes)
 
-`reeval run` exits 0 on a pass, 1 on a fail, and 3 on an infrastructure error. A fail is a failed gated cell, a `budget.duration` stop, or an error outside any attempt. An ungated cell can fail on a run that exits 0. Ctrl-C exits 130, and SIGTERM exits 143. During insights, a signal keeps the run's exit code.
+`reeval run` exits 0 on a pass, 1 on a fail, and 3 on an infrastructure error. A fail is a failed gated cell, a `budget.duration` stop, or an error outside any attempt. A harness key the model API rejects, at the session start or in a turn, makes the attempt an infrastructure error, and the turn's `c.send()` throws, so no later check or judge runs. An ungated cell can fail on a run that exits 0. Ctrl-C exits 130, and SIGTERM exits 143. During insights, a signal keeps the run's exit code.
 
 `reeval doctor` exits 1 when a check fails. A warning alone exits 0.
 

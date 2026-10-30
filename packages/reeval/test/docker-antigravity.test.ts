@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { describe, test } from 'node:test'
 import { imageFor, LABEL } from '@reeval/sandbox-docker'
-import { project, readRun, runCli } from './helpers.ts'
+import { assertKeyRejected, project, readRun, runCli } from './helpers.ts'
 import { harnesses, keyOf } from './support/harnesses.ts'
 
 const liveContainers = (runId: string) =>
@@ -57,10 +57,8 @@ export default defineConfig({
 `
       const eval_ = `import { evaluate, expect } from 'reeval'
 evaluate('hi', async (c) => {
-  const turn = await c.send('Reply with the word hi.')
-  // Gemini saw the swapped-in (made-up) key: the gateway brokered it.
-  expect(turn.transcript.some((e) => e.type === 'error' && /API_KEY_INVALID/.test(e.message ?? ''))).toBe(true)
-  expect(turn.transcript.filter((e) => e.type === 'error')).toHaveLength(1)
+  // The rejected key makes the attempt an infra error; the checks below still run, caught.
+  await c.send('Reply with the word hi.').catch(() => {})
   // Nothing in the sandbox holds the key: the CLI's own env had only the placeholder.
   const search = (needle: string) => c.exec(\`grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev \${needle} / || true\`)
   expect((await search('not_a_real_key')).stdout.trim()).toBe('')
@@ -86,9 +84,13 @@ evaluate('hi', async (c) => {
         timeoutMs: 240_000,
       })
       const out = a.stdout + a.stderr
-      assert.equal(a.code, 0, out)
+      assert.equal(a.code, 3, out)
       assert.ok(Date.now() - started < 200_000, 'a refused key ends the turn; nothing hangs')
       assert.match(out, /turn 1 error: The API rejected GEMINI_API_KEY: set a valid key/)
+      const errors = assertKeyRejected(brokered.dir, 'GEMINI_API_KEY')
+      // Gemini saw the swapped-in (made-up) key: the gateway brokered it.
+      assert.equal(errors.length, 1, JSON.stringify(errors))
+      assert.match(errors[0]?.message ?? '', /API_KEY_INVALID/)
       assert.match(
         out,
         /reeval:egress POST https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models\/[\w.-]+:streamGenerateContent(\?alt=sse)? HTTP\/[\d.]+ \(set x-goog-api-key\)/,

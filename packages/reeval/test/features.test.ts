@@ -2249,6 +2249,30 @@ export const features: Feature[] = [
     timeoutMs: { fake: 180_000 },
   },
   {
+    dir: 'harness/rejected-key-is-infra',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    lands: {
+      outcome: 'infra_error',
+      error: {
+        kind: 'infra',
+        message:
+          /^The API rejected FAKE_API_KEY: set a valid key in the environment or \.env\.local\. 401 Unauthorized/,
+      },
+    },
+    canary: /expected 'error' to be 'completed'/,
+    record: ({ run }) => {
+      const turns = landed(run)?.turns ?? []
+      assert.deepEqual(
+        turns.map((t) => t.status),
+        ['error', 'error'],
+      )
+      assert.match(turns[1]?.error ?? '', /^The API rejected FAKE_API_KEY/)
+      assert.deepEqual(landed(run)?.checks, [], 'no check ran')
+      assert.equal(landed(run)?.assertions, undefined, 'no check ran')
+    },
+  },
+  {
     dir: 'env/setup-order',
     tiers: ['fake', 'docker'],
     env: 'ordered',

@@ -990,7 +990,8 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.auth-hint',
     area: 'Harnesses',
-    name: 'A refused harness key names its variable and how to fix it',
+    name: 'A refused harness key names its variable and how to fix it, and makes the attempt an infra error',
+    fixtures: ['harness/rejected-key-is-infra'],
     unit: [
       'reeval/test/unit.test.ts',
       'reeval/test/docker.test.ts',

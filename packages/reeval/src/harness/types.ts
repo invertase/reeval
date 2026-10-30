@@ -17,6 +17,11 @@ export type HarnessResult = {
   unreported: WebEventType[]
   /** Every stream part as the harness sent it, only when `REEVAL_RAW_TRANSCRIPT` is set. */
   raw?: unknown[]
+  /**
+   * The turn's error, naming the variable, when the model API rejected the harness's credential:
+   * the attempt is then an infra error, not the agent's failure.
+   */
+  rejectedKey?: string
 }
 
 /** One agent conversation in one sandbox. Each `send` is the next turn. */

@@ -13,7 +13,7 @@ import {
   LABEL,
 } from '@reeval/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
-import { pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
+import { assertKeyRejected, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 
 const dockerReady = (() => {
   try {
@@ -1483,9 +1483,9 @@ evaluate('hi', async (c) => { await c.send('Reply with the word hi.') })
         out,
         /turn 1 error: The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key/,
       )
-      const { run, evals } = readRun(p.dir)
-      assert.equal(evals[0]?.trial.turns[0]?.status, 'error')
-      assert.equal(liveContainers(run.runId), '')
+      assert.equal(r.code, 3, out)
+      assertKeyRejected(p.dir, 'GOOGLE_GENERATIVE_AI_API_KEY')
+      assert.equal(liveContainers(readRun(p.dir).run.runId), '')
     },
   )
 
@@ -1596,9 +1596,9 @@ evaluate('hi', async (c) => { await c.send('Reply with the word hi.') })
           out,
           /turn 1 error: The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key/,
         )
-        const { run, evals } = readRun(p.dir)
-        assert.equal(evals[0]?.trial.turns[0]?.status, 'error')
-        assert.equal(liveContainers(run.runId), '')
+        assert.equal(r.code, 3, out)
+        assertKeyRejected(p.dir, 'GOOGLE_GENERATIVE_AI_API_KEY')
+        assert.equal(liveContainers(readRun(p.dir).run.runId), '')
       },
     )
   }
@@ -1615,7 +1615,7 @@ export default defineConfig({ harness: codex({ model: 'gpt-5.4-mini' }), timeout
 `,
         'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('hi', async (c) => {
-  await c.send('Reply with the word hi.')
+  await c.send('Reply with the word hi.').catch(() => {})
   // Each turn is its own codex process, gone by now: the files it left are what can hold the key.
   const found = await c.exec('grep -rl not_a_real_key "$HOME" /reeval /tmp 2>/dev/null; true')
   expect(found.stdout).toBe('')
@@ -1636,11 +1636,9 @@ evaluate('hi', async (c) => {
       assert.doesNotMatch(out, /refused/)
       assert.doesNotMatch(out, /chatgpt\.com|github\.com/, 'no analytics or plugin sync')
       assert.match(out, /turn 1 error: The API rejected OPENAI_API_KEY: set a valid key/)
-      const { run, evals } = readRun(p.dir)
-      const trial = evals[0]?.trial
-      assert.equal(trial?.turns[0]?.status, 'error', JSON.stringify(trial?.turns[0]))
-      assert.equal(trial?.outcome, 'pass', 'the sandbox saw only the placeholder')
-      assert.equal(liveContainers(run.runId), '')
+      assert.equal(r.code, 3, out)
+      assertKeyRejected(p.dir, 'OPENAI_API_KEY')
+      assert.equal(liveContainers(readRun(p.dir).run.runId), '')
     },
   )
 
@@ -1656,7 +1654,7 @@ export default defineConfig({ harness: grokBuild({ model: 'grok-4.6' }), timeout
 `,
         'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('hi', async (c) => {
-  await c.send('Reply with the word hi.')
+  await c.send('Reply with the word hi.').catch(() => {})
   const found = await c.exec('grep -rl not_a_real_key "$HOME" /reeval /tmp 2>/dev/null; true')
   expect(found.stdout).toBe('')
   const environ = await c.exec('cat /proc/[0-9]*/environ | tr "\\\\0" "\\\\n"')
@@ -1687,11 +1685,9 @@ evaluate('hi', async (c) => {
       }
       assert.doesNotMatch(out, /refused/)
       assert.match(out, /turn 1 error: The API rejected XAI_API_KEY: set a valid key/)
-      const { run, evals } = readRun(p.dir)
-      const trial = evals[0]?.trial
-      assert.equal(trial?.turns[0]?.status, 'error', JSON.stringify(trial?.turns[0]))
-      assert.equal(trial?.outcome, 'pass', 'the sandbox saw only the placeholder')
-      assert.equal(liveContainers(run.runId), '')
+      assert.equal(r.code, 3, out)
+      assertKeyRejected(p.dir, 'XAI_API_KEY')
+      assert.equal(liveContainers(readRun(p.dir).run.runId), '')
     },
   )
 
@@ -1711,15 +1707,8 @@ export default defineConfig({
 `
       const eval_ = `import { evaluate, expect } from 'reeval'
 evaluate('hi', async (c) => {
-  const turn = await c.send('Reply with the word hi.')
-  expect(
-    turn.transcript.some(
-      (e) =>
-        e.type === 'error' && /401|Invalid API key/i.test(e.message ?? ''),
-    ),
-  ).toBe(true)
-  // The failed call is one error event, not the stream's and the thrown error's both.
-  expect(turn.transcript.filter((e) => e.type === 'error')).toHaveLength(1)
+  // The rejected key makes the attempt an infra error; the checks below still run, caught.
+  await c.send('Reply with the word hi.').catch(() => {})
   const environ = await c.exec('env; cat /proc/[0-9]*/environ | tr "\\\\0" "\\\\n"')
   // After a 401 the CLI may unset ANTHROPIC_API_KEY. What's left is reeval's
   // placeholder, the adapter's, or nothing — never the host key.
@@ -1753,9 +1742,13 @@ evaluate('hi', async (c) => {
         timeoutMs: 240_000,
       })
       const out = a.stdout + a.stderr
-      assert.equal(a.code, 0, out)
+      assert.equal(a.code, 3, out)
       assert.ok(Date.now() - started < 200_000, 'a refused key ends the turn; nothing hangs')
       assert.match(out, /turn 1 error: The API rejected ANTHROPIC_API_KEY: set a valid key/)
+      const errors = assertKeyRejected(brokered.dir, 'ANTHROPIC_API_KEY')
+      // The failed call is one error event, not the stream's and the thrown error's both.
+      assert.equal(errors.length, 1, JSON.stringify(errors))
+      assert.match(errors[0]?.message ?? '', /401|Invalid API key/i)
       assert.match(
         out,
         /reeval:egress POST https:\/\/api\.anthropic\.com\/v1\/messages HTTP\/[\d.]+ \(set x-api-key\)/,

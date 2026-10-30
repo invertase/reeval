@@ -11,7 +11,7 @@ description: "The Goose harness runs Goose in the sandbox on a Gemini API key an
 
 Goose reads that value as `GOOGLE_API_KEY`. The gateway brokers the key in the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` and `GET /v1beta/models` at `generativelanguage.googleapis.com`. A restricted egress policy allows `generativelanguage.googleapis.com`.
 
-When the API rejects the key, the attempt error begins with `The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key in the environment or .env.local`.
+When the API rejects the key, the attempt is an infra error whose message begins with `The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key in the environment or .env.local`.
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/configuration/environments/secrets#keep-api-keys-on-the-host).
 

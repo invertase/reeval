@@ -1543,8 +1543,12 @@ export function authHint(agent: Agent, message: string, refused = false): string
   if (agent.token) {
     return `The API rejected the access token reeval minted from ${agent.credential}: check gcloud auth application-default login (or GOOGLE_APPLICATION_CREDENTIALS) and the project's Vertex AI access`
   }
-  return `The API rejected ${agent.credential}: set a valid key in the environment or .env.local`
+  return keyRejected(agent.credential)
 }
+
+/** What to do when the API refused the key in `credential`, naming it. */
+export const keyRejected = (credential: string) =>
+  `The API rejected ${credential}: set a valid key in the environment or .env.local`
 
 /**
  * The agent's credential from the host, as the adapter's explicit `auth`. Fails closed. Empty for

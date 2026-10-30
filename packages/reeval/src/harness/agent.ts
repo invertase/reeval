@@ -247,6 +247,17 @@ export function createAgentHarness(
                 atMs: at,
               })
             }
+            let rejected: string | undefined
+            const transcript = events.map((e) => {
+              if (e.type !== 'error') return e
+              const hint = authHint(catalog, e.message, refused)
+              if (!hint) return e
+              const message = `${hint}. ${e.message}`
+              rejected ??= message
+              return { ...e, message }
+            })
+            // A refused call the CLI got past, on a turn that went on to work, isn't a rejected key.
+            const lost = status === 'error' || (status === 'completed' && !!failed)
             return {
               text,
               status,
@@ -256,11 +267,8 @@ export function createAgentHarness(
               unreported: catalog.unreported?.(finishMetadata) ?? [],
               startedAt: new Date(startedAt).toISOString(),
               durationMs: Date.now() - startedAt,
-              transcript: events.map((e) => {
-                if (e.type !== 'error') return e
-                const hint = authHint(catalog, e.message, refused)
-                return hint ? { ...e, message: `${hint}. ${e.message}` } : e
-              }),
+              transcript,
+              ...(rejected && lost ? { rejectedKey: rejected } : {}),
               ...(process.env.REEVAL_RAW_TRANSCRIPT ? { raw: parts } : {}),
             }
           }

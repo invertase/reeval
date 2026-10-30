@@ -11,7 +11,7 @@ description: "The Cursor harness runs Cursor's agent in the sandbox on a Cursor 
 
 reeval exchanges that key for `accessToken` and `refreshToken` at `api2.cursor.sh`, on `POST /auth/exchange_user_api_key`. Requests to `cursor.sh` and `*.cursor.sh` carry those tokens. A restricted egress policy allows `api2.cursor.sh` and `*.cursor.sh`.
 
-When the API rejects the key, the attempt error begins with `The API rejected CURSOR_API_KEY: set a valid key in the environment or .env.local`.
+When the API rejects the key, the attempt is an infra error whose message begins with `The API rejected CURSOR_API_KEY: set a valid key in the environment or .env.local`.
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/configuration/environments/secrets#keep-api-keys-on-the-host).
 
