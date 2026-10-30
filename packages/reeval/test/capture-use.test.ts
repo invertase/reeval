@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { crc32, deflateSync } from 'node:zlib'
+import type { Landed, PageLayout, ShotClip } from '../src/capture/browser.ts'
 import { fakeInstructions } from '../src/capture/fake-instructions.ts'
 import {
   dispatchInput,
@@ -8,7 +9,7 @@ import {
   parseInstructions,
   resolveWait,
 } from '../src/capture/index.ts'
-import { pathOf } from '../src/capture/page-state.ts'
+import { pathOf, SETTLE_CAP_MS, type StateField, settledState } from '../src/capture/page-state.ts'
 import { pageChanged, VIEW_CHANGE } from '../src/capture/png.ts'
 import { stubPng } from '../src/capture/stub.ts'
 import {
@@ -16,8 +17,13 @@ import {
   type JourneyOptions,
   normalizesPoints,
   runJourney,
+  SHOT_EDGE,
+  SHOT_PIXELS,
   type StepShot,
-  scalePoints,
+  shotRegion,
+  shotScale,
+  TALL_PAGE,
+  toPagePoints,
 } from '../src/capture/use.ts'
 import type { CaptureUseAction } from '../src/types.ts'
 
@@ -58,6 +64,15 @@ test('mapPagePoint scrolls the window when the click is below it', () => {
   const below = mapPagePoint(10, 2000, window, { width: 1280, height: 3000 }, 0)
   assert.equal(below.dy > 0, true)
   assert.ok(below.y >= 0 && below.y < window.height)
+  // A point in the window stays where it is: re-centering it would scroll on every click.
+  assert.deepEqual(mapPagePoint(10, 1400, window, { width: 1280, height: 3000 }, 800), {
+    x: 10,
+    y: 600,
+    scrollY: 800,
+    dy: 0,
+  })
+  const above = mapPagePoint(10, 100, window, { width: 1280, height: 3000 }, 800)
+  assert.deepEqual(above, { x: 10, y: 100, scrollY: 0, dy: -800 })
 })
 
 test('dispatchInput sends CDP Input events and never Runtime.evaluate', async () => {
@@ -164,8 +179,11 @@ async function journeyClick(model: string, x: number, y: number) {
     },
     async dispatch(action: CaptureUseAction) {
       clicks.push(action)
+      return undefined
     },
+    layout: async () => undefined,
     busy: () => false,
+    requests: () => 0,
     dialogs: () => [],
   }
   await runJourney(session, 'http://127.0.0.1/', {
@@ -187,29 +205,77 @@ test("runJourney scales a Gemini model's 0-1000 point to the screenshot's CSS pi
   assert.match(gemini.systems[0] ?? '', /normalized to 0-1000/)
   const claude = await journeyClick('anthropic/claude-sonnet-5', 1000, 550)
   assert.deepEqual(claude.clicks, [{ type: 'click', x: 1000, y: 550 }])
-  assert.match(claude.systems[0] ?? '', /CSS pixels/)
+  assert.match(claude.systems[0] ?? '', /pixels on the screenshot, whose size each turn gives/)
 })
 
-test('scalePoints scales every point of an action and only Gemini ids normalize', () => {
-  const page = { width: 1280, height: 3000 }
-  assert.deepEqual(scalePoints({ type: 'drag', x: 0, y: 500, toX: 1000, toY: 1000 }, page), {
+test('toPagePoints maps every point of an action from the screenshot to the page, and refuses one off it', () => {
+  // The window of a 3000 px page, scrolled 1200 px down, shown at half scale.
+  const shot = { image: { width: 640, height: 360 }, region: { y: 1200, width: 1280, height: 720 } }
+  assert.deepEqual(toPagePoints({ type: 'click', x: 320, y: 180 }, shot, false), {
+    type: 'click',
+    x: 640,
+    y: 1560,
+  })
+  assert.deepEqual(toPagePoints({ type: 'drag', x: 0, y: 500, toX: 1000, toY: 1000 }, shot, true), {
     type: 'drag',
     x: 0,
-    y: 1500,
+    y: 1560,
     toX: 1280,
-    toY: 3000,
+    toY: 1920,
   })
-  assert.deepEqual(scalePoints({ type: 'scroll', x: 500, y: 500, dy: 300 }, page), {
+  assert.deepEqual(toPagePoints({ type: 'scroll', x: 500, y: 500, dy: 300 }, shot, true), {
     type: 'scroll',
     x: 640,
-    y: 1500,
+    y: 1560,
     dy: 300,
   })
-  assert.deepEqual(scalePoints({ type: 'type', text: 'hi' }, page), { type: 'type', text: 'hi' })
+  assert.deepEqual(toPagePoints({ type: 'type', text: 'hi' }, shot, false), {
+    type: 'type',
+    text: 'hi',
+  })
+  assert.deepEqual(toPagePoints({ type: 'click', x: 700, y: 10 }, shot, false), {
+    refused: '(700, 10) is outside the screenshot, which is 640×360',
+  })
+  assert.deepEqual(toPagePoints({ type: 'drag', x: 1, y: 1, toX: 5, toY: 1200 }, shot, true), {
+    refused: '(5, 1200) is outside the screenshot, which is 0-1000 on both axes',
+  })
   assert.equal(normalizesPoints('google/gemini-3.8-flash'), true)
   assert.equal(normalizesPoints('vertex/gemini-3.8-pro'), true)
   assert.equal(normalizesPoints('anthropic/claude-sonnet-5'), false)
   assert.equal(normalizesPoints('openai/gpt-5.5'), false)
+})
+
+test('shotRegion shows the whole page up to TALL_PAGE windows, and the window on a taller one', () => {
+  const win = { width: 1280, height: 720 }
+  assert.deepEqual(shotRegion({ scrollY: 0, width: 1280, height: 400 }, win), {
+    y: 0,
+    width: 1280,
+    height: 720,
+    partial: false,
+  })
+  assert.deepEqual(shotRegion({ scrollY: 0, width: 1280, height: TALL_PAGE * 720 }, win), {
+    y: 0,
+    width: 1280,
+    height: 1440,
+    partial: false,
+  })
+  assert.deepEqual(shotRegion({ scrollY: 900, width: 1280, height: 6000 }, win), {
+    y: 900,
+    width: 1280,
+    height: 720,
+    partial: true,
+  })
+  // A stale or overscrolled offset still shows a whole window of the page.
+  assert.equal(shotRegion({ scrollY: 5900, width: 1280, height: 6000 }, win).y, 5280)
+})
+
+test('shotScale keeps a screenshot within the pixels and the edge a model is sent', () => {
+  assert.equal(shotScale(1280, 720), 1)
+  const tall = shotScale(1280, 1440)
+  assert.ok(1280 * tall * 1440 * tall <= SHOT_PIXELS)
+  assert.ok(shotScale(1280, 1440) > 0.7)
+  const wide = shotScale(4000, 300)
+  assert.ok(4000 * wide <= SHOT_EDGE)
 })
 
 test('runJourney times out before the saved screenshot', async () => {
@@ -227,8 +293,12 @@ test('runJourney times out before the saved screenshot', async () => {
       late.push(remaining() <= 0)
       return stubPng('x', 1, '/', window)
     },
-    async dispatch() {},
+    async dispatch() {
+      return undefined
+    },
+    layout: async () => undefined,
     busy: () => false,
+    requests: () => 0,
     dialogs: () => [],
   }
   await assert.rejects(
@@ -285,10 +355,19 @@ function scriptedModel(next: (text: string) => [string, object], prompts: string
 }
 
 /**
- * A 100×100 RGB PNG, white but for `painted` black pixels on its even rows. Each odd row repeats
- * the row above through the Up filter, so each painted pixel shows twice.
+ * A `width`×`height` RGB PNG, white but for `painted` black pixels on its even rows. Each odd row
+ * repeats the row above through the Up filter, so each painted pixel shows twice.
  */
-function pagePng(painted: number): Buffer {
+const pngs = new Map<string, Buffer>()
+
+function pagePng(painted: number, width = 100, height = 100): Buffer {
+  const key = `${painted} ${width} ${height}`
+  const made = pngs.get(key) ?? drawPng(painted, width, height)
+  pngs.set(key, made)
+  return made
+}
+
+function drawPng(painted: number, width: number, height: number): Buffer {
   const chunk = (type: string, data: Buffer) => {
     const body = Buffer.concat([Buffer.from(type, 'ascii'), data])
     const out = Buffer.alloc(12 + data.length)
@@ -298,14 +377,16 @@ function pagePng(painted: number): Buffer {
     return out
   }
   const ihdr = Buffer.alloc(13)
-  ihdr.writeUInt32BE(100, 0)
-  ihdr.writeUInt32BE(100, 4)
+  ihdr.writeUInt32BE(width, 0)
+  ihdr.writeUInt32BE(height, 4)
   ihdr[8] = 8
   ihdr[9] = 2
-  const rows = Buffer.alloc(100 * 301, 0xff)
-  for (let y = 1; y < 100; y += 2) rows.fill(0, y * 301, (y + 1) * 301).writeUInt8(2, y * 301)
-  for (let i = 0; i < painted; i++) {
-    const at = 2 * Math.floor(i / 100) * 301 + 1 + (i % 100) * 3
+  const stride = width * 3 + 1
+  const rows = Buffer.alloc(stride * height, 0xff)
+  for (let y = 1; y < height; y += 2)
+    rows.fill(0, y * stride, (y + 1) * stride).writeUInt8(2, y * stride)
+  for (let i = 0; i < Math.min(painted, width * Math.ceil(height / 2)); i++) {
+    const at = 2 * Math.floor(i / width) * stride + 1 + (i % width) * 3
     rows.fill(0, at, at + 3)
   }
   return Buffer.concat([
@@ -362,20 +443,30 @@ const stillState = (): Probed => ({
   nodes: 10,
 })
 
+/** The scripted sessions' window, which their screenshots fill. */
+const view = { width: 640, height: 360 }
+
 /**
  * A session whose page, as the probe reads it, is `state(moves dispatched)`. `changes` also
- * changes its pixels with each move.
+ * changes its pixels with each move. `requests` is how many requests the page has sent.
  */
 function scriptedSession(
   changes: boolean,
   state: (moves: number) => Probed = changes ? signUpState() : stillState,
-  extra: { busy?: () => boolean; dialogs?: (moves: number) => string[] } = {},
+  extra: {
+    busy?: () => boolean
+    dialogs?: (moves: number) => string[]
+    requests?: () => number
+    layout?: () => PageLayout | undefined
+  } = {},
 ) {
   const dispatched: CaptureUseAction[] = []
+  const shots: Array<[boolean, ShotClip | undefined]> = []
   return {
     dispatched,
+    shots,
     session: {
-      window,
+      window: view,
       cdp: {
         on() {},
         send: async (method: string) =>
@@ -385,13 +476,25 @@ function scriptedSession(
         return { loaderId: 'n' }
       },
       async wait() {},
-      async screenshot() {
-        return pagePng(changes ? dispatched.length * 200 : 0)
+      async screenshot(fullPage: boolean, clip?: ShotClip) {
+        shots.push([fullPage, clip])
+        const size = clip
+          ? {
+              width: Math.round(clip.width * clip.scale),
+              height: Math.round(clip.height * clip.scale),
+            }
+          : view
+        return pagePng(changes ? dispatched.length * 25_600 : 0, size.width, size.height)
       },
-      async dispatch(action: CaptureUseAction) {
+      async dispatch(action: CaptureUseAction): Promise<Landed | undefined> {
         dispatched.push(action)
+        return undefined
+      },
+      async layout() {
+        return extra.layout ? extra.layout() : { scrollY: 0, ...view }
       },
       busy: extra.busy ?? (() => false),
+      requests: extra.requests ?? (() => 0),
       dialogs: () => extra.dialogs?.(dispatched.length) ?? [],
     },
   }
@@ -449,7 +552,7 @@ test('runJourney gives the model its moves and their effect, so a multi-step for
   assert.equal(result.moves, 5)
   assert.match(
     prompts[0] ?? '',
-    /^Goal: Create an account and submit the form\nThis is instruction 1 of 2\.\nThe page is at \/sign-up\.\nNothing is focused\.\nYou have made no moves/,
+    /^Goal: Create an account and submit the form\nThis is instruction 1 of 2\. Still to come, not part of this goal: "Open the profile"\.\nThe screenshot is 640×360 pixels\.\nThe page is at \/sign-up\.\nNothing is focused\.\nYou have made no moves/,
   )
   assert.match(
     prompts[5] ?? '',
@@ -461,7 +564,7 @@ test('runJourney gives the model its moves and their effect, so a multi-step for
   )
   assert.match(
     prompts[6] ?? '',
-    /instruction 2 of 2\. Already done: "Create an account and submit the form"\.\nThe page is at \/profile\./,
+    /instruction 2 of 2\. Already done: "Create an account and submit the form"\.\nThe screenshot is 640×360 pixels\.\nThe page is at \/profile\./,
   )
 })
 
@@ -568,7 +671,7 @@ test('runJourney names the instruction, the moves and the timeout when a model c
   try {
     await assert.rejects(
       journey(session, slow, ['Open the profile', 'Create an account and submit the form'], () =>
-        Math.max(0, 300 - (Date.now() - start)),
+        Math.max(0, 1500 - (Date.now() - start)),
       ),
       (error: Error) => {
         assert.equal(error.name, 'Error')
@@ -857,11 +960,15 @@ test('runJourney asks again after a move marked final that changed nothing, sinc
 function redirectingSignIn(redirectMs: number) {
   let submitted = 0
   const landed = () => submitted > 0 && Date.now() - submitted > redirectMs
-  const app = scriptedSession(false, (n) => ({
-    ...stillState(),
-    url: `http://127.0.0.1${landed() ? '/profile' : '/sign-in'}`,
-    text: `t${n}`,
-  }))
+  const app = scriptedSession(
+    false,
+    (n) => ({
+      ...stillState(),
+      url: `http://127.0.0.1${landed() ? '/profile' : '/sign-in'}`,
+      text: `t${n}`,
+    }),
+    { requests: () => app.dispatched.length },
+  )
   const dispatch = app.session.dispatch
   app.session.dispatch = async (action) => {
     if (!submitted) submitted = Date.now()
@@ -959,6 +1066,231 @@ test("runJourney saves each instruction's screenshot, and names why one stalled 
     { index: 1, instruction: 'Open the profile', moves: 0, ended: 'done' },
     { index: 2, instruction: 'Once the profile is visible, sign out', moves: 32, ended: 'stopped' },
   ])
+})
+
+test('runJourney goes on after a final move that only opened a step on the page, and ends on the one that sends', async () => {
+  // A delete button that opens an in-page confirmation (no request, no dialog), then its confirm.
+  const prompts: string[] = []
+  const ended: string[] = []
+  let sent = 0
+  const { session, dispatched } = scriptedSession(
+    false,
+    (n) => ({ ...stillState(), text: ['list', 'confirm open'][n] ?? 'deleted' }),
+    { requests: () => sent },
+  )
+  const dispatch = session.dispatch
+  session.dispatch = async (action) => {
+    if (dispatched.length === 1) sent++
+    return dispatch(action)
+  }
+  const result = await journey(
+    session,
+    scriptedModel(
+      (text) =>
+        /^1\. /m.test(text)
+          ? ['click', { x: 300, y: 200, completesGoal: true }]
+          : ['click', { x: 100, y: 100, completesGoal: true }],
+      prompts,
+    ),
+    ['Delete the draft'],
+    undefined,
+    (shot) => {
+      ended.push(shot.ended)
+      return undefined
+    },
+  )
+  assert.equal(result.moves, 2)
+  assert.deepEqual(ended, ['final'])
+  assert.match(
+    prompts[1] ?? '',
+    /^Move 1 was marked completesGoal, but it sent no request and opened no page or dialog, so the goal goes on\./m,
+  )
+})
+
+test("runJourney asks again after a final click whose only effect was reeval's own scroll", async () => {
+  const prompts: string[] = []
+  const { session, dispatched } = scriptedSession(true, stillState)
+  session.dispatch = async (action) => {
+    dispatched.push(action)
+    return { scrolled: true }
+  }
+  await journey(
+    session,
+    scriptedModel(
+      (text) =>
+        /^1\. .* → nothing changed$/m.test(text)
+          ? ['done', {}]
+          : ['click', { x: 10, y: 300, completesGoal: true }],
+      prompts,
+    ),
+    ['Accept the terms'],
+  )
+  assert.equal(dispatched.length, 1)
+  assert.equal(prompts.length, 2)
+})
+
+test('runJourney names what each move landed on, and the stuck error says it too', async () => {
+  const prompts: string[] = []
+  const { session, dispatched } = scriptedSession(false)
+  session.dispatch = async (action) => {
+    dispatched.push(action)
+    return { target: 'button "Pay"', scrolled: false }
+  }
+  await assert.rejects(
+    journey(
+      session,
+      scriptedModel(() => ['click', { x: 180, y: 130 }], prompts),
+      ['Pay'],
+    ),
+    /repeated click \{"x":180,"y":130\} on button "Pay" 5 times and nothing changed$/,
+  )
+  assert.match(
+    prompts[1] ?? '',
+    /^1\. click \{"x":180,"y":130\} on button "Pay" → nothing changed$/m,
+  )
+})
+
+test('runJourney refuses a point outside the screenshot and says how big it is', async () => {
+  const prompts: string[] = []
+  const { session, dispatched } = scriptedSession(false)
+  await journey(
+    session,
+    scriptedModel(
+      (text) => (/^1\. /m.test(text) ? ['done', {}] : ['click', { x: 900, y: 40 }]),
+      prompts,
+    ),
+    ['Open the menu'],
+  )
+  assert.equal(dispatched.length, 0)
+  assert.match(
+    prompts[1] ?? '',
+    /^1\. click \{"x":900,"y":40\} → not made: \(900, 40\) is outside the screenshot, which is 640×360$/m,
+  )
+})
+
+test('runJourney shows the window of a tall page, says where it is, and maps points back to the page', async () => {
+  const prompts: string[] = []
+  const { session, dispatched, shots } = scriptedSession(false, stillState, {
+    layout: () => ({ scrollY: 1200, width: 640, height: 5000 }),
+  })
+  await journey(
+    session,
+    scriptedModel(
+      (text) => (/^1\. /m.test(text) ? ['done', {}] : ['click', { x: 320, y: 100 }]),
+      prompts,
+    ),
+    ['Open post 37'],
+  )
+  assert.deepEqual(
+    shots.find(([, clip]) => clip),
+    [false, { x: 0, y: 1200, width: 640, height: 360, scale: 1 }],
+  )
+  assert.match(
+    prompts[0] ?? '',
+    /^The page is 5000 px tall, more than the screenshot shows: it shows the window, scrolled 1200 px down\. Scroll to see the rest\.$/m,
+  )
+  assert.deepEqual(dispatched, [{ type: 'click', x: 320, y: 1300 }])
+})
+
+/** A page whose text changes `ms` after `since()`, once. */
+const changesAfter = (since: () => number, ms: number, before: string, after: string) => () => ({
+  ...stillState(),
+  text: since() > 0 && Date.now() - since() >= ms ? after : before,
+})
+
+test("runJourney waits out a hover menu's intent delay, so the model never chooses on the page before it", async () => {
+  const prompts: string[] = []
+  let hovered = 0
+  const { session, dispatched } = scriptedSession(
+    false,
+    changesAfter(() => hovered, 300, 'closed', 'open'),
+  )
+  session.dispatch = async (action) => {
+    hovered = Date.now()
+    dispatched.push(action)
+    return undefined
+  }
+  await journey(
+    session,
+    scriptedModel(
+      (text) => (/^1\. /m.test(text) ? ['done', {}] : ['hover', { x: 100, y: 20 }]),
+      prompts,
+    ),
+    ['Open the Products menu'],
+  )
+  assert.equal(prompts.length, 2)
+  assert.match(prompts[1] ?? '', /^1\. hover \{"x":100,"y":20\} → the page's content changed$/m)
+})
+
+test("runJourney waits out a search box's debounce after typing", async () => {
+  const prompts: string[] = []
+  let typed = 0
+  const { session, dispatched } = scriptedSession(
+    false,
+    changesAfter(() => typed, 500, 'no results', 'three results'),
+  )
+  session.dispatch = async (action) => {
+    if (action.type === 'type') typed = Date.now()
+    dispatched.push(action)
+    return undefined
+  }
+  await journey(
+    session,
+    scriptedModel(
+      (text) => (/^1\. /m.test(text) ? ['done', {}] : ['type', { text: 'ada' }]),
+      prompts,
+    ),
+    ['Search for ada'],
+  )
+  assert.equal(prompts.length, 2)
+  assert.match(prompts[1] ?? '', /^1\. type \{"text":"ada"\} → the page's content changed$/m)
+})
+
+test('runJourney lets content that loads after load land before its first look, and marks none of it volatile', async () => {
+  const prompts: string[] = []
+  const opened = Date.now()
+  let clicked = 0
+  const loading = () => Date.now() - opened < 300
+  const { session } = scriptedSession(
+    false,
+    () => ({ ...stillState(), text: loading() ? 'loading' : clicked ? 'saved' : 'loaded' }),
+    { busy: loading },
+  )
+  session.dispatch = async () => {
+    clicked = Date.now()
+    return undefined
+  }
+  await journey(
+    session,
+    scriptedModel(
+      (text) => (/^1\. /m.test(text) ? ['done', {}] : ['click', { x: 10, y: 10 }]),
+      prompts,
+    ),
+    ['Save'],
+  )
+  assert.equal(prompts.length, 2)
+  assert.doesNotMatch(prompts.join('\n'), /keep changing on their own/)
+  assert.match(prompts[1] ?? '', /^1\. click \{"x":10,"y":10\} → the page's content changed$/m)
+})
+
+test('settledState marks a field volatile at its cap only if it kept changing, not if it changed once', async () => {
+  const started = Date.now()
+  const once = scriptedSession(
+    false,
+    () => ({
+      ...stillState(),
+      text: Date.now() - started >= SETTLE_CAP_MS - 200 ? 'rows' : 'none',
+    }),
+    { busy: () => true },
+  )
+  const volatile = new Set<StateField>()
+  const settled = await settledState(once.session as never, volatile, () => 10_000)
+  assert.deepEqual([...volatile], [])
+  assert.equal(settled.text, 'rows')
+  let tick = 0
+  const clock = scriptedSession(false, () => ({ ...stillState(), text: `clock ${tick++}` }))
+  await settledState(clock.session as never, volatile, () => 10_000)
+  assert.deepEqual([...volatile], ['text'])
 })
 
 test('pathOf strips the query and caps what the page controls', () => {

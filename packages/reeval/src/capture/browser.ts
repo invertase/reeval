@@ -64,7 +64,10 @@ export async function waitForPage(
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
 
-/** Map a full-page click onto the live window, scrolling with the wheel if needed. */
+/**
+ * Map a full-page point onto the live window, scrolled to `scrollY`. A point already in the window
+ * is left where it is; any other is scrolled to the window's middle with the wheel.
+ */
 export function mapPagePoint(
   x: number,
   y: number,
@@ -72,8 +75,9 @@ export function mapPagePoint(
   page: { width: number; height: number } | undefined,
   scrollY: number,
 ): { x: number; y: number; scrollY: number; dy: number } {
-  const maxY = Math.max(0, (page?.height ?? window.height) - window.height)
-  const target = y >= window.height || y < 0 ? clamp(y - window.height / 2, 0, maxY) : scrollY
+  const maxY = Math.max(0, (page?.height ?? window.height) - window.height, scrollY)
+  const visible = y >= scrollY && y < scrollY + window.height
+  const target = visible ? scrollY : clamp(y - window.height / 2, 0, maxY)
   const nextY = clamp(target, 0, maxY)
   return {
     x: clamp(x, 0, window.width - 1),
@@ -148,12 +152,13 @@ export async function dispatchInput(
   if (action.type === 'scroll') {
     await cdp.send('Input.dispatchMouseEvent', {
       type: 'mouseWheel',
-      x: action.x,
-      y: action.y,
+      x: clamp(action.x, 0, window.width - 1),
+      y: clamp(action.y - scrollY, 0, window.height - 1),
       deltaX: 0,
       deltaY: action.dy,
     })
-    return scrollY + action.dy
+    const maxY = Math.max(0, (page?.height ?? window.height) - window.height)
+    return clamp(scrollY + action.dy, 0, Math.max(maxY, scrollY))
   }
   const mapped = mapPagePoint(
     action.type === 'drag' ? action.x : action.x,
@@ -308,12 +313,14 @@ function requestId(msg: unknown): string | undefined {
 export function trackNetwork(
   cdp: Pick<CdpClient, 'on'>,
   quietMs = NETWORK_QUIET_MS,
-): { quiet(timeoutMs: number): Promise<void>; fresh(): boolean } {
+): { quiet(timeoutMs: number): Promise<void>; fresh(): boolean; started(): number } {
   const inFlight = new Map<string, number>()
+  let started = 0
   let changed: (() => void) | undefined
   cdp.on('Network.requestWillBeSent', (msg) => {
     const id = requestId(msg)
     if (id === undefined) return
+    started++
     inFlight.set(id, Date.now())
     changed?.()
   })
@@ -325,6 +332,7 @@ export function trackNetwork(
   cdp.on('Network.loadingFinished', end)
   cdp.on('Network.loadingFailed', end)
   return {
+    started: () => started,
     /** A request started in the last `FRESH_REQUEST_MS` is still in flight; a long poll is not fresh. */
     fresh() {
       const since = Date.now() - FRESH_REQUEST_MS
@@ -698,16 +706,96 @@ async function disposeChrome(child: ChildProcess, userData: string): Promise<voi
 
 type DialogOpening = { type?: string; message?: string; defaultPrompt?: string }
 
+export type ShotClip = { x: number; y: number; width: number; height: number; scale: number }
+
+export type PageLayout = { scrollY: number; width: number; height: number }
+
+export type Landed = { target?: string; scrolled: boolean }
+
+/** Clipped text the page controls, in the words the model reads. */
+const TARGET_CAP = 40
+
+// Read-only: names the element at a window point (through open shadow roots) and the control it's
+// in, as `button "Pay"`.
+const targetAt = (x: number, y: number) => `(() => {
+  const clip = (s) => String(s ?? '').replace(/\\s+/g, ' ').trim().slice(0, ${TARGET_CAP})
+  let e = document.elementFromPoint(${x}, ${y})
+  while (e && e.shadowRoot && e.shadowRoot.elementFromPoint) {
+    const inner = e.shadowRoot.elementFromPoint(${x}, ${y})
+    if (!inner || inner === e) break
+    e = inner
+  }
+  if (!e) return null
+  const control = e.closest('a,button,input,select,textarea,label,summary,[role],[onclick],[tabindex]') || e
+  const tag = control.tagName.toLowerCase()
+  const type = tag === 'input' ? '[' + (control.type || 'text') + ']' : ''
+  const name = clip(control.getAttribute('aria-label') || control.getAttribute('title') || (control.labels && control.labels[0] && control.labels[0].innerText) || control.getAttribute('placeholder') || (tag === 'input' || tag === 'select' || tag === 'textarea' ? '' : control.innerText) || control.getAttribute('alt'))
+  return tag + type + (name ? ' ' + JSON.stringify(name) : '')
+})()`
+
+/** The window's scroll offset and the page's size, from CDP: no script runs in the page. */
+export async function readLayout(cdp: CdpClient): Promise<PageLayout | undefined> {
+  const metrics = (await cdp.send('Page.getLayoutMetrics').catch(() => undefined)) as
+    | {
+        cssVisualViewport?: { pageY?: number }
+        cssContentSize?: { width?: number; height?: number }
+      }
+    | undefined
+  const scrollY = metrics?.cssVisualViewport?.pageY
+  const { width, height } = metrics?.cssContentSize ?? {}
+  if (typeof scrollY !== 'number' || typeof width !== 'number' || typeof height !== 'number') {
+    return undefined
+  }
+  return { scrollY: Math.round(scrollY), width: Math.ceil(width), height: Math.ceil(height) }
+}
+
+/** How long a wheel's scroll may stand still before it counts as stopped short. */
+const SCROLL_STILL_MS = 200
+const SCROLL_CAP_MS = 1500
+
+/**
+ * The window's offset once a wheel sent from `from` toward `want` has scrolled: the compositor
+ * scrolls after `Input.dispatchMouseEvent` returns. A page that stops short (its end, a locked
+ * body) stands still, and its offset then is the answer.
+ */
+async function scrolledTo(cdp: CdpClient, from: number, want: number): Promise<number> {
+  const start = Date.now()
+  let last = from
+  let still = start
+  for (;;) {
+    const y = (await readLayout(cdp))?.scrollY
+    if (y === undefined) return want
+    if (y === want) return y
+    const now = Date.now()
+    if (y !== last) {
+      last = y
+      still = now
+    } else if (now - still >= SCROLL_STILL_MS || now - start >= SCROLL_CAP_MS) {
+      return y
+    }
+    await new Promise((resolve) => setTimeout(resolve, 16))
+  }
+}
+
 export type ChromeSession = {
   cdp: CdpClient
   window: CaptureWindow
   navigate(url: string): Promise<{ loaderId?: string } | undefined>
   /** Without `nav` (a journey's beat), `'idle'` is the tab's network going quiet from now. */
   wait(wait: Wait, timeoutMs: number, nav?: { loaderId?: string }): Promise<void>
-  screenshot(fullPage: boolean): Promise<Buffer>
-  dispatch(action: CaptureUseAction, page?: { width: number; height: number }): Promise<void>
+  /** The window, the whole page, or `clip` (page CSS pixels) scaled by its `scale`. */
+  screenshot(fullPage: boolean, clip?: ShotClip): Promise<Buffer>
+  /** Makes `action` at page CSS points: what the pointer landed on, and whether reeval scrolled to it. */
+  dispatch(
+    action: CaptureUseAction,
+    page?: { width: number; height: number },
+  ): Promise<Landed | undefined>
+  /** Where the window is scrolled to and the page's size, in CSS pixels; undefined when unread. */
+  layout(): Promise<PageLayout | undefined>
   /** A frame is loading, or a request started in the last two seconds is in flight. */
   busy(): boolean
+  /** How many requests the tab has started so far. */
+  requests(): number
   /** The dialogs (`alert "hi"`) the page opened since the last call, each accepted. */
   dialogs(): string[]
   /** What the tab saw so far, with URLs on `origin` as paths. */
@@ -817,12 +905,13 @@ export async function withChrome<T>(
           if (wait === 'idle' && !nav) return network.quiet(waitMs)
           return waitForPage(cdp, wait, waitMs, nav)
         },
-        async screenshot(fullPage) {
+        async screenshot(fullPage, clip) {
           for (let tries = 1; ; tries++) {
             try {
               const shot = (await cdp.send('Page.captureScreenshot', {
                 format: 'png',
                 captureBeyondViewport: fullPage,
+                ...(clip ? { clip } : {}),
               })) as { data?: string }
               if (!shot.data) throw new Error('Page.captureScreenshot returned no data')
               return Buffer.from(shot.data, 'base64')
@@ -835,11 +924,42 @@ export async function withChrome<T>(
           }
         },
         async dispatch(action, page) {
-          scrollY = await dispatchInput(cdp, action, window, page, scrollY)
+          // The page scrolls on its own too (a navigation, focus, a script), so the offset is read.
+          const from = (await readLayout(cdp))?.scrollY ?? scrollY
+          if (action.type !== 'click' && action.type !== 'hover' && action.type !== 'drag') {
+            scrollY = await dispatchInput(cdp, action, window, page, from)
+            return { scrolled: false }
+          }
+          const at = mapPagePoint(action.x, action.y, window, page, from)
+          if (at.dy !== 0) {
+            await cdp.send('Input.dispatchMouseEvent', {
+              type: 'mouseWheel',
+              x: window.width / 2,
+              y: window.height / 2,
+              deltaX: 0,
+              deltaY: at.dy,
+            })
+          }
+          const after = at.dy !== 0 ? await scrolledTo(cdp, from, at.scrollY) : from
+          const point = mapPagePoint(action.x, action.y, window, page, after)
+          const named = (await cdp
+            .send('Runtime.evaluate', {
+              expression: targetAt(Math.round(point.x), Math.round(point.y)),
+              returnByValue: true,
+            })
+            .catch(() => undefined)) as { result?: { value?: unknown } } | undefined
+          const target = named?.result?.value
+          scrollY = await dispatchInput(cdp, action, window, page, after)
+          return {
+            ...(typeof target === 'string' ? { target } : {}),
+            scrolled: after !== from,
+          }
         },
+        layout: () => readLayout(cdp),
         busy() {
           return loading.size > 0 || network.fresh()
         },
+        requests: () => network.started(),
         dialogs() {
           return opened.splice(0)
         },

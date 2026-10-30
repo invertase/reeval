@@ -1,5 +1,6 @@
 // What a journey can tell about the page between moves: the URL, the focused element and its
 // value, the form controls, the text, and a viewport shot. A move's effect is the difference.
+import { debugLog } from '../debug/attempt.ts'
 import type { ChromeSession } from './browser.ts'
 import { pageChanged } from './png.ts'
 
@@ -10,8 +11,8 @@ export type PageState = {
   focus?: string | null
   /** The focused element's value: its text, `checked`, the chosen option, or a password's length. */
   value?: string | null
-  /** Whether typing would land in the focused element. */
-  editable?: boolean
+  /** Whether typing would land in the focused element; null when the page can't tell. */
+  editable?: boolean | null
   /** Hashes of every form control's state and of the page's text, and its element count. */
   form?: string
   text?: string
@@ -31,7 +32,13 @@ const PROBE = `(() => {
   const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) } return (h >>> 0).toString(36) }
   const clip = (s) => String(s ?? '').replace(/\\s+/g, ' ').trim().slice(0, ${TEXT_CAP})
   let a = document.activeElement
-  while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement
+  for (;;) {
+    if (a && a.shadowRoot && a.shadowRoot.activeElement) { a = a.shadowRoot.activeElement; continue }
+    let inner = null
+    try { inner = a && a.contentDocument ? a.contentDocument.activeElement : null } catch {}
+    if (inner && inner !== a.contentDocument.body) { a = inner; continue }
+    break
+  }
   if (a === document.body || a === document.documentElement) a = null
   const tag = a ? a.tagName.toLowerCase() : ''
   const type = a && tag === 'input' ? (a.type || 'text') : ''
@@ -45,7 +52,9 @@ const PROBE = `(() => {
     : a.isContentEditable ? clip(a.innerText)
     : null
   const buttons = ['button', 'submit', 'reset', 'image', 'file', 'range', 'color', 'hidden']
-  const editable = !!a && ((tag === 'input' && !toggles && !buttons.includes(type)) || tag === 'textarea' || a.isContentEditable)
+  // Focus inside a cross-origin frame or a closed shadow root shows only its host, which can't tell.
+  const sealed = !!a && (tag === 'iframe' || tag === 'frame' || (!!a.attachShadow && !a.shadowRoot && tag.includes('-')))
+  const editable = sealed ? null : !!a && ((tag === 'input' && !toggles && !buttons.includes(type)) || tag === 'textarea' || a.isContentEditable)
   const controls = Array.from(document.querySelectorAll('input,select,textarea'))
     .map((e) => (e.type === 'checkbox' || e.type === 'radio' ? (e.checked ? '1' : '0') : e.value))
   return {
@@ -120,10 +129,15 @@ export function describeChange(
 export const SETTLE_POLL_MS = 100
 export const SETTLE_CAP_MS = 3000
 
+/** How many times a field must change during one settle to count as changing on its own. */
+export const VOLATILE_CHANGES = 2
+
 /**
  * Waits for the page to stop changing after a move: two reads `SETTLE_POLL_MS` apart that agree,
  * with no navigation or fresh request in flight. At `SETTLE_CAP_MS` it gives up and adds the
- * fields still changing to `volatile`, so a clock or an animation doesn't hold up every move.
+ * fields that changed `VOLATILE_CHANGES` times or more to `volatile`, so a clock or an animation
+ * doesn't hold up every move. A field that changed once (content that loaded just as the cap came,
+ * behind requests that kept the page busy) is not volatile.
  */
 export async function settledState(
   session: ChromeSession,
@@ -133,15 +147,23 @@ export async function settledState(
   const start = Date.now()
   const sleep = () =>
     new Promise((resolve) => setTimeout(resolve, Math.max(0, Math.min(SETTLE_POLL_MS, left()))))
+  const changes = new Map<StateField, number>()
   let prev = await probePage(session)
   for (;;) {
     if (left() <= 0) return prev
     await sleep()
     const next = await probePage(session)
     const moving = differing(prev, next, volatile)
+    for (const field of moving) changes.set(field, (changes.get(field) ?? 0) + 1)
     if (!moving.length && !session.busy()) return next
     if (Date.now() - start >= SETTLE_CAP_MS || left() <= 0) {
-      for (const field of moving) if (field !== 'url' && field !== 'focus') volatile.add(field)
+      const marked = [...changes]
+        .filter(([field, n]) => n >= VOLATILE_CHANGES && field !== 'url' && field !== 'focus')
+        .map(([field]) => field)
+      for (const field of marked) volatile.add(field)
+      if (marked.length) {
+        debugLog('check', `capture page keeps changing on its own: ${marked.join(', ')}`)
+      }
       return next
     }
     prev = next
@@ -152,7 +174,13 @@ export async function settledState(
 export const LATE_CHANGE_MS = 1000
 
 /**
- * The page once a change that starts within `LATE_CHANGE_MS` of `settled` has settled too, or
+ * How long a settled page is watched after typing or hovering: a search's debounce or a menu's
+ * hover intent, commonly 200–500 ms, starts its change within it.
+ */
+export const LATE_INPUT_MS = 700
+
+/**
+ * The page once a change that starts within `windowMs` of `settled` has settled too, or
  * `settled`: an auth callback's redirect or a save's message often comes a beat after the
  * request that made it, and the next instruction's first look must not be the page before it.
  */
@@ -161,8 +189,9 @@ export async function lateSettledState(
   settled: PageState,
   volatile: Set<StateField>,
   left: () => number,
+  windowMs = LATE_CHANGE_MS,
 ): Promise<PageState> {
-  const until = Date.now() + Math.min(LATE_CHANGE_MS, left())
+  const until = Date.now() + Math.min(windowMs, left())
   while (Date.now() < until) {
     await new Promise((resolve) => setTimeout(resolve, Math.min(SETTLE_POLL_MS, left())))
     const next = await probePage(session)
