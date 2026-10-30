@@ -129,6 +129,23 @@ export function everyCallFailed(name: string, statuses: readonly number[]): stri
   return `every ${name} model call in the turn failed (HTTP ${[...new Set(statuses)].join(', ')})`
 }
 
+/**
+ * The turn's refused-key error (`hinted`, the first error `authHint` named the key in) when the API
+ * rejected the harness's key for the whole turn: the turn errored, or every brokered call failed,
+ * and no call the gateway brokered with the key in it succeeded. A key that served one call isn't
+ * rejected, whatever the turn's error says: a 401 the CLI retried past, or refused-key wording
+ * that came from elsewhere (a tool's or MCP server's output in the CLI's stderr).
+ */
+export function rejectedKey(turn: {
+  hinted: string | undefined
+  status: TurnStatus
+  statuses: readonly number[]
+}): string | undefined {
+  const { hinted, status, statuses } = turn
+  if (!hinted || status === 'aborted' || statuses.some((s) => s < 400)) return undefined
+  return status === 'error' || statuses.length > 0 ? hinted : undefined
+}
+
 /** The route's service account, written beside the workspace, as the adapter takes it. */
 async function writeAdc(sandbox: Sandbox, adc: SandboxAdc): Promise<AdapterVertex> {
   await sandbox.writeFile(`../${adc.file}`, adc.content)
@@ -247,6 +264,16 @@ export function createAgentHarness(
                 atMs: at,
               })
             }
+            let hinted: string | undefined
+            const transcript = events.map((e) => {
+              if (e.type !== 'error') return e
+              const hint = authHint(catalog, e.message, refused)
+              if (!hint) return e
+              const message = `${hint}. ${e.message}`
+              hinted ??= message
+              return { ...e, message }
+            })
+            const rejected = rejectedKey({ hinted, status, statuses })
             return {
               text,
               status,
@@ -256,11 +283,8 @@ export function createAgentHarness(
               unreported: catalog.unreported?.(finishMetadata) ?? [],
               startedAt: new Date(startedAt).toISOString(),
               durationMs: Date.now() - startedAt,
-              transcript: events.map((e) => {
-                if (e.type !== 'error') return e
-                const hint = authHint(catalog, e.message, refused)
-                return hint ? { ...e, message: `${hint}. ${e.message}` } : e
-              }),
+              transcript,
+              ...(rejected ? { rejectedKey: rejected } : {}),
               ...(process.env.REEVAL_RAW_TRANSCRIPT ? { raw: parts } : {}),
             }
           }

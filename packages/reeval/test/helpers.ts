@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict'
 import {
   type SpawnSyncOptionsWithStringEncoding,
   type SpawnSyncReturns,
@@ -286,6 +287,32 @@ export function readRun(
     return { ...e, error: trial.error, trial, image, read }
   })
   return { run, dir, evals, read }
+}
+
+/**
+ * The run's one attempt was an infra error because the API rejected `credential` on turn 1, with
+ * every check the eval ran after catching it passing. Returns the turn's error events.
+ */
+export function assertKeyRejected(
+  project: string,
+  credential: string,
+): Array<{ type: 'error'; message: string }> {
+  const { evals, read } = readRun(project)
+  const trial = evals[0]?.trial
+  const rejected = `The API rejected ${credential}: set a valid key in the environment or .env.local`
+  assert.equal(trial?.outcome, 'infra_error', JSON.stringify(trial?.error))
+  assert.ok(trial?.error?.message.startsWith(rejected), trial?.error?.message)
+  assert.equal(trial?.turns[0]?.status, 'error')
+  const failed = (trial?.assertions ?? []).filter((x) => x.status !== 'pass')
+  assert.deepEqual(failed, [], 'the checks after the turn passed')
+  const transcript = trial?.files.transcript?.path
+  return transcript
+    ? read(transcript)
+        .trim()
+        .split('\n')
+        .map((l) => JSON.parse(l))
+        .filter((e) => e.type === 'error')
+    : []
 }
 
 export const recordedRuns = (project: string, history = 'evals/.history') =>

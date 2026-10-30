@@ -118,7 +118,8 @@ CI writes the same matrix to the job summary.
   There's one step list per `c.send`, and the last list repeats. The steps are `{ exec }`,
   `{ write: { path: content } }`, `{ reply }` and `{ mcp: '<server>/<tool>' }`, which starts the
   environment's stdio MCP server in the sandbox and calls the tool, reported as
-  `mcp__<server>__<tool>`.
+  `mcp__<server>__<tool>`. `{ error }` ends the turn as a provider error would, and
+  `{ refuseKey: '<VARIABLE>' }` as the API rejecting that key would (an infra error).
 - The fake agent writes **harness-placed skills** to `~/.agents/skills/<name>/`, where the Cursor
   adapter puts them. Whether Cursor itself reads them from there is a question for the Docker
   and real-agent tiers.

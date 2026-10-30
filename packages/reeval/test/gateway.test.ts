@@ -33,7 +33,7 @@ import {
   vertexRegion,
   vertexSettings,
 } from '../src/gateway/vertex.ts'
-import { everyCallFailed } from '../src/harness/agent.ts'
+import { everyCallFailed, rejectedKey } from '../src/harness/agent.ts'
 import {
   agentAuth,
   agentFor,
@@ -485,6 +485,60 @@ describe('Vercel AI Gateway routes', () => {
       everyCallFailed('fx', [401, 401, 503]),
       'every fx model call in the turn failed (HTTP 401, 503)',
     )
+  })
+
+  test('a rejected key is a turn the key served no call in, not any 401 or refused-key wording', () => {
+    const hinted =
+      'The API rejected ANTHROPIC_API_KEY: set a valid key in the environment or .env.local. 401'
+    const cases: Array<[string, Parameters<typeof rejectedKey>[0], string | undefined]> = [
+      [
+        'every call refused, the turn errored',
+        { hinted, status: 'error', statuses: [401] },
+        hinted,
+      ],
+      [
+        "Gemini's 400, the CLI's wording",
+        { hinted, status: 'error', statuses: [400, 400] },
+        hinted,
+      ],
+      [
+        'refused at the start, nothing brokered in the turn',
+        { hinted, status: 'error', statuses: [] },
+        hinted,
+      ],
+      [
+        'every call failed on a turn the CLI ended as done',
+        { hinted, status: 'completed', statuses: [401] },
+        hinted,
+      ],
+      [
+        'a 401 the CLI retried past, then a crash',
+        { hinted, status: 'error', statuses: [401, 200, 500] },
+        undefined,
+      ],
+      [
+        'a 401 the CLI retried past, then done',
+        { hinted, status: 'completed', statuses: [401, 200] },
+        undefined,
+      ],
+      [
+        'refused-key wording on a turn whose calls worked',
+        { hinted, status: 'error', statuses: [200, 200] },
+        undefined,
+      ],
+      ['an aborted turn', { hinted, status: 'aborted', statuses: [401] }, undefined],
+      [
+        'an error with no refused-key hint',
+        { hinted: undefined, status: 'error', statuses: [401] },
+        undefined,
+      ],
+      [
+        'a completed turn, nothing brokered',
+        { hinted, status: 'completed', statuses: [] },
+        undefined,
+      ],
+    ]
+    for (const [name, turn, expected] of cases) assert.equal(rejectedKey(turn), expected, name)
   })
 
   test('pi on Vercel: its own provider on Chat Completions, the model as google/<id>', () => {

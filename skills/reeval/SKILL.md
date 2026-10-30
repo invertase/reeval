@@ -316,7 +316,7 @@ reeval analyze           reeval studio          reeval image build      reeval d
 | 0 | Pass, and `--dry-run` |
 | 1 | A gated failure |
 | 2 | A usage or config error, including a filter that matches nothing |
-| 3 | An infra error |
+| 3 | An infra error, such as a sandbox that failed to start or a harness key the API rejected |
 
 `reeval run` ends with a result block per eval, laid out by what it varies (a row per eval, per
 arm, per harness, or both), counts as `N of M`, a variant's effect as `helped`, `made it worse`

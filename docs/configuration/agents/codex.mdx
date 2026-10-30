@@ -11,7 +11,7 @@ description: "The Codex harness runs OpenAI's Codex CLI in the sandbox on an Ope
 
 reeval brokers that key over HTTP on `POST https://api.openai.com/v1/responses`, the model calls, and `POST https://api.openai.com/v1/alpha/search`, where Codex's web search tool sends its searches, and refuses it anywhere else. A restricted egress policy allows `api.openai.com`, so `deny-all` keeps web search.
 
-When the API rejects the key, the attempt error begins with `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local`.
+When the API rejects the key, the attempt is an infra error whose message begins with `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local`.
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/configuration/environments/secrets#keep-api-keys-on-the-host).
 

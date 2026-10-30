@@ -4,7 +4,7 @@ import { debugLog } from '../debug/attempt.ts'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
-import { agentMcp, layoutOf, writePluginFiles } from './agents.ts'
+import { agentMcp, keyRejected, layoutOf, writePluginFiles } from './agents.ts'
 import type { Harness } from './types.ts'
 
 const lineCount = (text: string) =>
@@ -167,6 +167,11 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
               debugLog('harness', `turn failed: ${step.error}`)
               transcript.push({ ...at(), type: 'error', message: step.error })
               return done('', 'error')
+            } else if ('refuseKey' in step) {
+              const message = `${keyRejected(step.refuseKey)}. 401 Unauthorized (the fake agent's)`
+              debugLog('harness', `turn failed: ${message}`)
+              transcript.push({ ...at(), type: 'error', message })
+              return { ...done('', 'error'), rejectedKey: message }
             } else scripted = step.reply
           }
           if (descriptor.delayMs) {

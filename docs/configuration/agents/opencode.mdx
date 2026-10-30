@@ -11,7 +11,7 @@ The part of the model id before the first `/` picks the provider, and the provid
 
 `opencode()` reads the provider's key from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when its value contains whitespace or a line break. reeval swaps the key into the provider's header on each request to the provider's hosts, and refuses it anywhere else. A restricted egress policy allows the provider's hosts and `mcp.exa.ai`.
 
-When the API rejects the key, the attempt error begins with `The API rejected <Key>: set a valid key in the environment or .env.local`, with the provider's key variable.
+When the API rejects the key, the attempt is an infra error whose message begins with `The API rejected <Key>: set a valid key in the environment or .env.local`, with the provider's key variable.
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/configuration/environments/secrets#keep-api-keys-on-the-host).
 

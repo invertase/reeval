@@ -922,7 +922,7 @@
       "additionalProperties": false
     },
     "FakeScriptStep": {
-      "description": "One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is the command's stdout, `write` as file edits, and `reply` is the turn's final message. `mcp` (`'<server>/<tool>'`) starts the environment's stdio MCP server in the sandbox, as an agent would, and calls the tool with no arguments; it's reported as `mcp__<server>__<tool>`. `error` ends the turn there with status `error` and that message, as a provider error would.",
+      "description": "One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is the command's stdout, `write` as file edits, and `reply` is the turn's final message. `mcp` (`'<server>/<tool>'`) starts the environment's stdio MCP server in the sandbox, as an agent would, and calls the tool with no arguments; it's reported as `mcp__<server>__<tool>`. `error` ends the turn there with status `error` and that message, as a provider error would. `refuseKey` ends it as the model API rejecting the key in that variable would, which makes the attempt an infra error.",
       "anyOf": [
         {
           "type": "object",
@@ -979,6 +979,17 @@
             }
           },
           "required": ["error"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "refuseKey": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["refuseKey"],
           "additionalProperties": false
         }
       ]

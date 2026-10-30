@@ -145,7 +145,7 @@ export function turnSender(
         durationMs: Date.now() - sendStarted,
       }
     })
-    const { raw, ...sent } = await a
+    const { raw, rejectedKey, ...sent } = await a
       .timed('agentMs', () => Promise.race([sending, cutoff]))
       .catch(async (error: unknown) => {
         // The errored entry stays in the record, with the starts the turn saw.
@@ -213,9 +213,11 @@ export function turnSender(
         `turn ${turnNumber} mcp ${s.server} ${s.ms === null ? "didn't answer initialize" : `answered initialize in ${formatDuration(s.ms)}`}`,
       )
     }
-    if (timedOut) {
+    // The agent never got to work, so checks on its workspace say nothing about it.
+    const infra = timedOut || (result.status !== 'aborted' && rejectedKey)
+    if (infra) {
       // Fails the attempt even when the eval's body catches it, like a failed start.
-      const error = new InfraError(timedOut)
+      const error = new InfraError(infra)
       a.startFailure ??= { error }
       throw error
     }

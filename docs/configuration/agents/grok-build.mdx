@@ -11,7 +11,7 @@ description: "The Grok Build harness runs xAI's Grok Build CLI in the sandbox on
 
 reeval swaps it into the `Authorization: Bearer` header on Grok Build's requests to `api.x.ai`, `GET /v1/models`, `GET /v1/api-key`, `POST /v1/chat/completions`, and `POST /v1/responses`, and refuses it anywhere else. A restricted egress policy allows `api.x.ai`.
 
-When xAI refuses the key, Grok Build drops its `xai.api_key` sign-in, and the attempt error begins with `The API rejected XAI_API_KEY: set a valid key in the environment or .env.local`.
+When xAI refuses the key, Grok Build drops its `xai.api_key` sign-in, and the attempt is an infra error whose message begins with `The API rejected XAI_API_KEY: set a valid key in the environment or .env.local`.
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/configuration/environments/secrets#keep-api-keys-on-the-host).
 

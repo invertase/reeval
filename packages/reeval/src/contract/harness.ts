@@ -135,6 +135,7 @@ export const fakeScriptStepSchema = z.union([
   z.strictObject({ reply: z.string() }),
   z.strictObject({ mcp: z.string().regex(/^[^/]+\/[^/]+$/) }),
   z.strictObject({ error: z.string() }),
+  z.strictObject({ refuseKey: nonEmpty() }),
 ])
 
 export const FAKE_LAYOUTS = [

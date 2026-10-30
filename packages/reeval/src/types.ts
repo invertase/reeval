@@ -629,6 +629,8 @@ export type FakeHarnessDescriptor = {
  * (`'<server>/<tool>'`) starts the environment's stdio MCP server in the sandbox, as an agent
  * would, and calls the tool with no arguments; it's reported as `mcp__<server>__<tool>`.
  * `error` ends the turn there with status `error` and that message, as a provider error would.
+ * `refuseKey` ends it as the model API rejecting the key in that variable would, which makes the
+ * attempt an infra error.
  */
 export type FakeScriptStep =
   | { exec: string }
@@ -636,6 +638,7 @@ export type FakeScriptStep =
   | { reply: string }
   | { mcp: string }
   | { error: string }
+  | { refuseKey: string }
 /**
  * Cursor's agent through the Cursor TypeScript SDK's local runtime
  * (`@reeval/harness-cursor-sdk`), made by `cursor()`. It reports each turn's tokens.
