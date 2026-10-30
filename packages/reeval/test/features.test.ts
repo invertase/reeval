@@ -1210,7 +1210,7 @@ export const features: Feature[] = [
     hostEnv: { OPENAI_API_KEY: BROKERED_KEY },
     canary:
       /expected 'reeval egress gateway: refused GET ht…' not to contain 'carries a brokered credential'/,
-    record: ({ run, runDir, stdout }) => {
+    record: ({ run, project, stdout }) => {
       const egress = landed(run)?.egress
       assert.deepEqual(egress?.blocked, [
         {
@@ -1233,7 +1233,10 @@ export const features: Feature[] = [
         2,
         'one warning per attempt, on the terminal',
       )
-      assert.equal(filesContaining(runDir, BROKERED_KEY), '')
+      // The record, transcripts and debug trace, with a twin: the same search finds the request.
+      const state = join(project, '.reeval')
+      assert.equal(filesContaining(state, BROKERED_KEY), '')
+      assert.notEqual(filesContaining(state, '/v1/models'), '')
     },
   },
   {
