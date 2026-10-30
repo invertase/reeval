@@ -138,7 +138,8 @@ export async function dispatchInput(
       if (!action.text) await pressKey(cdp, KEYS.Backspace)
     }
     if (action.text && keyed) {
-      for (const text of action.text) await pressKey(cdp, { key: text, code: '', windowsVirtualKeyCode: 0, text })
+      for (const text of action.text)
+        await pressKey(cdp, { key: text, code: '', windowsVirtualKeyCode: 0, text })
     } else if (action.text) {
       await cdp.send('Input.insertText', { text: action.text })
     }
