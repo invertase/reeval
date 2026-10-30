@@ -32,7 +32,7 @@ test('each provider is supported or refused, once, and the table is well formed'
   const ids = [...OPENCODE_PROVIDERS, ...REFUSED_OPENCODE_PROVIDERS].map((p) => p.id)
   assert.equal(new Set(ids).size, ids.length)
   for (const p of OPENCODE_PROVIDERS) {
-    assert.match(p.env, /^\w+$/, p.id)
+    assert.match(p.env, /^[A-Za-z_]\w*$/, p.id)
     assert.ok(p.headers.length > 0, `${p.id} has a header`)
     for (const h of p.headers) {
       assert.ok(['authorization', 'x-api-key', 'x-goog-api-key'].includes(h.name), h.name)
@@ -155,6 +155,7 @@ test('a model that can’t run says why: no provider, an unknown one, or one ree
     lmstudio: /LMStudio \(lmstudio\): it runs on your machine/,
     perplexity: /Perplexity \(perplexity\): none of its models can call tools/,
     lilac: /Lilac \(lilac\): every one of its models is deprecated/,
+    '302ai': /302\.AI \(302ai\): OpenCode reads its key from 302AI_API_KEY, a name a process's/,
   }
   for (const [id, why] of Object.entries(refused)) {
     assert.match(error(`${id}/m`), why, id)
@@ -171,14 +172,28 @@ test("a refusal's reason names no OpenCode version, so a bump alone doesn't move
     env: ['P_API_KEY'],
     variants: [{ variant: 'v', model: 'm', exit: 1, error, requests: [] }],
   })
-  const probe = { gone: failed('Error: Model unavailable: gone/m'), quiet: failed('Error: boom') }
+  const request = { method: 'POST', host: 'api.digit.test', path: '/v1', key: ['authorization'] }
+  const probe = {
+    gone: failed('Error: Model unavailable: gone/m'),
+    quiet: failed('Error: boom'),
+    digit: {
+      name: 'D',
+      env: ['9D_API_KEY'],
+      variants: [{ variant: 'v', model: 'm', exit: 0, error: '', requests: [request] }],
+    },
+  }
   const catalog = {
     gone: { models: { m: { status: 'deprecated' }, n: { status: 'deprecated' } } },
     quiet: { models: { m: {} } },
+    digit: { models: { m: {} } },
   }
   assert.deepEqual(
     buildTable(probe, catalog).refused.map((p) => [p.id, p.why]),
     [
+      [
+        'digit',
+        "OpenCode reads its key from 9D_API_KEY, a name a process's environment can't hold",
+      ],
       ['gone', 'every one of its models is deprecated, and OpenCode runs none of them'],
       ['quiet', 'OpenCode sends it no request with a key (Error: boom)'],
     ],

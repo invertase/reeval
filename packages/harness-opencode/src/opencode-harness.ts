@@ -249,13 +249,8 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
   }
 }
 
-/**
- * Every provider's key variable that a process can be given (not `302AI_API_KEY`): harness-acp
- * forwards the one in auth.
- */
-const OPENCODE_KEY_ENV = [...new Set(OPENCODE_PROVIDERS.map((p) => p.env))]
-  .filter((name) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
-  .sort()
+/** Every provider's key variable: harness-acp forwards the one in auth, and brokers it. */
+const OPENCODE_KEY_ENV = [...new Set(OPENCODE_PROVIDERS.map((p) => p.env))].sort()
 
 /** The variables a route sets besides the key (Bedrock's region, Vertex AI's), each empty. */
 const OPENCODE_ROUTE_ENV: Record<string, string> = Object.fromEntries(
@@ -282,11 +277,6 @@ function keyRoute(settings: OpenCodeHarnessSettings): Route {
   const resolved = resolveOpenCodeProvider(settings.model, settings.vars ?? {})
   if ('error' in resolved) throw new Error(resolved.error)
   const { provider, vars } = resolved
-  if (!OPENCODE_KEY_ENV.includes(provider.env)) {
-    throw new Error(
-      `OpenCode reads ${provider.name}'s key from ${provider.env}, which isn't a name a process's environment can have`,
-    )
-  }
   if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[provider.env]) {
     throw new Error(
       `OpenCode auth must be an environment object with ${provider.env} (the ${provider.name} key for ${settings.model})`,

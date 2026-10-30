@@ -272,7 +272,7 @@ test('the image bakes one bootstrap for every provider, region and Vertex AI', a
 test("a provider whose key variable a process can't be given is refused", () => {
   assert.throws(
     () => createOpenCode({ auth: { '302AI_API_KEY': 'k' }, model: '302ai/m' }),
-    /reads 302\.AI's key from 302AI_API_KEY, which isn't a name a process's environment can have/,
+    /can't run OpenCode on 302\.AI \(302ai\): OpenCode reads its key from 302AI_API_KEY/,
   )
 })
 

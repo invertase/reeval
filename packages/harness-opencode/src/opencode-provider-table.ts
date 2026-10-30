@@ -7,7 +7,6 @@ export const PROBED_VERSION = "2.1.4"
 
 /** Every provider whose key OpenCode sends in a header on known hosts, as the probe saw it. */
 export const OPENCODE_PROVIDERS: readonly OpenCodeProvider[] = [
-  {"id":"302ai","name":"302.AI","env":"302AI_API_KEY","headers":[{"name":"authorization","scheme":"bearer"}],"endpoints":[{"host":"api.302.ai","method":["POST"],"path":{"exact":"/v1/chat/completions"}}]},
   {"id":"abacus","name":"Abacus","env":"ABACUS_API_KEY","headers":[{"name":"authorization","scheme":"bearer"}],"endpoints":[{"host":"routellm.abacus.ai","method":["POST"],"path":{"exact":"/v1/chat/completions"}}]},
   {"id":"abliteration-ai","name":"abliteration.ai","env":"ABLIT_KEY","headers":[{"name":"authorization","scheme":"bearer"}],"endpoints":[{"host":"api.abliteration.ai","method":["POST"],"path":{"exact":"/v1/chat/completions"}}]},
   {"id":"above","name":"above.dev","env":"ABOVE_API_KEY","headers":[{"name":"authorization","scheme":"bearer"}],"endpoints":[{"host":"api.above.dev","method":["POST"],"path":{"exact":"/v1/chat/completions"}}]},
@@ -216,6 +215,7 @@ export const OPENCODE_PROVIDERS: readonly OpenCodeProvider[] = [
 
 /** Every other provider OpenCode knows, and why reeval can't broker its key. */
 export const REFUSED_OPENCODE_PROVIDERS: readonly RefusedOpenCodeProvider[] = [
+  {"id":"302ai","name":"302.AI","why":"OpenCode reads its key from 302AI_API_KEY, a name a process's environment can't hold"},
   {"id":"aihubmix","name":"AIHubMix","why":"OpenCode installs its provider package from npm when it starts, so where it sends the key is unknown"},
   {"id":"atomic-chat","name":"Atomic Chat","why":"it runs on your machine, and the sandbox can't reach the host's localhost"},
   {"id":"azure","name":"Azure","why":"its API host is per account (AZURE_RESOURCE_NAME), which reeval doesn't pass"},

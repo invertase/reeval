@@ -1826,6 +1826,10 @@ environment:
       route([VERCEL], opencode({ model: 'nope/m' })),
     ],
     [
+      "route: opencode on a provider whose key variable can't be set",
+      route([DIRECT], opencode({ model: '302ai/m' })),
+    ],
+    [
       'ts: openrouter with fallbacks',
       config({ gateway: [{ kind: 'openrouter', fallbacks: true }] }),
     ],

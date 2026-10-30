@@ -133,7 +133,15 @@ export function buildTable(probe: Probe, catalog: Catalog): Table {
       })
       continue
     }
-    const why = reasonFor(id, p, catalog)
+    const env = p.env ?? []
+    const key = env.includes('GOOGLE_GENERATIVE_AI_API_KEY')
+      ? 'GOOGLE_GENERATIVE_AI_API_KEY'
+      : (env[0] as string)
+    const why =
+      reasonFor(id, p, catalog) ??
+      (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)
+        ? undefined
+        : `OpenCode reads its key from ${key}, a name a process's environment can't hold`)
     if (why) {
       refused.push({ id, name, why })
       continue
@@ -153,7 +161,6 @@ export function buildTable(probe: Probe, catalog: Catalog): Table {
         }
       }
     }
-    const env = p.env ?? []
     const vars = (PROVIDER_VARS[id] ?? []).map(({ name, default: fallback, pattern }) => ({
       name,
       default: fallback,
@@ -162,9 +169,7 @@ export function buildTable(probe: Probe, catalog: Catalog): Table {
     supported.push({
       id,
       name,
-      env: env.includes('GOOGLE_GENERATIVE_AI_API_KEY')
-        ? 'GOOGLE_GENERATIVE_AI_API_KEY'
-        : (env[0] as string),
+      env: key,
       ...(vars.length ? { vars } : {}),
       headers: [...headers.values()],
       endpoints: [...endpoints.values()].sort(byEndpoint),

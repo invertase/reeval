@@ -49,6 +49,7 @@
   "route: claude code with effort on vercel": null,
   "route: opencode with an unknown provider on direct alone": "UsageError: evals/a.eval.ts › e on opencode:m: no gateway in the list can serve it (direct: OpenCode has no provider \"nope\" (in \"nope/m\"); a model id is <provider>/<model>, such as 'google/gemini-3.8-flash'). Add vercel() to gateway.",
   "route: opencode with an unknown provider on vercel": null,
+  "route: opencode on a provider whose key variable can't be set": "UsageError: evals/a.eval.ts › e on opencode:m: no gateway in the list can serve it (direct: reeval can't run OpenCode on 302.AI (302ai): OpenCode reads its key from 302AI_API_KEY, a name a process's environment can't hold, so the gateway can't keep its key out of the sandbox). Add vercel() to gateway.",
   "ts: openrouter with fallbacks": null,
   "ts: openrouter fallbacks not a boolean": "UsageError: gateway[0] in reeval.config.ts isn't a valid openrouter(): Invalid input: expected boolean, received string (got {\"kind\":\"openrouter\",\"fallbacks\":\"yes\"})",
   "ts: openrouter with a typo": "UsageError: gateway[0] in reeval.config.ts isn't a valid openrouter(): Unrecognized key: \"fallback\" (got {\"kind\":\"openrouter\",\"fallback\":true})",
