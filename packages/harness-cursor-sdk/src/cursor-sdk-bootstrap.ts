@@ -75,6 +75,8 @@ function storedShapeProblems(value, calls, recovered = RECOVERED) {
   return problems
 }
 const STORED_ONLY = ['beforeFullFileContent', 'afterFullFileContent', 'prevContent', 'interleavedOutput']
+const storedMessage = (kind, v) =>
+  [v.error, v.reason, v.clientVisibleError, v.message].find((m) => typeof m === 'string' && m) ?? kind
 function storedResults(value, ids, found = []) {
   if (Array.isArray(value)) {
     for (const v of value) storedResults(v, ids, found)
@@ -85,10 +87,11 @@ function storedResults(value, ids, found = []) {
         const outcome = Object.entries(call.result).find(([, v]) => v && typeof v === 'object')
         if (!outcome) continue
         const [kind, v] = outcome
-        const result =
-          kind === 'success'
-            ? { status: 'success', value: Object.fromEntries(Object.entries(v).filter(([k]) => !STORED_ONLY.includes(k))) }
-            : { status: 'error', error: v.error ?? v.message ?? { [kind]: v } }
+        // As the SDK's stream reports it: a command that exited non-zero is a success with its exit code.
+        const succeeded = kind === 'success' || (key === 'shellToolCall' && kind === 'failure')
+        const result = succeeded
+          ? { status: 'success', value: Object.fromEntries(Object.entries(v).filter(([k]) => !STORED_ONLY.includes(k))) }
+          : { status: 'error', error: { message: storedMessage(kind, v) } }
         found.push({ id: value.toolCallId, at: value, result })
       }
     }
@@ -136,16 +139,18 @@ export type StoredResult = {
   at: { startedAtMs?: unknown; completedAtMs?: unknown }
   result:
     | { status: 'success'; value: Record<string, unknown> }
-    | { status: 'error'; error: unknown }
+    | { status: 'error'; error: { message: string } }
 }
 
 /**
  * The results the stored conversation holds for these call ids, whatever the tool: each is a
  * `ToolCall` whose `<tool>ToolCall` has a `result` oneof, `success` or a failure. The stream can
  * end a turn with a call it reported `running` and never completed; the store often has its
- * result. A success drops the fields the store adds and the stream doesn't send (whole file
- * contents before and after an edit or delete, a shell's interleaved output). The runner runs
- * the same source.
+ * result. Each reads as the SDK's stream would report it: a shell's `failure` (a non-zero exit) is
+ * a success with its `exitCode`, and any other failure an error with its message (`error`,
+ * `reason` or `clientVisibleError`, else the oneof's case). A success drops the fields the store
+ * adds and the stream doesn't send (whole file contents before and after an edit or delete, a
+ * shell's interleaved output). The runner runs the same source.
  */
 export const storedResults = stored.storedResults
 
