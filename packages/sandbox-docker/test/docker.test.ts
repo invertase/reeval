@@ -6,7 +6,7 @@ import type net from 'node:net'
 import { after, before, describe, test } from 'node:test'
 import type { HarnessV1RequestTransformation } from '@ai-sdk/harness'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
-import { PROXY_PORT } from '../src/egress/gateway.ts'
+import { PROXY_PORT, QUIET_PROXY_WARNING } from '../src/egress/gateway.ts'
 import type { NetworkPolicy } from '../src/egress/policy.ts'
 import type { Substitution } from '../src/egress/substitution.ts'
 import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
@@ -35,6 +35,20 @@ const pythonImage = () => {
     return true
   } catch {
     return false
+  }
+}
+
+/** reeval's image with Node 20.10, which exits on `--disable-warning` in `NODE_OPTIONS`, beside its own. */
+const OLD_NODE_IMAGE = `reeval-test-old-node:${DEFAULT_IMAGE.split(':')[1]}`
+const oldNodeImage = () => {
+  try {
+    execFileSync(CLI, ['build', '-q', '-t', OLD_NODE_IMAGE, '-'], {
+      input: `FROM ${DEFAULT_IMAGE}\nCOPY --from=node:20.10.0-bookworm-slim /usr/local/bin/node /opt/old-node/node\nENV NODE_OPTIONS=--title=from-image\n`,
+      stdio: ['pipe', 'ignore', 'pipe'],
+    })
+    return OLD_NODE_IMAGE
+  } catch {
+    return undefined
   }
 }
 
@@ -437,23 +451,32 @@ describe('egress gateway in Docker', {
     const r = await sh(s, `node -e '${script}'`)
     assert.equal(r.exitCode, 0, r.stderr)
     assert.equal(r.stderr, '')
-    assert.equal(
-      r.stdout.trim(),
-      'from-container --title=from-container --disable-warning=UNDICI-EHPA',
-    )
+    assert.equal(r.stdout.trim(), `from-container --title=from-container ${QUIET_PROXY_WARNING}`)
     assert.deepEqual(
       seen.map((x) => x.path),
       ['/quiet'],
       'through the gateway',
     )
-    const own = await sh(s, `node -p process.title`, { NODE_OPTIONS: '--title=from-exec' })
-    assert.deepEqual([own.stdout.trim(), own.stderr], ['from-exec', ''])
+    const own = await sh(s, `node -p process.title`, { NODE_OPTIONS: '--title="from exec"' })
+    assert.deepEqual([own.stdout.trim(), own.stderr], ['from exec', ''])
+    // Only the proxy's warning goes: any other still prints.
+    const other = await sh(s, `node -e 'process.emitWarning("kept")'`)
+    assert.match(other.stderr, /^\(node:\d+\) Warning: kept\n/)
     // Twin: without NODE_OPTIONS, the image's Node does warn.
     const loud = await sh(s, `env -u NODE_OPTIONS node -e 0`)
     assert.match(loud.stderr, /\[UNDICI-EHPA\] Warning: EnvHttpProxyAgent is experimental/)
   })
 
-  // Node before 20.11 refuses --disable-warning in NODE_OPTIONS, and Node 24 doesn't warn.
+  test("an older Node beside the image's, as nvm installs one, still starts", async (t) => {
+    const image = oldNodeImage()
+    if (!image) return t.skip(`couldn't build ${OLD_NODE_IMAGE}`)
+    const s = await open({ image, egress: egress() })
+    const r = await sh(s, 'node -p process.title && /opt/old-node/node -p process.version')
+    assert.equal(r.exitCode, 0, r.stderr)
+    assert.deepEqual([r.stdout.split('\n'), r.stderr], [['from-image', 'v20.10.0', ''], ''])
+  })
+
+  // Node 20.10 has no env proxy and Node 24 doesn't warn, so neither gets the preload.
   for (const image of ['node:20.10.0-bookworm-slim', 'node:24-bookworm-slim']) {
     test(`${image}: Node's NODE_OPTIONS is left alone`, async () => {
       const s = await open({ image, root: true, egress: egress() })

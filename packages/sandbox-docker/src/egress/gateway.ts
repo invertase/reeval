@@ -20,14 +20,20 @@ export const CA_BUNDLE = '/etc/ssl/certs/ca-certificates.crt'
 const BUNDLED = 'reeval:ca-bundle'
 /**
  * Under `NODE_USE_ENV_PROXY`, Node 22 (undici 6) warns at every start that `EnvHttpProxyAgent` is
- * experimental; Node 24 (undici 7) doesn't. Node before 20.11 refuses the flag in `NODE_OPTIONS`,
- * so it's appended only where the container's Node warns and the flag silences it.
+ * experimental; Node 24 (undici 7) doesn't. The warning is printed on the next tick, so a preload
+ * that wraps the `warning` listeners drops it. Not `--disable-warning`: Node before 20.11 (and
+ * 21.0–21.2) exits on it in `NODE_OPTIONS`, which would break any older Node the agent runs, such
+ * as one from nvm. Worker threads on Node 22 warn before their preload runs, so they still do.
  */
-export const QUIET_PROXY_WARNING = '--disable-warning=UNDICI-EHPA'
+export const QUIET_NODE = '/usr/local/lib/reeval/quiet-proxy-warning.cjs'
+const QUIET_NODE_SOURCE =
+  '"use strict";const shown=process.listeners("warning");process.removeAllListeners("warning");process.on("warning",(w)=>{if(w&&w.code==="UNDICI-EHPA")return;for(const l of shown)l.call(process,w)})'
+export const QUIET_PROXY_WARNING = `--require=${QUIET_NODE}`
 const WARNS = 'reeval:proxy-warns'
-const warns = (options: string) =>
-  `NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:${PROXY_PORT} NODE_OPTIONS=${options} node -e 0 2>&1 | grep -q UNDICI-EHPA`
-const WARNS_SCRIPT = `{ ${warns("''")} && ! ${warns(QUIET_PROXY_WARNING)} && echo ${WARNS}; true; }`
+const nodeStart = (options: string) =>
+  `NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:${PROXY_PORT} NODE_OPTIONS=${options} node -e 0 2>&1`
+/** Writes the preload only where the image's Node warns, and uses it only if Node then starts silently. */
+const WARNS_SCRIPT = `{ ${nodeStart("''")} | grep -q UNDICI-EHPA && mkdir -p "$(dirname ${QUIET_NODE})" && printf '%s\\n' '${QUIET_NODE_SOURCE}' > ${QUIET_NODE} && quiet=$(${nodeStart(QUIET_PROXY_WARNING)}) && [ -z "$quiet" ] && echo ${WARNS}; true; }`
 
 const READY_TIMEOUT_MS = 15_000
 
@@ -42,7 +48,7 @@ export type GatewayOptions = Omit<EgressProxyOptions, 'ca'>
 export type Gateway = {
   /** Proxy and CA variables for every process in the container. */
   readonly env: Record<string, string>
-  /** Flags every exec appends to its `NODE_OPTIONS`, when the container's Node needs any. */
+  /** Options every exec appends to its `NODE_OPTIONS`, when the container's Node needs any. */
   readonly nodeOptions: string | undefined
   addTransformations(rules: readonly RequestTransformation[]): void
   setTransformations(rules: readonly RequestTransformation[]): void
