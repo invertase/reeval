@@ -2168,6 +2168,55 @@ evaluate('fine', async () => {})
     )
   })
 
+  test('a passed-on SIGTERM that arrives before its Ctrl-C is one press that exits 130: the run is recorded', {
+    skip: noSignals,
+  }, async () => {
+    const p = await project('sigint-forwarded-first', {
+      'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
+      'evals/agent.eval.ts': agentEval(''),
+    })
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'], {
+      onOutput: (stdout, pid) => {
+        if (!/\] {2}\+\d+:\d\d turn 1 started$/m.test(stdout)) return false
+        process.kill(pid, 'SIGTERM')
+        setTimeout(() => process.kill(-pid, 'SIGINT'), 5)
+        return true
+      },
+    })
+    assert.equal(r.code, 130, r.stdout + r.stderr)
+    assert.equal(readRun(p.dir).run.status, 'interrupted')
+    assert.doesNotMatch(r.stderr, /quit without writing/)
+    assert.match(r.stdout, /^A launcher passed the Ctrl-C on /m)
+  })
+
+  test('a passed-on SIGTERM that arrives before its Ctrl-C is still one Ctrl-C, and the next press quits', {
+    skip: noSignals,
+  }, async () => {
+    const p = await project('sigint-reordered', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/agent.eval.ts': `import { setTimeout as sleep } from 'node:timers/promises'
+import { evaluate } from 'reeval'
+evaluate('slow', async (c) => {
+  await c.send('write hello.txt')
+  console.log('parked')
+  await sleep(8_000)
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'], {
+      onOutput: (stdout, pid) => {
+        if (!/parked/.test(stdout)) return false
+        process.kill(pid, 'SIGTERM')
+        setTimeout(() => process.kill(-pid, 'SIGINT'), 5)
+        setTimeout(() => process.kill(-pid, 'SIGINT'), 200)
+        return true
+      },
+    })
+    assert.equal(r.code, 130, r.stdout + r.stderr)
+    assert.match(r.stdout, /^A launcher passed the Ctrl-C on /m)
+    assert.match(r.stderr, /quit without writing run \S+'s record/)
+  })
+
   test('a second Ctrl-C right after the first still quits, after a SIGTERM a launcher passed on', {
     skip: noSignals,
   }, async () => {
