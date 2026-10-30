@@ -19,6 +19,7 @@ import {
   OPENCODE_PNPM_WORKSPACE,
 } from './opencode-install.ts'
 import {
+  OPENCODE_PROVIDERS,
   OPENCODE_VERTEX_PROVIDER,
   openCodeEffortBody,
   openCodeProvider,
@@ -209,11 +210,21 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
     // The gate, which runs `opencode acp` (see OPENCODE_GATE).
     executable: OPENCODE_GATE_EXECUTABLE,
     args: [],
-    auth: settings.auth,
-    env: { ...openCodeEnv(settings), ...route.env },
-    ...(route.credentialBrokering
-      ? { credentialEnv: route.credentialEnv, credentialBrokering: route.credentialBrokering }
-      : {}),
+    // Only the route's own key: every provider's variable is a credential name (below), and
+    // harness-acp forwards whichever of them auth has.
+    auth: Object.fromEntries(
+      route.credentialEnv.flatMap((name) => {
+        const value = isHarnessAuthenticationEnvironment(settings.auth)
+          ? settings.auth[name]
+          : undefined
+        return value ? [[name, value]] : []
+      }),
+    ),
+    // The bootstrap lists these variables' names, so every route declares the same ones, set
+    // empty where the route has none: the image's bootstrap serves every provider and Vertex AI.
+    env: { ...openCodeEnv(settings), ...OPENCODE_ROUTE_ENV, ...route.env },
+    credentialEnv: OPENCODE_KEY_ENV,
+    credentialBrokering: route.credentialBrokering ?? (() => []),
     modelMapping: { type: 'session-config-option', path: 'model' },
     skillsDirectory: OPENCODE_HOME_SKILLS_DIR,
   })
@@ -238,6 +249,24 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
   }
 }
 
+/**
+ * Every provider's key variable that a process can be given (not `302AI_API_KEY`): harness-acp
+ * forwards the one in auth.
+ */
+const OPENCODE_KEY_ENV = [...new Set(OPENCODE_PROVIDERS.map((p) => p.env))]
+  .filter((name) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name))
+  .sort()
+
+/** The variables a route sets besides the key (Bedrock's region, Vertex AI's), each empty. */
+const OPENCODE_ROUTE_ENV: Record<string, string> = Object.fromEntries(
+  [
+    ...OPENCODE_PROVIDERS.flatMap((p) => (p.vars ?? []).map((v) => v.name)),
+    'GOOGLE_CLOUD_PROJECT',
+    'GOOGLE_VERTEX_LOCATION',
+    'GOOGLE_APPLICATION_CREDENTIALS',
+  ].map((name) => [name, '']),
+)
+
 /** Where OpenCode's model calls go, and the key (if any) the sandbox gets for them. */
 type Route = {
   readonly id: string
@@ -253,6 +282,11 @@ function keyRoute(settings: OpenCodeHarnessSettings): Route {
   const resolved = resolveOpenCodeProvider(settings.model, settings.vars ?? {})
   if ('error' in resolved) throw new Error(resolved.error)
   const { provider, vars } = resolved
+  if (!OPENCODE_KEY_ENV.includes(provider.env)) {
+    throw new Error(
+      `OpenCode reads ${provider.name}'s key from ${provider.env}, which isn't a name a process's environment can have`,
+    )
+  }
   if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[provider.env]) {
     throw new Error(
       `OpenCode auth must be an environment object with ${provider.env} (the ${provider.name} key for ${settings.model})`,

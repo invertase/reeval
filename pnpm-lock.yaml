@@ -100,6 +100,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/reeval
 
+  examples/with-checks-and-gates:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
   examples/with-code-review:
     dependencies:
       reeval:
@@ -472,12 +478,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/reeval
 
-  examples/with-checks-and-gates:
-    dependencies:
-      reeval:
-        specifier: workspace:*
-        version: link:../../packages/reeval
-
   examples/with-strict-secrets:
     dependencies:
       reeval:
@@ -773,7 +773,7 @@ importers:
         specifier: workspace:0.1.6
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.10
+        specifier: workspace:0.2.11
         version: link:../harness-opencode
       '@reeval/harness-pi':
         specifier: workspace:0.2.8
@@ -823,7 +823,7 @@ importers:
         specifier: workspace:0.1.6
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.10
+        specifier: workspace:0.2.11
         version: link:../harness-opencode
       '@reeval/harness-pi':
         specifier: workspace:0.2.8

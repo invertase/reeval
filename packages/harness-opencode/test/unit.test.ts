@@ -248,6 +248,34 @@ test('on Vertex AI, OpenCode runs a google-vertex/<model> id on a credentials fi
   )
 })
 
+test('the image bakes one bootstrap for every provider, region and Vertex AI', async () => {
+  const google = createOpenCode({
+    auth: { GOOGLE_GENERATIVE_AI_API_KEY: 'k' },
+    model: 'google/gemini-3.8-flash',
+  })
+  const vertex = { project: 'p', location: 'global', credentialsFile: '/reeval/adc.json' }
+  const others = [
+    createOpenCode({ auth: { ANTHROPIC_API_KEY: 'k' }, model: 'anthropic/claude-haiku-4-5' }),
+    createOpenCode({ auth: { OPENAI_API_KEY: 'k' }, model: 'openai/gpt-5.5', effort: 'high' }),
+    createOpenCode({
+      auth: { AWS_BEARER_TOKEN_BEDROCK: 'k' },
+      model: 'amazon-bedrock/m',
+      vars: { AWS_REGION: 'eu-west-1' },
+    }),
+    createOpenCode({ auth: {}, model: 'google-vertex/gemini-3.8-flash', vertex }),
+  ]
+  for (const other of others) {
+    assert.deepEqual(await other.getBootstrap?.({}), await google.getBootstrap?.({}))
+  }
+})
+
+test("a provider whose key variable a process can't be given is refused", () => {
+  assert.throws(
+    () => createOpenCode({ auth: { '302AI_API_KEY': 'k' }, model: '302ai/m' }),
+    /reads 302\.AI's key from 302AI_API_KEY, which isn't a name a process's environment can have/,
+  )
+})
+
 test("with requireCredentialBrokering, a sandbox that can't broker never gets the key", async () => {
   const harness = createOpenCode({
     auth: { OPENAI_API_KEY: 'sk-k' },

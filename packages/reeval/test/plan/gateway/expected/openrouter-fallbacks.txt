@@ -19,7 +19,7 @@ image docker · codex · 1 evals
 image docker · goose · 1 evals
   base  reeval-sandbox:goose-0.1.7  (reeval's image: built when missing or when its base changed)
 image docker · opencode · 1 evals
-  base  reeval-sandbox:opencode-0.2.10  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:opencode-0.2.11  (reeval's image: built when missing or when its base changed)
 image docker · grok-build · 1 evals
   base  reeval-sandbox:grok-build-0.1.6  (reeval's image: built when missing or when its base changed)
 image docker · cursor · 2 evals
