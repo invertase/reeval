@@ -3036,7 +3036,7 @@ export const features: Feature[] = [
       assert.deepEqual(art?.capture?.use, { model: 'anthropic/scripted-vision', moves: 5 })
       assert.ok(
         scriptedVision.prompts.some((p) =>
-          /^5\. click \{"x":200,"y":215\} → now at \/welcome(;|$)/m.test(p),
+          /^5\. click \{"x":200,"y":215\} on button "Sign up" → now at \/welcome(;|$)/m.test(p),
         ),
         'the model saw its submit move take the page to /welcome',
       )
@@ -3052,7 +3052,7 @@ export const features: Feature[] = [
       error: {
         kind: 'assertion',
         message:
-          /c\.capture\(\) instruction 1 of 1 "Open the menu" repeated click \{"x":600,"y":600\} 5 times and nothing changed/,
+          /c\.capture\(\) instruction 1 of 1 "Open the menu" repeated click \{"x":600,"y":600\} on the page background 5 times and nothing changed/,
       },
     },
     canary: /expected 'c\.capture\(\) instruction 1 of 1 "Open …' to be 'still open'/,
@@ -3095,6 +3095,16 @@ export const features: Feature[] = [
         landed(run)?.error?.message ?? '',
         /The page as it stopped: artifacts\/late\.step-1\.png\.$/,
       )
+    },
+  },
+  {
+    dir: 'ui/capture-use-scroll',
+    tiers: ['docker'],
+    env: 'ui',
+    canary: /expected 'no' to be 'yes'/,
+    record: ({ run }) => {
+      const art = landed(run)?.files.artifacts?.[0]
+      assert.deepEqual(art?.capture?.use, { model: 'fake', moves: 2 })
     },
   },
   {

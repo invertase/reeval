@@ -15,10 +15,11 @@ import type {
   Wait,
 } from '../types.ts'
 import { addUsage } from '../usage.ts'
-import { CAPTURE_KEYS, type ChromeSession, navigateAndWait } from './browser.ts'
+import { CAPTURE_KEYS, type ChromeSession, navigateAndWait, type PageLayout } from './browser.ts'
 import {
   describeChange,
   differing,
+  LATE_INPUT_MS,
   lateSettledState,
   type PageState,
   pathOf,
@@ -147,9 +148,12 @@ function onClock(session: ChromeSession, clock: Clock): ChromeSession {
     },
     navigate: (url) => race(clock, () => session.navigate(url)),
     wait: (wait, ms, nav) => race(clock, () => session.wait(wait, ms, nav).catch(own)),
-    screenshot: (fullPage) => race(clock, () => session.screenshot(fullPage)),
+    screenshot: (fullPage, clip) => race(clock, () => session.screenshot(fullPage, clip)),
+    reveal: (action, page) => race(clock, () => session.reveal(action, page)),
     dispatch: (action, page) => race(clock, () => session.dispatch(action, page)),
-    busy: () => session.busy(),
+    layout: () => race(clock, () => session.layout()),
+    busy: (any) => session.busy(any),
+    requests: () => session.requests(),
     dialogs: () => session.dialogs(),
     page: (origin) => session.page(origin),
   }
@@ -244,19 +248,96 @@ export const normalizesPoints = (model: string) =>
 
 const NORMALIZED = 1000
 
-/** Scales an action's 0–1000 points to CSS pixels on a `page`-sized screenshot. */
-export function scalePoints(
+/** Above this many window heights, the model sees the window rather than the whole page. */
+export const TALL_PAGE = 2
+
+/**
+ * The most pixels and the longest edge of the screenshot a model sees. Anthropic's API scales a
+ * larger image down and its models then answer in the smaller image's pixels, so reeval scales it
+ * itself and maps the points back.
+ */
+export const SHOT_PIXELS = 1_150_000
+export const SHOT_EDGE = 1568
+
+/** The screenshot a model chooses a move on, and the part of the page it shows. */
+export type ModelShot = {
+  png: Buffer
+  /** The image's size in pixels. */
+  image: { width: number; height: number }
+  /** The page's area it shows, in CSS pixels: the whole page, or the window on a tall page. */
+  region: { y: number; width: number; height: number }
+  /** The page's size in CSS pixels. */
+  page: { width: number; height: number }
+  /** The page is taller than the region, which is the window. */
+  partial: boolean
+}
+
+/** The scale that keeps a `width`×`height` image within `SHOT_PIXELS` and `SHOT_EDGE`. */
+export function shotScale(width: number, height: number): number {
+  const fit = Math.min(
+    1,
+    Math.sqrt(SHOT_PIXELS / (width * height)),
+    SHOT_EDGE / Math.max(width, height),
+  )
+  return Math.floor(fit * 1000) / 1000
+}
+
+/** What a model is shown of `layout`: the whole page, unless it is over `TALL_PAGE` windows tall. */
+export function shotRegion(
+  layout: PageLayout,
+  window: { width: number; height: number },
+): ModelShot['region'] & { partial: boolean } {
+  const height = Math.max(layout.height, window.height)
+  if (height <= TALL_PAGE * window.height) {
+    return { y: 0, width: window.width, height, partial: false }
+  }
+  const y = Math.min(Math.max(0, layout.scrollY), height - window.height)
+  return { y, width: window.width, height: window.height, partial: true }
+}
+
+async function modelShot(session: ChromeSession): Promise<ModelShot> {
+  const layout = await session.layout()
+  if (!layout) {
+    const png = await session.screenshot(true)
+    const size = pngSize(png)
+    return { png, image: size, region: { y: 0, ...size }, page: size, partial: false }
+  }
+  const { partial, ...region } = shotRegion(layout, session.window)
+  const scale = shotScale(region.width, region.height)
+  const png = await session.screenshot(!partial, { x: 0, ...region, scale })
+  const page = {
+    width: Math.max(layout.width, session.window.width),
+    height: Math.max(layout.height, session.window.height),
+  }
+  return { png, image: pngSize(png), region, page, partial }
+}
+
+/**
+ * An action's points, from the model's screenshot to page CSS pixels: 0–1000 across the image
+ * for a model that normalizes, the image's pixels for any other. A point off the image is refused.
+ */
+export function toPagePoints(
   action: CaptureUseAction,
-  page: { width: number; height: number },
-): CaptureUseAction {
-  const x = (n: number) => Math.round((n * page.width) / NORMALIZED)
-  const y = (n: number) => Math.round((n * page.height) / NORMALIZED)
+  shot: Pick<ModelShot, 'image' | 'region'>,
+  normalized: boolean,
+): CaptureUseAction | { refused: string } {
+  const { image, region } = shot
+  const span = normalized ? { width: NORMALIZED, height: NORMALIZED } : image
+  const off = (px: number, py: number) => px < 0 || py < 0 || px > span.width || py > span.height
+  const x = (n: number) => Math.round((n * region.width) / span.width)
+  const y = (n: number) => Math.round(region.y + (n * region.height) / span.height)
+  const refuse = (px: number, py: number) => ({
+    refused: `(${px}, ${py}) is outside the screenshot, which is ${normalized ? `0-${NORMALIZED} on both axes` : `${image.width}×${image.height}`}`,
+  })
   switch (action.type) {
     case 'click':
     case 'hover':
     case 'scroll':
+      if (off(action.x, action.y)) return refuse(action.x, action.y)
       return { ...action, x: x(action.x), y: y(action.y) }
     case 'drag':
+      if (off(action.x, action.y)) return refuse(action.x, action.y)
+      if (off(action.toX, action.toY)) return refuse(action.toX, action.toY)
       return { ...action, x: x(action.x), y: y(action.y), toX: x(action.toX), toY: y(action.toY) }
     default:
       return action
@@ -266,9 +347,9 @@ export function scalePoints(
 export const systemPrompt = (normalized: boolean) =>
   `You drive a web page from screenshots. Call one tool. ${
     normalized
-      ? `Coordinates are normalized to 0-${NORMALIZED} on the full-page image: x and toX across its width, y and toY down its height. A scroll's dy is in CSS pixels.`
-      : 'Coordinates are CSS pixels on the full-page image.'
-  } Each turn you get the goal, what has focus, your earlier moves with what each did, and a fresh screenshot. Click a field before typing into it, and do not repeat a move that already worked. A dropdown (select) never opens in the screenshot: click it once, press ArrowDown or ArrowUp until it shows the option you want, then press Enter to choose it. On a click or key press after which nothing of the goal is left, such as the click that submits a form you have filled in, set completesGoal to true: reeval makes it and goes on to the next goal without asking you again. Call done when the goal is met. Do not mention CDP.`
+      ? `Coordinates are normalized to 0-${NORMALIZED} on the screenshot: x and toX across its width, y and toY down its height.`
+      : 'Coordinates are pixels on the screenshot, whose size each turn gives.'
+  } A scroll's dy is in page pixels, positive to scroll down. Each turn you get the goal, what has focus, your earlier moves with what each did, and a fresh screenshot. Click a field before typing into it, and do not repeat a move that already worked. A dropdown (select) never opens in the screenshot: click it once, press ArrowDown or ArrowUp until it shows the option you want, then press Enter to choose it. On a click or key press after which nothing of the goal is left, such as the click that submits a form you have filled in, set completesGoal to true: reeval makes it and goes on to the next goal without asking you again. A goal with more than one step (sign in and allow access, fill in and confirm) is complete only on its last step's move, not on a submit that leads to the next step. Call done when the goal is met. Do not mention CDP.`
 
 const completesGoal = z
   .boolean()
@@ -282,7 +363,7 @@ const useTools = {
   }),
   type: tool({
     description:
-      'Insert text into the focused field. Click the field first. Set replace to true to replace what the field already holds instead of adding to it.',
+      'Insert text into the focused field. Click the field first. Set replace to true to replace what the field already holds instead of adding to it. In a date or time field, click its first part and type the digits in the order the field shows them, with no separators (11142026 for mm/dd/yyyy, 0730PM for --:-- --).',
     inputSchema: z.object({ text: z.string(), replace: z.boolean().optional() }),
   }),
   key: tool({
@@ -291,7 +372,8 @@ const useTools = {
     inputSchema: z.object({ key: z.enum(CAPTURE_KEYS), completesGoal }),
   }),
   scroll: tool({
-    description: 'Wheel-scroll a constrained scroller at (x, y).',
+    description:
+      'Wheel-scroll by dy page pixels with the pointer at (x, y): the page, or the scrolling box under the point.',
     inputSchema: z.object({ x: z.number(), y: z.number(), dy: z.number() }),
   }),
   drag: tool({
@@ -365,11 +447,17 @@ type Move = {
   dialogs: string[]
   changed?: boolean
   effect?: string
+  /** What the pointer landed on, as `button "Pay"`. */
+  target?: string
+  /** reeval scrolled the window to make the move, so the window's pixels say nothing of it. */
+  scrolled?: boolean
+  /** Marked final, but it sent nothing, opened no page and no dialog, so its goal went on. */
+  unproven?: boolean
 }
 
 const grid = (n: number) => Math.round(n / SAME_POINT)
 
-function moveKey({ final: _, ...action }: CaptureUseMove): string {
+export function moveKey({ final: _, ...action }: CaptureUseMove): string {
   switch (action.type) {
     case 'click':
     case 'hover':
@@ -397,7 +485,8 @@ function settleMove(
   volatile: ReadonlySet<StateField>,
 ): void {
   move.after = after
-  const fields = move.before ? differing(move.before, after, volatile) : []
+  const ignored: ReadonlySet<StateField> = move.scrolled ? new Set([...volatile, 'view']) : volatile
+  const fields = move.before ? differing(move.before, after, ignored) : []
   const notes = move.before ? describeChange(after, fields, origin) : []
   for (const dialog of move.dialogs) notes.push(`the page opened ${dialog}, which reeval accepted`)
   move.changed = fields.length > 0 || move.dialogs.length > 0
@@ -444,11 +533,24 @@ export function goalPrompt(
   moves: readonly Move[],
   origin: string,
   volatile: ReadonlySet<StateField> = new Set(),
+  view: { shot?: Omit<ModelShot, 'png'>; normalized?: boolean; later?: readonly string[] } = {},
 ): string {
   const lines = [`Goal: ${step.goal}`]
+  const quoted = (goals: readonly string[]) => goals.map((g) => JSON.stringify(g)).join(', ')
   if (step.total > 1) {
+    const done = earlier.length ? ` Already done: ${quoted(earlier)}.` : ''
+    const later = view.later?.length
+      ? ` Still to come, not part of this goal: ${quoted(view.later)}.`
+      : ''
+    lines.push(`This is instruction ${step.index} of ${step.total}.${done}${later}`)
+  }
+  const { shot } = view
+  if (shot && !view.normalized) {
+    lines.push(`The screenshot is ${shot.image.width}×${shot.image.height} pixels.`)
+  }
+  if (shot?.partial) {
     lines.push(
-      `This is instruction ${step.index} of ${step.total}.${earlier.length ? ` Already done: ${earlier.map((g) => JSON.stringify(g)).join(', ')}.` : ''}`,
+      `The page is ${shot.page.height} px tall, more than the screenshot shows: it shows the window, scrolled ${shot.region.y} px down. Scroll to see the rest.`,
     )
   }
   lines.push(...stateLines(now, origin, volatile))
@@ -459,8 +561,15 @@ export function goalPrompt(
   lines.push('Your moves for this goal so far, oldest first. The screenshot shows the page now.')
   moves.forEach((m, i) => {
     const effect = m.refused ? `not made: ${m.refused}` : (m.effect ?? '')
-    lines.push(`${i + 1}. ${m.said}${effect ? ` → ${effect}` : ''}`)
+    lines.push(
+      `${i + 1}. ${m.said}${m.target ? ` on ${m.target}` : ''}${effect ? ` → ${effect}` : ''}`,
+    )
   })
+  if (moves.at(-1)?.unproven) {
+    lines.push(
+      `Move ${moves.length} was marked completesGoal, but it sent no request and opened no page or dialog, so the goal goes on. If the goal is met, call done; if that move only opened a step on the way, such as a confirmation, finish it.`,
+    )
+  }
   if (stuckMoves(moves) >= CAPTURE_USE_NUDGE_AT) {
     lines.push(
       'Your last moves repeated the same action and nothing changed. Do not repeat it: if the goal is met, call done; otherwise try a different action.',
@@ -485,12 +594,14 @@ type Goal = {
   volatile: Set<StateField>
   /** No move has been made yet in the journey. */
   pristine: boolean
+  /** The instructions after this one. */
+  later: readonly string[]
   loadModel: (name: string) => Promise<unknown>
 }
 
 async function runModelGoal(
   session: ChromeSession,
-  { step, earlier, origin, modelName, clock, volatile, pristine, loadModel }: Goal,
+  { step, earlier, origin, modelName, clock, volatile, pristine, later, loadModel }: Goal,
 ): Promise<Ended & { usage: TokenUsage | null }> {
   const { goal } = step
   const model = await loadModel(modelName)
@@ -498,7 +609,14 @@ async function runModelGoal(
   const made: Move[] = []
   let dispatched = 0
   let usage: TokenUsage | null = null
-  let now = await probePage(session)
+  // The journey's first look waits for the page to settle and its requests to end: content that
+  // loads after `load` lands before the model chooses, not while it does.
+  let now = pristine
+    ? await settledState(session, volatile, clock.remaining, true)
+    : await probePage(session)
+  // With no request in flight at the first look, a request count to tell the page's own changes
+  // (a clock, a carousel) from data still arriving while the model chooses its first move.
+  const quiet = pristine && !session.busy(true) ? session.requests() : undefined
   let stale = 0
   const trail: Trail = { origin, start: now, made, choosing: false }
   clock.trail = trail
@@ -507,8 +625,12 @@ async function runModelGoal(
     check(clock)
     const last = made.at(-1)
     if (last?.after) {
-      // A change that lands after the move settled is still that move's.
-      const late = await probePage(session)
+      // A change that lands after the move settled is still that move's, once it has settled too:
+      // one read can catch it halfway, its text from before and its pixels from after.
+      let late = await probePage(session)
+      if (differing(last.after, late, volatile).length || session.busy()) {
+        late = await settledState(session, volatile, clock.remaining)
+      }
       last.dialogs.push(...session.dialogs())
       if (differing(last.after, late, volatile).length || last.dialogs.length) {
         settleMove(last, late, origin, volatile)
@@ -518,15 +640,15 @@ async function runModelGoal(
     const stuck = stuckMoves(made)
     if (stuck >= CAPTURE_USE_STUCK_AT) {
       throw new Error(
-        `c.capture() instruction ${step.index} of ${step.total} ${JSON.stringify(goal)} repeated ${last?.said} ${CAPTURE_USE_STUCK_AT} times and nothing changed`,
+        `c.capture() instruction ${step.index} of ${step.total} ${JSON.stringify(goal)} repeated ${last?.said}${last?.target ? ` on ${last.target}` : ''} ${CAPTURE_USE_STUCK_AT} times and nothing changed`,
       )
     }
-    const ephemeral = await session.screenshot(true)
-    const page = pngSize(ephemeral)
+    const shot = await modelShot(session)
+    const { png: ephemeral, ...seen } = shot
     debugTrace(
       'check',
       'capture-shot',
-      { goal, bytes: ephemeral.length, page, url: now.url },
+      { goal, bytes: ephemeral.length, ...seen, url: now.url },
       false,
     )
     const signal = AbortSignal.timeout(check(clock))
@@ -540,7 +662,14 @@ async function runModelGoal(
           {
             role: 'user',
             content: [
-              { type: 'text', text: goalPrompt(step, earlier, now, made, origin, volatile) },
+              {
+                type: 'text',
+                text: goalPrompt(step, earlier, now, made, origin, volatile, {
+                  shot: seen,
+                  normalized,
+                  later,
+                }),
+              },
               { type: 'file', mediaType: 'image/png', data: ephemeral },
             ],
           },
@@ -565,12 +694,15 @@ async function runModelGoal(
     // still landing invites a second submit. Credit the change and ask again, a bounded number of times.
     const fresh = await probePage(session)
     const opened = session.dialogs()
-    const moved = differing(now, fresh, volatile)
-    if (!last && pristine) {
-      // Before the journey's first move, whatever changes changes on its own.
+    let moved = differing(now, fresh, volatile)
+    if (!last && quiet !== undefined && !opened.length && session.requests() === quiet) {
+      // Before the journey's first move, a change that no request brought is the page's own.
       for (const f of moved) if (f !== 'url' && f !== 'focus') volatile.add(f)
-    } else if ((moved.length || opened.length) && stale < STALE_ASKS) {
-      // With no move yet in this instruction, the change is the last instruction's still landing.
+      moved = differing(now, fresh, volatile)
+    }
+    if ((moved.length || opened.length) && stale < STALE_ASKS) {
+      // With no move yet in this instruction, the change is the last instruction's still landing,
+      // or data the page fetched after its first look.
       stale++
       if (last && !last.refused) {
         last.dialogs.push(...opened)
@@ -584,12 +716,16 @@ async function runModelGoal(
       continue
     }
     stale = 0
-    let asks = actionFromTool(call.toolName, input)
+    const tool = actionFromTool(call.toolName, input)
+    let asks = 'refused' in tool ? tool : toPagePoints(tool, shot, normalized)
     if (!('refused' in asks) && asks.type === 'type' && now.editable === false) {
       asks = { refused: 'nothing that takes text is focused; click a field first' }
     }
+    // Focus the page can't see into (a card frame, a closed root) may be a password too.
     const logged =
-      !('refused' in asks) && asks.type === 'type' && now.focus?.includes('[password]')
+      !('refused' in asks) &&
+      asks.type === 'type' &&
+      (now.focus?.includes('[password]') || now.editable === null)
         ? `type ${JSON.stringify({ ...input, text: '•'.repeat(String(input.text ?? '').length) })}`
         : said
     const latency = formatDuration(Date.now() - asked)
@@ -601,21 +737,39 @@ async function runModelGoal(
       made.push({ said, key: said, refused: asks.refused, dialogs: [] })
       continue
     }
-    const chosen = normalized ? scalePoints(asks, page) : asks
+    const page = shot.page
     debugLog('check', `capture use ${logged} on ${JSON.stringify(goal)} · ${latency}`)
-    debugTrace('check', 'capture-use', { goal, action: chosen, page }, `capture use ${chosen.type}`)
+    debugTrace('check', 'capture-use', { goal, action: asks, page }, `capture use ${asks.type}`)
     if (asks.type === 'done') return { moves: dispatched, usage, ended: 'done' }
     const move: Move = { said, key: moveKey(asks), before: now, dialogs: [] }
     made.push(move)
-    await session.dispatch(chosen, page)
+    let sent = session.requests()
+    if (await session.reveal(asks, page)) {
+      // What reeval's scroll set off (rows a feed loads, a header that shrinks) is not the move's.
+      move.before = await settledState(session, volatile, clock.remaining)
+      sent = session.requests()
+    }
+    const landed = await session.dispatch(asks, page)
+    if (landed?.target) move.target = landed.target
+    if (landed?.scrolled) move.scrolled = true
     dispatched++
     now = await settledState(session, volatile, clock.remaining)
+    // A hover menu or a debounced search answers a beat after the move: watch for it here, so
+    // the model doesn't choose on the page before it.
+    if (asks.type === 'type' || asks.type === 'hover') {
+      now = await lateSettledState(session, now, volatile, clock.remaining, LATE_INPUT_MS)
+    }
     move.dialogs.push(...session.dialogs())
     settleMove(move, now, origin, volatile)
-    // A final move that changed nothing most likely missed, so the model sees that and goes on.
     if (asks.final && move.changed) {
-      await lateSettledState(session, now, volatile, clock.remaining)
-      return { moves: dispatched, usage, ended: 'final' }
+      // A move that sent nothing and stayed on the page may only have opened a step on the way
+      // (a confirmation, a menu), or changed nothing but what reeval scrolled: the goal goes on.
+      const left = now.url !== move.before?.url
+      if (session.requests() > sent || left || move.dialogs.length) {
+        await lateSettledState(session, now, volatile, clock.remaining)
+        return { moves: dispatched, usage, ended: 'final' }
+      }
+      move.unproven = true
     }
   }
   clock.step = { ...step, moves: dispatched }
@@ -709,6 +863,7 @@ export async function runJourney(
           clock,
           volatile,
           pristine: moves === 0,
+          later: goals.slice(stringIndex + 1),
           loadModel: options.loadModel,
         })
         usage = addUsage(usage, goal.usage)
