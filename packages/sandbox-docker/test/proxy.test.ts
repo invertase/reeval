@@ -1019,6 +1019,47 @@ describe('brokered endpoints through the proxy', () => {
       own.close()
     }
   })
+
+  test('a path that only resolves to an endpoint is refused and recorded as sent, and a request without the placeholder is not', async () => {
+    const own = await startProxy(
+      { mode: 'allow-all' },
+      {
+        endpoints: [
+          {
+            host: HOST,
+            path: { regex: '^/v1beta/models/[\\w.-]+:generateContent$' },
+            method: ['POST'],
+          },
+        ],
+      },
+    )
+    try {
+      own.proxy.addTransformations([hostWide])
+      seen.length = 0
+      const paths = [
+        '/v1/files/../v1beta/models/m:generateContent',
+        '/v1/files/%2e%2e/v1beta/models/m:generateContent',
+        '/v1beta/models/a%2Fb:generateContent',
+      ]
+      for (const path of paths) {
+        const r = await viaProxy(own, HOST, h1.port, { method: 'POST', path, headers: auth })
+        assert.equal(r.status, 403, path)
+      }
+      assert.equal(seen.length, 0, 'nothing reached upstream')
+      const plain = await viaProxy(own, HOST, h1.port, { method: 'GET', path: '/v1/telemetry' })
+      assert.equal(plain.status, 200)
+      assert.deepEqual(
+        own.proxy
+          .traffic()
+          .blocked.map((b) => b.reason.split(' carries')[0])
+          .sort(),
+        paths.map((p) => `POST ${p}`).sort(),
+      )
+      assert.doesNotMatch(JSON.stringify(own.proxy.traffic()), new RegExp(REAL))
+    } finally {
+      own.close()
+    }
+  })
 })
 
 describe('the harness key in responses', () => {
