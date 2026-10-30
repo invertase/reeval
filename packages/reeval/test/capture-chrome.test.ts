@@ -176,15 +176,22 @@ test("focus in a same-origin frame reads as the frame's field; a cross-origin fr
   })
 })
 
-test('typing into a date or time field presses its keys, which its segments take', { skip, timeout: 60_000 }, async () => {
+test('typing into a date or time field presses its keys, which its segments take', {
+  skip,
+  timeout: 60_000,
+}, async () => {
   await inChrome(async (session, origin) => {
     await open(session, `${origin}/when`)
     const value = async (id: string, text: string) => {
-      await session.cdp.send('Runtime.evaluate', { expression: `document.getElementById('${id}').focus()` })
+      await session.cdp.send('Runtime.evaluate', {
+        expression: `document.getElementById('${id}').focus()`,
+      })
       await session.dispatch({ type: 'type', text })
-      return ((await session.cdp.send('Runtime.evaluate', {
-        expression: `document.getElementById('${id}').value`,
-      })) as { result: { value: string } }).result.value
+      return (
+        (await session.cdp.send('Runtime.evaluate', {
+          expression: `document.getElementById('${id}').value`,
+        })) as { result: { value: string } }
+      ).result.value
     }
     assert.equal(await value('date', '11142026'), '2026-11-14')
     assert.equal(await value('time', '0730PM'), '19:30')

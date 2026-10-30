@@ -1754,11 +1754,13 @@ export const inventory: InventoryFeature[] = [
       'ui/capture-use-final',
       'ui/capture-use-history',
       'ui/capture-use-stuck',
+      'ui/capture-use-scroll',
     ],
     plan: ['capture/options'],
     unit: [
       'reeval/test/capture.test.ts',
       'reeval/test/capture-use.test.ts',
+      'reeval/test/capture-chrome.test.ts',
       'reeval/test/ai-sdk-warnings.test.ts',
     ],
   },

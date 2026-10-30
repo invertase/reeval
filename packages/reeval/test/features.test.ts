@@ -3083,6 +3083,16 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'ui/capture-use-scroll',
+    tiers: ['docker'],
+    env: 'ui',
+    canary: /expected 'no' to be 'yes'/,
+    record: ({ run }) => {
+      const art = landed(run)?.files.artifacts?.[0]
+      assert.deepEqual(art?.capture?.use, { model: 'fake', moves: 2 })
+    },
+  },
+  {
     dir: 'ui/capture-use-final',
     tiers: ['docker'],
     env: 'ui',
