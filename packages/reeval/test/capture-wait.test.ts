@@ -127,6 +127,18 @@ test('trackNetwork quiet waits out a request that starts inside the quiet window
   assert.ok(Date.now() - started >= 180, 'the quiet window restarts when the request ends')
 })
 
+test('trackNetwork counts every request it saw start, and knows when one of any age is in flight', () => {
+  const cdp = fakeCdp()
+  const network = trackNetwork(cdp, 50)
+  assert.equal(network.pending(), false)
+  cdp.emit('Network.requestWillBeSent', { requestId: 'list' })
+  cdp.emit('Network.requestWillBeSent', { requestId: 'poll' })
+  assert.deepEqual([network.started(), network.pending(), network.fresh()], [2, true, true])
+  cdp.emit('Network.loadingFinished', { requestId: 'list' })
+  cdp.emit('Network.loadingFailed', { requestId: 'poll' })
+  assert.deepEqual([network.started(), network.pending(), network.fresh()], [2, false, false])
+})
+
 test('trackNetwork quiet holds while more than two requests are in flight', async () => {
   const cdp = fakeCdp()
   const network = trackNetwork(cdp, 50)

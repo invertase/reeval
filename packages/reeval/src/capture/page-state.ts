@@ -137,12 +137,14 @@ export const VOLATILE_CHANGES = 2
  * with no navigation or fresh request in flight. At `SETTLE_CAP_MS` it gives up and adds the
  * fields that changed `VOLATILE_CHANGES` times or more to `volatile`, so a clock or an animation
  * doesn't hold up every move. A field that changed once (content that loaded just as the cap came,
- * behind requests that kept the page busy) is not volatile.
+ * behind requests that kept the page busy) is not volatile. With `anyRequest`, a request of any
+ * age holds it too, as a first look waits for data a page fetches after `load`.
  */
 export async function settledState(
   session: ChromeSession,
   volatile: Set<StateField>,
   left: () => number,
+  anyRequest = false,
 ): Promise<PageState> {
   const start = Date.now()
   const sleep = () =>
@@ -155,7 +157,7 @@ export async function settledState(
     const next = await probePage(session)
     const moving = differing(prev, next, volatile)
     for (const field of moving) changes.set(field, (changes.get(field) ?? 0) + 1)
-    if (!moving.length && !session.busy()) return next
+    if (!moving.length && !session.busy(anyRequest)) return next
     if (Date.now() - start >= SETTLE_CAP_MS || left() <= 0) {
       const marked = [...changes]
         .filter(([field, n]) => n >= VOLATILE_CHANGES && field !== 'url' && field !== 'focus')

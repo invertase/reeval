@@ -319,7 +319,12 @@ function requestId(msg: unknown): string | undefined {
 export function trackNetwork(
   cdp: Pick<CdpClient, 'on'>,
   quietMs = NETWORK_QUIET_MS,
-): { quiet(timeoutMs: number): Promise<void>; fresh(): boolean; started(): number } {
+): {
+  quiet(timeoutMs: number): Promise<void>
+  fresh(): boolean
+  pending(): boolean
+  started(): number
+} {
   const inFlight = new Map<string, number>()
   let started = 0
   let changed: (() => void) | undefined
@@ -339,6 +344,7 @@ export function trackNetwork(
   cdp.on('Network.loadingFailed', end)
   return {
     started: () => started,
+    pending: () => inFlight.size > 0,
     /** A request started in the last `FRESH_REQUEST_MS` is still in flight; a long poll is not fresh. */
     fresh() {
       const since = Date.now() - FRESH_REQUEST_MS
@@ -806,8 +812,8 @@ export type ChromeSession = {
   ): Promise<Landed | undefined>
   /** Where the window is scrolled to and the page's size, in CSS pixels; undefined when unread. */
   layout(): Promise<PageLayout | undefined>
-  /** A frame is loading, or a request started in the last two seconds is in flight. */
-  busy(): boolean
+  /** A frame is loading, or a request started in the last two seconds (with `any`, at all) is in flight. */
+  busy(any?: boolean): boolean
   /** How many requests the tab has started so far. */
   requests(): number
   /** The dialogs (`alert "hi"`) the page opened since the last call, each accepted. */
@@ -976,8 +982,8 @@ export async function withChrome<T>(
           }
         },
         layout: () => readLayout(cdp),
-        busy() {
-          return loading.size > 0 || network.fresh()
+        busy(any) {
+          return loading.size > 0 || (any ? network.pending() : network.fresh())
         },
         requests: () => network.started(),
         dialogs() {

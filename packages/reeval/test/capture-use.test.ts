@@ -465,7 +465,7 @@ function scriptedSession(
   changes: boolean,
   state: (moves: number) => Probed = changes ? signUpState() : stillState,
   extra: {
-    busy?: () => boolean
+    busy?: (any?: boolean) => boolean
     dialogs?: (moves: number) => string[]
     requests?: () => number
     layout?: () => PageLayout | undefined
@@ -1265,7 +1265,8 @@ test('runJourney lets content that loads after load land before its first look, 
   const { session } = scriptedSession(
     false,
     () => ({ ...stillState(), text: loading() ? 'loading' : clicked ? 'saved' : 'loaded' }),
-    { busy: loading },
+    // The list's request is older than a fresh one: only a wait for every request holds for it.
+    { busy: (any?: boolean) => !!any && loading() },
   )
   session.dispatch = async () => {
     clicked = Date.now()

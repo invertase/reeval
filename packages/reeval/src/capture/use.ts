@@ -151,7 +151,7 @@ function onClock(session: ChromeSession, clock: Clock): ChromeSession {
     screenshot: (fullPage, clip) => race(clock, () => session.screenshot(fullPage, clip)),
     dispatch: (action, page) => race(clock, () => session.dispatch(action, page)),
     layout: () => race(clock, () => session.layout()),
-    busy: () => session.busy(),
+    busy: (any) => session.busy(any),
     requests: () => session.requests(),
     dialogs: () => session.dialogs(),
     page: (origin) => session.page(origin),
@@ -608,10 +608,10 @@ async function runModelGoal(
   const made: Move[] = []
   let dispatched = 0
   let usage: TokenUsage | null = null
-  // The journey's first look waits for the page to settle: content that loads after `load` lands
-  // before the model chooses, not while it does.
+  // The journey's first look waits for the page to settle and its requests to end: content that
+  // loads after `load` lands before the model chooses, not while it does.
   let now = pristine
-    ? await settledState(session, volatile, clock.remaining)
+    ? await settledState(session, volatile, clock.remaining, true)
     : await probePage(session)
   let stale = 0
   const trail: Trail = { origin, start: now, made, choosing: false }
