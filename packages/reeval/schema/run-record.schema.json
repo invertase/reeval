@@ -1120,7 +1120,7 @@
       ]
     },
     "EgressRecord": {
-      "description": "An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted`, `blocked` and `unresolved` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked` contains only unexpected refusals.",
+      "description": "An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted`, `blocked` and `unresolved` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked` contains only unexpected refusals. A request that carries the harness's brokered key off the endpoints reeval brokers it for is refused on a host the policy let through: it's in `blocked` once per method and path, its `reason` names them, and `connections` counts its requests. Past the first 20 pairs, the rest share one entry per host.",
       "type": "object",
       "properties": {
         "allowed": {
@@ -1137,7 +1137,7 @@
           ]
         },
         "blocked": {
-          "description": "Hosts the gateway refused, and why. A name that didn't resolve is in `unresolved` instead.",
+          "description": "Hosts the policy refused, and requests that carry the harness's brokered key off the endpoints reeval brokers it for (one entry per method and path), each with why. A name that didn't resolve is in `unresolved` instead.",
           "type": "array",
           "items": {
             "type": "object",
