@@ -1495,6 +1495,24 @@ describe('redacting serialized JSON', () => {
     assert.equal(redactKey('error', {}), 'error')
   })
 
+  test('a short declared secret never alters a digest, but a whole hex secret is masked', () => {
+    registerSecret('1234')
+    const sha = `${'0'.repeat(30)}1234${'f'.repeat(30)}`
+    const commit = `${'a'.repeat(18)}1234${'b'.repeat(18)}`
+    const digests = { sha256: sha, environment: `sha256:${sha}`, commit }
+    assert.deepEqual(JSON.parse(redactJson(digests, undefined, {})), digests)
+    assert.deepEqual(scanText('run.json', JSON.stringify(digests, null, 2)), [])
+    // Canary: the same characters outside a digest, and a hex secret as long as one, are masked.
+    const hex = '9f3c2a7b'.repeat(5)
+    registerSecret(hex)
+    const out = { path: `x-${sha}-y`, commit: hex }
+    assert.deepEqual(JSON.parse(redactJson(out, undefined, {})), {
+      path: `x-${'0'.repeat(30)}[REDACTED]${'f'.repeat(30)}-y`,
+      commit: '[REDACTED]',
+    })
+    assert.equal(scanText('run.json', JSON.stringify(out, null, 2)).length, 2)
+  })
+
   test('a secret with characters JSON escapes is masked inside its string', () => {
     const quoted = 'reeval "quoted"\\secret\n9d1f'
     registerSecret(quoted)

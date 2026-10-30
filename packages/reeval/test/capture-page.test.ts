@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { Cdp } from '../src/capture/browser.ts'
+import { Cdp, withChrome } from '../src/capture/browser.ts'
 import { PAGE_ENTRIES, watchPage } from '../src/capture/page.ts'
 import { pageLines } from '../src/view/capture.ts'
 
@@ -274,4 +274,27 @@ test('a CDP call settles on its reply, its error, its deadline or the socket clo
   const pending = other.send('Page.enable')
   other.close()
   await assert.rejects(pending, /the capture closed its DevTools connection/)
+})
+
+test('canceling a capture whose browser never opened its DevTools port stops at once', {
+  timeout: 30_000,
+}, async () => {
+  // Node takes Chrome's flags as bad options and exits, as a browser killed mid-start does,
+  // leaving no DevToolsActivePort behind.
+  const canceled = new Error('canceled')
+  const controller = new AbortController()
+  setTimeout(() => controller.abort(canceled), 200)
+  const started = Date.now()
+  await assert.rejects(
+    withChrome(
+      process.execPath,
+      { width: 100, height: 100 },
+      60_000,
+      {},
+      async () => assert.fail('no session without a DevTools port'),
+      controller.signal,
+    ),
+    (e) => e === canceled,
+  )
+  assert.ok(Date.now() - started < 10_000, `took ${Date.now() - started}ms`)
 })

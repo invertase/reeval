@@ -571,7 +571,8 @@ export class Cdp {
   }
 }
 
-function waitForPortFile(file: string, timeoutMs: number): Promise<number> {
+/** Canceling stops the wait: a browser killed before it wrote the file never will. */
+function waitForPortFile(file: string, timeoutMs: number, signal?: AbortSignal): Promise<number> {
   const deadline = Date.now() + timeoutMs
   return new Promise((resolve, reject) => {
     const tick = () => {
@@ -582,6 +583,10 @@ function waitForPortFile(file: string, timeoutMs: number): Promise<number> {
           resolve(port)
           return
         }
+      }
+      if (signal?.aborted) {
+        reject(signal.reason)
+        return
       }
       if (Date.now() > deadline) {
         reject(new Error('chrome-headless-shell did not open a DevTools port'))
@@ -752,7 +757,7 @@ export async function withChrome<T>(
   }
   signal?.addEventListener('abort', kill, { once: true })
   try {
-    const port = await waitForPortFile(join(userData, 'DevToolsActivePort'), timeoutMs)
+    const port = await waitForPortFile(join(userData, 'DevToolsActivePort'), timeoutMs, signal)
     const cdp = await cdpConnect(await pageDebuggerUrl(port, timeoutMs), timeoutMs)
     cdp.callMs = () => deadline - Date.now()
     const abort = () => cdp.close()
