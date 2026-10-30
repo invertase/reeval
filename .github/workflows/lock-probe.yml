@@ -1,0 +1,32 @@
+name: lock-probe
+on:
+  push:
+    branches: [ehesp/install-ps1-file-lock-abd9]
+permissions:
+  contents: read
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        n: [1, 2, 3]
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts
+      - shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled, AntivirusEnabled, OnAccessProtectionEnabled | Format-List
+          (Get-MpPreference).ExclusionPath
+          gh release download v0.17.0 -R invertase/reeval -p 'reeval-0.17.0-windows-x64.exe' -D out
+          Invoke-WebRequest -UseBasicParsing https://download.sysinternals.com/files/Handle.zip -OutFile h.zip
+          Expand-Archive h.zip h
+          $handle = (Resolve-Path h/handle64.exe).Path
+          foreach ($shell in 'powershell', 'pwsh') {
+            Write-Host "== $shell"
+            & $shell -NoProfile -ExecutionPolicy Bypass -File scripts/lock-probe.ps1 -Exe (Resolve-Path out/reeval-0.17.0-windows-x64.exe).Path -Handle $handle
+          }
