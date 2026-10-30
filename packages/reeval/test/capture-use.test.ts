@@ -107,6 +107,17 @@ test('dispatchInput sends CDP Input events and never Runtime.evaluate', async ()
     ],
   )
   sent.length = 0
+  await dispatchInput(cdp, { type: 'type', text: '14' }, window, undefined, 0, true)
+  assert.deepEqual(
+    sent.map((s) => [s.params?.type, s.params?.key, s.params?.text]),
+    [
+      ['keyDown', '1', '1'],
+      ['keyUp', '1', undefined],
+      ['keyDown', '4', '4'],
+      ['keyUp', '4', undefined],
+    ],
+  )
+  sent.length = 0
   await dispatchInput(cdp, { type: 'key', key: 'ArrowDown' }, window)
   assert.deepEqual(
     sent.map((s) => [s.params?.type, s.params?.key, s.params?.windowsVirtualKeyCode]),

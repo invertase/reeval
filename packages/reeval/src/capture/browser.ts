@@ -123,6 +123,7 @@ export async function dispatchInput(
   window: CaptureWindow,
   page?: { width: number; height: number },
   scrollY = 0,
+  keyed = false,
 ): Promise<number> {
   if (action.type === 'done') return scrollY
   if (action.type === 'type') {
@@ -136,7 +137,11 @@ export async function dispatchInput(
       })
       if (!action.text) await pressKey(cdp, KEYS.Backspace)
     }
-    if (action.text) await cdp.send('Input.insertText', { text: action.text })
+    if (action.text && keyed) {
+      for (const text of action.text) await pressKey(cdp, { key: text, code: '', windowsVirtualKeyCode: 0, text })
+    } else if (action.text) {
+      await cdp.send('Input.insertText', { text: action.text })
+    }
     return scrollY
   }
   if (action.type === 'key') {
@@ -733,6 +738,14 @@ const targetAt = (x: number, y: number) => `(() => {
   return tag + type + (name ? ' ' + JSON.stringify(name) : '')
 })()`
 
+// Read-only: whether focus is in a date or time field, whose segments take key presses, not
+// inserted text.
+const SEGMENTED_FOCUS = `(() => {
+  let a = document.activeElement
+  while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement
+  return !!a && a.tagName === 'INPUT' && ['date', 'time', 'datetime-local', 'month', 'week'].includes(a.type)
+})()`
+
 /** The window's scroll offset and the page's size, from CDP: no script runs in the page. */
 export async function readLayout(cdp: CdpClient): Promise<PageLayout | undefined> {
   const metrics = (await cdp.send('Page.getLayoutMetrics').catch(() => undefined)) as
@@ -927,7 +940,13 @@ export async function withChrome<T>(
           // The page scrolls on its own too (a navigation, focus, a script), so the offset is read.
           const from = (await readLayout(cdp))?.scrollY ?? scrollY
           if (action.type !== 'click' && action.type !== 'hover' && action.type !== 'drag') {
-            scrollY = await dispatchInput(cdp, action, window, page, from)
+            const keyed =
+              action.type === 'type' &&
+              (await cdp
+                .send('Runtime.evaluate', { expression: SEGMENTED_FOCUS, returnByValue: true })
+                .then((r) => (r as { result?: { value?: unknown } }).result?.value === true)
+                .catch(() => false))
+            scrollY = await dispatchInput(cdp, action, window, page, from, keyed)
             return { scrolled: false }
           }
           const at = mapPagePoint(action.x, action.y, window, page, from)
