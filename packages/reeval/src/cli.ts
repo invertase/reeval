@@ -1085,11 +1085,19 @@ async function executeRun(
         const onSignal = (signal: NodeJS.Signals) => {
           // pnpm passes the terminal's Ctrl-C on as a SIGTERM a moment after the SIGINT the CLI
           // already got: one press, not a second. The same signal again is a second press, however
-          // soon: no launcher passes a SIGINT on as a SIGINT.
-          if (first && signal !== first.signal && Date.now() - first.at < SAME_PRESS_MS) {
+          // soon: no launcher passes a SIGINT on as a SIGINT. Sent within a millisecond, the two
+          // can arrive in either order, and either way the press was a Ctrl-C; a launcher passes it
+          // on once, so any signal after that is a second press.
+          if (
+            first &&
+            !first.passedOn &&
+            signal !== first.signal &&
+            Date.now() - first.at < SAME_PRESS_MS
+          ) {
+            if (signal === 'SIGINT') stopCode = EXIT.interrupted
             // pnpm exits once it has, and the shell takes the terminal back: another Ctrl-C
             // reaches the shell, not this process.
-            if (!first.passedOn && !finishing)
+            if (!finishing)
               renderer.onEvent({
                 type: 'notice',
                 at: Date.now(),
