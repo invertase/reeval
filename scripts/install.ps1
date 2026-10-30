@@ -91,11 +91,16 @@
       Fail "$name doesn't match SHA256SUMS (got $actual, expected $expected)"
     }
 
+    # It starts from a copy, and the file that never ran is the one installed: for a moment after a
+    # program runs, what watches programs start (antivirus, EDR, the CI runner's agent) can hold
+    # it open without delete sharing, and moving it then fails.
+    $check = Join-Path $tmp "check-$name"
+    Copy-Item -LiteralPath (Join-Path $tmp $name) $check
     # Only its stdout is read, and not under 'Stop': Windows PowerShell turns a native command's
     # stderr into errors, which 'Stop' throws, failing a binary that started.
     $ErrorActionPreference = 'Continue'
     $global:LASTEXITCODE = $null
-    $installed = try { & (Join-Path $tmp $name) --version 2>$null } catch { $_ }
+    $installed = try { & $check --version 2>$null } catch { $_ }
     $ErrorActionPreference = 'Stop'
     if ($LASTEXITCODE -ne 0) {
       $code = if ($null -eq $LASTEXITCODE) { "it couldn't run" } else { "exit $LASTEXITCODE" }
