@@ -363,7 +363,7 @@ const useTools = {
   }),
   type: tool({
     description:
-      'Insert text into the focused field. Click the field first. Set replace to true to replace what the field already holds instead of adding to it. In a date or time field, click its first part and type the digits in the order the field shows them, with no separators (11142026 for mm/dd/yyyy, 0730PM for --:-- --).',
+      'Insert text into the focused field. Click the field first. Set replace to true to replace what the field already holds instead of adding to it.',
     inputSchema: z.object({ text: z.string(), replace: z.boolean().optional() }),
   }),
   key: tool({
@@ -505,6 +505,12 @@ function stuckMoves(moves: readonly Move[]): number {
   return n
 }
 
+/**
+ * A focused date or time input, as the probe names it. Only these get the no-separators hint,
+ * which other fields would take as theirs too, dropping the spaces and slashes a card needs.
+ */
+const SEGMENTED = /^input\[(date|time|datetime-local|month|week)\]/
+
 /** What the model reads about the page now: where it is and what has focus. */
 function stateLines(now: PageState, origin: string, volatile: ReadonlySet<StateField>): string[] {
   const lines: string[] = []
@@ -516,6 +522,11 @@ function stateLines(now: PageState, origin: string, volatile: ReadonlySet<StateF
     if (now.focus.startsWith('select')) {
       lines.push(
         'A dropdown never opens in the screenshot: press ArrowDown or ArrowUp to the option, then Enter; it holds the new option only after Enter.',
+      )
+    }
+    if (SEGMENTED.test(now.focus)) {
+      lines.push(
+        'A date or time field takes its digits in the order it shows them, with no separators: 11142026 for mm/dd/yyyy, 0730PM for --:-- --. Click its left edge, its first part, before typing.',
       )
     }
   }
