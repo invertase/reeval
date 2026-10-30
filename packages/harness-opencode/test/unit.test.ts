@@ -248,6 +248,106 @@ test('on Vertex AI, OpenCode runs a google-vertex/<model> id on a credentials fi
   )
 })
 
+test('the image bakes one bootstrap for every provider, region and Vertex AI', async () => {
+  const google = createOpenCode({
+    auth: { GOOGLE_GENERATIVE_AI_API_KEY: 'k' },
+    model: 'google/gemini-3.8-flash',
+  })
+  const vertex = { project: 'p', location: 'global', credentialsFile: '/reeval/adc.json' }
+  const others = [
+    createOpenCode({ auth: { ANTHROPIC_API_KEY: 'k' }, model: 'anthropic/claude-haiku-4-5' }),
+    createOpenCode({ auth: { OPENAI_API_KEY: 'k' }, model: 'openai/gpt-5.5', effort: 'high' }),
+    createOpenCode({
+      auth: { AWS_BEARER_TOKEN_BEDROCK: 'k' },
+      model: 'amazon-bedrock/m',
+      vars: { AWS_REGION: 'eu-west-1' },
+    }),
+    createOpenCode({ auth: {}, model: 'google-vertex/gemini-3.8-flash', vertex }),
+  ]
+  for (const other of others) {
+    assert.deepEqual(await other.getBootstrap?.({}), await google.getBootstrap?.({}))
+  }
+})
+
+test("a provider whose key variable a process can't be given is refused", () => {
+  assert.throws(
+    () => createOpenCode({ auth: { '302AI_API_KEY': 'k' }, model: '302ai/m' }),
+    /can't run OpenCode on 302\.AI \(302ai\): OpenCode reads its key from 302AI_API_KEY/,
+  )
+})
+
+/** The environment the bridge starts with, and the brokering rules, on a stand-in sandbox. */
+async function started(harness: ReturnType<typeof createOpenCode>) {
+  let env: Record<string, string> | undefined
+  const rules: unknown[] = []
+  const stop = new Error('stop at the bridge')
+  const sandboxSession = {
+    ports: [4000],
+    getPortEndpoint: async () => ({ url: 'http://127.0.0.1:4000' }),
+    run: async () => ({ exitCode: 0, stdout: '/home/u', stderr: '' }),
+    writeTextFile: async () => {},
+    readTextFile: async () => '',
+    addRequestTransformations: async (r: unknown[]) => void rules.push(...r),
+    spawn: async (o: { env: Record<string, string> }) => {
+      env = o.env
+      throw stop
+    },
+  }
+  await assert.rejects(
+    harness.doStart({ sandboxSession, sessionId: 's', sessionWorkDir: '/w' } as never),
+    (e) => e === stop,
+  )
+  return { env: env ?? {}, rules }
+}
+
+test("the sandbox gets a placeholder for the route's own key, and no other provider's", async () => {
+  const auth = { ANTHROPIC_API_KEY: 'sk-ant-real', OPENAI_API_KEY: 'sk-openai-real' }
+  const { env, rules } = await started(
+    createOpenCode({ auth, model: 'anthropic/claude-haiku-4-5' }),
+  )
+  const placeholder = env.ANTHROPIC_API_KEY
+  assert.ok(placeholder && placeholder !== auth.ANTHROPIC_API_KEY, 'a placeholder')
+  assert.equal(env.OPENAI_API_KEY, undefined)
+  const all = JSON.stringify(env)
+  for (const key of Object.values(auth)) assert.ok(!all.includes(key), 'no real key')
+  assert.ok(rules.length > 0)
+  assert.ok(JSON.stringify(rules).includes(auth.ANTHROPIC_API_KEY), 'the gateway swaps it in')
+  assert.ok(!JSON.stringify(rules).includes(auth.OPENAI_API_KEY))
+  // No route's variables are set, empty or not, so the eval's own values reach the agent.
+  for (const name of ['AWS_REGION', 'GOOGLE_CLOUD_PROJECT', 'GOOGLE_APPLICATION_CREDENTIALS']) {
+    assert.equal(env[name], undefined, name)
+  }
+  assert.equal(env.REEVAL_OPENCODE_ENV, '{}')
+  assert.ok(!Object.values(env).includes(''), 'no empty variable')
+})
+
+test("a route's own variables reach OpenCode through the gate", async () => {
+  const bedrock = await started(
+    createOpenCode({
+      auth: { AWS_BEARER_TOKEN_BEDROCK: 'k-real' },
+      model: 'amazon-bedrock/m',
+      vars: { AWS_REGION: 'eu-west-1' },
+    }),
+  )
+  assert.deepEqual(JSON.parse(bedrock.env.REEVAL_OPENCODE_ENV ?? ''), { AWS_REGION: 'eu-west-1' })
+  assert.equal(bedrock.env.AWS_REGION, undefined)
+  const vertex = { project: 'p', location: 'global', credentialsFile: '/reeval/adc.json' }
+  const onVertex = await started(
+    createOpenCode({
+      auth: { ANTHROPIC_API_KEY: 'sk-ant-real' },
+      model: 'google-vertex/gemini-3.8-flash',
+      vertex,
+    }),
+  )
+  assert.deepEqual(JSON.parse(onVertex.env.REEVAL_OPENCODE_ENV ?? ''), {
+    GOOGLE_CLOUD_PROJECT: 'p',
+    GOOGLE_VERTEX_LOCATION: 'global',
+    GOOGLE_APPLICATION_CREDENTIALS: '/reeval/adc.json',
+  })
+  assert.equal(onVertex.env.ANTHROPIC_API_KEY, undefined, 'Vertex AI takes no key')
+  assert.deepEqual(onVertex.rules, [])
+})
+
 test("with requireCredentialBrokering, a sandbox that can't broker never gets the key", async () => {
   const harness = createOpenCode({
     auth: { OPENAI_API_KEY: 'sk-k' },

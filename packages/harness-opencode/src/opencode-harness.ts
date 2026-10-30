@@ -9,6 +9,7 @@ import { createACP } from '@ai-sdk/harness-acp'
 import type { Experimental_SandboxSession } from '@ai-sdk/provider-utils'
 import {
   OPENCODE_GATE,
+  OPENCODE_GATE_ENV,
   OPENCODE_GATE_EXECUTABLE,
   OPENCODE_GATE_PATH,
   OPENCODE_GATE_SERVERS_ENV,
@@ -19,6 +20,7 @@ import {
   OPENCODE_PNPM_WORKSPACE,
 } from './opencode-install.ts'
 import {
+  OPENCODE_PROVIDERS,
   OPENCODE_VERTEX_PROVIDER,
   openCodeEffortBody,
   openCodeProvider,
@@ -209,11 +211,21 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
     // The gate, which runs `opencode acp` (see OPENCODE_GATE).
     executable: OPENCODE_GATE_EXECUTABLE,
     args: [],
-    auth: settings.auth,
-    env: { ...openCodeEnv(settings), ...route.env },
-    ...(route.credentialBrokering
-      ? { credentialEnv: route.credentialEnv, credentialBrokering: route.credentialBrokering }
-      : {}),
+    // Only the route's own key: every provider's variable is a credential name (below), and
+    // harness-acp forwards whichever of them auth has.
+    auth: Object.fromEntries(
+      route.credentialEnv.flatMap((name) => {
+        const value = isHarnessAuthenticationEnvironment(settings.auth)
+          ? settings.auth[name]
+          : undefined
+        return value ? [[name, value]] : []
+      }),
+    ),
+    // The bootstrap lists these variables' names, so every route declares the same ones: the
+    // image's bootstrap serves every provider and Vertex AI.
+    env: { ...openCodeEnv(settings), [OPENCODE_GATE_ENV]: JSON.stringify(route.env) },
+    credentialEnv: OPENCODE_KEY_ENV,
+    credentialBrokering: route.credentialBrokering ?? (() => []),
     modelMapping: { type: 'session-config-option', path: 'model' },
     skillsDirectory: OPENCODE_HOME_SKILLS_DIR,
   })
@@ -238,10 +250,14 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
   }
 }
 
+/** Every provider's key variable: harness-acp forwards the one in auth, and brokers it. */
+const OPENCODE_KEY_ENV = [...new Set(OPENCODE_PROVIDERS.map((p) => p.env))].sort()
+
 /** Where OpenCode's model calls go, and the key (if any) the sandbox gets for them. */
 type Route = {
   readonly id: string
   readonly name: string
+  /** OpenCode's variables besides the key, which the gate sets ({@link OPENCODE_GATE_ENV}). */
   readonly env: Record<string, string>
   readonly credentialEnv: string[]
   readonly credentialBrokering?: Parameters<typeof createACP>[0]['credentialBrokering']

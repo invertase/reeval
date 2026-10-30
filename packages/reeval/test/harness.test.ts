@@ -84,7 +84,7 @@ import {
   opencodeVars,
   type ServedModel,
 } from '../src/harness/agents.ts'
-import { withDefaultEffort } from '../src/harness/default-effort.ts'
+import { noDefaultEffort, withDefaultEffort } from '../src/harness/default-effort.ts'
 import { effortFromModelLabel, harnessEffort, servedEffortOf } from '../src/harness/effort.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
 import { normalizeStream, type StampedPart } from '../src/harness/transcript.ts'
@@ -2616,35 +2616,57 @@ describe('token usage and the served model, from any harness', () => {
 describe("each harness's image serves its attempts' bootstrap", () => {
   // An attempt that asks for another bootstrap than its image baked reinstalls the CLI at start,
   // where a restricted egress policy refuses the download.
-  const ATTEMPTS: Record<(typeof BAKED_HARNESSES)[number], AgentHarnessDescriptor> = {
-    cursor: cursor({ model: 'composer-2.5' }),
-    'claude-code': claudeCode({ model: 'claude-sonnet-5-5' }),
-    antigravity: antigravity({ model: 'gemini-3.8-flash' }),
-    opencode: opencode({ model: 'google/gemini-3.8-flash' }),
-    goose: goose({ model: 'gemini-3.8-flash' }),
-    pi: pi({ model: 'gemini-3.8-flash' }),
-    codex: codex({ model: 'gpt-5.5' }),
-    fx: fx({ model: 'openai/gpt-5.5' }),
-    'grok-build': grokBuild({ model: 'grok-4.6' }),
+  const ATTEMPTS: Record<(typeof BAKED_HARNESSES)[number], readonly AgentHarnessDescriptor[]> = {
+    cursor: [cursor({ model: 'composer-2.5' })],
+    'claude-code': [claudeCode({ model: 'claude-sonnet-5-5' })],
+    antigravity: [antigravity({ model: 'gemini-3.8-flash' })],
+    // The image bakes Google's; each other provider's key, Bedrock's region and Vertex AI's
+    // service account are other variables.
+    opencode: [
+      opencode({ model: 'google/gemini-3.8-flash' }),
+      opencode({ model: 'anthropic/claude-haiku-4-5' }),
+      opencode({ model: 'openai/gpt-5.5' }),
+      opencode({ model: 'xai/grok-4.6' }),
+      opencode({ model: 'amazon-bedrock/anthropic.claude-haiku-4-5' }),
+      { ...opencode({ model: 'google/gemini-3.8-flash' }), gateway: 'vercel' },
+      { ...opencode({ model: 'anthropic/claude-haiku-4-5' }), gateway: 'openrouter' },
+      { ...opencode({ model: 'google/gemini-3.8-flash' }), gateway: 'vertex' },
+    ],
+    goose: [goose({ model: 'gemini-3.8-flash' })],
+    pi: [pi({ model: 'gemini-3.8-flash' })],
+    codex: [codex({ model: 'gpt-5.5' })],
+    fx: [fx({ model: 'openai/gpt-5.5' })],
+    'grok-build': [grokBuild({ model: 'grok-4.6' })],
   }
+  const VERTEX = { project: 'p', location: 'global', regions: {} }
   const bootstrapOf = async (descriptor: AgentHarnessDescriptor) => {
-    const agent = agentFor(descriptor)
+    const agent = agentFor(descriptor, VERTEX)
     const adapter = await agent.adapter({
       auth: agentAuth(agent, { [agent.credential]: 'k' }),
       ...(agent.routeEnv ? { env: agent.routeEnv } : {}),
+      ...(agent.adc
+        ? { vertex: { project: 'p', location: 'global', credentialsFile: '/reeval/adc.json' } }
+        : {}),
       descriptor,
       model: agent.modelId?.(descriptor.model) ?? descriptor.model,
       plugins: [],
     })
     return (adapter as HarnessV1).getBootstrap?.({})
   }
+  // `unchecked` is Cursor without its model catalog, whose models take an effort.
+  const takesEffort = (h: AgentHarnessDescriptor) =>
+    [undefined, 'unchecked'].includes(noDefaultEffort(h))
 
   for (const harness of BAKED_HARNESSES) {
     test(`${harness}, at no effort, the default effort and its own`, async () => {
       const baked = await ((await bakedAdapter(harness)) as HarnessV1).getBootstrap?.({})
-      const unset = ATTEMPTS[harness]
-      for (const descriptor of [unset, withDefaultEffort(unset), { ...unset, effort: 'high' }]) {
-        assert.deepEqual(await bootstrapOf(descriptor), baked, harnessEffort(descriptor) ?? 'none')
+      for (const unset of ATTEMPTS[harness]) {
+        const efforts = [unset, withDefaultEffort(unset)]
+        if (takesEffort(unset)) efforts.push({ ...unset, effort: 'high' })
+        for (const descriptor of efforts) {
+          const id = `${harnessId(descriptor)} on ${descriptor.gateway ?? 'direct'} at ${harnessEffort(descriptor) ?? 'no effort'}`
+          assert.deepEqual(await bootstrapOf(descriptor), baked, id)
+        }
       }
     })
   }

@@ -10,6 +10,14 @@ export const OPENCODE_GATE_PATH = `.ai-sdk-harness/.harness-bootstrap/opencode/i
 /** The variable that names the MCP servers the gate waits for, as a JSON list. */
 export const OPENCODE_GATE_SERVERS_ENV = 'REEVAL_OPENCODE_MCP_SERVERS'
 
+/**
+ * The variable that holds the route's variables besides its key (Bedrock's region, Vertex AI's
+ * project, location and credentials file), as a JSON object the gate sets in OpenCode's
+ * environment. One name on every route keeps the bootstrap, which lists the names, the same;
+ * a route's own variables, set or empty, would replace the eval's values for the agent's commands.
+ */
+export const OPENCODE_GATE_ENV = 'REEVAL_OPENCODE_ENV'
+
 /** How long the first prompt waits for the MCP servers at most, in ms. */
 export const OPENCODE_GATE_TIMEOUT_MS = 30_000
 
@@ -26,7 +34,8 @@ export const OPENCODE_GATE_SETTLE_MS = 250
  * `session/prompt` (and what follows it) until each server named in
  * `REEVAL_OPENCODE_MCP_SERVERS` has logged `mcp connected` or `mcp connect failed` (and
  * {@link OPENCODE_GATE_SETTLE_MS} has passed), or the timeout passes. With servers to wait for, OpenCode runs with its info logs on stderr, which the gate
- * reads and keeps; anything else on stderr passes through.
+ * reads and keeps; anything else on stderr passes through. OpenCode runs with the variables in
+ * {@link OPENCODE_GATE_ENV} added to the gate's environment.
  */
 export const OPENCODE_GATE = `#!/usr/bin/env node
 import { spawn } from 'node:child_process'
@@ -37,7 +46,10 @@ import { fileURLToPath } from 'node:url'
 const here = dirname(fileURLToPath(import.meta.url))
 const pending = new Set(JSON.parse(process.env.${OPENCODE_GATE_SERVERS_ENV} || '[]'))
 const logs = pending.size > 0 ? ['--print-logs', '--log-level', 'info'] : []
+const env = { ...process.env, ...JSON.parse(process.env.${OPENCODE_GATE_ENV} || '{}') }
+delete env.${OPENCODE_GATE_ENV}
 const child = spawn(join(here, 'opencode'), ['acp', ...logs], {
+  env,
   stdio: ['pipe', 'inherit', 'pipe'],
 })
 let held = null
