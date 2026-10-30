@@ -32,10 +32,10 @@
   },
   "devDependencies": {
     "@bcoe/v8-coverage": "1.0.2",
-    "@biomejs/biome": "2.6.2",
+    "@biomejs/biome": "2.6.3",
     "@types/node": "22.20.5",
     "c8": "12.0.0",
-    "knip": "6.41.0",
+    "knip": "6.43.0",
     "reeval": "workspace:*",
     "rollup-plugin-license": "3.7.1",
     "spdx-expression-validate": "2.0.0",
