@@ -49,10 +49,10 @@ jobs:
       # Antigravity, whose plugin fields load rules; 20 on Claude Code and Grok Build, whose don't;
       # 16 on Codex and Goose, whose plugins have no hooks or subagents; 18 on OpenCode, with
       # subagents but no hooks; 16 on pi and fx, with neither; 12 on the two without), the e2e (2)
-      # on the nine harnesses' own rows, and the real-tier fixtures (2 each, 13 of them):
-      # 44 + 40 + 32 + 18 + 32 + 24 + 18 + 26, plus 8 of headroom. Each reserves its attempts in
+      # on the nine harnesses' own rows, and the real-tier fixtures (2 each, 14 of them):
+      # 44 + 40 + 32 + 18 + 32 + 24 + 18 + 28, plus 8 of headroom. Each reserves its attempts in
       # the ledger first, and fails rather than go over.
-      REEVAL_REAL_ATTEMPT_BUDGET: '242'
+      REEVAL_REAL_ATTEMPT_BUDGET: '244'
       REEVAL_REAL_LEDGER: ${{ github.workspace }}/../reeval-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
