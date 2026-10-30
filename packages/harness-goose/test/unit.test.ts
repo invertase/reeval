@@ -51,7 +51,12 @@ test("with requireCredentialBrokering, a sandbox that can't broker never gets th
   )
 })
 
-const OFF_VERTEX = { GCP_PROJECT_ID: '', GCP_LOCATION: '', GOOGLE_APPLICATION_CREDENTIALS: '' }
+const OFF_VERTEX = {
+  GCP_PROJECT_ID: '',
+  GCP_LOCATION: '',
+  GOOGLE_APPLICATION_CREDENTIALS: '',
+  GOOSE_THINKING_EFFORT: '',
+}
 
 test('effort is GOOSE_THINKING_EFFORT', () => {
   assert.deepEqual(gooseEnv({ model: 'gemini-3.8-flash' }), {
@@ -122,8 +127,12 @@ test('on Vertex AI, Goose runs its gcp_vertex_ai provider on a credentials file,
   assert.equal(harness.harnessId, 'goose')
 })
 
-test('the image bakes one bootstrap for every provider and model', async () => {
+test('the image bakes one bootstrap for every provider, model and effort', async () => {
   const gemini = createGoose({ auth: { [GOOSE_CREDENTIAL_ENV]: 'AIza-k' }, model: 'unused' })
+  for (const effort of ['medium', 'high']) {
+    const at = createGoose({ auth: { [GOOSE_CREDENTIAL_ENV]: 'AIza-k' }, model: 'm', effort })
+    assert.deepEqual(await at.getBootstrap?.({}), await gemini.getBootstrap?.({}), effort)
+  }
   const vercel = createGoose({
     auth: { AI_GATEWAY_API_KEY: 'vck_k' },
     provider: AI_GATEWAY_PROVIDER,

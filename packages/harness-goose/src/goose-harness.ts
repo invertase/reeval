@@ -155,7 +155,7 @@ export type GooseVertex = {
 /** Goose's provider for Vertex AI, which authenticates from Application Default Credentials. */
 export const GOOSE_VERTEX_PROVIDER_ID = 'gcp_vertex_ai'
 
-/** Goose's process env: quiet flags, the provider and model, and thinking effort when set. */
+/** Goose's process env: quiet flags, the provider and model, and thinking effort. */
 export function gooseEnv(
   settings: Pick<GooseHarnessSettings, 'model' | 'effort' | 'provider' | 'vertex'>,
 ) {
@@ -164,9 +164,11 @@ export function gooseEnv(
     ...GOOSE_QUIET_ENV,
     GOOSE_PROVIDER: vertex ? GOOSE_VERTEX_PROVIDER_ID : (settings.provider ?? GEMINI_PROVIDER).id,
     GOOSE_MODEL: settings.model,
-    ...(settings.effort ? { GOOSE_THINKING_EFFORT: settings.effort } : {}),
-    // Set, if empty, on every provider: the bootstrap is keyed on these names, so the image's
-    // bootstrap serves Vertex AI too.
+    // Set, if empty, at every effort: the bootstrap is keyed on these names, so the image's
+    // bootstrap serves every effort. Goose reads an empty value as no effort.
+    GOOSE_THINKING_EFFORT: settings.effort ?? '',
+    // Set, if empty, on every provider, for the same reason: the image's bootstrap serves Vertex
+    // AI too.
     GCP_PROJECT_ID: vertex?.project ?? '',
     GCP_LOCATION: vertex?.location ?? '',
     GOOGLE_APPLICATION_CREDENTIALS: vertex?.credentialsFile ?? '',

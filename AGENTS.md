@@ -544,7 +544,7 @@ pnpm reeval run --dry-run          # the plan, without running
 
 1. Build the sandbox images once. This bakes each harness's CLI into reeval's image for it,
    `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.6`, `claude-code-1.0.160-patch.b17cde50`,
-   `antigravity-0.1.12`, `opencode-0.2.10`, `goose-0.1.6`, `pi-0.2.8`, `codex-0.1.9`, `fx-0.1.3`, `grok-build-0.1.6`), so
+   `antigravity-0.1.12`, `opencode-0.2.10`, `goose-0.1.7`, `pi-0.2.8`, `codex-0.1.9`, `fx-0.1.3`, `grok-build-0.1.6`), so
    the tag pins the CLI build. Rebuild after bumping a harness adapter. A project's other images
    (`from`, `dockerfile` and `install`) build with `reeval image build` there (`--dry-run` lists them).
 
