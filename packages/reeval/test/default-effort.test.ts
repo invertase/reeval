@@ -17,7 +17,16 @@ import {
   noDefaultEffort,
   withDefaultEffort,
 } from '../src/harness/default-effort.ts'
-import { antigravity, claudeCode, codex, cursor, fx, grokBuild, pi } from '../src/harness.ts'
+import {
+  antigravity,
+  claudeCode,
+  codex,
+  cursor,
+  fx,
+  grokBuild,
+  opencode,
+  pi,
+} from '../src/harness.ts'
 import { harnessId } from '../src/options.ts'
 import { effortSummary } from '../src/plan.ts'
 import type { CursorEfforts } from '../src/types.ts'
@@ -85,6 +94,24 @@ describe('the shared default effort', () => {
     assert.match(noDefaultEffort(fx({ model: 'gpt-5.4-mini' })) ?? '', /fx sends no effort/)
     const haiku = claudeCode({ model: 'claude-haiku-4-5' })
     assert.equal(withDefaultEffort(haiku), haiku)
+  })
+
+  test("is left off where OpenCode's model answers an effort with a 400", () => {
+    const haiku = opencode({ model: 'anthropic/claude-haiku-4-5' })
+    assert.equal(noDefaultEffort(haiku), "Anthropic's API takes no effort on claude-haiku-4-5")
+    assert.equal(withDefaultEffort(haiku), haiku)
+    assert.match(
+      noDefaultEffort(opencode({ model: 'openai/gpt-4.1' })) ?? '',
+      /OpenAI's API takes no reasoning effort on gpt-4\.1/,
+    )
+    assert.match(
+      noDefaultEffort(opencode({ model: 'google/gemini-2.5-flash' })) ?? '',
+      /Gemini's API takes no thinking level on gemini-2\.5-flash/,
+    )
+    assert.equal(
+      withDefaultEffort(opencode({ model: 'anthropic/claude-sonnet-5-5' })).effort,
+      'medium',
+    )
   })
 
   test("follows Cursor's catalog for each model", () => {

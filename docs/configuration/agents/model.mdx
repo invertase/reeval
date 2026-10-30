@@ -24,7 +24,7 @@ reeval refuses a prefixed id on a harness that takes a bare id, or a bare id on 
 
 ## `effort`
 
-`effort` is a reasoning-effort value that reeval passes to the harness's own CLI or SDK. It records the value as `effort` on the cell. With `effort` unset, a harness and model that take one run at `medium`, and the plan notes each that runs with none. `claudeCode` checks the value at plan time, and `cursor` checks it against Cursor's model catalog for the key. The `effort` entries in [Harness factory options](/reference/options#harness-factory-options) name the values a harness takes and where reeval sets them.
+`effort` is a reasoning-effort value that reeval passes to the harness's own CLI or SDK. It records the value as `effort` on the cell. With `effort` unset, a harness and model that take one run at `medium`, and the plan notes each that runs with none. `claudeCode` and `opencode` check the value at plan time, refusing one on a model that takes none, such as `claude-haiku-4-5`, and `cursor` checks it against Cursor's model catalog for the key. The `effort` entries in [Harness factory options](/reference/options#harness-factory-options) name the values a harness takes and where reeval sets them.
 
 `fx` has no `effort`, and reeval refuses one at plan time with exit code 2. Cursor's fast mode is `params.fast`, not `effort`.
 

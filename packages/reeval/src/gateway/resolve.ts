@@ -1,6 +1,6 @@
 // Which gateway in the config's `gateway` list each harness's model calls go through: the first
 // entry that can serve it, or the one it pins. Pure, so the plan refuses before anything starts.
-import { resolveOpenCodeProvider } from '@reeval/harness-opencode/providers'
+import { openCodeEffortBody, resolveOpenCodeProvider } from '@reeval/harness-opencode/providers'
 import { UsageError } from '../errors.ts'
 import { AGENTS, isAgentKind } from '../harness/agents.ts'
 import { harnessEffort } from '../harness/effort.ts'
@@ -34,6 +34,10 @@ export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
       if (h.kind === 'opencode') {
         const resolved = resolveOpenCodeProvider(h.model, process.env)
         if ('error' in resolved) return resolved.error
+        const effort = harnessEffort(h)
+        if (effort !== undefined && !openCodeEffortBody(h.model, effort)) {
+          return `reeval sends OpenCode's effort (${JSON.stringify(effort)}) in no field ${h.model} is known to read: drop effort, or run a model on Google, Vertex AI, Anthropic, OpenAI or OpenRouter`
+        }
       }
       return undefined
     },

@@ -1,7 +1,7 @@
 // The effort a harness runs at when its factory sets none: reeval's shared default, sent as each
 // CLI's own setting so no CLI's default (Codex's `low` on gpt-5.6-sol, Grok Build's `high`)
 // decides it, and left off where the harness, its gateway or its model takes no effort.
-import { openCodeEffortBody } from '@reeval/harness-opencode/providers'
+import { openCodeEffortBody, openCodeEffortRefusal } from '@reeval/harness-opencode/providers'
 import { antigravityIdEffort, claudeCodeTakesEffort } from '../contract/harness.ts'
 import { effortRefusedOn } from '../gateway/resolve.ts'
 import { harnessId } from '../options.ts'
@@ -40,11 +40,14 @@ export function noDefaultEffort(
       const named = antigravityIdEffort(h.model)
       return named ? `the model id names its effort, ${named}` : undefined
     }
-    case 'opencode':
+    case 'opencode': {
+      const refused = openCodeEffortRefusal(h.model)
+      if (refused) return refused
       if ((h.gateway ?? 'direct') === 'direct' && !openCodeEffortBody(h.model, DEFAULT_EFFORT)) {
         return `reeval sends OpenCode's effort in no field ${h.model} is known to read`
       }
       return effortRefusedOn(h, h.gateway ?? 'direct')
+    }
     default:
       return effortRefusedOn(h, h.gateway ?? 'direct')
   }

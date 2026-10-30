@@ -188,6 +188,55 @@ export const OPENCODE_VERTEX_PROVIDER = 'google-vertex'
 /** Gemini's own thinking level, as Gemini's API takes it. */
 const geminiThinking = (effort: string) => ({ thinkingConfig: { thinkingLevel: effort } })
 
+/** Anthropic models whose API refuses `output_config.effort`, besides every `claude-3-` model. */
+const ANTHROPIC_NO_EFFORT = new Set([
+  'claude-opus-4-0',
+  'claude-opus-4-1',
+  'claude-sonnet-4-0',
+  'claude-sonnet-4-5',
+  'claude-haiku-4-5',
+])
+
+/** `claude-haiku-4-5` from `claude-haiku-4-5@20251001` or `claude-haiku-4-5-20251001`. */
+const undated = (model: string) =>
+  model
+    .toLowerCase()
+    .replace(/@.*$/, '')
+    .replace(/-\d{8}$/, '')
+
+/** Why the API behind `provider` answers an effort on `model` with a 400, or undefined. */
+function apiRefusesEffort(provider: string, model: string): string | undefined {
+  const base = undated(model)
+  if (provider === 'anthropic' && (base.startsWith('claude-3-') || ANTHROPIC_NO_EFFORT.has(base))) {
+    return `Anthropic's API takes no effort on ${model}`
+  }
+  if (provider === 'openai' && (/^(gpt-[34]|chatgpt-)/.test(base) || base.includes('-chat'))) {
+    return `OpenAI's API takes no reasoning effort on ${model}`
+  }
+  if (
+    (provider === 'google' || provider === OPENCODE_VERTEX_PROVIDER) &&
+    /^gemini-[12]\./.test(base)
+  ) {
+    return `Gemini's API takes no thinking level on ${model}`
+  }
+  return undefined
+}
+
+/**
+ * Why `model` refuses the effort field {@link openCodeEffortBody} would send it (its API answers
+ * 400), or undefined. OpenRouter maps `reasoning.effort` onto each model itself, so it refuses
+ * none; on Vercel AI Gateway only a Gemini model has a field to refuse.
+ */
+export function openCodeEffortRefusal(model: string): string | undefined {
+  const parts = splitModel(model)
+  if (!parts) return undefined
+  if (parts.provider === 'vercel') {
+    const inner = splitModel(parts.model)
+    return inner?.provider === 'google' ? apiRefusesEffort(inner.provider, inner.model) : undefined
+  }
+  return apiRefusesEffort(parts.provider, parts.model)
+}
+
 /**
  * What OpenCode adds to the body of each call on `model` for `effort` (its config's per-model
  * `body`; OpenCode 2 has no per-model provider options), in the API's own field: Gemini's
@@ -195,12 +244,13 @@ const geminiThinking = (effort: string) => ({ thinkingConfig: { thinkingLevel: e
  * OpenRouter's `reasoning.effort` (which it sends a Gemini model as its thinking level), and a
  * Gemini model's `thinkingConfig` under Vercel AI Gateway's `providerOptions` (Vercel's own effort
  * field maps every Gemini 3 level but `low` to `high`). Undefined for a provider whose field no
- * run has checked.
+ * run has checked, and for a model whose API refuses the field ({@link openCodeEffortRefusal}).
  */
 export function openCodeEffortBody(
   model: string,
   effort: string,
 ): Record<string, unknown> | undefined {
+  if (openCodeEffortRefusal(model)) return undefined
   const parts = splitModel(model)
   if (parts?.provider === 'openrouter') return { reasoning: { effort } }
   if (parts?.provider === 'google' || parts?.provider === OPENCODE_VERTEX_PROVIDER)

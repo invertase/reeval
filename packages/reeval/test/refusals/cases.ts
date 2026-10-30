@@ -405,6 +405,18 @@ export const CASES: Record<string, Case[]> = {
       any(opencode, { model: 'openrouter/anthropic/claude-haiku-4.5' }),
     ],
     ['opencode good', any(opencode, { model: 'google/gemini-3.8-flash' })],
+    [
+      'opencode effort on an Anthropic model that takes none',
+      any(opencode, { model: 'anthropic/claude-haiku-4-5', effort: 'high' }),
+    ],
+    [
+      'opencode effort on an OpenAI model that takes none',
+      any(opencode, { model: 'openai/gpt-4.1', effort: 'low' }),
+    ],
+    [
+      'opencode effort on a Gemini model that takes none',
+      any(opencode, { model: 'google/gemini-2.5-flash', effort: 'low' }),
+    ],
     ['goose with a provider', any(goose, { model: 'google/gemini-3.8-flash' })],
     ['goose without a model', any(goose, {})],
     ['pi with a provider', any(pi, { model: 'google/gemini-3.8-flash' })],
@@ -1851,6 +1863,10 @@ environment:
       route([OPENROUTER, OFF], antigravity({ model: 'm' })),
     ],
     ['route: fx with effort on direct', route([DIRECT], fx({ model: 'gpt-5.5', effort: 'low' }))],
+    [
+      'route: opencode with effort in no known field on direct',
+      route([DIRECT], opencode({ model: 'cerebras/gpt-oss-120b', effort: 'high' })),
+    ],
     [
       'route: fx with effort on vercel',
       route([VERCEL], fx({ model: 'google/gemini-3.8-flash', effort: 'low' })),

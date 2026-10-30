@@ -1177,8 +1177,12 @@ export const inventory: InventoryFeature[] = [
     id: 'harness.default-effort',
     area: 'Harnesses',
     name: "An unset `effort` runs at `medium` on every harness and model that takes one, recorded and noted in the plan where it can't; Cursor's `effort` and `params` checked against its model catalog at plan time",
-    plan: ['default-effort/no-cursor-key', 'default-effort/cursor-catalog'],
-    unit: ['reeval/test/default-effort.test.ts', 'reeval/test/plan.test.ts'],
+    plan: ['default-effort/no-cursor-key', 'default-effort/cursor-catalog', 'opencode/opencode'],
+    unit: [
+      'reeval/test/default-effort.test.ts',
+      'reeval/test/plan.test.ts',
+      'harness-opencode/test/unit.test.ts',
+    ],
   },
   {
     id: 'harness.usage',

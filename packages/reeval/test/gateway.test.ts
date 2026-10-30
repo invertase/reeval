@@ -444,7 +444,7 @@ describe('Vercel AI Gateway routes', () => {
   test('effort with a harness whose effort path on Vercel is unchecked is refused there', () => {
     for (const [kind, model] of [
       ['goose', 'gemini-3-flash'],
-      ['opencode', 'anthropic/claude-haiku-4-5'],
+      ['opencode', 'anthropic/claude-sonnet-5-5'],
     ] as const) {
       const h = { kind, model, effort: 'high' } as HarnessDescriptor
       assert.throws(
