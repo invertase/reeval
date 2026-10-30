@@ -1,0 +1,193 @@
+[
+  {
+    "type": "user",
+    "uuid": "agent-01200ea5-67f3-4cf1-861b-9b984d842460:0",
+    "agent_id": "agent-01200ea5-67f3-4cf1-861b-9b984d842460",
+    "message": {
+      "agentConversationTurn": {
+        "userMessage": {
+          "text": "Change \"beta\" to \"BETA\" in notes.txt, create a new file c.txt containing \"x\", then delete b.txt. Reply with one word: done.",
+          "messageId": "",
+          "selectedContext": {
+            "selectedImages": [],
+            "extraContext": [],
+            "files": [],
+            "codeSelections": [],
+            "terminals": [],
+            "terminalSelections": [],
+            "folders": [],
+            "externalLinks": [],
+            "cursorRules": [],
+            "cursorCommands": [],
+            "documentations": [],
+            "uiElements": [],
+            "consoleLogs": [],
+            "extraContextEntries": [],
+            "gitCommits": [],
+            "pastChats": [],
+            "gitPrDiffSelections": [],
+            "selectedPullRequests": [],
+            "selectedSubagents": [],
+            "selectedVideos": [],
+            "selectedBrowsers": [],
+            "selectedDocuments": [],
+            "selectedSkills": []
+          },
+          "mode": "AGENT_MODE_UNSPECIFIED",
+          "conversationStateBlobId": "x0hUMlyEbUDAY3HMCHcDj87zCctZpNNOc4RBwgbEaVw=",
+          "hookAdditionalContexts": [],
+          "startedAtMs": "1793365364967",
+          "completedAtMs": "1793365364967"
+        },
+        "steps": [
+          {
+            "thinkingMessage": {
+              "text": "Updating notes.txt to uppercase \"BETA\", creating c.txt with \"x\", and deleting b.txt.",
+              "durationMs": 93,
+              "startedAtMs": "1793365365629",
+              "completedAtMs": "1793365365722"
+            }
+          },
+          {
+            "toolCall": {
+              "readToolCall": {
+                "args": {
+                  "path": "/reeval/workspace/notes.txt"
+                },
+                "result": {
+                  "success": {
+                    "content": "alpha\nbeta\ngamma\n",
+                    "isEmpty": false,
+                    "exceededLimit": false,
+                    "totalLines": 4,
+                    "fileSize": 17,
+                    "path": "/reeval/workspace/notes.txt",
+                    "readRange": {
+                      "startLine": 1,
+                      "endLine": 4
+                    },
+                    "relatedCursorRulePaths": [],
+                    "relatedCursorRules": []
+                  }
+                }
+              },
+              "hookAdditionalContexts": [],
+              "toolCallId": "tool_54fbe467-b16f-434a-8eff-6421203147d",
+              "startedAtMs": "1793365365727",
+              "completedAtMs": "1793365365871"
+            }
+          },
+          {
+            "toolCall": {
+              "globToolCall": {
+                "args": {
+                  "targetDirectory": "/reeval/workspace",
+                  "globPattern": "*"
+                },
+                "result": {
+                  "success": {
+                    "pattern": "",
+                    "path": "/reeval/workspace",
+                    "files": ["b.txt", "notes.txt"],
+                    "totalFiles": 2,
+                    "clientTruncated": false,
+                    "ripgrepTruncated": false
+                  }
+                }
+              },
+              "hookAdditionalContexts": [],
+              "toolCallId": "tool_81dfede3-fe89-44b8-b9d4-3554a96d637",
+              "startedAtMs": "1793365365729",
+              "completedAtMs": "1793365365872"
+            }
+          },
+          {
+            "toolCall": {
+              "deleteToolCall": {
+                "args": {
+                  "path": "/reeval/workspace/b.txt",
+                  "toolCallId": "tool_13d1bd82-2661-4419-8386-231fbc0dccc"
+                },
+                "result": {
+                  "success": {
+                    "path": "/reeval/workspace/b.txt",
+                    "deletedFile": "/reeval/workspace/b.txt",
+                    "fileSize": "4",
+                    "prevContent": "one\n"
+                  }
+                }
+              },
+              "hookAdditionalContexts": [],
+              "toolCallId": "tool_13d1bd82-2661-4419-8386-231fbc0dccc",
+              "startedAtMs": "1793365366896",
+              "completedAtMs": "1793365366993"
+            }
+          },
+          {
+            "toolCall": {
+              "editToolCall": {
+                "args": {
+                  "path": "/reeval/workspace/c.txt",
+                  "streamContent": "x\n"
+                },
+                "result": {
+                  "success": {
+                    "path": "/reeval/workspace/c.txt",
+                    "linesAdded": 1,
+                    "linesRemoved": 0,
+                    "diffString": "--- /dev/null\n+++ b//reeval/workspace/c.txt\n@@ -1,0 +1 @@\n+x",
+                    "afterFullFileContent": "x\n",
+                    "message": "Wrote contents to /reeval/workspace/c.txt"
+                  }
+                }
+              },
+              "hookAdditionalContexts": [],
+              "toolCallId": "tool_932f60e0-6025-4f01-9a55-84d824abedc",
+              "startedAtMs": "1793365366890",
+              "completedAtMs": "1793365367129"
+            }
+          },
+          {
+            "toolCall": {
+              "editToolCall": {
+                "args": {
+                  "path": "/reeval/workspace/notes.txt",
+                  "streamContent": "BETA"
+                },
+                "result": {
+                  "success": {
+                    "path": "/reeval/workspace/notes.txt",
+                    "linesAdded": 1,
+                    "linesRemoved": 1,
+                    "diffString": "--- a//reeval/workspace/notes.txt\n+++ b//reeval/workspace/notes.txt\n@@ -1,3 +1,3 @@\n alpha\n-beta\n+BETA\n gamma",
+                    "beforeFullFileContent": "alpha\nbeta\ngamma\n",
+                    "afterFullFileContent": "alpha\nBETA\ngamma\n",
+                    "message": "The file /reeval/workspace/notes.txt has been updated."
+                  }
+                }
+              },
+              "hookAdditionalContexts": [],
+              "toolCallId": "tool_d28e440f-c03f-48d6-b3df-c9372e868bd",
+              "startedAtMs": "1793365366881",
+              "completedAtMs": "1793365367130"
+            }
+          },
+          {
+            "thinkingMessage": {
+              "text": "All tasks are complete. The reply is \"done\".",
+              "durationMs": 64,
+              "startedAtMs": "1793365367720",
+              "completedAtMs": "1793365367784"
+            }
+          },
+          {
+            "assistantMessage": {
+              "text": "done.",
+              "startedAtMs": "1793365367785"
+            }
+          }
+        ]
+      }
+    }
+  }
+]

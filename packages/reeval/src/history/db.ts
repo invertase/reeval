@@ -19,7 +19,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 17
+const DB_VERSION = 18
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 const PART_KEYS = Object.keys(PART_COLUMNS) as Array<keyof typeof PART_COLUMNS>
@@ -156,8 +156,9 @@ CREATE TABLE attempt_context (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, path TEXT NOT NULL, sha256 TEXT, runtime INTEGER,
   declared INTEGER
 );
--- Every tool call in each attempt's transcript: its line in transcript.jsonl (from 1), target and
--- class (context, dependency, web, verify or workspace: a heuristic, see tool-class.ts).
+-- Every tool call in each attempt's transcript: its line in transcript.jsonl (from 1), target,
+-- ok (null when the harness never reported its result) and class (context, dependency, web,
+-- verify or workspace: a heuristic, see tool-class.ts).
 CREATE TABLE tool_calls (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, line INTEGER NOT NULL, turn INTEGER,
   tool TEXT, target TEXT, ok INTEGER, duration_ms INTEGER, class TEXT
@@ -390,7 +391,8 @@ export type ToolCall = {
   turn: number | null
   tool: string
   target: string
-  ok: boolean
+  /** Null when the harness never reported the call's result. */
+  ok: boolean | null
   durationMs: number | null
 }
 
@@ -411,7 +413,7 @@ export function toolCalls(transcript: string): ToolCall[] {
       turn: typeof event.turn === 'number' ? event.turn : null,
       tool: String(event.tool ?? ''),
       target: toolTarget(event.input, String(event.tool ?? '')),
-      ok: event.ok !== false,
+      ok: event.ok === null ? null : event.ok !== false,
       durationMs: typeof event.durationMs === 'number' ? event.durationMs : null,
     })
   })
@@ -711,7 +713,7 @@ function insertRun(
           t.turn,
           t.tool,
           t.target,
-          t.ok ? 1 : 0,
+          t.ok === null ? null : t.ok ? 1 : 0,
           t.durationMs,
           call.class,
         )

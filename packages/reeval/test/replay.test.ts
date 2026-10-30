@@ -1071,6 +1071,50 @@ describe('replay: the Claude Code bridge, from the SDK’s own messages', () => 
   })
 })
 
+describe('replay: a Cursor call the SDK never completed', () => {
+  // The real edit-and-run turn (SDK 1.0.34) with the read's `completed` event gone, as a turn
+  // reads whose SDK stream ended a call `running`.
+  const native = nativeEvents(read('cursor', 'edit-and-run.raw.jsonl'))
+  const isReadDone = (e: Record<string, unknown>) => {
+    const ev = e.event as Record<string, unknown> | undefined
+    return ev?.type === 'tool_call' && ev.name === 'read' && ev.status === 'completed'
+  }
+  const readDone = native.find(isReadDone) as { event: Record<string, unknown> }
+  const transcript = (events: Record<string, unknown>[]) => {
+    const t = new CursorSdkStreamTranslator({ workDir: '/reeval/workspace' })
+    const parts = events.flatMap((e) => t.push(JSON.stringify(e)))
+    return normalizeStream(
+      parts.map((part, ms) => ({ ms, part: part as never })),
+      0,
+    ).flatMap((e) => (e.type === 'tool' ? [[e.tool, e.ok]] : []))
+  }
+
+  test('it is unfinished (ok: null), not failed, and the calls that completed are ok', () => {
+    assert.ok(readDone, 'the capture has the read completing')
+    assert.deepEqual(transcript(native.filter((e) => !isReadDone(e))), [
+      ['read', null],
+      ['bash', true],
+    ])
+  })
+
+  test("the runner's result from the stored conversation, before the result line, completes it", () => {
+    const rest = native.filter((e) => !isReadDone(e))
+    const at = rest.findIndex((e) => e.type === 'result')
+    const recovered = { type: 'event', recovered: 'Agent.messages.list', event: readDone.event }
+    assert.deepEqual(transcript([...rest.slice(0, at), recovered, ...rest.slice(at)]), [
+      ['read', true],
+      ['bash', true],
+    ])
+  })
+
+  test('twin: the captured turn as it is has every call ok', () => {
+    assert.deepEqual(transcript(native), [
+      ['read', true],
+      ['bash', true],
+    ])
+  })
+})
+
 describe('replay: Cursor web calls, streamed and recovered', () => {
   // A real two-turn capture where SDK 1.0.32 streamed no web calls and the runner recovered them
   // from Agent.messages.list(); its first turn only (up to the first result line).

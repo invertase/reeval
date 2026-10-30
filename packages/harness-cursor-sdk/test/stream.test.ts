@@ -245,7 +245,7 @@ describe('stream translation', () => {
     assert.equal(finish?.type === 'finish' && finish.finishReason.raw, 'unauthenticated')
   })
 
-  test('a runner that dies closes open calls and reports its stderr', () => {
+  test('a runner that dies leaves open calls unfinished and reports its stderr', () => {
     const { parts } = translate(
       event({ type: 'tool_call', call_id: 'c', name: 'shell', status: 'running', args: {} }),
       { exitCode: 137, stderr: 'Killed' },
@@ -254,13 +254,55 @@ describe('stream translation', () => {
     // of this error: the step is closed first.
     assert.deepEqual(
       parts.map((p) => p.type),
-      ['stream-start', 'tool-call', 'tool-result', 'finish-step', 'error', 'finish'],
+      ['stream-start', 'tool-call', 'finish-step', 'error', 'finish'],
     )
-    const error = parts[4]
+    const error = parts[3]
     assert.match(
       String(error?.type === 'error' && (error.error as Error).message),
       /code 137.*Killed/,
     )
+  })
+
+  const running = event({
+    type: 'tool_call',
+    call_id: 'r',
+    name: 'read',
+    status: 'running',
+    args: { path: '/reeval/workspace/notes.txt' },
+  })
+  const result = line({ type: 'result', status: 'finished', usage: { inputTokens: 1 } })
+
+  test('a call the SDK never completed gets no result: unfinished, not failed', () => {
+    const { parts } = translate([running, result].join('\n'))
+    assert.deepEqual(
+      parts.map((p) => p.type),
+      ['stream-start', 'tool-call', 'finish-step', 'finish'],
+    )
+  })
+
+  test("the runner's recovered result closes a call the stream left running", () => {
+    const recovered = line({
+      type: 'event',
+      recovered: 'Agent.messages.list',
+      event: {
+        type: 'tool_call',
+        call_id: 'r',
+        name: 'read',
+        status: 'completed',
+        result: { status: 'success', value: { content: 'alpha\n', totalLines: 2 } },
+        started_at_ms: 1_000,
+        completed_at_ms: 1_100,
+      },
+    })
+    const { parts } = translate([running, recovered, result].join('\n'))
+    assert.deepEqual(
+      parts.map((p) => p.type),
+      ['stream-start', 'tool-call', 'tool-result', 'finish-step', 'finish'],
+    )
+    const done = parts[2]
+    assert.ok(done?.type === 'tool-result')
+    assert.deepEqual(done.result, { content: 'alpha\n', totalLines: 2 })
+    assert.equal(done.isError, undefined)
   })
 
   test('an aborted runner finishes without an error part', () => {
@@ -316,7 +358,7 @@ describe('a failed or canceled turn, as the runner reports it (SDK 1.0.32)', () 
     assert.equal(finish?.type === 'finish' && finish.finishReason.unified, 'error')
   })
 
-  test('a turn reeval canceled mid-edit: no error, the open edit closed, finish canceled', () => {
+  test('a turn reeval canceled mid-edit: no error, the open edit left unfinished, finish canceled', () => {
     const { parts } = translate(fixture('cancelled.ndjson'), { exitCode: 0 })
     assert.equal(
       parts.some((p) => p.type === 'error'),
@@ -324,7 +366,8 @@ describe('a failed or canceled turn, as the runner reports it (SDK 1.0.32)', () 
     )
     const calls = parts.filter((p) => p.type === 'tool-call').map((p) => p.toolCallId)
     const results = parts.filter((p) => p.type === 'tool-result').map((p) => p.toolCallId)
-    assert.deepEqual(results, calls)
+    assert.equal(calls.length, 2)
+    assert.deepEqual(results, calls.slice(0, 1), 'the edit the cancel cut short has no result')
     const finish = parts.find((p) => p.type === 'finish')
     assert.deepEqual(finish?.type === 'finish' && finish.finishReason, {
       unified: 'other',

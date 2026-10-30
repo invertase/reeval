@@ -116,7 +116,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
               tool: tool.tool,
               input: tool.input,
               output: tool.output,
-              ok: tool.ok ?? true,
+              ok: tool.ok === undefined ? true : tool.ok,
               durationMs: 0,
             })
           }

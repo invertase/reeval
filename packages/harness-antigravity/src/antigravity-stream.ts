@@ -191,12 +191,6 @@ export class AntigravityStreamTranslator {
     if (this.finished) return []
     const parts: HarnessV1StreamPart[] = []
     this.start(parts)
-    for (const call of this.openTools.values()) {
-      parts.push(
-        this.toolResult(call, `${call.nativeName} ${options.aborted ? 'aborted' : 'interrupted'}`),
-      )
-    }
-    this.openTools.clear()
     this.closeBlocks(parts)
     if (!options.aborted) {
       const detail = options.stderr?.trim()

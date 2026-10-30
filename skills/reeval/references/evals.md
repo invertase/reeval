@@ -152,7 +152,8 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
   `await expect(c.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`,
   `expect(turn).toHaveSearched(query?)` / `toHaveFetched(url?)` (sync; they throw
   `HarnessCapabilityError` when `turn.unreported` lists web events; a refused
-  search is still a `web-search` with `ok: false`), plus Vitest's.
+  search is still a `web-search` with `ok: false`; a call whose result never came has
+  `ok: null`, not `false`), plus Vitest's.
 - Transcript matchers (sync, no `await`): `expect(turn | c).toHaveCalledSkill(name)`,
   `toHaveCalledMcp(server, tool, input?)`, `toHaveCalledTool(name | RegExp, input?)`,
   `toHaveRun(command?)`, `toHaveEdited(path?)`, `toHaveSearched(query?)`,

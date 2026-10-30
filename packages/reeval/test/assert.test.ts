@@ -329,6 +329,24 @@ describe('toolTarget and toolCalls', () => {
       [['skill', 'foo']],
     )
   })
+
+  test('a call the harness never reported a result for is neither ok nor failed', () => {
+    const lines = [
+      { type: 'tool', tool: 'read', input: { path: 'a' }, ok: true },
+      { type: 'tool', tool: 'read', input: { path: 'b' }, ok: false },
+      { type: 'tool', tool: 'read', input: { path: 'c' }, ok: null },
+      { type: 'tool', tool: 'read', input: { path: 'd' } },
+    ]
+    assert.deepEqual(
+      toolCalls(lines.map((l) => JSON.stringify(l)).join('\n')).map((c) => [c.target, c.ok]),
+      [
+        ['a', true],
+        ['b', false],
+        ['c', null],
+        ['d', true],
+      ],
+    )
+  })
 })
 
 const replayRoot = join(testDir, 'replay')

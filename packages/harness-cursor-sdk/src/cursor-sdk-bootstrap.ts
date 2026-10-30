@@ -73,11 +73,33 @@ function storedShapeProblems(value, calls, recovered = RECOVERED) {
       problems.push(\`\${at}: result has neither success nor error\`)
   }
   return problems
+}
+const STORED_ONLY = ['beforeFullFileContent', 'afterFullFileContent', 'prevContent', 'interleavedOutput']
+function storedResults(value, ids, found = []) {
+  if (Array.isArray(value)) {
+    for (const v of value) storedResults(v, ids, found)
+  } else if (value && typeof value === 'object') {
+    if (typeof value.toolCallId === 'string' && ids.has(value.toolCallId)) {
+      for (const [key, call] of Object.entries(value)) {
+        if (!key.endsWith('ToolCall') || !call?.result || typeof call.result !== 'object') continue
+        const outcome = Object.entries(call.result).find(([, v]) => v && typeof v === 'object')
+        if (!outcome) continue
+        const [kind, v] = outcome
+        const result =
+          kind === 'success'
+            ? { status: 'success', value: Object.fromEntries(Object.entries(v).filter(([k]) => !STORED_ONLY.includes(k))) }
+            : { status: 'error', error: v.error ?? v.message ?? { [kind]: v } }
+        found.push({ id: value.toolCallId, at: value, result })
+      }
+    }
+    for (const v of Object.values(value)) storedResults(v, ids, found)
+  }
+  return found
 }`
 
 const stored = new Function(
   'RECOVERED',
-  `${CURSOR_SDK_STORED_HELPERS}\nreturn { storedWebCalls, storedShapeProblems }`,
+  `${CURSOR_SDK_STORED_HELPERS}\nreturn { storedWebCalls, storedShapeProblems, storedResults }`,
 )(CURSOR_SDK_RECOVERED_TOOLS) as {
   storedWebCalls: (
     value: unknown,
@@ -89,6 +111,7 @@ const stored = new Function(
     calls: StoredWebCall[],
     recovered?: Record<string, string>,
   ) => string[]
+  storedResults: (value: unknown, ids: Set<string>) => StoredResult[]
 }
 
 /**
@@ -106,6 +129,25 @@ export const storedWebCalls = stored.storedWebCalls
  * as the turn's unreported tools, with this message.
  */
 export const storedShapeProblems = stored.storedShapeProblems
+
+/** A call's result in the stored conversation, in the stream's `tool_call` result shape. */
+export type StoredResult = {
+  id: string
+  at: { startedAtMs?: unknown; completedAtMs?: unknown }
+  result:
+    | { status: 'success'; value: Record<string, unknown> }
+    | { status: 'error'; error: unknown }
+}
+
+/**
+ * The results the stored conversation holds for these call ids, whatever the tool: each is a
+ * `ToolCall` whose `<tool>ToolCall` has a `result` oneof, `success` or a failure. The stream can
+ * end a turn with a call it reported `running` and never completed; the store often has its
+ * result. A success drops the fields the store adds and the stream doesn't send (whole file
+ * contents before and after an edit or delete, a shell's interleaved output). The runner runs
+ * the same source.
+ */
+export const storedResults = stored.storedResults
 
 /** Relative to the harness state directory, `$HOME/.ai-sdk-harness`. */
 export const CURSOR_SDK_BOOTSTRAP_DIR = '.harness-bootstrap/cursor-sdk'
@@ -200,15 +242,20 @@ for (; !stopping; n++) {
       () => undefined,
     )
     run = await agent.send(prompt)
-    const streamed = new Set()
+    const streamed = new Map()
+    const ended = new Set()
     for await (const event of run.stream()) {
-      if (event.type === 'tool_call') streamed.add(event.call_id)
+      if (event.type === 'tool_call') {
+        if (!streamed.has(event.call_id)) streamed.set(event.call_id, event.name)
+        if (event.status && event.status !== 'running') ended.add(event.call_id)
+      }
       out({ type: 'event', event })
     }
     const result = await run.wait()
+    let messages
     try {
       if (before === undefined) throw new Error('the stored conversation could not be read before the turn')
-      const messages = await listMessages(turn)
+      messages = await listMessages(turn)
       const calls = storedWebCalls(messages, RECOVERED)
       const problems = storedShapeProblems(messages, calls.filter((c) => !before.has(c.id)), RECOVERED)
       if (problems.length) throw new Error(\`the stored conversation's shape changed (@cursor/sdk \${turn.sdkVersion ?? '?'}): \${problems.join('; ')}\`)
@@ -232,6 +279,33 @@ for (; !stopping; n++) {
       }
     } catch (error) {
       out({ type: 'unreported', turn: n, tools: Object.values(RECOVERED), message: String(error?.message ?? error) })
+    }
+    // Calls the stream left running: their results from the store, or none (the call stays unfinished).
+    const unfinished = new Set([...streamed.keys()].filter((id) => !ended.has(id)))
+    if (unfinished.size) {
+      try {
+        messages ??= await listMessages(turn)
+        for (const c of storedResults(messages, unfinished)) {
+          if (!unfinished.delete(c.id)) continue
+          out({
+            type: 'event',
+            recovered: 'Agent.messages.list',
+            event: {
+              type: 'tool_call',
+              agent_id: agent.agentId,
+              run_id: result.id,
+              call_id: c.id,
+              name: streamed.get(c.id),
+              status: c.result.status === 'success' ? 'completed' : 'error',
+              result: c.result,
+              started_at_ms: epochMs(c.at.startedAtMs),
+              completed_at_ms: epochMs(c.at.completedAtMs),
+            },
+          })
+        }
+      } catch (error) {
+        console.error(\`The stored conversation could not be read for unfinished tool calls: \${error?.message ?? error}\`)
+      }
     }
     out({
       type: 'result',

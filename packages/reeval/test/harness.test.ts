@@ -2147,21 +2147,39 @@ describe('a refused webSearch is a web-search event', () => {
     )
   })
 
-  test('a pending search (no result) is web-search with ok: false', () => {
+  test('a pending search (no result) is web-search with ok: null, not failed', () => {
     const events = normalizeStream([call('s', 'webSearch', { query: 'firebase ui web' })], 0)
     assert.deepEqual(
       events.flatMap((e) => (e.type === 'web-search' ? [[e.query, e.references, e.ok]] : [])),
-      [['firebase ui web', null, false]],
+      [['firebase ui web', null, null]],
     )
     assert.deepEqual(activity(events), { tools: 0, webSearches: 1, webFetches: 0 })
     assert.equal(searched(turnOf(events), /firebase/).pass, true)
   })
 
-  test('a pending fetch is web-fetch with ok: false', () => {
+  test('a pending fetch is web-fetch with ok: null, not failed', () => {
     const events = normalizeStream([call('f', 'webFetch', { url: 'https://example.com' })], 0)
     assert.deepEqual(
       events.flatMap((e) => (e.type === 'web-fetch' ? [[e.url, e.ok]] : [])),
-      [['https://example.com', false]],
+      [['https://example.com', null]],
+    )
+  })
+
+  test('a pending tool call is a tool with ok: null and no output, and a failed one stays failed', () => {
+    const events = normalizeStream(
+      [
+        { ...call('r', 'read', { path: 'notes.txt' }), ms: 5 },
+        call('x', 'bash', { command: 'false' }),
+        { ms: 30, part: { type: 'tool-error', toolCallId: 'x', error: 'exit 1' } },
+      ],
+      0,
+    )
+    assert.deepEqual(
+      events.flatMap((e) => (e.type === 'tool' ? [[e.tool, e.ok, e.output]] : [])),
+      [
+        ['read', null, null],
+        ['bash', false, 'exit 1'],
+      ],
     )
   })
 
@@ -2441,6 +2459,51 @@ describe('Cursor web tools at every layer: SDK, adapter, HarnessAgent, normalize
         ['web-fetch', 'https://httpbin.org/ip', true, 467, 1242],
       ],
     )
+  })
+
+  test('a call the SDK never completed is unfinished through every layer, or recovered from the store', async () => {
+    const startedAt = 1_790_000_000_000
+    const read = (status: string, extra: Record<string, unknown> = {}) =>
+      JSON.stringify({
+        type: 'event',
+        event: {
+          type: 'tool_call',
+          call_id: 'r',
+          name: 'read',
+          status,
+          args: { path: '/reeval/workspace/notes.txt' },
+          ...extra,
+        },
+      })
+    const result = JSON.stringify({ type: 'result', status: 'finished', usage: { inputTokens: 1 } })
+    const through = async (lines: string[]) => {
+      const t = new CursorSdkStreamTranslator({ workDir: '/reeval/workspace' })
+      const { stream } = await turnThrough(
+        lines.flatMap((l) => t.push(l)),
+        CURSOR_SDK_BUILTIN_TOOLS,
+      )
+      return normalizeStream(stream, startedAt).flatMap((e) =>
+        e.type === 'tool' ? [[e.tool, e.ok, e.output, e.durationMs]] : [],
+      )
+    }
+    assert.deepEqual(
+      (await through([read('running'), result])).map((e) => e.slice(0, 3)),
+      [['read', null, null]],
+    )
+    const recovered = JSON.stringify({
+      ...JSON.parse(read('completed')),
+      recovered: 'Agent.messages.list',
+      event: {
+        ...JSON.parse(read('completed')).event,
+        result: { status: 'success', value: { content: 'alpha\n' } },
+        started_at_ms: startedAt + 100,
+        completed_at_ms: startedAt + 213,
+      },
+    })
+    // Timed by the backend's clock, though its result arrived after the turn.
+    assert.deepEqual(await through([read('running'), recovered, result]), [
+      ['read', true, { content: 'alpha\n' }, 113],
+    ])
   })
 
   test('the SDK stream loses them before our first layer: its stream alone has none anywhere', async () => {

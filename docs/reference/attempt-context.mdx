@@ -448,6 +448,8 @@ const changed = turn.diff.files.map((file) => file.path)
 
 A `TranscriptEvent` is one entry in `turn.transcript`. Every event has `ts`, the wall-clock time as an ISO 8601 string, and `atMs`, milliseconds from the start of the turn. Its `type` is one of the values below, and each subsection lists the fields that type adds.
 
+A tool call whose result the harness never reported, because the turn ended or was cut short first, has `ok: null`. It isn't a failed call: `ok === false` and the `tool_calls` table's failures leave it out.
+
 ### `text`
 
 A message the harness sent.
@@ -510,8 +512,8 @@ A message the harness sent.
   How many sources the harness reports, or `null` when it reports none.
 </Property>
 
-<Property name="ok" type="boolean" optional>
-  Whether the search succeeded. Absent means it did.
+<Property name="ok" type="boolean | null" optional>
+  Whether the search succeeded. Absent means it did, and `null` means the harness never reported its result.
 </Property>
 
 <Property name="toolCallId" type="string" required>
@@ -532,8 +534,8 @@ A message the harness sent.
   The fetched URL.
 </Property>
 
-<Property name="ok" type="boolean" required>
-  Whether the fetch succeeded.
+<Property name="ok" type="boolean | null" required>
+  Whether the fetch succeeded, or `null` when the harness never reported its result.
 </Property>
 
 <Property name="toolCallId" type="string" required>
@@ -562,8 +564,8 @@ A message the harness sent.
   The output the harness reported.
 </Property>
 
-<Property name="ok" type="boolean" required>
-  Whether the call succeeded.
+<Property name="ok" type="boolean | null" required>
+  Whether the call succeeded, or `null` when the harness never reported its result. Its `output` is then `null`.
 </Property>
 
 <Property name="toolCallId" type="string" required>
