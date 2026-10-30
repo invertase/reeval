@@ -25,6 +25,7 @@ import {
   renderMatrix,
   renderOpenCodeProviders,
   renderPlugins,
+  renderTelemetry,
 } from './harness-matrix.mjs'
 import { recipeProblems } from './recipe-claims.mjs'
 
@@ -402,6 +403,7 @@ async function blocks() {
   problems.push(...harness.problems)
   out.set('harness-matrix', renderMatrix(harness.facts, { href: (p) => `/${p}` }))
   out.set('harness-layout', renderLayout(harness.facts))
+  out.set('harness-telemetry', renderTelemetry(harness.facts))
   for (const h of harness.facts) out.set(`harness-plugins:${h.kind}`, renderPlugins(h))
   out.set('opencode-providers', renderOpenCodeProviders())
   return out

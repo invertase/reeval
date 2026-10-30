@@ -1,0 +1,1 @@
+Choosing the meeting that ends earliest is correct because it leaves as much remaining time as possible for all future compatible meetings and never reduces the optimal number that can still be scheduled.

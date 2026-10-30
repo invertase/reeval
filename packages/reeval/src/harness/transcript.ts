@@ -1,6 +1,7 @@
 import { SANDBOX_ROOT, WORKSPACE_DIR } from '@reeval/sandbox-docker'
 import { isObjectLike } from '../object.ts'
-import type { FileEditEvent, TranscriptEvent } from '../types.ts'
+import type { FileEditEvent, TokenUsage, TranscriptEvent } from '../types.ts'
+import type { ReasoningDelivery } from './agents.ts'
 
 /** One stream part and when it arrived, in ms since the turn started. */
 export type StampedPart = { ms: number; part: { type: string; [key: string]: unknown } }
@@ -285,6 +286,77 @@ function toolInput(part: StampedPart['part']): unknown {
   return part.input
 }
 
+/** Claude Code's native tool names as its adapter's common ones, for a subagent's calls. */
+const CLAUDE_COMMON_NAMES: Readonly<Record<string, string>> = {
+  Read: 'read',
+  Write: 'write',
+  Edit: 'edit',
+  MultiEdit: 'edit',
+  Bash: 'bash',
+  Glob: 'glob',
+  Grep: 'grep',
+  WebSearch: 'webSearch',
+}
+
+/** A tool result's content as text: Claude's is a string or a list of `{ type: 'text', text }`. */
+const contentText = (content: unknown): string =>
+  Array.isArray(content)
+    ? content.map((c) => str(record(c).text)).join('')
+    : typeof content === 'string'
+      ? content
+      : jsonText(content)
+
+/**
+ * A Claude Code subagent's edit as Claude's own Edit or Write result, which `claudeEdit` reads:
+ * the bridge passes a subagent's messages on as raw SDK messages, whose result is only text.
+ */
+function subagentEditOutput(tool: string, input: Record<string, unknown>, said: string): unknown {
+  const filePath = inWorkspace(editPath(input))
+  if (tool === 'edit') {
+    return { filePath, oldString: input.old_string, newString: input.new_string }
+  }
+  return {
+    type: /created successfully/i.test(said) ? 'create' : 'update',
+    filePath,
+    content: input.content,
+  }
+}
+
+/**
+ * The tool calls and results in a Claude Code subagent's SDK message (`parent_tool_use_id` set),
+ * which the bridge passes on only as a `raw` part, as the stream parts its own calls arrive as.
+ */
+function subagentParts(raw: Record<string, unknown>): Array<StampedPart['part']> {
+  const parent = raw.parent_tool_use_id
+  if (typeof parent !== 'string' || (raw.type !== 'assistant' && raw.type !== 'user')) return []
+  const content = record(raw.message).content
+  if (!Array.isArray(content)) return []
+  const structured = record(raw.tool_use_result)
+  return content.flatMap((b): Array<StampedPart['part']> => {
+    const block = record(b)
+    if (raw.type === 'assistant' && block.type === 'tool_use' && typeof block.id === 'string') {
+      const name = str(block.name)
+      return [
+        {
+          type: 'tool-call',
+          toolCallId: block.id,
+          toolName: CLAUDE_COMMON_NAMES[name] ?? name,
+          input: block.input ?? {},
+          subagent: parent,
+        },
+      ]
+    }
+    if (raw.type === 'user' && block.type === 'tool_result') {
+      const said = contentText(block.content)
+      const id = str(block.tool_use_id)
+      return block.is_error === true
+        ? [{ type: 'tool-error', toolCallId: id, error: said }]
+        : [{ type: 'tool-result', toolCallId: id, output: said, structured }]
+    }
+    return []
+  })
+}
+
 /**
  * Turns an AI SDK harness stream into reeval transcript events: text and reasoning blocks joined,
  * each tool call merged with its result, edits normalized to `file-edit`, web tools given their
@@ -329,9 +401,23 @@ export function normalizeStream(parts: StampedPart[], startedAt: number): Transc
     const input = record(call.part.input)
     const name = toolName(call.part)
     const raw = failed ? errorText(end.part.error) : end.part.output
+    const subagent = str(call.part.subagent)
+    const structured = record(end.part.structured)
     // Antigravity runs commands in a PTY, so their output has CRLF line endings.
-    const output = name === 'bash' && typeof raw === 'string' ? raw.replace(/\r\n/g, '\n') : raw
-    const base = { ...stamp(call.ms), durationMs, ...stallFlags(name, durationMs) }
+    const output =
+      subagent && (name === 'edit' || name === 'write') && !failed
+        ? typeof structured.filePath === 'string'
+          ? { ...structured, filePath: inWorkspace(structured.filePath) }
+          : subagentEditOutput(name, input, str(raw))
+        : name === 'bash' && typeof raw === 'string'
+          ? raw.replace(/\r\n/g, '\n')
+          : raw
+    const base = {
+      ...stamp(call.ms),
+      durationMs,
+      ...stallFlags(name, durationMs),
+      ...(subagent ? { subagent } : {}),
+    }
     if ((name === 'edit' || name === 'write' || name === 'delete') && !failed) {
       for (const edit of fileEdits(id, output, name, input)) {
         out.push({ at: call.ms, event: { ...base, ...edit, ...stallFlags(name, durationMs) } })
@@ -387,6 +473,19 @@ export function normalizeStream(parts: StampedPart[], startedAt: number): Transc
   for (const stamped of parts) {
     const { ms, part } = stamped
     switch (part.type) {
+      case 'raw':
+        for (const sub of subagentParts(record(part.rawValue))) {
+          const id = str(sub.toolCallId)
+          if (sub.type === 'tool-call') {
+            pending.set(id, { ms, part: sub })
+            continue
+          }
+          const call = pending.get(id)
+          if (!call) continue
+          pending.delete(id)
+          toolDone(id, call, { ms, part: sub }, sub.type === 'tool-error')
+        }
+        break
       case 'text-start':
       case 'reasoning-start':
         blocks.set(str(part.id), {
@@ -455,10 +554,12 @@ export function normalizeStream(parts: StampedPart[], startedAt: number): Transc
     const start = t?.start ?? call.ms
     const durationMs =
       streamEndMs === undefined ? null : toolDurationMs(start, call, streamEndMs, t)
+    const subagent = str(call.part.subagent)
     const base = {
       ...stamp(call.ms),
       durationMs,
       ...stallFlags(name, durationMs),
+      ...(subagent ? { subagent } : {}),
     }
     if (name === 'webSearch') {
       out.push({
@@ -509,4 +610,22 @@ export function normalizeStream(parts: StampedPart[], startedAt: number): Transc
     }
   }
   return out.sort((a, b) => a.at - b.at).map((e) => e.event)
+}
+
+/**
+ * A turn's reasoning time, from the reasoning blocks the harness streamed; null when it can't be
+ * known. A harness whose reasoning arrives whole (`whole`) or not at all (`none`) can't time it.
+ * A streamed turn with no reasoning block has spent none only when its usage says it used no
+ * reasoning tokens; otherwise the model may have reasoned without the harness showing it.
+ */
+export function reasoningTime(
+  delivery: ReasoningDelivery,
+  events: readonly TranscriptEvent[],
+  usage: TokenUsage | null,
+): number | null {
+  if (delivery !== 'streamed') return null
+  const blocks = events.flatMap((e) => (e.type === 'reasoning' ? [e.durationMs] : []))
+  if (blocks.length === 0) return usage?.reasoning === 0 ? 0 : null
+  if (blocks.some((ms) => ms === null)) return null
+  return blocks.reduce((n: number, ms) => n + (ms ?? 0), 0)
 }

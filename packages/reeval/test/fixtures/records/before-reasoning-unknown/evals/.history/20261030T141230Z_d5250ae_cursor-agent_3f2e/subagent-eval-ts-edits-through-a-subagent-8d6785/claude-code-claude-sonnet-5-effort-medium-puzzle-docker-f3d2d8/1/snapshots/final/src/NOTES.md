@@ -1,0 +1,1 @@
+`src/schedule.js` greedily selects the maximum number of non-overlapping meetings from a list of `[start, end)` half-open intervals by sorting on end time and picking each meeting whose start is at or after the previously selected meeting's end.

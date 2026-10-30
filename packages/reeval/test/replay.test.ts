@@ -89,7 +89,7 @@ const signals: Record<string, (events: TranscriptEvent[]) => void> = {
 
 const harnesses = existsSync(root)
   ? readdirSync(root, { withFileTypes: true })
-      .filter((d) => d.isDirectory() && d.name !== 'formats')
+      .filter((d) => d.isDirectory() && d.name !== 'formats' && d.name !== 'telemetry')
       .map((d) => d.name)
   : []
 

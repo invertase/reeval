@@ -5,10 +5,12 @@ import {
   type AttemptRecord,
   activityLabel,
   artifactPath,
+  filesChanged,
   findAttempt,
   findEval,
   formatDuration,
   formatUsage,
+  reasoningLabel,
 } from 'reeval/view'
 import { Artifact } from '@/components/artifact'
 import { EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
@@ -156,10 +158,8 @@ export function AttemptPage() {
           <p className="mt-2 text-sm text-muted-foreground">
             <span className="font-mono text-xs">{attempt.id}</span> ·{' '}
             {formatDuration(attempt.durationMs)} · {plural(attempt.turns.length, 'turn')} ·{' '}
-            {activityLabel(attempt.activity)}
-            {attempt.activity.reasoningMs
-              ? ` · ${formatDuration(attempt.activity.reasoningMs)} reasoning`
-              : ''}
+            {activityLabel(attempt.activity, filesChanged(attempt.changedFiles))}
+            {` · reasoning ${reasoningLabel(attempt.activity.reasoningMs)}`}
             {attempt.usage ? ` · ${formatUsage(attempt.usage)} tokens` : ''}
             {served.length ? ` · served by ${served.join(', ')}` : ''}
             {attempt.effort

@@ -1,0 +1,31 @@
+diff --git a/src/NOTES.md b/src/NOTES.md
+new file mode 100644
+index 0000000..00369fc
+--- /dev/null
++++ b/src/NOTES.md
+@@ -0,0 +1 @@
++Sorting by end time and always taking the next compatible meeting with the earliest finish preserves the most remaining time on the timeline, so an exchange argument shows no optimal solution can include more meetings than this greedy schedule.
+diff --git a/src/schedule.js b/src/schedule.js
+index fe8c91e..d0ad520 100644
+--- a/src/schedule.js
++++ b/src/schedule.js
+@@ -1,4 +1,18 @@
+ // Returns the number of meetings that can be attended without overlap.
+ export function maxMeetings(meetings) {
+-  return 0
++  if (meetings.length === 0) return 0
++
++  const sorted = [...meetings].sort((a, b) => a[1] - b[1])
++  let count = 1
++  let lastEnd = sorted[0][1]
++
++  for (let i = 1; i < sorted.length; i++) {
++    const [start, end] = sorted[i]
++    if (start >= lastEnd) {
++      count++
++      lastEnd = end
++    }
++  }
++
++  return count
+ }

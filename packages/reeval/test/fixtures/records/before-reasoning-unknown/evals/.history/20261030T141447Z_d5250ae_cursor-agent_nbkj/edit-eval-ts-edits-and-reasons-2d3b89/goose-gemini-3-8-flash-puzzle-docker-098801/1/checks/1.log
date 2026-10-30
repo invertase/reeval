@@ -1,0 +1,24 @@
+$ node --test
+exit 0
+--- stdout
+TAP version 13
+# (node:1430) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: max meetings
+ok 1 - max meetings
+  ---
+  duration_ms: 0.579967
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 69.485882
+--- stderr
+(node:1418) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)

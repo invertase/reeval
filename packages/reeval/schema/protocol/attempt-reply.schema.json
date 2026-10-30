@@ -724,6 +724,10 @@
               "description": "True when a shell-like tool or edit ran at least two minutes.",
               "type": "boolean"
             },
+            "subagent": {
+              "description": "The `toolCallId` of the subagent call whose agent made this call; absent for the agent's own.",
+              "type": "string"
+            },
             "toolCallId": {
               "type": "string"
             },
@@ -772,6 +776,10 @@
               "description": "True when a shell-like tool or edit ran at least two minutes.",
               "type": "boolean"
             },
+            "subagent": {
+              "description": "The `toolCallId` of the subagent call whose agent made this call; absent for the agent's own.",
+              "type": "string"
+            },
             "toolCallId": {
               "type": "string"
             },
@@ -802,6 +810,10 @@
             "stalled": {
               "description": "True when a shell-like tool or edit ran at least two minutes.",
               "type": "boolean"
+            },
+            "subagent": {
+              "description": "The `toolCallId` of the subagent call whose agent made this call; absent for the agent's own.",
+              "type": "string"
             },
             "toolCallId": {
               "type": "string"
@@ -838,6 +850,10 @@
             "stalled": {
               "description": "True when a shell-like tool or edit ran at least two minutes.",
               "type": "boolean"
+            },
+            "subagent": {
+              "description": "The `toolCallId` of the subagent call whose agent made this call; absent for the agent's own.",
+              "type": "string"
             },
             "tool": {
               "type": "string"

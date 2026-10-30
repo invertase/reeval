@@ -1,0 +1,1 @@
+{ "name": "puzzle", "private": true, "type": "module", "scripts": { "test": "node --test" } }

@@ -362,10 +362,15 @@ function activity(record: EvalRecord): AttemptRecord['activity'] {
     const n = count(type)
     return n === 0 && record.turns.some((t) => t.unreported?.includes(type)) ? null : n
   }
-  const reasoningMs = events.reduce(
-    (n, e) => n + (e.type === 'reasoning' ? (e.durationMs ?? 0) : 0),
-    0,
+  const turns = record.turns.map((t) =>
+    t.reasoningMs !== undefined
+      ? t.reasoningMs
+      : t.transcript.reduce((n, e) => n + (e.type === 'reasoning' ? (e.durationMs ?? 0) : 0), 0),
   )
+  const reasoningMs =
+    turns.length === 0 || turns.some((ms) => ms === null)
+      ? null
+      : turns.reduce((n: number, ms) => n + (ms ?? 0), 0)
   const toolDurations = events.flatMap((e) =>
     'durationMs' in e && typeof e.durationMs === 'number' ? [e.durationMs] : [],
   )
@@ -987,6 +992,7 @@ async function attemptEvidence(
       unreported: t.unreported ?? [],
       error: turnError(t.transcript),
       ...(t.mcpStartup ? { mcpStartup: t.mcpStartup } : {}),
+      ...(t.reasoningMs !== undefined ? { reasoningMs: t.reasoningMs } : {}),
       text: turnText(t.text),
     })),
     usage: sumUsage((record?.turns ?? []).map((t) => t.usage)),
@@ -999,7 +1005,7 @@ async function attemptEvidence(
           fileEdits: 0,
           webSearches: 0,
           webFetches: 0,
-          reasoningMs: 0,
+          reasoningMs: null,
           stalledTools: 0,
           maxToolMs: null,
         },

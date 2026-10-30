@@ -1831,6 +1831,9 @@ class TranscriptEventFileEdit(TypedDict):
     removed: float | None
     # True when a shell-like tool or edit ran at least two minutes.
     stalled: NotRequired[bool]
+    # The `toolCallId` of the subagent call whose agent made this call; absent for the agent's
+    # own.
+    subagent: NotRequired[str]
     toolCallId: str
     ts: str
     type: Literal["file-edit"]
@@ -1847,6 +1850,9 @@ class TranscriptEventWebSearch(TypedDict):
     references: float | None
     # True when a shell-like tool or edit ran at least two minutes.
     stalled: NotRequired[bool]
+    # The `toolCallId` of the subagent call whose agent made this call; absent for the agent's
+    # own.
+    subagent: NotRequired[str]
     toolCallId: str
     ts: str
     type: Literal["web-search"]
@@ -1859,6 +1865,9 @@ class TranscriptEventWebFetch(TypedDict):
     ok: bool | None
     # True when a shell-like tool or edit ran at least two minutes.
     stalled: NotRequired[bool]
+    # The `toolCallId` of the subagent call whose agent made this call; absent for the agent's
+    # own.
+    subagent: NotRequired[str]
     toolCallId: str
     ts: str
     type: Literal["web-fetch"]
@@ -1874,6 +1883,9 @@ class TranscriptEventTool(TypedDict):
     output: Any
     # True when a shell-like tool or edit ran at least two minutes.
     stalled: NotRequired[bool]
+    # The `toolCallId` of the subagent call whose agent made this call; absent for the agent's
+    # own.
+    subagent: NotRequired[str]
     tool: str
     toolCallId: str
     ts: str

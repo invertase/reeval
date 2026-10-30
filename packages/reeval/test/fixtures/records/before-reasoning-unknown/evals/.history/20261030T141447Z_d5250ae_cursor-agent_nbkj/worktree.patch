@@ -1,0 +1,28 @@
+diff --git a/subagent.eval.ts b/subagent.eval.ts
+new file mode 100644
+index 0000000..aec2c31
+--- /dev/null
++++ b/subagent.eval.ts
+@@ -0,0 +1,22 @@
++import { defineEnvironment, evaluate, expect } from 'reeval'
++
++const env = defineEnvironment('puzzle', ({ directory }) => ({ files: directory('./project') }))
++
++evaluate('edits through a subagent', { environment: env }, async (c) => {
++  await c.send(
++    'Delegate this whole task to one subagent with your Agent (Task) tool, in the foreground (not in the background), and wait for it; do not edit files yourself. ' +
++      'The subagent should implement maxMeetings in src/schedule.js (the most [start, end) meetings ' +
++      'attendable without overlap; one may start when the last ends) with its file-editing tool, and create src/NOTES.md with one sentence.',
++  )
++  await expect(c).toHaveFile('src/NOTES.md', /\S/)
++  await expect(c.exec('node --test')).toSucceed()
++})
++
++evaluate('edits through the shell', { environment: env }, async (c) => {
++  await c.send(
++    'Without using any file-editing tool, only shell commands (for example a heredoc with cat), ' +
++      'rewrite src/schedule.js so maxMeetings returns the most [start, end) meetings attendable without overlap ' +
++      '(one may start when the last ends), and write src/NOTES.md with one sentence. Then run node --test.',
++  )
++  await expect(c).toHaveFile('src/NOTES.md', /\S/)
++})

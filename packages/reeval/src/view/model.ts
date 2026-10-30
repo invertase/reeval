@@ -159,12 +159,21 @@ export function formatUsage(usage: TokenUsage | null | undefined): string | null
 
 export const shortSha = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : 'no git')
 
+/** Reasoning time, or `n/a` when the harness couldn't measure it: never `0s` for unknown. */
+export const reasoningLabel = (ms: number | null) => (ms === null ? 'n/a' : formatDuration(ms))
+
 /**
  * An attempt's effort, counted as the CLI's turn lines count it: tool calls, then file edits.
  * Edit calls become one file edit per file they change, so they're counted apart, never summed.
+ * With the workspace diff's count, `files changed` follows: an edit made from the shell is in it,
+ * never in the file edits.
  */
-export function activityLabel(a: Pick<AttemptRecord['activity'], 'tools' | 'fileEdits'>): string {
-  return `${plural(a.tools, 'tool call')} · ${plural(a.fileEdits, 'file edit')}`
+export function activityLabel(
+  a: Pick<AttemptRecord['activity'], 'tools' | 'fileEdits'>,
+  changed?: number,
+): string {
+  const files = changed === undefined ? '' : ` · ${plural(changed, 'file')} changed`
+  return `${plural(a.tools, 'tool call')} · ${plural(a.fileEdits, 'file edit')}${files}`
 }
 
 // ── Runs list ────────────────────────────────────────────────────────────────────────────────

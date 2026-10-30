@@ -279,11 +279,15 @@ evaluate('writes ok', { runs: 1, compare }, async (c) => {
   test('tool calls and file edits are counted apart, on every page', () => {
     assert.equal(activityLabel({ tools: 21, fileEdits: 2 }), '21 tool calls · 2 file edits')
     assert.equal(activityLabel({ tools: 1, fileEdits: 0 }), '1 tool call · 0 file edits')
+    assert.equal(
+      activityLabel({ tools: 3, fileEdits: 0 }, 2),
+      '3 tool calls · 0 file edits · 2 files changed',
+    )
     const pages = ['pages/run.tsx', 'pages/attempt/index.tsx'].map((f) =>
       readFileSync(join(pkgRoot, '../studio-web/src', f), 'utf8'),
     )
     for (const page of pages) {
-      assert.match(page, /activityLabel\((a|attempt)\.activity\)/)
+      assert.match(page, /activityLabel\((a|attempt)\.activity, filesChanged\(\1\.changedFiles\)\)/)
       assert.doesNotMatch(page, /'tool call'/, 'no page counts tool calls its own way')
     }
     const runPage = readFileSync(join(pkgRoot, '../studio-web/src/pages/run.tsx'), 'utf8')
@@ -459,6 +463,7 @@ describe('view-models over a real history', () => {
         n,
         outcome,
         usage,
+        changedFiles: [],
         judgements: [
           j('login', login, login === 'pass' ? 0.9 : 0.2, '0:login'),
           j('checkout', 'fail', 0.1, '1:checkout'),

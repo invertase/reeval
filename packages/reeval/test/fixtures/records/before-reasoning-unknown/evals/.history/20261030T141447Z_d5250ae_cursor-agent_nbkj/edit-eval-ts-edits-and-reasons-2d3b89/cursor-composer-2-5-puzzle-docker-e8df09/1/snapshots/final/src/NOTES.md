@@ -1,0 +1,1 @@
+Sorting by end time and always taking the next compatible meeting with the earliest finish preserves the most remaining time on the timeline, so an exchange argument shows no optimal solution can include more meetings than this greedy schedule.

@@ -1,0 +1,1 @@
+Choosing the meeting with the earliest end leaves the most room for all remaining meetings, so by the exchange argument it can replace the first meeting in any optimal schedule without reducing the maximum count.

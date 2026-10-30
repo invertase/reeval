@@ -1,0 +1,28 @@
+diff --git a/src/NOTES.md b/src/NOTES.md
+new file mode 100644
+index 0000000..1af1ffb
+--- /dev/null
++++ b/src/NOTES.md
+@@ -0,0 +1 @@
++Choosing the meeting with the earliest end leaves the most room for all remaining meetings, so by the exchange argument it can replace the first meeting in any optimal schedule without reducing the maximum count.
+diff --git a/src/schedule.js b/src/schedule.js
+index fe8c91e..e4b7806 100644
+--- a/src/schedule.js
++++ b/src/schedule.js
+@@ -1,4 +1,15 @@
+ // Returns the number of meetings that can be attended without overlap.
+ export function maxMeetings(meetings) {
+-  return 0
++  const sortedMeetings = [...meetings].sort((a, b) => a[1] - b[1])
++  let lastEnd = -Infinity
++  let count = 0
++
++  for (const [start, end] of sortedMeetings) {
++    if (start >= lastEnd) {
++      count += 1
++      lastEnd = end
++    }
++  }
++
++  return count
+ }

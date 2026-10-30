@@ -85,6 +85,7 @@ export const transcriptEventSchema = z.discriminatedUnion('type', [
     removed: nullableNumber,
     durationMs: nullableNumber,
     stalled: z.boolean().optional(),
+    subagent: z.string().optional(),
   }),
   z.strictObject({
     ...at,
@@ -95,6 +96,7 @@ export const transcriptEventSchema = z.discriminatedUnion('type', [
     ok: z.boolean().nullable().optional(),
     durationMs: nullableNumber,
     stalled: z.boolean().optional(),
+    subagent: z.string().optional(),
   }),
   z.strictObject({
     ...at,
@@ -104,6 +106,7 @@ export const transcriptEventSchema = z.discriminatedUnion('type', [
     ok: z.boolean().nullable(),
     durationMs: nullableNumber,
     stalled: z.boolean().optional(),
+    subagent: z.string().optional(),
   }),
   z.strictObject({
     ...at,
@@ -115,6 +118,7 @@ export const transcriptEventSchema = z.discriminatedUnion('type', [
     ok: z.boolean().nullable(),
     durationMs: nullableNumber,
     stalled: z.boolean().optional(),
+    subagent: z.string().optional(),
   }),
   z.strictObject({ ...at, type: z.literal('error'), message: z.string() }),
   z.strictObject({ ...at, type: z.literal('retry'), message: z.string() }),

@@ -36,6 +36,7 @@ function cutOff(signal: AbortSignal, startedAt: string, grace = TURN_STOP_GRACE_
           usage: null,
           model: null,
           unreported: [],
+          reasoningMs: null,
           startedAt,
           durationMs: at,
         })
@@ -141,14 +142,16 @@ export function turnSender(
         usage: null,
         model: null,
         unreported: [],
+        reasoningMs: null,
         startedAt: entry.startedAt,
         durationMs: Date.now() - sendStarted,
       }
     })
-    const { raw, rejectedKey, ...sent } = await a
+    const { raw, rejectedKey, reasoningMs, ...sent } = await a
       .timed('agentMs', () => Promise.race([sending, cutoff]))
       .catch(async (error: unknown) => {
         // The errored entry stays in the record, with the starts the turn saw.
+        entry.reasoningMs = null
         if (watch) entry.mcpStartup = mcpStartupOf((await watch.end()).entries)
         throw error
       })
@@ -176,10 +179,16 @@ export function turnSender(
           ].sort((x, y) => x.atMs - y.atMs),
         }
       : sent
-    Object.assign(entry, result, raw ? { raw } : {}, {
-      durationMs: Math.max(result.durationMs, sendWallMs),
-      ...(startup ? { mcpStartup: mcpStartupOf(startup.entries) } : {}),
-    })
+    Object.assign(
+      entry,
+      result,
+      raw ? { raw } : {},
+      reasoningMs !== undefined ? { reasoningMs } : {},
+      {
+        durationMs: Math.max(result.durationMs, sendWallMs),
+        ...(startup ? { mcpStartup: mcpStartupOf(startup.entries) } : {}),
+      },
+    )
     for (const event of result.transcript) {
       debugTrace(
         'harness',
