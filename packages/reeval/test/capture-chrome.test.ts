@@ -40,7 +40,8 @@ const PAGES: Record<string, string> = {
       constructor() { super(); this.attachShadow({ mode: 'closed' }).innerHTML = '<input id="email">' }
     })</script></body>`,
   '/inner': `<body><input id="field" aria-label="Card"></body>`,
-  '/when': `<body><input id="date" type="date"><input id="time" type="time"><input id="size" type="number"></body>`,
+  '/when': `<body><input id="date" type="date"><input id="time" type="time"><input id="size" type="number">
+    <input id="pickup" type="datetime-local"><input id="expiry" type="month"><input id="week" type="week"></body>`,
   '/when-frame': `<body><iframe id="when" src="/when"></iframe></body>`,
 }
 
@@ -197,6 +198,18 @@ test('typing into a date or time field presses its keys, which its segments take
     assert.equal(await value('date', '11142026'), '2026-11-14')
     assert.equal(await value('time', '0730PM'), '19:30')
     assert.equal(await value('size', '4'), '4')
+    assert.equal(await value('week', '462026'), '2026-W46')
+    // The year takes up to six digits and a month input's month waits for more: ArrowRight moves on.
+    assert.equal(await value('pickup', '11142026'), '')
+    await session.dispatch({ type: 'key', key: 'ArrowRight' })
+    await session.dispatch({ type: 'type', text: '0730PM' })
+    assert.equal(await value('expiry', '11'), '')
+    await session.dispatch({ type: 'key', key: 'ArrowRight' })
+    await session.dispatch({ type: 'type', text: '2026' })
+    const typed = (await session.cdp.send('Runtime.evaluate', {
+      expression: `[pickup.value, expiry.value].join(' ')`,
+    })) as { result: { value: string } }
+    assert.equal(typed.result.value, '2026-11-14T19:30 2026-11')
     await open(session, `${origin}/when-frame`)
     await new Promise((resolve) => setTimeout(resolve, 500))
     const field = `document.getElementById('when').contentDocument.getElementById('date')`

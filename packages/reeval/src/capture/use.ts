@@ -511,6 +511,23 @@ function stuckMoves(moves: readonly Move[]): number {
  */
 const SEGMENTED = /^input\[(date|time|datetime-local|month|week)\]/
 
+/**
+ * How to type into a focused date or time input. Chrome's year segment takes up to six digits and
+ * a month input's month segment waits for more, so a part followed by another needs ArrowRight.
+ */
+function segmentedHint(focus: string): string | undefined {
+  const kind = SEGMENTED.exec(focus)?.[1]
+  if (!kind) return undefined
+  const first = 'Click its left edge, its first part, before typing.'
+  if (kind === 'datetime-local') {
+    return `A date and time field takes the date's digits with no separators, then ArrowRight, then the time's: type 11142026, press ArrowRight, type 0730PM. ${first}`
+  }
+  if (kind === 'month') {
+    return `A month field takes the month's number, then ArrowRight, then the year: type 11, press ArrowRight, type 2026. ${first}`
+  }
+  return `A date or time field takes its digits in the order it shows them, with no separators: 11142026 for mm/dd/yyyy, 0730PM for --:-- --, 462026 for Week --, ----. ${first}`
+}
+
 /** What the model reads about the page now: where it is and what has focus. */
 function stateLines(now: PageState, origin: string, volatile: ReadonlySet<StateField>): string[] {
   const lines: string[] = []
@@ -524,11 +541,8 @@ function stateLines(now: PageState, origin: string, volatile: ReadonlySet<StateF
         'A dropdown never opens in the screenshot: press ArrowDown or ArrowUp to the option, then Enter; it holds the new option only after Enter.',
       )
     }
-    if (SEGMENTED.test(now.focus)) {
-      lines.push(
-        'A date or time field takes its digits in the order it shows them, with no separators: 11142026 for mm/dd/yyyy, 0730PM for --:-- --. Click its left edge, its first part, before typing.',
-      )
-    }
+    const hint = segmentedHint(now.focus)
+    if (hint) lines.push(hint)
   }
   if (volatile.has('text') || volatile.has('nodes') || volatile.has('view')) {
     lines.push('Parts of the page keep changing on their own, so the effects below leave them out.')

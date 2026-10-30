@@ -1311,24 +1311,35 @@ test("runJourney waits out a search box's debounce after typing", async () => {
 
 test("runJourney gives the date format hint only while a date or time field has focus, so a card's spaces stay", async () => {
   const prompts: string[] = []
+  const focus = [
+    'input[text] "Card number"',
+    'input[date] "When"',
+    'input[datetime-local] "Pickup"',
+    'input[month] "Expiry"',
+  ]
   const { session } = scriptedSession(false, (moves) => ({
     ...stillState(),
-    focus: moves === 0 ? 'input[text] "Card number"' : 'input[date] "When"',
+    focus: focus[moves] ?? null,
   }))
   await journey(
     session,
     scriptedModel(
-      (text) => (/^1\. /m.test(text) ? ['done', {}] : ['click', { x: 10, y: 10 }]),
+      (text) => (/^3\. /m.test(text) ? ['done', {}] : ['click', { x: 10, y: 10 }]),
       prompts,
     ),
     ['Book for 14 November'],
   )
-  assert.equal(prompts.length, 2)
-  assert.doesNotMatch(prompts[0] ?? '', /no separators/)
+  assert.equal(prompts.length, 4)
+  assert.doesNotMatch(prompts[0] ?? '', /separators|ArrowRight, then/)
   assert.match(
     prompts[1] ?? '',
     /^A date or time field takes its digits .* 11142026 for mm\/dd\/yyyy/m,
   )
+  assert.match(
+    prompts[2] ?? '',
+    /^A date and time field .* type 11142026, press ArrowRight, type 0730PM\./m,
+  )
+  assert.match(prompts[3] ?? '', /^A month field .* type 11, press ArrowRight, type 2026\./m)
 })
 
 test('runJourney lets content that loads after load land before its first look, and marks none of it volatile', async () => {
