@@ -1309,6 +1309,28 @@ test("runJourney waits out a search box's debounce after typing", async () => {
   assert.match(prompts[1] ?? '', /^1\. type \{"text":"ada"\} → the page's content changed$/m)
 })
 
+test("runJourney gives the date format hint only while a date or time field has focus, so a card's spaces stay", async () => {
+  const prompts: string[] = []
+  const { session } = scriptedSession(false, (moves) => ({
+    ...stillState(),
+    focus: moves === 0 ? 'input[text] "Card number"' : 'input[date] "When"',
+  }))
+  await journey(
+    session,
+    scriptedModel(
+      (text) => (/^1\. /m.test(text) ? ['done', {}] : ['click', { x: 10, y: 10 }]),
+      prompts,
+    ),
+    ['Book for 14 November'],
+  )
+  assert.equal(prompts.length, 2)
+  assert.doesNotMatch(prompts[0] ?? '', /no separators/)
+  assert.match(
+    prompts[1] ?? '',
+    /^A date or time field takes its digits .* 11142026 for mm\/dd\/yyyy/m,
+  )
+})
+
 test('runJourney lets content that loads after load land before its first look, and marks none of it volatile', async () => {
   const prompts: string[] = []
   const opened = Date.now()
