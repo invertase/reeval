@@ -749,7 +749,13 @@ const targetAt = (x: number, y: number) => `(() => {
 // inserted text.
 const SEGMENTED_FOCUS = `(() => {
   let a = document.activeElement
-  while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement
+  for (;;) {
+    if (a && a.shadowRoot && a.shadowRoot.activeElement) { a = a.shadowRoot.activeElement; continue }
+    let inner = null
+    try { inner = a && a.contentDocument ? a.contentDocument.activeElement : null } catch {}
+    if (inner && inner !== a.contentDocument.body) { a = inner; continue }
+    break
+  }
   return !!a && a.tagName === 'INPUT' && ['date', 'time', 'datetime-local', 'month', 'week'].includes(a.type)
 })()`
 
@@ -805,6 +811,8 @@ export type ChromeSession = {
   wait(wait: Wait, timeoutMs: number, nav?: { loaderId?: string }): Promise<void>
   /** The window, the whole page, or `clip` (page CSS pixels) scaled by its `scale`. */
   screenshot(fullPage: boolean, clip?: ShotClip): Promise<Buffer>
+  /** Scrolls the window to a pointer action's page point when it's outside; whether it scrolled. */
+  reveal(action: CaptureUseAction, page?: { width: number; height: number }): Promise<boolean>
   /** Makes `action` at page CSS points: what the pointer landed on, and whether reeval scrolled to it. */
   dispatch(
     action: CaptureUseAction,
@@ -942,6 +950,23 @@ export async function withChrome<T>(
               await new Promise((resolve) => setTimeout(resolve, SCREENSHOT_RETRY_MS))
             }
           }
+        },
+        async reveal(action, page) {
+          if (action.type !== 'click' && action.type !== 'hover' && action.type !== 'drag') {
+            return false
+          }
+          const from = (await readLayout(cdp))?.scrollY ?? scrollY
+          const at = mapPagePoint(action.x, action.y, window, page, from)
+          if (at.dy === 0) return false
+          await cdp.send('Input.dispatchMouseEvent', {
+            type: 'mouseWheel',
+            x: window.width / 2,
+            y: window.height / 2,
+            deltaX: 0,
+            deltaY: at.dy,
+          })
+          scrollY = await scrolledTo(cdp, from, at.scrollY)
+          return scrollY !== from
         },
         async dispatch(action, page) {
           // The page scrolls on its own too (a navigation, focus, a script), so the offset is read.

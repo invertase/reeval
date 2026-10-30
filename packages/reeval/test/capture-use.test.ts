@@ -195,6 +195,7 @@ async function journeyClick(model: string, x: number, y: number) {
     layout: async () => undefined,
     busy: () => false,
     requests: () => 0,
+    reveal: async () => false,
     dialogs: () => [],
   }
   await runJourney(session, 'http://127.0.0.1/', {
@@ -310,6 +311,7 @@ test('runJourney times out before the saved screenshot', async () => {
     layout: async () => undefined,
     busy: () => false,
     requests: () => 0,
+    reveal: async () => false,
     dialogs: () => [],
   }
   await assert.rejects(
@@ -506,6 +508,7 @@ function scriptedSession(
       },
       busy: extra.busy ?? (() => false),
       requests: extra.requests ?? (() => 0),
+      reveal: async () => false,
       dialogs: () => extra.dialogs?.(dispatched.length) ?? [],
     },
   }
@@ -867,6 +870,24 @@ test('runJourney leaves out what keeps changing on its own, so a no-op still rea
   assert.match(prompts[2] ?? '', /^2\. click \{"x":10,"y":10\} → nothing changed$/m)
 })
 
+test('runJourney marks a clock that ticks only while the model chooses as volatile, so the stuck guard still stops a no-op', async () => {
+  const prompts: string[] = []
+  const { session } = scriptedSession(false, () => ({
+    ...stillState(),
+    text: `clock ${prompts.length}`,
+  }))
+  await assert.rejects(
+    journey(
+      session,
+      scriptedModel(() => ['click', { x: 10, y: 10 }], prompts),
+      ['Click the disabled button'],
+    ),
+    /repeated click \{"x":10,"y":10\} 5 times and nothing changed$/,
+  )
+  assert.equal(prompts.length, 5)
+  assert.match(prompts[1] ?? '', /^Parts of the page keep changing on their own/m)
+})
+
 test("runJourney names a { wait } step's timeout as the capture's", async () => {
   const { session } = scriptedSession(true)
   session.wait = async (wait: unknown) => {
@@ -1135,6 +1156,37 @@ test("runJourney asks again after a final click whose only effect was reeval's o
       prompts,
     ),
     ['Accept the terms'],
+  )
+  assert.equal(dispatched.length, 1)
+  assert.equal(prompts.length, 2)
+})
+
+test("runJourney does not credit a final click with the rows and requests reeval's scroll to it set off", async () => {
+  const prompts: string[] = []
+  let rows = 10
+  let sent = 0
+  const { session, dispatched } = scriptedSession(
+    false,
+    () => ({ ...stillState(), text: `rows ${rows}` }),
+    {
+      requests: () => sent,
+    },
+  )
+  session.reveal = async () => {
+    rows = 20
+    sent++
+    return true
+  }
+  await journey(
+    session,
+    scriptedModel(
+      (text) =>
+        /^1\. .* → nothing changed$/m.test(text)
+          ? ['done', {}]
+          : ['click', { x: 10, y: 300, completesGoal: true }],
+      prompts,
+    ),
+    ['Open the last row'],
   )
   assert.equal(dispatched.length, 1)
   assert.equal(prompts.length, 2)

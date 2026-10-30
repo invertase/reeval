@@ -41,6 +41,7 @@ const PAGES: Record<string, string> = {
     })</script></body>`,
   '/inner': `<body><input id="field" aria-label="Card"></body>`,
   '/when': `<body><input id="date" type="date"><input id="time" type="time"><input id="size" type="number"></body>`,
+  '/when-frame': `<body><iframe id="when" src="/when"></iframe></body>`,
 }
 
 async function serve(): Promise<{ server: Server; origin: string }> {
@@ -196,5 +197,14 @@ test('typing into a date or time field presses its keys, which its segments take
     assert.equal(await value('date', '11142026'), '2026-11-14')
     assert.equal(await value('time', '0730PM'), '19:30')
     assert.equal(await value('size', '4'), '4')
+    await open(session, `${origin}/when-frame`)
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const field = `document.getElementById('when').contentDocument.getElementById('date')`
+    await session.cdp.send('Runtime.evaluate', { expression: `${field}.focus()` })
+    await session.dispatch({ type: 'type', text: '11142026' })
+    const framed = (await session.cdp.send('Runtime.evaluate', {
+      expression: `${field}.value`,
+    })) as { result: { value: string } }
+    assert.equal(framed.result.value, '2026-11-14')
   })
 })

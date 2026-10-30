@@ -149,6 +149,7 @@ function onClock(session: ChromeSession, clock: Clock): ChromeSession {
     navigate: (url) => race(clock, () => session.navigate(url)),
     wait: (wait, ms, nav) => race(clock, () => session.wait(wait, ms, nav).catch(own)),
     screenshot: (fullPage, clip) => race(clock, () => session.screenshot(fullPage, clip)),
+    reveal: (action, page) => race(clock, () => session.reveal(action, page)),
     dispatch: (action, page) => race(clock, () => session.dispatch(action, page)),
     layout: () => race(clock, () => session.layout()),
     busy: (any) => session.busy(any),
@@ -362,7 +363,7 @@ const useTools = {
   }),
   type: tool({
     description:
-      'Insert text into the focused field. Click the field first. Set replace to true to replace what the field already holds instead of adding to it.',
+      'Insert text into the focused field. Click the field first. Set replace to true to replace what the field already holds instead of adding to it. In a date or time field, click its first part and type the digits in the order the field shows them, with no separators (11142026 for mm/dd/yyyy, 0730PM for --:-- --).',
     inputSchema: z.object({ text: z.string(), replace: z.boolean().optional() }),
   }),
   key: tool({
@@ -613,6 +614,9 @@ async function runModelGoal(
   let now = pristine
     ? await settledState(session, volatile, clock.remaining, true)
     : await probePage(session)
+  // With no request in flight at the first look, a request count to tell the page's own changes
+  // (a clock, a carousel) from data still arriving while the model chooses its first move.
+  const quiet = pristine && !session.busy(true) ? session.requests() : undefined
   let stale = 0
   const trail: Trail = { origin, start: now, made, choosing: false }
   clock.trail = trail
@@ -690,10 +694,15 @@ async function runModelGoal(
     // still landing invites a second submit. Credit the change and ask again, a bounded number of times.
     const fresh = await probePage(session)
     const opened = session.dialogs()
-    const moved = differing(now, fresh, volatile)
+    let moved = differing(now, fresh, volatile)
+    if (!last && quiet !== undefined && !opened.length && session.requests() === quiet) {
+      // Before the journey's first move, a change that no request brought is the page's own.
+      for (const f of moved) if (f !== 'url' && f !== 'focus') volatile.add(f)
+      moved = differing(now, fresh, volatile)
+    }
     if ((moved.length || opened.length) && stale < STALE_ASKS) {
       // With no move yet in this instruction, the change is the last instruction's still landing,
-      // or the page's own; `settledState` marks what keeps changing as volatile.
+      // or data the page fetched after its first look.
       stale++
       if (last && !last.refused) {
         last.dialogs.push(...opened)
@@ -712,8 +721,11 @@ async function runModelGoal(
     if (!('refused' in asks) && asks.type === 'type' && now.editable === false) {
       asks = { refused: 'nothing that takes text is focused; click a field first' }
     }
+    // Focus the page can't see into (a card frame, a closed root) may be a password too.
     const logged =
-      !('refused' in asks) && asks.type === 'type' && now.focus?.includes('[password]')
+      !('refused' in asks) &&
+      asks.type === 'type' &&
+      (now.focus?.includes('[password]') || now.editable === null)
         ? `type ${JSON.stringify({ ...input, text: '•'.repeat(String(input.text ?? '').length) })}`
         : said
     const latency = formatDuration(Date.now() - asked)
@@ -731,7 +743,12 @@ async function runModelGoal(
     if (asks.type === 'done') return { moves: dispatched, usage, ended: 'done' }
     const move: Move = { said, key: moveKey(asks), before: now, dialogs: [] }
     made.push(move)
-    const sent = session.requests()
+    let sent = session.requests()
+    if (await session.reveal(asks, page)) {
+      // What reeval's scroll set off (rows a feed loads, a header that shrinks) is not the move's.
+      move.before = await settledState(session, volatile, clock.remaining)
+      sent = session.requests()
+    }
     const landed = await session.dispatch(asks, page)
     if (landed?.target) move.target = landed.target
     if (landed?.scrolled) move.scrolled = true
