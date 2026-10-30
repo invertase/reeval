@@ -98,7 +98,15 @@
             },
             "input": {},
             "ok": {
-              "type": "boolean"
+              "description": "Whether the call succeeded; null when the harness never reported its result.",
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "output": {},
             "stalled": {
@@ -151,8 +159,64 @@
               ]
             },
             "ok": {
-              "description": "Whether the search succeeded. Absent means it did.",
+              "description": "Whether the fetch succeeded; null when the harness never reported its result.",
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "stalled": {
+              "description": "True when a shell-like tool or edit ran at least two minutes.",
               "type": "boolean"
+            },
+            "toolCallId": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "turn": {
+              "type": "number"
+            },
+            "type": {
+              "const": "web-fetch"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": ["atMs", "durationMs", "ok", "toolCallId", "ts", "turn", "type", "url"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "ok": {
+              "description": "Whether the search succeeded. Absent means it did; null means the harness never reported its result.",
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "query": {
               "type": "string"
@@ -195,47 +259,6 @@
             "turn",
             "type"
           ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "atMs": {
-              "type": "number"
-            },
-            "durationMs": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "number"
-                }
-              ]
-            },
-            "ok": {
-              "type": "boolean"
-            },
-            "stalled": {
-              "description": "True when a shell-like tool or edit ran at least two minutes.",
-              "type": "boolean"
-            },
-            "toolCallId": {
-              "type": "string"
-            },
-            "ts": {
-              "type": "string"
-            },
-            "turn": {
-              "type": "number"
-            },
-            "type": {
-              "const": "web-fetch"
-            },
-            "url": {
-              "type": "string"
-            }
-          },
-          "required": ["atMs", "durationMs", "ok", "toolCallId", "ts", "turn", "type", "url"]
         },
         {
           "type": "object",

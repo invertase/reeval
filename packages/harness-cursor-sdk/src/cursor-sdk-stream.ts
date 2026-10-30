@@ -131,6 +131,7 @@ function webKey(e: CursorSdkMessage): string | undefined {
  * Turns the runner's NDJSON for one turn into harness stream parts, in order. Text and
  * thinking arrive as deltas; a thinking event with `thinking_duration_ms` ends its block.
  * Each tool call is reported `running` (maybe more than once) and then `completed` or `error`.
+ * A call still running when the turn ends gets no result: it's unfinished, not failed.
  */
 export class CursorSdkStreamTranslator {
   agentId: string | undefined
@@ -218,7 +219,6 @@ export class CursorSdkStreamTranslator {
     if (this.finished) return []
     const parts: HarnessV1StreamPart[] = []
     this.start(parts)
-    this.closeTools(parts, options.aborted ? 'aborted' : 'interrupted')
     this.closeBlocks(parts)
     this.closeStep(parts)
     if (!options.aborted) {
@@ -261,20 +261,6 @@ export class CursorSdkStreamTranslator {
   private closeBlocks(parts: HarnessV1StreamPart[]) {
     this.closeText(parts)
     this.closeReasoning(parts)
-  }
-
-  private closeTools(parts: HarnessV1StreamPart[], why: string) {
-    for (const [toolCallId, call] of this.openTools) {
-      parts.push({
-        type: 'tool-result',
-        toolCallId,
-        toolName: call.toolName,
-        result: `${call.toolName} ${why}`,
-        isError: true,
-        ...(call.dynamic ? { dynamic: true } : {}),
-      })
-    }
-    this.openTools.clear()
   }
 
   private event(parts: HarnessV1StreamPart[], e: CursorSdkMessage, recovered = false) {
@@ -364,7 +350,6 @@ export class CursorSdkStreamTranslator {
   private finish(parts: HarnessV1StreamPart[], r: CursorSdkResult) {
     this.result = r
     this.agentId = r.agentId ?? this.agentId
-    this.closeTools(parts, 'unfinished')
     if (!this.sawText && r.result) {
       parts.push({ type: 'text-start', id: 'text-result' })
       parts.push({ type: 'text-delta', id: 'text-result', delta: r.result })
@@ -399,7 +384,6 @@ export class CursorSdkStreamTranslator {
   }
 
   private fail(parts: HarnessV1StreamPart[], message: string, raw: string) {
-    this.closeTools(parts, 'interrupted')
     this.closeBlocks(parts)
     this.closeStep(parts)
     parts.push({ type: 'error', error: new Error(message) })

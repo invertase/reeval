@@ -57,6 +57,16 @@ const events = [
     references: 3,
     durationMs: null,
   },
+  {
+    ...at,
+    type: 'tool',
+    toolCallId: 't6',
+    tool: 'read',
+    input: { path: 'notes.txt' },
+    output: null,
+    ok: null,
+    durationMs: null,
+  },
   { ...at, type: 'error', message: 'rate limited' },
 ] as unknown as TranscriptEvent[]
 
@@ -70,6 +80,7 @@ test('the transcript renders one compact entry per event, by mode', () => {
       'edit notes.txt (write, +2)',
       'fetch https://example.com/a → failed',
       'search "firebase auth" → ok',
+      'tool read: notes.txt → unfinished',
       'error: rate limited',
     ],
   )

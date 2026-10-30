@@ -5,4 +5,4 @@ evals/direct.eval.ts › allow-all keeps the network for raw TCP           fake/
 evals/direct.eval.ts › an eval can ask for allow-all itself              fake/-/docker         control  gated  ×1  egress "allow-all"
 excluded: —
 image docker · cursor · 3 evals
-  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)

@@ -228,6 +228,8 @@ On a variant, the streak counts a run only when the variant and the baseline bot
 
 These tables store the projected rows. `reeval query --schema` lists these columns. That listing omits `meta`, `files`, `family_lift_m`, and the derived `*_m` fact tables; it keeps `question_pairs_m` and `attempt_answers_m`.
 
+In `tool_calls`, `ok` is 1 or 0, or null for a call whose result the harness never reported. Count failures with `ok = 0`.
+
 [//]: # (generated:query-tables)
 
 | Name | Columns |

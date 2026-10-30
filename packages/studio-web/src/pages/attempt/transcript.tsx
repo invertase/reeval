@@ -151,7 +151,7 @@ function EventRow({ e, open, toggle }: { e: EventLine; open: boolean; toggle: ()
           icon={
             e.tool.toLowerCase().includes('shell') || e.tool === 'bash' ? TerminalSquare : Wrench
           }
-          tone={e.ok ? undefined : 'text-fail'}
+          tone={e.ok === false ? 'text-fail' : undefined}
           title={
             <>
               <span className="font-medium">{e.tool}</span>
@@ -162,7 +162,8 @@ function EventRow({ e, open, toggle }: { e: EventLine; open: boolean; toggle: ()
           }
           meta={
             <span className="flex items-center gap-2">
-              {e.ok ? null : <span className="text-fail">failed</span>}
+              {e.ok === false ? <span className="text-fail">failed</span> : null}
+              {e.ok === null ? <span className="text-muted-foreground">unfinished</span> : null}
               {dur}
             </span>
           }
@@ -202,7 +203,7 @@ function EventRow({ e, open, toggle }: { e: EventLine; open: boolean; toggle: ()
     case 'web-fetch':
       return (
         <div className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm">
-          <Globe className={cn('size-4 text-muted-foreground', !e.ok && 'text-fail')} />
+          <Globe className={cn('size-4 text-muted-foreground', e.ok === false && 'text-fail')} />
           <span className="text-muted-foreground">Fetched</span>
           <span className="min-w-0 truncate font-mono text-xs">{e.url}</span>
           <span className="ml-auto shrink-0 text-xs text-muted-foreground">{dur}</span>

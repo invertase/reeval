@@ -1021,7 +1021,7 @@ class ExecResult(TypedDict):
 
 class FakeHarnessDescriptorToolsItem(TypedDict):
     input: Any
-    ok: NotRequired[bool]
+    ok: NotRequired[bool | None]
     output: Any
     tool: str
 
@@ -1085,7 +1085,8 @@ class FakeHarnessDescriptor(TypedDict):
     startTimeout: NotRequired[Duration]
     # The fake agent's final message on every turn; default `Done.`.
     text: NotRequired[str]
-    # Tool calls the fake agent reports on every turn, before writing files.
+    # Tool calls the fake agent reports on every turn, before writing files. `ok` defaults to
+    # true; null reports a call whose result never came.
     tools: NotRequired[list[FakeHarnessDescriptorToolsItem]]
     # Files and message used instead when the environment gives the agent a skill.
     withSkill: NotRequired[FakeHarnessDescriptorWithSkill]
@@ -1838,8 +1839,9 @@ class TranscriptEventFileEdit(TypedDict):
 class TranscriptEventWebSearch(TypedDict):
     atMs: float
     durationMs: float | None
-    # Whether the search succeeded. Absent means it did.
-    ok: NotRequired[bool]
+    # Whether the search succeeded. Absent means it did; null means the harness never reported
+    # its result.
+    ok: NotRequired[bool | None]
     query: str
     # How many sources the harness says it used; Cursor sends no URLs or titles.
     references: float | None
@@ -1853,7 +1855,8 @@ class TranscriptEventWebSearch(TypedDict):
 class TranscriptEventWebFetch(TypedDict):
     atMs: float
     durationMs: float | None
-    ok: bool
+    # Whether the fetch succeeded; null when the harness never reported its result.
+    ok: bool | None
     # True when a shell-like tool or edit ran at least two minutes.
     stalled: NotRequired[bool]
     toolCallId: str
@@ -1866,7 +1869,8 @@ class TranscriptEventTool(TypedDict):
     atMs: float
     durationMs: float | None
     input: Any
-    ok: bool
+    # Whether the call succeeded; null when the harness never reported its result.
+    ok: bool | None
     output: Any
     # True when a shell-like tool or edit ran at least two minutes.
     stalled: NotRequired[bool]
@@ -1892,7 +1896,9 @@ class TranscriptEventRetry(TypedDict):
 
 # Normalized agent events. Each tool call is one event, merged with its result; `durationMs` is
 # wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null when
-# the harness never reported the end. Long shell or edit calls set `stalled: true`.
+# the harness never reported the end. Long shell or edit calls set `stalled: true`. A call the
+# harness never reported a result for (the turn ended or was cut short first) has `ok: null`: it
+# isn't known to have failed, and no failure count includes it.
 TranscriptEvent: TypeAlias = "TranscriptEvent1 | TranscriptEventFileEdit | TranscriptEventWebSearch | TranscriptEventWebFetch | TranscriptEventTool | TranscriptEventError | TranscriptEventRetry"
 
 

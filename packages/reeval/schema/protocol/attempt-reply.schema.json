@@ -671,7 +671,7 @@
       "additionalProperties": false
     },
     "TranscriptEvent": {
-      "description": "Normalized agent events. Each tool call is one event, merged with its result; `durationMs` is wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null when the harness never reported the end. Long shell or edit calls set `stalled: true`.",
+      "description": "Normalized agent events. Each tool call is one event, merged with its result; `durationMs` is wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null when the harness never reported the end. Long shell or edit calls set `stalled: true`. A call the harness never reported a result for (the turn ended or was cut short first) has `ok: null`: it isn't known to have failed, and no failure count includes it.",
       "oneOf": [
         {
           "type": "object",
@@ -758,8 +758,8 @@
               "type": ["number", "null"]
             },
             "ok": {
-              "description": "Whether the search succeeded. Absent means it did.",
-              "type": "boolean"
+              "description": "Whether the search succeeded. Absent means it did; null means the harness never reported its result.",
+              "type": ["boolean", "null"]
             },
             "query": {
               "type": "string"
@@ -796,7 +796,8 @@
               "type": ["number", "null"]
             },
             "ok": {
-              "type": "boolean"
+              "description": "Whether the fetch succeeded; null when the harness never reported its result.",
+              "type": ["boolean", "null"]
             },
             "stalled": {
               "description": "True when a shell-like tool or edit ran at least two minutes.",
@@ -830,7 +831,8 @@
             },
             "input": {},
             "ok": {
-              "type": "boolean"
+              "description": "Whether the call succeeded; null when the harness never reported its result.",
+              "type": ["boolean", "null"]
             },
             "output": {},
             "stalled": {

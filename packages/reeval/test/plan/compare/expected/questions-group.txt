@@ -32,4 +32,4 @@ evals/questions-group.eval.ts › pairs its evals' compares › compares        
                                                                              question: Which is shorter? · shows diff · environment · 8 pairs · no language model
 excluded: evals/questions-group.eval.ts › pairs its evals' compares › skipped without a compare (skip)
 image docker · cursor · 6 evals
-  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)

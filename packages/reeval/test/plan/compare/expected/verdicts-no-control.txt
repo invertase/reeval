@@ -14,4 +14,4 @@ evals/verdicts.eval.ts › six cases can: e                            b/skilled
 evals/verdicts.eval.ts › six cases can: f                            b/skilled/docker  variant skilled  gated  ×1  family six cases can: %s case 6/6
 excluded: —
 image docker · cursor · 12 evals
-  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)
