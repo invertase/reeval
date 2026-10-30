@@ -2,7 +2,6 @@
 // factories in `reeval/harness` return, and what a declaration tree from any language carries.
 // One schema per kind, joined on `kind`; the types in types.ts are held to them by
 // `_SameAsSchema`.
-import { openCodeEffortRefusal } from '@reeval/harness-opencode/providers'
 import { z } from 'zod'
 import { MAX_TIMER_MS, TIMER_LIMIT } from '../duration.ts'
 import type {
@@ -357,12 +356,6 @@ export const antigravityIdEffort = (model: string): string | undefined =>
 function effortProblem(value: HarnessDescriptor): string | undefined {
   if (value.kind === 'claude-code' && value.effort && !claudeCodeTakesEffort(value.model)) {
     return `claudeCode({ effort }): Claude Code sends no effort to ${value.model}, so drop effort or run a model that takes one, e.g. claude-sonnet-5-5`
-  }
-  if (value.kind === 'opencode' && value.effort) {
-    const refused = openCodeEffortRefusal(value.model)
-    if (refused) {
-      return `opencode({ effort }): ${refused}, so drop effort or run a model that takes one, e.g. anthropic/claude-sonnet-5-5`
-    }
   }
   if (value.kind === 'antigravity' && value.effort) {
     const named = antigravityIdEffort(value.model)

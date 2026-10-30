@@ -108,9 +108,26 @@ describe('the shared default effort', () => {
       noDefaultEffort(opencode({ model: 'google/gemini-2.5-flash' })) ?? '',
       /Gemini's API takes no thinking level on gemini-2\.5-flash/,
     )
+    assert.match(
+      noDefaultEffort(opencode({ model: 'openai/gpt-5-pro' })) ?? '',
+      /takes only effort high on gpt-5-pro, not medium/,
+    )
     assert.equal(
       withDefaultEffort(opencode({ model: 'anthropic/claude-sonnet-5-5' })).effort,
       'medium',
+    )
+  })
+
+  test("follows the API OpenCode's gateway calls: OpenRouter maps an effort onto Gemini 2.5", () => {
+    const flash = opencode({ model: 'google/gemini-2.5-flash' })
+    assert.equal(withDefaultEffort({ ...flash, gateway: 'openrouter' }).effort, 'medium')
+    assert.match(
+      noDefaultEffort({ ...flash, gateway: 'vercel' }) ?? '',
+      /Gemini's API takes no thinking level on gemini-2\.5-flash/,
+    )
+    assert.match(
+      noDefaultEffort({ ...flash, gateway: 'vertex' }) ?? '',
+      /Gemini's API takes no thinking level on gemini-2\.5-flash/,
     )
   })
 

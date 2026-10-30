@@ -188,34 +188,51 @@ export const OPENCODE_VERTEX_PROVIDER = 'google-vertex'
 /** Gemini's own thinking level, as Gemini's API takes it. */
 const geminiThinking = (effort: string) => ({ thinkingConfig: { thinkingLevel: effort } })
 
-/** Anthropic models whose API refuses `output_config.effort`, besides every `claude-3-` model. */
+/**
+ * Anthropic models whose API refuses `output_config.effort`, besides every `claude-3-` model
+ * (`claude-opus-4` and `claude-sonnet-4` are the undated `claude-opus-4-20250514` and its twin).
+ */
 const ANTHROPIC_NO_EFFORT = new Set([
+  'claude-opus-4',
   'claude-opus-4-0',
   'claude-opus-4-1',
+  'claude-sonnet-4',
   'claude-sonnet-4-0',
   'claude-sonnet-4-5',
   'claude-haiku-4-5',
 ])
 
-/** `claude-haiku-4-5` from `claude-haiku-4-5@20251001` or `claude-haiku-4-5-20251001`. */
+/** OpenAI models that take only some reasoning efforts, answering any other with a 400. */
+const OPENAI_ONLY_EFFORTS: Readonly<Record<string, readonly string[]>> = { 'gpt-5-pro': ['high'] }
+
+/**
+ * `claude-haiku-4-5` from `claude-haiku-4-5@20251001` or `claude-haiku-4-5-20251001`, and
+ * `gpt-5-pro` from `gpt-5-pro-2025-10-06`.
+ */
 const undated = (model: string) =>
   model
     .toLowerCase()
     .replace(/@.*$/, '')
-    .replace(/-\d{8}$/, '')
+    .replace(/-(\d{8}|\d{4}-\d{2}-\d{2})$/, '')
 
-/** Why the API behind `provider` answers an effort on `model` with a 400, or undefined. */
-function apiRefusesEffort(provider: string, model: string): string | undefined {
+/** Why the API behind `provider` answers `effort` on `model` with a 400, or undefined. */
+function apiRefusesEffort(provider: string, model: string, effort: string): string | undefined {
   const base = undated(model)
   if (provider === 'anthropic' && (base.startsWith('claude-3-') || ANTHROPIC_NO_EFFORT.has(base))) {
     return `Anthropic's API takes no effort on ${model}`
   }
-  if (provider === 'openai' && (/^(gpt-[34]|chatgpt-)/.test(base) || base.includes('-chat'))) {
-    return `OpenAI's API takes no reasoning effort on ${model}`
+  if (provider === 'openai') {
+    if (/^(gpt-[34]|chatgpt-)/.test(base) || base.includes('-chat')) {
+      return `OpenAI's API takes no reasoning effort on ${model}`
+    }
+    const only = OPENAI_ONLY_EFFORTS[base]
+    if (only && !only.includes(effort)) {
+      return `OpenAI's API takes only effort ${only.join(', ')} on ${model}, not ${effort}`
+    }
   }
   if (
     (provider === 'google' || provider === OPENCODE_VERTEX_PROVIDER) &&
-    /^gemini-[12]\./.test(base)
+    /^(gemini-[12]\.|gemma-)/.test(base)
   ) {
     return `Gemini's API takes no thinking level on ${model}`
   }
@@ -223,18 +240,21 @@ function apiRefusesEffort(provider: string, model: string): string | undefined {
 }
 
 /**
- * Why `model` refuses the effort field {@link openCodeEffortBody} would send it (its API answers
- * 400), or undefined. OpenRouter maps `reasoning.effort` onto each model itself, so it refuses
- * none; on Vercel AI Gateway only a Gemini model has a field to refuse.
+ * Why `model` (OpenCode's id, its gateway's prefix included) refuses `effort` in the field
+ * {@link openCodeEffortBody} would send it (its API answers 400), or undefined. OpenRouter maps
+ * `reasoning.effort` onto each model itself, so it refuses none; on Vercel AI Gateway only a
+ * Gemini model has a field to refuse.
  */
-export function openCodeEffortRefusal(model: string): string | undefined {
+export function openCodeEffortRefusal(model: string, effort: string): string | undefined {
   const parts = splitModel(model)
   if (!parts) return undefined
   if (parts.provider === 'vercel') {
     const inner = splitModel(parts.model)
-    return inner?.provider === 'google' ? apiRefusesEffort(inner.provider, inner.model) : undefined
+    return inner?.provider === 'google'
+      ? apiRefusesEffort(inner.provider, inner.model, effort)
+      : undefined
   }
-  return apiRefusesEffort(parts.provider, parts.model)
+  return apiRefusesEffort(parts.provider, parts.model, effort)
 }
 
 /**
@@ -250,7 +270,7 @@ export function openCodeEffortBody(
   model: string,
   effort: string,
 ): Record<string, unknown> | undefined {
-  if (openCodeEffortRefusal(model)) return undefined
+  if (openCodeEffortRefusal(model, effort)) return undefined
   const parts = splitModel(model)
   if (parts?.provider === 'openrouter') return { reasoning: { effort } }
   if (parts?.provider === 'google' || parts?.provider === OPENCODE_VERTEX_PROVIDER)

@@ -3,7 +3,7 @@
 // decides it, and left off where the harness, its gateway or its model takes no effort.
 import { openCodeEffortBody, openCodeEffortRefusal } from '@reeval/harness-opencode/providers'
 import { antigravityIdEffort, claudeCodeTakesEffort } from '../contract/harness.ts'
-import { effortRefusedOn } from '../gateway/resolve.ts'
+import { effortRefusedOn, openCodeModelOn } from '../gateway/resolve.ts'
 import { harnessId } from '../options.ts'
 import type { CursorEfforts, HarnessDescriptor } from '../types.ts'
 import { harnessEffort } from './effort.ts'
@@ -41,12 +41,13 @@ export function noDefaultEffort(
       return named ? `the model id names its effort, ${named}` : undefined
     }
     case 'opencode': {
-      const refused = openCodeEffortRefusal(h.model)
+      const gateway = h.gateway ?? 'direct'
+      const refused = openCodeEffortRefusal(openCodeModelOn(h.model, gateway), DEFAULT_EFFORT)
       if (refused) return refused
-      if ((h.gateway ?? 'direct') === 'direct' && !openCodeEffortBody(h.model, DEFAULT_EFFORT)) {
+      if (gateway === 'direct' && !openCodeEffortBody(h.model, DEFAULT_EFFORT)) {
         return `reeval sends OpenCode's effort in no field ${h.model} is known to read`
       }
-      return effortRefusedOn(h, h.gateway ?? 'direct')
+      return effortRefusedOn(h, gateway)
     }
     default:
       return effortRefusedOn(h, h.gateway ?? 'direct')
