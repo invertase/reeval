@@ -621,7 +621,7 @@ function waitForPortFile(file: string, timeoutMs: number, signal?: AbortSignal):
 export function pickPageDebuggerUrl(
   targets: Array<{ type?: string; webSocketDebuggerUrl?: string }>,
 ): string | undefined {
-  return targets.find((t) => t.webSocketDebuggerUrl && t.type !== 'browser')?.webSocketDebuggerUrl
+  return targets.find((t) => t.webSocketDebuggerUrl && t.type === 'page')?.webSocketDebuggerUrl
 }
 
 async function pageDebuggerUrl(port: number, timeoutMs: number): Promise<string> {

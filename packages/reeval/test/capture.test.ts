@@ -204,10 +204,13 @@ test('every capture name reeval accepts or derives is one the studio serves', ()
   }
 })
 
-test('pickPageDebuggerUrl skips the browser target', () => {
+test("pickPageDebuggerUrl picks the tab, not the browser or full Chrome's extension and UI pages", () => {
   assert.equal(
     pickPageDebuggerUrl([
       { type: 'browser', webSocketDebuggerUrl: 'ws://127.0.0.1:9/browser' },
+      { type: 'background_page', webSocketDebuggerUrl: 'ws://127.0.0.1:9/extension' },
+      { type: 'browser_ui', webSocketDebuggerUrl: 'ws://127.0.0.1:9/omnibox' },
+      { type: 'service_worker', webSocketDebuggerUrl: 'ws://127.0.0.1:9/worker' },
       { type: 'page', webSocketDebuggerUrl: 'ws://127.0.0.1:9/page' },
     ]),
     'ws://127.0.0.1:9/page',
