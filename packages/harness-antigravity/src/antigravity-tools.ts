@@ -97,7 +97,8 @@ export const ANTIGRAVITY_BUILTIN_TOOLS = {
   generate_image: native('generate_image', 'Generate Image'),
   invoke_subagent: native('invoke_subagent', 'Invoke Subagent'),
   manage_subagents: native('manage_subagents', 'Manage Subagents'),
-  // What it stops a subagent's task with (`Action: 'kill'`).
+  // What it lists, checks, sends input to and kills its background tasks with (commands, subagent
+  // tasks, `schedule` timers): it runs no command itself.
   manage_task: native('manage_task', 'Manage Task'),
   // What it waits on a subagent with: `schedule` prompts it again after `DurationSeconds`.
   schedule: native('schedule', 'Schedule'),
