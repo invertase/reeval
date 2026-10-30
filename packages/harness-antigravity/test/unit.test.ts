@@ -184,7 +184,7 @@ describe('tools', () => {
       input: { Query: 'x' },
       dynamic: false,
     })
-    assert.equal(projectToolCall('manage_task', {}).dynamic, true)
+    assert.equal(projectToolCall('manage_inbox', {}).dynamic, true)
   })
 
   test('an invoke_subagent tool step names each agent as a subagent step does (CLI 1.4.2)', () => {
@@ -216,6 +216,16 @@ describe('tools', () => {
       toolName: 'manage_subagents',
       nativeName: 'manage_subagents',
       input: { Action: 'list' },
+      dynamic: false,
+    })
+  })
+
+  test('manage_task is in the catalog (CLI 1.4.7)', () => {
+    const p = { Action: 'kill', TaskId: 'e5ee2cb1-55ef-44a9-a8e2-cfe492d0a1e3/task-4' }
+    assert.deepEqual(projectToolCall('manage_task', p), {
+      toolName: 'manage_task',
+      nativeName: 'manage_task',
+      input: p,
       dynamic: false,
     })
   })
