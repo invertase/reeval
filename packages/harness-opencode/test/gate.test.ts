@@ -4,7 +4,11 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, test } from 'node:test'
-import { OPENCODE_GATE, OPENCODE_GATE_SERVERS_ENV } from '../src/opencode-gate.ts'
+import {
+  OPENCODE_GATE,
+  OPENCODE_GATE_ENV,
+  OPENCODE_GATE_SERVERS_ENV,
+} from '../src/opencode-gate.ts'
 
 // The gate runs in reeval's Linux sandbox, where it execs OpenCode's bin by path; Windows can't run
 // it or the stand-in, extensionless scripts with a shebang.
@@ -26,7 +30,8 @@ writeFileSync(
   `#!/usr/bin/env node
 const { appendFileSync } = require('node:fs')
 const t0 = Date.now()
-appendFileSync(${JSON.stringify(log)}, JSON.stringify({ argv: process.argv.slice(2) }) + '\\n')
+const env = { AWS_REGION: process.env.AWS_REGION, EVAL_SET: process.env.EVAL_SET, gate: process.env.${OPENCODE_GATE_ENV} }
+appendFileSync(${JSON.stringify(log)}, JSON.stringify({ argv: process.argv.slice(2), env }) + '\\n')
 require('node:readline').createInterface({ input: process.stdin }).on('line', (line) =>
   appendFileSync(${JSON.stringify(log)}, JSON.stringify({ ms: Date.now() - t0, line }) + '\\n'))
 setTimeout(() => {
@@ -41,13 +46,19 @@ const CONNECTED =
   'timestamp=2026-09-28T06:34:11.857Z level=INFO message="mcp connected" server=stamp tools=1'
 
 /** Runs the gate on `lines` and returns what the stand-in saw, and the gate's stderr. */
-async function through(servers: string[], lines: string[], connect = CONNECTED) {
+async function through(
+  servers: string[],
+  lines: string[],
+  connect = CONNECTED,
+  env: Record<string, string> = {},
+) {
   writeFileSync(log, '')
   const child = spawn(gate, [], {
     env: {
       ...process.env,
       [OPENCODE_GATE_SERVERS_ENV]: JSON.stringify(servers),
       CONNECT_LINE: connect,
+      ...env,
     },
     stdio: ['pipe', 'ignore', 'pipe'],
   })
@@ -65,6 +76,7 @@ async function through(servers: string[], lines: string[], connect = CONNECTED) 
     .map((l) => JSON.parse(l))
   return {
     argv: seen[0].argv as string[],
+    env: seen[0].env as Record<string, string | undefined>,
     lines: seen.slice(1) as { ms: number; line: string }[],
     stderr,
   }
@@ -111,4 +123,17 @@ test('a server that fails to connect releases the prompt too', { skip }, async (
     r.lines.map((l) => l.line),
     [NEW, PROMPT],
   )
+})
+
+test("OpenCode gets the route's variables, over the sandbox's own, and not the gate's", {
+  skip,
+}, async () => {
+  const r = await through([], [NEW], CONNECTED, {
+    AWS_REGION: 'us-east-1',
+    EVAL_SET: 'kept',
+    [OPENCODE_GATE_ENV]: JSON.stringify({ AWS_REGION: 'eu-west-1' }),
+  })
+  assert.deepEqual(r.env, { AWS_REGION: 'eu-west-1', EVAL_SET: 'kept' })
+  const none = await through([], [NEW], CONNECTED, { AWS_REGION: 'us-east-1' })
+  assert.deepEqual(none.env, { AWS_REGION: 'us-east-1' })
 })

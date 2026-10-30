@@ -9,6 +9,7 @@ import { createACP } from '@ai-sdk/harness-acp'
 import type { Experimental_SandboxSession } from '@ai-sdk/provider-utils'
 import {
   OPENCODE_GATE,
+  OPENCODE_GATE_ENV,
   OPENCODE_GATE_EXECUTABLE,
   OPENCODE_GATE_PATH,
   OPENCODE_GATE_SERVERS_ENV,
@@ -220,9 +221,9 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
         return value ? [[name, value]] : []
       }),
     ),
-    // The bootstrap lists these variables' names, so every route declares the same ones, set
-    // empty where the route has none: the image's bootstrap serves every provider and Vertex AI.
-    env: { ...openCodeEnv(settings), ...OPENCODE_ROUTE_ENV, ...route.env },
+    // The bootstrap lists these variables' names, so every route declares the same ones: the
+    // image's bootstrap serves every provider and Vertex AI.
+    env: { ...openCodeEnv(settings), [OPENCODE_GATE_ENV]: JSON.stringify(route.env) },
     credentialEnv: OPENCODE_KEY_ENV,
     credentialBrokering: route.credentialBrokering ?? (() => []),
     modelMapping: { type: 'session-config-option', path: 'model' },
@@ -252,20 +253,11 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
 /** Every provider's key variable: harness-acp forwards the one in auth, and brokers it. */
 const OPENCODE_KEY_ENV = [...new Set(OPENCODE_PROVIDERS.map((p) => p.env))].sort()
 
-/** The variables a route sets besides the key (Bedrock's region, Vertex AI's), each empty. */
-const OPENCODE_ROUTE_ENV: Record<string, string> = Object.fromEntries(
-  [
-    ...OPENCODE_PROVIDERS.flatMap((p) => (p.vars ?? []).map((v) => v.name)),
-    'GOOGLE_CLOUD_PROJECT',
-    'GOOGLE_VERTEX_LOCATION',
-    'GOOGLE_APPLICATION_CREDENTIALS',
-  ].map((name) => [name, '']),
-)
-
 /** Where OpenCode's model calls go, and the key (if any) the sandbox gets for them. */
 type Route = {
   readonly id: string
   readonly name: string
+  /** OpenCode's variables besides the key, which the gate sets ({@link OPENCODE_GATE_ENV}). */
   readonly env: Record<string, string>
   readonly credentialEnv: string[]
   readonly credentialBrokering?: Parameters<typeof createACP>[0]['credentialBrokering']
