@@ -2,8 +2,17 @@ import type { HarnessV1, HarnessV1AuthenticationEnvironment } from '@ai-sdk/harn
 import {
   createCredentialRequestTransformation,
   isHarnessAuthenticationEnvironment,
+  resolveSandboxHomeDir,
+  shellQuote,
 } from '@ai-sdk/harness/utils'
 import { createACP } from '@ai-sdk/harness-acp'
+import type { Experimental_SandboxSession } from '@ai-sdk/provider-utils'
+import {
+  GOOSE_LAUNCHER,
+  GOOSE_LAUNCHER_ENV,
+  GOOSE_LAUNCHER_EXECUTABLE,
+  GOOSE_LAUNCHER_PATH,
+} from './goose-launcher.ts'
 import { GooseStreamTranslator } from './goose-stream.ts'
 import { GOOSE_BUILTIN_TOOLS, type GooseBuiltinTools } from './goose-tools.ts'
 
@@ -167,11 +176,17 @@ export function gooseEnv(
     // Set, if empty, at every effort: the bootstrap is keyed on these names, so the image's
     // bootstrap serves every effort. Goose reads an empty value as no effort.
     GOOSE_THINKING_EFFORT: settings.effort ?? '',
-    // Set, if empty, on every provider, for the same reason: the image's bootstrap serves Vertex
-    // AI too.
-    GCP_PROJECT_ID: vertex?.project ?? '',
-    GCP_LOCATION: vertex?.location ?? '',
-    GOOGLE_APPLICATION_CREDENTIALS: vertex?.credentialsFile ?? '',
+    // The launcher sets these in Goose's environment, so the image's bootstrap serves Vertex AI
+    // too, and no other provider replaces the eval's own values with empty ones.
+    [GOOSE_LAUNCHER_ENV]: JSON.stringify(
+      vertex
+        ? {
+            GCP_PROJECT_ID: vertex.project,
+            GCP_LOCATION: vertex.location,
+            GOOGLE_APPLICATION_CREDENTIALS: vertex.credentialsFile,
+          }
+        : {},
+    ),
   }
 }
 
@@ -201,7 +216,8 @@ export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuil
     harnessId: GOOSE_HARNESS_ID,
     builtinTools: GOOSE_BUILTIN_TOOLS,
     source: { type: 'install-command', command: GOOSE_INSTALL_COMMAND },
-    executable: 'goose',
+    // The launcher, which runs `goose acp` (see GOOSE_LAUNCHER).
+    executable: GOOSE_LAUNCHER_EXECUTABLE,
     args: ['acp'],
     auth: settings.auth,
     env: gooseEnv(settings),
@@ -242,9 +258,25 @@ export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuil
           `The sandbox can't broker ${credential} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
         )
       }
-      return translated(await acp.doStart(options), mcpServers)
+      const session = await acp.doStart(options)
+      // After the bootstrap, which installs Goose's bin directory; the first turn runs it.
+      await writeLauncher(options.sandboxSession, options.abortSignal)
+      return translated(session, mcpServers)
     },
   }
+}
+
+/** Writes the launcher where `harness-acp` runs its executable from, executable. */
+async function writeLauncher(sandbox: Experimental_SandboxSession, abortSignal?: AbortSignal) {
+  const home = await resolveSandboxHomeDir({ sandbox, ...(abortSignal ? { abortSignal } : {}) })
+  const path = `${home}/${GOOSE_LAUNCHER_PATH}`
+  await sandbox.run({
+    command: `mkdir -p ${shellQuote(path.slice(0, path.lastIndexOf('/')))}`,
+    abortSignal,
+  })
+  await sandbox.writeTextFile({ path, content: GOOSE_LAUNCHER, abortSignal })
+  const chmod = await sandbox.run({ command: `chmod 755 ${shellQuote(path)}`, abortSignal })
+  if (chmod.exitCode !== 0) throw new Error(`Goose's launcher isn't executable: ${path}`)
 }
 
 /** Goose's `config.yaml` (as JSON, which YAML reads) with each MCP server an enabled extension. */
