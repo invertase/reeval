@@ -53,7 +53,13 @@ import {
   openCodeTurnUsage,
 } from '@reeval/harness-opencode'
 import { PI_ENDPOINTS, PI_HOME_SKILLS_DIR, PI_WORKSPACE_SKILLS_DIR } from '@reeval/harness-pi'
-import { applyTransformations, hostAllowed, onEndpoint } from '@reeval/sandbox-docker'
+import {
+  applyTransformations,
+  BAKED_HARNESSES,
+  bakedAdapter,
+  hostAllowed,
+  onEndpoint,
+} from '@reeval/sandbox-docker'
 import { calledTool, fetched, searched } from '../src/assert.ts'
 import { malformedCredentials, missingCredentials, resolveConfig } from '../src/config.ts'
 import { plannedEgress } from '../src/egress.ts'
@@ -78,6 +84,7 @@ import {
   opencodeVars,
   type ServedModel,
 } from '../src/harness/agents.ts'
+import { withDefaultEffort } from '../src/harness/default-effort.ts'
 import { effortFromModelLabel, harnessEffort, servedEffortOf } from '../src/harness/effort.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
 import { normalizeStream, type StampedPart } from '../src/harness/transcript.ts'
@@ -2604,4 +2611,41 @@ describe('token usage and the served model, from any harness', () => {
     assert.equal(formatUsage(usage), null)
     assert.equal(served, undefined)
   })
+})
+
+describe("each harness's image serves its attempts' bootstrap", () => {
+  // An attempt that asks for another bootstrap than its image baked reinstalls the CLI at start,
+  // where a restricted egress policy refuses the download.
+  const ATTEMPTS: Record<(typeof BAKED_HARNESSES)[number], AgentHarnessDescriptor> = {
+    cursor: cursor({ model: 'composer-2.5' }),
+    'claude-code': claudeCode({ model: 'claude-sonnet-5-5' }),
+    antigravity: antigravity({ model: 'gemini-3.8-flash' }),
+    opencode: opencode({ model: 'google/gemini-3.8-flash' }),
+    goose: goose({ model: 'gemini-3.8-flash' }),
+    pi: pi({ model: 'gemini-3.8-flash' }),
+    codex: codex({ model: 'gpt-5.5' }),
+    fx: fx({ model: 'openai/gpt-5.5' }),
+    'grok-build': grokBuild({ model: 'grok-4.6' }),
+  }
+  const bootstrapOf = async (descriptor: AgentHarnessDescriptor) => {
+    const agent = agentFor(descriptor)
+    const adapter = await agent.adapter({
+      auth: agentAuth(agent, { [agent.credential]: 'k' }),
+      ...(agent.routeEnv ? { env: agent.routeEnv } : {}),
+      descriptor,
+      model: agent.modelId?.(descriptor.model) ?? descriptor.model,
+      plugins: [],
+    })
+    return (adapter as HarnessV1).getBootstrap?.({})
+  }
+
+  for (const harness of BAKED_HARNESSES) {
+    test(`${harness}, at no effort, the default effort and its own`, async () => {
+      const baked = await ((await bakedAdapter(harness)) as HarnessV1).getBootstrap?.({})
+      const unset = ATTEMPTS[harness]
+      for (const descriptor of [unset, withDefaultEffort(unset), { ...unset, effort: 'high' }]) {
+        assert.deepEqual(await bootstrapOf(descriptor), baked, harnessEffort(descriptor) ?? 'none')
+      }
+    })
+  }
 })

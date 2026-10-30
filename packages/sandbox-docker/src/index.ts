@@ -14,6 +14,7 @@ export {
 } from './build-failure.ts'
 export {
   type BuildOutput,
+  bakedAdapter,
   buildDockerfile,
   buildImage,
   buildInstallLayer,

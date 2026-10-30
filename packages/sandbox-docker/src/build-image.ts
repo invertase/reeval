@@ -141,6 +141,12 @@ const BOOTSTRAPS: Record<
   },
 }
 
+/**
+ * The adapter whose bootstrap `harness`'s image bakes. An attempt whose adapter asks for any other
+ * bootstrap reinstalls the CLI at start, which a restricted egress policy can refuse.
+ */
+export const bakedAdapter = (harness: BakedHarness) => BOOTSTRAPS[harness].adapter()
+
 /** Keeps the image's `PATH` in login shells, which Debian's `/etc/profile` resets. */
 const profilePathScript = () =>
   readFileSync(join(DOCKER_CONTEXT, 'reeval-path.sh')).toString('base64')
