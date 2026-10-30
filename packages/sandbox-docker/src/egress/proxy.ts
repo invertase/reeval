@@ -177,7 +177,7 @@ export type ContactedHost = {
 /** A host the gateway refused, and why. */
 export type BlockedHost = { host: string; port: number; connections: number; reason: string }
 /**
- * What went through the gateway, sorted by host and port. `blocked` is what the policy refused;
+ * What went through the gateway, sorted by host and port. `blocked` is what the gateway refused;
  * `unresolved`, hosts the policy let through whose names didn't resolve, so the gateway had
  * nowhere to connect.
  */

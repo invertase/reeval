@@ -1137,7 +1137,7 @@
           ]
         },
         "blocked": {
-          "description": "Hosts the policy refused.",
+          "description": "Hosts the gateway refused, and why. A name that didn't resolve is in `unresolved` instead.",
           "type": "array",
           "items": {
             "type": "object",

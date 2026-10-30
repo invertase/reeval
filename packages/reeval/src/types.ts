@@ -2485,7 +2485,7 @@ export type EgressRecord = {
     sent: number
     received: number
   }>
-  /** Hosts the policy refused. */
+  /** Hosts the gateway refused, and why. A name that didn't resolve is in `unresolved` instead. */
   blocked: Array<{ host: string; port: number; connections: number; reason: string }>
   expectedBlocked: Array<{ host: string; port: number; connections: number; reason: string }>
   /**

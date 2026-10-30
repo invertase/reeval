@@ -999,7 +999,7 @@ An attempt's network traffic. `allowed` is every host a restricted policy let th
 <Property name="contacted" type="Array<{host: string; port: number; connections: number; sent: number; received: number}>"></Property>
 
 <Property name="blocked" type="Array<{host: string; port: number; connections: number; reason: string}>">
-  Hosts the policy refused.
+  Hosts the gateway refused, and why. A name that didn't resolve is in `unresolved` instead.
 </Property>
 
 <Property name="expectedBlocked" type="Array<{host: string; port: number; connections: number; reason: string}>"></Property>
