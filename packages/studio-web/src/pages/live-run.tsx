@@ -4,6 +4,7 @@ import { ArrowLeft, CircleStop, FileText, Radio } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { formatDuration, isFinished, type LiveAttempt, type LiveRun } from 'reeval/view'
 import {
+  canceledUnrecorded,
   elapsed,
   LiveBadge,
   LiveProgressBar,
@@ -110,7 +111,7 @@ export function LiveRunPage() {
         </Button>
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h2 className="text-2xl font-semibold tracking-tight">
-            {stopped ? 'Run stopped' : 'Run in progress'}
+            {canceledUnrecorded(run) ? 'Run canceled' : stopped ? 'Run stopped' : 'Run in progress'}
           </h2>
           <LiveBadge run={run} />
         </div>
@@ -125,10 +126,20 @@ export function LiveRunPage() {
         <div className="flex gap-3 rounded-xl border border-infra/30 bg-infra/5 px-4 py-3 text-sm">
           <CircleStop className="mt-0.5 size-4 shrink-0 text-infra" />
           <p>
-            This run stopped without writing a record: its{' '}
-            <span className="font-mono">reeval run</span> exited or stopped responding. Continue it
-            with <span className="font-mono">reeval run --resume {run.runId}</span>. The attempts
-            below are what finished before it did.
+            {canceledUnrecorded(run) ? (
+              <>
+                This run was canceled, and its <span className="font-mono">reeval run</span> quit
+                before writing a record (a second Ctrl-C, or the process was killed).
+              </>
+            ) : (
+              <>
+                This run stopped without writing a record: its{' '}
+                <span className="font-mono">reeval run</span> exited or stopped responding.
+              </>
+            )}{' '}
+            Continue it with <span className="font-mono">reeval run --resume {run.runId}</span>, or
+            delete <span className="font-mono">.reeval/staging/{run.runId}</span> to discard it. The
+            attempts below are what finished before it stopped.
           </p>
         </div>
       ) : null}

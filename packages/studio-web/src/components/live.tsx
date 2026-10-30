@@ -24,9 +24,14 @@ export function useNow(ms = 1000) {
   return now
 }
 
+/** Whether the run was canceled and its `reeval run` quit before it wrote the record. */
+export const canceledUnrecorded = (run: LiveRun) =>
+  run.state === 'stopped' && run.phase === 'cancelling'
+
 /** `Running 3/6`: what the run is doing, and how many attempts have finished. */
 export function LiveBadge({ run, className }: { run: LiveRun; className?: string }) {
-  const { label, tone } = STATE[run.state]
+  const { tone } = STATE[run.state]
+  const label = canceledUnrecorded(run) ? 'Canceled, no record' : STATE[run.state].label
   return (
     <Badge variant="outline" className={cn('gap-1.5 tabular', tone, className)}>
       {run.state === 'stopped' ? (
@@ -133,8 +138,8 @@ export function LiveRuns({ runs }: { runs: LiveRun[] }) {
               {run.counts.passed} passed · {run.counts.failed + run.counts.errored} failed
               {run.state !== 'stopped' && run.counts.running
                 ? ` · ${run.counts.running} running`
-                : ''}{' '}
-              · {elapsed(run, now)}
+                : ''}
+              {run.state === 'stopped' ? '' : ` · ${elapsed(run, now)}`}
             </span>
           </div>
           <LiveProgressBar run={run} className="mt-2.5" />

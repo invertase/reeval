@@ -104,6 +104,28 @@ npx reeval run --ui plain
 
 Each flag has a variable, such as `REEVAL_UI`, and the flag overrides it. For the variables, including `REEVAL_HEARTBEAT`, see [Environment variables](/reference/environment-variables).
 
+## Cancel a run
+
+Press Ctrl-C once to cancel a run and keep its record:
+
+```text
+Canceling: stopping agents and destroying sandboxes, then writing the run's record. Ctrl-C again quits at once, without a record
+```
+
+The record gets status `interrupted`.
+
+<Warning>
+`pnpm exec` and `pnpm reeval` pass Ctrl-C on as a SIGTERM, which counts as the same press, and give the shell the terminal back. A second Ctrl-C then reaches the shell: quit with the `kill <pid>` the run prints.
+</Warning>
+
+A second press quits without a record. The finished attempts stay in `.reeval/staging`, and `reeval history` lists the run as canceled:
+
+```text
+reeval: quit without writing run 20261030T131051Z_…'s record; its workers still destroy their sandboxes.
+  reeval run --resume 20261030T131051Z_… keeps the attempts that finished, runs the rest and writes the record.
+  Deleting .reeval/staging/20261030T131051Z_… discards the run.
+```
+
 ## Resume a run
 
 To continue a stopped, interrupted, or budget-stopped run, pass `--resume`:

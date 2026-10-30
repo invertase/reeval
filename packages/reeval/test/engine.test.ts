@@ -2141,6 +2141,133 @@ evaluate('fine', async () => {})
     })
   }
 
+  test('a Ctrl-C a launcher passes on as SIGTERM, as pnpm does, is one press: the run is recorded', {
+    skip: noSignals,
+  }, async () => {
+    const p = await project('sigint-forwarded', {
+      'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
+      'evals/agent.eval.ts': agentEval(''),
+    })
+    let cli = 0
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'], {
+      onOutput: (stdout, pid) => {
+        if (!/\] {2}\+\d+:\d\d turn 1 started$/m.test(stdout)) return false
+        cli = pid
+        process.kill(-pid, 'SIGINT')
+        process.kill(pid, 'SIGTERM')
+        return true
+      },
+    })
+    assert.equal(r.code, 130, r.stdout + r.stderr)
+    assert.equal(readRun(p.dir).run.status, 'interrupted')
+    assert.doesNotMatch(r.stderr, /quit without writing/)
+    assert.match(r.stdout, /Ctrl-C again quits at once, without a record/)
+    assert.match(
+      r.stdout,
+      new RegExp(`^A launcher passed the Ctrl-C on .* kill ${cli} quits it`, 'm'),
+    )
+  })
+
+  test('a second Ctrl-C right after the first still quits, after a SIGTERM a launcher passed on', {
+    skip: noSignals,
+  }, async () => {
+    const p = await project('sigint-hammered', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/agent.eval.ts': `import { setTimeout as sleep } from 'node:timers/promises'
+import { evaluate } from 'reeval'
+evaluate('slow', async (c) => {
+  await c.send('write hello.txt')
+  console.log('parked')
+  await sleep(8_000)
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'], {
+      onOutput: (stdout, pid) => {
+        if (!/parked/.test(stdout)) return false
+        process.kill(-pid, 'SIGINT')
+        process.kill(pid, 'SIGTERM')
+        setTimeout(() => process.kill(-pid, 'SIGINT'), 200)
+        return true
+      },
+    })
+    assert.equal(r.code, 130, r.stdout + r.stderr)
+    const runId = /quit without writing run (\S+)'s record/.exec(r.stderr)?.[1]
+    assert.ok(runId, r.stderr)
+    assert.equal(existsSync(join(p.dir, '.reeval/runs', `${runId}.json`)), false)
+  })
+
+  test('a second Ctrl-C quits without a record, says how to resume, and leaves a run that resumes', {
+    skip: noSignals,
+  }, async () => {
+    // `slow` ignores the cancel for a while, so the second press lands while the run is canceling.
+    const p = await project('sigint-twice', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/agent.eval.ts': `import { existsSync, writeFileSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
+import { evaluate } from 'reeval'
+evaluate('fast', async (c) => { await c.send('write hello.txt') })
+evaluate('slow', async (c) => {
+  await c.send('write hello.txt')
+  if (!existsSync(new URL('../park', import.meta.url))) return
+  writeFileSync(new URL('../worker.pid', import.meta.url), String(process.pid))
+  console.log('parked')
+  await sleep(8_000)
+})
+`,
+      park: '',
+    })
+    const r = await runCli(p.dir, ['run', '--concurrency', '1', '--output-logs', 'full'], {
+      onOutput: (stdout, pid) => {
+        if (!/parked/.test(stdout)) return false
+        process.kill(-pid, 'SIGINT')
+        setTimeout(() => process.kill(-pid, 'SIGINT'), 1_500)
+        return true
+      },
+    })
+    assert.equal(r.code, 130, r.stdout + r.stderr)
+    const runId = /quit without writing run (\S+)'s record/.exec(r.stderr)?.[1]
+    assert.ok(runId, r.stderr)
+    assert.match(r.stderr, new RegExp(`^ {2}reeval run --resume ${runId} keeps the attempts`, 'm'))
+    assert.equal(existsSync(join(p.dir, '.reeval/runs', `${runId}.json`)), false)
+    const logged = readFileSync(join(p.dir, '.reeval/cli.jsonl'), 'utf8').trim().split('\n')
+    assert.equal(JSON.parse(logged.at(-1) as string).exitCode, 130, 'the command is still logged')
+    const worker = Number(readFileSync(join(p.dir, 'worker.pid'), 'utf8'))
+    const alive = () => {
+      try {
+        process.kill(worker, 0)
+        return true
+      } catch {
+        return false
+      }
+    }
+    const deadline = Date.now() + 20_000
+    while (alive() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100))
+    assert.equal(alive(), false, 'the worker exited')
+    const history = await runCli(p.dir, ['history'])
+    assert.match(history.stdout, /^1 run stopped without writing a record:$/m)
+    assert.match(
+      history.stdout,
+      new RegExp(`^ {2}${runId} {2}canceled, 1 of 2 attempts finished$`, 'm'),
+    )
+    const json = JSON.parse((await runCli(p.dir, ['history', '--json'])).stdout)
+    assert.deepEqual(
+      json.stopped.map((s: { runId: string; phase: string }) => [s.runId, s.phase]),
+      [[runId, 'cancelling']],
+    )
+    rmSync(join(p.dir, 'park'))
+    const resumed = await runCli(p.dir, ['run', '--resume'])
+    assert.equal(resumed.code, 0, resumed.stdout + resumed.stderr)
+    const { run } = readRun(p.dir)
+    assert.equal(run.runId, runId)
+    assert.equal(run.status, 'complete')
+    assert.deepEqual(run.evals.map((e) => [e.name, e.attempts[0]?.outcome]).sort(), [
+      ['fast', 'pass'],
+      ['slow', 'pass'],
+    ])
+    assert.doesNotMatch((await runCli(p.dir, ['history'])).stdout, /stopped without/)
+  })
+
   test('an unhandled rejection in the main process mid-run prints it, redacted, and exits 3', async () => {
     const secret = 'sk-live-0123456789abcdefghij'
     const p = await project('unhandled', {
