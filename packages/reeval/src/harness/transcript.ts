@@ -6,8 +6,11 @@ import type { FileEditEvent, TranscriptEvent } from '../types.ts'
 export type StampedPart = { ms: number; part: { type: string; [key: string]: unknown } }
 
 type Pending = { ms: number; part: StampedPart['part'] }
-/** `at` places a call recovered after the turn where it happened, not where it was reported. */
-type Timing = { start?: number; end?: number; at?: number }
+/**
+ * `at` places a call recovered after the turn where it happened, not where it was reported;
+ * `recovered` times it by the backend's clock alone, since its result arrives after the turn.
+ */
+type Timing = { start?: number; end?: number; at?: number; recovered?: boolean }
 
 /** Shell-like tools at or above this duration get `stalled: true` on their transcript event. */
 export const STALL_TOOL_MS = 120_000
@@ -27,6 +30,7 @@ const str = (value: unknown) => (typeof value === 'string' ? value : '')
 function toolDurationMs(start: number, call: Pending, endMs: number, t?: Timing): number {
   const wall = endMs - start
   if (t?.end === undefined) return endMs - call.ms
+  if (t.recovered) return t.end - start
   return Math.max(t.end - start, wall)
 }
 
@@ -304,8 +308,10 @@ export function normalizeStream(parts: StampedPart[], startedAt: number): Transc
       typeof event.completed_at_ms === 'number' ? event.completed_at_ms - startedAt : undefined
     if (started !== undefined) t.at = t.start = started
     else if (event.status === 'running' && t.start === undefined) t.start = ms
-    if (ended !== undefined) t.end = ended
-    else if (event.status === 'completed' || event.status === 'error') t.end = ms
+    if (ended !== undefined) {
+      t.end = ended
+      if (raw.recovered !== undefined && t.start !== undefined) t.recovered = true
+    } else if (event.status === 'completed' || event.status === 'error') t.end = ms
     timing.set(id, t)
   }
 
@@ -440,7 +446,8 @@ export function normalizeStream(parts: StampedPart[], startedAt: number): Transc
     }
   }
   const streamEndMs = parts.at(-1)?.ms
-  // Calls still open when the turn ended (aborted, or the harness never reported a result).
+  // Calls still open when the turn ended (aborted, or the harness never reported a result):
+  // `ok: null`, not known to have failed.
   for (const [id, call] of pending) {
     const name = toolName(call.part)
     const input = record(call.part.input)
@@ -462,7 +469,7 @@ export function normalizeStream(parts: StampedPart[], startedAt: number): Transc
           toolCallId: id,
           query: str(input.searchTerm) || str(input.query),
           references: null,
-          ok: false,
+          ok: null,
         },
       })
       continue
@@ -475,7 +482,7 @@ export function normalizeStream(parts: StampedPart[], startedAt: number): Transc
           type: 'web-fetch',
           toolCallId: id,
           url: str(input.url),
-          ok: false,
+          ok: null,
         },
       })
       continue
@@ -489,7 +496,7 @@ export function normalizeStream(parts: StampedPart[], startedAt: number): Transc
         tool: name,
         input: toolInput(call.part),
         output: null,
-        ok: false,
+        ok: null,
       },
     })
   }

@@ -1,0 +1,8 @@
+{"ts":"2026-10-30T13:12:06.873Z","atMs":0,"turn":0,"type":"prompt","text":"Uppercase beta in notes.txt"}
+{"turn":0,"ts":"2026-10-30T13:12:06.874Z","atMs":1,"type":"text","text":"Working on: Uppercase beta in notes.txt","durationMs":0}
+{"turn":0,"ts":"2026-10-30T13:12:06.874Z","atMs":1,"type":"tool","toolCallId":"call_1","tool":"read","input":{"path":"notes.txt"},"output":{"content":"beta\n"},"ok":true,"durationMs":0}
+{"turn":0,"ts":"2026-10-30T13:12:06.874Z","atMs":1,"type":"tool","toolCallId":"call_2","tool":"read","input":{"path":"missing.txt"},"output":null,"ok":null,"durationMs":0}
+{"turn":0,"ts":"2026-10-30T13:12:06.874Z","atMs":1,"type":"tool","toolCallId":"call_3","tool":"bash","input":{"command":"false"},"output":"exit 1","ok":false,"durationMs":0}
+{"turn":0,"ts":"2026-10-30T13:12:06.874Z","atMs":1,"type":"file-edit","toolCallId":"call_4","path":"notes.txt","kind":"create","added":1,"removed":0,"durationMs":2}
+{"turn":0,"ts":"2026-10-30T13:12:06.876Z","atMs":3,"type":"text","text":"Done.","durationMs":0}
+{"ts":"2026-10-30T13:12:06.876Z","atMs":3,"turn":0,"type":"turn-end","status":"completed","durationMs":3}

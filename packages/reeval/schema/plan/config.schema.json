@@ -827,14 +827,14 @@
           "type": "string"
         },
         "tools": {
-          "description": "Tool calls the fake agent reports on every turn, before writing files.",
+          "description": "Tool calls the fake agent reports on every turn, before writing files. `ok` defaults to true; null reports a call whose result never came.",
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
               "input": {},
               "ok": {
-                "type": "boolean"
+                "type": ["boolean", "null"]
               },
               "output": {},
               "tool": {

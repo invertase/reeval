@@ -14,6 +14,7 @@ import {
   projectToolCall,
   projectToolResult,
   resolveCursorSdkCredentials,
+  storedResults,
   storedShapeProblems,
   storedWebCalls,
   VERSION,
@@ -126,6 +127,113 @@ describe('bootstrap', () => {
       assert.ok(Number(c.at.completedAtMs) > Number(c.at.startedAtMs), 'the backend times it')
       assert.ok(c.call.result?.success, 'with its result')
     }
+  })
+
+  test('the runner looks up the calls the stream left running in the stored conversation', () => {
+    assert.match(CURSOR_SDK_RUNNER, /^function storedResults\(/m)
+    assert.match(CURSOR_SDK_RUNNER, /storedResults\(messages, unfinished\)/)
+  })
+})
+
+describe('storedResults: the results of calls the stream never completed', () => {
+  // A live SDK 1.0.40 turn (read, glob, two edits, delete), its paths moved to the sandbox's.
+  const live = () => JSON.parse(fixture('stored-tool-results.json'))
+  const ids = {
+    read: 'tool_54fbe467-b16f-434a-8eff-6421203147d',
+    glob: 'tool_81dfede3-fe89-44b8-b9d4-3554a96d637',
+    edit: 'tool_932f60e0-6025-4f01-9a55-84d824abedc',
+    delete: 'tool_13d1bd82-2661-4419-8386-231fbc0dccc',
+  }
+
+  test('finds any tool by its call id, with the backend times and the result the stream sends', () => {
+    const found = storedResults(live(), new Set([ids.read, ids.edit, ids.delete]))
+    assert.deepEqual(found.map((c) => c.id).sort(), [ids.read, ids.edit, ids.delete].sort())
+    const byId = new Map(found.map((c) => [c.id, c]))
+    const read = byId.get(ids.read)
+    assert.ok(read?.result.status === 'success')
+    assert.equal(read.result.value.content, 'alpha\nbeta\ngamma\n')
+    assert.ok(Number(read.at.completedAtMs) >= Number(read.at.startedAtMs))
+    // What the stream sends for an edit, and none of the file contents the store adds.
+    const edit = byId.get(ids.edit)
+    assert.ok(edit?.result.status === 'success')
+    assert.equal(edit.result.value.linesAdded, 1)
+    assert.match(
+      String(edit.result.value.diffString),
+      /^--- \/dev\/null\n\+\+\+ b\/\/reeval\/workspace\/c\.txt/,
+    )
+    assert.equal(edit.result.value.beforeFullFileContent, undefined)
+    assert.equal(edit.result.value.afterFullFileContent, undefined)
+    const del = byId.get(ids.delete)
+    assert.ok(del?.result.status === 'success')
+    assert.equal(del.result.value.prevContent, undefined)
+  })
+
+  test('only the ids asked for, and a call with no result yet is not found', () => {
+    assert.deepEqual(
+      storedResults(live(), new Set([ids.glob])).map((c) => c.id),
+      [ids.glob],
+    )
+    const pending = JSON.parse(JSON.stringify(live()), (key, value) =>
+      key === 'readToolCall' ? { args: value.args } : value,
+    )
+    assert.deepEqual(storedResults(pending, new Set([ids.read])), [])
+    assert.deepEqual(storedResults(live(), new Set(['tool_unknown'])), [])
+  })
+
+  const stored = (tool: string, result: unknown) =>
+    storedResults({ toolCall: { [tool]: { args: {}, result }, toolCallId: 't1' } }, new Set(['t1']))
+      .map((c) => c.result)
+      .at(0)
+
+  test('a failure is an error with its message, whichever oneof case the store uses', () => {
+    assert.deepEqual(stored('readToolCall', { error: { error: 'ENOENT', path: '/a' } }), {
+      status: 'error',
+      error: { message: 'ENOENT' },
+    })
+    assert.deepEqual(stored('shellToolCall', { isBackground: false, rejected: { reason: 'no' } }), {
+      status: 'error',
+      error: { message: 'no' },
+    })
+    assert.deepEqual(stored('editToolCall', { fileNotFound: { path: '/a' } }), {
+      status: 'error',
+      error: { message: 'fileNotFound' },
+    })
+    assert.deepEqual(
+      projectToolResult('read', 'error', { status: 'error', error: { message: 'ENOENT' } }),
+      {
+        output: 'ENOENT',
+        error: 'ENOENT',
+      },
+    )
+  })
+
+  test("a command that exited non-zero is a success with its exit code, as the SDK's stream reports it", () => {
+    const failure = {
+      command: 'false',
+      exitCode: 56,
+      signal: '',
+      stdout: '',
+      stderr: 'curl: (56) CONNECT tunnel failed, response 403\n',
+      executionTime: 597,
+      interleavedOutput: 'curl: (56) CONNECT tunnel failed, response 403\n',
+    }
+    const recovered = stored('shellToolCall', { failure })
+    assert.ok(recovered?.status === 'success')
+    assert.equal(recovered.value.exitCode, 56)
+    assert.equal(recovered.value.interleavedOutput, undefined)
+    // The real egress capture's streamed result for this command.
+    const streamed = {
+      status: 'success',
+      value: { exitCode: 56, signal: '', stdout: '', stderr: failure.stderr, executionTime: 597 },
+    }
+    assert.deepEqual(
+      projectToolResult('bash', 'completed', recovered),
+      projectToolResult('bash', 'completed', streamed),
+    )
+    assert.deepEqual(stored('shellToolCall', { timeout: { timeoutMs: 1000 } }), {
+      status: 'error',
+      error: { message: 'timeout' },
+    })
   })
 })
 

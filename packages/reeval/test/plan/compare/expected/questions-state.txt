@@ -24,4 +24,4 @@ evals/questions-state.eval.ts › each attempt without the transcript  a/-/docke
                                                                      question: What did the agent say it did? · shows task, output, diff · each attempt · 2 attempts · no language model
 excluded: —
 image docker · cursor · 5 evals
-  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)

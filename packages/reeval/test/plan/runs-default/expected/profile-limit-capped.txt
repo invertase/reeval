@@ -4,4 +4,4 @@ evals/r.eval.ts › runs from the group › compare  a/base/docker     control  
                                                  a/skilled/docker  variant skilled  gated    ×1
 excluded: —
 image docker · cursor · 1 evals
-  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)

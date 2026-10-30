@@ -4,4 +4,4 @@ evals/tags.eval.ts › case 1 [slow]             fake/-/docker  control  gated  
 evals/tags.eval.ts › case 2 [slow]             fake/-/docker  control  gated  ×1  family case $n case 2/2
 excluded: —
 image docker · cursor · 3 evals
-  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)

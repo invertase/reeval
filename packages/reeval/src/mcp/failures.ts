@@ -52,7 +52,7 @@ function compactLine(line: TranscriptLine, n: number): Record<string, unknown> |
         turn: line.turn,
         tool: 'web-search',
         target: line.query,
-        ok: line.ok ?? true,
+        ok: line.ok === undefined ? true : line.ok,
       }
     case 'web-fetch':
       return { line: n, turn: line.turn, tool: 'web-fetch', target: line.url, ok: line.ok }

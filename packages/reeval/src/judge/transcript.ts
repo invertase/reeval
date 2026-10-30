@@ -42,6 +42,8 @@ export function transcriptForJudge(events: readonly TranscriptEvent[], mode: Mod
     return at < kept ? `${s.slice(0, at).trimEnd()}…` : c
   }
   const took = (ms: number | null) => (ms === null ? '' : ` · ${formatDuration(ms)}`)
+  const result = (ok: boolean | null | undefined) =>
+    ok === null ? 'unfinished' : ok === false ? 'failed' : 'ok'
   const out: string[] = []
   for (const e of events) {
     switch (e.type) {
@@ -58,15 +60,13 @@ export function transcriptForJudge(events: readonly TranscriptEvent[], mode: Mod
         break
       }
       case 'web-search':
-        out.push(
-          `search ${JSON.stringify(e.query)} → ${e.ok === false ? 'failed' : 'ok'}${took(e.durationMs)}`,
-        )
+        out.push(`search ${JSON.stringify(e.query)} → ${result(e.ok)}${took(e.durationMs)}`)
         break
       case 'web-fetch':
-        out.push(`fetch ${e.url} → ${e.ok ? 'ok' : 'failed'}${took(e.durationMs)}`)
+        out.push(`fetch ${e.url} → ${result(e.ok)}${took(e.durationMs)}`)
         break
       case 'tool': {
-        const head = `tool ${e.tool}: ${cut(toolInput(e.input))} → ${e.ok ? 'ok' : 'failed'}${took(e.durationMs)}`
+        const head = `tool ${e.tool}: ${cut(toolInput(e.input))} → ${result(e.ok)}${took(e.durationMs)}`
         const output = e.output === undefined || e.output === null ? '' : cut(text(e.output)).trim()
         out.push(output ? `${head}\n${indent(output)}` : head)
         break

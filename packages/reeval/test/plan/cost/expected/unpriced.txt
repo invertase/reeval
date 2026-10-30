@@ -7,7 +7,7 @@ evals/cost.eval.ts › fixes the bug  cursor:my-model/-/docker           control
                                     fake/-/docker                      control  gated  ×1
 excluded: —
 image docker · cursor · 2 evals
-  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)
 cost  $0.02–0.17 priced (gpt-5.6-luna-high only) at prices.json over models.dev list prices; my-model: 0.6–4.1M tokens, typesafe-ai/jev: up to 372k tokens, no list price · no history, rough
 prices prices.json over models.dev · unpriced my-model 606000–4040000, typesafe-ai/jev 0–372000 · past 0 runs, 0 attempts
   evals/cost.eval.ts › greets         cursor:my-model/-/docker           my-model           judge typesafe-ai/jev  typical  ×1  agent 303000–2020000 tokens $—             judge 0–62000 tokens $—

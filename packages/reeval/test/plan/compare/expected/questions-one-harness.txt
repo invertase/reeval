@@ -11,4 +11,4 @@ evals/questions-attempts.eval.ts › beside a compare                    a/base/
 evals/questions-attempts.eval.ts › across harnesses without a compare  a/-/docker        control          gated               ×1  harnesses 2 → 1 (profile one) · 1 pairwise question off (profile one)
 excluded: —
 image docker · cursor · 4 evals
-  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)

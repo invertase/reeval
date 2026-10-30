@@ -1,0 +1,302 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261030T131206Z_nogit_cursor-agent_qb9s",
+  "status": "complete",
+  "startedAt": "2026-10-30T13:12:06.188Z",
+  "endedAt": "2026-10-30T13:12:06.921Z",
+  "durationMs": 733,
+  "author": "cursor-agent",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.17.0",
+    "node": "22.23.4",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.4"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.12",
+      "@reeval/harness-opencode": "0.2.11",
+      "@reeval/harness-goose": "0.1.7",
+      "@reeval/harness-pi": "0.2.8",
+      "@reeval/harness-cursor-sdk": "0.1.6",
+      "@ai-sdk/harness-claude-code": "1.0.160-patch.b17cde50",
+      "@reeval/harness-codex": "0.1.9",
+      "@reeval/harness-fx": "0.1.3",
+      "@reeval/harness-grok-build": "0.1.6",
+      "ai": "7.0.145",
+      "@ai-sdk/harness": "1.0.156",
+      "@ai-sdk/anthropic": "4.0.83",
+      "@ai-sdk/google": "4.0.100",
+      "@ai-sdk/openai": "4.0.97",
+      "@ai-sdk/typesafe-ai": "3.0.22"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "b7a490837586"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "fake",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "proxy"
+    }
+  ],
+  "profile": null,
+  "plan": {
+    "evals": 1,
+    "cells": 1,
+    "attempts": 1,
+    "estimateMs": 1000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "fake",
+    "environment": "fake",
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "eb28e4e8807dfde216bf87fc763847ede51555f7c2720ec0c5500a4f880f681d"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "attempts": 1,
+    "pass": 1,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/unfinished.eval.ts › a read the harness never finished",
+      "key": "evals/unfinished.eval.ts › a read the harness never finished",
+      "slug": "evals-unfinished-eval-ts-a-read-the-harness-never-finished-c64c66",
+      "file": "evals/unfinished.eval.ts",
+      "group": [],
+      "name": "a read the harness never finished",
+      "tags": [],
+      "fingerprint": "407ed9b0d85ebd51e7aadfccb66e054bf643458d37ad4321b16896bb41b08c52",
+      "sources": [
+        {
+          "path": "evals/unfinished.eval.ts",
+          "sha256": "6a2ee7de7639a30655e756db5958383bc63b58783e79fc06b100db1799cf3e00"
+        }
+      ],
+      "source": {
+        "body": "fd282460b7a41b043859c88dc1ff048c2bc9cb5fbcb56a76e1abcd9622ae1c36",
+        "options": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/fake/fake",
+          "harness": "fake",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "4598ce247df1a826500a58ee0b4320630b9a7d20560e487f14f9c30ac57654ed",
+          "fingerprintParts": {
+            "sources": "06bfba85c51b9941224a7ecb541606f57e14cc3f003371a59d1ca368feece85e",
+            "harness": "084dc0b68ca6d47bf1b43fb9e8d866bb91e85963592ad1a2ec93ef7e605285f9",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "49b5b8724ed5a100d1e4b70435aeed9bc39efda6dc90098a34f6c20aa6b71aa6",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toBe BETA\n",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/unfinished.eval.ts › a read the harness never finished # fake/fake/fake#1",
+          "id": "fake/fake/fake#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-10-30T13:12:06.844Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 74,
+          "turns": [
+            {
+              "prompt": "Uppercase beta in notes.txt",
+              "status": "completed",
+              "startedAt": "2026-10-30T13:12:06.873Z",
+              "durationMs": 3,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 28,
+            "agentMs": 3,
+            "diffMs": 9,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 3,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 2
+          },
+          "judgements": [],
+          "snapshots": [
+            {
+              "name": "final",
+              "form": "dir",
+              "path": "evals-unfinished-eval-ts-a-read-the-harness-never-finished-c64c66/fake-fake-fake-dc13e2/1/snapshots/final",
+              "bytes": 5,
+              "files": 1,
+              "excluded": [],
+              "masked": [],
+              "dropped": [],
+              "skipped": null
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toBe BETA\n",
+              "labelled": false,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": true,
+              "at": "evals/unfinished.eval.ts:5"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "notes.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-unfinished-eval-ts-a-read-the-harness-never-finished-c64c66/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "0679c3b79cf6e61d369977188cee9af4592e67929e9f455eee0bf5f762503e57",
+              "bytes": 1134
+            },
+            "diff": {
+              "path": "evals-unfinished-eval-ts-a-read-the-harness-never-finished-c64c66/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "ddc47d4e3578a733d04327e80d05c7065459b3fd06a372f7ecbc4b482efaa299",
+              "bytes": 129
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -24,7 +24,9 @@ export type FileEditEvent = {
 /**
  * Normalized agent events. Each tool call is one event, merged with its result; `durationMs`
  * is wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null
- * when the harness never reported the end. Long shell or edit calls set `stalled: true`.
+ * when the harness never reported the end. Long shell or edit calls set `stalled: true`. A
+ * call the harness never reported a result for (the turn ended or was cut short first) has
+ * `ok: null`: it isn't known to have failed, and no failure count includes it.
  */
 export type TranscriptEvent = EventTime &
   (
@@ -40,8 +42,11 @@ export type TranscriptEvent = EventTime &
         query: string
         /** How many sources the harness says it used; Cursor sends no URLs or titles. */
         references: number | null
-        /** Whether the search succeeded. Absent means it did. */
-        ok?: boolean
+        /**
+         * Whether the search succeeded. Absent means it did; null means the harness never
+         * reported its result.
+         */
+        ok?: boolean | null
         durationMs: number | null
         /** True when a shell-like tool or edit ran at least two minutes. */
         stalled?: boolean
@@ -50,7 +55,8 @@ export type TranscriptEvent = EventTime &
         type: 'web-fetch'
         toolCallId: string
         url: string
-        ok: boolean
+        /** Whether the fetch succeeded; null when the harness never reported its result. */
+        ok: boolean | null
         durationMs: number | null
         /** True when a shell-like tool or edit ran at least two minutes. */
         stalled?: boolean
@@ -61,7 +67,8 @@ export type TranscriptEvent = EventTime &
         tool: string
         input: unknown
         output: unknown
-        ok: boolean
+        /** Whether the call succeeded; null when the harness never reported its result. */
+        ok: boolean | null
         durationMs: number | null
         /** True when a shell-like tool or edit ran at least two minutes. */
         stalled?: boolean
@@ -586,8 +593,11 @@ export type FakeHarnessDescriptor = {
    * turn reports (`fake-1[effort=medium]`). Fast is not this.
    */
   effort?: string
-  /** Tool calls the fake agent reports on every turn, before writing files. */
-  tools?: Array<{ tool: string; input: unknown; output: unknown; ok?: boolean }>
+  /**
+   * Tool calls the fake agent reports on every turn, before writing files. `ok` defaults to true;
+   * null reports a call whose result never came.
+   */
+  tools?: Array<{ tool: string; input: unknown; output: unknown; ok?: boolean | null }>
   /** Files and message used instead when the environment gives the agent a skill. */
   withSkill?: { files?: Record<string, string>; text?: string }
   /** Chance (0–1) that an attempt writes no files and says so, for flaky pass rates. */

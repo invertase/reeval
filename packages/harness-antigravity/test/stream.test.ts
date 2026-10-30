@@ -188,7 +188,7 @@ describe('stream translation', () => {
     assert.deepEqual(t.end({ exitCode: 0 }), [])
   })
 
-  test('a tool still running when the process ends gets an error result', () => {
+  test('a tool still running when the process ends gets no result: unfinished, not failed', () => {
     const running = [
       line({ event: 'init', conversation_id: 'c1', init: {} }),
       step({
@@ -198,21 +198,13 @@ describe('stream translation', () => {
         tool_info: { name: 'run_command', parameters: { CommandLine: 'sleep 600' } },
       }),
     ].join('\n')
-    for (const [end, message] of [
-      [{ exitCode: 137, aborted: true }, 'run_command aborted'],
-      [{ exitCode: 1 }, 'run_command interrupted'],
-    ] as const) {
+    for (const end of [{ exitCode: 137, aborted: true }, { exitCode: 1 }]) {
       const { parts } = translate(running, end)
-      const call = parts.find((p) => p.type === 'tool-call')
-      const result = parts.find((p) => p.type === 'tool-result')
-      assert.ok(call?.type === 'tool-call' && result?.type === 'tool-result')
-      assert.deepEqual(result, {
-        type: 'tool-result',
-        toolCallId: call.toolCallId,
-        toolName: 'bash',
-        result: message,
-        isError: true,
-      })
+      assert.ok(parts.some((p) => p.type === 'tool-call'))
+      assert.equal(
+        parts.find((p) => p.type === 'tool-result'),
+        undefined,
+      )
       assert.equal(parts.at(-1)?.type, 'finish')
     }
   })
