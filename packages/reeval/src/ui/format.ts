@@ -78,6 +78,8 @@ export function progressLine(c: Colors, p: Progress): string {
       return judgeLine(c, p)
     case 'cleanup':
       return c.dim('cleaning up')
+    case 'warning':
+      return c.yellow(`warning: ${p.text}`)
     case 'browser-download': {
       const total = p.bytes == null ? '?' : formatBytes(p.bytes)
       return `downloading ${p.name} ${p.version} ${formatBytes(p.received)} / ${total} → ${p.cache}`
@@ -129,6 +131,9 @@ export function phaseOf(p: Progress | undefined): string {
       return 'cleanup'
     case 'browser-download':
       return 'browser download'
+    // A warning comes between phases; the renderers keep the phase before it.
+    case 'warning':
+      return 'running'
   }
 }
 

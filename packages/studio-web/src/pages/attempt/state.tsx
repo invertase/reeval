@@ -86,7 +86,7 @@ function Egress({ egress }: { egress: NonNullable<AttemptRecord['egress']> }) {
         </div>
       ))}
       {egress.blocked.map((h) => (
-        <div key={`blocked ${h.host}:${h.port}`} className="text-fail">
+        <div key={`blocked ${h.host}:${h.port} ${h.reason}`} className="text-fail">
           blocked {h.host}:{h.port}{' '}
           <span className="text-muted-foreground">
             ×{h.connections} · {h.reason}

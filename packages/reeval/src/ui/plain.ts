@@ -168,6 +168,11 @@ export class PlainRenderer implements Renderer {
   }
 
   #add(a: Attempt, line: Line) {
+    // A warning prints as it happens, whatever `--output-logs` shows of the attempt's block.
+    if (line.kind === 'warning' && !this.#streaming) {
+      this.#write(this.#detail(a, line, true))
+      return
+    }
     a.lines.push(line)
     if (this.#streaming) this.#write(this.#detail(a, line, true))
   }
@@ -220,7 +225,7 @@ export class PlainRenderer implements Renderer {
       case 'eval-progress': {
         const a = this.#running.get(e.key)
         if (!a) return
-        a.last = e
+        if (e.progress.kind !== 'warning') a.last = e
         const { progress } = e
         const paint = a.ungated ? { ...c, red: c.dim } : c
         const line: Line = {

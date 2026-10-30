@@ -1,10 +1,12 @@
+import { randomBytes } from 'node:crypto'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { debugLog } from '../debug/attempt.ts'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
+import { isDockerSandbox } from '../sandbox/docker.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
-import { agentMcp, keyRejected, layoutOf, writePluginFiles } from './agents.ts'
+import { AGENTS, agentMcp, keyRejected, layoutOf, writePluginFiles } from './agents.ts'
 import type { Harness } from './types.ts'
 
 const lineCount = (text: string) =>
@@ -27,6 +29,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
       // A start that never settles, abort or not, like an agent stuck in its bootstrap.
       if (hangs === true || starts++ < (hangs ?? 0)) return new Promise<never>(() => {})
       const layout = layoutOf(descriptor)
+      const brokered = descriptor.brokers ? await brokerKey(descriptor, sandbox) : undefined
       const mcp = agentMcp(layout, all, plugins)
       for (const path of await writePluginFiles(sandbox, layout, plugins)) {
         debugLog('env', `plugin settings → ${path} by the fake agent`)
@@ -130,7 +133,10 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
             if ('exec' in step) {
               const time = at()
               debugLog('harness', `tool shell called: $ ${step.exec}`)
-              const r = await sandbox.exec(step.exec, { signal })
+              const r = await sandbox.exec(step.exec, {
+                signal,
+                ...(brokered && { env: brokered }),
+              })
               debugLog(
                 'harness',
                 `tool shell returned exit ${r.exitCode} in ${Date.now() - startedAt - time.atMs}ms`,
@@ -190,6 +196,42 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
       }
     },
   }
+}
+
+/**
+ * Has the egress gateway swap the host's key for a placeholder on the hosts of the agent's
+ * endpoints, as a real adapter does, and returns the variable its `exec` steps get it in.
+ */
+async function brokerKey(
+  descriptor: FakeHarnessDescriptor,
+  sandbox: Sandbox,
+): Promise<Record<string, string>> {
+  const { credential, endpoints } = AGENTS[descriptor.layout ?? 'cursor']
+  const key = process.env[credential]
+  if (!key) {
+    throw new InfraError(
+      `${credential} isn't set, so the fake agent has no key to broker. Set it in the environment or .env.local.`,
+    )
+  }
+  const network = isDockerSandbox(sandbox) ? sandbox.network : undefined
+  if (!network?.setRequestTransformations) {
+    throw new InfraError("fakeHarness({ brokers: true }) needs docker(): this sandbox can't broker")
+  }
+  const placeholder = `reeval_fake_${randomBytes(24).toString('base64url')}`
+  await network.setRequestTransformations(
+    [...new Set(endpoints.map((e) => e.host))].map((host) => ({
+      match: {
+        host,
+        headers: [{ key: { exact: 'authorization' }, value: { exact: `Bearer ${placeholder}` } }],
+      },
+      transform: { headers: { authorization: `Bearer ${key}` } },
+    })),
+  )
+  debugLog(
+    'harness',
+    `${credential} is a placeholder for the fake agent, brokered on its endpoints`,
+  )
+  return { [credential]: placeholder }
 }
 
 /**

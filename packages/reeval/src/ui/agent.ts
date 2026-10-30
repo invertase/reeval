@@ -58,7 +58,7 @@ export class AgentRenderer implements Renderer {
         return
       }
       case 'eval-progress': {
-        if (e.progress.kind !== 'browser-download') return
+        if (e.progress.kind !== 'browser-download' && e.progress.kind !== 'warning') return
         const label = this.#labels.get(e.key) ?? `[${e.key}]`
         this.#write(`${label} ${progressLine(this.#c, e.progress)}`)
         return

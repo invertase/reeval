@@ -47,6 +47,9 @@ export type DockerSandbox = Sandbox & { readonly network: HarnessV1NetworkSandbo
 
 export const isDockerSandbox = (s: Sandbox): s is DockerSandbox => 'network' in s
 
+/** Distinct gateway warnings an attempt prints before one line says there are more. */
+const GATEWAY_WARNINGS = 5
+
 /**
  * The gateway's events as debug lines: one per request, with DNS decisions and headers traced.
  * Refused requests to the harness's expected hosts are traced only; teardown summarizes them.
@@ -135,6 +138,17 @@ export async function createDockerSandbox(
       if (by.costUsd !== undefined) cost = (cost ?? 0) + by.costUsd
     }
   }
+  const warned = new Set<string>()
+  const warn = (text: string) => {
+    if (warned.has(text) || warned.size > GATEWAY_WARNINGS) return
+    warned.add(text)
+    const shown =
+      warned.size > GATEWAY_WARNINGS
+        ? 'the egress gateway has more warnings for this attempt, not shown; its egress.blocked lists the requests it refused'
+        : text
+    if (options.onWarning) options.onWarning(shown)
+    else console.warn(`warning: ${shown}`)
+  }
   const started = performance.now()
   const { root, capabilities, memory, swap, cpus, pids } = descriptor
   const needsNode = (reason: string) =>
@@ -163,8 +177,8 @@ export async function createDockerSandbox(
       log: process.env.REEVAL_DEBUG ? (line) => console.error(line) : undefined,
       onEvent,
       onUnsubstituted: ({ name, where, in: places, method, url }) =>
-        console.warn(
-          `warning: the egress gateway sent ${method} ${url} with ${name}'s placeholder in the ${where}, where it isn't substituted: add '${where}' to its in (now ${JSON.stringify(places)}) if the API takes it there`,
+        warn(
+          `the egress gateway sent ${method} ${url} with ${name}'s placeholder in the ${where}, where it isn't substituted: add '${where}' to its in (now ${JSON.stringify(places)}) if the API takes it there`,
         ),
       ...(brokering && {
         endpoints: brokering.endpoints,
@@ -172,8 +186,8 @@ export async function createDockerSandbox(
         ...(brokering.tokens ? { derivedTokens: [brokering.tokens] } : {}),
         ...(brokering.localResponses ? { localResponses: brokering.localResponses } : {}),
         onRefused: ({ method, url }) =>
-          console.warn(
-            `warning: the egress gateway refused ${method} ${url}: it carries ${brokering.credential}'s placeholder and isn't one of the endpoints reeval brokers it for`,
+          warn(
+            `the egress gateway refused ${method} ${url}: it carries ${brokering.credential}'s placeholder and isn't one of the endpoints reeval brokers it for`,
           ),
       }),
     },

@@ -110,6 +110,8 @@ export class CodexStreamTranslator {
   private readonly blocks = new Map<string, { type: 'text' | 'reasoning'; text: string }>()
   /** Tool calls by id whose call went out, so a result isn't sent without one. */
   private readonly calls = new Set<string>()
+  /** Web actions that started and haven't completed: what they are is only known on completion. */
+  private readonly searches = new Map<string, CodexItem>()
   /** The last top-level `error`, a retry unless the next event is `turn.failed`. */
   private pendingError: string | undefined
   /** The thread's running total before this turn, from the previous `turn.completed`. */
@@ -146,6 +148,7 @@ export class CodexStreamTranslator {
     this.start(parts)
     this.flushError(parts)
     this.closeBlocks(parts)
+    this.failSearches(parts)
     if (!options.aborted) {
       const detail = options.stderr?.trim()
       parts.push({
@@ -181,6 +184,7 @@ export class CodexStreamTranslator {
       case 'turn.completed': {
         this.start(parts)
         this.closeBlocks(parts)
+        this.failSearches(parts)
         const usage = e.usage ? turnUsage(e.usage, this.before) : undefined
         if (e.usage) this.threadUsage = e.usage
         parts.push({
@@ -194,6 +198,7 @@ export class CodexStreamTranslator {
       case 'turn.failed':
         this.start(parts)
         this.closeBlocks(parts)
+        this.failSearches(parts)
         parts.push({
           type: 'error',
           error: new Error(e.error?.message || 'codex reported a failed turn'),
@@ -243,7 +248,11 @@ export class CodexStreamTranslator {
       // One item for each of the model's web actions, known once it completes: a search, or a page
       // it opened or searched within, which is a fetch. Both run on OpenAI's side.
       case 'web_search': {
-        if (!completed) return
+        if (!completed) {
+          this.searches.set(id, item)
+          return
+        }
+        this.searches.delete(id)
         const { type, url, query, pattern } = item.action ?? {}
         if ((type === 'open_page' || type === 'find_in_page') && url) {
           this.call(parts, id, 'webFetch', { url, ...(pattern ? { pattern } : {}) })
@@ -300,6 +309,15 @@ export class CodexStreamTranslator {
 
   private closeBlocks(parts: HarnessV1StreamPart[]) {
     for (const id of [...this.blocks.keys()]) this.closeBlock(id, parts)
+  }
+
+  /** A web action the turn ended without completing is a search that failed. */
+  private failSearches(parts: HarnessV1StreamPart[]) {
+    for (const [id, item] of this.searches) {
+      this.call(parts, id, 'webSearch', { query: item.action?.query || item.query || '' })
+      this.result(parts, id, 'webSearch', 'the web search never completed', true)
+    }
+    this.searches.clear()
   }
 
   private call(parts: HarnessV1StreamPart[], id: string, toolName: string, input: unknown) {

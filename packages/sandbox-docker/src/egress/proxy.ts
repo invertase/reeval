@@ -174,11 +174,17 @@ export type ContactedHost = {
   sent: number
   received: number
 }
-/** A host the gateway refused, and why. */
+/**
+ * A host the gateway refused, and why. A request that carries a brokered credential off the
+ * endpoints it's brokered for is refused on a host the policy let through: it's an entry of its
+ * own per method and path (past `REFUSED_PATHS` of them, one per host for the rest), and
+ * `connections` counts its requests.
+ */
 export type BlockedHost = { host: string; port: number; connections: number; reason: string }
 /**
- * What went through the gateway, sorted by host and port. `blocked` is what the gateway refused;
- * `unresolved`, hosts the policy let through whose names didn't resolve, so the gateway had
+ * What went through the gateway, sorted by host and port. `blocked` is what the policy refused,
+ * and the requests that carry a brokered credential off its endpoints, one entry per method and
+ * path; `unresolved`, hosts the policy let through whose names didn't resolve, so the gateway had
  * nowhere to connect.
  */
 export type EgressTraffic = {
@@ -270,6 +276,9 @@ const authorityOf = (host: string, port: number) => {
 }
 
 const pathOnly = (path: string) => path.split('?')[0]
+
+/** Refused brokered requests recorded per method and path before the rest share an entry. */
+const REFUSED_PATHS = 20
 
 function reply(socket: Duplex, status: number, reason: string) {
   const text = http.STATUS_CODES[status] ?? ''
@@ -388,6 +397,32 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     into.set(key, entry)
     counting.delete(connection)
     unclaimed.delete(connection)
+  }
+  /** Method and path pairs that have a refused request's entry of their own. */
+  let refusedPaths = 0
+  /**
+   * A request refused on a host the policy let through, one entry per method and path, counted
+   * per request. Past the first `REFUSED_PATHS` pairs, the rest share one entry per host, so an
+   * agent walking ids in a path can't grow the record without bound. Its connection stays open
+   * for the requests after it, so its bytes still count.
+   */
+  const blockRequest = (target: Target, method: string, path: string, reason: string) => {
+    const host = `${target.host}:${target.port}`
+    let key = `${host} ${method} ${path}`
+    if (!blocked.has(key)) {
+      if (refusedPaths >= REFUSED_PATHS) {
+        key = `${host} more`
+        reason = `more requests that carry a brokered credential off the endpoints reeval brokers it for, on paths past the first ${REFUSED_PATHS}`
+      } else refusedPaths++
+    }
+    const entry = blocked.get(key) ?? {
+      host: target.host,
+      port: target.port,
+      connections: 0,
+      reason,
+    }
+    entry.connections++
+    blocked.set(key, entry)
   }
   /** Counts what the connection carries each way, without reading it or changing its flow. */
   const countBytes = (connection: Duplex) => {
@@ -909,6 +944,13 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const url = `https://${target.host}${pathOnly(path)}`
     if (refused) {
       log(`reeval:egress ${method} ${url} HTTP/${version} refused (not a brokered endpoint)`)
+      const pathname = pathOnly(path) ?? path
+      blockRequest(
+        target,
+        method,
+        pathname,
+        `${method} ${pathname} carries a brokered credential, and it isn't one of the endpoints reeval brokers it for`,
+      )
       options.onRefused?.({ method, url })
       return {
         headers: {},

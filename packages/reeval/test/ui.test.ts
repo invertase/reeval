@@ -7,7 +7,7 @@ import type { AttemptMeta } from '../src/types.ts'
 import { AgentRenderer } from '../src/ui/agent.ts'
 import { type ColorDepth, colors, stripAnsi } from '../src/ui/colors.ts'
 import type { EvalResult, Progress, ReevalEvent, RunHeader } from '../src/ui/events.ts'
-import { progressLine } from '../src/ui/format.ts'
+import { phaseOf, progressLine } from '../src/ui/format.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
 import { Tagger } from '../src/ui/tags.ts'
@@ -544,6 +544,55 @@ test('browser-download names the binary, version, size and cache', () => {
     agent,
     /downloading chrome-headless-shell 140\.0\.7339\.185 128\.0 MB \/ 274\.0 MB → ~\/\.cache\/reeval/,
   )
+})
+
+test("a gateway warning prints as it happens, in the plain and agent output, on the attempt's line", () => {
+  const text =
+    "the egress gateway refused POST https://api.openai.com/v1/alpha/search: it carries OPENAI_API_KEY's placeholder and isn't one of the endpoints reeval brokers it for"
+  const events: ReevalEvent[] = [
+    {
+      type: 'run-start',
+      at: T0,
+      version: '0.1.0',
+      files: 1,
+      harness: 'codex/gpt-5.5',
+      sandbox: 'docker',
+      concurrency: 1,
+      runId: '20260101T000000Z_nogit_test_abcd',
+    },
+    {
+      type: 'collected',
+      at: T0,
+      file: 'evals/hello.eval.ts',
+      evals: [
+        {
+          id: GREET,
+          key: keyOf(GREET),
+          group: ['greet module'],
+          name: greetResult.name,
+          skipped: false,
+        },
+      ],
+    },
+    { type: 'eval-start', at: s(0), id: GREET, key: keyOf(GREET), attempt: greetResult.attempt },
+    progress(GREET, s(1), { kind: 'turn-start', turn: 1 }),
+    progress(GREET, s(2), { kind: 'warning', text }),
+  ]
+  const warned = /\] {2}\+0:02 warning: the egress gateway refused POST https:\/\/api\.openai/
+  const plain = render(events, options({ logOrder: 'stream' }))
+  assert.match(plain, warned)
+  // Grouped with errors-only, the attempt's block prints only if it fails; the warning doesn't wait.
+  const grouped = render(events, options({ logOrder: 'grouped', outputLogs: 'errors-only' }))
+  assert.match(grouped, warned)
+  assert.doesNotMatch(grouped, /turn 1 started/, 'the rest of the block is held')
+  let agent = ''
+  const renderer = new AgentRenderer({ out: { write: (chunk: string) => (agent += chunk) } })
+  for (const e of events) renderer.onEvent(e)
+  assert.ok(
+    agent.split('\n').some((l) => /^\[\w+#1 \S+\] warning: /.test(l) && l.endsWith(text)),
+    agent,
+  )
+  assert.equal(phaseOf({ at: s(2), kind: 'warning', text }), 'running')
 })
 
 test('a check with retries says which try it ended on', () => {

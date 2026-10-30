@@ -622,6 +622,13 @@ export type FakeHarnessDescriptor = {
     | 'codex'
     | 'fx'
     | 'grok-build'
+  /**
+   * In Docker, broker the key of the agent `layout` names (`OPENAI_API_KEY` for `codex`, Cursor's
+   * when unset) on that agent's endpoints, as its adapter does: the key stays on the host, and
+   * `exec` steps get a placeholder in its variable, which the egress gateway swaps in on those
+   * endpoints when sent as `Authorization: Bearer <placeholder>`, and refuses on any other request.
+   */
+  brokers?: true
 }
 /**
  * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
@@ -2469,7 +2476,10 @@ export type EnvironmentRecord = {
  * can't see the traffic, and then `contacted`, `blocked` and `unresolved` are empty. Bytes are
  * counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused
  * hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked`
- * contains only unexpected refusals.
+ * contains only unexpected refusals. A request that carries the harness's brokered key off the
+ * endpoints reeval brokers it for is refused on a host the policy let through: it's in `blocked`
+ * once per method and path, its `reason` names them, and `connections` counts its requests. Past
+ * the first 20 pairs, the rest share one entry per host.
  */
 export type EgressRecord = {
   policy: EgressPolicy
@@ -2488,7 +2498,11 @@ export type EgressRecord = {
     sent: number
     received: number
   }>
-  /** Hosts the gateway refused, and why. A name that didn't resolve is in `unresolved` instead. */
+  /**
+   * Hosts the policy refused, and requests that carry the harness's brokered key off the endpoints
+   * reeval brokers it for (one entry per method and path), each with why. A name that didn't
+   * resolve is in `unresolved` instead.
+   */
   blocked: Array<{ host: string; port: number; connections: number; reason: string }>
   expectedBlocked: Array<{ host: string; port: number; connections: number; reason: string }>
   /**
