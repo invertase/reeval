@@ -81,6 +81,13 @@ A refused request names the host and why it was blocked:
 
 The `allowed` list is every host the policy let through, the `allow` hosts and the automatic ones; it is `null` under `'proxy'` and `'allow-all'`. Hosts the harness's CLI always tries and never needs, such as its telemetry, are recorded in `expectedBlocked`; other refused requests remain in `blocked`. When you run `npx reeval run -v`, each blocked request also prints a `gateway` line as it happens. For more information, see [Debugging](/results/inspection/debugging).
 
+A host the policy lets through can still refuse one request: the harness's key is brokered only on its own endpoints, so a request carrying the key's placeholder anywhere else on that host gets a 403 and never goes upstream. It's in `blocked` once per method and path, beside the host's `contacted` entry, and `reeval run` prints a warning for it:
+
+```json
+{ "host": "api.openai.com", "port": 443, "connections": 1,
+  "reason": "GET /v1/models carries a brokered credential, and it isn't …" }
+```
+
 ## Tell blocked hosts from unresolved names
 
 A host the policy let through can still have a name that doesn't resolve, such as `metadata.google.internal`, the metadata server a Google Cloud SDK probes, outside Google Cloud. The gateway answers it with a 502 that carries the lookup's error, and records it in `unresolved`, never in `blocked`:
