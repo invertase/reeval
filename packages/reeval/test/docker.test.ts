@@ -1524,7 +1524,8 @@ export default defineConfig({
 `,
           'evals/d.eval.ts': String.raw`import { evaluate, expect } from 'reeval'
 evaluate('hi', async (c) => {
-  await c.send('Reply with the word hi.')
+  // The refused token makes the attempt an infra error; the checks below still run, caught.
+  await c.send('Reply with the word hi.').catch(() => {})
   // Goose's own environment, read from /proc while its session is open.
   const env = await c.exec(
     "for p in /proc/[0-9]*; do case \"$(tr '\\0' ' ' < $p/cmdline 2>/dev/null)\" in */goose\\ acp*) tr '\\0' '\\n' < $p/environ;; esac; done",
@@ -1548,7 +1549,7 @@ evaluate('hi', async (c) => {
           timeoutMs: 240_000,
         })
         const out = r.stdout + r.stderr
-        assert.equal(r.code, 0, out)
+        assert.equal(r.code, 3, out)
         // Goose trades the service account's assertion at its token_uri, which the gateway answers.
         assert.match(out, /gateway +POST https:\/\/oauth2\.googleapis\.com\/token → 200/)
         // And calls the route's project and region, where the gateway adds the host's token.
@@ -1558,7 +1559,16 @@ evaluate('hi', async (c) => {
         )
         assert.doesNotMatch(out, /eval-project\/locations|eval-location\//)
         const { run, evals } = readRun(p.dir)
-        assert.equal(evals[0]?.trial.turns[0]?.status, 'error')
+        const trial = evals[0]?.trial
+        assert.equal(trial?.turns[0]?.status, 'error')
+        assert.equal(trial?.outcome, 'infra_error', JSON.stringify(trial?.error))
+        assert.match(
+          trial?.error?.message ?? '',
+          /^The API rejected the access token reeval minted from Google Cloud credentials/,
+        )
+        const failed = (trial?.assertions ?? []).filter((x) => x.status !== 'pass')
+        assert.deepEqual(failed, [], "Goose's environment checks passed")
+        assert.equal(trial?.assertions?.length, 2)
         const leaked = spawnSync('grep', ['-rlsF', token, join(p.dir, '.reeval')])
         assert.equal(leaked.stdout.toString().trim(), '', 'no file under .reeval has the token')
         assert.equal(liveContainers(run.runId), '')
