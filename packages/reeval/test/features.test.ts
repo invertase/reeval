@@ -1902,7 +1902,7 @@ export const features: Feature[] = [
     dir: 'harness/cursor-web-fetch',
     tiers: ['real'],
     env: 'plain',
-    canary: /not to match \/Root=1-/,
+    canary: /not to match \/\\b\(\\d\+\)\\s\+\(\[0-9a-f\]\{64\}\)/,
     record: ({ run }) => {
       const attempt = landed(run)
       assert.deepEqual(attempt?.turns[0]?.unreported, [])
