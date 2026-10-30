@@ -32,7 +32,8 @@ evaluate('builds the sign-in page', async (c) => {
   whichever is first a language model; never Jev. Gemini's 0–1000 points are scaled to the screenshot. Fixture evals import
   `fakeInstructions` from `reeval/testing` and pass it as `instructions`.
   The same `timeout` is the budget for the whole capture, its instructions included: if it
-  runs out the capture fails and there is no PNG. `capture.browser: false` or
+  runs out the capture fails and there is no `<name>.png`, but the page as the instruction
+  stopped is in `artifacts/<name>.step-<n>.png`, which the error names. `capture.browser: false` or
   `REEVAL_CAPTURE_BROWSER=0` makes `c.capture()` throw.
 - The `capture` option shallow-merges camera defaults (`viewport`, `timeout`, `browser`,
   `model`, the vision model) down the cascade; `viewport` replaces the value, and the port is

@@ -3,6 +3,7 @@ import type {
   AttemptAnswer,
   AttemptError,
   AttemptImage,
+  CaptureStep,
   Cell,
   CellGate,
   CompareAnswer,
@@ -59,6 +60,8 @@ export type ArtifactRef = FileRef & {
     pageErrors?: number
     /** `artifacts/<name>.capture.json` beside the PNG: what the browser saw, a `CapturePage`. */
     page?: FileRef
+    /** Set on the screenshot taken as one of the capture's instructions ended. */
+    step?: CaptureStep
   }
 }
 
@@ -138,7 +141,10 @@ export type AttemptFiles = {
   rawTranscript?: FileRef
   diff?: FileRef
   judgeInput?: FileRef
-  /** PNGs from `c.capture()`, under the `artifacts/<name>.png` path. */
+  /**
+   * PNGs from `c.capture()`, under the `artifacts/<name>.png` path, then the page as each of its
+   * instructions ended, `artifacts/<name>.step-<n>.png`, kept when the capture fails too.
+   */
   artifacts?: ArtifactRef[]
 }
 

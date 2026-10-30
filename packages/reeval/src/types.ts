@@ -124,7 +124,8 @@ export type CaptureKey =
   | 'ArrowLeft'
   | 'ArrowRight'
 
-export type CaptureUseAction =
+/** A move on the page. */
+export type CaptureUseMove = (
   | { type: 'click'; x: number; y: number }
   /** `replace` selects what the focused field holds first, so the text replaces it. */
   | { type: 'type'; text: string; replace?: boolean }
@@ -132,7 +133,16 @@ export type CaptureUseAction =
   | { type: 'scroll'; x: number; y: number; dy: number }
   | { type: 'drag'; x: number; y: number; toX: number; toY: number }
   | { type: 'hover'; x: number; y: number }
-  | { type: 'done' }
+) & {
+  /**
+   * The move finishes its instruction: once the page settles, the journey goes on to the next.
+   * A model's final move that changed nothing on the page is asked about again instead.
+   */
+  final?: boolean
+}
+
+/** A move, or `done`: the instruction's goal is met without another move. */
+export type CaptureUseAction = CaptureUseMove | { type: 'done' }
 
 /** One list per instruction string. Tests; never downloads a model. */
 export type CaptureUseScript = CaptureUseAction[][]
@@ -2708,6 +2718,29 @@ export type CaptureArtifactMeta = {
   pageErrors?: number
   /** `artifacts/<name>.capture.json`: the page facts, a `CapturePage`. */
   page?: FileRef
+  /** Set on the screenshot taken as one of the capture's instructions ended. */
+  step?: CaptureStep
+}
+
+/**
+ * One instruction of a capture, as it ended. Its screenshot is `artifacts/<name>.step-<index>.png`,
+ * beside the capture's own `artifacts/<name>.png`.
+ */
+export type CaptureStep = {
+  /** The capture's name. */
+  of: string
+  /** Its place among the capture's goal strings, from 1. */
+  index: number
+  instruction: string
+  /** Moves made on the page for it. */
+  moves: number
+  /** Milliseconds from its first look at the page to its screenshot. */
+  ms: number
+  /**
+   * `final`: the model marked a move as finishing it. `done`: the model said the goal was met.
+   * `stopped`: it stopped the capture (its timeout, the move cap, a repeated move or an error).
+   */
+  ended: 'final' | 'done' | 'stopped'
 }
 
 /** Attempt-level capture vision spend; not harness usage. */

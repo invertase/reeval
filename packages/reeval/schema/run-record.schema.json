@@ -47,6 +47,10 @@
               "description": "The HTTP status of the page's document, after redirects; absent when no response came.",
               "type": "number"
             },
+            "step": {
+              "description": "Set on the screenshot taken as one of the capture's instructions ended.",
+              "$ref": "#/$defs/CaptureStep"
+            },
             "use": {
               "type": "object",
               "properties": {
@@ -211,7 +215,7 @@
       "type": "object",
       "properties": {
         "artifacts": {
-          "description": "PNGs from `c.capture()`, under the `artifacts/<name>.png` path.",
+          "description": "PNGs from `c.capture()`, under the `artifacts/<name>.png` path, then the page as each of its instructions ended, `artifacts/<name>.step-<n>.png`, kept when the capture fails too.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ArtifactRef"
@@ -714,6 +718,36 @@
         "turns",
         "usage"
       ]
+    },
+    "CaptureStep": {
+      "description": "One instruction of a capture, as it ended. Its screenshot is `artifacts/<name>.step-<index>.png`, beside the capture's own `artifacts/<name>.png`.",
+      "type": "object",
+      "properties": {
+        "ended": {
+          "description": "`final`: the model marked a move as finishing it. `done`: the model said the goal was met. `stopped`: it stopped the capture (its timeout, the move cap, a repeated move or an error).",
+          "enum": ["done", "final", "stopped"]
+        },
+        "index": {
+          "description": "Its place among the capture's goal strings, from 1.",
+          "type": "number"
+        },
+        "instruction": {
+          "type": "string"
+        },
+        "moves": {
+          "description": "Moves made on the page for it.",
+          "type": "number"
+        },
+        "ms": {
+          "description": "Milliseconds from its first look at the page to its screenshot.",
+          "type": "number"
+        },
+        "of": {
+          "description": "The capture's name.",
+          "type": "string"
+        }
+      },
+      "required": ["ended", "index", "instruction", "moves", "ms", "of"]
     },
     "CellCheck": {
       "description": "One check over a cell's counted attempts. `verdict` (variant cells) is `discriminates` when every answered instance passes on one side and fails on the other, `both-pass` when every answered instance passes on both sides, `both-fail` when every answered instance fails on both sides, or `mixed` otherwise. It is absent when either side has no pass or fail.",

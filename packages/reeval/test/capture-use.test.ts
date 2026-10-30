@@ -11,7 +11,14 @@ import {
 import { pathOf } from '../src/capture/page-state.ts'
 import { pageChanged, VIEW_CHANGE } from '../src/capture/png.ts'
 import { stubPng } from '../src/capture/stub.ts'
-import { actionFromTool, normalizesPoints, runJourney, scalePoints } from '../src/capture/use.ts'
+import {
+  actionFromTool,
+  type JourneyOptions,
+  normalizesPoints,
+  runJourney,
+  type StepShot,
+  scalePoints,
+} from '../src/capture/use.ts'
 import type { CaptureUseAction } from '../src/types.ts'
 
 const window = { width: 1280, height: 720 }
@@ -411,6 +418,7 @@ const journey = (
   model: unknown,
   instructions: string[],
   remaining: () => number = () => 10_000,
+  onStep?: JourneyOptions['onStep'],
 ) =>
   runJourney(session, 'http://127.0.0.1/sign-up', {
     wait: { ms: 0 },
@@ -421,6 +429,7 @@ const journey = (
     use: { model: 'anthropic/claude-sonnet-5' },
     remaining,
     loadModel: async () => model,
+    ...(onStep ? { onStep } : {}),
   })
 
 test('runJourney gives the model its moves and their effect, so a multi-step form finishes', async () => {
@@ -504,6 +513,15 @@ test('actionFromTool reads a point packed into x, and refuses input that names n
     refused: 'it had no numeric toX and toY',
   })
   assert.deepEqual(actionFromTool('type', {}), { refused: 'it had no text' })
+  assert.deepEqual(actionFromTool('key', { key: 'Enter', completesGoal: true }), {
+    type: 'key',
+    key: 'Enter',
+    final: true,
+  })
+  assert.deepEqual(actionFromTool('type', { text: 'ada', completesGoal: true }), {
+    type: 'type',
+    text: 'ada',
+  })
   assert.match(
     (actionFromTool('key', { key: 'F5' }) as { refused: string }).refused,
     /^the key is not one of Tab, Enter/,
@@ -556,7 +574,7 @@ test('runJourney names the instruction, the moves and the timeout when a model c
         assert.equal(error.name, 'Error')
         assert.equal(
           error.message,
-          'c.capture() timed out on "Create an account and submit the form" (instruction 2 of 2, after 1 move): it used all of its 1m 00s timeout. Raise timeout on the call or capture.timeout.',
+          'c.capture() timed out on "Create an account and submit the form" (instruction 2 of 2, after 1 move): it used all of its 1m 00s timeout; the model was still choosing move 2. Raise timeout on the call or capture.timeout.',
         )
         return true
       },
@@ -751,6 +769,196 @@ test("runJourney names a { wait } step's timeout as the capture's", async () => 
     }),
     /^Error: c\.capture\(\) timed out on \{ wait: "idle" \}: it used all of its 1m 00s timeout\. Raise timeout on the call or capture\.timeout\.$/,
   )
+})
+
+/** Where the sign-out app's controls are: the profile's sign-out button and the sign-in form. */
+const SIGN_OUT = { x: 600, y: 50 }
+const SIGN_IN: Array<[string, object]> = [
+  ['click', { x: 200, y: 115 }],
+  ['type', { text: 'ada@example.com' }],
+  ['click', { x: 200, y: 165 }],
+  ['type', { text: 'Test1234!' }],
+  ['click', { x: 200, y: 215 }],
+]
+
+/** An app that starts signed in on /profile: its sign-out button goes to /sign-in, the form's submit back. */
+function signOutApp() {
+  let path = '/profile'
+  const { session, dispatched } = scriptedSession(false, (n) => ({
+    ...stillState(),
+    url: `http://127.0.0.1${path}`,
+    text: `${path} ${n}`,
+  }))
+  const dispatch = session.dispatch
+  session.dispatch = async (action) => {
+    if (action.type === 'click' && action.x === SIGN_OUT.x && action.y === SIGN_OUT.y) {
+      path = '/sign-in'
+    }
+    if (action.type === 'click' && action.x === 200 && action.y === 215) path = '/profile'
+    await dispatch(action)
+  }
+  return { session, dispatched }
+}
+
+/**
+ * A model that reads "Once the profile screen is visible, sign out" as a state to hold: on
+ * /profile it clicks Sign out, which it marks as finishing the instruction, and on /sign-in it
+ * signs back in, so a driver that asks again after the sign-out loops.
+ */
+const signOutMove = (text: string, final: boolean): [string, object] => {
+  if (/^The page is at \/profile\./m.test(text)) {
+    return ['click', final ? { ...SIGN_OUT, completesGoal: true } : SIGN_OUT]
+  }
+  const lines = text.match(/^\d+\. .*$/gm) ?? []
+  const since = lines.length - 1 - lines.findLastIndex((l) => l.includes('"x":600'))
+  return SIGN_IN[since % SIGN_IN.length] ?? ['done', {}]
+}
+
+const signOutModel = (prompts: string[]) =>
+  scriptedModel((text) => signOutMove(text, true), prompts)
+
+test('runJourney ends an instruction on the move the model marks final, so a sign-out is not undone', async () => {
+  const prompts: string[] = []
+  const { session, dispatched } = signOutApp()
+  const result = await journey(session, signOutModel(prompts), [
+    "Once the profile screen for the signed-in user is visible, sign out using the app's sign-out control.",
+  ])
+  assert.deepEqual(dispatched, [{ type: 'click', ...SIGN_OUT, final: true }])
+  assert.equal(result.moves, 1)
+  assert.equal(prompts.length, 1)
+})
+
+test('runJourney asks again after a move marked final that changed nothing, since it most likely missed', async () => {
+  const prompts: string[] = []
+  const ended: string[] = []
+  const { session, dispatched } = scriptedSession(false)
+  await journey(
+    session,
+    scriptedModel(
+      (text) =>
+        /^1\. click \{"x":10,"y":10,"completesGoal":true\} → nothing changed$/m.test(text)
+          ? ['done', {}]
+          : ['click', { x: 10, y: 10, completesGoal: true }],
+      prompts,
+    ),
+    ['Save'],
+    undefined,
+    (shot) => {
+      ended.push(shot.ended)
+      return undefined
+    },
+  )
+  assert.equal(dispatched.length, 1)
+  assert.equal(prompts.length, 2)
+  assert.deepEqual(ended, ['done'])
+})
+
+/** A sign-in form whose submit redirects to /profile `redirectMs` after the click, as an auth callback does. */
+function redirectingSignIn(redirectMs: number) {
+  let submitted = 0
+  const landed = () => submitted > 0 && Date.now() - submitted > redirectMs
+  const app = scriptedSession(false, (n) => ({
+    ...stillState(),
+    url: `http://127.0.0.1${landed() ? '/profile' : '/sign-in'}`,
+    text: `t${n}`,
+  }))
+  const dispatch = app.session.dispatch
+  app.session.dispatch = async (action) => {
+    if (!submitted) submitted = Date.now()
+    await dispatch(action)
+  }
+  return { ...app, submitted: () => submitted }
+}
+
+const submitThenSignOut = (prompts: string[]) =>
+  scriptedModel(
+    (text) =>
+      text.startsWith('Goal: Submit')
+        ? ['click', { x: 200, y: 215, completesGoal: true }]
+        : /^The page is at \/profile\./m.test(text)
+          ? ['click', { ...SIGN_OUT, completesGoal: true }]
+          : ['click', { x: 300, y: 300 }],
+    prompts,
+  )
+
+test("runJourney waits for a final move's late change before the next instruction looks", async () => {
+  const prompts: string[] = []
+  const { session, dispatched } = redirectingSignIn(250)
+  await journey(session, submitThenSignOut(prompts), [
+    'Submit the form',
+    'Once the profile is visible, sign out',
+  ])
+  assert.deepEqual(
+    dispatched.map((a) => a.type === 'click' && a.x),
+    [200, SIGN_OUT.x],
+  )
+  assert.equal(prompts.length, 2)
+  assert.match(prompts[1] ?? '', /^The page is at \/profile\./m)
+})
+
+test("runJourney asks again when the last instruction's final move is still landing as the next one starts", async () => {
+  const prompts: string[] = []
+  const { session, dispatched, submitted } = redirectingSignIn(1600)
+  const model = submitThenSignOut(prompts)
+  const generate = model.doGenerate
+  model.doGenerate = async (options) => {
+    if (submitted()) await new Promise((resolve) => setTimeout(resolve, 800))
+    return generate(options)
+  }
+  await journey(session, model, ['Submit the form', 'Once the profile is visible, sign out'])
+  assert.deepEqual(
+    dispatched.map((a) => a.type === 'click' && a.x),
+    [200, SIGN_OUT.x],
+  )
+  assert.match(prompts[1] ?? '', /^The page is at \/sign-in\./m)
+  assert.match(prompts[2] ?? '', /^The page is at \/profile\./m)
+})
+
+test('runJourney tells the model its moves took the page away from where the goal started, so it can stop there', async () => {
+  const prompts: string[] = []
+  const { session, dispatched } = signOutApp()
+  await journey(
+    session,
+    scriptedModel((text) => {
+      if (/^1\. click .*"x":600/m.test(text) && /did what the goal asks, call done/.test(text)) {
+        return ['done', {}]
+      }
+      return ['click', SIGN_OUT]
+    }, prompts),
+    ['Once the profile screen is visible, sign out.'],
+  )
+  assert.equal(dispatched.length, 1)
+  assert.match(
+    prompts[1] ?? '',
+    /^1\. click \{"x":600,"y":50\} → now at \/sign-in; the page's content changed\nYour moves took the page from \/profile to \/sign-in\. If they did what the goal asks, call done: a goal's "once", "if" or "when" says where it starts, so do not undo them to get back there\.$/m,
+  )
+})
+
+test("runJourney saves each instruction's screenshot, and names why one stalled and its screenshot", async () => {
+  const shots: Array<Omit<StepShot, 'png' | 'ms'>> = []
+  const { session } = signOutApp()
+  const onStep = ({ png: _, ms: __, ...shot }: StepShot) => {
+    shots.push(shot)
+    return `artifacts/sign-out.step-${shot.index}.png`
+  }
+  const neverFinal = scriptedModel((text) =>
+    /^Goal: Open the profile/.test(text) ? ['done', {}] : signOutMove(text, false),
+  )
+  const instructions = ['Open the profile', 'Once the profile is visible, sign out']
+  await assert.rejects(
+    journey(session, neverFinal, instructions, undefined, onStep),
+    (error: Error) => {
+      assert.equal(
+        error.message,
+        'c.capture() instruction 2 of 2 "Once the profile is visible, sign out" did not finish in 32 moves; its moves left /profile and came back to it, so the model may be undoing what it did. The page as it stopped: artifacts/sign-out.step-2.png.',
+      )
+      return true
+    },
+  )
+  assert.deepEqual(shots, [
+    { index: 1, instruction: 'Open the profile', moves: 0, ended: 'done' },
+    { index: 2, instruction: 'Once the profile is visible, sign out', moves: 32, ended: 'stopped' },
+  ])
 })
 
 test('pathOf strips the query and caps what the page controls', () => {
