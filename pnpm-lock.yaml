@@ -755,28 +755,28 @@ importers:
         specifier: 2.4.0
         version: 2.4.0
       '@reeval/harness-antigravity':
-        specifier: workspace:0.1.12
+        specifier: workspace:0.1.13
         version: link:../harness-antigravity
       '@reeval/harness-codex':
-        specifier: workspace:0.1.9
+        specifier: workspace:0.1.10
         version: link:../harness-codex
       '@reeval/harness-cursor-sdk':
-        specifier: workspace:0.1.7
+        specifier: workspace:0.1.8
         version: link:../harness-cursor-sdk
       '@reeval/harness-fx':
-        specifier: workspace:0.1.4
+        specifier: workspace:0.1.5
         version: link:../harness-fx
       '@reeval/harness-goose':
-        specifier: workspace:0.1.9
+        specifier: workspace:0.1.10
         version: link:../harness-goose
       '@reeval/harness-grok-build':
-        specifier: workspace:0.1.7
+        specifier: workspace:0.1.8
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.12
+        specifier: workspace:0.2.13
         version: link:../harness-opencode
       '@reeval/harness-pi':
-        specifier: workspace:0.2.8
+        specifier: workspace:0.2.9
         version: link:../harness-pi
       '@reeval/sandbox-docker':
         specifier: workspace:*
@@ -805,28 +805,28 @@ importers:
         specifier: 1.0.2
         version: 1.0.2
       '@reeval/harness-antigravity':
-        specifier: workspace:0.1.12
+        specifier: workspace:0.1.13
         version: link:../harness-antigravity
       '@reeval/harness-codex':
-        specifier: workspace:0.1.9
+        specifier: workspace:0.1.10
         version: link:../harness-codex
       '@reeval/harness-cursor-sdk':
-        specifier: workspace:0.1.7
+        specifier: workspace:0.1.8
         version: link:../harness-cursor-sdk
       '@reeval/harness-fx':
-        specifier: workspace:0.1.4
+        specifier: workspace:0.1.5
         version: link:../harness-fx
       '@reeval/harness-goose':
-        specifier: workspace:0.1.9
+        specifier: workspace:0.1.10
         version: link:../harness-goose
       '@reeval/harness-grok-build':
-        specifier: workspace:0.1.7
+        specifier: workspace:0.1.8
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.12
+        specifier: workspace:0.2.13
         version: link:../harness-opencode
       '@reeval/harness-pi':
-        specifier: workspace:0.2.8
+        specifier: workspace:0.2.9
         version: link:../harness-pi
       ws:
         specifier: 8.22.0

@@ -41,7 +41,7 @@ updates:
     schedule: { interval: weekly }
     commit-message: { prefix: build, include: scope }
     ignore:
-      # Node majors move by hand, on the line reeval supports (engines: Node 22.13 and later), and
-      # with src/build-image.ts, which copies Node from node:22-bookworm-slim onto other bases.
+      # Node majors move by hand, on the current LTS, with NODE_IMAGE in src/build-image.ts, which
+      # copies Node from the same image onto other bases.
       - dependency-name: node
         update-types: [version-update:semver-major]

@@ -2012,6 +2012,153 @@ describe('brokered secrets through the proxy', () => {
     })
 
     test(
+      'an absolute-URL websocket upgrade sent to the gateway itself goes upstream as it is, unless the policy refuses it',
+      bounded,
+      async () => {
+        const { gw, requests } = await brokered(false)
+        const upgrade = (url: string) =>
+          new Promise<string>((resolve, reject) => {
+            const socket = net.connect(gw.port, '127.0.0.1', () =>
+              socket.write(
+                `GET ${url} HTTP/1.1\r\nhost: ${new URL(url).host}\r\nupgrade: websocket\r\nconnection: Upgrade\r\nsec-websocket-version: 13\r\nsec-websocket-key: dGhlIHNhbXBsZSBub25jZQ==\r\nauthorization: ${HOLDER}\r\n\r\n`,
+              ),
+            )
+            const chunks: Buffer[] = []
+            socket.on('data', (d: Buffer) => chunks.push(d))
+            socket.once('close', () => resolve(Buffer.concat(chunks).toString('latin1')))
+            socket.once('error', reject)
+          })
+        try {
+          seen.length = 0
+          const reply = await upgrade(`http://${PLAIN}:${port}/ws`)
+          assert.match(reply, /^HTTP\/1\.1 101 /)
+          assert.match(reply, /hello over ws/)
+          assert.equal(seen[0]?.path, '/ws')
+          assert.equal(seen[0]?.headers.authorization, HOLDER, 'not substituted over plain HTTP')
+          const [event] = await requests(1)
+          assert.equal(event?.type === 'request' && event.via, 'http')
+          assert.equal(event?.type === 'request' && event.status, 101)
+          assert.equal(event?.type === 'request' && event.url, `http://${PLAIN}:${port}/ws`)
+          assert.match(
+            await upgrade(`https://${PLAIN}:${port}/ws`),
+            /^HTTP\/1\.1 501 .*use CONNECT for wss:\/\/ websockets/s,
+          )
+
+          gw.proxy.setPolicy({ mode: 'deny-all' })
+          seen.length = 0
+          assert.match(await upgrade(`http://${PLAIN}:${port}/ws`), /^HTTP\/1\.1 403 /)
+          assert.equal(seen.length, 0, 'never reached upstream')
+          const refused = (await requests(2))[1]
+          assert.equal(refused?.type === 'request' && refused.allowed, false)
+          assert.deepEqual(
+            gw.proxy.traffic().blocked.map((b) => `${b.host}:${b.port}`),
+            [`${PLAIN}:${port}`],
+          )
+        } finally {
+          gw.close()
+        }
+      },
+    )
+
+    test(
+      'an absolute-URL websocket upgrade is held to the allowlist before DNS, to its Host, and never gets a harness credential',
+      bounded,
+      async () => {
+        const events: EgressEvent[] = []
+        const gw = await startProxy(
+          { mode: 'custom', allowedHosts: [PLAIN] },
+          { onEvent: (e) => events.push(e) },
+        )
+        gw.proxy.setTransformations([
+          {
+            match: { host: PLAIN },
+            transform: { headers: { authorization: `Bearer ${SECRET}` } },
+          },
+        ])
+        gw.proxy.setSubstitutions([sub({ hosts: [PLAIN] })])
+        const upgrade = (url: string, host = URL.parse(url)?.host ?? '') =>
+          new Promise<string>((resolve, reject) => {
+            const socket = net.connect(gw.port, '127.0.0.1', () =>
+              socket.write(
+                `GET ${url} HTTP/1.1\r\nhost: ${host}\r\nupgrade: websocket\r\nconnection: Upgrade\r\nsec-websocket-version: 13\r\nsec-websocket-key: dGhlIHNhbXBsZSBub25jZQ==\r\nauthorization: ${HOLDER}\r\n\r\n`,
+              ),
+            )
+            const chunks: Buffer[] = []
+            socket.on('data', (d: Buffer) => chunks.push(d))
+            socket.once('close', () => resolve(Buffer.concat(chunks).toString('latin1')))
+            socket.once('error', reject)
+          })
+        const dns = (host: string) =>
+          events.find((e) => e.type === 'dns' && e.host === host) as
+            | Extract<EgressEvent, { type: 'dns' }>
+            | undefined
+        try {
+          seen.length = 0
+          const allowed = await upgrade(`http://${PLAIN}:${port}/ws`)
+          assert.match(allowed, /^HTTP\/1\.1 101 /)
+          assert.equal(seen[0]?.headers.authorization, HOLDER, 'no transformation over plain HTTP')
+          assert.doesNotMatch(gw.lines.join('\n'), /substituted|decrypt/)
+
+          seen.length = 0
+          // A listed target with an unlisted Host could reach a server routing by Host.
+          assert.match(
+            await upgrade(`http://${PLAIN}:${port}/ws`, `${OTHER}:${port}`),
+            /^HTTP\/1\.1 421 .*names other\.upstream\.test/s,
+          )
+          // An unlisted target with a listed Host is refused on the target.
+          assert.match(
+            await upgrade(`http://${OTHER}:${port}/ws`, `${PLAIN}:${port}`),
+            /^HTTP\/1\.1 403 .*other\.upstream\.test isn't in the allowlist/s,
+          )
+          // Refused on the list, so the unresolvable name is never looked up.
+          assert.match(
+            await upgrade('http://nxdomain.test/ws'),
+            /^HTTP\/1\.1 403 .*nxdomain\.test isn't in the allowlist/s,
+          )
+          assert.match(dns('nxdomain.test')?.reason ?? '', /isn't in the allowlist/)
+          for (const literal of ['203.0.113.9', '[2001:db8::1]']) {
+            assert.match(
+              await upgrade(`http://${literal}:8080/ws`),
+              /^HTTP\/1\.1 403 .*isn't in the allowlist/s,
+              literal,
+            )
+          }
+          assert.equal(seen.length, 0, 'nothing refused reached an upstream')
+          assert.deepEqual(
+            gw.proxy
+              .traffic()
+              .blocked.map((b) => `${b.host}:${b.port}`)
+              .sort(),
+            ['2001:db8::1:8080', '203.0.113.9:8080', 'nxdomain.test:80', `${OTHER}:${port}`],
+          )
+
+          gw.proxy.setPolicy({ mode: 'allow-all' })
+          assert.match(
+            await upgrade('http://nxdomain.test:8080/ws'),
+            /^HTTP\/1\.1 502 .*\r\n\r\nreeval egress gateway can't resolve nxdomain\.test/s,
+          )
+          const missing = events.findLast(
+            (e) => e.type === 'request' && e.host === 'nxdomain.test' && e.port === 8080,
+          )
+          assert.equal(missing?.type === 'request' && missing.unresolved, true)
+          const traffic = gw.proxy.traffic()
+          assert.deepEqual(
+            traffic.unresolved.map((b) => `${b.host}:${b.port}`),
+            ['nxdomain.test:8080'],
+          )
+          assert.ok(!traffic.blocked.some((b) => b.port === 8080 && b.host === 'nxdomain.test'))
+          assert.match(
+            await upgrade('http://10.1.2.3/ws'),
+            /^HTTP\/1\.1 403 .*10\.1\.2\.3 is a private or reserved address/s,
+          )
+          assert.equal(seen.length, 0)
+        } finally {
+          gw.close()
+        }
+      },
+    )
+
+    test(
       "a client that sends nothing is closed after the wait, and it's traced",
       bounded,
       async () => {

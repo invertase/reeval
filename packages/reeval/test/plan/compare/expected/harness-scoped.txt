@@ -5,4 +5,4 @@ evals/scoped.eval.ts › variant on b only  a/base/docker     control          u
                                           b/skilled/docker  variant skilled  gated    ×4
 excluded: —
 image docker · cursor · 1 evals
-  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

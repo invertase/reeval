@@ -4,4 +4,4 @@ evals/right/a.eval.ts › alpha  left/-/docker   control  gated  ×1
                                right/-/docker  control  gated  ×1
 excluded: —
 image docker · cursor · 2 evals
-  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

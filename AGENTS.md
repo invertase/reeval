@@ -425,8 +425,9 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   Bump the family by hand, together with the adapter and its patch. It also skips the harness
   CLIs, which are pinned in each harness's source (Antigravity's, Goose's and fx's sha256, Codex's and Grok Build's
   sha512, Cursor's SDK version, OpenCode's inline lockfile) or in `packages/*/assets/` (pi's
-  lockfile). The drift leg in `real.yml` tracks those instead. Node majors (`@types/node` and the
-  base image's `node`) are ignored too: they stay on the `engines` floor's line, Node 22.
+  lockfile). The drift leg in `real.yml` tracks those instead. Node majors are ignored too:
+  `@types/node` stays on the `engines` floor's line, Node 22, and the base image's `node` on the
+  current LTS, moved by hand with `NODE_IMAGE` in `src/build-image.ts`.
 
 ### Changing what reeval persists
 
@@ -545,8 +546,8 @@ pnpm reeval run --dry-run          # the plan, without running
 ### With a real agent
 
 1. Build the sandbox images once. This bakes each harness's CLI into reeval's image for it,
-   `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.7`, `claude-code-1.0.171-patch.8cc1b324`,
-   `antigravity-0.1.12`, `opencode-0.2.12`, `goose-0.1.9`, `pi-0.2.8`, `codex-0.1.9`, `fx-0.1.4`, `grok-build-0.1.7`), so
+   `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.8`, `claude-code-1.0.171-patch.8cc1b324`,
+   `antigravity-0.1.13`, `opencode-0.2.13`, `goose-0.1.10`, `pi-0.2.9`, `codex-0.1.10`, `fx-0.1.5`, `grok-build-0.1.8`), so
    the tag pins the CLI build. Rebuild after bumping a harness adapter. A project's other images
    (`from`, `dockerfile` and `install`) build with `reeval image build` there (`--dry-run` lists them).
 

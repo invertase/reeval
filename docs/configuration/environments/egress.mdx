@@ -3,7 +3,7 @@ title: "Restrict sandbox egress"
 description: "Limit which hosts the sandbox reaches, and see what was blocked."
 ---
 
-The `egress` option sets which hosts the sandbox can reach. The default is `'proxy'`: any host over HTTP and HTTPS, through the egress gateway, which records each request. Set `'deny-all'` to block every host except automatic hosts, or `{ allow: [...] }` to allow selected hosts in addition to them. Brokered harness credentials and secrets with `hosts` stay on the host either way, but a secret without `hosts` is in the sandbox as its real value. For more information, see [Secrets](/configuration/environments/secrets#keep-api-keys-on-the-host).
+The `egress` option sets which hosts the sandbox can reach. The default is `'proxy'`: any host over HTTP, HTTPS and WebSockets, through the egress gateway, which records each request. The proxy variables, `NODE_USE_ENV_PROXY` included, send Node's `fetch`, `http`, `https` and `WebSocket` there. Set `'deny-all'` to block every host except automatic hosts, or `{ allow: [...] }` to allow selected hosts in addition to them. Brokered harness credentials and secrets with `hosts` stay on the host either way, but a secret without `hosts` is in the sandbox as its real value. For more information, see [Secrets](/configuration/environments/secrets#keep-api-keys-on-the-host).
 
 ## Block non-automatic hosts
 

@@ -3,6 +3,6 @@ evals/skills-and-mcp.eval.ts › loads the plugin  codex:gpt-5.6-luna/review/doc
                                                  goose:gemini-3.8-flash/review/docker  control  gated  ×1  effort medium · plugins review (skills, mcp)
 excluded: —
 image docker · codex · 1 evals
-  base  reeval-sandbox:codex-0.1.9  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:codex-0.1.10  (reeval's image: built when missing or when its base changed)
 image docker · goose · 1 evals
-  base  reeval-sandbox:goose-0.1.9  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:goose-0.1.10  (reeval's image: built when missing or when its base changed)
