@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.17.0](https://github.com/invertase/reeval/compare/v0.16.1...v0.17.0) (2026-10-30)
+
+
+### Features
+
+* **capture:** end an instruction on the move that completes it, and keep each instruction's screenshot ([#712](https://github.com/invertase/reeval/issues/712)) ([a8ea7b2](https://github.com/invertase/reeval/commit/a8ea7b2df05c771c1549a30b78fd93ade978b6e1))
+* **capture:** expose page facts on c.capture() and add toHaveStatus and toHaveNoPageErrors ([#704](https://github.com/invertase/reeval/issues/704)) ([d8349e1](https://github.com/invertase/reeval/commit/d8349e1077c65fe89d68f5fc9dd6b2e18ed5a963))
+* **ui:** show the run header as one block on a color terminal ([#713](https://github.com/invertase/reeval/issues/713)) ([06141de](https://github.com/invertase/reeval/commit/06141de39225b30c41169414a499760883115d3a))
+
+
+### Bug Fixes
+
+* **capture:** read a packed point's missing half from its own field ([#711](https://github.com/invertase/reeval/issues/711)) ([d7fa2d4](https://github.com/invertase/reeval/commit/d7fa2d422b9e96385f67c4c4ce5e425a473ae976))
+* **harness:** broker Codex's web search endpoint so its searches land ([#715](https://github.com/invertase/reeval/issues/715)) ([355b5f5](https://github.com/invertase/reeval/commit/355b5f5793349b89dae637a28bce956e035d67cf))
+* **harness:** run every harness at medium effort when unset and check Cursor's catalog at plan time ([#714](https://github.com/invertase/reeval/issues/714)) ([ee1d48a](https://github.com/invertase/reeval/commit/ee1d48a68339a314020a58a291d2cdd28639d815))
+
 ## [0.16.1](https://github.com/invertase/reeval/compare/v0.16.0...v0.16.1) (2026-10-29)
 
 
