@@ -138,7 +138,28 @@ function upgrade<T>(shape: keyof typeof SCHEMA_VERSIONS, value: T, what: string)
  * compare, history and the studio. A record from a newer reeval throws a `NewerSchemaError`.
  */
 export function readableRecord(record: RunRecord, what = `Run ${record.runId}`): RunRecord {
-  return fillDefaults('run-record', upgrade('run-record', record, what))
+  return unmeasuredReasoning(fillDefaults('run-record', upgrade('run-record', record, what)))
+}
+
+/**
+ * An attempt whose turns have no `reasoningMs` was recorded by a reeval that stored 0 for a
+ * reasoning time no one measured (Codex's, Antigravity's, a turn with no reasoning block). On a
+ * harness that now records `reasoningMs` on every turn (all but the fake one), that 0 reads as
+ * unknown, as this reeval records it, unless the usage says no reasoning tokens were used. An
+ * attempt with no turns reasoned for an unknown time on any harness.
+ */
+function unmeasuredReasoning(record: RunRecord): RunRecord {
+  for (const e of record.evals ?? []) {
+    const kinds = new Map((e.cells ?? []).map((c) => [c.key, c.harnessKind]))
+    for (const a of e.attempts ?? []) {
+      const turns = a.turns ?? []
+      if (a.activity?.reasoningMs !== 0 || turns.some((t) => t.reasoningMs !== undefined)) continue
+      const kind = kinds.get(a.cell)
+      const timed = kind !== 'fake' && kind !== 'unknown'
+      if (turns.length === 0 || (timed && a.usage?.reasoning !== 0)) a.activity.reasoningMs = null
+    }
+  }
+  return record
 }
 
 /** A transcript line as every reader sees it. */

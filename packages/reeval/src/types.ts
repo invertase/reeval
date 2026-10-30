@@ -35,6 +35,8 @@ export type TranscriptEvent = EventTime &
         durationMs: number | null
         /** True when a shell-like tool or edit ran at least two minutes. */
         stalled?: boolean
+        /** The `toolCallId` of the subagent call whose agent made this call; absent for the agent's own. */
+        subagent?: string
       })
     | {
         type: 'web-search'
@@ -50,6 +52,8 @@ export type TranscriptEvent = EventTime &
         durationMs: number | null
         /** True when a shell-like tool or edit ran at least two minutes. */
         stalled?: boolean
+        /** The `toolCallId` of the subagent call whose agent made this call; absent for the agent's own. */
+        subagent?: string
       }
     | {
         type: 'web-fetch'
@@ -60,6 +64,8 @@ export type TranscriptEvent = EventTime &
         durationMs: number | null
         /** True when a shell-like tool or edit ran at least two minutes. */
         stalled?: boolean
+        /** The `toolCallId` of the subagent call whose agent made this call; absent for the agent's own. */
+        subagent?: string
       }
     | {
         type: 'tool'
@@ -72,6 +78,8 @@ export type TranscriptEvent = EventTime &
         durationMs: number | null
         /** True when a shell-like tool or edit ran at least two minutes. */
         stalled?: boolean
+        /** The `toolCallId` of the subagent call whose agent made this call; absent for the agent's own. */
+        subagent?: string
       }
     | { type: 'error'; message: string }
     /** A step that failed while the turn went on: a model call the harness retried. */
@@ -2333,6 +2341,8 @@ export type TurnRecord = Pick<
   raw?: unknown[]
   /** Each stdio MCP server start during the turn; see the run record's `turns[].mcpStartup`. */
   mcpStartup?: McpStartup[]
+  /** See the run record's `turns[].reasoningMs`. */
+  reasoningMs?: number | null
 }
 
 /**

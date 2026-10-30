@@ -65,6 +65,9 @@ export type CodexItem = {
   query?: string
   action?: { type?: string; query?: string; url?: string; pattern?: string }
   message?: string
+  receiver_thread_ids?: string[]
+  prompt?: string | null
+  agents_states?: unknown
 }
 
 export type CodexEvent = {
@@ -257,6 +260,19 @@ export class CodexStreamTranslator {
             ? (item.error?.message ?? 'the MCP tool call failed')
             : (item.result?.structured_content ?? item.result?.content ?? null)
           this.result(parts, id, tool, output, failed)
+        }
+        return
+      }
+      // A call on Codex's sub-agents (spawn_agent, send_input, wait, close_agent). The sub-agent's
+      // own work runs in its own thread, which codex exec doesn't stream.
+      case 'collab_tool_call': {
+        const tool = item.tool ?? 'unknown'
+        this.call(parts, id, tool, {
+          ...(item.prompt ? { prompt: item.prompt } : {}),
+          receiver_thread_ids: item.receiver_thread_ids ?? [],
+        })
+        if (completed) {
+          this.result(parts, id, tool, item.agents_states ?? {}, item.status === 'failed')
         }
         return
       }

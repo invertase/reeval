@@ -32,6 +32,7 @@ CREATE TABLE effort_m (
   run_id TEXT, eval_key TEXT, cell_key TEXT, role TEXT, variant TEXT, harness TEXT,
   environment TEXT, n INTEGER, tools_median REAL, tools_q1 REAL, tools_q3 REAL,
   agent_s_median REAL, agent_s_q1 REAL, agent_s_q3 REAL, file_edits_median REAL,
+  files_changed_median REAL,
   tokens_median REAL, tokens_q1 REAL, tokens_q3 REAL,
   control_key TEXT, control_n INTEGER, control_tools_median REAL, control_agent_s_median REAL,
   control_tokens_median REAL,
@@ -137,6 +138,7 @@ type Attempt = {
   tools: number
   agent_ms: number
   file_edits: number
+  files_changed: number
   input_tokens: number | null
   output_tokens: number | null
   cache_read_tokens: number | null
@@ -318,7 +320,7 @@ export function deriveFacts(db: DatabaseSync): void {
   )
   const attempts = rowsOf<Attempt>(
     db.prepare(
-      `SELECT run_id, eval_key, cell_key, key, outcome, error_kind, tools, agent_ms, file_edits,
+      `SELECT run_id, eval_key, cell_key, key, outcome, error_kind, tools, agent_ms, file_edits, files_changed,
         input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens
        FROM attempts ORDER BY run_id, rowid`,
     ),
@@ -360,6 +362,7 @@ export function deriveFacts(db: DatabaseSync): void {
         tools: a.tools,
         agentMs: a.agent_ms,
         fileEdits: a.file_edits,
+        filesChanged: a.files_changed,
         ...(tokens !== undefined ? { tokens } : {}),
       },
     ])
@@ -424,6 +427,7 @@ export function deriveFacts(db: DatabaseSync): void {
       agent_s_q1: own ? s1(own.agentMs.q1) : null,
       agent_s_q3: own ? s1(own.agentMs.q3) : null,
       file_edits_median: own?.fileEdits ?? null,
+      files_changed_median: own?.filesChanged ?? null,
       tokens_median: own?.tokens?.median ?? null,
       tokens_q1: own?.tokens?.q1 ?? null,
       tokens_q3: own?.tokens?.q3 ?? null,

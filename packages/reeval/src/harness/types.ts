@@ -15,6 +15,12 @@ export type HarnessResult = {
   model: string | null
   /** Event types the harness can't report, so their absence from `transcript` proves nothing. */
   unreported: WebEventType[]
+  /**
+   * Milliseconds the agent spent reasoning in the turn, from the reasoning blocks it streamed;
+   * null when the harness can't time its reasoning, and absent for the fake harness, whose
+   * reasoning events carry their own durations.
+   */
+  reasoningMs?: number | null
   /** Every stream part as the harness sent it, only when `REEVAL_RAW_TRANSCRIPT` is set. */
   raw?: unknown[]
   /**

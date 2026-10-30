@@ -36,6 +36,7 @@ import {
   familyHeadLabel,
   familyLiftLabel,
   familyRateLabel,
+  filesChanged,
   formatDuration,
   formatPercent,
   formatRatio,
@@ -738,7 +739,7 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
                     <span className="font-mono text-xs">{a.id}</span>
                     <span className="text-xs text-muted-foreground">
                       {formatDuration(a.durationMs)} · {plural(a.turns.length, 'turn')} ·{' '}
-                      {activityLabel(a.activity)}
+                      {activityLabel(a.activity, filesChanged(a.changedFiles))}
                       {tokens ? ` · ${tokens}` : ''}
                     </span>
                     {judges.shown.map((j) => (

@@ -15,7 +15,10 @@ export const TOKENS_UNREPORTED = 'some cells did not report usage'
 export type EffortSample = {
   tools: number
   agentMs: number
+  /** Calls to the agent's file-editing tools (`activity.fileEdits`). */
   fileEdits: number
+  /** Files the workspace diff changed, however the agent changed them. */
+  filesChanged: number
   /** Total tokens when this attempt reported usage; omitted when the harness dropped it. */
   tokens?: number
 }
@@ -25,7 +28,10 @@ export type CellEffort = {
   n: number
   tools: Spread
   agentMs: Spread
+  /** Median file edits: edit tool calls, not the files the diff changed (`filesChanged`). */
   fileEdits: number
+  /** Median files the workspace diff changed. */
+  filesChanged: number
   /** Over the counted attempts that reported usage; omitted when none did. */
   tokens?: Spread
 }
@@ -71,13 +77,18 @@ export type EffortContrast = {
 }
 
 export const effortSample = (
-  a: Pick<AttemptRecord, 'activity' | 'timings' | 'usage'>,
+  a: Pick<AttemptRecord, 'activity' | 'timings' | 'usage' | 'changedFiles'>,
 ): EffortSample => ({
   tools: a.activity.tools,
   agentMs: a.timings.agentMs,
   fileEdits: a.activity.fileEdits,
+  filesChanged: filesChanged(a.changedFiles),
   ...(a.usage ? { tokens: totalTokens(a.usage) } : {}),
 })
+
+/** The files the workspace diff changed, a collapsed directory counting each of its files. */
+export const filesChanged = (files: AttemptRecord['changedFiles']) =>
+  files.reduce((n, f) => n + (f.count ?? 1), 0)
 
 const counted = (a: Pick<AttemptRecord, 'outcome'>) => a.outcome === 'pass' || a.outcome === 'fail'
 
@@ -99,6 +110,7 @@ export function effortOf(samples: EffortSample[]): CellEffort | null {
     tools: spread(samples.map((s) => s.tools)),
     agentMs: spread(samples.map((s) => s.agentMs)),
     fileEdits: median(samples.map((s) => s.fileEdits)) ?? 0,
+    filesChanged: median(samples.map((s) => s.filesChanged)) ?? 0,
     ...(tokens.length ? { tokens: spread(tokens) } : {}),
   }
 }

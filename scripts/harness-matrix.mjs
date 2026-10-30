@@ -171,6 +171,29 @@ export function renderMatrix(facts, { href }) {
   return [line(head), `|${head.map(() => '---').join('|')}|`, ...rows.map(line)].join('\n')
 }
 
+const REASONING_TIME = {
+  streamed: '✓',
+  whole: '✗ (its reasoning arrives whole)',
+  none: '✗ (it never shows its reasoning)',
+}
+
+/**
+ * Which effort measures each harness reports, from the catalog: tokens (the contract row's real
+ * runs), reasoning tokens apart, reasoning time, and a subagent's file edits. The others, tool
+ * calls, agent time and the files the workspace diff changed, are the same for every harness.
+ */
+export function renderTelemetry(facts) {
+  const tokens = (v) => (v === 'provider' ? "by the model's provider" : yes(v))
+  return [
+    "| Harness | Tokens | Reasoning tokens | Reasoning time | A subagent's file edits |",
+    '|---|---|---|---|---|',
+    ...facts.map(
+      (h) =>
+        `| ${h.agent.name} | ${yes(h.row.tokens)} | ${h.row.tokens ? tokens(h.agent.reasoningTokens) : '✗'} | ${REASONING_TIME[h.agent.reasoning]} | ${yes(!!h.agent.subagentCalls)} |`,
+    ),
+  ].join('\n')
+}
+
 /** Where each agent reads the environment's rules and skills. */
 export function renderLayout(facts) {
   return [

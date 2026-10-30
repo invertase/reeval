@@ -158,6 +158,25 @@ export type Agent = Layout & {
    */
   unreported?: (harnessMetadata: unknown) => WebEventType[]
   /**
+   * How the agent's reasoning reaches reeval, which decides whether a turn's reasoning time is
+   * measured: `streamed`, as the model produces it, so each block is timed; `whole`, each block
+   * only once it's done (Codex's reasoning items), so its time is unknown; `none`, never (the
+   * model's thinking stays inside the CLI), so its time is unknown too. Reasoning tokens are
+   * apart from this: they come from the turn's usage.
+   */
+  reasoning: ReasoningDelivery
+  /**
+   * Whether the turn's usage counts reasoning tokens apart (`usage.reasoning`): `provider` when it
+   * depends on the model's provider (OpenCode, fx). For the docs; usage itself says per turn.
+   */
+  reasoningTokens: boolean | 'provider'
+  /**
+   * Set when the transcript has a subagent's tool calls, so its edits count as file edits (Claude
+   * Code's bridge passes a subagent's messages on raw, and reeval reads them). Unset, only the
+   * workspace diff's `changedFiles` shows what a subagent changed.
+   */
+  subagentCalls?: true
+  /**
    * The model a brokered request asks the agent's API for, e.g. from its URL; unset when the
    * requests don't say (Cursor's are protobuf), so the record says it's unknown.
    */
@@ -220,6 +239,9 @@ export type Agent = Layout & {
     plugins: readonly PlacedPlugin[]
   }) => Promise<HarnessAgentAdapter>
 }
+
+/** How an agent's reasoning reaches reeval; see `Agent.reasoning`. */
+export type ReasoningDelivery = 'streamed' | 'whole' | 'none'
 
 /** What a Gemini CLI's adapter takes to run on Vertex AI from Application Default Credentials. */
 export type AdapterVertex = { project: string; location: string; credentialsFile: string }
@@ -922,6 +944,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: PLUGIN_PARTS,
     name: 'Cursor',
     factory: 'cursor',
+    reasoning: 'streamed',
+    reasoningTokens: false,
     credential: 'CURSOR_API_KEY',
     // The SDK trades the key for session tokens at the same endpoint as the CLI, and sends the
     // tokens to api2.cursor.sh only (its agent stream included, over HTTP/1.1 through the proxy).
@@ -950,6 +974,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: CLAUDE_FORMAT_PARTS,
     name: 'Claude Code',
     factory: 'claudeCode',
+    reasoning: 'streamed',
+    reasoningTokens: false,
+    subagentCalls: true,
     credential: 'ANTHROPIC_API_KEY',
     // What the CLI sends the key on, with non-essential traffic off.
     // Anything else gets a 403 from the gateway and a warning that names the request.
@@ -995,6 +1022,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
     ],
     name: 'Antigravity',
     factory: 'antigravity',
+    // agy's stream-json has no thinking content, only each step's `thinking_tokens`.
+    reasoning: 'none',
+    reasoningTokens: true,
     // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
     credential: 'GEMINI_API_KEY',
     // Its model calls (the main model, and a lite one for titles) and its web searches, which a
@@ -1029,6 +1059,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'OpenCode',
     factory: 'opencode',
     configuredModelOnStart: true,
+    reasoning: 'streamed',
+    reasoningTokens: 'provider',
     // Google's, for what names no model; forModel gives the model's provider's.
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     endpoints: GEMINI_ENDPOINTS,
@@ -1056,6 +1088,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'Goose',
     factory: 'goose',
     configuredModelOnStart: true,
+    reasoning: 'streamed',
+    // Goose's ACP server reports usage for its last model call only, which the adapter drops.
+    reasoningTokens: false,
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     // The requests Goose sends the key on, with session naming off.
     endpoints: GOOSE_ENDPOINTS,
@@ -1090,6 +1125,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginParts: ['skills', 'commands', 'mcp'],
     name: 'pi',
     factory: 'pi',
+    reasoning: 'streamed',
+    reasoningTokens: true,
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     // The only request pi sends the key on; --offline stops its startup network operations.
     endpoints: GEMINI_ENDPOINTS,
@@ -1123,6 +1160,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
     pluginServersByName: true,
     name: 'Codex',
     factory: 'codex',
+    // codex exec sends a reasoning item only once it's complete, when it sends one at all.
+    reasoning: 'whole',
+    reasoningTokens: true,
     credential: 'OPENAI_API_KEY',
     // On the adapter's provider (HTTP, not WebSockets): the model calls, whose responses name the
     // dated model and the effort that served them, and the web search tool's searches.
@@ -1161,6 +1201,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'fx',
     factory: 'fx',
     configuredModelOnStart: true,
+    reasoning: 'streamed',
+    reasoningTokens: 'provider',
     // AI Gateway's, for what names no model; forModel gives the model's provider's.
     ...fxForModel('provider/model'),
     forModel: fxForModel,
@@ -1188,6 +1230,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'Grok Build',
     factory: 'grokBuild',
     configuredModelOnStart: true,
+    reasoning: 'streamed',
+    reasoningTokens: true,
     credential: 'XAI_API_KEY',
     // The requests Grok sends the key on, with its summary, recap and title-refresh calls off.
     endpoints: XAI_ENDPOINTS,

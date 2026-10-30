@@ -676,8 +676,8 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="durationMs" type="number"></Property>
 
-<Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string; usage: TokenUsage | null; model: string | null; unreported: WebEventType[]; error: string | null; mcpStartup?: McpStartup[]}>">
-  `text` is the agent's final message, cut at 8 KB; the whole of it is in the `transcript.jsonl` file. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`).
+<Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string; usage: TokenUsage | null; model: string | null; unreported: WebEventType[]; error: string | null; mcpStartup?: McpStartup[]; reasoningMs?: number | null}>">
+  `text` is the agent's final message, cut at 8 KB; the whole of it is in the `transcript.jsonl` file. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`). `reasoningMs` is how long the turn's streamed reasoning took, null when the harness can't time it.
 </Property>
 
 <Property name="usage" type="TokenUsage | null">
@@ -690,8 +690,8 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="timings" type="PhaseTimings"></Property>
 
-<Property name="activity" type="{tools: number; fileEdits: number; webSearches: number | null; webFetches: number | null; reasoningMs: number; stalledTools: number; maxToolMs: number | null}">
-  Counts from the transcript, so the attempt's activity is available without reading the transcript. `webSearches` includes refused searches.
+<Property name="activity" type="{tools: number; fileEdits: number; webSearches: number | null; webFetches: number | null; reasoningMs: number | null; stalledTools: number; maxToolMs: number | null}">
+  Counts from the transcript, so the attempt's activity is available without reading the transcript. `webSearches` includes refused searches. `fileEdits` counts edit tool calls, so a shell edit isn't one; `changedFiles` has what the workspace diff shows changed. `reasoningMs` is null when some turn's reasoning time is unknown, so a 0 is always a measurement.
 </Property>
 
 <Property name="judgements" type="JudgmentRecord[]"></Property>

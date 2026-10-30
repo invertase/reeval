@@ -1,0 +1,27 @@
+diff --git a/src/NOTES.md b/src/NOTES.md
+new file mode 100644
+index 0000000..f81de5b
+--- /dev/null
++++ b/src/NOTES.md
+@@ -0,0 +1 @@
++Selecting the feasible meeting that ends earliest is optimal because it leaves the most remaining time for later meetings, so some maximum schedule always includes that choice.
+diff --git a/src/schedule.js b/src/schedule.js
+index fe8c91e..c53a041 100644
+--- a/src/schedule.js
++++ b/src/schedule.js
+@@ -1,4 +1,14 @@
+ // Returns the number of meetings that can be attended without overlap.
+ export function maxMeetings(meetings) {
+-  return 0
++  if (!meetings.length) return 0
++  const sorted = [...meetings].sort((a, b) => a[1] - b[1] || a[0] - b[0])
++  let count = 0
++  let lastEnd = -Infinity
++  for (const [start, end] of sorted) {
++    if (start >= lastEnd) {
++      count++
++      lastEnd = end
++    }
++  }
++  return count
+ }

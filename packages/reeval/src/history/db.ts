@@ -9,6 +9,7 @@ import { pairTallies } from '../compare/pairs.ts'
 import { UsageError } from '../errors.ts'
 import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID, ownRequire } from '../root.ts'
+import { filesChanged } from '../view/effort.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts, PART_COLUMNS } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
 import { rowsOf } from './rows.ts'
@@ -129,7 +130,7 @@ CREATE TABLE attempts (
   file_edits INTEGER, setup_ms INTEGER, agent_ms INTEGER, checks_ms INTEGER, judge_ms INTEGER,
   last_text TEXT, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
   cache_write_tokens INTEGER, reasoning_tokens INTEGER, served_model TEXT, oom_kills INTEGER,
-  reasoning_effort TEXT, served_reasoning_effort TEXT,
+  reasoning_effort TEXT, served_reasoning_effort TEXT, files_changed INTEGER, reasoning_ms INTEGER,
   PRIMARY KEY (run_id, key)
 );
 CREATE TABLE judgements (
@@ -622,7 +623,7 @@ function insertRun(
     }
     for (const a of e.attempts) {
       run(
-        `INSERT INTO attempts VALUES (${Array(30).fill('?').join(', ')})`,
+        `INSERT INTO attempts VALUES (${Array(32).fill('?').join(', ')})`,
         record.runId,
         e.key,
         a.cell,
@@ -653,6 +654,8 @@ function insertRun(
         a.error?.resource?.cause === 'oom' ? a.error.resource.kills : 0,
         a.effort ?? null,
         a.servedEffort ?? null,
+        filesChanged(a.changedFiles),
+        a.activity.reasoningMs,
       )
       const env = envOf.get(cellEnv.get(a.cell) ?? '')
       const skills = env?.skills.map((x) => x.name) ?? []

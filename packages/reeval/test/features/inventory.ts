@@ -1576,6 +1576,12 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/analysis.test.ts', 'reeval/test/unit.test.ts'],
   },
   {
+    id: 'effort.telemetry',
+    area: 'Records and studio',
+    name: "What each harness reports: file edits from edit tool calls (a Claude Code subagent's included) beside files changed from the workspace diff, and reasoning time measured from streamed blocks, null (`n/a`) where the harness can't time it",
+    unit: ['reeval/test/replay-telemetry.test.ts'],
+  },
+  {
     id: 'effort.separation',
     area: 'Records and studio',
     name: 'Effort separation per metric (`no overlap` at 3 vs 3 or more, directional in `reeval analyze`)',

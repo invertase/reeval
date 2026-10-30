@@ -18,7 +18,7 @@ import { formatTokens } from '../usage.ts'
 import { DIGEST_VERSION } from '../view/analysis.ts'
 import { compare } from '../view/compare.ts'
 import { contrastsOf } from '../view/contrasts.ts'
-import { bothUnderATenth, DIRECTIONAL_MIN } from '../view/effort.ts'
+import { bothUnderATenth, DIRECTIONAL_MIN, filesChanged } from '../view/effort.ts'
 import { familyEffortLabel, familyLiftLabel, familyRateLabel } from '../view/family.ts'
 import { runHeader } from '../view/header.ts'
 import { labeledJudgments } from '../view/judgments.ts'
@@ -53,6 +53,12 @@ export type DigestAttempt = {
   outcome: AttemptRecord['outcome']
   tools: number
   agentS: number
+  /** Calls to the agent's file-editing tools; an edit made from the shell isn't one. */
+  fileEdits: number
+  /** Files the workspace diff changed, however the agent changed them. */
+  filesChanged: number
+  /** Seconds the agent spent reasoning; null when its harness didn't report it, never 0 for that. */
+  reasoningS: number | null
   /** Assertions (`expect` and `expect.require`) passed over those that settled. */
   checks?: string
   /** The labels of the assertions that failed or couldn't answer. */
@@ -338,6 +344,10 @@ export async function buildDigestKeepingDropped(
           outcome: a.outcome,
           tools: a.activity.tools,
           agentS: Math.round(a.timings.agentMs / 1000),
+          fileEdits: a.activity.fileEdits,
+          filesChanged: filesChanged(a.changedFiles),
+          reasoningS:
+            a.activity.reasoningMs === null ? null : Math.round(a.activity.reasoningMs / 100) / 10,
           ...(assertions.length
             ? {
                 checks: `${assertions.filter((x) => x.status === 'pass').length}/${assertions.length}`,

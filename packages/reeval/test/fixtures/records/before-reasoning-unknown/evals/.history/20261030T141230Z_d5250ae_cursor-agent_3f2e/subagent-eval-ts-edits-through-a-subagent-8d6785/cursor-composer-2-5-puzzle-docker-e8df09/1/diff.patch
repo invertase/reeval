@@ -1,0 +1,27 @@
+diff --git a/src/NOTES.md b/src/NOTES.md
+new file mode 100644
+index 0000000..92cc634
+--- /dev/null
++++ b/src/NOTES.md
+@@ -0,0 +1 @@
++Sort meetings by end time and greedily take each meeting whose start is at or after the last chosen end.
+diff --git a/src/schedule.js b/src/schedule.js
+index fe8c91e..9dff8b3 100644
+--- a/src/schedule.js
++++ b/src/schedule.js
+@@ -1,4 +1,14 @@
+ // Returns the number of meetings that can be attended without overlap.
+ export function maxMeetings(meetings) {
+-  return 0
++  if (meetings.length === 0) return 0
++  const sorted = [...meetings].sort((a, b) => a[1] - b[1])
++  let count = 1
++  let lastEnd = sorted[0][1]
++  for (let i = 1; i < sorted.length; i++) {
++    if (sorted[i][0] >= lastEnd) {
++      count++
++      lastEnd = sorted[i][1]
++    }
++  }
++  return count
+ }

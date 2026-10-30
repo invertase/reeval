@@ -77,6 +77,7 @@ function familyLift(cases: FamilyCase[]): FamilyLift {
       outcome: i < pass ? 'pass' : 'fail',
       activity: { tools: 1, fileEdits: 0 },
       timings: { agentMs: 1000 },
+      changedFiles: [],
     }))
   const evals = cases.map(
     ([vPass, vCounted, cPass, cCounted], i) =>
@@ -272,6 +273,7 @@ describe("paired lift over a pooled family's cases", () => {
         outcome: 'pass',
         activity: { tools, fileEdits: 0 },
         timings: { agentMs: 1000 },
+        changedFiles: [],
       })
       return {
         file: 'family.eval.ts',

@@ -225,6 +225,8 @@ export type AttemptRecord = {
    * `text` is the agent's final message, cut at 8 KB; the whole of it is in the `transcript.jsonl`
    * file.
    * `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`).
+   * `reasoningMs` is how long the turn's streamed reasoning took, null when the harness can't
+   * time it.
    */
   turns: Array<{
     prompt: string
@@ -242,6 +244,16 @@ export type AttemptRecord = {
     error: string | null
     /** Each stdio MCP server start during the turn; see `McpStartup`. */
     mcpStartup?: McpStartup[]
+    /**
+     * Milliseconds the agent spent reasoning in the turn, the sum of the reasoning blocks its
+     * harness streamed; null when that's unknown: the harness can't time its reasoning (Codex's
+     * arrives whole, Antigravity's never), or the turn used reasoning tokens with no reasoning
+     * block, or had no block and no usage saying it used none, or never finished. Absent in
+     * records from before reeval recorded it, where a 0 on a real harness reads as an unknown
+     * `activity.reasoningMs`, and on the fake harness's finished turns, whose blocks are its
+     * script's.
+     */
+    reasoningMs?: number | null
   }>
   /** Tokens across the attempt's turns; null when the harness reported none. */
   usage: TokenUsage | null
@@ -251,14 +263,28 @@ export type AttemptRecord = {
    */
   captureUse?: { model: string; moves: number; usage: TokenUsage | null }
   timings: PhaseTimings
-  /** Counts from the transcript, so the attempt's activity is available without reading the transcript. `webSearches` includes refused searches. */
+  /**
+   * Counts from the transcript, so the attempt's activity is available without reading the transcript. `webSearches` includes refused searches.
+   * `fileEdits` counts edit tool calls, so a shell edit isn't one; `changedFiles` has what the workspace diff shows changed.
+   * `reasoningMs` is null when some turn's reasoning time is unknown, so a 0 is always a measurement.
+   */
   activity: {
     tools: number
+    /**
+     * The transcript's `file-edit` events: calls to the agent's file-editing tools, a Claude Code
+     * subagent's included. A file the agent changed from the shell, or through a subagent whose
+     * calls its harness doesn't stream (Cursor's `task`, Codex's `spawn_agent`), isn't counted:
+     * `changedFiles`, from the workspace diff, has every file the attempt changed.
+     */
     fileEdits: number
     /** Every `web-search` event, including refused ones. Null when a turn with none couldn't report them (`unreported`). */
     webSearches: number | null
     webFetches: number | null
-    reasoningMs: number
+    /**
+     * The turns' `reasoningMs` added up; null when any turn's is unknown, so a 0 is a
+     * measurement, never a harness that doesn't report it.
+     */
+    reasoningMs: number | null
     /** Transcript tool events with `stalled: true` (long shell or edit). */
     stalledTools: number
     /** Longest tool `durationMs` in the transcript; null when none reported a duration. */

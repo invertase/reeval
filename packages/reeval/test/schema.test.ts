@@ -290,6 +290,41 @@ describe('read defaults', () => {
     assert.deepEqual(record.evals, [{ todo: true }, { todo: false }])
   })
 
+  test("a real harness's reasoning time of 0 from before turns recorded it reads as unknown", () => {
+    const before = records.filter((r) => r.file.includes('/before-reasoning-unknown/'))
+    assert.ok(before.length > 0)
+    const read = new Map<string, number | null>()
+    for (const r of before)
+      for (const e of readableRecord(copy(r.value) as never).evals)
+        for (const a of e.attempts)
+          read.set(`${e.key} ${a.cell.split(':')[0]}`, a.activity.reasoningMs)
+    const edit = (h: string) => read.get(`edit.eval.ts › edits and reasons ${h}`)
+    for (const h of ['codex', 'antigravity', 'opencode', 'fx']) assert.equal(edit(h), null, h)
+    for (const h of ['cursor', 'claude-code', 'goose', 'pi', 'grok-build']) {
+      const ms = edit(h)
+      assert.ok(typeof ms === 'number' && ms > 0, `${h}: ${ms}`)
+    }
+  })
+
+  test("twin: a 0 the turns recorded, the fake harness's, or one with no reasoning tokens stays 0", () => {
+    const attempt = (turns: object[], usage: object | null = null) => ({
+      cell: 'c',
+      turns,
+      usage,
+      activity: { reasoningMs: 0 },
+    })
+    const record = (harnessKind: string, a: ReturnType<typeof attempt>) =>
+      readableRecord({
+        schemaVersion: 1,
+        evals: [{ cells: [{ key: 'c', harnessKind }], attempts: [a] }],
+      } as never).evals[0]?.attempts[0]?.activity.reasoningMs
+    assert.equal(record('codex', attempt([{ reasoningMs: 0 }])), 0)
+    assert.equal(record('fake', attempt([{}])), 0)
+    assert.equal(record('cursor', attempt([{}], { reasoning: 0 })), 0)
+    assert.equal(record('cursor', attempt([{}])), null)
+    assert.equal(record('fake', attempt([])), null)
+  })
+
   test('a file from a newer reeval throws NewerSchemaError naming both versions', () => {
     const record = copy(records[0]?.value) as Record<string, unknown>
     record.schemaVersion = 2
