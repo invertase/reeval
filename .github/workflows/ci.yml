@@ -230,7 +230,7 @@ jobs:
       - if: ${{ !cancelled() }}
         run: npx -y @docs.page/cli@2.1.0 check --external-links warn
       - if: ${{ !cancelled() }}
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
           # over a minute on Windows.
@@ -270,7 +270,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
           # over a minute on Windows.
@@ -314,7 +314,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
           # over a minute on Windows.
@@ -383,7 +383,7 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
           # over a minute on Windows.
@@ -518,7 +518,7 @@ jobs:
           go-version: stable
           cache: false
       - if: matrix.sdk == 'python'
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           cache-dependency-glob: packages/reeval-python/uv.lock
           save-cache: ${{ github.ref == 'refs/heads/main' }}
