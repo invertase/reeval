@@ -6,7 +6,7 @@ evals/cost.eval.ts › fixes the bug  cursor:composer-2.5/-/docker          cont
                                     claude-code:claude-sonnet-5/-/docker  control  gated  ×2  effort medium
 excluded: —
 image docker · cursor · 2 evals
-  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 2 evals
   base  reeval-sandbox:claude-code-1.0.171-patch.8cc1b324  (reeval's image: built when missing or when its base changed)
 cost  estimated $0.98–5.05 at prices.json over models.dev list prices, judge included · 2 of 8 attempts from 2 past runs, the rest rough

@@ -30,8 +30,14 @@ import { shellQuote as q, run } from './process.ts'
 import { createDockerSession } from './session.ts'
 
 const PNPM_VERSION = '10.33.3'
-/** npm before 11.6 (node:22 ships 10.9) can crash on circular peer sets (npm/cli#8261). */
+/** Pinned so evals' installs don't move with the Node image's bundled npm. */
 const NPM_VERSION = '11.20.0'
+/**
+ * The official Node image the sandbox's Node comes from: the base Dockerfile's `FROM` (a test holds
+ * them equal) and the toolchain layer's copy onto a `from` image. Node 24+ bundles undici 7, whose
+ * `EnvHttpProxyAgent` (behind `NODE_USE_ENV_PROXY`) prints no experimental warning.
+ */
+export const NODE_IMAGE = 'node:26-bookworm-slim'
 
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')
 
@@ -173,16 +179,17 @@ export const versionLabel = (output: string) =>
 
 /**
  * Adds what the harness bridge needs to a Debian or Ubuntu based toolchain image: Node (copied
- * from the official image, so the base's own toolchain is untouched), pnpm, git, curl and bash.
+ * from the official image, so the base's own toolchain is untouched, with libatomic1, which Node
+ * 25+ links against), pnpm, git, curl and bash.
  */
 const toolchainDockerfile = (from: string) => `FROM ${imageReference(from)}
 SHELL ["/bin/sh", "-c"]
 RUN command -v apt-get >/dev/null || { echo "reeval needs a Debian or Ubuntu based image (glibc and apt-get)" >&2; exit 1; } \\
   && apt-get update \\
-  && apt-get install -y --no-install-recommends bash ca-certificates curl git procps \\
+  && apt-get install -y --no-install-recommends bash ca-certificates curl git libatomic1 procps \\
   && rm -rf /var/lib/apt/lists/*
-COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
-COPY --from=node:22-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=${NODE_IMAGE} /usr/local/bin/node /usr/local/bin/node
+COPY --from=${NODE_IMAGE} /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \\
   && ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \\
   && npm install --global npm@${NPM_VERSION} \\

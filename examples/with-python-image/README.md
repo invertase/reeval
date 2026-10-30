@@ -37,7 +37,7 @@ pass             writes and tests fizzbuzz in Python
 ```
 
 `pnpm reeval image build --dry-run` then shows the image reeval built on the tag's digest:
-`✓ from python:3.12-slim  reeval-sandbox:cursor-0.1.7-python-3-12-slim-375f4a61`. Later runs reuse
+`✓ from python:3.12-slim  reeval-sandbox:cursor-0.1.8-python-3-12-slim-d2938f76`. Later runs reuse
 it even when the tag moves; pin a digest (`python:3.12-slim@sha256:…`) to never move.
 
 | File | What it is |

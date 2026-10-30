@@ -120,7 +120,7 @@
 | `reeval clean --images`, and no `-base` tag or replaced image left behind | ✓ 1 | — | — | — | — | — |
 | `reeval image build` (every image, every failure, exit 3, `--force`) and its `--dry-run` | ✓ 2 | — | — | — | — | — |
 | `egress`: allowlist or deny-all, enforced in Docker and recorded per attempt | ✓ 3 | ✓ 2 | — | ● 7 | ● 4 | ● 2 |
-| `egress: 'proxy'` (the default) detaches the container, so only HTTP(S) through the gateway leaves it; `'allow-all'` keeps its network, records `partial` and warns on a CI runner or cloud VM | ✓ 3 | ✓ 2 | — | ● 2 | ● 2 | — |
+| `egress: 'proxy'` (the default) detaches the container, so only HTTP(S) and WebSockets through the gateway leave it (Node's `fetch`, `http`, `https` and `WebSocket` too, without Node 22's experimental-proxy warning); `'allow-all'` keeps its network, records `partial` and warns on a CI runner or cloud VM | ✓ 4 | ✓ 2 | — | ● 3 | ● 2 | — |
 | The harness's key never enters the container | ✓ 3 | — | — | — | — | ● 2 |
 | A request carrying the harness's brokered key off its endpoints: a 403 from the gateway, a `blocked` entry in the attempt's `egress` and a warning on the terminal | ✓ 2 | — | — | ● 1 | — | — |
 | Ports: through the tunnel, or published without the gateway | ✓ 1 | — | — | — | — | — |

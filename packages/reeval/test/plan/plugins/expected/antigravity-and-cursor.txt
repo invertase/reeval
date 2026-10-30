@@ -3,6 +3,6 @@ evals/every-part.eval.ts › loads the plugin  antigravity:gemini-3.8-flash-low/
                                              cursor:composer-2.5/review/docker               control  gated  ×1  plugins review (skills, agents, commands, hooks, mcp, rules)
 excluded: —
 image docker · antigravity · 1 evals
-  base  reeval-sandbox:antigravity-0.1.12  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:antigravity-0.1.13  (reeval's image: built when missing or when its base changed)
 image docker · cursor · 1 evals
-  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

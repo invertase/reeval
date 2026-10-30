@@ -12,4 +12,4 @@ evals/m.eval.ts › gated on a pass rate     a/-/docker  control  gated passRate
                                            b/-/docker  control  gated passRate 0.8  ×5
 excluded: —
 image docker · cursor · 5 evals
-  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

@@ -20,6 +20,7 @@ import {
   harnessImageFor,
   installLayerTag,
   installScript,
+  NODE_IMAGE,
   pluginBuildScript,
   sourceTreeHash,
   versionLabel,
@@ -1385,6 +1386,16 @@ describe('image recipes', () => {
     for (const from of ['node:24', `ghcr.io/acme/tool:1.2@sha256:${'a'.repeat(64)}`]) {
       assert.match(harnessImageFor('cursor', from), /^reeval-sandbox:cursor-/)
     }
+  })
+
+  test('the base image and the toolchain layer take Node from the same image, on Node 24 or later', () => {
+    const dockerfile = readFileSync(
+      fileURLToPath(new URL('../docker/Dockerfile', import.meta.url)),
+      'utf8',
+    )
+    assert.equal(/^FROM (\S+)$/m.exec(dockerfile)?.[1], NODE_IMAGE)
+    // Node 22's undici 6 warns that EnvHttpProxyAgent is experimental in every proxied process.
+    assert.ok(Number(/^node:(\d+)-/.exec(NODE_IMAGE)?.[1]) >= 24, NODE_IMAGE)
   })
 
   test("a CLI's version output becomes a label value that can't add instructions", () => {

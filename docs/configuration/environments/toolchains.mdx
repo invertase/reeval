@@ -3,11 +3,11 @@ title: "Add toolchains"
 description: "Give every attempt the toolchain the agent needs."
 ---
 
-reeval's sandbox image has Node, Git, and the harness. When the agent needs another toolchain, add it to the image so every attempt starts with it installed. For more information about commands that run before each attempt, see [Setup commands](/configuration/environments/setup-commands).
+reeval's sandbox image has Node 26 (the current LTS), Git, and the harness. When the agent needs another toolchain, add it to the image so every attempt starts with it installed. For more information about commands that run before each attempt, see [Setup commands](/configuration/environments/setup-commands).
 
 ## Start from a base image
 
-To start with a Debian- or Ubuntu-based image, in the `evals/environments.ts` file, pass `from` to `docker()`. On the first run, reeval installs Node, Git, and the harness in the image and caches the result:
+To start with a Debian- or Ubuntu-based image, in the `evals/environments.ts` file, pass `from` to `docker()`. On the first run, reeval installs Node 26, Git, and the harness in the image and caches the result:
 
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'

@@ -505,11 +505,11 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
 </Property>
 
 <Property name="docker.image" type="string" optional>
-  An image that already has the harness baked in. reeval uses it as is. At most one of `image`, `from`, and `dockerfile`; without one, the container runs reeval's own image for the harness.
+  An image that already has the harness baked in. reeval uses it as is. At most one of `image`, `from`, and `dockerfile`; without one, the container runs reeval's own image for the harness, on Node 26.
 </Property>
 
 <Property name="docker.from" type="string" optional>
-  A Debian or Ubuntu based toolchain image, such as `python:3.12-slim`. reeval bakes Node, Git, and the harness on top on first use and caches the result. The image needs `apt-get` and glibc.
+  A Debian or Ubuntu based toolchain image, such as `python:3.12-slim`. reeval bakes Node 26, Git, and the harness on top on first use and caches the result. The image needs `apt-get` and glibc.
 </Property>
 
 <Property name="docker.dockerfile" type="string | URL" optional>

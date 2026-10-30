@@ -14,20 +14,20 @@ evals/e.eval.ts › default effort  codex:gpt-5.6-sol/-/docker                 c
                                   cursor:gpt-5.6-luna/-/docker               control  gated  ×1  effort medium
 excluded: —
 image docker · codex · 1 evals
-  base  reeval-sandbox:codex-0.1.9  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:codex-0.1.10  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 1 evals
   base  reeval-sandbox:claude-code-1.0.171-patch.8cc1b324  (reeval's image: built when missing or when its base changed)
 image docker · antigravity · 1 evals
-  base  reeval-sandbox:antigravity-0.1.12  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:antigravity-0.1.13  (reeval's image: built when missing or when its base changed)
 image docker · opencode · 1 evals
-  base  reeval-sandbox:opencode-0.2.12  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:opencode-0.2.13  (reeval's image: built when missing or when its base changed)
 image docker · goose · 1 evals
-  base  reeval-sandbox:goose-0.1.9  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:goose-0.1.10  (reeval's image: built when missing or when its base changed)
 image docker · pi · 1 evals
-  base  reeval-sandbox:pi-0.2.8  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:pi-0.2.9  (reeval's image: built when missing or when its base changed)
 image docker · grok-build · 1 evals
-  base  reeval-sandbox:grok-build-0.1.7  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:grok-build-0.1.8  (reeval's image: built when missing or when its base changed)
 image docker · fx · 1 evals
-  base  reeval-sandbox:fx-0.1.4  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:fx-0.1.5  (reeval's image: built when missing or when its base changed)
 image docker · cursor · 1 evals
-  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

@@ -5,6 +5,6 @@ evals/g.eval.ts › greets  codex:gpt-5.4-mini/-/docker   control  gated  ×1  e
 evals/g.eval.ts › pinned  b/-/docker                    control  gated  ×1  gateway: b → direct · gateway: openrouter() fallbacks on: reeval's own calls may fail over to another upstream provider; the harnesses' calls take OpenRouter's own routing
 excluded: —
 image docker · codex · 1 evals
-  base  reeval-sandbox:codex-0.1.9  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:codex-0.1.10  (reeval's image: built when missing or when its base changed)
 image docker · cursor · 2 evals
-  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

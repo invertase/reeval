@@ -37,7 +37,7 @@ whether it comes from a helper (`file()`, `skill.local()`, `skill.npm()`, `git()
 |---|---|
 | The environment's `sandbox` | It sets one; `extendEnvironment` keeps the parent's when the child omits it |
 | The cascaded `sandbox` option (`defineConfig({ sandbox })`) | The resolved environment omits it; it's the default machine, not an environment |
-| Implicit Docker (reeval's image: Node 22, git, pnpm, the agent CLI) | Neither is set |
+| Implicit Docker (reeval's image: Node 26, git, pnpm, the agent CLI) | Neither is set |
 
 A named env is a total override: no skills, files or sandbox inherit from the config
 environment. A fake profile or config puts `sandbox: fakeSandbox()` on `defaults` or

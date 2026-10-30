@@ -878,7 +878,7 @@ const bookworm = defineEnvironment('bookworm', { sandbox: docker({ from: 'debian
 evaluate('bakes', { environment: bookworm }, async (c) => {
   const turn = await c.send('x')
   const shell = turn.transcript.flatMap((e) => (e.type === 'tool' && e.tool === 'shell' ? [e.output] : []))
-  expect(shell.join('')).toMatch(/^v22\\./)
+  expect(shell.join('')).toMatch(/^v26\\./)
   expect((await c.exec('grep -c bookworm /etc/os-release')).exitCode).toBe(0)
   expect((await c.exec('git --version && curl --version && pnpm --version')).exitCode).toBe(0)
   expect((await c.exec('pwd')).stdout).toBe('/reeval/workspace\\n')

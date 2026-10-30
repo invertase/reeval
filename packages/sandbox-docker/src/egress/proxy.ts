@@ -648,8 +648,48 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       onPlain(target, req, res, path, url.host, done)
     })
   })
-  front.on('upgrade', (_req: http.IncomingMessage, socket: Duplex) => {
-    reply(socket, 501, 'reeval egress gateway: use CONNECT for websockets')
+  // An absolute-URL upgrade: a `ws://` WebSocket from a client that forwards plain HTTP rather than
+  // tunneling it, as Node 24+'s `NODE_USE_ENV_PROXY` does. Passed upstream as a plain upgrade in a
+  // tunnel is, so it gets no credentials or substitutions either. `wss://` comes over CONNECT.
+  front.on('upgrade', (req: http.IncomingMessage, socket: Duplex, head: Buffer) => {
+    const url = URL.parse(req.url ?? '')
+    if (url?.protocol !== 'http:') {
+      return reply(socket, 501, 'reeval egress gateway: use CONNECT for wss:// websockets')
+    }
+    const { host, port } = parseAuthority(url.host, 80)
+    if (!isPort(port)) {
+      log(`reeval:egress ${req.method} http://${url.host} refused (invalid port)`)
+      return reply(socket, 400, `reeval egress gateway: invalid port ${port} in ${url.origin}`)
+    }
+    const shown = `http://${authorityOf(host, port)}${pathOnly(url.pathname)}`
+    const startedAt = Date.now()
+    void check(host).then((verdict) => {
+      if (!verdict.allowed) {
+        log(`reeval:egress ${req.method} ${shown} (upgrade) denied (${verdict.reason})`)
+        block(socket, host, port, verdict)
+        emit({
+          type: 'request',
+          method: req.method ?? 'GET',
+          url: shown,
+          host,
+          port,
+          via: 'http',
+          allowed: false,
+          status: verdict.status,
+          reason: verdict.reason,
+          ...(verdict.status === 502 && { unresolved: true as const }),
+          sent: 0,
+          received: 0,
+          substituted: [],
+          credentials: [],
+          requestHeaders: plainHeaders(req.headers),
+          ms: Date.now() - startedAt,
+        })
+        return reply(socket, verdict.status, refusal(verdict))
+      }
+      contact(socket, host, port)
+      onPlainUpgrade({ host, port, address: verdict.address }, req, track(socket), head)
+    })
   })
 
   /**

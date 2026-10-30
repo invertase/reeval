@@ -1,6 +1,6 @@
 {
   "name": "@reeval/harness-grok-build",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "description": "An AI SDK harness adapter for xAI's Grok Build on an xAI API key, over its ACP server (grok agent stdio)",
   "license": "Apache-2.0",

@@ -5,6 +5,7 @@ import https from 'node:https'
 import type net from 'node:net'
 import { after, before, describe, test } from 'node:test'
 import type { HarnessV1RequestTransformation } from '@ai-sdk/harness'
+import { WebSocketServer } from 'ws'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import { PROXY_PORT } from '../src/egress/gateway.ts'
 import type { NetworkPolicy } from '../src/egress/policy.ts'
@@ -37,6 +38,44 @@ const pythonImage = () => {
     return false
   }
 }
+
+/** reeval's image with Node 22's binary beside its own, to show what the image's Node no longer prints. */
+const NODE_22_IMAGE = `reeval-test-node-22:${DEFAULT_IMAGE.split(':')[1]}`
+const node22Image = () => {
+  try {
+    execFileSync(CLI, ['build', '-q', '-t', NODE_22_IMAGE, '-'], {
+      input: `FROM ${DEFAULT_IMAGE}\nCOPY --from=node:22-bookworm-slim /usr/local/bin/node /opt/node-22/node\n`,
+      stdio: ['pipe', 'ignore', 'pipe'],
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Node's clients in the container, by name: `node probe.mjs <client> <url>` prints `<status> <body>`. */
+const NODE_PROBE = `import http from 'node:http'
+import https from 'node:https'
+const [client, url] = process.argv.slice(2)
+const get = (mod) => new Promise((ok, no) => mod.get(url, (r) => {
+  let body = ''
+  r.on('data', (d) => { body += d })
+  r.on('end', () => ok(r.statusCode + ' ' + body))
+}).on('error', no))
+const socket = () => new Promise((ok, no) => {
+  const ws = new WebSocket(url)
+  ws.onopen = () => ws.send('ping')
+  ws.onmessage = (e) => { ok('101 ' + e.data); ws.close() }
+  ws.onerror = (e) => no(e.error ?? new Error(e.message ?? 'websocket error'))
+})
+const clients = {
+  fetch: () => fetch(url).then(async (r) => r.status + ' ' + (await r.text())),
+  http: () => get(http),
+  https: () => get(https),
+  websocket: socket,
+}
+clients[client]().then(console.log, (e) => { console.error(String(e.cause ?? e)); process.exit(1) })
+`
 
 const PLACEHOLDER = `aisdkhc_${'Z'.repeat(43)}`
 const REAL = 'crsr_docker_test_real_key_9f8e7d6c5b4a39281706'
@@ -409,10 +448,99 @@ describe('egress gateway in Docker', {
     assert.equal(r.exitCode, 0, r.stderr)
     assert.equal(JSON.parse(r.stdout).authorization, `Bearer ${tokenHolder}`)
     assert.equal(seen[0]?.authorization, `Bearer ${token}`)
-    // Twin: without it, Node 22's fetch ignores the proxy and can't even resolve the host.
+    // Twin: without it, Node's fetch ignores the proxy and can't even resolve the host.
     const direct = await sh(s, `env -u NODE_USE_ENV_PROXY node -e '${script}'`)
     assert.notEqual(direct.exitCode, 0)
     assert.match(direct.stderr, /ENOTFOUND|EAI_AGAIN|getaddrinfo/)
+  })
+
+  test("Node's fetch, http, https and WebSocket go through the gateway without a warning, and deny-all refuses each", async () => {
+    const s = await brokered(DEFAULT_IMAGE)
+    await sh(s, `cat > /tmp/probe.mjs <<'EOF'\n${NODE_PROBE}EOF`)
+    const plainSeen: string[] = []
+    const plainServer = http.createServer((req, res) => {
+      plainSeen.push(req.url ?? '')
+      res.end('plain ok')
+    })
+    const sockets = new WebSocketServer({ server: plainServer })
+    sockets.on('connection', (ws, req) => {
+      plainSeen.push(`ws ${req.url}`)
+      ws.on('message', (data) => ws.send(`echo ${data}`))
+    })
+    const leaf = issueServerCertificate(upstreamCa, 'upstream.test')
+    const secureServer = https.createServer({
+      key: leaf.key.export({ type: 'pkcs8', format: 'pem' }),
+      cert: leaf.cert,
+    })
+    const secureSockets = new WebSocketServer({ server: secureServer })
+    secureSockets.on('connection', (ws, req) => {
+      plainSeen.push(`wss ${req.url}`)
+      ws.on('message', (data) => ws.send(`echo ${data}`))
+    })
+    const listen = async (server: net.Server) => {
+      await new Promise<void>((resolve) => server.listen(0, '0.0.0.0', resolve))
+      return `upstream.test:${(server.address() as net.AddressInfo).port}`
+    }
+    const plain = await listen(plainServer)
+    const secureWs = await listen(secureServer)
+    const secure = `upstream.test:${upstream.port}`
+    const urls = {
+      fetch: [`http://${plain}/fetch`, `https://${secure}/fetch`],
+      http: [`http://${plain}/http`],
+      https: [`https://${secure}/https`],
+      websocket: [`ws://${plain}/websocket`, `wss://${secureWs}/websocket`],
+    }
+    try {
+      for (const [client, list] of Object.entries(urls)) {
+        for (const url of list) {
+          const r = await sh(s, `node /tmp/probe.mjs ${client} ${url}`)
+          assert.equal(r.stderr, '', `${client} ${url}`)
+          assert.equal(r.exitCode, 0, `${client} ${url}`)
+          assert.match(r.stdout, /^(200|101) /, `${client} ${url}: ${r.stdout}`)
+        }
+      }
+      assert.deepEqual(plainSeen, ['/fetch', '/http', 'ws /websocket', 'wss /websocket'])
+      assert.deepEqual(
+        seen.map((x) => x.path),
+        ['/fetch', '/https'],
+      )
+
+      await s.setNetworkPolicy?.({ mode: 'deny-all' })
+      plainSeen.length = 0
+      seen.length = 0
+      for (const [client, list] of Object.entries(urls)) {
+        for (const url of list) {
+          const r = await sh(s, `node /tmp/probe.mjs ${client} ${url}`)
+          assert.doesNotMatch(r.stdout, /^(200|101) /, `${client} ${url} under deny-all`)
+          // Without the proxy there's no route at all: the name doesn't resolve.
+          const direct = await sh(
+            s,
+            `env -u NODE_USE_ENV_PROXY -u HTTP_PROXY -u HTTPS_PROXY -u http_proxy -u https_proxy node /tmp/probe.mjs ${client} ${url}`,
+          )
+          assert.notEqual(direct.exitCode, 0, `${client} ${url} without the proxy`)
+        }
+      }
+      const raw = await sh(
+        s,
+        `node -e 'require("net").connect(${upstream.port}, "1.1.1.1").on("connect", () => { console.log("connected"); process.exit(0) }).on("error", (e) => { console.error(e.code); process.exit(1) })'`,
+      )
+      assert.notEqual(raw.exitCode, 0, 'no raw TCP route')
+      assert.deepEqual([plainSeen, seen], [[], []], 'nothing reached an upstream under deny-all')
+    } finally {
+      for (const closing of [sockets, secureSockets, plainServer, secureServer]) closing.close()
+    }
+  })
+
+  test("Node 22's binary, unlike the image's own, warns that the proxy is experimental", async (t) => {
+    if (!node22Image()) return t.skip(`couldn't build ${NODE_22_IMAGE}`)
+    const s = await brokered(NODE_22_IMAGE)
+    const url = `https://upstream.test:${upstream.port}/fetch`
+    const script = `fetch("${url}").then((r) => r.text()).then(() => console.log("ok"))`
+    const own = await sh(s, `node -e '${script}'`)
+    assert.deepEqual([own.exitCode, own.stdout, own.stderr], [0, 'ok\n', ''])
+    const old = await sh(s, `/opt/node-22/node -e '${script}'`)
+    assert.equal(old.stdout, 'ok\n')
+    assert.match(old.stderr, /\[UNDICI-EHPA\] Warning: EnvHttpProxyAgent is experimental/)
   })
 
   test('a restricted policy leaves the gateway as the only way out', async () => {

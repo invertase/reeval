@@ -1,14 +1,14 @@
 # Base image for reeval sandboxes. `reeval image build` builds this, bakes the Cursor harness
 # bootstrap into it and commits the result as the image evals run in.
-FROM node:22-bookworm-slim
+FROM node:26-bookworm-slim
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends bash ca-certificates curl git procps \
   && rm -rf /var/lib/apt/lists/*
 
-# npm before 11.6 (node:22 ships 10.9) can crash resolving circular peer sets ("reading
-# 'edgesOut'", npm/cli#8261), so evals' installs get a fixed npm. The harness bridge installs its
-# dependencies with pnpm. Versions come from `reeval image build` (`NPM_VERSION` / `PNPM_VERSION`).
+# npm and pnpm are pinned so evals' installs don't move with the Node image's bundled npm. The
+# harness bridge installs its dependencies with pnpm. Versions come from `reeval image build`
+# (`NPM_VERSION` / `PNPM_VERSION`).
 ARG NPM_VERSION
 ARG PNPM_VERSION
 RUN test -n "$NPM_VERSION" && test -n "$PNPM_VERSION" \
