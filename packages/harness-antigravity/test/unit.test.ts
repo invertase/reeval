@@ -91,6 +91,10 @@ describe('auth', () => {
       '/v1beta/models/x:streamGenerateContent/',
       '/v1beta/models/a/b:streamGenerateContent',
       '/v1beta/models/a/b:generateContent',
+      '/v1beta/models/x:countTokens:generateContent',
+      '/v1beta/models/x%2F..%2Ffiles:generateContent',
+      '/v1beta/models/x%3AgenerateContent',
+      '/v1beta/models/x:GenerateContent',
       '/upload/v1beta/models/x:streamGenerateContent',
       '/upload/v1beta/models/x:generateContent',
     ]) {

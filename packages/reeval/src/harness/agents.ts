@@ -289,7 +289,7 @@ const GEMINI_ENDPOINTS = [
 const ANTIGRAVITY_ENDPOINTS = [
   {
     host: 'generativelanguage.googleapis.com',
-    path: { regex: '^/v1beta/models/[^/]+:(?:streamGenerateContent|generateContent)$' },
+    path: { regex: '^/v1beta/models/[\\w.-]+:(?:streamGenerateContent|generateContent)$' },
     method: ['POST'],
   },
 ] as const satisfies readonly EndpointMatch[]

@@ -60,7 +60,9 @@ export function antigravityEndpoints(baseUrl: string = GEMINI_API_URL) {
   return [
     {
       host: url.hostname,
-      path: { regex: `^${prefix}/v1beta/models/[^/]+:(?:streamGenerateContent|generateContent)$` },
+      path: {
+        regex: `^${prefix}/v1beta/models/[\\w.-]+:(?:streamGenerateContent|generateContent)$`,
+      },
       method: ['POST'],
     },
   ] as const satisfies ReadonlyArray<
