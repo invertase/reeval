@@ -18,6 +18,16 @@ export const CA_PATH = '/usr/local/share/ca-certificates/reeval-egress.crt'
 /** Debian's system bundle, which `update-ca-certificates` rebuilds with the gateway's CA in it. */
 export const CA_BUNDLE = '/etc/ssl/certs/ca-certificates.crt'
 const BUNDLED = 'reeval:ca-bundle'
+/**
+ * Under `NODE_USE_ENV_PROXY`, Node 22 (undici 6) warns at every start that `EnvHttpProxyAgent` is
+ * experimental; Node 24 (undici 7) doesn't. Node before 20.11 refuses the flag in `NODE_OPTIONS`,
+ * so it's appended only where the container's Node warns and the flag silences it.
+ */
+export const QUIET_PROXY_WARNING = '--disable-warning=UNDICI-EHPA'
+const WARNS = 'reeval:proxy-warns'
+const warns = (options: string) =>
+  `NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:${PROXY_PORT} NODE_OPTIONS=${options} node -e 0 2>&1 | grep -q UNDICI-EHPA`
+const WARNS_SCRIPT = `{ ${warns("''")} && ! ${warns(QUIET_PROXY_WARNING)} && echo ${WARNS}; true; }`
 
 const READY_TIMEOUT_MS = 15_000
 
@@ -32,6 +42,8 @@ export type GatewayOptions = Omit<EgressProxyOptions, 'ca'>
 export type Gateway = {
   /** Proxy and CA variables for every process in the container. */
   readonly env: Record<string, string>
+  /** Flags every exec appends to its `NODE_OPTIONS`, when the container's Node needs any. */
+  readonly nodeOptions: string | undefined
   addTransformations(rules: readonly RequestTransformation[]): void
   setTransformations(rules: readonly RequestTransformation[]): void
   setPolicy(policy: NetworkPolicy): void
@@ -45,7 +57,8 @@ export type Gateway = {
   close(): void
 }
 
-const installCa = (containerId: string, cert: string, signal?: AbortSignal, engine?: Engine) =>
+/** Installs the gateway's CA and checks whether the container's Node warns about the proxy. */
+const prepare = (containerId: string, cert: string, signal?: AbortSignal, engine?: Engine) =>
   docker(
     [
       'exec',
@@ -54,7 +67,7 @@ const installCa = (containerId: string, cert: string, signal?: AbortSignal, engi
       containerId,
       'sh',
       '-c',
-      `umask 022 && mkdir -p "$(dirname ${CA_PATH})" && cat > ${CA_PATH} && { command -v update-ca-certificates >/dev/null && update-ca-certificates >/dev/null 2>&1 && grep -q "$(sed -n 2p ${CA_PATH})" ${CA_BUNDLE} && echo ${BUNDLED}; true; }`,
+      `umask 022 && mkdir -p "$(dirname ${CA_PATH})" && cat > ${CA_PATH} && { command -v update-ca-certificates >/dev/null && update-ca-certificates >/dev/null 2>&1 && grep -q "$(sed -n 2p ${CA_PATH})" ${CA_BUNDLE} && echo ${BUNDLED}; true; } && ${WARNS_SCRIPT}`,
     ],
     { input: cert, signal, engine },
   )
@@ -70,11 +83,12 @@ export async function startGateway(
   engine?: Engine,
 ): Promise<Gateway> {
   const ca = createCertificateAuthority()
-  const installed = await installCa(containerId, ca.cert, signal, engine)
+  const installed = await prepare(containerId, ca.cert, signal, engine)
   if (installed.exitCode !== 0) {
     throw new Error(`couldn't install the gateway CA: ${installed.stderr.trim()}`)
   }
   const bundled = installed.stdout.toString('utf8').includes(BUNDLED)
+  const warns = installed.stdout.toString('utf8').includes(WARNS)
   const proxy = createEgressProxy({ ...options, ca })
   const args = [
     'exec',
@@ -194,6 +208,7 @@ export async function startGateway(
           }
         : {}),
     },
+    nodeOptions: warns ? QUIET_PROXY_WARNING : undefined,
     addTransformations: proxy.addTransformations,
     setTransformations: proxy.setTransformations,
     setPolicy: proxy.setPolicy,

@@ -415,6 +415,53 @@ describe('egress gateway in Docker', {
     assert.match(direct.stderr, /ENOTFOUND|EAI_AGAIN|getaddrinfo/)
   })
 
+  test("Node 22's experimental-proxy warning is silenced, keeping the eval's own NODE_OPTIONS", async () => {
+    const s = await open({
+      image: DEFAULT_IMAGE,
+      egress: egress(),
+      env: { NODE_OPTIONS: '--title=from-container' },
+    })
+    // A substitution has the gateway decrypt upstream.test, so Node can verify it.
+    await s.setSubstitutions?.([
+      {
+        name: 'T',
+        placeholder: tokenHolder,
+        value: token,
+        hosts: ['upstream.test'],
+        in: ['header'],
+      },
+    ])
+    const url = `https://upstream.test:${upstream.port}/quiet`
+    const script = `fetch("${url}").then((r) => r.text()).then(() => console.log(process.title, process.env.NODE_OPTIONS))`
+    seen.length = 0
+    const r = await sh(s, `node -e '${script}'`)
+    assert.equal(r.exitCode, 0, r.stderr)
+    assert.equal(r.stderr, '')
+    assert.equal(
+      r.stdout.trim(),
+      'from-container --title=from-container --disable-warning=UNDICI-EHPA',
+    )
+    assert.deepEqual(
+      seen.map((x) => x.path),
+      ['/quiet'],
+      'through the gateway',
+    )
+    const own = await sh(s, `node -p process.title`, { NODE_OPTIONS: '--title=from-exec' })
+    assert.deepEqual([own.stdout.trim(), own.stderr], ['from-exec', ''])
+    // Twin: without NODE_OPTIONS, the image's Node does warn.
+    const loud = await sh(s, `env -u NODE_OPTIONS node -e 0`)
+    assert.match(loud.stderr, /\[UNDICI-EHPA\] Warning: EnvHttpProxyAgent is experimental/)
+  })
+
+  // Node before 20.11 refuses --disable-warning in NODE_OPTIONS, and Node 24 doesn't warn.
+  for (const image of ['node:20.10.0-bookworm-slim', 'node:24-bookworm-slim']) {
+    test(`${image}: Node's NODE_OPTIONS is left alone`, async () => {
+      const s = await open({ image, root: true, egress: egress() })
+      const r = await sh(s, 'node -p "process.env.NODE_OPTIONS ?? \'unset\'"')
+      assert.deepEqual([r.exitCode, r.stdout.trim(), r.stderr], [0, 'unset', ''])
+    })
+  }
+
   test('a restricted policy leaves the gateway as the only way out', async () => {
     const s = await open({
       image: DEFAULT_IMAGE,

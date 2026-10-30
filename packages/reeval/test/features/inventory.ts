@@ -965,8 +965,12 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'egress.proxy',
     area: 'Sandbox',
-    name: "`egress: 'proxy'` (the default) detaches the container, so only HTTP(S) through the gateway leaves it; `'allow-all'` keeps its network, records `partial` and warns on a CI runner or cloud VM",
-    fixtures: ['egress/proxy-no-direct-route', 'egress/allow-all-direct'],
+    name: "`egress: 'proxy'` (the default) detaches the container, so only HTTP(S) through the gateway leaves it (Node's `fetch` too, without Node 22's experimental-proxy warning); `'allow-all'` keeps its network, records `partial` and warns on a CI runner or cloud VM",
+    fixtures: [
+      'egress/proxy-no-direct-route',
+      'egress/allow-all-direct',
+      'egress/node-proxy-quiet',
+    ],
     plan: ['egress/default-proxy', 'egress/allow-all-on-ci'],
     unit: [
       'sandbox-docker/test/docker.test.ts',

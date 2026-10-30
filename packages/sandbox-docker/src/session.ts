@@ -388,6 +388,10 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     }
   }
   const envFor = (env?: Record<string, string>) => (gateway ? { ...gateway.env, ...env } : env)
+  // Appended in the shell, so the image's, the container's and the exec's own NODE_OPTIONS stay.
+  const quietNode = gateway?.nodeOptions
+    ? `export NODE_OPTIONS="\${NODE_OPTIONS:+$NODE_OPTIONS }${gateway.nodeOptions}"; `
+    : ''
 
   const user = ['--user', execUser(options)]
   let execs = 0
@@ -409,7 +413,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     'bash',
     '-c',
     // On the command's own first line, so bash's `line N:` in its errors stays the command's.
-    `${EXEC_UMASK}; ${command}`,
+    `${EXEC_UMASK}; ${quietNode}${command}`,
   ]
   const nextMarker = () => `${id.slice(0, 12)}-${++execs}`
   /**

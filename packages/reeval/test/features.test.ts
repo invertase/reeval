@@ -1150,6 +1150,21 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'egress/node-proxy-quiet',
+    tiers: ['docker', 'podman'],
+    env: 'quiet',
+    canaryEnv: 'loud',
+    hostEnv: egressEnv,
+    canary: /expected '\(node:\d+\) \[UNDICI-EHPA\] Warning: En…' to be 'reeval-egress-ok'/,
+    record: ({ run }) => {
+      const contacted = landed(run)?.egress?.contacted ?? []
+      assert.deepEqual(
+        contacted.map((c) => [c.host, c.port]),
+        [[egressTarget.host, egressTarget.port]],
+      )
+    },
+  },
+  {
     dir: 'egress/blocked-host-recorded',
     tiers: ['docker', 'podman'],
     env: 'listed',

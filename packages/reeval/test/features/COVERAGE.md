@@ -120,7 +120,7 @@
 | `reeval clean --images`, and no `-base` tag or replaced image left behind | ✓ 1 | — | — | — | — | — |
 | `reeval image build` (every image, every failure, exit 3, `--force`) and its `--dry-run` | ✓ 2 | — | — | — | — | — |
 | `egress`: allowlist or deny-all, enforced in Docker and recorded per attempt | ✓ 3 | ✓ 2 | — | ● 6 | ● 3 | ● 2 |
-| `egress: 'proxy'` (the default) detaches the container, so only HTTP(S) through the gateway leaves it; `'allow-all'` keeps its network, records `partial` and warns on a CI runner or cloud VM | ✓ 3 | ✓ 2 | — | ● 2 | ● 2 | — |
+| `egress: 'proxy'` (the default) detaches the container, so only HTTP(S) through the gateway leaves it (Node's `fetch` too, without Node 22's experimental-proxy warning); `'allow-all'` keeps its network, records `partial` and warns on a CI runner or cloud VM | ✓ 3 | ✓ 2 | — | ● 3 | ● 3 | — |
 | The harness's key never enters the container | ✓ 3 | — | — | — | — | ● 2 |
 | Ports: through the tunnel, or published without the gateway | ✓ 1 | — | — | — | — | — |
 | No container or sandbox left after a failure, timeout or abort | ✓ 2 | — | — | — | — | ◐ 2 (2 without a canary) |
