@@ -95,6 +95,18 @@ let stopCode: number = EXIT.interrupted
  */
 let finishing = false
 
+/** The other signal this soon after the one that canceled the run is the same Ctrl-C, passed on. */
+const SAME_PRESS_MS = 1000
+
+/** What a forced quit leaves, and how to finish or discard it. */
+function quitWithoutRecord(runId: string, stagingDir: string): string {
+  return [
+    `reeval: quit without writing run ${runId}'s record; its workers still destroy their sandboxes.`,
+    `  reeval run --resume ${runId} keeps the attempts that finished, runs the rest and writes the record.`,
+    `  Deleting ${fromCwd(stagingDir)} discards the run.`,
+  ].join('\n')
+}
+
 async function run(argv: string[]): Promise<number> {
   const { values, positionals } = parseCli(argv)
   invocation.flags = values
@@ -1069,13 +1081,33 @@ async function executeRun(
       },
       // SIGTERM (docker stop, a CI runner's cancel) cancels like Ctrl-C.
       onCancelable: (cancel) => {
+        let first: { signal: NodeJS.Signals; at: number; passedOn?: boolean } | undefined
         const onSignal = (signal: NodeJS.Signals) => {
+          // pnpm passes the terminal's Ctrl-C on as a SIGTERM a moment after the SIGINT the CLI
+          // already got: one press, not a second. The same signal again is a second press, however
+          // soon: no launcher passes a SIGINT on as a SIGINT.
+          if (first && signal !== first.signal && Date.now() - first.at < SAME_PRESS_MS) {
+            // pnpm exits once it has, and the shell takes the terminal back: another Ctrl-C
+            // reaches the shell, not this process.
+            if (!first.passedOn && !finishing)
+              renderer.onEvent({
+                type: 'notice',
+                at: Date.now(),
+                level: 'warn',
+                text: `A launcher passed the Ctrl-C on and may have given the terminal back; the run still cancels and writes its record. kill ${process.pid} quits it at once, without a record`,
+              })
+            first.passedOn = true
+            return
+          }
           stopCode = signal === 'SIGTERM' ? EXIT.terminated : EXIT.interrupted
           if (interrupted) {
             renderer.close()
+            process.stderr.write(red(`${quitWithoutRecord(runId, stagingDir)}\n`))
+            finish(stopCode)
             process.exit(stopCode)
           }
           interrupted = true
+          first = { signal, at: Date.now() }
           if (finishing) return
           questions?.cancel()
           live?.phase('cancelling')
@@ -1083,7 +1115,7 @@ async function executeRun(
             type: 'notice',
             at: Date.now(),
             level: 'warn',
-            text: 'Canceling: stopping agents and destroying sandboxes (Ctrl-C again to force)',
+            text: "Canceling: stopping agents and destroying sandboxes, then writing the run's record. Ctrl-C again quits at once, without a record",
           })
           cancel()
         }

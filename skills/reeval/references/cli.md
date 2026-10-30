@@ -104,6 +104,11 @@ no hidden default harness or include.
 | 3 | An infra error, such as a sandbox that failed to start or a harness key the API rejected |
 | 130, 143 | Ctrl-C, SIGTERM |
 
+One Ctrl-C (or SIGTERM) cancels the run and still writes its record. A second one quits without a
+record: `reeval run --resume <id>` keeps the finished attempts and writes it. pnpm passes Ctrl-C on
+as a SIGTERM, which counts as the same press, and gives the terminal back: the run prints the
+`kill <pid>` that quits it.
+
 ## Recording runs
 
 Runs land in `.reeval/runs/`; `--record` (or `record: 'ci'` in CI) copies them to

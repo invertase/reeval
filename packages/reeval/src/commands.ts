@@ -23,6 +23,7 @@ import { fromCwd, sha256 } from './ids.ts'
 import { readRemarks, runRemarksFile } from './remarks/files.ts'
 import type { ResolvedConfig } from './types.ts'
 import { renderCompare, renderCompareMarkdown } from './ui/compare-layout.ts'
+import type { LiveRun } from './view/live.ts'
 import { suiteResult } from './view/suite.ts'
 
 export type HistoryFlags = {
@@ -171,7 +172,8 @@ export async function historyView(
     throw new CommandError(`--limit must be a number above 0 (got ${options.limit})`)
   const shown = entries.slice(-limit).map((e) => e.git?.sha)
   const reach = await reachability(config.root, shown)
-  return history(entries, { filter: options.filter || undefined, limit, reach })
+  const view = history(entries, { filter: options.filter || undefined, limit, reach })
+  return { ...view, stopped: await stoppedRuns(config) }
 }
 
 export async function historyCommand(ctx: Ctx, filter: string[]): Promise<number> {
@@ -180,8 +182,50 @@ export async function historyCommand(ctx: Ctx, filter: string[]): Promise<number
     limit: ctx.flags.limit ? Number(ctx.flags.limit) : undefined,
     all: ctx.flags.all,
   })
-  ctx.out(ctx.flags.json ? JSON.stringify(view, null, 2) : formatHistory(view))
+  ctx.out(
+    ctx.flags.json
+      ? JSON.stringify(view, null, 2)
+      : [formatHistory(view), ...formatStopped(view.stopped, ctx.config.root)].join('\n'),
+  )
   return 0
+}
+
+/** A run whose `reeval run` exited or went quiet before it wrote its record. */
+type StoppedRun = Pick<LiveRun, 'runId' | 'startedAt' | 'phase' | 'planned'> & {
+  finished: number
+}
+
+async function stoppedRuns(config: ResolvedConfig): Promise<StoppedRun[]> {
+  const { listLive } = await import('./studio/live.ts')
+  const live = await listLive({ root: config.root, historyDir: config.history.dir, scratch: true })
+  return live
+    .filter((r) => r.state === 'stopped')
+    .reverse()
+    .map((r) => ({
+      runId: r.runId,
+      startedAt: r.startedAt,
+      phase: r.phase,
+      planned: r.planned,
+      finished: r.counts.passed + r.counts.failed + r.counts.errored,
+    }))
+}
+
+function formatStopped(stopped: StoppedRun[], root: string): string[] {
+  if (!stopped.length) return []
+  const how = {
+    cancelling: 'canceled',
+    finishing: 'stopped writing its record',
+    running: 'stopped',
+  }
+  const last = stopped[stopped.length - 1] as StoppedRun
+  return [
+    '',
+    `${stopped.length} run${stopped.length === 1 ? '' : 's'} stopped without writing a record:`,
+    ...stopped.map(
+      (r) => `  ${r.runId}  ${how[r.phase]}, ${r.finished} of ${r.planned} attempts finished`,
+    ),
+    `reeval run --resume ${last.runId} keeps the attempts that finished, runs the rest and writes the record; deleting ${fromCwd(join(root, '.reeval', 'staging', last.runId))} discards the run.`,
+  ]
 }
 
 /** A listed run's record, from the history folder or the scratch runs. */
