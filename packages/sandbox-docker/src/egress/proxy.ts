@@ -8,7 +8,13 @@ import zlib from 'node:zlib'
 import { type CertificateAuthority, issueServerCertificate } from './cert.ts'
 import { requestedEffort } from './effort.ts'
 import { link } from './mux.ts'
-import { createPolicyCheck, hostAllowed, type Lookup, type NetworkPolicy } from './policy.ts'
+import {
+  createPolicyCheck,
+  hostAllowed,
+  type Lookup,
+  type NetworkPolicy,
+  type Verdict,
+} from './policy.ts'
 import {
   applyTransformations,
   credentialValues,
@@ -114,6 +120,8 @@ export type EgressRequestEvent = {
   status?: number
   /** Why it was refused. */
   reason?: string
+  /** Refused because its host's name didn't resolve, not by the policy. */
+  unresolved?: true
   /** Body bytes from the sandbox and to it (a tunnel's are the connection's, TLS included). */
   sent: number
   received: number
@@ -144,7 +152,15 @@ export type EgressRequestEvent = {
 }
 
 export type EgressEvent =
-  | { type: 'dns'; host: string; allowed: boolean; address?: string; reason?: string }
+  | {
+      type: 'dns'
+      host: string
+      allowed: boolean
+      address?: string
+      reason?: string
+      /** Refused because the name didn't resolve, not by the policy. */
+      unresolved?: true
+    }
   | EgressRequestEvent
 
 /**
@@ -158,10 +174,18 @@ export type ContactedHost = {
   sent: number
   received: number
 }
-/** A host the gateway refused, and why: the policy, or a name that doesn't resolve. */
+/** A host the gateway refused, and why. */
 export type BlockedHost = { host: string; port: number; connections: number; reason: string }
-/** What went through the gateway, sorted by host and port. */
-export type EgressTraffic = { contacted: ContactedHost[]; blocked: BlockedHost[] }
+/**
+ * What went through the gateway, sorted by host and port. `blocked` is what the gateway refused;
+ * `unresolved`, hosts the policy let through whose names didn't resolve, so the gateway had
+ * nowhere to connect.
+ */
+export type EgressTraffic = {
+  contacted: ContactedHost[]
+  blocked: BlockedHost[]
+  unresolved: BlockedHost[]
+}
 
 export type EgressProxy = {
   /** Serves one connection from the sandbox: an HTTP proxy client (CONNECT or absolute URLs). */
@@ -176,9 +200,10 @@ export type EgressProxy = {
 }
 
 type Target = { host: string; port: number; address: string }
+type Denied = Extract<Verdict, { allowed: false }>
 
 type RequestTracker = {
-  refuse(reason: string): void
+  refuse(reason: string, unresolved?: boolean): void
   set(
     fields: Partial<
       Pick<
@@ -307,10 +332,21 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     emit(
       verdict.allowed
         ? { type: 'dns', host, allowed: true, address: verdict.address }
-        : { type: 'dns', host, allowed: false, reason: verdict.reason },
+        : {
+            type: 'dns',
+            host,
+            allowed: false,
+            reason: verdict.reason,
+            ...(verdict.status === 502 && { unresolved: true as const }),
+          },
     )
     return verdict
   }
+  /** The refusal the sandbox gets: a policy block, or a name the gateway couldn't resolve. */
+  const refusal = (verdict: Denied) =>
+    verdict.status === 502
+      ? `reeval egress gateway ${verdict.reason}`
+      : `blocked by the reeval egress policy: ${verdict.reason}`
   /** Bytes each sandbox connection carried, both ways, for its tunnel's event. */
   const carried = new WeakMap<Duplex, { sent: number; received: number }>()
   const leaves = new Map<string, { key: string | Buffer; cert: string }>()
@@ -327,6 +363,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
 
   const contacted = new Map<string, ContactedHost>()
   const blocked = new Map<string, BlockedHost>()
+  const unresolved = new Map<string, BlockedHost>()
   /** The host each sandbox connection's bytes count towards: its latest allowed request's. */
   const counting = new WeakMap<Duplex, ContactedHost>()
   /** Bytes a connection sent before the policy decided whose they are: the request itself. */
@@ -343,11 +380,12 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     unclaimed.delete(connection)
     counting.set(connection, entry)
   }
-  const block = (connection: Duplex, host: string, port: number, reason: string) => {
+  const block = (connection: Duplex, host: string, port: number, verdict: Denied) => {
     const key = `${host}:${port}`
-    const entry = blocked.get(key) ?? { host, port, connections: 0, reason }
+    const into = verdict.status === 502 ? unresolved : blocked
+    const entry = into.get(key) ?? { host, port, connections: 0, reason: verdict.reason }
     entry.connections++
-    blocked.set(key, entry)
+    into.set(key, entry)
     counting.delete(connection)
     unclaimed.delete(connection)
   }
@@ -401,9 +439,10 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       emit({ ...event, status: event.status ?? res.statusCode, ms: Date.now() - startedAt })
     })
     return {
-      refuse(reason) {
+      refuse(reason, unresolved) {
         event.allowed = false
         event.reason = reason
+        if (unresolved) event.unresolved = true
       },
       set(fields) {
         Object.assign(event, fields)
@@ -452,21 +491,18 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
         log(`reeval:egress CONNECT ${host}:${port} denied (${verdict.reason})`)
-        block(socket, host, port, verdict.reason)
+        block(socket, host, port, verdict)
         emit({
           ...tunnel,
           allowed: false,
           status: verdict.status,
           reason: verdict.reason,
+          ...(verdict.status === 502 && { unresolved: true as const }),
           sent: 0,
           received: 0,
           ms: Date.now() - startedAt,
         })
-        return reply(
-          socket,
-          verdict.status,
-          `blocked by the reeval egress policy: ${verdict.reason}`,
-        )
+        return reply(socket, verdict.status, refusal(verdict))
       }
       contact(socket, host, port)
       const target = { host, port, address: verdict.address }
@@ -563,11 +599,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
         log(`reeval:egress ${req.method} ${shown} denied (${verdict.reason})`)
-        block(req.socket, host, port, verdict.reason)
-        done.refuse(verdict.reason)
-        return res
-          .writeHead(verdict.status)
-          .end(`blocked by the reeval egress policy: ${verdict.reason}\n`)
+        block(req.socket, host, port, verdict)
+        done.refuse(verdict.reason, verdict.status === 502)
+        return res.writeHead(verdict.status).end(`${refusal(verdict)}\n`)
       }
       contact(req.socket, host, port)
       const target = { host, port, address: verdict.address }
@@ -1466,7 +1500,11 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       connection.on('error', () => connection.destroy())
       front.emit('connection', connection)
     },
-    traffic: () => ({ contacted: byHost(contacted.values()), blocked: byHost(blocked.values()) }),
+    traffic: () => ({
+      contacted: byHost(contacted.values()),
+      blocked: byHost(blocked.values()),
+      unresolved: byHost(unresolved.values()),
+    }),
     addTransformations(more) {
       rules = [...rules, ...more]
     },

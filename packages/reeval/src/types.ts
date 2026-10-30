@@ -2463,10 +2463,10 @@ export type EnvironmentRecord = {
 /**
  * An attempt's network traffic. `allowed` is every host a restricted policy let through, its own
  * and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox
- * can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between
- * the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the
- * harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked` contains
- * only unexpected refusals.
+ * can't see the traffic, and then `contacted`, `blocked` and `unresolved` are empty. Bytes are
+ * counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused
+ * hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked`
+ * contains only unexpected refusals.
  */
 export type EgressRecord = {
   policy: EgressPolicy
@@ -2485,8 +2485,16 @@ export type EgressRecord = {
     sent: number
     received: number
   }>
+  /** Hosts the gateway refused, and why. A name that didn't resolve is in `unresolved` instead. */
   blocked: Array<{ host: string; port: number; connections: number; reason: string }>
   expectedBlocked: Array<{ host: string; port: number; connections: number; reason: string }>
+  /**
+   * Hosts the policy let through whose names didn't resolve (`metadata.google.internal` outside
+   * GCP, say), so the gateway answered 502 with the lookup's error. No policy refused them, so
+   * they're never in `blocked`. A record from an older reeval reads it as empty and has them in
+   * `blocked`, with a `can't resolve …` or `… has no addresses` reason.
+   */
+  unresolved: Array<{ host: string; port: number; connections: number; reason: string }>
 }
 
 /** The image an attempt's container started from, and how reeval made it. */

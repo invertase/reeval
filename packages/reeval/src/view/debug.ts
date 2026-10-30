@@ -51,6 +51,8 @@ export type DebugRequest = {
   allowed: boolean
   status?: number
   reason?: string
+  /** Refused because its host's name didn't resolve, not by the policy. */
+  unresolved?: true
   sent: number
   received: number
   /** Brokered secrets and the harness credential swapped in, by name. */
@@ -129,11 +131,13 @@ export function formatBytes(n: number): string {
 }
 
 /**
- * The gateway line for a request: method, URL, status, allowed or blocked and why, bytes each way,
- * time, and which secrets were swapped in (by name).
+ * The gateway line for a request: method, URL, status, allowed, blocked or unresolved and why,
+ * bytes each way, time, and which secrets were swapped in (by name).
  */
 export function requestLine(r: Omit<DebugRequest, 'at'>): string {
-  const verdict = r.allowed ? 'allowed' : `blocked: ${r.reason ?? 'refused'}`
+  const verdict = r.allowed
+    ? 'allowed'
+    : `${r.unresolved ? 'unresolved' : 'blocked'}: ${r.reason ?? 'refused'}`
   return [
     `${r.method} ${r.url} → ${r.status ?? '-'}`,
     verdict,

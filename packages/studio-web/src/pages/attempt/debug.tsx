@@ -116,15 +116,25 @@ function Requests({ requests }: { requests: DebugView['requests'] }) {
               <td className="max-w-[28rem] px-3 py-2 font-mono break-all">
                 {r.method} {r.url}
                 {!r.allowed && r.reason ? (
-                  <div className="mt-0.5 font-sans text-fail">{r.reason}</div>
+                  <div className={`mt-0.5 font-sans ${r.unresolved ? 'text-infra' : 'text-fail'}`}>
+                    {r.reason}
+                  </div>
                 ) : null}
               </td>
               <td className="px-3 py-2">
                 <Badge
                   variant="outline"
-                  className={r.allowed ? 'border-pass/30 text-pass' : 'border-fail/30 text-fail'}
+                  className={
+                    r.allowed
+                      ? 'border-pass/30 text-pass'
+                      : r.unresolved
+                        ? 'border-infra/30 text-infra'
+                        : 'border-fail/30 text-fail'
+                  }
                 >
-                  {r.allowed ? (r.status ?? '—') : `blocked ${r.status ?? ''}`}
+                  {r.allowed
+                    ? (r.status ?? '—')
+                    : `${r.unresolved ? 'unresolved' : 'blocked'} ${r.status ?? ''}`}
                 </Badge>
               </td>
               <td className="tabular px-3 py-2 whitespace-nowrap text-muted-foreground">

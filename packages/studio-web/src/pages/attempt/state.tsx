@@ -93,6 +93,14 @@ function Egress({ egress }: { egress: NonNullable<AttemptRecord['egress']> }) {
           </span>
         </div>
       ))}
+      {egress.unresolved.map((h) => (
+        <div key={`unresolved ${h.host}:${h.port}`} className="text-infra">
+          unresolved {h.host}:{h.port}{' '}
+          <span className="text-muted-foreground">
+            ×{h.connections} · {h.reason}
+          </span>
+        </div>
+      ))}
       {egress.expectedBlocked.map((h) => (
         <div key={`expected ${h.host}:${h.port}`} className="text-muted-foreground">
           blocked {h.host}:{h.port} ×{h.connections} · expected: the harness always tries it

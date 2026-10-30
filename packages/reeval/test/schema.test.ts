@@ -104,6 +104,7 @@ describe('persisted shapes', () => {
       'evals[].attempts[].activity.maxToolMs',
       'evals[].attempts[].activity.stalledTools',
       'evals[].attempts[].effort',
+      'evals[].attempts[].egress.unresolved',
       'evals[].attempts[].servedEffort',
       'evals[].cells[].effort',
       'evals[].todo',

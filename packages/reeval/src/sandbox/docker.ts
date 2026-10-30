@@ -63,7 +63,7 @@ function gatewayEvents(
         'gateway',
         'dns',
         event,
-        `dns ${event.host} ${event.allowed ? `→ ${event.address}` : `refused: ${event.reason}`}`,
+        `dns ${event.host} ${event.allowed ? `→ ${event.address}` : `${event.unresolved ? 'unresolved' : 'refused'}: ${event.reason}`}`,
       )
       return
     }

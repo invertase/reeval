@@ -178,7 +178,8 @@ user, can read it: broker it with `hosts`, or start the process from `c.exec` af
 `egress: 'proxy' | 'allow-all' | 'deny-all' | { allow: [hosts] }` limits where the sandbox may
 connect (the harness's API, brokered hosts and MCP hosts are always allowed; `DEFAULT_EGRESS_ALLOW`
 is npm, Yarn, PyPI and GitHub). A blocked request doesn't fail the attempt; it's recorded, and your
-checks decide.
+checks decide. The record's `egress.blocked` is what the policy refused; a name that didn't resolve
+(`metadata.google.internal` outside Google Cloud) is in `egress.unresolved` instead.
 
 The default, `'proxy'`, reaches any host over HTTP(S) through the egress gateway and nothing
 else: SSH, a database driver or a raw TCP/UDP client gets `Network is unreachable` (and the run's
