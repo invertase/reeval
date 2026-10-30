@@ -1085,12 +1085,13 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.goose',
     area: 'Harnesses',
-    name: '`goose()`: Goose over ACP on a brokered Gemini key, its image, rules, skills, MCP extensions and tool names',
+    name: "`goose()`: Goose over ACP on a brokered Gemini key, its image, rules, skills, MCP extensions and tool names, with Vertex AI's variables set only for Goose on Vertex AI, so the eval's own reach the agent",
     fixtures: [
       'harness/rules:goose',
       'harness/workspace-skills:goose',
       'harness/home-skills:goose',
       'harness/dockerfile:goose',
+      'harness/goose-eval-env',
     ],
     plan: ['goose/goose'],
     unit: [
