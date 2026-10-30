@@ -722,7 +722,7 @@ export type Landed = { target?: string; scrolled: boolean }
 const TARGET_CAP = 40
 
 // Read-only: names the element at a window point (through open shadow roots) and the control it's
-// in, as `button "Pay"`.
+// in, as `button "Pay"`, or the page background when nothing is there.
 const targetAt = (x: number, y: number) => `(() => {
   const clip = (s) => String(s ?? '').replace(/\\s+/g, ' ').trim().slice(0, ${TARGET_CAP})
   let e = document.elementFromPoint(${x}, ${y})
@@ -731,7 +731,7 @@ const targetAt = (x: number, y: number) => `(() => {
     if (!inner || inner === e) break
     e = inner
   }
-  if (!e) return null
+  if (!e || e === document.documentElement || e === document.body) return 'the page background'
   const control = e.closest('a,button,input,select,textarea,label,summary,[role],[onclick],[tabindex]') || e
   const tag = control.tagName.toLowerCase()
   const type = tag === 'input' ? '[' + (control.type || 'text') + ']' : ''
