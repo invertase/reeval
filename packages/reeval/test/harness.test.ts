@@ -21,6 +21,7 @@ import {
 import {
   CODEX_ENDPOINTS,
   CODEX_HOME_SKILLS_DIR,
+  CODEX_MODEL_ENDPOINTS,
   CODEX_WORKSPACE_SKILLS_DIR,
 } from '@reeval/harness-codex'
 import {
@@ -976,11 +977,33 @@ describe('the Codex harness', () => {
     assert.deepEqual(missingCredentials(config, { OPENAI_API_KEY: 'x' }), [])
   })
 
-  test("Codex's key is brokered to the Responses API only, whose response names the served model", () => {
+  test("Codex's key is brokered to the Responses API and its web search, and the Responses API names the served model", () => {
     assert.deepEqual(AGENTS.codex.endpoints, CODEX_ENDPOINTS)
     const b = brokeringFor(codex({ model: 'm' }))
     assert.equal(b?.credential, 'OPENAI_API_KEY')
-    assert.deepEqual(b?.modelResponses, CODEX_ENDPOINTS)
+    assert.deepEqual(
+      b?.endpoints.map((e) => [e.method, e.host, e.path]),
+      [
+        [['POST'], 'api.openai.com', { exact: '/v1/responses' }],
+        [['POST'], 'api.openai.com', { exact: '/v1/alpha/search' }],
+      ],
+    )
+    assert.deepEqual(b?.modelResponses, CODEX_MODEL_ENDPOINTS)
+    const on = (method: string, path: string, host = 'api.openai.com') =>
+      onEndpoint(b?.endpoints ?? [], { method, host, path, headers: {} })
+    assert.ok(on('POST', '/v1/responses') && on('POST', '/v1/alpha/search'))
+    for (const [method, path, host] of [
+      ['GET', '/v1/alpha/search'],
+      ['POST', '/v1/alpha/searchX'],
+      ['POST', '/v1/alpha/search/'],
+      ['POST', '/v1/alpha/search/../files'],
+      ['POST', '/v1/files/../alpha/search'],
+      ['POST', '/v1/files/%2e%2e/alpha/search'],
+      ['POST', '/v1/files'],
+      ['POST', '/v1/alpha/search', 'api.openai.com.evil.example'],
+    ]) {
+      assert.equal(on(method, path, host), false, `${method} ${host ?? ''}${path}`)
+    }
     const served = (request: Parameters<ServedModel>[0]) => b?.servedModel?.(request)
     const at = { method: 'POST', host: 'api.openai.com', path: '/v1/responses' }
     assert.equal(

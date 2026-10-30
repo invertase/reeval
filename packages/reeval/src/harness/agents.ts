@@ -328,9 +328,15 @@ const CURSOR_EXCHANGE = {
   method: ['POST'],
 } as const satisfies EndpointMatch
 
-/** What Codex sends the key on: the Responses API. */
-const OPENAI_ENDPOINTS = [
+/** Codex's model calls: the Responses API, whose response names the served model. */
+const OPENAI_MODEL_ENDPOINTS = [
   { host: 'api.openai.com', path: { exact: '/v1/responses' }, method: ['POST'] },
+] as const satisfies readonly EndpointMatch[]
+
+/** What Codex sends the key on: its model calls, and its web search tool's own endpoint. */
+const OPENAI_ENDPOINTS = [
+  ...OPENAI_MODEL_ENDPOINTS,
+  { host: 'api.openai.com', path: { exact: '/v1/alpha/search' }, method: ['POST'] },
 ] as const satisfies readonly EndpointMatch[]
 
 /**
@@ -1102,10 +1108,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'Codex',
     factory: 'codex',
     credential: 'OPENAI_API_KEY',
-    // The only request Codex sends the key on, on the adapter's provider (HTTP, not WebSockets),
-    // whose response names the dated model and the effort that served it.
+    // On the adapter's provider (HTTP, not WebSockets): the model calls, whose responses name the
+    // dated model and the effort that served them, and the web search tool's searches.
     endpoints: OPENAI_ENDPOINTS,
-    modelResponses: OPENAI_ENDPOINTS,
+    modelResponses: OPENAI_MODEL_ENDPOINTS,
     // Only with plugins on, which a session with plugins needs; it loads them all the same. In a
     // session without plugins these hosts are a real block.
     expectedBlocked: {

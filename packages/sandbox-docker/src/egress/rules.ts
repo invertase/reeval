@@ -45,7 +45,11 @@ export function matches(rule: RequestTransformation, request: OutboundRequest): 
   const { match } = rule
   if (normalizeHost(match.host) !== normalizeHost(request.host)) return false
   const url = new URL(request.path, 'https://placeholder.invalid')
-  if (match.path && !matchPart(match.path, url.pathname)) return false
+  // The upstream gets the target as sent, so a path matcher only matches one already in normal
+  // form: `/v1/files/../responses` (or `%2e%2e`, or backslashes) would otherwise match
+  // `/v1/responses` here and reach whatever the upstream makes of it.
+  const sent = request.path.split(/[?#]/, 1)[0]
+  if (match.path && (sent !== url.pathname || !matchPart(match.path, url.pathname))) return false
   if (match.method && !match.method.some((m) => m.toUpperCase() === request.method.toUpperCase())) {
     return false
   }

@@ -9,7 +9,7 @@ description: "The Codex harness runs OpenAI's Codex CLI in the sandbox on an Ope
 
 `codex()` reads `OPENAI_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
 
-reeval brokers that key on `POST https://api.openai.com/v1/responses` only, over HTTP. A restricted egress policy allows `api.openai.com`.
+reeval brokers that key over HTTP on `POST https://api.openai.com/v1/responses`, the model calls, and `POST https://api.openai.com/v1/alpha/search`, where Codex's web search tool sends its searches, and refuses it anywhere else. A restricted egress policy allows `api.openai.com`, so `deny-all` keeps web search.
 
 When the API rejects the key, the attempt error begins with `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local`.
 

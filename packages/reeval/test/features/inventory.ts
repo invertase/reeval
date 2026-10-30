@@ -1195,7 +1195,11 @@ export const inventory: InventoryFeature[] = [
     id: 'harness.web-events',
     area: 'Harnesses',
     name: "Web search and fetch events (Cursor's recovered from its stored conversation), `turn.unreported`, `toHaveSearched` and `toHaveFetched`",
-    fixtures: ['harness/cursor-web-fetch', 'harness/opencode-web-search'],
+    fixtures: [
+      'harness/cursor-web-fetch',
+      'harness/opencode-web-search',
+      'harness/codex-web-search',
+    ],
     unit: [
       'reeval/test/harness.test.ts',
       'harness-cursor-sdk/test/stream.test.ts',

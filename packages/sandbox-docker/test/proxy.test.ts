@@ -931,6 +931,18 @@ describe('brokered endpoints through the proxy', () => {
     assert.equal(seen.length, 0)
   })
 
+  test("a target that only normalizes to the endpoint is refused, since it's sent upstream as is", async () => {
+    seen.length = 0
+    for (const path of ['/v1/files/../messages', '/v1/files/%2e%2e/messages']) {
+      const r = await viaProxy(gw, HOST, h1.port, { method: 'POST', path, headers: auth })
+      assert.equal(r.status, 403, path)
+      const r2 = await viaProxyH2(gw, HOST, h2.port, path, `Bearer ${PLACEHOLDER}`)
+      assert.equal(r2.status, 403, `${path} over HTTP/2`)
+    }
+    assert.equal(seen.length, 0, 'nothing reached upstream')
+    assert.doesNotMatch(everything(), new RegExp(REAL))
+  })
+
   test('a request without the placeholder is not ours to refuse', async () => {
     seen.length = 0
     const r = await viaProxy(gw, HOST, h1.port, {
