@@ -2695,7 +2695,12 @@ describe("each harness's image serves its attempts' bootstrap", () => {
       { ...opencode({ model: 'anthropic/claude-haiku-4-5' }), gateway: 'openrouter' },
       { ...opencode({ model: 'google/gemini-3.8-flash' }), gateway: 'vertex' },
     ],
-    goose: [goose({ model: 'gemini-3.8-flash' })],
+    goose: [
+      goose({ model: 'gemini-3.8-flash' }),
+      { ...goose({ model: 'gemini-3.8-flash' }), gateway: 'vercel' },
+      { ...goose({ model: 'gemini-3.8-flash' }), gateway: 'openrouter' },
+      { ...goose({ model: 'gemini-3.8-flash' }), gateway: 'vertex' },
+    ],
     pi: [pi({ model: 'gemini-3.8-flash' })],
     codex: [codex({ model: 'gpt-5.5' })],
     fx: [fx({ model: 'openai/gpt-5.5' })],

@@ -2001,6 +2001,17 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/goose-eval-env',
+    tiers: ['real'],
+    realHarness: 'goose',
+    env: 'closed',
+    canary: /to not include 'GCP_PROJECT_ID=eval-project'/,
+    record: ({ run }) => {
+      const attempt = landed(run)
+      assert.ok((attempt?.activity.tools ?? 0) >= 1, JSON.stringify(attempt?.activity))
+    },
+  },
+  {
     dir: 'harness/claude-code-plugin',
     tiers: ['fake', 'docker'],
     image: 'claude-code',
