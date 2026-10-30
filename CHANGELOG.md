@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.17.2](https://github.com/invertase/reeval/compare/v0.17.1...v0.17.2) (2026-10-30)
+
+
+### Bug Fixes
+
+* **cli:** read a passed-on Ctrl-C as one press whichever signal arrives first ([#738](https://github.com/invertase/reeval/issues/738)) ([3c02c33](https://github.com/invertase/reeval/commit/3c02c33325dabe6d462fcc5049886054d01bf42a))
+* **harness:** record unmeasured reasoning time as null and count subagent edits ([#736](https://github.com/invertase/reeval/issues/736)) ([0ee5467](https://github.com/invertase/reeval/commit/0ee5467453eac366055b9368655d534b1b9a4e25))
+
 ## [0.17.1](https://github.com/invertase/reeval/compare/v0.17.0...v0.17.1) (2026-10-30)
 
 
