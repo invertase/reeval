@@ -3,6 +3,15 @@ import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 
 type Usage = Extract<HarnessV1StreamPart, { type: 'finish' }>['totalUsage']
 
+/** Parts that add to a step's content: not the stream's framing, and not a block's end. */
+const isContent = (part: HarnessV1StreamPart) =>
+  !['raw', 'stream-start', 'finish', 'finish-step', 'error'].includes(part.type) &&
+  !part.type.endsWith('-end')
+
+/** Whether a step is open after `parts`: content opens one, a `finish-step` closes it. */
+const stepOpenAfter = (open: boolean, parts: readonly HarnessV1StreamPart[]) =>
+  parts.reduce((o, p) => (p.type === 'finish-step' ? false : o || isContent(p)), open)
+
 /**
  * Codex's counts: `input_tokens` includes the cached and cache-write ones, `output_tokens` the
  * reasoning ones. `turn.completed` reports the thread's running total, every earlier turn's
@@ -114,6 +123,8 @@ export class CodexStreamTranslator {
   private readonly searches = new Map<string, CodexItem>()
   /** The last top-level `error`, a retry unless the next event is `turn.failed`. */
   private pendingError: string | undefined
+  /** Content went out since the last `finish-step`, which `finish` must not leave open. */
+  private stepOpen = false
   /** The thread's running total before this turn, from the previous `turn.completed`. */
   private readonly before: CodexUsage | undefined
   /** The thread's running total once `turn.completed` reports it. */
@@ -138,6 +149,7 @@ export class CodexStreamTranslator {
     const parts: HarnessV1StreamPart[] = []
     if (!this.finished) this.translate(event, parts)
     parts.push({ type: 'raw', rawValue: event })
+    this.stepOpen = stepOpenAfter(this.stepOpen, parts)
     return parts
   }
 
@@ -149,6 +161,8 @@ export class CodexStreamTranslator {
     this.flushError(parts)
     this.closeBlocks(parts)
     this.failSearches(parts)
+    const raw = options.aborted ? 'aborted' : `exit ${options.exitCode}`
+    this.closeStep(parts, raw)
     if (!options.aborted) {
       const detail = options.stderr?.trim()
       parts.push({
@@ -158,7 +172,7 @@ export class CodexStreamTranslator {
         ),
       })
     }
-    this.finish(parts, options.aborted ? 'aborted' : `exit ${options.exitCode}`)
+    this.finish(parts, raw)
     return parts
   }
 
@@ -199,6 +213,7 @@ export class CodexStreamTranslator {
         this.start(parts)
         this.closeBlocks(parts)
         this.failSearches(parts)
+        this.closeStep(parts, 'error')
         parts.push({
           type: 'error',
           error: new Error(e.error?.message || 'codex reported a failed turn'),
@@ -352,6 +367,20 @@ export class CodexStreamTranslator {
     if (this.started) return
     this.started = true
     parts.push({ type: 'stream-start' })
+  }
+
+  /**
+   * Ends the step a turn cut short (its calls and text with no `turn.completed`): `finish` with
+   * step content still open fails the whole turn in `HarnessAgent`. It never ends as `error`,
+   * which says a failed model call was retried.
+   */
+  private closeStep(parts: HarnessV1StreamPart[], raw: string) {
+    if (!stepOpenAfter(this.stepOpen, parts)) return
+    parts.push({
+      type: 'finish-step',
+      finishReason: { unified: raw === 'stop' ? 'stop' : 'other', raw },
+      usage: toUsage(undefined),
+    })
   }
 
   private finish(parts: HarnessV1StreamPart[], raw: string, usage?: CodexUsage) {
