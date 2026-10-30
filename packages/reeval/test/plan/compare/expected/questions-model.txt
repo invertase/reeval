@@ -22,4 +22,4 @@ evals/questions-model.eval.ts › no question model                  a/base/dock
                                                                    question: Which is clearer? · shows diff · environment · 8 pairs · no language model
 excluded: —
 image docker · cursor · 4 evals
-  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.7  (reeval's image: built when missing or when its base changed)

@@ -31,7 +31,7 @@ agent's image, here after the first run built it:
 ```text
 images  1 sandbox image (nothing built: --dry-run)
 docker+0ab0e263 · cursor + install · 1 eval
-  ✓ base               reeval-sandbox:cursor-0.1.6  (ready: built (3fa1c0ba62b4))
+  ✓ base               reeval-sandbox:cursor-0.1.7  (ready: built (3fa1c0ba62b4))
   ✓ install 1 command  reeval-install:1d7d61958ab1a130  (ready: built (15642b46f47f))
 ```
 
