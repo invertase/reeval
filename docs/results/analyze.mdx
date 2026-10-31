@@ -3,9 +3,9 @@ title: "Analyze a run"
 description: "Explain a run's results with an analysis model."
 ---
 
-Set an analysis model when you want a language model to explain a run. Insights print at the end of `reeval run`. `reeval analyze` writes a fuller analysis of one run.
+Set an analysis model when you want a language model to explain a run. `reeval analyze` writes an analysis of one run.
 
-For more information about what insights and Remarks are, see [Analysis](/reference/glossary#analysis).
+For more information about what an analysis is, see [Analysis](/reference/glossary#analysis).
 
 ## Set an analysis model
 
@@ -29,11 +29,7 @@ GOOGLE_GENERATIVE_AI_API_KEY=replace-with-your-key
 
 For more information about other model prefixes, see [`AI_GATEWAY_API_KEY`](/reference/environment-variables#aigatewayapikey).
 
-When the key is missing, the run keeps its outcome and prints this line:
-
-```text
-insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY, or analysis: { insights: false }
-```
+`reeval run` calls the analysis model only for questions and `c.capture()` instructions that have no model of their own, so a run with neither runs without the key. `reeval doctor` warns when the key is missing.
 
 For more information about the other `analysis` fields, see [the `analysis` option](/reference/options#analysis).
 
@@ -57,21 +53,6 @@ For more information about the other `analysis` fields, see [the `analysis` opti
    ```
 
 The analysis starts with `analysis` and the run id, then `vs` and the ancestor's run id when the digest includes one. `TL;DR`, `Suggested actions`, and `Confidence` always print. `What happened`, `Results`, `Why`, and `Anomalies` print when the model has something for them. reeval caches each analysis in the `.reeval/analysis` directory, so the same runs, model, and `analysis.instructions` print the cached analysis. To analyze another run, pass its id, and to choose the run it compares with, pass `--vs`.
-
-## Read insights
-
-Without `reeval analyze`, `reeval run` prints insights after the attempts finish: a sentence under a comparison row or a failure, and a headline above the tally. reeval fixes the outcome and exit code first. This is the block the scripted model in [`with-analysis`](https://github.com/invertase/reeval/tree/main/examples/with-analysis) printed:
-
-```text
-insights: 1 eval with fake (Ctrl-C skips the rest; --no-insights skips them all)
-
-pass             adds a tested multiply function
-  Yes: the agent added it and the tests pass.
-
-Every eval passed.
-```
-
-To skip insights on one run, pass `--no-insights`. To skip them on every run, set `analysis.insights` to `false`. For more information about the `Remarks:` that can follow the tally, see [Read a run's output](/results/output).
 
 ## Reference
 
