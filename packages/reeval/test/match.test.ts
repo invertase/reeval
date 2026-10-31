@@ -132,6 +132,9 @@ const ran = (result: RawAssertion | UntestedReply) => {
  * Each row: the protocol call's subject and wire arguments, and its label; every row runs with
  * and without `.not`, so repeated labels are numbered.
  */
+/** A budget refuses `.not` on both paths, with a `TypeError` that ends the body. */
+const NEGATES = new Set(Object.keys(MATCHERS).filter((name) => name !== 'toStayWithin'))
+
 const CASES: Array<[keyof typeof MATCHERS, ExpectCall['subject'], unknown[], string?]> = [
   ['toHaveFile', { attempt: true }, ['greet.js', re('greet')]],
   ['toHaveFile', { turn: 0 }, ['greet.js', 'nope']],
@@ -149,6 +152,7 @@ const CASES: Array<[keyof typeof MATCHERS, ExpectCall['subject'], unknown[], str
   ['toHaveFetched', { turn: 0 }, [], 'fetched something'],
   ['toHaveEdited', { turn: 0 }, ['greet.js']],
   ['toHaveChanged', { attempt: true }, [['src', re('\\.md$')]]],
+  ['toStayWithin', { turn: 0 }, [{ toolCalls: 10, duration: '5m' }]],
   ['toHaveChanged', { turn: 0 }, ['docs']],
   ['toHaveChanged', { turn: 0 }, [`docs/${'x'.repeat(80)}`]],
   ['toHaveStatus', { value: capture as never }, [404]],
@@ -213,7 +217,7 @@ describe('one matcher table', () => {
     const calls: RawAssertion[] = []
     const replies = []
     for (const [matcher, subject, args, label] of CASES) {
-      for (const not of [false, true]) {
+      for (const not of NEGATES.has(matcher) ? [false, true] : [false]) {
         const chain = own(tsSubject(subject), label) as unknown as Record<string, unknown>
         const assertion = (not ? chain.not : chain) as Record<string, (...a: unknown[]) => unknown>
         await Promise.resolve()
@@ -236,7 +240,7 @@ describe('one matcher table', () => {
       timed: durationMs !== undefined,
     })
     const ts = assertionRecords(rawAssertions(t)).map(timing)
-    assert.equal(ts.length, CASES.length * 2)
+    assert.equal(ts.length, CASES.length * 2 - CASES.filter(([m]) => !NEGATES.has(m)).length)
     assert.deepEqual(replies.map(timing), ts)
     assert.deepEqual(assertionRecords(calls).map(timing), ts, 'each reply is its final record')
     assert.deepEqual([...new Set(ts.map((x) => x.status))].sort(), ['error', 'fail', 'pass'])
@@ -250,6 +254,22 @@ describe('one matcher table', () => {
     ]) {
       assert.ok(labels.includes(label), `${label} in ${JSON.stringify(labels)}`)
     }
+  })
+
+  test('.not.toStayWithin is a TypeError from a protocol call and from the TypeScript expect', async () => {
+    const own = createExpect(task()) as unknown as (v: unknown) => {
+      not: { toStayWithin: (l: unknown) => void }
+    }
+    assert.throws(() => own(tsSubject({ turn: 0 })).not.toStayWithin({ toolCalls: 1 }), TypeError)
+    const call = {
+      op: 'expect',
+      subject: { turn: 0 },
+      matcher: 'toStayWithin',
+      args: [{ toolCalls: 1 }],
+      not: true,
+      soft: true,
+    } as ExpectCall
+    await assert.rejects(expectCall(c, [], call), TypeError)
   })
 
   test('concurrent calls are numbered in the order they were made, not the order they finish', async () => {

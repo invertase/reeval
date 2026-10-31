@@ -144,6 +144,14 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/output.test.ts'],
   },
   {
+    id: 'assert.stay-within',
+    area: 'Judges and matchers',
+    name: '`toStayWithin({ tokens, toolCalls, duration })`: a budget on a turn or on every turn of `c`; a `tokens` limit on a turn with no reported usage is an error, not a failure',
+    plan: [],
+    fixtures: ['assert/stay-within', 'assert/stay-within-unreported'],
+    unit: ['reeval/test/assert.test.ts'],
+  },
+  {
     id: 'where',
     area: 'Config and selection',
     name: "`where`: which case and environment pairs of an eval with `cases` run, decided at plan time from environment `traits` (and the harness when it reads it), listed in `--dry-run` and the record's `excluded`; with `compare`, the control decides for every variant",
@@ -153,7 +161,7 @@ export const inventory: InventoryFeature[] = [
   },
   {
     id: 'environment-traits',
-    area: 'Config and selection',
+    area: 'Environments',
     name: 'Environment `traits`: filter facts merged by key through `extend`, recorded on each cell and never written to the sandbox, a variable or the prompt',
     plan: ['environments/traits'],
     fixtures: ['run/traits-hidden'],

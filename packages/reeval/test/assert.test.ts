@@ -11,8 +11,10 @@ import {
   changed,
   edited,
   fetched,
+  limitsLabel,
   ran,
   searched,
+  withinLimits,
 } from '../src/assert.ts'
 import { expect, extendExpect } from '../src/engine/expect.ts'
 import { normalizeStream } from '../src/harness/transcript.ts'
@@ -403,4 +405,74 @@ describe('replay captures through normalizeStream', () => {
       throws(() => expect(t).toHaveRun(/deploy/), /expected shell commands matching \/deploy\//)
     })
   }
+})
+
+describe('toStayWithin', () => {
+  const usage = { input: 900, output: 100, cacheRead: 50, cacheWrite: 0, reasoning: null }
+  const budgetTurn = (
+    transcript: TranscriptEvent[],
+    durationMs = 1000,
+    u: typeof usage | null = usage,
+  ) => ({
+    transcript,
+    durationMs,
+    usage: u,
+  })
+  const one = budgetTurn([
+    tool('bash', { command: 'ls' }),
+    tool('bash', { command: 'pwd' }),
+    edit('a.ts'),
+  ])
+  const two = budgetTurn([tool('bash', { command: 'make' })], 2000)
+
+  test('a turn within each limit passes; over one names it with the figure', () => {
+    assert.equal(
+      withinLimits(one, { tokens: 1050, toolCalls: 3, duration: '1s' }, false).pass,
+      true,
+    )
+    const over = withinLimits(one, { tokens: 1000, toolCalls: { bash: 1, read: 0 } }, false)
+    assert.equal(over.pass, false)
+    assert.equal(over.message(), 'went over its budget: tokens 1,050 > 1,000 · bash 2 > 1')
+  })
+
+  test('c sums every turn', () => {
+    const c = { turns: [one, two] }
+    assert.equal(withinLimits(c, { toolCalls: { bash: 3 }, tokens: 2100 }, false).pass, true)
+    assert.equal(
+      withinLimits(c, { toolCalls: { bash: 2 }, duration: '2s' }, false).message(),
+      'went over its budget: bash 3 > 2 · duration 3s > 2s',
+    )
+  })
+
+  test('a null usage refuses tokens only', () => {
+    const none = budgetTurn([tool('bash', {})], 10, null)
+    throws(() => withinLimits(none, { tokens: 5 }, false), /can't check tokens/)
+    assert.equal(withinLimits(none, { toolCalls: 1 }, false).pass, true)
+  })
+
+  test('bad limits and .not are TypeErrors', () => {
+    const typeError = (limits: unknown, message: RegExp, not = false) =>
+      assert.throws(
+        () => withinLimits(one, limits, not),
+        (e: Error) => {
+          assert.equal(e.name, 'TypeError')
+          assert.match(e.message, message)
+          return true
+        },
+      )
+    typeError({}, /needs at least one limit/)
+    typeError({ toolcalls: 3 }, /no limit "toolcalls".*Did you mean "toolCalls"\?/)
+    typeError({ tokens: -1 }, /tokens is a whole number/)
+    typeError({ toolCalls: { bash: 1.5 } }, /toolCalls\.bash is a whole number/)
+    typeError({ duration: 'soon' }, /duration: Invalid duration/)
+    typeError({ tokens: 5 }, /can't be negated/, true)
+  })
+
+  test('the label lists the limits', () => {
+    assert.equal(
+      limitsLabel({ tokens: 200_000, toolCalls: { bash: 10 }, duration: '5m' }),
+      'tokens 200,000, bash 10, duration 5m',
+    )
+    assert.equal(limitsLabel({ toolCalls: 3 }), 'toolCalls 3')
+  })
 })

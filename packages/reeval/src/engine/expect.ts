@@ -20,8 +20,9 @@ import {
   setState,
   type Tester,
 } from '@vitest/expect'
+import type { Limits } from '../assert.ts'
 import { fromCwd } from '../ids.ts'
-import type { MATCHERS, MatcherArgs, MatcherName } from '../matchers.ts'
+import type { AtLeastOne, MATCHERS, MatcherArgs, MatcherName } from '../matchers.ts'
 import { isThenable } from '../object.ts'
 import type {
   AttemptContext,
@@ -50,6 +51,7 @@ type MatcherSubjects = {
   toHaveRun: TranscriptSubject
   toHaveEdited: TranscriptSubject
   toHaveChanged: Pick<Turn, 'diff'> | Pick<AttemptContext, 'turns'>
+  toStayWithin: Pick<Turn, 'usage' | 'transcript' | 'durationMs'> | Pick<AttemptContext, 'turns'>
   toHaveStatus: CapturePage
   toHaveNoPageErrors: CapturePage
 }
@@ -69,6 +71,7 @@ type SubjectHints = {
   toHaveRun: TakesTurns<'toHaveRun'>
   toHaveEdited: TakesTurns<'toHaveEdited'>
   toHaveChanged: TakesTurns<'toHaveChanged'>
+  toStayWithin: TakesTurns<'toStayWithin'>
   toHaveStatus: 'toHaveStatus() takes the capture from await c.capture()'
   toHaveNoPageErrors: 'toHaveNoPageErrors() takes the capture from await c.capture()'
 }
@@ -140,6 +143,12 @@ declare module '@vitest/expect' {
       'toHaveChanged',
       (paths?: string | RegExp | ReadonlyArray<string | RegExp>) => R
     >
+    /**
+     * The turn, or every turn of `c`, stayed within each limit: `tokens` (input and output,
+     * subagents included), `toolCalls` (a count, or a count per tool) and `duration`. A turn
+     * with no reported usage can't be checked against `tokens`, which is an error, not a failure.
+     */
+    toStayWithin: On<T, 'toStayWithin', (limits: AtLeastOne<Limits>) => R>
     /** The main frame's latest document answered `status`, after redirects. */
     toHaveStatus: On<T, 'toHaveStatus', (status: number | StatusRange) => R>
     /** The page had no uncaught exception or unhandled rejection. */

@@ -922,6 +922,29 @@
             "additionalProperties": false
           }
         },
+        "usage": {
+          "description": "Tokens the fake agent reports for every turn, as `turn.usage`; without it, null.",
+          "type": "object",
+          "properties": {
+            "cacheRead": {
+              "type": "number"
+            },
+            "cacheWrite": {
+              "type": "number"
+            },
+            "input": {
+              "type": "number"
+            },
+            "output": {
+              "type": "number"
+            },
+            "reasoning": {
+              "type": ["number", "null"]
+            }
+          },
+          "required": ["cacheRead", "cacheWrite", "input", "output", "reasoning"],
+          "additionalProperties": false
+        },
         "withSkill": {
           "description": "Files and message used instead when the environment gives the agent a skill.",
           "type": "object",

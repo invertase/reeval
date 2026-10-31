@@ -668,6 +668,14 @@ export type FakeHarnessDescriptor = {
   withSkill?: { files?: Record<string, string>; text?: string }
   /** Chance (0–1) that an attempt writes no files and says so, for flaky pass rates. */
   flakeRate?: number
+  /** Tokens the fake agent reports for every turn, as `turn.usage`; without it, null. */
+  usage?: {
+    input: number
+    output: number
+    cacheRead: number
+    cacheWrite: number
+    reasoning: number | null
+  }
   /**
    * Real sandbox actions, one list per `c.send` (the last list repeats), run in order before
    * `files`. `exec` runs as the agent: with the sandbox's own variables, none of the checks'.

@@ -976,6 +976,15 @@ class FakeHarnessDescriptorToolsItem(TypedDict):
     tool: str
 
 
+# Tokens the fake agent reports for every turn, as `turn.usage`; without it, null.
+class FakeHarnessDescriptorUsage(TypedDict):
+    cacheRead: float
+    cacheWrite: float
+    input: float
+    output: float
+    reasoning: float | None
+
+
 # Files and message used instead when the environment gives the agent a skill.
 class FakeHarnessDescriptorWithSkill(TypedDict):
     files: NotRequired[dict[str, str]]
@@ -1038,6 +1047,8 @@ class FakeHarnessDescriptor(TypedDict):
     # Tool calls the fake agent reports on every turn, before writing files. `ok` defaults to
     # true; null reports a call whose result never came.
     tools: NotRequired[list[FakeHarnessDescriptorToolsItem]]
+    # Tokens the fake agent reports for every turn, as `turn.usage`; without it, null.
+    usage: NotRequired[FakeHarnessDescriptorUsage]
     # Files and message used instead when the environment gives the agent a skill.
     withSkill: NotRequired[FakeHarnessDescriptorWithSkill]
 

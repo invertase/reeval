@@ -1,7 +1,19 @@
 import picomatch from 'picomatch'
+import { closest } from './contract/shared.ts'
+import { parseDuration } from './duration.ts'
 import { SKILL_LOAD_TOOLS, toolTarget } from './history/tool-target.ts'
 import { isObjectLike } from './object.ts'
-import type { AttemptContext, FileChange, TranscriptEvent, Turn, WebEventType } from './types.ts'
+import { formatDuration } from './text.ts'
+import type {
+  AttemptContext,
+  Duration,
+  FileChange,
+  TokenUsage,
+  TranscriptEvent,
+  Turn,
+  WebEventType,
+} from './types.ts'
+import { totalTokens } from './usage.ts'
 
 export type Result = { pass: boolean; message: () => string }
 
@@ -300,4 +312,134 @@ export function searched(actual: unknown, query?: RegExp | string): Result {
 
 export function fetched(actual: unknown, url?: RegExp | string): Result {
   return webEvent('toHaveFetched', actual, 'web-fetch', (e) => ('url' in e ? e.url : ''), url)
+}
+
+/** `toStayWithin`'s limits: each one caps what the turn, or every turn of `c`, used. */
+export type Limits = {
+  /** Input (cache included) plus output tokens, subagents included. */
+  tokens?: number
+  /** Every tool call, or each listed tool's calls by name as `toHaveCalledTool` names them. */
+  toolCalls?: number | Readonly<Record<string, number>>
+  /** The agent's time, as `turn.durationMs` counts it; setup and checks don't count. */
+  duration?: Duration
+}
+
+const LIMIT_KEYS = ['tokens', 'toolCalls', 'duration'] as const
+
+type BudgetSubject = Pick<Turn, 'usage' | 'transcript' | 'durationMs'>
+
+const isBudgetTurn = (value: unknown): value is BudgetSubject =>
+  isObjectLike(value) && Array.isArray(value.transcript) && typeof value.durationMs === 'number'
+
+const count = (n: number) => n.toLocaleString('en-US')
+
+const isCount = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0
+
+/** The limits as `toStayWithin`'s default label shows them: `tokens 200,000, bash 10`. */
+export function limitsLabel(limits: unknown): string | undefined {
+  if (!isObjectLike(limits)) return undefined
+  const parts: string[] = []
+  if (isCount(limits.tokens)) parts.push(`tokens ${count(limits.tokens)}`)
+  const calls = limits.toolCalls
+  if (isCount(calls)) parts.push(`toolCalls ${count(calls)}`)
+  else if (isObjectLike(calls)) {
+    for (const [tool, n] of Object.entries(calls)) parts.push(`${tool} ${String(n)}`)
+  }
+  if (limits.duration !== undefined) parts.push(`duration ${String(limits.duration)}`)
+  return parts.length ? parts.join(', ') : undefined
+}
+
+function checkLimits(limits: unknown): Limits {
+  const example = 'e.g. toStayWithin({ tokens: 200_000, toolCalls: { bash: 10 } })'
+  if (!isObjectLike(limits)) {
+    throw new TypeError(`toStayWithin() takes limits, ${example} (got ${JSON.stringify(limits)})`)
+  }
+  for (const key of Object.keys(limits)) {
+    if ((LIMIT_KEYS as readonly string[]).includes(key)) continue
+    const near = closest(key, LIMIT_KEYS)
+    throw new TypeError(
+      `toStayWithin() has no limit "${key}"; it takes tokens, toolCalls and duration.${near ? ` Did you mean "${near}"?` : ''}`,
+    )
+  }
+  if (!LIMIT_KEYS.some((k) => limits[k] !== undefined)) {
+    throw new TypeError(`toStayWithin() needs at least one limit, ${example}`)
+  }
+  const bad = (what: string, value: unknown) =>
+    new TypeError(
+      `toStayWithin()'s ${what} is a whole number of 0 or more (got ${JSON.stringify(value)})`,
+    )
+  if (limits.tokens !== undefined && !isCount(limits.tokens)) throw bad('tokens', limits.tokens)
+  const calls = limits.toolCalls
+  if (calls !== undefined && !isCount(calls)) {
+    if (!isObjectLike(calls) || !Object.keys(calls).length) {
+      throw new TypeError(
+        `toStayWithin()'s toolCalls is a count, or a count per tool such as { bash: 10 } (got ${JSON.stringify(calls)})`,
+      )
+    }
+    for (const [tool, n] of Object.entries(calls)) {
+      if (!isCount(n)) throw bad(`toolCalls.${tool}`, n)
+    }
+  }
+  if (limits.duration !== undefined) {
+    try {
+      parseDuration(limits.duration as Duration)
+    } catch (error) {
+      throw new TypeError(
+        `toStayWithin()'s duration: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+  return limits as Limits
+}
+
+/**
+ * `toStayWithin`: what the turn, or every turn of `c`, used, against each limit. A null `usage`
+ * can't show it stayed within `tokens`, so that's a `HarnessCapabilityError`, not a failure.
+ */
+export function withinLimits(actual: unknown, limits: unknown, not: boolean): Result {
+  if (not) {
+    throw new TypeError(
+      "toStayWithin() can't be negated: a budget checks the agent stayed within it. Check the figure itself instead, e.g. expect(turn.usage.output).toBeGreaterThan(…).",
+    )
+  }
+  const turns: readonly BudgetSubject[] = isBudgetTurn(actual)
+    ? [actual]
+    : isContext(actual)
+      ? actual.turns
+      : (() => {
+          throw subjectError('toStayWithin() expects a turn from c.send(), or c')
+        })()
+  const checked = checkLimits(limits)
+  const over: string[] = []
+  if (checked.tokens !== undefined) {
+    if (turns.some((t) => t.usage === null)) {
+      throw new HarnessCapabilityError(
+        "toStayWithin() can't check tokens: the harness reported no token usage for this turn (turn.usage is null). Drop tokens, or use a harness that reports usage.",
+      )
+    }
+    const used = turns.reduce((sum, t) => sum + totalTokens(t.usage as TokenUsage), 0)
+    if (used > checked.tokens) over.push(`tokens ${count(used)} > ${count(checked.tokens)}`)
+  }
+  const transcript = turns.flatMap((t) => t.transcript)
+  const calls = checked.toolCalls
+  if (typeof calls === 'number') {
+    const used = transcript.filter((e) => 'toolCallId' in e).length
+    if (used > calls) over.push(`toolCalls ${count(used)} > ${count(calls)}`)
+  } else if (calls) {
+    const tools = toolsOf(transcript)
+    for (const [tool, limit] of Object.entries(calls)) {
+      const used = tools.filter((e) => e.tool === tool).length
+      if (used > limit) over.push(`${tool} ${count(used)} > ${count(limit)}`)
+    }
+  }
+  if (checked.duration !== undefined) {
+    const limit = parseDuration(checked.duration)
+    const used = turns.reduce((sum, t) => sum + t.durationMs, 0)
+    if (used > limit) over.push(`duration ${formatDuration(used)} > ${String(checked.duration)}`)
+  }
+  return {
+    pass: over.length === 0,
+    message: () =>
+      over.length ? `went over its budget: ${over.join(' · ')}` : 'stayed within its budget',
+  }
 }

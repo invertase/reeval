@@ -2599,6 +2599,37 @@ export const features: Feature[] = [
     canary: /expected tool calls matching mcp__stamp__other/,
   },
   {
+    dir: 'assert/stay-within',
+    tiers: ['fake'],
+    env: 'plain',
+    canary: /went over its budget: tokens 1,200 > 1,199/,
+    record: ({ run }) => {
+      const lands = run.evals.find((e) => e.name === 'lands')
+      assert.deepEqual(
+        lands?.attempts[0]?.assertions.map((a) => [a.label, a.status]),
+        [
+          ['toStayWithin tokens 1,200, bash 2, duration 5m', 'pass'],
+          ['toStayWithin toolCalls 2', 'pass'],
+        ],
+      )
+    },
+  },
+  {
+    dir: 'assert/stay-within-unreported',
+    tiers: ['fake'],
+    env: 'plain',
+    lands: { outcome: 'fail', error: { kind: 'assertion', message: /can't check tokens/ } },
+    canary: /went over its budget: toolCalls 1 > 0/,
+    record: ({ run }) => {
+      const lands = run.evals.find((e) => e.name === 'lands')
+      assert.equal(
+        lands?.attempts[0]?.assertions[0]?.status,
+        'error',
+        'an unreported usage is an error, not a failed check',
+      )
+    },
+  },
+  {
     dir: 'assert/ran',
     tiers: ['fake'],
     env: 'plain',
