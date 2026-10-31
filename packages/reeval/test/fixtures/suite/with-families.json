@@ -340,6 +340,7 @@
                 "outcome": "fail"
               }
             ],
+            "rates": [],
             "questions": [],
             "observations": []
           },
@@ -422,6 +423,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           },
@@ -504,6 +506,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           }
@@ -591,6 +594,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           },
@@ -679,6 +683,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           },
@@ -767,6 +772,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           },
@@ -843,6 +849,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           },
@@ -890,6 +897,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           }
@@ -1050,6 +1058,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [
               {
                 "kind": "pairs",
@@ -1214,6 +1223,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [
               {
                 "kind": "pairs",
@@ -1311,6 +1321,7 @@
             ],
             "cases": null,
             "pooled": null,
+            "rates": null,
             "questions": [],
             "observations": []
           }
