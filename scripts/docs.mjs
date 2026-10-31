@@ -483,6 +483,35 @@ for (const [name, flags] of commands ?? []) {
   }
 }
 
+// And the other way: a flag a page shows, in a `reeval …` command or as inline code, is one
+// `reeval` parses. The pages also name other programs' flags as inline code.
+const OTHER_PROGRAMS_FLAGS = [
+  'cpus', // docker run
+  'effort', // agy
+  'memory', // docker run
+  'memory-swap', // docker run
+  'model', // codex
+  'pids-limit', // docker run
+  'thinking', // pi
+]
+const parsedFlags = new Set([...GLOBAL_FLAGS, ...[...(commands ?? new Map()).values()].flat()])
+const parsed = (flag) =>
+  parsedFlags.has(flag) || (flag.startsWith('no-') && parsedFlags.has(flag.slice(3)))
+for (const file of mdxFiles()) {
+  const shown = new Set()
+  for (const line of read(file).split('\n')) {
+    for (const m of line.matchAll(/`--([a-z][a-z0-9-]*)(?:[ =][^`]*)?`/g)) shown.add(m[1])
+    const at = line.search(/(?<![\w/.-])reeval (?!\w+\.)/)
+    if (at < 0) continue
+    for (const m of line.slice(at).matchAll(/(?<![\w-])--([a-z][a-z0-9-]*)/g)) shown.add(m[1])
+  }
+  for (const flag of shown) {
+    if (!parsed(flag) && !OTHER_PROGRAMS_FLAGS.includes(flag)) {
+      problems.push(`${relative(root, file)} shows --${flag}, which reeval doesn't parse`)
+    }
+  }
+}
+
 const optionsPage =
   page('reference/options') + page('reference/configuration') + page('reference/profiles')
 for (const key of [
@@ -1092,17 +1121,17 @@ for (const file of mdxFiles()) {
 // ---- Walkthroughs: one home each --------------------------------------------------------------
 
 // `reeval init` writes `analysis.model`, whose missing key is a warning in `reeval doctor`
-// (src/init.ts, src/doctor.ts) and skips insights in a run (test/init.test.ts), so a page that
+// (src/init.ts, src/doctor.ts) and which a run without questions never calls, so a page that
 // shows init and a doctor transcript may end "No problems." or "No problems, 1 warning.", and
-// must not call the insights key required.
-const INSIGHTS_KEY_REQUIRED =
-  /\bkeys? (?:for )?the (?:agent )?harness and (?:the )?insights model\b|\bkeys the harness and the insights model need\b|\bGoogle (?:API )?key\b[^\n]{0,40}\brequired\b/i
+// must not call the analysis key required.
+const ANALYSIS_KEY_REQUIRED =
+  /\bkeys? (?:for )?the (?:agent )?harness and (?:the )?(?:analysis|insights) model\b|\bkeys the harness and the (?:analysis|insights) model need\b|\bGoogle (?:API )?key\b[^\n]{0,40}\brequired\b/i
 for (const file of mdxFiles()) {
   const text = read(file)
   if (/reeval init\b/.test(text) && /^No problems(?:, \d+ warnings?)?\.$/m.test(text)) {
-    if (INSIGHTS_KEY_REQUIRED.test(text)) {
+    if (ANALYSIS_KEY_REQUIRED.test(text)) {
       problems.push(
-        `${relative(root, file)} shows reeval init and calls the insights key required: a run without GOOGLE_GENERATIVE_AI_API_KEY skips insights and doctor ends "No problems, 1 warning.", so say the key turns insights on`,
+        `${relative(root, file)} shows reeval init and calls the analysis key required: a run without GOOGLE_GENERATIVE_AI_API_KEY still runs and doctor ends "No problems, 1 warning.", so say the key is for reeval analyze`,
       )
     }
   }
