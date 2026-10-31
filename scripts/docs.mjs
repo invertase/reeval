@@ -483,32 +483,73 @@ for (const [name, flags] of commands ?? []) {
   }
 }
 
-// And the other way: a flag a page shows, in a `reeval …` command or as inline code, is one
-// `reeval` parses. The pages also name other programs' flags as inline code.
-const OTHER_PROGRAMS_FLAGS = [
+// And the other way: a flag a page shows a `reeval …` command with, in a code block or inline
+// code, is one that command parses (the parser refuses `reeval query --resume`), and a bare
+// inline `--flag` is one some command parses. A bare `-f` is often another program's (curl), so
+// only a command's short flags are checked. `--no-cache` is its own flag, not a negation. Other
+// programs' commands (`docker run --memory`, `agy --effort`) aren't checked, but the pages also
+// name a few of their flags bare. Generated blocks come from cli-spec.ts and aren't checked.
+const OTHER_PROGRAMS_BARE_FLAGS = [
   'cpus', // docker run
-  'effort', // agy
   'memory', // docker run
   'memory-swap', // docker run
   'model', // codex
   'pids-limit', // docker run
   'thinking', // pi
 ]
-const parsedFlags = new Set([...GLOBAL_FLAGS, ...[...(commands ?? new Map()).values()].flat()])
-const parsed = (flag) =>
-  parsedFlags.has(flag) || (flag.startsWith('no-') && parsedFlags.has(flag.slice(3)))
+const { FLAGS: SPEC_FLAGS = {} } = commands ? await import(join(src, 'cli-spec.ts')) : {}
+const allFlags = [...new Set([...GLOBAL_FLAGS, ...[...(commands ?? new Map()).values()].flat()])]
+const shortOf = (flag) => SPEC_FLAGS[flag]?.short
+const commandFlags = (rest) => {
+  const [first, second] = rest.trim().split(/\s+/)
+  const name = commands?.has(`${first} ${second}`) ? `${first} ${second}` : first
+  const flags = commands?.get(name)
+  return flags ? { name: `reeval ${name}`, flags: [...GLOBAL_FLAGS, ...flags] } : null
+}
+const shownFlags = (text, allowed, where) => {
+  const found = []
+  for (const m of text.matchAll(/(?<![\w-])--([a-z][a-z0-9-]*)/g)) {
+    if (!allowed.includes(m[1])) found.push(`--${m[1]}${where}`)
+  }
+  for (const m of text.matchAll(/(?<![\w-])-([a-zA-Z]+)(?![\w-])/g)) {
+    for (const c of m[1]) {
+      if (!allowed.some((f) => shortOf(f) === c)) found.push(`-${c}${where}`)
+    }
+  }
+  return found
+}
+const reevalAt = /(?:(?<=\.bin\/)|(?<![\w/.-]))reeval(?= |$)/g
+const shownInCommand = (code) =>
+  [...code.matchAll(reevalAt)].flatMap((m) => {
+    const rest = code.slice(m.index + 'reeval'.length).split(/\s(?:&&|\|\|?|;|#)(?:\s|$)/)[0]
+    const command = commandFlags(rest)
+    if (!command) return shownFlags(rest, allFlags, '')
+    return shownFlags(rest, command.flags, ` with ${command.name}`)
+  })
+const generatedBlock = /\[\/\/\]: # \(generated:([\w:-]+)\)[\s\S]*?\[\/\/\]: # \(\/generated:\1\)/g
 for (const file of mdxFiles()) {
   const shown = new Set()
-  for (const line of read(file).split('\n')) {
-    for (const m of line.matchAll(/`--([a-z][a-z0-9-]*)(?:[ =][^`]*)?`/g)) shown.add(m[1])
-    const at = line.search(/(?<![\w/.-])reeval (?!\w+\.)/)
-    if (at < 0) continue
-    for (const m of line.slice(at).matchAll(/(?<![\w-])--([a-z][a-z0-9-]*)/g)) shown.add(m[1])
-  }
-  for (const flag of shown) {
-    if (!parsed(flag) && !OTHER_PROGRAMS_FLAGS.includes(flag)) {
-      problems.push(`${relative(root, file)} shows --${flag}, which reeval doesn't parse`)
+  const parts = read(file)
+    .replace(generatedBlock, '')
+    .split(/^[ \t]*```.*$/m)
+  parts.forEach((part, i) => {
+    if (i % 2) {
+      for (const line of part.replace(/\\\n\s*/g, ' ').split('\n')) {
+        for (const flag of shownInCommand(line)) shown.add(flag)
+      }
+      return
     }
+    for (const [, code] of part.matchAll(/`([^`\n]+)`/g)) {
+      const bare = code.match(/^--([a-z][a-z0-9-]*)(?:[ =]|$)/)?.[1]
+      if (bare) {
+        if (!allFlags.includes(bare) && !OTHER_PROGRAMS_BARE_FLAGS.includes(bare)) {
+          shown.add(`--${bare}`)
+        }
+      } else for (const f of shownInCommand(code)) shown.add(f)
+    }
+  })
+  for (const flag of shown) {
+    problems.push(`${relative(root, file)} shows ${flag}, which reeval doesn't parse`)
   }
 }
 
