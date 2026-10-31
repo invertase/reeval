@@ -15,7 +15,7 @@
       "name": "an environment replaces it",
       "mode": "run",
       "options": {
-        "environment": {
+        "environments": {
           "kind": "environment",
           "name": "closed",
           "layers": [
@@ -38,7 +38,7 @@
       "name": "an extend child replaces its parent",
       "mode": "run",
       "options": {
-        "environment": {
+        "environments": {
           "kind": "environment",
           "name": "reopened",
           "layers": [
@@ -67,7 +67,7 @@
       "name": "the default list spreads",
       "mode": "run",
       "options": {
-        "environment": {
+        "environments": {
           "kind": "environment",
           "name": "installs",
           "layers": [
@@ -101,7 +101,7 @@
       "name": "the eval replaces the environment",
       "mode": "run",
       "options": {
-        "environment": {
+        "environments": {
           "kind": "environment",
           "name": "closed",
           "layers": [
@@ -137,7 +137,7 @@
           "name": "replaces the environment too",
           "mode": "run",
           "options": {
-            "environment": {
+            "environments": {
               "kind": "environment",
               "name": "closed",
               "layers": [
@@ -199,7 +199,7 @@
       "name": "a fake agent with a layout gets that agent's hosts",
       "mode": "run",
       "options": {
-        "environment": {
+        "environments": {
           "kind": "environment",
           "name": "closed",
           "layers": [
@@ -211,7 +211,7 @@
             }
           ]
         },
-        "harness": {
+        "harnesses": {
           "kind": "fake",
           "layout": "claude-code"
         }

@@ -5,7 +5,7 @@ const skilled = defineEnvironment('skilled', {
   sandbox: docker({ from: 'node:24-bookworm' }),
 })
 
-// No baseline and no config environment: empty control, same image as the variant.
+// No baseline and no config environments: empty control, same image as the variant.
 evaluate(
   'empty control shares the variant image',
   { compare: { variants: [skilled] } },

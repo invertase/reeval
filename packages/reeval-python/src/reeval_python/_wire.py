@@ -798,7 +798,7 @@ class EvalOptionsDataCompareCompare(TypedDict):
     # Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only).
     gate: NotRequired[Literal["all", "none", "variants"]]
     # Harnesses (ids or descriptors) to compare on; the others run the control only.
-    harness: NotRequired[list[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | str]]
+    harnesses: NotRequired[list[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | str]]
     # Lift in points from -1 to 1; a variant cell below it fails.
     minLift: NotRequired[float]
     # Other environments, each planned and run as itself.
@@ -813,11 +813,11 @@ class EvalOptionsDataCompareGatePassRate(TypedDict):
     passRate: float
 
 
-class EvalOptionsDataCompareHarnessAdd(TypedDict):
+class EvalOptionsDataCompareHarnessesAdd(TypedDict):
     add: AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor]
 
 
-class EvalOptionsDataCompareHarnessOnly(TypedDict):
+class EvalOptionsDataCompareHarnessesOnly(TypedDict):
     only: list[str] | str
 
 
@@ -837,11 +837,11 @@ class EvalOptionsDataCompare(TypedDict):
     # Variables and secrets for the sandbox, merged by name down the cascade.
     env: NotRequired[EnvVars]
     # The control: the compare has no `baseline`.
-    environment: NotRequired[EnvironmentData]
+    environments: NotRequired[EnvironmentData]
     # How each cell's attempts decide its outcome; default `'all'`.
     gate: NotRequired[Literal["all"] | EvalOptionsDataCompareGatePassRate]
     # Which agents run the eval; each harness is its own cell.
-    harness: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsDataCompareHarnessAdd | EvalOptionsDataCompareHarnessOnly]
+    harnesses: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsDataCompareHarnessesAdd | EvalOptionsDataCompareHarnessesOnly]
     # Defaults for `c.judge()`, merged field by field down the cascade.
     judge: NotRequired[ConfigJudgeOptions]
     # Keys a profile's `limit` may not narrow for this group or eval.
@@ -863,7 +863,7 @@ class EvalOptionsDataCompare(TypedDict):
     # can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.
     runs: NotRequired[float | EvalOptionsDataCompareRunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
-    # `harness`. Not an environment: it does not invent skills, files or a name.
+    # `harnesses`. Not an environment: it does not invent skills, files or a name.
     sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
     # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
     # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
@@ -883,7 +883,7 @@ class EvalOptionsDataCompare2Compare(TypedDict):
     # Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only).
     gate: NotRequired[Literal["all", "none", "variants"]]
     # Harnesses (ids or descriptors) to compare on; the others run the control only.
-    harness: NotRequired[list[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | str]]
+    harnesses: NotRequired[list[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | str]]
     # Lift in points from -1 to 1; a variant cell below it fails.
     minLift: NotRequired[float]
     # Other environments, each planned and run as itself.
@@ -898,11 +898,11 @@ class EvalOptionsDataCompare2GatePassRate(TypedDict):
     passRate: float
 
 
-class EvalOptionsDataCompare2HarnessAdd(TypedDict):
+class EvalOptionsDataCompare2HarnessesAdd(TypedDict):
     add: AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor]
 
 
-class EvalOptionsDataCompare2HarnessOnly(TypedDict):
+class EvalOptionsDataCompare2HarnessesOnly(TypedDict):
     only: list[str] | str
 
 
@@ -924,7 +924,7 @@ class EvalOptionsDataCompare2(TypedDict):
     # How each cell's attempts decide its outcome; default `'all'`.
     gate: NotRequired[Literal["all"] | EvalOptionsDataCompare2GatePassRate]
     # Which agents run the eval; each harness is its own cell.
-    harness: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsDataCompare2HarnessAdd | EvalOptionsDataCompare2HarnessOnly]
+    harnesses: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsDataCompare2HarnessesAdd | EvalOptionsDataCompare2HarnessesOnly]
     # Defaults for `c.judge()`, merged field by field down the cascade.
     judge: NotRequired[ConfigJudgeOptions]
     # Keys a profile's `limit` may not narrow for this group or eval.
@@ -946,7 +946,7 @@ class EvalOptionsDataCompare2(TypedDict):
     # can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.
     runs: NotRequired[float | EvalOptionsDataCompare2RunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
-    # `harness`. Not an environment: it does not invent skills, files or a name.
+    # `harnesses`. Not an environment: it does not invent skills, files or a name.
     sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
     # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
     # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
@@ -965,11 +965,11 @@ class EvalOptionsData3GatePassRate(TypedDict):
     passRate: float
 
 
-class EvalOptionsData3HarnessAdd(TypedDict):
+class EvalOptionsData3HarnessesAdd(TypedDict):
     add: AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor]
 
 
-class EvalOptionsData3HarnessOnly(TypedDict):
+class EvalOptionsData3HarnessesOnly(TypedDict):
     only: list[str] | str
 
 
@@ -987,11 +987,11 @@ class EvalOptionsData3(TypedDict):
     # Variables and secrets for the sandbox, merged by name down the cascade.
     env: NotRequired[EnvVars]
     # What this group or eval runs in, and the control of a compare without a `baseline`.
-    environment: NotRequired[EnvironmentData]
+    environments: NotRequired[EnvironmentData]
     # How each cell's attempts decide its outcome; default `'all'`.
     gate: NotRequired[Literal["all"] | EvalOptionsData3GatePassRate]
     # Which agents run the eval; each harness is its own cell.
-    harness: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsData3HarnessAdd | EvalOptionsData3HarnessOnly]
+    harnesses: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsData3HarnessesAdd | EvalOptionsData3HarnessesOnly]
     # Defaults for `c.judge()`, merged field by field down the cascade.
     judge: NotRequired[ConfigJudgeOptions]
     # Keys a profile's `limit` may not narrow for this group or eval.
@@ -1013,7 +1013,7 @@ class EvalOptionsData3(TypedDict):
     # can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.
     runs: NotRequired[float | EvalOptionsData3RunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
-    # `harness`. Not an environment: it does not invent skills, files or a name.
+    # `harnesses`. Not an environment: it does not invent skills, files or a name.
     sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
     # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
     # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
@@ -1536,7 +1536,7 @@ class PiHarnessDescriptor(TypedDict):
 
 
 # An option a profile's `limit` can narrow, and `pin` can protect.
-PinnableKey: TypeAlias = "Literal[\"compare\", \"harness\", \"runs\"]"
+PinnableKey: TypeAlias = "Literal[\"compare\", \"harnesses\", \"runs\"]"
 
 
 class PluginMarketplace1(TypedDict):

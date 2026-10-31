@@ -17,7 +17,7 @@ const tools = defineEnvironment('tools', {
   }),
 })
 
-evaluate('node 22', { environment: node22 }, async () => {})
-evaluate('node 24', { environment: node24 }, async () => {})
-evaluate('same image, other env', { environment: also22 }, async () => {})
-evaluate('install on 22', { environment: tools }, async () => {})
+evaluate('node 22', { environments: node22 }, async () => {})
+evaluate('node 24', { environments: node24 }, async () => {})
+evaluate('same image, other env', { environments: also22 }, async () => {})
+evaluate('install on 22', { environments: tools }, async () => {})

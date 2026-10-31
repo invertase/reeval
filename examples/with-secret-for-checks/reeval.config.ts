@@ -6,7 +6,7 @@ import { profiles } from '../profiles.ts'
 export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that runs the prompt's command in the sandbox, as a real agent would.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [[{ exec: 'env | sort > env.txt' }, { reply: 'env.txt has the environment.' }]],
   }),
   // fakeSandbox() runs everything on the host, so its agent would see the token too.

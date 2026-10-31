@@ -5,7 +5,7 @@
       "name": "marketplace plugins",
       "mode": "run",
       "options": {
-        "environment": {
+        "environments": {
           "kind": "environment",
           "name": "listed",
           "layers": [

@@ -20,7 +20,7 @@ import { tempDir } from './helpers.ts'
 function runIn(root: string): RunContext {
   const config = resolveConfig(
     {
-      harness: [fakeHarness(), cursor({ model: 'composer-2.5' })],
+      harnesses: [fakeHarness(), cursor({ model: 'composer-2.5' })],
       runs: 1,
     },
     root,
@@ -56,16 +56,16 @@ const plain = defineEnvironment('plain', {})
 const skill = defineEnvironment('skill', { rules: 'Use the house style.' })
 
 function declarations() {
-  group('outer', { tags: ['smoke'], harness: { only: 'fake' } }, () => {
+  group('outer', { tags: ['smoke'], harnesses: { only: 'fake' } }, () => {
     evaluate('a', { runs: 2 }, async () => {})
     group.skip('skipped', () => {
       evaluate('b', async () => {})
     })
-    group('both', { harness: { add: cursor({ model: 'composer-2', id: 'fast' }) } }, () => {
+    group('both', { harnesses: { add: cursor({ model: 'composer-2', id: 'fast' }) } }, () => {
       evaluate('c', { compare: { baseline: plain, variants: [skill] } }, async () => {})
     })
   })
-  evaluate('d', { timeout: '2m', egress: 'deny-all', environment: skill }, async () => {})
+  evaluate('d', { timeout: '2m', egress: 'deny-all', environments: skill }, async () => {})
   evaluate.each([{ n: 1 }, { n: 2 }])('case $n', async () => {})
   evaluate.todo('later')
   group.todo('also later')
@@ -157,8 +157,8 @@ function relativeTree(): DeclarationTree['children'] {
       type: 'group',
       name: 'fake',
       mode: 'run',
-      options: { harness: { only: 'fake' }, sandbox: { kind: 'fake', dir: './sandboxes' } },
-      children: [eval_('context', { environment: context })],
+      options: { harnesses: { only: 'fake' }, sandbox: { kind: 'fake', dir: './sandboxes' } },
+      children: [eval_('context', { environments: context })],
     },
     eval_('compare', {
       compare: {
@@ -217,11 +217,11 @@ test("a tree's relative host paths resolve against the declaring file's director
   const tree = JSON.parse(JSON.stringify(declaredTree(file))) as DeclarationTree
   assert.deepEqual(hostPaths(tree.children), {
     'fake.sandbox.dir': join(evals, 'sandboxes'),
-    'context.environment.layers.0.spec.files.a.txt.path': join(evals, 'fixtures/a.txt'),
-    'context.environment.layers.0.spec.rules.path': join(root, 'RULES.md'),
-    'context.environment.layers.0.spec.skills.0.path': join(evals, 'skills'),
-    'context.environment.layers.0.spec.skills.1.spec': join(root, 'pkg.tgz'),
-    'context.environment.layers.0.spec.workspace.url': join(root, 'app'),
+    'context.environments.layers.0.spec.files.a.txt.path': join(evals, 'fixtures/a.txt'),
+    'context.environments.layers.0.spec.rules.path': join(root, 'RULES.md'),
+    'context.environments.layers.0.spec.skills.0.path': join(evals, 'skills'),
+    'context.environments.layers.0.spec.skills.1.spec': join(root, 'pkg.tgz'),
+    'context.environments.layers.0.spec.workspace.url': join(root, 'app'),
     'compare.compare.baseline.layers.0.spec.sandbox.dockerfile': join(evals, 'images/Dockerfile'),
     'compare.compare.variants.0.layers.0.spec.sandbox.dockerfile': join(root, 'docker/Dockerfile'),
     'case 0.sandbox.dockerfile': join(evals, 'images/Dockerfile'),
@@ -266,7 +266,7 @@ test("a tree's missing Dockerfile is refused at its absolute path, naming the fi
   const full = join(root, 'evals', 'Dockerfile')
   for (const [options, field] of [
     [{ sandbox }, 'sandbox.dockerfile'],
-    [{ environment: env }, 'environment.layers[0].spec.sandbox.dockerfile'],
+    [{ environments: env }, 'environments.layers[0].spec.sandbox.dockerfile'],
     [{ compare: { variants: [env] } }, 'compare.variants[0].layers[0].spec.sandbox.dockerfile'],
   ] as const) {
     await assert.rejects(
@@ -353,8 +353,10 @@ test("planEval holds the engine's backstop to the longest timer Node can set", (
   const ctx = { ...run, file: join(run.config.root, 'evals/p.eval.ts'), order: 0 }
   const environment = defineEnvironment('slow', { setup: [{ run: 'ls', timeout: '30m' }] })
   const plan = (timeout: string) =>
-    planEval({ name: 'p', mode: 'run', groups: [], options: { timeout, environment } }, ctx)
-      .tests?.[0]?.timeout
+    planEval(
+      { name: 'p', mode: 'run', groups: [], options: { timeout, environments: environment } },
+      ctx,
+    ).tests?.[0]?.timeout
   // 596h and the setup step each fit a timer; with the harness's start allowance they don't.
   assert.equal(plan('596h'), 2 ** 31 - 1)
   assert.equal(plan('1h'), 3_600_000 + 1_800_000 + 2 * 90_000 + 5_000)

@@ -18,7 +18,7 @@ evaluate(
   'greets by name',
   {
     tags: ['questions'],
-    harness: [composer, pim],
+    harnesses: [composer, pim],
     runs: 1,
     compare: { baseline: plain, variants: [withHouseGreeting] },
     questions: [

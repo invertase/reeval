@@ -3,6 +3,6 @@ import { fakeHarness } from 'reeval/harness'
 import { eachCase } from './evals/env.ts'
 
 export default defineConfig({
-  harness: fakeHarness({}),
-  environment: eachCase,
+  harnesses: fakeHarness({}),
+  environments: eachCase,
 })

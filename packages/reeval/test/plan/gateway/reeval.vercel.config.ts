@@ -3,7 +3,7 @@ import { direct, vercel } from 'reeval/gateway'
 import { claudeCode, codex, cursor, goose, grokBuild, pi } from 'reeval/harness'
 
 export default defineConfig({
-  harness: [
+  harnesses: [
     claudeCode({ model: 'claude-sonnet-4-5' }),
     codex({ model: 'gpt-5.4-mini' }),
     cursor({ model: 'composer-2.5' }),
@@ -15,7 +15,7 @@ export default defineConfig({
   profiles: {
     'codex-pin': {
       gateway: [direct(), vercel()],
-      defaults: { harness: codex({ model: 'gpt-5.4-mini', gateway: 'vercel' }) },
+      defaults: { harnesses: codex({ model: 'gpt-5.4-mini', gateway: 'vercel' }) },
     },
   },
 })

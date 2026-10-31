@@ -81,9 +81,9 @@ import { gateLabel } from './view/gate.ts'
 
 /** Every eval/group option key `checkOptions` accepts. The feature matrix holds each to an inventory entry. */
 export const EVAL_OPTION_KEYS = [
-  'harness',
+  'harnesses',
   'sandbox',
-  'environment',
+  'environments',
   'compare',
   'runs',
   'gate',
@@ -102,10 +102,10 @@ export const EVAL_OPTION_KEYS = [
 
 const KNOWN: string[] = [...EVAL_OPTION_KEYS]
 const SUGGEST: Record<string, string> = {
-  harnesses: 'harness',
+  harness: 'harnesses',
   sandboxes: 'sandbox',
-  environments: 'environment',
-  baseline: 'environment',
+  environment: 'environments',
+  baseline: 'environments',
   variants: 'compare',
   repeat: 'runs',
   repeats: 'runs',
@@ -144,7 +144,7 @@ export function checkGate(value: unknown, where: string): void {
   const problem = gateProblem(value, where)
   if (problem) throw new UsageError(problem)
 }
-const PINNABLE: PinnableKey[] = ['harness', 'runs', 'compare']
+const PINNABLE: PinnableKey[] = ['harnesses', 'runs', 'compare']
 
 const ID = /^[A-Za-z0-9._:@+\-=[\]]+$/
 
@@ -226,7 +226,7 @@ const describe = (value: unknown) => {
 
 /** `compare: false` and `environment` beside `compare.baseline` are never legal options. */
 export function refuseIllegalCompare(
-  options: { environment?: unknown; compare?: unknown },
+  options: { environments?: unknown; compare?: unknown },
   where: string,
 ): void {
   if (options.compare === false) {
@@ -238,9 +238,9 @@ export function refuseIllegalCompare(
     options.compare !== null && typeof options.compare === 'object' && 'baseline' in options.compare
       ? options.compare.baseline
       : undefined
-  if (options.environment !== undefined && baseline !== undefined) {
+  if (options.environments !== undefined && baseline !== undefined) {
     throw new UsageError(
-      `environment and compare.baseline can't both be set in ${where}. compare: { baseline, variants } names every arm, so drop environment, or drop baseline to make environment the control.`,
+      `environments and compare.baseline can't both be set in ${where}. compare: { baseline, variants } names every arm, so drop environments, or drop baseline to make environments the control.`,
     )
   }
 }
@@ -343,21 +343,21 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     const problem = sandboxProblem(o.sandbox)
     if (problem) throw new UsageError(`sandbox in ${where}: ${problem}`)
   }
-  if (o.environment !== undefined) {
-    if (Array.isArray(o.environment)) {
+  if (o.environments !== undefined) {
+    if (Array.isArray(o.environments)) {
       throw new UsageError(
-        `environment takes one environment, not a list (${where}). To compare environments, use compare: { baseline, variants: [a, b] }. baseline is the control; variants are not layered on it.`,
+        `environments takes one environment, not a list (${where}). To compare environments, use compare: { baseline, variants: [a, b] }. baseline is the control; variants are not layered on it.`,
       )
     }
-    if (!isEnvironment(o.environment)) {
+    if (!isEnvironment(o.environments)) {
       throw new UsageError(
-        `environment in ${where} must come from defineEnvironment(…) (got ${describe(o.environment)})`,
+        `environments in ${where} must come from defineEnvironment(…) (got ${describe(o.environments)})`,
       )
     }
-    const problem = environmentDataProblem(o.environment, 'environment', where)
+    const problem = environmentDataProblem(o.environments, 'environments', where)
     if (problem) throw new UsageError(problem)
   }
-  const raw = options as { environment?: unknown; compare?: unknown }
+  const raw = options as { environments?: unknown; compare?: unknown }
   refuseIllegalCompare(raw, where)
   if (o.compare !== undefined) {
     const problem = compareProblem(o.compare, where, z.custom<Environment>(isEnvironment))
@@ -375,7 +375,7 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     const bad = Array.isArray(o.pin) ? o.pin.filter((k) => !PINNABLE.includes(k)) : [o.pin]
     if (bad.length) {
       throw new UsageError(
-        `pin in ${where} lists harness, runs and/or compare (got ${bad.map((k) => JSON.stringify(k)).join(', ')})`,
+        `pin in ${where} lists harnesses, runs and/or compare (got ${bad.map((k) => JSON.stringify(k)).join(', ')})`,
       )
     }
   }
@@ -468,7 +468,7 @@ function checkCaptureModel(value: unknown, where: string): void {
 
 function applyHarness(
   inherited: HarnessDescriptor[],
-  value: EvalOptions['harness'],
+  value: EvalOptions['harnesses'],
   where: string,
 ): HarnessDescriptor[] {
   if (value === undefined) return inherited
@@ -481,7 +481,7 @@ function applyHarness(
   const list = Array.isArray(next) ? next : [next]
   if (list.length === 0) {
     throw new UsageError(
-      `harness is an empty list in ${where}. Give at least one, e.g. harness: ${HARNESS_EXAMPLE}`,
+      `harnesses is an empty list in ${where}. Give at least one, e.g. harnesses: ${HARNESS_EXAMPLE}`,
     )
   }
   checkHarnesses(list, where)
@@ -503,7 +503,7 @@ function editHarness(
 ): HarnessDescriptor[] {
   if ('add' in edit && 'only' in edit) {
     throw new UsageError(
-      `harness in ${where} takes { add } or { only }, not both. Use add to append to the inherited harnesses, only to keep some of them.`,
+      `harnesses in ${where} takes { add } or { only }, not both. Use add to append to the inherited harnesses, only to keep some of them.`,
     )
   }
   if ('add' in edit) return [...inherited, ...(Array.isArray(edit.add) ? edit.add : [edit.add])]
@@ -512,7 +512,7 @@ function editHarness(
   const missing = ids.filter((id) => typeof id !== 'string' || !have.includes(id))
   if (missing.length) {
     throw new UsageError(
-      `harness { only: ${missing.map((id) => JSON.stringify(id)).join(', ')} } in ${where} names no inherited harness (inherited: ${have.join(', ')})`,
+      `harnesses { only: ${missing.map((id) => JSON.stringify(id)).join(', ')} } in ${where} names no inherited harness (inherited: ${have.join(', ')})`,
     )
   }
   return inherited.filter((h) => ids.includes(harnessId(h)))
@@ -523,24 +523,24 @@ export function checkHarnesses(list: unknown[], where: string): void {
   for (const item of list) {
     if (!isHarness(item)) {
       throw new UsageError(
-        `harness in ${where} must be like ${HARNESS_EXAMPLE} (got ${describe(item)})`,
+        `harnesses in ${where} must be like ${HARNESS_EXAMPLE} (got ${describe(item)})`,
       )
     }
     if (item.kind === 'opencode') {
       const why = opencodeModelError(item.model)
       if (why) throw new UsageError(`opencode() in ${where}: ${why}`)
     }
-    checkMaxConcurrent(item.maxConcurrent, `harness.maxConcurrent in ${where}`)
+    checkMaxConcurrent(item.maxConcurrent, `harnesses.maxConcurrent in ${where}`)
     const { startTimeout } = item
     if (startTimeout !== undefined) {
       try {
         parseDuration(startTimeout)
       } catch (error) {
-        throw new UsageError(`harness.startTimeout in ${where}: ${(error as Error).message}`)
+        throw new UsageError(`harnesses.startTimeout in ${where}: ${(error as Error).message}`)
       }
     }
     const problem = harnessProblem(item)
-    if (problem) throw new UsageError(`harness in ${where}: ${problem}`)
+    if (problem) throw new UsageError(`harnesses in ${where}: ${problem}`)
   }
 }
 
@@ -573,7 +573,7 @@ export type NormalizedCompare = {
   gate: CompareGate
   minLift?: number
   /** Harness ids; unset means every harness the eval runs. */
-  harness?: string[]
+  harnesses?: string[]
   /** How many variants the eval asked for, before a profile's limit. */
   of: number
 }
@@ -605,7 +605,7 @@ const FACTOR_FIX: Record<PairFactor, (r: Pick<Resolved, 'harness'>, where: strin
   environment: (_, where) =>
     `varies the environment (across: 'environment'), but ${where} runs one environment, so it has no pairs to ask. Add compare: { variants: [...] }`,
   harness: (r, where) =>
-    `varies the harness (across: 'harness'), but ${where} runs one harness (${r.harness.map(harnessId).join(', ')}), so it has no pairs to ask. Run it on two or more, harness: [a, b]`,
+    `varies the harness (across: 'harness'), but ${where} runs one harness (${r.harness.map(harnessId).join(', ')}), so it has no pairs to ask. Run it on two or more, harnesses: [a, b]`,
 }
 
 export type Resolved = {
@@ -648,8 +648,8 @@ function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | un
     variants: value.variants,
     gate: value.gate ?? 'variants',
     ...(value.minLift !== undefined ? { minLift: value.minLift } : {}),
-    ...(value.harness
-      ? { harness: value.harness.map((h) => (typeof h === 'string' ? h : harnessId(h))) }
+    ...(value.harnesses
+      ? { harnesses: value.harnesses.map((h) => (typeof h === 'string' ? h : harnessId(h))) }
       : {}),
     of: value.variants.length,
   }
@@ -675,9 +675,9 @@ function applyLevel(
     if (value !== undefined) out.sources = { ...out.sources, [key]: where }
   }
   if (options.egress !== undefined) out.egress[egress] = options.egress
-  out.harness = applyHarness(out.harness, options.harness, where)
+  out.harness = applyHarness(out.harness, options.harnesses, where)
   if (options.sandbox !== undefined) out.sandbox = options.sandbox
-  if (options.environment !== undefined) out.environment = options.environment
+  if (options.environments !== undefined) out.environment = options.environments
   if (options.compare !== undefined) out.compare = normalizeCompare(options.compare)
   if (options.runs !== undefined) {
     const { runs, bestOf } = runsOf(options.runs)
@@ -763,7 +763,7 @@ export function cascade(
   // A harness list only a profile's defaults set may narrow the config's, which drops a question
   // below rather than refusing it; neither list varying the harness is the eval's mistake.
   const harnessFromProfile =
-    profile?.defaults.harness !== undefined && !levels.some((l) => l.options.harness)
+    profile?.defaults.harnesses !== undefined && !levels.some((l) => l.options.harnesses)
   const authored = variesBy(out)
   if (harnessFromProfile) authored.harness ||= base.harness.length > 1
   // A skipped eval asks nothing, so a pairwise question it inherits needs no factor to vary.
@@ -775,15 +775,15 @@ export function cascade(
       )
     }
   }
-  if (profile?.defaults.harness !== undefined && levels.some((l) => l.options.harness)) {
-    notes.push('harness set by the eval')
+  if (profile?.defaults.harnesses !== undefined && levels.some((l) => l.options.harnesses)) {
+    notes.push('harnesses set by the eval')
   }
   const ids = out.harness.map(harnessId)
-  const scope = out.compare?.harness
+  const scope = out.compare?.harnesses
   const missing = scope?.filter((id) => !ids.includes(id)) ?? []
   if (missing.length) {
     throw new UsageError(
-      `compare.harness lists ${missing.join(', ')}, which ${where} doesn't run (it runs ${ids.join(', ')}).`,
+      `compare.harnesses lists ${missing.join(', ')}, which ${where} doesn't run (it runs ${ids.join(', ')}).`,
     )
   }
   for (const v of out.compare?.variants ?? []) {
@@ -819,16 +819,16 @@ export function cascade(
     const tag = `profile ${profile.name}`
     const pinned = (key: PinnableKey) => out.pin.includes(key)
     let comparedLeft = true
-    if (limit.harness && !pinned('harness')) {
-      const kept = out.harness.filter((h) => limit.harness?.includes(harnessId(h)))
+    if (limit.harnesses && !pinned('harnesses')) {
+      const kept = out.harness.filter((h) => limit.harnesses?.includes(harnessId(h)))
       if (kept.length === 0) {
-        skip = `no harness left: ${tag} allows ${limit.harness.join(', ') || 'none'}`
+        skip = `no harness left: ${tag} allows ${limit.harnesses.join(', ') || 'none'}`
       } else if (kept.length < out.harness.length) {
         notes.push(`harnesses ${out.harness.length} → ${kept.length} (${tag})`)
         out.harness = kept
-        // With every harness compare.harness names gone, no harness runs a variant, so the
+        // With every harness compare.harnesses names gone, no harness runs a variant, so the
         // compare is off and its controls gate as limit.compare: false leaves them.
-        const scope = out.compare?.harness
+        const scope = out.compare?.harnesses
         if (
           out.compare?.variants.length &&
           scope &&
@@ -935,7 +935,7 @@ function defaultRuns(
 }
 
 /**
- * Refuses a profile's `limit.harness` id that no collected eval runs on: it keeps nothing, and a
+ * Refuses a profile's `limit.harnesses` id that no collected eval runs on: it keeps nothing, and a
  * limit that keeps nothing skips every eval. `harnesses` are the ids every eval in the loaded
  * files runs on before the limit, whatever the tag and name filters pick. When a path filter
  * loaded only some files (`partial`), an id may name a harness of the others, so only a limit
@@ -946,7 +946,7 @@ export function checkLimitHarness(
   configFile: string,
   collected: { harnesses: readonly string[]; partial: boolean },
 ): void {
-  const ids = profile?.limit.harness
+  const ids = profile?.limit.harnesses
   if (!profile || !ids?.length) return
   const unknown = ids.filter((id) => !collected.harnesses.includes(id))
   if (!unknown.length || (collected.partial && unknown.length < ids.length)) return
@@ -955,7 +955,7 @@ export function checkLimitHarness(
   const evals = collected.partial ? 'eval in the selected files' : 'eval'
   const the = collected.partial ? 'the evals in the selected files' : 'the evals'
   throw new UsageError(
-    `profiles.${profile.name}.limit.harness in ${configFile} lists ${listed}, which no ${evals} runs on. Harness ids ${the} run on: ${have.join(', ') || 'none'}.`,
+    `profiles.${profile.name}.limit.harnesses in ${configFile} lists ${listed}, which no ${evals} runs on. Harness ids ${the} run on: ${have.join(', ') || 'none'}.`,
   )
 }
 
@@ -1017,14 +1017,14 @@ export function sandboxSetBy(
   if (resolved.compare) {
     if (planned.cell.role === 'control') {
       if (resolved.compare.from === 'environment') {
-        return resolved.sources?.environment ?? configFile
+        return resolved.sources?.environments ?? configFile
       }
       if (resolved.compare.from === 'empty') return configFile
       return resolved.sources?.compare ?? configFile
     }
     return resolved.sources?.compare ?? configFile
   }
-  return resolved.sources?.environment ?? configFile
+  return resolved.sources?.environments ?? configFile
 }
 
 /**
@@ -1067,7 +1067,7 @@ export function expand(resolved: Resolved, vertex?: VertexSettings): PlannedAtte
         }
       })(),
     ]
-    if (compare && (!compare.harness || compare.harness.includes(hid))) {
+    if (compare && (!compare.harnesses || compare.harnesses.includes(hid))) {
       for (const v of compare.variants) {
         const env = applied(v)
         const sandbox = attemptSandbox(resolved, env)

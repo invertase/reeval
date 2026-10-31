@@ -3,5 +3,5 @@ import { fakeHarness } from 'reeval/harness'
 
 // REEVAL_FIXTURE_SANDBOX picks the tier: the fake sandbox (F) by default, or docker (D).
 export default defineConfig({
-  harness: fakeHarness({ script: [[{ exec: 'echo contract-42' }]] }),
+  harnesses: fakeHarness({ script: [[{ exec: 'echo contract-42' }]] }),
 })

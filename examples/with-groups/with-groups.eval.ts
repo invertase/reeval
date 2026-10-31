@@ -8,7 +8,7 @@ const math = defineEnvironment('math', ({ directory, file }) => ({
 group(
   'math',
   // Two runs a cell, passing when one of them does: the default gate would need both.
-  { environment: math, tags: ['math'], timeout: '5m', runs: 2, gate: { passRate: 0.5 } },
+  { environments: math, tags: ['math'], timeout: '5m', runs: 2, gate: { passRate: 0.5 } },
   () => {
     evaluate('adds multiply', async (c) => {
       await c.send('Add a multiply(a, b) function to src/math.js.')

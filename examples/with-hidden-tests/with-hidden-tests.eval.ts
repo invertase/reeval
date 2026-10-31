@@ -4,7 +4,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 const slugify = defineEnvironment('slugify', ({ directory }) => ({ files: directory('./project') }))
 const hiddenTest = readFileSync(new URL('./hidden/slugify.test.js', import.meta.url), 'utf8')
 
-evaluate('implements slugify', { environment: slugify }, async (c) => {
+evaluate('implements slugify', { environments: slugify }, async (c) => {
   await c.send(
     'Implement slugify(text) in src/slugify.js: lower-case, words joined by single hyphens, ' +
       'punctuation dropped.',

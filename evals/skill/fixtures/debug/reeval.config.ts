@@ -4,7 +4,7 @@ import { fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: {
       'src/slug.js':
         'export function slugify(text) {\n' +

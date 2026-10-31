@@ -1548,7 +1548,7 @@ export type CompareOptions<E = Environment> = {
   /** Lift in points from -1 to 1; a variant cell below it fails. */
   minLift?: number
   /** Harnesses (ids or descriptors) to compare on; the others run the control only. */
-  harness?: Array<string | HarnessDescriptor>
+  harnesses?: Array<string | HarnessDescriptor>
 }
 
 /**
@@ -1779,7 +1779,7 @@ export type AttemptQuestionInput = {
 }
 
 /** An option a profile's `limit` can narrow, and `pin` can protect. */
-export type PinnableKey = 'harness' | 'runs' | 'compare'
+export type PinnableKey = 'harnesses' | 'runs' | 'compare'
 
 /**
  * How a cell's attempts decide its outcome: `'all'` (the default) passes only when every attempt
@@ -1817,9 +1817,9 @@ export type Runs<N extends number = number> = number | { bestOf: OddAtLeast3<N> 
 /** Options other than `environment` and `compare`, which are exclusive of each other. */
 type EvalOptionFields<N extends number = number> = {
   /** Which agents run the eval; each harness is its own cell. */
-  harness?: HarnessOption
+  harnesses?: HarnessOption
   /**
-   * The default machine when the resolved environment omits `sandbox`. Cascades like `harness`.
+   * The default machine when the resolved environment omits `sandbox`. Cascades like `harnesses`.
    * Not an environment: it does not invent skills, files or a name.
    */
   sandbox?: SandboxDescriptor
@@ -1892,18 +1892,18 @@ export type EvalSource = DeclaredSource & {
 type EnvironmentOrCompare<E> =
   | {
       /** What this group or eval runs in, and the control of a compare without a `baseline`. */
-      environment?: E
+      environments?: E
       compare?: never
     }
   | {
       /** Forbidden beside `compare.baseline`, which names the control. */
-      environment?: never
+      environments?: never
       /** Environments to run side by side; `baseline` is the control. */
       compare: CompareSpec<E> & { baseline: E }
     }
   | {
       /** The control: the compare has no `baseline`. */
-      environment?: E
+      environments?: E
       /** Environments to run side by side against `environment`, the control. */
       compare: CompareSpec<E> & { baseline?: undefined }
     }
@@ -1918,9 +1918,9 @@ export type GroupOptions<N extends number = number> = EvalOptions<N>
  * by name or a fake judge, and environments without `extend`. The same `environment` / compare
  * object split as `EvalOptions`.
  */
-export type EvalOptionsData = Omit<EvalOptionFields, 'harness' | 'judge'> & {
+export type EvalOptionsData = Omit<EvalOptionFields, 'harnesses' | 'judge'> & {
   /** Which agents run the eval; each harness is its own cell. */
-  harness?: HarnessData
+  harnesses?: HarnessData
   /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: ConfigJudgeOptions
 } & EnvironmentOrCompare<EnvironmentData>
@@ -1952,11 +1952,11 @@ export type Budget = {
 /** What evals get when they don't say otherwise: under groups and evals. */
 export type ProfileDefaults = {
   /** The agents every eval runs on, unless a group or eval replaces them. */
-  harness?: HarnessDescriptor | HarnessDescriptor[]
+  harnesses?: HarnessDescriptor | HarnessDescriptor[]
   /** The default machine when the resolved environment omits `sandbox`. */
   sandbox?: SandboxDescriptor
   /** What every eval runs in when it names no environment. */
-  environment?: Environment
+  environments?: Environment
   /** Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more). */
   runs?: Runs
   /** How each cell's attempts decide its outcome. */
@@ -1984,7 +1984,7 @@ export type ProfileLimit = {
   /** `false` runs the control only; `{ maxVariants }` keeps the first n variants. */
   compare?: false | { maxVariants: number }
   /** Harness ids to allow; evals left with none are skipped. */
-  harness?: string[]
+  harnesses?: string[]
 }
 
 /** How a run is sized: chosen with `--profile`, `REEVAL_PROFILE` or `defaultProfile`. */
@@ -2091,14 +2091,14 @@ export type ReevalConfig = {
   /** Globs of eval files, relative to the config's directory; default every `.eval.ts` under `evals`. */
   include?: string[]
   /** The agents every eval runs on, unless a group or eval replaces them; default Cursor. */
-  harness?: HarnessDescriptor | HarnessDescriptor[]
+  harnesses?: HarnessDescriptor | HarnessDescriptor[]
   /**
    * The default machine when the resolved environment omits `sandbox`. Not an environment:
    * it does not invent skills, files or a name. Implicit `docker()` when nobody sets one.
    */
   sandbox?: SandboxDescriptor
   /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
-  environment?: Environment
+  environments?: Environment
   /**
    * Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more); unset, a compare with
    * variants runs 4 a side and anything else once.
@@ -2189,9 +2189,9 @@ export type AnalysisConfigData = Omit<AnalysisConfig, 'model'> & {
 }
 
 /** `ProfileDefaults` as data: the environment without `extend`, and the judge as data. */
-export type ProfileDefaultsData = Omit<ProfileDefaults, 'environment' | 'judge'> & {
+export type ProfileDefaultsData = Omit<ProfileDefaults, 'environments' | 'judge'> & {
   /** What every eval runs in when it names no environment. */
-  environment?: EnvironmentData
+  environments?: EnvironmentData
   /** Defaults for `c.judge()`, merged field by field over the config's. */
   judge?: ConfigJudgeData
 }
@@ -2213,10 +2213,10 @@ export type ProfileData = Omit<Profile, 'defaults' | 'judge' | 'gateway'> & {
  */
 export type ReevalConfigData = Omit<
   ReevalConfig,
-  'environment' | 'judge' | 'profiles' | 'analysis' | 'gateway'
+  'environments' | 'judge' | 'profiles' | 'analysis' | 'gateway'
 > & {
   /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
-  environment?: EnvironmentData
+  environments?: EnvironmentData
   /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: ConfigJudgeData
   /** Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. */

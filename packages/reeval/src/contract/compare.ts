@@ -16,7 +16,7 @@ export const compareSchema = <E extends z.ZodType>(environment: E) =>
     variants: z.array(environment).min(1),
     gate: compareGateSchema.optional(),
     minLift: z.number().min(-1).max(1).optional(),
-    harness: z.array(z.union([z.string(), harnessDescriptorSchema])).optional(),
+    harnesses: z.array(z.union([z.string(), harnessDescriptorSchema])).optional(),
   })
 
 const authoredCompare = compareSchema(z.custom<Environment>())
@@ -47,19 +47,19 @@ function explain(where: string) {
     const v = spec[key]
     switch (key) {
       case 'baseline':
-        return `compare.baseline in ${where} must be an environment from defineEnvironment (got ${describe(v)}). It is the control; variants are not layered on it or on the eval's environment. Leave it out to use the eval's environment as the control.`
+        return `compare.baseline in ${where} must be an environment from defineEnvironment (got ${describe(v)}). It is the control; variants are not layered on it or on the eval's environment. Leave it out to use the eval's environments as the control.`
       case 'gate':
         return `compare.gate in ${where} is ${oneOf(compareGateSchema.options)} (got ${describe(v)})`
       case 'minLift':
         return `compare.minLift in ${where} is points from -1 to 1, e.g. minLift: 0.1 (got ${describe(v)})`
-      case 'harness': {
+      case 'harnesses': {
         const item = index === undefined ? undefined : (v as unknown[])[index]
         const kind = (item as { kind?: string } | null)?.kind
         const problem =
           kind && kind in FACTORY ? harnessProblem(item as HarnessDescriptor) : undefined
         return problem
-          ? `compare.harness in ${where}: ${problem}`
-          : `compare.harness in ${where} must be a list of harness ids, e.g. harness: ['cursor:composer-2.5'] (got ${describe(index === undefined ? v : item)})`
+          ? `compare.harnesses in ${where}: ${problem}`
+          : `compare.harnesses in ${where} must be a list of harness ids, e.g. harnesses: ['cursor:composer-2.5'] (got ${describe(index === undefined ? v : item)})`
       }
       default:
         return index === undefined
@@ -70,7 +70,7 @@ function explain(where: string) {
 }
 
 /** The order the hand-written checks ran in, so the first refusal stays the same. */
-const ORDER = ['baseline', 'gate', 'minLift', 'harness', 'variants']
+const ORDER = ['baseline', 'gate', 'minLift', 'harnesses', 'variants']
 
 /**
  * What's wrong with a compare object whose environments `environment` checks, or undefined.
@@ -81,7 +81,7 @@ export function compareProblem(value: unknown, where: string, environment: z.Zod
     return `compare in ${where} must be an object, not a list. Use compare: { baseline, variants: [...] }.`
   }
   if (!isObjectLike(value) || !Array.isArray(value.variants)) {
-    return `compare in ${where} takes { variants, baseline? } (got ${describe(value)}). Use compare: { variants: [a, b], baseline?, gate?, minLift?, harness? }.`
+    return `compare in ${where} takes { variants, baseline? } (got ${describe(value)}). Use compare: { variants: [a, b], baseline?, gate?, minLift?, harnesses? }.`
   }
   return refusal(compareSchema(environment), value, explain(where), { order: ORDER })
 }

@@ -9,8 +9,8 @@ import { notes, prompts, trimmed } from './probes.ts'
 evaluate(
   'effort',
   {
-    environment: notes,
-    harness: contractHarness(process.env.REEVAL_CONTRACT_EFFORT),
+    environments: notes,
+    harnesses: contractHarness(process.env.REEVAL_CONTRACT_EFFORT),
     tags: ['effort'],
   },
   async (c) => {

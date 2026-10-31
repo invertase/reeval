@@ -3,7 +3,7 @@ import { judgeSaw, tokens } from './env.ts'
 
 // The judge is sent [REDACTED] for a `to: 'checks'` secret in a check's output and for an
 // unbrokered secret the agent printed.
-evaluate('lands', { environment: tokens }, async (c) => {
+evaluate('lands', { environments: tokens }, async (c) => {
   const state = await judgeSaw(c, 'lands')
   const raw = [process.env.REEVAL_FIXTURE_TOKEN, process.env.REEVAL_FIXTURE_AGENT_VALUE]
   expect({

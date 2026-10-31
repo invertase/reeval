@@ -17,7 +17,7 @@ evaluate(
   "styles the page in Anthropic's brand",
   // No baseline, so the eval's environment is the control. Four tries a side is the fewest that
   // gives a verdict; the variant passes on 3 of 4 or more.
-  { environment: page, compare: { variants: [withSkill] }, runs: 4, gate: { passRate: 0.75 } },
+  { environments: page, compare: { variants: [withSkill] }, runs: 4, gate: { passRate: 0.75 } },
   async (c) => {
     await c.send(
       "Give index.html Anthropic's look: write styles.css with Anthropic's brand colors and " +

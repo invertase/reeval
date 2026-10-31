@@ -3,7 +3,7 @@ import { fakeJudge } from 'reeval/judge'
 import { app } from './env.ts'
 
 // diff's patterns narrow the judge to src/, and a later `!` pattern takes the tests back out.
-evaluate('lands', { environment: app }, async (c) => {
+evaluate('lands', { environments: app }, async (c) => {
   await c.send('write the app')
   let files: unknown
   const look = fakeJudge({

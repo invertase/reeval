@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent with one list of steps per c.send(). `exec` runs a real command in the
   // sandbox, reported as a shell call; `write` edits files; `reply` is the turn's final message.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [
       [
         { exec: 'ls src test' },

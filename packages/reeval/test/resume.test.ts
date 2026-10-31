@@ -297,7 +297,7 @@ evaluate('leftover', async () => {})
       'evals/shot.eval.ts': `
 import { defineEnvironment, evaluate } from 'reeval'
 const site = defineEnvironment('site', { files: { 'server.cjs': ${JSON.stringify(server)} } })
-evaluate('shot', { environment: site }, async (c) => {
+evaluate('shot', { environments: site }, async (c) => {
   await c.capture(await c.serve('node server.cjs'), { name: 'home', path: '/login' })
 })
 `,
@@ -391,8 +391,8 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { base } from './evals/envs.ts'
 export default defineConfig({
-  harness: fakeHarness({}),
-  environment: base,
+  harnesses: fakeHarness({}),
+  environments: base,
   judge: { model: fakeJudge({ score: 0.9 }) },
   analysis: { model: fakeAnalysis({ vote: 'A' }) },
 })

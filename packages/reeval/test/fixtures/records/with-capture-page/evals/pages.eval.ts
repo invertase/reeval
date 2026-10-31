@@ -32,21 +32,21 @@ http
 
 const site = defineEnvironment('site', { files: { 'server.mjs': server } })
 
-evaluate('captures a page that renders', { environment: site }, async (c) => {
+evaluate('captures a page that renders', { environments: site }, async (c) => {
   await c.send('Build the sign-up page.')
   const app = await c.serve('node server.mjs')
   const shot = await c.capture(app, { name: 'sign-up', path: '/sign-up' })
   expect(shot.file.bytes).toBeGreaterThan(0)
 })
 
-evaluate('captures a page that throws', { environment: site }, async (c) => {
+evaluate('captures a page that throws', { environments: site }, async (c) => {
   await c.send('Build the sign-up page.')
   const app = await c.serve('node server.mjs')
   const shot = await c.capture(app, { name: 'blank', path: '/blank' })
   expect(shot.file.bytes).toBeGreaterThan(0)
 })
 
-evaluate('captures a missing page', { environment: site }, async (c) => {
+evaluate('captures a missing page', { environments: site }, async (c) => {
   await c.send('Build the sign-up page.')
   const app = await c.serve('node server.mjs')
   const shot = await c.capture(app, { name: 'login', path: '/login' })

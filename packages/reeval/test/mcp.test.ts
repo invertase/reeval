@@ -30,8 +30,8 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 export default defineConfig({
-  harness: fakeHarness({ files: process.env.BREAK ? {} : { 'ok.txt': 'y' } }),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+  harnesses: fakeHarness({ files: process.env.BREAK ? {} : { 'ok.txt': 'y' } }),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   analysis: {
     model: fakeAnalysis({

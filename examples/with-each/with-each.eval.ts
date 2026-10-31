@@ -11,7 +11,7 @@ const cases = [
   { fn: 'power', a: 2, b: 5, want: '32' },
 ]
 
-evaluate.each(cases)('adds $fn to src/math.js', { environment: math }, async (c, item) => {
+evaluate.each(cases)('adds $fn to src/math.js', { environments: math }, async (c, item) => {
   await c.send(`Add a ${item.fn}(a, b) function to src/math.js.`)
 
   const run = await c.exec(`node ~/checks/call.mjs ${item.fn} ${item.a} ${item.b}`)

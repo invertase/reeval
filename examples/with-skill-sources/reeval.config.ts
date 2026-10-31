@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that replies with ./fake-agent/reply.md, the skills it was given, so the
   // checks run without keys or Docker.
-  harness: fakeHarness({ text: fakeAgent('reply.md') }),
+  harnesses: fakeHarness({ text: fakeAgent('reply.md') }),
   sandbox: fakeSandbox(),
   // The real agents: `--profile claude-code`, or any other in ../profiles.ts. An example's own
   // profiles go beside them.

@@ -8,6 +8,6 @@ import { fakeSandbox } from 'reeval/sandbox'
 const agent = JSON.stringify(join(import.meta.dirname, 'agent'))
 
 export default defineConfig({
-  harness: fakeHarness({ script: [[{ exec: `cp -R ${agent}/. .` }]], text: 'Done.' }),
+  harnesses: fakeHarness({ script: [[{ exec: `cp -R ${agent}/. .` }]], text: 'Done.' }),
   sandbox: fakeSandbox(),
 })

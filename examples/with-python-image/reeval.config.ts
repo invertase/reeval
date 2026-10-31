@@ -10,7 +10,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace. The environment's
   // Python sandbox still applies, so even the fake agent runs in Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: {
       'fizzbuzz.py': fakeAgent('fizzbuzz.py'),
       'test_fizzbuzz.py': fakeAgent('test_fizzbuzz.py'),

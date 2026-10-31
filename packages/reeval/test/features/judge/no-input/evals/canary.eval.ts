@@ -4,7 +4,7 @@ import { fakeJudge } from 'reeval/judge'
 import { app } from './env.ts'
 
 // Must fail: a call with only judge settings has no default inputs to fall back on.
-evaluate('canary', { environment: app }, async (c) => {
+evaluate('canary', { environments: app }, async (c) => {
   await c.send('write the app')
   const nothing = { model: fakeJudge({ score: 1 }) } as unknown as JudgeCallOptions
   let error: unknown

@@ -11,7 +11,7 @@ const math = defineEnvironment('reeval-math', ({ git }) => ({
   files: { '.gitignore': 'node_modules/\n' },
 }))
 
-evaluate('adds subtract to a pinned repository', { environment: math }, async (c) => {
+evaluate('adds subtract to a pinned repository', { environments: math }, async (c) => {
   await c.send('Add a subtract(a, b) function to src/math.js, with a test in test/math.test.js.')
 
   await expect(c.exec('node --test')).toSucceed()

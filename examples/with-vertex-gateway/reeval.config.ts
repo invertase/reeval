@@ -13,7 +13,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace, so the checks run
   // without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: {
       'src/math.js': fakeAgent('src/math.js'),
       'test/math.test.js': fakeAgent('test/math.test.js'),
@@ -33,7 +33,7 @@ export default defineConfig({
     // own key. The Anthropic API's dated id is sent to Vertex as claude-haiku-4-5@20251001.
     vertex: {
       defaults: {
-        harness: claudeCode({ model: 'claude-haiku-4-5-20251001' }),
+        harnesses: claudeCode({ model: 'claude-haiku-4-5-20251001' }),
         sandbox: docker(),
       },
       judge: { model: 'anthropic/claude-haiku-4-5-20251001' },

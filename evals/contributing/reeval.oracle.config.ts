@@ -8,7 +8,7 @@ import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
   include: ['*.eval.ts'],
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [[{ exec: 'git apply ~/oracle.patch' }]],
     text: 'Applied the merged change.',
   }),

@@ -6,8 +6,8 @@ import { fakeSandbox } from 'reeval/sandbox'
 // A record corpus entry (a placed plugin, from before plugin.marketplace), recorded by reeval 0.11.0.
 // Don't re-record it: test/corpus.test.ts reads it to prove this shape still loads.
 export default defineConfig({
-  harness: fakeHarness(),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  harnesses: fakeHarness(),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   analysis: {
     model: fakeAnalysis({
       output: () => ({

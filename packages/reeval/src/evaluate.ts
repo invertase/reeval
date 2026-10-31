@@ -432,11 +432,12 @@ function declareNodes(
 function optionsFrom(written: EvalOptionsData, where: string, base: string): EvalOptions {
   refuseIllegalCompare(written, where)
   const resolved = withPaths(written as GroupOptions, where, base) as EvalOptionsData
-  const { environment, compare, ...rest } = resolved
+  const { environments, compare, ...rest } = resolved
   const missing = missingIn(where)
   const asEnv = (env: EnvironmentData, field: string) =>
     environmentFrom(environmentPaths(env, base, field, missing) as EnvironmentData)
-  const own = environment !== undefined ? { environment: asEnv(environment, 'environment') } : {}
+  const own =
+    environments !== undefined ? { environments: asEnv(environments, 'environments') } : {}
   if (compare === undefined) return { ...rest, ...own }
   const variants = compare.variants.map((v, i) => asEnv(v, `compare.variants[${i}]`))
   if (compare.baseline !== undefined) {

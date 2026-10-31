@@ -63,7 +63,7 @@ import { fakeSandbox } from '${pkg}/sandbox'
 
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'greet.js': 'export const greet = (name) => \`Hello, \${name}!\`\\n' },
   }),
   sandbox: fakeSandbox(),
@@ -80,7 +80,7 @@ describe('reeval init', () => {
     assert.match(init.stdout, /npx reeval run +the eval on Cursor, with CURSOR_API_KEY/)
     assert.match(p.read('evals/environments.ts'), /export const greeter = defineEnvironment\(/)
     assert.match(p.read('evals/greet.eval.ts'), /import \{ greeter \} from '\.\/environments\.ts'/)
-    assert.match(p.read('evals/greet.eval.ts'), /\{ environment: greeter \}/)
+    assert.match(p.read('evals/greet.eval.ts'), /\{ environments: greeter \}/)
     assert.match(
       p.read('reeval.config.ts'),
       /^ {2}analysis: \{ model: 'google\/gemini-3\.8-flash' \},$/m,

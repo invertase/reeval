@@ -18,7 +18,7 @@ import {
 import { docker } from 'reeval/sandbox'
 
 const inDocker = (harness: HarnessDescriptor, judge: string): Profile => ({
-  defaults: { harness, sandbox: docker() },
+  defaults: { harnesses: harness, sandbox: docker() },
   judge: { model: judge },
 })
 

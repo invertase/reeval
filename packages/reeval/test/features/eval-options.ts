@@ -14,9 +14,9 @@ export type EvalOptionSpec = {
 }
 
 export const EVAL_OPTION_SPECS: EvalOptionSpec[] = [
-  { key: 'harness', featureId: 'matrix.harness-runs', plan: true, refusals: true },
+  { key: 'harnesses', featureId: 'matrix.harness-runs', plan: true, refusals: true },
   { key: 'sandbox', featureId: 'environment.sandbox', plan: true, refusals: true },
-  { key: 'environment', featureId: 'matrix.cascade', plan: true, refusals: true },
+  { key: 'environments', featureId: 'matrix.cascade', plan: true, refusals: true },
   { key: 'compare', featureId: 'compare', plan: true, refusals: true },
   { key: 'runs', featureId: 'matrix.harness-runs', plan: true },
   { key: 'runs.bestOf', featureId: 'runs.best-of', plan: true, refusals: true },

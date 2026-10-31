@@ -4,7 +4,7 @@ import { house, loaded, shellOutput } from './env.ts'
 // Under Antigravity's layout, the plugin stays whole where the session copied it (the adapter
 // installs it with agy plugin install): its skill isn't placed with Antigravity's own, its rule
 // isn't refused, and its MCP server is left to the CLI, from the plugin's rewritten .mcp.json.
-evaluate('lands', { environment: house }, async (c) => {
+evaluate('lands', { environments: house }, async (c) => {
   const turn = await c.send('read the plugin')
   expect(shellOutput(turn, 0)).toContain('Write every name in kebab-case.')
   expect(shellOutput(turn, 1)).toBe('not placed\n')

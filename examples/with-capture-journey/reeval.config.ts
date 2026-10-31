@@ -12,7 +12,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace, so the eval runs
   // without keys or Docker. The fake sandbox drives no journey and saves a 1×1 placeholder.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'index.html': fakeAgent('index.html') },
     text: 'The Show price button now reveals the price.',
   }),

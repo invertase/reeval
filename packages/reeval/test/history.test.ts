@@ -904,7 +904,7 @@ evaluate('sibling', async (c) => {
     assert.deepEqual(await agentRow(p.dir), ['drift', ['body changed']])
     await write(importing({ runs: 2, extra: ", timeout: '10m'" }))
     assert.deepEqual(await agentRow(p.dir), ['same', []], 'runs and timeout change nothing')
-    await write(importing({ extra: ", pin: ['harness']" }))
+    await write(importing({ extra: ", pin: ['harnesses']" }))
     const [status, changes] = await agentRow(p.dir)
     assert.equal(status, 'drift')
     assert.ok((changes as string[]).includes('options changed'), String(changes))
@@ -1325,11 +1325,11 @@ import { fakeSandbox } from 'reeval/sandbox'
 const sandbox = fakeSandbox()
 const one = defineEnvironment('tools', { sandbox, env: { FLAVOR: 'one' } })
 const two = defineEnvironment('tools', { sandbox, env: { FLAVOR: 'two' } })
-evaluate('uses one', { environment: one, runs: 3 }, async (c) => {
+evaluate('uses one', { environments: one, runs: 3 }, async (c) => {
   await c.send('x')
   expect(await c.judge('Is it fine?', { diff: true })).toPass()
 })
-evaluate('uses two', { environment: two }, async (c) => { await c.send('x') })
+evaluate('uses two', { environments: two }, async (c) => { await c.send('x') })
 evaluate('uses none', async (c) => { await c.send('x') })
 `,
     })

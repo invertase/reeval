@@ -13,7 +13,7 @@ import {
 } from 'reeval/harness'
 
 export default defineConfig({
-  harness: [
+  harnesses: [
     claudeCode({ model: 'claude-haiku-4-5' }),
     codex({ model: 'gpt-5.4-mini' }),
     goose({ model: 'gemini-3.8-flash' }),

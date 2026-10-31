@@ -12,7 +12,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's tests into the workspace, so the checks run
   // without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'test/duration.test.js': fakeAgent('test/duration.test.js') },
     text: 'I added tests for single units, combined units and invalid input.',
   }),
@@ -24,7 +24,7 @@ export default defineConfig({
     // An agent whose one test passes and misses the mutant, which the mutant check must catch.
     canary: {
       defaults: {
-        harness: fakeHarness({
+        harnesses: fakeHarness({
           files: { 'test/duration.test.js': canary('test/duration.test.js') },
           text: 'I added a test for parseDuration.',
         }),

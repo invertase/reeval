@@ -1,5 +1,5 @@
 # Strict routing as data: direct off, so every cell runs on Vercel AI Gateway or the plan refuses it.
-harness:
+harnesses:
   - { kind: claude-code, model: claude-sonnet-4-5 }
   - { kind: codex, model: gpt-5.4-mini }
 gateway: [vercel, { direct: { enabled: false } }]

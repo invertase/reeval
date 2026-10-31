@@ -10,15 +10,15 @@ const oracle = `node ${JSON.stringify(join(import.meta.dirname, 'scripts/oracle.
 
 export default defineConfig({
   include: ['*.eval.ts'],
-  harness: fakeHarness({ script: [[{ exec: oracle }]], text: 'Fixed it.' }),
+  harnesses: fakeHarness({ script: [[{ exec: oracle }]], text: 'Fixed it.' }),
   sandbox: fakeSandbox(),
   profiles: {
     canary: {
-      defaults: { harness: fakeHarness({ script: [[{ exec: `${oracle} --cheat` }]] }) },
+      defaults: { harnesses: fakeHarness({ script: [[{ exec: `${oracle} --cheat` }]] }) },
     },
     mcp: {
       defaults: {
-        harness: fakeHarness({
+        harnesses: fakeHarness({
           script: [[{ mcp: 'reeval/failures' }, { exec: oracle }]],
         }),
       },

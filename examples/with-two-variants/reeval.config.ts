@@ -21,7 +21,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that writes ./fake-agent's files into the workspace, following the
   // convention wherever it finds it, so the compare runs without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [[{ exec: divide }]],
     text: 'I added divide(a, b) to src/math.js.',
   }),

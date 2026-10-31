@@ -893,7 +893,7 @@ test("a reeval.yaml's relative host paths resolve against its directory", async 
     writeFileSync(
       join(dir, 'reeval.yaml'),
       `sandbox: { kind: docker, dockerfile: docker/Dockerfile }
-environment:
+environments:
   kind: environment
   name: base
   layers:
@@ -913,7 +913,7 @@ profiles:
   local:
     defaults:
       sandbox: { kind: fake, dir: ./tmp }
-      environment:
+      environments:
         kind: environment
         name: remote
         layers: [{ name: remote, spec: { workspace: { kind: git, repo: github:acme/app, url: https://github.com/acme/app.git } } }]
@@ -936,7 +936,7 @@ profiles:
     )
     const local = config.profiles.local?.defaults
     assert.deepEqual(local?.sandbox, { kind: 'fake', dir: join(dir, 'tmp') })
-    const remote = local?.environment?.layers[0]?.spec.workspace
+    const remote = local?.environments?.layers[0]?.spec.workspace
     assert.equal(remote?.url, 'https://github.com/acme/app.git', 'a URL is not a path')
   } finally {
     rmSync(root, { recursive: true, force: true })
@@ -950,7 +950,7 @@ test('a relative host path resolves the same in reeval.yaml, TypeScript data and
     'data/docker/Dockerfile': dockerfile,
     'helpers/docker/Dockerfile': dockerfile,
     'yaml/reeval.yaml': `sandbox: { kind: docker, dockerfile: docker/Dockerfile }
-environment:
+environments:
   kind: environment
   name: base
   layers:
@@ -968,7 +968,7 @@ profiles:
     'data/reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 export default defineConfig({
   sandbox: { kind: 'docker', dockerfile: 'docker/Dockerfile' },
-  environment: defineEnvironment('base', {
+  environments: defineEnvironment('base', {
     workspace: { kind: 'git', repo: '../app', url: '../app' },
     files: { 'a.md': { kind: 'file', path: 'notes/a.md' }, 'b.md': 'inline' },
     rules: { kind: 'file', path: './AGENTS.md' },
@@ -984,7 +984,7 @@ export default defineConfig({
 import { docker, fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
   sandbox: docker({ dockerfile: 'docker/Dockerfile' }),
-  environment: defineEnvironment('base', ({ file, git, skill }) => ({
+  environments: defineEnvironment('base', ({ file, git, skill }) => ({
     workspace: git('../app'),
     files: { 'a.md': file('notes/a.md'), 'b.md': 'inline' },
     rules: file('./AGENTS.md'),
@@ -1776,7 +1776,7 @@ test('expand: per harness, the control then each variant; labels name the role',
   const { resolved } = cascade(
     base,
     [
-      { options: { environment: extra }, where: 'group("parent")' },
+      { options: { environments: extra }, where: 'group("parent")' },
       {
         options: { compare: { baseline: plain, variants: [skill] }, runs: 1 },
         where: 'e',
@@ -1829,7 +1829,7 @@ test('named compare uses the cascaded sandbox option, not the config environment
   )
   const child = cascade(
     { ...base, sandbox: { kind: 'fake', id: 'from-root' } },
-    [{ options: { environment: kept }, where: 'e' }],
+    [{ options: { environments: kept }, where: 'e' }],
     'e',
   )
   assert.equal(expand(child.resolved)[0]?.sandbox.id, 'parent')
@@ -1837,7 +1837,7 @@ test('named compare uses the cascaded sandbox option, not the config environment
     { ...base, sandbox: { kind: 'fake', id: 'from-root' } },
     [
       {
-        options: { sandbox: { kind: 'fake', id: 'from-eval' }, environment: plain },
+        options: { sandbox: { kind: 'fake', id: 'from-eval' }, environments: plain },
         where: 'e',
       },
     ],
@@ -1853,14 +1853,14 @@ test('environment beside a compare with a baseline is an error; without one it i
   assert.throws(
     () =>
       checkOptions(
-        { environment: plain, compare: { baseline: plain, variants: [skill] } },
+        { environments: plain, compare: { baseline: plain, variants: [skill] } },
         'evaluate("e")',
       ),
-    /environment and compare\.baseline can't both be set in evaluate\("e"\)/,
+    /environments and compare\.baseline can't both be set in evaluate\("e"\)/,
   )
-  checkOptions({ environment: plain, compare: { variants: [skill] } }, 'evaluate("e")')
+  checkOptions({ environments: plain, compare: { variants: [skill] } }, 'evaluate("e")')
   assert.throws(
-    () => checkOptions({ environment: plain, compare: false }, 'evaluate("e")'),
+    () => checkOptions({ environments: plain, compare: false }, 'evaluate("e")'),
     /compare: false can't be set in evaluate\("e"\)/,
   )
   assert.throws(
@@ -1868,7 +1868,7 @@ test('environment beside a compare with a baseline is an error; without one it i
     /compare: false can't be set in group\("g"\)/,
   )
   checkOptions({ compare: { baseline: plain, variants: [skill] } }, 'evaluate("e")')
-  checkOptions({ environment: plain }, 'evaluate("e")')
+  checkOptions({ environments: plain }, 'evaluate("e")')
 })
 
 test('cascade: profile defaults sit under evals, limits narrow unless pinned, --runs wins', () => {
@@ -1878,7 +1878,7 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
     name: 'pr',
     reason: '--profile',
     defaults: { runs: 5 },
-    limit: { runs: 1, compare: false as const, harness: ['a'] },
+    limit: { runs: 1, compare: false as const, harnesses: ['a'] },
     judge: {},
     tags: [],
     budget: {},
@@ -1921,7 +1921,7 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
   )
   const skipped = cascade(
     base,
-    [{ options: { harness: { kind: 'fake', id: 'c' } }, where: 'e' }],
+    [{ options: { harnesses: { kind: 'fake', id: 'c' } }, where: 'e' }],
     'e',
     { profile },
   )

@@ -2008,7 +2008,7 @@
           "description": "Variables and secrets for the sandbox, merged by name over the config's.",
           "$ref": "#/$defs/EnvVars"
         },
-        "environment": {
+        "environments": {
           "description": "What every eval runs in when it names no environment.",
           "$ref": "#/$defs/EnvironmentData"
         },
@@ -2016,7 +2016,7 @@
           "description": "How each cell's attempts decide its outcome.",
           "$ref": "#/$defs/GatePolicy"
         },
-        "harness": {
+        "harnesses": {
           "description": "The agents every eval runs on, unless a group or eval replaces them.",
           "anyOf": [
             {
@@ -2133,7 +2133,7 @@
             }
           ]
         },
-        "harness": {
+        "harnesses": {
           "description": "Harness ids to allow; evals left with none are skipped.",
           "type": "array",
           "items": {
@@ -2219,7 +2219,7 @@
           "description": "Variables and secrets for the sandbox, merged by name down the cascade.",
           "$ref": "#/$defs/EnvVars"
         },
-        "environment": {
+        "environments": {
           "description": "What every eval runs in when it names no environment, and a baseline-less compare's control.",
           "$ref": "#/$defs/EnvironmentData"
         },
@@ -2235,7 +2235,7 @@
             "$ref": "#/$defs/GatewayEntryData"
           }
         },
-        "harness": {
+        "harnesses": {
           "description": "The agents every eval runs on, unless a group or eval replaces them; default Cursor.",
           "anyOf": [
             {

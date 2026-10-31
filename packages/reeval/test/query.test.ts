@@ -479,7 +479,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/house-greeting')],
 }))
-evaluate('loads', { environment: skilled }, async (c) => {
+evaluate('loads', { environments: skilled }, async (c) => {
   await c.send('go')
 })
 `,
@@ -504,7 +504,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox: fakeSandbox(),
   skills: [skill.local('../skills/house-greeting')],
 }))
-evaluate('brackets', { environment: skilled }, async (c) => {
+evaluate('brackets', { environments: skilled }, async (c) => {
   await c.send('go')
 })
 `,
@@ -612,8 +612,8 @@ const b = defineEnvironment('tools', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/beta')],
 }))
-evaluate('with alpha', { environment: a }, async (c) => { await c.send('x'); throw new Error('no') })
-evaluate('with beta', { environment: b }, async (c) => { await c.send('x'); throw new Error('no') })
+evaluate('with alpha', { environments: a }, async (c) => { await c.send('x'); throw new Error('no') })
+evaluate('with beta', { environments: b }, async (c) => { await c.send('x'); throw new Error('no') })
 `,
     })
     assert.equal((await runCli(p.dir)).code, 1)
@@ -645,8 +645,8 @@ import { fakeSandbox } from 'reeval/sandbox'
 const sandbox = fakeSandbox()
 const a = defineEnvironment('alpha', ({ skill }) => ({ sandbox, skills: [skill.local('../skills/greet')] }))
 const b = defineEnvironment('beta', ({ skill }) => ({ sandbox, skills: [skill.local('../skills/greet')] }))
-evaluate('one', { environment: a }, async (c) => { await c.send('x'); throw new Error('no') })
-evaluate('two', { environment: b }, async (c) => { await c.send('x'); throw new Error('no') })
+evaluate('one', { environments: a }, async (c) => { await c.send('x'); throw new Error('no') })
+evaluate('two', { environments: b }, async (c) => { await c.send('x'); throw new Error('no') })
 `,
     })
     assert.equal((await runCli(p.dir)).code, 1)

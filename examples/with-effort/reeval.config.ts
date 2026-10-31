@@ -12,7 +12,7 @@ export default defineConfig({
   // A scripted agent that copies ./fake-agent's files into the workspace, so both arms pass.
   // Its one shell step looks for the skill and, without it, spends a second as an agent would
   // exploring, so the effort table has a difference to show without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [[{ exec: 'test -d ~/.agents/skills/project-layout || sleep 1' }]],
     files: {
       'src/math.js': fakeAgent('src/math.js'),

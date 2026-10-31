@@ -82,7 +82,7 @@ const docs = defineEnvironment('${name}-docs', ({ file, mcp }) => ({
   files: { 'server.mjs': file('../${server}') },
   mcp: { docs: mcp.stdio(${command}) },
 }))
-evaluate('${name}', { environment: docs }, async (c) => {
+evaluate('${name}', { environments: docs }, async (c) => {
   await c.send('look it up')
   await c.send('and again')
   expect(true, 'answered').toBe(true)
@@ -156,7 +156,7 @@ evaluate('migrates', async (c) => {
 const server = defineEnvironment('server', ({ secret }) => ({
   env: { CHECK_TOKEN: secret({ to: 'checks', optional: true }) },
 }))
-evaluate('serves', { runs: 2, environment: server }, async (c) => {
+evaluate('serves', { runs: 2, environments: server }, async (c) => {
   await c.send('go')
   expect(true, 'served').toBe(true)
 })

@@ -238,9 +238,9 @@ export function configuredUses(config: ResolvedConfig) {
       sandbox: environmentSandbox(config.environment, config.sandbox),
     }))
   for (const [name, profile] of Object.entries(config.profiles)) {
-    const harnesses = profile.defaults?.harness
-      ? [profile.defaults.harness].flat()
-      : profile.defaults?.environment || profile.defaults?.sandbox
+    const harnesses = profile.defaults?.harnesses
+      ? [profile.defaults.harnesses].flat()
+      : profile.defaults?.environments || profile.defaults?.sandbox
         ? config.harness
         : []
     const sandbox = profileSandbox(config, profile.defaults)
@@ -272,7 +272,7 @@ const usesOf = (config: ResolvedConfig, planned: Planned): ImageUse[] =>
 export function describeConfig(config: ResolvedConfig): string {
   const profiles = Object.keys(config.profiles)
   return [
-    `harness ${config.harness.map(harnessId).join(', ')}${config.optionKeys?.includes('harness') ? '' : " (reeval's default)"}`,
+    `harness ${config.harness.map(harnessId).join(', ')}${config.optionKeys?.includes('harnesses') ? '' : " (reeval's default)"}`,
     `sandbox ${sandboxId(environmentSandbox(config.environment, config.sandbox))}`,
     profiles.length ? `profiles ${profiles.join(', ')}` : 'no profiles',
   ].join(', ')
@@ -825,7 +825,7 @@ export function checkGateways(config: ResolvedConfig, deps: DoctorDeps, envFile:
   }
   for (const { gateways, profile } of lists) {
     const harnesses = [
-      (profile && config.profiles[profile]?.defaults?.harness) || config.harness,
+      (profile && config.profiles[profile]?.defaults?.harnesses) || config.harness,
     ].flat()
     const where = profile ? `profile ${profile}` : config.file
     const list = `gateway ${gateways.map((g) => g.kind).join(', ')}${profile ? ` in profile ${profile}` : ''}`

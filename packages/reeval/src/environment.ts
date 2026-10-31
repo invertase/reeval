@@ -1218,7 +1218,7 @@ export function environmentDataProblem(
   if (envelope) return envelope
   for (const layer of env.layers) {
     try {
-      const of = option === 'environment' ? at : where
+      const of = option === 'environments' ? at : where
       checkSpec(layer.spec, `layer "${layer.name}" of environment "${env.name}" in ${of}`)
     } catch (error) {
       if (error instanceof DefinitionError) return error.message
@@ -1427,10 +1427,10 @@ export const environmentSandbox = (
  */
 export const profileSandbox = (
   config: { environment?: Environment; sandbox: SandboxDescriptor },
-  defaults: Pick<ProfileDefaults, 'environment' | 'sandbox'> | undefined,
+  defaults: Pick<ProfileDefaults, 'environments' | 'sandbox'> | undefined,
 ): SandboxDescriptor =>
   environmentSandbox(
-    defaults?.environment ?? config.environment,
+    defaults?.environments ?? config.environment,
     defaults?.sandbox ?? config.sandbox,
   )
 

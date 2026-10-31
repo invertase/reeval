@@ -2,7 +2,7 @@ import { evaluate, expect } from 'reeval'
 import { ui } from './env.ts'
 
 // Lands signs up; this expects nobody to have.
-evaluate('canary', { environment: ui }, async (c) => {
+evaluate('canary', { environments: ui }, async (c) => {
   const server = await c.serve('node server.mjs')
   await c.capture(server, {
     name: 'welcome',

@@ -41,7 +41,7 @@ const env = defineEnvironment('traced', {
   files: { 'notes.md': 'notes\\n' },
   setup: ['echo set-up > setup.txt'],
 })
-evaluate('traces every phase', { environment: env }, async (c) => {
+evaluate('traces every phase', { environments: env }, async (c) => {
   await c.send('write out.txt')
   await expect(c.exec('test -f out.txt')).toSucceed()
   expect(await c.judge('Did it write out.txt?', { diff: true })).toPass()
@@ -297,7 +297,7 @@ const env = defineEnvironment('sentry', ({ secret }) => ({
   sandbox: fakeSandbox(),
   env: { SENTRY_DSN: secret.fromEnv('REEVAL_DEBUG_DSN') },
 }))
-evaluate('prints the dsn', { environment: env }, async (c) => {
+evaluate('prints the dsn', { environments: env }, async (c) => {
   const dsn = (await c.exec('printenv SENTRY_DSN')).stdout.trim()
   console.log('logged', dsn)
   console.error('warned', dsn)
@@ -408,7 +408,7 @@ const env = defineEnvironment('headers', ({ mcp }) => ({
     }),
   },
 }))
-evaluate('prints its headers', { environment: env }, async (c) => {
+evaluate('prints its headers', { environments: env }, async (c) => {
   const turn = await c.send('print them')
   expect(turn.text).toBe('Done.')
 })

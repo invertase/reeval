@@ -82,9 +82,9 @@ export const historyConfigSchema = z.strictObject({
 const recordMode = z.enum(['manual', 'ci', 'always'])
 
 export const profileDefaultsDataSchema = z.strictObject({
-  harness: harnessList.optional(),
+  harnesses: harnessList.optional(),
   sandbox: sandboxDescriptorSchema.optional(),
-  environment: environmentDataSchema.optional(),
+  environments: environmentDataSchema.optional(),
   runs: runs().optional(),
   gate: gatePolicySchema.optional(),
   env: envVarsSchema.optional(),
@@ -101,7 +101,7 @@ export const profileLimitSchema = z.strictObject({
   compare: z
     .union([z.literal(false), z.strictObject({ maxVariants: z.number().int().min(0) })])
     .optional(),
-  harness: z.array(z.string()).optional(),
+  harnesses: z.array(z.string()).optional(),
 })
 
 export const profileDataSchema = z.strictObject({
@@ -141,9 +141,9 @@ export const analysisConfigDataSchema = z.strictObject({
 
 export const reevalConfigDataSchema = z.strictObject({
   include: z.array(z.string()).optional(),
-  harness: harnessList.optional(),
+  harnesses: harnessList.optional(),
   sandbox: sandboxDescriptorSchema.optional(),
-  environment: environmentDataSchema.optional(),
+  environments: environmentDataSchema.optional(),
   runs: runs().optional(),
   gate: gatePolicySchema.optional(),
   env: envVarsSchema.optional(),

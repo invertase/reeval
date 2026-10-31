@@ -1335,10 +1335,10 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
           reason: profile.reason,
           defaults: JSON.parse(
             JSON.stringify({
-              harness: ids(profile.defaults.harness),
-              environment: profile.defaults.environment?.name,
+              harness: ids(profile.defaults.harnesses),
+              environment: profile.defaults.environments?.name,
               sandbox:
-                (profile.defaults.environment || profile.defaults.sandbox) &&
+                (profile.defaults.environments || profile.defaults.sandbox) &&
                 sandboxId(profileSandbox(config, profile.defaults)),
               ...(profile.defaults.runs !== undefined ? runsOf(profile.defaults.runs) : {}),
               timeout: profile.defaults.timeout,

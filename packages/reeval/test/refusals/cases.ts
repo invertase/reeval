@@ -71,12 +71,12 @@ const yaml = (text: string) => () =>
 const configIn = (c: unknown) => () => resolveConfig(c as never, DIR, 'reeval.config.ts')
 const yamlIn = (text: string) => () =>
   resolveConfigData(parseYamlConfig(text, 'reeval.yaml'), DIR, 'reeval.yaml')
-/** A `pr` profile's `limit.harness` against the harness ids the collected evals run on. */
+/** A `pr` profile's `limit.harnesses` against the harness ids the collected evals run on. */
 const limitHarness =
   (ids: string[], harnesses: string[], partial = false) =>
   () =>
     checkLimitHarness(
-      { name: 'pr', limit: { harness: ids } } as ResolvedProfile,
+      { name: 'pr', limit: { harnesses: ids } } as ResolvedProfile,
       'reeval.config.ts',
       {
         harnesses,
@@ -152,7 +152,7 @@ const hostEntry = () => {
 /** What planning an eval with `options` refuses under `secrets: { unbrokered: 'error' }`. */
 const strict = (o: unknown) => () => {
   const config = resolveConfig(
-    { harness: fakeHarness(), sandbox: fakeSandbox(), secrets: { unbrokered: 'error' } },
+    { harnesses: fakeHarness(), sandbox: fakeSandbox(), secrets: { unbrokered: 'error' } },
     DIR,
     'reeval.config.ts',
   )
@@ -166,7 +166,7 @@ const planned =
   (o: unknown, own: object = {}, runs?: number) =>
   () => {
     const config = resolveConfig(
-      { harness: fakeHarness(), sandbox: fakeSandbox(), ...own },
+      { harnesses: fakeHarness(), sandbox: fakeSandbox(), ...own },
       DIR,
       'reeval.config.ts',
     )
@@ -201,7 +201,7 @@ const declares = (children: unknown[]) => () => {
   const run: RunContext = {
     runId: 'r',
     stagingDir: DIR,
-    config: resolveConfig({ harness: fakeHarness() }, DIR),
+    config: resolveConfig({ harnesses: fakeHarness() }, DIR),
     tags: [],
     concurrency: 1,
     profile: null,
@@ -635,16 +635,16 @@ export const CASES: Record<string, Case[]> = {
     ['gate unknown', options({ compare: { variants: [e2], gate: 'some' } })],
     ['minLift above 1', options({ compare: { variants: [e2], minLift: 2 } })],
     ['minLift a string', options({ compare: { variants: [e2], minLift: '0.1' } })],
-    ['harness not a list', options({ compare: { variants: [e2], harness: 'cursor' } })],
+    ['harness not a list', options({ compare: { variants: [e2], harnesses: 'cursor' } })],
     ['compare false', options({ compare: false })],
     [
       'harness with a bad descriptor',
-      options({ compare: { variants: [e2], harness: [{ kind: 'cursor', modle: 'm' }] } }),
+      options({ compare: { variants: [e2], harnesses: [{ kind: 'cursor', modle: 'm' }] } }),
     ],
-    ['harness with a number', options({ compare: { variants: [e2], harness: [3] } })],
+    ['harness with a number', options({ compare: { variants: [e2], harnesses: [3] } })],
     [
       'environment beside baseline',
-      options({ environment: e1, compare: { baseline: e1, variants: [e2] } }),
+      options({ environments: e1, compare: { baseline: e1, variants: [e2] } }),
     ],
     [
       'good',
@@ -654,7 +654,7 @@ export const CASES: Record<string, Case[]> = {
           variants: [e2],
           gate: 'all',
           minLift: 0.1,
-          harness: ['fake'],
+          harnesses: ['fake'],
         },
       }),
     ],
@@ -1382,14 +1382,14 @@ export const CASES: Record<string, Case[]> = {
         files: { 'a.txt': 'a' },
       }),
     ],
-    ['options: a list', options({ environment: [e1] })],
-    ['options: not an environment', options({ environment: 'one' })],
-    ['data: a typo in a layer', options({ environment: envData({ setpu: [] }) })],
-    ['data: a bad setup step', options({ environment: envData({ setup: [{ run: '' }] }) })],
+    ['options: a list', options({ environments: [e1] })],
+    ['options: not an environment', options({ environments: 'one' })],
+    ['data: a typo in a layer', options({ environments: envData({ setpu: [] }) })],
+    ['data: a bad setup step', options({ environments: envData({ setup: [{ run: '' }] }) })],
     [
       'data: a skill URL with a token in a layer',
       options({
-        environment: envData({
+        environments: envData({
           skills: [
             {
               kind: 'skill',
@@ -1403,25 +1403,25 @@ export const CASES: Record<string, Case[]> = {
     ],
     [
       'data: a layer without a spec',
-      options({ environment: { kind: 'environment', name: 'x', layers: [{ name: 'x' }] } }),
+      options({ environments: { kind: 'environment', name: 'x', layers: [{ name: 'x' }] } }),
     ],
     [
       'data: a bad name',
-      options({ environment: { kind: 'environment', name: 'a b', layers: [] } }),
+      options({ environments: { kind: 'environment', name: 'a b', layers: [] } }),
     ],
-    ['data: good', options({ environment: envData({ setup: ['ls'], files: { 'a.txt': 'a' } }) })],
+    ['data: good', options({ environments: envData({ setup: ['ls'], files: { 'a.txt': 'a' } }) })],
   ],
   config: [
     [
       "unbrokered 'error': a plain MCP header named like a credential",
       strict({
-        environment: mcpHeaders('https://mcp.example.com', { Authorization: 'Bearer abc123' }),
+        environments: mcpHeaders('https://mcp.example.com', { Authorization: 'Bearer abc123' }),
       }),
     ],
     [
       "unbrokered 'error': a plain MCP header with a token's shape, on http://",
       strict({
-        environment: mcpHeaders('http://localhost:4000', {
+        environments: mcpHeaders('http://localhost:4000', {
           'X-Trace': 'ghp_0123456789abcdefghijABCDEFGHIJ0123456789',
         }),
       }),
@@ -1429,7 +1429,7 @@ export const CASES: Record<string, Case[]> = {
     [
       "unbrokered 'error': a plain MCP header from a declaration tree",
       strict({
-        environment: {
+        environments: {
           kind: 'environment',
           name: 'e',
           layers: [
@@ -1452,12 +1452,12 @@ export const CASES: Record<string, Case[]> = {
     ],
     [
       "unbrokered 'error': a neutral plain MCP header",
-      strict({ environment: mcpHeaders('https://mcp.example.com', { 'X-Request-Source': 'ci' }) }),
+      strict({ environments: mcpHeaders('https://mcp.example.com', { 'X-Request-Source': 'ci' }) }),
     ],
     [
       "unbrokered 'error': a secret.template MCP header on https://",
       strict({
-        environment: defineEnvironment('e', ({ mcp, secret }) => ({
+        environments: defineEnvironment('e', ({ mcp, secret }) => ({
           mcp: {
             docs: mcp.http('https://mcp.example.com', {
               // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
@@ -1469,17 +1469,17 @@ export const CASES: Record<string, Case[]> = {
     ],
     [
       "unbrokered 'error': an http:// MCP server's header secret that sets hosts",
-      strict({ sandbox: docker(), environment: hostsHeader('http://mcp.internal/mcp') }),
+      strict({ sandbox: docker(), environments: hostsHeader('http://mcp.internal/mcp') }),
     ],
     [
       "unbrokered 'error': an https:// MCP server's header secret that sets hosts",
-      strict({ sandbox: docker(), environment: hostsHeader('https://mcp.internal/mcp') }),
+      strict({ sandbox: docker(), environments: hostsHeader('https://mcp.internal/mcp') }),
     ],
     [
       "unbrokered 'error': an http:// MCP server's header secret that sets hosts, from a declaration tree",
       strict({
         sandbox: docker(),
-        environment: {
+        environments: {
           kind: 'environment',
           name: 'e',
           layers: [
@@ -1503,11 +1503,11 @@ export const CASES: Record<string, Case[]> = {
       }),
     ],
     ['yaml: empty', yaml('')],
-    ['yaml: not YAML', yaml('harness: [a\n')],
+    ['yaml: not YAML', yaml('harnesses: [a\n')],
     ['yaml: a repeated key', yaml('runs: 1\nruns: 2\n')],
     ['yaml: a list', yaml('- runs: 1\n')],
     ['yaml: a scalar', yaml('runs\n')],
-    ['yaml: an unknown key', yaml('harnesses: []\n')],
+    ['yaml: an unknown key', yaml('harness: []\n')],
     ['yaml: runs 0', yaml('runs: 0\n')],
     ['yaml: runs null', yaml('runs:\n')],
     ['yaml: runs best of 2', yaml('runs: { bestOf: 2 }\n')],
@@ -1542,12 +1542,12 @@ export const CASES: Record<string, Case[]> = {
       'yaml: a secret with a typo',
       yaml('env:\n  API_KEY:\n    kind: secret\n    host: [api.example.com]\n'),
     ],
-    ['yaml: a harness without a kind', yaml('harness:\n  model: composer-2.5\n')],
+    ['yaml: a harness without a kind', yaml('harnesses:\n  model: composer-2.5\n')],
     [
       'yaml: a harness with a typo',
-      yaml('harness:\n  kind: cursor\n  model: composer-2.5\n  modle: x\n'),
+      yaml('harnesses:\n  kind: cursor\n  model: composer-2.5\n  modle: x\n'),
     ],
-    ['yaml: an empty harness list', yaml('harness: []\n')],
+    ['yaml: an empty harness list', yaml('harnesses: []\n')],
     [
       'yaml: a fake judge with a string score',
       yaml('judge:\n  model:\n    kind: fake-judge\n    score: high\n'),
@@ -1562,18 +1562,21 @@ export const CASES: Record<string, Case[]> = {
         'judge:\n  model: google/gemini-3.8-flash\n  providerOptions:\n    google:\n      thinkingConfig: { thinkingBudget: 0 }\n',
       ),
     ],
-    ['yaml: environment a name', yaml('environment: base\n')],
-    ['yaml: environment without layers', yaml('environment:\n  kind: environment\n  name: base\n')],
+    ['yaml: environment a name', yaml('environments: base\n')],
+    [
+      'yaml: environment without layers',
+      yaml('environments:\n  kind: environment\n  name: base\n'),
+    ],
     [
       'yaml: environment layer with a typo',
       yaml(
-        'environment:\n  kind: environment\n  name: base\n  layers:\n    - name: base\n      spec: { file: {} }\n',
+        'environments:\n  kind: environment\n  name: base\n  layers:\n    - name: base\n      spec: { file: {} }\n',
       ),
     ],
     [
       'yaml: environment as data',
       yaml(
-        'environment:\n  kind: environment\n  name: base\n  layers:\n    - name: base\n      spec:\n        files: { a.txt: hi }\n        setup: [ls]\n',
+        'environments:\n  kind: environment\n  name: base\n  layers:\n    - name: base\n      spec:\n        files: { a.txt: hi }\n        setup: [ls]\n',
       ),
     ],
     ['yaml: a profile with an unknown key', yaml('profiles:\n  pr:\n    limits: { runs: 1 }\n')],
@@ -1584,7 +1587,7 @@ export const CASES: Record<string, Case[]> = {
     ],
     [
       'yaml: a profile defaults environment a name',
-      yaml('profiles:\n  pr:\n    defaults: { environment: base }\n'),
+      yaml('profiles:\n  pr:\n    defaults: { environments: base }\n'),
     ],
     ['yaml: a profile null', yaml('profiles:\n  pr:\n')],
     ['yaml: defaultProfile not in profiles', yaml('defaultProfile: { ci: pr }\n')],
@@ -1605,7 +1608,7 @@ export const CASES: Record<string, Case[]> = {
     [
       'yaml: good',
       yaml(`include: ['evals/**/*.eval.ts']
-harness:
+harnesses:
   - { kind: fake, id: a }
   - { kind: cursor, model: composer-2.5 }
 sandbox: { kind: fake }
@@ -1631,13 +1634,13 @@ analysis:
   maxInputTokens: 4000
 profiles:
   pr:
-    limit: { runs: 1, compare: false, harness: [a] }
+    limit: { runs: 1, compare: false, harnesses: [a] }
     budget: { attempts: 5 }
     tags: ['!slow']
   nightly:
     defaults:
       runs: 3
-      environment:
+      environments:
         kind: environment
         name: nightly
         layers: [{ name: nightly, spec: { files: { a.txt: hi } } }]
@@ -1662,13 +1665,13 @@ profiles:
     [
       'yaml: a missing dockerfile in an environment layer',
       yamlIn(
-        'environment:\n  kind: environment\n  name: base\n  layers:\n    - name: base\n      spec: { sandbox: { kind: docker, dockerfile: nope } }\n',
+        'environments:\n  kind: environment\n  name: base\n  layers:\n    - name: base\n      spec: { sandbox: { kind: docker, dockerfile: nope } }\n',
       ),
     ],
     [
       'yaml: relative host files, rules, skills and a local repository',
       yamlIn(`sandbox: { kind: fake, dir: ./tmp }
-environment:
+environments:
   kind: environment
   name: base
   layers:
@@ -1685,13 +1688,13 @@ environment:
     [
       'yaml: a host file with an empty path',
       yamlIn(
-        'environment:\n  kind: environment\n  name: base\n  layers: [{ name: base, spec: { files: { a.txt: { kind: file, path: "" } } } }]\n',
+        'environments:\n  kind: environment\n  name: base\n  layers: [{ name: base, spec: { files: { a.txt: { kind: file, path: "" } } } }]\n',
       ),
     ],
     [
       'yaml: a local skill path a number',
       yamlIn(
-        'environment:\n  kind: environment\n  name: base\n  layers: [{ name: base, spec: { skills: [{ kind: skill, source: local, path: 3, placement: harness }] } }]\n',
+        'environments:\n  kind: environment\n  name: base\n  layers: [{ name: base, spec: { skills: [{ kind: skill, source: local, path: 3, placement: harness }] } }]\n',
       ),
     ],
     [

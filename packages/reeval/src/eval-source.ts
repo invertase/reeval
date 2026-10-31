@@ -95,12 +95,12 @@ function canonicalOptions(options: EvalOptions): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(options)) {
     if (value === undefined || UNHASHED.has(key)) continue
-    if (key === 'harness') out[key] = harnessForm(value)
+    if (key === 'harnesses') out[key] = harnessForm(value)
     else if (key === 'sandbox') out[key] = sandboxId(value as SandboxDescriptor)
     else if (key === 'judge' && isObjectLike(value)) {
       out[key] = { ...value, ...('model' in value ? { model: modelId(value.model) } : {}) }
-    } else if (key === 'compare' && isObjectLike(value) && Array.isArray(value.harness)) {
-      out[key] = { ...value, harness: value.harness.map(harnessForm) }
+    } else if (key === 'compare' && isObjectLike(value) && Array.isArray(value.harnesses)) {
+      out[key] = { ...value, harnesses: value.harnesses.map(harnessForm) }
     } else out[key] = value
   }
   return out

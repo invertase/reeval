@@ -8,7 +8,7 @@ const withTesting = math.extendEnvironment('testing', ({ skill }) => ({
 evaluate(
   'tests the new function',
   // No baseline: the eval's own environment, math, is the control.
-  { environment: math, compare: { variants: [withTesting] } },
+  { environments: math, compare: { variants: [withTesting] } },
   async (c) => {
     await c.send('Add a multiply(a, b) function to src/math.js.')
 

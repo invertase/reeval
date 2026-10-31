@@ -2,7 +2,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 
 const math = defineEnvironment('math', ({ directory }) => ({ files: directory('./project') }))
 
-evaluate('adds clamp without new dependencies', { environment: math }, async (c) => {
+evaluate('adds clamp without new dependencies', { environments: math }, async (c) => {
   await c.send(
     'Add clamp(n, min, max) to src/math.js, with a test in test/math.test.js. ' +
       'Add no dependencies.',

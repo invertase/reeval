@@ -15,18 +15,18 @@ const on =
 evaluate(
   'opencode loads the plugin',
   {
-    environment: review('opencode', ['skills', 'agents', 'commands', 'mcp']),
-    harness: on('opencode'),
+    environments: review('opencode', ['skills', 'agents', 'commands', 'mcp']),
+    harnesses: on('opencode'),
   },
   async () => {},
 )
 evaluate(
   'pi loads the plugin',
-  { environment: review('pi', ['skills', 'commands', 'mcp']), harness: on('pi') },
+  { environments: review('pi', ['skills', 'commands', 'mcp']), harnesses: on('pi') },
   async () => {},
 )
 evaluate(
   'fx loads the plugin',
-  { environment: review('fx', ['skills', 'mcp']), harness: on('fx') },
+  { environments: review('fx', ['skills', 'mcp']), harnesses: on('fx') },
   async () => {},
 )

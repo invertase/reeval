@@ -3,7 +3,7 @@ import { fakeJudge } from 'reeval/judge'
 import { app } from './env.ts'
 
 // Must fail: nothing adds the task, the changed files or the diff to an output-only call.
-evaluate('canary', { environment: app }, async (c) => {
+evaluate('canary', { environments: app }, async (c) => {
   await c.send('write the app')
   let state: Record<string, unknown> = {}
   const look = fakeJudge({

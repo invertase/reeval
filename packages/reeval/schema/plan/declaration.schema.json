@@ -761,7 +761,7 @@
                   "description": "Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only).",
                   "enum": ["all", "none", "variants"]
                 },
-                "harness": {
+                "harnesses": {
                   "description": "Harnesses (ids or descriptors) to compare on; the others run the control only.",
                   "type": "array",
                   "items": {
@@ -840,7 +840,7 @@
               "description": "Variables and secrets for the sandbox, merged by name down the cascade.",
               "$ref": "#/$defs/EnvVars"
             },
-            "environment": {
+            "environments": {
               "description": "The control: the compare has no `baseline`.",
               "$ref": "#/$defs/EnvironmentData"
             },
@@ -861,7 +861,7 @@
                 }
               ]
             },
-            "harness": {
+            "harnesses": {
               "description": "Which agents run the eval; each harness is its own cell.",
               "anyOf": [
                 {
@@ -1018,7 +1018,7 @@
               ]
             },
             "sandbox": {
-              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harness`. Not an environment: it does not invent skills, files or a name.",
+              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harnesses`. Not an environment: it does not invent skills, files or a name.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/DockerSandboxDescriptor"
@@ -1091,7 +1091,7 @@
                   "description": "Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only).",
                   "enum": ["all", "none", "variants"]
                 },
-                "harness": {
+                "harnesses": {
                   "description": "Harnesses (ids or descriptors) to compare on; the others run the control only.",
                   "type": "array",
                   "items": {
@@ -1187,7 +1187,7 @@
                 }
               ]
             },
-            "harness": {
+            "harnesses": {
               "description": "Which agents run the eval; each harness is its own cell.",
               "anyOf": [
                 {
@@ -1344,7 +1344,7 @@
               ]
             },
             "sandbox": {
-              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harness`. Not an environment: it does not invent skills, files or a name.",
+              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harnesses`. Not an environment: it does not invent skills, files or a name.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/DockerSandboxDescriptor"
@@ -1429,7 +1429,7 @@
               "description": "Variables and secrets for the sandbox, merged by name down the cascade.",
               "$ref": "#/$defs/EnvVars"
             },
-            "environment": {
+            "environments": {
               "description": "What this group or eval runs in, and the control of a compare without a `baseline`.",
               "$ref": "#/$defs/EnvironmentData"
             },
@@ -1450,7 +1450,7 @@
                 }
               ]
             },
-            "harness": {
+            "harnesses": {
               "description": "Which agents run the eval; each harness is its own cell.",
               "anyOf": [
                 {
@@ -1607,7 +1607,7 @@
               ]
             },
             "sandbox": {
-              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harness`. Not an environment: it does not invent skills, files or a name.",
+              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harnesses`. Not an environment: it does not invent skills, files or a name.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/DockerSandboxDescriptor"
@@ -2381,7 +2381,7 @@
     },
     "PinnableKey": {
       "description": "An option a profile's `limit` can narrow, and `pin` can protect.",
-      "enum": ["compare", "harness", "runs"]
+      "enum": ["compare", "harnesses", "runs"]
     },
     "PluginMarketplace": {
       "description": "A Claude Code marketplace: the source that holds its `.claude-plugin/marketplace.json`.",

@@ -3,7 +3,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 // The agent starts from ./project, a CommonJS package with node:test tests.
 const cjs = defineEnvironment('commonjs', ({ directory }) => ({ files: directory('./project') }))
 
-evaluate('migrates the package to ES modules', { environment: cjs }, async (c) => {
+evaluate('migrates the package to ES modules', { environments: cjs }, async (c) => {
   const turn = await c.send(
     'Migrate this package from CommonJS to ES modules. Keep npm test green.',
   )

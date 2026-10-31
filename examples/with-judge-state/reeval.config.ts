@@ -12,7 +12,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that runs the tests, then copies ./fake-agent's files into the workspace,
   // so the checks run without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [[{ exec: 'node --test' }]],
     files: {
       'src/math.js': fakeAgent('src/math.js'),

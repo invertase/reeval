@@ -7,7 +7,7 @@ const withDoc = defineEnvironment('with-doc', {
   files: { 'docs/billing.md': head ? 'Amounts are in pounds.\n' : 'Amounts are in pence.\n' },
 })
 
-evaluate('bills in minor units with the billing doc', { environment: withDoc }, async (c) => {
+evaluate('bills in minor units with the billing doc', { environments: withDoc }, async (c) => {
   await c.send('Bill the customer 12.50 GBP.')
   await expect(c.exec('grep -q pence docs/billing.md'), 'amount in minor units').toSucceed()
 })

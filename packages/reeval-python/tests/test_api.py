@@ -33,7 +33,7 @@ def test_reeval_keys_are_camel_cased_at_any_depth_and_record_keys_are_not() -> N
         {
             "compare": {"min_lift": 0.1},
             "judge": {"provider_options": {"google": {"thinking_config": 1}}},
-            "harness": fake_harness(delay_ms=5, fail_with="boom"),
+            "harnesses": fake_harness(delay_ms=5, fail_with="boom"),
             "sandbox": docker(start_timeout=60, env={"MY_VAR": "x", "snake_key": "y"}),
             "not_a_reeval_key": 1,
         }
@@ -41,7 +41,7 @@ def test_reeval_keys_are_camel_cased_at_any_depth_and_record_keys_are_not() -> N
     assert wire == {
         "compare": {"minLift": 0.1},
         "judge": {"providerOptions": {"google": {"thinking_config": 1}}},
-        "harness": {"kind": "fake", "delayMs": 5, "failWith": "boom"},
+        "harnesses": {"kind": "fake", "delayMs": 5, "failWith": "boom"},
         "sandbox": {
             "kind": "docker",
             "startTimeout": "1m",

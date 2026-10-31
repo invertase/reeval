@@ -13,4 +13,4 @@ evaluate(
 group('runs from the group', { runs: 2 }, () => {
   evaluate('compare', { compare: { baseline: base, variants: [skilled] } }, async () => {})
 })
-evaluate('no compare', { environment: base }, async () => {})
+evaluate('no compare', { environments: base }, async () => {})

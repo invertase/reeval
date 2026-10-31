@@ -11,5 +11,5 @@ evaluate(
   { compare: { baseline: plain, variants: [skilled] }, runs: 2, pin: ['compare', 'runs'] },
   async () => {},
 )
-evaluate('own harness', { harness: fakeHarness({ id: 'b' }) }, async () => {})
+evaluate('own harness', { harnesses: fakeHarness({ id: 'b' }) }, async () => {})
 evaluate('slow', { tags: ['nightly-only'] }, async () => {})

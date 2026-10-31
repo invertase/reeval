@@ -37,7 +37,7 @@ async function withEval(env: string, body = "await c.exec('true')", harness?: st
     'evals/w.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 import { fakeSandbox } from 'reeval/sandbox'
 const env = defineEnvironment('app', ({ git }) => ({ sandbox: fakeSandbox(), ${env} }))
-evaluate('works on the repo', { environment: env }, async (c) => {
+evaluate('works on the repo', { environments: env }, async (c) => {
   ${body}
 })
 evaluate('needs no workspace', async () => {})
@@ -245,7 +245,7 @@ const env = defineEnvironment('app', ({ git }) => ({
   workspace: git('../repo', { ref: 'v1', init: true }),
   files: { 'app/extra.js': 'x' },
 }))
-evaluate('commits in the repo', { environment: env, runs: 2 }, async (c) => {
+evaluate('commits in the repo', { environments: env, runs: 2 }, async (c) => {
   expect((await c.exec('git status --porcelain')).stdout).toBe('?? app/extra.js\\n')
   expect((await c.exec('git rev-parse HEAD')).stdout.trim()).toBe(process.env.EXPECTED_HEAD)
   const turn = await c.send('x')
@@ -331,14 +331,14 @@ const base = defineEnvironment('base', ({ git }) => ({
   workspace: git('../repo', { ref: 'v1' }),
 }))
 const sub = base.extendEnvironment('sub', ({ git }) => ({ workspace: git('../repo', { ref: 'v1', path: 'app' }) }))
-evaluate('edits the repo', { environment: base }, async (c) => {
+evaluate('edits the repo', { environments: base }, async (c) => {
   const turn = await c.send('x')
   expect(turn.diff.files).toEqual([
     { path: 'NOTES.md', status: 'added' },
     { path: 'app/greet.js', status: 'modified' },
   ])
 })
-evaluate('in the subdirectory', { environment: sub }, async (c) => {
+evaluate('in the subdirectory', { environments: sub }, async (c) => {
   expect(await c.readFile('greet.js')).toContain('Hello')
 })
 `,

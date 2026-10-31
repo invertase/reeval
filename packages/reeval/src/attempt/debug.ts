@@ -20,11 +20,11 @@ export function tracePlan(debug: AttemptDebug, spec: AttemptSpec, ctx: RunContex
     'plan',
     `config ${config} · ${profile} · run ${ctx.runId} · attempt ${spec.cell.key}#${spec.n}`,
   )
-  debug.log('plan', `harness ${harnessId(spec.harness)} ${from('harness')}`)
+  debug.log('plan', `harness ${harnessId(spec.harness)} ${from('harnesses')}`)
   debug.log('plan', `sandbox ${sandboxId(spec.sandbox)} ${from('sandbox')}`)
   const env = spec.environment
   const role = spec.cell.role === 'variant' ? ` · variant ${spec.cell.variant}` : ''
-  const envFrom = spec.cell.role === 'variant' ? from('compare') : from('environment', 'none set')
+  const envFrom = spec.cell.role === 'variant' ? from('compare') : from('environments', 'none set')
   debug.log('plan', `environment ${env.name}${role} ${envFrom}`)
   debug.log('plan', `egress ${egressLabel(spec.egress) || 'proxy'} ${from('egress')}`)
   const gate = typeof spec.gate === 'string' ? spec.gate : `passRate ${spec.gate.passRate}`

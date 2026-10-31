@@ -4,7 +4,7 @@ import { fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: {
       'README.md': '# notes\n\nA small notes CLI. Run `node notes.js add <text>`.\n',
     },

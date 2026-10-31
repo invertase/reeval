@@ -2,7 +2,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 
 const site = defineEnvironment('site', ({ directory }) => ({ files: directory('./project') }))
 
-evaluate('adds a sign-up button', { environment: site }, async (c) => {
+evaluate('adds a sign-up button', { environments: site }, async (c) => {
   await c.send('Add a "Sign up" button under the intro paragraph in index.html.')
 
   await expect(c).toHaveFile('index.html', /Sign up/)

@@ -10,6 +10,6 @@ const sandbox =
 
 export default defineConfig({
   include: ['evals/**/*.eval.py'],
-  harness: fakeHarness({ script: [[{ reply: 'Nothing to do.' }]] }),
+  harnesses: fakeHarness({ script: [[{ reply: 'Nothing to do.' }]] }),
   sandbox,
 })

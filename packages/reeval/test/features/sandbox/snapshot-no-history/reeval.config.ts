@@ -19,7 +19,7 @@ const probe = [
 // hidden version over the seeded file between the two turns.
 // REEVAL_FIXTURE_SANDBOX picks the tier: the fake sandbox (F) by default, or docker (D).
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [
       [{ exec: "printf 'turn1\\n' >> notes.txt && printf 'TURN1-SEEDED-EDIT\\n' > src/sum.js" }],
       [{ exec: probe }],

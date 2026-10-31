@@ -10,7 +10,7 @@ const gemini = defineEnvironment('gemini', ({ secret }) => ({
   },
 }))
 
-evaluate('calls Gemini with a key it never sees', { environment: gemini }, async (c) => {
+evaluate('calls Gemini with a key it never sees', { environments: gemini }, async (c) => {
   await c.send(
     'Write models.js, a Node script that lists the Gemini API models with fetch and prints how ' +
       'many there are. Read the key from GEMINI_API_KEY and send it in the x-goog-api-key header.',

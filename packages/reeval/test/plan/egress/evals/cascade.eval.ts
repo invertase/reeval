@@ -9,16 +9,16 @@ const installs = defineEnvironment('installs', {
 const plain = defineEnvironment('plain', {})
 
 evaluate('the config policy', async () => {})
-evaluate('an environment replaces it', { environment: closed }, async () => {})
-evaluate('an extend child replaces its parent', { environment: reopened }, async () => {})
-evaluate('the default list spreads', { environment: installs }, async () => {})
+evaluate('an environment replaces it', { environments: closed }, async () => {})
+evaluate('an extend child replaces its parent', { environments: reopened }, async () => {})
+evaluate('the default list spreads', { environments: installs }, async () => {})
 evaluate(
   'the eval replaces the environment',
-  { environment: closed, egress: { allow: ['eval.example.com'] } },
+  { environments: closed, egress: { allow: ['eval.example.com'] } },
   async () => {},
 )
 group('a group', { egress: { allow: ['group.example.com'] } }, () => {
-  evaluate('replaces the environment too', { environment: closed }, async () => {})
+  evaluate('replaces the environment too', { environments: closed }, async () => {})
 })
 evaluate(
   'a variant runs under its own policy',
@@ -27,6 +27,6 @@ evaluate(
 )
 evaluate(
   "a fake agent with a layout gets that agent's hosts",
-  { environment: closed, harness: fakeHarness({ layout: 'claude-code' }) },
+  { environments: closed, harnesses: fakeHarness({ layout: 'claude-code' }) },
   async () => {},
 )

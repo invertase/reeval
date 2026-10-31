@@ -253,7 +253,7 @@ function planTests(
     id: evalId(rankFile, [...groups, declaration.family.name]),
     ...declaration.family,
   }
-  const harnessBy = resolved.sources?.harness ?? ctx.config.file
+  const harnessBy = resolved.sources?.harnesses ?? ctx.config.file
   const plan = evalPlan(resolvedEval, plannedAttempts, { configFile: ctx.config.file, file: path })
   // OpenRouter's fallbacks reach only reeval's own calls; the plan says so where they're on.
   if (gatewayNotes.length && openRouterFallbacks(gateways)) {

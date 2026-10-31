@@ -12,7 +12,7 @@ export const rooted = defineEnvironment('rooted', {
 
 // The config environment adds a capability; the rooted profile replaces it entirely.
 export default defineConfig({
-  harness: fakeHarness(),
-  environment: net,
-  profiles: { rooted: { defaults: { environment: rooted } } },
+  harnesses: fakeHarness(),
+  environments: net,
+  profiles: { rooted: { defaults: { environments: rooted } } },
 })

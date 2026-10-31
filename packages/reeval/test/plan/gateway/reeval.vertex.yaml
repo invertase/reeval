@@ -1,6 +1,6 @@
 # Vertex with its settings: Claude Code runs there, in its Anthropic region, and fx with its effort
 # on a Gemini model; Codex and the OpenAI judge fall back to direct.
-harness:
+harnesses:
   - { kind: claude-code, model: claude-sonnet-4-5 }
   - { kind: codex, model: gpt-5.4-mini }
   - { kind: fx, model: google/gemini-3.8-flash, effort: low }

@@ -161,8 +161,8 @@ import { fakeAnalysis } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
-  harness: fakeHarness(),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  harnesses: fakeHarness(),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   analysis: {
     model: fakeAnalysis({
       output: () => ({

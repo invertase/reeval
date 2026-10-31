@@ -3,7 +3,7 @@ import { fakeJudge } from 'reeval/judge'
 import { ui } from './env.ts'
 
 // Must fail: the capture is a PNG file part, not jpeg.
-evaluate('canary', { environment: ui }, async (c) => {
+evaluate('canary', { environments: ui }, async (c) => {
   await c.send('write the form')
   const server = await c.serve('node server.mjs')
   const image = await c.capture(server, { name: 'form' })

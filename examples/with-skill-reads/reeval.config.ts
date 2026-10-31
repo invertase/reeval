@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that reads the skill's SKILL.md, but not its reference, then copies
   // ./fake-agent's files into the workspace, so the skill's reads show without keys.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [[{ exec: 'cat ~/.agents/skills/jsdoc/SKILL.md' }]],
     files: { 'src/math.js': fakeAgent('src/math.js') },
     text: 'I added multiply(a, b) to src/math.js, with a JSDoc block.',

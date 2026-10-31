@@ -6,7 +6,7 @@ import { genkit } from './environments.ts'
 // this proves the key works end to end without paying for a generation. No judge.
 evaluate(
   'the agent calls Gemini with a brokered key',
-  { environment: genkit, tags: ['smoke', 'gemini'] },
+  { environments: genkit, tags: ['smoke', 'gemini'] },
   async (c) => {
     const turn = await c.send(
       'Run exactly this once, and reply with the number it prints only: ' +

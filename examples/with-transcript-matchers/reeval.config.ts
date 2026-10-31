@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that writes ./fake-agent's files, then runs the tests as a shell tool call,
   // so the transcript has an edit and a command to check without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [
       [
         {

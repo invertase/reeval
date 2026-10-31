@@ -12,7 +12,7 @@ export default defineConfig({
   // A scripted agent that copies ./fake-agent's files into the workspace: every case's function,
   // with JSDoc blocks only when it has the skill, so the family shows a lift without keys or
   // Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'src/math.js': fakeAgent('without-skill/src/math.js') },
     text: 'I added the function to src/math.js.',
     withSkill: {

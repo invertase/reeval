@@ -3,7 +3,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 // The agent starts from the small package in ./project.
 const math = defineEnvironment('math', ({ directory }) => ({ files: directory('./project') }))
 
-evaluate('adds multiply, then runs the tests', { environment: math }, async (c) => {
+evaluate('adds multiply, then runs the tests', { environments: math }, async (c) => {
   const first = await c.send('Add a multiply(a, b) function to src/math.js, with a test.')
   expect(first).toHaveEdited('src/math.js')
 

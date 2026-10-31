@@ -10,5 +10,5 @@ const own = defineEnvironment('own', { sandbox: docker({ dockerfile: './images/D
 group('images', { sandbox: docker({ dockerfile: './images/Dockerfile' }) }, () => {
   evaluate('from the group', async () => {})
 })
-evaluate('an environment', { environment: built }, async () => {})
+evaluate('an environment', { environments: built }, async () => {})
 evaluate('a compare', { compare: { baseline: built, variants: [own] } }, async () => {})

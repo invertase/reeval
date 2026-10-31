@@ -1910,7 +1910,7 @@
           "description": "Variables and secrets for the sandbox, merged by name over the config's.",
           "$ref": "#/$defs/EnvVars"
         },
-        "environment": {
+        "environments": {
           "description": "What every eval runs in when it names no environment.",
           "$ref": "#/$defs/Environment"
         },
@@ -1931,7 +1931,7 @@
             }
           ]
         },
-        "harness": {
+        "harnesses": {
           "description": "The agents every eval runs on, unless a group or eval replaces them.",
           "anyOf": [
             {
@@ -2070,7 +2070,7 @@
             }
           ]
         },
-        "harness": {
+        "harnesses": {
           "description": "Harness ids to allow; evals left with none are skipped.",
           "type": "array",
           "items": {

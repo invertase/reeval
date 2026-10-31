@@ -7,7 +7,7 @@ const math = defineEnvironment('math', ({ directory }) => ({ files: directory('.
 // Placed after the turn, so the agent never sees it: its own tests can't stand in for it.
 const clampCheck = readFileSync(new URL('./hidden/clamp.mjs', import.meta.url), 'utf8')
 
-evaluate('adds a clamp function', { environment: math }, async (c) => {
+evaluate('adds a clamp function', { environments: math }, async (c) => {
   await c.send('Add a clamp(n, min, max) function to src/math.js, with a test.')
 
   await expect(c.exec('node --test'), 'its tests pass').toSucceed()

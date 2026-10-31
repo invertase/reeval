@@ -3,7 +3,7 @@ import { house, loaded, shellOutput } from './env.ts'
 
 // The plugin stays whole where the session copied it, for the harness to load itself: its skill
 // isn't placed with the harness's own, and its MCP server is left to the harness.
-evaluate('lands', { environment: house }, async (c) => {
+evaluate('lands', { environments: house }, async (c) => {
   const turn = await c.send('read the plugin')
   expect(shellOutput(turn, 0)).toContain('Write every name in kebab-case.')
   expect(shellOutput(turn, 1)).toBe('not placed\n')

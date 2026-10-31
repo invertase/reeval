@@ -72,9 +72,9 @@ class EvalOptions(TypedDict, total=False):
     compare: Mapping[str, Any]
     egress: Literal["allow-all", "deny-all", "proxy"] | Mapping[str, Sequence[str]]
     env: Mapping[str, Any]
-    environment: Environment | Mapping[str, Any]
+    environments: Environment | Mapping[str, Any]
     gate: Literal["all"] | Mapping[str, float]
-    harness: Harness | Sequence[Harness] | Mapping[str, Any]
+    harnesses: Harness | Sequence[Harness] | Mapping[str, Any]
     judge: JudgeDefaults
     pin: Sequence[str]
     question: Mapping[str, Any]

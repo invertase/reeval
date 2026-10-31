@@ -7,7 +7,7 @@ import { layout, ownSkills } from './layout.ts'
 // the plugin's skill where it was copied, look for it among the harness's own skills, then read
 // the MCP config the harness starts the plugin's server from.
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     layout,
     script: [
       [

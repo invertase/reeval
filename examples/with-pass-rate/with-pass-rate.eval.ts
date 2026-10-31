@@ -5,7 +5,7 @@ const math = defineEnvironment('math', ({ directory }) => ({ files: directory('.
 evaluate(
   'adds a tested multiply function',
   // Five tries, passing when three or more pass: the default gate would need all five.
-  { environment: math, runs: 5, gate: { passRate: 0.6 } },
+  { environments: math, runs: 5, gate: { passRate: 0.6 } },
   async (c) => {
     await c.send('Add a multiply(a, b) function to src/math.js, with a test in test/math.test.js.')
 

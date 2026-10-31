@@ -1,7 +1,7 @@
 import { evaluate, expect } from 'reeval'
 import { ui } from './env.ts'
 
-evaluate('canary', { environment: ui }, async (c) => {
+evaluate('canary', { environments: ui }, async (c) => {
   const server = await c.serve('node server.mjs')
   const shot = await c.capture(server, { name: 'tall', viewport: 'full-page' })
   // Window size instead of the author key.
