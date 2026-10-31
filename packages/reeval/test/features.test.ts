@@ -2870,6 +2870,25 @@ export const features: Feature[] = [
     record: ({ run }) => assert.equal(landed(run)?.serves, undefined),
   },
   {
+    dir: 'ui/serve-port-in-use',
+    tiers: ['fake', 'docker', 'podman'],
+    env: 'ui',
+    lands: {
+      outcome: 'fail',
+      error: {
+        kind: 'assertion',
+        message:
+          /c\.serve\("node server\.mjs preview \$PORT", (\d+)\): port \1 was already in use before c\.serve started \(a server the agent left running\?\), so the checks would reach that server, not this command's\. Stop it first, or drop the port to serve on PORT/,
+      },
+    },
+    canary: /expected 'c\.serve\("node server\.mjs preview \$POR…' to be 'served'/,
+    record: ({ run }) =>
+      assert.deepEqual(
+        landed(run)?.serves?.map((s) => s.command),
+        ['node server.mjs dev'],
+      ),
+  },
+  {
     dir: 'ui/serve-exits',
     tiers: ['fake', 'docker', 'podman'],
     env: 'ui',

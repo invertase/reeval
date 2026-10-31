@@ -43,7 +43,7 @@ import type {
 import { addUsage } from '../usage.ts'
 import { pageLines } from '../view/capture.ts'
 import { asCheck, sandboxFor } from './checks.ts'
-import { awaitListening, parseProbe, probeScript } from './serve.ts'
+import { awaitListening, hostListening, parseProbe, probeScript, servePort } from './serve.ts'
 import type { Attempt } from './state.ts'
 
 const BG_LOG = '/tmp/reeval-bg'
@@ -191,7 +191,6 @@ export async function serveCommand(
   command: string,
   port?: number,
 ): Promise<ServeHandle> {
-  const want = port ?? (await allocatePort())
   const box = await sandboxFor(a, 'c.serve()')
   const tables = a.spec.sandbox.kind !== 'fake'
   const look = (pid?: string) =>
@@ -200,6 +199,10 @@ export async function serveCommand(
     )
   const first = await look()
   const before = new Set(first.proc ? first.listeners.map((l) => l.port) : [])
+  // The fake sandbox shares the host's network; a container with no /proc can't tell.
+  const taken = async (p: number) =>
+    first.proc ? before.has(p) : !tables && (await hostListening(p)) !== undefined
+  const want = await servePort(command, port, allocatePort, taken)
   const { handle, pid, log } = await launch(a, command, 'c.serve()', { PORT: String(want) })
   const found = await awaitListening(command, {
     want,
