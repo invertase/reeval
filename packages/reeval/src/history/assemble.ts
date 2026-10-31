@@ -70,6 +70,7 @@ import {
   type GitInfo,
   type JudgmentRecord,
   type Lift,
+  type RunInvocation,
   type RunnerInfo,
   type RunRecord,
   SCHEMA_VERSION,
@@ -150,6 +151,7 @@ export type AssembleInput = {
   runner: RunnerInfo
   /** Each eval's pairwise answers by eval id, and each attempt's own answers by its key. */
   answers?: SettledQuestions
+  invocation?: RunInvocation
 }
 
 export type AssembledRun = {
@@ -1348,6 +1350,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
           limit: profile.limit,
         }
       : null,
+    ...(input.invocation ? { invocation: input.invocation } : {}),
     plan: {
       evals: input.plan.evals,
       cells: input.plan.cells,

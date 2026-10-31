@@ -11,15 +11,15 @@ import {
 } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
-import { join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import { UsageError } from './errors.ts'
 import { scratchDir } from './history/files.ts'
-import type { AttemptRecord, RunRecord } from './history/types.ts'
+import type { AttemptRecord, RunInvocation, RunRecord } from './history/types.ts'
 import { RefError } from './history/views.ts'
-import { RUN_ID, recordFileName } from './ids.ts'
+import { RUN_ID, recordFileName, relativeFile } from './ids.ts'
 import { type LiveKept, replace } from './live.ts'
 import type { EvalRecord, Outcome } from './types.ts'
-import { LIVE_FILE, readableLiveProgress } from './view/live.ts'
+import { LIVE_FILE, readableInvocation, readableLiveProgress } from './view/live.ts'
 
 /** Other-host / studio: a heartbeat older than this is quiet. A live pid on this host is not. */
 const STALE_MS = 15_000
@@ -405,6 +405,106 @@ export async function loadPrevious(staging: string): Promise<{
   } catch {
     return { record: null, artifacts: existsSync(artifacts) ? artifacts : null }
   }
+}
+
+/**
+ * How the run was first started: from the progress file a quit left, else the record a resume
+ * moved aside, else the interrupted or budget-stopped record. Null for a run an older reeval
+ * started.
+ */
+export async function savedInvocation(
+  root: string,
+  target: ResumeTarget,
+): Promise<RunInvocation | null> {
+  const staging = stagingOf(root, target.runId)
+  const text = await readFile(join(staging, LIVE_FILE), 'utf8').catch(() => null)
+  try {
+    const live = text ? readableLiveProgress(JSON.parse(text) as unknown) : null
+    if (live?.invocation) return live.invocation
+  } catch {}
+  const { record } = await loadPrevious(staging)
+  return readableInvocation((record ?? target.previous)?.invocation) ?? null
+}
+
+/**
+ * Filters as a run saves them: a part naming a path on disk (from `cwd`, as the engine reads it),
+ * or any absolute part, becomes that path relative to `root` in posix form, `.` for the root
+ * itself and `../…` outside it, so no host path is written and a resume resolves it from the
+ * root. An absolute part matches files by the start of their path, which the relative form
+ * keeps. Other parts are names.
+ */
+export function savedFilters(root: string, filters: readonly string[], cwd = process.cwd()) {
+  return filters.map((f) => {
+    const path = resolve(cwd, f)
+    if (!isAbsolute(f) && !existsSync(path)) return f
+    const slash = /[\\/]$/.test(f) ? '/' : ''
+    return (relativeFile(root, path) || '.') + slash
+  })
+}
+
+/** The `reeval run` flags and filters that shape a run's plan, as the command line gives them. */
+export type RunSettings = {
+  runs?: string
+  profile?: string
+  concurrency?: string
+  tag?: string[]
+  filters: string[]
+}
+
+/**
+ * The settings a resume plans with: each one left out is the run's saved one. `--runs` or a
+ * profile other than the run's is refused, since it plans other attempts than the ones kept;
+ * filters and `--tag` replace the run's for this resume, and `--concurrency` wins with a note.
+ * A `--runs` that isn't a count is left for the usual check to refuse. Saved path filters are
+ * resolved from `root`, so the resume picks the same files from any directory.
+ */
+export function resumeSettings(
+  runId: string,
+  saved: RunInvocation,
+  given: RunSettings,
+  { root, env = process.env }: { root: string; env?: NodeJS.ProcessEnv },
+): { settings: RunSettings; notes: string[] } {
+  const refuse = (started: string, flag: string) =>
+    new UsageError(
+      `run ${runId} was started ${started}, and --resume finishes the attempts it planned. Leave ${flag} out, or start a new run without --resume.`,
+    )
+  const runs = Number(given.runs)
+  const count = Number.isInteger(runs) && runs >= 1
+  if (given.runs !== undefined && count && runs !== saved.runs) {
+    throw refuse(
+      saved.runs === undefined ? 'without --runs' : `with --runs ${saved.runs}`,
+      '--runs',
+    )
+  }
+  const profile = given.profile ?? (env.REEVAL_PROFILE || undefined)
+  if (profile !== undefined && profile !== saved.profile) {
+    throw refuse(
+      saved.profile === undefined ? 'without a profile' : `with profile ${saved.profile}`,
+      '--profile and REEVAL_PROFILE',
+    )
+  }
+  const notes: string[] = []
+  const concurrency = given.concurrency ?? (env.REEVAL_CONCURRENCY || undefined)
+  if (concurrency !== undefined && saved.concurrency !== undefined) {
+    if (Number(concurrency) !== saved.concurrency) {
+      notes.push(
+        `concurrency ${concurrency} replaces the ${saved.concurrency} run ${runId} was started with`,
+      )
+    }
+  }
+  const settings: RunSettings = {
+    ...given,
+    filters: given.filters.length
+      ? given.filters
+      : saved.filters.map((f) => (existsSync(resolve(root, f)) ? resolve(root, f) : f)),
+  }
+  if (given.runs === undefined && saved.runs !== undefined) settings.runs = String(saved.runs)
+  if (profile === undefined && saved.profile !== undefined) settings.profile = saved.profile
+  if (concurrency === undefined && saved.concurrency !== undefined) {
+    settings.concurrency = String(saved.concurrency)
+  }
+  if (!given.tag?.length && saved.tags.length) settings.tag = saved.tags
+  return { settings, notes }
 }
 
 export const previousAttempt = (
