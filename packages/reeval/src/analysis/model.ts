@@ -6,6 +6,7 @@ import {
   type LanguageModel,
   type LanguageModelUsage,
   NoObjectGeneratedError,
+  NoOutputGeneratedError,
   Output,
 } from 'ai'
 import { analysisModelOf } from '../config.ts'
@@ -242,6 +243,12 @@ export type ModelAnswer = {
   latencyMs: number
 }
 
+/**
+ * A provider refusing `maxOutputTokens` above the model's own limit, e.g. "max_tokens is too large",
+ * "The maximum tokens you requested exceeds the model limit of 8192".
+ */
+const OVER_CAP = /\bmax(?:imum)?[ _](?:output[ _])?tokens\b/i
+
 /** The model stopped at `maxOutputTokens` before its analysis was whole; names the option in `file`. */
 function cutOff(
   model: ResolvedAnalysisModel,
@@ -277,12 +284,25 @@ export async function callAnalysisModel(
     if (NoObjectGeneratedError.isInstance(error) && error.finishReason === 'length') {
       throw cutOff(model, maxOutputTokens, file, error.usage)
     }
+    if (error instanceof Error && OVER_CAP.test(error.message)) {
+      throw new UsageError(
+        `${error.message} The analysis model, ${model.name}, was asked for up to ${maxOutputTokens} output tokens: set analysis: { maxOutputTokens } in ${file} to at most its output limit.`,
+      )
+    }
     throw error
   }
-  // A reply that is all reasoning has no text to parse, so the SDK returns it unparsed.
-  if (result.finishReason === 'length') throw cutOff(model, maxOutputTokens, file, result.usage)
+  let output: AnalysisOutput
+  try {
+    output = result.output as AnalysisOutput
+  } catch (error) {
+    // A reply that is all reasoning has no text to parse, so the SDK leaves it without an output.
+    if (NoOutputGeneratedError.isInstance(error) && result.finishReason === 'length') {
+      throw cutOff(model, maxOutputTokens, file, result.usage)
+    }
+    throw error
+  }
   return {
-    output: result.output as AnalysisOutput,
+    output,
     resolvedModel: result.response?.modelId ?? null,
     usage: {
       inputTokens: result.usage?.inputTokens ?? null,

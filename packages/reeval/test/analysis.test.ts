@@ -2011,25 +2011,16 @@ describe('contrasts: each pair of arms, variant against variant too', () => {
 })
 
 describe('an analysis cut off at maxOutputTokens', () => {
-  /** Calls anthropic/claude-sonnet-5 on a stubbed Messages API that stops at max_tokens with `content`. */
-  async function cutOffCall(content: unknown[]) {
+  /** Calls anthropic/claude-sonnet-5 on a stubbed Messages API that answers `body` with `status`. */
+  async function stubbedCall(body: unknown, status = 200) {
     const realFetch = globalThis.fetch
     const key = process.env.ANTHROPIC_API_KEY
     process.env.ANTHROPIC_API_KEY = 'sk-ant-test'
     globalThis.fetch = (async () =>
-      new Response(
-        JSON.stringify({
-          id: 'msg_1',
-          type: 'message',
-          role: 'assistant',
-          model: 'claude-sonnet-5',
-          content,
-          stop_reason: 'max_tokens',
-          stop_sequence: null,
-          usage: { input_tokens: 100, output_tokens: 8000 },
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      )) as typeof fetch
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      })) as typeof fetch
     try {
       return await callAnalysisModel(
         { name: 'anthropic/claude-sonnet-5', route: 'direct' },
@@ -2038,7 +2029,7 @@ describe('an analysis cut off at maxOutputTokens', () => {
         8000,
         'reeval.config.ts',
       ).then(
-        () => null,
+        (answer) => answer,
         (error: Error) => error,
       )
     } finally {
@@ -2046,6 +2037,20 @@ describe('an analysis cut off at maxOutputTokens', () => {
       if (key === undefined) delete process.env.ANTHROPIC_API_KEY
       else process.env.ANTHROPIC_API_KEY = key
     }
+  }
+  /** A reply that stops at max_tokens with `content`; the error it fails with, or null. */
+  const cutOffCall = async (content: unknown[], stop_reason = 'max_tokens') => {
+    const got = await stubbedCall({
+      id: 'msg_1',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-sonnet-5',
+      content,
+      stop_reason,
+      stop_sequence: null,
+      usage: { input_tokens: 100, output_tokens: 8000 },
+    })
+    return got instanceof Error ? got : null
   }
   const raise =
     /^The analysis model, anthropic\/claude-sonnet-5, stopped at analysis\.maxOutputTokens \(8000 tokens\) before its analysis was complete\. Raise analysis: \{ maxOutputTokens: 16000 \} in reeval\.config\.ts\.$/
@@ -2060,5 +2065,54 @@ describe('an analysis cut off at maxOutputTokens', () => {
     const error = await cutOffCall([{ type: 'text', text: '{"tldr": "The skill' }])
     assert.equal(error?.name, 'UsageError')
     assert.match(error.message, raise)
+  })
+
+  test('a whole analysis that ends at the cap is kept', async () => {
+    const analysis = {
+      tldr: 'A run.',
+      whatHappened: [],
+      results: [],
+      why: [],
+      anomalies: [],
+      actions: [],
+      confidence: { overall: 'medium', why: 'n = 3' },
+    }
+    const got = await stubbedCall({
+      id: 'msg_1',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-sonnet-5',
+      content: [{ type: 'text', text: JSON.stringify(analysis) }],
+      stop_reason: 'max_tokens',
+      stop_sequence: null,
+      usage: { input_tokens: 100, output_tokens: 8000 },
+    })
+    assert.ok(!(got instanceof Error), String(got))
+    assert.deepEqual(got.output, analysis)
+  })
+
+  test('unparsable JSON that is not cut off keeps its own error', async () => {
+    const error = await cutOffCall([{ type: 'text', text: '{"tldr": "The skill' }], 'end_turn')
+    assert.match(error?.message ?? '', /could not parse the response/)
+    assert.doesNotMatch(error?.message ?? '', /maxOutputTokens/)
+  })
+
+  test("a cap above the model's own limit names the option", async () => {
+    const error = await stubbedCall(
+      {
+        type: 'error',
+        error: {
+          type: 'invalid_request_error',
+          message: 'max_tokens: 32000 > 8192, which is the maximum allowed number of output tokens',
+        },
+      },
+      400,
+    )
+    assert.ok(error instanceof Error)
+    assert.equal(error.name, 'UsageError')
+    assert.match(
+      error.message,
+      /was asked for up to 8000 output tokens: set analysis: \{ maxOutputTokens \} in reeval\.config\.ts to at most its output limit\.$/,
+    )
   })
 })
