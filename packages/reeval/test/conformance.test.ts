@@ -278,7 +278,15 @@ describe('context goldens', () => {
       assert.ok(existsSync(out), `${name}: the runner wrote nothing\n${r.stdout}${r.stderr}`)
       const entry = evals.find((e) => e.name === name)
       assert.ok(entry, `${name}: no eval in the run record`)
-      const { outcome, error, assertions = [], judgements: judgments, checks, files } = entry.trial
+      const {
+        outcome,
+        error,
+        assertions = [],
+        judgements: judgments,
+        checks,
+        files,
+        observations,
+      } = entry.trial
       type Graded = { question: string; state: { task?: string; output?: unknown } }
       const inputs: Graded[] = files.judgeInput ? JSON.parse(entry.read(files.judgeInput.path)) : []
       const lines = parse(readFileSync(out, 'utf8'))
@@ -302,6 +310,7 @@ describe('context goldens', () => {
             exitCode,
             ...(retries ? { retries, tries: tries?.map((t) => ({ exitCode: t.exitCode })) } : {}),
           })),
+          ...(observations ? { observations } : {}),
         },
       })
       answered.set(

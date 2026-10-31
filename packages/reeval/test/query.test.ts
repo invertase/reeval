@@ -397,7 +397,7 @@ evaluate('steady', { runs: 2 }, async (c) => {
       ['SELEC 1', /reeval query: near "SELEC": syntax error/],
       [
         'nope',
-        /no view or table named "nope"\. Views: attempt_answers, check_discrimination, check_rates, check_streaks, context_use, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts.*\. Tables: artifacts, assertions, attempt_answers_m, attempt_context, attempts, cell_checks, cells,/,
+        /no view or table named "nope"\. Views: attempt_answers, attempt_values, check_discrimination, check_rates, check_streaks, context_use, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts.*\. Tables: artifacts, assertions, attempt_answers_m, attempt_context, attempt_values_m, attempts, cell_checks, cells,/,
       ],
     ]
     for (const [sql, message] of cases) {

@@ -558,6 +558,12 @@ export type AttemptContext = {
    * made to it afterwards.
    */
   writeFile(path: string, contents: string | Uint8Array): Promise<void>
+  /**
+   * Records a fact about the attempt under `name`, such as what the agent installed. It never
+   * affects the outcome. Calling it again with a name replaces its value. The value is JSON, at
+   * most 4 KB, and is masked like the rest of the record.
+   */
+  observe(name: string, value: JSONValue): void
   /** Every turn so far, oldest first. */
   readonly turns: readonly Turn[]
   /** Aborted on timeout or Ctrl-C. */
@@ -2629,6 +2635,15 @@ export type AssertionRecord = {
   durationMs?: number
 }
 
+/** A `c.observe(name, value)` call: the last value given for the name. */
+export type Observation = {
+  name: string
+  /** Masked like the rest of the record. */
+  value: JSONValue
+  /** How many turns the attempt had sent when the value was given: 0 before the first. */
+  turn: number
+}
+
 /** Full per-attempt payload, written to disk by the worker. */
 export type EvalRecord = {
   /** When the worker began the attempt (its scheduler lease), for start order across the run. */
@@ -2649,6 +2664,8 @@ export type EvalRecord = {
   >
   /** Every `expect` and `expect.require` matcher call that settled, in call order; unset with none. */
   assertions?: AssertionRecord[]
+  /** See `AttemptRecord.observations`. */
+  observations?: Observation[]
   /**
    * In call order, with `retries` when transient provider errors were retried on the way to the
    * verdict. `call` is the call's place among the attempt's `c.judge()` calls, failed ones

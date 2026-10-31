@@ -730,6 +730,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   The eval's questions asked of this attempt on its own (those without `across`), in question order; unset without any. They annotate: `outcome` never depends on them. Asked once the attempt ends, when it ran to a pass or a fail. Each answer's `input` is `questions/<n>.json` in the attempt's directory, `<n>` the question's place in the eval's `questions`.
 </Property>
 
+<Property name="observations" type="Observation[]" optional>
+  Each `c.observe(name, value)` the attempt made, one per name in first-call order with its last value; unset without any. They annotate: `outcome` never depends on them.
+</Property>
+
 ### `AttemptFiles`
 
 <Property name="setupLog" type="FileRef" optional>

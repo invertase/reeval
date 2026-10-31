@@ -9,6 +9,7 @@ import { pairTallies } from '../compare/pairs.ts'
 import { UsageError } from '../errors.ts'
 import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID, ownRequire } from '../root.ts'
+import type { JSONValue } from '../types.ts'
 import { filesChanged } from '../view/effort.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts, PART_COLUMNS } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
@@ -20,7 +21,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 18
+const DB_VERSION = 19
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 const PART_KEYS = Object.keys(PART_COLUMNS) as Array<keyof typeof PART_COLUMNS>
@@ -87,6 +88,13 @@ CREATE TABLE attempt_answers_m (
   run_id TEXT NOT NULL, eval_key TEXT NOT NULL, cell_key TEXT NOT NULL, attempt_key TEXT NOT NULL,
   attempt_id TEXT, outcome TEXT, question TEXT NOT NULL, choice TEXT, text TEXT, error TEXT,
   model TEXT, resolved_model TEXT, input_path TEXT
+);
+-- Every c.observe(name, value) an attempt made, its last value per name: the JSON as text, its
+-- kind, and the value again as num when it's a number and as text when it's a string.
+CREATE TABLE attempt_values_m (
+  run_id TEXT NOT NULL, eval_key TEXT NOT NULL, cell_key TEXT NOT NULL, attempt_key TEXT NOT NULL,
+  attempt_id TEXT, outcome TEXT, name TEXT NOT NULL, value TEXT, kind TEXT, num REAL, text TEXT,
+  turn INTEGER
 );
 -- Every pairwise question's vote: a pair of sides (arms within a harness, harnesses across an arm)
 -- on one run, shown in one order (swapped = 1: b first), and the side picked or 'tie'.
@@ -240,6 +248,13 @@ CREATE VIEW attempt_answers AS
   FROM attempt_answers_m q JOIN runs r USING (run_id)
   JOIN cells c ON c.run_id = q.run_id AND c.eval_key = q.eval_key AND c.key = q.cell_key;
 
+-- Each value an attempt observed with c.observe, with the attempt's outcome and cell: tally text
+-- with GROUP BY name, text, summarize num, or read an array's items with json_each(value).
+CREATE VIEW attempt_values AS
+  SELECT v.*, c.harness, c.environment, c.role, c.variant, r.started_at, r.branch
+  FROM attempt_values_m v JOIN runs r USING (run_id)
+  JOIN cells c ON c.run_id = v.run_id AND c.eval_key = v.eval_key AND c.key = v.cell_key;
+
 -- Each pairwise question's pairs of sides, head to head: wins when both orders agree, and splits
 -- when the order decided. The pooled win rate counts a split as a win for each side.
 CREATE VIEW question_pairs AS SELECT * FROM question_pairs_m;
@@ -354,6 +369,7 @@ export const VIEW_NAMES = [
   'contrasts',
   'question_pairs',
   'attempt_answers',
+  'attempt_values',
   'factor_effects',
   'skill_reads',
   'context_use',
@@ -369,6 +385,10 @@ export const VIEW_NAMES = [
 ]
 
 const json = (value: unknown) => JSON.stringify(value)
+
+/** An observed value's JSON kind, as `attempt_values.kind` names it. */
+const valueKind = (value: JSONValue) =>
+  value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value
 
 /** The agent CLI's home config, which its harness writes (MCP servers, settings), not the eval. */
 const HARNESS_CONFIG = /^~\/.*(^|\/)(config\.(toml|ya?ml|json)|settings(\.local)?\.json|mcp\.json)$/
@@ -742,6 +762,23 @@ function insertRun(
           q.input?.path ?? null,
         )
       }
+      for (const o of a.observations ?? []) {
+        run(
+          `INSERT INTO attempt_values_m VALUES (${Array(12).fill('?').join(', ')})`,
+          record.runId,
+          e.key,
+          a.cell,
+          a.key,
+          a.id,
+          a.outcome,
+          o.name,
+          JSON.stringify(o.value),
+          valueKind(o.value),
+          typeof o.value === 'number' ? o.value : null,
+          typeof o.value === 'string' ? o.value : null,
+          o.turn,
+        )
+      }
       for (const j of a.judgements) {
         run(
           'INSERT OR IGNORE INTO judgements VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -854,6 +891,7 @@ const DATA_TABLES = [
   'families',
   'family_lift_m',
   'attempt_answers_m',
+  'attempt_values_m',
   'votes',
   'question_pairs_m',
   'cells',

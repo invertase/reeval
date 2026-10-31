@@ -1,0 +1,180 @@
+{
+  "kind": "reeval-analysis",
+  "schemaVersion": 1,
+  "scope": {
+    "kind": "run",
+    "head": "20261030T182333Z_dc99f03_cursor-agent_1578",
+    "base": null,
+    "evals": null
+  },
+  "anchor": "20261030T182333Z_dc99f03_cursor-agent_1578",
+  "inputs": {
+    "records": [
+      {
+        "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+        "sha256": "2323e570d4c8669854a8fd4f0456a9634d8a8d066a420fd128e8a7060058e854"
+      }
+    ],
+    "digestVersion": 13,
+    "digestHash": "a93db5da8359499d8f9cde115a208999a3e3555b38fa5d1ac6d4b535797cfb14"
+  },
+  "promptVersion": "analysis-v12",
+  "author": "cursor-agent",
+  "model": "fake",
+  "resolvedModel": "fake-analysis",
+  "route": "fake",
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0
+  },
+  "latencyMs": 8,
+  "createdAt": "2026-10-30T18:24:03.208Z",
+  "validation": {
+    "citations": 4,
+    "invalid": [],
+    "dropped": 0,
+    "commands": 1,
+    "invalidCommands": [],
+    "unverifiedNumbers": 0
+  },
+  "analysis": {
+    "tldr": "The house-style skill lifts the pass rate.",
+    "whatHappened": [
+      {
+        "text": "Every eval ran once.",
+        "cites": [
+          "F1"
+        ],
+        "confidence": "high"
+      }
+    ],
+    "results": [
+      {
+        "text": "The variant passed where the control failed.",
+        "cites": [
+          "F1"
+        ],
+        "confidence": "medium"
+      }
+    ],
+    "why": [],
+    "anomalies": [
+      {
+        "text": "The broken harness never started.",
+        "kind": "noise",
+        "cites": [
+          "F1"
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "title": "Rerun the compare",
+        "target": "evals/skill.eval.ts",
+        "kind": "eval",
+        "change": "Run it three times.",
+        "expectedEffect": "A tighter interval.",
+        "verify": "reeval run skill --runs 3",
+        "impact": "medium",
+        "effort": "low",
+        "cites": [
+          "F1"
+        ]
+      }
+    ],
+    "confidence": {
+      "overall": "medium",
+      "why": "One run."
+    }
+  },
+  "attempts": {
+    "r1/cases-1/control#1": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-cases-eval-ts-greets-ada-8fa89b",
+      "attempt": "fake/plain/docker#1"
+    },
+    "r1/cases-1/with-house-greeting#1": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-cases-eval-ts-greets-ada-8fa89b",
+      "attempt": "fake/with-house-greeting/docker#1"
+    },
+    "r1/cases-2/control#1": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-cases-eval-ts-greets-grace-76447a",
+      "attempt": "fake/plain/docker#1"
+    },
+    "r1/cases-2/with-house-greeting#1": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-cases-eval-ts-greets-grace-76447a",
+      "attempt": "fake/with-house-greeting/docker#1"
+    },
+    "r1/greet-1/control#1": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-greet-eval-ts-writes-greet-js-df720a",
+      "attempt": "fake/fake/fake#1"
+    },
+    "r1/greet-2/control#1": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-greet-eval-ts-fails-its-check-and-its-judge-035df6",
+      "attempt": "fake/fake/fake#1"
+    },
+    "r1/greet-3/control#1": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-greet-eval-ts-never-starts-dd13ad",
+      "attempt": "broken/fake/fake#1"
+    },
+    "r1/greet-4/control#1": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-greet-eval-ts-is-skipped-for-now-9cda2b",
+      "attempt": "fake/fake/fake#1"
+    },
+    "r1/greet-5/control#1": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-greet-eval-ts-greets-in-welsh-bd390d",
+      "attempt": "unknown#1"
+    },
+    "r1/skill/control#1": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/plain/docker#1"
+    },
+    "r1/skill/control#2": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/plain/docker#2"
+    },
+    "r1/skill/control#3": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/plain/docker#3"
+    },
+    "r1/skill/control#4": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/plain/docker#4"
+    },
+    "r1/skill/with-house-greeting#1": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/with-house-greeting/docker#1"
+    },
+    "r1/skill/with-house-greeting#2": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/with-house-greeting/docker#2"
+    },
+    "r1/skill/with-house-greeting#3": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/with-house-greeting/docker#3"
+    },
+    "r1/skill/with-house-greeting#4": {
+      "runId": "20261030T182333Z_dc99f03_cursor-agent_1578",
+      "evalSlug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "attempt": "fake/with-house-greeting/docker#4"
+    }
+  },
+  "cited": {
+    "F1": "{\"kind\":\"pass@1\",\"run\":\"r1\",\"eval\":\"cases-1\",\"cells\":[{\"cell\":\"plain (control)\",\"pass\":\"0/1\",\"gated\":false},{\"cell\":\"with-house-greeting\",\"pass\":\"1/1\",\"gated\":true}],\"family\":\"evals/cases.eval.ts › greets %s\",\"case\":0}"
+  }
+}

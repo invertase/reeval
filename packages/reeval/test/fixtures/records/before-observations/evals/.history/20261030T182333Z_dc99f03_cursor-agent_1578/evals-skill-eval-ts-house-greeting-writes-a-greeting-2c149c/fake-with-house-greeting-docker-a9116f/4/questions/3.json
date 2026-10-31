@@ -1,0 +1,19 @@
+{
+  "question": "Does the greeting use the house style?",
+  "model": "fake",
+  "stateOptions": {
+    "task": false,
+    "output": false,
+    "files": false,
+    "diff": true,
+    "transcript": false,
+    "turns": "all",
+    "checks": false
+  },
+  "choices": [
+    "yes",
+    "no"
+  ],
+  "system": "You answer one question about an attempt by a coding agent at a task.\nThe attempt is shown as the changes it made to the project, as a unified diff.\nAnswer only from what is shown. Pick the one of the choices that answers it, and give a short reason for the pick.",
+  "prompt": "Question: Does the greeting use the house style?\n\nChoices:\n- yes\n- no\n\n<attempt>\n<diff>\ndiff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..8f6cfcf\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => 'Ahoy, ' + name + '!'\n\n</diff>\n</attempt>"
+}

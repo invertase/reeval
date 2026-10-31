@@ -44,6 +44,10 @@
   `c.capture`), so a check before any turn sees what the environment set up.
   `c.attempt.cell.role` is
   `'control'` or `'variant'`.
+- `c.observe(name, value)` records a JSON value about the attempt (which ORM it installed, how many
+  files it touched) that never affects pass or fail; the run output tallies it per cell and
+  `reeval query attempt_values` lists it. Use it for what you want to count, `expect` for what
+  must hold.
 
 ## The judge: inputs, input size, errors
 

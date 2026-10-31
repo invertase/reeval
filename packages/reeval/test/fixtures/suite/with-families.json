@@ -340,7 +340,8 @@
                 "outcome": "fail"
               }
             ],
-            "questions": []
+            "questions": [],
+            "observations": []
           },
           {
             "path": "evals%2Fcases.eval.ts › writes greet.js for Ada",
@@ -421,7 +422,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           },
           {
             "path": "evals%2Fcases.eval.ts › writes greet.js for Grace",
@@ -502,7 +504,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           }
         ]
       },
@@ -588,7 +591,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           },
           {
             "path": "evals%2Fgreet.eval.ts › fails its check",
@@ -675,7 +679,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           },
           {
             "path": "evals%2Fgreet.eval.ts › fails its judge",
@@ -762,7 +767,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           },
           {
             "path": "evals%2Fgreet.eval.ts › is skipped for now",
@@ -837,7 +843,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           },
           {
             "path": "evals%2Fgreet.eval.ts › greets in Welsh",
@@ -883,7 +890,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           }
         ]
       },
@@ -1057,7 +1065,8 @@
                 "rates": [],
                 "error": null
               }
-            ]
+            ],
+            "observations": []
           },
           {
             "path": "evals%2Fskill.eval.ts › house greeting › writes a greeting",
@@ -1233,7 +1242,8 @@
                 "rates": [],
                 "error": "Rate limit exceeded (429)"
               }
-            ]
+            ],
+            "observations": []
           }
         ]
       }
@@ -1301,7 +1311,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           }
         ]
       }

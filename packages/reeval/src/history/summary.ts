@@ -213,6 +213,9 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
       `- Question ${cell(`"${clip(q.question, 80)}"`)}: ${said}${q.input ? ` ([what the model saw](${q.input.path}))` : ''}`,
     )
   }
+  for (const o of a.observations ?? []) {
+    lines.push(`- Observed \`${cell(o.name)}\`: \`${clip(cell(JSON.stringify(o.value)), 300)}\``)
+  }
   const labels = checkLabels(a)
   a.checks.forEach((c, i) => {
     const label = labels[i]

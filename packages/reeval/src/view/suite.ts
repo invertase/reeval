@@ -18,6 +18,7 @@ import { cellEffort, cellSamples, contrastEffort, type EffortVerdict } from './e
 import { caseLabel } from './family.ts'
 import { checksByLabel, checkTries, labeledJudgments } from './judgments.ts'
 import { attemptAnswerRows, isNotGatedPass, runOutcome } from './model.ts'
+import { type ObservedTally, observedTallies } from './observations.ts'
 
 /**
  * A variant against its baseline: `better` or `worse` when the stored 95% interval on the
@@ -124,6 +125,8 @@ export type EvalResult = {
    * each question asked of any case, in first-asked order, summed over the cases that answered it.
    */
   questions: Array<QuestionResult | AttemptQuestionResult>
+  /** Each name its attempts observed with `c.observe`, tallied per cell; empty on a family. */
+  observations: ObservedTally[]
 }
 
 /** A pairwise question: each side's wins over the pairs the model decided. Never gates. */
@@ -803,6 +806,7 @@ function familyResult(
       }
     }),
     questions: familyQuestions(sorted),
+    observations: [],
   }
 }
 
@@ -823,6 +827,7 @@ function evalResult(record: RunRecord, e: EvalEntry, order: number): EvalResult 
     cases: null,
     pooled: null,
     questions: questionsOf(e),
+    observations: observedTallies(e.attempts),
   }
 }
 

@@ -247,6 +247,26 @@
             {
               "type": "object",
               "properties": {
+                "id": {
+                  "description": "Pairs a reply with its request.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "op": {
+                  "type": "string",
+                  "const": "observe"
+                }
+              },
+              "required": ["id", "ok", "op"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
                 "assertion": {
                   "$ref": "#/$defs/AssertionRecord"
                 },
@@ -377,6 +397,7 @@
                 "exec",
                 "readFile",
                 "writeFile",
+                "observe",
                 "expect",
                 "record",
                 "judge",
