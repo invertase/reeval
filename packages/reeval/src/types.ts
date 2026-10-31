@@ -440,6 +440,8 @@ export type JudgeInputs = {
   transcript?: boolean | 'tools' | 'full'
   /** `c.exec` results so far; a list shows only those commands, as passed to `c.exec`. */
   checks?: boolean | string[]
+  /** `c.observe()` values so far, by name; a list shows only those names. */
+  observations?: boolean | string[]
   /**
    * Captures sent as file parts: `c.capture()` handles or their names, or `true` for every
    * capture so far. Jev takes PNG captures; a provider that cannot take files fails the call.
@@ -480,6 +482,8 @@ export type ResolvedJudgeStateOptions = {
   transcript: boolean | 'tools' | 'full'
   turns: 'last' | 'all'
   checks: boolean | string[]
+  /** Set only when the call turned it on, so never `false` as written. */
+  observations?: boolean | string[]
 }
 
 export type Verdict = {
@@ -1600,6 +1604,8 @@ export type QuestionInputs = {
   transcript?: boolean | 'tools' | 'full'
   /** `c.exec` results; a list shows only those commands, as passed to `c.exec`. */
   checks?: boolean | string[]
+  /** `c.observe()` values, by name; a list shows only those names. */
+  observations?: boolean | string[]
   /** Each attempt's own captures, by name; `true` sends all of them. */
   artifacts?: true | string[]
 }
@@ -1616,6 +1622,8 @@ export type ResolvedQuestionStateOptions = {
   transcript: boolean | 'tools' | 'full'
   turns: 'last' | 'all'
   checks: boolean | string[]
+  /** Set only when the question turned it on, so never `false` as written. */
+  observations?: boolean | string[]
 }
 
 /** Defaults for every question below it. What a question is shown is its own, never a default. */
@@ -2056,6 +2064,8 @@ export type BlindSide = BlindTurn & {
         notRun: true
       }
   >
+  /** Its `c.observe()` values; a name the question lists that it never observed is `missing`. */
+  observations?: Array<{ name: string; value: JSONValue } | { name: string; missing: true }>
   /** Its captures, in the order sent, labeled by position; a name it lacks is `missing`. */
   artifacts?: Array<
     { label: string; mediaType: 'image/png'; bytes: number } | { label: string; missing: true }

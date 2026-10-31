@@ -75,6 +75,7 @@ function shownParts(shows: QuestionShows, taskEach: boolean): string[] {
     ...(isOn(state.checks)
       ? ['the commands run on its work, with their exit codes and output']
       : []),
+    ...(state.observations ? ['the values its eval recorded about it'] : []),
     ...(shows.artifacts !== undefined ? ['screenshots of its work'] : []),
   ]
 }
@@ -154,6 +155,8 @@ function buildSide(
   }
   const checks = checksOf(attempt, state.checks)
   if (checks) side.checks = checks
+  const observations = observationsOf(attempt, state.observations)
+  if (observations) side.observations = observations
   const images: ShownImage[] = []
   const sent: string[] = []
   if (shows.artifacts !== undefined) {
@@ -194,9 +197,26 @@ function checksOf(
   })
 }
 
+function observationsOf(
+  attempt: PairAttempt,
+  which: ResolvedQuestionStateOptions['observations'],
+): BlindSide['observations'] {
+  if (!which) return undefined
+  const observed = attempt.observations ?? []
+  const shown = (o: (typeof observed)[number]) => ({ name: o.name, value: o.value })
+  if (which === true) return observed.map(shown)
+  return which.map((name) => {
+    const o = observed.find((x) => x.name === name)
+    return o ? shown(o) : { name, missing: true as const }
+  })
+}
+
 const tag = (name: string, body: string) => [`<${name}>`, body, `</${name}>`]
 
-/** A side's text in the prompt: each part it shows, in its own tag. */
+/**
+ * A side's text in the prompt: each part it shows, in its own tag. Observations follow the turns,
+ * ahead of the files, diff and checks, so a side cut to fit a long diff keeps them.
+ */
 function sideText(side: BlindSide): string {
   const turnLines = (t: BlindTurn) => [
     ...(t.task !== undefined ? tag('task', t.task) : []),
@@ -207,6 +227,18 @@ function sideText(side: BlindSide): string {
     ...(side.turns
       ? side.turns.flatMap((t, i) => [`<turn n="${i + 1}">`, ...turnLines(t), '</turn>'])
       : turnLines(side)),
+    ...(side.observations
+      ? tag(
+          'observations',
+          side.observations
+            .map((o) =>
+              'missing' in o
+                ? `${o.name} → not observed`
+                : `${o.name} = ${JSON.stringify(o.value)}`,
+            )
+            .join('\n') || '(none)',
+        )
+      : []),
     ...(side.files ? tag('files', side.files.join('\n') || '(none)') : []),
     ...(side.diff !== undefined ? tag('diff', side.diff) : []),
     ...(side.checks
@@ -464,6 +496,15 @@ function missingEverywhere(
     const command = checks.find((c) => !sides.some((s) => s.checks?.some((r) => r.command === c)))
     if (command !== undefined) {
       return `question "${question}" checks names a command no ${who} ran: ${JSON.stringify(command)}`
+    }
+  }
+  const { observations } = shows.state
+  if (Array.isArray(observations)) {
+    const name = observations.find(
+      (n) => !sides.some((s) => s.observations?.some((o) => o.name === n)),
+    )
+    if (name !== undefined) {
+      return `question "${question}" observations names a value no ${who} observed: ${JSON.stringify(name)}`
     }
   }
   if (Array.isArray(shows.artifacts)) {
@@ -761,6 +802,7 @@ export function stagedAttempt(e: EngineEval, record: EvalRecord | null): PairAtt
         stdout,
         stderr,
       })) ?? [],
+    ...(record?.observations ? { observations: record.observations } : {}),
     id: `${cell.key}#${e.attempt?.n ?? 1}`,
   }
 }
@@ -826,6 +868,7 @@ async function keptAttempt(
       }
     }),
     checks,
+    ...(kept.observations ? { observations: kept.observations } : {}),
     ...(captures ? { captures: shots.flat() } : {}),
     id: `${cell.key}#${e.attempt?.n ?? kept.n}`,
   }

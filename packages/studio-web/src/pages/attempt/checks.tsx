@@ -3,6 +3,7 @@ import {
   CircleAlert,
   CircleCheck,
   CircleX,
+  Eye,
   ListChecks,
   TerminalSquare,
 } from 'lucide-react'
@@ -120,9 +121,35 @@ function Assertions({ assertions }: { assertions: Assertion[] }) {
   )
 }
 
+type Observation = NonNullable<AttemptRecord['observations']>[number]
+
+/** What the eval recorded with `c.observe()`: never part of the outcome. */
+function Observed({ observations }: { observations: Observation[] }) {
+  return (
+    <section className="space-y-2" data-observations>
+      <h3 className="text-sm font-medium">Observed</h3>
+      <div className="divide-y overflow-hidden rounded-lg border bg-card">
+        {observations.map((o) => (
+          <div key={o.name} className="flex items-start gap-3 px-4 py-2.5">
+            <Eye className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <code className="shrink-0 font-mono text-sm">{o.name}</code>
+            <code className="min-w-0 flex-1 font-mono text-xs break-words whitespace-pre-wrap text-muted-foreground">
+              {JSON.stringify(o.value)}
+            </code>
+            <span className="text-xs text-muted-foreground" title="Turns sent when it was observed">
+              turn {o.turn}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export function Checks({ record, attempt }: { record: RunRecord; attempt: AttemptRecord }) {
   const assertions = attempt.assertions ?? []
-  if (attempt.checks.length === 0 && assertions.length === 0) {
+  const observations = attempt.observations ?? []
+  if (attempt.checks.length === 0 && assertions.length === 0 && observations.length === 0) {
     return (
       <EmptyState icon={ListChecks} title="No checks">
         This eval made no <code className="font-mono">expect</code> calls and ran no{' '}
@@ -142,6 +169,7 @@ export function Checks({ record, attempt }: { record: RunRecord; attempt: Attemp
           ))}
         </section>
       ) : null}
+      {observations.length ? <Observed observations={observations} /> : null}
     </div>
   )
 }

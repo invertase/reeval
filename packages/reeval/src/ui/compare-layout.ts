@@ -2,7 +2,8 @@
 // file-path then source order, with each run of unchanged evals collapsed to `+N same`, then the
 // tally. A regressed eval lists the checks that flipped; a fixed one, the checks that now pass; one
 // that can't be compared names the part that changed. An eval whose gate changed names both gates
-// and how base would score under head's, and isn't collapsed. Pure and deterministic, from the two
+// and how base would score under head's, and isn't collapsed, as isn't one whose `c.observe()`
+// tallies moved (informational: the shift never changes its status). Pure and deterministic, from the two
 // runs' SuiteResults and compare rows; statistics print only with `verbose`.
 import type { HistoryCell, RunRecord } from '../history/types.ts'
 import { fenced, plural } from '../text.ts'
@@ -15,6 +16,7 @@ import {
   type StackChange,
 } from '../view/compare.ts'
 import { effortChangeLabel } from '../view/effort.ts'
+import { observedShift } from '../view/observations.ts'
 import {
   type CaseResult,
   type CellResult,
@@ -416,6 +418,24 @@ function statsRows(c: Colors, row: CompareRow): Item[] {
   })
 }
 
+/** Each observed name (on each cell, with more than one) whose tally moved between the runs. */
+function shiftRows(c: Colors, base: EvalResult | undefined, head: EvalResult | undefined): Item[] {
+  const before = base?.observations ?? []
+  const after = head?.observations ?? []
+  const keyOf = (o: { name: string; cell: string }) => `${o.name}\u0000${o.cell}`
+  const keys = [...new Set([...after, ...before].map(keyOf))]
+  const cells = new Set([...after, ...before].map((o) => o.cell))
+  return keys.flatMap((key) => {
+    const b = before.find((o) => keyOf(o) === key)
+    const h = after.find((o) => keyOf(o) === key)
+    const shift = observedShift(b, h)
+    const o = (h ?? b) as { name: string; cell: string }
+    if (!shift) return []
+    const label = cells.size > 1 ? `observed ${o.name} · ${o.cell}` : `observed ${o.name}`
+    return [{ indent: 2, cells: [label, t(shift, c.dim)] }]
+  })
+}
+
 type Block = { lines: string[]; ids: boolean }
 
 function block(
@@ -431,7 +451,7 @@ function block(
   const top = headLine(word, nameOf(row, unit))
   const baseId = input.base?.runId ?? ''
   const headId = input.head.runId
-  const stats = opts.verbose ? statsRows(c, row) : []
+  const stats = [...(opts.verbose ? statsRows(c, row) : []), ...shiftRows(c, base, head)]
   const family = row.kind === 'family'
   if (row.status === 'regressed' || row.status === 'fixed') {
     const evidence = family
@@ -582,7 +602,11 @@ export function renderCompare(input: CompareInput, opts: CompareOptions): string
     same = 0
   }
   for (const entry of ordered(input.rows, units)) {
-    const shown = entry.row.gate || (opts.verbose && entry.row.perCell?.length)
+    const key = rowKey(entry.row)
+    const shown =
+      entry.row.gate ||
+      (opts.verbose && entry.row.perCell?.length) ||
+      shiftRows(c, units.base.get(key)?.result, units.head.get(key)?.result).length
     if (entry.row.status === 'same' && !shown) {
       same++
       continue

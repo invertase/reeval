@@ -114,3 +114,39 @@ export function observedLine(t: ObservedTally): string {
     ? parts.join(' · ')
     : `${parts.join(' · ')} · ${t.attempts} ${t.attempts === 1 ? 'attempt' : 'attempts'}`
 }
+
+const sameTally = (a: ObservedTally, b: ObservedTally) =>
+  a.attempts === b.attempts &&
+  a.others === b.others &&
+  JSON.stringify(a.counts) === JSON.stringify(b.counts) &&
+  JSON.stringify(a.numbers) === JSON.stringify(b.numbers)
+
+/**
+ * How one name's tally on one cell moved from base to head, or null when it didn't:
+ * `prisma 6 → 1 · drizzle 2 → 8` (each value whose count changed, head's most first),
+ * `median 4 → 9`, or a side's whole line against `none` when only one side observed it.
+ */
+export function observedShift(
+  base: ObservedTally | undefined,
+  head: ObservedTally | undefined,
+): string | null {
+  if (!base && !head) return null
+  if (!base || !head)
+    return base ? `${observedLine(base)} → none` : `none → ${observedLine(head as ObservedTally)}`
+  if (sameTally(base, head)) return null
+  const before = new Map(base.counts.map((c) => [c.value, c.n]))
+  const after = new Map(head.counts.map((c) => [c.value, c.n]))
+  const values = [...new Set([...after.keys(), ...before.keys()])]
+  const moved = values.filter((v) => (before.get(v) ?? 0) !== (after.get(v) ?? 0))
+  const parts = moved
+    .slice(0, SHOWN)
+    .map((v) => `${clipValue(v)} ${before.get(v) ?? 0} → ${after.get(v) ?? 0}`)
+  if (moved.length > SHOWN) parts.push(`+${moved.length - SHOWN} more`)
+  const [b, h] = [base.numbers, head.numbers]
+  if (b && h && b.median !== h.median) parts.push(`median ${num(b.median)} → ${num(h.median)}`)
+  else if (b && h && (b.min !== h.min || b.max !== h.max)) {
+    parts.push(`range ${num(b.min)}–${num(b.max)} → ${num(h.min)}–${num(h.max)}`)
+  }
+  if (base.attempts !== head.attempts) parts.push(`${base.attempts} → ${head.attempts} attempts`)
+  return parts.length ? parts.join(' · ') : null
+}

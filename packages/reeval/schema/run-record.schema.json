@@ -2584,6 +2584,20 @@
         "files": {
           "type": "boolean"
         },
+        "observations": {
+          "description": "Set only when the call turned it on, so never `false` as written.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
         "output": {
           "type": "boolean"
         },
@@ -2638,6 +2652,20 @@
         },
         "files": {
           "type": "boolean"
+        },
+        "observations": {
+          "description": "Set only when the question turned it on, so never `false` as written.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "boolean"
+            }
+          ]
         },
         "output": {
           "type": "boolean"

@@ -166,7 +166,8 @@ def test_judge_that_turns_no_input_on_fails_before_it_reaches_reeval(host: Host)
     assert error["name"] == "TypeError"
     assert "shows the judge nothing" in error["message"]
     assert (
-        "task, output, files, diff, contents, transcript, checks or artifacts" in error["message"]
+        "task, output, files, diff, contents, transcript, checks, observations or artifacts"
+        in error["message"]
     )
     assert host.calls() == []
 

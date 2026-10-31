@@ -1005,7 +1005,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
               async () => {},
             )
           }),
-        /questions "Q" in evaluate\("g › e"\) shows the model nothing: turn on at least one of task, output, files, diff, transcript, checks or artifacts, e\.g\. \{ question: '…', diff: true \}\./,
+        /questions "Q" in evaluate\("g › e"\) shows the model nothing: turn on at least one of task, output, files, diff, transcript, checks, observations or artifacts, e\.g\. \{ question: '…', diff: true \}\./,
       ],
       [
         'a variant with its own checks',

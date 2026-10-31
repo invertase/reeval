@@ -95,6 +95,7 @@ const VALUES: Record<Exclude<keyof QuestionInputs, 'artifacts'> | 'turns', strin
   transcript: "true, false, 'tools' or 'full'",
   turns: "'last' or 'all'",
   checks: 'true, false or a list of commands',
+  observations: 'true, false or a list of names',
 }
 
 const describe = (value: unknown) => {

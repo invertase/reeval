@@ -567,6 +567,8 @@ export const CASES: Record<string, Case[]> = {
     ['call: transcript unknown', judgeCall({ transcript: 'all' })],
     ['call: turns unknown', judgeCall({ diff: true, turns: 'first' })],
     ['call: checks a string', judgeCall({ checks: 'npm test' })],
+    ['call: observations a string', judgeCall({ observations: 'orm' })],
+    ['call: observations with an empty name', judgeCall({ observations: [' '] })],
     ['good: call with contents', judgeCall({ contents: ['src/**/*.tsx'] })],
     ['good: call with artifacts', judgeCall({ artifacts: ['home'] })],
     [
@@ -581,6 +583,7 @@ export const CASES: Record<string, Case[]> = {
         contents: ['a.ts'],
         transcript: 'tools',
         checks: ['npm test'],
+        observations: ['orm'],
         artifacts: true,
         turns: 'all',
         on: { turn: 0 },
@@ -687,6 +690,14 @@ export const CASES: Record<string, Case[]> = {
       options({ questions: [{ question: 'Q', task: false, diff: false, transcript: false }] }),
     ],
     ['a question with only turns', options({ questions: [{ question: 'Q', turns: 'last' }] })],
+    [
+      'a question with observations a string',
+      options({ questions: [{ question: 'Q', observations: 'orm' }] }),
+    ],
+    [
+      'a question with an empty observations list',
+      options({ questions: [{ question: 'Q', observations: [] }] }),
+    ],
     [
       'a question model without a provider',
       options({ questions: [{ question: 'Q', diff: true, model: 'g' }] }),

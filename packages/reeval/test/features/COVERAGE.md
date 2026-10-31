@@ -160,7 +160,7 @@
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | Judge verdicts, errors, option cascade and retries | ✓ 2 | — | — | — | — | — |
 | Model routing for reeval's own calls (judge, analysis, compare questions): `anthropic/*`, `google/*`, `openai/*` and `typesafe-ai/*` call their provider directly when its key is set, which wins over the AI Gateway; any other prefix goes through the Gateway; a missing or malformed key names the model, its prefix and every key that works, at plan time, in `reeval doctor` and at call time | ✓ 6 | — | — | — | — | — |
-| What the judge is given: only the inputs each `c.judge()` call turns on (task, output, files, diff patterns, contents by path or pattern, transcript, checks, artifacts), over `turns`; none by default, and a call that turns none on fails before any model call (a compile error in TypeScript); build output, source maps, build info and minified files dropped from its diff | ✓ 4 | — | ● 9 | — | — | — |
+| What the judge is given: only the inputs each `c.judge()` call turns on (task, output, files, diff patterns, contents by path or pattern, transcript, checks, observations, artifacts), over `turns`; none by default, and a call that turns none on fails before any model call (a compile error in TypeScript); build output, source maps, build info and minified files dropped from its diff | ✓ 4 | — | ● 10 | — | — | — |
 | `c.judge({ artifacts })` sends captures as AI SDK file parts (`true` sends every one); JSON-only calls stay an object | ✓ 2 | — | ● 2 | ● 2 | — | — |
 | A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the inputs that were on, largest first; reeval sends what the call turns on, uncut | ✓ 3 | — | — | — | — | — |
 | A failed judge call returns `verdict: "error"`, is recorded, and fails the attempt after its body, so the judges and checks after it still run | ✓ 1 | — | — | — | — | — |
@@ -182,7 +182,7 @@
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | `evals[].answers[].input`: what each pairwise question's model was sent, per pair and order | ✓ 1 | — | ● 1 | ● 1 | — | — |
 | Budget-stopped runs are recorded with status `budget` | ✓ 1 | — | — | — | — | — |
-| Observed values: `c.observe(name, value)` records a JSON fact per attempt (the last value per name, masked), tallied per cell in the output, the `attempt_values` view and the analysis, and never gates | ✓ 1 | — | ● 1 | ● 1 | — | — |
+| Observed values: `c.observe(name, value)` records a JSON fact per attempt (the last value per name, masked), tallied per cell in the output, shown to a judge or question that asks for them, shifted in `reeval compare`, on the studio's attempt and eval pages, in the `attempt_values` view and the analysis, and never gates | ✓ 2 | — | ● 2 | ● 1 | — | — |
 | Recording, merges across branches, rebases and `reeval checkout` | ✓ 1 | — | — | — | — | — |
 | `history.artifacts` and `reeval record --artifacts`: `'failures'` keeps each failed attempt's files, whatever its eval did | ✓ 1 | — | ● 1 | — | — | — |
 | History `.gitignore` un-ignores recorded logs; `reeval record` warns when git still ignores them | ✓ 2 | — | — | — | — | — |

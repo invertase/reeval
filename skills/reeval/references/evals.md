@@ -46,7 +46,8 @@
   `'control'` or `'variant'`.
 - `c.observe(name, value)` records a JSON value about the attempt (which ORM it installed, how many
   files it touched) that never affects pass or fail; the run output tallies it per cell and
-  `reeval query attempt_values` lists it. Use it for what you want to count, `expect` for what
+  `reeval query attempt_values` lists it. `c.judge()` and questions see it only with
+  `observations: true` (or a list of names). Use it for what you want to count, `expect` for what
   must hold.
 
 ## The judge: inputs, input size, errors

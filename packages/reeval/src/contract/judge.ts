@@ -29,11 +29,12 @@ export const sharedInputFields = {
   diff: z.union([z.boolean(), z.array(nonEmpty()).min(1)]).optional(),
   transcript: z.union([z.boolean(), z.enum(['tools', 'full'])]).optional(),
   checks: z.union([z.boolean(), z.array(nonEmpty())]).optional(),
+  observations: z.union([z.boolean(), z.array(nonEmpty())]).optional(),
 }
 
 export const turnsSchema = z.enum(['last', 'all'])
 
-const { task, output, files, diff, transcript, checks } = sharedInputFields
+const { task, output, files, diff, transcript, checks, observations } = sharedInputFields
 
 export const judgeInputsSchema = z.strictObject({
   task,
@@ -43,6 +44,7 @@ export const judgeInputsSchema = z.strictObject({
   contents: z.array(nonEmpty()).optional(),
   transcript,
   checks,
+  observations,
   artifacts: z.union([z.literal(true), z.array(z.custom<Capture | string>())]).optional(),
 })
 
@@ -135,6 +137,7 @@ const VALUES: Record<Exclude<keyof JudgeInputs, 'artifacts'> | 'turns', string> 
   transcript: "true, false, 'tools' or 'full'",
   turns: "'last' or 'all'",
   checks: 'true, false or a list of commands',
+  observations: 'true, false or a list of names',
 }
 
 function distance(a: string, b: string): number {

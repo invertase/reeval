@@ -868,6 +868,20 @@
             }
           ]
         },
+        "observations": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          ]
+        },
         "on": {
           "description": "The turn `task`, `output`, `transcript` and `diff` read instead of the latest: an earlier turn, or a value graded as the output.",
           "anyOf": [

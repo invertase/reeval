@@ -1313,7 +1313,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'judge.scope',
     area: 'Judges and matchers',
-    name: 'What the judge is given: only the inputs each `c.judge()` call turns on (task, output, files, diff patterns, contents by path or pattern, transcript, checks, artifacts), over `turns`; none by default, and a call that turns none on fails before any model call (a compile error in TypeScript); build output, source maps, build info and minified files dropped from its diff',
+    name: 'What the judge is given: only the inputs each `c.judge()` call turns on (task, output, files, diff patterns, contents by path or pattern, transcript, checks, observations, artifacts), over `turns`; none by default, and a call that turns none on fails before any model call (a compile error in TypeScript); build output, source maps, build info and minified files dropped from its diff',
     fixtures: [
       'judge/build-output',
       'judge/input-diff',
@@ -1324,6 +1324,7 @@ export const inventory: InventoryFeature[] = [
       'judge/input-transcript',
       'judge/input-turns',
       'judge/input-checks',
+      'judge/input-observations',
     ],
     unit: [
       'reeval/test/unit.test.ts',
@@ -1397,9 +1398,9 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'history.observe',
     area: 'Records and studio',
-    name: 'Observed values: `c.observe(name, value)` records a JSON fact per attempt (the last value per name, masked), tallied per cell in the output, the `attempt_values` view and the analysis, and never gates',
-    fixtures: ['history/observe'],
-    unit: ['reeval/test/observe.test.ts'],
+    name: "Observed values: `c.observe(name, value)` records a JSON fact per attempt (the last value per name, masked), tallied per cell in the output, shown to a judge or question that asks for them, shifted in `reeval compare`, on the studio's attempt and eval pages, in the `attempt_values` view and the analysis, and never gates",
+    fixtures: ['history/observe', 'judge/input-observations'],
+    unit: ['reeval/test/observe.test.ts', 'studio-web/test/e2e.test.ts'],
   },
   {
     id: 'assert.named-checks',

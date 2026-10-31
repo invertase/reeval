@@ -61,6 +61,7 @@ type StateSources = {
   output: JSONValue
   wanted: ResolvedJudgeStateOptions
   checks: Attempt['record']['checks']
+  observations: Attempt['record']['observations']
   readFile: (path: string) => Promise<string | null>
   listFiles: () => Promise<string[]>
 }
@@ -87,6 +88,7 @@ async function draftState(src: StateSources): Promise<{ draft: Draft; dropped: s
     ...(contents ? { inFull: new Set(Object.keys(contents)) } : {}),
   })
   const checks = checksShown(wanted.checks, src.checks)
+  const observations = observationsShown(wanted.observations, src.observations)
   const draft: Draft = {
     all: wanted.turns === 'all',
     turns,
@@ -94,6 +96,7 @@ async function draftState(src: StateSources): Promise<{ draft: Draft; dropped: s
     ...(wanted.diff !== false ? { diff: shown.patch } : {}),
     ...(contents ? { contents } : {}),
     ...(checks ? { checks } : {}),
+    ...(observations ? { observations } : {}),
   }
   return { draft, dropped: wanted.diff !== false ? shown.dropped : [] }
 }
@@ -134,6 +137,24 @@ function checksShown(
   return ran
     .filter((r) => which === true || which.includes(r.command))
     .map(({ command, exitCode, stdout, stderr }) => ({ command, exitCode, stdout, stderr }))
+}
+
+function observationsShown(
+  which: ResolvedJudgeStateOptions['observations'],
+  observed: Attempt['record']['observations'] = [],
+): Draft['observations'] {
+  if (!which) return undefined
+  if (which !== true) {
+    const missing = which.find((name) => !observed.some((o) => o.name === name))
+    if (missing !== undefined) {
+      throw new Error(
+        `c.judge() observations names a value this attempt hasn't observed: ${JSON.stringify(missing)}`,
+      )
+    }
+  }
+  return Object.fromEntries(
+    observed.filter((o) => which === true || which.includes(o.name)).map((o) => [o.name, o.value]),
+  )
 }
 
 /**
@@ -187,6 +208,7 @@ export function judgeCaller(
       transcript: _transcript,
       turns: _turns,
       checks: _checks,
+      observations: _observations,
       artifacts,
       ...callJudge
     } = call
@@ -205,6 +227,7 @@ export function judgeCaller(
       output,
       wanted,
       checks: a.record.checks,
+      observations: a.record.observations,
       readFile,
       listFiles: async () => workspaceFiles(await sandboxFor(a, 'c.judge()'), a.signal),
     })

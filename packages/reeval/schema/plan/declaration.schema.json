@@ -2846,6 +2846,21 @@
           "description": "`'provider/model'` that answers it, over the cascaded `question.model`.",
           "type": "string"
         },
+        "observations": {
+          "description": "`c.observe()` values, by name; a list shows only those names.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          ]
+        },
         "output": {
           "description": "The final message: the agent's own account of its work.",
           "type": "boolean"

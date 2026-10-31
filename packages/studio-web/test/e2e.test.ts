@@ -295,6 +295,50 @@ describe('studio in a browser', () => {
   type Answer = { question: string; votes: unknown[]; error?: string }
 
   /**
+   * Opens each eval whose attempts observed values: one tally line per name and cell, and on each
+   * such attempt's page, the count in its Checks tab and one row per name in its Observed table.
+   */
+  async function readObserved(page: Page, url: string, runId: string, out: string, label: string) {
+    const record = JSON.parse(readFileSync(join(out, 'data/runs', `${runId}.json`), 'utf8'))
+    type Observed = { id: string; cell: string; observations?: Array<{ name: string }> }
+    for (const e of record.evals as Array<{ slug: string; attempts: Observed[] }>) {
+      for (const a of e.attempts) {
+        const names = a.observations?.map((o) => o.name) ?? []
+        if (!names.length) continue
+        const at = `${label} ${runId} ${a.id}`
+        await page.goto(
+          `${url}#/runs/${runId}/evals/${e.slug}/attempts/${encodeURIComponent(a.id)}`,
+        )
+        const tab = page.getByRole('tab', { name: /^Checks/ })
+        await tab
+          .locator('[data-observed-count]', { hasText: `${names.length} observed` })
+          .waitFor()
+        await tab.click()
+        const table = page.locator('[data-observations]')
+        await table.waitFor()
+        for (const name of names) await table.getByText(name, { exact: true }).waitFor()
+        assert.equal(
+          await table.locator('code', { hasText: /\S/ }).count(),
+          names.length * 2,
+          `${at}: a name and a value per observation`,
+        )
+      }
+      const tallies = new Set(
+        e.attempts.flatMap((a) => (a.observations ?? []).map((o) => `${o.name} ${a.cell}`)),
+      )
+      if (tallies.size === 0) continue
+      await page.goto(`${url}#/runs/${runId}?eval=${e.slug}`)
+      const section = page.locator('[data-observed]')
+      await section.waitFor()
+      assert.equal(
+        await section.locator('[data-observed-tally]').count(),
+        tallies.size,
+        `${label} ${runId} ${e.slug}: one tally per observed name and cell`,
+      )
+    }
+  }
+
+  /**
    * Opens each eval with answers on the run page: per-attempt ones one line each, pairwise ones
    * per question; a run without pairwise answers shows none.
    */
@@ -357,6 +401,7 @@ describe('studio in a browser', () => {
       })
       await broken(`${label} ${runId}`)
       await readAnswers(page, url, runId, out, label)
+      await readObserved(page, url, runId, out, label)
       if (existsSync(join(out, 'data/analysis', `${runId}.json`))) {
         await page.getByRole('tab', { name: 'Analysis' }).click()
         await page.getByText('Suggested actions').first().waitFor()

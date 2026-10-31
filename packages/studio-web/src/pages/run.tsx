@@ -44,6 +44,9 @@ import {
   isMatrix,
   isUngatedMiss,
   type JudgeKeyRate,
+  type ObservedTally,
+  observedLine,
+  observedTallies,
   pinnedAnalysis,
   type RunRecord,
   runLead,
@@ -589,6 +592,31 @@ function AttemptQuestions({ rows, runId }: { rows: AttemptAnswerRow[]; runId: st
   )
 }
 
+/** Each name the eval's `c.observe()` calls recorded, tallied per cell. Never gates. */
+function Observed({ tallies }: { tallies: ObservedTally[] }) {
+  const cells = new Set(tallies.map((t) => t.cell)).size
+  return (
+    <section className="space-y-2" data-observed>
+      <h3 className="text-sm font-medium">Observed</h3>
+      <div className="divide-y overflow-hidden rounded-lg border">
+        {tallies.map((t) => (
+          <div
+            key={`${t.name}\u0000${t.cell}`}
+            className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3.5 py-2.5"
+            data-observed-tally
+          >
+            <code className="font-mono text-sm">{t.name}</code>
+            {cells > 1 ? (
+              <span className="font-mono text-[11px] text-muted-foreground">{t.cell}</span>
+            ) : null}
+            <span className="min-w-0 font-mono text-xs break-words">{observedLine(t)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 const VERDICT_LABEL = {
   discriminates: 'discriminates',
   mixed: 'mixed',
@@ -662,6 +690,7 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
   const matrix = isMatrix(entry)
   const answers = answerRows(entry)
   const attemptAnswers = attemptAnswerRows(entry)
+  const observed = observedTallies(entry.attempts)
   const standingRates = !matrix && rows[0]?.judgeRates.length ? rows[0].judgeRates : []
   return (
     <div className="space-y-5">
@@ -718,6 +747,8 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
       {attemptAnswers.length ? (
         <AttemptQuestions rows={attemptAnswers} runId={record.runId} />
       ) : null}
+
+      {observed.length ? <Observed tallies={observed} /> : null}
 
       <section className="space-y-2">
         <h3 className="text-sm font-medium">{plural(entry.attempts.length, 'attempt')}</h3>

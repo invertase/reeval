@@ -1,6 +1,6 @@
 import { OBSERVE_NAME } from '../contract/attempt.ts'
 import { UsageError } from '../errors.ts'
-import { redactValue } from '../redact.ts'
+import { REDACTED, redactSecrets, redactValue } from '../redact.ts'
 import type { AttemptContext, JSONValue } from '../types.ts'
 import type { Attempt } from './state.ts'
 
@@ -38,6 +38,21 @@ function notJson(value: unknown, path: string, seen: Set<object>, depth = 0): st
   return undefined
 }
 
+/**
+ * `value` with each number whose digits are a secret's masked too: `redactValue` leaves numbers
+ * as they are, but an observed value goes to a judge's or question's model as it's recorded.
+ */
+function maskNumbers(value: JSONValue): JSONValue {
+  if (typeof value === 'number') {
+    return redactSecrets(String(value)) === String(value) ? value : REDACTED
+  }
+  if (Array.isArray(value)) return value.map(maskNumbers)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, maskNumbers(v)]))
+  }
+  return value
+}
+
 /** `c.observe`: keeps the last value per name, masked, with the turn it came after. */
 export function observer(a: Attempt): AttemptContext['observe'] {
   return (name, value) => {
@@ -52,7 +67,7 @@ export function observer(a: Attempt): AttemptContext['observe'] {
     }
     const problem = notJson(value, '', new Set())
     if (problem) throw new UsageError(`c.observe("${name}") takes JSON: ${problem}`)
-    const masked = redactValue(value as JSONValue)
+    const masked = maskNumbers(redactValue(value as JSONValue))
     const bytes = Buffer.byteLength(JSON.stringify(masked))
     if (bytes > MAX_OBSERVED_BYTES) {
       throw new UsageError(

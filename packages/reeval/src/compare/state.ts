@@ -1,3 +1,4 @@
+import { observationsOn } from '../judge/state-options.ts'
 import type {
   PlannedQuestion,
   QuestionOptions,
@@ -31,6 +32,7 @@ const KEYS = Object.keys(UNRECORDED_QUESTION_STATE) as Array<keyof ResolvedQuest
 export function resolveQuestionState(
   state: QuestionStateOptions | undefined,
 ): ResolvedQuestionStateOptions {
+  const observations = state?.observations
   return {
     task: state?.task ?? false,
     output: state?.output ?? false,
@@ -39,6 +41,7 @@ export function resolveQuestionState(
     transcript: state?.transcript ?? false,
     turns: state?.turns ?? 'all',
     checks: state?.checks ?? false,
+    ...(observationsOn(observations) ? { observations } : {}),
   }
 }
 
@@ -66,6 +69,9 @@ export function questionShows(
   state: ResolvedQuestionStateOptions,
   artifacts: true | string[] | undefined,
 ): string[] {
-  const on = KEYS.filter((k) => k !== 'turns' && !isOff(state[k]))
+  const on = [
+    ...KEYS.filter((k) => k !== 'turns' && !isOff(state[k])),
+    ...(state.observations ? ['observations'] : []),
+  ]
   return artifacts === undefined ? on : [...on, 'artifacts']
 }

@@ -807,7 +807,7 @@ For more information about comparisons, see [Measure lift against a baseline](/r
 `questions` lists what a language model is asked about the attempts after they end.
 
 <Property name="questions" type="Question[]" optional>
-  Objects with `question`, `model`, `across`, `choices`, `turns`, and at least one input: `task`, `output`, `files`, `diff`, `transcript`, `checks`, or `artifacts`. reeval refuses an entry with no input. A list replaces the inherited one, so `[]` asks none. Questions never change pass, fail, or the exit code.
+  Objects with `question`, `model`, `across`, `choices`, `turns`, and at least one input: `task`, `output`, `files`, `diff`, `transcript`, `checks`, `observations`, or `artifacts`. reeval refuses an entry with no input. A list replaces the inherited one, so `[]` asks none. Questions never change pass, fail, or the exit code.
 </Property>
 
 <Property name="questions[].across" type="'environment' | 'harness' | Array<'environment' | 'harness'>" optional>

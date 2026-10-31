@@ -1373,6 +1373,7 @@ class JudgeCallData(TypedDict):
     maxConcurrent: NotRequired[int]
     # `'provider/model'`, or a fake judge with a numeric score.
     model: NotRequired[str | FakeJudgeData]
+    observations: NotRequired[bool | list[str]]
     # The turn `task`, `output`, `transcript` and `diff` read instead of the latest: an earlier
     # turn, or a value graded as the output.
     on: NotRequired[JudgeCallDataOnTurn | JudgeCallDataOnValue]
@@ -1672,6 +1673,8 @@ class Question(TypedDict):
     files: NotRequired[bool]
     # `'provider/model'` that answers it, over the cascaded `question.model`.
     model: NotRequired[str]
+    # `c.observe()` values, by name; a list shows only those names.
+    observations: NotRequired[bool | list[str]]
     # The final message: the agent's own account of its work.
     output: NotRequired[bool]
     question: str
