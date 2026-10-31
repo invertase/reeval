@@ -1,4 +1,4 @@
-import { observationsOn } from '../judge/state-options.ts'
+import { observationsOn, observedNames } from '../judge/state-options.ts'
 import type {
   PlannedQuestion,
   QuestionOptions,
@@ -32,7 +32,7 @@ const KEYS = Object.keys(UNRECORDED_QUESTION_STATE) as Array<keyof ResolvedQuest
 export function resolveQuestionState(
   state: QuestionStateOptions | undefined,
 ): ResolvedQuestionStateOptions {
-  const observations = state?.observations
+  const observations = observedNames(state?.observations)
   return {
     task: state?.task ?? false,
     output: state?.output ?? false,

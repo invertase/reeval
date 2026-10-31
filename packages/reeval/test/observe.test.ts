@@ -286,19 +286,33 @@ evaluate('input', { questions, judge: { model: fakeJudge({ score: seen }) } }, a
 })
 
 describe('a secret-looking observation name in a run', () => {
-  test('is masked in the record and the judge state, and a judge names it as observed', async () => {
+  test('is masked in the record, the judge state and the question, and a judge or question names it as observed', async () => {
     const token = `ghp_${'q'.repeat(36)}`
     const p = await project('observe-secret-name', {
-      'reeval.config.ts': fakeConfig(),
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  harness: fakeHarness(),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  analysis: { model: fakeAnalysis({ answer: (q) => JSON.stringify(q.attempt.observations ?? null) }) },
+})
+`,
       'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
 import { fakeJudge } from 'reeval/judge'
 const token = 'ghp_' + 'q'.repeat(36)
+const other = 'ghp_' + 'z'.repeat(36)
 const seen = (state) => (state.observations?.['[REDACTED]'] === 'kept' ? 0.9 : 0.1)
-evaluate('masked', { judge: { model: fakeJudge({ score: seen }) } }, async (c) => {
+const questions = [{ question: 'Kept?', observations: [token] }]
+evaluate('masked', { questions, judge: { model: fakeJudge({ score: seen }) } }, async (c) => {
   await c.send('x')
   c.observe(token, 'kept')
-  expect(() => c.observe('ghp_' + 'z'.repeat(36), 'lost')).toThrow('names a secret')
+  expect(() => c.observe(other, 'lost')).toThrow('names a secret')
   expect(await c.judge('kept?', { observations: [token] })).toPass()
+  await expect(() => c.judge('other?', { observations: [other] })).rejects.toThrow(
+    'c.judge() observations names a value this attempt hasn\\'t observed: "[REDACTED]"',
+  )
 })
 `,
     })
@@ -307,6 +321,11 @@ evaluate('masked', { judge: { model: fakeJudge({ score: seen }) } }, async (c) =
     const { run } = readRun(p.dir)
     const attempt = run.evals[0]?.attempts[0]
     assert.deepEqual(attempt?.observations, [{ name: '[REDACTED]', value: 'kept', turn: 1 }])
+    assert.deepEqual(attempt?.answers?.[0]?.stateOptions.observations, ['[REDACTED]'])
+    assert.equal(
+      attempt?.answers?.[0]?.text,
+      JSON.stringify([{ name: '[REDACTED]', value: 'kept' }]),
+    )
     const record = JSON.stringify(run)
     assert.ok(!record.includes(token) && !record.includes('z'.repeat(36)), record)
   })

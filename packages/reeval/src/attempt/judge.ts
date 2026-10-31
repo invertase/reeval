@@ -34,7 +34,7 @@ import type {
   Verdict,
 } from '../types.ts'
 import { sandboxFor } from './checks.ts'
-import { observedName } from './observe.ts'
+import { observedHere, observedName } from './observe.ts'
 import type { Attempt } from './state.ts'
 
 const noJudgeModel = (configFile: string) =>
@@ -145,17 +145,8 @@ function observationsShown(
   observed: Attempt['record']['observations'] = [],
 ): Draft['observations'] {
   if (!which) return undefined
-  const names = which === true ? true : which.map(observedName)
-  if (names !== true) {
-    const missing = names.find((name) => !observed.some((o) => o.name === name))
-    if (missing !== undefined) {
-      throw new Error(
-        `c.judge() observations names a value this attempt hasn't observed: ${JSON.stringify(missing)}`,
-      )
-    }
-  }
   return Object.fromEntries(
-    observed.filter((o) => names === true || names.includes(o.name)).map((o) => [o.name, o.value]),
+    observed.filter((o) => which === true || which.includes(o.name)).map((o) => [o.name, o.value]),
   )
 }
 
@@ -223,6 +214,14 @@ export function judgeCaller(
     }
     const { maxConcurrent, ...judgeOptions } = options
     const output = on && 'value' in on ? on.value : subject.text
+    const unobserved = Array.isArray(call.observations)
+      ? call.observations.find((n) => !observedHere(a, n))
+      : undefined
+    if (unobserved !== undefined) {
+      throw new Error(
+        `c.judge() observations names a value this attempt hasn't observed: ${JSON.stringify(observedName(unobserved))}`,
+      )
+    }
     const { draft, dropped } = await draftState({
       turns: a.turns,
       subject,

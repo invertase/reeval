@@ -59,6 +59,16 @@ function maskNumbers(value: JSONValue): JSONValue {
  */
 export const observedName = (name: string): string => redactSecrets(name)
 
+/** Each attempt's names as its body gave them, by the name they're recorded as. */
+const givenNames = new WeakMap<Attempt, Map<string, string>>()
+
+/**
+ * Whether this attempt observed `name` as given: its masked name alone may be another secret's.
+ * An attempt that never called `c.observe` has observed nothing.
+ */
+export const observedHere = (a: Attempt, name: string): boolean =>
+  givenNames.get(a)?.get(observedName(name)) === name
+
 /**
  * `c.observe`: keeps the last value per name, masked, with the turn it came after. Two names that
  * mask to the same name are refused rather than renamed: a name is the key that tallies, compare
@@ -67,6 +77,7 @@ export const observedName = (name: string): string => redactSecrets(name)
  */
 export function observer(a: Attempt): AttemptContext['observe'] {
   const raw = new Map<string, string>()
+  givenNames.set(a, raw)
   return (given, value) => {
     if (typeof given !== 'string' || !OBSERVE_NAME.test(given)) {
       throw new UsageError(
