@@ -9,6 +9,7 @@ import type {
   ExecResult,
   FakeVote,
   FileChange,
+  Observation,
   Outcome,
   PairFactor,
   PairVote,
@@ -38,6 +39,8 @@ export type PairAttempt = {
   turns?: PairTurn[]
   /** Its `c.exec` results, in call order. */
   checks?: Array<{ command: string } & ExecResult>
+  /** Its `c.observe()` values, in first-call order. */
+  observations?: Observation[]
   /** Its captures, in capture order, with each PNG's bytes when it was read. */
   captures?: Array<{ name: string; data: Uint8Array }>
   /** The attempt's id, e.g. `cursor/-/docker#1`; never shown to the model. */

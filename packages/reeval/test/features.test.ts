@@ -2453,6 +2453,12 @@ export const features: Feature[] = [
     canary: /to deeply equal \[ { command: 'echo first'/,
   },
   {
+    dir: 'judge/input-observations',
+    tiers: ['fake'],
+    env: 'observed-app',
+    canary: /to deeply equal { orm: 'drizzle', files: 1 }/,
+  },
+  {
     dir: 'assert/labeled',
     tiers: ['fake', 'docker'],
     env: 'plain',

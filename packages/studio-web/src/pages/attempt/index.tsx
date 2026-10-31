@@ -114,6 +114,7 @@ export function AttemptPage() {
   const judge = attempt.judgements[0]
   const assertions = attempt.assertions ?? []
   const checkCount = attempt.checks.length + assertions.length
+  const observedCount = attempt.observations?.length ?? 0
   const failedChecks =
     attempt.checks.filter((c) => c.exitCode !== 0).length +
     assertions.filter((x) => x.status !== 'pass').length
@@ -292,6 +293,15 @@ export function AttemptPage() {
                 )}
               >
                 {failedChecks ? `${failedChecks}/${checkCount}` : checkCount}
+              </span>
+            ) : null}
+            {observedCount ? (
+              <span
+                className="tabular text-xs text-muted-foreground"
+                title="Values the eval observed with c.observe()"
+                data-observed-count
+              >
+                {observedCount} observed
               </span>
             ) : null}
           </TabsTrigger>

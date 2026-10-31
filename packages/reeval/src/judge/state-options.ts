@@ -5,6 +5,7 @@ import type { JudgeCallFields, JudgeOptions, ResolvedJudgeStateOptions } from '.
  * selections serialize the same.
  */
 export function resolveStateOptions(call: JudgeCallFields): ResolvedJudgeStateOptions {
+  const { observations } = call
   return {
     task: call.task ?? false,
     output: call.output ?? false,
@@ -14,8 +15,13 @@ export function resolveStateOptions(call: JudgeCallFields): ResolvedJudgeStateOp
     transcript: call.transcript ?? false,
     turns: call.turns ?? 'last',
     checks: call.checks ?? false,
+    ...(observationsOn(observations) ? { observations } : {}),
   }
 }
+
+/** `observations` when it turns the input on: `true` or a non-empty list. */
+export const observationsOn = (value: boolean | string[] | undefined): value is true | string[] =>
+  value === true || (Array.isArray(value) && value.length > 0)
 
 /** `inner` over `outer`, field by field. */
 export function mergeJudge<T extends JudgeOptions>(outer: T, inner: Partial<T> | undefined): T {

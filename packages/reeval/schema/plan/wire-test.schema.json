@@ -1809,6 +1809,20 @@
           "description": "`status path` lines for the changed files, under `diff`'s patterns.",
           "type": "boolean"
         },
+        "observations": {
+          "description": "`c.observe()` values, by name; a list shows only those names.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
         "output": {
           "description": "The final message: the agent's own account of its work.",
           "type": "boolean"

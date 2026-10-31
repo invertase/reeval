@@ -1,9 +1,13 @@
 // `c.observe(name, value)`: the values it keeps, what it refuses, and how they're tallied and
 // queried. The fixture `history/observe` checks the same from inside an attempt.
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { describe, test } from 'node:test'
+import { validate } from '../scripts/schema/validate.ts'
 import { observer } from '../src/attempt/observe.ts'
 import type { Attempt } from '../src/attempt/state.ts'
+import { attemptInput } from '../src/compare/questions.ts'
+import { resolveQuestionState } from '../src/compare/state.ts'
 import type { EvalRecord } from '../src/types.ts'
 import { observedLine, observedTallies } from '../src/view/observations.ts'
 import { fakeConfig, project, readRun, runCli } from './helpers.ts'
@@ -30,6 +34,17 @@ describe('c.observe', () => {
     const { a, observe } = attempt()
     observe('env', { token: `ghp_${'a'.repeat(36)}` })
     assert.deepEqual(a.record.observations?.[0]?.value, { token: '[REDACTED]' })
+  })
+
+  test('masks a number that is a secret', () => {
+    process.env.REEVAL_T_SECRET_PIN = '98765432'
+    try {
+      const { a, observe } = attempt()
+      observe('pin', { pin: 98765432, n: 3 })
+      assert.deepEqual(a.record.observations?.[0]?.value, { pin: '[REDACTED]', n: 3 })
+    } finally {
+      delete process.env.REEVAL_T_SECRET_PIN
+    }
   })
 
   test('refuses what it cannot record, naming why', () => {
@@ -190,5 +205,104 @@ evaluate('picks', { runs: 2 }, async (c) => {
         harness: 'fake',
       },
     ])
+  })
+})
+
+describe('observations as judge and question input', () => {
+  test('c.judge() and questions see them only when they turn them on', async () => {
+    const p = await project('observe-input', {
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  harness: fakeHarness(),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  analysis: { model: fakeAnalysis({ answer: (q) => JSON.stringify(q.attempt.observations ?? null) }) },
+})
+`,
+      'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
+import { fakeJudge } from 'reeval/judge'
+const seen = (state) => (state.observations?.orm === 'drizzle' ? 0.9 : 0.1)
+const questions = [
+  { question: 'Which ORM?', observations: ['orm'] },
+  { question: 'What did it say?', output: true },
+  { question: 'All of them?', observations: true },
+]
+evaluate('input', { questions, judge: { model: fakeJudge({ score: seen }) } }, async (c) => {
+  await c.send('x')
+  c.observe('orm', 'drizzle')
+  c.observe('lines', 3)
+  expect(await c.judge('picked drizzle?', { observations: ['orm'] })).toPass()
+  expect(await c.judge('saw it without asking?', { output: true })).not.toPass()
+  await expect(() => c.judge('typo', { observations: ['ormm'] })).rejects.toThrow(
+    'c.judge() observations names a value this attempt hasn\\'t observed: "ormm"',
+  )
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run } = readRun(p.dir)
+    const schema = JSON.parse(
+      readFileSync(new URL('../schema/run-record.schema.json', import.meta.url), 'utf8'),
+    )
+    assert.deepEqual(validate(schema, run), [])
+    const attempt = run.evals[0]?.attempts[0]
+    assert.deepEqual(
+      attempt?.answers?.map((a) => [a.question, a.text]),
+      [
+        ['Which ORM?', JSON.stringify([{ name: 'orm', value: 'drizzle' }])],
+        ['What did it say?', 'null'],
+        [
+          'All of them?',
+          JSON.stringify([
+            { name: 'orm', value: 'drizzle' },
+            { name: 'lines', value: 3 },
+          ]),
+        ],
+      ],
+    )
+  })
+})
+
+describe('observations in a question cut to fit', () => {
+  test('a long diff is cut before them', () => {
+    const attempt = {
+      harness: 'fake',
+      arm: 'base',
+      run: 1,
+      diff: `diff --git a/a.ts b/a.ts\n${'+x\n'.repeat(5000)}`,
+      checksPassed: true,
+      observations: [{ name: 'orm', value: 'drizzle', turn: 1 }],
+      id: 'fake#1',
+    }
+    const state = resolveQuestionState({ diff: true, observations: ['orm'] })
+    const { blind } = attemptInput('Which ORM?', attempt, 1000, { state })
+    assert.match(blind.prompt, /<observations>\norm = "drizzle"\n<\/observations>/)
+    assert.match(blind.prompt, /\[reeval: attempt cut at 4000 of \d+ characters\]/)
+  })
+})
+
+describe('observations in reeval compare', () => {
+  test('a moved tally shows on an eval that is otherwise the same', async () => {
+    const p = await project('observe-compare', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'
+evaluate('picks', { runs: 2 }, async (c) => {
+  await c.send('x')
+  c.observe('orm', c.attempt.n === 1 ? 'drizzle' : (process.env.SECOND_ORM ?? 'drizzle'))
+  c.observe('steady', 1)
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    assert.equal((await runCli(p.dir, ['run'], { env: { SECOND_ORM: 'prisma' } })).code, 0)
+    const base = readRun(p.dir, { back: 1 }).run.runId
+    const head = readRun(p.dir).run.runId
+    const r = await runCli(p.dir, ['compare', base, head])
+    assert.equal(r.code, 0, r.stderr)
+    assert.match(r.stdout, /same +picks\n +observed orm +drizzle 2 → 1 · prisma 0 → 1\n/)
+    assert.doesNotMatch(r.stdout, /observed steady/)
   })
 })

@@ -204,6 +204,10 @@ const verdict = await c.judge('Does the test read like a specification?', {
   `c.exec` results, or a list of the commands to show.
 </Property>
 
+<Property name="options.observations" type="boolean | string[]" optional>
+  `c.observe()` values as `{ name: value }`, or a list of the names to show.
+</Property>
+
 <Property name="options.artifacts" type="true | Array<Capture | string>" optional>
   Captures sent as PNG file parts, by handle or name, or `true` for all so far.
 </Property>

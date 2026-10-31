@@ -18,7 +18,7 @@ evaluate('lands', { environment: app }, async (c) => {
   await expect(c.judge('Is there a sign up flow?', nothing)).rejects.toThrow(
     'c.judge() shows the judge nothing: turn on at least one input, such as { diff: true } or ' +
       "{ contents: ['src/**'] }. The inputs are task, output, files, diff, contents, transcript, " +
-      'checks or artifacts.',
+      'checks, observations or artifacts.',
   )
   expect(asked).toBe(false)
 })

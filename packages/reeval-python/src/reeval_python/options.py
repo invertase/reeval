@@ -29,8 +29,8 @@ class JudgeOptions(JudgeDefaults, total=False):
     """`c.judge()`'s options: the judge defaults, and what the call shows the judge.
 
     Every input is off unless the call turns it on, and a call turns on at least one of `task`,
-    `output`, `files`, `diff`, `contents`, `transcript`, `checks` or `artifacts`. `turns` says
-    whether they read every turn up to the graded one (`"all"`) or that turn alone.
+    `output`, `files`, `diff`, `contents`, `transcript`, `checks`, `observations` or `artifacts`.
+    `turns` says whether they read every turn up to the graded one (`"all"`) or that turn alone.
     """
 
     task: bool
@@ -40,11 +40,22 @@ class JudgeOptions(JudgeDefaults, total=False):
     contents: Sequence[str]
     transcript: bool | Literal["tools", "full"]
     checks: bool | Sequence[str]
+    observations: bool | Sequence[str]
     artifacts: Literal[True] | Sequence[str]
     turns: Literal["last", "all"]
 
 
-JUDGE_INPUTS = ("task", "output", "files", "diff", "contents", "transcript", "checks", "artifacts")
+JUDGE_INPUTS = (
+    "task",
+    "output",
+    "files",
+    "diff",
+    "contents",
+    "transcript",
+    "checks",
+    "observations",
+    "artifacts",
+)
 
 
 class BestOf(TypedDict):

@@ -33,6 +33,7 @@ export { runHeader } from './header.ts'
 export * from './judgments.ts'
 export * from './live.ts'
 export * from './model.ts'
+export * from './observations.ts'
 export * from './patch.ts'
 export * from './paths.ts'
 export {

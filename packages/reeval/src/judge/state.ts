@@ -10,6 +10,7 @@ export type Draft = {
   diff?: string
   contents?: Record<string, string | null>
   checks?: Array<{ command: string } & ExecResult>
+  observations?: Record<string, JSONValue>
 }
 
 function turnState(t: DraftTurn): JudgeJsonState {
@@ -30,6 +31,7 @@ export function stateOf(d: Draft): JudgeJsonState {
     ...(d.diff !== undefined ? { diff: d.diff } : {}),
     ...(d.contents ? { contents: d.contents } : {}),
     ...(d.checks ? { checks: d.checks } : {}),
+    ...(d.observations ? { observations: d.observations } : {}),
     ...(transcript !== undefined ? { transcript } : {}),
   }
 }
