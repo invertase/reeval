@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import { UsageError } from './errors.ts'
 import { scratchDir } from './history/files.ts'
 import type { AttemptRecord, RunInvocation, RunRecord } from './history/types.ts'
@@ -427,14 +427,18 @@ export async function savedInvocation(
 }
 
 /**
- * Filters as a run saves them: a part naming a path on disk (from `cwd`, as the engine reads it)
- * becomes that path relative to `root` in posix form, `.` for the root itself and `../…` outside
- * it, so no host path is written and a resume resolves it from the root. Other parts are names.
+ * Filters as a run saves them: a part naming a path on disk (from `cwd`, as the engine reads it),
+ * or any absolute part, becomes that path relative to `root` in posix form, `.` for the root
+ * itself and `../…` outside it, so no host path is written and a resume resolves it from the
+ * root. An absolute part matches files by the start of their path, which the relative form
+ * keeps. Other parts are names.
  */
 export function savedFilters(root: string, filters: readonly string[], cwd = process.cwd()) {
   return filters.map((f) => {
     const path = resolve(cwd, f)
-    return existsSync(path) ? relativeFile(root, path) || '.' : f
+    if (!isAbsolute(f) && !existsSync(path)) return f
+    const slash = /[\\/]$/.test(f) ? '/' : ''
+    return (relativeFile(root, path) || '.') + slash
   })
 }
 

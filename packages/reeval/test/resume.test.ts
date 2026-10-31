@@ -526,6 +526,14 @@ evaluate('two', async () => {})
     assert.equal(await planned(join(p.dir, 'evals', 'b'), run.runId), 1)
   })
 
+  test('an absolute filter naming no path on disk is saved relative to the root', async () => {
+    const p = await project('resume-filter-abs-part', split)
+    const run = await interrupted(p.dir, p.dir, [join(p.dir, 'evals', 'a', 'on')])
+    assert.deepEqual(run.invocation?.filters, ['evals/a/on'])
+    assert.ok(!JSON.stringify(run).includes(p.dir))
+    assert.equal(await planned(join(p.dir, 'evals', 'b'), run.runId), 1)
+  })
+
   test('a filter typed from a subdirectory resumes from the root', async () => {
     const p = await project('resume-filter-cwd', split)
     const run = await interrupted(p.dir, join(p.dir, 'evals'), ['./a'])
