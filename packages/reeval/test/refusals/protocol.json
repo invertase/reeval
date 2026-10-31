@@ -1,6 +1,6 @@
 {
   "an empty id": "UsageError: The attempt request's id must not be empty (got \"\")",
-  "an unknown op": "UsageError: The attempt request's call.op is one of 'send', 'exec', 'serve', 'kill', 'capture', 'readFile', 'writeFile', 'expect', 'record' or 'judge' (got \"teleport\")",
+  "an unknown op": "UsageError: The attempt request's call.op is one of 'send', 'exec', 'serve', 'kill', 'capture', 'readFile', 'writeFile', 'observe', 'expect', 'record' or 'judge' (got \"teleport\")",
   "record with a status that is neither pass nor fail": "UsageError: The attempt request's call.status is 'pass' or 'fail' (got \"skipped\")",
   "record with a matcher that is not a name": "UsageError: The attempt request's call.matcher must be a name such as assert (got \"my check\")",
   "a polled exec with the result it already has": "UsageError: The attempt request's call.subject.result: can't be polled: drop result so reeval runs the command on each try (got {\"exitCode\":1,\"stdout\":\"\",\"stderr\":\"\"})",

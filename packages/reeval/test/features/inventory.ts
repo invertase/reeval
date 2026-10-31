@@ -1395,6 +1395,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/types.test.ts'],
   },
   {
+    id: 'history.observe',
+    area: 'Records and studio',
+    name: 'Observed values: `c.observe(name, value)` records a JSON fact per attempt (the last value per name, masked), tallied per cell in the output, the `attempt_values` view and the analysis, and never gates',
+    fixtures: ['history/observe'],
+    unit: ['reeval/test/observe.test.ts'],
+  },
+  {
     id: 'assert.named-checks',
     area: 'Judges and matchers',
     name: "Named check results: `expect(value, 'label')`, every `expect` and `expect.require` recorded per attempt, tallied per cell, and checks that don't discriminate in a compare",

@@ -15,6 +15,7 @@ import type {
   FileChange,
   JudgeArtifactRef,
   McpStartup,
+  Observation,
   Outcome,
   PhaseTimings,
   ResolvedJudgeStateOptions,
@@ -344,6 +345,11 @@ export type AttemptRecord = {
    * in the attempt's directory, `<n>` the question's place in the eval's `questions`.
    */
   answers?: AttemptAnswer[]
+  /**
+   * Each `c.observe(name, value)` the attempt made, one per name in first-call order with its last
+   * value; unset without any. They annotate: `outcome` never depends on them.
+   */
+  observations?: Observation[]
 }
 
 export type EvalEntry = {

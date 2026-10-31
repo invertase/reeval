@@ -316,6 +316,22 @@ await c.writeFile('src/note.ts', 'export const hint = "Cover getUserId."\n')
 
 A workspace file this call wrote stays out of `diff` until something changes it.
 
+## `c.observe()`
+
+`c.observe(name, value)` records a value about the attempt that never affects its outcome. An attempt observes at most 50 names, and a call that breaks a limit throws, failing the attempt like any other error in its body.
+
+```ts
+c.observe('deps', Object.keys(JSON.parse(pkg).dependencies))
+```
+
+<Property name="name" type="string" required>
+  1 to 64 letters, digits, `_`, `.`, `:`, `/` or `-`. Observing a name again replaces its value.
+</Property>
+
+<Property name="value" type="JSONValue" required>
+  Any JSON, at most 4 KB and nested at most 64 levels deep, masked like the rest of the record.
+</Property>
+
 ## `c.turns`
 
 `c.turns` lists every turn `c.send()` has returned, oldest first.

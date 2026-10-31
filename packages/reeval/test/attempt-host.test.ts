@@ -1,5 +1,6 @@
-// The attempt host's `judge` call: a wire `JudgeOn` reaches `c.judge` as the turn or the value it
-// names, as a TypeScript eval passes `on`, and a turn the attempt doesn't have is a usage error.
+// The attempt host: the `judge` call's wire `JudgeOn` reaches `c.judge` as the turn or the value
+// it names, as a TypeScript eval passes `on`, and a turn the attempt doesn't have, or a request
+// it can't check, is a usage error.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { AttemptRequest } from '../src/contract/attempt.ts'
@@ -62,5 +63,20 @@ test("judge on a turn the attempt doesn't have is a usage error", async () => {
   assert.equal(
     ((await none.judge({ on: { turn: 0 } })) as { error: { message: string } }).error.message,
     "c.judge()'s on is turn 0, but the attempt has 0 turns",
+  )
+})
+
+test('a value too deep to check is a usage error, not a lost reply', async () => {
+  const c = {} as AttemptContext
+  let value: unknown = 1
+  for (let i = 0; i < 200_000; i++) value = [value]
+  const reply = await replyToAttempt(c, [], new Map(), {
+    id: '1',
+    call: { op: 'observe', name: 'deep', value },
+  } as AttemptRequest)
+  assert.equal(reply.ok, false)
+  assert.match(
+    (reply as { error: { message: string } }).error.message,
+    /couldn't be checked: Maximum call stack size exceeded/,
   )
 })

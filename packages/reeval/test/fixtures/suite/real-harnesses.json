@@ -235,7 +235,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           }
         ]
       }

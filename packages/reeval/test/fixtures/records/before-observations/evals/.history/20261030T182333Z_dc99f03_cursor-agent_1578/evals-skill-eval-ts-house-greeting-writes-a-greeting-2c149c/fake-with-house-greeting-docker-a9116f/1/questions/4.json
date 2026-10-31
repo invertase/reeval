@@ -1,0 +1,15 @@
+{
+  "question": "How did the agent pick its greeting?",
+  "model": "fake",
+  "stateOptions": {
+    "task": false,
+    "output": false,
+    "files": false,
+    "diff": false,
+    "transcript": true,
+    "turns": "all",
+    "checks": false
+  },
+  "system": "You answer one question about an attempt by a coding agent at a task.\nThe attempt is shown as its transcript.\nAnswer only from what is shown. Answer it in a few sentences.",
+  "prompt": "Question: How did the agent pick its greeting?\n\n<attempt>\n<turn n=\"1\">\n<transcript>\nmessage: Working on: Write greet.js that greets in our house style.\nmessage: Loaded skills: house-greeting\ntool shell: ls → ok · 0ms\n  package.json\nedit greet.js (create, +1 −0) · 140ms\nmessage: I wrote greet.js in the house style.\n</transcript>\n</turn>\n</attempt>"
+}

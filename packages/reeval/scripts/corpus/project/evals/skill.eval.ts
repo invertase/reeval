@@ -7,7 +7,7 @@ const withHouseGreeting = defineEnvironment('with-house-greeting', ({ skill }) =
 
 // Both arms write greet.js, so the first pairwise question has votes and the second fails at the
 // model. Each attempt is asked the last two on its own: one picks from choices, one answers in
-// words. One check is labeled and one keeps its default label.
+// words. One check is labeled and one keeps its default label. Two values are observed.
 group(
   'house greeting',
   {
@@ -20,7 +20,7 @@ group(
       },
       { question: 'Which greeting handles a missing name?', across: 'environment', diff: true },
       { question: 'Does the greeting use the house style?', choices: ['yes', 'no'], diff: true },
-      'How did the agent pick its greeting?',
+      { question: 'How did the agent pick its greeting?', transcript: true },
     ],
   },
   () => {
@@ -28,6 +28,9 @@ group(
       await c.send('Write greet.js that greets in our house style.')
       await expect(c, 'writes greet.js').toHaveFile('greet.js')
       await expect(c).toHaveFile('greet.js')
+      const greet = (await c.readFile('greet.js')) ?? ''
+      c.observe('greeting', greet.includes('Ahoy') ? 'ahoy' : 'hello')
+      c.observe('lines', greet.split('\n').length)
     })
   },
 )

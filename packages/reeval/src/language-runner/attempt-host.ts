@@ -38,7 +38,13 @@ export async function replyToAttempt(
   request: AttemptRequest,
 ): Promise<AttemptReply> {
   const { id, call } = request
-  const problem = attemptRequestProblem({ id, call })
+  let problem: string | undefined
+  try {
+    problem = attemptRequestProblem({ id, call })
+  } catch (error) {
+    // A value nested deep enough exhausts the stack while it's checked.
+    problem = `The attempt request couldn't be checked: ${(error as Error).message}`
+  }
   if (problem) {
     const error = { name: 'UsageError', message: problem }
     return { id, ok: false, op: call?.op, error } as AttemptReply
@@ -88,6 +94,9 @@ async function perform(
         call.path,
         call.encoding === 'base64' ? Buffer.from(call.contents, 'base64') : call.contents,
       )
+      return {}
+    case 'observe':
+      c.observe(call.name, call.value)
       return {}
     case 'expect':
       return await expectCall(c, matcherCalls, call as ExpectCall)

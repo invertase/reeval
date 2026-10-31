@@ -1,0 +1,14 @@
+{"case":"observe","about":"observe before and after a turn, a name observed twice keeping its last value, a list and a number","options":{}}
+{"reeval":{"type":"start","attempt":{"id":"fake/-/fake#1","cell":{"key":"fake/-/fake","harness":"fake","environment":"-","sandbox":"fake","role":"control"},"n":1},"file":"evals/observe.eval.ts","body":"b1"}}
+{"runner":{"id":"1","call":{"op":"observe","name":"orm","value":"none yet"}}}
+{"reeval":{"id":"1","ok":true,"op":"observe"}}
+{"runner":{"id":"2","call":{"op":"send","prompt":"add a database layer"}}}
+{"reeval":{"id":"2","ok":true,"op":"send","turn":{"prompt":"add a database layer","text":"Wrote greet.js.","status":"completed","startedAt":"2026-01-01T00:00:00.000Z","durationMs":0,"transcript":[{"ts":"2026-01-01T00:00:00.000Z","atMs":0,"type":"text","text":"Working on: add a database layer","durationMs":0},{"ts":"2026-01-01T00:00:00.000Z","atMs":0,"type":"file-edit","toolCallId":"call_1","path":"greet.js","kind":"create","added":1,"removed":0,"durationMs":0},{"ts":"2026-01-01T00:00:00.000Z","atMs":0,"type":"text","text":"Wrote greet.js.","durationMs":0}],"usage":null,"model":null,"unreported":[],"diff":{"patch":"diff --git a/greet.js b/greet.js\nnew file mode 100644\nindex 0000000..b1063f6\n--- /dev/null\n+++ b/greet.js\n@@ -0,0 +1 @@\n+export const greet = (name) => `Hello, ${name}!`\n","files":[{"path":"greet.js","status":"added"}]}}}}
+{"runner":{"id":"3","call":{"op":"observe","name":"orm","value":"drizzle"}}}
+{"reeval":{"id":"3","ok":true,"op":"observe"}}
+{"runner":{"id":"4","call":{"op":"observe","name":"deps","value":["drizzle-orm","pg"]}}}
+{"reeval":{"id":"4","ok":true,"op":"observe"}}
+{"runner":{"id":"5","call":{"op":"observe","name":"dep-count","value":2}}}
+{"reeval":{"id":"5","ok":true,"op":"observe"}}
+{"runner":{"type":"done"}}
+{"record":{"outcome":"pass","error":null,"assertions":[],"judgements":[],"checks":[],"observations":[{"name":"orm","value":"drizzle","turn":1},{"name":"deps","value":["drizzle-orm","pg"],"turn":1},{"name":"dep-count","value":2,"turn":1}]}}

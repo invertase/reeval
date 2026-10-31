@@ -158,6 +158,16 @@ class AttemptCallWriteFile(TypedDict):
     path: str
 
 
+# `c.observe(name, value)`: records a fact about the attempt that never affects its outcome. A
+# name observed again keeps the last value. Fails after the body's `done`.
+class AttemptCallObserve(TypedDict):
+    # What the value is of, e.g. `installed`.
+    name: str
+    op: Literal["observe"]
+    # Any JSON, at most 4 KB once serialized.
+    value: JSONValue
+
+
 # Where the eval made the call, which the record names beside the check's outcome.
 class AttemptCallExpectAt(TypedDict):
     # The eval file: absolute, or relative to the project root.
@@ -232,7 +242,7 @@ class AttemptCallJudge(TypedDict):
 
 # One call an eval's body makes on its attempt. The sandbox and the agent session start on the
 # first call that needs them; there's no call to start them.
-AttemptCall: TypeAlias = "AttemptCallSend | AttemptCallExec | AttemptCallServe | AttemptCallKill | AttemptCallCapture | AttemptCallReadFile | AttemptCallWriteFile | AttemptCallExpect | AttemptCallRecord | AttemptCallJudge"
+AttemptCall: TypeAlias = "AttemptCallSend | AttemptCallExec | AttemptCallServe | AttemptCallKill | AttemptCallCapture | AttemptCallReadFile | AttemptCallWriteFile | AttemptCallObserve | AttemptCallExpect | AttemptCallRecord | AttemptCallJudge"
 
 
 # The runner to reeval: the eval's body has finished. The attempt's checks and record follow.
@@ -313,6 +323,13 @@ class AttemptReplyWriteFile(TypedDict):
     op: Literal["writeFile"]
 
 
+class AttemptReplyObserve(TypedDict):
+    # Pairs a reply with its request.
+    id: str
+    ok: Literal[True]
+    op: Literal["observe"]
+
+
 class AttemptReplyExpect(TypedDict):
     assertion: AssertionRecord
     # Pairs a reply with its request.
@@ -352,12 +369,12 @@ class AttemptReplyError(TypedDict):
     # Pairs a reply with its request.
     id: str
     ok: Literal[False]
-    op: Literal["send", "exec", "readFile", "writeFile", "expect", "record", "judge", "serve", "kill", "capture"]
+    op: Literal["send", "exec", "readFile", "writeFile", "observe", "expect", "record", "judge", "serve", "kill", "capture"]
 
 
 # reeval's reply to a call: its result, or the error it threw. A failed matcher is a result (its
 # record says `fail`), not an error, unless the matcher couldn't run.
-AttemptReply: TypeAlias = "AttemptReplySend | AttemptReplyExec | AttemptReplyServe | AttemptReplyKill | AttemptReplyCapture | AttemptReplyReadFile | AttemptReplyWriteFile | AttemptReplyExpect | AttemptReplyRecord | AttemptReplyJudge | AttemptReplyExpect2 | AttemptReplyError"
+AttemptReply: TypeAlias = "AttemptReplySend | AttemptReplyExec | AttemptReplyServe | AttemptReplyKill | AttemptReplyCapture | AttemptReplyReadFile | AttemptReplyWriteFile | AttemptReplyObserve | AttemptReplyExpect | AttemptReplyRecord | AttemptReplyJudge | AttemptReplyExpect2 | AttemptReplyError"
 
 
 # A call, numbered so its reply can find it.

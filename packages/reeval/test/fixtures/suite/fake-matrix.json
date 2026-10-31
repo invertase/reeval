@@ -96,7 +96,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           },
           {
             "path": "evals%2Fgreet.es.ts › fails its check",
@@ -183,7 +184,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           },
           {
             "path": "evals%2Fgreet.es.ts › fails its judge",
@@ -270,7 +272,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           },
           {
             "path": "evals%2Fgreet.es.ts › is skipped for now",
@@ -345,7 +348,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           },
           {
             "path": "evals%2Fgreet.es.ts › greets in Welsh",
@@ -391,7 +395,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           }
         ]
       },
@@ -550,7 +555,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           }
         ]
       }
@@ -618,7 +624,8 @@
             ],
             "cases": null,
             "pooled": null,
-            "questions": []
+            "questions": [],
+            "observations": []
           }
         ]
       }

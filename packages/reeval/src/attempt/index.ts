@@ -16,6 +16,7 @@ import { contextTaker } from './context.ts'
 import { tracePlan } from './debug.ts'
 import { prepareEnvironment } from './environment.ts'
 import { judgeCaller } from './judge.ts'
+import { observer } from './observe.ts'
 import { attemptError, recordEgress, recordFailure, recordOom, writeRecord } from './record.ts'
 import { startSession } from './session.ts'
 import { snapshotSidecar, takeSnapshot } from './snapshot.ts'
@@ -84,6 +85,7 @@ async function attemptBody(
     exec,
     readFile,
     writeFile,
+    observe: observer(a),
     serve: (command, port) => serveCommand(a, command, port),
     capture: (target, options) => capturePage(a, target, options),
     attempt: { id: attemptId(spec.cell.key, spec.n), cell: spec.cell, n: spec.n },

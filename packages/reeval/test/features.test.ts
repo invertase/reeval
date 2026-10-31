@@ -2479,6 +2479,24 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'history/observe',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    canary: /installs prisma: expected \{.*\} to have property "prisma"/,
+    record: ({ run, stdout }) => {
+      const observed = (name: string) =>
+        run.evals.find((e) => e.name === name)?.attempts[0]?.observations
+      const want = [
+        { name: 'orm', value: 'drizzle', turn: 1 },
+        { name: 'deps', value: ['drizzle-orm', 'pg'], turn: 1 },
+        { name: 'dep-count', value: 2, turn: 1 },
+      ]
+      assert.deepEqual(observed('lands'), want, 'the last value per name, in first-call order')
+      assert.deepEqual(observed('canary'), want, 'a failed attempt keeps what it observed')
+      assert.match(stdout, /observed\s+orm\s+drizzle 1\n\s+deps\s+drizzle-orm 1 · pg 1 · 1 attempt/)
+    },
+  },
+  {
     dir: 'assert/soft-default',
     tiers: ['fake', 'docker'],
     env: 'plain',

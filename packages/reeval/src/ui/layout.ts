@@ -5,6 +5,7 @@
 import { clip, plural } from '../text.ts'
 import { formatTokens } from '../usage.ts'
 import { formatCount, formatSeconds } from '../view/effort.ts'
+import { type ObservedTally, observedLine } from '../view/observations.ts'
 import type { RunRemarks } from '../view/remarks.ts'
 import type {
   Across,
@@ -505,6 +506,42 @@ function questionLines(
   })
 }
 
+/**
+ * Each observed name's tally: on its `observed` line with one cell, else a row per cell under it,
+ * labeled as the cells table labels them.
+ */
+function observedLines(
+  c: Colors,
+  tallies: ObservedTally[],
+  cells: CellResult[],
+  indent: number,
+): string[] {
+  if (!tallies.length) return []
+  const head = (name: string) => `${' '.repeat(indent)}${c.dim('observed')} ${clip(name, 40)}`
+  if (cells.length <= 1) {
+    return table(
+      tallies.map((o, i) => ({
+        indent,
+        cells: [i ? '' : t('observed', c.dim), clip(o.name, 40), observedLine(o)],
+      })),
+    )
+  }
+  const label = labeler(cells, ['harness', 'arm', 'sandbox'])
+  const byKey = new Map(cells.map((cell) => [cell.key, cell]))
+  const names = [...new Set(tallies.map((o) => o.name))]
+  return names.flatMap((name) => [
+    head(name),
+    ...table(
+      tallies
+        .filter((o) => o.name === name)
+        .map((o) => {
+          const cell = byKey.get(o.cell)
+          return { indent: indent + 2, cells: [cell ? label(cell) : o.cell, observedLine(o)] }
+        }),
+    ),
+  ])
+}
+
 /** A cell's counts summed over a family's cases. */
 function pooledCount(cases: CaseResult[], key: string): string {
   let passed = 0
@@ -661,6 +698,7 @@ export function evalBlock(c: Colors, e: EvalResult, verbose = false): string[] {
     ...upstreamLines(c, cells, 2),
     ...pageErrorLines(c, cells, 2),
     ...questionLines(c, e.questions, 2),
+    ...observedLines(c, e.observations, cells, 2),
   ]
 }
 

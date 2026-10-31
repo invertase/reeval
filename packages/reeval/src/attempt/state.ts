@@ -63,6 +63,8 @@ export type Attempt = {
   start: (who: string) => Promise<[Sandbox, HarnessSession]>
   /** Refuses starts from now on and waits for one in flight, so teardown sees its sandbox. */
   endStarts: () => Promise<void>
+  /** The eval's body has returned and teardown has begun. */
+  readonly ended: boolean
   /**
    * The start's failure, or an MCP server's that never answered `initialize`, which fails the
    * attempt whatever the eval's body made of it.
@@ -135,6 +137,9 @@ export function createAttempt(
     async endStarts() {
       ended = true
       await starting?.catch(() => {})
+    },
+    get ended() {
+      return ended
     },
     report: (update) => progress({ at: Date.now(), ...update }),
     async timed(phase, fn) {

@@ -1,5 +1,5 @@
 // The attempt protocol's contract: the calls an eval's body makes on its attempt (`c.send`,
-// `c.exec`, `c.readFile`, `c.writeFile` and each matcher), as a runner in another language would
+// `c.exec`, `c.readFile`, `c.writeFile`, `c.observe` and each matcher), as a runner in another language would
 // send them to reeval, and reeval's replies. Today an eval's body runs in reeval's own worker, so
 // no call crosses a process boundary yet; the schemas are the spec such a runner codes against,
 // with their JSON Schema in schema/protocol/. Results reuse the attempt's own types (`TurnData`,
@@ -442,6 +442,9 @@ export const judgeCallDataSchema = z
     "`c.judge()`'s options as data: the judge options, with the model by name or a fake judge's numeric score, the inputs it shows the judge (at least one turned on) and `on`.",
   )
 
+/** An observation's name: one a query, a tally line and a judge's input can carry as it is. */
+export const OBSERVE_NAME = /^[A-Za-z0-9_.:/-]{1,64}$/
+
 const callSiteSchema = z
   .strictObject({
     file: nonEmpty.describe('The eval file: absolute, or relative to the project root.'),
@@ -510,6 +513,18 @@ export const attemptCallSchema = z
           .describe('How `contents` is encoded; base64 carries bytes. Default `utf8`.'),
       })
       .describe('`c.writeFile(path, contents)`, creating its directories.'),
+    z
+      .strictObject({
+        op: z.literal('observe'),
+        name: z
+          .string()
+          .regex(OBSERVE_NAME, 'must be 1 to 64 letters, digits, _ . : / or -')
+          .describe('What the value is of, e.g. `installed`.'),
+        value: jsonValueSchema.describe('Any JSON, at most 4 KB once serialized.'),
+      })
+      .describe(
+        "`c.observe(name, value)`: records a fact about the attempt that never affects its outcome. A name observed again keeps the last value. Fails after the body's `done`.",
+      ),
     z
       .strictObject({
         op: z.literal('expect'),
@@ -656,6 +671,7 @@ export const attemptReplySchema = z
         contents: z.string().nullable().describe('Null when there is no such file.'),
       }),
       z.strictObject({ id, ok: z.literal(true), op: z.literal('writeFile') }),
+      z.strictObject({ id, ok: z.literal(true), op: z.literal('observe') }),
       z.strictObject({
         id,
         ok: z.literal(true),
@@ -693,6 +709,7 @@ export const attemptReplySchema = z
         'exec',
         'readFile',
         'writeFile',
+        'observe',
         'expect',
         'record',
         'judge',

@@ -22,6 +22,13 @@ import { bothUnderATenth, DIRECTIONAL_MIN, filesChanged } from '../view/effort.t
 import { familyEffortLabel, familyLiftLabel, familyRateLabel } from '../view/family.ts'
 import { runHeader } from '../view/header.ts'
 import { labeledJudgments } from '../view/judgments.ts'
+import { observedTallies } from '../view/observations.ts'
+
+/**
+ * The most of one tallied value the digest quotes: facts are never dropped to fit its cap, and a
+ * value can be 4 KB.
+ */
+const OBSERVED_VALUE_CHARS = 80
 
 /** A history query's row: the columns the digest reads, as their table declares them. */
 type Row<Columns> = Columns & Record<string, unknown>
@@ -127,6 +134,7 @@ export const RULES = [
   'A contrast fact (kind contrast) is one pair of arms on one harness, a against b, when an eval has two variants or more: pass rate and lift of a over b, the checks that tell them apart (discriminates or mixed; sameOnBoth counts the rest) and effort. It answers how two variants differ from each other, not only from the control; gating stays each variant against its control.',
   'A check (kind checks) whose verdict is both-pass or both-fail passes, or fails, on both the variant and its control: it is no evidence for or against the variant. Only discriminates rows say which requirement separated them.',
   "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check. Each pair is voted in both orders; splits counts pairs whose two orders picked opposite sides (the position decided, not the work), and rates count such a pair as one win each. With more than two arms, read headToHead (a–b wins per pair, splits apart), not the pooled rates. shows lists what each side was shown: a question that shows output or transcript can favor the better-written account rather than the better work, and one that shows artifacts rests on screenshots.",
+  "An observed fact is a value the eval's own code recorded with c.observe (what the agent installed, a count): counts tallies strings and each item of an array once per attempt, numbers summarizes number values. Observations never change pass, fail or the exit code: cite them as what happened, not as a check.",
 ]
 
 const pts = (x: number | null | undefined) =>
@@ -958,6 +966,31 @@ export async function buildDigestKeepingDropped(
             text: clip(x.answer.text, 300),
           })),
           ...(failed ? { error: clip(failed, 200) } : {}),
+        })
+      }
+    }
+  }
+
+  // Values the eval's code observed with c.observe: each name tallied per cell.
+  for (const r of runs) {
+    for (const e of r.record.evals) {
+      if (!evalKeys.has(e.key)) continue
+      for (const o of observedTallies(e.attempts)) {
+        fact('observed', {
+          run: short.get(r.record.runId),
+          eval: tagOf(e.key),
+          cell: cellTag(r.record.runId, e.key, o.cell),
+          name: o.name,
+          attempts: o.attempts,
+          ...(o.counts.length
+            ? {
+                counts: o.counts
+                  .slice(0, 10)
+                  .map((c) => ({ value: clip(c.value, OBSERVED_VALUE_CHARS), n: c.n })),
+              }
+            : {}),
+          ...(o.numbers ? { numbers: o.numbers } : {}),
+          ...(o.others ? { others: o.others } : {}),
         })
       }
     }

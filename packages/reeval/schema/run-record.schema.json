@@ -516,6 +516,13 @@
           "description": "Run number within the cell, from 1.",
           "type": "number"
         },
+        "observations": {
+          "description": "Each `c.observe(name, value)` the attempt made, one per name in first-call order with its last value; unset without any. They annotate: `outcome` never depends on them.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Observation"
+          }
+        },
         "outcome": {
           "$ref": "#/$defs/Outcome"
         },
@@ -2061,6 +2068,37 @@
         "worktreePatchNote"
       ]
     },
+    "JSONValue": {
+      "description": "Any JSON value.",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JSONValue"
+          }
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "$ref": "#/$defs/JSONValue"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
     "JudgeArtifactRef": {
       "description": "A capture this judge call sent as a file part. Bytes live in the `artifacts/<name>.png` file.",
       "type": "object",
@@ -2240,6 +2278,24 @@
         }
       },
       "required": ["ms", "server"]
+    },
+    "Observation": {
+      "description": "A `c.observe(name, value)` call: the last value given for the name.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "turn": {
+          "description": "How many turns the attempt had sent when the value was given: 0 before the first.",
+          "type": "number"
+        },
+        "value": {
+          "description": "Masked like the rest of the record.",
+          "$ref": "#/$defs/JSONValue"
+        }
+      },
+      "required": ["name", "turn", "value"]
     },
     "Outcome": {
       "enum": ["fail", "infra_error", "pass", "skipped"]

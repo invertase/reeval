@@ -88,10 +88,25 @@ export function compare(
 
   const values = (s: Schema[]) => s.map((a) => describe(newDoc, a)).join(' | ')
 
+  // A recursive type (`JSONValue`) refers to itself: a `$ref` pair already being walked further
+  // up has nothing new below it.
+  const walking = new Set<string>()
+
   function walk(before: Schema, after: Schema, path: string) {
     const key = `${path}\0${before.$ref ?? JSON.stringify(before)}\0${after.$ref ?? JSON.stringify(after)}`
     if (seen.has(key)) return
     seen.add(key)
+    const refs = before.$ref && after.$ref ? `${before.$ref}\0${after.$ref}` : null
+    if (refs && walking.has(refs)) return
+    if (refs) walking.add(refs)
+    try {
+      walkOnce(before, after, path)
+    } finally {
+      if (refs) walking.delete(refs)
+    }
+  }
+
+  function walkOnce(before: Schema, after: Schema, path: string) {
     const olds = alternatives(oldDoc, before)
     const news = alternatives(newDoc, after)
     if (news.some((n) => kindOf(n) === 'any')) return

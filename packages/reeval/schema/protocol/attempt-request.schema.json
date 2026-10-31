@@ -207,6 +207,27 @@
           "additionalProperties": false
         },
         {
+          "description": "`c.observe(name, value)`: records a fact about the attempt that never affects its outcome. A name observed again keeps the last value. Fails after the body's `done`.",
+          "type": "object",
+          "properties": {
+            "name": {
+              "description": "What the value is of, e.g. `installed`.",
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.:/-]{1,64}$"
+            },
+            "op": {
+              "type": "string",
+              "const": "observe"
+            },
+            "value": {
+              "description": "Any JSON, at most 4 KB once serialized.",
+              "$ref": "#/$defs/JSONValue"
+            }
+          },
+          "required": ["name", "op", "value"],
+          "additionalProperties": false
+        },
+        {
           "description": "A matcher call: `expect(subject, label).not?.matcher(...args)`. Replies with its record.",
           "type": "object",
           "properties": {

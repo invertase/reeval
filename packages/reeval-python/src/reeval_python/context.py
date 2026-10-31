@@ -245,6 +245,17 @@ class AttemptContext:
         else:
             await self._call({"op": "writeFile", "path": path, "contents": contents})
 
+    def observe(self, name: str, value: object) -> Coroutine[Any, Any, None]:
+        """Record a fact about the attempt under `name`, such as what the agent installed. It
+        never affects the outcome; observing a name again replaces its value. `value` is JSON, at
+        most 4 KB."""
+        _not_describing("c.observe")
+        data = json_value(value, f"c.observe({name!r}, …) takes a JSON value")
+        return tracked(self._observe(name, data), "c.observe()")
+
+    async def _observe(self, name: str, value: Any) -> None:
+        await self._call({"op": "observe", "name": name, "value": value})
+
     def kill(self, handle: BackgroundHandle) -> Coroutine[Any, Any, None]:
         """Stop a command `c.exec(…, background=True)` left running."""
         _not_describing("c.kill")
@@ -403,6 +414,14 @@ class SyncAttemptContext:
         """Write a file in the sandbox's workspace."""
         _not_describing("c.write_file")
         self._run(self._ctx._write_file(path, contents))  # pyright: ignore[reportPrivateUsage]
+
+    def observe(self, name: str, value: object) -> None:
+        """Record a fact about the attempt under `name`, such as what the agent installed. It
+        never affects the outcome; observing a name again replaces its value. `value` is JSON, at
+        most 4 KB."""
+        _not_describing("c.observe")
+        data = json_value(value, f"c.observe({name!r}, …) takes a JSON value")
+        self._run(self._ctx._observe(name, data))  # pyright: ignore[reportPrivateUsage]
 
     def kill(self, handle: BackgroundHandle) -> None:
         """Stop a command `c.exec(…, background=True)` left running."""
