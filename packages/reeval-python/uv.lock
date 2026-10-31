@@ -87,7 +87,7 @@ wheels = [
 
 [[package]]
 name = "reeval-python"
-version = "0.17.2"
+version = "0.18.0"
 source = { editable = "." }
 
 [package.dev-dependencies]

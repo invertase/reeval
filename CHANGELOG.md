@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.18.0](https://github.com/invertase/reeval/compare/v0.17.2...v0.18.0) (2026-10-31)
+
+
+### Features
+
+* **judge:** show c.observe values to judges and questions, in compare and the studio ([#743](https://github.com/invertase/reeval/issues/743)) ([99af246](https://github.com/invertase/reeval/commit/99af24666ab272aefa2f9fb13b6d7d23cf0c1a5a))
+* record non-gating attempt values with c.observe ([#741](https://github.com/invertase/reeval/issues/741)) ([cdb582f](https://github.com/invertase/reeval/commit/cdb582f6b58b229f56e8a7b3e9eab7ebf01590a1))
+
+
+### Bug Fixes
+
+* **analysis:** default maxOutputTokens to 32000 and name the option on a cut-off ([#747](https://github.com/invertase/reeval/issues/747)) ([8ed883b](https://github.com/invertase/reeval/commit/8ed883bd21b53caebe61cf50935004b70c5d7ecc))
+* **capture:** give the date format hint only while a date or time field has focus ([#744](https://github.com/invertase/reeval/issues/744)) ([862741a](https://github.com/invertase/reeval/commit/862741a902705c2c429257cb0800e9db7dae4477))
+* **capture:** make vision journeys hold up on scrolled pages, frames and late content ([#740](https://github.com/invertase/reeval/issues/740)) ([fd66d32](https://github.com/invertase/reeval/commit/fd66d325063d60c013bffb675fa79c44b480d69a))
+* **ci:** drop retired Claude 4.0 ids and fail docs:check on retired Claude models ([#754](https://github.com/invertase/reeval/issues/754)) ([321fcd1](https://github.com/invertase/reeval/commit/321fcd12ece30042790790772055292684197235))
+* **cli:** keep the attempts a filtered resume leaves out, and the run incomplete ([#753](https://github.com/invertase/reeval/issues/753)) ([eb077b3](https://github.com/invertase/reeval/commit/eb077b3368b3f03c7973645bccbc0bb3efe6ab88))
+* **cli:** make --resume plan with the run's own --runs, profile, filters and concurrency ([#749](https://github.com/invertase/reeval/issues/749)) ([416df31](https://github.com/invertase/reeval/commit/416df315c2bf2f11697d2f4213b62d4e878aaf50))
+* **docs:** skip changelog and captured data in the retired-model guard and catch Bedrock and claude-4-sonnet forms ([#755](https://github.com/invertase/reeval/issues/755)) ([29c0aef](https://github.com/invertase/reeval/commit/29c0aefa5d3d76d5af88f0df4af01cfa8c02401c))
+* **evaluate:** mask secrets in eval, group and todo names, and refuse names that mask alike ([#752](https://github.com/invertase/reeval/issues/752)) ([d491f0d](https://github.com/invertase/reeval/commit/d491f0d72c8f1bca57d4f9141e9bbfef0a15d60e))
+* **observe:** mask observation names and refuse two that mask the same ([#748](https://github.com/invertase/reeval/issues/748)) ([8f414d8](https://github.com/invertase/reeval/commit/8f414d83898ebb6d64adb11f1dfe4291663bb27d))
+* **serve:** refuse a given port that was already in use before c.serve started ([#746](https://github.com/invertase/reeval/issues/746)) ([36c1707](https://github.com/invertase/reeval/commit/36c1707e2ca5d7beb9797266243178b7855bf0d5))
+
 ## [0.17.2](https://github.com/invertase/reeval/compare/v0.17.1...v0.17.2) (2026-10-30)
 
 
