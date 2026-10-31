@@ -121,6 +121,13 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/engine.test.ts', 'reeval/test/options.test.ts'],
   },
   {
+    id: 'environments-axis',
+    area: 'Config and selection',
+    name: '`environments` as a list: a cell per environment beside each harness, and its edits',
+    plan: ['environments/list'],
+    unit: ['reeval/test/refusals.test.ts'],
+  },
+  {
     id: 'compare',
     area: 'Config and selection',
     name: '`compare`: control, variants, lift and `minLift`',

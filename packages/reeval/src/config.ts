@@ -259,12 +259,10 @@ function withHostPaths<T extends object>(
       out.sandbox = sandboxPaths(value.sandbox, root, `${prefix}sandbox`, missing)
     }
     if (environments && 'environments' in value) {
-      out.environments = environmentPaths(
-        value.environments,
-        root,
-        `${prefix}environments`,
-        missing,
-      )
+      const field = `${prefix}environments`
+      out.environments = Array.isArray(value.environments)
+        ? value.environments.map((e, i) => environmentPaths(e, root, `${field}[${i}]`, missing))
+        : environmentPaths(value.environments, root, field, missing)
     }
     return out
   }
@@ -284,9 +282,9 @@ function configFromData(data: Record<string, unknown>): ReevalConfig {
   const withEnvironment = (options: unknown) => {
     if (!isObjectLike(options)) return options
     const { environments } = options
-    return isEnvironment(environments)
-      ? { ...options, environments: environmentFrom(environments) }
-      : options
+    const from = (e: unknown) => (isEnvironment(e) ? environmentFrom(e) : e)
+    if (Array.isArray(environments)) return { ...options, environments: environments.map(from) }
+    return isEnvironment(environments) ? { ...options, environments: from(environments) } : options
   }
   const config = withEnvironment(data) as Record<string, unknown>
   const { profiles } = config
@@ -323,7 +321,7 @@ export function resolveConfigData(input: unknown, root: string, file: string): R
       (p) => (p as ProfileData | null)?.defaults?.environments,
     ),
   ]
-  if (environments.some((e) => e !== undefined && !isEnvironment(e))) {
+  if (environments.flat().some((e) => e !== undefined && !isEnvironment(e))) {
     const problem = configDataProblem(data, file)
     if (problem) throw new UsageError(problem)
   }
@@ -653,7 +651,7 @@ export function resolveConfig(
     include,
     harness,
     sandbox: user.sandbox ?? docker(),
-    environment: user.environments,
+    environments: user.environments === undefined ? [] : [user.environments].flat(),
     runs: user.runs,
     gate: user.gate,
     env: user.env ?? {},

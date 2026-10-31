@@ -1416,11 +1416,11 @@ export const environmentSandbox = (
  * else the profile's `defaults.sandbox`, else the config's.
  */
 export const profileSandbox = (
-  config: { environment?: Environment; sandbox: SandboxDescriptor },
+  config: { environments: Environment[]; sandbox: SandboxDescriptor },
   defaults: Pick<ProfileDefaults, 'environments' | 'sandbox'> | undefined,
 ): SandboxDescriptor =>
   environmentSandbox(
-    defaults?.environments ?? config.environment,
+    [defaults?.environments ?? config.environments].flat()[0],
     defaults?.sandbox ?? config.sandbox,
   )
 

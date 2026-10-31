@@ -1056,7 +1056,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
             { questions: [{ question: 'Which?', across: 'environment', diff: true }] },
             async () => {},
           ),
-        /questions "Which\?" in evaluate\("e"\) varies the environment \(across: 'environment'\), but evaluate\("e"\) runs one environment, so it has no pairs to ask\. Add compare: \{ variants: \[\.\.\.\] \}, or leave out across to ask each attempt on its own\./,
+        /questions "Which\?" in evaluate\("e"\) varies the environment \(across: 'environment'\), but evaluate\("e"\) runs one environment, so it has no pairs to ask\. Run it in two or more, environments: \[a, b\], or compare: \{ control, variants: \[\.\.\.\] \}, or leave out across to ask each attempt on its own\./,
       ],
       [
         'a pairwise question across harnesses on one harness',

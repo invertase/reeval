@@ -878,6 +878,14 @@ class EvalOptionsData2EgressAllow(TypedDict):
     allow: list[str]
 
 
+class EvalOptionsData2EnvironmentsAdd(TypedDict):
+    add: EnvironmentData | list[EnvironmentData]
+
+
+class EvalOptionsData2EnvironmentsOnly(TypedDict):
+    only: list[str] | str
+
+
 class EvalOptionsData2GatePassRate(TypedDict):
     passRate: float
 
@@ -903,8 +911,9 @@ class EvalOptionsData2(TypedDict):
     egress: NotRequired[Literal["allow-all", "deny-all", "proxy"] | EvalOptionsData2EgressAllow]
     # Variables and secrets for the sandbox, merged by name down the cascade.
     env: NotRequired[EnvVars]
-    # What this group or eval runs in.
-    environments: NotRequired[EnvironmentData]
+    # What this group or eval runs in: one environment, or a list, each its own cell beside each
+    # harness. `{ add }` and `{ only }` edit the inherited list.
+    environments: NotRequired[EnvironmentData | list[EnvironmentData] | EvalOptionsData2EnvironmentsAdd | EvalOptionsData2EnvironmentsOnly]
     # How each cell's attempts decide its outcome; default `'all'`.
     gate: NotRequired[Literal["all"] | EvalOptionsData2GatePassRate]
     # Which agents run the eval; each harness is its own cell.

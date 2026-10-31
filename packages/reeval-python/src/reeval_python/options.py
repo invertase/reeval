@@ -72,7 +72,9 @@ class EvalOptions(TypedDict, total=False):
     compare: Mapping[str, Any]
     egress: Literal["allow-all", "deny-all", "proxy"] | Mapping[str, Sequence[str]]
     env: Mapping[str, Any]
-    environments: Environment | Mapping[str, Any]
+    environments: Environment | Sequence[Environment] | Mapping[str, Any]
+    """One environment, or a list, each its own cell beside each harness; `{"add": …}` and
+    `{"only": [names]}` edit the inherited list."""
     gate: Literal["all"] | Mapping[str, float]
     harnesses: Harness | Sequence[Harness] | Mapping[str, Any]
     judge: JudgeDefaults

@@ -52,6 +52,8 @@ import type {
   Duration,
   EgressPolicy,
   Environment,
+  EnvironmentEdit,
+  EnvironmentsOption,
   EnvVars,
   EvalOptions,
   EvalPlan,
@@ -342,20 +344,7 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     const problem = sandboxProblem(o.sandbox)
     if (problem) throw new UsageError(`sandbox in ${where}: ${problem}`)
   }
-  if (o.environments !== undefined) {
-    if (Array.isArray(o.environments)) {
-      throw new UsageError(
-        `environments takes one environment, not a list (${where}). To compare environments, use compare: { control: a, variants: [b, c] }; variants are not layered on the control.`,
-      )
-    }
-    if (!isEnvironment(o.environments)) {
-      throw new UsageError(
-        `environments in ${where} must come from defineEnvironment(…) (got ${describe(o.environments)})`,
-      )
-    }
-    const problem = environmentDataProblem(o.environments, 'environments', where)
-    if (problem) throw new UsageError(problem)
-  }
+  if (o.environments !== undefined) checkEnvironments(o.environments, where)
   const raw = options as { environments?: unknown; compare?: unknown }
   refuseIllegalCompare(raw, where)
   if (o.compare !== undefined) {
@@ -463,6 +452,89 @@ function checkCaptureModel(value: unknown, where: string): void {
       `capture.model "${value}" in ${where} is an evaluation model: it scores yes/no questions and can't drive a capture. Use a language model that accepts images, e.g. 'google/gemini-3.8-flash'.`,
     )
   }
+}
+
+/** Each environment `environments` names, as one, a list or an edit, comes from defineEnvironment. */
+function checkEnvironments(value: EnvironmentsOption, where: string): void {
+  if (typeof value === 'function') return
+  let list: unknown[]
+  let label = 'environments'
+  if (isEnvironmentEdit(value)) {
+    if ('add' in value && 'only' in value) {
+      throw new UsageError(
+        `environments in ${where} takes { add } or { only }, not both. Use add to append to the inherited environments, only to keep some of them.`,
+      )
+    }
+    if ('only' in value) {
+      const names = [value.only].flat()
+      if (!names.length || names.some((n) => typeof n !== 'string')) {
+        throw new UsageError(
+          `environments { only } in ${where} lists environment names, e.g. { only: ['app'] } (got ${describe(value.only)})`,
+        )
+      }
+      return
+    }
+    list = [value.add].flat()
+    label = 'environments.add'
+  } else list = [value].flat()
+  if (list.length === 0) {
+    throw new UsageError(
+      `${label} is an empty list in ${where}. Give at least one, or leave environments out.`,
+    )
+  }
+  list.forEach((env, i) => {
+    const at = Array.isArray(value) || label !== 'environments' ? `${label}[${i}]` : label
+    if (!isEnvironment(env)) {
+      throw new UsageError(
+        `${at} in ${where} must come from defineEnvironment(…) (got ${describe(env)})`,
+      )
+    }
+    const problem = environmentDataProblem(env, at, where)
+    if (problem) throw new UsageError(problem)
+  })
+}
+
+const isEnvironmentEdit = (v: unknown): v is EnvironmentEdit =>
+  isObjectLike(v) && !Array.isArray(v) && !isEnvironment(v) && ('add' in v || 'only' in v)
+
+function applyEnvironments(
+  inherited: Environment[],
+  value: EvalOptions['environments'],
+  where: string,
+): Environment[] {
+  if (value === undefined) return inherited
+  const next =
+    typeof value === 'function'
+      ? value(inherited)
+      : isEnvironmentEdit(value)
+        ? editEnvironments(inherited, value, where)
+        : value
+  const list = [next].flat()
+  if (list.length === 0) {
+    throw new UsageError(
+      `environments is an empty list in ${where}. Give at least one, or leave environments out.`,
+    )
+  }
+  if (typeof value === 'function') checkEnvironments(list, where)
+  return list
+}
+
+/** `{ add }` appends to the inherited environments; `{ only }` keeps those with these names. */
+function editEnvironments(
+  inherited: Environment[],
+  edit: EnvironmentEdit,
+  where: string,
+): Environment[] {
+  if ('add' in edit) return [...inherited, ...[edit.add].flat()]
+  const names = [edit.only].flat()
+  const have = inherited.map((e) => e.name)
+  const missing = names.filter((n) => !have.includes(n))
+  if (missing.length) {
+    throw new UsageError(
+      `environments { only: ${missing.map((n) => JSON.stringify(n)).join(', ')} } in ${where} names no inherited environment (inherited: ${have.join(', ') || 'none'})`,
+    )
+  }
+  return inherited.filter((e) => names.includes(e.name))
 }
 
 function applyHarness(
@@ -592,14 +664,16 @@ const plannedQuestions = (value: Question[]): PlannedQuestion[] =>
   })
 
 /** Whether the eval's matrix varies each factor a pairwise question can vary. */
-const variesBy = (r: Pick<Resolved, 'compare' | 'harness'>): Record<PairFactor, boolean> => ({
-  environment: (r.compare?.variants.length ?? 0) > 0,
+const variesBy = (
+  r: Pick<Resolved, 'compare' | 'harness' | 'environments'>,
+): Record<PairFactor, boolean> => ({
+  environment: r.compare ? r.compare.variants.length > 0 : r.environments.length > 1,
   harness: r.harness.length > 1,
 })
 
 const FACTOR_FIX: Record<PairFactor, (r: Pick<Resolved, 'harness'>, where: string) => string> = {
   environment: (_, where) =>
-    `varies the environment (across: 'environment'), but ${where} runs one environment, so it has no pairs to ask. Add compare: { variants: [...] }`,
+    `varies the environment (across: 'environment'), but ${where} runs one environment, so it has no pairs to ask. Run it in two or more, environments: [a, b], or compare: { control, variants: [...] }`,
   harness: (r, where) =>
     `varies the harness (across: 'harness'), but ${where} runs one harness (${r.harness.map(harnessId).join(', ')}), so it has no pairs to ask. Run it on two or more, harnesses: [a, b]`,
 }
@@ -607,7 +681,8 @@ const FACTOR_FIX: Record<PairFactor, (r: Pick<Resolved, 'harness'>, where: strin
 export type Resolved = {
   harness: HarnessDescriptor[]
   sandbox: SandboxDescriptor
-  environment: Environment | undefined
+  /** Each is its own cell beside each harness; empty runs one empty environment. Unused with `compare`. */
+  environments: Environment[]
   compare: NormalizedCompare | undefined
   /** Attempts per cell; with `bestOf`, the most a cell runs. */
   runs: number
@@ -670,7 +745,7 @@ function applyLevel(
   if (options.egress !== undefined) out.egress[egress] = options.egress
   out.harness = applyHarness(out.harness, options.harnesses, where)
   if (options.sandbox !== undefined) out.sandbox = options.sandbox
-  if (options.environments !== undefined) out.environment = options.environments
+  out.environments = applyEnvironments(out.environments, options.environments, where)
   if (options.compare !== undefined) out.compare = normalizeCompare(options.compare)
   if (options.runs !== undefined) {
     const { runs, bestOf } = runsOf(options.runs)
@@ -732,6 +807,7 @@ export function cascade(
     capture: { ...base.capture },
     question: { ...base.question },
     questions: [...base.questions],
+    environments: [...base.environments],
     tags: [...base.tags],
     pin: [...base.pin],
   }
@@ -750,6 +826,15 @@ export function cascade(
     out.questions = out.questions.map((q) => withQuestionDefaults(q, out.question))
   }
   checkUnique(out.harness, where)
+  if (!out.compare) {
+    const names = out.environments.map((e) => e.name)
+    const dupe = names.find((n, i) => names.indexOf(n) !== i)
+    if (dupe) {
+      throw new UsageError(
+        `environments in ${where} lists two environments named ${dupe}. Give each its own name.`,
+      )
+    }
+  }
   // A harness list only a profile's defaults set may narrow the config's, which drops a question
   // below rather than refusing it; neither list varying the harness is the eval's mistake.
   const harnessFromProfile =
@@ -995,7 +1080,12 @@ export function sandboxSetBy(
 export function expand(resolved: Resolved, vertex?: VertexSettings): PlannedAttempt[] {
   const { compare } = resolved
   // An environment from another level is not applied beside a compare's control.
-  const control = applied(compare ? compare.control : resolved.environment)
+  const own: Array<Environment | undefined> = compare
+    ? [compare.control]
+    : resolved.environments.length
+      ? resolved.environments
+      : [undefined]
+  const controls = own.map((e) => applied(e))
   const policy = resolved.gate ?? 'all'
   const gateIf = (gated: boolean): CellGate => (gated ? policy : 'none')
   const attempts: PlannedAttempt[] = []
@@ -1007,26 +1097,24 @@ export function expand(resolved: Resolved, vertex?: VertexSettings): PlannedAtte
       sandbox: SandboxDescriptor
       cell: Cell
       gate: CellGate
-    }> = [
-      (() => {
-        const sandbox = attemptSandbox(resolved, control)
-        const sid = sandboxId(sandbox)
-        return {
-          env: control,
-          sandbox,
-          cell: {
-            key: cellKey(hid, control.name, sid),
-            harness: hid,
-            environment: control.name,
-            sandbox: sid,
-            role: 'control' as const,
-          },
-          // A compare a profile's limit left without variants has nothing to compare the
-          // control against, so it gates like an eval without compare.
-          gate: gateIf(!compare || compare.variants.length === 0 || compare.gate === 'all'),
-        }
-      })(),
-    ]
+    }> = controls.map((env) => {
+      const sandbox = attemptSandbox(resolved, env)
+      const sid = sandboxId(sandbox)
+      return {
+        env,
+        sandbox,
+        cell: {
+          key: cellKey(hid, env.name, sid),
+          harness: hid,
+          environment: env.name,
+          sandbox: sid,
+          role: 'control' as const,
+        },
+        // A compare a profile's limit left without variants has nothing to compare the
+        // control against, so it gates like an eval without compare.
+        gate: gateIf(!compare || compare.variants.length === 0 || compare.gate === 'all'),
+      }
+    })
     if (compare && (!compare.harnesses || compare.harnesses.includes(hid))) {
       for (const v of compare.variants) {
         const env = applied(v)
@@ -1050,7 +1138,13 @@ export function expand(resolved: Resolved, vertex?: VertexSettings): PlannedAtte
     for (const { env, sandbox, cell, gate } of cells) {
       const axes = [
         resolved.harness.length > 1 ? hid : '',
-        compare ? (cell.role === 'control' ? 'control' : env.name) : '',
+        compare
+          ? cell.role === 'control'
+            ? 'control'
+            : env.name
+          : controls.length > 1
+            ? env.name
+            : '',
       ].filter(Boolean)
       for (let n = 1; n <= resolved.runs; n++) {
         const label = [axes.join(' · '), resolved.runs > 1 ? `#${n}` : ''].filter(Boolean).join(' ')

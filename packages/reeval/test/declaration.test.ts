@@ -222,7 +222,7 @@ test("a tree's relative host paths resolve against the declaring file's director
     'context.environments.layers.0.spec.skills.0.path': join(evals, 'skills'),
     'context.environments.layers.0.spec.skills.1.spec': join(root, 'pkg.tgz'),
     'context.environments.layers.0.spec.workspace.url': join(root, 'app'),
-    'compare.compare.baseline.layers.0.spec.sandbox.dockerfile': join(evals, 'images/Dockerfile'),
+    'compare.compare.control.layers.0.spec.sandbox.dockerfile': join(evals, 'images/Dockerfile'),
     'compare.compare.variants.0.layers.0.spec.sandbox.dockerfile': join(root, 'docker/Dockerfile'),
     'case 0.sandbox.dockerfile': join(evals, 'images/Dockerfile'),
     'case 1.sandbox.dockerfile': join(evals, 'images/Dockerfile'),

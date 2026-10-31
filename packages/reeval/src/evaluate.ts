@@ -33,7 +33,9 @@ import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
 import { planEval } from './plan-eval.ts'
 import type {
   AttemptContext,
+  Environment,
   EnvironmentData,
+  EnvironmentsData,
   EvalFn,
   EvalOptions,
   EvalOptionsData,
@@ -100,7 +102,7 @@ function splitArgs<F extends (...args: never[]) => unknown>(
 ): [EvalOptions, F] {
   if (typeof a === 'function' && typeof b === 'function') {
     throw new UsageError(
-      `${what}("${name}") got two functions. Options must be a plain object; helpers such as secret are only available in defineConfig and defineEnvironment callbacks. Put the secret in an environment (environment: …) or in the config's env.`,
+      `${what}("${name}") got two functions. Options must be a plain object; helpers such as secret are only available in defineConfig and defineEnvironment callbacks. Put the secret in an environment (environments: …) or in the config's env.`,
     )
   }
   if (typeof a === 'function') return [(b as EvalOptions | undefined) ?? {}, a]
@@ -436,8 +438,16 @@ function optionsFrom(written: EvalOptionsData, where: string, base: string): Eva
   const missing = missingIn(where)
   const asEnv = (env: EnvironmentData, field: string) =>
     environmentFrom(environmentPaths(env, base, field, missing) as EnvironmentData)
+  const asEnvs = (value: EnvironmentsData, field: string): EnvironmentsData<Environment> => {
+    if (Array.isArray(value)) return value.map((e, i) => asEnv(e, `${field}[${i}]`))
+    if ('only' in value) return value
+    if ('add' in value) {
+      return { add: [value.add].flat().map((e, i) => asEnv(e, `${field}.add[${i}]`)) }
+    }
+    return asEnv(value, field)
+  }
   const own =
-    environments !== undefined ? { environments: asEnv(environments, 'environments') } : {}
+    environments !== undefined ? { environments: asEnvs(environments, 'environments') } : {}
   if (compare === undefined) return { ...rest, ...own }
   const variants = compare.variants.map((v, i) => asEnv(v, `compare.variants[${i}]`))
   return {

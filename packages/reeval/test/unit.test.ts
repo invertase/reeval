@@ -921,7 +921,7 @@ profiles:
     )
     const config = await loadConfig(join(dir, 'reeval.yaml'))
     assert.deepEqual(config.sandbox, { kind: 'docker', dockerfile: join(dir, 'docker/Dockerfile') })
-    const spec = config.environment?.layers[0]?.spec
+    const spec = config.environments[0]?.layers[0]?.spec
     assert.equal(spec?.workspace?.url, join(root, 'app'))
     assert.equal(spec?.workspace?.repo, '../app', 'repo stays as written')
     assert.deepEqual(spec?.files, {
@@ -999,7 +999,7 @@ export default defineConfig({
     const c = await loadConfig(join(dir, config))
     const paths = {
       sandbox: c.sandbox,
-      spec: c.environment?.layers[0]?.spec,
+      spec: c.environments[0]?.layers[0]?.spec,
       local: c.profiles.local?.defaults.sandbox,
     }
     return JSON.parse(JSON.stringify(paths).replaceAll(JSON.stringify(dir).slice(1, -1), '<dir>'))
@@ -1755,7 +1755,7 @@ const base: Resolved = {
     { kind: 'fake', id: 'b' },
   ],
   sandbox: { kind: 'fake' },
-  environment: undefined,
+  environments: [],
   compare: undefined,
   runs: 3,
   env: {},
@@ -1784,7 +1784,7 @@ test('expand: per harness, the control then each variant; labels name the role',
     ],
     'e',
   )
-  assert.equal(resolved.environment?.name, 'extra', 'the parent environment is still resolved')
+  assert.equal(resolved.environments[0]?.name, 'extra', 'the parent environment is still resolved')
   const attempts = expand(resolved)
   assert.deepEqual(
     attempts.map((a) => [a.cell.key, a.cell.role, a.gate !== 'none', a.label]),

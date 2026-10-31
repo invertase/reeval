@@ -1104,8 +1104,56 @@
               "$ref": "#/$defs/EnvVars"
             },
             "environments": {
-              "description": "What this group or eval runs in.",
-              "$ref": "#/$defs/EnvironmentData"
+              "description": "What this group or eval runs in: one environment, or a list, each its own cell beside each harness. `{ add }` and `{ only }` edit the inherited list.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EnvironmentData"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/EnvironmentData"
+                  }
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "add": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/EnvironmentData"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/EnvironmentData"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["add"]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "only": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["only"]
+                }
+              ]
             },
             "gate": {
               "description": "How each cell's attempts decide its outcome; default `'all'`.",

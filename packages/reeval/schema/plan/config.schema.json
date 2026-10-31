@@ -2009,8 +2009,19 @@
           "$ref": "#/$defs/EnvVars"
         },
         "environments": {
-          "description": "What every eval runs in when it names no environment.",
-          "$ref": "#/$defs/EnvironmentData"
+          "description": "What every eval runs in when it names no environment: one, or a list (a cell each).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnvironmentData"
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EnvironmentData"
+              }
+            }
+          ]
         },
         "gate": {
           "description": "How each cell's attempts decide its outcome.",
@@ -2220,8 +2231,19 @@
           "$ref": "#/$defs/EnvVars"
         },
         "environments": {
-          "description": "What every eval runs in when it names no environment and has no compare.",
-          "$ref": "#/$defs/EnvironmentData"
+          "description": "What every eval runs in when it names no environment and has no compare: one, or a list (a cell each).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnvironmentData"
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EnvironmentData"
+              }
+            }
+          ]
         },
         "gate": {
           "description": "How each cell's attempts decide its outcome; default `'all'`.",

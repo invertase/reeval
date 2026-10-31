@@ -1237,7 +1237,8 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       include: config.include,
       harness: config.harness.map(withoutCaps),
       sandbox: withoutCaps(config.sandbox),
-      environment: config.environment ?? null,
+      environment:
+        config.environments.length > 1 ? config.environments : (config.environments[0] ?? null),
       runs: config.runs,
       env: config.env,
       judge: withoutCaps(config.judge),
@@ -1336,7 +1337,12 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
           defaults: JSON.parse(
             JSON.stringify({
               harness: ids(profile.defaults.harnesses),
-              environment: profile.defaults.environments?.name,
+              environment:
+                profile.defaults.environments &&
+                [profile.defaults.environments]
+                  .flat()
+                  .map((e) => e.name)
+                  .join(', '),
               sandbox:
                 (profile.defaults.environments || profile.defaults.sandbox) &&
                 sandboxId(profileSandbox(config, profile.defaults)),
@@ -1358,7 +1364,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     budget: Object.keys(input.plan.budget).length ? input.plan.budget : null,
     config: {
       sandbox: plannedSandboxes(input.plan.sandboxes, profileSandbox(config, profile?.defaults)),
-      environment: config.environment?.name ?? null,
+      environment: config.environments.map((e) => e.name).join(', ') || null,
       ...(config.runs !== undefined ? runsOf(config.runs) : { runs: 1 }),
       judgeModel,
       threshold: runJudge.threshold,

@@ -1911,8 +1911,18 @@
           "$ref": "#/$defs/EnvVars"
         },
         "environments": {
-          "description": "What every eval runs in when it names no environment.",
-          "$ref": "#/$defs/Environment"
+          "description": "What every eval runs in when it names no environment: one, or a list (a cell each).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Environment"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Environment"
+              }
+            }
+          ]
         },
         "gate": {
           "description": "How each cell's attempts decide its outcome.",
@@ -2188,8 +2198,12 @@
         "env": {
           "$ref": "#/$defs/EnvVars"
         },
-        "environment": {
-          "$ref": "#/$defs/Environment"
+        "environments": {
+          "description": "Empty when the config names none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Environment"
+          }
         },
         "file": {
           "description": "The config file as typed from the current directory, or `reeval.config.ts` without one.",
@@ -2375,7 +2389,7 @@
         "debug",
         "defaultProfile",
         "env",
-        "environment",
+        "environments",
         "file",
         "gate",
         "gateway",

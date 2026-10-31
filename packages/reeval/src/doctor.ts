@@ -233,10 +233,12 @@ export function checkRuntime(runtime: Runtime, nodeVersion: string): Check {
 /** Every harness and sandbox a run of the config can use: the config's, then each profile's. */
 export function configuredUses(config: ResolvedConfig) {
   const uses: Array<{ harness: HarnessDescriptor; sandbox: SandboxDescriptor; profile?: string }> =
-    config.harness.map((harness) => ({
-      harness: routedHarness(harness, config.gateway),
-      sandbox: environmentSandbox(config.environment, config.sandbox),
-    }))
+    config.harness.flatMap((harness) =>
+      (config.environments.length ? config.environments : [undefined]).map((e) => ({
+        harness: routedHarness(harness, config.gateway),
+        sandbox: environmentSandbox(e, config.sandbox),
+      })),
+    )
   for (const [name, profile] of Object.entries(config.profiles)) {
     const harnesses = profile.defaults?.harnesses
       ? [profile.defaults.harnesses].flat()
@@ -273,7 +275,7 @@ export function describeConfig(config: ResolvedConfig): string {
   const profiles = Object.keys(config.profiles)
   return [
     `harness ${config.harness.map(harnessId).join(', ')}${config.optionKeys?.includes('harnesses') ? '' : " (reeval's default)"}`,
-    `sandbox ${sandboxId(environmentSandbox(config.environment, config.sandbox))}`,
+    `sandbox ${[...new Set((config.environments.length ? config.environments : [undefined]).map((e) => sandboxId(environmentSandbox(e, config.sandbox))))].join(', ')}`,
     profiles.length ? `profiles ${profiles.join(', ')}` : 'no profiles',
   ].join(', ')
 }

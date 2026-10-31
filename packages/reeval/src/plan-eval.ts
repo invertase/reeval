@@ -106,7 +106,7 @@ function configLevel(config: ResolvedConfig): Cascading {
   return {
     harness: config.harness,
     sandbox: config.sandbox,
-    environment: config.environment,
+    environments: config.environments,
     compare: undefined,
     runs,
     bestOf,

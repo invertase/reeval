@@ -1528,6 +1528,20 @@ export type HarnessOption =
   | HarnessData
   | ((inherited: HarnessDescriptor[]) => HarnessDescriptor | HarnessDescriptor[])
 
+/**
+ * An edit of the inherited environment list: `add` appends environments, `only` keeps the
+ * inherited ones with these names, in their order.
+ */
+export type EnvironmentEdit<E = Environment> = { add: E | E[] } | { only: string | string[] }
+
+/** One environment, a list (each is its own cell), or an edit of the inherited list, as data. */
+export type EnvironmentsData<E = EnvironmentData> = E | E[] | EnvironmentEdit<E>
+
+/** `EnvironmentsData`, or a function that edits the inherited list (TypeScript only). */
+export type EnvironmentsOption =
+  | EnvironmentsData<Environment>
+  | ((inherited: Environment[]) => Environment | Environment[])
+
 export type CompareGate = 'variants' | 'all' | 'none'
 
 /**
@@ -1814,7 +1828,7 @@ export type OddAtLeast3<N extends number> = number extends N
  */
 export type Runs<N extends number = number> = number | { bestOf: OddAtLeast3<N> }
 
-/** Options other than `environment` and `compare`, which are exclusive of each other. */
+/** Options other than `environments` and `compare`, which are exclusive of each other. */
 type EvalOptionFields<N extends number = number> = {
   /** Which agents run the eval; each harness is its own cell. */
   harnesses?: HarnessOption
@@ -1888,10 +1902,13 @@ export type EvalSource = DeclaredSource & {
  * A compare names every arm, so an inherited `environments` is not applied, and the same object
  * can't set both.
  */
-type EnvironmentOrCompare<E> =
+type EnvironmentOrCompare<E, Envs> =
   | {
-      /** What this group or eval runs in. */
-      environments?: E
+      /**
+       * What this group or eval runs in: one environment, or a list, each its own cell beside
+       * each harness. `{ add }` and `{ only }` edit the inherited list.
+       */
+      environments?: Envs
       compare?: never
     }
   | {
@@ -1903,7 +1920,7 @@ type EnvironmentOrCompare<E> =
 
 /** `N` is `runs.bestOf` as written, so an even or fractional literal is a type error. */
 export type EvalOptions<N extends number = number> = EvalOptionFields<N> &
-  EnvironmentOrCompare<Environment>
+  EnvironmentOrCompare<Environment, EnvironmentsOption>
 export type GroupOptions<N extends number = number> = EvalOptions<N>
 
 /**
@@ -1916,7 +1933,7 @@ export type EvalOptionsData = Omit<EvalOptionFields, 'harnesses' | 'judge'> & {
   harnesses?: HarnessData
   /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: ConfigJudgeOptions
-} & EnvironmentOrCompare<EnvironmentData>
+} & EnvironmentOrCompare<EnvironmentData, EnvironmentsData>
 
 /** An `Environment` as data, as JSON carries it: without `extend` / `extendEnvironment`. */
 export type EnvironmentData = Omit<Environment, 'extendEnvironment' | 'extend'>
@@ -1948,8 +1965,8 @@ export type ProfileDefaults = {
   harnesses?: HarnessDescriptor | HarnessDescriptor[]
   /** The default machine when the resolved environment omits `sandbox`. */
   sandbox?: SandboxDescriptor
-  /** What every eval runs in when it names no environment. */
-  environments?: Environment
+  /** What every eval runs in when it names no environment: one, or a list (a cell each). */
+  environments?: Environment | Environment[]
   /** Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more). */
   runs?: Runs
   /** How each cell's attempts decide its outcome. */
@@ -2090,8 +2107,11 @@ export type ReevalConfig = {
    * it does not invent skills, files or a name. Implicit `docker()` when nobody sets one.
    */
   sandbox?: SandboxDescriptor
-  /** What every eval runs in when it names no environment and has no compare. */
-  environments?: Environment
+  /**
+   * What every eval runs in when it names no environment and has no compare: one, or a list (a
+   * cell each).
+   */
+  environments?: Environment | Environment[]
   /**
    * Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more); unset, a compare with
    * variants runs 4 a side and anything else once.
@@ -2183,8 +2203,8 @@ export type AnalysisConfigData = Omit<AnalysisConfig, 'model'> & {
 
 /** `ProfileDefaults` as data: the environment without `extend`, and the judge as data. */
 export type ProfileDefaultsData = Omit<ProfileDefaults, 'environments' | 'judge'> & {
-  /** What every eval runs in when it names no environment. */
-  environments?: EnvironmentData
+  /** What every eval runs in when it names no environment: one, or a list (a cell each). */
+  environments?: EnvironmentData | EnvironmentData[]
   /** Defaults for `c.judge()`, merged field by field over the config's. */
   judge?: ConfigJudgeData
 }
@@ -2208,8 +2228,11 @@ export type ReevalConfigData = Omit<
   ReevalConfig,
   'environments' | 'judge' | 'profiles' | 'analysis' | 'gateway'
 > & {
-  /** What every eval runs in when it names no environment and has no compare. */
-  environments?: EnvironmentData
+  /**
+   * What every eval runs in when it names no environment and has no compare: one, or a list (a
+   * cell each).
+   */
+  environments?: EnvironmentData | EnvironmentData[]
   /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: ConfigJudgeData
   /** Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. */
@@ -2265,7 +2288,8 @@ export type ResolvedConfig = {
    * sets one.
    */
   sandbox: SandboxDescriptor
-  environment: Environment | undefined
+  /** Empty when the config names none. */
+  environments: Environment[]
   /** Unset leaves each eval its default: 4 for a compare with variants, otherwise 1. */
   runs: Runs | undefined
   /** Unset means `'all'`; kept unset so the plan can hint when `runs > 1`. */

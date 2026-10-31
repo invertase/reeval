@@ -68,6 +68,7 @@ export const captureOptionsSchema = z.strictObject({
 })
 
 const harnessList = z.union([harnessDescriptorSchema, z.array(harnessDescriptorSchema).min(1)])
+const environmentList = z.union([environmentDataSchema, z.array(environmentDataSchema).min(1)])
 
 export const budgetSchema = z.strictObject({
   attempts: count().optional(),
@@ -84,7 +85,7 @@ const recordMode = z.enum(['manual', 'ci', 'always'])
 export const profileDefaultsDataSchema = z.strictObject({
   harnesses: harnessList.optional(),
   sandbox: sandboxDescriptorSchema.optional(),
-  environments: environmentDataSchema.optional(),
+  environments: environmentList.optional(),
   runs: runs().optional(),
   gate: gatePolicySchema.optional(),
   env: envVarsSchema.optional(),
@@ -143,7 +144,7 @@ export const reevalConfigDataSchema = z.strictObject({
   include: z.array(z.string()).optional(),
   harnesses: harnessList.optional(),
   sandbox: sandboxDescriptorSchema.optional(),
-  environments: environmentDataSchema.optional(),
+  environments: environmentList.optional(),
   runs: runs().optional(),
   gate: gatePolicySchema.optional(),
   env: envVarsSchema.optional(),
@@ -252,6 +253,9 @@ export function configDataProblem(value: unknown, file: string): string | undefi
   }
   if (issue.code === 'invalid_union') {
     const values = 'options' in issue ? (issue.options as unknown[]) : undefined
+    if (!values && issue.path.at(-1) === 'environments') {
+      return `${at} must be an environment or a list of them (got ${got(v)})`
+    }
     return values
       ? `${at} is ${oneOf(values)} (got ${got(v)})`
       : `${at} matches none of its forms (got ${got(v)})`
