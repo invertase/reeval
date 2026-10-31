@@ -31,7 +31,7 @@ import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { vertexSettingsIn } from './gateway/vertex.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
-import type { GitInfo } from './history/types.ts'
+import type { GitInfo, RunInvocation } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
@@ -48,6 +48,9 @@ import {
   loadPrevious,
   prepareResume,
   resolveResume,
+  resumeSettings,
+  savedFilters,
+  savedInvocation,
   writeCurrent,
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
@@ -341,9 +344,25 @@ async function imageBuildCommand(
 async function runCommand(
   flags: Flags,
   configPath: string | undefined,
-  filters: string[],
+  given: string[],
 ): Promise<number> {
-  const setup = await prepareRun(flags, configPath)
+  const resumed = flags.resume === undefined ? null : await resumedRun(flags, given, configPath)
+  const runFlags = resumed?.settings ? { ...flags, ...resumed.settings } : flags
+  const filters = resumed?.settings?.filters ?? given
+  const setup = await prepareRun(runFlags, configPath, {
+    noProfile: !!resumed?.saved && resumed.saved.profile === undefined,
+    ...(resumed?.profileOf ? { profileOf: resumed.profileOf } : {}),
+  })
+  const explicit = runFlags.concurrency ?? (process.env.REEVAL_CONCURRENCY || undefined)
+  const startedWith: RunInvocation | undefined = resumed
+    ? (resumed.saved ?? undefined)
+    : {
+        ...(setup.runs === undefined ? {} : { runs: setup.runs }),
+        ...(setup.profile ? { profile: setup.profile.name } : {}),
+        ...(explicit === undefined ? {} : { concurrency: setup.concurrency }),
+        filters: savedFilters(setup.config.root, filters),
+        tags: runFlags.tag ?? [],
+      }
   const ctx = await startRun(setup)
   invocation.runId = ctx.runId
   const githubOut = process.env.GITHUB_OUTPUT
@@ -364,7 +383,10 @@ async function runCommand(
   })
   let executed: Awaited<ReturnType<typeof executeRun>>
   try {
-    executed = await executeRun(ctx, setup, filters, renderer)
+    executed = await executeRun(ctx, setup, filters, renderer, {
+      startedWith,
+      notes: resumed?.notes ?? [],
+    })
   } catch (error) {
     renderer.close()
     if (setup.resume === undefined) await rm(ctx.stagingDir, { recursive: true, force: true })
@@ -423,6 +445,7 @@ async function runCommand(
       previous: ctx.previous,
       previousArtifacts: ctx.previousArtifacts,
       runner: runnerInfo(),
+      ...(startedWith ? { invocation: startedWith } : {}),
       ...(answers && (answers.evals.size || answers.attempts.size) ? { answers } : {}),
     },
     // Until the record lands, the studio shows the run as live.
@@ -475,8 +498,43 @@ async function runCommand(
   return code
 }
 
-/** Everything that can fail before the evals are collected: output mode, config, profile, flags. */
-async function prepareRun(flags: Flags, configPath: string | undefined) {
+/**
+ * `--resume`: the run's saved settings with the flags given now. An older reeval's run saved none,
+ * so it plans with the flags given now, with a note.
+ */
+async function resumedRun(flags: Flags, filters: string[], configPath: string | undefined) {
+  const path = requireConfig(configPath)
+  // REEVAL_PROFILE and REEVAL_CONCURRENCY in a .env file are held to the run's like the shell's.
+  loadEnvFiles(path)
+  const root = dirname(path)
+  const target = await resolveResume(root, flags.resume || undefined)
+  const saved = await savedInvocation(root, target)
+  if (!saved) {
+    const note = `run ${target.runId} saved no --runs, profile or filters, so this resume plans with the ones given now`
+    return { saved: null, settings: null, notes: [note], profileOf: undefined }
+  }
+  const given = {
+    runs: flags.runs,
+    profile: flags.profile,
+    concurrency: flags.concurrency,
+    tag: flags.tag,
+    filters,
+  }
+  const resumed = resumeSettings(target.runId, saved, given, { root })
+  const fromRun = flags.profile === undefined && resumed.settings.profile !== undefined
+  return { saved, ...resumed, profileOf: fromRun ? target.runId : undefined }
+}
+
+/**
+ * Everything that can fail before the evals are collected: output mode, config, profile, flags.
+ * `noProfile` is a resume of a run that had none, which `defaultProfile` mustn't give one;
+ * `profileOf` names the resumed run whose profile `flags.profile` is.
+ */
+async function prepareRun(
+  flags: Flags,
+  configPath: string | undefined,
+  { noProfile = false, profileOf }: { noProfile?: boolean; profileOf?: string } = {},
+) {
   const output = resolveOutput({
     flags: {
       ui: flags.ui,
@@ -492,9 +550,14 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
   })
   const path = requireConfig(configPath)
   loadEnvFiles(path)
-  const named = flags.profile ?? (process.env.REEVAL_PROFILE || undefined)
+  const named = noProfile ? undefined : (flags.profile ?? (process.env.REEVAL_PROFILE || undefined))
   const config = await loadConfig(path, 'run', named)
-  const profile = selectProfile(config, flags.profile)
+  if (profileOf && flags.profile && !config.profiles[flags.profile]) {
+    throw new UsageError(
+      `run ${profileOf} was started with profile ${flags.profile}, which ${config.file} no longer defines. Put it back to resume the run, or start a new run without --resume.`,
+    )
+  }
+  const profile = noProfile ? null : selectProfile(config, flags.profile)
   let runs: number | undefined
   if (flags.runs !== undefined) {
     runs = Number(flags.runs)
@@ -699,6 +762,7 @@ async function executeRun(
   setup: Prepared,
   filters: string[],
   renderer: ReturnType<typeof createRenderer>,
+  started: { startedWith: RunInvocation | undefined; notes: string[] },
 ) {
   const { runId, stagingDir, config, runs, tags, concurrency, profile, verbosity, configFile } = ctx
   const run = JSON.parse(
@@ -783,6 +847,7 @@ async function executeRun(
         `${directOnCloud(cloud)}. Under it: ${direct.join(', ')}. Keep 'allow-all' to the evals that need raw TCP or UDP; the default, 'proxy', sends everything through the gateway`,
       )
     }
+    plan.warnings.push(...started.notes)
     if (completed.size) plan.resume = { runId, completed: completed.size }
     run.completed = [...completed]
     kept = keptAttempts(completed, stagingDir, ctx.previous)
@@ -1053,6 +1118,7 @@ async function executeRun(
           startedAt: ctx.startedAt,
           planned: toRun,
           kept,
+          ...(started.startedWith ? { invocation: started.startedWith } : {}),
         })
         renderer.onEvent({
           type: 'run-start',

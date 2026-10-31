@@ -2,6 +2,7 @@
 // `.reeval/staging/<runId>/live.json` (a `LiveProgress`) and replaces it whole on every change; it's
 // never part of a run record, and it goes when the record lands.
 
+import type { RunInvocation } from '../history/types.ts'
 import { isOneOf } from '../object.ts'
 import { fillDefaults } from './record.ts'
 
@@ -52,6 +53,8 @@ export type LiveProgress = {
   planned: number
   counts: LiveCounts
   attempts: LiveAttempt[]
+  /** How the run was started, for a `--resume` after a quit that wrote no record. */
+  invocation?: RunInvocation
 }
 
 /** A live run as the studio lists it: `stopped` when its process is gone or went quiet. */
@@ -109,6 +112,25 @@ function readableAttempt(v: unknown): LiveAttempt | null {
   }
 }
 
+const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(str)
+
+/** A saved invocation, or undefined when it isn't one; its numbers are whole and at least 1. */
+export function readableInvocation(v: unknown): RunInvocation | undefined {
+  if (!isObj(v)) return undefined
+  const { runs, profile, concurrency, filters, tags } = v
+  const count = (n: unknown) => n === undefined || (Number.isInteger(n) && (n as number) >= 1)
+  if (!count(runs) || !count(concurrency) || !(profile === undefined || str(profile)))
+    return undefined
+  if (!strings(filters) || !strings(tags)) return undefined
+  return {
+    ...(runs === undefined ? {} : { runs: runs as number }),
+    ...(profile === undefined ? {} : { profile }),
+    ...(concurrency === undefined ? {} : { concurrency: concurrency as number }),
+    filters,
+    tags,
+  }
+}
+
 /**
  * A progress file as the studio reads it, or null when it isn't one it can read: half-written,
  * corrupt, or from a newer reeval. Counts are recomputed from the attempts, never trusted.
@@ -121,6 +143,7 @@ export function readableLiveProgress(value: unknown): LiveProgress | null {
   if (!isOneOf(PHASES, phase) || !Array.isArray(attempts)) return null
   const list = attempts.map(readableAttempt)
   if (!list.every((a) => a !== null)) return null
+  const invocation = readableInvocation(value.invocation)
   return {
     schemaVersion: LIVE_SCHEMA_VERSION,
     runId,
@@ -132,5 +155,6 @@ export function readableLiveProgress(value: unknown): LiveProgress | null {
     planned: list.length,
     counts: liveCounts(list),
     attempts: list,
+    ...(invocation ? { invocation } : {}),
   }
 }

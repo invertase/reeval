@@ -1788,8 +1788,14 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'ui.serve.port',
     area: 'Records and studio',
-    name: '`c.serve` waits until the command listens, takes `PORT` or the one port that started listening after it (IPv4 or IPv6 loopback), records it in `serves`, and fails on several new ports (with the URLs it printed), an exit or a timeout with the last output',
-    fixtures: ['ui/serve-own-port', 'ui/serve-reads-port', 'ui/serve-two-ports', 'ui/serve-exits'],
+    name: '`c.serve` waits until the command listens, takes `PORT` or the one port that started listening after it (IPv4 or IPv6 loopback), records it in `serves`, and fails on several new ports (with the URLs it printed), an exit or a timeout with the last output, or on a given port something already listened on',
+    fixtures: [
+      'ui/serve-own-port',
+      'ui/serve-reads-port',
+      'ui/serve-two-ports',
+      'ui/serve-exits',
+      'ui/serve-port-in-use',
+    ],
     unit: ['reeval/test/serve.test.ts'],
   },
   {

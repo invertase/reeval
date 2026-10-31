@@ -74,6 +74,10 @@ For more information about the keys on `stack.judge.state`, see [`c.judge()`](/r
   The profile the run was sized with, and why it was chosen.
 </Property>
 
+<Property name="invocation" type="RunInvocation" optional>
+  How `reeval run` was started; `--resume` plans with it again. Unset in older records.
+</Property>
+
 <Property name="plan" type="{evals: number; cells: number; attempts: number; estimateMs: number; sandboxWarnings: SandboxWarning[]}">
   What the run planned before it started, and each level whose sandbox ran as root or with capabilities added back.
 </Property>

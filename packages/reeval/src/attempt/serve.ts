@@ -102,7 +102,7 @@ const addressFor = (listeners: Listener[], port: number) => {
   return all.find((a) => !a.includes(':')) ?? all.find((a) => a === '::') ?? all[0] ?? ''
 }
 
-/** `want` is taken whoever listens on it: reeval allocated it, or the eval named it. */
+/** `want` is taken whoever listens on it: `servePort` found it free when the command started. */
 export function decide(s: ServeState): ServeDecision {
   const { listeners, alive } = s.probe
   const ports = newPorts(listeners, s.before)
@@ -150,6 +150,37 @@ export async function hostListening(port: number): Promise<string | undefined> {
     if (ok) return host
   }
   return undefined
+}
+
+/** How many times `c.serve` allocates `PORT` again when the sandbox already listens on it. */
+const ALLOCATE_TRIES = 5
+
+/**
+ * The port `c.serve` sets as `PORT` and waits on: `port`, or one from `allocate` that nothing
+ * listens on yet. Throws when something already listens on `port`, since that server, not the
+ * command's, would answer the checks: c.serve only stops what it started.
+ */
+export async function servePort(
+  command: string,
+  port: number | undefined,
+  allocate: () => Promise<number>,
+  taken: (port: number) => Promise<boolean>,
+): Promise<number> {
+  if (port === undefined) {
+    for (let i = 0; i < ALLOCATE_TRIES; i++) {
+      const want = await allocate()
+      if (!(await taken(want))) return want
+    }
+    throw new Error(
+      `c.serve(${JSON.stringify(command)}) found every port it allocated for PORT already in use in the sandbox`,
+    )
+  }
+  if (await taken(port)) {
+    throw new Error(
+      `c.serve(${JSON.stringify(command)}, ${port}): port ${port} was already in use before c.serve started (a server the agent left running?), so the checks would reach that server, not this command's. Stop it first, or drop the port to serve on PORT`,
+    )
+  }
+  return port
 }
 
 export type ServeFound = { port: number; address: string; detected: boolean; readyMs: number }

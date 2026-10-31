@@ -4,6 +4,7 @@ import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import type { PlannedItem } from './engine/types.ts'
+import type { RunInvocation } from './history/types.ts'
 import type { EvalResult } from './ui/events.ts'
 import {
   LIVE_FILE,
@@ -32,6 +33,7 @@ export type LiveProgressOptions = {
   planned: PlannedItem[]
   /** By attempt key: a resume plans these skipped, but they show as they finished. */
   kept?: ReadonlyMap<string, LiveKept>
+  invocation?: RunInvocation
   heartbeatMs?: number
   now?: () => Date
 }
@@ -137,6 +139,7 @@ export function writeLiveProgress(options: LiveProgressOptions): LiveProgressWri
       planned: list.length,
       counts: liveCounts(list),
       attempts: list,
+      ...(options.invocation ? { invocation: options.invocation } : {}),
     }
   }
   const write = () => {

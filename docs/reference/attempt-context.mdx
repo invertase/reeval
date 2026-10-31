@@ -79,7 +79,7 @@ const app = await c.serve('npm start')
 </Property>
 
 <Property name="port" type="number" optional>
-  The container port to give the command, or a free port reeval allocates when omitted.
+  The container port to give the command, or a free port reeval allocates when omitted. The call throws, before it starts the command, when something already listens on this port, such as a dev server the agent left running.
 </Property>
 
 The `ServeHandle` has `kill()`, as a `BackgroundHandle` does, and this field:
@@ -329,7 +329,7 @@ c.observe('deps', Object.keys(JSON.parse(pkg).dependencies))
 ```
 
 <Property name="name" type="string" required>
-  1 to 64 letters, digits, `_`, `.`, `:`, `/` or `-`. Observing a name again replaces its value.
+  1 to 64 letters, digits, `_`, `.`, `:`, `/` or `-`. Observing a name again replaces its value. A secret in a name is masked as values are, and a second name that masks to the same name throws.
 </Property>
 
 <Property name="value" type="JSONValue" required>

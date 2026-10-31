@@ -19,7 +19,7 @@
           "maximum": 9007199254740991
         },
         "maxOutputTokens": {
-          "description": "The most tokens the model may answer with (default 8000). reeval has no prices, so tokens are the cap.",
+          "description": "The most tokens the model may answer with, reasoning included (default 32000). reeval has no prices, so tokens are the cap.",
           "type": "integer",
           "minimum": 500,
           "maximum": 9007199254740991

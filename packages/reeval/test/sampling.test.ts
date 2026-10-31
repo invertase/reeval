@@ -47,7 +47,7 @@ describe('sampling parameters on anthropic/* models', () => {
   const gateway: ResolvedAnalysisModel = { name: MODEL, route: 'gateway' }
 
   test('reeval analyze', async () => {
-    await assert.rejects(callAnalysisModel(gateway, {} as never, 'go', 100))
+    await assert.rejects(callAnalysisModel(gateway, {} as never, 'go', 100, 'reeval.config.ts'))
     assertNoSampling('analysis')
   })
 

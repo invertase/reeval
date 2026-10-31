@@ -2756,6 +2756,39 @@
       },
       "required": ["cause", "kills"]
     },
+    "RunInvocation": {
+      "description": "The `reeval run` settings that shaped a run's plan, as it was first started. A resume keeps them, so it finishes the attempts the run planned.",
+      "type": "object",
+      "properties": {
+        "concurrency": {
+          "description": "`--concurrency` or `REEVAL_CONCURRENCY`; unset when the config or the machine sized it.",
+          "type": "number"
+        },
+        "filters": {
+          "description": "The filter arguments.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "profile": {
+          "description": "The profile the run was sized with; unset when it had none.",
+          "type": "string"
+        },
+        "runs": {
+          "description": "`--runs`; unset when each cell ran its own `runs`.",
+          "type": "number"
+        },
+        "tags": {
+          "description": "`--tag`, without the profile's own tags.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["filters", "tags"]
+    },
     "RunnerInfo": {
       "anyOf": [
         {
@@ -3001,6 +3034,10 @@
               "type": "null"
             }
           ]
+        },
+        "invocation": {
+          "description": "How `reeval run` was started; `--resume` plans with it again. Unset in older records.",
+          "$ref": "#/$defs/RunInvocation"
         },
         "kind": {
           "const": "reeval-run"

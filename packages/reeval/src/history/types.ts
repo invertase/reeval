@@ -651,6 +651,23 @@ export type Cost = {
   source: 'reported' | 'unreported'
 }
 
+/**
+ * The `reeval run` settings that shaped a run's plan, as it was first started. A resume keeps
+ * them, so it finishes the attempts the run planned.
+ */
+export type RunInvocation = {
+  /** `--runs`; unset when each cell ran its own `runs`. */
+  runs?: number
+  /** The profile the run was sized with; unset when it had none. */
+  profile?: string
+  /** `--concurrency` or `REEVAL_CONCURRENCY`; unset when the config or the machine sized it. */
+  concurrency?: number
+  /** The filter arguments. */
+  filters: string[]
+  /** `--tag`, without the profile's own tags. */
+  tags: string[]
+}
+
 export type RunRecord = {
   kind: 'reeval-run'
   schemaVersion: typeof SCHEMA_VERSION
@@ -692,6 +709,8 @@ export type RunRecord = {
       harness?: string[]
     }
   } | null
+  /** How `reeval run` was started; `--resume` plans with it again. Unset in older records. */
+  invocation?: RunInvocation
   /**
    * What the run planned before it started, and each level whose sandbox ran as root or with
    * capabilities added back.

@@ -12,7 +12,7 @@ reeval loads every `*.eval.ts` and `*.eval.py` file under the `evals/` folder. T
 <Steps>
 <Step title="Name the question">
 
-Pass the evaluation name as the first argument to `evaluate()`. The name states the question the evaluation answers. Results and insights lead with the name, so you know what a pass means before reading any assertion. In the `evals/camelcase.eval.ts` file, declare the evaluation:
+Pass the evaluation name as the first argument to `evaluate()`. The name states the question the evaluation answers. Results lead with the name, so you know what a pass means before reading any assertion. In the `evals/camelcase.eval.ts` file, declare the evaluation:
 
 ```ts title="evals/camelcase.eval.ts"
 import { readFileSync } from 'node:fs'

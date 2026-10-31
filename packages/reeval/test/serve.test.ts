@@ -12,6 +12,7 @@ import {
   procAddress,
   SETTLE_MS,
   type ServeProbe,
+  servePort,
 } from '../src/attempt/serve.ts'
 
 const linux = process.platform === 'linux' ? false : 'reads /proc'
@@ -227,6 +228,28 @@ test('awaitListening without /proc waits for PORT on the host', async () => {
   })
   assert.equal(found.port, 4000)
   assert.equal(found.detected, false)
+})
+
+test('servePort refuses a given port already in use and allocates PORT past one', async () => {
+  const inUse = new Set([3000, 4001])
+  const taken = async (port: number) => inUse.has(port)
+  await assert.rejects(
+    servePort('npm run preview', 3000, async () => 4000, taken),
+    {
+      message:
+        'c.serve("npm run preview", 3000): port 3000 was already in use before c.serve started (a server the agent left running?), so the checks would reach that server, not this command\'s. Stop it first, or drop the port to serve on PORT',
+    },
+  )
+  assert.equal(await servePort('npm run preview', 3001, async () => 4000, taken), 3001)
+  let next = 4001
+  assert.equal(await servePort('npm start', undefined, async () => next++, taken), 4002)
+  await assert.rejects(
+    servePort('npm start', undefined, async () => 3000, taken),
+    {
+      message:
+        'c.serve("npm start") found every port it allocated for PORT already in use in the sandbox',
+    },
+  )
 })
 
 test('the probe script reads the listeners from /proc and whether the pid runs', {

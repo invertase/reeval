@@ -1,4 +1,5 @@
 no profile · 1 evals (1 skipped) · 1 cells · 1 attempts · resume 1 skipped
+warning: run 20260101T000000Z_nogit_test_abcd saved no --runs, profile or filters, so this resume plans with the ones given now
 evals/r.eval.ts › done      skipped: already completed in this run
 evals/r.eval.ts › leftover  fake/-/docker  control  gated  ×1
 excluded: —
