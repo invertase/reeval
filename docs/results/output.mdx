@@ -22,17 +22,11 @@ fail             adds a tested multiply function
   +2 more passed
 ```
 
-The tally omits zeros, as in `2 fail · 1 pass · 1 infra error`. A failure outside any evaluation counts as a `run error`. With no analysis model, this line follows the tally:
-
-```text
-Set analysis.model in reeval.config.ts for answers to what each eval asks.
-```
-
-For more information about setting that model, see [Analyze a run with reeval analyze](/results/analyze).
+The tally omits zeros, as in `2 fail · 1 pass · 1 infra error`. A failure outside any evaluation counts as a `run error`.
 
 ## Read remarks
 
-After the tally, `Remarks:` names concerns about the evaluations, such as a flaky assertion or a slow MCP server start. reeval's own rules raise them with or without an analysis model, and an analysis model adds its own. A `fix` or `at` line names the file location. At most three concerns print, then `+N more (-v)`. To print the rest and any suggestion, pass `-v`. A concern prints on the run that first raises it. A slow server start prints on every run where it happens.
+After the tally, `Remarks:` names concerns about the evaluations, such as a flaky assertion or a slow MCP server start. reeval's own rules raise them from the run and its history, with no model. A `fix` or `at` line names the file location. At most three concerns print, then `+N more (-v)`. To print the rest and any suggestion, pass `-v`. A concern prints on the run that first raises it. A slow server start prints on every run where it happens.
 
 A remark looks like this:
 

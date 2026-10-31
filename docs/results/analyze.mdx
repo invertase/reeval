@@ -29,7 +29,7 @@ GOOGLE_GENERATIVE_AI_API_KEY=replace-with-your-key
 
 For more information about other model prefixes, see [`AI_GATEWAY_API_KEY`](/reference/environment-variables#aigatewayapikey).
 
-`reeval run` doesn't call the analysis model unless an evaluation asks questions, so a run without the key still runs. `reeval doctor` warns when the key is missing.
+`reeval run` calls the analysis model only for questions and `c.capture()` instructions that have no model of their own, so a run with neither runs without the key. `reeval doctor` warns when the key is missing.
 
 For more information about the other `analysis` fields, see [the `analysis` option](/reference/options#analysis).
 
