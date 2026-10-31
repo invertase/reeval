@@ -48,7 +48,7 @@ Each built-in view returns one kind of row.
 | `contrasts` | `run_id`, `eval_key`, `harness`, `sandbox`, `a_key`, `b_key`, `a_environment`, `b_environment`, `a_pass`, `a_counted`, `b_pass`, `b_counted`, `points`, `lo`, `hi`, `pass_verdict`, `a_tools_median`, `b_tools_median`, `tools_ratio`, `tools_p`, `separated`, `verdict`, `agent_s_ratio`, `time_separated`, `time_verdict`, `tokens_ratio`, `tokens_separated`, `tokens_verdict`, `checks`, `discriminating` |
 | `drift` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `changed`, `changed_paths`, `noise`, `real_changed` |
 | `effort` | `run_id`, `eval_key`, `cell_key`, `role`, `variant`, `harness`, `environment`, `n`, `tools_median`, `tools_q1`, `tools_q3`, `agent_s_median`, `agent_s_q1`, `agent_s_q3`, `file_edits_median`, `files_changed_median`, `tokens_median`, `tokens_q1`, `tokens_q3`, `control_key`, `control_n`, `control_tools_median`, `control_agent_s_median`, `control_tokens_median`, `tools_ratio`, `agent_s_ratio`, `agent_s_delta`, `tokens_ratio`, `tools_p`, `agent_s_p`, `tokens_p`, `separated`, `time_separated`, `tokens_separated`, `verdict`, `time_verdict`, `tokens_verdict`, `tokens_note`, `context_calls_median`, `dependency_calls_median`, `web_calls_median`, `verify_calls_median`, `workspace_calls_median` |
-| `eval_trend` | `eval_key`, `run_id`, `started_at`, `branch`, `pr_number`, `recorded`, `outcome`, `pass_at_1`, `fingerprint` |
+| `eval_trend` | `eval_key`, `run_id`, `started_at`, `branch`, `pr_number`, `recorded`, `outcome`, `verdict`, `pass_at_1`, `fingerprint` |
 | `factor_effects` | `factor`, `level`, `baseline`, `context`, `tier`, `run_id`, `eval_key`, `strata`, `runs`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `points`, `lo`, `hi`, `within_noise`, `pass_verdict`, `tools_ratio`, `tools_ratios`, `agent_s_ratio`, `tools_p`, `consistent`, `separated`, `effort_verdict`, `tokens_ratio`, `tokens_p`, `tokens_verdict`, `tokens_note`, `note` |
 | `failing_attempts` | `run_id`, `started_at`, `eval_key`, `attempt_key`, `cell_key`, `harness`, `model`, `environment`, `skill`, `outcome`, `error_kind`, `error_message`, `duration_ms`, `oom_kills`, `first_failed_check` |
 | `family_lift` | `run_id`, `family_id`, `name`, `harness`, `variant`, `cell_key`, `control`, `pairs`, `variant_pass_at_1`, `control_pass_at_1`, `discordant_vc`, `discordant_cv`, `points`, `lo`, `hi`, `method`, `p`, `within_noise`, `verdict`, `min_lift`, `outcome`, `tools_ratio`, `tools_p`, `effort_verdict`, `agent_s_ratio`, `agent_s_p`, `time_verdict`, `tokens_ratio`, `tokens_p`, `tokens_verdict`, `started_at`, `branch` |
@@ -181,7 +181,7 @@ With no placed skill, `skill` is null.
 
 ## `eval_trend`
 
-`eval_trend` lists one row per evaluation per run.
+`eval_trend` lists one row per evaluation per run. `verdict` is `family` on a case whose family's `passRate` gates it, so its `outcome` doesn't fail the run on its own.
 
 ```bash title="Query"
 reeval query "SELECT eval_key, outcome, pass_at_1 FROM eval_trend"

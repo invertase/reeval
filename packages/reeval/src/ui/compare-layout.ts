@@ -104,6 +104,9 @@ const FLIPPED: Partial<Record<CompareStatus, string>> = {
   fixed: 'now passes',
 }
 
+/** The tally's verb for more than one case. */
+const FLIPPED_MANY: Record<string, string> = { 'now fails': 'now fail', 'now passes': 'now pass' }
+
 const flipped = (row: CompareRow) => (row.verdict === 'family' ? FLIPPED[row.status] : undefined)
 
 const statusWord = (c: Colors, row: CompareRow): Text => {
@@ -569,7 +572,8 @@ export function compareTally(c: Colors, rows: CompareRow[]): string {
   }
   const cases = Object.values(FLIPPED).flatMap((word) => {
     const n = rows.filter((r) => flipped(r) === word).length
-    return n ? [c.dim(`${plural(n, 'case')} ${word}`)] : []
+    const verb = n === 1 ? word : (FLIPPED_MANY[word] ?? word)
+    return n ? [c.dim(`${plural(n, 'case')} ${verb}`)] : []
   })
   const [regressed, fixed, ...rest] = TALLY
   const parts = [

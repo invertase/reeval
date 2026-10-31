@@ -245,6 +245,14 @@ describe('catch regressions (reeval compare)', () => {
     assert.equal(compareTally(c, [row('same'), row('fixed'), row('same')]), '1 fixed · 2 same')
     assert.equal(compareTally(c, [row('infra')]), '1 infra error')
     assert.equal(compareTally(c, []), 'no evals to compare')
+    const flipped = (status: 'regressed' | 'fixed') => ({
+      ...row(status),
+      verdict: 'family' as const,
+    })
+    assert.equal(
+      compareTally(c, [row('regressed'), flipped('regressed'), flipped('fixed'), flipped('fixed')]),
+      '1 regressed · 1 case now fails · 2 cases now pass',
+    )
   })
 
   test('a check not run on one side is not run, never a failure; a flip shows both sides', () => {

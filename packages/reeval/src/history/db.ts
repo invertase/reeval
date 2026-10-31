@@ -340,10 +340,11 @@ CREATE VIEW check_rates AS
   FROM cell_checks k
   JOIN cells c ON c.run_id = k.run_id AND c.eval_key = k.eval_key AND c.key = k.cell_key;
 
--- One eval per run: outcome and pass@1, with the branch and pull request.
+-- One eval per run: outcome and pass@1, with the branch and pull request. A case with verdict
+-- 'family' doesn't fail the run on its own outcome: its family's rate does.
 CREATE VIEW eval_trend AS
   SELECT e.eval_key, r.run_id, r.started_at, r.branch, r.pr_number, r.recorded, e.outcome,
-    e.pass_at_1, e.fingerprint
+    e.verdict, e.pass_at_1, e.fingerprint
   FROM (SELECT key AS eval_key, * FROM evals) e JOIN runs r USING (run_id);
 
 -- Each judge question's pass rate per cell per run, where it differs from that cell's last run.

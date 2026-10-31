@@ -89,6 +89,27 @@ evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 3 }
     assert.match(text.stderr, /history\.db: 1 runs/)
   })
 
+  test('eval_trend marks a case its family’s passRate gates', async () => {
+    const p = await project('query-trend-verdict', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/r.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('rated', { cases: ['a', 'b', 'c'], gate: { passRate: 0.6 } }, async (_c, k) => {
+  expect(k, 'not c').not.toBe('c')
+})
+evaluate('plain', {}, async () => {})
+`,
+    })
+    const r = await runCli(p.dir, ['run'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const trend = await query(p.dir, 'SELECT eval_key, outcome, verdict FROM eval_trend')
+    assert.deepEqual(trend.map((t) => [t.eval_key, t.outcome, t.verdict]).sort(), [
+      ['evals/r.eval.ts › plain', 'pass', null],
+      ['evals/r.eval.ts › rated [a]', 'pass', 'family'],
+      ['evals/r.eval.ts › rated [b]', 'pass', 'family'],
+      ['evals/r.eval.ts › rated [c]', 'fail', 'family'],
+    ])
+  })
+
   test('check_rates gives each labeled check’s pass rate per cell, on both arms of a compare', async () => {
     const p = await project('query-check-rates', {
       'reeval.config.ts': fakeConfig({
