@@ -637,7 +637,7 @@
           "description": "The eval's gate policy, or undefined when it was left at the default (`'all'`).",
           "anyOf": [
             {
-              "const": "all"
+              "enum": ["all", "none"]
             },
             {
               "type": "object",

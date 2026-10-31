@@ -977,6 +977,16 @@ export function cascade(
       `${where} compares environments, so it can't take runs: { bestOf: ${out.bestOf} }${set}: a lift needs the same number of attempts on each side, and best-of stops each cell on its own. Set a fixed count on it, e.g. runs: 4.`,
     )
   }
+  if (out.gate === 'none' && out.compare?.minLift !== undefined && out.compare.variants.length) {
+    throw new UsageError(
+      `${where} has gate: 'none', so its compare can't take minLift: ${out.compare.minLift}: minLift gates the lift, and nothing in it gates. Drop minLift, or gate the eval.`,
+    )
+  }
+  if (out.gate === 'none' && out.bestOf !== undefined) {
+    throw new UsageError(
+      `${where} has gate: 'none', so it can't take runs: { bestOf: ${out.bestOf} }: best-of decides each cell by its majority. Set a fixed count, e.g. runs: 3.`,
+    )
+  }
   if (out.bestOf !== undefined) {
     // The majority decides a best-of cell, so no other gate can.
     if (out.gate !== undefined && gateLabel(out.gate) !== gateLabel(MAJORITY_GATE)) {

@@ -1897,7 +1897,7 @@ evaluate('studied', { compare: { control: plain, variants: [skilled], gate: 'non
     assert.match(r.stdout, /^pass {13}compared\n {2}arm {16}pass\n {2}plain {14}0 of 2\n/m)
     assert.match(r.stdout, /^fail {13}repeated\n {2}4 tries {10}3 of 4\n/m)
     // Nothing gates a study, so it never reads pass beside 0 of 2.
-    assert.match(r.stdout, /^not gated {8}studied\n {2}arm {18}pass\n {2}plain {16}0 of 2\n/m)
+    assert.match(r.stdout, /^ran {14}studied\n {2}arm {18}pass\n {2}plain {16}0 of 2\n/m)
   })
 
   test("a harness whose session never becomes ready is an infra error, once retried; its sandbox goes, other evals don't wait", async () => {

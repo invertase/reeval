@@ -107,6 +107,7 @@ export const cases: PlanCase[] = [
   { dir: 'compare', name: 'cases-filtered', args: ['evals/cases.eval.ts', 'grace'] },
   { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.eval.ts', 'b/skilled'] },
   { dir: 'compare', name: 'study', args: ['evals/study.eval.ts'] },
+  { dir: 'survey', name: 'survey', args: [] },
   { dir: 'compare', name: 'verdicts', args: ['evals/verdicts.eval.ts'] },
   { dir: 'compare', name: 'verdicts-no-control', args: ['evals/verdicts.eval.ts', 'b/skilled'] },
   {

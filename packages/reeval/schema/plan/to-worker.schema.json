@@ -1928,7 +1928,7 @@
           "description": "How each cell's attempts decide its outcome.",
           "anyOf": [
             {
-              "const": "all"
+              "enum": ["all", "none"]
             },
             {
               "type": "object",
@@ -2213,7 +2213,7 @@
           "description": "Unset means `'all'`; kept unset so the plan can hint when `runs > 1`.",
           "anyOf": [
             {
-              "const": "all"
+              "enum": ["all", "none"]
             },
             {
               "type": "object",

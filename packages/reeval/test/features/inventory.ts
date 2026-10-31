@@ -136,6 +136,14 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/options.test.ts', 'reeval/test/results.test.ts'],
   },
   {
+    id: 'survey',
+    area: 'Config and selection',
+    name: "`survey()` and `gate: 'none'`: every cell ungated, a failed `expect` reads `ran` and fails nothing, and no pass^k hint",
+    plan: ['survey/survey'],
+    fixtures: ['run/survey', 'output/study'],
+    unit: ['reeval/test/output.test.ts'],
+  },
+  {
     id: 'cases',
     area: 'Config and selection',
     name: '`cases` and `caseKey`: one eval over a list of cases, each keyed `<eval> [<key>]`, pooled into a pass rate and a paired lift that `minLift` gates',

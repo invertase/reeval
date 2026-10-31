@@ -3149,6 +3149,24 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'run/survey',
+    tiers: ['fake'],
+    env: 'survey',
+    lands: { outcome: 'pass', error: { kind: 'assertion', message: /picks postgres/ } },
+    landsPass: [],
+    canary: /picks postgres: expected 'sqlite' to be 'postgres'/,
+    record: ({ run, stdout }) => {
+      const lands = run.evals.find((e) => e.name === 'lands')
+      assert.deepEqual(
+        lands?.cells.map((c) => c.gate),
+        ['none'],
+        'a survey records its cells ungated',
+      )
+      assert.match(stdout, /^ran {14}lands$/m)
+      assert.match(stdout, /\n1 fail · 1 ran\n/)
+    },
+  },
+  {
     dir: 'run/snapshots',
     tiers: ['fake', 'docker'],
     env: 'snapshots',
@@ -3277,14 +3295,14 @@ export const features: Feature[] = [
         { pass: 0, notGated: 1, fail: 1 },
       )
       const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
-      assert.match(summary, /^1 fail · 1 not gated · started /m)
-      assert.match(summary, /^not gated {8}lands$/m)
-      assert.match(summary, /^### ○ evals\/lands\.eval\.ts › lands · not gated$/m)
+      assert.match(summary, /^1 fail · 1 ran · started /m)
+      assert.match(summary, /^ran {14}lands$/m)
+      assert.match(summary, /^### ○ evals\/lands\.eval\.ts › lands · ran$/m)
       assert.doesNotMatch(summary, /\bpass · |· 1 pass\b/)
       const recorded = await runCli(project, ['record'])
       assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
       const compared = await runCli(project, ['compare'])
-      assert.match(compared.stdout, /^2 new evals \(1 fail · 1 not gated\)$/m)
+      assert.match(compared.stdout, /^2 new evals \(1 fail · 1 ran\)$/m)
       const history = await runCli(project, ['history'])
       assert.match(history.stdout, /^ {2}○ +– {2}evals\/lands\.eval\.ts › lands$/m)
     },

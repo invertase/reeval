@@ -97,12 +97,12 @@ const TALLY: CompareStatus[] = [
 const paintStatus = (c: Colors, s: CompareStatus): Paint =>
   s === 'regressed' ? c.red : s === 'fixed' ? c.green : s === 'same' ? c.dim : c.yellow
 
-/** A side's outcome as its row reads it: a study's pass is `not_gated`. */
+/** A side's outcome as its row reads it: a survey's pass is `not_gated`, which reads `ran`. */
 type Shown = ResultOutcome | 'not_gated'
 
 const OUTCOME: Record<Shown, string> = {
   pass: 'pass',
-  not_gated: 'not gated',
+  not_gated: 'ran',
   fail: 'fail',
   infra_error: 'infra error',
   canceled: 'canceled',
@@ -122,7 +122,7 @@ const paintOutcome = (c: Colors, o: Shown): Paint =>
 const sideOutcome = (row: CompareRow, side: 'base' | 'head'): ResultOutcome | null =>
   row.canceled?.includes(side) ? 'canceled' : row[side]
 
-/** One side's outcome as its eval's row in `reeval run` reads it: a study's pass is `not gated`. */
+/** One side's outcome as its eval's row in `reeval run` reads it: a survey's pass is `ran`. */
 const shownOutcome = (row: CompareRow, side: 'base' | 'head', unit?: Unit): Shown | null => {
   const o = sideOutcome(row, side)
   return o === 'pass' && isStudy(unit?.result.cells ?? []) ? 'not_gated' : o

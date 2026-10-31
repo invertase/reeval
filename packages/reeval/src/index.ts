@@ -9,7 +9,7 @@ export {
   DEFAULT_SKILL_EXCLUDE,
   defineEnvironment,
 } from './environment.ts'
-export { evaluate, group } from './evaluate.ts'
+export { evaluate, group, survey } from './evaluate.ts'
 export type {
   AttemptRecord,
   CellRecord,
@@ -87,6 +87,7 @@ export type {
   SetupStep,
   SkillSource,
   StatusRange,
+  SurveyOptions,
   TranscriptEvent,
   Turn,
   TurnData,

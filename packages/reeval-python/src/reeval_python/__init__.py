@@ -1,7 +1,7 @@
 """Python eval authoring API for reeval (*.eval.py)."""
 
 from reeval_python.context import AttemptContext, SyncAttemptContext
-from reeval_python.declare import evaluate, group, todo
+from reeval_python.declare import evaluate, group, survey, todo
 from reeval_python.environment import (
     DEFAULT_EGRESS_ALLOW,
     DockerSandbox,
@@ -18,7 +18,15 @@ from reeval_python.environment import (
 )
 from reeval_python.errors import ReevalAssertionError, ReevalCallError
 from reeval_python.expect import Expectation, expect
-from reeval_python.options import BestOf, CaseOptions, EvalOptions, JudgeDefaults, JudgeOptions
+from reeval_python.options import (
+    BestOf,
+    CaseOptions,
+    EvalOptions,
+    JudgeDefaults,
+    JudgeOptions,
+    SurveyCaseOptions,
+    SurveyOptions,
+)
 from reeval_python.types import BackgroundHandle, Diff, ExecResult, FileChange, Turn, Verdict
 
 __all__ = [
@@ -42,6 +50,8 @@ __all__ = [
     "PluginBuild",
     "ReevalAssertionError",
     "ReevalCallError",
+    "SurveyCaseOptions",
+    "SurveyOptions",
     "SyncAttemptContext",
     "Turn",
     "Verdict",
@@ -53,5 +63,6 @@ __all__ = [
     "fake_judge",
     "group",
     "plugin",
+    "survey",
     "todo",
 ]

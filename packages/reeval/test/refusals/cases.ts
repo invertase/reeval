@@ -25,7 +25,7 @@ import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
 import { bodyHash, caseHash } from '../../src/eval-source.ts'
-import { declareTree, evaluate } from '../../src/evaluate.ts'
+import { declareTree, evaluate, survey } from '../../src/evaluate.ts'
 import { resolveModelGateway } from '../../src/gateway/models.ts'
 import { resolveGateway } from '../../src/gateway/resolve.ts'
 import { vercelCredentialProblem } from '../../src/gateway/vercel.ts'
@@ -220,6 +220,13 @@ const declaresWith = (declare: () => void) => () => {
 /** What evaluate() refuses of its cases, in an eval file of its own. */
 const withCases = (options: object, body: (...args: never[]) => unknown = async () => {}) =>
   declaresWith(() => evaluate('e', options as never, body as never))
+/** What survey() and an ungated evaluate() refuse, in an eval file of their own. */
+const surveys = (options: object) =>
+  declaresWith(() => survey('s', options as never, async () => {}))
+const ungated = (options: object) =>
+  declaresWith(() => evaluate('e', { gate: 'none', ...options } as never, async () => {}))
+const plainEnv = defineEnvironment('plain', {})
+const skillEnv = defineEnvironment('skill', { rules: 'Use the house style.' })
 const group = (name: string, children: unknown[]) => ({
   type: 'group',
   name,
@@ -2072,6 +2079,25 @@ environments:
     ['model: openai on vertex, direct off', model('openai/m', undefined, [VERTEX, OFF])],
   ],
   declaration: [
+    ['survey: a gate', surveys({ gate: 'all' })],
+    [
+      'survey: a compare gate',
+      surveys({ compare: { control: plainEnv, variants: [skillEnv], gate: 'all' } }),
+    ],
+    [
+      'survey: a compare minLift',
+      surveys({ compare: { control: plainEnv, variants: [skillEnv], minLift: 0.2 } }),
+    ],
+    ['survey: best-of runs', surveys({ runs: { bestOf: 3 } })],
+    [
+      'survey: accepted with cases and a compare',
+      surveys({ cases: ['a', 'b'], compare: { control: plainEnv, variants: [skillEnv] } }),
+    ],
+    [
+      "gate 'none' with minLift",
+      ungated({ compare: { control: plainEnv, variants: [skillEnv], minLift: 0.2 } }),
+    ],
+    ["gate 'none' with best-of runs", ungated({ runs: { bestOf: 3 } })],
     ['cases: not a list', withCases({ cases: 'abc' })],
     ['cases: an empty list', withCases({ cases: [] })],
     ['cases: caseKey without cases', withCases({ caseKey: (c: string) => c })],

@@ -97,7 +97,7 @@ For more information about the keys on `stack.judge.state`, see [`c.judge()`](/r
 <Property name="evals" type="EvalEntry[]"></Property>
 
 <Property name="families" type="FamilyRecord[]" optional>
-  Each pooled `evaluate.each` that ran; unset when none did.
+  Each eval with `cases` that ran; unset when none did.
 </Property>
 
 <Property name="errors" type="string[]" optional>
@@ -311,7 +311,7 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 </Property>
 
 <Property name="family" type="{id: string; name: string; case: number; cases: number}" optional>
-  Set on each case of a pooled `evaluate.each`; `RunRecord.families` has the suite.
+  Set on each case of an eval with `cases`; `RunRecord.families` has the suite.
 </Property>
 
 ### `CellRecord`
@@ -412,7 +412,7 @@ A variant cell's pass@1 against the control's, on the same harness and sandbox.
 
 ### `FamilyRecord`
 
-A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an evaluation.
+A eval with `cases`: its cases as samples of one suite. Each case is also an evaluation.
 
 <Property name="id" type="string">
   `file › group › … › template`.
@@ -876,7 +876,7 @@ One failed judge try that was retried, and the backoff before the next.
 
 ### `Cell`
 
-A cell of an evaluation combines a harness, an environment (`-` when none is set), and that environment's sandbox id. With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.
+A cell of an evaluation combines a harness, an environment (`-` when none is set), and that environment's sandbox id. With `compare`, the control is `compare.control` and each variant is that environment on its own, including its sandbox.
 
 <Property name="key" type="string">
   The harness id, the environment name, and the sandbox id, joined with `/`.

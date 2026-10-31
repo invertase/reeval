@@ -43,6 +43,7 @@ import type {
   EvalOptions,
   EvalOptionsData,
   GroupOptions,
+  SurveyOptions,
 } from './types.ts'
 
 type Declaring = { name: string; options: GroupOptions; node: DeclaredGroup }
@@ -187,6 +188,14 @@ type EvaluateFn = {
   <N extends number = number>(name: string, options: EvalOptions<N>, fn: EvalFn): void
 }
 
+/** `survey`'s calls: `evaluate`'s, with `SurveyOptions`. */
+type SurveyFn = {
+  <const T>(name: string, options: SurveyOptions & CaseOptions<T>, fn: CaseFn<T>): void
+  <const T>(name: string, fn: CaseFn<T>, options: SurveyOptions & CaseOptions<T>): void
+  (name: string, fn: EvalFn, options?: SurveyOptions): void
+  (name: string, options: SurveyOptions, fn: EvalFn): void
+}
+
 /**
  * The evals declared so far, by id, with their name paths and whether each is a family's case,
  * so a second id is refused.
@@ -313,13 +322,14 @@ function register(
 let registered = 0
 
 const defineEval =
-  (mode: DeclaredMode, declared?: DeclaredSource): EvaluateFn =>
+  (mode: DeclaredMode, declared?: DeclaredSource, verb: Verb = 'evaluate'): EvaluateFn =>
   (name: string, a?: unknown, b?: unknown) => {
-    checkOnly(mode, 'evaluate')
-    const [written, fn] = splitArgs<EvalFn>('evaluate', name, a as EvalOptions, b as EvalOptions)
-    const where = `evaluate("${name}")`
+    checkOnly(mode, verb)
+    const [split, fn] = splitArgs<EvalFn>(verb, name, a as EvalOptions, b as EvalOptions)
+    const where = `${verb}("${name}")`
+    const written = verb === 'survey' ? surveyOptions(split, where) : split
     if (isObjectLike(written) && ('cases' in written || 'caseKey' in written)) {
-      return registerCases(mode, name, written as EvalOptions & CaseOptions<unknown>, fn)
+      return registerCases(mode, name, written as EvalOptions & CaseOptions<unknown>, fn, where)
     }
     register(
       mode,
@@ -339,8 +349,8 @@ function registerCases(
   name: string,
   written: EvalOptions & CaseOptions<unknown>,
   fn: EvalFn | CaseFn<unknown>,
+  where: string,
 ): void {
-  const where = `evaluate("${name}")`
   const { cases, caseKey, ...rest } = written
   if (!Array.isArray(cases)) {
     throw new UsageError(
@@ -383,6 +393,44 @@ export const evaluate: EvaluateFn & {
 } = Object.assign(defineEval('run'), {
   skip: defineEval('skip'),
   only: defineEval('only'),
+  todo: registerTodo,
+})
+
+type Verb = 'evaluate' | 'survey'
+
+/**
+ * A survey's options as an eval's: the gate fixed at `'none'`. A gate of its own, or its compare's
+ * `gate` or `minLift`, is refused, since nothing in a survey gates.
+ */
+function surveyOptions(written: EvalOptions, where: string): EvalOptions {
+  if (!isObjectLike(written)) return written
+  const fix = 'A survey records what its attempts do and gates nothing; use evaluate() to gate.'
+  if ('gate' in written) throw new UsageError(`${where} sets gate. ${fix}`)
+  if (isObjectLike(written.runs)) {
+    throw new UsageError(
+      `${where} sets runs: { bestOf }, which gates each cell on its majority. ${fix} Set a fixed count, e.g. runs: 3.`,
+    )
+  }
+  const compare: unknown = written.compare
+  for (const key of ['gate', 'minLift'] as const) {
+    if (isObjectLike(compare) && key in compare) {
+      throw new UsageError(`${where} sets compare.${key}. ${fix}`)
+    }
+  }
+  return { ...written, gate: 'none' }
+}
+
+/**
+ * `survey` is `evaluate` with the gate fixed at `'none'`: its attempts run and are recorded, and
+ * only run and infra errors fail it. A failed `expect` reads as a check that failed, not a fail.
+ */
+export const survey: SurveyFn & {
+  skip: SurveyFn
+  only: SurveyFn
+  todo: (name: string) => void
+} = Object.assign(defineEval('run', undefined, 'survey') as SurveyFn, {
+  skip: defineEval('skip', undefined, 'survey') as SurveyFn,
+  only: defineEval('only', undefined, 'survey') as SurveyFn,
   todo: registerTodo,
 })
 

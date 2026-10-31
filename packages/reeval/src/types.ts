@@ -1815,9 +1815,10 @@ export type PinnableKey = 'harnesses' | 'runs' | 'compare'
 /**
  * How a cell's attempts decide its outcome: `'all'` (the default) passes only when every attempt
  * passes (pass^k); `{ passRate }` passes when its pass@1 (passes over passes and fails) is at
- * least that share.
+ * least that share; `'none'` gates nothing, so the eval's attempts run and are recorded, and only
+ * run and infra errors fail it (what `survey` sets).
  */
-export type GatePolicy = 'all' | { passRate: number }
+export type GatePolicy = 'all' | 'none' | { passRate: number }
 
 /** A cell's gate: its policy, or `'none'` when its failures don't fail the eval (a control's). */
 export type CellGate = GatePolicy | 'none'
@@ -1919,7 +1920,7 @@ export type EvalSource = DeclaredSource & {
  * A compare names every arm, so an inherited `environments` is not applied, and the same object
  * can't set both.
  */
-type EnvironmentOrCompare<E, Envs> =
+type EnvironmentOrCompare<E, Envs, C = CompareSpec<E>> =
   | {
       /**
        * What this group or eval runs in: one environment, or a list, each its own cell beside
@@ -1932,13 +1933,22 @@ type EnvironmentOrCompare<E, Envs> =
       /** Forbidden beside `compare`, whose `control` names what the eval runs in. */
       environments?: never
       /** Environments to run side by side; `control` is what each variant is measured against. */
-      compare: CompareSpec<E>
+      compare: C
     }
 
 /** `N` is `runs.bestOf` as written, so an even or fractional literal is a type error. */
 export type EvalOptions<N extends number = number> = EvalOptionFields<N> &
   EnvironmentOrCompare<Environment, EnvironmentsOption>
 export type GroupOptions<N extends number = number> = EvalOptions<N>
+
+/**
+ * A survey's options: an eval's, without a gate. It records what its attempts do, and only run
+ * and infra errors fail it, so its compare has no `gate` or `minLift` and its runs no `bestOf`.
+ */
+export type SurveyOptions = Omit<EvalOptionFields, 'gate' | 'runs'> & {
+  /** Attempts per cell. */
+  runs?: number
+} & EnvironmentOrCompare<Environment, EnvironmentsOption, Omit<CompareSpec, 'gate' | 'minLift'>>
 
 /**
  * `EvalOptions` in their data forms, as JSON carries them: the harness as data, the judge's model

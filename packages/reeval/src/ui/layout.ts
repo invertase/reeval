@@ -133,7 +133,7 @@ const paintOutcome = (c: Colors, o: ResultOutcome): Paint =>
 
 function verdict(c: Colors, e: Pick<EvalResult, 'outcome' | 'todo' | 'cells'>): Text {
   if (e.todo) return t('todo', c.dim)
-  if (e.outcome === 'pass' && isStudy(e.cells ?? [])) return t('not gated', c.dim)
+  if (e.outcome === 'pass' && isStudy(e.cells ?? [])) return t('ran', c.dim)
   return t(VERDICT[e.outcome], paintOutcome(c, e.outcome))
 }
 
@@ -585,7 +585,7 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
   const caseWord = (k: CaseResult) =>
     verdict(c, { outcome: k.outcome, todo: false, cells: k.cells })
   const pooledWord = isNotGatedResult(e)
-    ? t('not gated', c.dim)
+    ? t('ran', c.dim)
     : t(VERDICT[pooledOutcome], paintOutcome(c, pooledOutcome))
   const words = [...cases.map(caseWord), ...(pooled.length ? [pooledWord] : [])]
   const wordWidth = Math.max(...words.map((w) => w.text.length))
@@ -703,7 +703,7 @@ export function evalBlock(c: Colors, e: EvalResult, verbose = false): string[] {
 }
 
 /**
- * `5 fail · 2 pass · 1 not gated · 1 canceled`: errors outside any eval and fails first, every
+ * `5 fail · 2 pass · 1 ran · 1 canceled`: errors outside any eval and fails first, every
  * case counting one, zeros left out.
  */
 export function tallyLine(c: Colors, tally: SuiteResult['tally']): string {
@@ -711,7 +711,7 @@ export function tallyLine(c: Colors, tally: SuiteResult['tally']): string {
     tally.errors ? c.red(plural(tally.errors, 'run error')) : '',
     tally.fail ? c.red(`${tally.fail} fail`) : '',
     tally.pass ? c.green(`${tally.pass} pass`) : '',
-    tally.notGated ? c.dim(`${tally.notGated} not gated`) : '',
+    tally.notGated ? c.dim(`${tally.notGated} ran`) : '',
     tally.infraError ? c.yellow(plural(tally.infraError, 'infra error')) : '',
     tally.canceled ? c.yellow(`${tally.canceled} canceled`) : '',
     tally.skipped ? c.dim(`${tally.skipped} skipped`) : '',

@@ -66,8 +66,8 @@ class BestOf(TypedDict):
     """Odd, 3 or more."""
 
 
-class EvalOptions(TypedDict, total=False):
-    """Options for an eval or a group; a group's cascade to the evals inside it."""
+class _SharedOptions(TypedDict, total=False):
+    """The options an eval and a survey both take."""
 
     capture: Mapping[str, Any]
     compare: Mapping[str, Any]
@@ -76,7 +76,6 @@ class EvalOptions(TypedDict, total=False):
     environments: Environment | Sequence[Environment] | Mapping[str, Any]
     """One environment, or a list, each its own cell beside each harness; `{"add": …}` and
     `{"only": [names]}` edit the inherited list."""
-    gate: Literal["all"] | Mapping[str, float]
     harnesses: Harness | Sequence[Harness] | Mapping[str, Any]
     judge: JudgeDefaults
     pin: Sequence[str]
@@ -84,9 +83,6 @@ class EvalOptions(TypedDict, total=False):
     questions: Sequence[Mapping[str, Any]]
     """Asked of each attempt, or between attempts with `across`; `[]` clears the group's. Each
     names what it's shown: `{"question": …, "diff": True}`, at least one input."""
-    runs: int | BestOf
-    """Attempts per cell, or `{"best_of": n}`, which gates each cell on its majority. Not on a
-    compared eval."""
     sandbox: DockerSandbox | Mapping[str, Any]
     snapshot: bool | Literal["turns"] | Mapping[str, Any]
     """When each attempt's workspace is copied into its directory in `.reeval/runs`: `True` after
@@ -98,6 +94,33 @@ class EvalOptions(TypedDict, total=False):
     tags: Sequence[str]
     timeout: timedelta | float
     """Per attempt, in seconds or as a timedelta."""
+
+
+class EvalOptions(_SharedOptions, total=False):
+    """Options for an eval or a group; a group's cascade to the evals inside it."""
+
+    gate: Literal["all", "none"] | Mapping[str, float]
+    """`"all"` (every attempt passes), `"none"` (nothing gates, as in a survey) or
+    `{"pass_rate": 0.8}`."""
+    runs: int | BestOf
+    """Attempts per cell, or `{"best_of": n}`, which gates each cell on its majority. Not on a
+    compared eval."""
+
+
+class SurveyOptions(_SharedOptions, total=False):
+    """A survey's options: an eval's without a gate. Its compare takes no `gate` or `min_lift`."""
+
+    runs: int
+    """Attempts per cell."""
+
+
+class SurveyCaseOptions(SurveyOptions, Generic[T], total=False):
+    """A survey's options with `cases`, as `CaseOptions` are an eval's."""
+
+    cases: Required[Sequence[T]]
+    """The inputs, each JSON data."""
+    case_key: Callable[[T], str]
+    """Each case's key, as in `CaseOptions`."""
 
 
 class CaseOptions(EvalOptions, Generic[T], total=False):

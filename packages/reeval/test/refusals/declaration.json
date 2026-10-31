@@ -1,4 +1,11 @@
 {
+  "survey: a gate": "UsageError: survey(\"s\") sets gate. A survey records what its attempts do and gates nothing; use evaluate() to gate.",
+  "survey: a compare gate": "UsageError: survey(\"s\") sets compare.gate. A survey records what its attempts do and gates nothing; use evaluate() to gate.",
+  "survey: a compare minLift": "UsageError: survey(\"s\") sets compare.minLift. A survey records what its attempts do and gates nothing; use evaluate() to gate.",
+  "survey: best-of runs": "UsageError: survey(\"s\") sets runs: { bestOf }, which gates each cell on its majority. A survey records what its attempts do and gates nothing; use evaluate() to gate. Set a fixed count, e.g. runs: 3.",
+  "survey: accepted with cases and a compare": null,
+  "gate 'none' with minLift": "UsageError: evaluate(\"e\") has gate: 'none', so its compare can't take minLift: 0.2: minLift gates the lift, and nothing in it gates. Drop minLift, or gate the eval.",
+  "gate 'none' with best-of runs": "UsageError: evaluate(\"e\") has gate: 'none', so it can't take runs: { bestOf: 3 }: best-of decides each cell by its majority. Set a fixed count, e.g. runs: 3.",
   "cases: not a list": "UsageError: cases in evaluate(\"e\") must be a list (got string), e.g. cases: ['users', 'posts'].",
   "cases: an empty list": "UsageError: cases in evaluate(\"e\") is an empty list. Give at least one case.",
   "cases: caseKey without cases": "UsageError: caseKey in evaluate(\"e\") names each case, but there are no cases. Add cases: [...], or drop caseKey.",

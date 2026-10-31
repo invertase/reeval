@@ -1216,7 +1216,7 @@ export async function buildDigestKeepingDropped(
           commit: r.record.git?.sha.slice(0, 7) ?? null,
           branch: r.record.git?.branch ?? null,
           status: r.record.status,
-          summary: `${r.record.summary.pass}/${r.record.summary.attempts} attempts passed (${r.record.summary.notGated} failed, not gated)`,
+          summary: `${r.record.summary.pass}/${r.record.summary.attempts} attempts passed (${r.record.summary.notGated} failed in ungated cells)`,
         },
       ]),
     ),

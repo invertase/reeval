@@ -839,7 +839,7 @@ class EvalOptionsDataCompare(TypedDict):
     # Variables and secrets for the sandbox, merged by name down the cascade.
     env: NotRequired[EnvVars]
     # How each cell's attempts decide its outcome; default `'all'`.
-    gate: NotRequired[Literal["all"] | EvalOptionsDataCompareGatePassRate]
+    gate: NotRequired[Literal["all", "none"] | EvalOptionsDataCompareGatePassRate]
     # Which agents run the eval; each harness is its own cell.
     harnesses: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsDataCompareHarnessesAdd | EvalOptionsDataCompareHarnessesOnly]
     # Defaults for `c.judge()`, merged field by field down the cascade.
@@ -915,7 +915,7 @@ class EvalOptionsData2(TypedDict):
     # harness. `{ add }` and `{ only }` edit the inherited list.
     environments: NotRequired[EnvironmentData | list[EnvironmentData] | EvalOptionsData2EnvironmentsAdd | EvalOptionsData2EnvironmentsOnly]
     # How each cell's attempts decide its outcome; default `'all'`.
-    gate: NotRequired[Literal["all"] | EvalOptionsData2GatePassRate]
+    gate: NotRequired[Literal["all", "none"] | EvalOptionsData2GatePassRate]
     # Which agents run the eval; each harness is its own cell.
     harnesses: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsData2HarnessesAdd | EvalOptionsData2HarnessesOnly]
     # Defaults for `c.judge()`, merged field by field down the cascade.

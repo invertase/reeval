@@ -261,7 +261,7 @@ function TreeRow({
         {node.tally.fail ? (
           <span className="tabular text-fail">{node.tally.fail} failed</span>
         ) : node.tally.missed ? (
-          <span className="tabular">{node.tally.missed} missed, not gated</span>
+          <span className="tabular">{node.tally.missed} ran with a failed check</span>
         ) : null}
       </button>
       {open
@@ -341,7 +341,7 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
                     {row.role}
                     {row.gated ? null : (
                       <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                        not gated
+                        ran
                       </Badge>
                     )}
                   </div>
@@ -791,7 +791,7 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
                     ) : null}
                     {missed ? (
                       <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                        missed, not gated
+                        check failed
                       </Badge>
                     ) : null}
                   </div>
@@ -901,7 +901,7 @@ export function RunPage() {
             {notGated ? (
               <>
                 {' · '}
-                <span className="font-semibold">{notGated}</span> missed, not gated
+                <span className="font-semibold">{notGated}</span> ran with a failed check
               </>
             ) : null}
             {infraError ? (

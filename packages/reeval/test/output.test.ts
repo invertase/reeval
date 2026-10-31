@@ -147,7 +147,7 @@ describe('every layout', () => {
     assert.match(text, /^ {2}question {2}Which reads better\?\n {4}4 votes, every one a tie$/m)
   })
 
-  test('a family case whose cells are all ungated reads not gated, never pass beside 0 of 1', () => {
+  test('a family case whose cells are all ungated reads ran, never pass beside 0 of 1', () => {
     const g = GOLDENS.find((x) => x.name === 'family')
     assert.ok(g)
     const suite = goldenSuite(g)
@@ -162,7 +162,7 @@ describe('every layout', () => {
       }
     }
     const text = render(suite, null, { color: false, verbose: false }).join('\n')
-    assert.match(text, /^ {2}not gated {2}\S.* +0 of 1$/m)
+    assert.match(text, /^ {2}ran {2}\S.* +0 of 1$/m)
     assert.doesNotMatch(text, /^ {2}pass {2}\S.* +0 of 1$/m)
   })
 
@@ -206,7 +206,7 @@ describe('every layout', () => {
       '1 fail · 2 pass · 3 canceled',
     )
     assert.equal(tallyLine(c, tally({ errors: 1, pass: 2 })), '1 run error · 2 pass')
-    assert.equal(tallyLine(c, tally({ pass: 1, notGated: 4 })), '1 pass · 4 not gated')
+    assert.equal(tallyLine(c, tally({ pass: 1, notGated: 4 })), '1 pass · 4 ran')
     assert.equal(tallyLine(c, tally({})), 'no evals ran')
   })
 

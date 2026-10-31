@@ -1029,11 +1029,15 @@
       "additionalProperties": false
     },
     "GatePolicy": {
-      "description": "How a cell's attempts decide its outcome: `'all'` (the default) passes only when every attempt passes (pass^k); `{ passRate }` passes when its pass@1 (passes over passes and fails) is at least that share.",
+      "description": "How a cell's attempts decide its outcome: `'all'` (the default) passes only when every attempt passes (pass^k); `{ passRate }` passes when its pass@1 (passes over passes and fails) is at least that share; `'none'` gates nothing, so the eval's attempts run and are recorded, and only run and infra errors fail it (what `survey` sets).",
       "anyOf": [
         {
           "type": "string",
           "const": "all"
+        },
+        {
+          "type": "string",
+          "const": "none"
         },
         {
           "type": "object",

@@ -848,7 +848,7 @@
               "description": "How each cell's attempts decide its outcome; default `'all'`.",
               "anyOf": [
                 {
-                  "const": "all"
+                  "enum": ["all", "none"]
                 },
                 {
                   "type": "object",
@@ -1159,7 +1159,7 @@
               "description": "How each cell's attempts decide its outcome; default `'all'`.",
               "anyOf": [
                 {
-                  "const": "all"
+                  "enum": ["all", "none"]
                 },
                 {
                   "type": "object",

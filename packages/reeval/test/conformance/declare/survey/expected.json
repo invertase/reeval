@@ -1,0 +1,119 @@
+{
+  "children": [
+    {
+      "type": "eval",
+      "name": "which database",
+      "mode": "run",
+      "options": {
+        "runs": 3,
+        "gate": "none"
+      },
+      "body": "b1",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
+    },
+    {
+      "type": "eval",
+      "name": "which database with the skill",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "control": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "runs": 4,
+        "gate": "none"
+      },
+      "body": "b2",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
+    },
+    {
+      "type": "eval",
+      "name": "which framework [chat]",
+      "mode": "run",
+      "options": {
+        "gate": "none"
+      },
+      "body": "b3",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "case": "dff0bd1de0982319b8f746e57331349f38930dc350f48c28177dfd87ca5ccb67"
+      },
+      "family": {
+        "name": "which framework",
+        "case": 0,
+        "cases": 2
+      }
+    },
+    {
+      "type": "eval",
+      "name": "which framework [rag]",
+      "mode": "run",
+      "options": {
+        "gate": "none"
+      },
+      "body": "b4",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
+        "case": "2f3db7691887bb3c3b5637bfcfba7490c17a7cda08f8ccdafc53556f0d043a74"
+      },
+      "family": {
+        "name": "which framework",
+        "case": 1,
+        "cases": 2
+      }
+    },
+    {
+      "type": "eval",
+      "name": "ungated on its own",
+      "mode": "run",
+      "options": {
+        "gate": "none",
+        "runs": 2
+      },
+      "body": "b5",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
+    }
+  ]
+}

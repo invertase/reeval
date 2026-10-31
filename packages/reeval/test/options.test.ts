@@ -473,7 +473,7 @@ group('g', { compare: { control: base, variants: [skilled] }, runs: 2 }, () => {
 
     const md = readRun(p.dir).read('summary.md')
     assert.match(md, block)
-    assert.match(md, /^#### ○ fake\/base\/fake#1 · missed, not gated$/m)
+    assert.match(md, /^#### ○ fake\/base\/fake#1 · 1 check failed$/m)
     assert.match(md, /^<details><summary>Why it missed<\/summary>$/m)
     const { run, evals } = readRun(p.dir)
     const [e] = evals
@@ -537,9 +537,9 @@ evaluate('no worse', { runs: 1, compare: { control: base, variants: [skilled], m
     )
     assert.match(
       r.stdout,
-      /^not gated {8}no worse\n {2}arm {14}pass\n {2}base {13}1 of 1\n {2}skilled {10}0 of 1 {2}can't tell yet, not by minLift 50\n {4}error {2}the variant is worse$/m,
+      /^ran {14}no worse\n {2}arm {14}pass\n {2}base {13}1 of 1\n {2}skilled {10}0 of 1 {2}can't tell yet, not by minLift 50\n {4}error {2}the variant is worse$/m,
     )
-    assert.match(r.stdout, /^1 fail · 1 not gated$/m)
+    assert.match(r.stdout, /^1 fail · 1 ran$/m)
   })
 
   test('compare.harness scopes variants; other harnesses run the control only', async () => {

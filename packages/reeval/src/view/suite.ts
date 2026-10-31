@@ -687,7 +687,7 @@ export const isStudy = (cells: readonly Pick<CellResult, 'gated'>[]): boolean =>
 
 /**
  * A study's pass: every cell `gate: 'none'`, or on a family every case's with no pooled `minLift`
- * gating it, so it reads `not gated`, never `pass`.
+ * gating it, so it reads `ran`, never `pass`.
  */
 export const isNotGatedResult = (
   e: Pick<EvalResult, 'outcome' | 'cells' | 'cases' | 'pooled'>,

@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast, overload
 from reeval_python import _wire as w
 from reeval_python.checks import ASSERT_HOOK, check, compile_eval
 from reeval_python.environment import Environment
-from reeval_python.options import CaseOptions, EvalOptions
+from reeval_python.options import CaseOptions, EvalOptions, SurveyCaseOptions, SurveyOptions
 from reeval_python.wire import options_to_wire
 
 if TYPE_CHECKING:
@@ -281,6 +281,71 @@ def evaluate(
     return decorator
 
 
+def _survey_options(name: str, arg: object) -> dict[str, Any]:
+    """A survey's options as an eval's: the gate fixed at `"none"`. Its own `gate`, or its
+    compare's `gate` or `min_lift`, is refused, since nothing in a survey gates."""
+    where = f"survey({name!r})"
+    fix = "A survey records what its attempts do and gates nothing; use evaluate() to gate."
+    opts = dict[str, Any](cast(dict[str, Any], arg)) if isinstance(arg, dict) else {}
+    if "gate" in opts:
+        raise ValueError(f"{where} sets gate. {fix}")
+    if isinstance(opts.get("runs"), dict):
+        raise ValueError(
+            f"{where} sets runs={{'best_of': …}}, which gates each cell on its majority. {fix} "
+            "Set a fixed count, e.g. runs=3."
+        )
+    compare = opts.get("compare")
+    for key in ("gate", "min_lift"):
+        if isinstance(compare, dict) and key in compare:
+            raise ValueError(f"{where} sets compare.{key}. {fix}")
+    return {**opts, "gate": "none"}
+
+
+@overload
+def survey(  # pyright: ignore[reportOverlappingOverload]
+    name: str, options: SurveyCaseOptions[T], /, *, mode: Mode = "run"
+) -> _Cases[T]: ...
+@overload
+def survey(
+    name: str, options: SurveyOptions | None = None, /, *, mode: Mode = "run"
+) -> Callable[[Body], Body]: ...
+@overload
+def survey(name: str, fn: Body, /, *, mode: Mode = "run") -> Body: ...
+@overload
+def survey(name: str, options: SurveyOptions, fn: Body, /, *, mode: Mode = "run") -> Body: ...
+
+
+def survey(
+    name: str,
+    arg: Callable[..., Any] | SurveyOptions | SurveyCaseOptions[Any] | None = None,
+    arg2: Callable[..., Any] | None = None,
+    /,
+    *,
+    mode: Mode = "run",
+) -> Any:
+    """`evaluate` with the gate fixed at `"none"`: its attempts run and are recorded, and only run
+    and infra errors fail it. A failed `expect` reads as a check that failed, not a fail."""
+    if callable(arg) and arg2 is None:
+        _register_eval(name, mode, {"gate": "none"}, arg, None, None)
+        return arg
+    opts = _survey_options(name, arg)
+    with_cases = "cases" in opts or "case_key" in opts
+    if callable(arg2):
+        if with_cases:
+            _register_cases(name, mode, opts, arg2, "survey")
+        else:
+            _register_eval(name, mode, opts, arg2, None, None)
+        return arg2
+    if with_cases:
+        return _Cases[Any](lambda fn: _register_cases(name, mode, opts, fn, "survey"))
+
+    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        _register_eval(name, mode, opts, fn, None, None)
+        return fn
+
+    return decorator
+
+
 _BAD_KEY = re.compile(r"[#/›\x00-\x1f\x7f]")
 CASE_KEY_MAX = 80
 
@@ -342,9 +407,11 @@ def case_keys(cases: Sequence[Any], case_key: Callable[[Any], Any] | None, where
     return out
 
 
-def _register_cases(name: str, mode: Mode, opts: dict[str, Any], fn: Callable[..., Any]) -> None:
+def _register_cases(
+    name: str, mode: Mode, opts: dict[str, Any], fn: Callable[..., Any], verb: str = "evaluate"
+) -> None:
     """Each case plans as a member of a pooled family named for the eval, `<name> [<key>]`."""
-    where = f"evaluate({name!r})"
+    where = f"{verb}({name!r})"
     cases = opts.pop("cases", None)
     case_key = opts.pop("case_key", None)
     if not isinstance(cast(object, cases), list | tuple):

@@ -1,8 +1,8 @@
 {
-  "gate a number": "UsageError: gate in evals/a.eval.ts › e is 'all' (every attempt passes) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 } (got 0.8)",
-  "gate passRate 0": "UsageError: gate in evals/a.eval.ts › e is 'all' (every attempt passes) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 } (got {\"passRate\":0})",
-  "gate passRate above 1": "UsageError: gate in evals/a.eval.ts › e is 'all' (every attempt passes) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 } (got {\"passRate\":1.2})",
-  "gate with an extra key": "UsageError: gate in evals/a.eval.ts › e is 'all' (every attempt passes) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 } (got {\"passRate\":0.5,\"min\":1})",
+  "gate a number": "UsageError: gate in evals/a.eval.ts › e is 'all' (every attempt passes), 'none' (nothing gates) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 } (got 0.8)",
+  "gate passRate 0": "UsageError: gate in evals/a.eval.ts › e is 'all' (every attempt passes), 'none' (nothing gates) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 } (got {\"passRate\":0})",
+  "gate passRate above 1": "UsageError: gate in evals/a.eval.ts › e is 'all' (every attempt passes), 'none' (nothing gates) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 } (got {\"passRate\":1.2})",
+  "gate with an extra key": "UsageError: gate in evals/a.eval.ts › e is 'all' (every attempt passes), 'none' (nothing gates) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 } (got {\"passRate\":0.5,\"min\":1})",
   "gate good": null,
   "revision a fraction": "UsageError: revision in evals/a.eval.ts › e must be a whole number or a non-empty string, e.g. revision: 2 (got 1.5)",
   "revision empty": "UsageError: revision in evals/a.eval.ts › e must be a whole number or a non-empty string, e.g. revision: 2 (got \" \")",
