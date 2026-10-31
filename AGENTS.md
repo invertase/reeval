@@ -529,7 +529,9 @@ guide, from the harness catalog, each adapter's tool catalog and the contract ro
 `test/support/harnesses.ts`, and fails when those disagree. It does not write to `README.md`.
 `--check` also fails when an option key, `REEVAL_*` variable or exit code in the code isn't named on
 its Reference page, when `reeval --help` misses a flag the CLI parses, when a sidebar link has no page
-(or a page no link), or when a page installs or imports the package by name. CI runs it in the `docs` job.
+(or a page no link), when a page installs or imports the package by name, or when any tracked file
+names a Claude model the Claude API has retired (`scripts/retired-models.mjs`, which lists them
+from Anthropic's deprecations page). CI runs it in the `docs` job.
 Images live in `docs/assets/` (at most 1600 px wide).
 
 ## Running the examples

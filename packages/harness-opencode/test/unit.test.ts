@@ -124,14 +124,12 @@ test('effort is in no body for a model whose API answers it with a 400', () => {
   for (const [model, api] of [
     ['anthropic/claude-haiku-4-5', "Anthropic's API"],
     ['anthropic/claude-sonnet-4-5-20250929', "Anthropic's API"],
-    ['anthropic/claude-3-7-sonnet-latest', "Anthropic's API"],
     ['openai/gpt-4.1', "OpenAI's API"],
     ['openai/gpt-5-chat-latest', "OpenAI's API"],
     ['google/gemini-2.5-flash', "Gemini's API"],
     ['google-vertex/gemini-2.5-pro', "Gemini's API"],
     ['vercel/google/gemini-2.5-flash', "Gemini's API"],
     ['google/gemma-4-31b-it', "Gemini's API"],
-    ['anthropic/claude-opus-4-20250514', "Anthropic's API"],
     ['openai/gpt-5-pro', "OpenAI's API takes only effort high"],
     ['openai/gpt-5-pro-2025-10-06', "OpenAI's API takes only effort high"],
   ]) {
