@@ -18,6 +18,7 @@ import type {
   EvalResult,
   Interval,
   PooledArm,
+  PooledRate,
   QuestionResult,
   ResultOutcome,
   SuiteResult,
@@ -566,14 +567,21 @@ function gatedEffect(
   return t(effect.text ? `${effect.text}, ${short}` : short, c.red)
 }
 
+/** `pass@1 67%, passRate 0.6`: a cell's rate over the cases, red when below its gate. */
+function rateText(c: Colors, r: PooledRate): Text {
+  const text = `pass@1 ${Math.round(r.rate * 100)}%, ${r.outcome === 'fail' ? 'below ' : ''}passRate ${r.passRate}`
+  return t(text, r.outcome === 'fail' ? c.red : c.dim)
+}
+
 function pooledStats(p: PooledArm, label: string) {
   return `${label}: ${p.pairs} paired cases, 95% interval ${signedPoints(p.interval.low)}…${signedPoints(p.interval.high)}`
 }
 
 /**
  * A family: its template, then a row per case. With one cell a case is a row with its count;
- * with more, the case is outer and its cells inner, laid out as a single eval's are, and a
- * pooled `all cases` row sums each cell's counts with its variant's pooled effect.
+ * with more, the case is outer and its cells inner, laid out as a single eval's are. A pooled
+ * `all cases` row sums each cell's counts with its variant's pooled effect and, under
+ * `gate: { passRate }`, its rate over the cases, which gates it.
  */
 function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: boolean): string[] {
   const cases = e.cases ?? []
@@ -581,13 +589,24 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
     ...new Map(cases.flatMap((k) => k.cells).map((cell) => [cell.key, cell])).values(),
   ]
   const pooled = e.pooled ?? []
-  const pooledOutcome: ResultOutcome = pooled.some((p) => p.outcome === 'fail') ? 'fail' : 'pass'
+  const rates = new Map((e.rates ?? []).map((r) => [r.key, r]))
+  const pooledOutcome: ResultOutcome = [...pooled, ...rates.values()].some(
+    (p) => p.outcome === 'fail',
+  )
+    ? 'fail'
+    : 'pass'
+  // A case whose gated cells are all gated on their rate over the cases has no verdict of its own.
+  const byRate = (k: CaseResult) =>
+    k.outcome === 'pass' &&
+    k.cells.some((cell) => rates.has(cell.key)) &&
+    k.cells.every((cell) => !cell.gated || rates.has(cell.key))
   const caseWord = (k: CaseResult) =>
-    verdict(c, { outcome: k.outcome, todo: false, cells: k.cells })
+    byRate(k) ? t('') : verdict(c, { outcome: k.outcome, todo: false, cells: k.cells })
   const pooledWord = isNotGatedResult(e)
     ? t('ran', c.dim)
     : t(VERDICT[pooledOutcome], paintOutcome(c, pooledOutcome))
-  const words = [...cases.map(caseWord), ...(pooled.length ? [pooledWord] : [])]
+  const hasPooled = pooled.length > 0 || rates.size > 0
+  const words = [...cases.map(caseWord), ...(hasPooled ? [pooledWord] : [])]
   const wordWidth = Math.max(...words.map((w) => w.text.length))
   const lead = (word: Text, name: string): Text => ({
     text: `${word.text.padEnd(wordWidth)}  ${name}`,
@@ -602,6 +621,14 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
       items.push({ indent: 2, cells: [lead(caseWord(k), k.label), cell ? cellCount(cell) : ''] })
       if (cell && !clean(cell)) items.push(...evidence(c, cell, 4))
     }
+    const only = columns[0]
+    const rate = only && rates.get(only.key)
+    if (only && rate) {
+      items.push({
+        indent: 2,
+        cells: [lead(pooledWord, 'all cases'), pooledCount(cases, only.key), rateText(c, rate)],
+      })
+    }
     return [head, ...table(items), ...questions]
   }
   const out = [head]
@@ -610,7 +637,7 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
     const failed = k.outcome !== 'pass'
     out.push(...cellsBody(c, kind, k.cells, 4, { failed, verbose, effects: false }))
   }
-  if (pooled.length) {
+  if (hasPooled) {
     const label = labeler(columns, ['harness', 'arm', 'sandbox'])
     const byKey = new Map(pooled.map((p) => [p.key, p]))
     const items: Item[] = [
@@ -619,9 +646,15 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
     for (const col of columns) {
       const p = byKey.get(col.key)
       const effect = p ? gatedEffect(c, p) : t('')
+      const rate = rates.get(col.key)
       items.push({
         indent: 4,
-        cells: [label(col), pooledCount(cases, col.key), ...(effect.text ? [effect] : [])],
+        cells: [
+          label(col),
+          pooledCount(cases, col.key),
+          ...(effect.text ? [effect] : []),
+          ...(rate ? [rateText(c, rate)] : []),
+        ],
       })
       if (p && verbose) items.push({ indent: 6, free: t(pooledStats(p, label(col)), c.dim) })
     }

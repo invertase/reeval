@@ -170,9 +170,9 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'cases',
     area: 'Config and selection',
-    name: '`cases` and `caseKey`: one eval over a list of cases, each keyed `<eval> [<key>]`, pooled into a pass rate and a paired lift that `minLift` gates',
+    name: '`cases` and `caseKey`: one eval over a list of cases, each keyed `<eval> [<key>]`, pooled into a pass rate that `gate: { passRate }` gates and a paired lift that `minLift` gates',
     plan: ['compare/cases', 'compare/cases-filtered', 'selection/tags'],
-    fixtures: ['run/cases'],
+    fixtures: ['run/cases', 'run/cases-rate'],
     unit: ['reeval/test/options.test.ts', 'reeval/test/results.test.ts'],
   },
   {

@@ -435,6 +435,10 @@ export type FamilyRate = {
   /** The mean of the cases' pass@1; at one attempt a case, `pass / counted`. */
   rate: number
   interval: FamilyInterval
+  /** The cell's `gate: { passRate }`: on a family it gates `rate`, not each case's pass@1. */
+  passRate?: number
+  /** Set with `passRate`: `fail` when `rate` is below it. */
+  outcome?: 'pass' | 'fail'
 }
 
 /**
@@ -510,7 +514,10 @@ export type FamilyRecord = {
   rates: FamilyRate[]
   /** One per variant cell, with `compare`. */
   lifts: FamilyLift[]
-  /** `fail` when a lift is below its `minLift`. The cases still pass or fail on their own. */
+  /**
+   * `fail` when a lift is below its `minLift` or a rate below its `passRate`. A case still fails
+   * on its own under `gate: 'all'`.
+   */
   outcome: 'pass' | 'fail'
 }
 

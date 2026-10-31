@@ -163,6 +163,7 @@ const caseAsEval = (family: EvalResult, k: CaseResult): EvalResult => ({
   cells: k.cells,
   cases: null,
   pooled: null,
+  rates: null,
   questions: [],
 })
 

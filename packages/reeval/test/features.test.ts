@@ -3180,6 +3180,41 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'run/cases-rate',
+    tiers: ['fake'],
+    env: 'rate',
+    canary: /passes its case: expected 'c' not to be 'c'/,
+    evals: Object.fromEntries(
+      ['lands', 'canary'].flatMap((name) =>
+        ['a', 'b', 'c'].map((key) => [
+          `${name} [${key}]`,
+          {
+            outcome: 'pass' as const,
+            attempts: ['fake/rate/fake#1'],
+            ...(key === 'c'
+              ? {
+                  error: {
+                    kind: 'assertion' as const,
+                    message: /passes its case: expected 'c' not to be 'c'/,
+                  },
+                }
+              : {}),
+          },
+        ]),
+      ),
+    ),
+    record: ({ run, stdout }) => {
+      const rates = (name: string) =>
+        run.families
+          ?.find((f) => f.name === name)
+          ?.rates.map((r) => [r.rate, r.passRate, r.outcome])
+      assert.deepEqual(rates('lands'), [[0.667, 0.6, 'pass']], 'the rate over the cases clears 0.6')
+      assert.deepEqual(rates('canary'), [[0.667, 0.7, 'fail']], 'and is below 0.7')
+      assert.match(stdout, /^ {2}pass {2}all cases {2,}2 of 3 {2}pass@1 67%, passRate 0\.6$/m)
+      assert.match(stdout, /^ {2}fail {2}all cases {2,}2 of 3 {2}pass@1 67%, below passRate 0\.7$/m)
+    },
+  },
+  {
     dir: 'run/where',
     tiers: ['fake'],
     env: 'next-app',

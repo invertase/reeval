@@ -56,7 +56,7 @@ import { promptTokens, sumUsage } from '../usage.ts'
 import { checkVerdict } from '../view/contrasts.ts'
 import { cellOutcome, gatePart, passRateOf, worstOutcome } from '../view/gate.ts'
 import { checkTries } from '../view/judgments.ts'
-import { familiesOf } from './families.ts'
+import { familiesOf, pooledPassRate } from './families.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
   type AttemptFiles,
@@ -1142,8 +1142,11 @@ function rollUp(evals: EvalEntry[]): void {
         c.outcome = 'fail'
       }
     }
+    // A case's `{ passRate }` cell fails through its family's rate over the cases (`familiesOf`).
+    const ungated = (c: CellRecord) =>
+      c.gate === 'none' || (entry.family !== undefined && pooledPassRate(c) !== undefined)
     entry.outcome = worstOutcome(
-      entry.cells.map((c) => (c.gate === 'none' && c.outcome === 'fail' ? 'pass' : c.outcome)),
+      entry.cells.map((c) => (ungated(c) && c.outcome === 'fail' ? 'pass' : c.outcome)),
     )
     const gated = new Set(entry.cells.filter((c) => c.gate !== 'none').map((c) => c.key))
     entry.passRate = passRateOf(

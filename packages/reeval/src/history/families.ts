@@ -56,7 +56,7 @@ const interval = (
   method,
 })
 
-function rateOf(cell: string, sides: Side[]): FamilyRate {
+function rateOf(cell: string, sides: Side[], passRate: number | undefined): FamilyRate {
   const pass = sides.reduce((s, x) => s + x.pass, 0)
   const counted = sides.reduce((s, x) => s + x.counted, 0)
   const single = sides.every((x) => x.counted === 1)
@@ -72,8 +72,15 @@ function rateOf(cell: string, sides: Side[]): FamilyRate {
     interval: single
       ? interval(w.low, w.high, 'wilson', [0, 1])
       : interval(t.low, t.high, 't-cases', [0, 1]),
+    ...(passRate !== undefined
+      ? { passRate, outcome: t.mean >= passRate ? ('pass' as const) : ('fail' as const) }
+      : {}),
   }
 }
+
+/** A cell's `{ passRate }` gate, which its family gates over the cases. */
+export const pooledPassRate = (cell: Pick<CellRecord, 'gate'>): number | undefined =>
+  typeof cell.gate === 'object' ? cell.gate.passRate : undefined
 
 function metric(pairs: Array<[number, number]>): FamilyEffortMetric {
   const differences = pairs.map(([v, c]) => v - c)
@@ -206,7 +213,8 @@ export function familiesOf(
       for (const c of e.cells) if (!cellKeys.includes(c.key)) cellKeys.push(c.key)
     const rates = cellKeys.flatMap((key) => {
       const sides = cases.flatMap((e) => sideOf(e, key) ?? [])
-      return sides.length ? [rateOf(key, sides)] : []
+      const cell = cases.flatMap((e) => e.cells).find((c) => c.key === key)
+      return sides.length ? [rateOf(key, sides, cell && pooledPassRate(cell))] : []
     })
     const lifts: FamilyLift[] = []
     for (const key of cellKeys) {
@@ -234,7 +242,7 @@ export function familiesOf(
       ran: cases.length,
       rates,
       lifts,
-      outcome: lifts.some((l) => l.outcome === 'fail') ? 'fail' : 'pass',
+      outcome: [...rates, ...lifts].some((x) => x.outcome === 'fail') ? 'fail' : 'pass',
     }
   })
 }

@@ -107,10 +107,7 @@ export type EvalResult = {
   /** Source order in the file. */
   order: number
   across: Across
-  /**
-   * An eval with `cases` with two or more cases: `cases` is set and `cells` is null. An
-   * unpooled one (`{ pool: false }`) is recorded as separate evals, each a single eval.
-   */
+  /** An eval with `cases`: `cases` is set and `cells` is null. */
   family: boolean
   /** A placeholder (`evaluate.todo`) that never ran. */
   todo: boolean
@@ -118,8 +115,10 @@ export type EvalResult = {
   outcome: ResultOutcome
   cells: CellResult[] | null
   cases: CaseResult[] | null
-  /** A family's variants against their baseline, pooled over the cases; null on a single eval. */
+  /** A family's variants against their control, pooled over the cases; null on a single eval. */
   pooled: PooledArm[] | null
+  /** A family's `{ passRate }` cells, each gated on its rate over the cases; null on a single eval. */
+  rates: PooledRate[] | null
   /**
    * Its questions' answers: the pairwise ones, then those asked of each attempt. On a family,
    * each question asked of any case, in first-asked order, summed over the cases that answered it.
@@ -179,7 +178,7 @@ export type CellResult = {
   variant: string | null
   /** The control of an eval that has variants: the arm the variants are measured against. */
   baseline: boolean
-  /** On a variant, its baseline cell's key; else null. */
+  /** On a variant, its control cell's key; else null. */
   vs: string | null
   /** The cell's place in the eval's cells. */
   order: number
@@ -330,6 +329,16 @@ export type PooledArm = {
   interval: Interval
   /** The compare's `minLift`, a fraction like the interval, which gates its low end; null without one. */
   minLift: number | null
+  outcome: 'pass' | 'fail'
+}
+
+/** A cell's pass@1 over a family's cases, which its `gate: { passRate }` gates. */
+export type PooledRate = {
+  /** The cell's key, the same in every case. */
+  key: string
+  /** The mean of the cases' pass@1. */
+  rate: number
+  passRate: number
   outcome: 'pass' | 'fail'
 }
 
@@ -687,16 +696,17 @@ export const isStudy = (cells: readonly Pick<CellResult, 'gated'>[]): boolean =>
 
 /**
  * A study's pass: every cell `gate: 'none'`, or on a family every case's with no pooled `minLift`
- * gating it, so it reads `ran`, never `pass`.
+ * or `passRate` gating it, so it reads `ran`, never `pass`.
  */
 export const isNotGatedResult = (
-  e: Pick<EvalResult, 'outcome' | 'cells' | 'cases' | 'pooled'>,
+  e: Pick<EvalResult, 'outcome' | 'cells' | 'cases' | 'pooled' | 'rates'>,
 ): boolean =>
   e.outcome === 'pass' &&
   (e.cases
     ? e.cases.length > 0 &&
       e.cases.every((k) => isStudy(k.cells)) &&
-      (e.pooled ?? []).every((p) => p.minLift === null)
+      (e.pooled ?? []).every((p) => p.minLift === null) &&
+      !e.rates?.length
     : isStudy(e.cells ?? []))
 
 /** The record's outcome, or `canceled` when every gated attempt that failed was canceled. */
@@ -805,6 +815,11 @@ function familyResult(
         outcome: lift.outcome,
       }
     }),
+    rates: family.rates.flatMap((r) =>
+      r.passRate !== undefined && r.outcome !== undefined
+        ? [{ key: r.cell, rate: r.rate, passRate: r.passRate, outcome: r.outcome }]
+        : [],
+    ),
     questions: familyQuestions(sorted),
     observations: [],
   }
@@ -826,6 +841,7 @@ function evalResult(record: RunRecord, e: EvalEntry, order: number): EvalResult 
     cells: cellsOf(record, e, path, declaredChecks([e])),
     cases: null,
     pooled: null,
+    rates: null,
     questions: questionsOf(e),
     observations: observedTallies(e.attempts),
   }
@@ -863,7 +879,7 @@ export function suiteResult(record: RunRecord): SuiteResult {
     }
     if (seen.has(family.id)) continue
     seen.add(family.id)
-    if (family.outcome === 'fail' && family.lifts.some((l) => l.outcome === 'fail')) tally.fail++
+    if (family.outcome === 'fail') tally.fail++
     const cases = record.evals.filter((x) => x.family?.id === family.id)
     evals.push(familyResult(record, family, cases, evals.length))
   }
