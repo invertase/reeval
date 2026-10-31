@@ -1582,7 +1582,7 @@
           "type": "string"
         },
         "outcome": {
-          "description": "Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation.",
+          "description": "Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation. On a case with `verdict: 'family'`, it's what the case did, and its family's outcome is the verdict.",
           "$ref": "#/$defs/Outcome"
         },
         "passRate": {
@@ -1640,6 +1640,10 @@
         "todo": {
           "description": "A placeholder, `evaluate.todo` or `group.todo`: it never runs, and its outcome is `skipped`.",
           "type": "boolean"
+        },
+        "verdict": {
+          "description": "`family` on a case whose `gate: { passRate }` its family holds over the mean of its cases: a failed `outcome` doesn't fail the run, and `RunRecord.families`' outcome decides. Unset otherwise, and on records from before a family pooled `passRate`.",
+          "const": "family"
         }
       },
       "required": [
@@ -1914,6 +1918,13 @@
         "cases": {
           "description": "Cases in the list.",
           "type": "number"
+        },
+        "excluded": {
+          "description": "Every case and environment (and harness) pair `where` left out, including those of a case it left out everywhere, which has no evaluation; unset when none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExcludedPair"
+          }
         },
         "file": {
           "type": "string"

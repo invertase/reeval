@@ -71,7 +71,7 @@ CREATE TABLE runs (
 CREATE TABLE evals (
   run_id TEXT NOT NULL, key TEXT NOT NULL, id TEXT, slug TEXT, file TEXT, groups TEXT, name TEXT,
   tags TEXT, fingerprint TEXT, outcome TEXT, pass_at_1 REAL, sources TEXT, family_id TEXT,
-  case_index INTEGER,
+  case_index INTEGER, verdict TEXT,
   PRIMARY KEY (run_id, key)
 );
 -- Each eval with cases per run: its cases, and each cell's pass@1 over them (the mean of the
@@ -533,7 +533,7 @@ function insertRun(
   for (const e of record.evals) {
     const cellEnv = new Map(e.cells.map((c) => [c.key, c.environmentDigest ?? '']))
     run(
-      `INSERT INTO evals VALUES (${Array(14).fill('?').join(', ')})`,
+      `INSERT INTO evals VALUES (${Array(15).fill('?').join(', ')})`,
       record.runId,
       e.key,
       e.id,
@@ -548,6 +548,7 @@ function insertRun(
       json(e.sources),
       e.family?.id ?? null,
       e.family?.case ?? null,
+      e.verdict ?? null,
     )
     for (const c of e.cells) {
       const p = c.fingerprintParts

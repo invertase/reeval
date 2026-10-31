@@ -2948,6 +2948,11 @@ export type EvalPlan = {
   attempts: number
   /** The case and environment pairs `where` left out of this case; unset when none. */
   excluded?: ExcludedPair[]
+  /**
+   * On a case of a pooled family, every pair `where` left out of any of its cases, so the record
+   * keeps a case it left out everywhere; unset when none.
+   */
+  familyExcluded?: ExcludedPair[]
   notes: string[]
   /** Why the eval doesn't run at all, e.g. a profile's harness limit left none. */
   skip?: string

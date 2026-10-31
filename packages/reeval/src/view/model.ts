@@ -185,17 +185,24 @@ export function activityLabel(
  */
 export function runOutcome(run: {
   status: RunRecord['status']
-  evals: ReadonlyArray<{ outcome: Outcome }>
+  evals: ReadonlyArray<Pick<EvalEntry, 'outcome' | 'verdict'>>
   families?: ReadonlyArray<{ outcome: 'pass' | 'fail' }>
   errors?: readonly string[]
 }): Outcome {
   if (run.status === 'interrupted') return 'skipped'
   if (run.errors?.length) return 'fail'
-  const outcomes = [...run.evals, ...(run.families ?? [])].map((e) => e.outcome)
+  const outcomes = [...run.evals.map(verdictOutcome), ...(run.families ?? []).map((f) => f.outcome)]
   if (outcomes.includes('fail') || run.status === 'budget') return 'fail'
   if (outcomes.includes('infra_error')) return 'infra_error'
   return 'pass'
 }
+
+/**
+ * An eval's outcome as a verdict: a case whose family's rate over the cases gates it
+ * (`verdict: 'family'`) fails through the family, not on its own.
+ */
+export const verdictOutcome = (e: Pick<EvalEntry, 'outcome' | 'verdict'>): Outcome =>
+  e.verdict === 'family' && e.outcome === 'fail' ? 'pass' : e.outcome
 
 function andList(items: readonly string[]): string {
   if (items.length <= 1) return items[0] ?? ''

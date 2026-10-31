@@ -38,6 +38,7 @@ import type {
   CellGate,
   EnvironmentRecord,
   EvalRecord,
+  ExcludedPair,
   ExecResult,
   FamilyMeta,
   FileChange,
@@ -441,6 +442,8 @@ class Seen {
     Omit<Stack['harnesses'][number], 'resolvedModels' | 'resolvedEffort'>
   >()
   readonly resolvedHarnesses = new Map<string, Set<string>>()
+  /** Every pair `where` left out of a pooled family, by family id, from its cases' plans. */
+  readonly familyExcluded = new Map<string, ExcludedPair[]>()
   /** Keys of the attempts kept from the previous record on resume. */
   readonly kept = new Set<string>()
   /** Registry digests found by the preflight, by image id. */
@@ -540,6 +543,8 @@ class Seen {
       }
       this.byEval.set(e.id, entry)
     }
+    const familyExcluded = e.attempt?.plan.familyExcluded
+    if (entry.family && familyExcluded) this.familyExcluded.set(entry.family.id, familyExcluded)
     return entry
   }
 }
@@ -1144,12 +1149,13 @@ function rollUp(evals: EvalEntry[]): void {
         c.outcome = 'fail'
       }
     }
-    // A case's `{ passRate }` cell fails through its family's rate over the cases (`familiesOf`).
-    const ungated = (c: CellRecord) =>
-      c.gate === 'none' || (entry.family !== undefined && pooledPassRate(c) !== undefined)
     entry.outcome = worstOutcome(
-      entry.cells.map((c) => (ungated(c) && c.outcome === 'fail' ? 'pass' : c.outcome)),
+      entry.cells.map((c) => (c.gate === 'none' && c.outcome === 'fail' ? 'pass' : c.outcome)),
     )
+    // Its family's rate over the cases gates a case's `{ passRate }` cells (`familiesOf`).
+    if (entry.family && entry.cells.some((c) => pooledPassRate(c) !== undefined)) {
+      entry.verdict = 'family'
+    } else delete entry.verdict
     const gated = new Set(entry.cells.filter((c) => c.gate !== 'none').map((c) => c.key))
     entry.passRate = passRateOf(
       entry.attempts.filter((a) => gated.has(a.cell)).map((a) => a.outcome),
@@ -1291,7 +1297,12 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     if (!entry.family && before) entry.family = before
   }
   rollUp(evals)
-  const families = familiesOf(evals, (cell) => minLifts.get(cell))
+  const families = familiesOf(
+    evals,
+    (cell) => minLifts.get(cell),
+    (id) =>
+      seen.familyExcluded.get(id) ?? input.previous?.families?.find((f) => f.id === id)?.excluded,
+  )
   sequence(evals)
   for (const e of evals) {
     const asked = input.answers?.evals.get(e.id)

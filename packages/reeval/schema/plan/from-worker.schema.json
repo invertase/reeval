@@ -783,6 +783,13 @@
             "$ref": "#/$defs/ExcludedPair"
           }
         },
+        "familyExcluded": {
+          "description": "On a case of a pooled family, every pair `where` left out of any of its cases, so the record keeps a case it left out everywhere; unset when none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExcludedPair"
+          }
+        },
         "gate": {
           "description": "The eval's gate policy, or undefined when it was left at the default (`'all'`).",
           "anyOf": [

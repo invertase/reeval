@@ -597,7 +597,7 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
     : 'pass'
   // A case whose gated cells are all gated on their rate over the cases has no verdict of its own.
   const byRate = (k: CaseResult) =>
-    k.outcome === 'pass' &&
+    (k.outcome === 'pass' || k.outcome === 'fail') &&
     k.cells.some((cell) => rates.has(cell.key)) &&
     k.cells.every((cell) => !cell.gated || rates.has(cell.key))
   const caseWord = (k: CaseResult) =>

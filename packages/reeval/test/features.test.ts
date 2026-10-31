@@ -3208,7 +3208,7 @@ export const features: Feature[] = [
         ['a', 'b', 'c'].map((key) => [
           `${name} [${key}]`,
           {
-            outcome: 'pass' as const,
+            outcome: key === 'c' ? ('fail' as const) : ('pass' as const),
             attempts: ['fake/rate/fake#1'],
             ...(key === 'c'
               ? {
@@ -3227,6 +3227,11 @@ export const features: Feature[] = [
         run.families
           ?.find((f) => f.name === name)
           ?.rates.map((r) => [r.rate, r.passRate, r.outcome])
+      assert.ok(
+        run.evals.every((e) => e.verdict === 'family'),
+        "each case's family is its verdict",
+      )
+      assert.match(stdout, /^1 fail · 1 pass$/m, 'the tally counts each family once')
       assert.deepEqual(rates('lands'), [[0.667, 0.6, 'pass']], 'the rate over the cases clears 0.6')
       assert.deepEqual(rates('canary'), [[0.667, 0.7, 'fail']], 'and is below 0.7')
       assert.match(stdout, /^ {2}pass {2}all cases {2,}2 of 3 {2}pass@1 67%, passRate 0\.6$/m)
@@ -3265,6 +3270,21 @@ export const features: Feature[] = [
       )
       const canary = run.evals.find((e) => e.name === 'canary [next]')
       assert.deepEqual(canary?.excluded, [{ case: 'next', environment: 'vite-app' }])
+      const family = run.families?.find((f) => f.name === 'lands')
+      assert.deepEqual(
+        [family?.cases, family?.ran, family?.excluded],
+        [
+          3,
+          2,
+          [
+            { case: 'next', environment: 'vite-app' },
+            { case: 'vite', environment: 'next-app' },
+            { case: 'astro', environment: 'next-app' },
+            { case: 'astro', environment: 'vite-app' },
+          ],
+        ],
+        'a case where leaves out everywhere stays in the family',
+      )
     },
   },
   {

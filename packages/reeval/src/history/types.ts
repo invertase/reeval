@@ -383,9 +383,16 @@ export type EvalEntry = {
   /**
    * Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is
    * `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated
-   * cell's failures don't fail the evaluation.
+   * cell's failures don't fail the evaluation. On a case with `verdict: 'family'`, it's what the
+   * case did, and its family's outcome is the verdict.
    */
   outcome: Outcome
+  /**
+   * `family` on a case whose `gate: { passRate }` its family holds over the mean of its cases: a
+   * failed `outcome` doesn't fail the run, and `RunRecord.families`' outcome decides. Unset
+   * otherwise, and on records from before a family pooled `passRate`.
+   */
+  verdict?: 'family'
   /** A placeholder, `evaluate.todo` or `group.todo`: it never runs, and its outcome is `skipped`. */
   todo: boolean
   /** pass@1, pass / (pass + fail), over the gated cells' attempts; infra errors and skips excluded. */
@@ -511,6 +518,11 @@ export type FamilyRecord = {
   rates: FamilyRate[]
   /** One per variant cell, with `compare`. */
   lifts: FamilyLift[]
+  /**
+   * Every case and environment (and harness) pair `where` left out, including those of a case it
+   * left out everywhere, which has no evaluation; unset when none.
+   */
+  excluded?: ExcludedPair[]
   /**
    * `fail` when a lift is below its `minLift` or a rate below its `passRate`. A case still fails
    * on its own under `gate: 'all'`.
@@ -913,6 +925,7 @@ export type HistoryEntry = {
     source?: EvalEntry['source']
     revision?: EvalEntry['revision']
     outcome: Outcome
+    verdict?: EvalEntry['verdict']
     passRate: number | null
     cells: HistoryCell[]
   }>

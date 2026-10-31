@@ -111,7 +111,9 @@ export type EvalResult = {
   family: boolean
   /** A placeholder (`evaluate.todo`) that never ran. */
   todo: boolean
-  /** On a family: `fail` when a case failed or its pooled gate did. */
+  /**
+   * On a family: `fail` when its pooled gate failed, or a case it doesn't gate on its rate did.
+   */
   outcome: ResultOutcome
   cells: CellResult[] | null
   cases: CaseResult[] | null
@@ -163,6 +165,7 @@ export type CaseResult = {
   name: string
   /** Its place in the case list. */
   order: number
+  /** What the case did; when its family's rate gates it, the family's outcome is the verdict. */
   outcome: ResultOutcome
   cells: CellResult[]
 }
@@ -717,6 +720,10 @@ function outcomeOf(e: EvalEntry): ResultOutcome {
   return failed.length && failed.every((a) => a.error?.kind === 'aborted') ? 'canceled' : 'fail'
 }
 
+/** A case's outcome as its family's verdict reads it: a failure its family's rate gates passes. */
+const caseVerdict = (e: EvalEntry): ResultOutcome =>
+  e.verdict === 'family' && e.outcome === 'fail' ? 'pass' : outcomeOf(e)
+
 /** Each question any case asked, in first-asked order, with its votes or answers summed over the cases. */
 function familyQuestions(
   cases: readonly EvalEntry[],
@@ -798,7 +805,7 @@ function familyResult(
     todo: false,
     outcome: worst([
       ...(family.outcome === 'fail' ? ['fail' as const] : []),
-      ...results.map((c) => c.outcome),
+      ...sorted.map(caseVerdict),
     ]),
     cells: null,
     cases: results,
@@ -871,7 +878,8 @@ export function suiteResult(record: RunRecord): SuiteResult {
   for (const e of record.evals) {
     const evals = byFile.get(e.file) ?? []
     byFile.set(e.file, evals)
-    count(e)
+    // A case its family's rate gates isn't a verdict of its own: the family's is counted instead.
+    if (e.verdict !== 'family') count(e)
     const family = e.family && families.get(e.family.id)
     if (!family) {
       evals.push(evalResult(record, e, evals.length))
@@ -879,9 +887,13 @@ export function suiteResult(record: RunRecord): SuiteResult {
     }
     if (seen.has(family.id)) continue
     seen.add(family.id)
-    if (family.outcome === 'fail') tally.fail++
     const cases = record.evals.filter((x) => x.family?.id === family.id)
-    evals.push(familyResult(record, family, cases, evals.length))
+    const result = familyResult(record, family, cases, evals.length)
+    if (cases.some((x) => x.verdict === 'family')) {
+      if (result.outcome === 'infra_error') tally.infraError++
+      else tally[result.outcome]++
+    } else if (family.outcome === 'fail') tally.fail++
+    evals.push(result)
   }
   const files = [...byFile]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

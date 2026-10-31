@@ -462,6 +462,7 @@ function applyWhere(where: string, keys: string[], prepared: Prepared[]): void {
     for (const t of p.planned.tests ?? []) {
       plans.add(t.attempt.plan)
       if (own.length) t.attempt.plan.excluded = own
+      if (t.attempt.family) t.attempt.plan.familyExcluded = excluded
     }
   }
   // A completed attempt's plan is a copy that shares its notes.

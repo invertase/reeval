@@ -15,6 +15,7 @@ import {
   signedRank,
   wilson,
 } from '../stats.ts'
+import type { ExcludedPair } from '../types.ts'
 import { EFFORT_ALPHA, type EffortSample, effortSample } from '../view/effort.ts'
 import type {
   AttemptRecord,
@@ -193,11 +194,12 @@ function liftOf(
 
 /**
  * The run's pooled families, in the order their first case appears; `minLiftOf` gives a variant
- * cell's `compare.minLift`.
+ * cell's `compare.minLift`, and `excludedOf` the pairs `where` left out of a family.
  */
 export function familiesOf(
   evals: EvalEntry[],
   minLiftOf: (cell: CellRecord) => number | undefined,
+  excludedOf: (id: string) => ExcludedPair[] | undefined = () => undefined,
 ): FamilyRecord[] {
   const byId = new Map<string, EvalEntry[]>()
   for (const e of evals) {
@@ -208,6 +210,7 @@ export function familiesOf(
     const cases = [...members].sort((a, b) => (a.family?.case ?? 0) - (b.family?.case ?? 0))
     const first = cases[0] as EvalEntry
     const family = first.family as NonNullable<EvalEntry['family']>
+    const excluded = excludedOf(family.id)
     const cellKeys: string[] = []
     for (const e of cases)
       for (const c of e.cells) if (!cellKeys.includes(c.key)) cellKeys.push(c.key)
@@ -242,6 +245,7 @@ export function familiesOf(
       ran: cases.length,
       rates,
       lifts,
+      ...(excluded?.length ? { excluded } : {}),
       outcome: [...rates, ...lifts].some((x) => x.outcome === 'fail') ? 'fail' : 'pass',
     }
   })

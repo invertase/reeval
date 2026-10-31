@@ -47,6 +47,7 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
       ...(e.source ? { source: e.source } : {}),
       ...(e.revision !== undefined ? { revision: e.revision } : {}),
       outcome: e.outcome,
+      ...(e.verdict ? { verdict: e.verdict } : {}),
       passRate: e.passRate,
       cells: e.cells.map((c) => ({
         key: c.key,

@@ -18,6 +18,7 @@ import { shellQuote } from '@reeval/sandbox-docker/process'
 import { createChecks } from '../src/attempt/checks.ts'
 import { traceEnvironment } from '../src/attempt/debug.ts'
 import type { Attempt, AttemptSpec } from '../src/attempt/state.ts'
+import { regressions } from '../src/commands.ts'
 import {
   CONFIG_FILES,
   defaultConcurrency,
@@ -84,6 +85,7 @@ import { clip } from '../src/text.ts'
 import type { EvalOptions, Outcome, ResolvedProfile } from '../src/types.ts'
 import { rowKey } from '../src/view/compare.ts'
 import { gatePart } from '../src/view/gate.ts'
+import { runOutcome } from '../src/view/model.ts'
 import { splitPatch } from '../src/view/patch.ts'
 import { project } from './helpers.ts'
 
@@ -1557,6 +1559,50 @@ test("compare has a row for a pooled family's gate, comparable when its cases an
     status(rated('pass'), rated('fail')),
     ['regressed', 'pass', 'fail'],
     "a cell's rate over the cases below its passRate gates the family too",
+  )
+  const byRate = (caseOutcome: 'pass' | 'fail', outcome: 'pass' | 'fail'): HistoryEntry => {
+    const r = rated(outcome)
+    return {
+      ...r,
+      evals: r.evals.map((e) =>
+        e.id.endsWith('grace') ? { ...e, outcome: caseOutcome, verdict: 'family' as const } : e,
+      ),
+    }
+  }
+  const flip = compare(byRate('pass', 'pass'), byRate('fail', 'pass'))
+  assert.deepEqual(
+    flip.map((r) => [r.kind ?? 'eval', r.status, r.verdict ?? null]),
+    [
+      ['eval', 'same', null],
+      ['eval', 'regressed', 'family'],
+      ['family', 'same', null],
+    ],
+    'a case its family rates shows what it did, and carries its family as the verdict',
+  )
+  assert.deepEqual(regressions(flip), [], 'so --fail-on-regression leaves it to the family')
+  assert.deepEqual(
+    regressions(compare(byRate('pass', 'pass'), byRate('fail', 'fail'))).map((r) => r.kind),
+    ['family'],
+  )
+  assert.deepEqual(
+    family(rated('pass'), rated('fail'))?.rates,
+    [
+      {
+        key: 'k',
+        base: { rate: 0.67, passRate: 0.7, outcome: 'pass' },
+        head: { rate: 0.67, passRate: 0.7, outcome: 'fail' },
+      },
+    ],
+    'the family row has each side of its rate',
+  )
+  assert.equal(
+    runOutcome({
+      status: 'complete',
+      evals: [{ outcome: 'pass' }, { outcome: 'fail', verdict: 'family' }],
+      families: [{ outcome: 'pass' }],
+    }),
+    'pass',
+    "a case its family rates doesn't fail the run on its own",
   )
 
   // Over the variants both have; with none in common, not comparable.

@@ -54,6 +54,14 @@ export type CompareRow = {
   kind?: 'family'
   /** On a family row: each variant's pooled lift on each side, null where that run has none. */
   lifts?: CompareFamilyLift[]
+  /** On a family row: each cell's rate over the cases that a `passRate` gates, on each side. */
+  rates?: CompareFamilyRate[]
+  /**
+   * `family` on a case whose family's rate over the cases gates it (`EvalEntry.verdict`): `base`
+   * and `head` are what it did, and its family's row is the verdict, so `--fail-on-regression`
+   * leaves it to that row.
+   */
+  verdict?: 'family'
 }
 
 export type CompareFamilyLift = {
@@ -61,6 +69,12 @@ export type CompareFamilyLift = {
   vs: string
   base: Omit<FamilyLiftSummary, 'variant' | 'vs'> | null
   head: Omit<FamilyLiftSummary, 'variant' | 'vs'> | null
+}
+
+export type CompareFamilyRate = {
+  key: string
+  base: { rate: number; passRate: number; outcome: 'pass' | 'fail' } | null
+  head: { rate: number; passRate: number; outcome: 'pass' | 'fail' } | null
 }
 
 export type CompareCell = {
@@ -174,7 +188,7 @@ export function cellsChanged(
 
 type ComparableEval = Pick<
   HistoryEntry['evals'][number],
-  'id' | 'fingerprint' | 'outcome' | 'sources' | 'source' | 'revision' | 'cells'
+  'id' | 'fingerprint' | 'outcome' | 'verdict' | 'sources' | 'source' | 'revision' | 'cells'
 >
 
 type ComparableFamily = NonNullable<HistoryEntry['families']>[number]
@@ -334,7 +348,12 @@ export const addedRow = (h: ComparableEval): CompareRow => ({
   head: h.outcome,
   status: 'added',
   ...canceledSides({ base: null, head: h.outcome }, { head: h.cells }),
+  ...verdictOf(h),
 })
+
+/** A case its family's rate gates, on the side that decides: head's, or base's when only it ran. */
+const verdictOf = (e: ComparableEval | undefined): Pick<CompareRow, 'verdict'> =>
+  e?.verdict ? { verdict: e.verdict } : {}
 
 /**
  * When two runs of an eval differ only in which cells ran (a filtered run, a harness added), its
@@ -398,6 +417,25 @@ function familyLifts(b: ComparableFamily | null, h: ComparableFamily | null): Co
   return [...out.values()]
 }
 
+/** Each gated cell's rate over the cases on both sides, head's order first; unset when none. */
+function familyRates(
+  b: ComparableFamily | null,
+  h: ComparableFamily | null,
+): Pick<CompareRow, 'rates'> {
+  const out = new Map<string, CompareFamilyRate>()
+  for (const [side, f] of [
+    ['head', h],
+    ['base', b],
+  ] as const) {
+    for (const { cell, ...rate } of f?.rates ?? []) {
+      const row = out.get(cell) ?? { key: cell, base: null, head: null }
+      row[side] = rate
+      out.set(cell, row)
+    }
+  }
+  return out.size ? { rates: [...out.values()] } : {}
+}
+
 const liftsOutcome = (lifts: ReadonlyArray<{ outcome: 'pass' | 'fail' }>): Outcome =>
   lifts.some((l) => l.outcome === 'fail') ? 'fail' : 'pass'
 
@@ -409,6 +447,7 @@ const addedFamilyRow = (h: ComparableFamily): CompareRow => ({
   head: h.outcome,
   status: 'added',
   lifts: familyLifts(null, h),
+  ...familyRates(null, h),
 })
 
 /** The rows of a run with nothing to compare it with: every eval and gated family is new. */
@@ -440,7 +479,17 @@ function familyRow(
 ): CompareRow {
   if (!b) return addedFamilyRow(h as ComparableFamily)
   const lifts = familyLifts(b, h ?? null)
-  if (!h) return { id, kind: 'family', base: b.outcome, head: null, status: 'removed', lifts }
+  if (!h) {
+    return {
+      id,
+      kind: 'family',
+      base: b.outcome,
+      head: null,
+      status: 'removed',
+      lifts,
+      ...familyRates(b, null),
+    }
+  }
   const shared = lifts.flatMap((l) => (l.base && l.head ? [{ base: l.base, head: l.head }] : []))
   const scoped = shared.length > 0 && shared.length < lifts.length
   const disjoint = !shared.length && b.lifts.length > 0 && h.lifts.length > 0
@@ -450,6 +499,7 @@ function familyRow(
     base: scoped ? liftsOutcome(shared.map((l) => l.base)) : b.outcome,
     head: scoped ? liftsOutcome(shared.map((l) => l.head)) : h.outcome,
     lifts,
+    ...familyRates(b, h),
     ...(scoped || disjoint
       ? {
           cells: {
@@ -525,6 +575,7 @@ function evalRows(base: Comparable, head: Comparable, graderChanged: boolean): C
         head: null,
         status: 'removed',
         ...canceledSides({ base: b.outcome, head: null }, { base: b.cells }),
+        ...verdictOf(b),
       }
     }
     const comparable = sameEval(b, h)
@@ -537,6 +588,7 @@ function evalRows(base: Comparable, head: Comparable, graderChanged: boolean): C
       ...outcomes,
       ...(scoped ? { cells: scoped.cells } : {}),
       ...canceledSides(outcomes, scoped?.over ?? { base: b.cells, head: h.cells }),
+      ...verdictOf(h),
     }
     const perCell = compareCells(b, h)
     if (perCell.length) row.perCell = perCell
