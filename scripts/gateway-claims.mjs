@@ -84,7 +84,7 @@ export function gatewayNotesProblems(docsDir) {
   const factories = harnessFactories(join(docsDir, '..'))
   let config
   for (const [, lang, body] of text.matchAll(FENCE)) {
-    if (lang === 'ts' && /\bharness:\s*\[/.test(body)) config = body
+    if (lang === 'ts' && /\bharnesses:\s*\[/.test(body)) config = body
     if (lang !== 'text' || !config) continue
     const notes = [...body.matchAll(/gateway: \S+ → \w+/g)].length
     if (!notes) continue

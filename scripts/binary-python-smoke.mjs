@@ -76,7 +76,7 @@ for (const key of ['BINARY', 'DOWNLOAD', 'OFFLINE', 'VERSION']) delete baseEnv[`
 
 // reeval.yml, not reeval.config.ts: a Python project has no TypeScript.
 const config = (delayMs = 0) => `include: ['evals/**/*.eval.py']
-harness:
+harnesses:
   kind: fake
   files: { greet.py: "print(\\"hi\\")\\n" }
   text: I wrote greet.py.${delayMs ? `\n  delayMs: ${delayMs}` : ''}

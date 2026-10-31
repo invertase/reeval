@@ -80,7 +80,7 @@ import { plain, withHouseGreeting } from './environments.ts'
 evaluate(
   'reviews a greet module',
   {
-    harness: (inherited) => inherited.map((h) => (h.kind === 'fake' ? { ...h, flakeRate: 0 } : h)),
+    harnesses: (inherited) => inherited.map((h) => (h.kind === 'fake' ? { ...h, flakeRate: 0 } : h)),
     compare: { control: plain, variants: [withHouseGreeting] },
     questions: [
       { question: 'Which greet.js reads more like our house style?', across: ['environment', 'harness'], diff: true },
@@ -107,7 +107,7 @@ import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
   include: ${JSON.stringify(include)},
-  harness: [${harnesses.join(', ')}],
+  harnesses: [${harnesses.join(', ')}],
   sandbox: fakeSandbox(),
   judge: { model: fakeJudge({ score: ${judge} }) },
   // Answers the pairwise questions: the attempt whose diff says Ahoy wins, then the one that
