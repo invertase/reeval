@@ -779,6 +779,17 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/unit.test.ts', 'reeval/test/secrets.test.ts', 'reeval/test/debug.test.ts'],
   },
   {
+    id: 'redaction.names',
+    area: 'Environments',
+    name: 'Secrets masked in eval, group and todo names; names that mask alike refused',
+    fixtures: ['secrets/masked-eval-names'],
+    unit: [
+      'reeval/test/eval-names.test.ts',
+      'reeval/test/options.test.ts',
+      'reeval/test/refusals.test.ts',
+    ],
+  },
+  {
     id: 'redaction.judge',
     area: 'Environments',
     name: 'Secrets masked in what the judge is sent',

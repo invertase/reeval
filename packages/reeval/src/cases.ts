@@ -3,6 +3,7 @@
 // read it as one eval with cases.
 import { UsageError } from './errors.ts'
 import { isObjectLike } from './object.ts'
+import { redactSecrets } from './redact.ts'
 
 /** The longest a case key may be. */
 export const CASE_KEY_MAX = 80
@@ -44,19 +45,19 @@ export function caseKeys(
     }
     if (typeof raw !== 'string') {
       throw new UsageError(
-        `caseKey in ${where} must return a string (got ${JSON.stringify(raw) ?? String(raw)} for cases[${i}])`,
+        `caseKey in ${where} must return a string (got ${redactSecrets(JSON.stringify(raw) ?? String(raw))} for cases[${i}])`,
       )
     }
     const key = raw.trim()
     if (!key || key.length > CASE_KEY_MAX || BAD_KEY.test(key)) {
       throw new UsageError(
-        `cases[${i}] in ${where} has the key ${JSON.stringify(raw)}: a case key is 1–${CASE_KEY_MAX} characters, with no #, /, › or control characters.${caseKey ? '' : ' Pass caseKey to give it another.'}`,
+        `cases[${i}] in ${where} has the key ${redactSecrets(JSON.stringify(raw))}: a case key is 1–${CASE_KEY_MAX} characters, with no #, /, › or control characters.${caseKey ? '' : ' Pass caseKey to give it another.'}`,
       )
     }
     const earlier = seen.get(key)
     if (earlier !== undefined) {
       throw new UsageError(
-        `cases[${earlier}] and cases[${i}] in ${where} have the same key "${key}". Each case needs its own key${caseKey ? '' : ': give them distinct ids or names, or pass caseKey'}.`,
+        `cases[${earlier}] and cases[${i}] in ${where} have the same key "${redactSecrets(key)}". Each case needs its own key${caseKey ? '' : ': give them distinct ids or names, or pass caseKey'}.`,
       )
     }
     seen.set(key, i)

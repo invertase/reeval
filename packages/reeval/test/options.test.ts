@@ -1115,6 +1115,16 @@ describe('common mistakes', { concurrency: 4 }, () => {
         /Unknown option "cases" in group\("g"\)\. cases belongs to one eval: evaluate\(name, \{ cases: \[\.\.\.\] \}, async \(c, item\) => \{ … \}\)\./,
       ],
       [
+        'cases whose keys mask to the same key',
+        () =>
+          evaluate(
+            'uses',
+            { cases: [{ id: `sk-ant-${'a'.repeat(24)}` }, { id: `sk-ant-${'b'.repeat(24)}` }] },
+            async () => {},
+          ),
+        /evaluate\("uses \[\[REDACTED\]\]"\) names a secret, and its masked name is another eval's in this file: name it without the secret\. Give each case a key that holds no secret\./,
+      ],
+      [
         'a zero timeout',
         () => evaluate('e', { timeout: 0 }, async () => {}),
         /Invalid duration 0\. A duration is more than zero: use e\.g\. "90s" or "15m"\./,

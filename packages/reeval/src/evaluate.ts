@@ -32,6 +32,7 @@ import { evalId } from './ids.ts'
 import { isObjectLike } from './object.ts'
 import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
 import { type PlannedEval, planEval } from './plan-eval.ts'
+import { maskedVariables, redactSecrets } from './redact.ts'
 import type {
   CaseFn,
   CaseOptions,
@@ -47,7 +48,8 @@ import type {
 } from './types.ts'
 import type { CaseWhere } from './where.ts'
 
-type Declaring = { name: string; options: GroupOptions; node: DeclaredGroup }
+/** `name` is as it's shown, masked; `given` is as the file wrote it. */
+type Declaring = { name: string; given: string; options: GroupOptions; node: DeclaredGroup }
 
 // The groups enclosing the code being collected. The collector runs a nested group's callback
 // after its parent's callback has returned, so each group captures its parents when declared.
@@ -132,16 +134,53 @@ function checkOnly(mode: DeclaredMode, what: string): void {
   throw error
 }
 
+/** Each name path as its file wrote it, by kind and the path it's shown as. */
+const givenPaths = new Map<string, string>()
+
+/**
+ * `name` as it's declared, recorded and shown: masked as everything reeval writes is, so the
+ * eval's id, its artifact directory and every view hold no secret. Two names that mask to the
+ * same name are refused rather than numbered: the id is the key history, compare and query
+ * group attempts by across runs, and a number would depend on the order of the declarations.
+ */
+function shownName(kind: 'eval' | 'group' | 'todo', name: string, hint = ''): string {
+  const shown = redactSecrets(name)
+  const path = [...groupStack.map((g) => g.name), shown]
+  const given = [...groupStack.map((g) => g.given), name].join('\0')
+  // A todo is an eval entry under its id, so it and an eval share one name.
+  const key = [collectingFile() ?? '', kind === 'group' ? 'group' : 'eval', ...path].join('\0')
+  const earlier = givenPaths.get(key)
+  if (earlier !== undefined && earlier !== given) {
+    const what = kind === 'group' ? 'group' : kind === 'todo' ? 'evaluate.todo' : 'evaluate'
+    throw new UsageError(
+      `${what}("${path.join(' › ')}") names a secret, and its masked name is another ${kind === 'group' ? 'group' : 'eval'}'s in this file: name it without the secret.${hint}`,
+    )
+  }
+  givenPaths.set(key, given)
+  return shown
+}
+
+/**
+ * A note naming the variables whose values masked part of an eval's name: unlike a credential
+ * shape, a value is masked only where the variable holds it, so the eval's id differs elsewhere.
+ */
+function maskedNote(names: string[]): string | undefined {
+  const vars = [...new Set(names.flatMap((n) => maskedVariables(n)))]
+  if (!vars.length) return undefined
+  return `name masked: it holds the value of ${vars.join(', ')}, so its id differs where ${vars.length === 1 ? 'that variable has' : 'those variables have'} another value`
+}
+
 const defineGroup =
   (mode: DeclaredMode): GroupFn =>
-  (name: string, a?: GroupOptions | (() => void), b?: GroupOptions | (() => void)) => {
+  (given: string, a?: GroupOptions | (() => void), b?: GroupOptions | (() => void)) => {
     checkOnly(mode, 'group')
+    const name = shownName('group', given)
     const [written, fn] = splitArgs<() => void>('group', name, a, b)
     const options = withPaths(written, `group("${name}")`)
     checkOptions(options, `group("${name}")`)
     const node: DeclaredGroup = { type: 'group', name, mode, options: data(options), children: [] }
     declare(node)
-    const stack = [...groupStack, { name, options, node }]
+    const stack = [...groupStack, { name, given, options, node }]
     registerGroup(name, mode, () => {
       const outer = groupStack
       groupStack = stack
@@ -164,7 +203,8 @@ export const group: GroupFn & { skip: GroupFn; only: GroupFn; todo: (name: strin
  * A placeholder, `evaluate.todo` or `group.todo`: one eval entry that never runs, counted as
  * skipped and shown as todo. The enclosing groups' tags filter it as they do an eval.
  */
-function registerTodo(name: string) {
+function registerTodo(given: string) {
+  const name = shownName('todo', given)
   declare({ type: 'todo', name })
   const tags = [...new Set(groupStack.flatMap((g) => g.options.tags ?? []))]
   if (matchesTags(tags, getRunContext().tags)) registerTest(name, { mode: 'todo' }, async () => {})
@@ -266,14 +306,14 @@ function checkFamily(groups: string[], family: DeclaredFamily): void {
 
 function register(
   mode: DeclaredMode,
-  name: string,
+  given: string,
   own: EvalOptions,
   fn: EvalFn,
   source: DeclaredSource,
   hint = '',
-  family?: DeclaredFamily,
+  givenFamily?: DeclaredFamily,
 ): void {
-  prepare(mode, name, own, fn, source, hint, family).commit()
+  prepare(mode, given, own, fn, source, hint, givenFamily).commit()
 }
 
 /** An eval planned but not yet registered: `commit` registers its tests. */
@@ -281,14 +321,20 @@ type Prepared = { planned: PlannedEval; commit: () => void }
 
 function prepare(
   mode: DeclaredMode,
-  name: string,
+  given: string,
   own: EvalOptions,
   fn: EvalFn,
   source: DeclaredSource,
   hint = '',
-  family?: DeclaredFamily,
+  givenFamily?: DeclaredFamily,
   where?: CaseWhere,
 ): Prepared {
+  const name = shownName(
+    'eval',
+    given,
+    givenFamily ? ' Give each case a key that holds no secret.' : '',
+  )
+  const family = givenFamily && { ...givenFamily, name: redactSecrets(givenFamily.name) }
   const groups = groupStack.map((g) => g.name)
   if (family) checkFamily(groups, family)
   checkUnique(`evaluate("${[...groups, name].join(' › ')}")`, groups, name, hint, !!family)
@@ -315,7 +361,13 @@ function prepare(
     },
     { ...getRunContext(), file: collectingFile(), order: registered },
   )
-  if (planned.tests) registered++
+  if (planned.tests) {
+    const note = maskedNote([...groupStack.map((g) => g.given), given])
+    if (note) {
+      for (const notes of new Set(planned.tests.map((t) => t.attempt.plan.notes))) notes.push(note)
+    }
+    registered++
+  }
   const commit = () => {
     declareHarnesses(planned.harnesses)
     if (!planned.tests) return
@@ -346,8 +398,9 @@ const defineEval =
   (mode: DeclaredMode, declared?: DeclaredSource, verb: Verb = 'evaluate'): EvaluateFn =>
   (name: string, a?: unknown, b?: unknown) => {
     checkOnly(mode, verb)
-    const [split, fn] = splitArgs<EvalFn>(verb, name, a as EvalOptions, b as EvalOptions)
-    const where = `${verb}("${name}")`
+    const shown = redactSecrets(name)
+    const [split, fn] = splitArgs<EvalFn>(verb, shown, a as EvalOptions, b as EvalOptions)
+    const where = `${verb}("${shown}")`
     const written = verb === 'survey' ? surveyOptions(split, where) : split
     if (isObjectLike(written) && 'where' in written && !('cases' in written)) {
       throw new UsageError(
@@ -404,19 +457,22 @@ function registerCases(
     )
   }
   const keys = caseKeys(cases, caseKey, where)
+  // Keys as they're shown and recorded: in the plan's notes and the pairs `where` leaves out.
+  const shownKeys = keys.map((k) => redactSecrets(k))
   const own = withPaths(rest as EvalOptions, where)
   const file = collectingFile()
   const body = bodyHash(fn, where, file)
   const pooled = cases.length >= 2
   const prepared = cases.map((item, i) => {
-    const key = keys[i] as string
+    const key = shownKeys[i] as string
     const family = pooled ? { name, case: i, cases: cases.length } : undefined
     const source = { body, case: caseHash(item, `${where} case "${key}"`, file) }
     const run: EvalFn = (c) => (fn as CaseFn<unknown>)(c, item)
     const picks = pick ? { label: where, key, item, where: pick } : undefined
-    return prepare(mode, caseEvalName(name, key), own, run, source, '', family, picks)
+    const member = caseEvalName(name, keys[i] as string)
+    return prepare(mode, member, own, run, source, '', family, picks)
   })
-  if (pick) applyWhere(where, keys, prepared)
+  if (pick) applyWhere(where, shownKeys, prepared)
   for (const p of prepared) p.commit()
 }
 
@@ -539,18 +595,18 @@ function declareNodes(
     if (node.type === 'todo') registerTodo(node.name)
     else if (node.type === 'group') {
       const children = node.children
-      const where = `group("${node.name}")`
+      const where = `group("${redactSecrets(node.name)}")`
       defineGroup(node.mode)(node.name, optionsFrom(node.options, where, base), () =>
         declareNodes(children, bodyFor, base),
       )
     } else if (node.family) {
-      const options = optionsFrom(node.options, `evaluate("${node.name}")`, base)
+      const options = optionsFrom(node.options, `evaluate("${redactSecrets(node.name)}")`, base)
       checkOnly(node.mode, 'evaluate')
       register(node.mode, node.name, options, bodyFor(node.body), node.source, '', node.family)
     } else
       defineEval(node.mode, node.source)(
         node.name,
-        optionsFrom(node.options, `evaluate("${node.name}")`, base),
+        optionsFrom(node.options, `evaluate("${redactSecrets(node.name)}")`, base),
         bodyFor(node.body),
       )
   }
