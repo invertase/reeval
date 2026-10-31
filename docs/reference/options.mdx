@@ -738,22 +738,14 @@ For more information about brokering a secret, see [Secrets](/configuration/envi
 
 ## `analysis`
 
-`analysis` is the language model for insights, `reeval analyze`, and questions.
+`analysis` is the language model for `reeval analyze` and questions.
 
 <Property name="analysis" type="AnalysisConfig" optional>
-  The model, insights, token caps, and prompt text.
+  The model, token caps, and prompt text.
 </Property>
 
 <Property name="analysis.model" type="string" optional>
   A `'provider/model'` string; reeval refuses an evaluation model. `reeval analyze` and questions fall back to a judge language model.
-</Property>
-
-<Property name="analysis.insights" type="boolean" optional>
-  Whether `reeval run` explains each result when `model` is set. The default is `true`; `--no-insights` turns it off.
-</Property>
-
-<Property name="analysis.maxTokens" type="number" optional>
-  Tokens one run's insights may use, a whole number of at least 1. The default is 250000; evaluations past it print without one.
 </Property>
 
 <Property name="analysis.instructions" type="string" optional>
@@ -765,7 +757,7 @@ For more information about brokering a secret, see [Secrets](/configuration/envi
 </Property>
 
 <Property name="analysis.maxOutputTokens" type="number" optional>
-  The most tokens in an answer, a whole number of at least 500. The default is 8000.
+  The most tokens in an answer from `reeval analyze` or a question, a whole number of at least 500. A reasoning model's reasoning counts against it. The default is 32000; lower it for a model whose output limit is smaller. A `reeval analyze` answer cut off at the cap fails with a message to raise it.
 </Property>
 
 For more information about analysis, see [Analyze a run](/results/analyze#set-an-analysis-model).

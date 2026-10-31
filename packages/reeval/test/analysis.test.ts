@@ -16,6 +16,7 @@ import {
 import { join, relative, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import { type Digest as AnalysisDigest, RULES } from '../src/analysis/digest.ts'
+import { callAnalysisModel } from '../src/analysis/model.ts'
 import { analysisSchema, SYSTEM_PROMPT } from '../src/analysis/schema.ts'
 import { capConfidence, validateAnalysis } from '../src/analysis/validate.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
@@ -1663,7 +1664,7 @@ evaluate('greets', { runs: 1 }, async (c) => {
     assert.equal(readdirSync(join(p.dir, '.reeval/analysis')).length, 1)
     const dry = await runCli(p.dir, ['analyze', '--dry-run'])
     assert.match(dry.stdout, /cache hit/)
-    assert.match(dry.stdout, /≈ \d+ tokens \(cap 20000 in, 8000 out\)/)
+    assert.match(dry.stdout, /≈ \d+ tokens \(cap 20000 in, 32000 out\)/)
     assert.doesNotMatch(again.stdout + dry.stdout, /\$\d|USD/, 'tokens only, never dollars')
     assert.equal((await runCli(p.dir, ['analyze', '--no-cache'])).code, 0)
     assert.equal(calls(p.dir), 2)
@@ -2006,5 +2007,112 @@ describe('contrasts: each pair of arms, variant against variant too', () => {
     const { digest } = await digestOf(p.dir, ['--vs', 'none'])
     assert.equal(digest.facts.filter((f) => f.kind === 'contrast').length, 0)
     assert.equal(digest.facts.filter((f) => f.kind === 'checks').length, 1)
+  })
+})
+
+describe('an analysis cut off at maxOutputTokens', () => {
+  /** Calls anthropic/claude-sonnet-5 on a stubbed Messages API that answers `body` with `status`. */
+  async function stubbedCall(body: unknown, status = 200) {
+    const realFetch = globalThis.fetch
+    const key = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test'
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      })) as typeof fetch
+    try {
+      return await callAnalysisModel(
+        { name: 'anthropic/claude-sonnet-5', route: 'direct' },
+        {} as never,
+        'go',
+        8000,
+        'reeval.config.ts',
+      ).then(
+        (answer) => answer,
+        (error: Error) => error,
+      )
+    } finally {
+      globalThis.fetch = realFetch
+      if (key === undefined) delete process.env.ANTHROPIC_API_KEY
+      else process.env.ANTHROPIC_API_KEY = key
+    }
+  }
+  /** A reply that stops at max_tokens with `content`; the error it fails with, or null. */
+  const cutOffCall = async (content: unknown[], stop_reason = 'max_tokens') => {
+    const got = await stubbedCall({
+      id: 'msg_1',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-sonnet-5',
+      content,
+      stop_reason,
+      stop_sequence: null,
+      usage: { input_tokens: 100, output_tokens: 8000 },
+    })
+    return got instanceof Error ? got : null
+  }
+  const raise =
+    /^The analysis model, anthropic\/claude-sonnet-5, stopped at analysis\.maxOutputTokens \(8000 tokens\) before its analysis was complete\. Raise analysis: \{ maxOutputTokens: 16000 \} in reeval\.config\.ts\.$/
+
+  test('a reply that is all reasoning names the option, not "No output generated"', async () => {
+    const error = await cutOffCall([{ type: 'thinking', thinking: 'Let me look…', signature: 's' }])
+    assert.equal(error?.name, 'UsageError')
+    assert.match(error.message, raise)
+  })
+
+  test('a reply cut off mid-answer names the option, not "could not parse"', async () => {
+    const error = await cutOffCall([{ type: 'text', text: '{"tldr": "The skill' }])
+    assert.equal(error?.name, 'UsageError')
+    assert.match(error.message, raise)
+  })
+
+  test('a whole analysis that ends at the cap is kept', async () => {
+    const analysis = {
+      tldr: 'A run.',
+      whatHappened: [],
+      results: [],
+      why: [],
+      anomalies: [],
+      actions: [],
+      confidence: { overall: 'medium', why: 'n = 3' },
+    }
+    const got = await stubbedCall({
+      id: 'msg_1',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-sonnet-5',
+      content: [{ type: 'text', text: JSON.stringify(analysis) }],
+      stop_reason: 'max_tokens',
+      stop_sequence: null,
+      usage: { input_tokens: 100, output_tokens: 8000 },
+    })
+    assert.ok(!(got instanceof Error), String(got))
+    assert.deepEqual(got.output, analysis)
+  })
+
+  test('unparsable JSON that is not cut off keeps its own error', async () => {
+    const error = await cutOffCall([{ type: 'text', text: '{"tldr": "The skill' }], 'end_turn')
+    assert.match(error?.message ?? '', /could not parse the response/)
+    assert.doesNotMatch(error?.message ?? '', /maxOutputTokens/)
+  })
+
+  test("a cap above the model's own limit names the option", async () => {
+    const error = await stubbedCall(
+      {
+        type: 'error',
+        error: {
+          type: 'invalid_request_error',
+          message: 'max_tokens: 32000 > 8192, which is the maximum allowed number of output tokens',
+        },
+      },
+      400,
+    )
+    assert.ok(error instanceof Error)
+    assert.equal(error.name, 'UsageError')
+    assert.match(
+      error.message,
+      /was asked for up to 8000 output tokens: set analysis: \{ maxOutputTokens \} in reeval\.config\.ts to at most its output limit\.$/,
+    )
   })
 })
