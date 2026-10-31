@@ -119,7 +119,7 @@ A resume plans with the settings the run started with, which its record and prog
 
 `REEVAL_PROFILE` and `REEVAL_CONCURRENCY` count from a `.env` file too. A run with no profile resumes with none, whatever `defaultProfile` picks now. A run an older reeval started saved no `invocation`: its resume plans with the flags given, with a note.
 
-A filter that names a path is saved relative to the project root, in posix form, so the resume picks the same files from any directory. For example, `./a` typed in `evals/` is saved as `evals/a`.
+A filter that names a path on disk, or any absolute filter, is saved relative to the project root in posix form, with its trailing `/` kept, so the resume picks the same files from any directory. For example, `./a` typed in `evals/` is saved as `evals/a`.
 
 ## `reeval clean`
 
