@@ -2083,7 +2083,7 @@ export type AnalysisConfig = {
   instructions?: string
   /** The digest's cap; evidence is dropped, lowest priority first, to fit (default 20000). */
   maxInputTokens?: number
-  /** The most tokens the model may answer with (default 8000). reeval has no prices, so tokens are the cap. */
+  /** The most tokens the model may answer with, reasoning included (default 32000). reeval has no prices, so tokens are the cap. */
   maxOutputTokens?: number
 }
 

@@ -1,7 +1,13 @@
 // The analysis model: a language model, routed like the judge (the first gateway in the config's
 // list that serves it; with no list, its provider's own key). Evaluation models (typesafe-ai/*)
 // score yes/no questions and can't write one.
-import { generateText, type LanguageModel, Output } from 'ai'
+import {
+  generateText,
+  type LanguageModel,
+  type LanguageModelUsage,
+  NoObjectGeneratedError,
+  Output,
+} from 'ai'
 import { analysisModelOf } from '../config.ts'
 import { UsageError } from '../errors.ts'
 import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
@@ -236,21 +242,45 @@ export type ModelAnswer = {
   latencyMs: number
 }
 
+/** The model stopped at `maxOutputTokens` before its analysis was whole; names the option in `file`. */
+function cutOff(
+  model: ResolvedAnalysisModel,
+  maxOutputTokens: number,
+  file: string,
+  usage: LanguageModelUsage | undefined,
+): UsageError {
+  const reasoning = usage?.outputTokenDetails?.reasoningTokens
+  return new UsageError(
+    `The analysis model, ${model.name}, stopped at analysis.maxOutputTokens (${maxOutputTokens} tokens${reasoning ? `, ${reasoning} of them reasoning` : ''}) before its analysis was complete. Raise analysis: { maxOutputTokens: ${maxOutputTokens * 2} } in ${file}.`,
+  )
+}
+
 export async function callAnalysisModel(
   model: ResolvedAnalysisModel,
   digest: Digest,
   prompt: string,
   maxOutputTokens: number,
+  file: string,
 ): Promise<ModelAnswer> {
   const started = Date.now()
-  const result = await generateText({
-    model: await languageModel(model, digest),
-    system: SYSTEM_PROMPT,
-    prompt,
-    output: Output.object({ schema: analysisSchema, name: 'analysis' }),
-    maxOutputTokens,
-    maxRetries: 3,
-  })
+  let result: Awaited<ReturnType<typeof generateText>>
+  try {
+    result = await generateText({
+      model: await languageModel(model, digest),
+      system: SYSTEM_PROMPT,
+      prompt,
+      output: Output.object({ schema: analysisSchema, name: 'analysis' }),
+      maxOutputTokens,
+      maxRetries: 3,
+    })
+  } catch (error) {
+    if (NoObjectGeneratedError.isInstance(error) && error.finishReason === 'length') {
+      throw cutOff(model, maxOutputTokens, file, error.usage)
+    }
+    throw error
+  }
+  // A reply that is all reasoning has no text to parse, so the SDK returns it unparsed.
+  if (result.finishReason === 'length') throw cutOff(model, maxOutputTokens, file, result.usage)
   return {
     output: result.output as AnalysisOutput,
     resolvedModel: result.response?.modelId ?? null,

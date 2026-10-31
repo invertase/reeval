@@ -243,6 +243,7 @@ export async function analyzeDigest(
     seen,
     `${promptOf(p.digest)}${reads?.text ?? ''}`,
     config.analysis.maxOutputTokens,
+    config.file,
   )
   const evals = p.headRun.record.evals.map((e) => ({
     file: e.file,

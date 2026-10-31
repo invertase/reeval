@@ -765,7 +765,7 @@ For more information about brokering a secret, see [Secrets](/configuration/envi
 </Property>
 
 <Property name="analysis.maxOutputTokens" type="number" optional>
-  The most tokens in an answer, a whole number of at least 500. The default is 8000.
+  The most tokens in an answer, a whole number of at least 500. A reasoning model's reasoning counts against it. The default is 32000; an answer cut off at the cap fails with a message to raise it.
 </Property>
 
 For more information about analysis, see [Analyze a run](/results/analyze#set-an-analysis-model).

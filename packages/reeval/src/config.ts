@@ -678,7 +678,7 @@ export function resolveConfig(
 
 export const ANALYSIS_DEFAULTS = {
   maxInputTokens: 20_000,
-  maxOutputTokens: 8_000,
+  maxOutputTokens: 32_000,
 } as const
 
 function checkAnalysis(
