@@ -3,7 +3,7 @@
 ```ts
 evaluate('builds the sign-in page', async (c) => {
   await c.send('Build a sign-in page served by `npm start` on $PORT.')
-  const app = await c.serve('npm start', 3000)
+  const app = await c.serve('npm start')
   await c.capture(app, { name: 'sign-in', path: '/login', wait: 'idle' })
   const q = 'Does the screenshot show an email field and a password field?'
   expect(await c.judge(q, { artifacts: ['sign-in'] })).toPass()
@@ -16,7 +16,8 @@ evaluate('builds the sign-in page', async (c) => {
   IPv6 loopback) gets that port as `handle.port`; no `--port` flags needed. Several new ports, none
   of them `PORT`, throw with the list and the URLs it printed: pass the one to use, `c.serve('npm run dev', 5173)`. An
   exit, or nothing listening in 120 s, throws with its last output. With `port`, only that
-  port counts. `c.exec(cmd, { background:
+  port counts, and a `port` something already listens on (the agent's own dev server, left
+  running) throws before `cmd` starts: pass none and serve on `PORT`. `c.exec(cmd, { background:
   true })` starts a command without a port or the wait and returns `{ kill() }`.
 - `await c.capture(port | server, { name?, path?,
   wait?, instructions?, viewport?, model? })` screenshots the tunneled port into

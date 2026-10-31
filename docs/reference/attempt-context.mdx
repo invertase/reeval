@@ -79,7 +79,7 @@ const app = await c.serve('npm start')
 </Property>
 
 <Property name="port" type="number" optional>
-  The container port to give the command, or a free port reeval allocates when omitted.
+  The container port to give the command, or a free port reeval allocates when omitted. The call throws, before it starts the command, when something already listens on this port, such as a dev server the agent left running.
 </Property>
 
 The `ServeHandle` has `kill()`, as a `BackgroundHandle` does, and this field:
