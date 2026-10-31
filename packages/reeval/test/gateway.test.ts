@@ -704,7 +704,7 @@ describe('OpenRouter routes', () => {
     )
     assert.equal(agent.modelId?.('claude-haiku-4-5'), 'anthropic/claude-haiku-4.5')
     assert.equal(anthropicOnOpenRouter('claude-sonnet-4-5'), 'anthropic/claude-sonnet-4.5')
-    assert.equal(anthropicOnOpenRouter('claude-opus-4'), 'anthropic/claude-opus-4')
+    assert.equal(anthropicOnOpenRouter('claude-opus-5'), 'anthropic/claude-opus-5')
     assert.equal(anthropicOnOpenRouter('anthropic/claude-x'), 'anthropic/claude-x')
   })
 

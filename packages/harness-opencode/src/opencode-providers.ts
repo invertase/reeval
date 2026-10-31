@@ -188,19 +188,8 @@ export const OPENCODE_VERTEX_PROVIDER = 'google-vertex'
 /** Gemini's own thinking level, as Gemini's API takes it. */
 const geminiThinking = (effort: string) => ({ thinkingConfig: { thinkingLevel: effort } })
 
-/**
- * Anthropic models whose API refuses `output_config.effort`, besides every `claude-3-` model
- * (`claude-opus-4` and `claude-sonnet-4` are the undated `claude-opus-4-20250514` and its twin).
- */
-const ANTHROPIC_NO_EFFORT = new Set([
-  'claude-opus-4',
-  'claude-opus-4-0',
-  'claude-opus-4-1',
-  'claude-sonnet-4',
-  'claude-sonnet-4-0',
-  'claude-sonnet-4-5',
-  'claude-haiku-4-5',
-])
+/** Anthropic models whose API refuses `output_config.effort`. */
+const ANTHROPIC_NO_EFFORT = new Set(['claude-sonnet-4-5', 'claude-haiku-4-5'])
 
 /** OpenAI models that take only some reasoning efforts, answering any other with a 400. */
 const OPENAI_ONLY_EFFORTS: Readonly<Record<string, readonly string[]>> = { 'gpt-5-pro': ['high'] }
@@ -218,7 +207,7 @@ const undated = (model: string) =>
 /** Why the API behind `provider` answers `effort` on `model` with a 400, or undefined. */
 function apiRefusesEffort(provider: string, model: string, effort: string): string | undefined {
   const base = undated(model)
-  if (provider === 'anthropic' && (base.startsWith('claude-3-') || ANTHROPIC_NO_EFFORT.has(base))) {
+  if (provider === 'anthropic' && ANTHROPIC_NO_EFFORT.has(base)) {
     return `Anthropic's API takes no effort on ${model}`
   }
   if (provider === 'openai') {
