@@ -19,7 +19,8 @@
   discordant cases reads `can't tell yet` (`insufficient` in `reeval query family_lift`), so
   aim for six cases or more; the plan hints when there are fewer. No `runs: { bestOf }` beside it.
   `gate: { passRate }` gates each cell's rate over the cases (the mean of each case's pass@1), so
-  one failing case of three passes `passRate: 0.6`; under `'all'` every case must pass.
+  one failing case of three passes `passRate: 0.6`; under `'all'` every case must pass. The
+  failing case still records `fail` (with `verdict: 'family'`); the family's row is the verdict.
 - Each case has a key, which names its row: a string or number is its own key, an object its
   `id`, else its `name`; otherwise pass `caseKey: (item) => item.slug`. Keys are unique, at most
   80 characters, with no `#`, `/` or `›`. `cases`, `caseKey` and `where` go on `evaluate` or

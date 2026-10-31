@@ -118,6 +118,8 @@ Two of three cases pass, a rate of 67%, so the `all cases` row passes:
 
 Under the default `'all'`, every case must pass.
 
+Each case's record keeps what it did, so case `c` reads `fail`, with `verdict: 'family'`. The run's exit code and tally read the `all cases` row instead. `reeval compare` shows a case that flipped as `now fails` or `now passes`, and `--fail-on-regression` reads the `all cases` row.
+
 ## Run a case on some environments
 
 `where` picks the case and environment pairs that run, at plan time. It reads each environment's `traits`, filter facts that the agent never sees:
@@ -138,7 +140,7 @@ evaluate(
     // ...
 ```
 
-The `reeval run --dry-run` notes list each pair left out, such as `excluded on vite-app: q2`, and each case's record keeps its own in `excluded` (`whereExcluded` in `--dry-run --json`). With `compare`, the control's answer holds for every variant. Reading `harness` decides each harness on its own. `where` is TypeScript only.
+The `reeval run --dry-run` notes list each pair left out, such as `excluded on vite-app: q2`, and each case's record keeps its own in `excluded` (`whereExcluded` in `--dry-run --json`). The record's family keeps every pair in its own `excluded`, including a case `where` leaves out everywhere, which runs nothing. With `compare`, the control's answer holds for every variant. Reading `harness` decides each harness on its own. `where` is TypeScript only.
 
 ## Compare over cases
 

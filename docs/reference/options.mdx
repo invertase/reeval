@@ -559,7 +559,7 @@ For more information about environments, see [Define an environment](/configurat
 `gate` is how a cell's attempts decide its outcome.
 
 <Property name="gate" type="'all' | 'none' | { passRate: number }" optional>
-  `'all'` (the default) passes when every counted outcome is `pass`. `{ passRate }` passes when at least that share of `pass` and `fail` outcomes passes, above 0 and at most 1. When no outcome counts, the cell takes its worst attempt outcome. With `cases`, `{ passRate }` gates each cell's rate over its cases, the mean of each case's pass@1, rather than each case. `'none'` gates no cell: the attempts run and are recorded, the result prints `ran`, and only run and infra errors fail the run. [`survey()`](/reference/authoring-api#survey) sets it.
+  `'all'` (the default) passes when every counted outcome is `pass`. `{ passRate }` passes when at least that share of `pass` and `fail` outcomes passes, above 0 and at most 1. When no outcome counts, the cell takes its worst attempt outcome. With `cases`, `{ passRate }` gates each cell's rate over its cases, the mean of each case's pass@1, rather than each case: a case keeps its own outcome, with `verdict: 'family'`, and the family's outcome sets the exit code. `'none'` gates no cell: the attempts run and are recorded, the result prints `ran`, and only run and infra errors fail the run. [`survey()`](/reference/authoring-api#survey) sets it.
 </Property>
 
 ## `env`
@@ -815,7 +815,7 @@ evaluate(
 </Property>
 
 <Property name="where" type="(pair: { case, environment, harness }) => boolean" optional>
-  TypeScript only. Which case and environment pairs run, decided at plan time. `environment` has its `name` and `traits`, and reeval refuses reading a trait no listed environment defines. With `compare`, it sees the control, whose answer holds for every variant. Reading `harness` decides each harness on its own. The pairs it leaves out are listed in `--dry-run`, and each case's own are in its `excluded` in the record and its `whereExcluded` in `--dry-run --json`. reeval refuses `where` without `cases`.
+  TypeScript only. Which case and environment pairs run, decided at plan time. `environment` has its `name` and `traits`, and reeval refuses reading a trait no listed environment defines. With `compare`, it sees the control, whose answer holds for every variant. Reading `harness` decides each harness on its own. The pairs it leaves out are listed in `--dry-run`, and each case's own are in its `excluded` in the record and its `whereExcluded` in `--dry-run --json`. The record's family lists every pair in its `excluded`, including those of a case left out everywhere. reeval refuses `where` without `cases`.
 </Property>
 
 For more information, see [Evaluate many cases](/evaluations/task/cases).

@@ -295,7 +295,11 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 </Property>
 
 <Property name="outcome" type="Outcome">
-  Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation.
+  Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation. On a case with `verdict: 'family'`, it's what the case did, and its family's outcome is the verdict.
+</Property>
+
+<Property name="verdict" type="'family'" optional>
+  `family` on a case whose `gate: { passRate }` its family holds over the mean of its cases: a failed `outcome` doesn't fail the run, and `RunRecord.families`' outcome decides. Unset otherwise, and on records from before a family pooled `passRate`.
 </Property>
 
 <Property name="todo" type="boolean">
@@ -448,6 +452,10 @@ An eval with `cases`: its cases as samples of one suite. Each case is also an ev
 
 <Property name="lifts" type="FamilyLift[]">
   One per variant cell, with `compare`.
+</Property>
+
+<Property name="excluded" type="ExcludedPair[]" optional>
+  Every case and environment (and harness) pair `where` left out, including those of a case it left out everywhere, which has no evaluation; unset when none.
 </Property>
 
 <Property name="outcome" type="'pass' | 'fail'">
