@@ -45,6 +45,9 @@ import type { CliInvocation } from './report/types.ts'
 import {
   completedKeysFor,
   keptAttempts,
+  type LeftOut,
+  leftOutAttempts,
+  liveAttempts,
   loadPrevious,
   prepareResume,
   resolveResume,
@@ -386,13 +389,15 @@ async function runCommand(
     executed = await executeRun(ctx, setup, filters, renderer, {
       startedWith,
       notes: resumed?.notes ?? [],
+      narrowed: !!resumed && (given.length > 0 || !!flags.tag?.length),
     })
   } catch (error) {
     renderer.close()
     if (setup.resume === undefined) await rm(ctx.stagingDir, { recursive: true, force: true })
     throw error
   }
-  const { engineRun, plan, sandboxVersions, budgetReached, cutShort, live, questions } = executed
+  const { engineRun, plan, sandboxVersions, budgetReached, cutShort, live, questions, leftOut } =
+    executed
   invocation.unhandledErrors = engineRun.unhandledErrors
   const engines = [
     ...new Set(plan?.sandboxes.flatMap((s) => (s.kind === 'docker' ? [s.engine ?? 'docker'] : []))),
@@ -444,6 +449,7 @@ async function runCommand(
       git: ctx.git,
       previous: ctx.previous,
       previousArtifacts: ctx.previousArtifacts,
+      leftOut,
       runner: runnerInfo(),
       ...(startedWith ? { invocation: startedWith } : {}),
       ...(answers && (answers.evals.size || answers.attempts.size) ? { answers } : {}),
@@ -452,13 +458,19 @@ async function runCommand(
     () => live?.stop(),
   )
   const { record } = run
-  // `--json`'s outcome, the studio and `reeval show` read the same outcome from the record.
+  // The studio and `reeval show` read the same outcome from the record.
   const outcome = runOutcome(record)
+  const notRun = leftOut.filter((l) => !l.done).length
+  // Left incomplete by its filters, a resume exits on the attempts it ran, and `--json` says so.
+  const ran =
+    notRun > 0 && !stopped && record.status === 'interrupted'
+      ? runOutcome({ ...record, status: 'complete' })
+      : outcome
   const code = stopped
     ? stopCode
-    : outcome === 'fail'
+    : ran === 'fail'
       ? EXIT.failed
-      : outcome === 'infra_error'
+      : ran === 'infra_error'
         ? EXIT.infra
         : EXIT.ok
   const { pruneDebug } = await import('./debug/files.ts')
@@ -471,6 +483,7 @@ async function runCommand(
     summaryPath: fromCwd(summary),
     results: engineRun.evals,
     remarks: run.remarks,
+    ...(notRun > 0 && !stopped ? { notRun } : {}),
   })
   renderer.close()
   const stepSummary = process.env.GITHUB_STEP_SUMMARY
@@ -489,10 +502,14 @@ async function runCommand(
     const line = await recordCmd(config, record.runId, { ...flags, ...allow })
     if (setup.json) console.error(line)
     else console.log(line)
+  } else if (autoRecord && notRun > 0 && !stopped) {
+    const line = `Not recorded: run ${record.runId} is incomplete. reeval run --resume ${record.runId}${flags.record ? ' --record' : ''} runs the rest and records it.`
+    if (setup.json) console.error(line)
+    else console.log(line)
   }
   if (setup.json) {
     const { suiteResult } = await import('./view/suite.ts')
-    process.stdout.write(`${JSON.stringify(suiteResult(record), null, 2)}\n`)
+    process.stdout.write(`${JSON.stringify({ ...suiteResult(record), outcome: ran }, null, 2)}\n`)
   }
 
   return code
@@ -787,7 +804,12 @@ async function executeRun(
   setup: Prepared,
   filters: string[],
   renderer: ReturnType<typeof createRenderer>,
-  started: { startedWith: RunInvocation | undefined; notes: string[] },
+  started: {
+    startedWith: RunInvocation | undefined
+    notes: string[]
+    /** A resume whose filters or `--tag` replace the run's, so its plan may leave attempts out. */
+    narrowed: boolean
+  },
 ) {
   const { runId, stagingDir, config, runs, tags, concurrency, profile, verbosity, configFile } = ctx
   const run = JSON.parse(
@@ -815,6 +837,7 @@ async function executeRun(
   let toRun: PlannedItem[] = []
   let live: LiveProgressWriter | undefined
   let kept = new Map<string, LiveKept>()
+  let leftOut: LeftOut[] = []
   let questions: QuestionRunner | undefined
   const onPlan = async (collected: CollectedPlan) => {
     const { planned, excluded, matched, unmatched } = collected
@@ -875,9 +898,25 @@ async function executeRun(
       )
     }
     plan.warnings.push(...started.notes)
+    if (started.narrowed) {
+      leftOut = leftOutAttempts(
+        planned,
+        stagingDir,
+        ctx.previous,
+        await liveAttempts(stagingDir),
+        new Set(excluded.map((e) => e.id)),
+      )
+      const notRun = leftOut.filter((l) => !l.done).length
+      if (notRun) {
+        plan.warnings.push(
+          `${notRun === 1 ? '1 attempt' : `${notRun} attempts`} run ${runId} planned ${notRun === 1 ? "isn't" : "aren't"} in this resume's filters: ${notRun === 1 ? 'it stays' : 'they stay'} not run and the run stays incomplete. reeval run --resume ${runId} runs ${notRun === 1 ? 'it' : 'them'}`,
+        )
+      }
+    }
     if (completed.size) plan.resume = { runId, completed: completed.size }
     run.completed = [...completed]
-    kept = keptAttempts(completed, stagingDir, ctx.previous)
+    const done = leftOut.filter((l) => l.done).map((l) => l.key)
+    kept = keptAttempts([...completed, ...done], stagingDir, ctx.previous)
     const { imageStages, imageTargets } = await import('./sandbox/images.ts')
     const targets = imageTargets(
       skipped
@@ -1145,6 +1184,7 @@ async function executeRun(
           startedAt: ctx.startedAt,
           planned: toRun,
           kept,
+          leftOut,
           ...(started.startedWith ? { invocation: started.startedWith } : {}),
         })
         renderer.onEvent({
@@ -1256,6 +1296,7 @@ async function executeRun(
     cutShort,
     live,
     questions,
+    leftOut,
   }
 }
 

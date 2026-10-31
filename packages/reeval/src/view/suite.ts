@@ -56,7 +56,8 @@ export type SuiteResult = {
   status: RunRecord['status']
   /**
    * The run's outcome, which `reeval run`'s exit code is read from: `fail` on any error outside
-   * an attempt, and `skipped` on an interrupted run.
+   * an attempt, and `skipped` on an interrupted run. `reeval run --json` gives a resume that its
+   * filters left `interrupted` the outcome of the attempts it ran, as its exit code.
    */
   outcome: Outcome
   /**

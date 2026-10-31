@@ -19,7 +19,12 @@ import { RefError } from './history/views.ts'
 import { RUN_ID, recordFileName, relativeFile } from './ids.ts'
 import { type LiveKept, replace } from './live.ts'
 import type { EvalRecord, Outcome } from './types.ts'
-import { LIVE_FILE, readableInvocation, readableLiveProgress } from './view/live.ts'
+import {
+  LIVE_FILE,
+  type LiveAttempt,
+  readableInvocation,
+  readableLiveProgress,
+} from './view/live.ts'
 
 /** Other-host / studio: a heartbeat older than this is quiet. A live pid on this host is not. */
 const STALE_MS = 15_000
@@ -154,6 +159,52 @@ export function completedKeysFor(
     if (stagingRecordComplete(staging, key) || fromPrevious.has(key)) keys.add(key)
   }
   return keys
+}
+
+/** An attempt the run planned that a filtered resume leaves out of its plan. */
+export type LeftOut = Pick<LiveAttempt, 'key' | 'evalId' | 'name' | 'file' | 'cell' | 'n'> & {
+  /** Finished earlier in the run; else it never started or didn't finish, and stays not run. */
+  done: boolean
+}
+
+/**
+ * The attempts the run planned, from the previous record and the progress file a quit left,
+ * that this resume's plan leaves out. The record keeps them, so the run stays incomplete until
+ * a resume runs the ones that aren't done. A todo, or an eval `declared` (the ids this resume
+ * collected as `.skip` or `.todo`), never runs, so it's done.
+ */
+export function leftOutAttempts(
+  planned: readonly { key: string }[],
+  staging: string,
+  previous: RunRecord | null | undefined,
+  live: readonly LiveAttempt[],
+  declared: ReadonlySet<string> = new Set(),
+): LeftOut[] {
+  const now = new Set(planned.map((p) => p.key))
+  const found = new Map<string, LeftOut>()
+  const add = (a: Omit<LeftOut, 'done'>, finished: boolean) => {
+    if (now.has(a.key) || found.has(a.key)) return
+    const done = finished || declared.has(a.evalId) || stagingRecordComplete(staging, a.key)
+    found.set(a.key, { ...a, done })
+  }
+  for (const e of previous?.evals ?? []) {
+    for (const a of e.attempts) {
+      const at = { key: a.key, evalId: e.id, name: e.name, file: e.file, cell: a.cell, n: a.n }
+      add(at, e.todo || isCompletedAttempt(a.outcome, a.error))
+    }
+  }
+  for (const a of live) add(a, false)
+  return [...found.values()]
+}
+
+/** The attempts in a stopped run's progress file, or none. */
+export async function liveAttempts(staging: string): Promise<LiveAttempt[]> {
+  const text = await readFile(join(staging, LIVE_FILE), 'utf8').catch(() => null)
+  try {
+    return (text ? readableLiveProgress(JSON.parse(text) as unknown)?.attempts : null) ?? []
+  } catch {
+    return []
+  }
 }
 
 /**

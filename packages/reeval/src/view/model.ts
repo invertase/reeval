@@ -181,7 +181,8 @@ export function activityLabel(
 /**
  * A run's outcome, which `reeval run`'s exit code is read from: an error outside any attempt, a
  * failed gated cell or a budget stop fails the run, while failures in ungated cells (controls, by
- * default) don't. An interrupted run is `skipped`, whatever ran.
+ * default) don't. An interrupted run is `skipped`, whatever ran; a resume its filters left
+ * `interrupted` exits on its outcome as if it were complete.
  */
 export function runOutcome(run: {
   status: RunRecord['status']

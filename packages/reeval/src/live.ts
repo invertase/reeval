@@ -5,6 +5,7 @@ import { hostname } from 'node:os'
 import { join } from 'node:path'
 import type { PlannedItem } from './engine/types.ts'
 import type { RunInvocation } from './history/types.ts'
+import type { LeftOut } from './resume.ts'
 import type { EvalResult } from './ui/events.ts'
 import {
   LIVE_FILE,
@@ -33,6 +34,8 @@ export type LiveProgressOptions = {
   planned: PlannedItem[]
   /** By attempt key: a resume plans these skipped, but they show as they finished. */
   kept?: ReadonlyMap<string, LiveKept>
+  /** Attempts the run planned that this resume leaves out: kept, as not run unless done. */
+  leftOut?: readonly LeftOut[]
   invocation?: RunInvocation
   heartbeatMs?: number
   now?: () => Date
@@ -123,6 +126,21 @@ export function writeLiveProgress(options: LiveProgressOptions): LiveProgressWri
       ]
     }),
   )
+  for (const l of options.leftOut ?? []) {
+    if (attempts.has(l.key)) continue
+    const was = kept.get(l.key)
+    attempts.set(l.key, {
+      key: l.key,
+      evalId: l.evalId,
+      name: l.name,
+      file: l.file,
+      cell: l.cell,
+      n: l.n,
+      status: (l.done && was?.outcome) || 'skipped',
+      startedAt: was?.startedAt ?? null,
+      durationMs: was?.durationMs ?? null,
+    })
+  }
   let phase: LivePhase = 'running'
   let stopped = false
 

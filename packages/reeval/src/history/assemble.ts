@@ -28,7 +28,7 @@ import {
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactJsonText, redactSecrets, redactSplitSecrets } from '../redact.ts'
-import { isCompletedAttempt, previousAttempt } from '../resume.ts'
+import { isCompletedAttempt, type LeftOut, previousAttempt } from '../resume.ts'
 import { containsZero, liftInterval, round3 } from '../stats.ts'
 import { formatDuration } from '../text.ts'
 import type {
@@ -137,6 +137,11 @@ export type AssembleInput = {
   previous?: RunRecord | null
   /** Artifact directory of `previous`, when it was moved aside into staging. */
   previousArtifacts?: string | null
+  /**
+   * Attempts the run planned that a filtered resume left out: kept as they were, or as not run,
+   * so a run with any not done stays incomplete.
+   */
+  leftOut?: readonly LeftOut[]
   reeval: string
   runtime: NonNullable<Stack['runtime']>
   /** What the evals are written in; a runner for another language gives its own. */
@@ -558,6 +563,15 @@ const UNKNOWN_CELL: Cell = {
   role: 'control',
 }
 
+/** A cell known only by its key, `<harness>/<environment>/<sandbox>`. */
+const cellOfKey = (key: string): Cell => ({
+  ...UNKNOWN_CELL,
+  key,
+  harness: key.split('/')[0] ?? 'unknown',
+  environment: key.split('/')[1] ?? 'unknown',
+  sandbox: key.split('/')[2]?.replace(/#\d+$/, '') ?? 'unknown',
+})
+
 /** minLift per cell, kept aside while attempts are added; see `rollUp`. */
 const minLifts = new WeakMap<CellRecord, number>()
 
@@ -638,7 +652,8 @@ async function addPreviousAttempt(
 ): Promise<void> {
   const before = previous.evals.find((p) => p.id === e.id)
   const beforeCell = before?.cells.find((c) => c.key === kept.cell)
-  const cell: Cell = e.attempt?.cell ??
+  const cell: Cell =
+    e.attempt?.cell ??
     (beforeCell && {
       key: beforeCell.key,
       harness: beforeCell.harness,
@@ -646,13 +661,8 @@ async function addPreviousAttempt(
       sandbox: beforeCell.sandbox,
       role: beforeCell.role,
       ...(beforeCell.variant !== undefined ? { variant: beforeCell.variant } : {}),
-    }) ?? {
-      ...UNKNOWN_CELL,
-      key: kept.cell,
-      harness: kept.cell.split('/')[0] ?? 'unknown',
-      environment: kept.cell.split('/')[1] ?? 'unknown',
-      sandbox: kept.cell.split('/')[2]?.replace(/#\d+$/, '') ?? 'unknown',
-    }
+    }) ??
+    cellOfKey(kept.cell)
   const sources = before?.sources ?? []
   const { source, revision } = e.attempt ?? before ?? {}
   const stub: EngineEval = {
@@ -667,6 +677,7 @@ async function addPreviousAttempt(
     errors: [],
     formattedErrors: [],
     meta: undefined,
+    ...(before?.todo ? { todo: true as const } : {}),
   }
   seen.add(null, cell, stub)
   seen.addKept(previous, kept, cell, beforeCell?.environmentDigest ?? null, e.attempt !== undefined)
@@ -786,9 +797,10 @@ async function addAttempt(
   judge: JudgeFingerprint,
   previous?: RunRecord | null,
   previousArtifacts?: string | null,
+  unplanned?: { cell: Cell; n: number },
 ): Promise<void> {
-  const cell = e.attempt?.cell ?? UNKNOWN_CELL
-  const n = e.attempt?.n ?? 1
+  const cell = e.attempt?.cell ?? unplanned?.cell ?? UNKNOWN_CELL
+  const n = e.attempt?.n ?? unplanned?.n ?? 1
   const kept = previousAttempt(previous, e.key)
   if (previous && e.state === 'skipped' && kept && isCompletedAttempt(kept.outcome, kept.error)) {
     await addPreviousAttempt(e, kept, seen, out, judge, previous, previousArtifacts)
@@ -1280,6 +1292,30 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       }
     }
   }
+  const added = new Set([...seen.byEval.values()].flatMap((e) => e.attempts.map((a) => a.key)))
+  for (const l of input.leftOut ?? []) {
+    if (added.has(l.key)) continue
+    const [, ...names] = l.evalId.split(' › ')
+    const stub: EngineEval = {
+      id: l.evalId,
+      key: l.key,
+      file: l.file,
+      group: names.slice(0, -1),
+      name: l.name,
+      attempt: undefined,
+      state: 'skipped',
+      durationMs: 0,
+      errors: [],
+      formattedErrors: [],
+      meta: undefined,
+    }
+    const was = previousAttempt(input.previous, l.key)
+    if (input.previous && was) {
+      await addPreviousAttempt(stub, was, seen, out, judge, input.previous, input.previousArtifacts)
+    } else {
+      await addAttempt(stub, ctx, seen, out, judge, null, null, { cell: cellOfKey(l.cell), n: l.n })
+    }
+  }
   const evals = [...seen.byEval.values()]
   for (const entry of evals) {
     const before = input.previous?.evals.find((p) => p.id === entry.id)?.family
@@ -1321,7 +1357,15 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     kind: 'reeval-run',
     schemaVersion: SCHEMA_VERSION,
     runId,
-    status: input.interrupted ? 'interrupted' : input.budgetReached ? 'budget' : 'complete',
+    status: input.interrupted
+      ? 'interrupted'
+      : input.budgetReached
+        ? 'budget'
+        : input.leftOut?.some((l) => !l.done)
+          ? input.previous?.status === 'budget'
+            ? 'budget'
+            : 'interrupted'
+          : 'complete',
     startedAt: input.startedAt.toISOString(),
     endedAt: input.endedAt.toISOString(),
     durationMs: input.endedAt.getTime() - input.startedAt.getTime(),
