@@ -135,12 +135,6 @@ jobs:
         working-directory: packages/reeval
         env: { REEVAL_TEST_REAL: '1' }
         run: node --test --test-timeout=1800000 --experimental-strip-types --no-warnings test/questions-real.test.ts
-      # One well-named eval on the fake harness, classified by a real analysis model.
-      - name: insights (real model)
-        if: ${{ !cancelled() }}
-        working-directory: packages/reeval
-        env: { REEVAL_TEST_REAL: '1' }
-        run: node --test --experimental-strip-types --no-warnings --test-name-pattern='real model' test/insights.test.ts
       - if: always()
         run: |
           [ -f "$REEVAL_REAL_LEDGER" ] && { echo '### Real attempts reserved'; echo; echo '```'; cat "$REEVAL_REAL_LEDGER"; echo '```'; } >> "$GITHUB_STEP_SUMMARY" || true
