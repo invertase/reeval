@@ -343,9 +343,9 @@ test('Bedrock brokers its API key as a Bearer token, and its URL names the serve
   assert.equal(
     providerServedModel(bedrock, {
       ...runtime,
-      path: '/model/anthropic.claude-v2%3A1/converse-stream',
+      path: '/model/anthropic.claude-haiku-4-5-20251001-v1%3A0/converse-stream',
     }),
-    'anthropic.claude-v2:1',
+    'anthropic.claude-haiku-4-5-20251001-v1:0',
   )
   assert.equal(
     providerServedModel(bedrock, {

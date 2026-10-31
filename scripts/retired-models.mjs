@@ -7,11 +7,22 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
- * Retired ids, their aliases and OpenRouter's dotted forms: Claude 1, 2 and Instant, every
- * Claude 3, Sonnet 4 and Opus 4 (`-20250514`, `-4-0`, `-4`) and Opus 4.1.
+ * Retired ids, their aliases, OpenRouter's dotted forms, Bedrock's (`anthropic.claude-v2:1`,
+ * `us.anthropic.…`) and the `claude-4-sonnet` order: Claude 1, 2 and Instant, every Claude 3,
+ * Sonnet 4 and Opus 4 (`-20250514`, `-4-0`, `-4`) and Opus 4.1.
  */
 const RETIRED =
-  /(?<![\w.-])(?:anthropic[/.])?claude-(?:(?:sonnet|opus)-4(?:[-.]0|-20250514)?|opus-4[-.]1(?:-20250805)?|3(?:[-.]\d)?-(?:sonnet|haiku|opus)[\w.-]*|(?:sonnet|haiku|opus)-3(?:[-.]\d)?[\w.-]*|[12](?:\.\d)?|instant[\w.-]*)(?![\w.]|-\d)/g
+  /(?<![\w.-])(?:(?:[a-z]{2,6}(?:-gov)?\.)?anthropic[/.])?claude-(?:(?:sonnet|opus)-4(?:[-.]0|-20250514)?|opus-4[-.]1(?:-20250805)?|4(?:[-.]1)?-(?:sonnet|opus)|3(?:[-.]\d)?-(?:sonnet|haiku|opus)[\w.-]*|(?:sonnet|haiku|opus)-3(?:[-.]\d)?[\w.-]*|[12](?:\.\d)?|v[12](?::\d+)?|instant[\w.-]*)(?![\w.]|-\d)/g
+
+/**
+ * Files that quote what was, not what reeval calls: release-please writes CHANGELOG.md from PR
+ * titles, and the recorded runs and captured streams replay without a request.
+ */
+const SKIPPED = [
+  'CHANGELOG.md',
+  'packages/reeval/test/fixtures/records/',
+  'packages/reeval/test/replay/',
+]
 
 /**
  * Ids a file may name, because they describe a model rather than call it. Claude Code drops
@@ -31,6 +42,10 @@ export function retiredModelProblems(root) {
   const files = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
     .split('\0')
     .filter((file) => file && file !== 'scripts/retired-models.mjs')
+    .filter(
+      (file) =>
+        !SKIPPED.some((skip) => file === skip || (skip.endsWith('/') && file.startsWith(skip))),
+    )
   const problems = []
   for (const file of files) {
     const allowed = ALLOWED[file]
