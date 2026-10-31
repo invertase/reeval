@@ -512,7 +512,10 @@ export type FamilyRecord = {
   name: string
   /** Cases in the list. */
   cases: number
-  /** Cases with an evaluation in this run; fewer when a filter or tag left some out. */
+  /**
+   * Cases with an attempt that ran (not skipped) in this run; fewer when a filter or tag left
+   * some out, or an interrupted run or a filtered resume hasn't run them yet.
+   */
   ran: number
   /** One per cell. */
   rates: FamilyRate[]

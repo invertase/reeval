@@ -1955,7 +1955,7 @@
           "enum": ["fail", "pass"]
         },
         "ran": {
-          "description": "Cases with an evaluation in this run; fewer when a filter or tag left some out.",
+          "description": "Cases with an attempt that ran (not skipped) in this run; fewer when a filter or tag left some out, or an interrupted run or a filtered resume hasn't run them yet.",
           "type": "number"
         },
         "rates": {

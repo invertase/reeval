@@ -688,6 +688,8 @@ async function addPreviousAttempt(
   seen.add(null, cell, stub)
   seen.addKept(previous, kept, cell, beforeCell?.environmentDigest ?? null, e.attempt !== undefined)
   const entry = seen.entry(stub, sources, { source, revision })
+  // Unplanned this time, the case keeps the pairs `where` left it out of.
+  if (!e.attempt && !entry.excluded && before?.excluded) entry.excluded = before.excluded
   const created = !entry.cells.some((c) => c.key === cell.key)
   const cellRecord = cellOf(
     entry,

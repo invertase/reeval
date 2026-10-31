@@ -242,7 +242,7 @@ export function familiesOf(
       group: first.group,
       name: family.name,
       cases: family.cases,
-      ran: cases.length,
+      ran: cases.filter((e) => e.attempts.some((a) => a.outcome !== 'skipped')).length,
       rates,
       lifts,
       ...(excluded?.length ? { excluded } : {}),
