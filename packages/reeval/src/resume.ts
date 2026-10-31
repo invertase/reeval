@@ -170,24 +170,27 @@ export type LeftOut = Pick<LiveAttempt, 'key' | 'evalId' | 'name' | 'file' | 'ce
 /**
  * The attempts the run planned, from the previous record and the progress file a quit left,
  * that this resume's plan leaves out. The record keeps them, so the run stays incomplete until
- * a resume runs the ones that aren't done.
+ * a resume runs the ones that aren't done. A todo, or an eval `declared` (the ids this resume
+ * collected as `.skip` or `.todo`), never runs, so it's done.
  */
 export function leftOutAttempts(
   planned: readonly { key: string }[],
   staging: string,
   previous: RunRecord | null | undefined,
   live: readonly LiveAttempt[],
+  declared: ReadonlySet<string> = new Set(),
 ): LeftOut[] {
   const now = new Set(planned.map((p) => p.key))
   const found = new Map<string, LeftOut>()
   const add = (a: Omit<LeftOut, 'done'>, finished: boolean) => {
     if (now.has(a.key) || found.has(a.key)) return
-    found.set(a.key, { ...a, done: finished || stagingRecordComplete(staging, a.key) })
+    const done = finished || declared.has(a.evalId) || stagingRecordComplete(staging, a.key)
+    found.set(a.key, { ...a, done })
   }
   for (const e of previous?.evals ?? []) {
     for (const a of e.attempts) {
       const at = { key: a.key, evalId: e.id, name: e.name, file: e.file, cell: a.cell, n: a.n }
-      add(at, isCompletedAttempt(a.outcome, a.error))
+      add(at, e.todo || isCompletedAttempt(a.outcome, a.error))
     }
   }
   for (const a of live) add(a, false)

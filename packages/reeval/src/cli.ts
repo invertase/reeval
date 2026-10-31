@@ -458,12 +458,12 @@ async function runCommand(
     () => live?.stop(),
   )
   const { record } = run
-  // `--json`'s outcome, the studio and `reeval show` read the same outcome from the record.
+  // The studio and `reeval show` read the same outcome from the record.
   const outcome = runOutcome(record)
   const notRun = leftOut.filter((l) => !l.done).length
-  // Left incomplete by its filters, a resume exits on the attempts it ran.
+  // Left incomplete by its filters, a resume exits on the attempts it ran, and `--json` says so.
   const ran =
-    notRun > 0 && record.status === 'interrupted'
+    notRun > 0 && !stopped && record.status === 'interrupted'
       ? runOutcome({ ...record, status: 'complete' })
       : outcome
   const code = stopped
@@ -502,10 +502,14 @@ async function runCommand(
     const line = await recordCmd(config, record.runId, { ...flags, ...allow })
     if (setup.json) console.error(line)
     else console.log(line)
+  } else if (autoRecord && notRun > 0 && !stopped) {
+    const line = `Not recorded: run ${record.runId} is incomplete. reeval run --resume ${record.runId}${flags.record ? ' --record' : ''} runs the rest and records it.`
+    if (setup.json) console.error(line)
+    else console.log(line)
   }
   if (setup.json) {
     const { suiteResult } = await import('./view/suite.ts')
-    process.stdout.write(`${JSON.stringify(suiteResult(record), null, 2)}\n`)
+    process.stdout.write(`${JSON.stringify({ ...suiteResult(record), outcome: ran }, null, 2)}\n`)
   }
 
   return code
@@ -895,7 +899,13 @@ async function executeRun(
     }
     plan.warnings.push(...started.notes)
     if (started.narrowed) {
-      leftOut = leftOutAttempts(planned, stagingDir, ctx.previous, await liveAttempts(stagingDir))
+      leftOut = leftOutAttempts(
+        planned,
+        stagingDir,
+        ctx.previous,
+        await liveAttempts(stagingDir),
+        new Set(excluded.map((e) => e.id)),
+      )
       const notRun = leftOut.filter((l) => !l.done).length
       if (notRun) {
         plan.warnings.push(

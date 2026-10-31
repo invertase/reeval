@@ -348,7 +348,10 @@ describe('catch regressions (reeval compare)', () => {
   test('a run that did not finish is noted above the tally', () => {
     const g = compareGolden('compare')
     for (const [status, note] of [
-      ['interrupted', /^head \S+ was interrupted, so some of its evals were canceled/m],
+      [
+        'interrupted',
+        /^head \S+ didn’t finish, so some of its evals were canceled or haven’t run yet/m,
+      ],
       ['budget', /^head \S+ stopped at its duration budget, so some of its evals never ran$/m],
     ] as const) {
       const input = goldenCompare(g)

@@ -585,6 +585,50 @@ evaluate('two', async () => {})
     )
   })
 
+  test('a filtered resume counts skip and todo evals as done, and says an incomplete run is not recorded', async () => {
+    const p = await project('resume-filter-declared', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a/one.eval.ts': `import { evaluate } from 'reeval'
+evaluate('one', async () => {})
+evaluate.skip('sk', async () => {})
+`,
+      'evals/b/two.eval.ts': `import { evaluate } from 'reeval'
+evaluate('two', async () => {})
+evaluate.todo('td')
+`,
+    })
+    const pending = await interrupted(p.dir, p.dir, [])
+    const scratch = join(p.dir, '.reeval', 'runs', `${pending.runId}.json`)
+    const run: RunRecord = JSON.parse(readFileSync(scratch, 'utf8'))
+    for (const e of run.evals) {
+      if (e.name === 'two') e.attempts = e.attempts.map((a) => ({ ...a, outcome: 'pass' }))
+    }
+    writeFileSync(scratch, JSON.stringify(run))
+    const r = await runCli(p.dir, ['run', '--resume', run.runId, 'evals/a', '--ui', 'plain'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.doesNotMatch(r.stdout, /Incomplete|isn't in this resume's filters/)
+    const done = readRun(p.dir).run
+    assert.equal(done.status, 'complete')
+    assert.deepEqual(
+      done.evals.map((e) => [e.name, e.outcome, e.todo]),
+      [
+        ['one', 'pass', false],
+        ['sk', 'skipped', false],
+        ['two', 'pass', false],
+        ['td', 'skipped', true],
+      ],
+    )
+    const left = await interrupted(p.dir, p.dir, [])
+    const again = await runCli(p.dir, ['run', '--resume', left.runId, 'evals/a', '--record'])
+    assert.equal(again.code, 0, again.stdout + again.stderr)
+    assert.match(
+      again.stdout,
+      new RegExp(
+        `Not recorded: run ${left.runId} is incomplete\\. reeval run --resume ${left.runId} --record runs the rest and records it\\.`,
+      ),
+    )
+  })
+
   test('a filtered resume of a quit keeps what its progress file planned, and exits on what it ran', async () => {
     const p = await project('resume-filter-quit', {
       'reeval.config.ts': fakeConfig(),
@@ -618,8 +662,10 @@ evaluate('three', async () => {})
         attempts: [attempt('one', 'queued'), attempt('two', 'running'), attempt('three', 'pass')],
       }),
     )
-    const r = await runCli(p.dir, ['run', '--resume', SEEDED_RUN_ID, 'one', '--ui', 'plain'])
+    const r = await runCli(p.dir, ['run', '--resume', SEEDED_RUN_ID, 'one', '--json'])
     assert.equal(r.code, 1, r.stdout + r.stderr)
+    const json = JSON.parse(r.stdout) as { status: string; outcome: string }
+    assert.deepEqual([json.status, json.outcome], ['interrupted', 'fail'])
     const { run } = readRun(p.dir)
     assert.equal(run.status, 'interrupted')
     assert.deepEqual(

@@ -677,6 +677,7 @@ async function addPreviousAttempt(
     errors: [],
     formattedErrors: [],
     meta: undefined,
+    ...(before?.todo ? { todo: true as const } : {}),
   }
   seen.add(null, cell, stub)
   seen.addKept(previous, kept, cell, beforeCell?.environmentDigest ?? null, e.attempt !== undefined)
