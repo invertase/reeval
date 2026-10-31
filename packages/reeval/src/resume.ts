@@ -410,7 +410,7 @@ export async function loadPrevious(staging: string): Promise<{
 /**
  * How the run was first started: from the progress file a quit left, else the record a resume
  * moved aside, else the interrupted or budget-stopped record. Null for a run an older reeval
- * started, which a resume plans from the flags it's given.
+ * started.
  */
 export async function savedInvocation(
   root: string,
@@ -438,7 +438,7 @@ export type RunSettings = {
 /**
  * The settings a resume plans with: each one left out is the run's saved one. `--runs` or a
  * profile other than the run's is refused, since it plans other attempts than the ones kept;
- * filters and `--tag` narrow what this resume runs, and `--concurrency` wins with a note.
+ * filters and `--tag` replace the run's for this resume, and `--concurrency` wins with a note.
  */
 export function resumeSettings(
   runId: string,

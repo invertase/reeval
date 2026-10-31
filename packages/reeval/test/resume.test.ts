@@ -461,6 +461,40 @@ evaluate('two', async () => {})
     assert.equal((await dryPlan(p.dir, ['--runs', '2'])).totals.attempts, 4)
   })
 
+  test('a run with no profile resumes with none, whatever picks one now', async () => {
+    const p = await project('resume-no-profile', {
+      ...evals,
+      'reeval.config.ts': fakeConfig({
+        extra: `profiles: { wide: { defaults: { runs: 4 } } }, defaultProfile: { ci: 'wide' },`,
+      }),
+    })
+    quitStaging(p.dir, { filters: [], tags: [] })
+    const run = (env: NodeJS.ProcessEnv) =>
+      runCli(p.dir, ['run', '--resume', SEEDED_RUN_ID, '--dry-run', '--json'], { env })
+    const ci = await run({ CI: '1' })
+    assert.equal(ci.code, 0, ci.stdout + ci.stderr)
+    const plan = JSON.parse(ci.stdout) as Plan & { profile: unknown }
+    assert.equal(plan.profile, null)
+    assert.equal(plan.totals.attempts, 3)
+    writeFileSync(join(p.dir, '.env.local'), 'REEVAL_PROFILE=wide\n')
+    const env = await run({ CI: '' })
+    assert.equal(env.code, 2, env.stdout + env.stderr)
+    assert.match(env.stderr, /was started without a profile/)
+  })
+
+  test('a run an older reeval started plans from the flags given, with a note', async () => {
+    const p = await project('resume-older', evals)
+    writeStoppedStaging(p.dir, SEEDED_RUN_ID)
+    const plan = await dryPlan(p.dir, ['--runs', '3'])
+    assert.equal(plan.totals.attempts, 6)
+    assert.ok(
+      plan.warnings.includes(
+        `run ${SEEDED_RUN_ID} saved no --runs, profile or filters, so this resume plans with the ones given now`,
+      ),
+      plan.warnings.join('\n'),
+    )
+  })
+
   test('another --concurrency wins with a note', async () => {
     const p = await project('resume-concurrency', evals)
     quitStaging(p.dir, { concurrency: 3, filters: [], tags: [] })

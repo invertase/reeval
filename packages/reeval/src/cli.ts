@@ -346,17 +346,21 @@ async function runCommand(
   given: string[],
 ): Promise<number> {
   const resumed = flags.resume === undefined ? null : await resumedRun(flags, given, configPath)
-  const runFlags = resumed ? { ...flags, ...resumed.settings } : flags
-  const filters = resumed?.settings.filters ?? given
-  const setup = await prepareRun(runFlags, configPath)
+  const runFlags = resumed?.settings ? { ...flags, ...resumed.settings } : flags
+  const filters = resumed?.settings?.filters ?? given
+  const setup = await prepareRun(runFlags, configPath, {
+    noProfile: !!resumed?.saved && resumed.saved.profile === undefined,
+  })
   const explicit = runFlags.concurrency ?? (process.env.REEVAL_CONCURRENCY || undefined)
-  const startedWith: RunInvocation = resumed?.saved ?? {
-    ...(setup.runs === undefined ? {} : { runs: setup.runs }),
-    ...(setup.profile ? { profile: setup.profile.name } : {}),
-    ...(explicit === undefined ? {} : { concurrency: setup.concurrency }),
-    filters,
-    tags: runFlags.tag ?? [],
-  }
+  const startedWith: RunInvocation | undefined = resumed
+    ? (resumed.saved ?? undefined)
+    : {
+        ...(setup.runs === undefined ? {} : { runs: setup.runs }),
+        ...(setup.profile ? { profile: setup.profile.name } : {}),
+        ...(explicit === undefined ? {} : { concurrency: setup.concurrency }),
+        filters,
+        tags: runFlags.tag ?? [],
+      }
   const ctx = await startRun(setup)
   invocation.runId = ctx.runId
   const githubOut = process.env.GITHUB_OUTPUT
@@ -439,7 +443,7 @@ async function runCommand(
       previous: ctx.previous,
       previousArtifacts: ctx.previousArtifacts,
       runner: runnerInfo(),
-      invocation: startedWith,
+      ...(startedWith ? { invocation: startedWith } : {}),
       ...(answers && (answers.evals.size || answers.attempts.size) ? { answers } : {}),
     },
     // Until the record lands, the studio shows the run as live.
@@ -492,12 +496,21 @@ async function runCommand(
   return code
 }
 
-/** `--resume`: the run's saved settings with the flags given now, or null for an older run. */
+/**
+ * `--resume`: the run's saved settings with the flags given now. An older reeval's run saved none,
+ * so it plans with the flags given now, with a note.
+ */
 async function resumedRun(flags: Flags, filters: string[], configPath: string | undefined) {
-  const root = dirname(requireConfig(configPath))
+  const path = requireConfig(configPath)
+  // REEVAL_PROFILE and REEVAL_CONCURRENCY in a .env file are held to the run's like the shell's.
+  loadEnvFiles(path)
+  const root = dirname(path)
   const target = await resolveResume(root, flags.resume || undefined)
   const saved = await savedInvocation(root, target)
-  if (!saved) return null
+  if (!saved) {
+    const note = `run ${target.runId} saved no --runs, profile or filters, so this resume plans with the ones given now`
+    return { saved: null, settings: null, notes: [note] }
+  }
   const given = {
     runs: flags.runs,
     profile: flags.profile,
@@ -508,8 +521,15 @@ async function resumedRun(flags: Flags, filters: string[], configPath: string | 
   return { saved, ...resumeSettings(target.runId, saved, given) }
 }
 
-/** Everything that can fail before the evals are collected: output mode, config, profile, flags. */
-async function prepareRun(flags: Flags, configPath: string | undefined) {
+/**
+ * Everything that can fail before the evals are collected: output mode, config, profile, flags.
+ * `noProfile` is a resume of a run that had none, which `defaultProfile` mustn't give one.
+ */
+async function prepareRun(
+  flags: Flags,
+  configPath: string | undefined,
+  { noProfile = false }: { noProfile?: boolean } = {},
+) {
   const output = resolveOutput({
     flags: {
       ui: flags.ui,
@@ -525,9 +545,9 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
   })
   const path = requireConfig(configPath)
   loadEnvFiles(path)
-  const named = flags.profile ?? (process.env.REEVAL_PROFILE || undefined)
+  const named = noProfile ? undefined : (flags.profile ?? (process.env.REEVAL_PROFILE || undefined))
   const config = await loadConfig(path, 'run', named)
-  const profile = selectProfile(config, flags.profile)
+  const profile = noProfile ? null : selectProfile(config, flags.profile)
   let runs: number | undefined
   if (flags.runs !== undefined) {
     runs = Number(flags.runs)
@@ -730,7 +750,7 @@ async function executeRun(
   setup: Prepared,
   filters: string[],
   renderer: ReturnType<typeof createRenderer>,
-  started: { startedWith: RunInvocation; notes: string[] },
+  started: { startedWith: RunInvocation | undefined; notes: string[] },
 ) {
   const { runId, stagingDir, config, runs, tags, concurrency, profile, verbosity, configFile } = ctx
   const run = JSON.parse(
@@ -1086,7 +1106,7 @@ async function executeRun(
           startedAt: ctx.startedAt,
           planned: toRun,
           kept,
-          invocation: started.startedWith,
+          ...(started.startedWith ? { invocation: started.startedWith } : {}),
         })
         renderer.onEvent({
           type: 'run-start',

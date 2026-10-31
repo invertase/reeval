@@ -110,7 +110,8 @@ as a SIGTERM, which counts as the same press, and gives the terminal back: the r
 `kill <pid>` that quits it.
 
 `--resume` plans with the run's own `--runs`, profile, filters, `--tag` and `--concurrency`, so
-leave them out. Another `--runs` or profile exits 2; other filters or tags narrow the resume.
+leave them out. Another `--runs` or profile exits 2; other filters or tags replace the run's for
+that resume.
 
 ## Recording runs
 
