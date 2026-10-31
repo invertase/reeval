@@ -20,6 +20,7 @@ import type {
   CursorEfforts,
   Duration,
   EvalPlan,
+  ExcludedPair,
   FamilyMeta,
   HarnessDescriptor,
   PairFactor,
@@ -617,6 +618,11 @@ export type PlanEval = {
   questions?: PlanQuestion[]
   /** Set on each case of an eval with `cases`. */
   family?: FamilyMeta
+  /**
+   * The environments (and harnesses) `where` left this case out of; unset when none. The plan's
+   * own `excluded` is the evals a filter or `.skip` left out.
+   */
+  whereExcluded?: ExcludedPair[]
 }
 
 /** A Docker sandbox image the plan needs, and how it's made, as `reeval image build --dry-run` lists it. */
@@ -679,6 +685,7 @@ export function planDocument(
         cells: [],
         ...(questions.length ? { questions } : {}),
         ...(attempt.family ? { family: attempt.family } : {}),
+        ...(attempt.plan.excluded ? { whereExcluded: attempt.plan.excluded } : {}),
       }
       evals.set(id, e)
     }

@@ -86,6 +86,38 @@ Run the evaluation. The result prints its name as a heading and a row per case:
 </Step>
 </Steps>
 
+## Gate on the rate over the cases
+
+With `gate: { passRate }`, each cell passes on its rate over the cases, the mean of each case's pass@1. A failing case doesn't fail the evaluation on its own:
+
+```ts title="evals/rate.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+
+evaluate(
+  'rate',
+  { gate: { passRate: 0.6 }, cases: ['a', 'b', 'c'] },
+  async (c, key) => {
+    await c.send(key)
+    expect(key).not.toBe('c')
+  },
+)
+```
+
+Two of three cases pass, a rate of 67%, so the `all cases` row passes:
+
+```text
+                 rate
+        a          1 of 1
+        b          1 of 1
+        c          0 of 1
+    not.toBe c     failed  evals/rate.eval.ts:8
+      expected 'c' not to be 'c' // Object.is equality
+    …
+  pass  all cases  2 of 3  pass@1 67%, passRate 0.6
+```
+
+Under the default `'all'`, every case must pass.
+
 ## Run a case on some environments
 
 `where` picks the case and environment pairs that run, at plan time. It reads each environment's `traits`, filter facts that the agent never sees:
@@ -106,7 +138,7 @@ evaluate(
     // ...
 ```
 
-The `reeval run --dry-run` notes list each pair left out, such as `excluded on vite-app: q2`, and the record keeps them in `excluded`. With `compare`, the control's answer holds for every variant. Reading `harness` decides each harness on its own. `where` is TypeScript only.
+The `reeval run --dry-run` notes list each pair left out, such as `excluded on vite-app: q2`, and each case's record keeps its own in `excluded` (`whereExcluded` in `--dry-run --json`). With `compare`, the control's answer holds for every variant. Reading `harness` decides each harness on its own. `where` is TypeScript only.
 
 ## Compare over cases
 

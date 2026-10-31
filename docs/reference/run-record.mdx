@@ -315,7 +315,7 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 </Property>
 
 <Property name="excluded" type="ExcludedPair[]" optional>
-  The case and environment pairs `where` left out, across the eval's cases (each case's entry carries the same list); unset when none.
+  The environments (and harnesses) `where` left this case out of; unset when none.
 </Property>
 
 ### `CellRecord`
@@ -447,7 +447,7 @@ An eval with `cases`: its cases as samples of one suite. Each case is also an ev
 </Property>
 
 <Property name="outcome" type="'pass' | 'fail'">
-  `fail` when a lift is below its `minLift`. The cases still pass or fail on their own.
+  `fail` when a lift is below its `minLift` or a rate below its `passRate`. A case still fails on its own under `gate: 'all'`.
 </Property>
 
 ### `FamilyRate`
@@ -473,6 +473,14 @@ One cell's pass@1 over a family's cases.
 </Property>
 
 <Property name="interval" type="FamilyInterval"></Property>
+
+<Property name="passRate" type="number" optional>
+  The cell's `gate: { passRate }`: on a family it gates `rate`, not each case's pass@1.
+</Property>
+
+<Property name="outcome" type="'pass' | 'fail'" optional>
+  Set with `passRate`: `fail` when `rate` is below it.
+</Property>
 
 ### `FamilyLift`
 
@@ -898,7 +906,9 @@ A cell of an evaluation combines a harness, an environment (`-` when none is set
   The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts with the engine (`docker` by default). It adds `:` and the sanitized final component of `image` or `from`, or for `dockerfile` the sanitized filename (the parent directory name when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps append `+` and an eight-character hash.
 </Property>
 
-<Property name="role" type="CellRole"></Property>
+<Property name="role" type="CellRole">
+  `variant` on a compare's variant cell, else `control`: the compare's control, or any cell of an eval without `compare`, each environment of an `environments` grid included. A variant's lift is against the `control` cell on its harness and sandbox.
+</Property>
 
 <Property name="variant" type="string" optional>
   The variant's name, for variant cells.

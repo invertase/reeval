@@ -19,7 +19,7 @@ export type Sources = {
   testSource: (path: string) => string | null
   /** contract.test.ts's behaviors, and whether each has a canary. */
   contract: { name: string; canary: boolean }[]
-  /** Top-level eval/group keys from src/options.ts EVAL_OPTION_KEYS. */
+  /** Top-level eval/group keys from src/options.ts EVAL_OPTION_KEYS, and CASE_OPTION_KEYS. */
   evalOptionKeys: readonly string[]
   /** Maps each key to the inventory feature that covers it. */
   evalOptionSpecs: EvalOptionSpec[]
@@ -54,7 +54,7 @@ const refusalMentions = (text: string, key: string) => {
   return lower.includes(`${key.toLowerCase()} in `)
 }
 
-/** Every EVAL_OPTION_KEYS entry and plan/refusal coverage for cascade options. */
+/** Every EVAL_OPTION_KEYS and CASE_OPTION_KEYS entry, and plan/refusal coverage for each option. */
 export function checkEvalOptionCoverage(
   inventory: InventoryFeature[],
   sources: Pick<Sources, 'evalOptionKeys' | 'evalOptionSpecs' | 'refusalText'>,
@@ -76,7 +76,7 @@ export function checkEvalOptionCoverage(
     seen.add(spec.key)
     if (!spec.key.includes('.') && !sources.evalOptionKeys.includes(spec.key)) {
       problems.push(
-        `eval-options.ts lists "${spec.key}", which isn't in src/options.ts EVAL_OPTION_KEYS`,
+        `eval-options.ts lists "${spec.key}", which isn't in src/options.ts EVAL_OPTION_KEYS or CASE_OPTION_KEYS`,
       )
     }
     const feature = byId.get(spec.featureId)

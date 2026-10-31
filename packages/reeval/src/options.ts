@@ -101,6 +101,9 @@ export const EVAL_OPTION_KEYS = [
   'pin',
 ] as const
 
+/** Options of one `evaluate()` or `survey()`, read before the cascade, so never a group's. */
+export const CASE_OPTION_KEYS = ['cases', 'caseKey', 'where'] as const
+
 const KNOWN: string[] = [...EVAL_OPTION_KEYS]
 const SUGGEST: Record<string, string> = {
   harness: 'harnesses',

@@ -41,6 +41,7 @@ import type {
   EvalFn,
   EvalOptions,
   EvalOptionsData,
+  EvalPlan,
   GroupOptions,
   SurveyOptions,
 } from './types.ts'
@@ -420,8 +421,9 @@ function registerCases(
 }
 
 /**
- * The checks `where` needs across an eval's cases, then the pairs it left out, on every case's
- * plan: a cell that no case runs on is refused, and so is an eval it leaves nothing to run.
+ * The checks `where` needs across an eval's cases, then the pairs it left out: each case's own on
+ * its plan, and every case's in the eval's notes. A cell that no case runs on is refused, and so
+ * is an eval it leaves nothing to run.
  */
 function applyWhere(where: string, keys: string[], prepared: Prepared[]): void {
   const picks = prepared.flatMap((p) => (p.planned.picked ? [p.planned.picked] : []))
@@ -454,8 +456,14 @@ function applyWhere(where: string, keys: string[], prepared: Prepared[]): void {
       ([on, list]) => `excluded on ${on}: ${list.sort((a, b) => order(a) - order(b)).join(', ')}`,
     ),
   ]
-  const plans = new Set(prepared.flatMap((p) => (p.planned.tests ?? []).map((t) => t.attempt.plan)))
-  for (const plan of plans) plan.excluded = excluded
+  const plans = new Set<EvalPlan>()
+  for (const p of prepared) {
+    const own = p.planned.picked?.excluded ?? []
+    for (const t of p.planned.tests ?? []) {
+      plans.add(t.attempt.plan)
+      if (own.length) t.attempt.plan.excluded = own
+    }
+  }
   // A completed attempt's plan is a copy that shares its notes.
   for (const list of new Set([...plans].map((p) => p.notes))) list.push(...notes)
 }

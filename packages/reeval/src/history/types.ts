@@ -403,10 +403,7 @@ export type EvalEntry = {
   answers?: CompareAnswer[]
   /** Set on each case of an eval with `cases`; `RunRecord.families` has the suite. */
   family?: { id: string; name: string; case: number; cases: number }
-  /**
-   * The case and environment pairs `where` left out, across the eval's cases (each case's entry
-   * carries the same list); unset when none.
-   */
+  /** The environments (and harnesses) `where` left this case out of; unset when none. */
   excluded?: ExcludedPair[]
 }
 

@@ -2504,6 +2504,11 @@ export type Cell = {
    * eight-character hash.
    */
   sandbox: string
+  /**
+   * `variant` on a compare's variant cell, else `control`: the compare's control, or any cell of
+   * an eval without `compare`, each environment of an `environments` grid included. A variant's
+   * lift is against the `control` cell on its harness and sandbox.
+   */
   role: CellRole
   /** The variant's name, for variant cells. */
   variant?: string
@@ -2941,7 +2946,7 @@ export type EvalPlan = {
   /** The eval's gate policy, or undefined when it was left at the default (`'all'`). */
   gate?: GatePolicy
   attempts: number
-  /** The case and environment pairs `where` left out, across the eval's cases; unset when none. */
+  /** The case and environment pairs `where` left out of this case; unset when none. */
   excluded?: ExcludedPair[]
   notes: string[]
   /** Why the eval doesn't run at all, e.g. a profile's harness limit left none. */

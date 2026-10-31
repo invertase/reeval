@@ -18,6 +18,8 @@
   `runs: 1` can reach a lift verdict where each case alone is within noise. Fewer than six
   discordant cases reads `can't tell yet` (`insufficient` in `reeval query family_lift`), so
   aim for six cases or more; the plan hints when there are fewer. No `runs: { bestOf }` beside it.
+  `gate: { passRate }` gates each cell's rate over the cases (the mean of each case's pass@1), so
+  one failing case of three passes `passRate: 0.6`; under `'all'` every case must pass.
 - Each case has a key, which names its row: a string or number is its own key, an object its
   `id`, else its `name`; otherwise pass `caseKey: (item) => item.slug`. Keys are unique, at most
   80 characters, with no `#`, `/` or `›`. `cases`, `caseKey` and `where` go on `evaluate` or
@@ -26,8 +28,8 @@
   on which environment, at plan time, from each environment's `traits` (`defineEnvironment('next',
   { traits: { stack: 'next' } })`; never shown to the agent). Reading a trait no environment
   defines is an error; with `compare` it sees the control, and its answer holds for the variants.
-  `--dry-run` notes `excluded on vite-app: q2`, and the record keeps `excluded`. A cell left with
-  no cases is an error: drop that environment instead.
+  `--dry-run` notes `excluded on vite-app: q2`, and each case's record keeps its own in
+  `excluded`. A cell left with no cases is an error: drop that environment instead.
 - `survey(name, [options,] fn)` is `evaluate` with `gate: 'none'`: it records what agents do
   (with `c.observe` and checks) and fails only on run or infra errors. Its block reads `ran`.
   `gate`, `compare.gate`, `compare.minLift` and `runs: { bestOf }` are errors on it.
@@ -184,8 +186,10 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
   `toHaveCalledTool('edit')` or `'webSearch'`.
 - Budgets: `expect(turn | c).toStayWithin({ tokens: 20_000, toolCalls: 30, duration: '5m' })`
   (sync) caps the turns' summed tokens, tool calls (a number, or `{ bash: 5 }` per tool) and time.
-  With `tokens`, a harness that reported no usage throws `HarnessCapabilityError` (an error, not a
-  pass); `.not` is refused. Python: `to_stay_within(tokens=, tool_calls=, duration=)`.
+  Tokens include subagents. With `tokens`, a harness that reported no usage throws
+  `HarnessCapabilityError` (an error, not a pass). `.not`, an unknown key or a bad limit throws a
+  `TypeError` that ends the attempt as its error, not a failed check. Python:
+  `to_stay_within(tokens=, tool_calls=, duration=)`.
 - Guard files the agent must leave alone with `expect(c).not.toHaveChanged(['test/**',
   'package.json'])` (sync): it reads the workspace diff, so a shell or subprocess write counts
   and a read doesn't. Strings are globs (a directory matches everything under it), RegExps work,

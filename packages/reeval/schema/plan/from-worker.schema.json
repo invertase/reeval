@@ -280,6 +280,7 @@
           "type": "string"
         },
         "role": {
+          "description": "`variant` on a compare's variant cell, else `control`: the compare's control, or any cell of an eval without `compare`, each environment of an `environments` grid included. A variant's lift is against the `control` cell on its harness and sandbox.",
           "$ref": "#/$defs/CellRole"
         },
         "sandbox": {
@@ -776,7 +777,7 @@
           }
         },
         "excluded": {
-          "description": "The case and environment pairs `where` left out, across the eval's cases; unset when none.",
+          "description": "The case and environment pairs `where` left out of this case; unset when none.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ExcludedPair"

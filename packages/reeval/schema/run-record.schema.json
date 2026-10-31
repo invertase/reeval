@@ -934,6 +934,7 @@
           ]
         },
         "role": {
+          "description": "`variant` on a compare's variant cell, else `control`: the compare's control, or any cell of an eval without `compare`, each environment of an `environments` grid included. A variant's lift is against the `control` cell on its harness and sandbox.",
           "$ref": "#/$defs/CellRole"
         },
         "runs": {
@@ -1531,7 +1532,7 @@
           "$ref": "#/$defs/EvalCompareMeta"
         },
         "excluded": {
-          "description": "The case and environment pairs `where` left out, across the eval's cases (each case's entry carries the same list); unset when none.",
+          "description": "The environments (and harnesses) `where` left this case out of; unset when none.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ExcludedPair"
@@ -1887,8 +1888,16 @@
         "interval": {
           "$ref": "#/$defs/FamilyInterval"
         },
+        "outcome": {
+          "description": "Set with `passRate`: `fail` when `rate` is below it.",
+          "enum": ["fail", "pass"]
+        },
         "pass": {
           "description": "Passes and counted attempts over those cases.",
+          "type": "number"
+        },
+        "passRate": {
+          "description": "The cell's `gate: { passRate }`: on a family it gates `rate`, not each case's pass@1.",
           "type": "number"
         },
         "rate": {
@@ -1931,7 +1940,7 @@
           "type": "string"
         },
         "outcome": {
-          "description": "`fail` when a lift is below its `minLift`. The cases still pass or fail on their own.",
+          "description": "`fail` when a lift is below its `minLift` or a rate below its `passRate`. A case still fails on its own under `gate: 'all'`.",
           "enum": ["fail", "pass"]
         },
         "ran": {

@@ -2602,7 +2602,7 @@ export const features: Feature[] = [
     dir: 'assert/stay-within',
     tiers: ['fake'],
     env: 'plain',
-    canary: /went over its budget: tokens 1,200 > 1,199/,
+    canary: /went over its budget: tokens 1,200 > 1,199 \(subagents included\)/,
     record: ({ run }) => {
       const lands = run.evals.find((e) => e.name === 'lands')
       assert.deepEqual(
@@ -3232,8 +3232,12 @@ export const features: Feature[] = [
     },
     record: ({ run }) => {
       const lands = run.evals.find((e) => e.name === 'lands [next]')
-      assert.deepEqual(lands?.excluded, [
-        { case: 'next', environment: 'vite-app' },
+      assert.deepEqual(
+        lands?.excluded,
+        [{ case: 'next', environment: 'vite-app' }],
+        'its own pairs',
+      )
+      assert.deepEqual(run.evals.find((e) => e.name === 'lands [vite]')?.excluded, [
         { case: 'vite', environment: 'next-app' },
       ])
       assert.deepEqual(

@@ -518,6 +518,9 @@ class Cell(TypedDict):
     harness: str
     # The harness id, the environment name, and the sandbox id, joined with `/`.
     key: str
+    # `variant` on a compare's variant cell, else `control`: the compare's control, or any cell
+    # of an eval without `compare`, each environment of an `environments` grid included. A
+    # variant's lift is against the `control` cell on its harness and sandbox.
     role: CellRole
     # The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts
     # with the engine (`docker` by default). It adds `:` and the sanitized final component of

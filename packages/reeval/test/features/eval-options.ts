@@ -1,6 +1,7 @@
-// Maps eval/group option keys (src/options.ts EVAL_OPTION_KEYS and nested cascade paths) to the
-// inventory feature that covers them. matrix.test.ts fails when a key is missing, when dry-run
-// coverage lacks a plan case, or when refusal coverage lacks rows in test/refusals/.
+// Maps eval/group option keys (src/options.ts EVAL_OPTION_KEYS and CASE_OPTION_KEYS, and nested
+// cascade paths) to the inventory feature that covers them. matrix.test.ts fails when a key is
+// missing, when dry-run coverage lacks a plan case, or when refusal coverage lacks rows in
+// test/refusals/.
 
 export type EvalOptionSpec = {
   /** Top-level key from EVAL_OPTION_KEYS, or a dotted cascade path such as question.model. */
@@ -33,4 +34,7 @@ export const EVAL_OPTION_SPECS: EvalOptionSpec[] = [
   { key: 'tags', featureId: 'selection.tags', plan: true },
   { key: 'revision', featureId: 'history.revision', plan: true, refusals: true },
   { key: 'pin', featureId: 'profiles', plan: true },
+  { key: 'cases', featureId: 'cases', plan: true, refusals: true },
+  { key: 'caseKey', featureId: 'cases', plan: true, refusals: true },
+  { key: 'where', featureId: 'where', plan: true, refusals: true },
 ]

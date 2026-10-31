@@ -559,7 +559,7 @@ For more information about environments, see [Define an environment](/configurat
 `gate` is how a cell's attempts decide its outcome.
 
 <Property name="gate" type="'all' | 'none' | { passRate: number }" optional>
-  `'all'` (the default) passes when every counted outcome is `pass`. `{ passRate }` passes when at least that share of `pass` and `fail` outcomes passes, above 0 and at most 1. When no outcome counts, the cell takes its worst attempt outcome. `'none'` gates no cell: the attempts run and are recorded, the result prints `ran`, and only run and infra errors fail the run. [`survey()`](/reference/authoring-api#survey) sets it.
+  `'all'` (the default) passes when every counted outcome is `pass`. `{ passRate }` passes when at least that share of `pass` and `fail` outcomes passes, above 0 and at most 1. When no outcome counts, the cell takes its worst attempt outcome. With `cases`, `{ passRate }` gates each cell's rate over its cases, the mean of each case's pass@1, rather than each case. `'none'` gates no cell: the attempts run and are recorded, the result prints `ran`, and only run and infra errors fail the run. [`survey()`](/reference/authoring-api#survey) sets it.
 </Property>
 
 ## `env`
@@ -798,7 +798,7 @@ For more information about analysis, see [Analyze a run](/results/analyze#set-an
   The harnesses to compare on; the others run the control only. reeval refuses an id the evaluation does not run.
 </Property>
 
-An evaluation with `cases` reports one `all cases` row that sums each cell's counts, with a lift paired by case. A paired outcome is `insufficient` below six discordant pairs or cases, so six cases with one attempt a side can read `helped` only when all six are discordant. A case still fails on its own assertions, and a failed case fails the evaluation. The [`family_lift`](/reference/query-views#familylift) view lists each evaluation's pooled lift.
+An evaluation with `cases` reports one `all cases` row that sums each cell's counts, with a lift paired by case. A paired outcome is `insufficient` below six discordant pairs or cases, so six cases with one attempt a side can read `helped` only when all six are discordant. Under `gate: 'all'`, a case fails on its own assertions, and a failed case fails the evaluation. Under `{ passRate }`, the `all cases` row's rate decides instead. The [`family_lift`](/reference/query-views#familylift) view lists each evaluation's pooled lift.
 
 For more information about comparisons, see [Measure lift against a control](/results/compare/lift).
 
@@ -823,7 +823,7 @@ evaluate(
 </Property>
 
 <Property name="where" type="(pair: { case, environment, harness }) => boolean" optional>
-  TypeScript only. Which case and environment pairs run, decided at plan time. `environment` has its `name` and `traits`, and reeval refuses reading a trait no listed environment defines. With `compare`, it sees the control, whose answer holds for every variant. Reading `harness` decides each harness on its own. The pairs it leaves out are listed in `--dry-run` and in the record's `excluded`. reeval refuses `where` without `cases`.
+  TypeScript only. Which case and environment pairs run, decided at plan time. `environment` has its `name` and `traits`, and reeval refuses reading a trait no listed environment defines. With `compare`, it sees the control, whose answer holds for every variant. Reading `harness` decides each harness on its own. The pairs it leaves out are listed in `--dry-run`, and each case's own are in its `excluded` in the record and its `whereExcluded` in `--dry-run --json`. reeval refuses `where` without `cases`.
 </Property>
 
 For more information, see [Evaluate many cases](/evaluations/task/cases).
