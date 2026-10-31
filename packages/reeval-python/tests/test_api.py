@@ -74,13 +74,16 @@ def test_a_duration_refuses_anything_but_seconds(given: Any) -> None:
 
 
 def test_an_environment_spec_is_camel_cased_and_copied() -> None:
-    spec: dict[str, Any] = {"harness": {"kind": "fake", "delay_ms": 5}, "env": {"A": "1"}}
+    spec: dict[str, Any] = {"sandbox": {"kind": "docker", "max_concurrent": 2}, "env": {"A": "1"}}
     env = define_environment("e", spec)
     spec["env"]["A"] = "changed"
     child = env.extend("child", spec)
     spec["env"]["A"] = "changed again"
     layers = child._to_wire()["layers"]  # pyright: ignore[reportPrivateUsage]
-    assert layers[0]["spec"] == {"harness": {"kind": "fake", "delayMs": 5}, "env": {"A": "1"}}
+    assert layers[0]["spec"] == {
+        "sandbox": {"kind": "docker", "maxConcurrent": 2},
+        "env": {"A": "1"},
+    }
     assert layers[1]["spec"]["env"] == {"A": "changed"}
 
 
