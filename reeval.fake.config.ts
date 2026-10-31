@@ -7,7 +7,7 @@ import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
   include: ['evals/*/*.eval.ts'],
-  harness: fakeHarness({ text: 'I left the workspace as it was.' }),
+  harnesses: fakeHarness({ text: 'I left the workspace as it was.' }),
   sandbox: fakeSandbox(),
   judge: { model: fakeJudge({ score: 0.9 }) },
   analysis: { model: fakeAnalysis({ vote: 'tie' }) },

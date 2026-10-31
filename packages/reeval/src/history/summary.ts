@@ -17,6 +17,12 @@ import { suiteResult } from '../view/suite.ts'
 import { warnings } from './state.ts'
 import type { AttemptRecord, RunRecord } from './types.ts'
 
+/** An ungated miss as its heading reads it: `1 check failed`, or why it missed when no check did. */
+function failedChecks(a: AttemptRecord): string {
+  const n = (a.assertions ?? []).filter((x) => x.status !== 'pass').length
+  return n ? `${n} ${n === 1 ? 'check' : 'checks'} failed` : 'missed, ran'
+}
+
 export const OUTCOME_MARK: Record<Outcome, string> = {
   pass: '✓',
   fail: '✗',
@@ -146,7 +152,7 @@ export function renderSummary(run: RunRecord, opts: { remarks?: RunRemarks | nul
   for (const e of [...run.evals].sort((x, y) => rank(x.outcome) - rank(y.outcome))) {
     if (e.outcome === 'skipped') continue
     const mark = isNotGatedPass(e) ? '○' : OUTCOME_MARK[evalMarkOutcome(e)]
-    lines.push('', `### ${mark} ${e.id}${isNotGatedPass(e) ? ' · not gated' : ''}`, '')
+    lines.push('', `### ${mark} ${e.id}${isNotGatedPass(e) ? ' · ran' : ''}`, '')
     const multi = e.attempts.length > 1
     const inputs = (e.answers ?? []).filter((a) => a.input)
     for (const a of inputs) {
@@ -159,7 +165,7 @@ export function renderSummary(run: RunRecord, opts: { remarks?: RunRemarks | nul
     for (const a of [...e.attempts].sort((x, y) => attemptRank(x) - attemptRank(y))) {
       if (a.outcome === 'skipped') continue
       if (isUngatedMiss(e, a)) {
-        if (multi) lines.push(`#### ○ ${a.id} · missed, not gated`, '')
+        if (multi) lines.push(`#### ○ ${a.id} · ${failedChecks(a)}`, '')
         lines.push('<details><summary>Why it missed</summary>', '')
         attemptDetail(lines, a)
         lines.push('', '</details>')

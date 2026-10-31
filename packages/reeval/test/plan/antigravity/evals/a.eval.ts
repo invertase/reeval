@@ -12,22 +12,22 @@ const python = defineEnvironment('python', {
 evaluate('both harnesses', async () => {})
 evaluate(
   'antigravity only, own id',
-  { harness: antigravity({ model: 'gemini-3.8-flash-low', id: 'agy' }) },
+  { harnesses: antigravity({ model: 'gemini-3.8-flash-low', id: 'agy' }) },
   async () => {},
 )
 evaluate(
   'three harnesses on a dockerfile',
   {
-    harness: (inherited) => [...inherited, claudeCode({ model: 'claude-sonnet-5' })],
-    environment: tools,
+    harnesses: (inherited) => [...inherited, claudeCode({ model: 'claude-sonnet-5' })],
+    environments: tools,
   },
   async () => {},
 )
 evaluate(
   'antigravity on a toolchain base',
   {
-    harness: [cursor({ model: 'composer-2.5' }), antigravity({ model: 'gemini-3.1-pro-high' })],
-    environment: python,
+    harnesses: [cursor({ model: 'composer-2.5' }), antigravity({ model: 'gemini-3.1-pro-high' })],
+    environments: python,
   },
   async () => {},
 )

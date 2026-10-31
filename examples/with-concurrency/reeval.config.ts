@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace, taking two seconds a
   // turn, so the wall time shows how many attempts ran at once.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: {
       'src/math.js': fakeAgent('src/math.js'),
       'test/math.test.js': fakeAgent('test/math.test.js'),

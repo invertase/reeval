@@ -55,11 +55,11 @@ The `effort` table prints the median tool calls, time, and tokens of each cell. 
   project-layout   1      <0.1s
 ```
 
-The `effort` table prints only when every cell has at least four counted attempts, and either the evaluation failed or a variant used fewer or more tokens, tool calls, or time than its baseline.
+The `effort` table prints only when every cell has at least four counted attempts, and either the evaluation failed or a variant used fewer or more tokens, tool calls, or time than its control.
 
 ## Compare the measures
 
-In a comparison, `npx reeval query effort` lists each variant's tool calls, time, and tokens against its baseline. For more information about how reeval calls a difference, see [Tokens, tool calls and time](/reference/statistics#tokens-tool-calls-and-time).
+In a comparison, `npx reeval query effort` lists each variant's tool calls, time, and tokens against its control. For more information about how reeval calls a difference, see [Tokens, tool calls and time](/reference/statistics#tokens-tool-calls-and-time).
 
 ## Reference
 

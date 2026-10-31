@@ -69,4 +69,4 @@ too, or `'none'` to only report.
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace, without and with the skill |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
-[Measure lift against a baseline](../../docs/results/compare/lift.mdx) covers `minLift`.
+[Measure lift against a control](../../docs/results/compare/lift.mdx) covers `minLift`.

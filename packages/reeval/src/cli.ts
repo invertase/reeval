@@ -583,7 +583,9 @@ async function prepareRun(
     }
   }
   const sandboxes = [
-    environmentSandbox(config.environment, config.sandbox),
+    ...(config.environments.length ? config.environments : [undefined]).map((e) =>
+      environmentSandbox(e, config.sandbox),
+    ),
     ...(profile ? [profileSandbox(config, profile.defaults)] : []),
   ]
   const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {

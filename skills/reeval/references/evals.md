@@ -2,23 +2,38 @@
 
 ## Contents
 
-- Families: `evaluate.each`
+- Cases: `cases`, `caseKey`, `where`, and `survey`
 - The attempt: `c.send`, `c.exec`, `c.serve`, files
 - The judge: inputs, input size, errors
 - Trustworthy evals
 - Matchers
 
-## Families: `evaluate.each`
+## Cases: `cases`, `caseKey`, `where`, and `survey`
 
 - `evaluate(name, [options,] fn)` and `group(name, [options,] fn)`; also `.skip`, `.only`
-  (an error in CI), `.todo`, and `evaluate.each(cases)(name, [options,] (c, item) => …)` (`$key`,
-  `%s`, `%#` in the name). The eval id is `file › group › name`; renaming an eval restarts its history.
-- `evaluate.each` with two or more cases pools them into a family (id `file › group › template`):
-  one pass rate over the cases and, with `compare`, one lift paired by case, which `minLift` gates
-  (not each case's). Prefer it to separate evals when the cases are one population: six cases at
+  (an error in CI), `.todo`. The eval id is `file › group › name`; renaming an eval restarts its history.
+- `evaluate(name, { cases: [...] }, async (c, item) => …)` runs one eval over a list: one pass
+  rate over the cases and, with `compare`, one lift paired by case, which `minLift` gates (not
+  each case's). Prefer it to separate evals when the cases are one population: six cases at
   `runs: 1` can reach a lift verdict where each case alone is within noise. Fewer than six
-  discordant cases reads `can't tell yet` (`insufficient` in `reeval query family_lift`), so a family needs six cases or more; the plan hints when it has fewer. `evaluate.each(cases, { pool: false })` keeps the cases
-  independent; eval options go after the name, never beside the cases.
+  discordant cases reads `can't tell yet` (`insufficient` in `reeval query family_lift`), so
+  aim for six cases or more; the plan hints when there are fewer. No `runs: { bestOf }` beside it.
+  `gate: { passRate }` gates each cell's rate over the cases (the mean of each case's pass@1), so
+  one failing case of three passes `passRate: 0.6`; under `'all'` every case must pass. The
+  failing case still records `fail` (with `verdict: 'family'`); the family's row is the verdict.
+- Each case has a key, which names its row: a string or number is its own key, an object its
+  `id`, else its `name`; otherwise pass `caseKey: (item) => item.slug`. Keys are unique, at most
+  80 characters, with no `#`, `/` or `›`. `cases`, `caseKey` and `where` go on `evaluate` or
+  `survey`, never a group or the config.
+- `where: ({ case, environment, harness }) => boolean` (TypeScript only) picks which case runs
+  on which environment, at plan time, from each environment's `traits` (`defineEnvironment('next',
+  { traits: { stack: 'next' } })`; never shown to the agent). Reading a trait no environment
+  defines is an error; with `compare` it sees the control, and its answer holds for the variants.
+  `--dry-run` notes `excluded on vite-app: q2`, and each case's record keeps its own in
+  `excluded`. A cell left with no cases is an error: drop that environment instead.
+- `survey(name, [options,] fn)` is `evaluate` with `gate: 'none'`: it records what agents do
+  (with `c.observe` and checks) and fails only on run or infra errors. Its block reads `ran`.
+  `gate`, `compare.gate`, `compare.minLift` and `runs: { bestOf }` are errors on it.
   A comment on an eval describes the current check (why a canary fails, which path it reads),
   not what used to be true or which product a prompt was ported from.
 
@@ -104,17 +119,17 @@ you rely on a canary that only it catches.
 ```ts
 // reeval.config.ts: the real harness, plus two profiles that swap only the harness and judge
 export default defineConfig({
-  harness: cursor({ model: 'composer-2.5' }),
+  harnesses: cursor({ model: 'composer-2.5' }),
   profiles: {
     oracle: {
       defaults: {
-        harness: fakeHarness({ files: { 'greet.js': 'export const greet = …' } }),
+        harnesses: fakeHarness({ files: { 'greet.js': 'export const greet = …' } }),
         judge: { model: fakeJudge({ score: 0.95 }) },
       },
     },
     canary: {
       defaults: {
-        harness: fakeHarness({ files: { 'greet.test.js': "test('greets', () => {})\n" } }),
+        harnesses: fakeHarness({ files: { 'greet.test.js': "test('greets', () => {})\n" } }),
         judge: { model: fakeJudge({ score: 0.1 }) },
       },
     },
@@ -139,7 +154,7 @@ npx reeval run --profile canary           # the checks you meant fail, exit 1
   oracle, with its key, to check that a question passes good work.
 - `fakeSandbox()` isn't the oracle's sandbox: it runs on the host, brokers nothing and enforces no
   egress. It's for trying reeval and testing configs without Docker.
-- An eval or group that sets its own `harness` keeps it (the plan notes `harness set by the
+- An eval or group that sets its own `harnesses` keeps it (the plan notes `harnesses set by the
   eval`), and an ungated cell's (`compare: { gate: 'none' }`, a control's) failed checks don't change the
   exit code: its row in the result block shows its count (`plain  0 of 4`).
 
@@ -171,6 +186,12 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
   the same on every harness (stdio; Goose, OpenCode, pi and Codex refuse
   `mcp.sse`). Use `toHaveEdited` / `toHaveSearched`, not
   `toHaveCalledTool('edit')` or `'webSearch'`.
+- Budgets: `expect(turn | c).toStayWithin({ tokens: 20_000, toolCalls: 30, duration: '5m' })`
+  (sync) caps the turns' summed tokens, tool calls (a number, or `{ bash: 5 }` per tool) and time.
+  Tokens include subagents. With `tokens`, a harness that reported no usage throws
+  `HarnessCapabilityError` (an error, not a pass). `.not`, an unknown key or a bad limit throws a
+  `TypeError` that ends the attempt as its error, not a failed check. Python:
+  `to_stay_within(tokens=, tool_calls=, duration=)`.
 - Guard files the agent must leave alone with `expect(c).not.toHaveChanged(['test/**',
   'package.json'])` (sync): it reads the workspace diff, so a shell or subprocess write counts
   and a read doesn't. Strings are globs (a directory matches everything under it), RegExps work,

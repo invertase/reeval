@@ -1,5 +1,0 @@
-{
-  "eval": "plan/compare/evals/each.eval.ts",
-  "plan": "plan/compare/expected/each-pooled.txt",
-  "args": ["evals/each.eval.ts"]
-}

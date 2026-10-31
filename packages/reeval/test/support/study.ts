@@ -37,7 +37,7 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [[
       { exec: 'cat ${SKILLS}/*/SKILL.md 2>/dev/null || true' },
       { exec: 'cat ${SKILLS}/fui-new/references/react.md 2>/dev/null || true' },
@@ -93,7 +93,7 @@ group(
   'auth skill',
   {
     compare: {
-      baseline: noSkill,
+      control: noSkill,
       variants: [currentSkill${options.oneVariant ? '' : ', newSkill'}],
       ${gate}
     },

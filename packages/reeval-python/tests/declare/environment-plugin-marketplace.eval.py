@@ -16,4 +16,4 @@ def marketplace_plugins():
     def entries(c): ...
 
 
-group("marketplace plugins", {"environment": listed}, marketplace_plugins)
+group("marketplace plugins", {"environments": listed}, marketplace_plugins)

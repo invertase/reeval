@@ -101,7 +101,7 @@ For more information about the keys on `stack.judge.state`, see [`c.judge()`](/r
 <Property name="evals" type="EvalEntry[]"></Property>
 
 <Property name="families" type="FamilyRecord[]" optional>
-  Each pooled `evaluate.each` that ran; unset when none did.
+  Each eval with `cases` that ran; unset when none did.
 </Property>
 
 <Property name="errors" type="string[]" optional>
@@ -295,7 +295,11 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 </Property>
 
 <Property name="outcome" type="Outcome">
-  Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation.
+  Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation. On a case with `verdict: 'family'`, it's what the case did, and its family's outcome is the verdict.
+</Property>
+
+<Property name="verdict" type="'family'" optional>
+  `family` on a case whose `gate: { passRate }` its family holds over the mean of its cases: a failed `outcome` doesn't fail the run, and `RunRecord.families`' outcome decides. Unset otherwise, and on records from before a family pooled `passRate`.
 </Property>
 
 <Property name="todo" type="boolean">
@@ -315,7 +319,11 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 </Property>
 
 <Property name="family" type="{id: string; name: string; case: number; cases: number}" optional>
-  Set on each case of a pooled `evaluate.each`; `RunRecord.families` has the suite.
+  Set on each case of an eval with `cases`; `RunRecord.families` has the suite.
+</Property>
+
+<Property name="excluded" type="ExcludedPair[]" optional>
+  The environments (and harnesses) `where` left this case out of; unset when none.
 </Property>
 
 ### `CellRecord`
@@ -416,7 +424,7 @@ A variant cell's pass@1 against the control's, on the same harness and sandbox.
 
 ### `FamilyRecord`
 
-A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an evaluation.
+An eval with `cases`: its cases as samples of one suite. Each case is also an evaluation.
 
 <Property name="id" type="string">
   `file › group › … › template`.
@@ -435,7 +443,7 @@ A pooled `evaluate.each`: its cases as samples of one suite. Each case is also a
 </Property>
 
 <Property name="ran" type="number">
-  Cases with an evaluation in this run; fewer when a filter or tag left some out.
+  Cases with an attempt that ran (not skipped) in this run; fewer when a filter or tag left some out, or an interrupted run or a filtered resume hasn't run them yet.
 </Property>
 
 <Property name="rates" type="FamilyRate[]">
@@ -446,8 +454,12 @@ A pooled `evaluate.each`: its cases as samples of one suite. Each case is also a
   One per variant cell, with `compare`.
 </Property>
 
+<Property name="excluded" type="ExcludedPair[]" optional>
+  Every case and environment (and harness) pair `where` left out, including those of a case it left out everywhere, which has no evaluation; unset when none.
+</Property>
+
 <Property name="outcome" type="'pass' | 'fail'">
-  `fail` when a lift is below its `minLift`. The cases still pass or fail on their own.
+  `fail` when a lift is below its `minLift` or a rate below its `passRate`. A case still fails on its own under `gate: 'all'`.
 </Property>
 
 ### `FamilyRate`
@@ -473,6 +485,14 @@ One cell's pass@1 over a family's cases.
 </Property>
 
 <Property name="interval" type="FamilyInterval"></Property>
+
+<Property name="passRate" type="number" optional>
+  The cell's `gate: { passRate }`: on a family it gates `rate`, not each case's pass@1.
+</Property>
+
+<Property name="outcome" type="'pass' | 'fail'" optional>
+  Set with `passRate`: `fail` when `rate` is below it.
+</Property>
 
 ### `FamilyLift`
 
@@ -880,7 +900,7 @@ One failed judge try that was retried, and the backoff before the next.
 
 ### `Cell`
 
-A cell of an evaluation combines a harness, an environment (`-` when none is set), and that environment's sandbox id. With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.
+A cell of an evaluation combines a harness, an environment (`-` when none is set), and that environment's sandbox id. With `compare`, the control is `compare.control` and each variant is that environment on its own, including its sandbox.
 
 <Property name="key" type="string">
   The harness id, the environment name, and the sandbox id, joined with `/`.
@@ -898,10 +918,16 @@ A cell of an evaluation combines a harness, an environment (`-` when none is set
   The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts with the engine (`docker` by default). It adds `:` and the sanitized final component of `image` or `from`, or for `dockerfile` the sanitized filename (the parent directory name when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps append `+` and an eight-character hash.
 </Property>
 
-<Property name="role" type="CellRole"></Property>
+<Property name="role" type="CellRole">
+  `variant` on a compare's variant cell, else `control`: the compare's control, or any cell of an eval without `compare`, each environment of an `environments` grid included. A variant's lift is against the `control` cell on its harness and sandbox.
+</Property>
 
 <Property name="variant" type="string" optional>
   The variant's name, for variant cells.
+</Property>
+
+<Property name="traits" type="Traits" optional>
+  The environment's merged traits; unset when it has none. Not part of the key.
 </Property>
 
 ### `EnvironmentRecord`

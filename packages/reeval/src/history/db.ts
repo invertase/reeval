@@ -71,10 +71,10 @@ CREATE TABLE runs (
 CREATE TABLE evals (
   run_id TEXT NOT NULL, key TEXT NOT NULL, id TEXT, slug TEXT, file TEXT, groups TEXT, name TEXT,
   tags TEXT, fingerprint TEXT, outcome TEXT, pass_at_1 REAL, sources TEXT, family_id TEXT,
-  case_index INTEGER,
+  case_index INTEGER, verdict TEXT,
   PRIMARY KEY (run_id, key)
 );
--- Each pooled evaluate.each per run: its cases, and each cell's pass@1 over them (the mean of the
+-- Each eval with cases per run: its cases, and each cell's pass@1 over them (the mean of the
 -- cases' pass@1).
 CREATE TABLE families (
   run_id TEXT NOT NULL, family_id TEXT NOT NULL, file TEXT, groups TEXT, name TEXT,
@@ -215,7 +215,7 @@ CREATE VIEW lift AS
   JOIN cells k ON k.run_id = c.run_id AND k.eval_key = c.eval_key AND k.key = c.lift_vs
   WHERE c.role = 'variant';
 
--- Each variant against its control over a pooled evaluate.each's cases, paired by case, per run.
+-- Each variant against its control over an eval's cases, paired by case, per run.
 CREATE VIEW family_lift AS
   SELECT f.*, r.started_at, r.branch
   FROM family_lift_m f JOIN runs r USING (run_id);
@@ -340,10 +340,11 @@ CREATE VIEW check_rates AS
   FROM cell_checks k
   JOIN cells c ON c.run_id = k.run_id AND c.eval_key = k.eval_key AND c.key = k.cell_key;
 
--- One eval per run: outcome and pass@1, with the branch and pull request.
+-- One eval per run: outcome and pass@1, with the branch and pull request. A case with verdict
+-- 'family' doesn't fail the run on its own outcome: its family's rate does.
 CREATE VIEW eval_trend AS
   SELECT e.eval_key, r.run_id, r.started_at, r.branch, r.pr_number, r.recorded, e.outcome,
-    e.pass_at_1, e.fingerprint
+    e.verdict, e.pass_at_1, e.fingerprint
   FROM (SELECT key AS eval_key, * FROM evals) e JOIN runs r USING (run_id);
 
 -- Each judge question's pass rate per cell per run, where it differs from that cell's last run.
@@ -533,7 +534,7 @@ function insertRun(
   for (const e of record.evals) {
     const cellEnv = new Map(e.cells.map((c) => [c.key, c.environmentDigest ?? '']))
     run(
-      `INSERT INTO evals VALUES (${Array(14).fill('?').join(', ')})`,
+      `INSERT INTO evals VALUES (${Array(15).fill('?').join(', ')})`,
       record.runId,
       e.key,
       e.id,
@@ -548,6 +549,7 @@ function insertRun(
       json(e.sources),
       e.family?.id ?? null,
       e.family?.case ?? null,
+      e.verdict ?? null,
     )
     for (const c of e.cells) {
       const p = c.fingerprintParts

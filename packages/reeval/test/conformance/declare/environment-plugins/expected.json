@@ -5,7 +5,7 @@
       "name": "remote plugins",
       "mode": "run",
       "options": {
-        "environment": {
+        "environments": {
           "kind": "environment",
           "name": "fetched",
           "layers": [
@@ -48,7 +48,7 @@
           "name": "a child adds another",
           "mode": "run",
           "options": {
-            "environment": {
+            "environments": {
               "kind": "environment",
               "name": "pinned",
               "layers": [

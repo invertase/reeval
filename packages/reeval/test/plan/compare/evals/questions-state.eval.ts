@@ -4,7 +4,7 @@ import { base, skilled } from './envs.ts'
 evaluate(
   'transcript across harnesses',
   {
-    compare: { baseline: base, variants: [skilled] },
+    compare: { control: base, variants: [skilled] },
     questions: [
       {
         question: 'Which agent verified its work?',
@@ -18,7 +18,7 @@ evaluate(
 evaluate(
   'transcript within a harness',
   {
-    compare: { baseline: base, variants: [skilled] },
+    compare: { control: base, variants: [skilled] },
     questions: [
       {
         question: 'Which arm verified its work?',
@@ -32,7 +32,7 @@ evaluate(
 evaluate(
   'screenshots',
   {
-    compare: { baseline: base, variants: [skilled] },
+    compare: { control: base, variants: [skilled] },
     questions: [
       { question: 'Which page looks better?', across: 'environment', artifacts: ['landing'] },
     ],

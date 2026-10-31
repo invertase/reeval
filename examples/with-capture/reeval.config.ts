@@ -12,7 +12,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace, so the checks run
   // without keys or Docker. The fake sandbox saves a 1×1 placeholder for each screenshot.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'index.html': fakeAgent('index.html') },
     text: 'I added a Sign up button under the intro paragraph.',
   }),

@@ -21,6 +21,14 @@ export const jsonValueSchema: z.ZodType<JSONValue> = z.lazy(() =>
 // More than zero, so at least one non-zero digit.
 const DURATION = /^(?=.*[1-9])\d+(\.\d+)?(ms|s|m|h)$/
 
+export const tokenUsageSchema = z.strictObject({
+  input: z.number(),
+  output: z.number(),
+  cacheRead: z.number(),
+  cacheWrite: z.number(),
+  reasoning: z.number().nullable(),
+})
+
 export const durationSchema = z.union([
   z.number().positive().max(MAX_TIMER_MS, TIMER_LIMIT),
   // The template literal gives `Duration`'s type; its own JSON Schema pattern allows `-5s`.

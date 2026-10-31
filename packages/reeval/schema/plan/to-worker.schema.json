@@ -521,9 +521,28 @@
         "name": {
           "description": "The name it was defined or extended under, which names its cells.",
           "type": "string"
+        },
+        "traits": {
+          "description": "Its layers' `traits`, merged by key with the child's winning; `{}` when none.",
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
         }
       },
-      "required": ["extend", "extendEnvironment", "kind", "layers", "name"]
+      "required": ["extend", "extendEnvironment", "kind", "layers", "name", "traits"]
     },
     "EnvironmentLayer": {
       "description": "One environment in an `extend` chain.",
@@ -615,6 +634,28 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/SkillSource"
+          }
+        },
+        "traits": {
+          "description": "Filter facts for `where`, such as `{ stack: 'next' }`: a key to a string or a list of strings. A child's key replaces its parent's value whole; keys it doesn't set are inherited. Recorded on the cell, and never written to the sandbox, the prompt or the judge.",
+          "readOnly": true,
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "readOnly": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
           }
         },
         "workspace": {
@@ -855,6 +896,29 @@
             "required": ["input", "output", "tool"],
             "additionalProperties": false
           }
+        },
+        "usage": {
+          "description": "Tokens the fake agent reports for every turn, as `turn.usage`; without it, null.",
+          "type": "object",
+          "properties": {
+            "cacheRead": {
+              "type": "number"
+            },
+            "cacheWrite": {
+              "type": "number"
+            },
+            "input": {
+              "type": "number"
+            },
+            "output": {
+              "type": "number"
+            },
+            "reasoning": {
+              "type": ["number", "null"]
+            }
+          },
+          "required": ["cacheRead", "cacheWrite", "input", "output", "reasoning"],
+          "additionalProperties": false
         },
         "withSkill": {
           "description": "Files and message used instead when the environment gives the agent a skill.",
@@ -1910,15 +1974,25 @@
           "description": "Variables and secrets for the sandbox, merged by name over the config's.",
           "$ref": "#/$defs/EnvVars"
         },
-        "environment": {
-          "description": "What every eval runs in when it names no environment.",
-          "$ref": "#/$defs/Environment"
+        "environments": {
+          "description": "What every eval runs in when it names no environment: one, or a list (a cell each).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Environment"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Environment"
+              }
+            }
+          ]
         },
         "gate": {
           "description": "How each cell's attempts decide its outcome.",
           "anyOf": [
             {
-              "const": "all"
+              "enum": ["all", "none"]
             },
             {
               "type": "object",
@@ -1931,7 +2005,7 @@
             }
           ]
         },
-        "harness": {
+        "harnesses": {
           "description": "The agents every eval runs on, unless a group or eval replaces them.",
           "anyOf": [
             {
@@ -2070,7 +2144,7 @@
             }
           ]
         },
-        "harness": {
+        "harnesses": {
           "description": "Harness ids to allow; evals left with none are skipped.",
           "type": "array",
           "items": {
@@ -2188,8 +2262,12 @@
         "env": {
           "$ref": "#/$defs/EnvVars"
         },
-        "environment": {
-          "$ref": "#/$defs/Environment"
+        "environments": {
+          "description": "Empty when the config names none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Environment"
+          }
         },
         "file": {
           "description": "The config file as typed from the current directory, or `reeval.config.ts` without one.",
@@ -2199,7 +2277,7 @@
           "description": "Unset means `'all'`; kept unset so the plan can hint when `runs > 1`.",
           "anyOf": [
             {
-              "const": "all"
+              "enum": ["all", "none"]
             },
             {
               "type": "object",
@@ -2375,7 +2453,7 @@
         "debug",
         "defaultProfile",
         "env",
-        "environment",
+        "environments",
         "file",
         "gate",
         "gateway",

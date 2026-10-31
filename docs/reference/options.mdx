@@ -11,9 +11,9 @@ description: "Options set how evaluations run. Each key is accepted in set place
 |---|---|---|---|---|
 | [`include`](#include) | ✓ |  |  |  |
 | [`gateway`](#gateway) | ✓ |  |  |  |
-| [`harness`](#harness) | ✓ | ✓ | ✓ | ✓ |
+| [`harnesses`](#harnesses) | ✓ | ✓ | ✓ | ✓ |
 | [`sandbox`](#sandbox) | ✓ | ✓ | ✓ |  |
-| [`environment`](#environment) | ✓ | ✓ | ✓ |  |
+| [`environments`](#environments) | ✓ | ✓ | ✓ |  |
 | [`runs`](#runs) | ✓ | ✓ | ✓ | ✓ |
 | [`gate`](#gate) | ✓ | ✓ | ✓ |  |
 | [`env`](#env) | ✓ | ✓ | ✓ |  |
@@ -41,7 +41,7 @@ description: "Options set how evaluations run. Each key is accepted in set place
 
 ## The cascade
 
-reeval applies the `reeval.config.ts` file, then the selected profile's `defaults`, then each enclosing `group()`, outermost first, then the `evaluate()` call. A profile `limit` then narrows `runs`, `compare`, and `harness`, except the keys in `pin`.
+reeval applies the `reeval.config.ts` file, then the selected profile's `defaults`, then each enclosing `group()`, outermost first, then the `evaluate()` call. A profile `limit` then narrows `runs`, `compare`, and `harnesses`, except the keys in `pin`.
 
 A later level replaces most keys, `compare` whole. `env` merges by name, `judge` and `question` field by field, `capture` shallowly, and `tags` and `pin` keep every value. `--runs` then replaces `runs`. `--tag` filters which evaluations run, and `--concurrency` caps the attempts running at once; neither changes an evaluation's options.
 
@@ -77,18 +77,18 @@ A harness or a judge that names its own `gateway` skips the list's fallback. For
 
 For more information about OpenRouter, see [Route through OpenRouter](/configuration/gateways/openrouter).
 
-## `harness`
+## `harnesses`
 
-`harness` names the agents that run an evaluation, one cell each.
+`harnesses` names the agents that run an evaluation, one cell each.
 
-<Property name="harness" type="HarnessOption | string[]" optional>
+<Property name="harnesses" type="HarnessOption | string[]" optional>
   The config and profile defaults accept a descriptor or list, which replaces inherited harnesses. Groups and evaluations also accept `{ add }`, `{ only }`, or, in TypeScript, a function of the inherited list. A profile `limit` lists allowed ids. reeval refuses `add` beside `only`, an empty resolved list, an unknown `only` id, and repeated ids among the resolved descriptors.
 </Property>
 
 The default is:
 
 ```ts
-harness: cursor({ model: 'composer-2.5' })
+harnesses: cursor({ model: 'composer-2.5' })
 ```
 
 For more information about harness forms, see [Choose an agent](/configuration/agents).
@@ -155,7 +155,7 @@ Cursor's agent calls only Cursor's API, and Antigravity's CLI calls only Google'
 
 ### Harness behavior
 
-Each value of `harness` reads the environment's `rules`, `skills`, and `mcp` servers from its own places and records its own events. Each row is one harness. The harness pages hold each one's key and plugins.
+Each value of `harnesses` reads the environment's `rules`, `skills`, and `mcp` servers from its own places and records its own events. Each row is one harness. The harness pages hold each one's key and plugins.
 
 #### Support by harness
 
@@ -479,7 +479,7 @@ For more information about the matchers, see [`toHaveSearched()`](/reference/mat
 `sandbox` is where an attempt runs when its environment names none.
 
 <Property name="sandbox" type="SandboxDescriptor" optional>
-  A descriptor from a sandbox factory, with `maxConcurrent` a whole number of at least 1. The default is `docker()`. An empty baseline in a comparison without `compare.baseline` or `environment` uses the first variant's sandbox when that variant sets one.
+  A descriptor from a sandbox factory, with `maxConcurrent` a whole number of at least 1. The default is `docker()`. 
 </Property>
 
 For more information about sandbox factories, see [Choose a sandbox](/configuration/sandboxes). For the factories' own options, see [`docker()`](#docker).
@@ -536,12 +536,12 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
   Processes and threads at once. Defaults to `1024`.
 </Property>
 
-## `environment`
+## `environments`
 
-`environment` is what an evaluation runs in, and the baseline of a `compare` without `compare.baseline`.
+`environments` names what an evaluation runs in, one cell each.
 
-<Property name="environment" type="Environment" optional>
-  One environment from `defineEnvironment()`. reeval refuses a list, and `environment` beside `compare.baseline`.
+<Property name="environments" type="EnvironmentsOption" optional>
+  One environment from `defineEnvironment()` or a list, which replaces inherited environments. Groups and evaluations also accept `{ add }`, `{ only }`, or, in TypeScript, a function of the inherited list. reeval refuses an empty list, `add` beside `only`, two environments with one name, `environments` beside `compare` on the same evaluation, and `environments` under a group's `compare`: the control goes in `compare.control`.
 </Property>
 
 For more information about environments, see [Define an environment](/configuration/environments).
@@ -558,8 +558,8 @@ For more information about environments, see [Define an environment](/configurat
 
 `gate` is how a cell's attempts decide its outcome.
 
-<Property name="gate" type="'all' | { passRate: number }" optional>
-  `'all'` (the default) passes when every counted outcome is `pass`. `{ passRate }` passes when at least that share of `pass` and `fail` outcomes passes, above 0 and at most 1. When no outcome counts, the cell takes its worst attempt outcome.
+<Property name="gate" type="'all' | 'none' | { passRate: number }" optional>
+  `'all'` (the default) passes when every counted outcome is `pass`. `{ passRate }` passes when at least that share of `pass` and `fail` outcomes passes, above 0 and at most 1. When no outcome counts, the cell takes its worst attempt outcome. With `cases`, `{ passRate }` gates each cell's rate over its cases, the mean of each case's pass@1, rather than each case: a case keeps its own outcome, with `verdict: 'family'`, and the family's outcome sets the exit code. `'none'` gates no cell: the attempts run and are recorded, the result prints `ran`, and only run and infra errors fail the run. [`survey()`](/reference/authoring-api#survey) sets it.
 </Property>
 
 ## `env`
@@ -764,18 +764,18 @@ For more information about analysis, see [Analyze a run](/results/analyze#set-an
 
 ## `compare`
 
-`compare` runs the baseline and each variant with the same prompt and assertions.
+`compare` runs the control and each variant with the same prompt and assertions.
 
 <Property name="compare" type="CompareOptions | false | { maxVariants: number }" optional>
   A group or an evaluation refuses `false`. On a profile `limit`, `false` drops the variants and `{ maxVariants }` keeps the first that many, where `maxVariants` is a whole number of at least 0.
 </Property>
 
-<Property name="compare.baseline" type="Environment" optional>
-  The baseline. Without it, the cascaded `environment`, or an empty environment named `baseline`.
+<Property name="compare.control" type="Environment" required>
+  The environment each variant is measured against. It replaces any inherited `environments`, and is not layered under the variants.
 </Property>
 
 <Property name="compare.variants" type="Environment[]" required>
-  A non-empty list. reeval refuses two variants with one name, or one named like the baseline.
+  A non-empty list. reeval refuses two variants with one name, or one named like the control.
 </Property>
 
 <Property name="compare.gate" type="'variants' | 'all' | 'none'" optional>
@@ -783,16 +783,42 @@ For more information about analysis, see [Analyze a run](/results/analyze#set-an
 </Property>
 
 <Property name="compare.minLift" type="number" optional>
-  Lift from -1 to 1. A variant cell fails when its lift interval's lower end is below it. A family of pooled cases is gated on the family's pooled lift instead, and fails when the pooled interval's lower end is below it.
+  Lift from -1 to 1. A variant cell fails when its lift interval's lower end is below it. An evaluation with `cases` is gated on its pooled lift instead, and fails when the pooled interval's lower end is below it.
 </Property>
 
-<Property name="compare.harness" type="Array<string | HarnessDescriptor>" optional>
-  The harnesses to compare on; the others run the baseline only. reeval refuses an id the evaluation does not run.
+<Property name="compare.harnesses" type="Array<string | HarnessDescriptor>" optional>
+  The harnesses to compare on; the others run the control only. reeval refuses an id the evaluation does not run.
 </Property>
 
-A family of pooled cases reports one `all cases` row that sums each cell's counts, with a lift paired by case. A paired outcome is `insufficient` below six discordant pairs or cases, so six cases with one attempt a side can read `helped` only when all six are discordant. A case still fails on its own assertions, and a failed case fails the family. The [`family_lift`](/reference/query-views#familylift) view lists each family's pooled lift.
+An evaluation with `cases` reports one `all cases` row that sums each cell's counts, with a lift paired by case. A paired outcome is `insufficient` below six discordant pairs or cases, so six cases with one attempt a side can read `helped` only when all six are discordant. Under `gate: 'all'`, a case fails on its own assertions, and a failed case fails the evaluation. Under `{ passRate }`, the `all cases` row's rate decides instead. The [`family_lift`](/reference/query-views#familylift) view lists each evaluation's pooled lift.
 
-For more information about comparisons, see [Measure lift against a baseline](/results/compare/lift).
+For more information about comparisons, see [Measure lift against a control](/results/compare/lift).
+
+## `cases`
+
+`cases` runs one evaluation over a list of inputs. It is accepted on `evaluate()` and `survey()` only.
+
+```ts
+evaluate(
+  'answers a stack question',
+  { environments: [next, vite], cases: questions, where: fits },
+  async (c, q) => {
+    // ...
+```
+
+<Property name="cases" type="T[]" optional>
+  The inputs, each JSON data. The body takes one as its second argument. The cases pool into one pass rate and, with `compare`, one lift paired by case. reeval refuses `runs: { bestOf }` beside it.
+</Property>
+
+<Property name="caseKey" type="(item: T) => string" optional>
+  Each case's key, which names it in the output and the record. reeval refuses two cases with one key. Without it, a string or a finite number is its own key, and an object uses its `id`, else its `name`.
+</Property>
+
+<Property name="where" type="(pair: { case, environment, harness }) => boolean" optional>
+  TypeScript only. Which case and environment pairs run, decided at plan time. `environment` has its `name` and `traits`, and reeval refuses reading a trait no listed environment defines. With `compare`, it sees the control, whose answer holds for every variant. Reading `harness` decides each harness on its own. The pairs it leaves out are listed in `--dry-run`, and each case's own are in its `excluded` in the record and its `whereExcluded` in `--dry-run --json`. The record's family lists every pair in its `excluded`, including those of a case left out everywhere. reeval refuses `where` without `cases`.
+</Property>
+
+For more information, see [Evaluate many cases](/evaluations/task/cases).
 
 ## `questions`
 
@@ -857,5 +883,5 @@ For more information about questions, see [Ask questions across attempts](/evalu
 `pin` lists the keys a profile `limit` does not narrow.
 
 <Property name="pin" type="Array<'harness' | 'runs' | 'compare'>" optional>
-  Any of `harness`, `runs`, and `compare`, kept from enclosing groups. reeval refuses any other entry.
+  Any of `harnesses`, `runs`, and `compare`, kept from enclosing groups. reeval refuses any other entry.
 </Property>

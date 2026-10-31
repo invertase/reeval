@@ -3,7 +3,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 // The agent starts from the small package in ./project, README.md included.
 const math = defineEnvironment('math', ({ directory }) => ({ files: directory('./project') }))
 
-evaluate('lists the new function in the README', { environment: math }, async (c) => {
+evaluate('lists the new function in the README', { environments: math }, async (c) => {
   await c.send('Add a multiply(a, b) function to src/math.js, and list it in README.md.')
 
   await expect(c).toHaveFile('src/math.js', /export function multiply/)

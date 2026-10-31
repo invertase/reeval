@@ -934,6 +934,7 @@
           ]
         },
         "role": {
+          "description": "`variant` on a compare's variant cell, else `control`: the compare's control, or any cell of an eval without `compare`, each environment of an `environments` grid included. A variant's lift is against the `control` cell on its harness and sandbox.",
           "$ref": "#/$defs/CellRole"
         },
         "runs": {
@@ -945,6 +946,25 @@
         },
         "skipped": {
           "type": "number"
+        },
+        "traits": {
+          "description": "The environment's merged traits; unset when it has none. Not part of the key.",
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
         },
         "variant": {
           "description": "The variant's name, for variant cells.",
@@ -1475,10 +1495,11 @@
       "type": "object",
       "properties": {
         "baseline": {
+          "description": "The control's environment name.",
           "type": "string"
         },
         "from": {
-          "description": "Set when `compare.baseline` was omitted: the control is the eval's cascaded `environment`, or an empty environment named `baseline` when there was none.",
+          "description": "Not written, since a compare names its control. A record that has it ran the eval's cascaded environment (`'environment'`) or an empty one named `baseline` (`'empty'`) as the control.",
           "enum": ["empty", "environment"]
         }
       },
@@ -1510,8 +1531,15 @@
           "description": "The baseline environment, when the evaluation uses `compare`.",
           "$ref": "#/$defs/EvalCompareMeta"
         },
+        "excluded": {
+          "description": "The environments (and harnesses) `where` left this case out of; unset when none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExcludedPair"
+          }
+        },
         "family": {
-          "description": "Set on each case of a pooled `evaluate.each`; `RunRecord.families` has the suite.",
+          "description": "Set on each case of an eval with `cases`; `RunRecord.families` has the suite.",
           "type": "object",
           "properties": {
             "case": {
@@ -1554,7 +1582,7 @@
           "type": "string"
         },
         "outcome": {
-          "description": "Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation.",
+          "description": "Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation. On a case with `verdict: 'family'`, it's what the case did, and its family's outcome is the verdict.",
           "$ref": "#/$defs/Outcome"
         },
         "passRate": {
@@ -1612,6 +1640,10 @@
         "todo": {
           "description": "A placeholder, `evaluate.todo` or `group.todo`: it never runs, and its outcome is `skipped`.",
           "type": "boolean"
+        },
+        "verdict": {
+          "description": "`family` on a case whose `gate: { passRate }` its family holds over the mean of its cases: a failed `outcome` doesn't fail the run, and `RunRecord.families`' outcome decides. Unset otherwise, and on records from before a family pooled `passRate`.",
+          "const": "family"
         }
       },
       "required": [
@@ -1640,7 +1672,7 @@
           "type": "string"
         },
         "case": {
-          "description": "sha256 of the case's data; set on each case of an `evaluate.each`.",
+          "description": "sha256 of the case's data; set on each case of an eval with `cases`.",
           "type": "string"
         },
         "options": {
@@ -1649,6 +1681,24 @@
         }
       },
       "required": ["body", "options"]
+    },
+    "ExcludedPair": {
+      "description": "A case and environment pair `where` left out.",
+      "type": "object",
+      "properties": {
+        "case": {
+          "description": "The case key.",
+          "type": "string"
+        },
+        "environment": {
+          "type": "string"
+        },
+        "harness": {
+          "description": "Set only when `where` read the harness.",
+          "type": "string"
+        }
+      },
+      "required": ["case", "environment"]
     },
     "ExecTry": {
       "description": "One run of a `c.exec` command that had `retries`.",
@@ -1842,8 +1892,16 @@
         "interval": {
           "$ref": "#/$defs/FamilyInterval"
         },
+        "outcome": {
+          "description": "Set with `passRate`: `fail` when `rate` is below it.",
+          "enum": ["fail", "pass"]
+        },
         "pass": {
           "description": "Passes and counted attempts over those cases.",
+          "type": "number"
+        },
+        "passRate": {
+          "description": "The cell's `gate: { passRate }`: on a family it gates `rate`, not each case's pass@1.",
           "type": "number"
         },
         "rate": {
@@ -1854,12 +1912,19 @@
       "required": ["cases", "cell", "counted", "interval", "pass", "rate"]
     },
     "FamilyRecord": {
-      "description": "A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an evaluation.",
+      "description": "An eval with `cases`: its cases as samples of one suite. Each case is also an evaluation.",
       "type": "object",
       "properties": {
         "cases": {
           "description": "Cases in the list.",
           "type": "number"
+        },
+        "excluded": {
+          "description": "Every case and environment (and harness) pair `where` left out, including those of a case it left out everywhere, which has no evaluation; unset when none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExcludedPair"
+          }
         },
         "file": {
           "type": "string"
@@ -1886,11 +1951,11 @@
           "type": "string"
         },
         "outcome": {
-          "description": "`fail` when a lift is below its `minLift`. The cases still pass or fail on their own.",
+          "description": "`fail` when a lift is below its `minLift` or a rate below its `passRate`. A case still fails on its own under `gate: 'all'`.",
           "enum": ["fail", "pass"]
         },
         "ran": {
-          "description": "Cases with an evaluation in this run; fewer when a filter or tag left some out.",
+          "description": "Cases with an attempt that ran (not skipped) in this run; fewer when a filter or tag left some out, or an interrupted run or a filtered resume hasn't run them yet.",
           "type": "number"
         },
         "rates": {
@@ -2965,7 +3030,7 @@
           }
         },
         "families": {
-          "description": "Each pooled `evaluate.each` that ran; unset when none did.",
+          "description": "Each eval with `cases` that ran; unset when none did.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/FamilyRecord"

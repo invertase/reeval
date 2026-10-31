@@ -13,7 +13,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that replies with ./fake-agent's review and edits nothing, and a judge with
   // a fixed score, so the checks run without keys or Docker.
-  harness: fakeHarness({ text: fakeAgent('review.md') }),
+  harnesses: fakeHarness({ text: fakeAgent('review.md') }),
   sandbox: fakeSandbox(),
   judge: { model: fakeJudge({ score: 0.9 }) },
   // The real agents: `--profile claude-code`, or any other in ../profiles.ts. An example's own
@@ -23,7 +23,7 @@ export default defineConfig({
     // An agent that fixes the bug instead of reporting it, which the no-edits guard must catch.
     canary: {
       defaults: {
-        harness: fakeHarness({
+        harnesses: fakeHarness({
           files: { 'src/page.js': canary('src/page.js') },
           text: 'page() was off by one; I fixed it.',
         }),

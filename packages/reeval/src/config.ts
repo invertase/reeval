@@ -65,9 +65,9 @@ export { UsageError }
 const CONFIG_KEYS = [
   'include',
   'gateway',
-  'harness',
+  'harnesses',
   'sandbox',
-  'environment',
+  'environments',
   'runs',
   'gate',
   'env',
@@ -89,9 +89,9 @@ const CONFIG_KEYS = [
 ]
 const PROFILE_KEYS = ['defaults', 'limit', 'judge', 'budget', 'record', 'tags', 'gateway']
 const DEFAULTS_KEYS = [
-  'harness',
+  'harnesses',
   'sandbox',
-  'environment',
+  'environments',
   'runs',
   'gate',
   'env',
@@ -102,7 +102,7 @@ const DEFAULTS_KEYS = [
   'timeout',
   'snapshot',
 ]
-const LIMIT_KEYS = ['runs', 'compare', 'harness']
+const LIMIT_KEYS = ['runs', 'compare', 'harnesses']
 
 export type ConfigInput = ReevalConfig | ((helpers: ConfigHelpers) => ReevalConfig)
 
@@ -258,8 +258,11 @@ function withHostPaths<T extends object>(
     if ('sandbox' in value) {
       out.sandbox = sandboxPaths(value.sandbox, root, `${prefix}sandbox`, missing)
     }
-    if (environments && 'environment' in value) {
-      out.environment = environmentPaths(value.environment, root, `${prefix}environment`, missing)
+    if (environments && 'environments' in value) {
+      const field = `${prefix}environments`
+      out.environments = Array.isArray(value.environments)
+        ? value.environments.map((e, i) => environmentPaths(e, root, `${field}[${i}]`, missing))
+        : environmentPaths(value.environments, root, field, missing)
     }
     return out
   }
@@ -278,10 +281,10 @@ function withHostPaths<T extends object>(
 function configFromData(data: Record<string, unknown>): ReevalConfig {
   const withEnvironment = (options: unknown) => {
     if (!isObjectLike(options)) return options
-    const { environment } = options
-    return isEnvironment(environment)
-      ? { ...options, environment: environmentFrom(environment) }
-      : options
+    const { environments } = options
+    const from = (e: unknown) => (isEnvironment(e) ? environmentFrom(e) : e)
+    if (Array.isArray(environments)) return { ...options, environments: environments.map(from) }
+    return isEnvironment(environments) ? { ...options, environments: from(environments) } : options
   }
   const config = withEnvironment(data) as Record<string, unknown>
   const { profiles } = config
@@ -306,19 +309,19 @@ function configFromData(data: Record<string, unknown>): ReevalConfig {
 export function resolveConfigData(input: unknown, root: string, file: string): ResolvedConfig {
   if (!isRecord(input)) {
     throw new UsageError(
-      `${file} must be a mapping of config keys, like harness: and judge: (got ${JSON.stringify(input)})`,
+      `${file} must be a mapping of config keys, like harnesses: and judge: (got ${JSON.stringify(input)})`,
     )
   }
   const data = withHostPaths(input, root, file, { environments: true })
   // `resolveConfig` would ask for `defineEnvironment(…)`, which a data config can't call.
-  const { environment, profiles } = data as ReevalConfigData
+  const { environments: environment, profiles } = data as ReevalConfigData
   const environments = [
     environment,
     ...Object.values(typeof profiles === 'object' && profiles ? profiles : {}).map(
-      (p) => (p as ProfileData | null)?.defaults?.environment,
+      (p) => (p as ProfileData | null)?.defaults?.environments,
     ),
   ]
-  if (environments.some((e) => e !== undefined && !isEnvironment(e))) {
+  if (environments.flat().some((e) => e !== undefined && !isEnvironment(e))) {
     const problem = configDataProblem(data, file)
     if (problem) throw new UsageError(problem)
   }
@@ -412,7 +415,7 @@ function checkProfile(name: string, profile: unknown, file: string): Profile {
   }
   if (p.limit !== undefined) {
     unknownKey(p.limit, LIMIT_KEYS, `${where}.limit`, file)
-    const { runs, compare, harness } = p.limit
+    const { runs, compare, harnesses: harness } = p.limit
     if (runs !== undefined && !(Number.isInteger(runs) && runs >= 1)) {
       throw new UsageError(
         `${where}.limit.runs in ${file} must be a whole number of at least 1 (got ${JSON.stringify(runs)})`,
@@ -431,7 +434,7 @@ function checkProfile(name: string, profile: unknown, file: string): Profile {
       const bad = Array.isArray(harness) ? harness.find((h) => typeof h !== 'string') : harness
       if (bad !== undefined) {
         throw new UsageError(
-          `${where}.limit.harness in ${file} can only list harness ids to allow (got ${describeValue(bad)}). To add harnesses, use ${where}.defaults.harness.`,
+          `${where}.limit.harnesses in ${file} can only list harness ids to allow (got ${describeValue(bad)}). To add harnesses, use ${where}.defaults.harnesses.`,
         )
       }
     }
@@ -612,10 +615,10 @@ export function resolveConfig(
     )
   }
   const historyDir = resolve(root, user.history?.dir ?? join(evalRoot(include), '.history'))
-  const harness = user.harness === undefined ? [DEFAULT_HARNESS] : [user.harness].flat()
+  const harness = user.harnesses === undefined ? [DEFAULT_HARNESS] : [user.harnesses].flat()
   if (harness.length === 0) {
     throw new UsageError(
-      `harness is an empty list in ${file}. Give at least one, e.g. harness: ${HARNESS_EXAMPLE}`,
+      `harnesses is an empty list in ${file}. Give at least one, e.g. harnesses: ${HARNESS_EXAMPLE}`,
     )
   }
   checkHarnesses(harness, file)
@@ -648,7 +651,7 @@ export function resolveConfig(
     include,
     harness,
     sandbox: user.sandbox ?? docker(),
-    environment: user.environment,
+    environments: user.environments === undefined ? [] : [user.environments].flat(),
     runs: user.runs,
     gate: user.gate,
     env: user.env ?? {},

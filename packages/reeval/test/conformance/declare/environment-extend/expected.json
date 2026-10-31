@@ -5,7 +5,7 @@
       "name": "parent image",
       "mode": "run",
       "options": {
-        "environment": {
+        "environments": {
           "kind": "environment",
           "name": "parent",
           "layers": [
@@ -31,7 +31,7 @@
       "name": "child replaces sandbox",
       "mode": "run",
       "options": {
-        "environment": {
+        "environments": {
           "kind": "environment",
           "name": "child",
           "layers": [
@@ -66,7 +66,7 @@
       "name": "child keeps parent sandbox",
       "mode": "run",
       "options": {
-        "environment": {
+        "environments": {
           "kind": "environment",
           "name": "kept",
           "layers": [

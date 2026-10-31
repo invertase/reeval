@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace, and the changelog
   // entry only when it has the skill, so the compare shows a lift without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'src/math.js': fakeAgent('src/math.js') },
     text: 'I added multiply(a, b) to src/math.js.',
     withSkill: {

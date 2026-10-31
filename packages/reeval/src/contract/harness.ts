@@ -2,6 +2,7 @@
 // factories in `reeval/harness` return, and what a declaration tree from any language carries.
 // One schema per kind, joined on `kind`; the types in types.ts are held to them by
 // `_SameAsSchema`.
+
 import { z } from 'zod'
 import { MAX_TIMER_MS, TIMER_LIMIT } from '../duration.ts'
 import type {
@@ -29,6 +30,7 @@ import {
   nonEmpty,
   refusal,
   type Same,
+  tokenUsageSchema,
 } from './shared.ts'
 
 /** A model id with no provider prefix. */
@@ -180,6 +182,7 @@ export const fakeHarnessSchema = z.strictObject({
     })
     .optional(),
   flakeRate: z.number().optional(),
+  usage: tokenUsageSchema.optional(),
   script: z.array(z.array(fakeScriptStepSchema)).optional(),
   maxConcurrent: z.number().optional(),
   startTimeout: durationSchema.optional(),

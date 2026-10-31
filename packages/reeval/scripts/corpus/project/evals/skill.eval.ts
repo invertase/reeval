@@ -11,7 +11,7 @@ const withHouseGreeting = defineEnvironment('with-house-greeting', ({ skill }) =
 group(
   'house greeting',
   {
-    compare: { baseline: plain, variants: [withHouseGreeting] },
+    compare: { control: plain, variants: [withHouseGreeting] },
     questions: [
       {
         question: 'Which greeting reads more like our house style?',

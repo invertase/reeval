@@ -2,7 +2,7 @@ import { evaluate, expect } from 'reeval'
 import { ui } from './env.ts'
 
 // Must fail: a command that exits never serves.
-evaluate('canary', { environment: ui }, async (c) => {
+evaluate('canary', { environments: ui }, async (c) => {
   try {
     await c.serve('node server.mjs')
   } catch (error) {

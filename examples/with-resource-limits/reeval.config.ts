@@ -10,7 +10,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace. The environment's
   // docker() sandbox still applies, so even the fake agent runs in Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: {
       'src/math.js': fakeAgent('src/math.js'),
       'test/math.test.js': fakeAgent('test/math.test.js'),

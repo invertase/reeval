@@ -11,7 +11,7 @@ import { fakeSandbox } from 'reeval/sandbox'
 const greet = "export const greet = (name) => 'Hello, ' + name + '!'\n"
 
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'greet.js': greet, 'package.json': '{ "type": "module" }\n' },
     text: 'I wrote greet.js.',
     reasoning: 'The task wants one file.',
@@ -22,7 +22,7 @@ export default defineConfig({
       text: 'I wrote greet.js in the house style.',
     },
   }),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   judge: { model: fakeJudge({ score: 0.8 }) },
   analysis: {
     model: fakeAnalysis({

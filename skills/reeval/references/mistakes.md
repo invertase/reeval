@@ -6,13 +6,17 @@ Each row is a mistake, what reeval says and the fix.
 |---|---|---|
 | No `reeval.config.*` | `No reeval.config.ts … here or above. Run reeval init.` | `reeval init`, or pass `--config` |
 | `compare` in `reeval.config.ts` | `compare can't be set in reeval.config.ts` | Put it on the group or eval |
-| `environment: [a, b]` | `environment takes one environment, not a list` | `compare: { baseline: a, variants: [b] }` |
-| `compare: [b]` | `compare must be an object` | `compare: { baseline, variants: [b] }` |
+| `compare: [b]` | `compare … must be an object, not a list` | `compare: { control: a, variants: [b] }` |
+| `compare: { variants: [b] }` | `compare … has no control` | `compare: { control: a, variants: [b] }` |
+| `compare: { baseline: a, … }` | `Unknown compare option "baseline" … Did you mean "control"?` | `compare: { control: a, … }` |
 | `compare: { strategy: 'peer' }` | `Unknown compare option "strategy"` | Drop it. Variants already run on their own |
-| `environment` and `compare: { baseline, … }` together | `environment and compare.baseline can't both be set` | Drop `environment`, or drop `baseline` to make it the control |
+| `environments` beside `compare` | `… sets both environments and compare` | Move the environment into `compare.control` |
+| `evaluate.each(cases)(name, fn)` | `evaluate.each is not a function` | `evaluate(name, { cases }, async (c, item) => …)` |
+| `where` without `cases`, or on a group | `… sets where without cases` / `Unknown option "where" in group(…)` | Put `where` beside `cases` on the eval |
+| `gate` or `compare.minLift` on `survey` | `survey(…) sets gate. A survey … gates nothing` | Use `evaluate` to gate |
 | `compare: false` on an eval or group | `compare: false can't be set` | Use a profile's `limit.compare: false` |
 | A question and no language model | `questions "…" (…) needs a language model` (exit 2) | Set `analysis.model`, give the question its own `model`, or set `question: { model }` |
-| `import { baseline }` | `reeval has no baseline` | `baseline` is a field of `compare`, not an export |
+| `import { baseline }` | `reeval has no baseline` | Name the control in `compare: { control }`; it isn't an export |
 | `repeat: 3` / `times` | `Unknown option "repeat" … Did you mean "runs"?` | `runs: 3` |
 | `runs: { bestOf: 4 }` | `runs.bestOf … must be an odd whole number of 3 or more` | `runs: { bestOf: 3 }` or `5` |
 | `runs: { bestOf: 3 }` with `compare` | `… compares environments, so it can't take runs: { bestOf: 3 }` | a fixed count, `runs: 4` |

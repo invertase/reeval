@@ -49,6 +49,7 @@ export type RemarkContext = {
 /** `KIND_ORDER` ranks remarks of one severity: the ones most worth acting on first. */
 const KIND_ORDER: Remark['kind'][] = [
   'flaky-check',
+  'survey-throws',
   'slow-mcp-start',
   'proxy-only-egress',
   'setup-process-secret',
@@ -485,6 +486,45 @@ function snapshotTooLarge(e: EvalResult, entries: EvalEntry[], ctx: RemarkContex
   ]
 }
 
+/**
+ * survey-throws: a survey whose body threw outside an `expect` in more than half its counted
+ * tries. A survey fails only on run and infra errors, so those tries read `ran` while recording
+ * the eval's error, not what the agent did. One per eval.
+ */
+function surveyThrows(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext): Candidate[] {
+  if (!entries.every((entry) => entry.cells.every((c) => c.gate === 'none'))) return []
+  const cellPaths = new Map<string, string>()
+  for (const u of units(e)) for (const c of u.cells) cellPaths.set(`${u.id}\0${c.key}`, c.path)
+  const counted = entries.flatMap((entry) =>
+    entry.attempts
+      .filter((a) => a.outcome === 'pass' || a.outcome === 'fail')
+      .map((attempt) => ({ entry, attempt })),
+  )
+  const threw = counted.filter(
+    ({ attempt }) =>
+      attempt.error?.kind === 'assertion' &&
+      !(attempt.assertions ?? []).some((x) => x.status !== 'pass'),
+  )
+  const [first] = threw
+  if (!first || threw.length * 2 <= counted.length) return []
+  return [
+    {
+      id: remarkId('survey-throws', e.path, first.entry),
+      evalId: e.path,
+      kind: 'survey-throws',
+      severity: 'concern',
+      text: `${threw.length} of ${counted.length} tries threw outside an expect, so the survey recorded its own error, not what the agent did: ${clip(first.attempt.error?.message ?? '', 120)}`,
+      evidence: threw.map(
+        (h) => `${cellPaths.get(`${h.entry.id}\0${h.attempt.cell}`) ?? h.entry.id}#${h.attempt.n}`,
+      ),
+      fix: {
+        at: ctx.locate(first.entry, null),
+        edit: 'fix what the body throws, or check what can fail with expect, which a survey records without failing',
+      },
+    },
+  ]
+}
+
 /** Every deterministic remark the run raises, ranked: concerns first, then by kind and eval. */
 export function deterministicRemarks(
   suite: SuiteResult,
@@ -506,6 +546,7 @@ export function deterministicRemarks(
         ...proxyOnlyEgress(e, own, ctx),
         ...setupProcessSecret(e, own, ctx),
         ...snapshotTooLarge(e, own, ctx),
+        ...surveyThrows(e, own, ctx),
         ...tooFewTries(e, first, ctx),
         ...checkNeverFails(e, entries, ctx),
       )

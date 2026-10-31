@@ -2,7 +2,7 @@
 
 **Shows:** which of two rules files works better. Each arm is the same project with its own
 `rules: file(…)`, a one-line `rules/short.md` and a `rules/detailed.md` that spells out the
-changelog's format. `compare: { baseline: shortRules, variants: [detailedRules] }` runs both, and
+changelog's format. `compare: { control: shortRules, variants: [detailedRules] }` runs both, and
 the checks read the changelog the agent wrote.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
@@ -53,5 +53,5 @@ The eval sets no `runs`, so the compare runs each arm four times, the fewest for
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace; its changelog step is in `reeval.config.ts` |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and its rules-following step, and the real agents from `../profiles.ts` |
 
-[Measure lift against a baseline](../../docs/results/compare/lift.mdx) covers naming both arms, and
+[Measure lift against a control](../../docs/results/compare/lift.mdx) covers naming both arms, and
 [Add project rules](../../docs/configuration/environments/rules.mdx) covers `rules`.

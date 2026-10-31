@@ -306,14 +306,14 @@
           "type": "string"
         },
         "family": {
-          "description": "Set on each case of a pooled `evaluate.each`: its template, index and the list's length.",
+          "description": "Set on each case of an eval with `cases`: its template, index and the list's length.",
           "$ref": "#/$defs/DeclaredFamily"
         },
         "mode": {
           "$ref": "#/$defs/DeclaredMode"
         },
         "name": {
-          "description": "The eval's name, as passed to `evaluate` (a case's, for `evaluate.each`).",
+          "description": "The eval's name, as passed to `evaluate` (a case's, for an eval with `cases`).",
           "type": "string"
         },
         "options": {
@@ -332,7 +332,7 @@
       "additionalProperties": false
     },
     "DeclaredFamily": {
-      "description": "Where a case of a pooled `evaluate.each` sits in its list.",
+      "description": "Where a case of an eval with `cases` sits in its list.",
       "type": "object",
       "properties": {
         "case": {
@@ -348,7 +348,7 @@
           "maximum": 9007199254740991
         },
         "name": {
-          "description": "The name template passed to `evaluate.each`.",
+          "description": "The eval's own name, which each case's name extends.",
           "type": "string"
         }
       },
@@ -404,7 +404,7 @@
       ]
     },
     "DeclaredSource": {
-      "description": "An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source text, and of an `evaluate.each` case's data as canonical JSON (object keys sorted, no whitespace, non-ASCII characters as themselves).",
+      "description": "An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source text, and of a case's data as canonical JSON (object keys sorted, no whitespace, non-ASCII characters as themselves).",
       "type": "object",
       "properties": {
         "body": {
@@ -413,7 +413,7 @@
           "pattern": "^[0-9a-f]{64}$"
         },
         "case": {
-          "description": "sha256 of the case's data; set on each case of an `evaluate.each`.",
+          "description": "sha256 of the case's data; set on each case of an eval with `cases`.",
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         }
@@ -715,6 +715,28 @@
             "$ref": "#/$defs/SkillSource"
           }
         },
+        "traits": {
+          "description": "Filter facts for `where`, such as `{ stack: 'next' }`: a key to a string or a list of strings. A child's key replaces its parent's value whole; keys it doesn't set are inherited. Recorded on the cell, and never written to the sandbox, the prompt or the judge.",
+          "readOnly": true,
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "readOnly": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
+        },
         "workspace": {
           "description": "The code the workspace starts as, before `files`, `rules` and `setup`; a child's replaces its parent's.",
           "$ref": "#/$defs/GitWorkspace"
@@ -754,344 +776,18 @@
               "$ref": "#/$defs/CaptureOptions"
             },
             "compare": {
-              "description": "Environments to run side by side against `environment`, the control.",
+              "description": "Environments to run side by side; `control` is what each variant is measured against.",
               "type": "object",
               "properties": {
-                "gate": {
-                  "description": "Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only).",
-                  "enum": ["all", "none", "variants"]
-                },
-                "harness": {
-                  "description": "Harnesses (ids or descriptors) to compare on; the others run the control only.",
-                  "type": "array",
-                  "items": {
-                    "anyOf": [
-                      {
-                        "$ref": "#/$defs/AntigravityHarnessDescriptor"
-                      },
-                      {
-                        "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
-                      },
-                      {
-                        "$ref": "#/$defs/CodexHarnessDescriptor"
-                      },
-                      {
-                        "$ref": "#/$defs/CursorHarnessDescriptor"
-                      },
-                      {
-                        "$ref": "#/$defs/FakeHarnessDescriptor"
-                      },
-                      {
-                        "$ref": "#/$defs/FxHarnessDescriptor"
-                      },
-                      {
-                        "$ref": "#/$defs/GooseHarnessDescriptor"
-                      },
-                      {
-                        "$ref": "#/$defs/GrokBuildHarnessDescriptor"
-                      },
-                      {
-                        "$ref": "#/$defs/OpenCodeHarnessDescriptor"
-                      },
-                      {
-                        "$ref": "#/$defs/PiHarnessDescriptor"
-                      },
-                      {
-                        "type": "string"
-                      }
-                    ]
-                  }
-                },
-                "minLift": {
-                  "description": "Lift in points from -1 to 1; a variant cell below it fails.",
-                  "type": "number"
-                },
-                "variants": {
-                  "description": "Other environments, each planned and run as itself.",
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/$defs/EnvironmentData"
-                  }
-                }
-              },
-              "required": ["variants"]
-            },
-            "egress": {
-              "description": "Where the sandbox may connect. Replaces the inherited policy: config, profile defaults, the environment, then groups and the eval.",
-              "anyOf": [
-                {
-                  "enum": ["allow-all", "deny-all", "proxy"]
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "allow": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  "required": ["allow"]
-                }
-              ]
-            },
-            "env": {
-              "description": "Variables and secrets for the sandbox, merged by name down the cascade.",
-              "$ref": "#/$defs/EnvVars"
-            },
-            "environment": {
-              "description": "The control: the compare has no `baseline`.",
-              "$ref": "#/$defs/EnvironmentData"
-            },
-            "gate": {
-              "description": "How each cell's attempts decide its outcome; default `'all'`.",
-              "anyOf": [
-                {
-                  "const": "all"
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "passRate": {
-                      "type": "number"
-                    }
-                  },
-                  "required": ["passRate"]
-                }
-              ]
-            },
-            "harness": {
-              "description": "Which agents run the eval; each harness is its own cell.",
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/AntigravityHarnessDescriptor"
-                },
-                {
-                  "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
-                },
-                {
-                  "$ref": "#/$defs/CodexHarnessDescriptor"
-                },
-                {
-                  "$ref": "#/$defs/CursorHarnessDescriptor"
-                },
-                {
-                  "$ref": "#/$defs/FakeHarnessDescriptor"
-                },
-                {
-                  "$ref": "#/$defs/FxHarnessDescriptor"
-                },
-                {
-                  "$ref": "#/$defs/GooseHarnessDescriptor"
-                },
-                {
-                  "$ref": "#/$defs/GrokBuildHarnessDescriptor"
-                },
-                {
-                  "$ref": "#/$defs/OpenCodeHarnessDescriptor"
-                },
-                {
-                  "$ref": "#/$defs/PiHarnessDescriptor"
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/$defs/HarnessDescriptor"
-                  }
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "add": {
-                      "anyOf": [
-                        {
-                          "$ref": "#/$defs/AntigravityHarnessDescriptor"
-                        },
-                        {
-                          "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
-                        },
-                        {
-                          "$ref": "#/$defs/CodexHarnessDescriptor"
-                        },
-                        {
-                          "$ref": "#/$defs/CursorHarnessDescriptor"
-                        },
-                        {
-                          "$ref": "#/$defs/FakeHarnessDescriptor"
-                        },
-                        {
-                          "$ref": "#/$defs/FxHarnessDescriptor"
-                        },
-                        {
-                          "$ref": "#/$defs/GooseHarnessDescriptor"
-                        },
-                        {
-                          "$ref": "#/$defs/GrokBuildHarnessDescriptor"
-                        },
-                        {
-                          "$ref": "#/$defs/OpenCodeHarnessDescriptor"
-                        },
-                        {
-                          "$ref": "#/$defs/PiHarnessDescriptor"
-                        },
-                        {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/$defs/HarnessDescriptor"
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  "required": ["add"]
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "only": {
-                      "anyOf": [
-                        {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        {
-                          "type": "string"
-                        }
-                      ]
-                    }
-                  },
-                  "required": ["only"]
-                }
-              ]
-            },
-            "judge": {
-              "description": "Defaults for `c.judge()`, merged field by field down the cascade.",
-              "$ref": "#/$defs/ConfigJudgeOptions"
-            },
-            "pin": {
-              "description": "Keys a profile's `limit` may not narrow for this group or eval.",
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/PinnableKey"
-              }
-            },
-            "question": {
-              "description": "The model every question that names none of its own is answered by, down the cascade.",
-              "$ref": "#/$defs/QuestionOptions"
-            },
-            "questions": {
-              "description": "What a language model is asked about the attempts, always a list; they never change pass, fail or the exit code. A question with `across` picks between pairs of attempts once they all end; one without is asked of each attempt as it ends. Replaces the inherited list, so `[]` asks none.",
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/Question"
-              }
-            },
-            "revision": {
-              "description": "The eval's version, part of its fingerprint: bump it when a change the eval file doesn't show (a helper, a fixture, data it reads) changes what it measures. A group's applies to the evals inside it that set none.",
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "runs": {
-              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "bestOf": {
-                      "type": "number"
-                    }
-                  },
-                  "required": ["bestOf"]
-                }
-              ]
-            },
-            "sandbox": {
-              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harness`. Not an environment: it does not invent skills, files or a name.",
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/DockerSandboxDescriptor"
-                },
-                {
-                  "$ref": "#/$defs/FakeSandboxDescriptor"
-                }
-              ]
-            },
-            "snapshot": {
-              "description": "When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.",
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/SnapshotOptions"
-                },
-                {
-                  "const": "turns"
-                },
-                {
-                  "type": "boolean"
-                }
-              ]
-            },
-            "tags": {
-              "description": "Labels for `--tag` and profiles to select by; a group's are added to its evals'.",
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "timeout": {
-              "description": "Per attempt.",
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            }
-          },
-          "required": ["compare"]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "capture": {
-              "description": "Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the value.",
-              "$ref": "#/$defs/CaptureOptions"
-            },
-            "compare": {
-              "description": "Environments to run side by side; `baseline` is the control.",
-              "type": "object",
-              "properties": {
-                "baseline": {
-                  "description": "The control. Not layered under the variants. Without it, the control is the environment the eval would otherwise run in (the cascaded `environment`), else an empty one named `baseline`.",
+                "control": {
+                  "description": "The environment each variant is measured against. Not layered under the variants, and it replaces any `environments` the eval inherits.",
                   "$ref": "#/$defs/EnvironmentData"
                 },
                 "gate": {
                   "description": "Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only).",
                   "enum": ["all", "none", "variants"]
                 },
-                "harness": {
+                "harnesses": {
                   "description": "Harnesses (ids or descriptors) to compare on; the others run the control only.",
                   "type": "array",
                   "items": {
@@ -1144,7 +840,7 @@
                   }
                 }
               },
-              "required": ["baseline", "variants"]
+              "required": ["control", "variants"]
             },
             "egress": {
               "description": "Where the sandbox may connect. Replaces the inherited policy: config, profile defaults, the environment, then groups and the eval.",
@@ -1174,7 +870,7 @@
               "description": "How each cell's attempts decide its outcome; default `'all'`.",
               "anyOf": [
                 {
-                  "const": "all"
+                  "enum": ["all", "none"]
                 },
                 {
                   "type": "object",
@@ -1187,7 +883,7 @@
                 }
               ]
             },
-            "harness": {
+            "harnesses": {
               "description": "Which agents run the eval; each harness is its own cell.",
               "anyOf": [
                 {
@@ -1327,7 +1023,7 @@
               ]
             },
             "runs": {
-              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
+              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a case of an eval with `cases` included.",
               "anyOf": [
                 {
                   "type": "number"
@@ -1344,7 +1040,7 @@
               ]
             },
             "sandbox": {
-              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harness`. Not an environment: it does not invent skills, files or a name.",
+              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harnesses`. Not an environment: it does not invent skills, files or a name.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/DockerSandboxDescriptor"
@@ -1429,15 +1125,63 @@
               "description": "Variables and secrets for the sandbox, merged by name down the cascade.",
               "$ref": "#/$defs/EnvVars"
             },
-            "environment": {
-              "description": "What this group or eval runs in, and the control of a compare without a `baseline`.",
-              "$ref": "#/$defs/EnvironmentData"
+            "environments": {
+              "description": "What this group or eval runs in: one environment, or a list, each its own cell beside each harness. `{ add }` and `{ only }` edit the inherited list.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/EnvironmentData"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/EnvironmentData"
+                  }
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "add": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/EnvironmentData"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/EnvironmentData"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["add"]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "only": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["only"]
+                }
+              ]
             },
             "gate": {
               "description": "How each cell's attempts decide its outcome; default `'all'`.",
               "anyOf": [
                 {
-                  "const": "all"
+                  "enum": ["all", "none"]
                 },
                 {
                   "type": "object",
@@ -1450,7 +1194,7 @@
                 }
               ]
             },
-            "harness": {
+            "harnesses": {
               "description": "Which agents run the eval; each harness is its own cell.",
               "anyOf": [
                 {
@@ -1590,7 +1334,7 @@
               ]
             },
             "runs": {
-              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
+              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a case of an eval with `cases` included.",
               "anyOf": [
                 {
                   "type": "number"
@@ -1607,7 +1351,7 @@
               ]
             },
             "sandbox": {
-              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harness`. Not an environment: it does not invent skills, files or a name.",
+              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harnesses`. Not an environment: it does not invent skills, files or a name.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/DockerSandboxDescriptor"
@@ -1792,6 +1536,29 @@
             "required": ["input", "output", "tool"],
             "additionalProperties": false
           }
+        },
+        "usage": {
+          "description": "Tokens the fake agent reports for every turn, as `turn.usage`; without it, null.",
+          "type": "object",
+          "properties": {
+            "cacheRead": {
+              "type": "number"
+            },
+            "cacheWrite": {
+              "type": "number"
+            },
+            "input": {
+              "type": "number"
+            },
+            "output": {
+              "type": "number"
+            },
+            "reasoning": {
+              "type": ["number", "null"]
+            }
+          },
+          "required": ["cacheRead", "cacheWrite", "input", "output", "reasoning"],
+          "additionalProperties": false
         },
         "withSkill": {
           "description": "Files and message used instead when the environment gives the agent a skill.",
@@ -2381,7 +2148,7 @@
     },
     "PinnableKey": {
       "description": "An option a profile's `limit` can narrow, and `pin` can protect.",
-      "enum": ["compare", "harness", "runs"]
+      "enum": ["compare", "harnesses", "runs"]
     },
     "PluginMarketplace": {
       "description": "A Claude Code marketplace: the source that holds its `.claude-plugin/marketplace.json`.",

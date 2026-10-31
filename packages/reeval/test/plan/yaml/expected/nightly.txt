@@ -3,9 +3,9 @@ hint: 3 evals run more than once with the default gate, so every attempt must pa
 hint: 1 compare runs 2 times per cell; a verdict needs 4 runs a side, so its lift and effort will say can't tell yet (runs: 4)
 evals/y.eval.ts › inherits             a/nightly/fake  control          gated    ×2
                                        b/nightly/fake  control          gated    ×2
-evals/y.eval.ts › compared             a/nightly/fake  control          ungated  ×2
+evals/y.eval.ts › compared             a/plain/fake    control          ungated  ×2
                                        a/skilled/fake  variant skilled  gated    ×2
-                                       b/nightly/fake  control          ungated  ×2
+                                       b/plain/fake    control          ungated  ×2
                                        b/skilled/fake  variant skilled  gated    ×2
 evals/y.eval.ts › slow [nightly-only]  a/nightly/fake  control          gated    ×2
                                        b/nightly/fake  control          gated    ×2

@@ -4,7 +4,7 @@ import { app } from './env.ts'
 
 // The judge is shown only the inputs the call turns on: output alone here, with no task, files or
 // diff from anywhere else.
-evaluate('lands', { environment: app }, async (c) => {
+evaluate('lands', { environments: app }, async (c) => {
   await c.send('write the app')
   let state: Record<string, unknown> = {}
   const look = fakeJudge({

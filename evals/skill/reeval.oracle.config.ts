@@ -11,7 +11,7 @@ const solve = fileURLToPath(new URL('./oracle/solve.mjs', import.meta.url))
 
 export default defineConfig({
   include: ['*.eval.ts'],
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [[{ exec: `node ${solve}` }]],
     text:
       'Fixed: compare moved out of the config, the environment list became compare, repeat ' +

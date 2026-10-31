@@ -11,6 +11,7 @@ import type {
   EnvironmentRecord,
   EvalCompareMeta,
   EvalSource,
+  ExcludedPair,
   ExecTry,
   FileChange,
   JudgeArtifactRef,
@@ -382,9 +383,16 @@ export type EvalEntry = {
   /**
    * Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is
    * `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated
-   * cell's failures don't fail the evaluation.
+   * cell's failures don't fail the evaluation. On a case with `verdict: 'family'`, it's what the
+   * case did, and its family's outcome is the verdict.
    */
   outcome: Outcome
+  /**
+   * `family` on a case whose `gate: { passRate }` its family holds over the mean of its cases: a
+   * failed `outcome` doesn't fail the run, and `RunRecord.families`' outcome decides. Unset
+   * otherwise, and on records from before a family pooled `passRate`.
+   */
+  verdict?: 'family'
   /** A placeholder, `evaluate.todo` or `group.todo`: it never runs, and its outcome is `skipped`. */
   todo: boolean
   /** pass@1, pass / (pass + fail), over the gated cells' attempts; infra errors and skips excluded. */
@@ -400,8 +408,10 @@ export type EvalEntry = {
    * with secrets masked and screenshots as refs; unset where the evaluation's files weren't kept.
    */
   answers?: CompareAnswer[]
-  /** Set on each case of a pooled `evaluate.each`; `RunRecord.families` has the suite. */
+  /** Set on each case of an eval with `cases`; `RunRecord.families` has the suite. */
   family?: { id: string; name: string; case: number; cases: number }
+  /** The environments (and harnesses) `where` left this case out of; unset when none. */
+  excluded?: ExcludedPair[]
 }
 
 /** A 95% interval on a pooled rate or difference. */
@@ -429,6 +439,10 @@ export type FamilyRate = {
   /** The mean of the cases' pass@1; at one attempt a case, `pass / counted`. */
   rate: number
   interval: FamilyInterval
+  /** The cell's `gate: { passRate }`: on a family it gates `rate`, not each case's pass@1. */
+  passRate?: number
+  /** Set with `passRate`: `fail` when `rate` is below it. */
+  outcome?: 'pass' | 'fail'
 }
 
 /**
@@ -488,7 +502,7 @@ export type FamilyLift = {
   effort?: FamilyEffort
 }
 
-/** A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an evaluation. */
+/** An eval with `cases`: its cases as samples of one suite. Each case is also an evaluation. */
 export type FamilyRecord = {
   /** `file › group › … › template`. */
   id: string
@@ -498,13 +512,24 @@ export type FamilyRecord = {
   name: string
   /** Cases in the list. */
   cases: number
-  /** Cases with an evaluation in this run; fewer when a filter or tag left some out. */
+  /**
+   * Cases with an attempt that ran (not skipped) in this run; fewer when a filter or tag left
+   * some out, or an interrupted run or a filtered resume hasn't run them yet.
+   */
   ran: number
   /** One per cell. */
   rates: FamilyRate[]
   /** One per variant cell, with `compare`. */
   lifts: FamilyLift[]
-  /** `fail` when a lift is below its `minLift`. The cases still pass or fail on their own. */
+  /**
+   * Every case and environment (and harness) pair `where` left out, including those of a case it
+   * left out everywhere, which has no evaluation; unset when none.
+   */
+  excluded?: ExcludedPair[]
+  /**
+   * `fail` when a lift is below its `minLift` or a rate below its `passRate`. A case still fails
+   * on its own under `gate: 'all'`.
+   */
   outcome: 'pass' | 'fail'
 }
 
@@ -740,7 +765,7 @@ export type RunRecord = {
   redaction: { version: 1 }
   summary: RunSummary
   evals: EvalEntry[]
-  /** Each pooled `evaluate.each` that ran; unset when none did. */
+  /** Each eval with `cases` that ran; unset when none did. */
   families?: FamilyRecord[]
   /**
    * These are redacted errors outside any attempt: an evaluation file that didn't load, a rejection
@@ -903,6 +928,7 @@ export type HistoryEntry = {
     source?: EvalEntry['source']
     revision?: EvalEntry['revision']
     outcome: Outcome
+    verdict?: EvalEntry['verdict']
     passRate: number | null
     cells: HistoryCell[]
   }>
@@ -912,6 +938,10 @@ export type HistoryEntry = {
       /** The eval ids of its cases in this run. */
       caseIds: string[]
       lifts: FamilyLiftSummary[]
+      /** Its cells' rates over the cases that a `gate: { passRate }` gates; unset when none. */
+      rates?: Array<
+        Pick<FamilyRate, 'cell' | 'rate'> & Required<Pick<FamilyRate, 'passRate' | 'outcome'>>
+      >
     }
   >
   /** The run's errors outside any attempt; unset when there were none. */

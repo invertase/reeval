@@ -6,8 +6,8 @@ import { fakeSandbox } from 'reeval/sandbox'
 // stack.harnesses[].resolvedModels (#80), evals[].todo (#82) and plan.sandboxWarnings (#100).
 // Don't re-record it: it's there to prove records from before those fields still load.
 export default defineConfig({
-  harness: fakeHarness({ files: { 'greet.js': "export const greet = (n) => 'Hello, ' + n\n" } }),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  harnesses: fakeHarness({ files: { 'greet.js': "export const greet = (n) => 'Hello, ' + n\n" } }),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   // Its evals keep the names their records were made under.
   include: ['evals/**/*.es.ts'],
 })

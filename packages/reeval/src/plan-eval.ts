@@ -61,6 +61,7 @@ import type {
   ResolvedGateway,
   RunContext,
 } from './types.ts'
+import { type CaseWhere, type PickedPairs, pickPairs } from './where.ts'
 
 /** Lets the attempt's own eval timer fire before the engine's backstop, so the message and cleanup are its own. */
 const GRACE_MS = 5_000
@@ -73,8 +74,10 @@ export type EvalDeclaration = {
   options: EvalOptions
   /** Hashes of its body and case data, from whoever declared it. */
   source: DeclaredSource
-  /** Set on each case of a pooled `evaluate.each`. */
+  /** Set on each case of an eval with `cases`. */
   family?: DeclaredFamily
+  /** Set on each case of an eval with `cases` and `where`. */
+  where?: CaseWhere
 }
 
 /** Where the eval is planned: the run, the eval file, and how many evals the file planned before it. */
@@ -106,7 +109,7 @@ function configLevel(config: ResolvedConfig): Cascading {
   return {
     harness: config.harness,
     sandbox: config.sandbox,
-    environment: config.environment,
+    environments: config.environments,
     compare: undefined,
     runs,
     bestOf,
@@ -131,6 +134,8 @@ export type PlannedEval = {
   /** `null` when the run's tags leave the eval out (it isn't counted in `order`). */
   tests: PlannedTest[] | null
   harnesses: string[]
+  /** What `where` kept and left out of this case; unset without `where`. */
+  picked?: Omit<PickedPairs, 'kept'>
 }
 
 /** The tests an eval registers. Throws a UsageError for options the plan refuses. */
@@ -150,7 +155,17 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
   })
   const { harnesses } = resolvedEval
   if (!matchesTags(resolvedEval.resolved.tags, ctx.tags)) return { tests: null, harnesses }
-  return { tests: planTests(declaration, ctx, where, resolvedEval), harnesses }
+  const picks: PickedPairs[] = []
+  const tests = planTests(declaration, ctx, where, resolvedEval, (attempts) => {
+    if (!declaration.where) return attempts
+    const picked = pickPairs(declaration.where, attempts)
+    picks.push(picked)
+    return picked.kept
+  })
+  const [picked] = picks
+  if (!picked) return { tests, harnesses }
+  const { excluded, cells, keptCells } = picked
+  return { tests, harnesses, picked: { excluded, cells, keptCells } }
 }
 
 function planTests(
@@ -158,6 +173,7 @@ function planTests(
   ctx: PlanContext,
   where: string,
   resolvedEval: ResolvedEval,
+  pick: (attempts: PlannedAttempt[]) => PlannedAttempt[],
 ): PlannedTest[] {
   const { name, mode, groups: enclosing } = declaration
   const groups = enclosing.map((g) => g.name)
@@ -208,7 +224,9 @@ function planTests(
           return { ...harness, gateway: route.name }
         })
         .map((harness) => withDefaultEffort(harness, ctx.cursorEfforts))
-  const plannedAttempts = resolvedEval.skip ? [] : expand({ ...resolved, harness: routed }, vertex)
+  const plannedAttempts = resolvedEval.skip
+    ? []
+    : pick(expand({ ...resolved, harness: routed }, vertex))
   let judge: AttemptMeta['judge']
   if (plannedAttempts.length) {
     try {
@@ -253,7 +271,7 @@ function planTests(
     id: evalId(rankFile, [...groups, declaration.family.name]),
     ...declaration.family,
   }
-  const harnessBy = resolved.sources?.harness ?? ctx.config.file
+  const harnessBy = resolved.sources?.harnesses ?? ctx.config.file
   const plan = evalPlan(resolvedEval, plannedAttempts, { configFile: ctx.config.file, file: path })
   // OpenRouter's fallbacks reach only reeval's own calls; the plan says so where they're on.
   if (gatewayNotes.length && openRouterFallbacks(gateways)) {

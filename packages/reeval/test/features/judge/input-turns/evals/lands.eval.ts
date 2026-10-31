@@ -3,7 +3,7 @@ import { fakeJudge } from 'reeval/judge'
 import { app } from './env.ts'
 
 // turns: 'all' puts every turn up to the graded one under turns, oldest first.
-evaluate('lands', { environment: app }, async (c) => {
+evaluate('lands', { environments: app }, async (c) => {
   await c.send('write the app')
   await c.send('now add tests')
   let state: Record<string, unknown> = {}

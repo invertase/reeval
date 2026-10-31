@@ -6,7 +6,7 @@ import { contractHarness } from './harness.ts'
 // harness, model and gateway (REEVAL_CONTRACT_HARNESS, REEVAL_CONTRACT_MODEL,
 // REEVAL_CONTRACT_GATEWAY) from its table.
 export default defineConfig({
-  harness: contractHarness(),
+  harnesses: contractHarness(),
   // REEVAL_CONTRACT_GATEWAY: the row's gateway alone, so the plan refuses rather than falls back.
   ...(process.env.REEVAL_CONTRACT_GATEWAY === 'vercel' ? { gateway: [vercel()] } : {}),
   ...(process.env.REEVAL_CONTRACT_GATEWAY === 'openrouter' ? { gateway: [openrouter()] } : {}),

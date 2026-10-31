@@ -5,7 +5,7 @@ description: "The words name the parts of a run and what a result reports."
 
 ## Agent
 
-An agent is a harness plus its model, named in the `harness` option, such as `claude-code:claude-sonnet-5`.
+An agent is a harness plus its model, named in the `harnesses` option, such as `claude-code:claude-sonnet-5`.
 
 **Agent mode** is `--ui agent`, output for an agent that is itself running reeval. `to: 'agent'` on a secret puts the value in the container's environment. For more information about an agent, see [Harness](/reference/glossary#harness).
 
@@ -33,17 +33,13 @@ A [judgment](#judgment) is not an assertion, and neither are the **doctor checks
 
 An attempt is one execution of a cell in a fresh sandbox, and its outcome is pass, fail, infra error, or skipped. For more information about an attempt, see [Cell](/reference/glossary#cell).
 
-## Baseline
-
-The baseline is a comparison's environment without the change, and each variant is measured against it. `compare.baseline` optionally names it; the record's cell role calls it `'control'`. For more information about a baseline, see [Compare setups](/results/compare/lift).
-
 ## Case
 
-A case is one item of the array `evaluate.each()` takes, and each case is an evaluation. Two or more cases pool into one family with one pass rate. For more information about a case, see [Evaluate many cases](/evaluations/task/cases).
+A case is one item of an evaluation's `cases` option. Every case runs the same body, and the cases pool into one pass rate. For more information about a case, see [Evaluate many cases](/evaluations/task/cases).
 
 ## Cell
 
-A cell is one agent, one environment, and one `sandbox` option of an evaluation, and each of its attempts gets a fresh sandbox. In a comparison, the baseline and each variant are separate cells. For more information about a cell, see [Attempt](/reference/glossary#attempt).
+A cell is one agent, one environment, and one `sandbox` option of an evaluation, and each of its attempts gets a fresh sandbox. In a comparison, the control and each variant are separate cells. For more information about a cell, see [Attempt](/reference/glossary#attempt).
 
 ## compare
 
@@ -51,7 +47,11 @@ A cell is one agent, one environment, and one `sandbox` option of an evaluation,
 
 ## Comparison
 
-A comparison runs its baseline and each variant as separate cells. It measures a variant against the baseline only when the cells share an agent and `sandbox` option, and reports `helped`, `made it worse`, or `can't tell yet`. For more information about a comparison, see [Compare setups](/results/compare/lift).
+A comparison runs its control and each variant as separate cells. It measures a variant against the control only when the cells share an agent and `sandbox` option, and reports `helped`, `made it worse`, or `can't tell yet`. For more information about a comparison, see [Compare setups](/results/compare/lift).
+
+## Control
+
+The control is a comparison's environment without the change, named in `compare.control`, and each variant is measured against it. For more information about a control, see [Compare setups](/results/compare/lift).
 
 ## digest
 
@@ -73,7 +73,7 @@ In code, an **environment** is the value `defineEnvironment()` returns. **Variab
 
 ## Evaluation
 
-An evaluation is one task for the agent and the assertions and judgments on its result, declared with `evaluate()` or as one case of `evaluate.each()` in a `*.eval.ts` file. The evaluation fails when a cell that counts toward it fails.
+An evaluation is one task for the agent and the assertions and judgments on its result, declared with `evaluate()` or `survey()` in a `*.eval.ts` file, optionally over a list of `cases`. The evaluation fails when a cell that counts toward it fails.
 
 The **evaluation model** is a `typesafe-ai/*` judge model, which only scores yes or no, as the error strings name it. A **language model** writes text. For more information about an evaluation, see [Evaluate](/evaluations/evaluate).
 
@@ -99,7 +99,7 @@ A judgment is an LLM verdict from `c.judge()` on a yes or no question about the 
 
 ## Lift
 
-Lift is a variant against the baseline: the difference in pass rate on the same agent and `sandbox` option. For more information about lift, see [How reeval decides a change helped](/reference/statistics).
+Lift is a variant against the control: the difference in pass rate on the same agent and `sandbox` option. For more information about lift, see [How reeval decides a change helped](/reference/statistics).
 
 ## maxConcurrent
 
@@ -179,7 +179,7 @@ A turn is the agent's reply to one `c.send()` call. The turn holds the final mes
 
 ## Variant
 
-A variant is an environment in `compare.variants`: the baseline's setup with the change under test. It runs as its own cell and is measured against the baseline. For more information about a variant, see [Compare setups](/results/compare/lift).
+A variant is an environment in `compare.variants`: the control's setup with the change under test. It runs as its own cell and is measured against the control. For more information about a variant, see [Compare setups](/results/compare/lift).
 
 ## verdict
 

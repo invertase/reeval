@@ -3,7 +3,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 // The agent starts from ./project: a list of notes and nothing that pages it.
 const notes = defineEnvironment('notes', ({ directory }) => ({ files: directory('./project') }))
 
-evaluate('revises the paging after review', { environment: notes }, async (c) => {
+evaluate('revises the paging after review', { environments: notes }, async (c) => {
   await c.send(
     'Add listNotes() to src/notes.js: it returns the notes ten at a time. Add tests in ' +
       'test/notes.test.js.',

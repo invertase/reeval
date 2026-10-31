@@ -22,11 +22,11 @@ reeval doesn't check these, so read the eval for them yourself:
 - **One judge question asks one thing.** Split "uses Zod and adds tests" in two.
 - **A prompt doesn't name the tool** an eval asks the agent to choose.
 - **An eval about a change compares it:** a skill, doc or MCP server gets `compare` with a
-  baseline without it.
+  control without it.
 
 ## `too-few-tries`
 
-Suggestion. A variant and its baseline differ by at least 50 points with fewer than
+Suggestion. A variant and its control differ by at least 50 points with fewer than
 4 counted tries a side, so the effect reads "can't tell yet" on a gap that matters. **Fix:** raise
 `runs` to 4 or more.
 
@@ -79,3 +79,11 @@ directories left out. It's about what happened in the run, so it prints in every
 **Fix:** have the task write generated files (build output, downloads, datasets) into a directory
 reeval leaves out, compress the snapshots for the larger cap, or set `snapshot: false` on the eval
 when nobody reads its workspace.
+
+## `survey-throws`
+
+Concern. A survey's body threw outside an `expect` in more than half its counted tries. A survey
+fails only on run and infra errors, so those tries read `ran`, but what they recorded is the
+eval's own error, not what the agent did. The remark quotes the first error and lists each try.
+**Fix:** fix what the body throws (a missing file it reads, a bad selector), or check what can
+fail with `expect`, which a survey records as a check without failing.

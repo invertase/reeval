@@ -40,7 +40,7 @@ In the `evals/cli.eval.ts` file, write the task that uses the CLI and check its 
 
 ```ts title="evals/cli.eval.ts"
 evaluate('counts the large orders with jq', {
-  environment: withJq,
+  environments: withJq,
 }, async (c) => {
   await c.send(
     'Write count.sh, a bash script that prints how many orders in ' +

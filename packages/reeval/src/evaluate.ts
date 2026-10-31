@@ -1,6 +1,7 @@
 import { dirname } from 'node:path'
 import { runAttempt } from './attempt/index.ts'
 import { bestOfCell } from './best-of.ts'
+import { caseEvalName, caseKeys } from './cases.ts'
 import { declarationProblem } from './contract/declaration.ts'
 import type {
   DeclarationTree,
@@ -30,16 +31,22 @@ import { bodyHash, caseHash } from './eval-source.ts'
 import { evalId } from './ids.ts'
 import { isObjectLike } from './object.ts'
 import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
-import { planEval } from './plan-eval.ts'
+import { type PlannedEval, planEval } from './plan-eval.ts'
 import { maskedVariables, redactSecrets } from './redact.ts'
 import type {
-  AttemptContext,
+  CaseFn,
+  CaseOptions,
+  Environment,
   EnvironmentData,
+  EnvironmentsData,
   EvalFn,
   EvalOptions,
   EvalOptionsData,
+  EvalPlan,
   GroupOptions,
+  SurveyOptions,
 } from './types.ts'
+import type { CaseWhere } from './where.ts'
 
 /** `name` is as it's shown, masked; `given` is as the file wrote it. */
 type Declaring = { name: string; given: string; options: GroupOptions; node: DeclaredGroup }
@@ -102,7 +109,7 @@ function splitArgs<F extends (...args: never[]) => unknown>(
 ): [EvalOptions, F] {
   if (typeof a === 'function' && typeof b === 'function') {
     throw new UsageError(
-      `${what}("${name}") got two functions. Options must be a plain object; helpers such as secret are only available in defineConfig and defineEnvironment callbacks. Put the secret in an environment (environment: …) or in the config's env.`,
+      `${what}("${name}") got two functions. Options must be a plain object; helpers such as secret are only available in defineConfig and defineEnvironment callbacks. Put the secret in an environment (environments: …) or in the config's env.`,
     )
   }
   if (typeof a === 'function') return [(b as EvalOptions | undefined) ?? {}, a]
@@ -203,10 +210,31 @@ function registerTodo(given: string) {
   if (matchesTags(tags, getRunContext().tags)) registerTest(name, { mode: 'todo' }, async () => {})
 }
 
-/** `N` is `runs.bestOf` as written, so an even or fractional literal is a type error. */
-type EvaluateFn<F = EvalFn> = {
-  <N extends number = number>(name: string, fn: F, options?: EvalOptions<N>): void
-  <N extends number = number>(name: string, options: EvalOptions<N>, fn: F): void
+/**
+ * `N` is `runs.bestOf` as written, so an even or fractional literal is a type error. With
+ * `cases`, the body takes the attempt and its case, typed from the list.
+ */
+type EvaluateFn = {
+  <const T, N extends number = number>(
+    name: string,
+    options: EvalOptions<N> & CaseOptions<T>,
+    fn: CaseFn<T>,
+  ): void
+  <const T, N extends number = number>(
+    name: string,
+    fn: CaseFn<T>,
+    options: EvalOptions<N> & CaseOptions<T>,
+  ): void
+  <N extends number = number>(name: string, fn: EvalFn, options?: EvalOptions<N>): void
+  <N extends number = number>(name: string, options: EvalOptions<N>, fn: EvalFn): void
+}
+
+/** `survey`'s calls: `evaluate`'s, with `SurveyOptions`. */
+type SurveyFn = {
+  <const T>(name: string, options: SurveyOptions & CaseOptions<T>, fn: CaseFn<T>): void
+  <const T>(name: string, fn: CaseFn<T>, options: SurveyOptions & CaseOptions<T>): void
+  (name: string, fn: EvalFn, options?: SurveyOptions): void
+  (name: string, options: SurveyOptions, fn: EvalFn): void
 }
 
 /**
@@ -227,7 +255,7 @@ const separatorHint = (path: string[], earlier: string[]) =>
 /** A run's facts name an eval and a family alike by id, so an eval can't take a family's. */
 const namedLikeFamily = (eval_: string[], family: string[]) =>
   new UsageError(
-    `evaluate("${eval_.join(' › ')}") has the same id as the pooled evaluate.each("${family.join(' › ')}") in this file: a family's id is its name template. Give the eval or the template another name.${separatorHint(eval_, family)}`,
+    `evaluate("${eval_.join(' › ')}") has the same id as evaluate("${family.join(' › ')}") with cases in this file. Give one of them another name.${separatorHint(eval_, family)}`,
   )
 
 function checkUnique(
@@ -270,7 +298,7 @@ function checkFamily(groups: string[], family: DeclaredFamily): void {
     earlier.seen.has(family.case)
   ) {
     throw new UsageError(
-      `evaluate.each("${path.join(' › ')}") is declared twice in this file. Each pooled evaluate.each needs its own name, or their cases are pooled into one family. Give each its own name template, or pass evaluate.each(cases, { pool: false }) to keep the cases apart.${separatorHint(path, earlier.path)}`,
+      `evaluate("${path.join(' › ')}") with cases is declared twice in this file. Each eval needs its own name, or their cases are pooled into one. Give each its own name.${separatorHint(path, earlier.path)}`,
     )
   }
   earlier.seen.add(family.case)
@@ -285,10 +313,26 @@ function register(
   hint = '',
   givenFamily?: DeclaredFamily,
 ): void {
+  prepare(mode, given, own, fn, source, hint, givenFamily).commit()
+}
+
+/** An eval planned but not yet registered: `commit` registers its tests. */
+type Prepared = { planned: PlannedEval; commit: () => void }
+
+function prepare(
+  mode: DeclaredMode,
+  given: string,
+  own: EvalOptions,
+  fn: EvalFn,
+  source: DeclaredSource,
+  hint = '',
+  givenFamily?: DeclaredFamily,
+  where?: CaseWhere,
+): Prepared {
   const name = shownName(
     'eval',
     given,
-    hint && ' For evaluate.each, name each case by %# or by a field that holds no secret.',
+    givenFamily ? ' Give each case a key that holds no secret.' : '',
   )
   const family = givenFamily && { ...givenFamily, name: redactSecrets(givenFamily.name) }
   const groups = groupStack.map((g) => g.name)
@@ -305,7 +349,7 @@ function register(
     source,
     ...(family ? { family } : {}),
   })
-  const { tests, harnesses } = planEval(
+  const planned = planEval(
     {
       name,
       mode,
@@ -313,129 +357,220 @@ function register(
       options: own,
       source,
       ...(family ? { family } : {}),
+      ...(where ? { where } : {}),
     },
     { ...getRunContext(), file: collectingFile(), order: registered },
   )
-  declareHarnesses(harnesses)
-  if (!tests) return
-  const note = maskedNote([...groupStack.map((g) => g.given), given])
-  if (note) {
-    for (const notes of new Set(tests.map((t) => t.attempt.plan.notes))) notes.push(note)
-  }
-  registered++
-  const bestOfCells = new Map<string, ReturnType<typeof bestOfCell>>()
-  for (const { name: testName, spec, ...options } of tests) {
-    const { cell, n, bestOf } = options.attempt
-    let hooks = {}
-    // A resumed run's completed attempts are skipped, but still settle their place in the cell.
-    if (bestOf !== undefined) {
-      const of = bestOfCells.get(cell.key) ?? bestOfCell(bestOf)
-      bestOfCells.set(cell.key, of)
-      hooks = of(n)
+  if (planned.tests) {
+    const note = maskedNote([...groupStack.map((g) => g.given), given])
+    if (note) {
+      for (const notes of new Set(planned.tests.map((t) => t.attempt.plan.notes))) notes.push(note)
     }
-    registerTest(
-      testName,
-      { ...options, ...hooks },
-      spec ? (handle) => runAttempt(spec, fn, handle) : async () => {},
-    )
+    registered++
   }
+  const commit = () => {
+    declareHarnesses(planned.harnesses)
+    if (!planned.tests) return
+    const bestOfCells = new Map<string, ReturnType<typeof bestOfCell>>()
+    for (const { name: testName, spec, ...options } of planned.tests) {
+      const { cell, n, bestOf } = options.attempt
+      let hooks = {}
+      // A resumed run's completed attempts are skipped, but still settle their place in the cell.
+      if (bestOf !== undefined) {
+        const of = bestOfCells.get(cell.key) ?? bestOfCell(bestOf)
+        bestOfCells.set(cell.key, of)
+        hooks = of(n)
+      }
+      registerTest(
+        testName,
+        { ...options, ...hooks },
+        spec ? (handle) => runAttempt(spec, fn, handle) : async () => {},
+      )
+    }
+  }
+  return { planned, commit }
 }
 
 /** Evals registered so far in this worker, for the scheduler's tie-break. */
 let registered = 0
 
 const defineEval =
-  (mode: DeclaredMode, declared?: DeclaredSource): EvaluateFn =>
-  (name: string, a?: EvalOptions | EvalFn, b?: EvalOptions | EvalFn) => {
-    checkOnly(mode, 'evaluate')
+  (mode: DeclaredMode, declared?: DeclaredSource, verb: Verb = 'evaluate'): EvaluateFn =>
+  (name: string, a?: unknown, b?: unknown) => {
+    checkOnly(mode, verb)
     const shown = redactSecrets(name)
-    const [own, fn] = splitArgs<EvalFn>('evaluate', shown, a, b)
-    const where = `evaluate("${shown}")`
+    const [split, fn] = splitArgs<EvalFn>(verb, shown, a as EvalOptions, b as EvalOptions)
+    const where = `${verb}("${shown}")`
+    const written = verb === 'survey' ? surveyOptions(split, where) : split
+    if (isObjectLike(written) && 'where' in written && !('cases' in written)) {
+      throw new UsageError(
+        `${where} sets where without cases. where picks case-and-environment pairs; to drop an environment, leave it out of environments.`,
+      )
+    }
+    if (isObjectLike(written) && ('cases' in written || 'caseKey' in written)) {
+      return registerCases(mode, name, written as EvalOptions & CaseOptions<unknown>, fn, where)
+    }
     register(
       mode,
       name,
-      withPaths(own, where),
+      withPaths(written, where),
       fn,
       declared ?? { body: bodyHash(fn, where, collectingFile()) },
     )
   }
 
-/** `$key` is a property of the case, `%s` the case itself, `%#` its index. */
-function formatName(template: string, item: unknown, index: number): string {
-  return template
-    .replace(/%#/g, String(index))
-    .replace(/%s/g, typeof item === 'string' ? item : JSON.stringify(item))
-    .replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (whole, key: string) =>
-      isObjectLike(item) && key in item ? String(item[key]) : whole,
+/**
+ * An eval with `cases`: each case plans as a member of a pooled family named for the eval, so its
+ * cases pool into one pass rate and, with `compare`, one lift paired by case.
+ */
+function registerCases(
+  mode: DeclaredMode,
+  name: string,
+  written: EvalOptions & CaseOptions<unknown>,
+  fn: EvalFn | CaseFn<unknown>,
+  where: string,
+): void {
+  const { cases, caseKey, where: pick, ...rest } = written
+  if (!Array.isArray(cases)) {
+    throw new UsageError(
+      cases === undefined
+        ? `caseKey in ${where} names each case, but there are no cases. Add cases: [...], or drop caseKey.`
+        : `cases in ${where} must be a list (got ${typeof cases}), e.g. cases: ['users', 'posts'].`,
     )
-}
-
-/** How an `evaluate.each` treats its cases. */
-export type EachOptions = {
-  /**
-   * Pool the cases into one suite: a pass rate over them and, with `compare`, one paired lift
-   * that `minLift` gates. On by default; `false` keeps them independent evals.
-   */
-  pool?: boolean
-}
-
-function checkEachOptions(options: unknown): EachOptions {
-  if (options === undefined) return {}
-  if (isObjectLike(options) && Object.keys(options).every((k) => k === 'pool')) {
-    const { pool } = options
-    if (pool === undefined) return {}
-    if (typeof pool === 'boolean') return { pool }
   }
-  throw new UsageError(
-    `evaluate.each(cases, options) takes { pool?: boolean } (got ${JSON.stringify(options)}). Eval options such as compare go after the name: evaluate.each(cases)(name, { compare }, fn).`,
-  )
+  if (cases.length === 0) {
+    throw new UsageError(`cases in ${where} is an empty list. Give at least one case.`)
+  }
+  if (caseKey !== undefined && typeof caseKey !== 'function') {
+    throw new UsageError(
+      `caseKey in ${where} must be a function from a case to its key, e.g. caseKey: (item) => item.slug.`,
+    )
+  }
+  if (pick !== undefined && typeof pick !== 'function') {
+    throw new UsageError(
+      `where in ${where} must be a function from a case and an environment to true or false, e.g. where: ({ case: item, environment }) => item.stacks.includes(environment.traits.stack).`,
+    )
+  }
+  if (isObjectLike(rest.runs) && 'bestOf' in rest.runs) {
+    throw new UsageError(
+      `${where} has cases, so it can't take runs: { bestOf }: best-of stops each cell on its own, and the cases pool over the runs. Set a fixed count, e.g. runs: 3.`,
+    )
+  }
+  const keys = caseKeys(cases, caseKey, where)
+  // Keys as they're shown and recorded: in the plan's notes and the pairs `where` leaves out.
+  const shownKeys = keys.map((k) => redactSecrets(k))
+  const own = withPaths(rest as EvalOptions, where)
+  const file = collectingFile()
+  const body = bodyHash(fn, where, file)
+  const pooled = cases.length >= 2
+  const prepared = cases.map((item, i) => {
+    const key = shownKeys[i] as string
+    const family = pooled ? { name, case: i, cases: cases.length } : undefined
+    const source = { body, case: caseHash(item, `${where} case "${key}"`, file) }
+    const run: EvalFn = (c) => (fn as CaseFn<unknown>)(c, item)
+    const picks = pick ? { label: where, key, item, where: pick } : undefined
+    const member = caseEvalName(name, keys[i] as string)
+    return prepare(mode, member, own, run, source, '', family, picks)
+  })
+  if (pick) applyWhere(where, shownKeys, prepared)
+  for (const p of prepared) p.commit()
 }
 
 /**
- * One eval per case, pooled into one suite:
- * `evaluate.each(cases)('adds $a and $b', async (c, { a, b }) => …)`.
+ * The checks `where` needs across an eval's cases, then the pairs it left out: each case's own on
+ * its plan, and every case's in the eval's notes. A cell that no case runs on is refused, and so
+ * is an eval it leaves nothing to run.
  */
-const evalEach =
-  <T>(
-    cases: readonly T[],
-    options?: EachOptions,
-  ): EvaluateFn<(c: AttemptContext, item: T) => Promise<void>> =>
-  (name: string, a?: unknown, b?: unknown) => {
-    const { pool = true } = checkEachOptions(options)
-    if (!Array.isArray(cases)) {
-      throw new UsageError(
-        `evaluate.each takes an array of cases (got ${typeof cases}), e.g. evaluate.each([{ n: 1 }, { n: 2 }])("case $n", async (c, item) => { … }).`,
-      )
-    }
-    const template = redactSecrets(name)
-    const [written, fn] = splitArgs<(c: AttemptContext, item: T) => Promise<void>>(
-      'evaluate.each',
-      template,
-      a as EvalOptions,
-      b as EvalOptions,
+function applyWhere(where: string, keys: string[], prepared: Prepared[]): void {
+  const picks = prepared.flatMap((p) => (p.planned.picked ? [p.planned.picked] : []))
+  if (!picks.length) return
+  const excluded = picks.flatMap((p) => p.excluded)
+  const kept = new Set(picks.flatMap((p) => p.keptCells))
+  if (!kept.size) {
+    throw new UsageError(
+      `${where}'s where excludes all ${excluded.length} case-and-environment pairs, so it has nothing to run.`,
     )
-    const own = withPaths(written, `evaluate.each("${template}")`)
-    const hint = ` For evaluate.each, put $key, %s or %# in the name ("${template}") so each case's name differs.`
-    const pooled = pool && cases.length >= 2
-    const file = collectingFile()
-    const body = bodyHash(fn, `evaluate.each("${template}")`, file)
-    cases.forEach((item, i) => {
-      const family = pooled ? { name, case: i, cases: cases.length } : undefined
-      const source = { body, case: caseHash(item, `evaluate.each("${template}") case ${i}`, file) }
-      register('run', formatName(name, item, i), own, (c) => fn(c, item), source, hint, family)
-    })
   }
+  const empty = picks.flatMap((p) => p.cells).find((c) => !kept.has(c.key))
+  if (empty) {
+    throw new UsageError(
+      `${where}'s where leaves cell ${empty.key} with no cases. Leave ${empty.environment} out of environments, or widen where.`,
+    )
+  }
+  if (!excluded.length) return
+  const byEnv = new Map<string, string[]>()
+  for (const e of excluded) {
+    const on = e.harness ? `${e.environment} for ${e.harness}` : e.environment
+    const list = byEnv.get(on) ?? []
+    if (!list.includes(e.case)) list.push(e.case)
+    byEnv.set(on, list)
+  }
+  const order = (k: string) => keys.indexOf(k)
+  const notes = [
+    `where excludes ${excluded.length} ${excluded.length === 1 ? 'pair' : 'pairs'}`,
+    ...[...byEnv].map(
+      ([on, list]) => `excluded on ${on}: ${list.sort((a, b) => order(a) - order(b)).join(', ')}`,
+    ),
+  ]
+  const plans = new Set<EvalPlan>()
+  for (const p of prepared) {
+    const own = p.planned.picked?.excluded ?? []
+    for (const t of p.planned.tests ?? []) {
+      plans.add(t.attempt.plan)
+      if (own.length) t.attempt.plan.excluded = own
+      if (t.attempt.family) t.attempt.plan.familyExcluded = excluded
+    }
+  }
+  // A completed attempt's plan is a copy that shares its notes.
+  for (const list of new Set([...plans].map((p) => p.notes))) list.push(...notes)
+}
 
 export const evaluate: EvaluateFn & {
   skip: EvaluateFn
   only: EvaluateFn
   todo: (name: string) => void
-  each: typeof evalEach
 } = Object.assign(defineEval('run'), {
   skip: defineEval('skip'),
   only: defineEval('only'),
   todo: registerTodo,
-  each: evalEach,
+})
+
+type Verb = 'evaluate' | 'survey'
+
+/**
+ * A survey's options as an eval's: the gate fixed at `'none'`. A gate of its own, or its compare's
+ * `gate` or `minLift`, is refused, since nothing in a survey gates.
+ */
+function surveyOptions(written: EvalOptions, where: string): EvalOptions {
+  if (!isObjectLike(written)) return written
+  const fix = 'A survey records what its attempts do and gates nothing; use evaluate() to gate.'
+  if ('gate' in written) throw new UsageError(`${where} sets gate. ${fix}`)
+  if (isObjectLike(written.runs)) {
+    throw new UsageError(
+      `${where} sets runs: { bestOf }, which gates each cell on its majority. ${fix} Set a fixed count, e.g. runs: 3.`,
+    )
+  }
+  const compare: unknown = written.compare
+  for (const key of ['gate', 'minLift'] as const) {
+    if (isObjectLike(compare) && key in compare) {
+      throw new UsageError(`${where} sets compare.${key}. ${fix}`)
+    }
+  }
+  return { ...written, gate: 'none' }
+}
+
+/**
+ * `survey` is `evaluate` with the gate fixed at `'none'`: its attempts run and are recorded, and
+ * only run and infra errors fail it. A failed `expect` reads as a check that failed, not a fail.
+ */
+export const survey: SurveyFn & {
+  skip: SurveyFn
+  only: SurveyFn
+  todo: (name: string) => void
+} = Object.assign(defineEval('run', undefined, 'survey') as SurveyFn, {
+  skip: defineEval('skip', undefined, 'survey') as SurveyFn,
+  only: defineEval('only', undefined, 'survey') as SurveyFn,
+  todo: registerTodo,
 })
 
 /**
@@ -484,18 +619,24 @@ function declareNodes(
 function optionsFrom(written: EvalOptionsData, where: string, base: string): EvalOptions {
   refuseIllegalCompare(written, where)
   const resolved = withPaths(written as GroupOptions, where, base) as EvalOptionsData
-  const { environment, compare, ...rest } = resolved
+  const { environments, compare, ...rest } = resolved
   const missing = missingIn(where)
   const asEnv = (env: EnvironmentData, field: string) =>
     environmentFrom(environmentPaths(env, base, field, missing) as EnvironmentData)
-  const own = environment !== undefined ? { environment: asEnv(environment, 'environment') } : {}
+  const asEnvs = (value: EnvironmentsData, field: string): EnvironmentsData<Environment> => {
+    if (Array.isArray(value)) return value.map((e, i) => asEnv(e, `${field}[${i}]`))
+    if ('only' in value) return value
+    if ('add' in value) {
+      return { add: [value.add].flat().map((e, i) => asEnv(e, `${field}.add[${i}]`)) }
+    }
+    return asEnv(value, field)
+  }
+  const own =
+    environments !== undefined ? { environments: asEnvs(environments, 'environments') } : {}
   if (compare === undefined) return { ...rest, ...own }
   const variants = compare.variants.map((v, i) => asEnv(v, `compare.variants[${i}]`))
-  if (compare.baseline !== undefined) {
-    return {
-      ...rest,
-      compare: { ...compare, baseline: asEnv(compare.baseline, 'compare.baseline'), variants },
-    }
+  return {
+    ...rest,
+    compare: { ...compare, control: asEnv(compare.control, 'compare.control'), variants },
   }
-  return { ...rest, ...own, compare: { ...compare, variants } }
 }

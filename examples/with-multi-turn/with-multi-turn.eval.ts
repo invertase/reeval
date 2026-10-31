@@ -5,7 +5,7 @@ const math = defineEnvironment('math', ({ directory, file }) => ({
   files: { ...directory('./project'), '~/checks/call.mjs': file('./checks/call.mjs') },
 }))
 
-evaluate('extends multiply in a follow-up turn', { environment: math }, async (c) => {
+evaluate('extends multiply in a follow-up turn', { environments: math }, async (c) => {
   const first = await c.send(
     'Add a multiply(a, b) function to src/math.js, with a test in test/math.test.js.',
   )

@@ -323,15 +323,17 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
 /**
  * What `--fail-on-regression` fails on: an eval or a pooled family's gate that went from pass to
  * fail, and a new or changed (can't compare) one that fails, since nothing earlier vouches for it.
- * A head the run's interrupt canceled didn't fail.
+ * A head the run's interrupt canceled didn't fail, and a case its family's rate gates is left to
+ * the family's row.
  */
 export const regressions = (rows: CompareRow[]) =>
   rows.filter(
     (r) =>
-      r.status === 'regressed' ||
-      ((r.status === 'added' || r.status === 'drift') &&
-        r.head === 'fail' &&
-        !r.canceled?.includes('head')),
+      r.verdict !== 'family' &&
+      (r.status === 'regressed' ||
+        ((r.status === 'added' || r.status === 'drift') &&
+          r.head === 'fail' &&
+          !r.canceled?.includes('head'))),
   )
 
 /** Recreates the state a run executed in: its commit, plus its uncommitted changes if any. */

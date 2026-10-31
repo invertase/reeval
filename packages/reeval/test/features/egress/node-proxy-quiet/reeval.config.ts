@@ -7,7 +7,7 @@ const fetchTarget = `fetch("http://${process.env.REEVAL_EGRESS_TARGET}/").then((
 
 export default defineConfig({
   // As the agent: Node's fetch, stderr included, on REEVAL_FIXTURE_NODE when the environment sets it.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [[{ exec: `\${REEVAL_FIXTURE_NODE:-node} -e '${fetchTarget}' 2>&1` }]],
   }),
 })

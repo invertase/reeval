@@ -6,8 +6,8 @@ import { fakeSandbox } from 'reeval/sandbox'
 // A record corpus entry (with evals[].family and families (a pooled evaluate.each)), recorded by reeval 0.8.0 at 71885e3.
 // Don't re-record it: test/corpus.test.ts reads it to prove this shape still loads.
 export default defineConfig({
-  harness: fakeHarness(),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  harnesses: fakeHarness(),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   analysis: {
     model: fakeAnalysis({
       output: () => ({

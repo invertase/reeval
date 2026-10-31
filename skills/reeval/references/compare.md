@@ -10,9 +10,8 @@
 
 ## What `compare` runs
 
-`compare` answers "does this environment help?". The control is `baseline`, or, when it's
-left out, the environment the eval would run in anyway (its own or an inherited `environment`,
-else an empty one named `baseline`).
+`compare` answers "does this environment help?". `compare: { control, variants }` names
+both sides: the control is what each variant is measured against, and `control` is required.
 
 Each variant runs as that environment on its own, with the same prompt and checks. `compare`
 does not layer, inherit or extend. Share setup first (the example is in SKILL.md).
@@ -22,25 +21,23 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
 - With `runs` unset at every level, a compare with variants runs 4 a cell, the fewest tries a
   side a lift verdict needs (the plan notes `runs 4 (compare default)`); anything else runs once.
   Any level that sets `runs`, `runs: 1` and `--runs` included, replaces it, and a profile's
-  `limit.runs` caps it. A pooled `evaluate.each` case runs once: its lift pools over the cases.
+  `limit.runs` caps it. A compare with `cases` runs each case once: its lift pools over the cases.
   Don't set `runs: 1` in the config unless you mean every compare to run once.
 - `parent.extendEnvironment(name, spec)` appends the child's spec as a new layer. The child wins
   on shared keys; `setup` concatenates. Call it before `compare`. Two stacks that should not
-  share are two `defineEnvironment` calls, then `{ baseline, variants }`.
-- `compare: { variants: [houseStyle] }` with `environment: plain` (on the same object or a
-  parent) plans the same cells as the example: without `baseline`, the cascaded environment is
-  the control. A `baseline` names every arm instead: `environment` beside it is exit 2, and an
-  inherited environment is not applied as files, skills or variables. A named arm that omits
+  share are two `defineEnvironment` calls, then `{ control, variants }`.
+- `environments` beside `compare` (on the same object) is exit 2: move it to `compare.control`.
+  An inherited `environments` is not applied as files, skills or variables. A side that omits
   `sandbox` uses the cascaded `sandbox` option, else implicit Docker; `.extend()` keeps the
-  parent env's sandbox when the child omits it. `compare: false` is not an eval or group option.
+  parent env's sandbox when the child omits it.
 - There is no `strategy` field. A profile's `limit.compare: false` strips variants and runs
-  the baseline, which then gates like an eval without compare (as does `maxVariants: 0`), whatever
+  the control, which then gates like an eval without compare (as does `maxVariants: 0`), whatever
   `compare.gate` says. `compare: false` on `evaluate` or `group` is an error.
 
 ## Gates and lift
 
 - Only variant cells gate by default (`gate?: 'variants' | 'all' | 'none'`). A control's misses
-  show in its arm's count (`plain  0 of 2`) and never fail the run. `compare.harness: ['cursor:composer-2.5']` compares on some harnesses only.
+  show in its arm's count (`plain  0 of 2`) and never fail the run. `compare.harnesses: [cursor({ model: 'composer-2.5' })]` compares on some harnesses only.
 - With `runs > 1`, a cell passes only if every counted attempt passes (pass^k), unless
   `gate: { passRate: 0.8 }` (a pass@1 threshold; pass@1 is passes over passes and fails). Infra errors don't count; a cell is `infra_error`
   only when nothing counted.
@@ -51,7 +48,7 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   it the lift is `insufficient` (not measured), never a results line. When the eval's sources changed across the compared runs, that pass@1
   difference is `not comparable: the eval changed`, not an effect, and mixed counts such as
   `6/10 vs 8/9` are not a results line.
-- `compare: { baseline, variants: [x], minLift: 0 }` fails a variant whose interval's lower
+- `compare: { control, variants: [x], minLift: 0 }` fails a variant whose interval's lower
   bound is below 0.
 
 ## Effort and contrasts
@@ -90,7 +87,7 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
 
 ```ts
 evaluate('greets in the house style', {
-  compare: { baseline: plain, variants: [houseStyle] },
+  compare: { control: plain, variants: [houseStyle] },
   questions: [
     // asked of each attempt as it ends: free text, or a pick from choices
     { question: 'How did the agent pick its greeting?', transcript: true },

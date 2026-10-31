@@ -1,6 +1,6 @@
 // What an eval's `sources` fingerprint part covers, the same in every language: the eval's own
 // body (its function's source text), its declared options and its enclosing groups' (`tags`,
-// `runs`, `timeout`, `revision` and `gate` aside), an `evaluate.each` case's data, and its
+// `runs`, `timeout`, `revision` and `gate` aside), a case's data, and its
 // `revision`. Nothing else in the file is read: helpers, constants outside the body, fixtures and
 // data it reads are the author's to mark by bumping `revision`. Packages are covered by the recorded lockfiles.
 import { readFile } from 'node:fs/promises'
@@ -54,7 +54,7 @@ export function bodyHash(fn: (...args: never[]) => unknown, where: string, file?
 }
 
 /**
- * sha256 of an `evaluate.each` case in canonical JSON. Throws on a value that isn't JSON data (a
+ * sha256 of a case in canonical JSON. Throws on a value that isn't JSON data (a
  * class instance such as a RegExp or Map, a non-finite number), whose changes JSON can't see.
  */
 export function caseHash(item: unknown, where: string, file?: string): string {
@@ -95,12 +95,12 @@ function canonicalOptions(options: EvalOptions): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(options)) {
     if (value === undefined || UNHASHED.has(key)) continue
-    if (key === 'harness') out[key] = harnessForm(value)
+    if (key === 'harnesses') out[key] = harnessForm(value)
     else if (key === 'sandbox') out[key] = sandboxId(value as SandboxDescriptor)
     else if (key === 'judge' && isObjectLike(value)) {
       out[key] = { ...value, ...('model' in value ? { model: modelId(value.model) } : {}) }
-    } else if (key === 'compare' && isObjectLike(value) && Array.isArray(value.harness)) {
-      out[key] = { ...value, harness: value.harness.map(harnessForm) }
+    } else if (key === 'compare' && isObjectLike(value) && Array.isArray(value.harnesses)) {
+      out[key] = { ...value, harnesses: value.harnesses.map(harnessForm) }
     } else out[key] = value
   }
   return out

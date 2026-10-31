@@ -258,8 +258,8 @@ import { fakeHarness } from 'reeval/harness'
 import { docker } from 'reeval/sandbox'
 import { fakeJudge } from 'reeval/judge'
 export default defineConfig({
-  harness: fakeHarness(),
-  environment: defineEnvironment('docker', { sandbox: docker() }),
+  harnesses: fakeHarness(),
+  environments: defineEnvironment('docker', { sandbox: docker() }),
   judge: { model: fakeJudge({ score: 0.9 }) },
 })
 `,
@@ -284,8 +284,8 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 import { fakeJudge } from 'reeval/judge'
 export default defineConfig({
-  harness: fakeHarness({ delayMs: 400 }),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url), maxConcurrent: 2 }) }),
+  harnesses: fakeHarness({ delayMs: 400 }),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url), maxConcurrent: 2 }) }),
   judge: { model: fakeJudge({ score: 0.9 }), maxConcurrent: 1 },
 })
 `,
@@ -319,7 +319,7 @@ import { fakeHarness } from 'reeval/harness'
 import { traced } from './trace.ts'
 const harness = [fakeHarness({ id: 'x' }), fakeHarness({ id: 'y' })]
 for (const name of ['a', 'b']) {
-  evaluate(name, { harness }, async (c) => {
+  evaluate(name, { harnesses: harness }, async (c) => {
     await traced(\`\${name} \${c.attempt.cell.harness}#\${c.attempt.n}\`, () => c.send('go'))
   })
 }

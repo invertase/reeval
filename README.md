@@ -90,7 +90,7 @@ const withSkill = plain.extendEnvironment('with-skill', ({ skill }) => ({
 
 evaluate(
   'triages a GitHub issue with the AI SDK',
-  { runs: 4, compare: { baseline: plain, variants: [withSkill] } },
+  { runs: 4, compare: { control: plain, variants: [withSkill] } },
   async (c) => {
     await c.send(`
       Add triage.ts: triageIssue(title, body) uses the ai package to

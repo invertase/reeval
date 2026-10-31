@@ -508,9 +508,8 @@ class CaptureWindow(TypedDict):
 
 
 # A cell of an evaluation combines a harness, an environment (`-` when none is set), and that
-# environment's sandbox id. With `compare`, the control is `baseline` (or the cascaded
-# environment, or an empty `baseline`) and each variant is that environment on its own,
-# including its sandbox.
+# environment's sandbox id. With `compare`, the control is `compare.control` and each variant is
+# that environment on its own, including its sandbox.
 class Cell(TypedDict):
     # The environment's own name, also on a variant cell (`with-skill`, with no prefix).
     environment: str
@@ -519,6 +518,9 @@ class Cell(TypedDict):
     harness: str
     # The harness id, the environment name, and the sandbox id, joined with `/`.
     key: str
+    # `variant` on a compare's variant cell, else `control`: the compare's control, or any cell
+    # of an eval without `compare`, each environment of an `environments` grid included. A
+    # variant's lift is against the `control` cell on its harness and sandbox.
     role: CellRole
     # The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts
     # with the engine (`docker` by default). It adds `:` and the sanitized final component of
@@ -526,6 +528,8 @@ class Cell(TypedDict):
     # when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps
     # append `+` and an eight-character hash.
     sandbox: str
+    # The environment's merged traits; unset when it has none. Not part of the key.
+    traits: NotRequired[dict[str, str | list[str]]]
     # The variant's name, for variant cells.
     variant: NotRequired[str]
 
@@ -629,10 +633,10 @@ class DeclarationTree(TypedDict):
 class DeclaredEval(TypedDict):
     # Names the eval's body to whoever runs it.
     body: str
-    # Set on each case of a pooled `evaluate.each`: its template, index and the list's length.
+    # Set on each case of an eval with `cases`: its template, index and the list's length.
     family: NotRequired[DeclaredFamily]
     mode: DeclaredMode
-    # The eval's name, as passed to `evaluate` (a case's, for `evaluate.each`).
+    # The eval's name, as passed to `evaluate` (a case's, for an eval with `cases`).
     name: str
     # The eval's own options, before the cascade.
     options: EvalOptionsData
@@ -640,13 +644,13 @@ class DeclaredEval(TypedDict):
     type: Literal["eval"]
 
 
-# Where a case of a pooled `evaluate.each` sits in its list.
+# Where a case of an eval with `cases` sits in its list.
 class DeclaredFamily(TypedDict):
     # The case's index, from 0.
     case: int
     # How many cases the list has.
     cases: int
-    # The name template passed to `evaluate.each`.
+    # The eval's own name, which each case's name extends.
     name: str
 
 
@@ -670,12 +674,12 @@ DeclaredNode: TypeAlias = "DeclaredEval | DeclaredGroup | DeclaredTodo"
 
 
 # An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source
-# text, and of an `evaluate.each` case's data as canonical JSON (object keys sorted, no
-# whitespace, non-ASCII characters as themselves).
+# text, and of a case's data as canonical JSON (object keys sorted, no whitespace, non-ASCII
+# characters as themselves).
 class DeclaredSource(TypedDict):
     # sha256 of the body function's source text.
     body: str
-    # sha256 of the case's data; set on each case of an `evaluate.each`.
+    # sha256 of the case's data; set on each case of an eval with `cases`.
     case: NotRequired[str]
 
 
@@ -788,17 +792,25 @@ class EnvironmentSpec(TypedDict):
     setup: NotRequired[list[SetupStep]]
     # Skills placed for the agent.
     skills: NotRequired[list[SkillSource]]
+    # Filter facts for `where`, such as `{ stack: 'next' }`: a key to a string or a list of
+    # strings. A child's key replaces its parent's value whole; keys it doesn't set are
+    # inherited. Recorded on the cell, and never written to the sandbox, the prompt or the
+    # judge.
+    traits: NotRequired[dict[str, str | list[str]]]
     # The code the workspace starts as, before `files`, `rules` and `setup`; a child's replaces
     # its parent's.
     workspace: NotRequired[GitWorkspace]
 
 
-# Environments to run side by side against `environment`, the control.
+# Environments to run side by side; `control` is what each variant is measured against.
 class EvalOptionsDataCompareCompare(TypedDict):
+    # The environment each variant is measured against. Not layered under the variants, and it
+    # replaces any `environments` the eval inherits.
+    control: EnvironmentData
     # Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only).
     gate: NotRequired[Literal["all", "none", "variants"]]
     # Harnesses (ids or descriptors) to compare on; the others run the control only.
-    harness: NotRequired[list[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | str]]
+    harnesses: NotRequired[list[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | str]]
     # Lift in points from -1 to 1; a variant cell below it fails.
     minLift: NotRequired[float]
     # Other environments, each planned and run as itself.
@@ -813,11 +825,11 @@ class EvalOptionsDataCompareGatePassRate(TypedDict):
     passRate: float
 
 
-class EvalOptionsDataCompareHarnessAdd(TypedDict):
+class EvalOptionsDataCompareHarnessesAdd(TypedDict):
     add: AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor]
 
 
-class EvalOptionsDataCompareHarnessOnly(TypedDict):
+class EvalOptionsDataCompareHarnessesOnly(TypedDict):
     only: list[str] | str
 
 
@@ -829,19 +841,17 @@ class EvalOptionsDataCompare(TypedDict):
     # Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the
     # value.
     capture: NotRequired[CaptureOptions]
-    # Environments to run side by side against `environment`, the control.
+    # Environments to run side by side; `control` is what each variant is measured against.
     compare: EvalOptionsDataCompareCompare
     # Where the sandbox may connect. Replaces the inherited policy: config, profile defaults,
     # the environment, then groups and the eval.
     egress: NotRequired[Literal["allow-all", "deny-all", "proxy"] | EvalOptionsDataCompareEgressAllow]
     # Variables and secrets for the sandbox, merged by name down the cascade.
     env: NotRequired[EnvVars]
-    # The control: the compare has no `baseline`.
-    environment: NotRequired[EnvironmentData]
     # How each cell's attempts decide its outcome; default `'all'`.
-    gate: NotRequired[Literal["all"] | EvalOptionsDataCompareGatePassRate]
+    gate: NotRequired[Literal["all", "none"] | EvalOptionsDataCompareGatePassRate]
     # Which agents run the eval; each harness is its own cell.
-    harness: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsDataCompareHarnessAdd | EvalOptionsDataCompareHarnessOnly]
+    harnesses: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsDataCompareHarnessesAdd | EvalOptionsDataCompareHarnessesOnly]
     # Defaults for `c.judge()`, merged field by field down the cascade.
     judge: NotRequired[ConfigJudgeOptions]
     # Keys a profile's `limit` may not narrow for this group or eval.
@@ -860,10 +870,10 @@ class EvalOptionsDataCompare(TypedDict):
     # Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell
     # once a majority of its `n` attempts agree and gates it on that majority; not on a compared
     # eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift
-    # can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.
+    # can reach a verdict, and anything else runs once, a case of an eval with `cases` included.
     runs: NotRequired[float | EvalOptionsDataCompareRunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
-    # `harness`. Not an environment: it does not invent skills, files or a name.
+    # `harnesses`. Not an environment: it does not invent skills, files or a name.
     sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
     # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
     # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
@@ -874,57 +884,50 @@ class EvalOptionsDataCompare(TypedDict):
     timeout: NotRequired[float | str]
 
 
-# Environments to run side by side; `baseline` is the control.
-class EvalOptionsDataCompare2Compare(TypedDict):
-    # The control. Not layered under the variants. Without it, the control is the environment
-    # the eval would otherwise run in (the cascaded `environment`), else an empty one named
-    # `baseline`.
-    baseline: EnvironmentData
-    # Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only).
-    gate: NotRequired[Literal["all", "none", "variants"]]
-    # Harnesses (ids or descriptors) to compare on; the others run the control only.
-    harness: NotRequired[list[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | str]]
-    # Lift in points from -1 to 1; a variant cell below it fails.
-    minLift: NotRequired[float]
-    # Other environments, each planned and run as itself.
-    variants: list[EnvironmentData]
-
-
-class EvalOptionsDataCompare2EgressAllow(TypedDict):
+class EvalOptionsData2EgressAllow(TypedDict):
     allow: list[str]
 
 
-class EvalOptionsDataCompare2GatePassRate(TypedDict):
-    passRate: float
+class EvalOptionsData2EnvironmentsAdd(TypedDict):
+    add: EnvironmentData | list[EnvironmentData]
 
 
-class EvalOptionsDataCompare2HarnessAdd(TypedDict):
-    add: AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor]
-
-
-class EvalOptionsDataCompare2HarnessOnly(TypedDict):
+class EvalOptionsData2EnvironmentsOnly(TypedDict):
     only: list[str] | str
 
 
-class EvalOptionsDataCompare2RunsBestOf(TypedDict):
+class EvalOptionsData2GatePassRate(TypedDict):
+    passRate: float
+
+
+class EvalOptionsData2HarnessesAdd(TypedDict):
+    add: AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor]
+
+
+class EvalOptionsData2HarnessesOnly(TypedDict):
+    only: list[str] | str
+
+
+class EvalOptionsData2RunsBestOf(TypedDict):
     bestOf: float
 
 
-class EvalOptionsDataCompare2(TypedDict):
+class EvalOptionsData2(TypedDict):
     # Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the
     # value.
     capture: NotRequired[CaptureOptions]
-    # Environments to run side by side; `baseline` is the control.
-    compare: EvalOptionsDataCompare2Compare
     # Where the sandbox may connect. Replaces the inherited policy: config, profile defaults,
     # the environment, then groups and the eval.
-    egress: NotRequired[Literal["allow-all", "deny-all", "proxy"] | EvalOptionsDataCompare2EgressAllow]
+    egress: NotRequired[Literal["allow-all", "deny-all", "proxy"] | EvalOptionsData2EgressAllow]
     # Variables and secrets for the sandbox, merged by name down the cascade.
     env: NotRequired[EnvVars]
+    # What this group or eval runs in: one environment, or a list, each its own cell beside each
+    # harness. `{ add }` and `{ only }` edit the inherited list.
+    environments: NotRequired[EnvironmentData | list[EnvironmentData] | EvalOptionsData2EnvironmentsAdd | EvalOptionsData2EnvironmentsOnly]
     # How each cell's attempts decide its outcome; default `'all'`.
-    gate: NotRequired[Literal["all"] | EvalOptionsDataCompare2GatePassRate]
+    gate: NotRequired[Literal["all", "none"] | EvalOptionsData2GatePassRate]
     # Which agents run the eval; each harness is its own cell.
-    harness: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsDataCompare2HarnessAdd | EvalOptionsDataCompare2HarnessOnly]
+    harnesses: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsData2HarnessesAdd | EvalOptionsData2HarnessesOnly]
     # Defaults for `c.judge()`, merged field by field down the cascade.
     judge: NotRequired[ConfigJudgeOptions]
     # Keys a profile's `limit` may not narrow for this group or eval.
@@ -943,77 +946,10 @@ class EvalOptionsDataCompare2(TypedDict):
     # Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell
     # once a majority of its `n` attempts agree and gates it on that majority; not on a compared
     # eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift
-    # can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.
-    runs: NotRequired[float | EvalOptionsDataCompare2RunsBestOf]
+    # can reach a verdict, and anything else runs once, a case of an eval with `cases` included.
+    runs: NotRequired[float | EvalOptionsData2RunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
-    # `harness`. Not an environment: it does not invent skills, files or a name.
-    sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
-    # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
-    # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
-    snapshot: NotRequired[SnapshotOptions | Literal["turns"] | bool]
-    # Labels for `--tag` and profiles to select by; a group's are added to its evals'.
-    tags: NotRequired[list[str]]
-    # Per attempt.
-    timeout: NotRequired[float | str]
-
-
-class EvalOptionsData3EgressAllow(TypedDict):
-    allow: list[str]
-
-
-class EvalOptionsData3GatePassRate(TypedDict):
-    passRate: float
-
-
-class EvalOptionsData3HarnessAdd(TypedDict):
-    add: AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor]
-
-
-class EvalOptionsData3HarnessOnly(TypedDict):
-    only: list[str] | str
-
-
-class EvalOptionsData3RunsBestOf(TypedDict):
-    bestOf: float
-
-
-class EvalOptionsData3(TypedDict):
-    # Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the
-    # value.
-    capture: NotRequired[CaptureOptions]
-    # Where the sandbox may connect. Replaces the inherited policy: config, profile defaults,
-    # the environment, then groups and the eval.
-    egress: NotRequired[Literal["allow-all", "deny-all", "proxy"] | EvalOptionsData3EgressAllow]
-    # Variables and secrets for the sandbox, merged by name down the cascade.
-    env: NotRequired[EnvVars]
-    # What this group or eval runs in, and the control of a compare without a `baseline`.
-    environment: NotRequired[EnvironmentData]
-    # How each cell's attempts decide its outcome; default `'all'`.
-    gate: NotRequired[Literal["all"] | EvalOptionsData3GatePassRate]
-    # Which agents run the eval; each harness is its own cell.
-    harness: NotRequired[AntigravityHarnessDescriptor | ClaudeCodeHarnessDescriptor | CodexHarnessDescriptor | CursorHarnessDescriptor | FakeHarnessDescriptor | FxHarnessDescriptor | GooseHarnessDescriptor | GrokBuildHarnessDescriptor | OpenCodeHarnessDescriptor | PiHarnessDescriptor | list[HarnessDescriptor] | EvalOptionsData3HarnessAdd | EvalOptionsData3HarnessOnly]
-    # Defaults for `c.judge()`, merged field by field down the cascade.
-    judge: NotRequired[ConfigJudgeOptions]
-    # Keys a profile's `limit` may not narrow for this group or eval.
-    pin: NotRequired[list[PinnableKey]]
-    # The model every question that names none of its own is answered by, down the cascade.
-    question: NotRequired[QuestionOptions]
-    # What a language model is asked about the attempts, always a list; they never change pass,
-    # fail or the exit code. A question with `across` picks between pairs of attempts once they
-    # all end; one without is asked of each attempt as it ends. Replaces the inherited list, so
-    # `[]` asks none.
-    questions: NotRequired[list[Question]]
-    # The eval's version, part of its fingerprint: bump it when a change the eval file doesn't
-    # show (a helper, a fixture, data it reads) changes what it measures. A group's applies to
-    # the evals inside it that set none.
-    revision: NotRequired[float | str]
-    # Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell
-    # once a majority of its `n` attempts agree and gates it on that majority; not on a compared
-    # eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift
-    # can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.
-    runs: NotRequired[float | EvalOptionsData3RunsBestOf]
-    # The default machine when the resolved environment omits `sandbox`. Cascades like
-    # `harness`. Not an environment: it does not invent skills, files or a name.
+    # `harnesses`. Not an environment: it does not invent skills, files or a name.
     sandbox: NotRequired[DockerSandboxDescriptor | FakeSandboxDescriptor]
     # When each attempt's workspace is copied into its directory in `.reeval/runs`: `true` after
     # the checks, `'turns'` after each `c.send` too, `false` never. Default `true`.
@@ -1027,7 +963,7 @@ class EvalOptionsData3(TypedDict):
 # `EvalOptions` in their data forms, as JSON carries them: the harness as data, the judge's
 # model by name or a fake judge, and environments without `extend`. The same `environment` /
 # compare object split as `EvalOptions`.
-EvalOptionsData: TypeAlias = "EvalOptionsDataCompare | EvalOptionsDataCompare2 | EvalOptionsData3"
+EvalOptionsData: TypeAlias = "EvalOptionsDataCompare | EvalOptionsData2"
 
 
 class ExecResult(TypedDict):
@@ -1041,6 +977,15 @@ class FakeHarnessDescriptorToolsItem(TypedDict):
     ok: NotRequired[bool | None]
     output: Any
     tool: str
+
+
+# Tokens the fake agent reports for every turn, as `turn.usage`; without it, null.
+class FakeHarnessDescriptorUsage(TypedDict):
+    cacheRead: float
+    cacheWrite: float
+    input: float
+    output: float
+    reasoning: float | None
 
 
 # Files and message used instead when the environment gives the agent a skill.
@@ -1105,6 +1050,8 @@ class FakeHarnessDescriptor(TypedDict):
     # Tool calls the fake agent reports on every turn, before writing files. `ok` defaults to
     # true; null reports a call whose result never came.
     tools: NotRequired[list[FakeHarnessDescriptorToolsItem]]
+    # Tokens the fake agent reports for every turn, as `turn.usage`; without it, null.
+    usage: NotRequired[FakeHarnessDescriptorUsage]
     # Files and message used instead when the environment gives the agent a skill.
     withSkill: NotRequired[FakeHarnessDescriptorWithSkill]
 
@@ -1536,7 +1483,7 @@ class PiHarnessDescriptor(TypedDict):
 
 
 # An option a profile's `limit` can narrow, and `pin` can protect.
-PinnableKey: TypeAlias = "Literal[\"compare\", \"harness\", \"runs\"]"
+PinnableKey: TypeAlias = "Literal[\"compare\", \"harnesses\", \"runs\"]"
 
 
 class PluginMarketplace1(TypedDict):
@@ -2060,6 +2007,7 @@ RECORD_FIELDS: frozenset[str] = frozenset(
         "providerOptions",
         "regions",
         "score",
+        "traits",
         "untested",
         "value",
         "write",

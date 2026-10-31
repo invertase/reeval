@@ -10,6 +10,7 @@ import { fenced, plural } from '../text.ts'
 import {
   type CompareCell,
   type CompareFamilyLift,
+  type CompareFamilyRate,
   type CompareRow,
   type CompareStatus,
   rowKey,
@@ -97,12 +98,28 @@ const TALLY: CompareStatus[] = [
 const paintStatus = (c: Colors, s: CompareStatus): Paint =>
   s === 'regressed' ? c.red : s === 'fixed' ? c.green : s === 'same' ? c.dim : c.yellow
 
-/** A side's outcome as its row reads it: a study's pass is `not_gated`. */
+/** A case its family's rate gates that flipped: what it did, while its family's row is the verdict. */
+const FLIPPED: Partial<Record<CompareStatus, string>> = {
+  regressed: 'now fails',
+  fixed: 'now passes',
+}
+
+/** The tally's verb for more than one case. */
+const FLIPPED_MANY: Record<string, string> = { 'now fails': 'now fail', 'now passes': 'now pass' }
+
+const flipped = (row: CompareRow) => (row.verdict === 'family' ? FLIPPED[row.status] : undefined)
+
+const statusWord = (c: Colors, row: CompareRow): Text => {
+  const word = flipped(row)
+  return word ? t(word, c.dim) : t(WORD[row.status], paintStatus(c, row.status))
+}
+
+/** A side's outcome as its row reads it: a survey's pass is `not_gated`, which reads `ran`. */
 type Shown = ResultOutcome | 'not_gated'
 
 const OUTCOME: Record<Shown, string> = {
   pass: 'pass',
-  not_gated: 'not gated',
+  not_gated: 'ran',
   fail: 'fail',
   infra_error: 'infra error',
   canceled: 'canceled',
@@ -122,7 +139,7 @@ const paintOutcome = (c: Colors, o: Shown): Paint =>
 const sideOutcome = (row: CompareRow, side: 'base' | 'head'): ResultOutcome | null =>
   row.canceled?.includes(side) ? 'canceled' : row[side]
 
-/** One side's outcome as its eval's row in `reeval run` reads it: a study's pass is `not gated`. */
+/** One side's outcome as its eval's row in `reeval run` reads it: a survey's pass is `ran`. */
 const shownOutcome = (row: CompareRow, side: 'base' | 'head', unit?: Unit): Shown | null => {
   const o = sideOutcome(row, side)
   return o === 'pass' && isStudy(unit?.result.cells ?? []) ? 'not_gated' : o
@@ -163,6 +180,7 @@ const caseAsEval = (family: EvalResult, k: CaseResult): EvalResult => ({
   cells: k.cells,
   cases: null,
   pooled: null,
+  rates: null,
   questions: [],
 })
 
@@ -378,11 +396,12 @@ const pooledShort = (l: PooledSide | null) =>
   l ? `${signed(l.points)} (${signed(l.lo)}…${signed(l.hi)})` : '–'
 
 /**
- * A family row's gated variants: each pooled lift, base → head, and the `minLift` a side's low end
- * fell short of, red when head's did and green when only base's did.
+ * A family row's gates: each variant's pooled lift and each cell's rate over the cases, base →
+ * head, with the `minLift` or `passRate` a side fell short of, red when head's did and green when
+ * only base's did.
  */
 function pooledItems(c: Colors, row: CompareRow): Item[] {
-  return (row.lifts ?? []).flatMap((l) => {
+  const lifts = (row.lifts ?? []).flatMap((l) => {
     const minLift = l.head?.minLift ?? l.base?.minLift
     if (minLift === undefined) return []
     const sides =
@@ -396,6 +415,21 @@ function pooledItems(c: Colors, row: CompareRow): Item[] {
     const short = failed === 'fail' ? `, not by minLift ${Math.round(minLift * 100)}` : ''
     return [{ indent: 2, cells: [l.key, t(`lift ${sides}${short}`, paint)] }]
   })
+  const rateSide = (r: CompareFamilyRate['base']) => (r ? `${Math.round(r.rate * 100)}%` : '–')
+  const rates = (row.rates ?? []).map((r): Item => {
+    const sides =
+      row.status === 'added'
+        ? rateSide(r.head)
+        : row.status === 'removed'
+          ? rateSide(r.base)
+          : `${rateSide(r.base)} → ${rateSide(r.head)}`
+    const gate = row.status === 'removed' ? r.base : r.head
+    const failed = gate?.outcome === 'fail'
+    const paint = failed ? c.red : r.base?.outcome === 'fail' && r.head ? c.green : c.dim
+    const short = gate ? `, ${failed ? 'below ' : ''}passRate ${gate.passRate}` : ''
+    return { indent: 2, cells: [r.key, t(`pass@1 ${sides}${short}`, paint)] }
+  })
+  return [...lifts, ...rates]
 }
 
 /** `-v`: a cell's lift and effort, base → head. */
@@ -447,7 +481,7 @@ function block(
 ): Block {
   const base = units.base.get(rowKey(row))?.result
   const head = units.head.get(rowKey(row))?.result
-  const word = t(WORD[row.status], paintStatus(c, row.status))
+  const word = statusWord(c, row)
   const top = headLine(word, nameOf(row, unit))
   const baseId = input.base?.runId ?? ''
   const headId = input.head.runId
@@ -526,12 +560,28 @@ function block(
   return { lines: [top, ...table(gateRows(c, row)), ...table(stats)], ids: false }
 }
 
-/** `1 regressed · 1 fixed · 1 can't compare · 4 same`: what needs a look first, zeros left out. */
+/**
+ * `1 regressed · 1 fixed · 1 can't compare · 4 same`: what needs a look first, zeros left out. A
+ * case its family's rate gates that flipped is `1 case now fails`, after the verdicts.
+ */
 export function compareTally(c: Colors, rows: CompareRow[]): string {
-  const parts = TALLY.flatMap((s) => {
-    const n = rows.filter((r) => r.status === s).length
+  const verdicts = rows.filter((r) => !flipped(r))
+  const count = (s: CompareStatus) => {
+    const n = verdicts.filter((r) => r.status === s).length
     return n ? [paintStatus(c, s)(`${n} ${WORD[s]}`)] : []
+  }
+  const cases = Object.values(FLIPPED).flatMap((word) => {
+    const n = rows.filter((r) => flipped(r) === word).length
+    const verb = n === 1 ? word : (FLIPPED_MANY[word] ?? word)
+    return n ? [c.dim(`${plural(n, 'case')} ${verb}`)] : []
   })
+  const [regressed, fixed, ...rest] = TALLY
+  const parts = [
+    ...count(regressed as CompareStatus),
+    ...count(fixed as CompareStatus),
+    ...cases,
+    ...rest.flatMap(count),
+  ]
   return parts.length ? parts.join(c.dim(' · ')) : 'no evals to compare'
 }
 
@@ -574,16 +624,14 @@ function noBaseline(c: Colors, input: CompareInput, opts: CompareOptions): strin
     return `${plural(rows.length, noun)}${counts.length ? ` (${counts.join(c.dim(' · '))})` : ''}`
   }
   const families = input.rows.filter((r) => r.kind === 'family')
+  const evals = input.rows.filter((r) => r.kind !== 'family' && r.verdict !== 'family')
   return [
     `No earlier recorded run to compare ${runId} with, so every eval is new.`,
     ...(blocks.length ? ['', ...blocks] : []),
     '',
     ...sideNotes(c, input),
     [
-      tally(
-        input.rows.filter((r) => r.kind !== 'family'),
-        'new eval',
-      ),
+      ...(evals.length || !families.length ? [tally(evals, 'new eval')] : []),
       ...(families.length ? [tally(families, 'pooled gate')] : []),
     ].join(c.dim(' · ')),
   ]

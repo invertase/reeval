@@ -15,5 +15,5 @@ const listed = defineEnvironment('listed', ({ secret }) => ({
   env: { API_KEY: secret({ hosts: ['api.example.com', 'uploads.example.com'] }) },
 }))
 
-evaluate('secret and MCP hosts are allowed', { environment: services }, async () => {})
-evaluate('hosts the policy lists are not repeated', { environment: listed }, async () => {})
+evaluate('secret and MCP hosts are allowed', { environments: services }, async () => {})
+evaluate('hosts the policy lists are not repeated', { environments: listed }, async () => {})

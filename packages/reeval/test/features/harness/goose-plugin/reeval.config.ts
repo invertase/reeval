@@ -5,7 +5,7 @@ import { fakeHarness } from 'reeval/harness'
 // agent takes goose's layout (and image), so no key is needed. As the agent: read the plugin's
 // skill among Goose's own skills, in its private home, where the session placed it.
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     layout: 'goose',
     script: [
       [

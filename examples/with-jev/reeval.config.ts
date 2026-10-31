@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace, so the checks run
   // without an agent's key or Docker. The judge is real: see with-jev.eval.ts.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'README.md': fakeAgent('README.md') },
     text: 'I wrote README.md with a usage example for add.',
   }),

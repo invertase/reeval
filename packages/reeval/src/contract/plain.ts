@@ -95,6 +95,7 @@ const host = z.string().superRefine((value, ctx) => {
 
 export const gatePolicySchema = z.union([
   z.literal('all'),
+  z.literal('none'),
   z.strictObject({ passRate: z.number().gt(0).max(1) }),
 ])
 
@@ -343,7 +344,7 @@ export function descriptorProblem(
 }
 
 const GATE_SHAPE =
-  "is 'all' (every attempt passes) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 }"
+  "is 'all' (every attempt passes), 'none' (nothing gates) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 }"
 
 /** reeval's sentence for a gate that isn't one, or undefined. */
 export const gateProblem = (value: unknown, where: string) =>

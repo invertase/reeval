@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's fix into the workspace, so the checks run
   // without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'src/stats.js': fakeAgent('src/stats.js') },
     text: 'median() sorted the numbers as strings; it sorts them numerically now.',
   }),

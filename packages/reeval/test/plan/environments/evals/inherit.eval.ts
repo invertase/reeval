@@ -7,6 +7,6 @@ const withMode = defineEnvironment('with-mode', { env: { MODE: 'x' } })
 // environment's image (node:22). A named env is a total override.
 evaluate(
   'named compare uses the root sandbox',
-  { compare: { baseline: plain, variants: [withMode] } },
+  { compare: { control: plain, variants: [withMode] } },
   async () => {},
 )

@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that copies ./fake-agent's files into the workspace: multiply without a
   // JSDoc block, or with one when it has the skill, so the compare runs without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'src/math.js': fakeAgent('without-skill/src/math.js') },
     text: 'I added multiply(a, b) to src/math.js.',
     withSkill: {

@@ -8,6 +8,6 @@ kept = parent.extend("kept", {"env": {"MODE": "x"}})
 def body(c): ...
 
 
-evaluate("parent image", {"environment": parent}, body)
-evaluate("child replaces sandbox", {"environment": child}, body)
-evaluate("child keeps parent sandbox", {"environment": kept}, body)
+evaluate("parent image", {"environments": parent}, body)
+evaluate("child replaces sandbox", {"environments": child}, body)
+evaluate("child keeps parent sandbox", {"environments": kept}, body)

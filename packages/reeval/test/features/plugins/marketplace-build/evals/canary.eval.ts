@@ -2,7 +2,7 @@ import { evaluate, expect } from 'reeval'
 import { placed, unbuilt } from './env.ts'
 
 // Must fail: this build writes nothing, so the built file is missing.
-evaluate('canary', { environment: unbuilt }, async (c) => {
+evaluate('canary', { environments: unbuilt }, async (c) => {
   expect((await c.exec(`cat ${placed}/dist/built.txt`)).stdout).toContain(
     'built from the acme-tools marketplace',
   )

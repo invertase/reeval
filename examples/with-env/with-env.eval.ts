@@ -10,7 +10,7 @@ const shopInEuros = shop.extendEnvironment('shop-eur', { env: { CURRENCY: 'EUR' 
 
 const prompt = 'Make price() in src/price.js use the currency in the CURRENCY environment variable.'
 
-evaluate('prices in the configured currency', { environment: shopInEuros }, async (c) => {
+evaluate('prices in the configured currency', { environments: shopInEuros }, async (c) => {
   await c.send(prompt)
 
   expect((await c.exec('node bin/price.js 1250')).stdout).toBe('EUR 12.50\n')

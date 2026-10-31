@@ -20,6 +20,7 @@ import type {
   CursorEfforts,
   Duration,
   EvalPlan,
+  ExcludedPair,
   FamilyMeta,
   HarnessDescriptor,
   PairFactor,
@@ -48,7 +49,7 @@ const HISTORY_RUNS = 30
 export type PlanRow = {
   id: string
   plan: EvalPlan
-  /** Set on each case of a pooled `evaluate.each`. */
+  /** Set on each case of an eval with `cases`. */
   family?: FamilyMeta
   /** Optimistic pair sides for `--dry-run`: every planned attempt is assumed to pass checks. */
   sides: PairAttempt[]
@@ -384,7 +385,7 @@ const cappedBy = (note: string): string | undefined =>
   /^runs \d+ → \d+ \(profile (.+)\)$/.exec(note)?.[1]
 
 /**
- * One line per compared family with too few cases for its paired lift to get a verdict: one
+ * One line per compared eval with too few cases for its paired lift to get a verdict: one
  * attempt a case can't give more discordant cases than there are cases, and several need as many
  * cases, so more runs don't help. `rows` are those that plan a lift.
  */
@@ -400,7 +401,7 @@ function familyHints(rows: PlanRow[]): string[] {
     .map(([id, { n, of }]) => {
       const has = n === of ? `has ${plural(n, 'case')}` : `runs ${n} of its ${of} cases`
       const fix = of >= PAIRED_MIN ? 'run all its cases' : 'add cases'
-      return `family ${clip(id, 64)} ${has}; its lift needs ${PAIRED_MIN} for a verdict, so it will say can't tell yet whatever the runs (${fix})`
+      return `${clip(id, 64)} ${has}; its lift needs ${PAIRED_MIN} for a verdict, so it will say can't tell yet whatever the runs (${fix})`
     })
 }
 
@@ -530,6 +531,8 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
     const family = members[0]?.family
     const live = members.filter((m) => !m.plan.skip)
     const attempts = live.reduce((sum, m) => sum + m.plan.attempts, 0)
+    // `where` can leave a case off some harnesses, so the eval runs on as many as its widest case.
+    const harnesses = Math.max(p.harnesses, ...live.map((m) => m.plan.harnesses))
     const pooled = family
       ? [
           `${live.length === family.cases ? family.cases : `${live.length} of ${family.cases}`} cases · ${p.variants === null ? 'pooled pass rate' : 'paired lift'}`,
@@ -537,7 +540,7 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
       : []
     return [
       clip(id, 64),
-      String(p.harnesses),
+      String(harnesses),
       p.variants === null
         ? '—'
         : p.variants.run === p.variants.of
@@ -613,8 +616,13 @@ export type PlanEval = {
   cells: PlanCell[]
   /** Its questions: pairwise ones answered after the run, the rest after each attempt; unset without any. */
   questions?: PlanQuestion[]
-  /** Set on each case of a pooled `evaluate.each`. */
+  /** Set on each case of an eval with `cases`. */
   family?: FamilyMeta
+  /**
+   * The environments (and harnesses) `where` left this case out of; unset when none. The plan's
+   * own `excluded` is the evals a filter or `.skip` left out.
+   */
+  whereExcluded?: ExcludedPair[]
 }
 
 /** A Docker sandbox image the plan needs, and how it's made, as `reeval image build --dry-run` lists it. */
@@ -677,6 +685,7 @@ export function planDocument(
         cells: [],
         ...(questions.length ? { questions } : {}),
         ...(attempt.family ? { family: attempt.family } : {}),
+        ...(attempt.plan.excluded ? { whereExcluded: attempt.plan.excluded } : {}),
       }
       evals.set(id, e)
     }

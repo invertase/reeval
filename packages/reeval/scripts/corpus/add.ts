@@ -3,7 +3,7 @@
 // against files that really have today's shape.
 //
 //   pnpm build && pnpm --filter reeval corpus:add <name> [--note "why"]
-//     records scripts/corpus/project (the fake harness: a compare with questions, a pooled evaluate.each, judges, a
+//     records scripts/corpus/project (the fake harness: a compare with questions, an eval with cases, judges, a
 //     failure, an infra error, todo and skipped evals, and a saved analysis) with this build, one run of
 //     about 3,000 lines
 //
@@ -47,8 +47,8 @@ import { fakeSandbox } from 'reeval/sandbox'
 // A record corpus entry (${note}), recorded by ${recordedBy}.
 // Don't re-record it: test/corpus.test.ts reads it to prove this shape still loads.
 export default defineConfig({
-  harness: fakeHarness(),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  harnesses: fakeHarness(),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   analysis: {
     model: fakeAnalysis({ output: () => ({ tldr: 'corpus', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'corpus' } }) }),
   },

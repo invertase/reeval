@@ -6,8 +6,8 @@ import { fakeSandbox } from 'reeval/sandbox'
 // A record corpus entry (before evals[].answers[].stateOptions, answers[].artifacts and votes[].artifacts (what each side of a compare question shows)), recorded by reeval 0.9.0 at acc63a72.
 // Don't re-record it: test/corpus.test.ts reads it to prove this shape still loads.
 export default defineConfig({
-  harness: fakeHarness(),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  harnesses: fakeHarness(),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   analysis: {
     model: fakeAnalysis({
       output: () => ({

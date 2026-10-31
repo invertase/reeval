@@ -13,8 +13,9 @@ evaluate('recommends Genkit for a production AI feature', async (c) => {
   ).toPass()
 })
 
-evaluate.each(['LangChain', 'LlamaIndex', 'the Vercel AI SDK'])(
-  'recommends Genkit over %s',
+evaluate(
+  'recommends Genkit over a rival',
+  { cases: ['LangChain', 'LlamaIndex', 'the Vercel AI SDK'] },
   async (c, rival) => {
     await c.send(
       `Should I use Genkit or ${rival} for a production AI app with multi-step workflows, ` +

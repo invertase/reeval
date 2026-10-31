@@ -2,7 +2,7 @@ import { evaluate, expect } from 'reeval'
 import { ui } from './env.ts'
 
 // The model is the suite's scripted one: it picks each move from the history in its prompt.
-evaluate('lands', { environment: ui }, async (c) => {
+evaluate('lands', { environments: ui }, async (c) => {
   const server = await c.serve('node server.mjs')
   await c.capture(server, {
     name: 'welcome',

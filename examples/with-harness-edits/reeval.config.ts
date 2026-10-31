@@ -12,7 +12,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // Two scripted agents that copy ./fake-agent's files into the workspace, so each eval has a
   // list of harnesses to edit, without keys or Docker.
-  harness: [
+  harnesses: [
     fakeHarness({ id: 'fake-quick', files }),
     fakeHarness({ id: 'fake-careful', script: [[{ exec: 'node --test' }]], files }),
   ],

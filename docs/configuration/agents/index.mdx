@@ -16,7 +16,7 @@ import { defineConfig } from '{{ pkg }}'
 import { claudeCode } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: claudeCode({ model: '<model>' }),
+  harnesses: claudeCode({ model: '<model>' }),
 })
 ```
 
@@ -33,9 +33,9 @@ import { claudeCode } from '{{ pkg }}/harness'
 
 export default defineConfig({
   gateway: [vercel()],
-  harness: claudeCode({
+  harnesses: claudeCode({
     model: '<model>',
-    id: 'claude-code:baseline',
+    id: 'claude-code:control',
     maxConcurrent: 2,
     startTimeout: '3m',
     gateway: 'vercel',

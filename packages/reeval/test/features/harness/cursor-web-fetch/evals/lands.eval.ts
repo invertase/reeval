@@ -3,7 +3,7 @@ import { beacon, plain, prompt, publishedAt, randomness, url } from './env.ts'
 
 // The agent really fetched the page, and the transcript shows the fetch. The Cursor SDK drops
 // web calls from its stream; the adapter's runner recovers them from the stored conversation.
-evaluate('lands', { environment: plain }, async (c) => {
+evaluate('lands', { environments: plain }, async (c) => {
   const turn = await c.send(prompt)
   expect(turn.status).toBe('completed')
   const reply = beacon.exec(turn.text)

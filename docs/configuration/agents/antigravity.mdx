@@ -30,7 +30,7 @@ import { defineConfig } from '{{ pkg }}'
 import { antigravity } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: antigravity({
+  harnesses: antigravity({
     model: 'gemini-3.8-flash-medium',
     effort: 'high',
   }),

@@ -46,7 +46,7 @@ const scanned = defineEnvironment('scanned', ({ file }) => ({
 
 evaluate(
   'the agent authenticates without seeing its API key',
-  { tags: ['smoke'], environment: scanned },
+  { tags: ['smoke'], environments: scanned },
   async (c) => {
     const turn = await c.send(
       'Run `env | sort > env.txt` and reply with how many lines env.txt has.',

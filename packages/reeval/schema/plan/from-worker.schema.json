@@ -65,7 +65,7 @@
           "$ref": "#/$defs/PlannedEgress"
         },
         "family": {
-          "description": "Set when the eval is a case of a pooled `evaluate.each`.",
+          "description": "Set when the eval is a case of an eval with `cases`.",
           "$ref": "#/$defs/FamilyMeta"
         },
         "files": {
@@ -264,7 +264,7 @@
       "additionalProperties": false
     },
     "Cell": {
-      "description": "A cell of an evaluation combines a harness, an environment (`-` when none is set), and that environment's sandbox id. With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.",
+      "description": "A cell of an evaluation combines a harness, an environment (`-` when none is set), and that environment's sandbox id. With `compare`, the control is `compare.control` and each variant is that environment on its own, including its sandbox.",
       "type": "object",
       "properties": {
         "environment": {
@@ -280,11 +280,31 @@
           "type": "string"
         },
         "role": {
+          "description": "`variant` on a compare's variant cell, else `control`: the compare's control, or any cell of an eval without `compare`, each environment of an `environments` grid included. A variant's lift is against the `control` cell on its harness and sandbox.",
           "$ref": "#/$defs/CellRole"
         },
         "sandbox": {
           "description": "The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts with the engine (`docker` by default). It adds `:` and the sanitized final component of `image` or `from`, or for `dockerfile` the sanitized filename (the parent directory name when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps append `+` and an eight-character hash.",
           "type": "string"
+        },
+        "traits": {
+          "description": "The environment's merged traits; unset when it has none. Not part of the key.",
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
         },
         "variant": {
           "description": "The variant's name, for variant cells.",
@@ -625,10 +645,11 @@
       "type": "object",
       "properties": {
         "baseline": {
+          "description": "The control's environment name.",
           "type": "string"
         },
         "from": {
-          "description": "Set when `compare.baseline` was omitted: the control is the eval's cascaded `environment`, or an empty environment named `baseline` when there was none.",
+          "description": "Not written, since a compare names its control. A record that has it ran the eval's cascaded environment (`'environment'`) or an empty one named `baseline` (`'empty'`) as the control.",
           "enum": ["empty", "environment"]
         }
       },
@@ -755,11 +776,25 @@
             "type": "string"
           }
         },
+        "excluded": {
+          "description": "The case and environment pairs `where` left out of this case; unset when none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExcludedPair"
+          }
+        },
+        "familyExcluded": {
+          "description": "On a case of a pooled family, every pair `where` left out of any of its cases, so the record keeps a case it left out everywhere; unset when none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExcludedPair"
+          }
+        },
         "gate": {
           "description": "The eval's gate policy, or undefined when it was left at the default (`'all'`).",
           "anyOf": [
             {
-              "const": "all"
+              "enum": ["all", "none"]
             },
             {
               "type": "object",
@@ -860,7 +895,7 @@
           "type": "string"
         },
         "case": {
-          "description": "sha256 of the case's data; set on each case of an `evaluate.each`.",
+          "description": "sha256 of the case's data; set on each case of an eval with `cases`.",
           "type": "string"
         },
         "options": {
@@ -869,6 +904,24 @@
         }
       },
       "required": ["body", "options"]
+    },
+    "ExcludedPair": {
+      "description": "A case and environment pair `where` left out.",
+      "type": "object",
+      "properties": {
+        "case": {
+          "description": "The case key.",
+          "type": "string"
+        },
+        "environment": {
+          "type": "string"
+        },
+        "harness": {
+          "description": "Set only when `where` read the harness.",
+          "type": "string"
+        }
+      },
+      "required": ["case", "environment"]
     },
     "FakeHarnessDescriptor": {
       "description": "A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`.",
@@ -1000,6 +1053,29 @@
             "additionalProperties": false
           }
         },
+        "usage": {
+          "description": "Tokens the fake agent reports for every turn, as `turn.usage`; without it, null.",
+          "type": "object",
+          "properties": {
+            "cacheRead": {
+              "type": "number"
+            },
+            "cacheWrite": {
+              "type": "number"
+            },
+            "input": {
+              "type": "number"
+            },
+            "output": {
+              "type": "number"
+            },
+            "reasoning": {
+              "type": ["number", "null"]
+            }
+          },
+          "required": ["cacheRead", "cacheWrite", "input", "output", "reasoning"],
+          "additionalProperties": false
+        },
         "withSkill": {
           "description": "Files and message used instead when the environment gives the agent a skill.",
           "type": "object",
@@ -1123,7 +1199,7 @@
       ]
     },
     "FamilyMeta": {
-      "description": "A case's place in its pooled `evaluate.each`.",
+      "description": "A case's place in its eval with `cases`.",
       "type": "object",
       "properties": {
         "case": {

@@ -1,0 +1,21 @@
+no profile · 7 evals · 14 cells · 20 attempts
+hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+evals/list.eval.ts › a grid                               one/nextjs/docker:node:24-bookworm   control         gated    ×1
+                                                          one/python/docker:node:24-bookworm   control         gated    ×1
+                                                          two/nextjs/docker:node:24-bookworm   control         gated    ×1
+                                                          two/python/docker:node:24-bookworm   control         gated    ×1
+evals/list.eval.ts › add, as data                         fake/node22/docker:node:22-bookworm  control         gated    ×1
+                                                          fake/nextjs/docker:node:24-bookworm  control         gated    ×1
+evals/list.eval.ts › add, as a function                   fake/node22/docker:node:22-bookworm  control         gated    ×1
+                                                          fake/nextjs/docker:node:24-bookworm  control         gated    ×1
+evals/list.eval.ts › both stacks › inherits the list      fake/nextjs/docker:node:24-bookworm  control         gated    ×1
+                                                          fake/python/docker:node:24-bookworm  control         gated    ×1
+evals/list.eval.ts › both stacks › only, as data          fake/python/docker:node:24-bookworm  control         gated    ×1
+evals/list.eval.ts › both stacks › only, as a function    fake/nextjs/docker:node:24-bookworm  control         gated    ×1
+evals/list.eval.ts › both stacks › a compare replaces it  fake/plain/docker:node:24-bookworm   control         ungated  ×4  runs 4 (compare default)
+                                                          fake/nextjs/docker:node:24-bookworm  variant nextjs  gated    ×4
+excluded: —
+image docker:node:24-bookworm · cursor · 7 evals
+  from node:24-bookworm  reeval-sandbox:cursor-0.1.8-node-24-bookworm-c571df39  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+image docker:node:22-bookworm · cursor · 2 evals
+  from node:22-bookworm  reeval-sandbox:cursor-0.1.8-node-22-bookworm-352a5ef5  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

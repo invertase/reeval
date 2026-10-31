@@ -9,7 +9,7 @@ console.log(users.length)
 `
 
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'count.js': count },
     text: 'Created count.js.',
   }),

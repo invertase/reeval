@@ -3,7 +3,7 @@ import { MCP_LOG, plugged, prompts, toolNames, withFakePlugin } from './probes.t
 
 // The probe plugin's stdio MCP server starts in the sandbox and the agent calls its tool: the
 // server logged the call, and a transcript tool names it (each harness namespaces it its own way).
-const options = { environment: plugged, harness: withFakePlugin, tags: ['plugin'] }
+const options = { environments: plugged, harnesses: withFakePlugin, tags: ['plugin'] }
 
 evaluate('plugin mcp', options, async (c) => {
   const turn = await c.send(prompts.pluginMcp)

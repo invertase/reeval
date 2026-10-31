@@ -45,8 +45,8 @@ const CONFIG = `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
-  harness: fakeHarness({}),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+  harnesses: fakeHarness({}),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   ANALYSIS
 })
 `
@@ -64,7 +64,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: ${runs} }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: ${runs} }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -664,7 +664,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -1245,7 +1245,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -1262,7 +1262,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 2 }, async (c) => {
   await c.send('go now')
 })
 `,

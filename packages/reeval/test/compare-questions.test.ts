@@ -19,7 +19,7 @@ export const skilled = defineEnvironment('skilled', { sandbox })
     'evals/envs.ts': ENVS,
     'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-evaluate('asks', { runs: 1, compare: { baseline: base, variants: [skilled] }, questions: ${question} }, async (c) => {
+evaluate('asks', { runs: 1, compare: { control: base, variants: [skilled] }, questions: ${question} }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -117,7 +117,7 @@ evaluate('asks', { runs: 1, compare: { baseline: base, variants: [skilled] }, qu
       'evals/envs.ts': ENVS,
       'evals/q.eval.ts': `import { evaluate } from 'reeval'
 import { base, skilled } from './envs.ts'
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 evaluate('own model', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment', task: true, diff: true, model: 'anthropic/claude-sonnet-5' }] }, async () => {})
 evaluate('cascade', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment', task: true, diff: true }, { question: 'Which is shorter?', across: 'environment', task: true, diff: true, model: 'openai/gpt-5.5' }] }, async () => {})
 `,
@@ -176,8 +176,8 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
-  harness: ${OK},
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+  harnesses: ${OK},
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   analysis: {
     model: fakeAnalysis({
@@ -197,14 +197,14 @@ export const next = defineEnvironment('new-skill', { sandbox })
 `,
       'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, current, next, none, skilled } from './envs.ts'
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 const body = async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 }
 evaluate('two questions', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment', task: true, diff: true }, { question: 'Which is shorter?', across: 'environment', task: true, diff: true }] }, body)
 evaluate('reasons', { runs: 1, compare, questions: [{ question: 'Which reads better?', across: 'environment', task: true, diff: true }] }, body)
-evaluate('three arms', { compare: { baseline: none, variants: [current, next], gate: 'none' }, questions: [{ question: 'Which delivers a better user experience?', across: 'environment', task: true, diff: true }], runs: 3 }, body)
+evaluate('three arms', { compare: { control: none, variants: [current, next], gate: 'none' }, questions: [{ question: 'Which delivers a better user experience?', across: 'environment', task: true, diff: true }], runs: 3 }, body)
 `,
     })
     const dry = await runCli(p.dir, ['run', '--dry-run'])
@@ -300,13 +300,13 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
-  harness: [
+  harnesses: [
     fakeHarness({ id: 'one', files: { 'ok.txt': 'yes' } }),
     fakeHarness({ id: 'two', files: { 'ok.txt': 'yes', 'extra.txt': 'more' } }),
     fakeHarness({ id: 'bad', files: { 'no.txt': 'no' } }),
   ],
   runs: 2,
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   analysis: {
     model: fakeAnalysis({
@@ -323,7 +323,7 @@ export default defineConfig({
       'evals/envs.ts': ENVS,
       'evals/votes.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 const body = async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
@@ -335,13 +335,13 @@ evaluate('plain', { compare }, body)
 import { fakeHarness } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
 import { base, skilled } from './envs.ts'
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 evaluate('across environment', { compare, questions: [{ question: 'Which is tidier?', across: 'environment', task: true, diff: true }] }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
 for (const judged of [false, true]) {
-  const options = { compare, harness: fakeHarness({ files: { 'ok.txt': 'yes' } }), runs: 1, judge: { model: fakeJudge({ score: 0.2 }) }, questions: [{ question: 'Which is neater?', across: 'environment', task: true, diff: true }] }
+  const options = { compare, harnesses: fakeHarness({ files: { 'ok.txt': 'yes' } }), runs: 1, judge: { model: fakeJudge({ score: 0.2 }) }, questions: [{ question: 'Which is neater?', across: 'environment', task: true, diff: true }] }
   evaluate(judged ? 'failed checks, judged' : 'failed checks', options, async (c) => {
     await c.send('go')
     if (judged) await c.judge('Is it nice?', { diff: true })
@@ -352,7 +352,7 @@ for (const judged of [false, true]) {
       'evals/each.eval.ts': `import { evaluate, expect } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { base, skilled } from './envs.ts'
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 const body = async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
@@ -360,7 +360,7 @@ const body = async (c) => {
 evaluate('choices', { compare, questions: [{ question: 'Did it write ok.txt?', choices: ['yes', 'no'], task: true, output: true, diff: true, transcript: true }] }, body)
 evaluate('free text', { compare, questions: [{ question: 'What did it write?', task: true, output: true, diff: true, transcript: true }] }, body)
 evaluate('unrun command', { compare, questions: [{ question: 'What did it run?', checks: ['npm tset'] }] }, body)
-const one = { harness: fakeHarness({ files: { 'ok.txt': 'yes' } }), runs: 1, questions: [{ question: 'What did it do?', task: true, output: true, diff: true, transcript: true }] }
+const one = { harnesses: fakeHarness({ files: { 'ok.txt': 'yes' } }), runs: 1, questions: [{ question: 'What did it do?', task: true, output: true, diff: true, transcript: true }] }
 evaluate('passes', one, async (c) => {
   await c.send('go')
 })
@@ -368,7 +368,7 @@ evaluate('fails', one, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('missing.txt')
 })
-evaluate('broken agent', { ...one, harness: fakeHarness({ failWith: 'agent CLI failed to start' }) }, async (c) => {
+evaluate('broken agent', { ...one, harnesses: fakeHarness({ failWith: 'agent CLI failed to start' }) }, async (c) => {
   await c.send('go')
 })
 `,
@@ -571,8 +571,8 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
-  harness: ${OK},
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+  harnesses: ${OK},
+  environments: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   analysis: {
     model: fakeAnalysis({
@@ -585,7 +585,7 @@ export default defineConfig({
       'evals/envs.ts': ENVS,
       'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 const body = async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')

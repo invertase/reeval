@@ -6,6 +6,6 @@ const session = defineEnvironment('session', ({ mcp }) => ({
 }))
 
 export default defineConfig({
-  harness: fakeHarness(),
-  profiles: { headers: { defaults: { environment: session } } },
+  harnesses: fakeHarness(),
+  profiles: { headers: { defaults: { environments: session } } },
 })

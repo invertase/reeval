@@ -609,6 +609,28 @@
             "$ref": "#/$defs/SkillSource"
           }
         },
+        "traits": {
+          "description": "Filter facts for `where`, such as `{ stack: 'next' }`: a key to a string or a list of strings. A child's key replaces its parent's value whole; keys it doesn't set are inherited. Recorded on the cell, and never written to the sandbox, the prompt or the judge.",
+          "readOnly": true,
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "readOnly": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
+        },
         "workspace": {
           "description": "The code the workspace starts as, before `files`, `rules` and `setup`; a child's replaces its parent's.",
           "$ref": "#/$defs/GitWorkspace"
@@ -845,6 +867,29 @@
             "additionalProperties": false
           }
         },
+        "usage": {
+          "description": "Tokens the fake agent reports for every turn, as `turn.usage`; without it, null.",
+          "type": "object",
+          "properties": {
+            "cacheRead": {
+              "type": "number"
+            },
+            "cacheWrite": {
+              "type": "number"
+            },
+            "input": {
+              "type": "number"
+            },
+            "output": {
+              "type": "number"
+            },
+            "reasoning": {
+              "type": ["number", "null"]
+            }
+          },
+          "required": ["cacheRead", "cacheWrite", "input", "output", "reasoning"],
+          "additionalProperties": false
+        },
         "withSkill": {
           "description": "Files and message used instead when the environment gives the agent a skill.",
           "type": "object",
@@ -1029,11 +1074,15 @@
       "additionalProperties": false
     },
     "GatePolicy": {
-      "description": "How a cell's attempts decide its outcome: `'all'` (the default) passes only when every attempt passes (pass^k); `{ passRate }` passes when its pass@1 (passes over passes and fails) is at least that share.",
+      "description": "How a cell's attempts decide its outcome: `'all'` (the default) passes only when every attempt passes (pass^k); `{ passRate }` passes when its pass@1 (passes over passes and fails) is at least that share; `'none'` gates nothing, so the eval's attempts run and are recorded, and only run and infra errors fail it (what `survey` sets).",
       "anyOf": [
         {
           "type": "string",
           "const": "all"
+        },
+        {
+          "type": "string",
+          "const": "none"
         },
         {
           "type": "object",
@@ -2008,15 +2057,26 @@
           "description": "Variables and secrets for the sandbox, merged by name over the config's.",
           "$ref": "#/$defs/EnvVars"
         },
-        "environment": {
-          "description": "What every eval runs in when it names no environment.",
-          "$ref": "#/$defs/EnvironmentData"
+        "environments": {
+          "description": "What every eval runs in when it names no environment: one, or a list (a cell each).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnvironmentData"
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EnvironmentData"
+              }
+            }
+          ]
         },
         "gate": {
           "description": "How each cell's attempts decide its outcome.",
           "$ref": "#/$defs/GatePolicy"
         },
-        "harness": {
+        "harnesses": {
           "description": "The agents every eval runs on, unless a group or eval replaces them.",
           "anyOf": [
             {
@@ -2133,7 +2193,7 @@
             }
           ]
         },
-        "harness": {
+        "harnesses": {
           "description": "Harness ids to allow; evals left with none are skipped.",
           "type": "array",
           "items": {
@@ -2219,9 +2279,20 @@
           "description": "Variables and secrets for the sandbox, merged by name down the cascade.",
           "$ref": "#/$defs/EnvVars"
         },
-        "environment": {
-          "description": "What every eval runs in when it names no environment, and a baseline-less compare's control.",
-          "$ref": "#/$defs/EnvironmentData"
+        "environments": {
+          "description": "What every eval runs in when it names no environment and has no compare: one, or a list (a cell each).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnvironmentData"
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EnvironmentData"
+              }
+            }
+          ]
         },
         "gate": {
           "description": "How each cell's attempts decide its outcome; default `'all'`.",
@@ -2235,7 +2306,7 @@
             "$ref": "#/$defs/GatewayEntryData"
           }
         },
-        "harness": {
+        "harnesses": {
           "description": "The agents every eval runs on, unless a group or eval replaces them; default Cursor.",
           "anyOf": [
             {

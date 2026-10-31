@@ -26,9 +26,9 @@ compare a skill, fix a config, read a failure. Read a reference file when the ta
 | Read | When the task involves |
 |---|---|
 | [references/config.md](references/config.md) | Harness factories and their keys, `effort`, judge models, `reeval.yaml`, path rules, where the sandbox comes from, imports, the options cascade |
-| [references/evals.md](references/evals.md) | `evaluate.each` and families, `c.serve`, `c.writeFile` hidden tests, the judge's inputs, the judge's input size, judge errors, every matcher |
+| [references/evals.md](references/evals.md) | `cases`, `caseKey` and `where`, `survey`, `toStayWithin`, `c.serve`, `c.writeFile` hidden tests, the judge's inputs, the judge's input size, judge errors, every matcher |
 | [references/capture.md](references/capture.md) | Web UIs: `c.capture()` screenshots, `instructions` journeys, `artifacts` on judges and questions |
-| [references/compare.md](references/compare.md) | `compare` beyond the example below: baselines, gates, lift and effort, labeled checks, `questions`, `skill_files` |
+| [references/compare.md](references/compare.md) | `compare` beyond the example below: the control, gates, lift and effort, labeled checks, `questions`, `skill_files` |
 | [references/environments.md](references/environments.md) | Environments: skills, files, rules, MCP servers, `git()` workspaces, `directory()`, Docker sandboxes, secrets, egress |
 | [references/cli.md](references/cli.md) | The CLI beyond `run`: `query` views, `analyze`, `show`, `compare`, `record`, `studio`, `mcp`, filters, exit codes |
 | [references/mistakes.md](references/mistakes.md) | An error message from reeval you need to map to its fix (the full table) |
@@ -96,7 +96,7 @@ import { cursor } from 'reeval/harness'
 
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],            // default
-  harness: cursor({ model: 'composer-2.5' }), // model required; CURSOR_API_KEY
+  harnesses: cursor({ model: 'composer-2.5' }), // model required; CURSOR_API_KEY
   // no default judge model; pin versions
   judge: { model: 'typesafe-ai/jev-1.14.0', threshold: 0.8 },
   // runs: attempts per cell; unset, 1, or 4 for a compare with variants
@@ -133,7 +133,7 @@ export default defineConfig({
   attempts) and gates on it, replacing `gate`. Use it to settle a flaky pass/fail for less than a
   fixed count; not on an eval with `compare` (refused: lift needs equal attempts), and a cell
   only reaches `flaky_cells`' 6-attempt `flaky` in one run from `bestOf: 7`.
-- An eval's fingerprint reads its own body, options, `evaluate.each` case and `revision`, not
+- An eval's fingerprint reads its own body, options, case and `revision`, not
   helpers, constants outside the body or fixtures. After changing one of those in a way that
   changes what the eval measures, bump `revision` (`{ revision: 2 }`, on the eval or its group)
   so `reeval compare` says `can't compare … revision 1 → 2` instead of `regressed`.
@@ -148,7 +148,7 @@ import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
   // A scripted "agent": writes these files every turn and replies with text.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'hello.txt': 'hello\n' },
     text: 'Created hello.txt.',
   }),
@@ -185,9 +185,9 @@ group('hello', () => {
 ```
 
 - `evaluate(name, [options,] fn)` and `group(name, [options,] fn)`; also `.skip`, `.only`
-  (an error in CI), `.todo`, and `evaluate.each(cases)(name, [options,] (c, item) => …)` (`$key`,
-  `%s`, `%#` in the name; cases pool into one family, see
-  [references/evals.md](references/evals.md)). The eval id is `file › group › name`; renaming an
+  (an error in CI), `.todo`. `{ cases: [...] }` runs one eval over a list, with the body
+  `(c, item) => …` (cases pool into one pass rate, see [references/evals.md](references/evals.md)).
+  `survey(name, [options,] fn)` is `evaluate` that gates nothing: it records what agents do. The eval id is `file › group › name`; renaming an
   eval restarts its history. Name the eval after the question it answers
   (`recommends Genkit for a production AI feature`, not `genkit test 2`), so the results and
   `reeval analyze` read in those terms.
@@ -265,7 +265,7 @@ const houseStyle = plain.extendEnvironment('house-style', ({ skill }) => ({
 
 group(
   'greetings',
-  { compare: { baseline: plain, variants: [houseStyle] } },
+  { compare: { control: plain, variants: [houseStyle] } },
   () => {
     evaluate('greets in the house style', async (c) => {
       await c.send('Create greet.js exporting greet(name) in our house style.')
@@ -286,8 +286,8 @@ group(
   without `runs`, a compare runs 4 a cell, the fewest for a lift verdict. A `runs` below 4 reads
   `can't tell yet`; `runs: 1` at any level or a profile's `limit.runs: 1` keeps a smoke run cheap.
 - Each variant runs as that environment on its own; `compare` does not layer, inherit or
-  extend. Share setup with `parent.extendEnvironment(name, spec)` before `compare`. Without
-  `baseline`, the cascaded `environment` is the control.
+  extend. Share setup with `parent.extendEnvironment(name, spec)` before `compare`. `control` is
+  required, and `environments` beside `compare` is an error: the control goes in `compare`.
 - Only variant cells gate by default; a control's misses don't fail the run. Below four tries a
   side each variant's effect reads `can't tell yet`; from four, the block adds an effort table
   (median tools, time, tokens per arm), which often shows a skill's effect first. In a compare,
@@ -322,7 +322,7 @@ reeval analyze           reeval studio          reeval image build      reeval d
 arm, per harness, or both), counts as `N of M`, a variant's effect as `helped`, `made it worse`
 or `can't tell yet`, and failed checks with their messages; `-v` adds intervals. Then the tally
 (`1 fail · 2 pass`; an `error:` outside any eval, such as a stray rejection in an eval file, is
-`1 run error` and fails the run; a study, every cell `gate: 'none'`, is `1 not gated`, never a pass,
+`1 run error` and fails the run; a `survey`, every cell `gate: 'none'`, is `1 ran`, never a pass,
 so read its arm rows for what passed). `Remarks:` after the tally names evals that need work
 (a flaky check, too few tries, a slow MCP server), with the line to fix, from fixed rules with no
 model; they never change a verdict or the exit code, and go in `remarks.json` beside the run. The
@@ -338,8 +338,8 @@ server: [references/cli.md](references/cli.md).
 | Mistake | Fix |
 |---|---|
 | `compare` in `reeval.config.ts` | Put it on the group or eval |
-| `environment: [a, b]` or `compare: [b]` | `compare: { baseline: a, variants: [b] }` |
-| `import { baseline }` | `baseline` is a field of `compare`, not an export |
+| `environments: [a, b]` to measure b, or `compare: [b]` | `compare: { control: a, variants: [b] }` |
+| `compare: { baseline: a, … }` | `compare: { control: a, … }` |
 | `repeat: 3` / `times` | `runs: 3` |
 | Judge model `'gemini-3.8-flash'` | `'google/gemini-3.8-flash'` |
 | Forgetting `await` on `toHaveFile`, or on `toSucceed` given `c.exec()`'s promise | `await expect(...)` |

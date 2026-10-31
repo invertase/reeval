@@ -159,7 +159,7 @@ export function formatHistory({ runs, rows, orphaned }: ReturnType<typeof histor
   }
   lines.push(
     '',
-    '✓ pass  ✗ fail  ! infra error  ↓ skipped  ○ not gated  · not run  ¦ eval or stack changed',
+    '✓ pass  ✗ fail  ! infra error  ↓ skipped  ○ ran  · not run  ¦ eval or stack changed',
   )
   if (orphaned.length > 0) {
     lines.push(

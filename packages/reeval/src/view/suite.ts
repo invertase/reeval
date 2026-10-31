@@ -108,19 +108,20 @@ export type EvalResult = {
   /** Source order in the file. */
   order: number
   across: Across
-  /**
-   * A pooled `evaluate.each` with two or more cases: `cases` is set and `cells` is null. An
-   * unpooled one (`{ pool: false }`) is recorded as separate evals, each a single eval.
-   */
+  /** An eval with `cases`: `cases` is set and `cells` is null. */
   family: boolean
   /** A placeholder (`evaluate.todo`) that never ran. */
   todo: boolean
-  /** On a family: `fail` when a case failed or its pooled gate did. */
+  /**
+   * On a family: `fail` when its pooled gate failed, or a case it doesn't gate on its rate did.
+   */
   outcome: ResultOutcome
   cells: CellResult[] | null
   cases: CaseResult[] | null
-  /** A family's variants against their baseline, pooled over the cases; null on a single eval. */
+  /** A family's variants against their control, pooled over the cases; null on a single eval. */
   pooled: PooledArm[] | null
+  /** A family's `{ passRate }` cells, each gated on its rate over the cases; null on a single eval. */
+  rates: PooledRate[] | null
   /**
    * Its questions' answers: the pairwise ones, then those asked of each attempt. On a family,
    * each question asked of any case, in first-asked order, summed over the cases that answered it.
@@ -165,6 +166,7 @@ export type CaseResult = {
   name: string
   /** Its place in the case list. */
   order: number
+  /** What the case did; when its family's rate gates it, the family's outcome is the verdict. */
   outcome: ResultOutcome
   cells: CellResult[]
 }
@@ -180,7 +182,7 @@ export type CellResult = {
   variant: string | null
   /** The control of an eval that has variants: the arm the variants are measured against. */
   baseline: boolean
-  /** On a variant, its baseline cell's key; else null. */
+  /** On a variant, its control cell's key; else null. */
   vs: string | null
   /** The cell's place in the eval's cells. */
   order: number
@@ -331,6 +333,16 @@ export type PooledArm = {
   interval: Interval
   /** The compare's `minLift`, a fraction like the interval, which gates its low end; null without one. */
   minLift: number | null
+  outcome: 'pass' | 'fail'
+}
+
+/** A cell's pass@1 over a family's cases, which its `gate: { passRate }` gates. */
+export type PooledRate = {
+  /** The cell's key, the same in every case. */
+  key: string
+  /** The mean of the cases' pass@1. */
+  rate: number
+  passRate: number
   outcome: 'pass' | 'fail'
 }
 
@@ -688,16 +700,17 @@ export const isStudy = (cells: readonly Pick<CellResult, 'gated'>[]): boolean =>
 
 /**
  * A study's pass: every cell `gate: 'none'`, or on a family every case's with no pooled `minLift`
- * gating it, so it reads `not gated`, never `pass`.
+ * or `passRate` gating it, so it reads `ran`, never `pass`.
  */
 export const isNotGatedResult = (
-  e: Pick<EvalResult, 'outcome' | 'cells' | 'cases' | 'pooled'>,
+  e: Pick<EvalResult, 'outcome' | 'cells' | 'cases' | 'pooled' | 'rates'>,
 ): boolean =>
   e.outcome === 'pass' &&
   (e.cases
     ? e.cases.length > 0 &&
       e.cases.every((k) => isStudy(k.cells)) &&
-      (e.pooled ?? []).every((p) => p.minLift === null)
+      (e.pooled ?? []).every((p) => p.minLift === null) &&
+      !e.rates?.length
     : isStudy(e.cells ?? []))
 
 /** The record's outcome, or `canceled` when every gated attempt that failed was canceled. */
@@ -707,6 +720,10 @@ function outcomeOf(e: EvalEntry): ResultOutcome {
   const failed = e.attempts.filter((a) => a.outcome === 'fail' && gated.has(a.cell))
   return failed.length && failed.every((a) => a.error?.kind === 'aborted') ? 'canceled' : 'fail'
 }
+
+/** A case's outcome as its family's verdict reads it: a failure its family's rate gates passes. */
+const caseVerdict = (e: EvalEntry): ResultOutcome =>
+  e.verdict === 'family' && e.outcome === 'fail' ? 'pass' : outcomeOf(e)
 
 /** Each question any case asked, in first-asked order, with its votes or answers summed over the cases. */
 function familyQuestions(
@@ -789,7 +806,7 @@ function familyResult(
     todo: false,
     outcome: worst([
       ...(family.outcome === 'fail' ? ['fail' as const] : []),
-      ...results.map((c) => c.outcome),
+      ...sorted.map(caseVerdict),
     ]),
     cells: null,
     cases: results,
@@ -806,6 +823,11 @@ function familyResult(
         outcome: lift.outcome,
       }
     }),
+    rates: family.rates.flatMap((r) =>
+      r.passRate !== undefined && r.outcome !== undefined
+        ? [{ key: r.cell, rate: r.rate, passRate: r.passRate, outcome: r.outcome }]
+        : [],
+    ),
     questions: familyQuestions(sorted),
     observations: [],
   }
@@ -827,6 +849,7 @@ function evalResult(record: RunRecord, e: EvalEntry, order: number): EvalResult 
     cells: cellsOf(record, e, path, declaredChecks([e])),
     cases: null,
     pooled: null,
+    rates: null,
     questions: questionsOf(e),
     observations: observedTallies(e.attempts),
   }
@@ -856,7 +879,8 @@ export function suiteResult(record: RunRecord): SuiteResult {
   for (const e of record.evals) {
     const evals = byFile.get(e.file) ?? []
     byFile.set(e.file, evals)
-    count(e)
+    // A case its family's rate gates isn't a verdict of its own: the family's is counted instead.
+    if (e.verdict !== 'family') count(e)
     const family = e.family && families.get(e.family.id)
     if (!family) {
       evals.push(evalResult(record, e, evals.length))
@@ -864,9 +888,13 @@ export function suiteResult(record: RunRecord): SuiteResult {
     }
     if (seen.has(family.id)) continue
     seen.add(family.id)
-    if (family.outcome === 'fail' && family.lifts.some((l) => l.outcome === 'fail')) tally.fail++
     const cases = record.evals.filter((x) => x.family?.id === family.id)
-    evals.push(familyResult(record, family, cases, evals.length))
+    const result = familyResult(record, family, cases, evals.length)
+    if (cases.some((x) => x.verdict === 'family')) {
+      if (result.outcome === 'infra_error') tally.infraError++
+      else tally[result.outcome]++
+    } else if (family.outcome === 'fail') tally.fail++
+    evals.push(result)
   }
   const files = [...byFile]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

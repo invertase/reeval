@@ -1,13 +1,14 @@
 import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
 
+const bare = defineEnvironment('bare', {})
 const skilled = defineEnvironment('skilled', {
   sandbox: docker({ from: 'node:24-bookworm' }),
 })
 
-// No baseline and no config environment: empty control, same image as the variant.
+// An empty control runs on the cascaded sandbox, not on its variant's.
 evaluate(
-  'empty control shares the variant image',
-  { compare: { variants: [skilled] } },
+  'an empty control takes the cascaded sandbox',
+  { compare: { control: bare, variants: [skilled] } },
   async () => {},
 )

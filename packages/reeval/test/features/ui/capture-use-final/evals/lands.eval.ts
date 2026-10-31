@@ -3,7 +3,7 @@ import { fakeInstructions } from 'reeval/testing'
 import { ui } from './env.ts'
 
 // No `done`: the click marked final ends the instruction, or the capture times out.
-evaluate('lands', { environment: ui, capture: { timeout: '10s' } }, async (c) => {
+evaluate('lands', { environments: ui, capture: { timeout: '10s' } }, async (c) => {
   const server = await c.serve('node server.mjs')
   await c.capture(server, {
     name: 'after',

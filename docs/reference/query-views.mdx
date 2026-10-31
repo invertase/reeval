@@ -48,7 +48,7 @@ Each built-in view returns one kind of row.
 | `contrasts` | `run_id`, `eval_key`, `harness`, `sandbox`, `a_key`, `b_key`, `a_environment`, `b_environment`, `a_pass`, `a_counted`, `b_pass`, `b_counted`, `points`, `lo`, `hi`, `pass_verdict`, `a_tools_median`, `b_tools_median`, `tools_ratio`, `tools_p`, `separated`, `verdict`, `agent_s_ratio`, `time_separated`, `time_verdict`, `tokens_ratio`, `tokens_separated`, `tokens_verdict`, `checks`, `discriminating` |
 | `drift` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `changed`, `changed_paths`, `noise`, `real_changed` |
 | `effort` | `run_id`, `eval_key`, `cell_key`, `role`, `variant`, `harness`, `environment`, `n`, `tools_median`, `tools_q1`, `tools_q3`, `agent_s_median`, `agent_s_q1`, `agent_s_q3`, `file_edits_median`, `files_changed_median`, `tokens_median`, `tokens_q1`, `tokens_q3`, `control_key`, `control_n`, `control_tools_median`, `control_agent_s_median`, `control_tokens_median`, `tools_ratio`, `agent_s_ratio`, `agent_s_delta`, `tokens_ratio`, `tools_p`, `agent_s_p`, `tokens_p`, `separated`, `time_separated`, `tokens_separated`, `verdict`, `time_verdict`, `tokens_verdict`, `tokens_note`, `context_calls_median`, `dependency_calls_median`, `web_calls_median`, `verify_calls_median`, `workspace_calls_median` |
-| `eval_trend` | `eval_key`, `run_id`, `started_at`, `branch`, `pr_number`, `recorded`, `outcome`, `pass_at_1`, `fingerprint` |
+| `eval_trend` | `eval_key`, `run_id`, `started_at`, `branch`, `pr_number`, `recorded`, `outcome`, `verdict`, `pass_at_1`, `fingerprint` |
 | `factor_effects` | `factor`, `level`, `baseline`, `context`, `tier`, `run_id`, `eval_key`, `strata`, `runs`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `points`, `lo`, `hi`, `within_noise`, `pass_verdict`, `tools_ratio`, `tools_ratios`, `agent_s_ratio`, `tools_p`, `consistent`, `separated`, `effort_verdict`, `tokens_ratio`, `tokens_p`, `tokens_verdict`, `tokens_note`, `note` |
 | `failing_attempts` | `run_id`, `started_at`, `eval_key`, `attempt_key`, `cell_key`, `harness`, `model`, `environment`, `skill`, `outcome`, `error_kind`, `error_message`, `duration_ms`, `oom_kills`, `first_failed_check` |
 | `family_lift` | `run_id`, `family_id`, `name`, `harness`, `variant`, `cell_key`, `control`, `pairs`, `variant_pass_at_1`, `control_pass_at_1`, `discordant_vc`, `discordant_cv`, `points`, `lo`, `hi`, `method`, `p`, `within_noise`, `verdict`, `min_lift`, `outcome`, `tools_ratio`, `tools_p`, `effort_verdict`, `agent_s_ratio`, `agent_s_p`, `time_verdict`, `tokens_ratio`, `tokens_p`, `tokens_verdict`, `started_at`, `branch` |
@@ -63,7 +63,7 @@ Each built-in view returns one kind of row.
 
 ## `lift`
 
-`lift` lists one row per variant cell in a run, beside its baseline.
+`lift` lists one row per variant cell in a run, beside its control.
 
 ```bash title="Query"
 reeval query "SELECT eval_key, points, lo, hi FROM lift WHERE within_noise = 0"
@@ -73,7 +73,7 @@ reeval query "SELECT eval_key, points, lo, hi FROM lift WHERE within_noise = 0"
 
 ## `family_lift`
 
-`family_lift` lists one row per variant of a pooled `evaluate.each` in one run.
+`family_lift` lists one row per variant of an evaluation with `cases` in one run.
 
 ```bash title="Query"
 reeval query "SELECT name, variant, points FROM family_lift"
@@ -81,7 +81,7 @@ reeval query "SELECT name, variant, points FROM family_lift"
 
 ## `effort`
 
-`effort` lists one row per cell, with a variant's ratios against its baseline.
+`effort` lists one row per cell, with a variant's ratios against its control.
 
 ```bash title="Query"
 reeval query "SELECT eval_key, variant, tools_ratio FROM effort"
@@ -113,7 +113,7 @@ reeval query "SELECT question, choice, outcome FROM attempt_answers"
 
 ## `factor_effects`
 
-`factor_effects` lists one row per factor level against a baseline.
+`factor_effects` lists one row per factor level against a control.
 
 ```bash title="Query"
 reeval query "SELECT factor, level, tier, points FROM factor_effects"
@@ -181,7 +181,7 @@ With no placed skill, `skill` is null.
 
 ## `eval_trend`
 
-`eval_trend` lists one row per evaluation per run.
+`eval_trend` lists one row per evaluation per run. `verdict` is `family` on a case whose family's `passRate` gates it, so its `outcome` doesn't fail the run on its own.
 
 ```bash title="Query"
 reeval query "SELECT eval_key, outcome, pass_at_1 FROM eval_trend"
@@ -197,7 +197,7 @@ reeval query "SELECT question, prev_pass_rate, pass_rate FROM verdict_flips"
 
 ## `check_discrimination`
 
-`check_discrimination` lists one row per assertion on a variant cell, beside its baseline.
+`check_discrimination` lists one row per assertion on a variant cell, beside its control.
 
 ```bash title="Query"
 reeval query "SELECT label, verdict FROM check_discrimination"
@@ -223,7 +223,7 @@ reeval query "SELECT label, pass, fail, rate FROM check_rates"
 reeval query "SELECT label, streak_runs, ended_by FROM check_streaks"
 ```
 
-On a variant, the streak counts a run only when the variant and the baseline both pass.
+On a variant, the streak counts a run only when the variant and the control both pass.
 
 ## Tables
 
@@ -246,7 +246,7 @@ In `tool_calls`, `ok` is 1 or 0, or null for a call whose result the harness nev
 | `context_reads` | `run_id`, `attempt_key`, `line`, `path` |
 | `env_skills` | `run_id`, `environment`, `digest`, `name`, `source`, `commit_sha`, `sha256`, `placement` |
 | `environments` | `run_id`, `name`, `digest`, `parent`, `overrides` |
-| `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_at_1`, `sources`, `family_id`, `case_index` |
+| `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_at_1`, `sources`, `family_id`, `case_index`, `verdict` |
 | `families` | `run_id`, `family_id`, `file`, `groups`, `name`, `cases`, `ran`, `cell_key`, `cell_cases`, `pass`, `counted`, `pass_at_1`, `lo`, `hi`, `method`, `outcome` |
 | `judgements` | `run_id`, `attempt_key`, `key`, `question`, `verdict`, `score`, `threshold`, `model`, `resolved_model`, `input_path` |
 | `mcp_startup` | `run_id`, `attempt_key`, `turn`, `server`, `ms` |

@@ -12,7 +12,7 @@ export default defineConfig({
   // Any secret the sandbox would get as its real value stops the run before it starts.
   secrets: { unbrokered: 'error' },
   // A scripted agent that copies ./fake-agent's files into the workspace.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: { 'repo.js': fakeAgent('repo.js') },
     text: "I wrote repo.js, which prints the repo's description.",
   }),

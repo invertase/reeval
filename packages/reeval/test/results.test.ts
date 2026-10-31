@@ -475,14 +475,18 @@ describe("an eval's source", () => {
   })
 
   test('the options hash leaves out tags, runs, timeout, revision and gate, and reads harnesses and sandboxes by id', () => {
-    const base = optionsHash([{ pin: ['harness'] }])
+    const base = optionsHash([{ pin: ['harnesses'] }])
     const unhashed = { tags: ['slow'], runs: 5, timeout: '2m', revision: 3, gate: 'all' } as const
-    assert.equal(optionsHash([{ pin: ['harness'], ...unhashed }]), base)
-    assert.equal(optionsHash([{}, { pin: ['harness'] }]), base, 'an option-less group adds nothing')
-    assert.equal(optionsHash([{ runs: 2 }, { pin: ['harness'] }]), base, "a group's runs too")
+    assert.equal(optionsHash([{ pin: ['harnesses'], ...unhashed }]), base)
+    assert.equal(
+      optionsHash([{}, { pin: ['harnesses'] }]),
+      base,
+      'an option-less group adds nothing',
+    )
+    assert.equal(optionsHash([{ runs: 2 }, { pin: ['harnesses'] }]), base, "a group's runs too")
     assert.notEqual(optionsHash([{ pin: ['runs'] }]), base, 'twin: another option changes it')
     assert.notEqual(
-      optionsHash([{ pin: ['harness'] }, { pin: ['harness'] }]),
+      optionsHash([{ pin: ['harnesses'] }, { pin: ['harnesses'] }]),
       base,
       'a group level is its own',
     )
@@ -521,7 +525,7 @@ describe("an eval's source", () => {
   })
 
   test("a case hashes as JSON data, and data JSON can't see is refused", () => {
-    const at = 'evaluate.each("e") case 0'
+    const at = 'evaluate("e") case "a"'
     assert.equal(caseHash({ n: 1, s: 'x' }, at), caseHash({ s: 'x', n: 1 }, at))
     assert.notEqual(caseHash({ n: 1 }, at), caseHash({ n: 2 }, at), 'twin: another value')
     const env = defineEnvironment('skilled', {})
@@ -535,7 +539,7 @@ describe("an eval's source", () => {
     ] as const) {
       assert.throws(
         () => caseHash({ want: value }, at),
-        new RegExp(`^UsageError: evaluate\\.each\\("e"\\) case 0: .* \\(it holds ${what}\\)`),
+        new RegExp(`^UsageError: evaluate\\("e"\\) case "a": .* \\(it holds ${what}\\)`),
       )
     }
   })

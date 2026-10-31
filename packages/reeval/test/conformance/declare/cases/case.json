@@ -1,0 +1,5 @@
+{
+  "eval": "plan/compare/evals/cases.eval.ts",
+  "plan": "plan/compare/expected/cases.txt",
+  "args": ["evals/cases.eval.ts"]
+}

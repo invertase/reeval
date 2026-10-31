@@ -17,7 +17,7 @@ export default defineConfig({
   // A scripted agent that copies ./fake-agent/turn-1 into the workspace on the first turn and
   // ./fake-agent/turn-2 on the second, and a judge with a fixed score, so the checks run without
   // keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [
       [{ write: turn(1) }, { reply: 'listNotes({ page }) returns ten notes a page, with a test.' }],
       [{ write: turn(2) }, { reply: 'listNotes({ cursor }) pages by cursor now; tests updated.' }],

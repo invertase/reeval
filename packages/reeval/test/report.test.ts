@@ -244,8 +244,8 @@ describe('reeval report: the bundle', () => {
     assert.ok(bundle.run?.failures[0]?.debugLog.some((l) => l.includes('teardown')))
     assert.ok(bundle.run?.failures[0]?.debugFiles.includes('debug.log'))
     assert.deepEqual(bundle.config?.optionKeys, [
-      'environment',
-      'harness',
+      'environments',
+      'harnesses',
       'judge',
       'profiles',
       'sandbox',

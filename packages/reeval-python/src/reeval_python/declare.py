@@ -11,18 +11,20 @@ import inspect
 import itertools
 import json
 import linecache
+import math
 import re
 import sys
 import textwrap
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass, field
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast, overload
 
 from reeval_python import _wire as w
 from reeval_python.checks import ASSERT_HOOK, check, compile_eval
 from reeval_python.environment import Environment
-from reeval_python.options import EvalOptions
+from reeval_python.options import CaseOptions, EvalOptions, SurveyCaseOptions, SurveyOptions
 from reeval_python.wire import options_to_wire
 
 if TYPE_CHECKING:
@@ -115,7 +117,7 @@ _suites: list[_Suite] = []
 _bodies: dict[str, Callable[..., Any]] = {}
 # By id (the names joined with " › "): each eval's name path and whether it is a family's case.
 _names: dict[str, tuple[tuple[str, ...], bool]] = {}
-# Each pooled evaluate_each's name path, by its id.
+# Each eval with cases: its name path, by its id.
 _families: dict[str, tuple[str, ...]] = {}
 
 
@@ -141,9 +143,9 @@ def _separator_hint(path: tuple[str, ...], earlier: tuple[str, ...]) -> str:
 
 def _named_like_family(path: tuple[str, ...], family: tuple[str, ...]) -> ValueError:
     return ValueError(
-        f"evaluate({' › '.join(path)!r}) has the same id as the pooled "
-        f"evaluate_each({' › '.join(family)!r}) in this file: a family's id is its name "
-        f"template. Give the eval or the template another name.{_separator_hint(path, family)}"
+        f"evaluate({' › '.join(path)!r}) has the same id as "
+        f"evaluate({' › '.join(family)!r}) with cases in this file. Give one of them another "
+        f"name.{_separator_hint(path, family)}"
     )
 
 
@@ -212,6 +214,32 @@ AsyncBody = Callable[["AttemptContext"], Coroutine[Any, Any, None]]
 Body = TypeVar("Body", SyncBody, AsyncBody)
 
 
+T = TypeVar("T")
+SyncCaseBody = Callable[["SyncAttemptContext", T], None]
+AsyncCaseBody = Callable[["AttemptContext", T], Coroutine[Any, Any, None]]
+
+
+class _Cases(Generic[T]):
+    """`evaluate(name, {"cases": …})`'s decorator: a body taking the context and one case."""
+
+    def __init__(self, register: Callable[[Callable[..., Any]], None]) -> None:
+        self._register = register
+
+    @overload
+    def __call__(self, fn: SyncCaseBody[T], /) -> SyncCaseBody[T]: ...
+    @overload
+    def __call__(self, fn: AsyncCaseBody[T], /) -> AsyncCaseBody[T]: ...
+
+    def __call__(self, fn: Callable[..., Any], /) -> Any:
+        self._register(fn)
+        return fn
+
+
+# Overlaps the next on purpose: options with `cases` are `EvalOptions` too, and take a case body.
+@overload
+def evaluate(  # pyright: ignore[reportOverlappingOverload]
+    name: str, options: CaseOptions[T], /, *, mode: Mode = "run"
+) -> _Cases[T]: ...
 @overload
 def evaluate(
     name: str, options: EvalOptions | None = None, /, *, mode: Mode = "run"
@@ -224,20 +252,28 @@ def evaluate(name: str, options: EvalOptions, fn: Body, /, *, mode: Mode = "run"
 
 def evaluate(
     name: str,
-    arg: Callable[..., Any] | EvalOptions | None = None,
+    arg: Callable[..., Any] | EvalOptions | CaseOptions[Any] | None = None,
     arg2: Callable[..., Any] | None = None,
     /,
     *,
     mode: Mode = "run",
 ) -> Any:
+    """An eval: its name, options and body. With `cases`, the body takes `(c, case)` and runs
+    once per case with every cell and run."""
     if callable(arg) and arg2 is None:
         _register_eval(name, mode, {}, arg, None, None)
         return arg
-    if isinstance(arg, dict) and callable(arg2):
-        _register_eval(name, mode, dict[str, Any](cast(dict[str, Any], arg)), arg2, None, None)
+    opts = dict[str, Any](cast(dict[str, Any], arg)) if isinstance(arg, dict) else {}
+    with_cases = "cases" in opts or "case_key" in opts
+    if callable(arg2):
+        if with_cases:
+            _register_cases(name, mode, opts, arg2)
+        else:
+            _register_eval(name, mode, opts, arg2, None, None)
         return arg2
 
-    opts = dict[str, Any](cast(dict[str, Any], arg)) if isinstance(arg, dict) else {}
+    if with_cases:
+        return _Cases[Any](lambda fn: _register_cases(name, mode, opts, fn))
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         _register_eval(name, mode, opts, fn, None, None)
@@ -246,24 +282,206 @@ def evaluate(
     return decorator
 
 
-_PLACEHOLDER = re.compile(r"%#|%s|\$([A-Za-z_]\w*)")
+def _survey_options(name: str, arg: object) -> dict[str, Any]:
+    """A survey's options as an eval's: the gate fixed at `"none"`. Its own `gate`, or its
+    compare's `gate` or `min_lift`, is refused, since nothing in a survey gates."""
+    where = f"survey({name!r})"
+    fix = "A survey records what its attempts do and gates nothing; use evaluate() to gate."
+    opts = dict[str, Any](cast(dict[str, Any], arg)) if isinstance(arg, dict) else {}
+    if "gate" in opts:
+        raise ValueError(f"{where} sets gate. {fix}")
+    if isinstance(opts.get("runs"), dict):
+        raise ValueError(
+            f"{where} sets runs={{'best_of': …}}, which gates each cell on its majority. {fix} "
+            "Set a fixed count, e.g. runs=3."
+        )
+    compare = opts.get("compare")
+    for key in ("gate", "min_lift"):
+        if isinstance(compare, dict) and key in compare:
+            raise ValueError(f"{where} sets compare.{key}. {fix}")
+    return {**opts, "gate": "none"}
 
 
-def _case_name(template: str, case: Any, index: int) -> str:
-    """A case's eval name: `%#` is its index, `%s` the case as `str()` writes it, and `$field`
-    the field of a dict case (left as written when the case has no such field). One pass, so a
-    value that contains a placeholder stays as it is."""
-    fields = cast(dict[str, Any], case) if isinstance(case, dict) else {}
+@overload
+def survey(  # pyright: ignore[reportOverlappingOverload]
+    name: str, options: SurveyCaseOptions[T], /, *, mode: Mode = "run"
+) -> _Cases[T]: ...
+@overload
+def survey(
+    name: str, options: SurveyOptions | None = None, /, *, mode: Mode = "run"
+) -> Callable[[Body], Body]: ...
+@overload
+def survey(name: str, fn: Body, /, *, mode: Mode = "run") -> Body: ...
+@overload
+def survey(name: str, options: SurveyOptions, fn: Body, /, *, mode: Mode = "run") -> Body: ...
 
-    def fill(m: re.Match[str]) -> str:
-        if m.group(0) == "%#":
-            return str(index)
-        if m.group(0) == "%s":
-            return str(cast(object, case))
-        key = m.group(1)
-        return str(fields[key]) if key in fields else m.group(0)
 
-    return _PLACEHOLDER.sub(fill, template)
+def survey(
+    name: str,
+    arg: Callable[..., Any] | SurveyOptions | SurveyCaseOptions[Any] | None = None,
+    arg2: Callable[..., Any] | None = None,
+    /,
+    *,
+    mode: Mode = "run",
+) -> Any:
+    """`evaluate` with the gate fixed at `"none"`: its attempts run and are recorded, and only run
+    and infra errors fail it. A failed `expect` reads as a check that failed, not a fail."""
+    if callable(arg) and arg2 is None:
+        _register_eval(name, mode, {"gate": "none"}, arg, None, None)
+        return arg
+    opts = _survey_options(name, arg)
+    with_cases = "cases" in opts or "case_key" in opts
+    if callable(arg2):
+        if with_cases:
+            _register_cases(name, mode, opts, arg2, "survey")
+        else:
+            _register_eval(name, mode, opts, arg2, None, None)
+        return arg2
+    if with_cases:
+        return _Cases[Any](lambda fn: _register_cases(name, mode, opts, fn, "survey"))
+
+    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        _register_eval(name, mode, opts, fn, None, None)
+        return fn
+
+    return decorator
+
+
+_BAD_KEY = re.compile(r"[#/›\x00-\x1f\x7f]")
+CASE_KEY_MAX = 80
+
+
+def _default_key(case: Any) -> str | None:
+    if isinstance(case, str):
+        return case
+    if isinstance(case, int | float) and not isinstance(case, bool) and math.isfinite(case):
+        return _js_number(case)
+    if isinstance(case, dict):
+        fields = cast(dict[str, Any], case)
+        for key in ("id", "name"):
+            if isinstance(fields.get(key), str):
+                return cast(str, fields[key])
+    for key in ("id", "name"):
+        value = getattr(cast(object, case), key, None)
+        if isinstance(value, str):
+            return value
+    return None
+
+
+def _js_number(n: float) -> str:
+    """A number as JavaScript's `String(n)` writes it (`2.0` as `2`, `1e-07` as `1e-7`), so both
+    SDKs key it alike. `repr` has the same shortest round-trip digits; only the layout differs."""
+    x = float(n)
+    if x == 0:
+        return "0"
+    parts = Decimal(repr(abs(x))).normalize().as_tuple()
+    digits = "".join(map(str, parts.digits))
+    size = len(digits)
+    point = size + int(parts.exponent)
+    if size <= point <= 21:
+        body = digits + "0" * (point - size)
+    elif 0 < point <= 21:
+        body = f"{digits[:point]}.{digits[point:]}"
+    elif -6 < point <= 0:
+        body = f"0.{'0' * -point}{digits}"
+    else:
+        mantissa = digits[0] + (f".{digits[1:]}" if size > 1 else "")
+        body = f"{mantissa}e{'+' if point > 0 else '-'}{abs(point - 1)}"
+    return ("-" if x < 0 else "") + body
+
+
+def case_keys(cases: Sequence[Any], case_key: Callable[[Any], Any] | None, where: str) -> list[str]:
+    """Each case's key, in list order: `case_key(case)` when given, else its default. Trimmed,
+    1–80 characters, with no `#`, `/`, `›` or control characters, and unique within the eval."""
+    seen: dict[str, int] = {}
+    out: list[str] = []
+    for i, case in enumerate(cases):
+        raw = case_key(case) if case_key else _default_key(case)
+        if raw is None:
+            raise ValueError(
+                f"cases[{i}] in {where} has no key: a case is its own key when it's a string or "
+                "a number, or a dict's id or name. Give it an id, or pass "
+                '"case_key": lambda case: case["slug"].'
+            )
+        if not isinstance(raw, str):
+            raise TypeError(
+                f"case_key in {where} must return a string (got {raw!r} for cases[{i}])"
+            )
+        key = raw.strip()
+        if not key or len(key) > CASE_KEY_MAX or _BAD_KEY.search(key):
+            raise ValueError(
+                f"cases[{i}] in {where} has the key {raw!r}: a case key is 1–{CASE_KEY_MAX} "
+                "characters, with no #, /, › or control characters."
+                + ("" if case_key else " Pass case_key to give it another.")
+            )
+        if key in seen:
+            raise ValueError(
+                f"cases[{seen[key]}] and cases[{i}] in {where} have the same key {key!r}. Each "
+                "case needs its own key"
+                + ("." if case_key else ": give them distinct ids or names, or pass case_key.")
+            )
+        seen[key] = i
+        out.append(key)
+    return out
+
+
+def _register_cases(
+    name: str, mode: Mode, opts: dict[str, Any], fn: Callable[..., Any], verb: str = "evaluate"
+) -> None:
+    """Each case plans as a member of a pooled family named for the eval, `<name> [<key>]`."""
+    where = f"{verb}({name!r})"
+    cases = opts.pop("cases", None)
+    case_key = opts.pop("case_key", None)
+    if not isinstance(cast(object, cases), list | tuple):
+        raise TypeError(
+            f"case_key in {where} names each case, but there are no cases. Add cases, or drop "
+            "case_key."
+            if cases is None
+            else f"cases in {where} must be a list (got {type(cases).__name__}), e.g. "
+            '"cases": ["users", "posts"]'
+        )
+    cases = cast(Sequence[Any], cases)
+    if not cases:
+        raise ValueError(f"cases in {where} is an empty list. Give at least one case.")
+    if case_key is not None and not callable(case_key):
+        raise TypeError(f"case_key in {where} must be a function from a case to its key")
+    if isinstance(opts.get("runs"), dict):
+        raise ValueError(
+            f"{where} has cases, so it can't take runs={{'best_of': …}}: best-of stops each cell "
+            "on its own, and the cases pool over the runs. Set a fixed count, e.g. runs=3."
+        )
+    _refuse_generator(fn, where)
+    try:
+        inspect.signature(fn).bind(None, None)
+    except TypeError:
+        raise TypeError(
+            f"{where}: with cases, the body takes the attempt and its case, e.g. def body(c, case)"
+        ) from None
+    except ValueError:
+        pass
+    keys = case_keys(cases, cast(Callable[[Any], Any] | None, case_key), where)
+    body = body_hash(fn, where)
+    pooled = len(cases) > 1
+    if pooled:
+        path = (*(frame.name for frame in _group_stack), name)
+        key = " › ".join(path)
+        if key in _families:
+            raise ValueError(
+                f"{where} with cases is declared twice in this file. Each eval needs its own "
+                "name, or their cases are pooled into one. Give each its own name."
+                f"{_separator_hint(path, _families[key])}"
+            )
+        plain = _names.get(key)
+        if plain is not None and not plain[1]:
+            raise _named_like_family(plain[0], path)
+        _families[key] = path
+    for index, (case, case_name) in enumerate(zip(cases, keys, strict=True)):
+        family = DeclaredFamily(name=name, case=index, cases=len(cases)) if pooled else None
+        source: w.DeclaredSource = {
+            "body": body,
+            "case": case_hash(case, f"{where} case {case_name!r}"),
+        }
+        _register_eval(f"{name} [{case_name}]", mode, opts, _with_case(fn, case), source, family)
 
 
 def body_hash(fn: Callable[..., Any], where: str) -> str:
@@ -436,94 +654,6 @@ def _with_case(fn: Callable[..., Any], case: Any) -> Callable[..., Any]:
         return fn(c, case)
 
     return body
-
-
-T = TypeVar("T")
-SyncCaseBody = Callable[["SyncAttemptContext", T], None]
-AsyncCaseBody = Callable[["AttemptContext", T], Coroutine[Any, Any, None]]
-
-
-class _Each(Generic[T]):
-    """`evaluate_each(…)`'s decorator: a body taking the context and one case."""
-
-    def __init__(self, register: Callable[[Callable[..., Any]], None]) -> None:
-        self._register = register
-
-    @overload
-    def __call__(self, fn: SyncCaseBody[T], /) -> SyncCaseBody[T]: ...
-    @overload
-    def __call__(self, fn: AsyncCaseBody[T], /) -> AsyncCaseBody[T]: ...
-
-    def __call__(self, fn: Callable[..., Any], /) -> Any:
-        self._register(fn)
-        return fn
-
-
-def evaluate_each(
-    cases: Sequence[T],
-    name_template: str,
-    options: EvalOptions | None = None,
-    *,
-    pool: bool = True,
-) -> _Each[T]:
-    """One eval per case; the body gets `(c, case)`. Its cases pool into one family unless
-    `pool=False` or there's only one.
-
-    Each eval is named from `name_template`: `%#` is the case's index, `%s` the case as `str()`
-    writes it, and `$field` a dict case's field (`"greets $name"`), left as written when the
-    case has no such field.
-    """
-    if not isinstance(cast(object, cases), list | tuple):
-        raise TypeError(
-            f"evaluate_each takes a list of cases (got {type(cases).__name__}), e.g. "
-            'evaluate_each([{"n": 1}, {"n": 2}], "case $n")'
-        )
-    opts = dict[str, Any](options or {})
-    hint = (
-        f" For evaluate_each, put $key, %s or %# in the name ({name_template!r}) so each case's "
-        "name differs."
-    )
-
-    def decorator(fn: Callable[..., Any]) -> None:
-        _refuse_generator(fn, f"evaluate_each({name_template!r})")
-        try:
-            inspect.signature(fn).bind(None, None)
-        except TypeError:
-            raise TypeError(
-                f"evaluate_each({name_template!r}): the body takes the attempt and its case, "
-                "e.g. def body(c, case)"
-            ) from None
-        except ValueError:
-            pass
-        each = f"evaluate_each({name_template!r})"
-        body = body_hash(fn, each)
-        pooled = pool and len(cases) > 1
-        if pooled:
-            path = (*(frame.name for frame in _group_stack), name_template)
-            key = " › ".join(path)
-            if key in _families:
-                raise ValueError(
-                    f"evaluate_each({key!r}) is declared twice in this file. Each pooled "
-                    "evaluate_each needs its own name, or their cases are pooled into one family. "
-                    "Give each its own name template, or pass pool=False to keep the cases apart."
-                    f"{_separator_hint(path, _families[key])}"
-                )
-            plain = _names.get(key)
-            if plain is not None and not plain[1]:
-                raise _named_like_family(plain[0], path)
-            _families[key] = path
-        for index, case in enumerate(cases):
-            family = None
-            if pooled:
-                family = DeclaredFamily(name=name_template, case=index, cases=len(cases))
-            name = _case_name(name_template, case, index)
-            source: w.DeclaredSource = {
-                "body": body,
-                "case": case_hash(case, f"{each} case {index}"),
-            }
-            _register_eval(name, "run", opts, _with_case(fn, case), source, family, hint)
-
-    return _Each(decorator)
 
 
 def todo(name: str) -> None:

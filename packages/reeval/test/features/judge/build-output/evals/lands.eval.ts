@@ -4,7 +4,7 @@ import { app } from './env.ts'
 
 // The judge's diff keeps the source and puts a marker in place of the build output and the
 // minified bundle.
-evaluate('lands', { environment: app }, async (c) => {
+evaluate('lands', { environments: app }, async (c) => {
   await c.send('build the app')
   let diff = ''
   const look = fakeJudge({

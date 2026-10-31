@@ -13,7 +13,7 @@ const withDoc = defineEnvironment('with-doc', {
 // third has 1 try an arm, so its effect can't be told yet.
 evaluate(
   'greets in the house style',
-  { runs: 4, compare: { baseline: plain, variants: [withSkill, withDoc] } },
+  { runs: 4, compare: { control: plain, variants: [withSkill, withDoc] } },
   async (c) => {
     await c.send('Write greet.js that greets in our house style.')
     await expect(c, 'writes greet.js').toHaveFile('greet.js')
@@ -24,14 +24,14 @@ evaluate(
 
 evaluate(
   'keeps the plain greeting',
-  { runs: 4, compare: { baseline: plain, variants: [withSkill] } },
+  { runs: 4, compare: { control: plain, variants: [withSkill] } },
   async (c) => {
     await c.send('Write greet.js that says Hello.')
     await expect(c.exec('grep -q Hello greet.js'), 'says hello').toSucceed()
   },
 )
 
-evaluate('greets once', { compare: { baseline: plain, variants: [withSkill] } }, async (c) => {
+evaluate('greets once', { compare: { control: plain, variants: [withSkill] } }, async (c) => {
   await c.send('Write greet.js that greets in our house style.')
   await expect(c.exec('grep -q Ahoy greet.js'), 'house greeting').toSucceed()
 })

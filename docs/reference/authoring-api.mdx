@@ -1,6 +1,6 @@
 ---
 title: "Authoring API reference"
-description: "evaluate, evaluate.each, group, and defineEnvironment declare evaluations and environments, with the types they take."
+description: "evaluate, survey, group, and defineEnvironment declare evaluations and environments, with the types they take."
 ---
 
 ## `evaluate()`
@@ -13,7 +13,7 @@ import { plain } from './environments.ts'
 
 evaluate(
   'tests build only the request fields they read',
-  { environment: plain, timeout: '30m' },
+  { environments: plain, timeout: '30m' },
   async (c) => {
     await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
     await expect(c, 'uses fromPartial').toHaveFile(
@@ -29,7 +29,7 @@ evaluate(
 </Property>
 
 <Property name="options" type="EvalOptions" optional>
-  A plain object. `environment` and `compare.baseline` cannot both be set.
+  A plain object. `environments` and `compare` cannot both be set: the control goes in `compare.control`.
 </Property>
 
 <Property name="fn" type="EvalFn" required>
@@ -42,16 +42,19 @@ reeval refuses, with exit code 2, two functions, no function, a second evaluatio
 
 For more information about `EvalOptions`, `GroupOptions`, and the type of each key, see [Options reference](/reference/options).
 
-## `evaluate.each()`
+## Cases
 
-`evaluate.each(cases, options?)` returns a function with the signature of `evaluate()`, whose body also receives the case. The following call declares one evaluation per case:
+`cases` runs one evaluation over a list of inputs, and the body receives each as its second argument:
 
 ```ts title="evals/shoehorn.eval.ts"
 const handlers = ['getUserId', 'getUserEmail', 'getUserRole']
 
-evaluate.each(handlers)(
-  'tests %s with only the request fields it reads',
-  { compare: { baseline: plain, variants: [withShoehorn] } },
+evaluate(
+  'tests a handler with only the request fields it reads',
+  {
+    cases: handlers,
+    compare: { control: plain, variants: [withShoehorn] },
+  },
   async (c, handler) => {
     // ...
   },
@@ -59,24 +62,37 @@ evaluate.each(handlers)(
 ```
 
 <Property name="cases" type="readonly T[]" required>
-  The cases, one evaluation each.
+  The inputs, each JSON data. The cases pool into one pass rate and, under `compare`, one lift paired by case and gated by `compare.minLift`.
 </Property>
 
-<Property name="options" type="EachOptions" optional>
-  Whether the cases pool into a family.
+<Property name="caseKey" type="(item: T) => string" optional>
+  Each case's key, 1 to 80 characters with no `#`, `/`, `›` or control characters. Without it, a string or a finite number is its own key, and an object uses its `id`, else its `name`.
 </Property>
 
-<Property name="name" type="string" required>
-  A template for each case's name, and the family's name. `%s` is the case, `%#` is its index from 0, and `$key` is a property of an object case. A string case prints as itself, and an object case prints as JSON.
+<Property name="where" type="Where<T>" optional>
+  TypeScript only. Which case and environment pairs run, from each environment's `traits`. For more information, see [the `cases` option](/reference/options#cases).
 </Property>
 
-<Property name="fn" type="(c: AttemptContext, item: T) => Promise<void>" required>
-  The body, called once per attempt with the case.
+<Property name="fn" type="CaseFn<T>" required>
+  The body, `(c: AttemptContext, item: T) => Promise<void>`, called once per attempt with its case.
 </Property>
 
-The returned function has no `skip`, `only`, or `todo`. reeval refuses, with exit code 2, a `cases` value that is not an array, and two cases with the same name, including two whose names differ only in a masked secret. Name each case by `%#` or by a property that holds no secret.
+Results print the evaluation's name as a heading and a row per case key. reeval refuses, with exit code 2, a `cases` value that is not a non-empty list, a case with no key, two cases with one key, including two whose keys differ only in a masked secret, `caseKey` or `where` without `cases`, and `runs: { bestOf }` beside `cases`. `cases`, `caseKey` and `where` are options of `evaluate()` and `survey()` only, not of `group()` or the config.
 
-For more information about families and the `all cases` row, see [`compare`](/reference/options#compare).
+For more information about the `all cases` row, see [`compare`](/reference/options#compare).
+
+## `survey()`
+
+`survey(name, options?, fn)` declares an evaluation that records what its attempts do and gates nothing:
+
+```ts title="evals/database.eval.ts"
+survey('which database', { runs: 3 }, async (c) => {
+  await c.send('Add persistence to the app.')
+  c.observe('package.json', await c.readFile('package.json'))
+})
+```
+
+`survey()` takes what `evaluate()` takes, with `gate` fixed at `'none'`. Every cell prints `ran` rather than a pass or a fail, and only run and infra errors fail the run. A failed `expect` reads as a check that failed. reeval refuses, with exit code 2, `gate`, `compare.gate`, `compare.minLift`, and `runs: { bestOf }`. `survey.skip()`, `survey.only()`, and `survey.todo()` work as `evaluate()`'s do.
 
 ## `EvalFn`
 
@@ -84,22 +100,12 @@ For more information about families and the `all cases` row, see [`compare`](/re
 
 For more information about `AttemptContext` and the types the methods of `c` take and return, see [Attempt context reference](/reference/attempt-context).
 
-## `EachOptions`
-
-`EachOptions` is the type of `evaluate.each()`'s second argument.
-
-<Property name="pool" type="boolean" optional>
-  `true` by default: two or more cases form a family with one pass rate and, under `compare`, one paired lift gated by `compare.minLift`. `false` keeps each case independent: each case gates alone and prints its own block, and the `--dry-run` table lists each on its own row, without the family note. One case is never pooled.
-</Property>
-
-reeval refuses any other key with exit code 2.
-
 ## `group()`
 
 `group(name, options?, fn)` applies its options to every evaluation and nested group inside it, as in the following call:
 
 ```ts title="evals/shoehorn.eval.ts"
-group('request builders', { environment: plain, tags: ['smoke'] }, () => {
+group('request builders', { environments: plain, tags: ['smoke'] }, () => {
   // ...
   group('billing', { tags: ['billing'] }, () => {
     // ...
@@ -125,7 +131,7 @@ For more information about the cascade from `ReevalConfig` and `Profile` to an e
 
 ## `defineEnvironment()`
 
-`defineEnvironment(name, spec)` defines what an evaluation runs in. The following declaration extends a baseline into a variant:
+`defineEnvironment(name, spec)` defines what an evaluation runs in. The following declaration extends a control into a variant:
 
 ```ts title="evals/environments.ts"
 export const plain = defineEnvironment('plain', {

@@ -1,7 +1,7 @@
 # The config as data: no TypeScript, and every value in its data form.
-harness: { kind: fake, id: a }
+harnesses: { kind: fake, id: a }
 sandbox: { kind: fake }
-environment:
+environments:
   kind: environment
   name: base
   layers: [{ name: base, spec: { files: { README.md: hello } } }]
@@ -15,8 +15,8 @@ profiles:
   nightly:
     defaults:
       runs: 2
-      harness: [{ kind: fake, id: a }, { kind: fake, id: b }]
-      environment:
+      harnesses: [{ kind: fake, id: a }, { kind: fake, id: b }]
+      environments:
         kind: environment
         name: nightly
         layers: [{ name: nightly, spec: { env: { MODE: nightly } } }]

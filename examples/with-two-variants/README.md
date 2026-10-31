@@ -68,5 +68,5 @@ tries, enough for a verdict.
 | [`fake-agent/`](./fake-agent) | What the fake agent writes: `plain/`, or `convention/` when it finds the convention |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and its step that looks for the convention, and the real agents from `../profiles.ts` |
 
-[Measure lift against a baseline](../../docs/results/compare/lift.mdx)
+[Measure lift against a control](../../docs/results/compare/lift.mdx)
 covers comparing variants against each other.

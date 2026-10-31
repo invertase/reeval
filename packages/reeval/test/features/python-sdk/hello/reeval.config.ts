@@ -11,7 +11,7 @@ const sandbox =
 
 export default defineConfig({
   include: ['evals/**/*.eval.py'],
-  harness:
+  harnesses:
     process.env.REEVAL_FIXTURE_HARNESS === 'cursor'
       ? cursor({
           model: process.env.REEVAL_REAL_MODEL ?? 'composer-2.5',

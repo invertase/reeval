@@ -21,7 +21,7 @@ import { evaluate, expect, group } from 'reeval'
 const key = (c: string) => 'sk-ant-' + c.repeat(24)
 evaluate('plain ' + key('a'), async () => { expect(1).toBe(1) })
 group('grp ' + key('d'), () => {
-  evaluate.each([{ k: key('b') }])('case [$k]', async () => { expect(1).toBe(2) })
+  evaluate('case', { cases: [{ id: key('b') }] }, async () => { expect(1).toBe(2) })
   evaluate.todo('later ' + key('c'))
 })
 `
@@ -73,9 +73,9 @@ describe('eval names that hold a secret', () => {
         /evaluate\("e \[REDACTED\]"\) names a secret, and its masked name is another eval's in this file: name it without the secret\./,
       ],
       [
-        "an evaluate.each's cases",
-        `evaluate.each([{ k: key('a') }, { k: key('b') }])('e [$k]', async () => {})`,
-        /evaluate\("e \[\[REDACTED\]\]"\) names a secret, .* For evaluate\.each, name each case by %# or by a field that holds no secret\./,
+        "an eval's cases",
+        `evaluate('e', { cases: [{ id: key('a') }, { id: key('b') }] }, async () => {})`,
+        /evaluate\("e \[\[REDACTED\]\]"\) names a secret, .* Give each case a key that holds no secret\./,
       ],
       [
         'two groups',
@@ -168,7 +168,7 @@ evaluate('plain sk-ant-' + 'a'.repeat(24), async () => {})
     const value = 'hunter9hunter9xq'
     const file = (name: string) => `import { defineEnvironment, evaluate } from 'reeval'
 const db = defineEnvironment('db', ({ secret }) => ({ env: { DB_PASS: secret.fromEnv('DB_PASS') } }))
-evaluate(${JSON.stringify(name)}, { environment: db }, async () => {})
+evaluate(${JSON.stringify(name)}, { environments: db }, async () => {})
 evaluate.todo('later ' + ${JSON.stringify(value)})
 `
     const p = await project('masked-declared', {
@@ -204,5 +204,61 @@ evaluate.todo('later ' + ${JSON.stringify(value)})
     const refused = await runCli(todo.dir, ['run', '--dry-run'], { env })
     assert.equal(refused.code, 2, refused.stdout + refused.stderr)
     assert.match(refused.stderr, /evals\/a\.eval\.ts › later \[REDACTED\] names a secret/)
+  })
+
+  test("a case key that holds a secret is masked in the case's name, the notes and where's exclusions", async () => {
+    const value = 'abcd1234efgh5678ijkl'
+    const p = await project('masked-case-key', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const a = defineEnvironment('a-env', { traits: { stack: 'a' } })
+const b = defineEnvironment('b-env', { traits: { stack: 'b' } })
+evaluate('keys', {
+  environments: [a, b],
+  cases: [{ id: 'k ${value}', stack: 'a' }, { id: 'plain', stack: 'b' }],
+  where: ({ case: c, environment }) => environment.traits.stack === c.stack,
+}, async () => {})
+`,
+    })
+    const env = { MY_API_TOKEN: value }
+    const dry = await runCli(p.dir, ['run', '--dry-run', '--json'], { env })
+    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+    assert.match(dry.stdout, /name masked: it holds the value of MY_API_TOKEN/)
+    const run = await runCli(p.dir, ['run', '--record'], { env })
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    const { run: record } = readRun(p.dir)
+    assert.deepEqual(record.evals.map((e) => e.id).sort(), [
+      'evals/a.eval.ts › keys [k [REDACTED]]',
+      'evals/a.eval.ts › keys [plain]',
+    ])
+    const excluded = (record.families ?? []).flatMap((f) => f.excluded ?? []).map((e) => e.case)
+    assert.deepEqual(excluded.sort(), ['k [REDACTED]', 'plain'])
+    const written = ['.reeval', 'evals/.history'].flatMap((d) => filesUnder(join(p.dir, d)))
+    for (const text of [dry.stdout, dry.stderr, run.stdout, run.stderr, ...written]) {
+      assert.doesNotMatch(text, /abcd1234|efgh5678/, text.slice(0, 2000))
+    }
+  })
+
+  test('a case key that holds a value declared with secret() is refused at plan time', async () => {
+    const value = 'hunter9hunter9xq'
+    const p = await project('masked-case-declared', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const db = defineEnvironment('db', ({ secret }) => ({ env: { DB_PASS: secret.fromEnv('DB_PASS') } }))
+evaluate('uses', { environments: db, cases: ['${value}', 'plain'] }, async () => {})
+`,
+    })
+    const run = await runCli(p.dir, ['run'], { env: { DB_PASS: value } })
+    const out = run.stdout + run.stderr
+    assert.equal(run.code, 2, out)
+    assert.match(
+      out,
+      /evals\/a\.eval\.ts › uses \[\[REDACTED\]\] names a secret declared with secret\(\)/,
+    )
+    assert.doesNotMatch(out, /hunter9/)
+    const reeval = join(p.dir, '.reeval')
+    for (const text of existsSync(reeval) ? filesUnder(reeval) : []) {
+      assert.doesNotMatch(text, /hunter9/)
+    }
   })
 })

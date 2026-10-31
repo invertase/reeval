@@ -133,9 +133,9 @@ import { fakeSandbox } from 'reeval/sandbox'
 import { fakeJudge } from 'reeval/judge'
 const sandbox = fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) })
 export default defineConfig({
-  harness: fakeHarness(${options.harness ?? '{}'}),
+  harnesses: fakeHarness(${options.harness ?? '{}'}),
   sandbox,
-  environment: defineEnvironment('fake', {}),
+  environments: defineEnvironment('fake', {}),
   judge: ${options.judge ?? '{ model: fakeJudge({ score: 0.9 }) }'},
   ${options.extra ?? ''}
 })

@@ -33,7 +33,7 @@ const compareEval = (runs: number, variant: number, base: number, name = 'skill 
 import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
-evaluate('${name}', { runs: ${runs}, compare: { baseline: plain, variants: [marked] } }, async (c) => {
+evaluate('${name}', { runs: ${runs}, compare: { control: plain, variants: [marked] } }, async (c) => {
   await c.send('go')
   const wins = c.attempt.cell.role === 'variant' ? ${variant} : ${base}
   expect(c.attempt.n <= wins, 'uses the marker').toBe(true)
@@ -82,7 +82,7 @@ const docs = defineEnvironment('${name}-docs', ({ file, mcp }) => ({
   files: { 'server.mjs': file('../${server}') },
   mcp: { docs: mcp.stdio(${command}) },
 }))
-evaluate('${name}', { environment: docs }, async (c) => {
+evaluate('${name}', { environments: docs }, async (c) => {
   await c.send('look it up')
   await c.send('and again')
   expect(true, 'answered').toBe(true)
@@ -152,11 +152,18 @@ evaluate('migrates', async (c) => {
   expect('psql: Network is unreachable', 'migrated').toBe('ok')
 })
 `,
+      'evals/survey.eval.ts': `import { expect, survey } from 'reeval'
+survey('throws', { runs: 3 }, async (c) => {
+  await c.send('go')
+  if (c.attempt.n < 3) throw new Error('no pick file')
+  expect(true, 'picked').toBe(true)
+})
+`,
       'evals/server.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const server = defineEnvironment('server', ({ secret }) => ({
   env: { CHECK_TOKEN: secret({ to: 'checks', optional: true }) },
 }))
-evaluate('serves', { runs: 2, environment: server }, async (c) => {
+evaluate('serves', { runs: 2, environments: server }, async (c) => {
   await c.send('go')
   expect(true, 'served').toBe(true)
 })
@@ -284,6 +291,38 @@ describe('remark thresholds', () => {
     assert.equal(both?.evidence.length, 2)
   })
 
+  test('survey-throws: a survey that threw outside an expect in more than half its tries', async () => {
+    const record = only(await rules(), 'throws')
+    const [remark] = raise(record, NO_HISTORY)
+    assert.equal(remark?.kind, 'survey-throws')
+    assert.equal(remark?.severity, 'concern')
+    assert.equal(
+      remark?.text,
+      '2 of 3 tries threw outside an expect, so the survey recorded its own error, not what the agent did: no pick file',
+    )
+    assert.equal(remark?.evidence.length, 2)
+    const edit = (change: (a: RunRecord['evals'][number]['attempts'][number]) => void) => {
+      const copy = structuredClone(record)
+      change(copy.evals[0]?.attempts[0] as never)
+      return kinds(copy, NO_HISTORY)
+    }
+    assert.deepEqual(
+      edit((a) => Object.assign(a, { outcome: 'pass', error: null })),
+      [],
+      'half the tries',
+    )
+    assert.deepEqual(
+      edit((a) => {
+        a.assertions = [{ ...(a.assertions?.[0] as never), status: 'fail' }]
+      }),
+      [],
+      'a failed expect is a check, not a throw',
+    )
+    const gated = structuredClone(record)
+    for (const c of gated.evals[0]?.cells ?? []) c.gate = 'all'
+    assert.deepEqual(kinds(gated, NO_HISTORY), [], 'an evaluate fails on it instead')
+  })
+
   test('snapshot-too-large: an attempt over the cap took no snapshot, not one taken or off', async () => {
     const record = only(await rules(), 'serves')
     const taken = (
@@ -386,16 +425,16 @@ describe('remarks in reeval run', () => {
     for (const block of blocks) assert.doesNotMatch(block ?? '', /well written/)
   })
 
-  test('a fix points at its line, a family at its name template; an edit re-arms only its eval', async () => {
+  test('a fix points at its line, an eval with cases at its name; an edit re-arms only its eval', async () => {
     const p = await project('remarks-once', {
       'reeval.config.ts': fakeConfig(),
       'evals/skill.eval.ts': compareEval(2, 2, 0),
       'evals/fam.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
-evaluate.each([{ id: 'a' }, { id: 'b' }])(
-  'fixes $id',
-  { runs: 2, compare: { baseline: plain, variants: [marked] } },
+evaluate(
+  'fixes',
+  { cases: [{ id: 'a' }, { id: 'b' }], runs: 2, compare: { control: plain, variants: [marked] } },
   async (c) => {
     await c.send('go')
     expect(c.attempt.cell.role === 'variant', 'uses the marker').toBe(true)
@@ -413,7 +452,7 @@ evaluate.each([{ id: 'a' }, { id: 'b' }])(
       ),
       first,
     )
-    assert.match(first, /^ {2}fixes \$id: Marked passed .*\n {4}fix {2}evals\/fam\.eval\.ts:5 /m)
+    assert.match(first, /^ {2}fixes: Marked passed .*\n {4}fix {2}evals\/fam\.eval\.ts:5 /m)
     const firstRun = readRun(p.dir).run.runId
     const second = await runCli(p.dir, ['run', '-v'])
     assert.equal(remarksBlock(second.stdout), null, 'printed once per eval version')

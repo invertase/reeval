@@ -14,10 +14,10 @@ const unused =
     : fakeSandbox({ dir: new URL('./sandboxes', import.meta.url), id: 'from-config-env' })
 
 export default defineConfig({
-  harness: fakeHarness({}),
+  harnesses: fakeHarness({}),
   // One attempt a cell, where a compare would otherwise run 4 a side.
   runs: 1,
   sandbox: root,
   // Present so the fixture can prove a named env does not inherit this sandbox.
-  environment: defineEnvironment('config', { sandbox: unused }),
+  environments: defineEnvironment('config', { sandbox: unused }),
 })

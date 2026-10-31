@@ -1,5 +1,5 @@
 # OpenRouter, upstream fallbacks on for reeval's own calls; each provider's own key ends the list.
-harness:
+harnesses:
   - { kind: codex, model: gpt-5.4-mini }
   - { kind: cursor, model: composer-2.5 }
 gateway: [{ openrouter: { fallbacks: true } }]

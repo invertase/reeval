@@ -36,7 +36,7 @@ test("the Python SDK's DEFAULT_EGRESS_ALLOW is reeval's", () => {
 
 test("the Python SDK's matchers are reeval's, each under its snake_case name", () => {
   const source = readFileSync(join(pkg, 'src/reeval_python/expect.py'), 'utf8')
-  const methods = [...source.matchAll(/def (to_\w+)\(self[\s\S]*?self\._match\("(\w+)"/g)].map(
+  const methods = [...source.matchAll(/def (to_\w+)\(\s*self[\s\S]*?self\._match\("(\w+)"/g)].map(
     ([, method, matcher]) => [method, matcher],
   )
   // Their subject is a c.capture() result, which the Python SDK can't make yet.

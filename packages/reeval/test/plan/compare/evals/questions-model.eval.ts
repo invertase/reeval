@@ -1,7 +1,7 @@
 import { evaluate, group } from 'reeval'
 import { base, skilled } from './envs.ts'
 
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 const across = 'environment' as const
 
 group('reviews', { question: { model: 'google/gemini-3.8-flash' } }, () => {

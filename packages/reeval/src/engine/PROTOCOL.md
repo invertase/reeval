@@ -87,7 +87,7 @@ A tree's relative host paths resolve against the directory of the eval file bein
 rule TypeScript and `reeval.yaml` follow: a fake sandbox's `dir`, a `dockerfile` (which must be a
 file), and, in each environment layer's spec, host files in `files` and `rules`, a local skill's
 `path`, a local npm skill's `spec` and a local git workspace's `url`. That covers an eval's or
-group's `sandbox`, `environment`, `compare.baseline` and `compare.variants`. Absolute paths stay
+group's `sandbox`, `environments`, `compare.control` and `compare.variants`. Absolute paths stay
 as written, so a tree a TypeScript file declared, whose helpers already resolved its paths,
 declares the same again.
 

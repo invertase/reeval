@@ -38,6 +38,7 @@ import type {
   CellGate,
   EnvironmentRecord,
   EvalRecord,
+  ExcludedPair,
   ExecResult,
   FamilyMeta,
   FileChange,
@@ -56,7 +57,7 @@ import { promptTokens, sumUsage } from '../usage.ts'
 import { checkVerdict } from '../view/contrasts.ts'
 import { cellOutcome, gatePart, passRateOf, worstOutcome } from '../view/gate.ts'
 import { checkTries } from '../view/judgments.ts'
-import { familiesOf } from './families.ts'
+import { familiesOf, pooledPassRate } from './families.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
   type AttemptFiles,
@@ -446,6 +447,8 @@ class Seen {
     Omit<Stack['harnesses'][number], 'resolvedModels' | 'resolvedEffort'>
   >()
   readonly resolvedHarnesses = new Map<string, Set<string>>()
+  /** Every pair `where` left out of a pooled family, by family id, from its cases' plans. */
+  readonly familyExcluded = new Map<string, ExcludedPair[]>()
   /** Keys of the attempts kept from the previous record on resume. */
   readonly kept = new Set<string>()
   /** Registry digests found by the preflight, by image id. */
@@ -532,6 +535,7 @@ class Seen {
         tags: e.attempt?.tags ?? [],
         ...(e.attempt?.plan.compare ? { compare: e.attempt.plan.compare } : {}),
         ...(e.attempt?.family ? { family: familyOf(e.attempt.family) } : {}),
+        ...(e.attempt?.plan.excluded ? { excluded: e.attempt.plan.excluded } : {}),
         fingerprint: '',
         sources,
         ...(from.source ? { source: from.source } : {}),
@@ -544,6 +548,8 @@ class Seen {
       }
       this.byEval.set(e.id, entry)
     }
+    const familyExcluded = e.attempt?.plan.familyExcluded
+    if (entry.family && familyExcluded) this.familyExcluded.set(entry.family.id, familyExcluded)
     return entry
   }
 }
@@ -682,6 +688,8 @@ async function addPreviousAttempt(
   seen.add(null, cell, stub)
   seen.addKept(previous, kept, cell, beforeCell?.environmentDigest ?? null, e.attempt !== undefined)
   const entry = seen.entry(stub, sources, { source, revision })
+  // Unplanned this time, the case keeps the pairs `where` left it out of.
+  if (!e.attempt && !entry.excluded && before?.excluded) entry.excluded = before.excluded
   const created = !entry.cells.some((c) => c.key === cell.key)
   const cellRecord = cellOf(
     entry,
@@ -1158,6 +1166,10 @@ function rollUp(evals: EvalEntry[]): void {
     entry.outcome = worstOutcome(
       entry.cells.map((c) => (c.gate === 'none' && c.outcome === 'fail' ? 'pass' : c.outcome)),
     )
+    // Its family's rate over the cases gates a case's `{ passRate }` cells (`familiesOf`).
+    if (entry.family && entry.cells.some((c) => pooledPassRate(c) !== undefined)) {
+      entry.verdict = 'family'
+    } else delete entry.verdict
     const gated = new Set(entry.cells.filter((c) => c.gate !== 'none').map((c) => c.key))
     entry.passRate = passRateOf(
       entry.attempts.filter((a) => gated.has(a.cell)).map((a) => a.outcome),
@@ -1251,7 +1263,8 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       include: config.include,
       harness: config.harness.map(withoutCaps),
       sandbox: withoutCaps(config.sandbox),
-      environment: config.environment ?? null,
+      environment:
+        config.environments.length > 1 ? config.environments : (config.environments[0] ?? null),
       runs: config.runs,
       env: config.env,
       judge: withoutCaps(config.judge),
@@ -1322,7 +1335,12 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     if (!entry.family && before) entry.family = before
   }
   rollUp(evals)
-  const families = familiesOf(evals, (cell) => minLifts.get(cell))
+  const families = familiesOf(
+    evals,
+    (cell) => minLifts.get(cell),
+    (id) =>
+      seen.familyExcluded.get(id) ?? input.previous?.families?.find((f) => f.id === id)?.excluded,
+  )
   sequence(evals)
   for (const e of evals) {
     const asked = input.answers?.evals.get(e.id)
@@ -1381,10 +1399,15 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
           reason: profile.reason,
           defaults: JSON.parse(
             JSON.stringify({
-              harness: ids(profile.defaults.harness),
-              environment: profile.defaults.environment?.name,
+              harness: ids(profile.defaults.harnesses),
+              environment:
+                profile.defaults.environments &&
+                [profile.defaults.environments]
+                  .flat()
+                  .map((e) => e.name)
+                  .join(', '),
               sandbox:
-                (profile.defaults.environment || profile.defaults.sandbox) &&
+                (profile.defaults.environments || profile.defaults.sandbox) &&
                 sandboxId(profileSandbox(config, profile.defaults)),
               ...(profile.defaults.runs !== undefined ? runsOf(profile.defaults.runs) : {}),
               timeout: profile.defaults.timeout,
@@ -1405,7 +1428,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     budget: Object.keys(input.plan.budget).length ? input.plan.budget : null,
     config: {
       sandbox: plannedSandboxes(input.plan.sandboxes, profileSandbox(config, profile?.defaults)),
-      environment: config.environment?.name ?? null,
+      environment: config.environments.map((e) => e.name).join(', ') || null,
       ...(config.runs !== undefined ? runsOf(config.runs) : { runs: 1 }),
       judgeModel,
       threshold: runJudge.threshold,

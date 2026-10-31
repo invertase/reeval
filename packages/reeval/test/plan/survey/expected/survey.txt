@@ -1,0 +1,16 @@
+no profile · 5 evals · 12 cells · 30 attempts
+evals/survey.eval.ts › which database                 a/-/docker        control          ungated  ×3
+                                                      b/-/docker        control          ungated  ×3
+evals/survey.eval.ts › which database with the skill  a/base/docker     control          ungated  ×4
+                                                      a/skilled/docker  variant skilled  ungated  ×4
+                                                      b/base/docker     control          ungated  ×4
+                                                      b/skilled/docker  variant skilled  ungated  ×4
+evals/survey.eval.ts › which framework [chat]         a/-/docker        control          ungated  ×1  family which framework case 1/2
+                                                      b/-/docker        control          ungated  ×1
+evals/survey.eval.ts › which framework [rag]          a/-/docker        control          ungated  ×1  family which framework case 2/2
+                                                      b/-/docker        control          ungated  ×1
+evals/survey.eval.ts › ungated on its own             a/-/docker        control          ungated  ×2
+                                                      b/-/docker        control          ungated  ×2
+excluded: —
+image docker · cursor · 5 evals
+  base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

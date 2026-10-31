@@ -3,7 +3,7 @@ import { fakeJudge } from 'reeval/judge'
 import { ui } from './env.ts'
 
 // Must fail: artifacts: true sends the captures in the order the attempt took them.
-evaluate('canary', { environment: ui }, async (c) => {
+evaluate('canary', { environments: ui }, async (c) => {
   await c.send('write the form')
   const server = await c.serve('node server.mjs')
   await c.capture(server, { name: 'empty' })

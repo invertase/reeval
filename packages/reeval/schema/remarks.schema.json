@@ -47,6 +47,7 @@
             "setup-process-secret",
             "slow-mcp-start",
             "snapshot-too-large",
+            "survey-throws",
             "too-few-tries"
           ]
         },

@@ -32,6 +32,7 @@ import type {
   WebEventType,
 } from '../types.ts'
 import { captureWindowSchema } from './config.ts'
+import { traitsSchema } from './environment.ts'
 import { gatewayNameSchema } from './gateway.ts'
 import {
   fakeJudgeDataSchema,
@@ -40,17 +41,16 @@ import {
   sharedInputFields,
   turnsSchema,
 } from './judge.ts'
-import { type Assert, dataProblem, durationSchema, jsonValueSchema, type Same } from './shared.ts'
+import {
+  type Assert,
+  dataProblem,
+  durationSchema,
+  jsonValueSchema,
+  type Same,
+  tokenUsageSchema,
+} from './shared.ts'
 
 const nullableNumber = z.number().nullable()
-
-export const tokenUsageSchema = z.strictObject({
-  input: z.number(),
-  output: z.number(),
-  cacheRead: z.number(),
-  cacheWrite: z.number(),
-  reasoning: nullableNumber,
-})
 
 export const fileChangeSchema = z.strictObject({
   path: z.string(),
@@ -733,6 +733,7 @@ export const cellSchema = z.strictObject({
   sandbox: z.string(),
   role: cellRoleSchema,
   variant: z.string().optional(),
+  traits: traitsSchema.optional(),
 })
 
 export const attemptStartSchema = z

@@ -6,7 +6,7 @@ const users = defineEnvironment('users', ({ directory }) => ({
   setup: ['node scripts/seed.mjs', { run: 'node --test', timeout: '2m' }],
 }))
 
-evaluate('counts the active users', { environment: users }, async (c) => {
+evaluate('counts the active users', { environments: users }, async (c) => {
   const turn = await c.send(
     'Write src/active.js. It prints how many users in data/users.json are active.',
   )

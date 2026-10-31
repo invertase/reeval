@@ -1,4 +1,4 @@
-import type { HistoryEntry, RunRecord } from '../history/types.ts'
+import type { FamilyRecord, HistoryEntry, RunRecord } from '../history/types.ts'
 import { cellEffort } from './effort.ts'
 
 /** The derived header of one run: what listings, indexes and comparisons need without the record. */
@@ -47,6 +47,7 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
       ...(e.source ? { source: e.source } : {}),
       ...(e.revision !== undefined ? { revision: e.revision } : {}),
       outcome: e.outcome,
+      ...(e.verdict ? { verdict: e.verdict } : {}),
       passRate: e.passRate,
       cells: e.cells.map((c) => ({
         key: c.key,
@@ -83,7 +84,7 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
     })),
     ...(record.families?.length
       ? {
-          families: record.families.map(({ id, name, cases, ran, outcome, lifts }) => ({
+          families: record.families.map(({ id, name, cases, ran, outcome, lifts, rates }) => ({
             id,
             name,
             cases,
@@ -99,11 +100,20 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
               ...(l.minLift !== undefined ? { minLift: l.minLift } : {}),
               outcome: l.outcome,
             })),
+            ...gatedRates(rates),
           })),
         }
       : {}),
     ...(record.errors?.length ? { errors: record.errors } : {}),
   }
+}
+
+/** A family's rates that its `gate: { passRate }` gates, when it has any. */
+function gatedRates(rates: FamilyRecord['rates']) {
+  const gated = rates.flatMap(({ cell, rate, passRate, outcome }) =>
+    passRate !== undefined && outcome !== undefined ? [{ cell, rate, passRate, outcome }] : [],
+  )
+  return gated.length ? { rates: gated } : {}
 }
 
 /** A cell's failed attempts that the run's interrupt canceled, when it has any. */

@@ -1,0 +1,5 @@
+{
+  "eval": "plan/survey/evals/survey.eval.ts",
+  "plan": "plan/survey/expected/survey.txt",
+  "args": []
+}

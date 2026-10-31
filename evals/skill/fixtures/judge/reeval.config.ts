@@ -4,7 +4,7 @@ import { fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     files: {
       'README.md':
         '# wordcount\n\nInstall with `npm i -g .`, then run `wordcount notes.txt`.\n' +

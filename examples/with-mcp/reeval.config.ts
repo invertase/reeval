@@ -11,7 +11,7 @@ export default defineConfig({
   include: ['*.eval.ts'],
   // A scripted agent that starts the MCP server and calls its tool, as an agent would, then copies
   // ./fake-agent's files into the workspace, so the checks run without keys or Docker.
-  harness: fakeHarness({
+  harnesses: fakeHarness({
     script: [[{ mcp: 'releases/latest_version' }]],
     files: { 'package.json': fakeAgent('package.json') },
     text: 'The latest release is 2.4.0, so package.json is now at 2.4.0.',

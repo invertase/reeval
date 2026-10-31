@@ -18,6 +18,7 @@ import { shellQuote } from '@reeval/sandbox-docker/process'
 import { createChecks } from '../src/attempt/checks.ts'
 import { traceEnvironment } from '../src/attempt/debug.ts'
 import type { Attempt, AttemptSpec } from '../src/attempt/state.ts'
+import { regressions } from '../src/commands.ts'
 import {
   CONFIG_FILES,
   defaultConcurrency,
@@ -84,6 +85,7 @@ import { clip } from '../src/text.ts'
 import type { EvalOptions, Outcome, ResolvedProfile } from '../src/types.ts'
 import { rowKey } from '../src/view/compare.ts'
 import { gatePart } from '../src/view/gate.ts'
+import { runOutcome } from '../src/view/model.ts'
 import { splitPatch } from '../src/view/patch.ts'
 import { project } from './helpers.ts'
 
@@ -893,7 +895,7 @@ test("a reeval.yaml's relative host paths resolve against its directory", async 
     writeFileSync(
       join(dir, 'reeval.yaml'),
       `sandbox: { kind: docker, dockerfile: docker/Dockerfile }
-environment:
+environments:
   kind: environment
   name: base
   layers:
@@ -913,7 +915,7 @@ profiles:
   local:
     defaults:
       sandbox: { kind: fake, dir: ./tmp }
-      environment:
+      environments:
         kind: environment
         name: remote
         layers: [{ name: remote, spec: { workspace: { kind: git, repo: github:acme/app, url: https://github.com/acme/app.git } } }]
@@ -921,7 +923,7 @@ profiles:
     )
     const config = await loadConfig(join(dir, 'reeval.yaml'))
     assert.deepEqual(config.sandbox, { kind: 'docker', dockerfile: join(dir, 'docker/Dockerfile') })
-    const spec = config.environment?.layers[0]?.spec
+    const spec = config.environments[0]?.layers[0]?.spec
     assert.equal(spec?.workspace?.url, join(root, 'app'))
     assert.equal(spec?.workspace?.repo, '../app', 'repo stays as written')
     assert.deepEqual(spec?.files, {
@@ -936,7 +938,7 @@ profiles:
     )
     const local = config.profiles.local?.defaults
     assert.deepEqual(local?.sandbox, { kind: 'fake', dir: join(dir, 'tmp') })
-    const remote = local?.environment?.layers[0]?.spec.workspace
+    const remote = local?.environments?.layers[0]?.spec.workspace
     assert.equal(remote?.url, 'https://github.com/acme/app.git', 'a URL is not a path')
   } finally {
     rmSync(root, { recursive: true, force: true })
@@ -950,7 +952,7 @@ test('a relative host path resolves the same in reeval.yaml, TypeScript data and
     'data/docker/Dockerfile': dockerfile,
     'helpers/docker/Dockerfile': dockerfile,
     'yaml/reeval.yaml': `sandbox: { kind: docker, dockerfile: docker/Dockerfile }
-environment:
+environments:
   kind: environment
   name: base
   layers:
@@ -968,7 +970,7 @@ profiles:
     'data/reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 export default defineConfig({
   sandbox: { kind: 'docker', dockerfile: 'docker/Dockerfile' },
-  environment: defineEnvironment('base', {
+  environments: defineEnvironment('base', {
     workspace: { kind: 'git', repo: '../app', url: '../app' },
     files: { 'a.md': { kind: 'file', path: 'notes/a.md' }, 'b.md': 'inline' },
     rules: { kind: 'file', path: './AGENTS.md' },
@@ -984,7 +986,7 @@ export default defineConfig({
 import { docker, fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
   sandbox: docker({ dockerfile: 'docker/Dockerfile' }),
-  environment: defineEnvironment('base', ({ file, git, skill }) => ({
+  environments: defineEnvironment('base', ({ file, git, skill }) => ({
     workspace: git('../app'),
     files: { 'a.md': file('notes/a.md'), 'b.md': 'inline' },
     rules: file('./AGENTS.md'),
@@ -999,7 +1001,7 @@ export default defineConfig({
     const c = await loadConfig(join(dir, config))
     const paths = {
       sandbox: c.sandbox,
-      spec: c.environment?.layers[0]?.spec,
+      spec: c.environments[0]?.layers[0]?.spec,
       local: c.profiles.local?.defaults.sandbox,
     }
     return JSON.parse(JSON.stringify(paths).replaceAll(JSON.stringify(dir).slice(1, -1), '<dir>'))
@@ -1543,6 +1545,65 @@ test("compare has a row for a pooled family's gate, comparable when its cases an
     undefined,
     'no minLift on either side: no row',
   )
+  const rated = (outcome: 'pass' | 'fail'): HistoryEntry => {
+    const r = run([])
+    const [f] = r.families ?? []
+    return {
+      ...r,
+      families: f
+        ? [{ ...f, outcome, rates: [{ cell: 'k', rate: 0.67, passRate: 0.7, outcome }] }]
+        : [],
+    }
+  }
+  assert.deepEqual(
+    status(rated('pass'), rated('fail')),
+    ['regressed', 'pass', 'fail'],
+    "a cell's rate over the cases below its passRate gates the family too",
+  )
+  const byRate = (caseOutcome: 'pass' | 'fail', outcome: 'pass' | 'fail'): HistoryEntry => {
+    const r = rated(outcome)
+    return {
+      ...r,
+      evals: r.evals.map((e) =>
+        e.id.endsWith('grace') ? { ...e, outcome: caseOutcome, verdict: 'family' as const } : e,
+      ),
+    }
+  }
+  const flip = compare(byRate('pass', 'pass'), byRate('fail', 'pass'))
+  assert.deepEqual(
+    flip.map((r) => [r.kind ?? 'eval', r.status, r.verdict ?? null]),
+    [
+      ['eval', 'same', null],
+      ['eval', 'regressed', 'family'],
+      ['family', 'same', null],
+    ],
+    'a case its family rates shows what it did, and carries its family as the verdict',
+  )
+  assert.deepEqual(regressions(flip), [], 'so --fail-on-regression leaves it to the family')
+  assert.deepEqual(
+    regressions(compare(byRate('pass', 'pass'), byRate('fail', 'fail'))).map((r) => r.kind),
+    ['family'],
+  )
+  assert.deepEqual(
+    family(rated('pass'), rated('fail'))?.rates,
+    [
+      {
+        key: 'k',
+        base: { rate: 0.67, passRate: 0.7, outcome: 'pass' },
+        head: { rate: 0.67, passRate: 0.7, outcome: 'fail' },
+      },
+    ],
+    'the family row has each side of its rate',
+  )
+  assert.equal(
+    runOutcome({
+      status: 'complete',
+      evals: [{ outcome: 'pass' }, { outcome: 'fail', verdict: 'family' }],
+      families: [{ outcome: 'pass' }],
+    }),
+    'pass',
+    "a case its family rates doesn't fail the run on its own",
+  )
 
   // Over the variants both have; with none in common, not comparable.
   const scoped = family(run([lift('a', 'pass'), lift('b', 'fail')]), run([lift('a', 'fail')]))
@@ -1755,7 +1816,7 @@ const base: Resolved = {
     { kind: 'fake', id: 'b' },
   ],
   sandbox: { kind: 'fake' },
-  environment: undefined,
+  environments: [],
   compare: undefined,
   runs: 3,
   env: {},
@@ -1776,15 +1837,15 @@ test('expand: per harness, the control then each variant; labels name the role',
   const { resolved } = cascade(
     base,
     [
-      { options: { environment: extra }, where: 'group("parent")' },
+      { options: { environments: extra }, where: 'group("parent")' },
       {
-        options: { compare: { baseline: plain, variants: [skill] }, runs: 1 },
+        options: { compare: { control: plain, variants: [skill] }, runs: 1 },
         where: 'e',
       },
     ],
     'e',
   )
-  assert.equal(resolved.environment?.name, 'extra', 'the parent environment is still resolved')
+  assert.equal(resolved.environments[0]?.name, 'extra', 'the parent environment is still resolved')
   const attempts = expand(resolved)
   assert.deepEqual(
     attempts.map((a) => [a.cell.key, a.cell.role, a.gate !== 'none', a.label]),
@@ -1815,7 +1876,7 @@ test('named compare uses the cascaded sandbox option, not the config environment
   const kept = parent.extend('kept', { files: { 'x.txt': 'y' } })
   const { resolved } = cascade(
     { ...base, sandbox: { kind: 'fake', id: 'from-root' }, environment: configEnv },
-    [{ options: { compare: { baseline: plain, variants: [skill] }, runs: 1 }, where: 'e' }],
+    [{ options: { compare: { control: plain, variants: [skill] }, runs: 1 }, where: 'e' }],
     'e',
   )
   assert.deepEqual(
@@ -1829,7 +1890,7 @@ test('named compare uses the cascaded sandbox option, not the config environment
   )
   const child = cascade(
     { ...base, sandbox: { kind: 'fake', id: 'from-root' } },
-    [{ options: { environment: kept }, where: 'e' }],
+    [{ options: { environments: kept }, where: 'e' }],
     'e',
   )
   assert.equal(expand(child.resolved)[0]?.sandbox.id, 'parent')
@@ -1837,7 +1898,7 @@ test('named compare uses the cascaded sandbox option, not the config environment
     { ...base, sandbox: { kind: 'fake', id: 'from-root' } },
     [
       {
-        options: { sandbox: { kind: 'fake', id: 'from-eval' }, environment: plain },
+        options: { sandbox: { kind: 'fake', id: 'from-eval' }, environments: plain },
         where: 'e',
       },
     ],
@@ -1847,28 +1908,31 @@ test('named compare uses the cascaded sandbox option, not the config environment
   assert.equal(expand(evalSandbox.resolved)[0]?.sandbox.id, 'from-eval')
 })
 
-test('environment beside a compare with a baseline is an error; without one it is the control', () => {
+test('environments beside a compare is an error: compare.control names what the eval runs in', () => {
   const plain = defineEnvironment('plain', {})
   const skill = defineEnvironment('skill', {})
   assert.throws(
     () =>
       checkOptions(
-        { environment: plain, compare: { baseline: plain, variants: [skill] } },
+        { environments: plain, compare: { control: plain, variants: [skill] } } as never,
         'evaluate("e")',
       ),
-    /environment and compare\.baseline can't both be set in evaluate\("e"\)/,
+    /evaluate\("e"\) sets both environments and compare\. With compare, the control is compare\.control: move it there, as compare: \{ control: plain, variants: \[\.\.\.\] \}\./,
   )
-  checkOptions({ environment: plain, compare: { variants: [skill] } }, 'evaluate("e")')
   assert.throws(
-    () => checkOptions({ environment: plain, compare: false }, 'evaluate("e")'),
+    () => checkOptions({ compare: { variants: [skill] } } as never, 'evaluate("e")'),
+    /compare in evaluate\("e"\) has no control\. Name it: compare: \{ control: app, variants: \[\.\.\.\] \}\./,
+  )
+  assert.throws(
+    () => checkOptions({ environments: plain, compare: false }, 'evaluate("e")'),
     /compare: false can't be set in evaluate\("e"\)/,
   )
   assert.throws(
     () => checkOptions({ compare: false }, 'group("g")'),
     /compare: false can't be set in group\("g"\)/,
   )
-  checkOptions({ compare: { baseline: plain, variants: [skill] } }, 'evaluate("e")')
-  checkOptions({ environment: plain }, 'evaluate("e")')
+  checkOptions({ compare: { control: plain, variants: [skill] } }, 'evaluate("e")')
+  checkOptions({ environments: plain }, 'evaluate("e")')
 })
 
 test('cascade: profile defaults sit under evals, limits narrow unless pinned, --runs wins', () => {
@@ -1878,14 +1942,14 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
     name: 'pr',
     reason: '--profile',
     defaults: { runs: 5 },
-    limit: { runs: 1, compare: false as const, harness: ['a'] },
+    limit: { runs: 1, compare: false as const, harnesses: ['a'] },
     judge: {},
     tags: [],
     budget: {},
   }
   const narrowed = cascade(
     base,
-    [{ options: { compare: { baseline: plain, variants: [skill] } }, where: 'e' }],
+    [{ options: { compare: { control: plain, variants: [skill] } }, where: 'e' }],
     'e',
     { profile },
   )
@@ -1904,7 +1968,7 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
     base,
     [
       {
-        options: { compare: { baseline: plain, variants: [skill] }, pin: ['runs', 'compare'] },
+        options: { compare: { control: plain, variants: [skill] }, pin: ['runs', 'compare'] },
         where: 'e',
       },
     ],
@@ -1921,7 +1985,7 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
   )
   const skipped = cascade(
     base,
-    [{ options: { harness: { kind: 'fake', id: 'c' } }, where: 'e' }],
+    [{ options: { harnesses: { kind: 'fake', id: 'c' } }, where: 'e' }],
     'e',
     { profile },
   )
@@ -1931,7 +1995,7 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
 test('cascade: unset runs default to 4 for a compare with variants, 1 otherwise', () => {
   const plain = defineEnvironment('plain', {})
   const skill = defineEnvironment('skill', {})
-  const compare = { baseline: plain, variants: [skill] }
+  const compare = { control: plain, variants: [skill] }
   const unset = { ...base, runs: undefined }
   const runsOf = (options: EvalOptions, opts: Parameters<typeof cascade>[3] = {}) =>
     cascade(unset, [{ options, where: 'e' }], 'e', opts)

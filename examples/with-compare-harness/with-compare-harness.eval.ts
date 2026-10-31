@@ -10,13 +10,13 @@ evaluate(
   'documents the new function',
   {
     // The eval names its own agents, so every profile runs these two.
-    harness: [claudeCode({ model: 'claude-sonnet-5' }), codex({ model: 'gpt-5.6-luna' })],
+    harnesses: [claudeCode({ model: 'claude-sonnet-5' }), codex({ model: 'gpt-5.6-luna' })],
     compare: {
+      control: math,
       variants: [withJsdoc],
       // Only Claude Code runs the variant; Codex runs the control alone.
-      harness: ['claude-code:claude-sonnet-5'],
+      harnesses: ['claude-code:claude-sonnet-5'],
     },
-    environment: math,
     // Pairs Claude Code's attempts with Codex's, in the same environment.
     questions: [{ question: 'Which multiply() is easier to read?', across: 'harness', diff: true }],
   },

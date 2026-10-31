@@ -1,4 +1,4 @@
-// A pooled `evaluate.each` as one suite: each cell's pass@1 over the cases and, with
+// An eval with `cases` as one suite: each cell's pass@1 over the cases and, with
 // `compare`, each variant's lift over the control paired by case. A case is the unit: at one
 // attempt a case and side that's a Bernoulli pair (Newcombe's paired interval, McNemar's exact
 // test); at several, a t interval over the cases' pass@1 differences, so attempts within a case
@@ -15,6 +15,7 @@ import {
   signedRank,
   wilson,
 } from '../stats.ts'
+import type { ExcludedPair } from '../types.ts'
 import { EFFORT_ALPHA, type EffortSample, effortSample } from '../view/effort.ts'
 import type {
   AttemptRecord,
@@ -56,7 +57,7 @@ const interval = (
   method,
 })
 
-function rateOf(cell: string, sides: Side[]): FamilyRate {
+function rateOf(cell: string, sides: Side[], passRate: number | undefined): FamilyRate {
   const pass = sides.reduce((s, x) => s + x.pass, 0)
   const counted = sides.reduce((s, x) => s + x.counted, 0)
   const single = sides.every((x) => x.counted === 1)
@@ -72,8 +73,15 @@ function rateOf(cell: string, sides: Side[]): FamilyRate {
     interval: single
       ? interval(w.low, w.high, 'wilson', [0, 1])
       : interval(t.low, t.high, 't-cases', [0, 1]),
+    ...(passRate !== undefined
+      ? { passRate, outcome: t.mean >= passRate ? ('pass' as const) : ('fail' as const) }
+      : {}),
   }
 }
+
+/** A cell's `{ passRate }` gate, which its family gates over the cases. */
+export const pooledPassRate = (cell: Pick<CellRecord, 'gate'>): number | undefined =>
+  typeof cell.gate === 'object' ? cell.gate.passRate : undefined
 
 function metric(pairs: Array<[number, number]>): FamilyEffortMetric {
   const differences = pairs.map(([v, c]) => v - c)
@@ -186,11 +194,12 @@ function liftOf(
 
 /**
  * The run's pooled families, in the order their first case appears; `minLiftOf` gives a variant
- * cell's `compare.minLift`.
+ * cell's `compare.minLift`, and `excludedOf` the pairs `where` left out of a family.
  */
 export function familiesOf(
   evals: EvalEntry[],
   minLiftOf: (cell: CellRecord) => number | undefined,
+  excludedOf: (id: string) => ExcludedPair[] | undefined = () => undefined,
 ): FamilyRecord[] {
   const byId = new Map<string, EvalEntry[]>()
   for (const e of evals) {
@@ -201,12 +210,14 @@ export function familiesOf(
     const cases = [...members].sort((a, b) => (a.family?.case ?? 0) - (b.family?.case ?? 0))
     const first = cases[0] as EvalEntry
     const family = first.family as NonNullable<EvalEntry['family']>
+    const excluded = excludedOf(family.id)
     const cellKeys: string[] = []
     for (const e of cases)
       for (const c of e.cells) if (!cellKeys.includes(c.key)) cellKeys.push(c.key)
     const rates = cellKeys.flatMap((key) => {
       const sides = cases.flatMap((e) => sideOf(e, key) ?? [])
-      return sides.length ? [rateOf(key, sides)] : []
+      const cell = cases.flatMap((e) => e.cells).find((c) => c.key === key)
+      return sides.length ? [rateOf(key, sides, cell && pooledPassRate(cell))] : []
     })
     const lifts: FamilyLift[] = []
     for (const key of cellKeys) {
@@ -231,10 +242,11 @@ export function familiesOf(
       group: first.group,
       name: family.name,
       cases: family.cases,
-      ran: cases.length,
+      ran: cases.filter((e) => e.attempts.some((a) => a.outcome !== 'skipped')).length,
       rates,
       lifts,
-      outcome: lifts.some((l) => l.outcome === 'fail') ? 'fail' : 'pass',
+      ...(excluded?.length ? { excluded } : {}),
+      outcome: [...rates, ...lifts].some((x) => x.outcome === 'fail') ? 'fail' : 'pass',
     }
   })
 }
