@@ -36,6 +36,25 @@ describe('c.observe', () => {
     assert.deepEqual(a.record.observations?.[0]?.value, { token: '[REDACTED]' })
   })
 
+  test('masks a secret-looking name, and refuses another that masks to the same name', () => {
+    const token = (c: string) => `ghp_${c.repeat(36)}`
+    const { a, observe } = attempt()
+    observe(token('a'), 1)
+    observe(token('a'), 2)
+    observe(`count_${token('b')}`, 3)
+    assert.throws(
+      () => observe(token('c'), 4),
+      (e: Error) =>
+        /c\.observe\("\[REDACTED\]"\) names a secret, and its masked name is another observation's/.test(
+          e.message,
+        ) && !e.message.includes('ghp_'),
+    )
+    assert.deepEqual(a.record.observations, [
+      { name: '[REDACTED]', value: 2, turn: 0 },
+      { name: 'count_[REDACTED]', value: 3, turn: 0 },
+    ])
+  })
+
   test('masks a number that is a secret', () => {
     process.env.REEVAL_T_SECRET_PIN = '98765432'
     try {
@@ -263,6 +282,33 @@ evaluate('input', { questions, judge: { model: fakeJudge({ score: seen }) } }, a
         ],
       ],
     )
+  })
+})
+
+describe('a secret-looking observation name in a run', () => {
+  test('is masked in the record and the judge state, and a judge names it as observed', async () => {
+    const token = `ghp_${'q'.repeat(36)}`
+    const p = await project('observe-secret-name', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
+import { fakeJudge } from 'reeval/judge'
+const token = 'ghp_' + 'q'.repeat(36)
+const seen = (state) => (state.observations?.['[REDACTED]'] === 'kept' ? 0.9 : 0.1)
+evaluate('masked', { judge: { model: fakeJudge({ score: seen }) } }, async (c) => {
+  await c.send('x')
+  c.observe(token, 'kept')
+  expect(() => c.observe('ghp_' + 'z'.repeat(36), 'lost')).toThrow('names a secret')
+  expect(await c.judge('kept?', { observations: [token] })).toPass()
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run } = readRun(p.dir)
+    const attempt = run.evals[0]?.attempts[0]
+    assert.deepEqual(attempt?.observations, [{ name: '[REDACTED]', value: 'kept', turn: 1 }])
+    const record = JSON.stringify(run)
+    assert.ok(!record.includes(token) && !record.includes('z'.repeat(36)), record)
   })
 })
 

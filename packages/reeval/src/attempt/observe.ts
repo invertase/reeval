@@ -53,12 +53,31 @@ function maskNumbers(value: JSONValue): JSONValue {
   return value
 }
 
-/** `c.observe`: keeps the last value per name, masked, with the turn it came after. */
+/**
+ * An observation's name as it's recorded and shown: masked as its value is. A name that holds a
+ * secret is a value too, and a judge's or question's list of names is matched against this.
+ */
+export const observedName = (name: string): string => redactSecrets(name)
+
+/**
+ * `c.observe`: keeps the last value per name, masked, with the turn it came after. Two names that
+ * mask to the same name are refused rather than renamed: a name is the key that tallies, compare
+ * and `attempt_values` group by across attempts, and a numbered stand-in would depend on the
+ * order of each attempt's calls, joining values that don't belong together.
+ */
 export function observer(a: Attempt): AttemptContext['observe'] {
-  return (name, value) => {
-    if (typeof name !== 'string' || !OBSERVE_NAME.test(name)) {
+  const raw = new Map<string, string>()
+  return (given, value) => {
+    if (typeof given !== 'string' || !OBSERVE_NAME.test(given)) {
       throw new UsageError(
-        `c.observe() needs a name of 1 to 64 letters, digits, _ . : / or - (got ${JSON.stringify(name)})`,
+        `c.observe() needs a name of 1 to 64 letters, digits, _ . : / or - (got ${JSON.stringify(typeof given === 'string' ? observedName(given) : given)})`,
+      )
+    }
+    const name = observedName(given)
+    const earlier = raw.get(name)
+    if (earlier !== undefined && earlier !== given) {
+      throw new UsageError(
+        `c.observe("${name}") names a secret, and its masked name is another observation's: name the value without the secret`,
       )
     }
     if (a.ended) throw new UsageError(`c.observe("${name}") came after the eval's body returned`)
@@ -82,6 +101,7 @@ export function observer(a: Attempt): AttemptContext['observe'] {
         `c.observe("${name}") is one name too many: an attempt observes at most ${MAX_OBSERVATIONS}`,
       )
     }
+    raw.set(name, given)
     const observation = { name, value: masked, turn: a.turns.length }
     if (same) Object.assign(same, observation)
     else list.push(observation)

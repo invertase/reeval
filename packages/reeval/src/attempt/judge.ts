@@ -34,6 +34,7 @@ import type {
   Verdict,
 } from '../types.ts'
 import { sandboxFor } from './checks.ts'
+import { observedName } from './observe.ts'
 import type { Attempt } from './state.ts'
 
 const noJudgeModel = (configFile: string) =>
@@ -144,8 +145,9 @@ function observationsShown(
   observed: Attempt['record']['observations'] = [],
 ): Draft['observations'] {
   if (!which) return undefined
-  if (which !== true) {
-    const missing = which.find((name) => !observed.some((o) => o.name === name))
+  const names = which === true ? true : which.map(observedName)
+  if (names !== true) {
+    const missing = names.find((name) => !observed.some((o) => o.name === name))
     if (missing !== undefined) {
       throw new Error(
         `c.judge() observations names a value this attempt hasn't observed: ${JSON.stringify(missing)}`,
@@ -153,7 +155,7 @@ function observationsShown(
     }
   }
   return Object.fromEntries(
-    observed.filter((o) => which === true || which.includes(o.name)).map((o) => [o.name, o.value]),
+    observed.filter((o) => names === true || names.includes(o.name)).map((o) => [o.name, o.value]),
   )
 }
 
