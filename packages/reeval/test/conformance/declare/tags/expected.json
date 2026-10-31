@@ -44,7 +44,7 @@
     },
     {
       "type": "eval",
-      "name": "case 1",
+      "name": "case [1]",
       "mode": "run",
       "options": {
         "tags": ["slow"]
@@ -52,17 +52,17 @@
       "body": "b2",
       "source": {
         "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
-        "case": "2bfd14f43d17fc7cea24e0917a8879b4b2f880b8baeec1b9d90fbaad655e71bd"
+        "case": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
       },
       "family": {
-        "name": "case $n",
+        "name": "case",
         "case": 0,
         "cases": 2
       }
     },
     {
       "type": "eval",
-      "name": "case 2",
+      "name": "case [2]",
       "mode": "run",
       "options": {
         "tags": ["slow"]
@@ -70,10 +70,10 @@
       "body": "b3",
       "source": {
         "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
-        "case": "363379742f80b51bdb9206579af7754911543079b9399cb3fc315fb199f476e8"
+        "case": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
       },
       "family": {
-        "name": "case $n",
+        "name": "case",
         "case": 1,
         "cases": 2
       }

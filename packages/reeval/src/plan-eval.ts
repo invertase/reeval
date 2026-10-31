@@ -73,7 +73,7 @@ export type EvalDeclaration = {
   options: EvalOptions
   /** Hashes of its body and case data, from whoever declared it. */
   source: DeclaredSource
-  /** Set on each case of a pooled `evaluate.each`. */
+  /** Set on each case of an eval with `cases`. */
   family?: DeclaredFamily
 }
 

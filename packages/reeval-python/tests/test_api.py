@@ -1,4 +1,4 @@
-"""The public API's data: options in reeval's spelling at any depth, the shapes evaluate_each
+"""The public API's data: options in reeval's spelling at any depth, the cases an eval
 takes, environments that don't change under the eval, and plugin builds on every source."""
 
 from __future__ import annotations
@@ -19,7 +19,6 @@ from reeval_python import (
     define_environment,
     docker,
     evaluate,
-    evaluate_each,
     fake_harness,
     group,
     plugin,
@@ -102,14 +101,63 @@ def test_every_plugin_source_takes_a_build() -> None:
 
 
 @pytest.mark.parametrize("cases", ["abc", (c for c in "ab"), {"a": 1}])
-def test_evaluate_each_takes_a_list_of_cases(cases: Any) -> None:
-    with pytest.raises(TypeError, match="takes a list of cases"):
-        evaluate_each(cases, "case %s")
-
-
-def test_evaluate_each_refuses_a_body_without_the_case_where_it_is_declared() -> None:
+def test_cases_must_be_a_list(cases: Any) -> None:
     def load() -> None:
-        @evaluate_each([1, 2], "case %s")
+        evaluate("case", {"cases": cases})(lambda c, case: None)  # pyright: ignore[reportCallIssue, reportArgumentType]
+
+    with pytest.raises(TypeError, match=r"cases in evaluate\('case'\) must be a list"):
+        collect_module_tree_sync(load)
+
+
+@pytest.mark.parametrize(
+    ("opts", "message"),
+    [
+        ({"cases": []}, r"cases in evaluate\('e'\) is an empty list"),
+        ({"cases": [{"n": 1}]}, r"cases\[0\] in evaluate\('e'\) has no key"),
+        (
+            {"cases": ["a", "a"]},
+            r"cases\[0\] and cases\[1\] in evaluate\('e'\) have the same key 'a'",
+        ),
+        ({"cases": ["a/b"]}, r"has the key 'a/b': a case key is 1–80 characters"),
+        (
+            {"cases": [1], "case_key": lambda c: 1},
+            r"case_key in evaluate\('e'\) must return a string",
+        ),
+        (
+            {"case_key": lambda c: c},
+            r"case_key in evaluate\('e'\) names each case, but there are no cases",
+        ),
+        (
+            {"cases": [1, 2], "runs": {"best_of": 3}},
+            r"evaluate\('e'\) has cases, so it can't take runs",
+        ),
+    ],
+)
+def test_bad_cases_are_refused_where_they_are_declared(opts: Any, message: str) -> None:
+    def load() -> None:
+        evaluate("e", opts)(lambda c, case: None)
+
+    with pytest.raises((TypeError, ValueError), match=message):
+        collect_module_tree_sync(load)
+
+
+def test_cases_key_their_evals_and_pool_when_there_are_several() -> None:
+    def load() -> None:
+        evaluate("e", {"cases": ["users", 2, {"id": "x"}, {"name": "y"}]})(lambda c, case: None)
+        evaluate("one", {"cases": [{"slug": "s"}], "case_key": lambda c: c["slug"]})(
+            lambda c, case: None
+        )
+
+    tree = collect_module_tree_sync(load)
+    names = [child["name"] for child in tree["children"]]
+    assert names == ["e [users]", "e [2]", "e [x]", "e [y]", "one [s]"]
+    assert tree["children"][1]["family"] == {"name": "e", "case": 1, "cases": 4}
+    assert "family" not in tree["children"][4]
+
+
+def test_cases_refuse_a_body_without_the_case_where_it_is_declared() -> None:
+    def load() -> None:
+        @evaluate("case", {"cases": [1, 2]})
         def _(c: Any) -> None: ...
 
     with pytest.raises(TypeError, match=r"the body takes the attempt and its case"):
@@ -163,15 +211,6 @@ def test_poll_s_function_names_one_read_and_says_what_to_do_with_more() -> None:
         describe(c.read_file)  # pyright: ignore[reportArgumentType]
 
 
-def test_a_case_name_declared_twice_says_how_to_tell_cases_apart() -> None:
-    def load() -> None:
-        @evaluate_each([1, 2], "same", pool=False)
-        def _(c: Any, case: int) -> None: ...
-
-    with pytest.raises(ValueError, match=r"is declared twice.*put \$key, %s or %# in the name"):
-        collect_module_tree_sync(load)
-
-
 def test_an_eval_declared_twice_is_refused_where_it_is_declared() -> None:
     def load() -> None:
         def body(c: Any) -> None: ...
@@ -182,34 +221,30 @@ def test_an_eval_declared_twice_is_refused_where_it_is_declared() -> None:
 
     with pytest.raises(ValueError, match=r"evaluate\('a'\) is declared twice") as raised:
         collect_module_tree_sync(load)
-    assert "evaluate_each" not in str(raised.value)
+    assert "cases" not in str(raised.value)
 
 
-def test_two_pooled_families_with_one_template_are_refused() -> None:
+def test_two_evals_with_cases_and_one_name_are_refused() -> None:
     def load() -> None:
-        @evaluate_each([{"n": 1}, {"n": 2}], "case $n")
+        @evaluate("case", {"cases": [1, 2]})
         def _(c: Any, case: Any) -> None: ...
 
-        @evaluate_each([{"n": 3}, {"n": 4}, {"n": 5}], "case $n")
+        @evaluate("case", {"cases": [3, 4, 5]})
         def _(c: Any, case: Any) -> None: ...
 
-    with pytest.raises(
-        ValueError, match=r"evaluate_each\('case \$n'\) is declared twice.*pool=False"
-    ):
+    with pytest.raises(ValueError, match=r"evaluate\('case'\) with cases is declared twice"):
         collect_module_tree_sync(load)
 
 
-def test_one_template_in_two_groups_and_unpooled_is_accepted() -> None:
+def test_one_name_with_cases_in_two_groups_is_accepted() -> None:
     def load() -> None:
         def body(c: Any, case: Any) -> None: ...
 
-        group("g", lambda: evaluate_each([1, 2], "c %s")(body))
-        group("h", lambda: evaluate_each([1, 2], "c %s")(body))
-        evaluate_each([1, 2], "c %s", pool=False)(body)
-        evaluate_each([3, 4], "c %s", pool=False)(body)
+        group("g", lambda: evaluate("c", {"cases": [1, 2]})(body))
+        group("h", lambda: evaluate("c", {"cases": [1, 2]})(body))
 
     tree = collect_module_tree_sync(load)
-    assert len(tree["children"]) == 6
+    assert len(tree["children"]) == 2
 
 
 def test_a_name_holding_the_id_separator_is_refused_beside_a_grouped_eval() -> None:
@@ -224,21 +259,19 @@ def test_a_name_holding_the_id_separator_is_refused_beside_a_grouped_eval() -> N
 
 
 @pytest.mark.parametrize("eval_first", [True, False])
-def test_an_eval_named_like_a_pooled_template_is_refused(eval_first: bool) -> None:
+def test_an_eval_named_like_one_with_cases_is_refused(eval_first: bool) -> None:
     def load() -> None:
         def body(c: Any) -> None: ...
 
         def each(c: Any, case: Any) -> None: ...
 
         if eval_first:
-            evaluate("case $n", body)
-        evaluate_each([{"n": 1}, {"n": 2}], "case $n")(each)
+            evaluate("case", body)
+        evaluate("case", {"cases": [1, 2]})(each)
         if not eval_first:
-            evaluate("case $n", body)
+            evaluate("case", body)
 
-    with pytest.raises(
-        ValueError, match=r"has the same id as the pooled evaluate_each\('case \$n'\)"
-    ):
+    with pytest.raises(ValueError, match=r"has the same id as evaluate\('case'\) with cases"):
         collect_module_tree_sync(load)
 
 
@@ -251,7 +284,7 @@ def test_a_generator_body_is_refused_where_it_is_declared(kind: str) -> None:
     with pytest.raises(TypeError, match="an eval body can't yield"):
         collect_module_tree_sync(lambda: evaluate("g", space["body"]))
     with pytest.raises(TypeError, match="an eval body can't yield"):
-        collect_module_tree_sync(lambda: evaluate_each([1], "g %s")(space["body"]))
+        collect_module_tree_sync(lambda: evaluate("g", {"cases": [1]})(space["body"]))
 
 
 USER_EVAL = """
@@ -301,11 +334,7 @@ def test_a_user_eval_type_checks_under_strict_pyright(tmp_path: Path) -> None:
     assert "Coroutine" in revealed, revealed
 
 
-def test_case_names_fill_each_placeholder_once() -> None:
-    from reeval_python.declare import _case_name  # pyright: ignore[reportPrivateUsage]
+def test_case_keys_match_javascripts_string_of_a_number() -> None:
+    from reeval_python.declare import case_keys
 
-    assert _case_name("case %# is %s", "ada", 2) == "case 2 is ada"
-    assert _case_name("$name and $names", {"name": "a", "names": "b"}, 0) == "a and b"
-    assert _case_name("$name", {"name": "$other", "other": "x"}, 0) == "$other"
-    assert _case_name("$missing %s", {"a": 1}, 0) == "$missing {'a': 1}"
-    assert _case_name("%s", "100%#", 7) == "100%#"
+    assert case_keys([2.0, 0.5, 3], None, "evaluate('e')") == ["2", "0.5", "3"]

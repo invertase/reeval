@@ -1,9 +1,9 @@
 no profile · 1 evals · 4 cells · 4 attempts
-hint: family evals/verdicts.eval.ts › six cases can: %s runs 1 of its 6 cases; its lift needs 6 for a verdict, so it will say can't tell yet whatever the runs (run all its cases)
-evals/verdicts.eval.ts › six cases can: a  a/base/docker     control          ungated  ×1  family six cases can: %s case 1/6
-                                           a/skilled/docker  variant skilled  gated    ×1
-                                           b/base/docker     control          ungated  ×1
-                                           b/skilled/docker  variant skilled  gated    ×1
+hint: evals/verdicts.eval.ts › six cases can runs 1 of its 6 cases; its lift needs 6 for a verdict, so it will say can't tell yet whatever the runs (run all its cases)
+evals/verdicts.eval.ts › six cases can [a]  a/base/docker     control          ungated  ×1  family six cases can case 1/6
+                                            a/skilled/docker  variant skilled  gated    ×1
+                                            b/base/docker     control          ungated  ×1
+                                            b/skilled/docker  variant skilled  gated    ×1
 excluded: —
 image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)

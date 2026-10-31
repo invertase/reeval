@@ -1,9 +1,9 @@
 import { evaluate, expect } from 'reeval'
-import { eachCase } from './env.ts'
+import { cases } from './env.ts'
 
-evaluate.each([{ file: 'word.txt', word: 'ahoy' }])(
+evaluate(
   'lands',
-  { environments: eachCase },
+  { cases: [{ id: 'ahoy', file: 'word.txt', word: 'ahoy' }], environments: cases },
   async (c, { file, word }) => {
     expect(await c.readFile(file)).toBe(word)
   },

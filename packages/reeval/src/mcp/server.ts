@@ -27,7 +27,7 @@ export const DEFAULT_LINES = 200
 const VIEW_ROWS: Record<string, string> = {
   lift: 'variant cell per run: its control, both sides’ pass counts and pass@1, lift points and the 95% interval (lo, hi), within_noise',
   family_lift:
-    'variant cell per pooled evaluate.each per run: its control, paired cases, both sides’ mean pass@1 over them, lift points and the 95% interval (lo, hi), verdict and effort ratios',
+    'variant cell per eval with cases per run: its control, paired cases, both sides’ mean pass@1 over them, lift points and the 95% interval (lo, hi), verdict and effort ratios',
   effort:
     'cell per run: attempts, median tool calls, agent seconds and tokens; for a variant, the ratios to its control, p-values and verdicts (tokens omitted when either side has no usage sample)',
   attempt_answers:

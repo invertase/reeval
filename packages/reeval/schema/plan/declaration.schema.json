@@ -306,14 +306,14 @@
           "type": "string"
         },
         "family": {
-          "description": "Set on each case of a pooled `evaluate.each`: its template, index and the list's length.",
+          "description": "Set on each case of an eval with `cases`: its template, index and the list's length.",
           "$ref": "#/$defs/DeclaredFamily"
         },
         "mode": {
           "$ref": "#/$defs/DeclaredMode"
         },
         "name": {
-          "description": "The eval's name, as passed to `evaluate` (a case's, for `evaluate.each`).",
+          "description": "The eval's name, as passed to `evaluate` (a case's, for an eval with `cases`).",
           "type": "string"
         },
         "options": {
@@ -332,7 +332,7 @@
       "additionalProperties": false
     },
     "DeclaredFamily": {
-      "description": "Where a case of a pooled `evaluate.each` sits in its list.",
+      "description": "Where a case of an eval with `cases` sits in its list.",
       "type": "object",
       "properties": {
         "case": {
@@ -348,7 +348,7 @@
           "maximum": 9007199254740991
         },
         "name": {
-          "description": "The name template passed to `evaluate.each`.",
+          "description": "The name template the eval's own name.",
           "type": "string"
         }
       },
@@ -404,7 +404,7 @@
       ]
     },
     "DeclaredSource": {
-      "description": "An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source text, and of an `evaluate.each` case's data as canonical JSON (object keys sorted, no whitespace, non-ASCII characters as themselves).",
+      "description": "An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source text, and of a case's data as canonical JSON (object keys sorted, no whitespace, non-ASCII characters as themselves).",
       "type": "object",
       "properties": {
         "body": {
@@ -413,7 +413,7 @@
           "pattern": "^[0-9a-f]{64}$"
         },
         "case": {
-          "description": "sha256 of the case's data; set on each case of an `evaluate.each`.",
+          "description": "sha256 of the case's data; set on each case of an eval with `cases`.",
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         }
@@ -1001,7 +1001,7 @@
               ]
             },
             "runs": {
-              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
+              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a eval with `cases` case included.",
               "anyOf": [
                 {
                   "type": "number"
@@ -1312,7 +1312,7 @@
               ]
             },
             "runs": {
-              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.",
+              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a eval with `cases` case included.",
               "anyOf": [
                 {
                   "type": "number"

@@ -297,8 +297,8 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     const near = SUGGEST[key] ?? closest(key, allowed)
     const value = (options as Record<string, unknown>)[key]
     const hint =
-      key === 'pool'
-        ? ' pool is an option of evaluate.each, beside the cases: evaluate.each(cases, { pool: false }).'
+      key === 'cases' || key === 'caseKey'
+        ? ` ${key} belongs to one eval: evaluate(name, { cases: [...] }, async (c, item) => { … }).`
         : key === 'workspace' && typeof value !== 'boolean'
           ? " workspace is an environment's starting tree: defineEnvironment(name, { workspace: git(…) })."
           : near
@@ -795,7 +795,7 @@ export function cascade(
     profile?: ResolvedProfile | null
     runs?: number
     skipped?: boolean
-    /** A case of a pooled `evaluate.each`, whose lift pools over the cases, not the runs. */
+    /** A case of an eval with `cases`, whose lift pools over the cases, not the runs. */
     pooled?: boolean
   } = {},
 ): ResolvedEval {

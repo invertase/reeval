@@ -386,16 +386,16 @@ describe('remarks in reeval run', () => {
     for (const block of blocks) assert.doesNotMatch(block ?? '', /well written/)
   })
 
-  test('a fix points at its line, a family at its name template; an edit re-arms only its eval', async () => {
+  test('a fix points at its line, an eval with cases at its name; an edit re-arms only its eval', async () => {
     const p = await project('remarks-once', {
       'reeval.config.ts': fakeConfig(),
       'evals/skill.eval.ts': compareEval(2, 2, 0),
       'evals/fam.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
-evaluate.each([{ id: 'a' }, { id: 'b' }])(
-  'fixes $id',
-  { runs: 2, compare: { control: plain, variants: [marked] } },
+evaluate(
+  'fixes',
+  { cases: [{ id: 'a' }, { id: 'b' }], runs: 2, compare: { control: plain, variants: [marked] } },
   async (c) => {
     await c.send('go')
     expect(c.attempt.cell.role === 'variant', 'uses the marker').toBe(true)
@@ -413,7 +413,7 @@ evaluate.each([{ id: 'a' }, { id: 'b' }])(
       ),
       first,
     )
-    assert.match(first, /^ {2}fixes \$id: Marked passed .*\n {4}fix {2}evals\/fam\.eval\.ts:5 /m)
+    assert.match(first, /^ {2}fixes: Marked passed .*\n {4}fix {2}evals\/fam\.eval\.ts:5 /m)
     const firstRun = readRun(p.dir).run.runId
     const second = await runCli(p.dir, ['run', '-v'])
     assert.equal(remarksBlock(second.stdout), null, 'printed once per eval version')

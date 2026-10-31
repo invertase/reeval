@@ -171,15 +171,15 @@ expect.poll(lambda: c.read_file("ready.txt"), timeout=10).to_be("ready\n")
 expect.poll(c, "the server wrote its log").to_have_file("server.log")
 ```
 
-### Names of `evaluate_each` cases
+### Cases
 
-`evaluate_each(cases, name)` names each eval from `name`: `%#` is the case's index, `%s` the case
-as `str()` writes it, and `$field` a dict case's field. Each placeholder is filled once, so a value
-that contains `$` or `%` stays as it is, and a `$field` the case doesn't have is left as written.
-Two evals with one name in a file are refused where they're declared.
+`"cases"` runs one eval over a list, and the body takes the attempt and its case. Each case has a
+key: a string or a number is its own, a dict or an object its `id` or `name`, and `"case_key"`
+gives any other. A key is 1–80 characters with no `#`, `/`, `›` or control characters, and unique
+within the eval; the run reports each case as `<eval> [<key>]`.
 
 ```python
-@evaluate_each([{"lang": "en"}, {"lang": "fr"}], "greets in $lang (#%#)")
+@evaluate("greets", {"cases": [{"lang": "en"}, {"lang": "fr"}], "case_key": lambda c: c["lang"]})
 def greets(c: SyncAttemptContext, case: dict[str, str]) -> None: ...
 ```
 

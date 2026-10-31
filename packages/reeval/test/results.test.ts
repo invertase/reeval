@@ -525,7 +525,7 @@ describe("an eval's source", () => {
   })
 
   test("a case hashes as JSON data, and data JSON can't see is refused", () => {
-    const at = 'evaluate.each("e") case 0'
+    const at = 'evaluate("e") case "a"'
     assert.equal(caseHash({ n: 1, s: 'x' }, at), caseHash({ s: 'x', n: 1 }, at))
     assert.notEqual(caseHash({ n: 1 }, at), caseHash({ n: 2 }, at), 'twin: another value')
     const env = defineEnvironment('skilled', {})
@@ -539,7 +539,7 @@ describe("an eval's source", () => {
     ] as const) {
       assert.throws(
         () => caseHash({ want: value }, at),
-        new RegExp(`^UsageError: evaluate\\.each\\("e"\\) case 0: .* \\(it holds ${what}\\)`),
+        new RegExp(`^UsageError: evaluate\\("e"\\) case "a": .* \\(it holds ${what}\\)`),
       )
     }
   })

@@ -28,7 +28,7 @@ import { remarkLines } from './remarks.ts'
 
 export type Layout = {
   kind: 'results' | 'measure' | 'harnesses' | 'both' | 'regressions'
-  /** A pooled `evaluate.each`: the kind's rows, one per case, inside one block. */
+  /** A eval with `cases`: the kind's rows, one per case, inside one block. */
   family: boolean
 }
 

@@ -1512,7 +1512,7 @@
           "$ref": "#/$defs/EvalCompareMeta"
         },
         "family": {
-          "description": "Set on each case of a pooled `evaluate.each`; `RunRecord.families` has the suite.",
+          "description": "Set on each case of an eval with `cases`; `RunRecord.families` has the suite.",
           "type": "object",
           "properties": {
             "case": {
@@ -1641,7 +1641,7 @@
           "type": "string"
         },
         "case": {
-          "description": "sha256 of the case's data; set on each case of an `evaluate.each`.",
+          "description": "sha256 of the case's data; set on each case of an eval with `cases`.",
           "type": "string"
         },
         "options": {
@@ -1855,7 +1855,7 @@
       "required": ["cases", "cell", "counted", "interval", "pass", "rate"]
     },
     "FamilyRecord": {
-      "description": "A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an evaluation.",
+      "description": "A eval with `cases`: its cases as samples of one suite. Each case is also an evaluation.",
       "type": "object",
       "properties": {
         "cases": {
@@ -2933,7 +2933,7 @@
           }
         },
         "families": {
-          "description": "Each pooled `evaluate.each` that ran; unset when none did.",
+          "description": "Each eval with `cases` that ran; unset when none did.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/FamilyRecord"

@@ -66,7 +66,7 @@ function declarations() {
     })
   })
   evaluate('d', { timeout: '2m', egress: 'deny-all', environments: skill }, async () => {})
-  evaluate.each([{ n: 1 }, { n: 2 }])('case $n', async () => {})
+  evaluate('case', { cases: [1, 2] }, async () => {})
   evaluate.todo('later')
   group.todo('also later')
 }
@@ -89,8 +89,8 @@ test('evaluate and group record the tree they declare, and each body by id', asy
       'run outer': ['run a b4', { 'skip skipped': ['run b b5'] }, { 'run both': ['run c b6'] }],
     },
     'run d b1',
-    'run case 1 b2',
-    'run case 2 b3',
+    'run case [1] b2',
+    'run case [2] b3',
     'todo later',
     'todo also later',
   ])

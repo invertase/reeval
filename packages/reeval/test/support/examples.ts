@@ -77,7 +77,7 @@ export const EXAMPLES: Record<string, Example> = {
     plain: inDocker('claude-code:claude-sonnet-5'),
   },
   'with-multi-turn': { run: { 'fake/math/fake': pass(1) } },
-  'with-each': { run: { 'fake/math/fake': pass(3) } },
+  'with-cases': { run: { 'fake/math/fake': pass(3) } },
   'with-groups': {
     run: { 'fake/math/fake': [...pass(3), 'skipped', 'skipped'], unknown: ['skipped'] },
   },
@@ -196,7 +196,7 @@ export const EXAMPLES: Record<string, Example> = {
       sandbox: ['docker'],
     }),
   },
-  'with-family-lift': { run: { 'fake/math/fake': fail(6), 'fake/jsdoc/fake': pass(6) } },
+  'with-case-lift': { run: { 'fake/math/fake': fail(6), 'fake/jsdoc/fake': pass(6) } },
   'with-effort': { run: { 'fake/math/fake': pass(4), 'fake/project-layout/fake': pass(4) } },
   'with-skill-reads': { run: { needs: 'Docker' }, plain: fakeInDocker },
 

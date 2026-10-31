@@ -1,6 +1,7 @@
 import { dirname } from 'node:path'
 import { runAttempt } from './attempt/index.ts'
 import { bestOfCell } from './best-of.ts'
+import { caseEvalName, caseKeys } from './cases.ts'
 import { declarationProblem } from './contract/declaration.ts'
 import type {
   DeclarationTree,
@@ -33,6 +34,8 @@ import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
 import { planEval } from './plan-eval.ts'
 import type {
   AttemptContext,
+  CaseFn,
+  CaseOptions,
   Environment,
   EnvironmentData,
   EnvironmentsData,
@@ -165,10 +168,23 @@ function registerTodo(name: string) {
   if (matchesTags(tags, getRunContext().tags)) registerTest(name, { mode: 'todo' }, async () => {})
 }
 
-/** `N` is `runs.bestOf` as written, so an even or fractional literal is a type error. */
-type EvaluateFn<F = EvalFn> = {
-  <N extends number = number>(name: string, fn: F, options?: EvalOptions<N>): void
-  <N extends number = number>(name: string, options: EvalOptions<N>, fn: F): void
+/**
+ * `N` is `runs.bestOf` as written, so an even or fractional literal is a type error. With
+ * `cases`, the body takes the attempt and its case, typed from the list.
+ */
+type EvaluateFn = {
+  <const T, N extends number = number>(
+    name: string,
+    options: EvalOptions<N> & CaseOptions<T>,
+    fn: CaseFn<T>,
+  ): void
+  <const T, N extends number = number>(
+    name: string,
+    fn: CaseFn<T>,
+    options: EvalOptions<N> & CaseOptions<T>,
+  ): void
+  <N extends number = number>(name: string, fn: EvalFn, options?: EvalOptions<N>): void
+  <N extends number = number>(name: string, options: EvalOptions<N>, fn: EvalFn): void
 }
 
 /**
@@ -189,7 +205,7 @@ const separatorHint = (path: string[], earlier: string[]) =>
 /** A run's facts name an eval and a family alike by id, so an eval can't take a family's. */
 const namedLikeFamily = (eval_: string[], family: string[]) =>
   new UsageError(
-    `evaluate("${eval_.join(' › ')}") has the same id as the pooled evaluate.each("${family.join(' › ')}") in this file: a family's id is its name template. Give the eval or the template another name.${separatorHint(eval_, family)}`,
+    `evaluate("${eval_.join(' › ')}") has the same id as evaluate("${family.join(' › ')}") with cases in this file. Give one of them another name.${separatorHint(eval_, family)}`,
   )
 
 function checkUnique(
@@ -232,7 +248,7 @@ function checkFamily(groups: string[], family: DeclaredFamily): void {
     earlier.seen.has(family.case)
   ) {
     throw new UsageError(
-      `evaluate.each("${path.join(' › ')}") is declared twice in this file. Each pooled evaluate.each needs its own name, or their cases are pooled into one family. Give each its own name template, or pass evaluate.each(cases, { pool: false }) to keep the cases apart.${separatorHint(path, earlier.path)}`,
+      `evaluate("${path.join(' › ')}") with cases is declared twice in this file. Each eval needs its own name, or their cases are pooled into one. Give each its own name.${separatorHint(path, earlier.path)}`,
     )
   }
   earlier.seen.add(family.case)
@@ -298,94 +314,76 @@ let registered = 0
 
 const defineEval =
   (mode: DeclaredMode, declared?: DeclaredSource): EvaluateFn =>
-  (name: string, a?: EvalOptions | EvalFn, b?: EvalOptions | EvalFn) => {
+  (name: string, a?: unknown, b?: unknown) => {
     checkOnly(mode, 'evaluate')
-    const [own, fn] = splitArgs<EvalFn>('evaluate', name, a, b)
+    const [written, fn] = splitArgs<EvalFn>('evaluate', name, a as EvalOptions, b as EvalOptions)
     const where = `evaluate("${name}")`
+    if (isObjectLike(written) && ('cases' in written || 'caseKey' in written)) {
+      return registerCases(mode, name, written as EvalOptions & CaseOptions<unknown>, fn)
+    }
     register(
       mode,
       name,
-      withPaths(own, where),
+      withPaths(written, where),
       fn,
       declared ?? { body: bodyHash(fn, where, collectingFile()) },
     )
   }
 
-/** `$key` is a property of the case, `%s` the case itself, `%#` its index. */
-function formatName(template: string, item: unknown, index: number): string {
-  return template
-    .replace(/%#/g, String(index))
-    .replace(/%s/g, typeof item === 'string' ? item : JSON.stringify(item))
-    .replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (whole, key: string) =>
-      isObjectLike(item) && key in item ? String(item[key]) : whole,
-    )
-}
-
-/** How an `evaluate.each` treats its cases. */
-export type EachOptions = {
-  /**
-   * Pool the cases into one suite: a pass rate over them and, with `compare`, one paired lift
-   * that `minLift` gates. On by default; `false` keeps them independent evals.
-   */
-  pool?: boolean
-}
-
-function checkEachOptions(options: unknown): EachOptions {
-  if (options === undefined) return {}
-  if (isObjectLike(options) && Object.keys(options).every((k) => k === 'pool')) {
-    const { pool } = options
-    if (pool === undefined) return {}
-    if (typeof pool === 'boolean') return { pool }
-  }
-  throw new UsageError(
-    `evaluate.each(cases, options) takes { pool?: boolean } (got ${JSON.stringify(options)}). Eval options such as compare go after the name: evaluate.each(cases)(name, { compare }, fn).`,
-  )
-}
-
 /**
- * One eval per case, pooled into one suite:
- * `evaluate.each(cases)('adds $a and $b', async (c, { a, b }) => …)`.
+ * An eval with `cases`: each case plans as a member of a pooled family named for the eval, so its
+ * cases pool into one pass rate and, with `compare`, one lift paired by case.
  */
-const evalEach =
-  <T>(
-    cases: readonly T[],
-    options?: EachOptions,
-  ): EvaluateFn<(c: AttemptContext, item: T) => Promise<void>> =>
-  (name: string, a?: unknown, b?: unknown) => {
-    const { pool = true } = checkEachOptions(options)
-    if (!Array.isArray(cases)) {
-      throw new UsageError(
-        `evaluate.each takes an array of cases (got ${typeof cases}), e.g. evaluate.each([{ n: 1 }, { n: 2 }])("case $n", async (c, item) => { … }).`,
-      )
-    }
-    const [written, fn] = splitArgs<(c: AttemptContext, item: T) => Promise<void>>(
-      'evaluate.each',
-      name,
-      a as EvalOptions,
-      b as EvalOptions,
+function registerCases(
+  mode: DeclaredMode,
+  name: string,
+  written: EvalOptions & CaseOptions<unknown>,
+  fn: EvalFn | CaseFn<unknown>,
+): void {
+  const where = `evaluate("${name}")`
+  const { cases, caseKey, ...rest } = written
+  if (!Array.isArray(cases)) {
+    throw new UsageError(
+      cases === undefined
+        ? `caseKey in ${where} names each case, but there are no cases. Add cases: [...], or drop caseKey.`
+        : `cases in ${where} must be a list (got ${typeof cases}), e.g. cases: ['users', 'posts'].`,
     )
-    const own = withPaths(written, `evaluate.each("${name}")`)
-    const hint = ` For evaluate.each, put $key, %s or %# in the name ("${name}") so each case's name differs.`
-    const pooled = pool && cases.length >= 2
-    const file = collectingFile()
-    const body = bodyHash(fn, `evaluate.each("${name}")`, file)
-    cases.forEach((item, i) => {
-      const family = pooled ? { name, case: i, cases: cases.length } : undefined
-      const source = { body, case: caseHash(item, `evaluate.each("${name}") case ${i}`, file) }
-      register('run', formatName(name, item, i), own, (c) => fn(c, item), source, hint, family)
-    })
   }
+  if (cases.length === 0) {
+    throw new UsageError(`cases in ${where} is an empty list. Give at least one case.`)
+  }
+  if (caseKey !== undefined && typeof caseKey !== 'function') {
+    throw new UsageError(
+      `caseKey in ${where} must be a function from a case to its key, e.g. caseKey: (item) => item.slug.`,
+    )
+  }
+  if (isObjectLike(rest.runs) && 'bestOf' in rest.runs) {
+    throw new UsageError(
+      `${where} has cases, so it can't take runs: { bestOf }: best-of stops each cell on its own, and the cases pool over the runs. Set a fixed count, e.g. runs: 3.`,
+    )
+  }
+  const keys = caseKeys(cases, caseKey, where)
+  const own = withPaths(rest as EvalOptions, where)
+  const file = collectingFile()
+  const body = bodyHash(fn, where, file)
+  const pooled = cases.length >= 2
+  cases.forEach((item, i) => {
+    const key = keys[i] as string
+    const family = pooled ? { name, case: i, cases: cases.length } : undefined
+    const source = { body, case: caseHash(item, `${where} case "${key}"`, file) }
+    const run: EvalFn = (c) => (fn as CaseFn<unknown>)(c, item)
+    register(mode, caseEvalName(name, key), own, run, source, '', family)
+  })
+}
 
 export const evaluate: EvaluateFn & {
   skip: EvaluateFn
   only: EvaluateFn
   todo: (name: string) => void
-  each: typeof evalEach
 } = Object.assign(defineEval('run'), {
   skip: defineEval('skip'),
   only: defineEval('only'),
   todo: registerTodo,
-  each: evalEach,
 })
 
 /**

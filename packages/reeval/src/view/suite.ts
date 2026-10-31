@@ -108,7 +108,7 @@ export type EvalResult = {
   order: number
   across: Across
   /**
-   * A pooled `evaluate.each` with two or more cases: `cases` is set and `cells` is null. An
+   * A eval with `cases` with two or more cases: `cases` is set and `cells` is null. An
    * unpooled one (`{ pool: false }`) is recorded as separate evals, each a single eval.
    */
   family: boolean

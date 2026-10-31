@@ -24,7 +24,7 @@
 | Option cascade through groups and evals; harness edits (`{ add }`, `{ only }`, functions) | ✓ 2 | ✓ 1 | — | — | — | — |
 | `environments` as a list: a cell per environment beside each harness, and its edits | ✓ 1 | ✓ 1 | — | — | — | — |
 | `compare`: control, variants, lift and `minLift` | ✓ 2 | ✓ 2 | ● 1 | ● 1 | — | — |
-| `evaluate.each`: one eval per case, pooled into a family with a pass rate and a paired lift that `minLift` gates; `{ pool: false }` | ✓ 2 | ✓ 3 | ● 1 | — | — | — |
+| `cases` and `caseKey`: one eval over a list of cases, each keyed `<eval> [<key>]`, pooled into a pass rate and a paired lift that `minLift` gates | ✓ 2 | ✓ 3 | ● 1 | — | — | — |
 | `compare.harnesses` | ✓ 1 | ✓ 1 | — | — | — | — |
 | `compare.control`: the control cell, which replaces an inherited `environments` | ✓ 1 | ✓ 4 | ● 1 | ● 1 | — | — |
 | `questions` with `across`: pairwise questions in the plan, answered after the run with win rates | ✓ 4 | ✓ 5 | — | — | — | ◐ 1 (1 without a canary) |
@@ -192,7 +192,7 @@
 | `snapshot` (default on): each attempt's final workspace, and with `'turns'` one after each send, in its directory in `.reeval/runs` as a directory or with `compress` a tar.gz, without dependency and cache directories, masked, capped and pruned with debug data | ✓ 2 | — | ● 2 | ● 2 | — | — |
 | `reeval compare --fail-on-regression` | ✓ 1 | — | — | — | — | — |
 | An eval Ctrl-C canceled reads `can't compare` with that side `canceled` in `reeval compare`, never `regressed`, and doesn't fail `--fail-on-regression` | ✓ 2 | — | — | — | — | — |
-| A pooled family's `minLift` gate is a row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail | ✓ 2 | — | — | — | — | — |
+| An eval's pooled `minLift` gate over its cases is a row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail | ✓ 2 | — | — | — | — | — |
 | A changed gate is a fingerprint part `reeval compare` names and re-scores base under, so `--fail-on-regression` fails only on a flip the gate doesn't explain | ✓ 3 | — | — | — | — | — |
 | `reeval query` | ✓ 1 | — | — | — | — | ◐ 1 (1 without a canary) |
 | `reeval mcp`: run history as read-only MCP tools and resources, over stdio or stateless HTTP | ✓ 1 | — | — | — | — | — |
@@ -203,7 +203,7 @@
 | Effort (tool calls, agent time, and tokens when both sides reported usage): the effort table in `reeval run` and `summary.md` from four counted tries a side, beside lift in `reeval compare -v` and the studio | ✓ 2 | — | — | — | — | — |
 | What each harness reports: file edits from edit tool calls (a Claude Code subagent's included) beside files changed from the workspace diff, and reasoning time measured from streamed blocks, null (`n/a`) where the harness can't time it | ✓ 1 | — | — | — | — | — |
 | Effort separation per metric (`no overlap` at 3 vs 3 or more, directional in `reeval analyze`) | ✓ 1 | ✓ 1 | — | — | — | — |
-| The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will say `can't tell yet` whatever happens; a profile's `limit.runs` cut is named | — | ✓ 6 | — | — | — | — |
+| The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared eval with below 6 cases will say `can't tell yet` whatever happens; a profile's `limit.runs` cut is named | — | ✓ 6 | — | — | — | — |
 | Contrasts: every arm side by side (checks, effort) in the run output, `reeval show` and `summary.md`; each pair of arms on one harness in `reeval query contrasts` and the digest | ✓ 1 | — | — | — | — | — |
 | Compare questions: pairs whose two orders disagree are splits, counted on the answer line, each pair head to head with three sides or more, `reeval query question_pairs` and `votes`, and the digest | ✓ 2 | — | — | — | — | — |
 | Labels and names: judges and `toSucceed` checks by their `expect` label in judge rates, `reeval show` and `summary.md` (a long script on one line), tokens as `430k vs 1,094k` everywhere, and a compare’s control named by its environment in the digest | ✓ 1 | — | — | — | — | — |
@@ -243,11 +243,11 @@
 | Output modes, renderers and GitHub Actions groups | ✓ 2 | — | — | — | — | — |
 | The run header: on a color terminal outside CI, one block of the plan's facts with its warnings and hints wrapped to the width; elsewhere the plain plan line | ✓ 1 | — | — | — | — | — |
 | `--log-order`, `--log-prefix` and `--output-logs` through `reeval run` | ✓ 1 | — | — | — | — | — |
-| Result layouts by what an eval varies: results, measure a change, compare harnesses, both, and a family | ✓ 1 | — | ● 5 | — | — | — |
+| Result layouts by what an eval varies: results, measure a change, compare harnesses, both, and an eval with cases | ✓ 1 | — | ● 5 | — | — | — |
 | A check that never ran reads `not run`, never `0 of N`, including every check of a cell with no counted attempt | ✓ 2 | — | ● 2 | — | — | — |
 | The tally (`5 fail · 2 pass`, infra errors, canceled attempts and skips apart) and the no-model hint | ✓ 2 | — | ● 1 | — | — | — |
 | An error outside any attempt: printed first, `N run error` in the tally, `errors` in the record, and `outcome: fail` with exit 1 | ✓ 1 | — | ● 1 | — | — | — |
-| A family's block reads every case: its columns, pooled arms and summed compare questions | ✓ 1 | — | — | — | — | — |
+| An eval with cases' block reads every case: its columns, pooled arms and summed compare questions | ✓ 1 | — | — | — | — | — |
 | `-v`/`--verbose`: the timestamped per-attempt phase trace (plan, image, container, environment, brokering, turns and tool calls, checks, judge, gateway requests, teardown) | ✓ 4 | — | — | — | — | ◐ 1 (1 without a canary) |
 | `-vv`/`--trace`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times | ✓ 2 | — | — | — | — | — |
 | Local debug data: `.reeval/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder | ✓ 1 | — | — | — | — | ◐ 1 (1 without a canary) |

@@ -6,7 +6,7 @@ const sandbox =
     ? docker()
     : fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
 
-export const eachCase = defineEnvironment('each-case', {
+export const cases = defineEnvironment('cases', {
   sandbox,
   files: { 'word.txt': 'ahoy' },
 })

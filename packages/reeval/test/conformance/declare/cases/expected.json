@@ -2,7 +2,7 @@
   "children": [
     {
       "type": "eval",
-      "name": "pooled across ada",
+      "name": "pooled [ada]",
       "mode": "run",
       "options": {
         "compare": {
@@ -53,14 +53,14 @@
         "case": "982c2f9e71df354525a6c3c60fe5f63cbf624b59fb9539e267f5ad935c619613"
       },
       "family": {
-        "name": "pooled across %s",
+        "name": "pooled",
         "case": 0,
         "cases": 3
       }
     },
     {
       "type": "eval",
-      "name": "pooled across grace",
+      "name": "pooled [grace]",
       "mode": "run",
       "options": {
         "compare": {
@@ -111,14 +111,14 @@
         "case": "6ec8b2f67db1bc05685b30ff9764b89ac2833fe0eaf41eb6f2d06cd1fb064325"
       },
       "family": {
-        "name": "pooled across %s",
+        "name": "pooled",
         "case": 1,
         "cases": 3
       }
     },
     {
       "type": "eval",
-      "name": "pooled across linus",
+      "name": "pooled [linus]",
       "mode": "run",
       "options": {
         "compare": {
@@ -169,14 +169,14 @@
         "case": "a620174ad9fa7073e651f8796a96cc760e55fda95ce15565a053714be71f3732"
       },
       "family": {
-        "name": "pooled across %s",
+        "name": "pooled",
         "case": 2,
         "cases": 3
       }
     },
     {
       "type": "eval",
-      "name": "each on its own for ada",
+      "name": "keyed [ada]",
       "mode": "run",
       "options": {
         "compare": {
@@ -224,11 +224,16 @@
       "source": {
         "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
         "case": "8fa929a996ad5dbf44e72f10481e2806f0250540f8de5a3def8363ac8d0ee988"
+      },
+      "family": {
+        "name": "keyed",
+        "case": 0,
+        "cases": 2
       }
     },
     {
       "type": "eval",
-      "name": "each on its own for grace",
+      "name": "keyed [grace]",
       "mode": "run",
       "options": {
         "compare": {
@@ -276,11 +281,16 @@
       "source": {
         "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6",
         "case": "963c0c84a7d284287f17a4b304db1cd7051e5924681405936e5949fe8af9c7de"
+      },
+      "family": {
+        "name": "keyed",
+        "case": 1,
+        "cases": 2
       }
     },
     {
       "type": "eval",
-      "name": "one case is not a family: only",
+      "name": "one case is not pooled [only]",
       "mode": "run",
       "options": {},
       "body": "b6",

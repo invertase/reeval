@@ -74,7 +74,7 @@ CREATE TABLE evals (
   case_index INTEGER,
   PRIMARY KEY (run_id, key)
 );
--- Each pooled evaluate.each per run: its cases, and each cell's pass@1 over them (the mean of the
+-- Each eval with cases per run: its cases, and each cell's pass@1 over them (the mean of the
 -- cases' pass@1).
 CREATE TABLE families (
   run_id TEXT NOT NULL, family_id TEXT NOT NULL, file TEXT, groups TEXT, name TEXT,
@@ -215,7 +215,7 @@ CREATE VIEW lift AS
   JOIN cells k ON k.run_id = c.run_id AND k.eval_key = c.eval_key AND k.key = c.lift_vs
   WHERE c.role = 'variant';
 
--- Each variant against its control over a pooled evaluate.each's cases, paired by case, per run.
+-- Each variant against its control over a eval with cases's cases, paired by case, per run.
 CREATE VIEW family_lift AS
   SELECT f.*, r.started_at, r.branch
   FROM family_lift_m f JOIN runs r USING (run_id);

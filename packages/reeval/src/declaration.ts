@@ -23,7 +23,7 @@ export type DeclaredGroup = {
 /** An `evaluate`: one eval, planned into a test per attempt. */
 export type DeclaredEval = {
   type: 'eval'
-  /** The eval's name, as passed to `evaluate` (a case's, for `evaluate.each`). */
+  /** The eval's name, as passed to `evaluate` (a case's, for an eval with `cases`). */
   name: string
   mode: DeclaredMode
   /** The eval's own options, before the cascade. */
@@ -31,25 +31,25 @@ export type DeclaredEval = {
   /** Names the eval's body to whoever runs it. */
   body: string
   source: DeclaredSource
-  /** Set on each case of a pooled `evaluate.each`: its template, index and the list's length. */
+  /** Set on each case of an eval with `cases`: its template, index and the list's length. */
   family?: DeclaredFamily
 }
 
 /**
  * An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source
- * text, and of an `evaluate.each` case's data as canonical JSON (object keys sorted, no
+ * text, and of a case's data as canonical JSON (object keys sorted, no
  * whitespace, non-ASCII characters as themselves).
  */
 export type DeclaredSource = {
   /** sha256 of the body function's source text. */
   body: string
-  /** sha256 of the case's data; set on each case of an `evaluate.each`. */
+  /** sha256 of the case's data; set on each case of an eval with `cases`. */
   case?: string
 }
 
-/** Where a case of a pooled `evaluate.each` sits in its list. */
+/** Where a case of an eval with `cases` sits in its list. */
 export type DeclaredFamily = {
-  /** The name template passed to `evaluate.each`. */
+  /** The name template the eval's own name. */
   name: string
   /** The case's index, from 0. */
   case: number

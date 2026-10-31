@@ -5,4 +5,4 @@ group('versioned', { revision: 2, runs: 2, timeout: '2m' }, () => {
   evaluate('overrides', { revision: 'v3' }, async () => {})
 })
 evaluate('unversioned', async () => {})
-evaluate.each([{ n: 1 }, { n: 2 }])('case $n', { revision: 1 }, async () => {})
+evaluate('case', { cases: [1, 2], revision: 1 }, async () => {})

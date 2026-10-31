@@ -25,7 +25,7 @@ import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
 import { bodyHash, caseHash } from '../../src/eval-source.ts'
-import { declareTree } from '../../src/evaluate.ts'
+import { declareTree, evaluate } from '../../src/evaluate.ts'
 import { resolveModelGateway } from '../../src/gateway/models.ts'
 import { resolveGateway } from '../../src/gateway/resolve.ts'
 import { vercelCredentialProblem } from '../../src/gateway/vercel.ts'
@@ -196,7 +196,9 @@ const tree = (children: unknown) => () => {
 }
 /** What declaring a tree refuses as it declares it, each in an eval file of its own. */
 let declaredFiles = 0
-const declares = (children: unknown[]) => () => {
+const declares = (children: unknown[]) =>
+  declaresWith(() => declareTree(children as DeclaredNode[], () => async () => {}))
+const declaresWith = (declare: () => void) => () => {
   const file = join(DIR, `evals/d${++declaredFiles}.eval.ts`)
   const run: RunContext = {
     runId: 'r',
@@ -213,8 +215,11 @@ const declares = (children: unknown[]) => () => {
     collectingFile: () => file,
     declareHarnesses: () => {},
   })
-  declareTree(children as DeclaredNode[], () => async () => {})
+  declare()
 }
+/** What evaluate() refuses of its cases, in an eval file of its own. */
+const withCases = (options: object, body: (...args: never[]) => unknown = async () => {}) =>
+  declaresWith(() => evaluate('e', options as never, body as never))
 const group = (name: string, children: unknown[]) => ({
   type: 'group',
   name,
@@ -826,8 +831,10 @@ export const CASES: Record<string, Case[]> = {
       'yaml: snapshot in a profile',
       yaml('profiles:\n  pr:\n    defaults: { snapshot: { compress: true } }\n'),
     ],
+    ['cases in options', options({ cases: [1, 2] })],
+    ['caseKey in options', options({ caseKey: (c: string) => c })],
     ['a bound body', () => bodyHash((async () => {}).bind(null), 'evaluate("e")')],
-    ['a case that is not JSON data', () => caseHash({ want: /hi/ }, 'evaluate.each("e") case 0')],
+    ['a case that is not JSON data', () => caseHash({ want: /hi/ }, 'evaluate("e") case "a"')],
     ['egress a list', options({ egress: ['api.example.com'] })],
     ['egress a string', options({ egress: 'none' })],
     ['egress deny key', options({ egress: { deny: ['x.com'] } })],
@@ -2065,6 +2072,22 @@ environments:
     ['model: openai on vertex, direct off', model('openai/m', undefined, [VERTEX, OFF])],
   ],
   declaration: [
+    ['cases: not a list', withCases({ cases: 'abc' })],
+    ['cases: an empty list', withCases({ cases: [] })],
+    ['cases: caseKey without cases', withCases({ caseKey: (c: string) => c })],
+    ['cases: caseKey not a function', withCases({ cases: [1], caseKey: 'slug' })],
+    ['cases: a case with no key', withCases({ cases: [{ slug: 'a' }] })],
+    ['cases: caseKey returns a number', withCases({ cases: [1], caseKey: () => 1 })],
+    ['cases: a key with a slash', withCases({ cases: ['a/b'] })],
+    ['cases: a key that is too long', withCases({ cases: ['x'.repeat(81)] })],
+    ['cases: an empty key', withCases({ cases: ['a'], caseKey: () => ' ' })],
+    ['cases: two cases with one key', withCases({ cases: [{ id: 'a' }, { name: 'a' }] })],
+    ['cases: one key from caseKey', withCases({ cases: [1, 2], caseKey: () => 'k' })],
+    ['cases: with best-of runs', withCases({ cases: [1, 2], runs: { bestOf: 3 } })],
+    [
+      'cases: keys from ids, names, strings and numbers',
+      withCases({ cases: ['s', 2, { id: 'i' }, { name: 'n' }] }),
+    ],
     ['not a list', tree({ type: 'eval' })],
     ['a node that is not one', tree(['e'])],
     ['an unknown node type', tree([evalNode({ type: 'test' })])],

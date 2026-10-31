@@ -628,10 +628,10 @@ class DeclarationTree(TypedDict):
 class DeclaredEval(TypedDict):
     # Names the eval's body to whoever runs it.
     body: str
-    # Set on each case of a pooled `evaluate.each`: its template, index and the list's length.
+    # Set on each case of an eval with `cases`: its template, index and the list's length.
     family: NotRequired[DeclaredFamily]
     mode: DeclaredMode
-    # The eval's name, as passed to `evaluate` (a case's, for `evaluate.each`).
+    # The eval's name, as passed to `evaluate` (a case's, for an eval with `cases`).
     name: str
     # The eval's own options, before the cascade.
     options: EvalOptionsData
@@ -639,13 +639,13 @@ class DeclaredEval(TypedDict):
     type: Literal["eval"]
 
 
-# Where a case of a pooled `evaluate.each` sits in its list.
+# Where a case of an eval with `cases` sits in its list.
 class DeclaredFamily(TypedDict):
     # The case's index, from 0.
     case: int
     # How many cases the list has.
     cases: int
-    # The name template passed to `evaluate.each`.
+    # The name template the eval's own name.
     name: str
 
 
@@ -669,12 +669,12 @@ DeclaredNode: TypeAlias = "DeclaredEval | DeclaredGroup | DeclaredTodo"
 
 
 # An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source
-# text, and of an `evaluate.each` case's data as canonical JSON (object keys sorted, no
-# whitespace, non-ASCII characters as themselves).
+# text, and of a case's data as canonical JSON (object keys sorted, no whitespace, non-ASCII
+# characters as themselves).
 class DeclaredSource(TypedDict):
     # sha256 of the body function's source text.
     body: str
-    # sha256 of the case's data; set on each case of an `evaluate.each`.
+    # sha256 of the case's data; set on each case of an eval with `cases`.
     case: NotRequired[str]
 
 
@@ -860,7 +860,7 @@ class EvalOptionsDataCompare(TypedDict):
     # Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell
     # once a majority of its `n` attempts agree and gates it on that majority; not on a compared
     # eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift
-    # can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.
+    # can reach a verdict, and anything else runs once, a eval with `cases` case included.
     runs: NotRequired[float | EvalOptionsDataCompareRunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harnesses`. Not an environment: it does not invent skills, files or a name.
@@ -936,7 +936,7 @@ class EvalOptionsData2(TypedDict):
     # Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell
     # once a majority of its `n` attempts agree and gates it on that majority; not on a compared
     # eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift
-    # can reach a verdict, and anything else runs once, a pooled `evaluate.each` case included.
+    # can reach a verdict, and anything else runs once, a eval with `cases` case included.
     runs: NotRequired[float | EvalOptionsData2RunsBestOf]
     # The default machine when the resolved environment omits `sandbox`. Cascades like
     # `harnesses`. Not an environment: it does not invent skills, files or a name.

@@ -400,7 +400,7 @@ export type EvalEntry = {
    * with secrets masked and screenshots as refs; unset where the evaluation's files weren't kept.
    */
   answers?: CompareAnswer[]
-  /** Set on each case of a pooled `evaluate.each`; `RunRecord.families` has the suite. */
+  /** Set on each case of an eval with `cases`; `RunRecord.families` has the suite. */
   family?: { id: string; name: string; case: number; cases: number }
 }
 
@@ -488,7 +488,7 @@ export type FamilyLift = {
   effort?: FamilyEffort
 }
 
-/** A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an evaluation. */
+/** A eval with `cases`: its cases as samples of one suite. Each case is also an evaluation. */
 export type FamilyRecord = {
   /** `file › group › … › template`. */
   id: string
@@ -721,7 +721,7 @@ export type RunRecord = {
   redaction: { version: 1 }
   summary: RunSummary
   evals: EvalEntry[]
-  /** Each pooled `evaluate.each` that ran; unset when none did. */
+  /** Each eval with `cases` that ran; unset when none did. */
   families?: FamilyRecord[]
   /**
    * These are redacted errors outside any attempt: an evaluation file that didn't load, a rejection

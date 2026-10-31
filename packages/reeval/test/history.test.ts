@@ -1014,9 +1014,12 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
-  'writes ok.txt for %s',
-  { compare: { control: plain, variants: [skilled], minLift: ${minLift} } },
+evaluate(
+  'writes ok.txt',
+  {
+    cases: ['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'],
+    compare: { control: plain, variants: [skilled], minLift: ${minLift} },
+  },
   async (c) => {
     await c.send('go')
     if (c.attempt.cell.role === 'control' && process.env.REEVAL_TEST_BASE_OK) return
@@ -1057,7 +1060,7 @@ evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
     assert.equal(regressed.code, 1, regressed.out)
     assert.match(
       regressed.out,
-      /^regressed {8}writes ok\.txt for %s \(all cases\)\n {2}base +\S+\n {2}head +\S+\n {2}fake\/skilled\/fake {2}lift \+100 \(\+\d+…\+100\) → \+0 \(−\d+…\+\d+\), not by minLift 20$/m,
+      /^regressed {8}writes ok\.txt \(all cases\)\n {2}base +\S+\n {2}head +\S+\n {2}fake\/skilled\/fake {2}lift \+100 \(\+\d+…\+100\) → \+0 \(−\d+…\+\d+\), not by minLift 20$/m,
     )
     assert.match(regressed.out, /^\+6 same$/m, 'the cases pass on their own')
     assert.match(regressed.out, /^1 regressed · 6 same$/m)
@@ -1078,7 +1081,7 @@ evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
     assert.equal((await runCli(p.dir, ['run'], baseOk)).code, 1)
     const drift = await compareCode('--fail-on-regression')
     assert.equal(drift.code, 1, drift.out)
-    assert.match(drift.out, /^can't compare {4}writes ok\.txt for %s \(all cases\)$/m)
+    assert.match(drift.out, /^can't compare {4}writes ok\.txt \(all cases\)$/m)
     assert.deepEqual((await familyRow())?.changes, ['options changed'])
     assert.equal((await runCli(p.dir)).code, 0)
     assert.equal((await compareCode('--fail-on-regression')).code, 0, 'canary: passing, it is fine')
@@ -1169,9 +1172,12 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
-  'writes ok.txt for %s',
-  { compare: { control: plain, variants: [skilled], minLift: 0.2 } },
+evaluate(
+  'writes ok.txt',
+  {
+    cases: ['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'],
+    compare: { control: plain, variants: [skilled], minLift: 0.2 },
+  },
   async (c) => {
     await c.send('go')
     if (c.attempt.cell.role === 'control' && process.env.REEVAL_TEST_BASE_OK) return
@@ -1197,7 +1203,7 @@ evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
     assert.equal(shown.code, 0, `nothing regressed\n${shown.stdout}`)
     assert.match(
       shown.stdout,
-      /^same {13}writes ok\.txt for ada\n {2}gate +all → passRate 0\.5 {2}base would still pass under it$/m,
+      /^same {13}writes ok\.txt \[ada\]\n {2}gate +all → passRate 0\.5 {2}base would still pass under it$/m,
       'a gate change is named even where the outcome held',
     )
 
@@ -1211,7 +1217,7 @@ evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
   test('reeval compare has no row for a pooled family without a gate', async () => {
     const p = await gitProject('compare-family-ungated', {
       'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate.each(['ada', 'grace'])('greets %s', async (c) => {
+evaluate('greets', { cases: ['ada', 'grace'] }, async (c) => {
   await c.send('go')
   expect(process.env.REEVAL_TEST_BREAK ?? 'ok').toBe('ok')
 })

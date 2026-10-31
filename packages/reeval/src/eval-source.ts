@@ -1,6 +1,6 @@
 // What an eval's `sources` fingerprint part covers, the same in every language: the eval's own
 // body (its function's source text), its declared options and its enclosing groups' (`tags`,
-// `runs`, `timeout`, `revision` and `gate` aside), an `evaluate.each` case's data, and its
+// `runs`, `timeout`, `revision` and `gate` aside), a case's data, and its
 // `revision`. Nothing else in the file is read: helpers, constants outside the body, fixtures and
 // data it reads are the author's to mark by bumping `revision`. Packages are covered by the recorded lockfiles.
 import { readFile } from 'node:fs/promises'
@@ -54,7 +54,7 @@ export function bodyHash(fn: (...args: never[]) => unknown, where: string, file?
 }
 
 /**
- * sha256 of an `evaluate.each` case in canonical JSON. Throws on a value that isn't JSON data (a
+ * sha256 of a case in canonical JSON. Throws on a value that isn't JSON data (a
  * class instance such as a RegExp or Map, a non-finite number), whose changes JSON can't see.
  */
 export function caseHash(item: unknown, where: string, file?: string): string {

@@ -655,7 +655,7 @@ export function deriveFacts(db: DatabaseSync): void {
     })
   }
 
-  // Paired: a pooled evaluate.each's variant against its control over the cases of one run, each
+  // Paired: a eval with cases's variant against its control over the cases of one run, each
   // case a paired sample, as its record computed it.
   const familyLifts = rowsOf<Record<(typeof FAMILY_COLUMNS)[number], SQLInputValue>>(
     db.prepare(`SELECT ${FAMILY_COLUMNS.join(', ')} FROM family_lift_m`),
@@ -684,7 +684,7 @@ export function deriveFacts(db: DatabaseSync): void {
       tokens_ratio: f.tokens_ratio,
       tokens_p: f.tokens_p,
       tokens_verdict: f.tokens_verdict,
-      note: 'paired by case over a pooled evaluate.each: strata is the paired cases',
+      note: 'paired by case over a eval with cases: strata is the paired cases',
     })
   }
 

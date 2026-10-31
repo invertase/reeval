@@ -65,7 +65,7 @@
           "$ref": "#/$defs/PlannedEgress"
         },
         "family": {
-          "description": "Set when the eval is a case of a pooled `evaluate.each`.",
+          "description": "Set when the eval is a case of an eval with `cases`.",
           "$ref": "#/$defs/FamilyMeta"
         },
         "files": {
@@ -861,7 +861,7 @@
           "type": "string"
         },
         "case": {
-          "description": "sha256 of the case's data; set on each case of an `evaluate.each`.",
+          "description": "sha256 of the case's data; set on each case of an eval with `cases`.",
           "type": "string"
         },
         "options": {
@@ -1124,7 +1124,7 @@
       ]
     },
     "FamilyMeta": {
-      "description": "A case's place in its pooled `evaluate.each`.",
+      "description": "A case's place in its eval with `cases`.",
       "type": "object",
       "properties": {
         "case": {

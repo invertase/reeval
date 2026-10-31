@@ -136,11 +136,11 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/options.test.ts', 'reeval/test/results.test.ts'],
   },
   {
-    id: 'evaluate.each',
+    id: 'cases',
     area: 'Config and selection',
-    name: '`evaluate.each`: one eval per case, pooled into a family with a pass rate and a paired lift that `minLift` gates; `{ pool: false }`',
-    plan: ['compare/each-pooled', 'compare/each-filtered', 'selection/tags'],
-    fixtures: ['run/each-case'],
+    name: '`cases` and `caseKey`: one eval over a list of cases, each keyed `<eval> [<key>]`, pooled into a pass rate and a paired lift that `minLift` gates',
+    plan: ['compare/cases', 'compare/cases-filtered', 'selection/tags'],
+    fixtures: ['run/cases'],
     unit: ['reeval/test/options.test.ts', 'reeval/test/results.test.ts'],
   },
   {
@@ -1539,7 +1539,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'compare.family-gate',
     area: 'Records and studio',
-    name: "A pooled family's `minLift` gate is a row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail",
+    name: "An eval's pooled `minLift` gate over its cases is a row in `reeval compare`, and `--fail-on-regression` fails when it goes from pass to fail",
     unit: ['reeval/test/history.test.ts', 'reeval/test/unit.test.ts'],
   },
   {
@@ -1612,12 +1612,12 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'plan.verdict-hints',
     area: 'Records and studio',
-    name: "The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared family below 6 cases will say `can't tell yet` whatever happens; a profile's `limit.runs` cut is named",
+    name: "The plan's verdict hints: a compare below 4 runs a cell (1 included) and a compared eval with below 6 cases will say `can't tell yet` whatever happens; a profile's `limit.runs` cut is named",
     plan: [
       'compare/verdicts',
       'compare/verdicts-no-control',
       'compare/verdicts-some-cases',
-      'compare/each-pooled',
+      'compare/cases',
       'compare/study',
       'runs-default/profile-limit-capped',
     ],
@@ -1870,7 +1870,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'output.layouts',
     area: 'CLI and runner',
-    name: 'Result layouts by what an eval varies: results, measure a change, compare harnesses, both, and a family',
+    name: 'Result layouts by what an eval varies: results, measure a change, compare harnesses, both, and an eval with cases',
     fixtures: ['output/none', 'output/change', 'output/harness', 'output/both', 'output/family'],
     unit: ['reeval/test/output.test.ts'],
   },
@@ -1898,7 +1898,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'output.family-cases',
     area: 'CLI and runner',
-    name: "A family's block reads every case: its columns, pooled arms and summed compare questions",
+    name: "An eval with cases' block reads every case: its columns, pooled arms and summed compare questions",
     unit: ['reeval/test/suite.test.ts'],
   },
   {

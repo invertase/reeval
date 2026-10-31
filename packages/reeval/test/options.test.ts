@@ -176,9 +176,13 @@ group('slow things', { tags: ['slow'] }, () => {
 })
 evaluate('quick', async () => {})
 evaluate.todo('later')
-evaluate.each([{ a: 1, b: 2 }, { a: 3, b: 4 }])('adds $a and $b (%#)', async (c, { a, b }) => {
-  if (a + b !== (a === 1 ? 3 : 7)) throw new Error('bad sum')
-})
+evaluate(
+  'adds',
+  { cases: [{ id: '1+2', a: 1, b: 2 }, { id: '3+4', a: 3, b: 4 }] },
+  async (c, { a, b }) => {
+    if (a + b !== (a === 1 ? 3 : 7)) throw new Error('bad sum')
+  },
+)
 `,
     })
     const slow = await runCli(p.dir, ['run', '--tag', 'slow', '--tag', '!flaky'])
@@ -195,8 +199,8 @@ evaluate.each([{ a: 1, b: 2 }, { a: 3, b: 4 }])('adds $a and $b (%#)', async (c,
       ['bigger', 'pass'],
       ['quick', 'pass'],
       ['later', 'skipped'],
-      ['adds 1 and 2 (0)', 'pass'],
-      ['adds 3 and 4 (1)', 'pass'],
+      ['adds [1+2]', 'pass'],
+      ['adds [3+4]', 'pass'],
     ])
     const none = await runCli(p.dir, ['run', 'no-such-eval'])
     assert.equal(none.code, 2)
@@ -274,7 +278,6 @@ export const skilled = base.extendEnvironment('skilled', ({ skill }) => ({
 `
 
   const each = (
-    options: string,
     runs = 1,
     cases = "['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara']",
   ) => ({
@@ -283,9 +286,13 @@ export const skilled = base.extendEnvironment('skilled', ({ skill }) => ({
     'evals/envs.ts': envs,
     'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-evaluate.each(${cases}${options})(
-  'writes ok.txt for %s',
-  { compare: { control: base, variants: [skilled], minLift: MIN_LIFT }, runs: ${runs} },
+evaluate(
+  'writes ok.txt',
+  {
+    cases: ${cases},
+    compare: { control: base, variants: [skilled], minLift: MIN_LIFT },
+    runs: ${runs},
+  },
   async (c, name) => {
     await c.send('write ok.txt for ' + name)
     await expect(c).toHaveFile('ok.txt')
@@ -294,8 +301,8 @@ evaluate.each(${cases}${options})(
 `,
   })
 
-  test('evaluate.each pools its cases into one paired lift that minLift gates', async () => {
-    const files = each('')
+  test('cases pool into one paired lift that minLift gates', async () => {
+    const files = each()
     const p = await project('each-pooled', {
       ...files,
       'evals/e.eval.ts': files['evals/e.eval.ts'].replace('MIN_LIFT', '0.2'),
@@ -305,7 +312,7 @@ evaluate.each(${cases}${options})(
     // The case is outer and its arms inner; the pooled effect is on `all cases`.
     assert.match(
       r.stdout,
-      /^ {17}writes ok\.txt for %s\n {2}pass {2}ada\n {4}arm {12}pass\n {4}base {11}0 of 1\n {4}skilled {8}1 of 1\n/m,
+      /^ {17}writes ok\.txt\n {2}pass {2}ada\n {4}arm {12}pass\n {4}base {11}0 of 1\n {4}skilled {8}1 of 1\n/m,
     )
     for (const name of ['grace', 'linus', 'margaret', 'dennis', 'barbara'])
       assert.match(r.stdout, new RegExp(`^ {2}pass {2}${name}$`, 'm'), name)
@@ -321,7 +328,7 @@ evaluate.each(${cases}${options})(
     assert.deepEqual(
       evals.map((e) => [e.name, e.family?.case]),
       ['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'].map((n, i) => [
-        `writes ok.txt for ${n}`,
+        `writes ok.txt [${n}]`,
         i,
       ]),
     )
@@ -330,7 +337,7 @@ evaluate.each(${cases}${options})(
       'a case is not gated on minLift alone',
     )
     const [family] = run.families ?? []
-    assert.equal(family?.id, 'evals/e.eval.ts › writes ok.txt for %s')
+    assert.equal(family?.id, 'evals/e.eval.ts › writes ok.txt')
     assert.deepEqual(
       family?.rates.map((x) => [x.cell, x.pass, x.counted, x.interval.method]),
       [
@@ -364,7 +371,7 @@ evaluate.each(${cases}${options})(
     ])
     assert.equal(q.code, 0, q.stdout + q.stderr)
     assert.deepEqual(JSON.parse(q.stdout)[0], {
-      family_id: 'evals/e.eval.ts › writes ok.txt for %s',
+      family_id: 'evals/e.eval.ts › writes ok.txt',
       variant: 'skilled',
       pairs: 6,
       variant_pass_at_1: 1,
@@ -384,8 +391,8 @@ evaluate.each(${cases}${options})(
     ])
   })
 
-  test("a pooled lift below minLift fails the run, and the family's mark", async () => {
-    const files = each('')
+  test('a pooled lift below minLift fails the run, and the eval with cases', async () => {
+    const files = each()
     const p = await project('each-min-lift', {
       ...files,
       'evals/e.eval.ts': files['evals/e.eval.ts'].replace('MIN_LIFT', '0.6'),
@@ -406,24 +413,8 @@ evaluate.each(${cases}${options})(
     )
   })
 
-  test('evaluate.each with { pool: false } records independent evals', async () => {
-    const files = each(', { pool: false }')
-    const p = await project('each-unpooled', {
-      ...files,
-      'evals/e.eval.ts': files['evals/e.eval.ts'].replace(', minLift: MIN_LIFT', ''),
-    })
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.doesNotMatch(r.stdout, /all cases|writes ok\.txt for %s/)
-    assert.match(r.stdout, /^pass {13}writes ok\.txt for ada$/m)
-    const { run, evals } = readRun(p.dir)
-    assert.equal(run.families, undefined)
-    assert.equal(evals.length, 6)
-    assert.ok(evals.every((e) => e.family === undefined))
-  })
-
-  test('a pooled family over several runs a case pairs per-case pass rates', async () => {
-    const files = each('', 2, "['ada', 'grace', 'linus']")
+  test('cases over several runs a case pair per-case pass rates', async () => {
+    const files = each(2, "['ada', 'grace', 'linus']")
     const p = await project('each-runs', {
       ...files,
       'evals/e.eval.ts': files['evals/e.eval.ts'].replace('MIN_LIFT', '0.2'),
@@ -1114,23 +1105,14 @@ describe('common mistakes', { concurrency: 4 }, () => {
         /evaluate\("x"\) has no function\. Pass the eval's body, e\.g\. evaluate\("x", async \(c\) => \{ … \}\)\./,
       ],
       [
-        'evaluate.each cases with the same name',
-        () =>
-          evaluate.each([
-            { a: 1, b: 2 },
-            { a: 1, b: 3 },
-          ])('adds $a', async () => {}),
-        /evaluate\("adds 1"\) is declared twice in this file\. .* For evaluate\.each, put \$key, %s or %# in the name \("adds \$a"\) so each case's name differs\./,
+        'two cases with the same key',
+        () => evaluate('adds', { cases: [{ id: 'a' }, { id: 'a' }] }, async () => {}),
+        /cases\[0\] and cases\[1\] in evaluate\("adds"\) have the same key "a"\. Each case needs its own key: give them distinct ids or names, or pass caseKey\./,
       ],
       [
-        "pool in an eval's options",
-        () => evaluate.each([1, 2])('n %s', { pool: false } as never, async () => {}),
-        /Unknown option "pool" in evaluate\("n 1"\)\. pool is an option of evaluate\.each, beside the cases: evaluate\.each\(cases, \{ pool: false \}\)\./,
-      ],
-      [
-        "eval options as evaluate.each's second argument",
-        () => evaluate.each([1, 2], { runs: 2 } as never)('n %s', async () => {}),
-        /evaluate\.each\(cases, options\) takes \{ pool\?: boolean \} \(got \{"runs":2\}\)\. Eval options such as compare go after the name/,
+        'cases on a group',
+        () => group('g', { cases: [1, 2] } as never, () => {}),
+        /Unknown option "cases" in group\("g"\)\. cases belongs to one eval: evaluate\(name, \{ cases: \[\.\.\.\] \}, async \(c, item\) => \{ … \}\)\./,
       ],
       [
         'a zero timeout',

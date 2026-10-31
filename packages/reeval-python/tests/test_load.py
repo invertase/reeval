@@ -17,7 +17,7 @@ import pickle
 import typing
 from dataclasses import dataclass
 
-from reeval_python import evaluate, evaluate_each
+from reeval_python import evaluate
 
 
 @dataclass
@@ -29,7 +29,7 @@ assert typing.get_type_hints(Case) == {"name": str}
 assert pickle.loads(pickle.dumps(Case("x"))) == Case("x")
 
 
-@evaluate_each([Case("a"), Case("b")], "case %#")
+@evaluate("case", {"cases": [Case("a"), Case("b")]})
 def each(c, case: Case):
     c.exec(case.name)
 
@@ -52,7 +52,7 @@ def _names(tree: object) -> list[str]:
 def test_a_file_with_future_annotations_and_a_dataclass_loads(tmp_path: Path) -> None:
     path = tmp_path / "dataclass.eval.py"
     path.write_text(DATACLASS)
-    assert _names(collect_eval_file(path)) == ["case 0", "case 1", "sees its own module"]
+    assert _names(collect_eval_file(path)) == ["case [a]", "case [b]", "sees its own module"]
 
 
 def test_two_files_defining_the_same_class_keep_their_own(tmp_path: Path) -> None:
@@ -86,7 +86,7 @@ def test_a_file_that_fails_to_load_leaves_no_module(tmp_path: Path) -> None:
 def test_the_runner_collects_and_runs_a_dataclass_file(tmp_path: Path) -> None:
     host = Host(tmp_path, DATACLASS)
     try:
-        host.start("case 1", key="k1")
+        host.start("case [b]", key="k1")
         assert host.done("k1") == {"type": "done", "key": "k1"}
         assert [c["command"] for c in host.calls("k1")] == ["b"]
         host.start("sees its own module", key="k2")

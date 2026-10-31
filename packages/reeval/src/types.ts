@@ -577,6 +577,23 @@ export type AttemptContext = {
 }
 export type EvalFn = (c: AttemptContext) => Promise<void>
 
+/** The body of an eval with `cases`: the attempt and its case. */
+export type CaseFn<T> = (c: AttemptContext, item: T) => Promise<void>
+
+/**
+ * One eval over several inputs: each case runs the body with every cell and run, and the cases
+ * pool into one pass rate (and, with `compare`, one lift paired by case). Per eval only.
+ */
+export type CaseOptions<T> = {
+  /** The inputs, each JSON data; the body gets one as its second argument. */
+  cases: readonly T[]
+  /**
+   * Each case's key, which names it in the output and the record. Without it, a string or a
+   * finite number is its own key, and an object uses its `id`, else its `name`.
+   */
+  caseKey?: (item: T) => string
+}
+
 /** A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`. */
 export type FakeHarnessDescriptor = {
   kind: 'fake'
@@ -1841,7 +1858,7 @@ type EvalOptionFields<N extends number = number> = {
    * Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once
    * a majority of its `n` attempts agree and gates it on that majority; not on a compared eval.
    * Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach
-   * a verdict, and anything else runs once, a pooled `evaluate.each` case included.
+   * a verdict, and anything else runs once, a eval with `cases` case included.
    */
   runs?: Runs<N>
   /** How each cell's attempts decide its outcome; default `'all'`. */
@@ -2952,7 +2969,7 @@ export type AttemptMeta = {
   plan: EvalPlan
   /** Why this attempt does not run, e.g. it already completed in a resumed run. */
   skip?: string
-  /** Set when the eval is a case of a pooled `evaluate.each`. */
+  /** Set when the eval is a case of an eval with `cases`. */
   family?: FamilyMeta
   /** The gateway its harness resolved to; unset when no config, profile or pin names one. */
   gateway?: ResolvedGateway
@@ -2970,7 +2987,7 @@ export type ResolvedGateway = {
   skipped: Array<{ gateway: GatewayName; why: string }>
 }
 
-/** A case's place in its pooled `evaluate.each`. */
+/** A case's place in its eval with `cases`. */
 export type FamilyMeta = {
   /** `file › group › … › template`, like an eval id with the name template in place of the name. */
   id: string

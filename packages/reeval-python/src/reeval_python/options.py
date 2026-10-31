@@ -6,13 +6,14 @@ data reeval documents for it, in snake_case too, and reeval checks them when it 
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
-from typing import Any, Literal, TypedDict
+from typing import Any, Generic, Literal, Required, TypedDict, TypeVar
 
 from reeval_python.environment import DockerSandbox, Environment, FakeHarness, FakeJudge
 
 Harness = str | FakeHarness | Mapping[str, Any]
+T = TypeVar("T")
 
 
 class JudgeDefaults(TypedDict, total=False):
@@ -97,3 +98,15 @@ class EvalOptions(TypedDict, total=False):
     tags: Sequence[str]
     timeout: timedelta | float
     """Per attempt, in seconds or as a timedelta."""
+
+
+class CaseOptions(EvalOptions, Generic[T], total=False):
+    """An eval's options with `cases`: each case runs the body, `(c, case)`, with every cell and
+    run, and the cases pool into one pass rate (and, with `compare`, one lift paired by case).
+    Per eval only."""
+
+    cases: Required[Sequence[T]]
+    """The inputs, each JSON data."""
+    case_key: Callable[[T], str]
+    """Each case's key, which names it in the output and the record. Without it, a string or a
+    finite number is its own key, and a dict uses its `id`, else its `name`."""

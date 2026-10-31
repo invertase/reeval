@@ -48,7 +48,7 @@ const HISTORY_RUNS = 30
 export type PlanRow = {
   id: string
   plan: EvalPlan
-  /** Set on each case of a pooled `evaluate.each`. */
+  /** Set on each case of an eval with `cases`. */
   family?: FamilyMeta
   /** Optimistic pair sides for `--dry-run`: every planned attempt is assumed to pass checks. */
   sides: PairAttempt[]
@@ -384,7 +384,7 @@ const cappedBy = (note: string): string | undefined =>
   /^runs \d+ → \d+ \(profile (.+)\)$/.exec(note)?.[1]
 
 /**
- * One line per compared family with too few cases for its paired lift to get a verdict: one
+ * One line per compared eval with too few cases for its paired lift to get a verdict: one
  * attempt a case can't give more discordant cases than there are cases, and several need as many
  * cases, so more runs don't help. `rows` are those that plan a lift.
  */
@@ -400,7 +400,7 @@ function familyHints(rows: PlanRow[]): string[] {
     .map(([id, { n, of }]) => {
       const has = n === of ? `has ${plural(n, 'case')}` : `runs ${n} of its ${of} cases`
       const fix = of >= PAIRED_MIN ? 'run all its cases' : 'add cases'
-      return `family ${clip(id, 64)} ${has}; its lift needs ${PAIRED_MIN} for a verdict, so it will say can't tell yet whatever the runs (${fix})`
+      return `${clip(id, 64)} ${has}; its lift needs ${PAIRED_MIN} for a verdict, so it will say can't tell yet whatever the runs (${fix})`
     })
 }
 
@@ -613,7 +613,7 @@ export type PlanEval = {
   cells: PlanCell[]
   /** Its questions: pairwise ones answered after the run, the rest after each attempt; unset without any. */
   questions?: PlanQuestion[]
-  /** Set on each case of a pooled `evaluate.each`. */
+  /** Set on each case of an eval with `cases`. */
   family?: FamilyMeta
 }
 

@@ -3129,12 +3129,22 @@ export const features: Feature[] = [
     },
   },
   {
-    dir: 'run/each-case',
+    dir: 'run/cases',
     tiers: ['fake'],
-    env: 'each-case',
+    env: 'cases',
     canary: /expected 'ahoy' to be 'hello'/,
+    evals: {
+      'lands [ahoy]': { outcome: 'pass', attempts: ['fake/cases/fake#1'] },
+      'canary [hello]': {
+        outcome: 'fail',
+        attempts: ['fake/cases/fake#1'],
+        error: { kind: 'assertion', message: /expected 'ahoy' to be 'hello'/ },
+      },
+    },
     record: ({ run }) => {
-      assert.equal(run.evals.find((e) => e.name === 'lands')?.family, undefined)
+      const lands = run.evals.find((e) => e.name === 'lands [ahoy]')
+      assert.ok(lands, 'the case runs as lands [ahoy]')
+      assert.equal(lands.family, undefined)
       assert.equal(run.families, undefined, 'one case is not a family')
     },
   },
@@ -3364,10 +3374,10 @@ export const features: Feature[] = [
     env: '-',
     canary: /is red: expected 'green' to be 'red'/,
     evals: {
-      'lands red': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
-      'lands blue': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
-      'canary red': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
-      'canary green': {
+      'lands [red]': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      'lands [blue]': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      'canary [red]': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      'canary [green]': {
         outcome: 'fail',
         attempts: ['fake/-/fake#1'],
         error: { kind: 'assertion', message: /is red: expected 'green' to be 'red'/ },
@@ -3376,11 +3386,11 @@ export const features: Feature[] = [
     record: ({ stdout }) => {
       assert.match(
         stdout,
-        /\n {17}lands %s\n {2}pass {2}red {8}1 of 1\n {2}pass {2}blue {7}1 of 1\n\n/,
+        /\n {17}lands\n {2}pass {2}red {8}1 of 1\n {2}pass {2}blue {7}1 of 1\n\n/,
       )
       assert.match(
         stdout,
-        /\n {17}canary %s\n {2}pass {2}red {8}1 of 1\n {2}fail {2}green {6}0 of 1\n {4}is red {9}failed {2}evals\/canary\.eval\.ts:5\n {6}expected 'green' to be 'red'/,
+        /\n {17}canary\n {2}pass {2}red {8}1 of 1\n {2}fail {2}green {6}0 of 1\n {4}is red {9}failed {2}evals\/canary\.eval\.ts:5\n {6}expected 'green' to be 'red'/,
       )
       assert.match(stdout, /\n1 fail · 3 pass\n/)
     },

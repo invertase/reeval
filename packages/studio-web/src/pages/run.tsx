@@ -148,7 +148,7 @@ function SandboxWarnings({ warnings }: { warnings: SandboxWarning[] }) {
 }
 
 /**
- * Each pooled `evaluate.each`: its template, a mark per case (click to open that case), and its
+ * Each eval with `cases`: its name, a mark per case (click to open that case), and its
  * pooled pass rate or paired lift, the suite's one verdict.
  */
 function Families({ record, onSelect }: { record: RunRecord; onSelect: (slug: string) => void }) {
@@ -156,7 +156,7 @@ function Families({ record, onSelect }: { record: RunRecord; onSelect: (slug: st
   if (families.length === 0) return null
   return (
     <div className="space-y-3 rounded-xl border bg-card p-4" data-testid="families">
-      <h2 className="text-sm font-medium">Families</h2>
+      <h2 className="text-sm font-medium">Evals with cases</h2>
       {families.map((f) => {
         const cases = familyCases(f, record.evals)
         return (
