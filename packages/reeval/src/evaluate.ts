@@ -33,7 +33,6 @@ import { isObjectLike } from './object.ts'
 import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
 import { type PlannedEval, planEval } from './plan-eval.ts'
 import type {
-  AttemptContext,
   CaseFn,
   CaseOptions,
   Environment,
