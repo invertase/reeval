@@ -19,7 +19,7 @@ evaluate.each([{ name: 'reset' }, { name: 'double' }, { name: 'clear' }])(
 
 evaluate.each(['Ada', 'Grace', 'Linus', 'Edsger'])(
   'greets %s in the house style',
-  { compare: { baseline: plain, variants: [withSkill] } },
+  { compare: { control: plain, variants: [withSkill] } },
   async (c, name) => {
     await c.send(`Write greet.js that greets ${name} in our house style.`)
     await expect(c.exec('grep -q Ahoy greet.js'), 'house greeting').toSucceed()

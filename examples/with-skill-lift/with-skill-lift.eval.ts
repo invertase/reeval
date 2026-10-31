@@ -9,7 +9,7 @@ const withSkill = math.extendEnvironment('changelog', ({ skill }) => ({
 evaluate(
   'records the change in the changelog',
   // Four tries a side is the fewest that gives a verdict; the variant passes on 3 of 4 or more.
-  { compare: { baseline: math, variants: [withSkill] }, runs: 4, gate: { passRate: 0.75 } },
+  { compare: { control: math, variants: [withSkill] }, runs: 4, gate: { passRate: 0.75 } },
   async (c) => {
     await c.send('Add a multiply(a, b) function to src/math.js.')
 

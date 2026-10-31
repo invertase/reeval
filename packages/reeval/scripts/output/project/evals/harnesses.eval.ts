@@ -28,7 +28,7 @@ evaluate('greets in the house style on each agent', { harnesses: [skilled, terse
 
 evaluate(
   'learns the house style from the skill',
-  { harnesses: [learner, terse], runs: 4, compare: { baseline: plain, variants: [withSkill] } },
+  { harnesses: [learner, terse], runs: 4, compare: { control: plain, variants: [withSkill] } },
   async (c) => {
     await c.send('Write greet.js that greets in our house style.')
     await expect(c.exec('grep -q Ahoy greet.js'), 'house greeting').toSucceed()

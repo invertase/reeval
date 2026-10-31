@@ -22,8 +22,6 @@ import {
   applied,
   checkEgress,
   checkEnv,
-  EMPTY_BASELINE,
-  emptyEnvironment,
   environmentDataProblem,
   isEnvironment,
   isMovingRef,
@@ -105,7 +103,8 @@ const SUGGEST: Record<string, string> = {
   harness: 'harnesses',
   sandboxes: 'sandbox',
   environment: 'environments',
-  baseline: 'environments',
+  baseline: 'compare',
+  control: 'compare',
   variants: 'compare',
   repeat: 'runs',
   repeats: 'runs',
@@ -224,23 +223,23 @@ const describe = (value: unknown) => {
   return JSON.stringify(value) ?? String(value)
 }
 
-/** `compare: false` and `environment` beside `compare.baseline` are never legal options. */
+/** `compare: false` and `environments` beside `compare` are never legal options. */
 export function refuseIllegalCompare(
   options: { environments?: unknown; compare?: unknown },
   where: string,
 ): void {
   if (options.compare === false) {
     throw new UsageError(
-      `compare: false can't be set in ${where}. A profile turns compare off with limit.compare: false, which runs the baseline and strips the variants. On a group or eval, omit compare or pass compare: { baseline, variants }.`,
+      `compare: false can't be set in ${where}. A profile turns compare off with limit.compare: false, which runs the control and strips the variants. On a group or eval, omit compare or pass compare: { control, variants }.`,
     )
   }
-  const baseline =
-    options.compare !== null && typeof options.compare === 'object' && 'baseline' in options.compare
-      ? options.compare.baseline
-      : undefined
-  if (options.environments !== undefined && baseline !== undefined) {
+  if (options.environments !== undefined && options.compare !== undefined) {
+    const first = Array.isArray(options.environments)
+      ? options.environments[0]
+      : options.environments
+    const name = isObjectLike(first) && typeof first.name === 'string' ? first.name : 'app'
     throw new UsageError(
-      `environments and compare.baseline can't both be set in ${where}. compare: { baseline, variants } names every arm, so drop environments, or drop baseline to make environments the control.`,
+      `${where} sets both environments and compare. With compare, the control is compare.control: move it there, as compare: { control: ${name}, variants: [...] }.`,
     )
   }
 }
@@ -346,7 +345,7 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   if (o.environments !== undefined) {
     if (Array.isArray(o.environments)) {
       throw new UsageError(
-        `environments takes one environment, not a list (${where}). To compare environments, use compare: { baseline, variants: [a, b] }. baseline is the control; variants are not layered on it.`,
+        `environments takes one environment, not a list (${where}). To compare environments, use compare: { control: a, variants: [b, c] }; variants are not layered on the control.`,
       )
     }
     if (!isEnvironment(o.environments)) {
@@ -362,9 +361,9 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   if (o.compare !== undefined) {
     const problem = compareProblem(o.compare, where, z.custom<Environment>(isEnvironment))
     if (problem) throw new UsageError(problem)
-    const { baseline, variants } = o.compare
+    const { control, variants } = o.compare
     for (const [label, env] of [
-      ['compare.baseline', baseline],
+      ['compare.control', control],
       ...variants.map((v, i) => [`compare.variants[${i}]`, v] as const),
     ] as const) {
       const bad = env && environmentDataProblem(env, label, where)
@@ -565,10 +564,7 @@ function checkUnique(list: HarnessDescriptor[], where: string) {
 export type Level = { options: EvalOptions; where: string }
 
 export type NormalizedCompare = {
-  /** The control, once `cascade` resolves an omitted `baseline`. */
-  baseline: Environment
-  /** Set when `baseline` was omitted: where the control came from. */
-  from?: 'environment' | 'empty'
+  control: Environment
   variants: Environment[]
   gate: CompareGate
   minLift?: number
@@ -641,10 +637,7 @@ export type Resolved = {
 function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | undefined {
   if (value === undefined) return undefined
   return {
-    // An omitted baseline stays empty until `cascade` knows the eval's environment.
-    ...(value.baseline
-      ? { baseline: value.baseline }
-      : { baseline: emptyEnvironment(EMPTY_BASELINE), from: 'empty' as const }),
+    control: value.control,
     variants: value.variants,
     gate: value.gate ?? 'variants',
     ...(value.minLift !== undefined ? { minLift: value.minLift } : {}),
@@ -753,9 +746,6 @@ export function cascade(
     )
   }
   for (const { options: own, where: at } of levels) applyLevel(out, own, at)
-  if (out.compare?.from && out.environment) {
-    out.compare = { ...out.compare, baseline: out.environment, from: 'environment' }
-  }
   if (out.questions.length) {
     out.questions = out.questions.map((q) => withQuestionDefaults(q, out.question))
   }
@@ -787,16 +777,12 @@ export function cascade(
     )
   }
   for (const v of out.compare?.variants ?? []) {
-    if (v.name === out.compare?.baseline.name) {
+    if (v.name === out.compare?.control.name) {
       throw new UsageError(
-        out.compare.from === 'empty'
-          ? `compare in ${where} lists a variant named ${v.name}, the name of the empty control a compare without a baseline or environment runs. Rename the variant, or set compare.baseline.`
-          : out.compare.from === 'environment'
-            ? `compare in ${where} lists ${v.name}, which is the control: compare has no baseline, so the eval's environment is. List only the other environments.`
-            : `compare in ${where} lists ${v.name}, which is the baseline. List only the other environments.`,
+        `compare in ${where} lists ${v.name}, which is the control. List only the other environments.`,
       )
     }
-    const control = out.compare?.baseline
+    const control = out.compare?.control
     const shared = control && sameWorkspaceOnly(control, v)
     if (control && shared) {
       const at = shared.ref ? `at ref "${shared.ref}"` : 'with no ref (the repository HEAD)'
@@ -977,27 +963,17 @@ export type PlannedAttempt = {
 
 /**
  * The sandbox an attempt runs in: the resolved environment's (including an `.extend()`
- * parent's), else the first variant's when this is an omitted-baseline empty control, else
- * the cascaded option (`defineConfig` / profile defaults / group / eval), else implicit Docker.
- * A named environment is a total override: the config environment's sandbox is not inherited.
+ * parent's), else the cascaded option (`defineConfig` / profile defaults / group / eval), else
+ * implicit Docker. A named environment is a total override: the config environment's sandbox is
+ * not inherited.
  */
-export const attemptSandbox = (resolved: Resolved, env: AppliedEnvironment): SandboxDescriptor => {
-  const own = env.layers.findLast((l) => l.spec.sandbox)?.spec.sandbox
-  if (own) return own
-  // An omitted-baseline empty control has no layers. Use the first variant's sandbox so the
-  // compare is the same machine without the variant's files, not implicit Docker vs Node 24.
-  const variant =
-    resolved.compare?.from === 'empty' && env.name === EMPTY_BASELINE
-      ? resolved.compare.variants[0]
-      : undefined
-  return sandboxOf(variant?.layers ?? [], resolved.sandbox)
-}
+export const attemptSandbox = (resolved: Resolved, env: AppliedEnvironment): SandboxDescriptor =>
+  env.layers.findLast((l) => l.spec.sandbox)?.spec.sandbox ?? sandboxOf([], resolved.sandbox)
 
 /**
  * Which level set this attempt's sandbox: the cascade source of the environment that named one
- * (an `.extend()` child still names that environment), else the first variant when this is an
- * omitted-baseline empty control, else the cascaded `sandbox` option, else the config (implicit
- * Docker).
+ * (an `.extend()` child still names that environment), else the cascaded `sandbox` option, else
+ * the config (implicit Docker).
  */
 export function sandboxSetBy(
   planned: Pick<PlannedAttempt, 'environment' | 'cell'>,
@@ -1005,26 +981,11 @@ export function sandboxSetBy(
   configFile: string,
 ): string {
   if (!planned.environment.layers.some((l) => l.spec.sandbox)) {
-    if (
-      resolved.compare?.from === 'empty' &&
-      planned.cell.role === 'control' &&
-      resolved.compare.variants[0]?.layers.some((l) => l.spec.sandbox)
-    ) {
-      return resolved.sources?.compare ?? configFile
-    }
     return resolved.sources?.sandbox ?? configFile
   }
-  if (resolved.compare) {
-    if (planned.cell.role === 'control') {
-      if (resolved.compare.from === 'environment') {
-        return resolved.sources?.environments ?? configFile
-      }
-      if (resolved.compare.from === 'empty') return configFile
-      return resolved.sources?.compare ?? configFile
-    }
-    return resolved.sources?.compare ?? configFile
-  }
-  return resolved.sources?.environments ?? configFile
+  return (
+    (resolved.compare ? resolved.sources?.compare : resolved.sources?.environments) ?? configFile
+  )
 }
 
 /**
@@ -1033,9 +994,8 @@ export function sandboxSetBy(
  */
 export function expand(resolved: Resolved, vertex?: VertexSettings): PlannedAttempt[] {
   const { compare } = resolved
-  // A compare's control is its baseline, which `cascade` resolved when it was omitted. An
-  // environment from another level is not applied beside it.
-  const control = applied(compare ? compare.baseline : resolved.environment)
+  // An environment from another level is not applied beside a compare's control.
+  const control = applied(compare ? compare.control : resolved.environment)
   const policy = resolved.gate ?? 'all'
   const gateIf = (gated: boolean): CellGate => (gated ? policy : 'none')
   const attempts: PlannedAttempt[] = []
@@ -1288,10 +1248,7 @@ export function evalPlan(
       : null,
     ...(resolved.compare
       ? {
-          compare: {
-            baseline: resolved.compare.baseline.name,
-            ...(resolved.compare.from ? { from: resolved.compare.from } : {}),
-          },
+          compare: { baseline: resolved.compare.control.name },
         }
       : {}),
     ...(!skip && resolved.questions.length ? { questions: resolved.questions } : {}),

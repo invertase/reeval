@@ -30,7 +30,7 @@ const docs = defineEnvironment('docs', ({ mcp, secret }) => ({
 evaluate('a preset host', { environments: gemini }, async () => {})
 evaluate(
   'a variant brokers it',
-  { compare: { baseline: plain, variants: [brokered] } },
+  { compare: { control: plain, variants: [brokered] } },
   async () => {},
 )
 evaluate('MCP headers go to their server', { environments: docs }, async () => {})

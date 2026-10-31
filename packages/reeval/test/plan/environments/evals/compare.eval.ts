@@ -1,9 +1,14 @@
 import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
 
+const plain = defineEnvironment('plain', { sandbox: docker({ from: 'node:22-bookworm' }) })
 const skilled = defineEnvironment('skilled', {
   sandbox: docker({ from: 'node:24-bookworm' }),
 })
 
-// No baseline: the config's `environment` is the control.
-evaluate('config is the control', { compare: { variants: [skilled] } }, async () => {})
+// compare.control replaces the config's `environments`.
+evaluate(
+  'the control replaces the config environment',
+  { compare: { control: plain, variants: [skilled] } },
+  async () => {},
+)

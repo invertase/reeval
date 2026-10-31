@@ -20,7 +20,7 @@ evaluate(
     tags: ['questions'],
     harnesses: [composer, pim],
     runs: 1,
-    compare: { baseline: plain, variants: [withHouseGreeting] },
+    compare: { control: plain, variants: [withHouseGreeting] },
     questions: [
       {
         question: 'Which greet.js handles a missing or empty name better?',

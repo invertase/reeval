@@ -7,7 +7,7 @@ skilled = base.extend("skilled", {"env": {"MODE": "skilled"}})
 @evaluate_each(
     ["ada", "grace", "linus"],
     "pooled across %s",
-    {"compare": {"baseline": base, "variants": [skilled], "min_lift": 0.2}},
+    {"compare": {"control": base, "variants": [skilled], "min_lift": 0.2}},
 )
 async def pooled(c, who): ...
 
@@ -15,7 +15,7 @@ async def pooled(c, who): ...
 @evaluate_each(
     [{"who": "ada"}, {"who": "grace"}],
     "each on its own for $who",
-    {"compare": {"baseline": base, "variants": [skilled]}},
+    {"compare": {"control": base, "variants": [skilled]}},
     pool=False,
 )
 async def on_its_own(c, case): ...

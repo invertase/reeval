@@ -7,7 +7,7 @@ skilled = base.extend("skilled", {"env": {"MODE": "skilled"}})
 @evaluate(
     "transcript across harnesses",
     {
-        "compare": {"baseline": base, "variants": [skilled]},
+        "compare": {"control": base, "variants": [skilled]},
         "questions": [
             {
                 "question": "Which agent verified its work?",
@@ -23,7 +23,7 @@ async def transcript_across_harnesses(c): ...
 @evaluate(
     "transcript within a harness",
     {
-        "compare": {"baseline": base, "variants": [skilled]},
+        "compare": {"control": base, "variants": [skilled]},
         "questions": [
             {
                 "question": "Which arm verified its work?",
@@ -39,7 +39,7 @@ async def transcript_within_a_harness(c): ...
 @evaluate(
     "screenshots",
     {
-        "compare": {"baseline": base, "variants": [skilled]},
+        "compare": {"control": base, "variants": [skilled]},
         "questions": [
             {
                 "question": "Which page looks better?",

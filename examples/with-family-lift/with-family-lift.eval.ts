@@ -11,7 +11,7 @@ const functions = ['subtract', 'multiply', 'divide', 'power', 'max', 'min']
 
 evaluate.each(functions)(
   'documents %s',
-  { compare: { baseline: math, variants: [withJsdoc], minLift: 0.2 } },
+  { compare: { control: math, variants: [withJsdoc], minLift: 0.2 } },
   async (c, name) => {
     await c.send(`Add a ${name}(a, b) function to src/math.js.`)
 

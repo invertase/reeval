@@ -247,7 +247,7 @@ evaluate(
   'mixed',
   {
     runs: 2,
-    compare: { baseline, variants: [variant] },
+    compare: { control: baseline, variants: [variant] },
     questions: [{ question: 'Which page looks better?', across: 'environment', task: true, artifacts: ['landing'] }],
   },
   async (c) => {
@@ -265,7 +265,7 @@ evaluate(
       `import { evaluate } from 'reeval'
 import { baseline, variant } from './env.ts'
 
-evaluate('flat', { compare: { baseline, variants: [variant], minLift: 0.5 } }, async (c) => {
+evaluate('flat', { compare: { control: baseline, variants: [variant], minLift: 0.5 } }, async (c) => {
   await c.send('write the page')
 })
 `,
@@ -277,7 +277,7 @@ import { baseline, variant } from './env.ts'
 
 evaluate(
   'lifted',
-  { runs: 2, compare: { baseline, variants: [variant], minLift: 0.6 } },
+  { runs: 2, compare: { control: baseline, variants: [variant], minLift: 0.6 } },
   async (c) => {
     await c.send('write the page')
     expect(c.attempt.cell.role === 'variant' || c.attempt.n === 1, 'passes').toBe(true)
@@ -1016,7 +1016,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
 }))
 evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
   'writes ok.txt for %s',
-  { compare: { baseline: plain, variants: [skilled], minLift: ${minLift} } },
+  { compare: { control: plain, variants: [skilled], minLift: ${minLift} } },
   async (c) => {
     await c.send('go')
     if (c.attempt.cell.role === 'control' && process.env.REEVAL_TEST_BASE_OK) return
@@ -1171,7 +1171,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
 }))
 evaluate.each(['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'])(
   'writes ok.txt for %s',
-  { compare: { baseline: plain, variants: [skilled], minLift: 0.2 } },
+  { compare: { control: plain, variants: [skilled], minLift: 0.2 } },
   async (c) => {
     await c.send('go')
     if (c.attempt.cell.role === 'control' && process.env.REEVAL_TEST_BASE_OK) return

@@ -33,7 +33,7 @@ const compareEval = (runs: number, variant: number, base: number, name = 'skill 
 import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
-evaluate('${name}', { runs: ${runs}, compare: { baseline: plain, variants: [marked] } }, async (c) => {
+evaluate('${name}', { runs: ${runs}, compare: { control: plain, variants: [marked] } }, async (c) => {
   await c.send('go')
   const wins = c.attempt.cell.role === 'variant' ? ${variant} : ${base}
   expect(c.attempt.n <= wins, 'uses the marker').toBe(true)
@@ -395,7 +395,7 @@ const plain = defineEnvironment('plain', {})
 const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
 evaluate.each([{ id: 'a' }, { id: 'b' }])(
   'fixes $id',
-  { runs: 2, compare: { baseline: plain, variants: [marked] } },
+  { runs: 2, compare: { control: plain, variants: [marked] } },
   async (c) => {
     await c.send('go')
     expect(c.attempt.cell.role === 'variant', 'uses the marker').toBe(true)

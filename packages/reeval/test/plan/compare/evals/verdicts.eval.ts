@@ -1,7 +1,7 @@
 import { evaluate } from 'reeval'
 import { base, skilled } from './envs.ts'
 
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 
 evaluate('one run a cell can never get a verdict', { compare, runs: 1 }, async () => {})
 evaluate('three runs a cell can never get a verdict', { compare, runs: 3 }, async () => {})

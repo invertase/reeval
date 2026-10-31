@@ -8,7 +8,7 @@ const extra = defineEnvironment('extra', { env: { MODE: 'extra' } })
 group('parent', { environments: extra }, () => {
   evaluate(
     'baseline, not the inherited environment',
-    { compare: { baseline: base, variants: [peer] } },
+    { compare: { control: base, variants: [peer] } },
     async () => {},
   )
 })

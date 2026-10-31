@@ -1190,7 +1190,7 @@ const environmentEnvelope = environmentDataSchema.extend({
 /**
  * What's wrong with an environment as data (from another language, or built by hand), in the
  * words `defineEnvironment` uses for each layer's spec, or undefined. `option` names the option
- * (`environment`, `compare.baseline`, …) and `where` the eval or config that set it.
+ * (`environments`, `compare.control`, …) and `where` the eval or config that set it.
  */
 export function environmentDataProblem(
   value: unknown,
@@ -1398,16 +1398,6 @@ export type AppliedEnvironment = {
 }
 
 export const NO_ENVIRONMENT = '-'
-
-/** The control of a compare without a `baseline` when nothing in the cascade sets an environment. */
-export const EMPTY_BASELINE = 'baseline'
-
-/**
- * An environment with no layers. As a compare's empty control it uses the first
- * variant's sandbox when that variant sets one, else the cascaded option sandbox,
- * else the implicit default Docker sandbox.
- */
-export const emptyEnvironment = (name: string): Environment => makeEnvironment(name, [])
 
 /** The last layer that sets `sandbox`, else `fallback` (the cascaded option sandbox). */
 export const sandboxOf = (

@@ -9,7 +9,7 @@ const withHouseGreeting = defineEnvironment('with-house-greeting', ({ skill }) =
 // record has a family with rates and a paired lift.
 evaluate.each(['Ada', 'Grace'])(
   'greets %s',
-  { compare: { baseline: plain, variants: [withHouseGreeting], minLift: 0.2 } },
+  { compare: { control: plain, variants: [withHouseGreeting], minLift: 0.2 } },
   async (c, name) => {
     await c.send(`Write greet.js that greets ${name} in our house style.`)
     await expect(c.exec('grep -q Ahoy greet.js')).toSucceed()

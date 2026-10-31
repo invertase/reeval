@@ -1475,10 +1475,11 @@
       "type": "object",
       "properties": {
         "baseline": {
+          "description": "The control's environment name.",
           "type": "string"
         },
         "from": {
-          "description": "Set when `compare.baseline` was omitted: the control is the eval's cascaded `environment`, or an empty environment named `baseline` when there was none.",
+          "description": "Not written, since a compare names its control. A record that has it ran the eval's cascaded environment (`'environment'`) or an empty one named `baseline` (`'empty'`) as the control.",
           "enum": ["empty", "environment"]
         }
       },

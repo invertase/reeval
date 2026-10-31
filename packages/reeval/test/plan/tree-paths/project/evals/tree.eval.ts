@@ -39,7 +39,7 @@ declareTree(
       mode: 'run',
       options: {
         compare: {
-          baseline: env('built', '../docker/Dockerfile'),
+          control: env('built', '../docker/Dockerfile'),
           variants: [env('own', 'images/Dockerfile')],
         },
       },

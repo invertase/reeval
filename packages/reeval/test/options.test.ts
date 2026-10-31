@@ -285,7 +285,7 @@ export const skilled = base.extendEnvironment('skilled', ({ skill }) => ({
 import { base, skilled } from './envs.ts'
 evaluate.each(${cases}${options})(
   'writes ok.txt for %s',
-  { compare: { baseline: base, variants: [skilled], minLift: MIN_LIFT }, runs: ${runs} },
+  { compare: { control: base, variants: [skilled], minLift: MIN_LIFT }, runs: ${runs} },
   async (c, name) => {
     await c.send('write ok.txt for ' + name)
     await expect(c).toHaveFile('ok.txt')
@@ -446,7 +446,7 @@ evaluate.each(${cases}${options})(
       'evals/envs.ts': envs,
       'evals/c.eval.ts': `import { evaluate, expect, group } from 'reeval'
 import { base, skilled } from './envs.ts'
-group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => {
+group('g', { compare: { control: base, variants: [skilled] }, runs: 2 }, () => {
   evaluate('writes ok.txt', async (c) => {
     await c.send('go')
     const mode = (await c.exec('printf %s "$MODE"')).stdout
@@ -521,11 +521,11 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
       'evals/envs.ts': envs,
       'evals/c.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-evaluate('all gated', { runs: 1, compare: { baseline: base, variants: [skilled], gate: 'all' } }, async (c) => {
+evaluate('all gated', { runs: 1, compare: { control: base, variants: [skilled], gate: 'all' } }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
-evaluate('no worse', { runs: 1, compare: { baseline: base, variants: [skilled], minLift: 0.5, gate: 'none' } }, async (c) => {
+evaluate('no worse', { runs: 1, compare: { control: base, variants: [skilled], minLift: 0.5, gate: 'none' } }, async (c) => {
   await c.send('go')
   if (c.attempt.cell.role === 'variant') throw new Error('the variant is worse')
 })
@@ -558,7 +558,7 @@ evaluate('no worse', { runs: 1, compare: { baseline: base, variants: [skilled], 
       'evals/envs.ts': envs,
       'evals/c.eval.ts': `import { evaluate } from 'reeval'
 import { base, skilled } from './envs.ts'
-evaluate('scoped', { compare: { baseline: base, variants: [skilled], harnesses: ['b'] } }, async (c) => { await c.send('x') })
+evaluate('scoped', { compare: { control: base, variants: [skilled], harnesses: ['b'] } }, async (c) => { await c.send('x') })
 `,
     })
     const r = await runCli(p.dir)
@@ -1012,7 +1012,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
         () =>
           evaluate(
             'e',
-            { compare: { baseline: a, variants: [{ environment: a, check: () => {} } as never] } },
+            { compare: { control: a, variants: [{ environment: a, check: () => {} } as never] } },
             async () => {},
           ),
         /compare\.variants in evaluate\("e"\) must be environments from defineEnvironment \(got an object with "environment", "check"\)\. Variants share the eval's prompt and checks; if a variant needs different checks, write a separate eval\./,
@@ -1022,7 +1022,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
         () =>
           evaluate(
             'e',
-            { compare: { baseline: b, variants: [a], harnesses: ['sonnet'] } },
+            { compare: { control: b, variants: [a], harnesses: ['sonnet'] } },
             async () => {},
           ),
         /compare\.harnesses lists sonnet, which evaluate\("e"\) doesn't run \(it runs fake\)\./,
@@ -1036,17 +1036,17 @@ describe('common mistakes', { concurrency: 4 }, () => {
           const head = base.extendEnvironment('head', ({ git }) => ({
             workspace: git('..', { ref: process.env.REEVAL_TEST_UNSET_HEAD }),
           }))
-          evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})
+          evaluate('e', { compare: { control: base, variants: [head] } }, async () => {})
         },
         /compare in evaluate\("e"\) runs head and base on the same tree: past what they share, each sets only workspace, and both are git\("\.\."\) with no ref \(the repository HEAD\)\. A ref read from an unset variable is undefined, so check the variables the arms take their refs from, and give each arm its own ref\./,
       ],
       [
-        'a variant that is the environment a compare without a baseline runs as its control',
+        'a variant that is the control',
         () =>
           group('g', { environments: a }, () => {
-            evaluate('e', { compare: { variants: [a, b] } }, async () => {})
+            evaluate('e', { compare: { control: a, variants: [a, b] } }, async () => {})
           }),
-        /compare in evaluate\("g › e"\) lists a, which is the control: compare has no baseline, so the eval's environment is\./,
+        /compare in evaluate\("g › e"\) lists a, which is the control\. List only the other environments\./,
       ],
       [
         'a pairwise question across environments without a compare',
@@ -1064,7 +1064,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
           evaluate(
             'e',
             {
-              compare: { baseline: a, variants: [b] },
+              compare: { control: a, variants: [b] },
               questions: [{ question: 'Which?', across: ['environment', 'harness'], diff: true }],
             },
             async () => {},
@@ -1321,19 +1321,6 @@ describe('common mistakes', { concurrency: 4 }, () => {
       })
     }
 
-    test('a variant named baseline in a compare without a baseline or environment is refused', async () => {
-      const declare = () =>
-        evaluate(
-          'e',
-          { compare: { variants: [defineEnvironment('baseline', {})] } },
-          async () => {},
-        )
-      assert.match(
-        String(await refusal(declare, fakeConfigInput(false))),
-        /compare in evaluate\("e"\) lists a variant named baseline, the name of the empty control a compare without a baseline or environment runs\. Rename the variant, or set compare\.baseline\./,
-      )
-    })
-
     test('compare arms on one workspace that differ in something else plan', async () => {
       const declare = () => {
         const base = defineEnvironment('base', ({ git }) => ({ workspace: git('..') }))
@@ -1346,8 +1333,8 @@ describe('common mistakes', { concurrency: 4 }, () => {
           rules: 'Be brief.',
         }))
         const bare = defineEnvironment('bare', ({ git }) => ({ workspace: git('..') }))
-        evaluate('extends', { compare: { baseline: base, variants: [skilled] } }, async () => {})
-        evaluate('apart', { compare: { baseline: ruled, variants: [bare] } }, async () => {})
+        evaluate('extends', { compare: { control: base, variants: [skilled] } }, async () => {})
+        evaluate('apart', { compare: { control: ruled, variants: [bare] } }, async () => {})
       }
       assert.equal(await refusal(declare), null)
     })
@@ -1453,7 +1440,7 @@ defineEnvironment('py', { dockerfile: './Dockerfile' } as never)
         'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const a = defineEnvironment('a', {})
 const b = defineEnvironment('b', {})
-evaluate('e', { compare: { baseline: b, variants: [a], harnesses: ['sonnet'] } }, async () => {})
+evaluate('e', { compare: { control: b, variants: [a], harnesses: ['sonnet'] } }, async () => {})
 `,
       },
       /^reeval: evals\/o\.eval\.ts: compare\.harnesses lists sonnet, which evaluate\("e"\) doesn't run \(it runs fake\)\./m,
@@ -1810,7 +1797,7 @@ export const withSkill = defineEnvironment('with-skill', ({ file, mcp, secret, s
 `,
       'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
 import { plain, withSkill } from './envs.ts'
-evaluate('greets', { runs: 1, compare: { baseline: plain, variants: [withSkill] } }, async (c) => {
+evaluate('greets', { runs: 1, compare: { control: plain, variants: [withSkill] } }, async (c) => {
   const turn = await c.send('greet')
   const loaded = turn.transcript.some((e) => e.type === 'text' && e.text === 'Loaded skills: house-greeting; mcp: docs')
   const token = (await c.exec('printf %s "$APP_TOKEN"')).stdout

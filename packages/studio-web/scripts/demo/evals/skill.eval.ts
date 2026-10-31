@@ -17,7 +17,7 @@ group(
   // The question is asked after the run of the attempts that passed their checks: when the
   // baseline misses, as expected, there's no pair to judge and the answer says so.
   {
-    compare: { baseline: plain, variants: [withHouseGreeting] },
+    compare: { control: plain, variants: [withHouseGreeting] },
     questions: [
       {
         question: 'Which greet.js reads more like our house style?',

@@ -65,5 +65,5 @@ export function arms(target: Target) {
   const variant = base.extendEnvironment(`${target}-setup`, ({ skill }) => ({
     skills: [skill.local('../../skills/reeval'), skill.local('../../skills/setup')],
   }))
-  return { baseline: control, variants: [variant] }
+  return { control: control, variants: [variant] }
 }

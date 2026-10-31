@@ -12,7 +12,7 @@ export const compareGateSchema = z.enum(['variants', 'all', 'none'])
 /** The compare object, with environments checked by `environment`. */
 export const compareSchema = <E extends z.ZodType>(environment: E) =>
   z.strictObject({
-    baseline: environment.optional(),
+    control: environment,
     variants: z.array(environment).min(1),
     gate: compareGateSchema.optional(),
     minLift: z.number().min(-1).max(1).optional(),
@@ -46,8 +46,12 @@ function explain(where: string) {
     const [key, index] = issue.path as [string, number?]
     const v = spec[key]
     switch (key) {
-      case 'baseline':
-        return `compare.baseline in ${where} must be an environment from defineEnvironment (got ${describe(v)}). It is the control; variants are not layered on it or on the eval's environment. Leave it out to use the eval's environments as the control.`
+      case 'control':
+        if (v === undefined) return noControl(where)
+        if (Array.isArray(v)) {
+          return `compare.control in ${where} takes one environment (got ${v.map((e) => (e as { name?: string } | null)?.name ?? describe(e)).join(', ')}). For a grid without a compare, use environments.`
+        }
+        return `compare.control in ${where} must be an environment from defineEnvironment (got ${describe(v)}). It is what each variant is measured against; variants are not layered on it.`
       case 'gate':
         return `compare.gate in ${where} is ${oneOf(compareGateSchema.options)} (got ${describe(v)})`
       case 'minLift':
@@ -70,7 +74,10 @@ function explain(where: string) {
 }
 
 /** The order the hand-written checks ran in, so the first refusal stays the same. */
-const ORDER = ['baseline', 'gate', 'minLift', 'harnesses', 'variants']
+const ORDER = ['control', 'gate', 'minLift', 'harnesses', 'variants']
+
+const noControl = (where: string) =>
+  `compare in ${where} has no control. Name it: compare: { control: app, variants: [...] }.`
 
 /**
  * What's wrong with a compare object whose environments `environment` checks, or undefined.
@@ -78,10 +85,13 @@ const ORDER = ['baseline', 'gate', 'minLift', 'harnesses', 'variants']
  */
 export function compareProblem(value: unknown, where: string, environment: z.ZodType) {
   if (Array.isArray(value)) {
-    return `compare in ${where} must be an object, not a list. Use compare: { baseline, variants: [...] }.`
+    return `compare in ${where} must be an object, not a list. Use compare: { control, variants: [...] }.`
+  }
+  if (isObjectLike(value) && 'baseline' in value) {
+    return `Unknown compare option "baseline" in ${where}. Did you mean "control"?`
   }
   if (!isObjectLike(value) || !Array.isArray(value.variants)) {
-    return `compare in ${where} takes { variants, baseline? } (got ${describe(value)}). Use compare: { variants: [a, b], baseline?, gate?, minLift?, harnesses? }.`
+    return `compare in ${where} takes { control, variants } (got ${describe(value)}). Use compare: { control: a, variants: [b, c], gate?, minLift?, harnesses? }.`
   }
   return refusal(compareSchema(environment), value, explain(where), { order: ORDER })
 }

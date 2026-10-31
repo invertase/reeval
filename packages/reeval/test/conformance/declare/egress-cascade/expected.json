@@ -163,7 +163,7 @@
       "mode": "run",
       "options": {
         "compare": {
-          "baseline": {
+          "control": {
             "kind": "environment",
             "name": "plain",
             "layers": [

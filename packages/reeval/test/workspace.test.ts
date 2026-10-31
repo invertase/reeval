@@ -137,7 +137,7 @@ const base = defineEnvironment('base', ({ git }) => ({
 const head = base.extendEnvironment('head', ({ git }) => ({
   workspace: git('../repo', { ref: process.env.HEAD_REF }),
 }))
-evaluate('lift', { compare: { baseline: base, variants: [head] } }, async (c) => {
+evaluate('lift', { compare: { control: base, variants: [head] } }, async (c) => {
   await c.exec('true')
 })
 `,

@@ -441,7 +441,7 @@ describe('reeval run --json', () => {
       'evals/hello.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const bye = defineEnvironment('bye', { files: { 'bye.txt': 'bye' } })
-evaluate('writes hello.txt', { compare: { baseline: plain, variants: [bye] } }, async (c) => {
+evaluate('writes hello.txt', { compare: { control: plain, variants: [bye] } }, async (c) => {
   console.log('a log line from the eval')
   process.stdout.write('a direct write\\n')
   await c.send('write hello.txt')

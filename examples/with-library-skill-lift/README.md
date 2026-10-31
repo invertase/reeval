@@ -2,8 +2,8 @@
 
 **Shows:** measuring a skill someone else publishes. The variant fetches Anthropic's
 `brand-guidelines` skill from [anthropics/skills](https://github.com/anthropics/skills) at a pinned
-commit with `skill.git(repo, { ref, path, only })`. The compare has no baseline, so the eval's own
-environment is the control. The agent styles a page in Anthropic's brand, and the checks look for
+commit with `skill.git(repo, { ref, path, only })`. The page without the skill is the
+control. The agent styles a page in Anthropic's brand, and the checks look for
 the skill's exact accent color and fonts, which an agent without it has to guess.
 
 **Needs:** the network, for reeval to fetch the skill on the host (it caches it in

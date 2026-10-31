@@ -22,7 +22,7 @@ group('a group', { egress: { allow: ['group.example.com'] } }, () => {
 })
 evaluate(
   'a variant runs under its own policy',
-  { compare: { baseline: plain, variants: [closed] } },
+  { compare: { control: plain, variants: [closed] } },
   async () => {},
 )
 evaluate(

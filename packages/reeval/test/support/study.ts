@@ -93,7 +93,7 @@ group(
   'auth skill',
   {
     compare: {
-      baseline: noSkill,
+      control: noSkill,
       variants: [currentSkill${options.oneVariant ? '' : ', newSkill'}],
       ${gate}
     },

@@ -19,7 +19,7 @@ export const skilled = defineEnvironment('skilled', { sandbox })
     'evals/envs.ts': ENVS,
     'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-evaluate('asks', { runs: 1, compare: { baseline: base, variants: [skilled] }, questions: ${question} }, async (c) => {
+evaluate('asks', { runs: 1, compare: { control: base, variants: [skilled] }, questions: ${question} }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -117,7 +117,7 @@ evaluate('asks', { runs: 1, compare: { baseline: base, variants: [skilled] }, qu
       'evals/envs.ts': ENVS,
       'evals/q.eval.ts': `import { evaluate } from 'reeval'
 import { base, skilled } from './envs.ts'
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 evaluate('own model', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment', task: true, diff: true, model: 'anthropic/claude-sonnet-5' }] }, async () => {})
 evaluate('cascade', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment', task: true, diff: true }, { question: 'Which is shorter?', across: 'environment', task: true, diff: true, model: 'openai/gpt-5.5' }] }, async () => {})
 `,
@@ -197,14 +197,14 @@ export const next = defineEnvironment('new-skill', { sandbox })
 `,
       'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, current, next, none, skilled } from './envs.ts'
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 const body = async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 }
 evaluate('two questions', { runs: 1, compare, questions: [{ question: 'Which is cleaner?', across: 'environment', task: true, diff: true }, { question: 'Which is shorter?', across: 'environment', task: true, diff: true }] }, body)
 evaluate('reasons', { runs: 1, compare, questions: [{ question: 'Which reads better?', across: 'environment', task: true, diff: true }] }, body)
-evaluate('three arms', { compare: { baseline: none, variants: [current, next], gate: 'none' }, questions: [{ question: 'Which delivers a better user experience?', across: 'environment', task: true, diff: true }], runs: 3 }, body)
+evaluate('three arms', { compare: { control: none, variants: [current, next], gate: 'none' }, questions: [{ question: 'Which delivers a better user experience?', across: 'environment', task: true, diff: true }], runs: 3 }, body)
 `,
     })
     const dry = await runCli(p.dir, ['run', '--dry-run'])
@@ -323,7 +323,7 @@ export default defineConfig({
       'evals/envs.ts': ENVS,
       'evals/votes.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 const body = async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
@@ -335,7 +335,7 @@ evaluate('plain', { compare }, body)
 import { fakeHarness } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
 import { base, skilled } from './envs.ts'
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 evaluate('across environment', { compare, questions: [{ question: 'Which is tidier?', across: 'environment', task: true, diff: true }] }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
@@ -352,7 +352,7 @@ for (const judged of [false, true]) {
       'evals/each.eval.ts': `import { evaluate, expect } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { base, skilled } from './envs.ts'
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 const body = async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
@@ -585,7 +585,7 @@ export default defineConfig({
       'evals/envs.ts': ENVS,
       'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-const compare = { baseline: base, variants: [skilled] }
+const compare = { control: base, variants: [skilled] }
 const body = async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')

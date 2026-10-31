@@ -63,7 +63,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: ${runs} }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: ${runs} }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -663,7 +663,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -1244,7 +1244,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -1261,7 +1261,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 2 }, async (c) => {
   await c.send('go now')
 })
 `,

@@ -1778,7 +1778,7 @@ test('expand: per harness, the control then each variant; labels name the role',
     [
       { options: { environments: extra }, where: 'group("parent")' },
       {
-        options: { compare: { baseline: plain, variants: [skill] }, runs: 1 },
+        options: { compare: { control: plain, variants: [skill] }, runs: 1 },
         where: 'e',
       },
     ],
@@ -1815,7 +1815,7 @@ test('named compare uses the cascaded sandbox option, not the config environment
   const kept = parent.extend('kept', { files: { 'x.txt': 'y' } })
   const { resolved } = cascade(
     { ...base, sandbox: { kind: 'fake', id: 'from-root' }, environment: configEnv },
-    [{ options: { compare: { baseline: plain, variants: [skill] }, runs: 1 }, where: 'e' }],
+    [{ options: { compare: { control: plain, variants: [skill] }, runs: 1 }, where: 'e' }],
     'e',
   )
   assert.deepEqual(
@@ -1847,18 +1847,21 @@ test('named compare uses the cascaded sandbox option, not the config environment
   assert.equal(expand(evalSandbox.resolved)[0]?.sandbox.id, 'from-eval')
 })
 
-test('environment beside a compare with a baseline is an error; without one it is the control', () => {
+test('environments beside a compare is an error: compare.control names what the eval runs in', () => {
   const plain = defineEnvironment('plain', {})
   const skill = defineEnvironment('skill', {})
   assert.throws(
     () =>
       checkOptions(
-        { environments: plain, compare: { baseline: plain, variants: [skill] } },
+        { environments: plain, compare: { control: plain, variants: [skill] } } as never,
         'evaluate("e")',
       ),
-    /environments and compare\.baseline can't both be set in evaluate\("e"\)/,
+    /evaluate\("e"\) sets both environments and compare\. With compare, the control is compare\.control: move it there, as compare: \{ control: plain, variants: \[\.\.\.\] \}\./,
   )
-  checkOptions({ environments: plain, compare: { variants: [skill] } }, 'evaluate("e")')
+  assert.throws(
+    () => checkOptions({ compare: { variants: [skill] } } as never, 'evaluate("e")'),
+    /compare in evaluate\("e"\) has no control\. Name it: compare: \{ control: app, variants: \[\.\.\.\] \}\./,
+  )
   assert.throws(
     () => checkOptions({ environments: plain, compare: false }, 'evaluate("e")'),
     /compare: false can't be set in evaluate\("e"\)/,
@@ -1867,7 +1870,7 @@ test('environment beside a compare with a baseline is an error; without one it i
     () => checkOptions({ compare: false }, 'group("g")'),
     /compare: false can't be set in group\("g"\)/,
   )
-  checkOptions({ compare: { baseline: plain, variants: [skill] } }, 'evaluate("e")')
+  checkOptions({ compare: { control: plain, variants: [skill] } }, 'evaluate("e")')
   checkOptions({ environments: plain }, 'evaluate("e")')
 })
 
@@ -1885,7 +1888,7 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
   }
   const narrowed = cascade(
     base,
-    [{ options: { compare: { baseline: plain, variants: [skill] } }, where: 'e' }],
+    [{ options: { compare: { control: plain, variants: [skill] } }, where: 'e' }],
     'e',
     { profile },
   )
@@ -1904,7 +1907,7 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
     base,
     [
       {
-        options: { compare: { baseline: plain, variants: [skill] }, pin: ['runs', 'compare'] },
+        options: { compare: { control: plain, variants: [skill] }, pin: ['runs', 'compare'] },
         where: 'e',
       },
     ],
@@ -1931,7 +1934,7 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
 test('cascade: unset runs default to 4 for a compare with variants, 1 otherwise', () => {
   const plain = defineEnvironment('plain', {})
   const skill = defineEnvironment('skill', {})
-  const compare = { baseline: plain, variants: [skill] }
+  const compare = { control: plain, variants: [skill] }
   const unset = { ...base, runs: undefined }
   const runsOf = (options: EvalOptions, opts: Parameters<typeof cascade>[3] = {}) =>
     cascade(unset, [{ options, where: 'e' }], 'e', opts)

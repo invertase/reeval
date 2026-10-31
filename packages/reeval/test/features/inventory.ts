@@ -80,7 +80,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'matrix.harness-runs',
     area: 'Config and selection',
-    name: '`harness` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once',
+    name: '`harnesses` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once',
     plan: [
       'matrix/default',
       'matrix/runs-override',
@@ -137,22 +137,23 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/options.test.ts', 'reeval/test/results.test.ts'],
   },
   {
-    id: 'compare.harness',
+    id: 'compare.harnesses',
     area: 'Config and selection',
-    name: '`compare.harness`',
+    name: '`compare.harnesses`',
     plan: ['compare/harness-scoped'],
     unit: ['reeval/test/options.test.ts'],
   },
   {
-    id: 'compare.baseline',
+    id: 'compare.control',
     area: 'Config and selection',
-    name: '`compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control',
+    name: '`compare.control`: the control cell, which replaces an inherited `environments`',
     plan: [
-      'compare/baseline-omitted',
-      'compare/baseline-omitted-off',
+      'compare/control',
+      'compare/control-off',
+      'environments/control-over-config',
       'environments/empty-control',
     ],
-    fixtures: ['compare/baseline-omitted', 'compare/baseline-empty'],
+    fixtures: ['compare/control-empty'],
     unit: ['reeval/test/options.test.ts'],
   },
   {
@@ -338,12 +339,12 @@ export const inventory: InventoryFeature[] = [
     id: 'profiles.compare-off',
     area: 'Config and selection',
     name: '`limit.compare: false`, or `maxVariants` leaving none: the lone control gates like an eval without compare',
-    plan: ['compare/off-study', 'compare/zero-variants', 'compare/baseline-omitted-off'],
+    plan: ['compare/off-study', 'compare/zero-variants', 'compare/control-off'],
   },
   {
     id: 'profiles.limit-harness-drops-compare',
     area: 'Config and selection',
-    name: '`limit.harness` leaving none of `compare.harness`: the compare is off and each control gates like an eval without compare',
+    name: '`limit.harnesses` leaving none of `compare.harnesses`: the compare is off and each control gates like an eval without compare',
     plan: ['compare/harness-scoped-dropped', 'compare/harness-scoped-dropped-pinned'],
   },
   {
@@ -773,7 +774,7 @@ export const inventory: InventoryFeature[] = [
     plan: [
       'environments/images',
       'environments/extend-replace',
-      'environments/config-control',
+      'environments/control-over-config',
       'environments/inherit-config',
       'environments/empty-control',
     ],

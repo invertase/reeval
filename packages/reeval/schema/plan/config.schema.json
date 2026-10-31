@@ -2220,7 +2220,7 @@
           "$ref": "#/$defs/EnvVars"
         },
         "environments": {
-          "description": "What every eval runs in when it names no environment, and a baseline-less compare's control.",
+          "description": "What every eval runs in when it names no environment and has no compare.",
           "$ref": "#/$defs/EnvironmentData"
         },
         "gate": {

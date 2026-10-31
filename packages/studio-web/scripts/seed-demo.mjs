@@ -81,7 +81,7 @@ evaluate(
   'reviews a greet module',
   {
     harness: (inherited) => inherited.map((h) => (h.kind === 'fake' ? { ...h, flakeRate: 0 } : h)),
-    compare: { baseline: plain, variants: [withHouseGreeting] },
+    compare: { control: plain, variants: [withHouseGreeting] },
     questions: [
       { question: 'Which greet.js reads more like our house style?', across: ['environment', 'harness'], diff: true },
       { question: 'Which greet.js handles a missing name?', across: ['environment', 'harness'], diff: true },

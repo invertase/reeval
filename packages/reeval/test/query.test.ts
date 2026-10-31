@@ -41,7 +41,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/house-greeting')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [skilled] }, runs: 3 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -104,7 +104,7 @@ const styled = defineEnvironment('styled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/house')],
 }))
-evaluate('greets', { compare: { baseline: plain, variants: [styled] }, runs: 2 }, async (c) => {
+evaluate('greets', { compare: { control: plain, variants: [styled] }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c, 'writes ok.txt').toHaveFile('ok.txt')
   await expect(c, 'house style').toHaveFile('styled.txt', /Ahoy/)

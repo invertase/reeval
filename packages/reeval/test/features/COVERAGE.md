@@ -19,13 +19,13 @@
 | Config and option mistakes exit 2 with the fix | ✓ 4 | — | — | — | — | — |
 | `.env` and `.env.local` loading, from the config's directory | ✓ 1 | — | — | — | — | — |
 | Finding the nearest `reeval.config.*` upward from the current directory; `--config` wins | ✓ 2 | — | ● 1 | ● 1 | — | — |
-| `harness` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once | ✓ 2 | ✓ 8 | — | — | — | — |
+| `harnesses` lists × `runs`, and `--runs`; unset, a compare runs 4 a side and anything else once | ✓ 2 | ✓ 8 | — | — | — | — |
 | `runs: { bestOf }`: each cell stops once a majority of its attempts agree, gates on that majority and marks the attempts it added or skipped; refused on a compare and when not odd and 3 or more | ✓ 4 | ✓ 6 | ● 1 | — | — | — |
 | Option cascade through groups and evals; harness edits (`{ add }`, `{ only }`, functions) | ✓ 2 | ✓ 1 | — | — | — | — |
 | `compare`: control, variants, lift and `minLift` | ✓ 2 | ✓ 2 | ● 1 | ● 1 | — | — |
 | `evaluate.each`: one eval per case, pooled into a family with a pass rate and a paired lift that `minLift` gates; `{ pool: false }` | ✓ 2 | ✓ 3 | ● 1 | — | — | — |
-| `compare.harness` | ✓ 1 | ✓ 1 | — | — | — | — |
-| `compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control | ✓ 1 | ✓ 3 | ● 2 | ● 2 | — | — |
+| `compare.harnesses` | ✓ 1 | ✓ 1 | — | — | — | — |
+| `compare.control`: the control cell, which replaces an inherited `environments` | ✓ 1 | ✓ 4 | ● 1 | ● 1 | — | — |
 | `questions` with `across`: pairwise questions in the plan, answered after the run with win rates | ✓ 4 | ✓ 5 | — | — | — | ◐ 1 (1 without a canary) |
 | What a question shows: only the inputs each entry turns on (task, output, files, diff, transcript, checks, artifacts), at least one, over `turns`, refused at plan time otherwise; and the `question` option's cascaded model | ✓ 3 | ✓ 2 | ● 3 | ● 1 | — | — |
 | `questions` without `across`: asked of each attempt as it ends, free text or `choices`, in `evals[].attempts[].answers` | ✓ 2 | ✓ 2 | ● 1 | ● 1 | — | — |
@@ -40,7 +40,7 @@
 | `vertex({ project, location, regions })`: its shape and project checked at plan time, Claude Code, Antigravity, OpenCode, Goose, pi, Grok Build and fx (Gemini, on its Chat Completions endpoint) on Vertex AI with a host-minted access token the egress gateway adds and refreshes, `google/*` and `anthropic/*` judge and analysis models called there with the same token, `reeval doctor`’s vertex check, and the other harnesses and models falling through it | ✓ 2 | ✓ 1 | — | — | — | — |
 | `limit.compare.maxVariants` | — | ✓ 1 | — | — | — | — |
 | `limit.compare: false`, or `maxVariants` leaving none: the lone control gates like an eval without compare | — | ✓ 3 | — | — | — | — |
-| `limit.harness` leaving none of `compare.harness`: the compare is off and each control gates like an eval without compare | — | ✓ 2 | — | — | — | — |
+| `limit.harnesses` leaving none of `compare.harnesses`: the compare is off and each control gates like an eval without compare | — | ✓ 2 | — | — | — | — |
 | `reeval run --dry-run` and `--dry-run --json` | ✓ 1 | ✓ 1 | — | — | — | — |
 | `reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part | ✓ 1 | ✓ 5 | — | — | — | — |
 | `budget.attempts`, `budget.duration` and `--force` | ✓ 1 | ✓ 1 | — | — | — | — |

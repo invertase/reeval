@@ -93,7 +93,7 @@ Every example takes the real agents in [`profiles.ts`](./profiles.ts) by name: `
 | Example | Shows |
 |---|---|
 | [`with-skill-lift`](./with-skill-lift) | Whether a skill helps |
-| [`with-compare-control`](./with-compare-control) | A compare without a baseline |
+| [`with-compare-control`](./with-compare-control) | A compare that names its control |
 | [`with-min-lift`](./with-min-lift) | Failing a run when a variant doesn't clearly help |
 | [`with-two-variants`](./with-two-variants) | One convention handed over two ways |
 | [`with-rules-ab`](./with-rules-ab) | Which of two rules files works better |

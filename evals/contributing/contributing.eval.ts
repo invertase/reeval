@@ -17,7 +17,7 @@ group('contributing to reeval', { timeout: '45m' }, () => {
     const variants = newGuides ? [variant, newGuides] : [variant]
     evaluate(
       `${task.title} (#${task.pr.number})`,
-      { compare: { baseline: control, variants, gate: 'none' } },
+      { compare: { control: control, variants, gate: 'none' } },
       async (c) => {
         // The merged change, for reeval.oracle.config.ts's fake agent to apply. A real agent never
         // gets it.

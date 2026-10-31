@@ -86,11 +86,11 @@ export const cases: PlanCase[] = [
   },
   { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.eval.ts'] },
   { dir: 'compare', name: 'independent', args: ['evals/independent.eval.ts'] },
-  { dir: 'compare', name: 'baseline-omitted', args: ['evals/omitted.eval.ts'] },
+  { dir: 'compare', name: 'control', args: ['evals/control.eval.ts'] },
   {
     dir: 'compare',
-    name: 'baseline-omitted-off',
-    args: ['--profile', 'off', 'evals/omitted.eval.ts'],
+    name: 'control-off',
+    args: ['--profile', 'off', 'evals/control.eval.ts'],
   },
   { dir: 'compare', name: 'harness-scoped', args: ['evals/scoped.eval.ts'] },
   {
@@ -291,7 +291,7 @@ export const cases: PlanCase[] = [
   { dir: 'environments', name: 'images', args: ['evals/images.eval.ts'] },
   { dir: 'environments', name: 'podman', args: ['evals/podman.eval.ts'] },
   { dir: 'environments', name: 'extend-replace', args: ['evals/extend.eval.ts'] },
-  { dir: 'environments', name: 'config-control', args: ['evals/compare.eval.ts'] },
+  { dir: 'environments', name: 'control-over-config', args: ['evals/compare.eval.ts'] },
   { dir: 'environments', name: 'inherit-config', args: ['evals/inherit.eval.ts'] },
   {
     dir: 'environments',

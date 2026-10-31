@@ -6,6 +6,6 @@ evaluate('globs and into', { environments: picked }, async () => {})
 evaluate('without the default ignores', { environments: everything }, async () => {})
 evaluate(
   'a variant adds a directory',
-  { compare: { baseline: whole, variants: [composed] } },
+  { compare: { control: whole, variants: [composed] } },
   async () => {},
 )

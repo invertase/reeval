@@ -12,7 +12,7 @@ def asked_by_the_group():
     @evaluate("also inherits it", {"runs": 2, "gate": {"pass_rate": 0.5}})
     async def also_inherits(c): ...
 
-    @evaluate("replaces the compare", {"compare": {"baseline": base, "variants": [terse]}})
+    @evaluate("replaces the compare", {"compare": {"control": base, "variants": [terse]}})
     async def replaces_the_compare(c): ...
 
     @evaluate(
@@ -28,7 +28,7 @@ def asked_by_the_group():
 group(
     "asked by the group",
     {
-        "compare": {"baseline": base, "variants": [skilled]},
+        "compare": {"control": base, "variants": [skilled]},
         "questions": [
             {"question": "Which handles state more cleanly?", "across": "environment", "diff": True}
         ],
@@ -38,7 +38,7 @@ group(
 
 
 def pairs_its_evals_compares():
-    @evaluate("compares", {"compare": {"baseline": base, "variants": [skilled]}})
+    @evaluate("compares", {"compare": {"control": base, "variants": [skilled]}})
     async def compares(c): ...
 
     @evaluate("skipped without a compare", mode="skip")

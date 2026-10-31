@@ -87,7 +87,7 @@ const named = (value: unknown, names: string[]) => {
 // A study, not a gate: the numbers are each side's pass rate, the lift and the effort.
 const study = (fixture: string, history?: { base: string }) => {
   const { control, variant } = brokenProject(fixture, history)
-  return { compare: { baseline: control, variants: [variant], gate: 'none' as const } }
+  return { compare: { control: control, variants: [variant], gate: 'none' as const } }
 }
 
 group('debugs a run', () => {

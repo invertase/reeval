@@ -6,6 +6,9 @@ const sandbox =
     ? docker()
     : fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
 
+/** Only a sandbox: no files, no skills. */
+export const empty = defineEnvironment('empty', { sandbox })
+
 export const variant = defineEnvironment('variant', {
   sandbox,
   files: { 'from-variant.txt': 'variant-only' },

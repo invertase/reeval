@@ -94,7 +94,7 @@ import { fakeSandbox } from 'reeval/sandbox'
 const sandbox = fakeSandbox()
 const plain = defineEnvironment('plain', { sandbox })
 const other = defineEnvironment('other', { sandbox })
-group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other] }, questions: [{ question: 'Which wrote hello.txt?', across: 'environment', task: true, diff: true }], runs: 2 } : {}, () => {
+group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { control: plain, variants: [other] }, questions: [{ question: 'Which wrote hello.txt?', across: 'environment', task: true, diff: true }], runs: 2 } : {}, () => {
   evaluate('writes hello', async (c) => {
     await c.send('write hello.txt')
     await expect(c.exec('test -f hello.txt')).toSucceed()
@@ -151,8 +151,8 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   skills: [skill.inline({ name: 'ok', description: 'Writes ok.txt', content: 'Write ok.txt.' })],
 }))
 const compare = process.env.REEVAL_TEST_GATE_ALL
-  ? { baseline: plain, variants: [skilled], gate: 'all' as const }
-  : { baseline: plain, variants: [skilled] }
+  ? { control: plain, variants: [skilled], gate: 'all' as const }
+  : { control: plain, variants: [skilled] }
 evaluate('writes ok', { runs: 1, compare }, async (c) => {
   await c.send('write ok.txt')
   await expect(c.exec('test -f ok.txt')).toSucceed()

@@ -264,7 +264,7 @@
       "additionalProperties": false
     },
     "Cell": {
-      "description": "A cell of an evaluation combines a harness, an environment (`-` when none is set), and that environment's sandbox id. With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.",
+      "description": "A cell of an evaluation combines a harness, an environment (`-` when none is set), and that environment's sandbox id. With `compare`, the control is `compare.control` and each variant is that environment on its own, including its sandbox.",
       "type": "object",
       "properties": {
         "environment": {
@@ -625,10 +625,11 @@
       "type": "object",
       "properties": {
         "baseline": {
+          "description": "The control's environment name.",
           "type": "string"
         },
         "from": {
-          "description": "Set when `compare.baseline` was omitted: the control is the eval's cascaded `environment`, or an empty environment named `baseline` when there was none.",
+          "description": "Not written, since a compare names its control. A record that has it ran the eval's cascaded environment (`'environment'`) or an empty one named `baseline` (`'empty'`) as the control.",
           "enum": ["empty", "environment"]
         }
       },

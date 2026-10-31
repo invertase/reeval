@@ -62,7 +62,7 @@ function declarations() {
       evaluate('b', async () => {})
     })
     group('both', { harnesses: { add: cursor({ model: 'composer-2', id: 'fast' }) } }, () => {
-      evaluate('c', { compare: { baseline: plain, variants: [skill] } }, async () => {})
+      evaluate('c', { compare: { control: plain, variants: [skill] } }, async () => {})
     })
   })
   evaluate('d', { timeout: '2m', egress: 'deny-all', environments: skill }, async () => {})
@@ -162,7 +162,7 @@ function relativeTree(): DeclarationTree['children'] {
     },
     eval_('compare', {
       compare: {
-        baseline: env('plain', { sandbox: docker('./images/Dockerfile') }),
+        control: env('plain', { sandbox: docker('./images/Dockerfile') }),
         variants: [env('built', { sandbox: docker('../docker/Dockerfile') })],
       },
     }),
@@ -267,7 +267,10 @@ test("a tree's missing Dockerfile is refused at its absolute path, naming the fi
   for (const [options, field] of [
     [{ sandbox }, 'sandbox.dockerfile'],
     [{ environments: env }, 'environments.layers[0].spec.sandbox.dockerfile'],
-    [{ compare: { variants: [env] } }, 'compare.variants[0].layers[0].spec.sandbox.dockerfile'],
+    [
+      { compare: { control: env, variants: [] } },
+      'compare.control.layers[0].spec.sandbox.dockerfile',
+    ],
   ] as const) {
     await assert.rejects(
       () => collected(root, () => declareTree(node(options), () => async () => {})),

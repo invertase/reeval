@@ -2,7 +2,7 @@
 
 **Shows:** which of two rules files works better. Each arm is the same project with its own
 `rules: file(…)`, a one-line `rules/short.md` and a `rules/detailed.md` that spells out the
-changelog's format. `compare: { baseline: shortRules, variants: [detailedRules] }` runs both, and
+changelog's format. `compare: { control: shortRules, variants: [detailedRules] }` runs both, and
 the checks read the changelog the agent wrote.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root

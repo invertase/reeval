@@ -10,7 +10,7 @@ const divideTest = readFileSync(new URL('./hidden/divide.test.js', import.meta.u
 evaluate(
   'rejects division by zero',
   {
-    compare: { baseline: math, variants: [withErrors] },
+    compare: { control: math, variants: [withErrors] },
     // across makes it pairwise: asked of every pair of arms whose attempts passed their
     // checks, with each side's diff. It never gates.
     questions: [

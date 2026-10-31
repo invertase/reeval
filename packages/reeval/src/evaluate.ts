@@ -440,11 +440,8 @@ function optionsFrom(written: EvalOptionsData, where: string, base: string): Eva
     environments !== undefined ? { environments: asEnv(environments, 'environments') } : {}
   if (compare === undefined) return { ...rest, ...own }
   const variants = compare.variants.map((v, i) => asEnv(v, `compare.variants[${i}]`))
-  if (compare.baseline !== undefined) {
-    return {
-      ...rest,
-      compare: { ...compare, baseline: asEnv(compare.baseline, 'compare.baseline'), variants },
-    }
+  return {
+    ...rest,
+    compare: { ...compare, control: asEnv(compare.control, 'compare.control'), variants },
   }
-  return { ...rest, ...own, compare: { ...compare, variants } }
 }

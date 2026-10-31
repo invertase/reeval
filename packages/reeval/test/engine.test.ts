@@ -1878,7 +1878,7 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
   sandbox,
   skills: [skill.local('../skills/s')],
 }))
-evaluate('compared', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+evaluate('compared', { compare: { control: plain, variants: [skilled] }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
 })
@@ -1886,7 +1886,7 @@ evaluate('repeated', { runs: 4 }, async (c) => {
   await c.send('go')
   expect(c.attempt.n % 4).not.toBe(0)
 })
-evaluate('studied', { compare: { baseline: plain, variants: [skilled], gate: 'none' }, runs: 2 }, async (c) => {
+evaluate('studied', { compare: { control: plain, variants: [skilled], gate: 'none' }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('nope.txt')
 })

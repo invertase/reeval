@@ -5,7 +5,7 @@ import { base, skilled, terse } from './envs.ts'
 group(
   'asked by the group',
   {
-    compare: { baseline: base, variants: [skilled] },
+    compare: { control: base, variants: [skilled] },
     questions: [
       { question: 'Which handles state more cleanly?', across: 'environment', diff: true },
     ],
@@ -15,7 +15,7 @@ group(
     evaluate('also inherits it', { runs: 2, gate: { passRate: 0.5 } }, async () => {})
     evaluate(
       'replaces the compare',
-      { compare: { baseline: base, variants: [terse] } },
+      { compare: { control: base, variants: [terse] } },
       async () => {},
     )
     evaluate(
@@ -31,7 +31,7 @@ group(
   "pairs its evals' compares",
   { questions: [{ question: 'Which is shorter?', across: 'environment', diff: true }] },
   () => {
-    evaluate('compares', { compare: { baseline: base, variants: [skilled] } }, async () => {})
+    evaluate('compares', { compare: { control: base, variants: [skilled] } }, async () => {})
     evaluate.skip('skipped without a compare', async () => {})
   },
 )

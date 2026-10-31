@@ -623,34 +623,49 @@ export const CASES: Record<string, Case[]> = {
   ],
   compare: [
     ['a list', options({ compare: [e1, e2] })],
-    ['no variants', options({ compare: { baseline: e1 } })],
-    ['variants not a list', options({ compare: { variants: e1 } })],
-    ['empty variants', options({ compare: { variants: [] } })],
-    ['a variant that is not an environment', options({ compare: { variants: ['two'] } })],
+    ['no variants', options({ compare: { control: e1 } })],
+    ['variants not a list', options({ compare: { control: e1, variants: e1 } })],
+    ['empty variants', options({ compare: { control: e1, variants: [] } })],
     [
-      'a baseline that is not an environment',
-      options({ compare: { baseline: 'one', variants: [e2] } }),
+      'a variant that is not an environment',
+      options({ compare: { control: e1, variants: ['two'] } }),
     ],
-    ['an unknown key', options({ compare: { variants: [e2], arms: [] } })],
-    ['gate unknown', options({ compare: { variants: [e2], gate: 'some' } })],
-    ['minLift above 1', options({ compare: { variants: [e2], minLift: 2 } })],
-    ['minLift a string', options({ compare: { variants: [e2], minLift: '0.1' } })],
-    ['harness not a list', options({ compare: { variants: [e2], harnesses: 'cursor' } })],
+    [
+      'a control that is not an environment',
+      options({ compare: { control: 'one', variants: [e2] } }),
+    ],
+    ['no control', options({ compare: { variants: [e2] } })],
+    ['a baseline', options({ compare: { baseline: e1, variants: [e2] } })],
+    ['a list as the control', options({ compare: { control: [e1, e2], variants: [e2] } })],
+    ['an unknown key', options({ compare: { control: e1, variants: [e2], arms: [] } })],
+    ['gate unknown', options({ compare: { control: e1, variants: [e2], gate: 'some' } })],
+    ['minLift above 1', options({ compare: { control: e1, variants: [e2], minLift: 2 } })],
+    ['minLift a string', options({ compare: { control: e1, variants: [e2], minLift: '0.1' } })],
+    [
+      'harness not a list',
+      options({ compare: { control: e1, variants: [e2], harnesses: 'cursor' } }),
+    ],
     ['compare false', options({ compare: false })],
     [
       'harness with a bad descriptor',
-      options({ compare: { variants: [e2], harnesses: [{ kind: 'cursor', modle: 'm' }] } }),
+      options({
+        compare: { control: e1, variants: [e2], harnesses: [{ kind: 'cursor', modle: 'm' }] },
+      }),
     ],
-    ['harness with a number', options({ compare: { variants: [e2], harnesses: [3] } })],
     [
-      'environment beside baseline',
-      options({ environments: e1, compare: { baseline: e1, variants: [e2] } }),
+      'harness with a number',
+      options({ compare: { control: e1, variants: [e2], harnesses: [3] } }),
     ],
+    [
+      'environments beside compare',
+      options({ environments: e1, compare: { control: e1, variants: [e2] } }),
+    ],
+    ['a variant that is the control', planned({ compare: { control: e1, variants: [e1, e2] } })],
     [
       'good',
       options({
         compare: {
-          baseline: e1,
+          control: e1,
           variants: [e2],
           gate: 'all',
           minLift: 0.1,
@@ -660,16 +675,19 @@ export const CASES: Record<string, Case[]> = {
     ],
     [
       'data: a variant with a bad spec',
-      options({ compare: { variants: [envData({ setpu: [] })] } }),
+      options({ compare: { control: e1, variants: [envData({ setpu: [] })] } }),
     ],
-    ['runs best of 3 on a compare', planned({ runs: { bestOf: 3 }, compare: { variants: [e2] } })],
+    [
+      'runs best of 3 on a compare',
+      planned({ runs: { bestOf: 3 }, compare: { control: e1, variants: [e2] } }),
+    ],
     [
       'runs best of 3 from the config on a compare',
-      planned({ compare: { variants: [e2] } }, { runs: { bestOf: 3 } }),
+      planned({ compare: { control: e1, variants: [e2] } }, { runs: { bestOf: 3 } }),
     ],
     [
       'runs best of 3 on a compare, its runs replaced',
-      planned({ compare: { variants: [e2] } }, { runs: { bestOf: 3 } }, 2),
+      planned({ compare: { control: e1, variants: [e2] } }, { runs: { bestOf: 3 } }, 2),
     ],
   ],
   questions: [
@@ -772,7 +790,7 @@ export const CASES: Record<string, Case[]> = {
     [
       'good',
       options({
-        compare: { variants: [e2] },
+        compare: { control: e1, variants: [e2] },
         questions: [
           { question: 'Q', transcript: 'tools', turns: 'last' },
           { question: 'R', model: 'google/g', across: ['environment', 'harness'], diff: true },

@@ -1531,16 +1531,16 @@ export type HarnessOption =
 export type CompareGate = 'variants' | 'all' | 'none'
 
 /**
- * The baseline and each variant run as their own environments, with the same prompt and checks.
+ * The control and each variant run as their own environments, with the same prompt and checks.
  * `compare` does not layer them. Share setup first with `environment.extend` / `extendEnvironment`.
  * `false` is not a value here: a profile turns compare off with `limit.compare`.
  */
 export type CompareOptions<E = Environment> = {
   /**
-   * The control. Not layered under the variants. Without it, the control is the environment the
-   * eval would otherwise run in (the cascaded `environment`), else an empty one named `baseline`.
+   * The environment each variant is measured against. Not layered under the variants, and it
+   * replaces any `environments` the eval inherits.
    */
-  baseline?: E
+  control: E
   /** Other environments, each planned and run as itself. */
   variants: E[]
   /** Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only). */
@@ -1791,7 +1791,7 @@ export type GatePolicy = 'all' | { passRate: number }
 /** A cell's gate: its policy, or `'none'` when its failures don't fail the eval (a control's). */
 export type CellGate = GatePolicy | 'none'
 
-/** A compare object: `baseline` and `variants`. Same as `CompareOptions`. */
+/** A compare object: `control` and `variants`. Same as `CompareOptions`. */
 export type CompareSpec<E = Environment> = CompareOptions<E>
 
 type OddDigit = '1' | '3' | '5' | '7' | '9'
@@ -1885,27 +1885,20 @@ export type EvalSource = DeclaredSource & {
 
 /**
  * `compare: false` is not an option here: a profile's `limit.compare: false` strips variants.
- * A compare with a `baseline` names every arm, so the cascaded `environment` is not applied, and
- * the same object can't set both. Without a `baseline`, the cascaded `environment` (this object's
- * own, or an inherited one) is the control.
+ * A compare names every arm, so an inherited `environments` is not applied, and the same object
+ * can't set both.
  */
 type EnvironmentOrCompare<E> =
   | {
-      /** What this group or eval runs in, and the control of a compare without a `baseline`. */
+      /** What this group or eval runs in. */
       environments?: E
       compare?: never
     }
   | {
-      /** Forbidden beside `compare.baseline`, which names the control. */
+      /** Forbidden beside `compare`, whose `control` names what the eval runs in. */
       environments?: never
-      /** Environments to run side by side; `baseline` is the control. */
-      compare: CompareSpec<E> & { baseline: E }
-    }
-  | {
-      /** The control: the compare has no `baseline`. */
-      environments?: E
-      /** Environments to run side by side against `environment`, the control. */
-      compare: CompareSpec<E> & { baseline?: undefined }
+      /** Environments to run side by side; `control` is what each variant is measured against. */
+      compare: CompareSpec<E>
     }
 
 /** `N` is `runs.bestOf` as written, so an even or fractional literal is a type error. */
@@ -2097,7 +2090,7 @@ export type ReevalConfig = {
    * it does not invent skills, files or a name. Implicit `docker()` when nobody sets one.
    */
   sandbox?: SandboxDescriptor
-  /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
+  /** What every eval runs in when it names no environment and has no compare. */
   environments?: Environment
   /**
    * Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more); unset, a compare with
@@ -2215,7 +2208,7 @@ export type ReevalConfigData = Omit<
   ReevalConfig,
   'environments' | 'judge' | 'profiles' | 'analysis' | 'gateway'
 > & {
-  /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
+  /** What every eval runs in when it names no environment and has no compare. */
   environments?: EnvironmentData
   /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: ConfigJudgeData
@@ -2392,9 +2385,8 @@ export type CellRole = 'control' | 'variant'
 
 /**
  * A cell of an evaluation combines a harness, an environment (`-` when none is set), and that
- * environment's sandbox id. With `compare`, the control is `baseline` (or the cascaded
- * environment, or an empty `baseline`) and each variant is that environment on its own,
- * including its sandbox.
+ * environment's sandbox id. With `compare`, the control is `compare.control` and each variant is
+ * that environment on its own, including its sandbox.
  */
 export type Cell = {
   /** The harness id, the environment name, and the sandbox id, joined with `/`. */
@@ -2824,10 +2816,11 @@ export type CaptureUseSpend = {
 
 /** Which environment ran as the control, so the studio can show it. */
 export type EvalCompareMeta = {
+  /** The control's environment name. */
   baseline: string
   /**
-   * Set when `compare.baseline` was omitted: the control is the eval's cascaded `environment`, or
-   * an empty environment named `baseline` when there was none.
+   * Not written, since a compare names its control. A record that has it ran the eval's cascaded
+   * environment (`'environment'`) or an empty one named `baseline` (`'empty'`) as the control.
    */
   from?: 'environment' | 'empty'
 }
