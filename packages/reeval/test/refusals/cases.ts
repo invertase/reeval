@@ -2090,6 +2090,13 @@ environment:
       ]),
     ],
     [
+      'declared: an eval and a todo whose names mask to the same name',
+      declares([
+        evalNode({ name: `e sk-ant-${'a'.repeat(24)}` }),
+        { type: 'todo', name: `e sk-ant-${'b'.repeat(24)}` },
+      ]),
+    ],
+    [
       'declared: two group names that mask to the same name',
       declares([
         group(`g sk-ant-${'a'.repeat(24)}`, [evalNode()]),

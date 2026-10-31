@@ -31,7 +31,7 @@ import { evalId } from './ids.ts'
 import { isObjectLike } from './object.ts'
 import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
 import { planEval } from './plan-eval.ts'
-import { redactSecrets } from './redact.ts'
+import { maskedVariables, redactSecrets } from './redact.ts'
 import type {
   AttemptContext,
   EnvironmentData,
@@ -140,7 +140,8 @@ function shownName(kind: 'eval' | 'group' | 'todo', name: string, hint = ''): st
   const shown = redactSecrets(name)
   const path = [...groupStack.map((g) => g.name), shown]
   const given = [...groupStack.map((g) => g.given), name].join('\0')
-  const key = [collectingFile() ?? '', kind, ...path].join('\0')
+  // A todo is an eval entry under its id, so it and an eval share one name.
+  const key = [collectingFile() ?? '', kind === 'group' ? 'group' : 'eval', ...path].join('\0')
   const earlier = givenPaths.get(key)
   if (earlier !== undefined && earlier !== given) {
     const what = kind === 'group' ? 'group' : kind === 'todo' ? 'evaluate.todo' : 'evaluate'
@@ -150,6 +151,16 @@ function shownName(kind: 'eval' | 'group' | 'todo', name: string, hint = ''): st
   }
   givenPaths.set(key, given)
   return shown
+}
+
+/**
+ * A note naming the variables whose values masked part of an eval's name: unlike a credential
+ * shape, a value is masked only where the variable holds it, so the eval's id differs elsewhere.
+ */
+function maskedNote(names: string[]): string | undefined {
+  const vars = [...new Set(names.flatMap((n) => maskedVariables(n)))]
+  if (!vars.length) return undefined
+  return `name masked: it holds the value of ${vars.join(', ')}, so its id differs where ${vars.length === 1 ? 'that variable has' : 'those variables have'} another value`
 }
 
 const defineGroup =
@@ -307,6 +318,10 @@ function register(
   )
   declareHarnesses(harnesses)
   if (!tests) return
+  const note = maskedNote([...groupStack.map((g) => g.given), given])
+  if (note) {
+    for (const notes of new Set(tests.map((t) => t.attempt.plan.notes))) notes.push(note)
+  }
   registered++
   const bestOfCells = new Map<string, ReturnType<typeof bestOfCell>>()
   for (const { name: testName, spec, ...options } of tests) {
@@ -445,18 +460,18 @@ function declareNodes(
     if (node.type === 'todo') registerTodo(node.name)
     else if (node.type === 'group') {
       const children = node.children
-      const where = `group("${node.name}")`
+      const where = `group("${redactSecrets(node.name)}")`
       defineGroup(node.mode)(node.name, optionsFrom(node.options, where, base), () =>
         declareNodes(children, bodyFor, base),
       )
     } else if (node.family) {
-      const options = optionsFrom(node.options, `evaluate("${node.name}")`, base)
+      const options = optionsFrom(node.options, `evaluate("${redactSecrets(node.name)}")`, base)
       checkOnly(node.mode, 'evaluate')
       register(node.mode, node.name, options, bodyFor(node.body), node.source, '', node.family)
     } else
       defineEval(node.mode, node.source)(
         node.name,
-        optionsFrom(node.options, `evaluate("${node.name}")`, base),
+        optionsFrom(node.options, `evaluate("${redactSecrets(node.name)}")`, base),
         bodyFor(node.body),
       )
   }

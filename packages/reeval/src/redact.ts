@@ -482,6 +482,15 @@ export type SecretMatch = {
 export const findSecrets = (text: string, env: NodeJS.ProcessEnv = process.env): SecretMatch[] =>
   secretRanges(text, envSecrets(env))
 
+/** The variables whose values `redactSecrets` masks in `text`, by name, each once. */
+export const maskedVariables = (text: string, env: NodeJS.ProcessEnv = process.env): string[] => [
+  ...new Set(
+    findSecrets(text, env).flatMap(({ rule }) =>
+      rule.startsWith(valueRule('')) ? [rule.slice(valueRule('').length)] : [],
+    ),
+  ),
+]
+
 /**
  * The end of a cut at or before `end` that goes through no stretch `findSecrets` finds, for text
  * that's kept unmasked but masked later: a cut through a secret would keep a part the later mask

@@ -25,7 +25,7 @@ evaluate(
 ```
 
 <Property name="name" type="string" required>
-  The evaluation's name. Results and history list it first. A secret-looking value in it, such as an API key, is masked as `[REDACTED]` in the plan, the terminal, the run record and every view, so the evaluation's id is the masked name.
+  The evaluation's name. Results and history list it first. A secret-looking value in it, such as an API key, is masked as `[REDACTED]` in the plan, the terminal, the run record and every view, so the evaluation's id is the masked name. A part masked because it's the value of a secret-named variable, such as `POSTGRES_PASSWORD`, changes the id only where that variable holds it, and the plan notes it as `name masked: it holds the value of POSTGRES_PASSWORD`. A name filter matches the masked name, so filter by `[REDACTED]` or a part without the secret.
 </Property>
 
 <Property name="options" type="EvalOptions" optional>
@@ -38,7 +38,7 @@ evaluate(
 
 `options` and `fn` take either order. `evaluate.skip(name, options?, fn)` declares without running. `evaluate.only(name, options?, fn)` runs only the marked evaluations in its file. `evaluate.todo(name)` takes no body, and the plan lists it as `todo`.
 
-reeval refuses, with exit code 2, two functions, no function, a second evaluation with the same full name in one file, a second name in one file that masks to the same name as another (`evaluate("e [REDACTED]") names a secret, and its masked name is another eval's in this file`), and `evaluate.only()` when the `CI` variable is set to a value other than `false`.
+reeval refuses, with exit code 2, two functions, no function, a second evaluation with the same full name in one file, a second name in one file that masks to the same name as another (`evaluate("e [REDACTED]") names a secret, and its masked name is another eval's in this file`), including an evaluation and an `evaluate.todo` whose names mask alike, a name that holds a value declared with `secret()` (`… names a secret declared with secret()`), and `evaluate.only()` when the `CI` variable is set to a value other than `false`.
 
 For more information about `EvalOptions`, `GroupOptions`, and the type of each key, see [Options reference](/reference/options).
 
