@@ -102,7 +102,7 @@ const addressFor = (listeners: Listener[], port: number) => {
   return all.find((a) => !a.includes(':')) ?? all.find((a) => a === '::') ?? all[0] ?? ''
 }
 
-/** `want` is taken whoever listens on it: `servePort` held it free when the command started. */
+/** `want` is taken whoever listens on it: `servePort` found it free when the command started. */
 export function decide(s: ServeState): ServeDecision {
   const { listeners, alive } = s.probe
   const ports = newPorts(listeners, s.before)
