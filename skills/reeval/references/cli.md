@@ -109,6 +109,9 @@ record: `reeval run --resume <id>` keeps the finished attempts and writes it. pn
 as a SIGTERM, which counts as the same press, and gives the terminal back: the run prints the
 `kill <pid>` that quits it.
 
+`--resume` plans with the run's own `--runs`, profile, filters, `--tag` and `--concurrency`, so
+leave them out. Another `--runs` or profile exits 2; other filters or tags narrow the resume.
+
 ## Recording runs
 
 Runs land in `.reeval/runs/`; `--record` (or `record: 'ci'` in CI) copies them to

@@ -31,7 +31,7 @@ import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
 import { vertexSettingsIn } from './gateway/vertex.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
-import type { GitInfo } from './history/types.ts'
+import type { GitInfo, RunInvocation } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveKept, type LiveProgressWriter, writeLiveProgress } from './live.ts'
@@ -48,6 +48,8 @@ import {
   loadPrevious,
   prepareResume,
   resolveResume,
+  resumeSettings,
+  savedInvocation,
   writeCurrent,
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
@@ -341,9 +343,20 @@ async function imageBuildCommand(
 async function runCommand(
   flags: Flags,
   configPath: string | undefined,
-  filters: string[],
+  given: string[],
 ): Promise<number> {
-  const setup = await prepareRun(flags, configPath)
+  const resumed = flags.resume === undefined ? null : await resumedRun(flags, given, configPath)
+  const runFlags = resumed ? { ...flags, ...resumed.settings } : flags
+  const filters = resumed?.settings.filters ?? given
+  const setup = await prepareRun(runFlags, configPath)
+  const explicit = runFlags.concurrency ?? (process.env.REEVAL_CONCURRENCY || undefined)
+  const startedWith: RunInvocation = resumed?.saved ?? {
+    ...(setup.runs === undefined ? {} : { runs: setup.runs }),
+    ...(setup.profile ? { profile: setup.profile.name } : {}),
+    ...(explicit === undefined ? {} : { concurrency: setup.concurrency }),
+    filters,
+    tags: runFlags.tag ?? [],
+  }
   const ctx = await startRun(setup)
   invocation.runId = ctx.runId
   const githubOut = process.env.GITHUB_OUTPUT
@@ -364,7 +377,10 @@ async function runCommand(
   })
   let executed: Awaited<ReturnType<typeof executeRun>>
   try {
-    executed = await executeRun(ctx, setup, filters, renderer)
+    executed = await executeRun(ctx, setup, filters, renderer, {
+      startedWith,
+      notes: resumed?.notes ?? [],
+    })
   } catch (error) {
     renderer.close()
     if (setup.resume === undefined) await rm(ctx.stagingDir, { recursive: true, force: true })
@@ -423,6 +439,7 @@ async function runCommand(
       previous: ctx.previous,
       previousArtifacts: ctx.previousArtifacts,
       runner: runnerInfo(),
+      invocation: startedWith,
       ...(answers && (answers.evals.size || answers.attempts.size) ? { answers } : {}),
     },
     // Until the record lands, the studio shows the run as live.
@@ -473,6 +490,22 @@ async function runCommand(
   }
 
   return code
+}
+
+/** `--resume`: the run's saved settings with the flags given now, or null for an older run. */
+async function resumedRun(flags: Flags, filters: string[], configPath: string | undefined) {
+  const root = dirname(requireConfig(configPath))
+  const target = await resolveResume(root, flags.resume || undefined)
+  const saved = await savedInvocation(root, target)
+  if (!saved) return null
+  const given = {
+    runs: flags.runs,
+    profile: flags.profile,
+    concurrency: flags.concurrency,
+    tag: flags.tag,
+    filters,
+  }
+  return { saved, ...resumeSettings(target.runId, saved, given) }
 }
 
 /** Everything that can fail before the evals are collected: output mode, config, profile, flags. */
@@ -697,6 +730,7 @@ async function executeRun(
   setup: Prepared,
   filters: string[],
   renderer: ReturnType<typeof createRenderer>,
+  started: { startedWith: RunInvocation; notes: string[] },
 ) {
   const { runId, stagingDir, config, runs, tags, concurrency, profile, verbosity, configFile } = ctx
   const run = JSON.parse(
@@ -781,6 +815,7 @@ async function executeRun(
         `${directOnCloud(cloud)}. Under it: ${direct.join(', ')}. Keep 'allow-all' to the evals that need raw TCP or UDP; the default, 'proxy', sends everything through the gateway`,
       )
     }
+    plan.warnings.push(...started.notes)
     if (completed.size) plan.resume = { runId, completed: completed.size }
     run.completed = [...completed]
     kept = keptAttempts(completed, stagingDir, ctx.previous)
@@ -1051,6 +1086,7 @@ async function executeRun(
           startedAt: ctx.startedAt,
           planned: toRun,
           kept,
+          invocation: started.startedWith,
         })
         renderer.onEvent({
           type: 'run-start',

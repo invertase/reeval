@@ -5,7 +5,13 @@ import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { UsageError } from '../src/errors.ts'
-import type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from '../src/history/types.ts'
+import type {
+  AttemptRecord,
+  CellRecord,
+  EvalEntry,
+  RunInvocation,
+  RunRecord,
+} from '../src/history/types.ts'
 import { RefError } from '../src/history/views.ts'
 import { attemptKey, evalId } from '../src/ids.ts'
 import {
@@ -16,6 +22,7 @@ import {
   prepareResume,
   readCurrent,
   resolveResume,
+  resumeSettings,
   writeCurrent,
 } from '../src/resume.ts'
 import { fakeConfig, project, readRun, runCli } from './helpers.ts'
@@ -378,6 +385,111 @@ evaluate('shot', { environment: site }, async (c) => {
     const r = await runCli(p.dir, ['run', '--resume', run.runId])
     assert.equal(r.code, 2, r.stdout + r.stderr)
     assert.match(r.stderr, /is complete and cannot be resumed/)
+  })
+})
+
+describe('reeval run --resume keeps how the run was started', () => {
+  const evals = {
+    'reeval.config.ts': fakeConfig(),
+    'evals/pair.eval.ts': `
+import { evaluate } from 'reeval'
+evaluate('one', { runs: 2 }, async () => {})
+evaluate('two', async () => {})
+`,
+  }
+
+  /** A quit that wrote no record: the progress file carries how the run was started. */
+  function quitStaging(dir: string, invocation: RunInvocation) {
+    const staging = writeStoppedStaging(dir, SEEDED_RUN_ID)
+    const file = join(staging, 'live.json')
+    const live = JSON.parse(readFileSync(file, 'utf8'))
+    writeFileSync(file, JSON.stringify({ ...live, invocation }))
+  }
+
+  type Plan = {
+    concurrency: number
+    warnings: string[]
+    totals: { evals: number; attempts: number }
+  }
+  const dryPlan = async (dir: string, args: string[] = []) => {
+    const r = await runCli(dir, ['run', '--resume', SEEDED_RUN_ID, ...args, '--dry-run', '--json'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    return JSON.parse(r.stdout) as Plan
+  }
+
+  test('an interrupted record finishes at the --runs and --concurrency it started with', async () => {
+    const p = await project('resume-runs', evals)
+    const first = await runCli(p.dir, ['run', 'one', '--runs', '3', '--concurrency', '2'])
+    assert.equal(first.code, 0, first.stdout + first.stderr)
+    const { run } = readRun(p.dir)
+    assert.deepEqual(run.invocation, { runs: 3, concurrency: 2, filters: ['one'], tags: [] })
+    for (const e of run.evals) {
+      e.attempts = e.attempts.map((a) => (a.n > 1 ? { ...a, outcome: 'skipped', error: null } : a))
+    }
+    const scratch = join(p.dir, '.reeval', 'runs', `${run.runId}.json`)
+    writeFileSync(scratch, JSON.stringify({ ...run, status: 'interrupted' }))
+    const r = await runCli(p.dir, ['run', '--resume', run.runId, '--ui', 'plain'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const resumed = readRun(p.dir).run
+    assert.equal(resumed.runId, run.runId)
+    assert.deepEqual(
+      resumed.evals.map((e) => [e.name, e.attempts.map((a) => a.outcome)]),
+      [['one', ['pass', 'pass', 'pass']]],
+    )
+    assert.equal(resumed.config.concurrency, 2)
+    assert.deepEqual(resumed.invocation, run.invocation)
+  })
+
+  test('a quit without a record plans from its progress file', async () => {
+    const p = await project('resume-quit-settings', evals)
+    quitStaging(p.dir, { runs: 2, concurrency: 3, filters: ['two'], tags: [] })
+    const plan = await dryPlan(p.dir)
+    assert.equal(plan.totals.evals, 1)
+    assert.equal(plan.totals.attempts, 2)
+    assert.equal(plan.concurrency, 3)
+  })
+
+  test('another --runs or profile is refused, naming what the run started with', async () => {
+    const p = await project('resume-conflict', evals)
+    quitStaging(p.dir, { runs: 2, filters: [], tags: [] })
+    const runs = await runCli(p.dir, ['run', '--resume', SEEDED_RUN_ID, '--runs', '1'])
+    assert.equal(runs.code, 2, runs.stdout + runs.stderr)
+    assert.match(runs.stderr, new RegExp(`run ${SEEDED_RUN_ID} was started with --runs 2`))
+    const profile = await runCli(p.dir, ['run', '--resume', SEEDED_RUN_ID, '--profile', 'ci'])
+    assert.equal(profile.code, 2, profile.stdout + profile.stderr)
+    assert.match(profile.stderr, /was started without a profile/)
+    assert.equal((await dryPlan(p.dir, ['--runs', '2'])).totals.attempts, 4)
+  })
+
+  test('another --concurrency wins with a note', async () => {
+    const p = await project('resume-concurrency', evals)
+    quitStaging(p.dir, { concurrency: 3, filters: [], tags: [] })
+    const plan = await dryPlan(p.dir, ['--concurrency', '1'])
+    assert.equal(plan.concurrency, 1)
+    assert.ok(
+      plan.warnings.includes(`concurrency 1 replaces the 3 run ${SEEDED_RUN_ID} was started with`),
+      plan.warnings.join('\n'),
+    )
+  })
+})
+
+describe('resumeSettings', () => {
+  const saved: RunInvocation = { profile: 'nightly', filters: ['a'], tags: ['slow'] }
+
+  test('fills what is left out and keeps a narrower filter or tag', () => {
+    const left = resumeSettings('r', saved, { filters: [] }, {})
+    assert.deepEqual(left.settings, { profile: 'nightly', filters: ['a'], tag: ['slow'] })
+    const narrowed = resumeSettings('r', saved, { filters: ['b'], tag: ['fast'] }, {})
+    assert.deepEqual(narrowed.settings, { profile: 'nightly', filters: ['b'], tag: ['fast'] })
+  })
+
+  test('REEVAL_PROFILE counts as naming the profile', () => {
+    const same = resumeSettings('r', saved, { filters: [] }, { REEVAL_PROFILE: 'nightly' })
+    assert.equal(same.settings.profile, undefined)
+    assert.throws(
+      () => resumeSettings('r', saved, { filters: [] }, { REEVAL_PROFILE: 'quick' }),
+      (e: unknown) => e instanceof UsageError && /with profile nightly/.test((e as Error).message),
+    )
   })
 })
 

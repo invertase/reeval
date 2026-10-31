@@ -109,6 +109,14 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
 
 [//]: # (/generated:cli-help:run)
 
+A resume plans with the settings the run started with, which its record and progress file keep as `invocation`:
+
+| Setting | Left out | Given again |
+|---|---|---|
+| `--runs`, the profile (`--profile` or `REEVAL_PROFILE`) | The run's | Exits 2 unless it's the run's |
+| filters, `--tag` | The run's | Narrows what this resume runs |
+| `--concurrency` (or `REEVAL_CONCURRENCY`) | The run's | Wins, with a note in the plan |
+
 ## `reeval clean`
 
 The `reeval clean` command deletes local debug data and the attempts' snapshots, and leaves the rest of the `.reeval/runs/` directory. `--keep` defaults to 0. `--images` prunes every Docker and Podman store that answers.
