@@ -13,10 +13,17 @@ export function resultLines(c: Colors, e: RunEnd, verbose: boolean): string[] {
   const { record } = e
   const tokens = formatUsage(record.cost.usage)
   const notes = [
-    ...(record.status === 'budget'
+    ...(e.notRun
+      ? [
+          c.yellow(
+            `Incomplete: ${e.notRun === 1 ? '1 attempt' : `${e.notRun} attempts`} this resume’s filters left out ${e.notRun === 1 ? 'is' : 'are'} not run; reeval run --resume ${record.runId} runs ${e.notRun === 1 ? 'it' : 'them'}`,
+          ),
+        ]
+      : []),
+    ...(record.status === 'budget' && !e.notRun
       ? [c.yellow('Budget reached: attempts that hadn’t started were skipped')]
       : []),
-    ...(record.status === 'interrupted'
+    ...(record.status === 'interrupted' && !e.notRun
       ? [c.yellow('Interrupted: attempts that hadn’t finished were canceled')]
       : []),
     c.dim(

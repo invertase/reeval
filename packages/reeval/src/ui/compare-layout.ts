@@ -586,7 +586,7 @@ export function compareTally(c: Colors, rows: CompareRow[]): string {
 }
 
 const UNFINISHED: Partial<Record<RunRecord['status'], string>> = {
-  interrupted: 'was interrupted, so some of its evals were canceled before they finished',
+  interrupted: 'didn’t finish, so some of its evals were canceled or haven’t run yet',
   budget: 'stopped at its duration budget, so some of its evals never ran',
 }
 

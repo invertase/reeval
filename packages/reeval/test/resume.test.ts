@@ -548,6 +548,148 @@ evaluate('two', async () => {})
     assert.deepEqual(savedFilters(root, [outside, 'one', '.'], root), ['..', 'one', '.'])
   })
 
+  test('a filtered resume keeps the attempts it leaves out as not run, and the run incomplete', async () => {
+    const p = await project('resume-filter-left-out', split)
+    const run = await interrupted(p.dir, p.dir, [])
+    const dry = await runCli(p.dir, ['run', '--resume', run.runId, 'one', '--dry-run', '--json'])
+    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+    assert.ok(
+      (JSON.parse(dry.stdout) as { warnings: string[] }).warnings.includes(
+        `1 attempt run ${run.runId} planned isn't in this resume's filters: it stays not run and the run stays incomplete. reeval run --resume ${run.runId} runs it`,
+      ),
+      dry.stdout,
+    )
+    const r = await runCli(p.dir, ['run', '--resume', run.runId, 'one', '--ui', 'plain'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, /Incomplete: 1 attempt this resume’s filters left out is not run/)
+    const filtered = readRun(p.dir).run
+    assert.equal(filtered.status, 'interrupted')
+    const outcomes = (record: RunRecord) =>
+      record.evals.map((e) => [e.name, e.attempts.map((a) => a.outcome)])
+    assert.deepEqual(outcomes(filtered), [
+      ['one', ['pass']],
+      ['two', ['skipped']],
+    ])
+    assert.equal(filtered.evals[1]?.cells[0]?.key, run.evals[1]?.cells[0]?.key)
+    const rest = await runCli(p.dir, ['run', '--resume', run.runId, '--ui', 'plain'])
+    assert.equal(rest.code, 0, rest.stdout + rest.stderr)
+    const finished = readRun(p.dir).run
+    assert.equal(finished.status, 'complete')
+    assert.deepEqual(outcomes(finished), [
+      ['one', ['pass']],
+      ['two', ['pass']],
+    ])
+    assert.equal(
+      finished.evals[0]?.attempts[0]?.startedAt,
+      filtered.evals[0]?.attempts[0]?.startedAt,
+    )
+  })
+
+  test('a filtered resume counts skip and todo evals as done, and says an incomplete run is not recorded', async () => {
+    const p = await project('resume-filter-declared', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a/one.eval.ts': `import { evaluate } from 'reeval'
+evaluate('one', async () => {})
+evaluate.skip('sk', async () => {})
+`,
+      'evals/b/two.eval.ts': `import { evaluate } from 'reeval'
+evaluate('two', async () => {})
+evaluate.todo('td')
+`,
+    })
+    const pending = await interrupted(p.dir, p.dir, [])
+    const scratch = join(p.dir, '.reeval', 'runs', `${pending.runId}.json`)
+    const run: RunRecord = JSON.parse(readFileSync(scratch, 'utf8'))
+    for (const e of run.evals) {
+      if (e.name === 'two') e.attempts = e.attempts.map((a) => ({ ...a, outcome: 'pass' }))
+    }
+    writeFileSync(scratch, JSON.stringify(run))
+    const r = await runCli(p.dir, ['run', '--resume', run.runId, 'evals/a', '--ui', 'plain'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.doesNotMatch(r.stdout, /Incomplete|isn't in this resume's filters/)
+    const done = readRun(p.dir).run
+    assert.equal(done.status, 'complete')
+    assert.deepEqual(
+      done.evals.map((e) => [e.name, e.outcome, e.todo]),
+      [
+        ['one', 'pass', false],
+        ['sk', 'skipped', false],
+        ['two', 'pass', false],
+        ['td', 'skipped', true],
+      ],
+    )
+    const left = await interrupted(p.dir, p.dir, [])
+    const again = await runCli(p.dir, ['run', '--resume', left.runId, 'evals/a', '--record'])
+    assert.equal(again.code, 0, again.stdout + again.stderr)
+    assert.match(
+      again.stdout,
+      new RegExp(
+        `Not recorded: run ${left.runId} is incomplete\\. reeval run --resume ${left.runId} --record runs the rest and records it\\.`,
+      ),
+    )
+  })
+
+  test('a filtered resume of a quit keeps what its progress file planned, and exits on what it ran', async () => {
+    const p = await project('resume-filter-quit', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/trio.eval.ts': `import { evaluate } from 'reeval'
+evaluate('one', async () => { throw new Error('one fails') })
+evaluate('two', async () => {})
+evaluate('three', async () => {})
+`,
+    })
+    const file = 'evals/trio.eval.ts'
+    const cell = 'fake/fake/fake'
+    const staging = writeStoppedStaging(p.dir, SEEDED_RUN_ID, [{ file, name: 'three', cell }])
+    const liveFile = join(staging, 'live.json')
+    const attempt = (name: string, status: string) => ({
+      key: attemptKey(evalId(file, [name]), cell, 1),
+      evalId: evalId(file, [name]),
+      name,
+      file,
+      cell,
+      n: 1,
+      status,
+      startedAt: null,
+      durationMs: null,
+    })
+    writeFileSync(
+      liveFile,
+      JSON.stringify({
+        ...JSON.parse(readFileSync(liveFile, 'utf8')),
+        invocation: { filters: [], tags: [] },
+        planned: 3,
+        attempts: [attempt('one', 'queued'), attempt('two', 'running'), attempt('three', 'pass')],
+      }),
+    )
+    const r = await runCli(p.dir, ['run', '--resume', SEEDED_RUN_ID, 'one', '--json'])
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const json = JSON.parse(r.stdout) as { status: string; outcome: string }
+    assert.deepEqual([json.status, json.outcome], ['interrupted', 'fail'])
+    const { run } = readRun(p.dir)
+    assert.equal(run.status, 'interrupted')
+    assert.deepEqual(
+      run.evals.map((e) => [e.name, e.attempts.map((a) => [a.cell, a.outcome])]),
+      [
+        ['one', [[cell, 'fail']]],
+        ['two', [[cell, 'skipped']]],
+        ['three', [[cell, 'pass']]],
+      ],
+    )
+    const rest = await runCli(p.dir, ['run', '--resume', SEEDED_RUN_ID, '--ui', 'plain'])
+    assert.equal(rest.code, 1, rest.stdout + rest.stderr)
+    const finished = readRun(p.dir).run
+    assert.equal(finished.status, 'complete')
+    assert.deepEqual(
+      finished.evals.map((e) => [e.name, e.outcome]),
+      [
+        ['one', 'fail'],
+        ['two', 'pass'],
+        ['three', 'pass'],
+      ],
+    )
+  })
+
   test('--runs that is not a count gets the usual error', async () => {
     const p = await project('resume-runs-nan', evals)
     quitStaging(p.dir, { runs: 2, filters: [], tags: [] })
@@ -717,10 +859,29 @@ evaluate('slow', { runs: 2 }, async (c) => { await c.send('x') })
     const second = readRun(dir).run
     assertKept(dir, first, second)
     assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.equal(second.status, 'complete')
     const was = first.evals.find((e) => e.name === 'gated')?.cells
     const cells = second.evals.find((e) => e.name === 'gated')?.cells
     const meta = (c: CellRecord) => [c.key, c.role, c.gate, c.harnessKind, c.model, c.overrides]
     assert.deepEqual(cells?.map(meta), was?.map(meta))
+  })
+
+  test('stays budget-stopped while a filtered resume leaves attempts out', async () => {
+    const { dir, first } = await stopped(
+      'resume-budget-left-out',
+      (e, a) => e.name === 'slow' || (a.cell.includes('skilled') && a.n === 2),
+    )
+    const r = await runCli(dir, ['run', '--resume', first.runId, 'gated', '--ui', 'plain'])
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const second = readRun(dir).run
+    assert.equal(second.status, 'budget')
+    const slow = second.evals.find((e) => e.name === 'slow')
+    assert.deepEqual(
+      slow?.attempts.map((a) => a.outcome),
+      ['skipped', 'skipped'],
+    )
+    const gated = second.evals.find((e) => e.name === 'gated')
+    assert.ok(gated?.attempts.every((a) => a.outcome === 'pass'))
   })
 
   test('asks a pairwise question again over the kept and new attempts', async () => {

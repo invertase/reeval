@@ -173,6 +173,8 @@ export type ReevalEvent =
       results: EvalResult[]
       /** The run's remarks, or null when it raised none. */
       remarks?: RunRemarks | null
+      /** Attempts the run planned that this resume's filters left out and that aren't done. */
+      notRun?: number
     }
 
 export interface Renderer {

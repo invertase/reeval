@@ -111,7 +111,8 @@ as a SIGTERM, which counts as the same press, and gives the terminal back: the r
 
 `--resume` plans with the run's own `--runs`, profile, filters, `--tag` and `--concurrency`, so
 leave them out. Another `--runs` or profile exits 2; other filters or tags replace the run's for
-that resume.
+that resume. Attempts the run planned that they leave out stay in the record as not run (or as
+they finished), the run stays `interrupted` (or `budget`), and a later `--resume` runs them.
 
 ## Recording runs
 
