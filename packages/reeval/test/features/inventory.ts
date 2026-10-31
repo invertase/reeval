@@ -144,6 +144,22 @@ export const inventory: InventoryFeature[] = [
     unit: ['reeval/test/output.test.ts'],
   },
   {
+    id: 'where',
+    area: 'Config and selection',
+    name: "`where`: which case and environment pairs of an eval with `cases` run, decided at plan time from environment `traits` (and the harness when it reads it), listed in `--dry-run` and the record's `excluded`; with `compare`, the control decides for every variant",
+    plan: ['where/where'],
+    fixtures: ['run/where'],
+    unit: ['reeval/test/refusals.test.ts'],
+  },
+  {
+    id: 'environment-traits',
+    area: 'Config and selection',
+    name: 'Environment `traits`: filter facts merged by key through `extend`, recorded on each cell and never written to the sandbox, a variable or the prompt',
+    plan: ['environments/traits'],
+    fixtures: ['run/traits-hidden'],
+    unit: ['reeval/test/refusals.test.ts'],
+  },
+  {
     id: 'cases',
     area: 'Config and selection',
     name: '`cases` and `caseKey`: one eval over a list of cases, each keyed `<eval> [<key>]`, pooled into a pass rate and a paired lift that `minLift` gates',

@@ -715,6 +715,28 @@
             "$ref": "#/$defs/SkillSource"
           }
         },
+        "traits": {
+          "description": "Filter facts for `where`, such as `{ stack: 'next' }`: a key to a string or a list of strings. A child's key replaces its parent's value whole; keys it doesn't set are inherited. Recorded on the cell, and never written to the sandbox, the prompt or the judge.",
+          "readOnly": true,
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "readOnly": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
+        },
         "workspace": {
           "description": "The code the workspace starts as, before `files`, `rules` and `setup`; a child's replaces its parent's.",
           "$ref": "#/$defs/GitWorkspace"

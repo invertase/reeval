@@ -30,6 +30,7 @@ import {
   plannedSecrets,
   sameWorkspaceOnly,
   sandboxOf,
+  traitsOf,
   type UnbrokeredSecret,
   unbrokeredSecrets,
   workspaceLabel,
@@ -299,11 +300,13 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     const hint =
       key === 'cases' || key === 'caseKey'
         ? ` ${key} belongs to one eval: evaluate(name, { cases: [...] }, async (c, item) => { … }).`
-        : key === 'workspace' && typeof value !== 'boolean'
-          ? " workspace is an environment's starting tree: defineEnvironment(name, { workspace: git(…) })."
-          : near
-            ? ` Did you mean "${near}"?`
-            : ''
+        : key === 'where'
+          ? ' where is an option of evaluate() and survey() only, beside cases: evaluate(name, { cases: [...], where: ({ case, environment }) => … }, …).'
+          : key === 'workspace' && typeof value !== 'boolean'
+            ? " workspace is an environment's starting tree: defineEnvironment(name, { workspace: git(…) })."
+            : near
+              ? ` Did you mean "${near}"?`
+              : ''
     throw new UsageError(`Unknown option "${key}" in ${where}.${hint}`)
   }
   const o = options as EvalOptions
@@ -1087,6 +1090,11 @@ export function sandboxSetBy(
  * Per harness: the control, then each variant it compares on; then run numbers. `vertex` is the
  * run's `vertex()` settings, for each harness that resolved to Vertex AI.
  */
+const cellTraits = (env: AppliedEnvironment): Pick<Cell, 'traits'> => {
+  const traits = traitsOf(env.layers)
+  return Object.keys(traits).length ? { traits } : {}
+}
+
 export function expand(resolved: Resolved, vertex?: VertexSettings): PlannedAttempt[] {
   const { compare } = resolved
   // An environment from another level is not applied beside a compare's control.
@@ -1119,6 +1127,7 @@ export function expand(resolved: Resolved, vertex?: VertexSettings): PlannedAtte
           environment: env.name,
           sandbox: sid,
           role: 'control' as const,
+          ...cellTraits(env),
         },
         // A compare a profile's limit left without variants has nothing to compare the
         // control against, so it gates like an eval without compare.
@@ -1140,6 +1149,7 @@ export function expand(resolved: Resolved, vertex?: VertexSettings): PlannedAtte
             sandbox: sid,
             role: 'variant',
             variant: v.name,
+            ...cellTraits(env),
           },
           gate: gateIf(compare.gate !== 'none'),
         })

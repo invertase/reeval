@@ -3149,6 +3149,51 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'run/where',
+    tiers: ['fake'],
+    env: 'next-app',
+    canary: /runs on its own stack: expected 'next' to be 'vite'/,
+    evals: {
+      'lands [next]': { outcome: 'pass', attempts: ['fake/next-app/fake#1'] },
+      'lands [vite]': { outcome: 'pass', attempts: ['fake/vite-app/fake#1'] },
+      'canary [next]': { outcome: 'pass', attempts: ['fake/next-app/fake#1'] },
+      'canary [vite]': {
+        outcome: 'fail',
+        attempts: ['fake/next-app/fake#1', 'fake/vite-app/fake#1'],
+        error: { kind: 'assertion', message: /expected 'next' to be 'vite'/ },
+        clean: ['fake/vite-app/fake#1'],
+      },
+    },
+    record: ({ run }) => {
+      const lands = run.evals.find((e) => e.name === 'lands [next]')
+      assert.deepEqual(lands?.excluded, [
+        { case: 'next', environment: 'vite-app' },
+        { case: 'vite', environment: 'next-app' },
+      ])
+      assert.deepEqual(
+        lands?.cells.map((c) => [c.environment, c.traits]),
+        [['next-app', { stack: 'next' }]],
+      )
+      const canary = run.evals.find((e) => e.name === 'canary [next]')
+      assert.deepEqual(canary?.excluded, [{ case: 'next', environment: 'vite-app' }])
+    },
+  },
+  {
+    dir: 'run/traits-hidden',
+    tiers: ['fake'],
+    env: 'hidden',
+    canaryEnv: 'leaked',
+    canary: /the trait is hidden: expected '[^']*leak\.txt[^']*' to be '0'/,
+    record: ({ run }) => {
+      const lands = run.evals.find((e) => e.name === 'lands')
+      assert.deepEqual(
+        lands?.cells[0]?.traits,
+        { stack: 'next', marker: 'trait-zx81', auth: ['clerk', 'none'] },
+        'the cell records the merged traits',
+      )
+    },
+  },
+  {
     dir: 'run/survey',
     tiers: ['fake'],
     env: 'survey',

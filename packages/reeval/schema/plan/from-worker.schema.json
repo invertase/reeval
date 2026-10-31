@@ -286,6 +286,25 @@
           "description": "The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts with the engine (`docker` by default). It adds `:` and the sanitized final component of `image` or `from`, or for `dockerfile` the sanitized filename (the parent directory name when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps append `+` and an eight-character hash.",
           "type": "string"
         },
+        "traits": {
+          "description": "The environment's merged traits; unset when it has none. Not part of the key.",
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
         "variant": {
           "description": "The variant's name, for variant cells.",
           "type": "string"
@@ -756,6 +775,13 @@
             "type": "string"
           }
         },
+        "excluded": {
+          "description": "The case and environment pairs `where` left out, across the eval's cases; unset when none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExcludedPair"
+          }
+        },
         "gate": {
           "description": "The eval's gate policy, or undefined when it was left at the default (`'all'`).",
           "anyOf": [
@@ -870,6 +896,24 @@
         }
       },
       "required": ["body", "options"]
+    },
+    "ExcludedPair": {
+      "description": "A case and environment pair `where` left out.",
+      "type": "object",
+      "properties": {
+        "case": {
+          "description": "The case key.",
+          "type": "string"
+        },
+        "environment": {
+          "type": "string"
+        },
+        "harness": {
+          "description": "Set only when `where` read the harness.",
+          "type": "string"
+        }
+      },
+      "required": ["case", "environment"]
     },
     "FakeHarnessDescriptor": {
       "description": "A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`.",

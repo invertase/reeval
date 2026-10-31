@@ -25,7 +25,7 @@ import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
 import { bodyHash, caseHash } from '../../src/eval-source.ts'
-import { declareTree, evaluate, survey } from '../../src/evaluate.ts'
+import { declareTree, group as defineGroup, evaluate, survey } from '../../src/evaluate.ts'
 import { resolveModelGateway } from '../../src/gateway/models.ts'
 import { resolveGateway } from '../../src/gateway/resolve.ts'
 import { vercelCredentialProblem } from '../../src/gateway/vercel.ts'
@@ -226,6 +226,9 @@ const surveys = (options: object) =>
 const ungated = (options: object) =>
   declaresWith(() => evaluate('e', { gate: 'none', ...options } as never, async () => {}))
 const plainEnv = defineEnvironment('plain', {})
+const nextEnv = defineEnvironment('next-app', { traits: { stack: 'next' } })
+const viteEnv = defineEnvironment('vite-app', { traits: { stack: 'vite' } })
+type Pair = { case: string; environment: { traits: Record<string, unknown> }; harness: string }
 const skillEnv = defineEnvironment('skill', { rules: 'Use the house style.' })
 const group = (name: string, children: unknown[]) => ({
   type: 'group',
@@ -1388,6 +1391,16 @@ export const CASES: Record<string, Case[]> = {
     ['install beside the sandbox', env({ install: ['x'] })],
     ['steps instead of setup', env({ steps: ['x'] })],
     ['an unknown field', env({ color: 'blue' })],
+    ['traits: tags instead of traits', env({ tags: { stack: 'next' } })],
+    ['traits: not an object', env({ traits: ['next'] })],
+    ['traits: a bad key', env({ traits: { Stack: 'next' } })],
+    ['traits: a number value', env({ traits: { stack: 15 } })],
+    ['traits: an empty list', env({ traits: { auth: [] } })],
+    ['traits: a repeated value', env({ traits: { auth: ['clerk', 'clerk'] } })],
+    [
+      'traits: too many',
+      env({ traits: Object.fromEntries(Array.from({ length: 17 }, (_, i) => [`t${i}`, 'x'])) }),
+    ],
     ['a sandbox that is not one', env({ sandbox: 'docker' })],
     ['a sandbox maxConcurrent 0', env({ sandbox: { kind: 'fake', maxConcurrent: 0 } })],
     [
@@ -2110,6 +2123,54 @@ environments:
     ['cases: two cases with one key', withCases({ cases: [{ id: 'a' }, { name: 'a' }] })],
     ['cases: one key from caseKey', withCases({ cases: [1, 2], caseKey: () => 'k' })],
     ['cases: with best-of runs', withCases({ cases: [1, 2], runs: { bestOf: 3 } })],
+    ['where: without cases', withCases({ where: () => true })],
+    ['where: not a function', withCases({ cases: ['a'], where: true })],
+    [
+      'where: in a group',
+      declaresWith(() => defineGroup('g', { where: () => true } as never, () => {})),
+    ],
+    [
+      'where: reads a trait no environment defines',
+      withCases({
+        cases: ['a'],
+        environments: [nextEnv],
+        where: ({ environment }: Pair) => environment.traits.stak === 'next',
+      }),
+    ],
+    [
+      'where: returns a string',
+      withCases({ cases: ['q001'], environments: [nextEnv], where: () => 'yes' }),
+    ],
+    [
+      'where: throws',
+      withCases({
+        cases: ['q001'],
+        environments: [nextEnv],
+        where: () => {
+          throw new Error('no such stack')
+        },
+      }),
+    ],
+    [
+      'where: leaves a cell with no cases',
+      withCases({
+        cases: ['a', 'b'],
+        environments: [nextEnv, viteEnv],
+        where: ({ environment }: Pair) => environment.traits.stack === 'next',
+      }),
+    ],
+    [
+      'where: excludes every pair',
+      withCases({ cases: ['a', 'b'], environments: [nextEnv, viteEnv], where: () => false }),
+    ],
+    [
+      'where: accepted, a harness read',
+      withCases({
+        cases: ['a', 'b'],
+        environments: [nextEnv],
+        where: ({ case: c, harness }: Pair) => c === 'a' || harness === 'fake',
+      }),
+    ],
     [
       'cases: keys from ids, names, strings and numbers',
       withCases({ cases: ['s', 2, { id: 'i' }, { name: 'n' }] }),

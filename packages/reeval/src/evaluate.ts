@@ -31,7 +31,7 @@ import { bodyHash, caseHash } from './eval-source.ts'
 import { evalId } from './ids.ts'
 import { isObjectLike } from './object.ts'
 import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
-import { planEval } from './plan-eval.ts'
+import { type PlannedEval, planEval } from './plan-eval.ts'
 import type {
   AttemptContext,
   CaseFn,
@@ -45,6 +45,7 @@ import type {
   GroupOptions,
   SurveyOptions,
 } from './types.ts'
+import type { CaseWhere } from './where.ts'
 
 type Declaring = { name: string; options: GroupOptions; node: DeclaredGroup }
 
@@ -272,6 +273,22 @@ function register(
   hint = '',
   family?: DeclaredFamily,
 ): void {
+  prepare(mode, name, own, fn, source, hint, family).commit()
+}
+
+/** An eval planned but not yet registered: `commit` registers its tests. */
+type Prepared = { planned: PlannedEval; commit: () => void }
+
+function prepare(
+  mode: DeclaredMode,
+  name: string,
+  own: EvalOptions,
+  fn: EvalFn,
+  source: DeclaredSource,
+  hint = '',
+  family?: DeclaredFamily,
+  where?: CaseWhere,
+): Prepared {
   const groups = groupStack.map((g) => g.name)
   if (family) checkFamily(groups, family)
   checkUnique(`evaluate("${[...groups, name].join(' › ')}")`, groups, name, hint, !!family)
@@ -286,7 +303,7 @@ function register(
     source,
     ...(family ? { family } : {}),
   })
-  const { tests, harnesses } = planEval(
+  const planned = planEval(
     {
       name,
       mode,
@@ -294,28 +311,32 @@ function register(
       options: own,
       source,
       ...(family ? { family } : {}),
+      ...(where ? { where } : {}),
     },
     { ...getRunContext(), file: collectingFile(), order: registered },
   )
-  declareHarnesses(harnesses)
-  if (!tests) return
-  registered++
-  const bestOfCells = new Map<string, ReturnType<typeof bestOfCell>>()
-  for (const { name: testName, spec, ...options } of tests) {
-    const { cell, n, bestOf } = options.attempt
-    let hooks = {}
-    // A resumed run's completed attempts are skipped, but still settle their place in the cell.
-    if (bestOf !== undefined) {
-      const of = bestOfCells.get(cell.key) ?? bestOfCell(bestOf)
-      bestOfCells.set(cell.key, of)
-      hooks = of(n)
+  if (planned.tests) registered++
+  const commit = () => {
+    declareHarnesses(planned.harnesses)
+    if (!planned.tests) return
+    const bestOfCells = new Map<string, ReturnType<typeof bestOfCell>>()
+    for (const { name: testName, spec, ...options } of planned.tests) {
+      const { cell, n, bestOf } = options.attempt
+      let hooks = {}
+      // A resumed run's completed attempts are skipped, but still settle their place in the cell.
+      if (bestOf !== undefined) {
+        const of = bestOfCells.get(cell.key) ?? bestOfCell(bestOf)
+        bestOfCells.set(cell.key, of)
+        hooks = of(n)
+      }
+      registerTest(
+        testName,
+        { ...options, ...hooks },
+        spec ? (handle) => runAttempt(spec, fn, handle) : async () => {},
+      )
     }
-    registerTest(
-      testName,
-      { ...options, ...hooks },
-      spec ? (handle) => runAttempt(spec, fn, handle) : async () => {},
-    )
   }
+  return { planned, commit }
 }
 
 /** Evals registered so far in this worker, for the scheduler's tie-break. */
@@ -328,6 +349,11 @@ const defineEval =
     const [split, fn] = splitArgs<EvalFn>(verb, name, a as EvalOptions, b as EvalOptions)
     const where = `${verb}("${name}")`
     const written = verb === 'survey' ? surveyOptions(split, where) : split
+    if (isObjectLike(written) && 'where' in written && !('cases' in written)) {
+      throw new UsageError(
+        `${where} sets where without cases. where picks case-and-environment pairs; to drop an environment, leave it out of environments.`,
+      )
+    }
     if (isObjectLike(written) && ('cases' in written || 'caseKey' in written)) {
       return registerCases(mode, name, written as EvalOptions & CaseOptions<unknown>, fn, where)
     }
@@ -351,7 +377,7 @@ function registerCases(
   fn: EvalFn | CaseFn<unknown>,
   where: string,
 ): void {
-  const { cases, caseKey, ...rest } = written
+  const { cases, caseKey, where: pick, ...rest } = written
   if (!Array.isArray(cases)) {
     throw new UsageError(
       cases === undefined
@@ -367,6 +393,11 @@ function registerCases(
       `caseKey in ${where} must be a function from a case to its key, e.g. caseKey: (item) => item.slug.`,
     )
   }
+  if (pick !== undefined && typeof pick !== 'function') {
+    throw new UsageError(
+      `where in ${where} must be a function from a case and an environment to true or false, e.g. where: ({ case: item, environment }) => item.stacks.includes(environment.traits.stack).`,
+    )
+  }
   if (isObjectLike(rest.runs) && 'bestOf' in rest.runs) {
     throw new UsageError(
       `${where} has cases, so it can't take runs: { bestOf }: best-of stops each cell on its own, and the cases pool over the runs. Set a fixed count, e.g. runs: 3.`,
@@ -377,13 +408,57 @@ function registerCases(
   const file = collectingFile()
   const body = bodyHash(fn, where, file)
   const pooled = cases.length >= 2
-  cases.forEach((item, i) => {
+  const prepared = cases.map((item, i) => {
     const key = keys[i] as string
     const family = pooled ? { name, case: i, cases: cases.length } : undefined
     const source = { body, case: caseHash(item, `${where} case "${key}"`, file) }
     const run: EvalFn = (c) => (fn as CaseFn<unknown>)(c, item)
-    register(mode, caseEvalName(name, key), own, run, source, '', family)
+    const picks = pick ? { label: where, key, item, where: pick } : undefined
+    return prepare(mode, caseEvalName(name, key), own, run, source, '', family, picks)
   })
+  if (pick) applyWhere(where, keys, prepared)
+  for (const p of prepared) p.commit()
+}
+
+/**
+ * The checks `where` needs across an eval's cases, then the pairs it left out, on every case's
+ * plan: a cell that no case runs on is refused, and so is an eval it leaves nothing to run.
+ */
+function applyWhere(where: string, keys: string[], prepared: Prepared[]): void {
+  const picks = prepared.flatMap((p) => (p.planned.picked ? [p.planned.picked] : []))
+  if (!picks.length) return
+  const excluded = picks.flatMap((p) => p.excluded)
+  const kept = new Set(picks.flatMap((p) => p.keptCells))
+  if (!kept.size) {
+    throw new UsageError(
+      `${where}'s where excludes all ${excluded.length} case-and-environment pairs, so it has nothing to run.`,
+    )
+  }
+  const empty = picks.flatMap((p) => p.cells).find((c) => !kept.has(c.key))
+  if (empty) {
+    throw new UsageError(
+      `${where}'s where leaves cell ${empty.key} with no cases. Leave ${empty.environment} out of environments, or widen where.`,
+    )
+  }
+  if (!excluded.length) return
+  const byEnv = new Map<string, string[]>()
+  for (const e of excluded) {
+    const on = e.harness ? `${e.environment} for ${e.harness}` : e.environment
+    const list = byEnv.get(on) ?? []
+    if (!list.includes(e.case)) list.push(e.case)
+    byEnv.set(on, list)
+  }
+  const order = (k: string) => keys.indexOf(k)
+  const notes = [
+    `where excludes ${excluded.length} ${excluded.length === 1 ? 'pair' : 'pairs'}`,
+    ...[...byEnv].map(
+      ([on, list]) => `excluded on ${on}: ${list.sort((a, b) => order(a) - order(b)).join(', ')}`,
+    ),
+  ]
+  const plans = new Set(prepared.flatMap((p) => (p.planned.tests ?? []).map((t) => t.attempt.plan)))
+  for (const plan of plans) plan.excluded = excluded
+  // A completed attempt's plan is a copy that shares its notes.
+  for (const list of new Set([...plans].map((p) => p.notes))) list.push(...notes)
 }
 
 export const evaluate: EvaluateFn & {

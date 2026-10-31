@@ -525,6 +525,8 @@ class Cell(TypedDict):
     # when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps
     # append `+` and an eight-character hash.
     sandbox: str
+    # The environment's merged traits; unset when it has none. Not part of the key.
+    traits: NotRequired[dict[str, str | list[str]]]
     # The variant's name, for variant cells.
     variant: NotRequired[str]
 
@@ -787,6 +789,11 @@ class EnvironmentSpec(TypedDict):
     setup: NotRequired[list[SetupStep]]
     # Skills placed for the agent.
     skills: NotRequired[list[SkillSource]]
+    # Filter facts for `where`, such as `{ stack: 'next' }`: a key to a string or a list of
+    # strings. A child's key replaces its parent's value whole; keys it doesn't set are
+    # inherited. Recorded on the cell, and never written to the sandbox, the prompt or the
+    # judge.
+    traits: NotRequired[dict[str, str | list[str]]]
     # The code the workspace starts as, before `files`, `rules` and `setup`; a child's replaces
     # its parent's.
     workspace: NotRequired[GitWorkspace]
@@ -1986,6 +1993,7 @@ RECORD_FIELDS: frozenset[str] = frozenset(
         "providerOptions",
         "regions",
         "score",
+        "traits",
         "untested",
         "value",
         "write",

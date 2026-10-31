@@ -592,6 +592,37 @@ export type CaseOptions<T> = {
    * finite number is its own key, and an object uses its `id`, else its `name`.
    */
   caseKey?: (item: T) => string
+  /**
+   * Which case and environment pairs run, decided at plan time. It sees each environment's
+   * `traits`, and with `compare` the control, whose answer holds for every variant. Reading
+   * `harness` decides each harness on its own. The pairs it leaves out are listed in `--dry-run`
+   * and the record's `excluded`.
+   */
+  where?: Where<T>
+}
+
+/** Filter facts about an environment, for `where`: never sent to the agent, never prompt data. */
+export type Traits = Readonly<Record<string, string | readonly string[]>>
+
+/** `where`'s predicate: true runs the case on that environment (and harness). */
+export type Where<T> = (pair: {
+  case: T
+  environment: {
+    readonly name: string
+    /** The environment's traits; reading a key that no listed environment defines is refused. */
+    readonly traits: Readonly<Record<string, string | readonly string[] | undefined>>
+  }
+  /** The harness id; reading it decides each harness on its own. */
+  readonly harness: string
+}) => boolean
+
+/** A case and environment pair `where` left out. */
+export type ExcludedPair = {
+  /** The case key. */
+  case: string
+  environment: string
+  /** Set only when `where` read the harness. */
+  harness?: string
 }
 
 /** A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`. */
@@ -1328,6 +1359,12 @@ export type EnvironmentSpec = {
    * parent's plugin of the same name.
    */
   plugins?: PluginSource[]
+  /**
+   * Filter facts for `where`, such as `{ stack: 'next' }`: a key to a string or a list of
+   * strings. A child's key replaces its parent's value whole; keys it doesn't set are inherited.
+   * Recorded on the cell, and never written to the sandbox, the prompt or the judge.
+   */
+  traits?: Traits
 }
 
 /**
@@ -1446,6 +1483,8 @@ export type Environment = {
   readonly name: string
   /** Its `extend` chain, root first. */
   readonly layers: readonly EnvironmentLayer[]
+  /** Its layers' `traits`, merged by key with the child's winning; `{}` when none. */
+  readonly traits: Traits
   /**
    * A child environment layered on this one; wherever it sets a key this one has, it wins.
    * `sandbox` is replaced entirely when the child sets one; when the child omits it, the
@@ -1963,7 +2002,7 @@ export type EvalOptionsData = Omit<EvalOptionFields, 'harnesses' | 'judge'> & {
 } & EnvironmentOrCompare<EnvironmentData, EnvironmentsData>
 
 /** An `Environment` as data, as JSON carries it: without `extend` / `extendEnvironment`. */
-export type EnvironmentData = Omit<Environment, 'extendEnvironment' | 'extend'>
+export type EnvironmentData = Omit<Environment, 'extendEnvironment' | 'extend' | 'traits'>
 
 /** The config file is plain data sent to workers, so its judge model can't be an object. */
 export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & {
@@ -2460,6 +2499,8 @@ export type Cell = {
   role: CellRole
   /** The variant's name, for variant cells. */
   variant?: string
+  /** The environment's merged traits; unset when it has none. Not part of the key. */
+  traits?: Traits
 }
 
 /** A plugin as an attempt placed it. */
@@ -2892,6 +2933,8 @@ export type EvalPlan = {
   /** The eval's gate policy, or undefined when it was left at the default (`'all'`). */
   gate?: GatePolicy
   attempts: number
+  /** The case and environment pairs `where` left out, across the eval's cases; unset when none. */
+  excluded?: ExcludedPair[]
   notes: string[]
   /** Why the eval doesn't run at all, e.g. a profile's harness limit left none. */
   skip?: string

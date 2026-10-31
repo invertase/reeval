@@ -32,6 +32,7 @@ import type {
   WebEventType,
 } from '../types.ts'
 import { captureWindowSchema } from './config.ts'
+import { traitsSchema } from './environment.ts'
 import { gatewayNameSchema } from './gateway.ts'
 import {
   fakeJudgeDataSchema,
@@ -733,6 +734,7 @@ export const cellSchema = z.strictObject({
   sandbox: z.string(),
   role: cellRoleSchema,
   variant: z.string().optional(),
+  traits: traitsSchema.optional(),
 })
 
 export const attemptStartSchema = z

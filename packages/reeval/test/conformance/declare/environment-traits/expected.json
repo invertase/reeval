@@ -1,0 +1,78 @@
+{
+  "children": [
+    {
+      "type": "eval",
+      "name": "traits",
+      "mode": "run",
+      "options": {
+        "environments": [
+          {
+            "kind": "environment",
+            "name": "next-app",
+            "layers": [
+              {
+                "name": "next-app",
+                "spec": {
+                  "traits": {
+                    "stack": "next",
+                    "auth": ["clerk", "none"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "kind": "environment",
+            "name": "next-clerk",
+            "layers": [
+              {
+                "name": "next-app",
+                "spec": {
+                  "traits": {
+                    "stack": "next",
+                    "auth": ["clerk", "none"]
+                  }
+                }
+              },
+              {
+                "name": "next-clerk",
+                "spec": {
+                  "traits": {
+                    "auth": "clerk"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "kind": "environment",
+            "name": "next-plain",
+            "layers": [
+              {
+                "name": "next-app",
+                "spec": {
+                  "traits": {
+                    "stack": "next",
+                    "auth": ["clerk", "none"]
+                  }
+                }
+              },
+              {
+                "name": "next-plain",
+                "spec": {
+                  "env": {
+                    "MODE": "plain"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "body": "b1",
+      "source": {
+        "body": "eb3e3dcbc03908fdd57fbad9d733b8407d9d149f40ff08f3357926f885cf47d6"
+      }
+    }
+  ]
+}

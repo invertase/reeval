@@ -49,6 +49,7 @@ import type {
   SecretTemplate,
   SkillHelper,
   SubstituteIn,
+  Traits,
 } from './types.ts'
 
 export class DefinitionError extends Error {
@@ -66,6 +67,7 @@ const SPEC_KEYS = [
   'skills',
   'mcp',
   'plugins',
+  'traits',
 ]
 /** Image fields that belong on `sandbox: docker({ … })`, not as sibling keys. */
 const SANDBOX_KEYS = ['image', 'install', 'dockerfile', 'from']
@@ -85,6 +87,8 @@ const SPEC_HINTS: Record<string, string> = {
   repo: 'workspace',
   git: 'workspace',
   template: 'workspace',
+  tags: 'traits',
+  labels: 'traits',
 }
 
 export const isSecret = (value: unknown): value is Secret =>
@@ -1042,6 +1046,47 @@ export function checkEnv(env: unknown, where: string, Err = DefinitionError): vo
   }
 }
 
+const TRAIT_KEY = /^[a-z][a-zA-Z0-9_-]{0,31}$/
+const MAX_TRAITS = 16
+const MAX_TRAIT_VALUES = 32
+const MAX_TRAIT_LENGTH = 80
+
+function checkTraits(traits: unknown, where: string): void {
+  if (typeof traits !== 'object' || traits === null || Array.isArray(traits)) {
+    throw new DefinitionError(
+      `traits in ${where} must map a key to a string or a list of strings, e.g. traits: { stack: 'next' } (got ${JSON.stringify(traits)})`,
+    )
+  }
+  const entries = Object.entries(traits)
+  if (entries.length > MAX_TRAITS) {
+    throw new DefinitionError(`${where} has ${entries.length} traits; at most ${MAX_TRAITS}`)
+  }
+  const fits = (v: unknown) => typeof v === 'string' && v.length > 0 && v.length <= MAX_TRAIT_LENGTH
+  for (const [key, value] of entries) {
+    if (!TRAIT_KEY.test(key)) {
+      throw new DefinitionError(
+        `${where} trait "${key}" must start with a lowercase letter and have at most 32 letters, digits, "_" or "-"`,
+      )
+    }
+    if (Array.isArray(value)) {
+      if (value.length === 0) throw new DefinitionError(`${where} trait "${key}" is an empty list`)
+      if (value.length > MAX_TRAIT_VALUES) {
+        throw new DefinitionError(
+          `${where} trait "${key}" lists ${value.length} values; at most ${MAX_TRAIT_VALUES}`,
+        )
+      }
+      if (value.every(fits) && new Set(value).size === value.length) continue
+    } else if (fits(value)) continue
+    throw new DefinitionError(
+      `${where} trait "${key}" must be a string of 1–${MAX_TRAIT_LENGTH} characters or a list of distinct ones (got ${JSON.stringify(value)})`,
+    )
+  }
+}
+
+/** The traits of an `extend` chain, merged by key with the child's winning. */
+export const traitsOf = (layers: readonly EnvironmentLayer[]): Traits =>
+  Object.freeze(Object.assign({}, ...layers.map((l) => l.spec.traits ?? {})))
+
 export const stepCommand = (step: string | { run: string }) =>
   typeof step === 'string' ? step : step.run
 
@@ -1077,6 +1122,7 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
     if (problem) throw new DefinitionError(`workspace in ${where}: ${problem}`)
   }
   if (s.env !== undefined) checkEnv(s.env, where)
+  if (s.traits !== undefined) checkTraits(s.traits, where)
   if (s.egress !== undefined) checkEgress(s.egress, where)
   const list = <T>(key: 'setup' | 'skills' | 'plugins', value: T[] | undefined): T[] => {
     if (value !== undefined && !Array.isArray(value)) {
@@ -1356,6 +1402,7 @@ function makeEnvironment(name: string, layers: EnvironmentLayer[]): Environment 
   }
   Object.defineProperty(env, 'extendEnvironment', { enumerable: false, value: extend })
   Object.defineProperty(env, 'extend', { enumerable: false, value: extend })
+  Object.defineProperty(env, 'traits', { enumerable: false, value: traitsOf(layers) })
   return Object.freeze(env) as Environment
 }
 

@@ -108,6 +108,7 @@ export const cases: PlanCase[] = [
   { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.eval.ts', 'b/skilled'] },
   { dir: 'compare', name: 'study', args: ['evals/study.eval.ts'] },
   { dir: 'survey', name: 'survey', args: [] },
+  { dir: 'where', name: 'where', args: [] },
   { dir: 'compare', name: 'verdicts', args: ['evals/verdicts.eval.ts'] },
   { dir: 'compare', name: 'verdicts-no-control', args: ['evals/verdicts.eval.ts', 'b/skilled'] },
   {
@@ -295,6 +296,7 @@ export const cases: PlanCase[] = [
   { dir: 'environments', name: 'control-over-config', args: ['evals/compare.eval.ts'] },
   { dir: 'environments', name: 'inherit-config', args: ['evals/inherit.eval.ts'] },
   { dir: 'environments', name: 'list', args: ['evals/list.eval.ts'] },
+  { dir: 'environments', name: 'traits', args: ['evals/traits.eval.ts'] },
   {
     dir: 'environments',
     name: 'empty-control',

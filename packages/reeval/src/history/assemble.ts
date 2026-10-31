@@ -525,6 +525,7 @@ class Seen {
         tags: e.attempt?.tags ?? [],
         ...(e.attempt?.plan.compare ? { compare: e.attempt.plan.compare } : {}),
         ...(e.attempt?.family ? { family: familyOf(e.attempt.family) } : {}),
+        ...(e.attempt?.plan.excluded ? { excluded: e.attempt.plan.excluded } : {}),
         fingerprint: '',
         sources,
         ...(from.source ? { source: from.source } : {}),

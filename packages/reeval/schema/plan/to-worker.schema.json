@@ -521,9 +521,28 @@
         "name": {
           "description": "The name it was defined or extended under, which names its cells.",
           "type": "string"
+        },
+        "traits": {
+          "description": "Its layers' `traits`, merged by key with the child's winning; `{}` when none.",
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
         }
       },
-      "required": ["extend", "extendEnvironment", "kind", "layers", "name"]
+      "required": ["extend", "extendEnvironment", "kind", "layers", "name", "traits"]
     },
     "EnvironmentLayer": {
       "description": "One environment in an `extend` chain.",
@@ -615,6 +634,28 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/SkillSource"
+          }
+        },
+        "traits": {
+          "description": "Filter facts for `where`, such as `{ stack: 'next' }`: a key to a string or a list of strings. A child's key replaces its parent's value whole; keys it doesn't set are inherited. Recorded on the cell, and never written to the sandbox, the prompt or the judge.",
+          "readOnly": true,
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "readOnly": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
           }
         },
         "workspace": {

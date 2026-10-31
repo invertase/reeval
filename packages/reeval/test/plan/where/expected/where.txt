@@ -1,0 +1,27 @@
+no profile · 7 evals · 22 cells · 22 attempts
+hint: evals/where.eval.ts › with the skill runs 2 of its 3 cases; its lift needs 6 for a verdict, so it will say can't tell yet whatever the runs (add cases)
+evals/where.eval.ts › stack questions [q1]  a/next-app/docker      control               gated    ×1  family stack questions case 1/3 · where excludes 2 pairs · excluded on vite-app: q2 · excluded on next-app: q3 · traits {"stack":"next","auth":["clerk","none"]}
+                                            a/vite-app/docker      control               gated    ×1  traits {"stack":"vite"}
+                                            b/next-app/docker      control               gated    ×1  traits {"stack":"next","auth":["clerk","none"]}
+                                            b/vite-app/docker      control               gated    ×1  traits {"stack":"vite"}
+evals/where.eval.ts › stack questions [q2]  a/next-app/docker      control               gated    ×1  family stack questions case 2/3 · where excludes 2 pairs · excluded on vite-app: q2 · excluded on next-app: q3 · traits {"stack":"next","auth":["clerk","none"]}
+                                            b/next-app/docker      control               gated    ×1  traits {"stack":"next","auth":["clerk","none"]}
+evals/where.eval.ts › stack questions [q3]  a/vite-app/docker      control               gated    ×1  family stack questions case 3/3 · where excludes 2 pairs · excluded on vite-app: q2 · excluded on next-app: q3 · traits {"stack":"vite"}
+                                            b/vite-app/docker      control               gated    ×1  traits {"stack":"vite"}
+evals/where.eval.ts › per harness [x]       a/next-app/docker      control               gated    ×1  family per harness case 1/2 · where excludes 2 pairs · excluded on next-app for b: y · excluded on vite-app for b: y · traits {"stack":"next","auth":["clerk","none"]}
+                                            a/vite-app/docker      control               gated    ×1  traits {"stack":"vite"}
+                                            b/next-app/docker      control               gated    ×1  traits {"stack":"next","auth":["clerk","none"]}
+                                            b/vite-app/docker      control               gated    ×1  traits {"stack":"vite"}
+evals/where.eval.ts › per harness [y]       a/next-app/docker      control               gated    ×1  family per harness case 2/2 · where excludes 2 pairs · excluded on next-app for b: y · excluded on vite-app for b: y · traits {"stack":"next","auth":["clerk","none"]}
+                                            a/vite-app/docker      control               gated    ×1  traits {"stack":"vite"}
+evals/where.eval.ts › with the skill [q1]   a/next-app/docker      control               ungated  ×1  family with the skill case 1/3 · where excludes 2 pairs · excluded on next-app: q3 · excluded on next-skilled: q3 · traits {"stack":"next","auth":["clerk","none"]}
+                                            a/next-skilled/docker  variant next-skilled  gated    ×1  traits {"stack":"next","auth":["clerk","none"]}
+                                            b/next-app/docker      control               ungated  ×1  traits {"stack":"next","auth":["clerk","none"]}
+                                            b/next-skilled/docker  variant next-skilled  gated    ×1  traits {"stack":"next","auth":["clerk","none"]}
+evals/where.eval.ts › with the skill [q2]   a/next-app/docker      control               ungated  ×1  family with the skill case 2/3 · where excludes 2 pairs · excluded on next-app: q3 · excluded on next-skilled: q3 · traits {"stack":"next","auth":["clerk","none"]}
+                                            a/next-skilled/docker  variant next-skilled  gated    ×1  traits {"stack":"next","auth":["clerk","none"]}
+                                            b/next-app/docker      control               ungated  ×1  traits {"stack":"next","auth":["clerk","none"]}
+                                            b/next-skilled/docker  variant next-skilled  gated    ×1  traits {"stack":"next","auth":["clerk","none"]}
+excluded: —
+image docker · cursor · 7 evals
+  base  reeval-sandbox:cursor-0.1.8  (reeval's image: built when missing or when its base changed)
