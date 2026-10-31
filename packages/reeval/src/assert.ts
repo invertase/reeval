@@ -386,7 +386,7 @@ function checkLimits(limits: unknown): Limits {
   if (calls !== undefined && !isCount(calls)) {
     if (!isObjectLike(calls) || !Object.keys(calls).length) {
       throw misuseError(
-        `toStayWithin()'s toolCalls is a count, or a count per tool such as { bash: 10 } (got ${JSON.stringify(calls)})`,
+        `toStayWithin()'s toolCalls is a count, or a count per tool such as { bash: 10 } (got ${typeof calls === 'number' ? String(calls) : JSON.stringify(calls)})`,
       )
     }
     for (const [tool, n] of Object.entries(calls)) {

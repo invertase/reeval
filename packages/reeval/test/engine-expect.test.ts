@@ -438,6 +438,31 @@ describe('assertions recorded on the attempt', () => {
       records(t).map((x) => [x.label, x.status]),
       [['poll.toBe 1', 'fail']],
     )
+    const polled = own.poll(() => 1, { interval: 5, timeout: 60_000 }) as unknown as {
+      toBeMisused(): Promise<void>
+    }
+    const startedAt = Date.now()
+    await assert.rejects(polled.toBeMisused(), /needs a limit/)
+    assert.ok(Date.now() - startedAt < 5_000, "the poll's own matcher called wrong isn't retried")
+    await assert.rejects(
+      own
+        .poll(
+          async () => {
+            await polled.toBeMisused()
+            return 1
+          },
+          { interval: 5, timeout: 20 },
+        )
+        .toBe(1),
+      /needs a limit/,
+    )
+    assert.deepEqual(
+      records(t).map((x) => [x.label, x.status]),
+      [
+        ['poll.toBe 1', 'fail'],
+        ['poll.toBe 1 #2', 'fail'],
+      ],
+    )
   })
 
   test("a matcher that can't answer is an error, not a failure; a thrown non-Error keeps its text", () => {

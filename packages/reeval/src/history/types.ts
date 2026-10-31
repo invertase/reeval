@@ -922,6 +922,10 @@ export type HistoryEntry = {
       /** The eval ids of its cases in this run. */
       caseIds: string[]
       lifts: FamilyLiftSummary[]
+      /** Its cells' rates over the cases that a `gate: { passRate }` gates; unset when none. */
+      rates?: Array<
+        Pick<FamilyRate, 'cell' | 'rate'> & Required<Pick<FamilyRate, 'passRate' | 'outcome'>>
+      >
     }
   >
   /** The run's errors outside any attempt; unset when there were none. */

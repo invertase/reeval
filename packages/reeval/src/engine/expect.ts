@@ -544,13 +544,21 @@ function createPoll(
             const signal = AbortSignal.timeout(timeout)
             for (;;) {
               const tried: Recorded[] = []
+              let polledValue = false
               try {
                 chai.util.flag(assertion, 'object', await pollTry.run(tried, () => fn({ signal })))
+                polledValue = true
                 const result = await Reflect.apply(matcher, assertion, args)
                 if (entry) settle(entry, undefined, startedAt)
                 outer?.push(...tried)
                 return result
               } catch (error) {
+                // The poll's own matcher called wrong fails the same way every try.
+                if (polledValue && isMisuse(error)) {
+                  if (list && entry) unrecord(list, entry)
+                  outer?.push(...tried)
+                  throw error
+                }
                 if (Date.now() + interval >= deadline) {
                   if (error instanceof Error && location.stack)
                     error.stack = location.stack.replace(location.message, error.message)

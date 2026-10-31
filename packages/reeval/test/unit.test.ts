@@ -1543,6 +1543,21 @@ test("compare has a row for a pooled family's gate, comparable when its cases an
     undefined,
     'no minLift on either side: no row',
   )
+  const rated = (outcome: 'pass' | 'fail'): HistoryEntry => {
+    const r = run([])
+    const [f] = r.families ?? []
+    return {
+      ...r,
+      families: f
+        ? [{ ...f, outcome, rates: [{ cell: 'k', rate: 0.67, passRate: 0.7, outcome }] }]
+        : [],
+    }
+  }
+  assert.deepEqual(
+    status(rated('pass'), rated('fail')),
+    ['regressed', 'pass', 'fail'],
+    "a cell's rate over the cases below its passRate gates the family too",
+  )
 
   // Over the variants both have; with none in common, not comparable.
   const scoped = family(run([lift('a', 'pass'), lift('b', 'fail')]), run([lift('a', 'fail')]))

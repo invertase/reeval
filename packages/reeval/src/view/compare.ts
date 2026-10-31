@@ -373,8 +373,12 @@ function compareCells(base: ComparableEval, head: ComparableEval): CompareCell[]
   })
 }
 
-/** A family with a gate: some pooled lift has a `minLift`. One without can't fail, so has no row. */
-const gated = (f: ComparableFamily | undefined) => !!f?.lifts.some((l) => l.minLift !== undefined)
+/**
+ * A family with a gate: some pooled lift has a `minLift`, or some cell's rate over the cases a
+ * `passRate`. One without can't fail, so has no row.
+ */
+const gated = (f: ComparableFamily | undefined) =>
+  !!f && (f.lifts.some((l) => l.minLift !== undefined) || !!f.rates?.length)
 
 const liftSide = ({ variant: _, vs: __, ...side }: FamilyLiftSummary) => side
 
