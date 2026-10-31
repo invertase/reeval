@@ -17,6 +17,7 @@ import sys
 import textwrap
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass, field
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast, overload
 
@@ -368,8 +369,25 @@ def _default_key(case: Any) -> str | None:
 
 
 def _js_number(n: float) -> str:
-    """A number as JavaScript's `String(n)` writes it, so both SDKs key `2.0` as `2`."""
-    return str(int(n)) if float(n).is_integer() and abs(n) < 1e21 else repr(float(n))
+    """A number as JavaScript's `String(n)` writes it (`2.0` as `2`, `1e-07` as `1e-7`), so both
+    SDKs key it alike. `repr` has the same shortest round-trip digits; only the layout differs."""
+    x = float(n)
+    if x == 0:
+        return "0"
+    parts = Decimal(repr(abs(x))).normalize().as_tuple()
+    digits = "".join(map(str, parts.digits))
+    size = len(digits)
+    point = size + int(parts.exponent)
+    if size <= point <= 21:
+        body = digits + "0" * (point - size)
+    elif 0 < point <= 21:
+        body = f"{digits[:point]}.{digits[point:]}"
+    elif -6 < point <= 0:
+        body = f"0.{'0' * -point}{digits}"
+    else:
+        mantissa = digits[0] + (f".{digits[1:]}" if size > 1 else "")
+        body = f"{mantissa}e{'+' if point > 0 else '-'}{abs(point - 1)}"
+    return ("-" if x < 0 else "") + body
 
 
 def case_keys(cases: Sequence[Any], case_key: Callable[[Any], Any] | None, where: str) -> list[str]:

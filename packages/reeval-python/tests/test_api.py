@@ -341,3 +341,17 @@ def test_case_keys_match_javascripts_string_of_a_number() -> None:
     from reeval_python.declare import case_keys
 
     assert case_keys([2.0, 0.5, 3], None, "evaluate('e')") == ["2", "0.5", "3"]
+    # Each as Node prints String(n).
+    js = {
+        -0.0: "0",
+        1e-7: "1e-7",
+        1e-6: "0.000001",
+        1e21: "1e+21",
+        1.2345678901234568e20: "123456789012345680000",
+        0.1 + 0.2: "0.30000000000000004",
+        -1.5e-10: "-1.5e-10",
+        5e-324: "5e-324",
+        1.7976931348623157e308: "1.7976931348623157e+308",
+        1e100: "1e+100",
+    }
+    assert case_keys(list(js), None, "evaluate('e')") == list(js.values())
