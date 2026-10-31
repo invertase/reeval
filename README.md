@@ -1,17 +1,19 @@
 ```
-                                    ██
- ▄▄ ▄▄▄  ▄▄▄▄   ▄▄▄▄  ▄▄  ▄▄  ▄▄▄▄  ██
- ███▀▀▀ ██▄▄██ ██▄▄██ ██  ██  ▄▄▄██ ██
- ██     ██   ▄ ██   ▄  ████  ██  ██ ██
- ██      ▀▀▀▀   ▀▀▀▀    ▀▀    ▀▀▀▀▀ ▀▀
+                                ██
+▄▄ ▄▄▄  ▄▄▄   ▄▄▄  ▄▄  ▄▄  ▄▄▄  ██
+███▀▀▀ ██▄██ ██▄██ ██  ██  ▄▄██ ██
+██     ██  ▄ ██  ▄  ████  ██ ██ ██
+██      ▀▀▀   ▀▀▀    ▀▀    ▀▀▀▀ ▀▀
+```
 
- Evaluation runner for SDKs, CLIs, MCP servers, and docs.
+Evaluation runner for SDKs, CLIs, MCP servers, and docs.
 
- # Get started using the `/setup` skill:
- npx skills add invertase/reeval --skill setup
+```bash
+# Get started using the `/setup` skill:
+npx skills add invertase/reeval --skill setup
 
- # Or install manually:
- npm i -D reeval && npx reeval init
+# Or install manually:
+npm i -D reeval && npx reeval init
 ```
 
 > [!IMPORTANT]
@@ -165,3 +167,14 @@ To read past runs without calling a model, run `npx reeval query failing_attempt
 ## License
 
 [Apache-2.0](LICENSE). Copyright 2026 Invertase Limited. The npm package ships third-party licenses and attributions in `THIRD_PARTY_NOTICES.md`. Questions about licensing: [oss@invertase.io](mailto:oss@invertase.io).
+
+---
+
+<p align="center">
+  <a href="https://invertase.io/?utm_source=readme&utm_medium=footer&utm_campaign=reeval">
+    <img width="75px" src="https://static.invertase.io/assets/invertase/invertase-rounded-avatar.png" alt="Invertase">
+  </a>
+  <p align="center">
+    Built and maintained by <a href="https://invertase.io/?utm_source=readme&utm_medium=footer&utm_campaign=reeval">Invertase</a>.
+  </p>
+</p>
