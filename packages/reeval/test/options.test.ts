@@ -1123,6 +1123,15 @@ describe('common mistakes', { concurrency: 4 }, () => {
         /evaluate\("adds 1"\) is declared twice in this file\. .* For evaluate\.each, put \$key, %s or %# in the name \("adds \$a"\) so each case's name differs\./,
       ],
       [
+        'evaluate.each cases whose names mask to the same name',
+        () =>
+          evaluate.each([{ k: `sk-ant-${'a'.repeat(24)}` }, { k: `sk-ant-${'b'.repeat(24)}` }])(
+            'uses $k',
+            async () => {},
+          ),
+        /evaluate\("uses \[REDACTED\]"\) names a secret, and its masked name is another eval's in this file: name it without the secret\. For evaluate\.each, name each case by %# or by a field that holds no secret\./,
+      ],
+      [
         "pool in an eval's options",
         () => evaluate.each([1, 2])('n %s', { pool: false } as never, async () => {}),
         /Unknown option "pool" in evaluate\("n 1"\)\. pool is an option of evaluate\.each, beside the cases: evaluate\.each\(cases, \{ pool: false \}\)\./,

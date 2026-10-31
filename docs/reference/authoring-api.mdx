@@ -25,7 +25,7 @@ evaluate(
 ```
 
 <Property name="name" type="string" required>
-  The evaluation's name. Results and history list it first.
+  The evaluation's name. Results and history list it first. A secret-looking value in it, such as an API key, is masked as `[REDACTED]` in the plan, the terminal, the run record and every view, so the evaluation's id is the masked name. A part masked because it's the value of a secret-named variable, such as `POSTGRES_PASSWORD`, changes the id only where that variable holds it, and the plan notes it as `name masked: it holds the value of POSTGRES_PASSWORD`. A name filter matches the masked name, so filter by `[REDACTED]` or a part without the secret.
 </Property>
 
 <Property name="options" type="EvalOptions" optional>
@@ -38,7 +38,7 @@ evaluate(
 
 `options` and `fn` take either order. `evaluate.skip(name, options?, fn)` declares without running. `evaluate.only(name, options?, fn)` runs only the marked evaluations in its file. `evaluate.todo(name)` takes no body, and the plan lists it as `todo`.
 
-reeval refuses, with exit code 2, two functions, no function, a second evaluation with the same full name in one file, and `evaluate.only()` when the `CI` variable is set to a value other than `false`.
+reeval refuses, with exit code 2, two functions, no function, a second evaluation with the same full name in one file, a second name in one file that masks to the same name as another (`evaluate("e [REDACTED]") names a secret, and its masked name is another eval's in this file`), including an evaluation and an `evaluate.todo` whose names mask alike, a name that holds a value declared with `secret()` (`… names a secret declared with secret()`), and `evaluate.only()` when the `CI` variable is set to a value other than `false`.
 
 For more information about `EvalOptions`, `GroupOptions`, and the type of each key, see [Options reference](/reference/options).
 
@@ -74,7 +74,7 @@ evaluate.each(handlers)(
   The body, called once per attempt with the case.
 </Property>
 
-The returned function has no `skip`, `only`, or `todo`. reeval refuses, with exit code 2, a `cases` value that is not an array, and two cases with the same name.
+The returned function has no `skip`, `only`, or `todo`. reeval refuses, with exit code 2, a `cases` value that is not an array, and two cases with the same name, including two whose names differ only in a masked secret. Name each case by `%#` or by a property that holds no secret.
 
 For more information about families and the `all cases` row, see [`compare`](/reference/options#compare).
 
@@ -108,7 +108,7 @@ group('request builders', { environment: plain, tags: ['smoke'] }, () => {
 ```
 
 <Property name="name" type="string" required>
-  The group's name. The full name of each evaluation inside it joins the group names and its own with `›`.
+  The group's name. The full name of each evaluation inside it joins the group names and its own with `›`. A secret in it is masked as in an evaluation's name.
 </Property>
 
 <Property name="options" type="GroupOptions" optional>
@@ -119,7 +119,7 @@ group('request builders', { environment: plain, tags: ['smoke'] }, () => {
   The body, which declares evaluations and nested groups and returns synchronously.
 </Property>
 
-`options` and `fn` take either order. `group.skip(name, options?, fn)` skips every evaluation inside the group, including a nested group. `group.only(name, options?, fn)` runs only that group in its file, and other files still run. `group.todo(name)` takes no body, the plan lists it as `todo`, and the groups around it still add their tags to it. reeval refuses `group.only()` with exit code 2 when the `CI` variable is set to a value other than `false`.
+`options` and `fn` take either order. `group.skip(name, options?, fn)` skips every evaluation inside the group, including a nested group. `group.only(name, options?, fn)` runs only that group in its file, and other files still run. `group.todo(name)` takes no body, the plan lists it as `todo`, and the groups around it still add their tags to it. reeval refuses, with exit code 2, two groups in one file whose names differ only in a masked secret, and `group.only()` when the `CI` variable is set to a value other than `false`.
 
 For more information about the cascade from `ReevalConfig` and `Profile` to an evaluation, see [The cascade](/reference/options#the-cascade), [Configuration reference](/reference/configuration), and [Profiles reference](/reference/profiles).
 

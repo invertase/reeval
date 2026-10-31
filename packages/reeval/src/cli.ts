@@ -702,15 +702,42 @@ function noMatch(config: StartedRun['config'], filters: string[], tags: string[]
     tags.length ? `tags ${tags.join(', ')}` : '',
   ].filter(Boolean)
   return new UsageError(
-    `No evals matched ${config.include.join(', ')}${narrowed.length ? ` with ${narrowed.join(' and ')}` : ''}`,
+    `No evals matched ${config.include.join(', ')}${narrowed.length ? ` with ${narrowed.join(' and ')}` : ''}${maskedFilterHint(filters)}`,
   )
+}
+
+/**
+ * Why a filter that holds a secret matches nothing: eval names are masked before they're
+ * matched. Printed masked, it's the filter that would match.
+ */
+function maskedFilterHint(parts: string[]): string {
+  const masked = parts.filter((p) => redactSecrets(p) !== p)
+  if (!masked.length) return ''
+  return `. Eval names are masked, so a filter that holds a secret can't match one: filter by the masked name (${masked.map((p) => `"${redactSecrets(p)}"`).join(', ')}) or a part of it without the secret`
 }
 
 function unmatchedFilter(config: StartedRun['config'], parts: string[]) {
   const which = parts.map((p) => `"${p}"`).join(', ')
   return new UsageError(
-    `filter ${which} ${parts.length === 1 ? 'matches' : 'match'} no eval file, eval name or cell in ${config.include.join(', ')}`,
+    `filter ${which} ${parts.length === 1 ? 'matches' : 'match'} no eval file, eval name or cell in ${config.include.join(', ')}${maskedFilterHint(parts)}`,
   )
+}
+
+/**
+ * An eval whose id holds a value declared with `secret()`. `evaluate` masks names as the
+ * worker's environment shows secrets, but a declared one is only known once the plan has the
+ * environments, after the names became ids, so it's refused rather than written.
+ */
+function namesDeclaredSecret(evals: ReadonlyArray<{ id: string }>): UsageError | undefined {
+  for (const { id } of evals) {
+    const [file, ...names] = id.split(' › ')
+    const masked = names.map((n) => redactSecrets(n))
+    if (masked.every((n, i) => n === names[i])) continue
+    return new UsageError(
+      `${[file, ...masked].join(' › ')} names a secret declared with secret(): name it without the secret.`,
+    )
+  }
+  return undefined
 }
 
 /**
@@ -810,6 +837,8 @@ async function executeRun(
     toRun = skipped
     for (const p of skipped)
       for (const name of p.attempt.secretVars) registerSecret(process.env[name])
+    const named = namesDeclaredSecret([...planned, ...excluded])
+    if (named) throw named
     const efforts = await planEfforts(skipped)
     if (efforts) run.cursorEfforts = efforts
     const asks = skipped.some((p) => !p.attempt.plan.skip && p.attempt.plan.questions?.length)

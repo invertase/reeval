@@ -2083,6 +2083,27 @@ environment:
     ],
     ['declared: two evals with the same name', declares([evalNode(), evalNode({ body: 'b2' })])],
     [
+      'declared: two eval names that mask to the same name',
+      declares([
+        evalNode({ name: `e sk-ant-${'a'.repeat(24)}` }),
+        evalNode({ name: `e sk-ant-${'b'.repeat(24)}`, body: 'b2' }),
+      ]),
+    ],
+    [
+      'declared: an eval and a todo whose names mask to the same name',
+      declares([
+        evalNode({ name: `e sk-ant-${'a'.repeat(24)}` }),
+        { type: 'todo', name: `e sk-ant-${'b'.repeat(24)}` },
+      ]),
+    ],
+    [
+      'declared: two group names that mask to the same name',
+      declares([
+        group(`g sk-ant-${'a'.repeat(24)}`, [evalNode()]),
+        group(`g sk-ant-${'b'.repeat(24)}`, [evalNode({ name: 'f', body: 'b2' })]),
+      ]),
+    ],
+    [
       'declared: an eval named like a grouped eval',
       declares([group('g', [evalNode()]), evalNode({ name: 'g › e', body: 'b2' })]),
     ],

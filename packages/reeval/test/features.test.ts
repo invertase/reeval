@@ -1108,6 +1108,45 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'secrets/masked-eval-names',
+    tiers: ['fake'],
+    env: 'plain',
+    canary: /gets the case masked: expected '\[REDACTED\]' to be '\[REDACTED\]'/,
+    evals: {
+      'lands [[REDACTED]]': { outcome: 'pass', attempts: ['fake/plain/fake#1'] },
+      'canary [[REDACTED]]': {
+        outcome: 'fail',
+        attempts: ['fake/plain/fake#1'],
+        error: { kind: 'assertion', message: /gets the case masked/ },
+      },
+    },
+    async record({ run, project, runDir, stdout }) {
+      assert.deepEqual(
+        run.evals.map((e) => e.id),
+        ['evals/canary.eval.ts › canary [[REDACTED]]', 'evals/lands.eval.ts › lands [[REDACTED]]'],
+      )
+      const recorded = await runCli(project, ['record'])
+      assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
+      const site = join(project, 'site')
+      const built = await runCli(project, ['studio', 'build', '--out', site])
+      assert.equal(built.code, 0, built.stdout + built.stderr)
+      const history = await runCli(project, ['history'])
+      assert.match(history.stdout, /lands \[\[REDACTED\]\]/)
+      const runs = join(project, '.reeval', 'runs')
+      for (const [where, text] of [
+        ['the terminal', stdout],
+        ['`reeval history`', history.stdout],
+        ['the runs folder', filesContaining(runs, 'sk-ant-')],
+        ['the history folder', filesContaining(join(project, 'evals', '.history'), 'sk-ant-')],
+        ['the studio build', filesContaining(site, 'sk-ant-')],
+      ] as const) {
+        assert.doesNotMatch(text, /sk-ant-|reeval-fixture-not-a-key/, `${where} has the key`)
+      }
+      // Twin: the same search finds the masked name in the run.
+      assert.notEqual(filesContaining(runDir, 'lands [[REDACTED]]'), '')
+    },
+  },
+  {
     dir: 'secrets/short-declared-secrets',
     tiers: ['fake', 'docker'],
     env: 'pins',
