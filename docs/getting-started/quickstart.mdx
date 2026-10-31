@@ -16,7 +16,7 @@ This example uses Docker for its sandbox. You need these:
 | Node {{ node }} or later | reeval's CLI |
 | Docker or Podman | the sandbox |
 | An API key for the agent harness | the harness |
-| A Google API key (optional) | insights, the model's explanation of each evaluation after a run |
+| A Google API key (optional) | `reeval analyze`, the model's explanation of a run |
 
 For more information about other harnesses and their keys, see [Harnesses](/configuration/agents).
 
@@ -36,7 +36,7 @@ Create the project files for the harness:
 npx reeval init --harness claude-code
 ```
 
-The command writes the `reeval.config.ts` file, an example evaluation in `evals/greet.eval.ts`, and the `evals/environments.ts` file, and names the keys it uses. Add them to the `.env.local` file next to the `reeval.config.ts` file. The Google key turns insights on. A run without it skips insights and still runs the evaluation:
+The command writes the `reeval.config.ts` file, an example evaluation in `evals/greet.eval.ts`, and the `evals/environments.ts` file, and names the keys it uses. Add them to the `.env.local` file next to the `reeval.config.ts` file. The Google key is for `reeval analyze`. A run without it still runs the evaluation:
 
 ```bash title=".env.local"
 ANTHROPIC_API_KEY=replace-with-anthropic-key

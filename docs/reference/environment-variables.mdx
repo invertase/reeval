@@ -7,7 +7,7 @@ Where a flag and a variable set the same thing, the flag takes precedence. `REEV
 
 `reeval run` reads `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, `REEVAL_OUTPUT_LOGS`, and `REEVAL_HEARTBEAT` before the `.env.local` file and the `.env` file load. For each of those four, `auto` or no value uses the default, and a value outside its own list stops the command: `live`, `plain`, or `agent` for `REEVAL_UI`; `stream` or `grouped` for `REEVAL_LOG_ORDER`; `task` or `none` for `REEVAL_LOG_PREFIX`; `full`, `errors-only`, or `none` for `REEVAL_OUTPUT_LOGS`.
 
-Whitespace or a control character in a harness, judge, or `question` credential stops the run. A missing credential for a harness, a judge, or a `question` stops the run. A missing `analysis.model` credential skips insights.
+Whitespace or a control character in a harness, judge, or `question` credential stops the run. A missing credential for a harness, a judge, or a `question` stops the run. A missing `analysis.model` credential stops `reeval analyze`, not a run.
 
 For more information about config keys, see [Options](/reference/options). For more information about harnesses, see [Agents](/configuration/agents).
 
