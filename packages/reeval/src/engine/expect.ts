@@ -267,6 +267,17 @@ export const isUnanswerable = (error: unknown) =>
   (error instanceof TypeError && Symbol.for('reeval.subjectError') in error) ||
   (error as Error | null)?.name === 'HarnessCapabilityError'
 
+/** A matcher called wrong (reeval's `misuseError`): no check ran, so none is recorded. */
+const isMisuse = (error: unknown) =>
+  error instanceof TypeError && Symbol.for('reeval.misuse') in error
+
+const unrecord = (list: Recorded[], entry: Recorded) => {
+  for (const calls of [list, pollTry.getStore()]) {
+    const at = calls?.indexOf(entry) ?? -1
+    if (at >= 0) calls?.splice(at, 1)
+  }
+}
+
 /** `path:line` of the first frame in `stack` that is in `file`, the eval file, when one is. */
 export function lineIn(stack: string | undefined, file: string): string | undefined {
   const want = comparable(file.startsWith('file:') ? fileURLToPath(file) : file)
@@ -373,6 +384,10 @@ function recording<T extends object>(target: T, list: Recorded[], file?: string)
     try {
       result = Reflect.apply(fn, target, args)
     } catch (error) {
+      if (isMisuse(error)) {
+        unrecord(list, entry)
+        throw error
+      }
       settle(entry, error)
       if (!carriesOn(entry, error)) throw error
       // A Chai method (`include`) chains on, as it would have passing; a Jest matcher returns nothing.

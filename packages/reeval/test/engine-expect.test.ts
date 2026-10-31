@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { subjectError } from '../src/assert.ts'
+import { misuseError, subjectError } from '../src/assert.ts'
 import { assertionRecords, checkFailure } from '../src/attempt/assertions.ts'
 import {
   attemptExpectError,
@@ -410,6 +410,34 @@ describe('assertions recorded on the attempt', () => {
     assert.equal(soft.length, 3)
     assert.ok(soft.every((x) => x.error instanceof Error))
     assert.match(checkFailure(rawAssertions(t))?.message ?? '', /first: expected 1 to be 2/)
+  })
+
+  test("a matcher called wrong isn't a check: it records nothing and its TypeError ends the body", async () => {
+    extendExpect({
+      toBeMisused: () => {
+        throw misuseError('toBeMisused() needs a limit')
+      },
+    })
+    const t = task()
+    const own = createExpect(t)
+    const misused = (value: unknown) => own(value) as unknown as { toBeMisused(): void }
+    assert.throws(() => misused(1).toBeMisused(), /needs a limit/)
+    await assert.rejects(
+      own
+        .poll(
+          () => {
+            misused(1).toBeMisused()
+            return 1
+          },
+          { interval: 5, timeout: 20 },
+        )
+        .toBe(1),
+      /needs a limit/,
+    )
+    assert.deepEqual(
+      records(t).map((x) => [x.label, x.status]),
+      [['poll.toBe 1', 'fail']],
+    )
   })
 
   test("a matcher that can't answer is an error, not a failure; a thrown non-Error keeps its text", () => {

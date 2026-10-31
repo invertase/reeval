@@ -11,6 +11,7 @@ import {
   changed,
   edited,
   fetched,
+  isMisuse,
   limitsLabel,
   ran,
   searched,
@@ -432,7 +433,10 @@ describe('toStayWithin', () => {
     )
     const over = withinLimits(one, { tokens: 1000, toolCalls: { bash: 1, read: 0 } }, false)
     assert.equal(over.pass, false)
-    assert.equal(over.message(), 'went over its budget: tokens 1,050 > 1,000 · bash 2 > 1')
+    assert.equal(
+      over.message(),
+      'went over its budget: tokens 1,050 > 1,000 (subagents included) · bash 2 > 1',
+    )
   })
 
   test('c sums every turn', () => {
@@ -450,12 +454,13 @@ describe('toStayWithin', () => {
     assert.equal(withinLimits(none, { toolCalls: 1 }, false).pass, true)
   })
 
-  test('bad limits and .not are TypeErrors', () => {
+  test('bad limits and .not are misuse TypeErrors', () => {
     const typeError = (limits: unknown, message: RegExp, not = false) =>
       assert.throws(
         () => withinLimits(one, limits, not),
         (e: Error) => {
           assert.equal(e.name, 'TypeError')
+          assert.ok(isMisuse(e), 'a misuse, which the attempt records as its error')
           assert.match(e.message, message)
           return true
         },
@@ -474,5 +479,6 @@ describe('toStayWithin', () => {
       'tokens 200,000, bash 10, duration 5m',
     )
     assert.equal(limitsLabel({ toolCalls: 3 }), 'toolCalls 3')
+    assert.equal(limitsLabel({ toolCalls: { bash: 10_000 } }), 'bash 10,000')
   })
 })

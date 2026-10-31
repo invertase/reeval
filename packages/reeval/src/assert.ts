@@ -17,7 +17,6 @@ import { totalTokens } from './usage.ts'
 
 export type Result = { pass: boolean; message: () => string }
 
-/** A check the turn's harness can't answer either way, e.g. a web fetch it never reports. */
 /**
  * A matcher handed a subject it can't read, such as `toHaveEdited(1)`: recorded as `error`, an
  * answer it couldn't give, so the eval's own `TypeError`s stay errors that end the attempt.
@@ -26,6 +25,18 @@ export function subjectError(message: string): TypeError {
   return Object.assign(new TypeError(message), { [Symbol.for('reeval.subjectError')]: true })
 }
 
+/**
+ * A matcher called wrong, such as `toStayWithin()` with no limit: not a check that ran, so it
+ * isn't recorded as one, and the `TypeError` ends the attempt as the eval's own would.
+ */
+export function misuseError(message: string): TypeError {
+  return Object.assign(new TypeError(message), { [Symbol.for('reeval.misuse')]: true })
+}
+
+export const isMisuse = (error: unknown): boolean =>
+  error instanceof TypeError && Symbol.for('reeval.misuse') in error
+
+/** A check the turn's harness can't answer either way, e.g. a web fetch it never reports. */
 export class HarnessCapabilityError extends Error {
   override name = 'HarnessCapabilityError'
 }
@@ -343,7 +354,9 @@ export function limitsLabel(limits: unknown): string | undefined {
   const calls = limits.toolCalls
   if (isCount(calls)) parts.push(`toolCalls ${count(calls)}`)
   else if (isObjectLike(calls)) {
-    for (const [tool, n] of Object.entries(calls)) parts.push(`${tool} ${String(n)}`)
+    for (const [tool, n] of Object.entries(calls)) {
+      parts.push(`${tool} ${isCount(n) ? count(n) : String(n)}`)
+    }
   }
   if (limits.duration !== undefined) parts.push(`duration ${String(limits.duration)}`)
   return parts.length ? parts.join(', ') : undefined
@@ -352,27 +365,27 @@ export function limitsLabel(limits: unknown): string | undefined {
 function checkLimits(limits: unknown): Limits {
   const example = 'e.g. toStayWithin({ tokens: 200_000, toolCalls: { bash: 10 } })'
   if (!isObjectLike(limits)) {
-    throw new TypeError(`toStayWithin() takes limits, ${example} (got ${JSON.stringify(limits)})`)
+    throw misuseError(`toStayWithin() takes limits, ${example} (got ${JSON.stringify(limits)})`)
   }
   for (const key of Object.keys(limits)) {
     if ((LIMIT_KEYS as readonly string[]).includes(key)) continue
     const near = closest(key, LIMIT_KEYS)
-    throw new TypeError(
+    throw misuseError(
       `toStayWithin() has no limit "${key}"; it takes tokens, toolCalls and duration.${near ? ` Did you mean "${near}"?` : ''}`,
     )
   }
   if (!LIMIT_KEYS.some((k) => limits[k] !== undefined)) {
-    throw new TypeError(`toStayWithin() needs at least one limit, ${example}`)
+    throw misuseError(`toStayWithin() needs at least one limit, ${example}`)
   }
   const bad = (what: string, value: unknown) =>
-    new TypeError(
+    misuseError(
       `toStayWithin()'s ${what} is a whole number of 0 or more (got ${typeof value === 'number' ? String(value) : JSON.stringify(value)})`,
     )
   if (limits.tokens !== undefined && !isCount(limits.tokens)) throw bad('tokens', limits.tokens)
   const calls = limits.toolCalls
   if (calls !== undefined && !isCount(calls)) {
     if (!isObjectLike(calls) || !Object.keys(calls).length) {
-      throw new TypeError(
+      throw misuseError(
         `toStayWithin()'s toolCalls is a count, or a count per tool such as { bash: 10 } (got ${JSON.stringify(calls)})`,
       )
     }
@@ -384,7 +397,7 @@ function checkLimits(limits: unknown): Limits {
     try {
       parseDuration(limits.duration as Duration)
     } catch (error) {
-      throw new TypeError(
+      throw misuseError(
         `toStayWithin()'s duration: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
@@ -398,7 +411,7 @@ function checkLimits(limits: unknown): Limits {
  */
 export function withinLimits(actual: unknown, limits: unknown, not: boolean): Result {
   if (not) {
-    throw new TypeError(
+    throw misuseError(
       "toStayWithin() can't be negated: a budget checks the agent stayed within it. Check the figure itself instead, e.g. expect(turn.usage.output).toBeGreaterThan(…).",
     )
   }
@@ -418,7 +431,9 @@ export function withinLimits(actual: unknown, limits: unknown, not: boolean): Re
       )
     }
     const used = turns.reduce((sum, t) => sum + totalTokens(t.usage as TokenUsage), 0)
-    if (used > checked.tokens) over.push(`tokens ${count(used)} > ${count(checked.tokens)}`)
+    if (used > checked.tokens) {
+      over.push(`tokens ${count(used)} > ${count(checked.tokens)} (subagents included)`)
+    }
   }
   const transcript = turns.flatMap((t) => t.transcript)
   const calls = checked.toolCalls
