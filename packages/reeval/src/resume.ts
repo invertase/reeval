@@ -11,12 +11,12 @@ import {
 } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { UsageError } from './errors.ts'
 import { scratchDir } from './history/files.ts'
 import type { AttemptRecord, RunInvocation, RunRecord } from './history/types.ts'
 import { RefError } from './history/views.ts'
-import { RUN_ID, recordFileName } from './ids.ts'
+import { RUN_ID, recordFileName, relativeFile } from './ids.ts'
 import { type LiveKept, replace } from './live.ts'
 import type { EvalRecord, Outcome } from './types.ts'
 import { LIVE_FILE, readableInvocation, readableLiveProgress } from './view/live.ts'
@@ -426,6 +426,18 @@ export async function savedInvocation(
   return readableInvocation((record ?? target.previous)?.invocation) ?? null
 }
 
+/**
+ * Filters as a run saves them: a part naming a path on disk (from `cwd`, as the engine reads it)
+ * becomes that path relative to `root` in posix form, `.` for the root itself and `../…` outside
+ * it, so no host path is written and a resume resolves it from the root. Other parts are names.
+ */
+export function savedFilters(root: string, filters: readonly string[], cwd = process.cwd()) {
+  return filters.map((f) => {
+    const path = resolve(cwd, f)
+    return existsSync(path) ? relativeFile(root, path) || '.' : f
+  })
+}
+
 /** The `reeval run` flags and filters that shape a run's plan, as the command line gives them. */
 export type RunSettings = {
   runs?: string
@@ -439,18 +451,22 @@ export type RunSettings = {
  * The settings a resume plans with: each one left out is the run's saved one. `--runs` or a
  * profile other than the run's is refused, since it plans other attempts than the ones kept;
  * filters and `--tag` replace the run's for this resume, and `--concurrency` wins with a note.
+ * A `--runs` that isn't a count is left for the usual check to refuse. Saved path filters are
+ * resolved from `root`, so the resume picks the same files from any directory.
  */
 export function resumeSettings(
   runId: string,
   saved: RunInvocation,
   given: RunSettings,
-  env: NodeJS.ProcessEnv = process.env,
+  { root, env = process.env }: { root: string; env?: NodeJS.ProcessEnv },
 ): { settings: RunSettings; notes: string[] } {
   const refuse = (started: string, flag: string) =>
     new UsageError(
       `run ${runId} was started ${started}, and --resume finishes the attempts it planned. Leave ${flag} out, or start a new run without --resume.`,
     )
-  if (given.runs !== undefined && Number(given.runs) !== saved.runs) {
+  const runs = Number(given.runs)
+  const count = Number.isInteger(runs) && runs >= 1
+  if (given.runs !== undefined && count && runs !== saved.runs) {
     throw refuse(
       saved.runs === undefined ? 'without --runs' : `with --runs ${saved.runs}`,
       '--runs',
@@ -474,9 +490,11 @@ export function resumeSettings(
   }
   const settings: RunSettings = {
     ...given,
-    filters: given.filters.length ? given.filters : saved.filters,
+    filters: given.filters.length
+      ? given.filters
+      : saved.filters.map((f) => (existsSync(resolve(root, f)) ? resolve(root, f) : f)),
   }
-  if (saved.runs !== undefined) settings.runs = String(saved.runs)
+  if (given.runs === undefined && saved.runs !== undefined) settings.runs = String(saved.runs)
   if (profile === undefined && saved.profile !== undefined) settings.profile = saved.profile
   if (concurrency === undefined && saved.concurrency !== undefined) {
     settings.concurrency = String(saved.concurrency)

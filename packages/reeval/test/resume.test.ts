@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { hostname } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { UsageError } from '../src/errors.ts'
@@ -23,6 +23,7 @@ import {
   readCurrent,
   resolveResume,
   resumeSettings,
+  savedFilters,
   writeCurrent,
 } from '../src/resume.ts'
 import { fakeConfig, project, readRun, runCli } from './helpers.ts'
@@ -495,6 +496,71 @@ evaluate('two', async () => {})
     )
   })
 
+  const split = {
+    'reeval.config.ts': fakeConfig(),
+    'evals/a/one.eval.ts': `import { evaluate } from 'reeval'\nevaluate('one', async () => {})\n`,
+    'evals/b/two.eval.ts': `import { evaluate } from 'reeval'\nevaluate('two', async () => {})\n`,
+  }
+  const planned = async (cwd: string, runId: string) => {
+    const r = await runCli(cwd, ['run', '--resume', runId, '--dry-run', '--json'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    return (JSON.parse(r.stdout) as { totals: { evals: number } }).totals.evals
+  }
+  /** Started with `args` from `cwd`, then rewritten as interrupted before it ran anything. */
+  async function interrupted(dir: string, cwd: string, args: string[]) {
+    const r = await runCli(cwd, ['run', ...args])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run } = readRun(dir)
+    for (const e of run.evals) {
+      e.attempts = e.attempts.map((a) => ({ ...a, outcome: 'skipped', error: null }))
+    }
+    const scratch = join(dir, '.reeval', 'runs', `${run.runId}.json`)
+    writeFileSync(scratch, JSON.stringify({ ...run, status: 'interrupted' }))
+    return run
+  }
+
+  test('an absolute filter under the root is saved relative to it', async () => {
+    const p = await project('resume-filter-abs', split)
+    const run = await interrupted(p.dir, p.dir, [join(p.dir, 'evals', 'a')])
+    assert.deepEqual(run.invocation?.filters, ['evals/a'])
+    assert.equal(await planned(join(p.dir, 'evals', 'b'), run.runId), 1)
+  })
+
+  test('a filter typed from a subdirectory resumes from the root', async () => {
+    const p = await project('resume-filter-cwd', split)
+    const run = await interrupted(p.dir, join(p.dir, 'evals'), ['./a'])
+    assert.deepEqual(run.invocation?.filters, ['evals/a'])
+    assert.equal(await planned(p.dir, run.runId), 1)
+  })
+
+  test('a filter outside the root is saved relative to it, never as a host path', () => {
+    const root = join(tmpdir(), 'reeval-saved-filters', 'project')
+    const outside = join(tmpdir(), 'reeval-saved-filters')
+    mkdirSync(root, { recursive: true })
+    assert.deepEqual(savedFilters(root, [outside, 'one', '.'], root), ['..', 'one', '.'])
+  })
+
+  test('--runs that is not a count gets the usual error', async () => {
+    const p = await project('resume-runs-nan', evals)
+    quitStaging(p.dir, { runs: 2, filters: [], tags: [] })
+    const r = await runCli(p.dir, ['run', '--resume', SEEDED_RUN_ID, '--runs', 'abc'])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stderr, /--runs must be a whole number of at least 1 \(got abc\)/)
+  })
+
+  test('a saved profile the config no longer defines names the resumed run', async () => {
+    const p = await project('resume-profile-gone', evals)
+    quitStaging(p.dir, { profile: 'gone', filters: [], tags: [] })
+    const r = await runCli(p.dir, ['run', '--resume', SEEDED_RUN_ID])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      new RegExp(
+        `run ${SEEDED_RUN_ID} was started with profile gone, which \\S+ no longer defines`,
+      ),
+    )
+  })
+
   test('another --concurrency wins with a note', async () => {
     const p = await project('resume-concurrency', evals)
     quitStaging(p.dir, { concurrency: 3, filters: [], tags: [] })
@@ -510,18 +576,20 @@ evaluate('two', async () => {})
 describe('resumeSettings', () => {
   const saved: RunInvocation = { profile: 'nightly', filters: ['a'], tags: ['slow'] }
 
-  test('fills what is left out and keeps a narrower filter or tag', () => {
-    const left = resumeSettings('r', saved, { filters: [] }, {})
+  const at = (env: NodeJS.ProcessEnv = {}) => ({ root: join(tmpdir(), 'reeval-no-root'), env })
+
+  test('fills what is left out, and a filter or tag given replaces the run’s', () => {
+    const left = resumeSettings('r', saved, { filters: [] }, at())
     assert.deepEqual(left.settings, { profile: 'nightly', filters: ['a'], tag: ['slow'] })
-    const narrowed = resumeSettings('r', saved, { filters: ['b'], tag: ['fast'] }, {})
-    assert.deepEqual(narrowed.settings, { profile: 'nightly', filters: ['b'], tag: ['fast'] })
+    const other = resumeSettings('r', saved, { filters: ['b'], tag: ['fast'] }, at())
+    assert.deepEqual(other.settings, { profile: 'nightly', filters: ['b'], tag: ['fast'] })
   })
 
   test('REEVAL_PROFILE counts as naming the profile', () => {
-    const same = resumeSettings('r', saved, { filters: [] }, { REEVAL_PROFILE: 'nightly' })
+    const same = resumeSettings('r', saved, { filters: [] }, at({ REEVAL_PROFILE: 'nightly' }))
     assert.equal(same.settings.profile, undefined)
     assert.throws(
-      () => resumeSettings('r', saved, { filters: [] }, { REEVAL_PROFILE: 'quick' }),
+      () => resumeSettings('r', saved, { filters: [] }, at({ REEVAL_PROFILE: 'quick' })),
       (e: unknown) => e instanceof UsageError && /with profile nightly/.test((e as Error).message),
     )
   })

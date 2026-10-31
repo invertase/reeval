@@ -49,6 +49,7 @@ import {
   prepareResume,
   resolveResume,
   resumeSettings,
+  savedFilters,
   savedInvocation,
   writeCurrent,
 } from './resume.ts'
@@ -350,6 +351,7 @@ async function runCommand(
   const filters = resumed?.settings?.filters ?? given
   const setup = await prepareRun(runFlags, configPath, {
     noProfile: !!resumed?.saved && resumed.saved.profile === undefined,
+    ...(resumed?.profileOf ? { profileOf: resumed.profileOf } : {}),
   })
   const explicit = runFlags.concurrency ?? (process.env.REEVAL_CONCURRENCY || undefined)
   const startedWith: RunInvocation | undefined = resumed
@@ -358,7 +360,7 @@ async function runCommand(
         ...(setup.runs === undefined ? {} : { runs: setup.runs }),
         ...(setup.profile ? { profile: setup.profile.name } : {}),
         ...(explicit === undefined ? {} : { concurrency: setup.concurrency }),
-        filters,
+        filters: savedFilters(setup.config.root, filters),
         tags: runFlags.tag ?? [],
       }
   const ctx = await startRun(setup)
@@ -509,7 +511,7 @@ async function resumedRun(flags: Flags, filters: string[], configPath: string | 
   const saved = await savedInvocation(root, target)
   if (!saved) {
     const note = `run ${target.runId} saved no --runs, profile or filters, so this resume plans with the ones given now`
-    return { saved: null, settings: null, notes: [note] }
+    return { saved: null, settings: null, notes: [note], profileOf: undefined }
   }
   const given = {
     runs: flags.runs,
@@ -518,17 +520,20 @@ async function resumedRun(flags: Flags, filters: string[], configPath: string | 
     tag: flags.tag,
     filters,
   }
-  return { saved, ...resumeSettings(target.runId, saved, given) }
+  const resumed = resumeSettings(target.runId, saved, given, { root })
+  const fromRun = flags.profile === undefined && resumed.settings.profile !== undefined
+  return { saved, ...resumed, profileOf: fromRun ? target.runId : undefined }
 }
 
 /**
  * Everything that can fail before the evals are collected: output mode, config, profile, flags.
- * `noProfile` is a resume of a run that had none, which `defaultProfile` mustn't give one.
+ * `noProfile` is a resume of a run that had none, which `defaultProfile` mustn't give one;
+ * `profileOf` names the resumed run whose profile `flags.profile` is.
  */
 async function prepareRun(
   flags: Flags,
   configPath: string | undefined,
-  { noProfile = false }: { noProfile?: boolean } = {},
+  { noProfile = false, profileOf }: { noProfile?: boolean; profileOf?: string } = {},
 ) {
   const output = resolveOutput({
     flags: {
@@ -547,6 +552,11 @@ async function prepareRun(
   loadEnvFiles(path)
   const named = noProfile ? undefined : (flags.profile ?? (process.env.REEVAL_PROFILE || undefined))
   const config = await loadConfig(path, 'run', named)
+  if (profileOf && flags.profile && !config.profiles[flags.profile]) {
+    throw new UsageError(
+      `run ${profileOf} was started with profile ${flags.profile}, which ${config.file} no longer defines. Put it back to resume the run, or start a new run without --resume.`,
+    )
+  }
   const profile = noProfile ? null : selectProfile(config, flags.profile)
   let runs: number | undefined
   if (flags.runs !== undefined) {
