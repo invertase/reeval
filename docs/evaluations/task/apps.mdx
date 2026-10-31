@@ -21,7 +21,7 @@ import { nextApp } from './environments.ts'
 
 evaluate(
   'the sign-in page shows an email and a password field',
-  { environment: nextApp },
+  { environments: nextApp },
   async (c) => {
     await c.send('Add a /login page with email and password fields.')
     await expect(c.exec('npm run build'), 'builds').toSucceed()
@@ -77,14 +77,14 @@ expect(await c.judge(q, { artifacts: true }), 'error state').toPass()
 
 For more information about the judge, its model, and its threshold, see [Judgments](/evaluations/grading/judgments).
 
-In a comparison, a question shows each side's own capture when its `artifacts` names the captures, or is `true`, so the model sees the baseline's page beside the variant's. For more information about pairwise questions, see [Ask questions across attempts](/evaluations/grading/questions).
+In a comparison, a question shows each side's own capture when its `artifacts` names the captures, or is `true`, so the model sees the control's page beside the variant's. For more information about pairwise questions, see [Ask questions across attempts](/evaluations/grading/questions).
 
 ## Set the viewport and browser
 
 The viewport defaults to 1280×720. In the `evals/sign-in.eval.ts` file, set the capture width and height:
 
 ```ts title="evals/sign-in.eval.ts"
-{ environment: nextApp, capture: { viewport: { width: 390, height: 844 } } },
+{ environments: nextApp, capture: { viewport: { width: 390, height: 844 } } },
 ```
 
 `viewport: 'full-page'` captures the whole page. `browser: false` stops reeval from using its browser on the host, and `c.capture` then throws. For more information about every key, see [the `capture` option](/reference/options#capture).

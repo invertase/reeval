@@ -3,7 +3,7 @@ title: "Give the agent skills"
 description: "Place a skill where the harness loads it, and check the agent used it."
 ---
 
-You place a skill on an environment so the harness can load it during an attempt. Each entry in `skills` comes from the `skill` helper. For more information about measuring whether a skill helped, see [Measure lift against a baseline](/results/compare/lift).
+You place a skill on an environment so the harness can load it during an attempt. Each entry in `skills` comes from the `skill` helper. For more information about measuring whether a skill helped, see [Measure lift against a control](/results/compare/lift).
 
 ## Add a skill
 
@@ -18,7 +18,7 @@ export const math = defineEnvironment('math', ({ directory, skill }) => ({
 }))
 ```
 
-Pass `math` as an evaluation's `environment`, as [Environments](/configuration/environments#define-and-use-an-environment) shows. To compare the environment with and without the skill, see [Measure lift against a baseline](/results/compare/lift).
+Pass `math` as an evaluation's `environment`, as [Environments](/configuration/environments#define-and-use-an-environment) shows. To compare the environment with and without the skill, see [Measure lift against a control](/results/compare/lift).
 
 A skill directory holds a `SKILL.md` file. The frontmatter `name` is kebab-case, and `description` is required. When the frontmatter omits `name`, reeval uses the directory name. A `name` other than kebab-case, or a missing `description`, fails the attempt. Quote a frontmatter value that contains `": "`.
 

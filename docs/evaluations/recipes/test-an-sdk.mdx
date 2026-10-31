@@ -27,7 +27,7 @@ const checkClient = readFileSync(
   new URL('./hidden/check-client.mjs', import.meta.url), 'utf8',
 )
 
-evaluate('uses the Acme SDK correctly', { environment: app }, async (c) => {
+evaluate('uses the Acme SDK correctly', { environments: app }, async (c) => {
   await c.send(
     'Write src/forecast.js exporting forecast(city), which resolves to ' +
       'the temperature in Celsius from the Acme SDK in vendor/acme (see ' +

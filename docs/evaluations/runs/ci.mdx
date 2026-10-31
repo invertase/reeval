@@ -51,7 +51,7 @@ When the run finishes, the `reeval run` command appends the run's `summary.md` f
 
 The `reeval run` command exits 1 when an evaluation fails. The step lets that code through so the later `reeval compare` step decides, because an evaluation that already failed on the base commit is not a regression. Any other non-zero code, such as 2 for a usage error or 3 for an infrastructure error, fails the job here.
 
-An ungated cell, a baseline by default, can fail on a run that exits 0. A `budget.duration` stop counts as a failed run. For more information about exit codes, see [Exit codes](/reference/cli#exit-codes).
+An ungated cell, a control by default, can fail on a run that exits 0. A `budget.duration` stop counts as a failed run. For more information about exit codes, see [Exit codes](/reference/cli#exit-codes).
 
 </Step>
 <Step title="Add the API key">

@@ -37,7 +37,7 @@ import { fx } from '{{ pkg }}/harness'
 
 export default defineConfig({
   gateway: [vercel(), direct()],
-  harness: fx({ model: 'anthropic/claude-sonnet-5' }),
+  harnesses: fx({ model: 'anthropic/claude-sonnet-5' }),
 })
 ```
 

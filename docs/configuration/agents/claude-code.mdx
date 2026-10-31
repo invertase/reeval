@@ -33,7 +33,7 @@ import { defineConfig } from '{{ pkg }}'
 import { claudeCode } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: claudeCode({
+  harnesses: claudeCode({
     model: 'claude-sonnet-5',
     effort: 'high',
   }),

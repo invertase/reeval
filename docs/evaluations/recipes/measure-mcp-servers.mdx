@@ -3,14 +3,14 @@ title: "Measure MCP servers"
 description: "See whether an MCP server helped a harness."
 ---
 
-You measure an MCP server by running one task on a baseline with no server and a variant with the server. The effect reads `helped`, `made it worse`, or `can't tell yet`. The example server is `releases`, a stdio server that knows the latest `acme-cli` release. For a runnable project with the server, see [`with-mcp`](https://github.com/invertase/reeval/tree/main/examples/with-mcp).
+You measure an MCP server by running one task on a control with no server and a variant with the server. The effect reads `helped`, `made it worse`, or `can't tell yet`. The example server is `releases`, a stdio server that knows the latest `acme-cli` release. For a runnable project with the server, see [`with-mcp`](https://github.com/invertase/reeval/tree/main/examples/with-mcp).
 
 ## Run one task with and without the server
 
 <Steps>
-<Step title="Define the baseline and variant">
+<Step title="Define the control and variant">
 
-In the `evals/environments.ts` file, define the baseline `app`, which holds the project, and the variant `withReleases`, which adds the server's script and starts the server in the sandbox:
+In the `evals/environments.ts` file, define the control `app`, which holds the project, and the variant `withReleases`, which adds the server's script and starts the server in the sandbox:
 
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
@@ -41,7 +41,7 @@ import { app, withReleases } from './environments.ts'
 
 evaluate(
   'bumps to the latest release',
-  { environment: app, compare: { variants: [withReleases] }, runs: 4 },
+  { compare: { control: app, variants: [withReleases] }, runs: 4 },
   async (c) => {
     const turn = await c.send(
       "Set package.json's version to the latest acme-cli release.",
@@ -55,7 +55,7 @@ evaluate(
 )
 ```
 
-The prompt doesn't name the server, so the file assertion passes on the baseline only when the harness finds the version another way. The baseline has no server to call, so only the variant checks the call. `runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect reads `can't tell yet`.
+The prompt doesn't name the server, so the file assertion passes on the control only when the harness finds the version another way. The control has no server to call, so only the variant checks the call. `runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect reads `can't tell yet`.
 
 </Step>
 <Step title="Run the comparison">
@@ -78,4 +78,4 @@ When the file assertion passes on both sides, the harness finds the version with
 
 ## Next
 
-For more information about gates and extra variants, see [Measure lift against a baseline](/results/compare/lift).
+For more information about gates and extra variants, see [Measure lift against a control](/results/compare/lift).

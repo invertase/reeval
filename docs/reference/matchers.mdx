@@ -250,3 +250,29 @@ For more information about the error, see [`HarnessCapabilityError`](/reference/
 `toHaveFetched()` refuses a turn whose `unreported` lists `web-fetch`, and it refuses `c` when any turn so far lists `web-fetch`. The refusal throws a `HarnessCapabilityError`.
 
 For more information about the same error, see [`toHaveSearched()`](/reference/matchers#tohavesearched).
+
+## `toStayWithin()`
+
+`toStayWithin(limits)` passes when the agent stayed within each limit given. The subject is a turn from `c.send()` or `c`, which sums every turn so far.
+
+```ts
+    expect(turn, 'stayed cheap').toStayWithin({
+      tokens: 20_000,
+      toolCalls: { bash: 5 },
+      duration: '5m',
+    })
+```
+
+<Property name="tokens" type="number" optional>
+  The most tokens the turns may use, input and output together, from the harness's usage.
+</Property>
+
+<Property name="toolCalls" type="number | Record<string, number>" optional>
+  The most tool calls: a number counts every tool call, file edit, web search, and web fetch, and an object counts each named tool's calls.
+</Property>
+
+<Property name="duration" type="Duration" optional>
+  The most time the turns may take, such as `'5m'`.
+</Property>
+
+Give at least one limit, each a whole number of at least 0. The label reads such as `toStayWithin tokens 20,000, bash 5, duration 5m`, and the failure message names each limit it went over, such as `went over its budget: tokens 1,200 > 1,199 · bash 3 > 2`. reeval refuses `.not` and a limit that is not a number. With `tokens`, a turn whose harness reported no usage throws a `HarnessCapabilityError`, and the record marks the assertion as an error. In Python, the matcher is `to_stay_within(tokens=, tool_calls=, duration=)`.

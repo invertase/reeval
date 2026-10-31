@@ -7,7 +7,7 @@ description: An environment spec sets what the agent starts with, built from the
 
 `defineEnvironment()` and `extend()` take a spec or a callback with `git`, `file`, `directory`, `skill`, `mcp`, `plugin`, and `secret`. Relative host paths passed to those helpers resolve against the calling file. The return is synchronous, and a `Promise` stops the run with exit code 2.
 
-A child merges `env`, `files`, and `mcp` by name, `skills` by skill name, and `plugins` by plugin name, and its value wins. `setup` appends. `sandbox`, `workspace`, `egress`, and `rules` replace when set. An omitted `sandbox` keeps the parent's, and a set `sandbox` keeps none of the parent's install steps.
+A child merges `env`, `files`, and `mcp` by name, `traits` by key, `skills` by skill name, and `plugins` by plugin name, and its value wins. `setup` appends. `sandbox`, `workspace`, `egress`, and `rules` replace when set. An omitted `sandbox` keeps the parent's, and a set `sandbox` keeps none of the parent's install steps.
 
 For more information about defining an environment, see [Environments](/configuration/environments).
 
@@ -73,6 +73,10 @@ export const chatbot = defineEnvironment('chatbot', ({
 
 <Property name="plugins" type="PluginSource[]" optional>
   Claude Code layout plugins from `plugin`. A child replaces a parent plugin of the same name.
+</Property>
+
+<Property name="traits" type="Record<string, string | string[]>" optional>
+  Filter facts for an evaluation's `where`, such as `{ stack: 'next', auth: ['clerk', 'none'] }`. The agent never sees them, and they are not part of the environment's digest. A key starts with a lowercase letter and has at most 32 letters, digits, `_`, or `-`. An environment has at most 16 traits, and each value is a string of 1 to 80 characters or a non-empty list of up to 32 distinct strings. A child merges them by key, and its value wins. The record keeps them on each cell's `traits`.
 </Property>
 
 ## `git()`
@@ -353,7 +357,7 @@ Host lists for `hosts` on `secret()` and `secret.fromEnv()`.
 
 ## `extend()`
 
-`extend()` is `extendEnvironment()` on a `defineEnvironment()` parent. `compare` runs the baseline and each variant as its own environment, so shared fields are an `extend()` chain. Merging is described under Environment fields.
+`extend()` is `extendEnvironment()` on a `defineEnvironment()` parent. `compare` runs the control and each variant as its own environment, so shared fields are an `extend()` chain. Merging is described under Environment fields.
 
 <Property name="name" type="string" required>
   The cell-key name. It starts with a letter or a digit, then letters, digits, `.`, `_`, `@`, `+`, or `-`, and any other name stops the run with exit code 2.

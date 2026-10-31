@@ -63,7 +63,7 @@ Each built-in view returns one kind of row.
 
 ## `lift`
 
-`lift` lists one row per variant cell in a run, beside its baseline.
+`lift` lists one row per variant cell in a run, beside its control.
 
 ```bash title="Query"
 reeval query "SELECT eval_key, points, lo, hi FROM lift WHERE within_noise = 0"
@@ -73,7 +73,7 @@ reeval query "SELECT eval_key, points, lo, hi FROM lift WHERE within_noise = 0"
 
 ## `family_lift`
 
-`family_lift` lists one row per variant of a pooled `evaluate.each` in one run.
+`family_lift` lists one row per variant of an evaluation with `cases` in one run.
 
 ```bash title="Query"
 reeval query "SELECT name, variant, points FROM family_lift"
@@ -81,7 +81,7 @@ reeval query "SELECT name, variant, points FROM family_lift"
 
 ## `effort`
 
-`effort` lists one row per cell, with a variant's ratios against its baseline.
+`effort` lists one row per cell, with a variant's ratios against its control.
 
 ```bash title="Query"
 reeval query "SELECT eval_key, variant, tools_ratio FROM effort"
@@ -113,7 +113,7 @@ reeval query "SELECT question, choice, outcome FROM attempt_answers"
 
 ## `factor_effects`
 
-`factor_effects` lists one row per factor level against a baseline.
+`factor_effects` lists one row per factor level against a control.
 
 ```bash title="Query"
 reeval query "SELECT factor, level, tier, points FROM factor_effects"
@@ -197,7 +197,7 @@ reeval query "SELECT question, prev_pass_rate, pass_rate FROM verdict_flips"
 
 ## `check_discrimination`
 
-`check_discrimination` lists one row per assertion on a variant cell, beside its baseline.
+`check_discrimination` lists one row per assertion on a variant cell, beside its control.
 
 ```bash title="Query"
 reeval query "SELECT label, verdict FROM check_discrimination"
@@ -223,7 +223,7 @@ reeval query "SELECT label, pass, fail, rate FROM check_rates"
 reeval query "SELECT label, streak_runs, ended_by FROM check_streaks"
 ```
 
-On a variant, the streak counts a run only when the variant and the baseline both pass.
+On a variant, the streak counts a run only when the variant and the control both pass.
 
 ## Tables
 

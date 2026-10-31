@@ -13,7 +13,7 @@ A `group()` call wraps the evaluations that share its options. In the `evals/sho
 import { evaluate, expect, group } from '{{ pkg }}'
 import { plain } from './environments.ts'
 
-group('request builders', { environment: plain, tags: ['smoke'] }, () => {
+group('request builders', { environments: plain, tags: ['smoke'] }, () => {
   evaluate('tests build only the request fields they read', async (c) => {
     await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
     await expect(c, 'uses fromPartial').toHaveFile(

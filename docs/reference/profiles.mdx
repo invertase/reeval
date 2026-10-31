@@ -36,17 +36,17 @@ For more information about sizing a run with a profile, see [Size runs with prof
 
 ## `defaults`
 
-`defaults` applies before groups and the evaluation. A later `harness` can replace or edit `defaults.harness`; the plan notes `harness set by the eval` whenever a group or evaluation sets `harness`.
+`defaults` applies before groups and the evaluation. A later `harnesses` can replace or edit `defaults.harnesses`; the plan notes `harnesses set by the eval` whenever a group or evaluation sets `harnesses`.
 
 <Property name="defaults" type="ProfileDefaults" optional>
-  `harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge`, `capture`, `question`, and `timeout`.
+  `harnesses`, `sandbox`, `environments`, `runs`, `gate`, `env`, `egress`, `judge`, `capture`, `question`, and `timeout`.
 </Property>
 
 For more information about those keys, see [Options reference](/reference/options).
 
 ## `limit`
 
-`limit` narrows `runs`, `compare`, and `harness` after the evaluation. `pin` names keys that stay as resolved. reeval unions `pin` from each group, outermost first, then the evaluation.
+`limit` narrows `runs`, `compare`, and `harnesses` after the evaluation. `pin` names keys that stay as resolved. reeval unions `pin` from each group, outermost first, then the evaluation.
 
 <Property name="limit" type="ProfileLimit" optional>
   The plan notes a cut, as in `runs 3 → 1 (profile nightly)`. It notes protected keys that `limit` also sets, as in `pinned: compare, runs`.
@@ -63,16 +63,16 @@ For more information about `pin`, see [Options reference](/reference/options#pin
 ### `compare`
 
 <Property name="compare" type="false | { maxVariants: number }" optional>
-  `false` drops the variants and runs the baseline. `{ maxVariants: n }` keeps the first `n` variants. `n` is a whole number of at least 0.
+  `false` drops the variants and runs the control. `{ maxVariants: n }` keeps the first `n` variants. `n` is a whole number of at least 0.
 </Property>
 
-`limit.compare` applies when the resolved evaluation has `compare`, whether a group, a profile's `defaults`, the config or the evaluation set it. After `false` or `{ maxVariants: 0 }`, the baseline gates like an evaluation without `compare`. The plan notes `compare off (profile nightly)` or `variants 4 → 1 (profile nightly)`.
+`limit.compare` applies when the resolved evaluation has `compare`, whether a group, a profile's `defaults`, the config or the evaluation set it. After `false` or `{ maxVariants: 0 }`, the control gates like an evaluation without `compare`. The plan notes `compare off (profile nightly)` or `variants 4 → 1 (profile nightly)`.
 
 A pairwise question needs two attempts that differ in a factor it varies. When the limit leaves none of its factors varying, the plan notes `1 pairwise question off (profile nightly)`, or `2 pairwise questions off (profile nightly)` for two. When it leaves some, the question keeps those and the plan notes `1 pairwise question narrowed (profile nightly)`, or `2 pairwise questions narrowed (profile nightly)` for two.
 
-### `harness`
+### `harnesses`
 
-<Property name="harness" type="string[]" optional>
+<Property name="harnesses" type="string[]" optional>
   Harness ids to keep. A default id includes `[effort=<value>]` whenever `effort` is set. reeval skips an evaluation left with none.
 </Property>
 

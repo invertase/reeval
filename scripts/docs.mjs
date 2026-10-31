@@ -524,15 +524,15 @@ if (!limitCompare) {
 }
 
 // limit.compare runs after the cascade, so it tests the resolved compare from any level, and a
-// baseline it leaves without variants gates like an eval without compare (gateIf in src/options.ts).
+// control it leaves without variants gates like an eval without compare (gateIf in src/options.ts).
 if (limitCompare && /applies when the evaluation sets `compare`/.test(limitCompare)) {
   problems.push(
     'reference/profiles limit.compare says it "applies when the evaluation sets `compare`": it limits the resolved compare, from a group, a profile\'s defaults, the config or the evaluation (src/options.ts)',
   )
 }
-if (limitCompare && !/baseline gates like an evaluation without `compare`/.test(limitCompare)) {
+if (limitCompare && !/control gates like an evaluation without `compare`/.test(limitCompare)) {
   problems.push(
-    'reference/profiles limit.compare does not say how a baseline left without variants gates: like an evaluation without `compare` (src/options.ts gateIf)',
+    'reference/profiles limit.compare does not say how a control left without variants gates: like an evaluation without `compare` (src/options.ts gateIf)',
   )
 }
 
@@ -1031,13 +1031,9 @@ if (dockerId && /Defaults to `docker`/.test(dockerId)) {
   )
 }
 const minLift = optionEntry(optionsPage, 'compare.minLift')
-if (
-  minLift &&
-  /variant cell fails/.test(minLift) &&
-  !/famil(?:y|ies)[^.]*\bpooled lift\b/.test(minLift)
-) {
+if (minLift && /variant cell fails/.test(minLift) && !/`cases`[^.]*\bpooled lift\b/.test(minLift)) {
   problems.push(
-    "reference/options compare.minLift says a variant cell fails and does not say a family is gated on the family's pooled lift (history/families.ts gates the pooled interval)",
+    'reference/options compare.minLift says a variant cell fails and does not say an evaluation with `cases` is gated on its pooled lift (history/families.ts gates the pooled interval)',
   )
 }
 
@@ -1151,7 +1147,7 @@ problems.push(...copied)
 // is". Only a definition counts: the predicate starts with an article, "one", "what", "how",
 // "each" or "every", so "A cell is flaky when" and "The lift is paired by case" pass.
 const ABOUT_THE_EXAMPLE = new Set([
-  'docs/getting-started/quickstart.mdx: The baseline is an unstyled page.',
+  'docs/getting-started/quickstart.mdx: The control is an unstyled page.',
 ])
 
 const plainMarkdown = (text) =>

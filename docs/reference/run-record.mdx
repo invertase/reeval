@@ -314,6 +314,10 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
   Set on each case of an eval with `cases`; `RunRecord.families` has the suite.
 </Property>
 
+<Property name="excluded" type="ExcludedPair[]" optional>
+  The case and environment pairs `where` left out, across the eval's cases (each case's entry carries the same list); unset when none.
+</Property>
+
 ### `CellRecord`
 
 One harness and environment of an evaluation, and how its attempts went.
@@ -898,6 +902,10 @@ A cell of an evaluation combines a harness, an environment (`-` when none is set
 
 <Property name="variant" type="string" optional>
   The variant's name, for variant cells.
+</Property>
+
+<Property name="traits" type="Traits" optional>
+  The environment's merged traits; unset when it has none. Not part of the key.
 </Property>
 
 ### `EnvironmentRecord`

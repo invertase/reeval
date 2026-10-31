@@ -23,7 +23,7 @@ export const getUserId = (req: Request) => req.params.id
 
 evaluate(
   'adds a test without installing anything',
-  { environment: offline },
+  { environments: offline },
   async (c) => {
     await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
     await expect(c, 'writes the test').toHaveFile('src/user.test.ts')

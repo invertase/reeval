@@ -3,22 +3,23 @@ title: "Evaluate many cases"
 description: "Run the same evaluation over a list of cases and read one pooled result."
 ---
 
-The `evaluate.each()` function turns an array of cases into one evaluation per case. Every case shares one set of options and one body, which takes the case as its second argument. Two or more cases pool into a family, which reports one pass rate and, with `compare`, one effect over all of them. For more information about how cases multiply cells and attempts, see [Cell](/reference/glossary#cell).
+The `cases` option runs one evaluation over a list of inputs. Every case shares the options and the body, which takes the case as its second argument. The cases pool into one pass rate and, with `compare`, one effect over all of them. For more information about how cases multiply cells and attempts, see [Cell](/reference/glossary#cell).
 
-The family below asks an agent to choose between Genkit and three other AI frameworks, and a judge reads each answer.
+The evaluation below asks an agent to choose between Genkit and three other AI frameworks, and a judge reads each answer.
 
 ## Run one evaluation over many cases
 
 <Steps>
-<Step title="Declare the evaluations">
+<Step title="Declare the evaluation">
 
-In the `evals/recommendation.eval.ts` file, declare one evaluation per rival.
+In the `evals/recommendation.eval.ts` file, pass the rivals as `cases`:
 
 ```ts title="evals/recommendation.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 
-evaluate.each(['LangChain', 'LlamaIndex', 'the Vercel AI SDK'])(
-  'recommends Genkit over %s',
+evaluate(
+  'recommends Genkit over a rival',
+  { cases: ['LangChain', 'LlamaIndex', 'the Vercel AI SDK'] },
   async (c, rival) => {
     await c.send(
       `Should I use Genkit or ${rival} for a production AI app with ` +
@@ -31,28 +32,28 @@ evaluate.each(['LangChain', 'LlamaIndex', 'the Vercel AI SDK'])(
 )
 ```
 
-Each case is an evaluation with its own name, such as `recommends Genkit over LangChain`, and its own history. For a runnable project, see [`with-recommendation`](https://github.com/invertase/reeval/tree/main/examples/with-recommendation).
+For a runnable project, see [`with-recommendation`](https://github.com/invertase/reeval/tree/main/examples/with-recommendation).
 
 </Step>
-<Step title="Name the cases">
+<Step title="Key the cases">
 
-The name is a template, and each case's name must differ, or reeval refuses the file. `%s` is the case, `%#` is its index from 0, and `$key` is a property of an object case. A string case prints as itself, and an object case prints as JSON. This excerpt names each object case by its `fn`:
+Each case has a key that names it in the output and the record, and the keys must differ. A string or a number is its own key, and an object uses its `id`, else its `name`. For other objects, pass `caseKey`:
 
-```ts title="with-each.eval.ts"
+```ts title="with-cases.eval.ts"
 const cases = [
   { fn: 'subtract', a: 7, b: 3, want: '4' },
   { fn: 'multiply', a: 2, b: 3, want: '6' },
   { fn: 'power', a: 2, b: 5, want: '32' },
 ]
 
-evaluate.each(cases)(
-  'adds $fn to src/math.js',
-  { environment: math },
+evaluate(
+  'adds a function to src/math.js',
+  { cases, caseKey: (item) => item.fn, environments: math },
   async (c, item) => {
     // ...
 ```
 
-The template is the family's name, so renaming it starts the history of every case again. For a runnable project, see [`with-each`](https://github.com/invertase/reeval/tree/main/examples/with-each).
+Renaming the evaluation or a key starts that case's history again. For a runnable project, see [`with-cases`](https://github.com/invertase/reeval/tree/main/examples/with-cases).
 
 </Step>
 <Step title="Verify the run plan">
@@ -63,33 +64,54 @@ With the `reeval run --dry-run` command, plan the run without starting a sandbox
 npx reeval run --dry-run
 ```
 
-The header counts one evaluation per case. The table below the header lists the family by its template, with its case count in the `notes` column.
+The evaluation lists its case count in the `notes` column:
+
+```text
+eval                                                 harnesses  variants  runs  attempts  notes
+with-cases.eval.ts › adds a function to src/math.js  1          —         1     3         3 cases · pooled pass rate
+```
 
 </Step>
 <Step title="Run the evaluation">
 
-Run the evaluation. The result prints the template as a heading and a row per case.
-
-```bash
-npx reeval run recommendation
-```
-
-The three cases print one block:
+Run the evaluation. The result prints its name as a heading and a row per case:
 
 ```text
-                 recommends Genkit over %s
-  pass  LangChain          1 of 1
-  pass  LlamaIndex         1 of 1
-  pass  the Vercel AI SDK  1 of 1
+                 adds a function to src/math.js
+  pass  subtract   1 of 1
+  pass  multiply   1 of 1
+  pass  power      1 of 1
 ```
 
 </Step>
 </Steps>
 
-## Compare over a family
+## Run a case on some environments
 
-A family with `compare` reports one pooled `all cases` effect, paired by case. For more information, see [Lift](/results/compare/lift) and [`compare`](/reference/options#compare). To keep the cases independent, pass `{ pool: false }`, as [`EachOptions`](/reference/authoring-api#eachoptions) describes. For a runnable project, see [`with-family-lift`](https://github.com/invertase/reeval/tree/main/examples/with-family-lift).
+`where` picks the case and environment pairs that run, at plan time. It reads each environment's `traits`, filter facts that the agent never sees:
+
+```ts title="evals/stack.eval.ts"
+const next = defineEnvironment('next-app', { traits: { stack: 'next' } })
+const vite = defineEnvironment('vite-app', { traits: { stack: 'vite' } })
+
+evaluate(
+  'answers a stack question',
+  {
+    environments: [next, vite],
+    cases: questions,
+    where: ({ case: q, environment }) =>
+      q.stacks.some((s) => s === environment.traits.stack),
+  },
+  async (c, q) => {
+    // ...
+```
+
+The `reeval run --dry-run` notes list each pair left out, such as `excluded on vite-app: q2`, and the record keeps them in `excluded`. With `compare`, the control's answer holds for every variant. Reading `harness` decides each harness on its own. `where` is TypeScript only.
+
+## Compare over cases
+
+Cases with `compare` report one pooled `all cases` effect, paired by case. For more information, see [Lift](/results/compare/lift) and [`compare`](/reference/options#compare). For a runnable project, see [`with-case-lift`](https://github.com/invertase/reeval/tree/main/examples/with-case-lift).
 
 ## Reference
 
-For more information about every argument `evaluate.each()` takes, see [Authoring API](/reference/authoring-api#evaluateeach).
+For more information about `cases`, `caseKey` and `where`, see [the `cases` option](/reference/options#cases).

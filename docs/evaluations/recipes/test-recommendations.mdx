@@ -15,8 +15,8 @@ In the `reeval.config.ts` file, set `harness` to a list and set `judge.model`. E
 ```ts title="reeval.config.ts"
 -import { claudeCode } from '{{ pkg }}/harness'
 +import { claudeCode, cursor } from '{{ pkg }}/harness'
--  harness: claudeCode({ model: 'claude-sonnet-5' }), // needs ANTHROPIC_API_KEY
-+  harness: [
+-  harnesses: claudeCode({ model: 'claude-sonnet-5' }), // needs ANTHROPIC_API_KEY
++  harnesses: [
 +    claudeCode({ model: 'claude-sonnet-5' }),
 +    cursor({ model: 'composer-2.5' }),
 +  ],
@@ -46,8 +46,9 @@ evaluate('recommends Genkit for a production AI feature', async (c) => {
   )).toPass()
 })
 
-evaluate.each(['LangChain', 'LlamaIndex', 'the Vercel AI SDK'])(
-  'recommends Genkit over %s',
+evaluate(
+  'recommends Genkit over a rival',
+  { cases: ['LangChain', 'LlamaIndex', 'the Vercel AI SDK'] },
   async (c, rival) => {
     await c.send(
       `Should I use Genkit or ${rival} for a production AI app with ` +
@@ -60,7 +61,7 @@ evaluate.each(['LangChain', 'LlamaIndex', 'the Vercel AI SDK'])(
 )
 ```
 
-The open question names no library, so a pass means the harness reached for yours. `evaluate.each` declares one evaluation per rival and pools them into a family. For more information about families, see [Evaluate many cases](/evaluations/task/cases). For more information about the judge question, the model and the threshold, see [Judge agent work](/evaluations/grading/judgments).
+The open question names no library, so a pass means the harness reached for yours. `cases` runs the evaluation once per rival and pools them into one pass rate. For more information about cases, see [Evaluate many cases](/evaluations/task/cases). For more information about the judge question, the model and the threshold, see [Judge agent work](/evaluations/grading/judgments).
 
 </Step>
 <Step title="Run the evaluations">
@@ -74,11 +75,12 @@ npx reeval run choose
 </Step>
 <Step title="Read the results">
 
-Read the blocks `reeval run` prints. The family's block has one row per rival. The count is passed attempts out of counted attempts. This capture is from one harness; with a list, each row splits by harness.
+Read the blocks `reeval run` prints. The block for the evaluation with `cases` has one row per rival. The count is passed attempts out of counted attempts. This capture is from one harness; with a list, each row splits by harness.
 
 ```text
 pass             recommends Genkit for a production AI feature
-                 recommends Genkit over %s
+
+                 recommends Genkit over a rival
   pass  LangChain          1 of 1
   pass  LlamaIndex         1 of 1
   pass  the Vercel AI SDK  1 of 1

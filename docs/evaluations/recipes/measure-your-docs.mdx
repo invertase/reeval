@@ -3,14 +3,14 @@ title: "Measure docs"
 description: "See whether docs helped the agent pass an assertion."
 ---
 
-You run one task on a baseline without the docs and on a variant that has them. The cells share the prompt and the assertions. For a runnable project that measures the same convention as a doc and as a skill, see [`with-two-variants`](https://github.com/invertase/reeval/tree/main/examples/with-two-variants).
+You run one task on a control without the docs and on a variant that has them. The cells share the prompt and the assertions. For a runnable project that measures the same convention as a doc and as a skill, see [`with-two-variants`](https://github.com/invertase/reeval/tree/main/examples/with-two-variants).
 
 ## Run one task with and without the docs
 
 <Steps>
-<Step title="Define the baseline and variant">
+<Step title="Define the control and variant">
 
-In the `evals/environments.ts` file, define the baseline `plain` and the variant `with-docs`. The `plain` baseline sets no `rules`. The `with-docs` variant sets `rules`.
+In the `evals/environments.ts` file, define the control `plain` and the variant `with-docs`. The `plain` control sets no `rules`. The `with-docs` variant sets `rules`.
 
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
@@ -44,7 +44,7 @@ import { plain, withDocs } from './environments.ts'
 
 evaluate(
   'streams the chat reply',
-  { runs: 4, compare: { baseline: plain, variants: [withDocs] } },
+  { runs: 4, compare: { control: plain, variants: [withDocs] } },
   async (c) => {
     await c.send('Stream the chat reply from src/chat.ts.')
     await expect(c, 'uses streamText').toHaveFile(
@@ -85,11 +85,11 @@ pass             streams the chat reply
 
 The `with-docs` row reads `helped` because the `with-docs` variant passed the `uses streamText` assertion in 4 of 4 attempts, and the `plain` cell passed it in 0 of 4. The other effect words are `made it worse` and `can't tell yet`.
 
-If the `plain` baseline and the `with-docs` variant both pass, the harness already calls `streamText`, and this task cannot show what the docs changed. A baseline that already includes the docs measures nothing.
+If the `plain` control and the `with-docs` variant both pass, the harness already calls `streamText`, and this task cannot show what the docs changed. A control that already includes the docs measures nothing.
 
 </Step>
 </Steps>
 
 ## Next
 
-For more information about gates and extra variants, see [Measure lift against a baseline](/results/compare/lift).
+For more information about gates and extra variants, see [Measure lift against a control](/results/compare/lift).

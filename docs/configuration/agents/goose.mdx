@@ -30,7 +30,7 @@ import { defineConfig } from '{{ pkg }}'
 import { goose } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: goose({
+  harnesses: goose({
     model: 'gemini-3.8-flash',
     effort: 'high',
   }),

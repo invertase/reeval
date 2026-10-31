@@ -26,7 +26,7 @@ import { defineConfig } from '{{ pkg }}'
 import { grokBuild } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: grokBuild({
+  harnesses: grokBuild({
     model: 'grok-4.6',
   }),
 })

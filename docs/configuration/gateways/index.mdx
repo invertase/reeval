@@ -16,7 +16,7 @@ import { claudeCode, cursor } from '{{ pkg }}/harness'
 
 export default defineConfig({
   gateway: [vercel(), direct()],
-  harness: [
+  harnesses: [
     claudeCode({ model: 'claude-sonnet-5' }),
     cursor({ model: 'composer-2.5' }),
   ],
@@ -41,7 +41,7 @@ For a runnable project that also sends the judge through Vercel AI Gateway, see 
 To send one harness or the judge through a particular gateway, set `gateway` on its factory or on `judge`:
 
 ```ts title="reeval.config.ts"
-harness: codex({ model: 'gpt-5.6-luna', gateway: 'openrouter' }),
+harnesses: codex({ model: 'gpt-5.6-luna', gateway: 'openrouter' }),
 ```
 
 The pinned gateway must be in the config's `gateway` list. A pinned gateway never falls back, so the plan stops when that gateway can't serve the harness. For more information about the list and the pin, see [the `gateway` option](/reference/options#gateway).

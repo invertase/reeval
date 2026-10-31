@@ -1,23 +1,23 @@
 ---
-title: "Measure lift against a baseline"
+title: "Measure lift against a control"
 description: "See whether a skill, doc, or MCP server changes what the harness does."
 ---
 
-A comparison runs one evaluation on a baseline without the change and on a variant with it. Both get the same prompt and assertions. reeval reports whether the variant `helped`, `made it worse`, or `can't tell yet`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For where a comparison appears in a run, see [Comparison](/reference/glossary#comparison).
+A comparison runs one evaluation on a control without the change and on a variant with it. Both get the same prompt and assertions. reeval reports whether the variant `helped`, `made it worse`, or `can't tell yet`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For where a comparison appears in a run, see [Comparison](/reference/glossary#comparison).
 
-The examples use the baseline `page`, an unstyled HTML page, and the variant `brand-guidelines`, which adds Anthropic's `brand-guidelines` skill. To build them, see [Quick start](/getting-started/quickstart) or [Environments](/configuration/environments).
+The examples use the control `page`, an unstyled HTML page, and the variant `brand-guidelines`, which adds Anthropic's `brand-guidelines` skill. To build them, see [Quick start](/getting-started/quickstart) or [Environments](/configuration/environments).
 
 ## Run the comparison
 
-Name the variants in `compare.variants` in the evaluation's options:
+Name the control in `compare.control` and the variants in `compare.variants` in the evaluation's options:
 
 ```ts title="evals/brand.eval.ts"
-{ environment: page, compare: { variants: [withSkill] }, runs: 4, gate: { passRate: 0.75 } },
+{ compare: { control: page, variants: [withSkill] }, runs: 4, gate: { passRate: 0.75 } },
 ```
 
 The task asks for Anthropic's brand color and fonts in `styles.css`, and its `brand orange` and `brand fonts` assertions read that file. For the full evaluation, see [`with-library-skill-lift`](https://github.com/invertase/reeval/tree/main/examples/with-library-skill-lift).
 
-With no `compare.baseline`, the evaluation's `environment` is the baseline, here `page`. To name a different baseline, set `compare.baseline`. `runs: 4` gives each cell four attempts. Run the evaluation:
+`compare.control` is the environment each variant is measured against, here `page`. `runs: 4` gives each cell four attempts. Run the evaluation:
 
 ```bash
 npx reeval run brand
@@ -40,7 +40,7 @@ pass             styles the page in Anthropic's brand
   +1 more passed
 ```
 
-The `arm` column lists the baseline and the variant. A comparison of harnesses or sandboxes heads the column `harness` or `sandbox`. The `pass` column is passed attempts out of counted attempts, and the last word is the effect. The `check` table counts each assertion per cell ([Measure a run](/results/measure#read-the-assertion-and-effort-tables)).
+The `arm` column lists the control and the variant. A comparison of harnesses or sandboxes heads the column `harness` or `sandbox`. The `pass` column is passed attempts out of counted attempts, and the last word is the effect. The `check` table counts each assertion per cell ([Measure a run](/results/measure#read-the-assertion-and-effort-tables)).
 
 To print the interval under each variant, pass `-v`:
 
@@ -48,18 +48,18 @@ To print the interval under each variant, pass `-v`:
     difference +100 points, 95% interval +31…+100
 ```
 
-The evaluation's outcome, `pass`, is the variant's, because reeval gates only variants by default. Set `compare.gate` to `'all'` to gate the baseline too, or `'none'` to gate neither. `gate: { passRate: 0.75 }` passes a cell when at least 3 of its 4 attempts pass.
+The evaluation's outcome, `pass`, is the variant's, because reeval gates only variants by default. Set `compare.gate` to `'all'` to gate the control too, or `'none'` to gate neither. `gate: { passRate: 0.75 }` passes a cell when at least 3 of its 4 attempts pass.
 
 For when each effect word applies, including the four-attempt minimum, see [Variant outcomes](/reference/statistics#variant-outcomes).
 
-If the baseline and the variant pass every attempt, the harness already does what the skill teaches, and this task can't show the change. A baseline that includes the change, such as a rules file or a doc that repeats the skill, gives both cells the same instructions and measures nothing either.
+If the control and the variant pass every attempt, the harness already does what the skill teaches, and this task can't show the change. A control that includes the change, such as a rules file or a doc that repeats the skill, gives both cells the same instructions and measures nothing either.
 
 ## Gate on lift
 
 Set `compare.minLift` to the smallest lift you accept, from -1 to 1:
 
 ```ts title="with-min-lift.eval.ts"
-compare: { baseline: math, variants: [withJsdoc], minLift: 0.2 },
+compare: { control: math, variants: [withJsdoc], minLift: 0.2 },
 ```
 
 A variant whose lift may be below 20 points fails, even when it `helped`, and its row reads `helped, not by minLift 20`. For a runnable project, see [`with-min-lift`](https://github.com/invertase/reeval/tree/main/examples/with-min-lift).
@@ -68,4 +68,4 @@ A variant whose lift may be below 20 points fails, even when it `helped`, and it
 
 For every `compare` key, see [the `compare` option](/reference/options#compare).
 
-Each extra environment in `compare.variants` gets its own row, effect, and gate ([`with-two-variants`](https://github.com/invertase/reeval/tree/main/examples/with-two-variants)). To measure the variant on more than one harness, see [Compare harnesses](/evaluations/recipes/compare-harnesses); `compare.harness` limits the variant to the listed harnesses ([`with-compare-harness`](https://github.com/invertase/reeval/tree/main/examples/with-compare-harness)). To ask a language model which side did better, see [Ask questions across attempts](/evaluations/grading/questions) and [`with-compare-questions`](https://github.com/invertase/reeval/tree/main/examples/with-compare-questions).
+Each extra environment in `compare.variants` gets its own row, effect, and gate ([`with-two-variants`](https://github.com/invertase/reeval/tree/main/examples/with-two-variants)). To measure the variant on more than one harness, see [Compare harnesses](/evaluations/recipes/compare-harnesses); `compare.harnesses` limits the variant to the listed harnesses ([`with-compare-harness`](https://github.com/invertase/reeval/tree/main/examples/with-compare-harness)). To ask a language model which side did better, see [Ask questions across attempts](/evaluations/grading/questions) and [`with-compare-questions`](https://github.com/invertase/reeval/tree/main/examples/with-compare-questions).

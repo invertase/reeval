@@ -25,7 +25,7 @@ For more information about each environment field, see [Workspaces](/configurati
 </Step>
 <Step title="Extend an environment">
 
-In the `evals/environments.ts` file, call `.extendEnvironment()` on `page` to derive `page-production`. The child keeps the parent's fields and adds its own, so the baseline and the variant differ by one change.
+In the `evals/environments.ts` file, call `.extendEnvironment()` on `page` to derive `page-production`. The child keeps the parent's fields and adds its own, so the control and the variant differ by one change.
 
 ```ts title="evals/environments.ts"
 export const production = page.extendEnvironment('page-production', {
@@ -42,19 +42,19 @@ For more information about the merge rules, see [`extend`](/reference/environmen
 </Step>
 <Step title="Use an environment in an evaluation">
 
-In the `evals/page.eval.ts` file, pass `page` as the `environment` and `production` as a variant. reeval names each cell by its harness, environment, and sandbox.
+In the `evals/page.eval.ts` file, pass `page` as the control and `production` as a variant. reeval names each cell by its harness, environment, and sandbox.
 
 ```ts title="evals/page.eval.ts"
 import { page, production } from './environments.ts'
 // ...
 evaluate(
   'adds a footer',
-  { environment: page, compare: { variants: [production] } },
+  { compare: { control: page, variants: [production] } },
   // ...
 )
 ```
 
-For more information about where you can set the option, see [the `environment` option](/reference/options#environment).
+For more information about where you can set the option, see [the `compare` option](/reference/options#compare).
 
 </Step>
 <Step title="Verify with the `reeval run --dry-run` command">
@@ -91,7 +91,7 @@ In the `reeval.config.ts` file, set `environment` to run every evaluation that s
 import { defineConfig } from '{{ pkg }}'
 import { page } from './evals/environments.ts'
 
-export default defineConfig({ environment: page })
+export default defineConfig({ environments: page })
 ```
 
 A group's or an evaluation's `environment` replaces the config's.
