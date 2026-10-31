@@ -175,6 +175,24 @@ const planned =
       { config, profile: null, runs, tags: [], concurrency: 1, file: undefined, order: 0 },
     )
   }
+/** What planning an eval with `options` refuses inside a group with `group`. */
+const plannedUnder = (group: unknown, o: unknown) => () => {
+  const config = resolveConfig(
+    { harnesses: fakeHarness(), sandbox: fakeSandbox() },
+    DIR,
+    'reeval.config.ts',
+  )
+  planEval(
+    {
+      name: 'e',
+      mode: 'run',
+      groups: [{ name: 'g', options: group as never }],
+      options: o as never,
+      source: { body: '0'.repeat(64) },
+    },
+    { config, profile: null, tags: [], concurrency: 1, file: undefined, order: 0 },
+  )
+}
 /** An environment with one MCP server on `url` that sends `headers`. */
 const mcpHeaders = (url: string, headers: Record<string, unknown>) =>
   defineEnvironment('e', ({ mcp }) => ({ mcp: { docs: mcp.http(url, { headers } as never) } }))
@@ -674,6 +692,20 @@ export const CASES: Record<string, Case[]> = {
     [
       'environments beside compare',
       options({ environments: e1, compare: { control: e1, variants: [e2] } }),
+    ],
+    [
+      'environments under a group compare',
+      plannedUnder(
+        { compare: { control: e1, variants: [e2] } },
+        { environments: defineEnvironment('three', {}) },
+      ),
+    ],
+    [
+      "a group's environments, the eval's compare",
+      plannedUnder(
+        { environments: defineEnvironment('three', {}) },
+        { compare: { control: e1, variants: [e2] } },
+      ),
     ],
     ['a variant that is the control', planned({ compare: { control: e1, variants: [e1, e2] } })],
     [

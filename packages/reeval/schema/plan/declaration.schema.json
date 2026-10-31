@@ -348,7 +348,7 @@
           "maximum": 9007199254740991
         },
         "name": {
-          "description": "The name template the eval's own name.",
+          "description": "The eval's own name, which each case's name extends.",
           "type": "string"
         }
       },
@@ -1023,7 +1023,7 @@
               ]
             },
             "runs": {
-              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a eval with `cases` case included.",
+              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a case of an eval with `cases` included.",
               "anyOf": [
                 {
                   "type": "number"
@@ -1334,7 +1334,7 @@
               ]
             },
             "runs": {
-              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a eval with `cases` case included.",
+              "description": "Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once a majority of its `n` attempts agree and gates it on that majority; not on a compared eval. Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach a verdict, and anything else runs once, a case of an eval with `cases` included.",
               "anyOf": [
                 {
                   "type": "number"

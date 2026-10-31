@@ -1,4 +1,4 @@
-// A eval with `cases` as one suite: each cell's pass@1 over the cases and, with
+// An eval with `cases` as one suite: each cell's pass@1 over the cases and, with
 // `compare`, each variant's lift over the control paired by case. A case is the unit: at one
 // attempt a case and side that's a Bernoulli pair (Newcombe's paired interval, McNemar's exact
 // test); at several, a t interval over the cases' pass@1 differences, so attempts within a case

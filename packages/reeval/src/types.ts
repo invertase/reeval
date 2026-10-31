@@ -1906,7 +1906,7 @@ type EvalOptionFields<N extends number = number> = {
    * Attempts per cell: a number, or `{ bestOf: n }` (odd, 3 or more), which stops each cell once
    * a majority of its `n` attempts agree and gates it on that majority; not on a compared eval.
    * Unset at every level, a compare with variants runs 4 a side, the fewest whose lift can reach
-   * a verdict, and anything else runs once, a eval with `cases` case included.
+   * a verdict, and anything else runs once, a case of an eval with `cases` included.
    */
   runs?: Runs<N>
   /** How each cell's attempts decide its outcome; default `'all'`. */

@@ -366,7 +366,7 @@ function checkLimits(limits: unknown): Limits {
   }
   const bad = (what: string, value: unknown) =>
     new TypeError(
-      `toStayWithin()'s ${what} is a whole number of 0 or more (got ${JSON.stringify(value)})`,
+      `toStayWithin()'s ${what} is a whole number of 0 or more (got ${typeof value === 'number' ? String(value) : JSON.stringify(value)})`,
     )
   if (limits.tokens !== undefined && !isCount(limits.tokens)) throw bad('tokens', limits.tokens)
   const calls = limits.toolCalls

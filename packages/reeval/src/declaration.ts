@@ -49,7 +49,7 @@ export type DeclaredSource = {
 
 /** Where a case of an eval with `cases` sits in its list. */
 export type DeclaredFamily = {
-  /** The name template the eval's own name. */
+  /** The eval's own name, which each case's name extends. */
   name: string
   /** The case's index, from 0. */
   case: number

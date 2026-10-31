@@ -17,6 +17,8 @@
   "harness with a bad descriptor": "UsageError: compare.harnesses in evals/a.eval.ts › e: Unknown cursor() option \"modle\". Did you mean \"model\"?",
   "harness with a number": "UsageError: compare.harnesses in evals/a.eval.ts › e must be a list of harness ids, e.g. harnesses: ['cursor:composer-2.5'] (got 3)",
   "environments beside compare": "UsageError: evals/a.eval.ts › e sets both environments and compare. With compare, the control is compare.control: move it there, as compare: { control: one, variants: [...] }.",
+  "environments under a group compare": "UsageError: evaluate(\"g › e\") sets environments, but group(\"g\") sets compare, which runs its control in their place. Set compare: { control, variants: [...] } on evaluate(\"g › e\") instead, or move evaluate(\"g › e\") out of group(\"g\").",
+  "a group's environments, the eval's compare": null,
   "a variant that is the control": "UsageError: compare in evaluate(\"e\") lists one, which is the control. List only the other environments.",
   "good": null,
   "data: a variant with a bad spec": "UsageError: Unknown field \"setpu\" in layer \"x\" of environment \"x\" in compare.variants[0] in evals/a.eval.ts › e. Did you mean \"setup\"?",

@@ -1899,7 +1899,7 @@
       "required": ["cases", "cell", "counted", "interval", "pass", "rate"]
     },
     "FamilyRecord": {
-      "description": "A eval with `cases`: its cases as samples of one suite. Each case is also an evaluation.",
+      "description": "An eval with `cases`: its cases as samples of one suite. Each case is also an evaluation.",
       "type": "object",
       "properties": {
         "cases": {

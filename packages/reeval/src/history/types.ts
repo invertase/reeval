@@ -494,7 +494,7 @@ export type FamilyLift = {
   effort?: FamilyEffort
 }
 
-/** A eval with `cases`: its cases as samples of one suite. Each case is also an evaluation. */
+/** An eval with `cases`: its cases as samples of one suite. Each case is also an evaluation. */
 export type FamilyRecord = {
   /** `file › group › … › template`. */
   id: string

@@ -47,7 +47,7 @@ export type CompareRow = {
    */
   canceled?: Array<'base' | 'head'>
   /**
-   * `family`: a eval with `cases`'s gate, its `id` the family's. `base` and `head` are its
+   * `family`: the gate of an eval with `cases`, its `id` the family's. `base` and `head` are its
    * pooled outcome (`fail` when a lift is below its `minLift`); its cases have rows of their own.
    * For such a row, `cells` are the variants whose pooled lift only one run has.
    */

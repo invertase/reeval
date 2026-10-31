@@ -61,7 +61,7 @@ else
   cat > evals/tailwind.eval.ts <<'EOF'
 import { defineEnvironment, evaluate, expect } from 'reeval'
 const vite = defineEnvironment('vite', { files: { 'package.json': '{ "type": "module" }\n' } })
-evaluate('sets up Tailwind CSS v4 with its CSS import', { environment: vite }, async (c) => {
+evaluate('sets up Tailwind CSS v4 with its CSS import', { environments: vite }, async (c) => {
   await c.send('Add Tailwind CSS 4 to this project, with src/styles.css as the stylesheet.')
   const css = (await c.readFile('src/styles.css')) ?? ''
   expect(css, 'uses @import "tailwindcss"').toMatch(/@import\s+["']tailwindcss["']/)

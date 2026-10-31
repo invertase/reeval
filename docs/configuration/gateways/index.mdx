@@ -23,7 +23,7 @@ export default defineConfig({
 })
 ```
 
-Vercel AI Gateway serves Claude Code on `AI_GATEWAY_API_KEY`. It can't serve Cursor, so Cursor falls back to `direct()` and its own `CURSOR_API_KEY`. Without `direct()` at the end, a harness that no gateway in the list serves stops the plan with exit code 2. The plan's `notes` column lists the gateway each harness resolved to, in `harness` order:
+Vercel AI Gateway serves Claude Code on `AI_GATEWAY_API_KEY`. It can't serve Cursor, so Cursor falls back to `direct()` and its own `CURSOR_API_KEY`. Without `direct()` at the end, a harness that no gateway in the list serves stops the plan with exit code 2. The plan's `notes` column lists the gateway each harness resolved to, in `harnesses` order:
 
 ```bash
 npx reeval run --dry-run

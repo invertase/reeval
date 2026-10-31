@@ -215,7 +215,7 @@ CREATE VIEW lift AS
   JOIN cells k ON k.run_id = c.run_id AND k.eval_key = c.eval_key AND k.key = c.lift_vs
   WHERE c.role = 'variant';
 
--- Each variant against its control over a eval with cases's cases, paired by case, per run.
+-- Each variant against its control over an eval's cases, paired by case, per run.
 CREATE VIEW family_lift AS
   SELECT f.*, r.started_at, r.branch
   FROM family_lift_m f JOIN runs r USING (run_id);

@@ -419,7 +419,7 @@ export async function buildDigestKeepingDropped(
         ...(e.family ? { family: e.family.id, case: e.family.case } : {}),
       })
     }
-    // A eval with cases: its cases' lift paired by case, which its cases' facts leave out.
+    // An eval with cases: its cases' lift paired by case, which its cases' facts leave out.
     for (const f of r.record.families ?? []) {
       const member = r.record.evals.find((e) => e.family?.id === f.id && evalKeys.has(e.key))
       if (!member) continue

@@ -530,6 +530,8 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
     const family = members[0]?.family
     const live = members.filter((m) => !m.plan.skip)
     const attempts = live.reduce((sum, m) => sum + m.plan.attempts, 0)
+    // `where` can leave a case off some harnesses, so the eval runs on as many as its widest case.
+    const harnesses = Math.max(p.harnesses, ...live.map((m) => m.plan.harnesses))
     const pooled = family
       ? [
           `${live.length === family.cases ? family.cases : `${live.length} of ${family.cases}`} cases · ${p.variants === null ? 'pooled pass rate' : 'paired lift'}`,
@@ -537,7 +539,7 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
       : []
     return [
       clip(id, 64),
-      String(p.harnesses),
+      String(harnesses),
       p.variants === null
         ? '—'
         : p.variants.run === p.variants.of

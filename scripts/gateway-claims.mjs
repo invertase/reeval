@@ -98,7 +98,7 @@ export function gatewayNotesProblems(docsDir) {
     )
     if (notes < harnesses) {
       problems.push(
-        `${file} shows ${notes} \`gateway:\` notes for the ${harnesses} harness factories in its config block: the plan prints one note per harness, in the order of \`harness\``,
+        `${file} shows ${notes} \`gateway:\` notes for the ${harnesses} harness factories in its config block: the plan prints one note per harness, in the order of \`harnesses\``,
       )
     }
   }

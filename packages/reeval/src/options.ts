@@ -824,7 +824,17 @@ export function cascade(
       'inherited',
     )
   }
-  for (const { options: own, where: at } of levels) applyLevel(out, own, at)
+  // An inherited compare runs its own control, so environments set under it would never run.
+  let compareAt: string | undefined
+  for (const { options: own, where: at } of levels) {
+    if (compareAt && own.environments !== undefined) {
+      throw new UsageError(
+        `${at} sets environments, but ${compareAt} sets compare, which runs its control in their place. Set compare: { control, variants: [...] } on ${at} instead, or move ${at} out of ${compareAt}.`,
+      )
+    }
+    applyLevel(out, own, at)
+    if (own.compare !== undefined) compareAt = at
+  }
   if (out.questions.length) {
     out.questions = out.questions.map((q) => withQuestionDefaults(q, out.question))
   }

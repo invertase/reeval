@@ -541,7 +541,7 @@ For more information about sandbox factories, see [Choose a sandbox](/configurat
 `environments` names what an evaluation runs in, one cell each.
 
 <Property name="environments" type="EnvironmentsOption" optional>
-  One environment from `defineEnvironment()` or a list, which replaces inherited environments. Groups and evaluations also accept `{ add }`, `{ only }`, or, in TypeScript, a function of the inherited list. reeval refuses an empty list, `add` beside `only`, two environments with one name, and `environments` beside `compare` on the same evaluation: the control goes in `compare.control`.
+  One environment from `defineEnvironment()` or a list, which replaces inherited environments. Groups and evaluations also accept `{ add }`, `{ only }`, or, in TypeScript, a function of the inherited list. reeval refuses an empty list, `add` beside `only`, two environments with one name, `environments` beside `compare` on the same evaluation, and `environments` under a group's `compare`: the control goes in `compare.control`.
 </Property>
 
 For more information about environments, see [Define an environment](/configuration/environments).
