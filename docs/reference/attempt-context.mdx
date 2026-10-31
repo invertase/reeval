@@ -329,7 +329,7 @@ c.observe('deps', Object.keys(JSON.parse(pkg).dependencies))
 ```
 
 <Property name="name" type="string" required>
-  1 to 64 letters, digits, `_`, `.`, `:`, `/` or `-`. Observing a name again replaces its value.
+  1 to 64 letters, digits, `_`, `.`, `:`, `/` or `-`. Observing a name again replaces its value. A secret in a name is masked as values are, and a second name that masks to the same name throws.
 </Property>
 
 <Property name="value" type="JSONValue" required>

@@ -36,6 +36,25 @@ describe('c.observe', () => {
     assert.deepEqual(a.record.observations?.[0]?.value, { token: '[REDACTED]' })
   })
 
+  test('masks a secret-looking name, and refuses another that masks to the same name', () => {
+    const token = (c: string) => `ghp_${c.repeat(36)}`
+    const { a, observe } = attempt()
+    observe(token('a'), 1)
+    observe(token('a'), 2)
+    observe(`count_${token('b')}`, 3)
+    assert.throws(
+      () => observe(token('c'), 4),
+      (e: Error) =>
+        /c\.observe\("\[REDACTED\]"\) names a secret, and its masked name is another observation's/.test(
+          e.message,
+        ) && !e.message.includes('ghp_'),
+    )
+    assert.deepEqual(a.record.observations, [
+      { name: '[REDACTED]', value: 2, turn: 0 },
+      { name: 'count_[REDACTED]', value: 3, turn: 0 },
+    ])
+  })
+
   test('masks a number that is a secret', () => {
     process.env.REEVAL_T_SECRET_PIN = '98765432'
     try {
@@ -263,6 +282,52 @@ evaluate('input', { questions, judge: { model: fakeJudge({ score: seen }) } }, a
         ],
       ],
     )
+  })
+})
+
+describe('a secret-looking observation name in a run', () => {
+  test('is masked in the record, the judge state and the question, and a judge or question names it as observed', async () => {
+    const token = `ghp_${'q'.repeat(36)}`
+    const p = await project('observe-secret-name', {
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  harness: fakeHarness(),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  analysis: { model: fakeAnalysis({ answer: (q) => JSON.stringify(q.attempt.observations ?? null) }) },
+})
+`,
+      'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
+import { fakeJudge } from 'reeval/judge'
+const token = 'ghp_' + 'q'.repeat(36)
+const other = 'ghp_' + 'z'.repeat(36)
+const seen = (state) => (state.observations?.['[REDACTED]'] === 'kept' ? 0.9 : 0.1)
+const questions = [{ question: 'Kept?', observations: [token] }]
+evaluate('masked', { questions, judge: { model: fakeJudge({ score: seen }) } }, async (c) => {
+  await c.send('x')
+  c.observe(token, 'kept')
+  expect(() => c.observe(other, 'lost')).toThrow('names a secret')
+  expect(await c.judge('kept?', { observations: [token] })).toPass()
+  await expect(() => c.judge('other?', { observations: [other] })).rejects.toThrow(
+    'c.judge() observations names a value this attempt hasn\\'t observed: "[REDACTED]"',
+  )
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run } = readRun(p.dir)
+    const attempt = run.evals[0]?.attempts[0]
+    assert.deepEqual(attempt?.observations, [{ name: '[REDACTED]', value: 'kept', turn: 1 }])
+    assert.deepEqual(attempt?.answers?.[0]?.stateOptions.observations, ['[REDACTED]'])
+    assert.equal(
+      attempt?.answers?.[0]?.text,
+      JSON.stringify([{ name: '[REDACTED]', value: 'kept' }]),
+    )
+    const record = JSON.stringify(run)
+    assert.ok(!record.includes(token) && !record.includes('z'.repeat(36)), record)
   })
 })
 

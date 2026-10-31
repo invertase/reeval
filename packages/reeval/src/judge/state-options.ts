@@ -1,3 +1,4 @@
+import { observedName } from '../attempt/observe.ts'
 import type { JudgeCallFields, JudgeOptions, ResolvedJudgeStateOptions } from '../types.ts'
 
 /**
@@ -5,7 +6,7 @@ import type { JudgeCallFields, JudgeOptions, ResolvedJudgeStateOptions } from '.
  * selections serialize the same.
  */
 export function resolveStateOptions(call: JudgeCallFields): ResolvedJudgeStateOptions {
-  const { observations } = call
+  const observations = observedNames(call.observations)
   return {
     task: call.task ?? false,
     output: call.output ?? false,
@@ -18,6 +19,10 @@ export function resolveStateOptions(call: JudgeCallFields): ResolvedJudgeStateOp
     ...(observationsOn(observations) ? { observations } : {}),
   }
 }
+
+/** A list of observation names as they're recorded, so a secret in one is masked. */
+export const observedNames = <T extends boolean | string[] | undefined>(value: T): T =>
+  (Array.isArray(value) ? value.map(observedName) : value) as T
 
 /** `observations` when it turns the input on: `true` or a non-empty list. */
 export const observationsOn = (value: boolean | string[] | undefined): value is true | string[] =>

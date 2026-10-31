@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
 import { cannedModel, type HostModelSettings, hostModel, isFake } from '../analysis/model.ts'
+import { observedName } from '../attempt/observe.ts'
 import type { EngineEval } from '../engine/node.ts'
 import type { VertexSettings } from '../gateway/vertex.ts'
 import type { AttemptRecord, FileRef, RunRecord } from '../history/types.ts'
@@ -205,7 +206,7 @@ function observationsOf(
   const observed = attempt.observations ?? []
   const shown = (o: (typeof observed)[number]) => ({ name: o.name, value: o.value })
   if (which === true) return observed.map(shown)
-  return which.map((name) => {
+  return which.map(observedName).map((name) => {
     const o = observed.find((x) => x.name === name)
     return o ? shown(o) : { name, missing: true as const }
   })
@@ -500,9 +501,9 @@ function missingEverywhere(
   }
   const { observations } = shows.state
   if (Array.isArray(observations)) {
-    const name = observations.find(
-      (n) => !sides.some((s) => s.observations?.some((o) => o.name === n)),
-    )
+    const name = observations
+      .map(observedName)
+      .find((n) => !sides.some((s) => s.observations?.some((o) => o.name === n)))
     if (name !== undefined) {
       return `question "${question}" observations names a value no ${who} observed: ${JSON.stringify(name)}`
     }
