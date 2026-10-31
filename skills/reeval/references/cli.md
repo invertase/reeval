@@ -74,8 +74,8 @@ model), and the one questions without their own model use. `reeval init` sets it
 `AI_GATEWAY_API_KEY` only with `gateway: [vercel()]`).
 
 `reeval run` ends with `Remarks:` when an eval itself needs work, with no model: `flaky-check`,
-`slow-mcp-start`, `proxy-only-egress`, `setup-process-secret` and `snapshot-too-large` (concerns,
-at most three), and
+`slow-mcp-start`, `proxy-only-egress`, `setup-process-secret`, `snapshot-too-large` and
+`survey-throws` (concerns, at most three), and
 with `-v` `too-few-tries` and `check-never-fails` (suggestions). They go in `remarks.json` beside
 the run, which `reeval record` copies into the history folder. Each names the source line to change (`fix  <file:line>`).
 Act on them: raise `runs`, tighten or remove the check, bake the MCP server's dependencies into

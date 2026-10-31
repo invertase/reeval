@@ -152,6 +152,13 @@ evaluate('migrates', async (c) => {
   expect('psql: Network is unreachable', 'migrated').toBe('ok')
 })
 `,
+      'evals/survey.eval.ts': `import { expect, survey } from 'reeval'
+survey('throws', { runs: 3 }, async (c) => {
+  await c.send('go')
+  if (c.attempt.n < 3) throw new Error('no pick file')
+  expect(true, 'picked').toBe(true)
+})
+`,
       'evals/server.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const server = defineEnvironment('server', ({ secret }) => ({
   env: { CHECK_TOKEN: secret({ to: 'checks', optional: true }) },
@@ -282,6 +289,38 @@ describe('remark thresholds', () => {
       `Setup left "sleep 600" (and 1 more) running with CHECK_TOKEN, API_TOKEN, to: 'checks' secrets without hosts, in their environment in 2 tries, so the agent can read the real value from those processes.`,
     )
     assert.equal(both?.evidence.length, 2)
+  })
+
+  test('survey-throws: a survey that threw outside an expect in more than half its tries', async () => {
+    const record = only(await rules(), 'throws')
+    const [remark] = raise(record, NO_HISTORY)
+    assert.equal(remark?.kind, 'survey-throws')
+    assert.equal(remark?.severity, 'concern')
+    assert.equal(
+      remark?.text,
+      '2 of 3 tries threw outside an expect, so the survey recorded its own error, not what the agent did: no pick file',
+    )
+    assert.equal(remark?.evidence.length, 2)
+    const edit = (change: (a: RunRecord['evals'][number]['attempts'][number]) => void) => {
+      const copy = structuredClone(record)
+      change(copy.evals[0]?.attempts[0] as never)
+      return kinds(copy, NO_HISTORY)
+    }
+    assert.deepEqual(
+      edit((a) => Object.assign(a, { outcome: 'pass', error: null })),
+      [],
+      'half the tries',
+    )
+    assert.deepEqual(
+      edit((a) => {
+        a.assertions = [{ ...(a.assertions?.[0] as never), status: 'fail' }]
+      }),
+      [],
+      'a failed expect is a check, not a throw',
+    )
+    const gated = structuredClone(record)
+    for (const c of gated.evals[0]?.cells ?? []) c.gate = 'all'
+    assert.deepEqual(kinds(gated, NO_HISTORY), [], 'an evaluate fails on it instead')
   })
 
   test('snapshot-too-large: an attempt over the cap took no snapshot, not one taken or off', async () => {
