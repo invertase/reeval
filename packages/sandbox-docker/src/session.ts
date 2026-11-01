@@ -173,9 +173,16 @@ export async function confinementArgs(options: SessionOptions): Promise<string[]
   ]
 }
 
-/** Runtime `npm i -g` goes to the sandbox user's own prefix, whose `bin` the images put on PATH. */
-const userEnv = (options: SessionOptions): Record<string, string> =>
-  options.root ? {} : { NPM_CONFIG_PREFIX: `${SANDBOX_HOME}/.local` }
+/**
+ * Runtime `npm i -g` goes to the sandbox user's own prefix, whose `bin` the images put on PATH.
+ * npm's and pnpm's update checks stay off: the image pins both, and pnpm checks
+ * `registry.npmjs.org/pnpm` on any install a day after the image's last check (a harness
+ * bootstrap's frozen install included), which `deny-all` would record as a blocked host.
+ */
+const userEnv = (options: SessionOptions): Record<string, string> => ({
+  NPM_CONFIG_UPDATE_NOTIFIER: 'false',
+  ...(options.root ? {} : { NPM_CONFIG_PREFIX: `${SANDBOX_HOME}/.local` }),
+})
 
 /** Whether the gateway runs. When it doesn't, the session has no request-transformation methods. */
 export type EgressStatus = { active: true } | { active: false; reason: string }

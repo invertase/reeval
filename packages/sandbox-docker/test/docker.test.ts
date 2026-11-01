@@ -53,6 +53,17 @@ const node22Image = () => {
   }
 }
 
+/**
+ * reeval's image with npm's update checks turned on in its `ENV`, as an eval's own Dockerfile can
+ * do, so only the session's env can turn them off.
+ */
+const NOTIFIER_IMAGE = `reeval-test-notifier:${DEFAULT_IMAGE.split(':')[1]}`
+const notifierImage = () =>
+  execFileSync(CLI, ['build', '-q', '-t', NOTIFIER_IMAGE, '-'], {
+    input: `FROM ${DEFAULT_IMAGE}\nENV NPM_CONFIG_UPDATE_NOTIFIER=true\n`,
+    stdio: ['pipe', 'ignore', 'pipe'],
+  })
+
 /** Node's clients in the container, by name: `node probe.mjs <client> <url>` prints `<status> <body>`. */
 const NODE_PROBE = `import http from 'node:http'
 import https from 'node:https'
@@ -762,6 +773,26 @@ describe('egress policy in Docker', {
     assert.notEqual(other.stdout, '200')
     assert.match(other.stderr, /403/)
     assert.equal(seen.length, 1, 'nothing else reached the upstream')
+  })
+
+  test("pnpm's update check contacts no registry, so a dependency-free install under deny-all is blocked nowhere", async () => {
+    notifierImage()
+    const s = await createSession({ image: NOTIFIER_IMAGE, egress: egress({ policy: denyAll }) })
+    sessions.push(s)
+    // No last check on record, so pnpm checks on this install whatever the image's age.
+    const install = (prefix = '') =>
+      sh(
+        s,
+        `rm -rf ~/.local/state/pnpm && d=$(mktemp -d) && cd "$d" && echo '{"name":"p","private":true}' > package.json && ${prefix}pnpm install`,
+      )
+    const npm = () =>
+      (s.traffic?.().blocked ?? []).filter((b) => b.host === 'registry.npmjs.org').length
+    const r = await install()
+    assert.equal(r.exitCode, 0, r.stdout + r.stderr)
+    assert.equal(npm(), 0, 'registry.npmjs.org was contacted')
+    // Canary: with the check back on, the same install does contact it.
+    await install('NPM_CONFIG_UPDATE_NOTIFIER=true ')
+    assert.ok(npm() > 0, "the canary's install didn't contact registry.npmjs.org")
   })
 
   test('absolute-form https (GET https://… without CONNECT): allowed, keyed and refused like CONNECT', async () => {
