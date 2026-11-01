@@ -101,7 +101,7 @@ For more information about judge fields, see [Options reference](/reference/opti
 ### `attempts`
 
 <Property name="attempts" type="number" optional>
-  A whole number of at least 1. reeval exits with code 2 before the run starts when the plan is over the cap, unless `--force` is set. The plan line shows the cap, as in `budget 5 attempts ✗`.
+  A whole number of at least 1. reeval exits with code 2 before the run starts when the plan is over the cap, unless `--force` is set. The header's `Scope:` line shows the cap, as in `(budget: 5 ✗)`.
 </Property>
 
 ### `duration`
@@ -110,7 +110,7 @@ For more information about judge fields, see [Options reference](/reference/opti
   Greater than zero. A number is milliseconds, and a number plus `ms`, `s`, `m`, or `h` is that unit.
 </Property>
 
-The plan line appends the duration, as in `budget 5 attempts ✗, 2h`.
+The header's `Scope:` line appends the duration, as in `(budget: 5 ✗, 2h)`.
 
 The timer starts when the first attempt starts. At the cap, running attempts finish and queued attempts are skipped. The record status is `budget`, and the run fails.
 
@@ -160,7 +160,7 @@ A `defaultProfile` name that is not a profile exits with code 2 when the config 
 
 An unknown `--profile` or `REEVAL_PROFILE` name exits with code 2. The message lists the names in `profiles`, or says that the `reeval.config.ts` file defines none.
 
-The plan line includes the reason, as in `profile nightly (--profile)`, `REEVAL_PROFILE`, `auto: CI is set`, or `default`. With no profile, that segment is absent.
+The header's `Profile:` line names it, with the reason unless `--profile` chose it, as in `nightly (REEVAL_PROFILE)`, `pr (auto: CI is set)`, or `pr (default)`. With no profile, that line is absent.
 
 The `profile` field on the config callback is the `--profile` or `REEVAL_PROFILE` name. `defaultProfile` leaves that field unset.
 
