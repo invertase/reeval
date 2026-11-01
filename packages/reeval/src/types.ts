@@ -1,4 +1,3 @@
-import type { DeclaredSource } from './declaration.ts'
 import type { ArtifactLevel, FileRef, JudgeRetry, RecordMode } from './history/types.ts'
 
 /** More than zero and at most 596h: `90s`, `15m`, `1h`, or a number of milliseconds. */
@@ -1878,7 +1877,14 @@ export type Revision = number | string
  * An eval's own source as hashes: its body and case data as declared, and its options and its
  * enclosing groups' in canonical form (`tags`, `revision` and `gate` aside).
  */
-export type EvalSource = DeclaredSource & {
+export type EvalSource = {
+  /** sha256 of the body function's source text. */
+  body: string
+  /**
+   * sha256 of the case's data as canonical JSON, with secrets in its strings masked as the record
+   * masks them; set on each case of an `evaluate.each`.
+   */
+  case?: string
   /** sha256 of the canonical options. */
   options: string
 }

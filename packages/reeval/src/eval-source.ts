@@ -11,6 +11,7 @@ import { UsageError } from './errors.ts'
 import { relativeFile, sha256 } from './ids.ts'
 import { isObjectLike } from './object.ts'
 import { harnessId, sandboxId } from './options.ts'
+import { redactJsonText } from './redact.ts'
 import type {
   EvalOptions,
   EvalSource,
@@ -54,17 +55,25 @@ export function bodyHash(fn: (...args: never[]) => unknown, where: string, file?
 }
 
 /**
- * sha256 of an `evaluate.each` case in canonical JSON. Throws on a value that isn't JSON data (a
- * class instance such as a RegExp or Map, a non-finite number), whose changes JSON can't see.
+ * An `evaluate.each` case as canonical JSON text. Throws on a value that isn't JSON data (a class
+ * instance such as a RegExp or Map, a non-finite number), whose changes JSON can't see.
  */
-export function caseHash(item: unknown, where: string, file?: string): string {
+export function caseJson(item: unknown, where: string, file?: string): string {
   const refuse = (what: string): never => {
     throw new UsageError(
       `${where}: reeval fingerprints each case as JSON data, and this one isn't (it holds ${what}). Pass plain objects, arrays, strings, finite numbers, booleans, null, functions or environments, and build the rest in the body.`,
     )
   }
-  return sha256(canonicalJson(item, { file, refuse }))
+  return canonicalJson(item, { file, refuse })
 }
+
+/**
+ * sha256 of a case's canonical JSON text with secrets in its strings masked as `redactJsonText`
+ * masks them. The record is committed beside the eval file, so an unmasked hash would let its
+ * reader confirm a guessed secret; a case without one hashes its text byte for byte.
+ */
+export const caseHash = (json: string, env: NodeJS.ProcessEnv = process.env): string =>
+  sha256(redactJsonText(json, env))
 
 /** sha256 of the eval's options and its enclosing groups', outermost first, in canonical form. */
 export function optionsHash(levels: readonly EvalOptions[]): string {

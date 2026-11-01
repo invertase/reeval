@@ -36,7 +36,7 @@ const hash = () =>
 
 export const declaredSourceSchema = z.strictObject({
   body: hash(),
-  case: hash().optional(),
+  caseJson: z.string().optional(),
 })
 
 export const declaredEvalSchema = z.strictObject({

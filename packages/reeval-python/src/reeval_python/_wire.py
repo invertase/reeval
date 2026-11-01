@@ -669,14 +669,14 @@ DeclaredMode: TypeAlias = "Literal[\"run\", \"skip\", \"only\"]"
 DeclaredNode: TypeAlias = "DeclaredEval | DeclaredGroup | DeclaredTodo"
 
 
-# An eval's own source, hashed by the SDK that declared it: sha256 (hex) of its body's source
-# text, and of an `evaluate.each` case's data as canonical JSON (object keys sorted, no
-# whitespace, non-ASCII characters as themselves).
+# An eval's own source as the SDK that declared it reads it: sha256 (hex) of its body's source
+# text, and an `evaluate.each` case's data as canonical JSON (object keys sorted, no whitespace,
+# non-ASCII characters as themselves). reeval hashes the case itself, with its secrets masked.
 class DeclaredSource(TypedDict):
     # sha256 of the body function's source text.
     body: str
-    # sha256 of the case's data; set on each case of an `evaluate.each`.
-    case: NotRequired[str]
+    # The case's data as canonical JSON text; set on each case of an `evaluate.each`.
+    caseJson: NotRequired[str]
 
 
 # `evaluate.todo` or `group.todo`.
@@ -2020,6 +2020,7 @@ CAMEL_KEYS: frozenset[str] = frozenset(
         "bestOf",
         "cacheRead",
         "cacheWrite",
+        "caseJson",
         "costUsd",
         "delayMs",
         "durationMs",

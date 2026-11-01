@@ -34,11 +34,19 @@ const TASK_AND_DIFF = resolveQuestionState({ task: true, diff: true })
 import type { EngineEval } from '../src/engine/node.ts'
 import { defineEnvironment } from '../src/environment.ts'
 import { TimeoutError } from '../src/errors.ts'
-import { bodyHash, canonicalJson, caseHash, optionsHash, sourcesPart } from '../src/eval-source.ts'
+import {
+  bodyHash,
+  canonicalJson,
+  caseHash,
+  caseJson,
+  optionsHash,
+  sourcesPart,
+} from '../src/eval-source.ts'
 import { fingerprintOf, judgmentKey, mergeOutcome } from '../src/history/assemble.ts'
 import { familiesOf } from '../src/history/families.ts'
 import { runnerInfo } from '../src/history/provenance.ts'
 import type { EvalEntry, FamilyLift, FingerprintParts } from '../src/history/types.ts'
+import { sha256 } from '../src/ids.ts'
 import { patchForJudge } from '../src/judge/patch.ts'
 import { checkGate } from '../src/options.ts'
 import {
@@ -522,10 +530,11 @@ describe("an eval's source", () => {
 
   test("a case hashes as JSON data, and data JSON can't see is refused", () => {
     const at = 'evaluate.each("e") case 0'
-    assert.equal(caseHash({ n: 1, s: 'x' }, at), caseHash({ s: 'x', n: 1 }, at))
-    assert.notEqual(caseHash({ n: 1 }, at), caseHash({ n: 2 }, at), 'twin: another value')
+    const hash = (item: unknown) => caseHash(caseJson(item, at), {})
+    assert.equal(hash({ n: 1, s: 'x' }), hash({ s: 'x', n: 1 }))
+    assert.notEqual(hash({ n: 1 }), hash({ n: 2 }), 'twin: another value')
     const env = defineEnvironment('skilled', {})
-    assert.equal(caseHash({ env, at: new Date(0) }, at), caseHash({ env, at: new Date(0) }, at))
+    assert.equal(hash({ env, at: new Date(0) }), hash({ env, at: new Date(0) }))
     for (const [value, what] of [
       [/hello/, 'a RegExp'],
       [new Map([['a', 1]]), 'a Map'],
@@ -534,10 +543,28 @@ describe("an eval's source", () => {
       [Number.POSITIVE_INFINITY, 'Infinity'],
     ] as const) {
       assert.throws(
-        () => caseHash({ want: value }, at),
+        () => caseJson({ want: value }, at),
         new RegExp(`^UsageError: evaluate\\.each\\("e"\\) case 0: .* \\(it holds ${what}\\)`),
       )
     }
+  })
+
+  test('a case hashes with its secrets masked, and as its text when it holds none', () => {
+    const env = { DB_PASSWORD: 'hunter2hunter2' }
+    const text = caseJson({ password: 'hunter2hunter2', n: 1 }, 'evaluate.each("e") case 0')
+    assert.notEqual(caseHash(text, env), sha256(text), 'the raw case would confirm a guess')
+    assert.equal(caseHash(text, env), sha256('{"n":1,"password":"[REDACTED]"}'))
+    assert.equal(
+      caseHash(text, env),
+      caseHash(caseJson({ password: 'rotated-secret-value', n: 1 }, 'e'), {
+        DB_PASSWORD: 'rotated-secret-value',
+      }),
+      'a rotated secret keeps the hash',
+    )
+    const token = `ghp_${'Q'.repeat(36)}`
+    assert.equal(caseHash(JSON.stringify({ k: token }), {}), sha256('{"k":"[REDACTED]"}'))
+    const plain = caseJson({ s: 'café', n: [1, 2] }, 'e')
+    assert.equal(caseHash(plain, env), sha256(plain), 'a case without secrets keeps its hash')
   })
 })
 

@@ -381,11 +381,12 @@ def _case_default(value: Any) -> Any:
     raise TypeError(f"{type(value).__name__} isn't JSON data")
 
 
-def case_hash(case: Any, where: str) -> str:
-    """sha256 of a case's data as canonical JSON: keys sorted, no whitespace. A dataclass is its
-    fields and an environment its name; anything else that isn't JSON is refused."""
+def case_json(case: Any, where: str) -> str:
+    """A case's data as canonical JSON text: keys sorted, no whitespace. A dataclass is its fields
+    and an environment its name; anything else that isn't JSON is refused. reeval hashes it with
+    its secrets masked."""
     try:
-        text = json.dumps(
+        return json.dumps(
             case,
             default=_case_default,
             sort_keys=True,
@@ -398,7 +399,6 @@ def case_hash(case: Any, where: str) -> str:
             f"{where}: reeval fingerprints each case as JSON data, and this one isn't ({exc}). "
             "Pass dicts, lists, strings, numbers, booleans, None or dataclasses"
         ) from None
-    return hashlib.sha256(text.encode()).hexdigest()
 
 
 def is_async(fn: Callable[..., Any]) -> bool:
@@ -519,7 +519,7 @@ def evaluate_each(
             name = _case_name(name_template, case, index)
             source: w.DeclaredSource = {
                 "body": body,
-                "case": case_hash(case, f"{each} case {index}"),
+                "caseJson": case_json(case, f"{each} case {index}"),
             }
             _register_eval(name, "run", opts, _with_case(fn, case), source, family, hint)
 

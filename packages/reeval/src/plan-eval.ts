@@ -3,7 +3,7 @@
 // plugins: whoever declared the eval (an eval file's `evaluate`, or a declaration tree) registers
 // what it returns.
 import { type AttemptSpec, setupAllowance } from './attempt/index.ts'
-import type { DeclaredFamily, DeclaredSource } from './declaration.ts'
+import type { DeclaredFamily } from './declaration.ts'
 import { MAX_TIMER_MS, parseDuration } from './duration.ts'
 import { allowedHosts, unenforceable } from './egress.ts'
 import type { Gate, TestMode } from './engine/runtime.ts'
@@ -56,6 +56,7 @@ import type { Limits } from './scheduler/core.ts'
 import type {
   AttemptMeta,
   EvalOptions,
+  EvalSource,
   GroupOptions,
   ResolvedConfig,
   ResolvedGateway,
@@ -71,8 +72,8 @@ export type EvalDeclaration = {
   mode: TestMode
   groups: { name: string; options: GroupOptions }[]
   options: EvalOptions
-  /** Hashes of its body and case data, from whoever declared it. */
-  source: DeclaredSource
+  /** Hashes of its body and case data. */
+  source: Omit<EvalSource, 'options'>
   /** Set on each case of a pooled `evaluate.each`. */
   family?: DeclaredFamily
 }

@@ -173,11 +173,8 @@ def test_case_data_is_canonical_json_and_non_json_is_refused(tmp_path: Path) -> 
         def case(c, item): ...
         """,
     )
-    import hashlib
-
-    first = hashlib.sha256('{"a":"é","b":1}'.encode()).hexdigest()
-    assert found["case 0"]["case"] == first
-    assert found["case 1"]["case"] == hashlib.sha256(b'{"n":2}').hexdigest()
+    assert found["case 0"]["caseJson"] == '{"a":"é","b":1}'
+    assert found["case 1"]["caseJson"] == '{"n":2}'
     assert found["case 0"]["body"] == found["case 1"]["body"]
 
     path = tmp_path / "c.eval.py"
