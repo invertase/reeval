@@ -64,7 +64,7 @@ group('g', { runs: 2 }, () => {
     })
     const r = await runCli(p.dir, ['run', '--output-logs', 'full'])
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.match(r.stdout, /^plan {2}(?:run \S+ · )?1 eval · 2 cells · 4 attempts · ~/m)
+    assert.match(r.stdout, /^ {2}➜ {2}Scope: +1 eval file · 1 eval · 2 cells · 4 attempts$/m)
     assert.match(r.stdout, /^\[writes#1 good\] ▶ evals\/m\.eval\.ts › g › writes ok\.txt$/m)
     assert.match(r.stdout, /^\[writes#2 bad\] ▶ evals\/m\.eval\.ts › g › writes ok\.txt$/m)
     assert.match(
@@ -304,7 +304,7 @@ evaluate.each(${cases}${options})(
     assert.equal(r.code, 0, r.stdout + r.stderr)
     // The family is one row, its arms pooled over the cases.
     const pooled =
-      /✓ writes ok\.txt for %s {2}6 of 6 runs passed\n[│ ]+Baseline base passed 0 of 6\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}6 of 6 {2}helped\n/
+      /✓ writes ok\.txt for %s {2}6 of 6 variant runs passed\n[│ ]+Baseline base passed 0 of 6\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}6 of 6 {2}helped\n/
     assert.match(r.stdout, pooled)
     assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed')
     assert.match(r.stdout, /^Done in \S+ · 6 passed$/m)
@@ -399,7 +399,7 @@ evaluate.each(${cases}${options})(
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /✗ writes ok\.txt for %s {2}6 of 6 runs passed\n[│ ]+Baseline base passed 0 of 6\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}6 of 6 {2}helped, not by minLift 60\n/,
+      /✗ writes ok\.txt for %s {2}6 of 6 variant runs passed\n[│ ]+Baseline base passed 0 of 6\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}6 of 6 {2}helped, not by minLift 60\n/,
     )
     assert.doesNotMatch(r.stdout, /Failed cases/, 'every case passed on its own')
     assert.match(
@@ -424,7 +424,7 @@ evaluate.each(${cases}${options})(
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.doesNotMatch(r.stdout, /writes ok\.txt for %s/)
-    assert.match(r.stdout, /✓ writes ok\.txt for ada {7}1 of 1 run passed$/m)
+    assert.match(r.stdout, /✓ writes ok\.txt for ada {7}1 of 1 variant run passed$/m)
     const { run, evals } = readRun(p.dir)
     assert.equal(run.families, undefined)
     assert.equal(evals.length, 6)
@@ -473,10 +473,10 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /^plan {2}(?:run \S+ · )?1 eval · 2 cells · 4 attempts/m)
+    assert.match(r.stdout, /^ {2}➜ {2}Scope: +1 eval file · 1 eval · 2 cells · 4 attempts$/m)
     // A successful compare reads as one: the control's expected misses aren't failures.
     const block =
-      /✓ g › writes ok\.txt {2}2 of 2 runs passed\n[│ ]+Baseline base passed 0 of 2\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}2 of 2 {2}helped\n[│ ]+Every failure was the same check:\n[│ ]+"toHaveFile ok\.txt" failed 2 times, all on the baseline\n/
+      /✓ g › writes ok\.txt {2}2 of 2 variant runs passed\n[│ ]+Baseline base passed 0 of 2\.\n[│ ]+Variants, by pass rate:\n[│ ]+skilled {2}2 of 2 {2}helped\n[│ ]+Every failure was the same check:\n[│ ]+"toHaveFile ok\.txt" failed 2 times, all on the baseline\n/
     assert.match(r.stdout, block)
     assert.match(r.stdout, /^Done in \S+ · 1 passed · 2 not gated$|^Done in \S+ · 1 passed$/m)
 
@@ -613,7 +613,7 @@ group('rated', { gate: { passRate: 0.6 } }, () => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /^hint: 1 eval runs more than once with the default gate, so every attempt must pass \(pass\^k\); set gate: \{ passRate: 0\.8 \} to gate on pass@1 instead$/m,
+      /^ {2}ℹ {2}Hint: {4}1 eval runs more than once with the default gate, so every attempt must pass \(pass\^k\); set gate: \{ passRate: 0\.8 \} to gate on pass@1 instead$/m,
     )
     const cells = readRun(p.dir).evals.map((e) => [
       e.name,
@@ -659,7 +659,7 @@ describe('profiles', () => {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /^plan {2}(?:run \S+ · )?profile pr \(auto: CI is set\) · 3 evals \(1 skipped\) · 4 cells · 6 attempts · ~.* · budget 5 attempts ✗$/m,
+      /^ {2}➜ {2}Profile: +pr \(auto: CI is set\)\n(.*\n)* {2}➜ {2}Scope: +1 eval file · 3 evals \(1 skipped\) · 4 cells · 6 attempts \(budget: 5 ✗\)$/m,
     )
     assert.match(r.stdout, /^eval +harnesses +variants +runs +attempts +notes$/m)
     assert.equal(existsSync(join(p.dir, '.reeval/runs')), false, 'a dry run writes no run')
@@ -1728,7 +1728,7 @@ evaluate('one', { environment: maybe }, async () => {})
     const r = await runCli(p.dir, ['run', '--dry-run'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const warning =
-      /^warning: AWS_SECRET_ACCESS_KEY is in the sandbox as its real value\. To give the agent only a placeholder, add the hosts it's sent to, e\.g\. secret\.fromEnv\('AWS_SECRET_ACCESS_KEY', \{ hosts: \['api\.example\.com'\] \}\)\.$/gm
+      /^ {2}⚠ {2}Warning: AWS_SECRET_ACCESS_KEY is in the sandbox as its real value\. To give the agent only a placeholder, add the hosts it's sent to, e\.g\. secret\.fromEnv\('AWS_SECRET_ACCESS_KEY', \{ hosts: \['api\.example\.com'\] \}\)\.$/gm
     assert.equal(r.stdout.match(warning)?.length, 1, r.stdout)
     assert.doesNotMatch(r.stdout, /GEMINI_API_KEY is in the sandbox/)
   })
@@ -1791,7 +1791,7 @@ evaluate('e', { environment: main }, async () => {})
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /^warning: skill\.git\(github:invertase\/genkit-skills\) uses moving ref "main": results aren't comparable over time\. Pin a tag or SHA \(the resolved commit is recorded either way\)\.$/m,
+      /^ {2}⚠ {2}Warning: skill\.git\(github:invertase\/genkit-skills\) uses moving ref "main": results aren't comparable over time\. Pin a tag or SHA \(the resolved commit is recorded either way\)\.$/m,
     )
   })
 })

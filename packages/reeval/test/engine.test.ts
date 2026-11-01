@@ -122,7 +122,11 @@ export default defineConfig({
     })
     const r = await runCli(p.dir, ['run', 'scaffold', 'right/', '--ui', 'plain'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, / · harness right · /, 'the header names only the harness that runs')
+    assert.match(
+      r.stdout,
+      /^ {2}➜ {2}Harness: +right$/m,
+      'the header names only the harness that runs',
+    )
     const { evals } = readRun(p.dir)
     assert.deepEqual(
       evals.map((e) => [e.id, e.cells.map((c) => c.key)]),
@@ -1010,7 +1014,7 @@ evaluate('fails', async (c) => {
       'full',
     )
     assert.equal(stream.code, 1, stream.stdout + stream.stderr)
-    assert.match(stream.stdout, / · stream logs$/m)
+    assert.match(stream.stdout, /^ {2}◆ {2}Streaming logs\.\.\.$/m)
     const logs = lines(stream.stdout).filter((l) => /(stdout|stderr) \| log from/.test(l))
     assert.deepEqual(
       logs.map((l) => l.replace(/ {2}\+0:\d\d /, ' ')).sort(),
@@ -1027,7 +1031,7 @@ evaluate('fails', async (c) => {
       'errors-only',
     )
     assert.equal(grouped.code, 1, grouped.stdout + grouped.stderr)
-    assert.match(grouped.stdout, / · grouped logs$/m)
+    assert.match(grouped.stdout, /^ {2}◆ {2}Running; logs print for failed attempts only\.\.\.$/m)
     const out = lines(grouped.stdout)
     assert.ok(!out.some((l) => l.includes('log from passes')), 'a passing attempt prints no detail')
     const head = out.indexOf('[fails#1 fake] ▶ evals/o.eval.ts › fails')
@@ -1044,10 +1048,14 @@ evaluate('fails', async (c) => {
     assert.equal(none.code, 1)
     assert.doesNotMatch(lines(none.stdout).join('\n'), /log from|sandbox ready|AssertionError/)
 
-    const byEnv = await runCli(p.dir, ['run', '--ui', 'plain', '--output-logs', 'errors-only'], {
+    const byEnv = await runCli(p.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
       env: { REEVAL_LOG_ORDER: 'grouped' },
     })
-    assert.match(byEnv.stdout, / · grouped logs$/m, 'REEVAL_LOG_ORDER stands in for the flag')
+    assert.match(
+      byEnv.stdout,
+      /^ {2}◆ {2}Running; each attempt's logs print as it ends\.\.\.$/m,
+      'REEVAL_LOG_ORDER stands in for the flag',
+    )
     const bad = await run('--log-order', 'sideways')
     assert.equal(bad.code, 2)
     assert.match(bad.stderr, /--log-order is one of stream, grouped, auto \(got sideways\)/)
@@ -1064,21 +1072,29 @@ evaluate('passes', async () => {})
       env: { REEVAL_UI: 'agent', NO_COLOR: '', FORCE_COLOR: '' },
     })
     assert.equal(r.code, 1)
-    const [plan, ...out] = r.stdout.trimEnd().split('\n')
-    assert.match(plan ?? '', /^plan {2}(?:run \S+ · )?2 evals · 2 cells · 2 attempts · ~/)
-    assert.match(out[0] ?? '', /^reeval run: \S+ · 1 eval file$/)
-    assert.deepEqual(out.slice(1, -2), [
-      '',
-      'evals/agent.eval.ts',
-      '  ✗ agent eval  0 of 1 run passed',
-      '    Failed on fake.',
-      '    Every failure was the same check:',
-      '      "toPass ok?" failed once',
-      '        judge score 0.30 is below 0.8 for "ok?" (fake)',
-      '        at evals/agent.eval.ts:6',
-      '  ✓ passes      1 of 1 run passed',
-      '',
-    ])
+    const all = r.stdout.trimEnd().split('\n')
+    assert.match(all[0] ?? '', /^REEVAL v\S+$/, 'the header block a terminal prints')
+    assert.ok(
+      all.includes('  ➜  Scope:     1 eval file · 2 evals · 2 cells · 2 attempts'),
+      r.stdout,
+    )
+    const out = all.slice(all.indexOf('  ◆  Running...'))
+    assert.deepEqual(
+      out.slice(1, -2).map((l) => l.replace(/Snapshot: \S+/, 'Snapshot: <path>')),
+      [
+        '',
+        'evals/agent.eval.ts',
+        '  ✗ agent eval  0 of 1 run passed',
+        '    Failed on fake.',
+        '    Every failure was the same check:',
+        '      "toPass ok?" failed once',
+        '        judge score 0.30 is below 0.8 for "ok?" (fake)',
+        '        at evals/agent.eval.ts:6',
+        '    Snapshot: <path>',
+        '  ✓ passes      1 of 1 run passed',
+        '',
+      ],
+    )
     assert.match(out.at(-2) ?? '', /^Done in \d+m?s · 1 failed · 1 passed$/)
     assert.match(
       out.at(-1) ?? '',
@@ -1913,7 +1929,7 @@ evaluate('studied', { compare: { baseline: plain, variants: [skilled], gate: 'no
     // The control's two failures don't fail it: only the gated variant's 2 of 2 gate.
     assert.match(
       r.stdout,
-      /^├─ ✓ compared {2}2 of 2 runs passed\n│ {4}Baseline plain passed 0 of 2\.\n/m,
+      /^├─ ✓ compared {2}2 of 2 variant runs passed\n│ {4}Baseline plain passed 0 of 2\.\n/m,
     )
     assert.match(r.stdout, /^├─ ✗ repeated {2}3 of 4 runs passed\n│ {4}Passed 3 of 4 on fake\.\n/m)
     // Nothing gates a study, so it reads ●, never ✓ beside 0 of 4.
@@ -2190,7 +2206,7 @@ evaluate('fine', async () => {})
     assert.match(r.stdout, /Ctrl-C again quits at once, without a record/)
     assert.match(
       r.stdout,
-      new RegExp(`^A launcher passed the Ctrl-C on .* kill ${cli} quits it`, 'm'),
+      new RegExp(`^ {2}⚠ {2}A launcher passed the Ctrl-C on .* kill ${cli} quits it`, 'm'),
     )
   })
 
@@ -2212,7 +2228,7 @@ evaluate('fine', async () => {})
     assert.equal(r.code, 130, r.stdout + r.stderr)
     assert.equal(readRun(p.dir).run.status, 'interrupted')
     assert.doesNotMatch(r.stderr, /quit without writing/)
-    assert.match(r.stdout, /^A launcher passed the Ctrl-C on /m)
+    assert.match(r.stdout, /^ {2}⚠ {2}A launcher passed the Ctrl-C on /m)
   })
 
   test('a passed-on SIGTERM that arrives before its Ctrl-C is still one Ctrl-C, and the next press quits', {
@@ -2239,7 +2255,7 @@ evaluate('slow', async (c) => {
       },
     })
     assert.equal(r.code, 130, r.stdout + r.stderr)
-    assert.match(r.stdout, /^A launcher passed the Ctrl-C on /m)
+    assert.match(r.stdout, /^ {2}⚠ {2}A launcher passed the Ctrl-C on /m)
     assert.match(r.stderr, /quit without writing run \S+'s record/)
   })
 
@@ -2435,7 +2451,7 @@ evaluate('agent eval', async (c) => {
     const r = await runCli(p.dir, ['run'], {
       timeoutMs: 20_000,
       onOutput: (stdout, pid) => {
-        if (!/^reeval /m.test(stdout)) return false
+        if (!/^ {2}◆ {2}(Running|Streaming)/m.test(stdout)) return false
         process.kill(pid, 'SIGINT')
         return true
       },

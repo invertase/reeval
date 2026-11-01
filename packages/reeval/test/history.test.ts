@@ -658,7 +658,7 @@ evaluate(
     })
     const r = await runCli(p.dir, ['run', '--profile', 'fake', '--ui', 'plain'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, / · harness fake · sandbox fake · /)
+    assert.match(r.stdout, /^ {2}➜ {2}Harness: +fake\n {2}➜ {2}Sandbox: +fake$/m)
     const { run } = readRun(p.dir)
     assert.equal(run.evals[0]?.cells[0]?.sandbox, 'fake', 'the cell ran on the fake sandbox')
     assert.equal(run.config.sandbox, 'fake')
@@ -1442,17 +1442,11 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
     }
 
     const plan = await ok(['run', '--dry-run'])
-    assert.match(
-      plan.stdout,
-      /^plan {2}(?:run \S+ · )?config \.\.\/\.\.\/\.\.\/reeval\.config\.ts · 1 eval · /m,
-    )
+    assert.match(plan.stdout, /^ {2}➜ {2}Config: +\.\.\/\.\.\/\.\.\/reeval\.config\.ts$/m)
     assert.doesNotMatch(plan.stdout, /decoy/)
 
     const run = await ok(['run', '-v'])
-    assert.match(
-      run.stdout,
-      /plan +(?:run \S+ · )?config \.\.\/\.\.\/\.\.\/reeval\.config\.ts · no profile · /,
-    )
+    assert.match(run.stdout, /^ {2}➜ {2}Config: +\.\.\/\.\.\/\.\.\/reeval\.config\.ts$/m)
     const first = readRun(p.dir).run
     assert.deepEqual(
       first.evals.flatMap((e) => e.attempts.map((a) => `${e.id} ${a.id}`)),

@@ -490,7 +490,7 @@ describe('plain renderer', () => {
   test('no line says how an attempt ended; with --output-logs none, nothing prints per attempt', () => {
     for (const logOrder of ['stream', 'grouped'] as const) {
       const out = render(interleaved, options({ logOrder, outputLogs: 'none', heartbeatMs: 0 }))
-      assert.equal(out, lines('  ◆  Running...', '', ...RESULT))
+      assert.equal(out, lines('  ◆  Running...', ...RESULT))
     }
     assert.doesNotMatch(render(interleaved, options({ logOrder: 'stream' })), / [✓✗] evals\//)
   })
@@ -516,9 +516,13 @@ describe('plain renderer', () => {
     const clear = '\r\x1b[2K'
     assert.ok(out.includes(`${clear}2 evals · 0/2 tries`), out)
     assert.ok(out.includes(`${clear}2 evals · 1/2 tries`), out)
-    assert.ok(out.includes(`${clear}2 evals · 2/2 tries${clear}\n`), out)
+    assert.ok(out.includes(`  ◆  Running...\n\n${clear}2 evals · 0/2 tries`), out)
+    assert.ok(
+      out.includes(`${clear}2 evals · 2/2 tries${clear}evals/`),
+      'no second gap above the list',
+    )
     assert.doesNotMatch(out, /running after/)
-    assert.ok(out.endsWith(lines(...RESULT)))
+    assert.ok(out.endsWith(lines(...RESULT.slice(1))))
     const logs = render(interleaved, options({ statusLine: true, logOrder: 'stream' }))
     assert.ok(
       logs.includes(

@@ -133,7 +133,6 @@ type Feature = {
   args?: string[]
 }
 
-/** The result block `reeval run` printed for one eval, from its verdict line to the blank line. */
 /** An eval's block in summary.md's results. */
 function blockOf(stdout: string, name: string): string {
   const lines = stdout.split('\n')
@@ -2552,7 +2551,10 @@ export const features: Feature[] = [
       ]
       assert.deepEqual(observed('lands'), want, 'the last value per name, in first-call order')
       assert.deepEqual(observed('canary'), want, 'a failed attempt keeps what it observed')
-      assert.match(stdout, /observed\s+orm\s+drizzle 1\n\s+deps\s+drizzle-orm 1 · pg 1 · 1 attempt/)
+      assert.match(
+        stdout,
+        /Observed:\n[│ ]+orm +drizzle 1\n[│ ]+deps +drizzle-orm 1 · pg 1 · 1 attempt$/m,
+      )
     },
   },
   {
@@ -3519,7 +3521,7 @@ export const features: Feature[] = [
       assert.match(stdout, /✓ lands %s {2}2 of 2 runs passed\n\n/)
       assert.match(
         stdout,
-        /✗ canary %s {2}1 of 2 runs passed\n +Passed 1 of 2 on fake\.\n +Every failure was the same check:\n +"is red" failed once\n +expected 'green' to be 'red'/,
+        /✗ canary %s {2}1 of 2 runs passed\n +Passed 1 of 2 on fake\.\n +Failed cases: green\.\n +Every failure was the same check:\n +"is red" failed once\n +expected 'green' to be 'red'/,
       )
       assert.match(stdout, /\nDone in \S+ · 1 failed · 3 passed\n/)
     },
@@ -3622,6 +3624,7 @@ export const features: Feature[] = [
     tiers: ['fake', 'docker', 'real'],
     env: '-',
     canary: /expected.*to succeed/i,
+    args: ['--output-logs', 'errors-only'],
     prepare: (dir) => syncPythonFixtureProject(dir),
     record: ({ run, stdout }) => {
       const [lands] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
@@ -3750,7 +3753,7 @@ export const features: Feature[] = [
         ],
         'an eval declared skipped, or in a skipped group, is marked skip; one that ran is not',
       )
-      assert.match(stdout, /^skipped +parked$/m, 'a complete run shows a declared skip as skipped')
+      assert.match(stdout, /– parked +skipped$/m, 'a complete run shows a declared skip as skipped')
     },
   },
   {

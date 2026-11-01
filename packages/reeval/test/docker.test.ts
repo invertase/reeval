@@ -476,11 +476,13 @@ evaluate('ok', async (c) => {
       }
       const lines = r.stdout.split('\n')
       const failedAt = lines.findIndex((l) =>
-        /✗ docker\+[0-9a-f]+ \+ install failed to prepare \(set by group\("broken tools"\)/.test(l),
+        /✗ {2}docker\+[0-9a-f]+ \+ install failed to prepare \(set by group\("broken tools"\)/.test(
+          l,
+        ),
       )
       assert.ok(failedAt >= 0, r.stdout)
       assert.ok(
-        failedAt < lines.findIndex((l) => l.includes('▶')),
+        failedAt < lines.findIndex((l) => /^ {2}◆ {2}(Running|Streaming)/.test(l)),
         'reported before any attempt starts',
       )
       assert.equal(

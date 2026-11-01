@@ -57,7 +57,7 @@ async function failsOnlyItsAttempts(env: string, message: RegExp, hostEnv: NodeJ
   assert.equal(r.code, 3, output)
   assert.match(
     output,
-    /✗ workspace .+ failed to prepare \(set by environment app; only its attempts fail\)/,
+    /✗ {2}workspace .+ failed to prepare \(set by environment app; only its attempts fail\)/,
   )
   assert.match(output, message)
   const { run } = readRun(p.dir)

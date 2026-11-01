@@ -248,7 +248,10 @@ evaluate('three arms', { compare: { baseline: none, variants: [current, next], g
     const reasonWins =
       /^[│ ] +Question: Which reads better\?\n[│ ] +base +won 1 of 2\n[│ ] +skilled +won 1 of 2$/m
     assert.match(r.stdout, reasonWins)
-    assert.match(run.read('summary.md'), /^ {2}question {2}Which reads better\?\n {4}base {11}won 1 of 2\n {4}skilled {8}won 1 of 2$/m)
+    assert.match(
+      run.read('summary.md'),
+      /^ {2}question {2}Which reads better\?\n {4}base {11}won 1 of 2\n {4}skilled {8}won 1 of 2$/m,
+    )
 
     // Three arms, three runs, and a vote for the side shown first: every pair splits with the
     // order, which the pooled rates (each arm 50%) and a "0 ties" count hide.

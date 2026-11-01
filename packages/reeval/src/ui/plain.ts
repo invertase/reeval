@@ -103,6 +103,8 @@ export class PlainRenderer implements Renderer {
   #queued = new Set<string>()
   #runStartedAt = 0
   #lastWrite = 0
+  /** The last line written was blank, so the list needs no gap above it. */
+  #blank = false
   #timer: NodeJS.Timeout | undefined
   /** On a TTY: the status line is drawn under everything else, and redrawn after each write. */
   readonly #live: boolean
@@ -131,6 +133,7 @@ export class PlainRenderer implements Renderer {
     const line = `${text.trimEnd()}\n`
     this.#o.out.write(this.#status ? `${CLEAR}${line}${this.#status}` : line)
     this.#lastWrite = this.#now()
+    this.#blank = line === '\n'
   }
 
   /** `7 evals · 12/28 tries`: what's collected so far and how many tries ended. */
@@ -274,7 +277,7 @@ export class PlainRenderer implements Renderer {
       }
       case 'run-end': {
         this.#clearStatus()
-        this.#write('')
+        if (!this.#blank) this.#write('')
         const verbose = (this.#o.verbosity ?? 0) > 0
         const list = statusList({
           record: e.record,
