@@ -24,7 +24,11 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "measures": [
+          "leans: 5.9× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+          "leans: 2× faster, but 2 runs a side can't confirm it; 4 is the least that can"
+        ]
       }
     ]
   },
@@ -53,7 +57,10 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "measures": [
+          "leans: 2.2× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can"
+        ]
       }
     ]
   },
@@ -74,7 +81,10 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "measures": [
+          "leans: 16% fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can"
+        ]
       },
       {
         "cell": "es-good",
@@ -82,7 +92,11 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "measures": [
+          "leans: 12× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+          "leans: 2.3× faster, but 2 runs a side can't confirm it; 4 is the least that can"
+        ]
       }
     ]
   },
@@ -111,7 +125,11 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "measures": [
+          "leans: 4.5× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+          "leans: 1.9× faster, but 2 runs a side can't confirm it; 4 is the least that can"
+        ]
       }
     ]
   },
@@ -132,7 +150,10 @@
         "gated": true,
         "lift": "+50 pts (95% −27…+91)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "measures": [
+          "leans: judge \"Pass only if the final message names all three mistakes…\" +0.45, but 2 runs a side can't confirm it; 4 is the least that can"
+        ]
       },
       {
         "cell": "es-good",
@@ -140,7 +161,11 @@
         "gated": true,
         "lift": "+50 pts (95% −27…+91)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "measures": [
+          "leans: 1.7× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+          "leans: judge \"Pass only if the final message names all three mistakes…\" +0.45, but 2 runs a side can't confirm it; 4 is the least that can"
+        ]
       }
     ]
   },
@@ -169,7 +194,11 @@
         "gated": true,
         "lift": "+0 pts (95% −66…+66)",
         "verdict": "within noise",
-        "smallSample": true
+        "smallSample": true,
+        "measures": [
+          "leans: 7× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+          "leans: 1.9× faster, but 2 runs a side can't confirm it; 4 is the least that can"
+        ]
       }
     ]
   },
@@ -1061,6 +1090,10 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: 5.9× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+      "leans: 2× faster, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1082,6 +1115,10 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: 5.8× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+      "leans: 1.8× faster, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1124,6 +1161,9 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: 2.2× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1145,6 +1185,9 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: 2× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1166,6 +1209,9 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: 16% fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1187,6 +1233,10 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: 12× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+      "leans: 2.3× faster, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1208,6 +1258,10 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: 9.9× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+      "leans: 2.3× faster, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1250,6 +1304,10 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: 4.5× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+      "leans: 1.9× faster, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1271,6 +1329,10 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: 4.7× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+      "leans: 2× faster, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1292,6 +1354,9 @@
     "lift": "+50 pts (95% −27…+91)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: judge \"Pass only if the final message names all three mistakes…\" +0.45, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1313,6 +1378,10 @@
     "lift": "+50 pts (95% −27…+91)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: 1.7× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+      "leans: judge \"Pass only if the final message names all three mistakes…\" +0.45, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1334,6 +1403,10 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: 1.7× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+      "leans: 11% faster, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1376,6 +1449,10 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: 7× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+      "leans: 1.9× faster, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {
@@ -1397,6 +1474,10 @@
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
     "smallSample": true,
+    "measures": [
+      "leans: 7.7× fewer tool calls, but 2 runs a side can't confirm it; 4 is the least that can",
+      "leans: 1.9× faster, but 2 runs a side can't confirm it; 4 is the least that can"
+    ],
     "checks": [],
     "sameOnBoth": 0,
     "effort": {

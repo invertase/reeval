@@ -34,7 +34,8 @@ every run and no other measure (effort, a judge, a check, a compare question) is
 but some lean: a difference its own test doesn't hold yet, at p below 0.1 and at least 10
 points, 0.05 of a judge's score, 60/40 of 4 or more decisive pairs for a question (p below 0.2), or 10% of an
 effort median ("the variant looks different: 10% faster; about 30 runs a side would confirm
-it"); weaker ones are the same. **Fix:** raise `runs` to the number the remark
+it"); weaker ones are the same, except on a sample too small for the test to show anything ("12×
+faster, but 3 runs a side can't confirm it; 4 is the least that can"). **Fix:** raise `runs` to the number the remark
 names, or add cases to a family.
 
 ## `cant-tell-apart`

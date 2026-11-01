@@ -112,11 +112,15 @@
                         "lo": -0.122,
                         "hi": 1,
                         "p": null,
-                        "verdict": "same",
-                        "leaning": null,
+                        "verdict": "leans",
+                        "leaning": "better",
                         "text": "pass rate +100 pts",
-                        "needed": null,
-                        "unit": "runs"
+                        "needed": 4,
+                        "unit": "runs",
+                        "short": {
+                          "now": 1,
+                          "at": 4
+                        }
                       },
                       {
                         "measure": "tools",
@@ -131,7 +135,8 @@
                         "leaning": null,
                         "text": "same tool calls",
                         "needed": null,
-                        "unit": "runs"
+                        "unit": "runs",
+                        "short": null
                       },
                       {
                         "measure": "agentMs",
@@ -142,11 +147,15 @@
                         "lo": null,
                         "hi": null,
                         "p": 1,
-                        "verdict": "same",
-                        "leaning": null,
-                        "text": "same agent time",
+                        "verdict": "leans",
+                        "leaning": "better",
+                        "text": "2× faster",
                         "needed": null,
-                        "unit": "runs"
+                        "unit": "runs",
+                        "short": {
+                          "now": 1,
+                          "at": 4
+                        }
                       }
                     ],
                     "errors": [],
@@ -306,11 +315,15 @@
                         "lo": -0.122,
                         "hi": 1,
                         "p": null,
-                        "verdict": "same",
-                        "leaning": null,
+                        "verdict": "leans",
+                        "leaning": "better",
                         "text": "pass rate +100 pts",
-                        "needed": null,
-                        "unit": "runs"
+                        "needed": 4,
+                        "unit": "runs",
+                        "short": {
+                          "now": 1,
+                          "at": 4
+                        }
                       },
                       {
                         "measure": "tools",
@@ -325,7 +338,8 @@
                         "leaning": null,
                         "text": "same tool calls",
                         "needed": null,
-                        "unit": "runs"
+                        "unit": "runs",
+                        "short": null
                       },
                       {
                         "measure": "agentMs",
@@ -336,11 +350,15 @@
                         "lo": null,
                         "hi": null,
                         "p": 1,
-                        "verdict": "same",
-                        "leaning": null,
-                        "text": "same agent time",
+                        "verdict": "leans",
+                        "leaning": "better",
+                        "text": "27% faster",
                         "needed": null,
-                        "unit": "runs"
+                        "unit": "runs",
+                        "short": {
+                          "now": 1,
+                          "at": 4
+                        }
                       }
                     ],
                     "errors": [],
@@ -448,7 +466,8 @@
                     "leaning": null,
                     "text": "pass rate +100 pts",
                     "needed": null,
-                    "unit": "cases"
+                    "unit": "cases",
+                    "short": null
                   },
                   {
                     "measure": "tools",
@@ -463,7 +482,8 @@
                     "leaning": null,
                     "text": "same tool calls",
                     "needed": null,
-                    "unit": "cases"
+                    "unit": "cases",
+                    "short": null
                   },
                   {
                     "measure": "agentMs",
@@ -474,11 +494,15 @@
                     "lo": null,
                     "hi": null,
                     "p": 0.5,
-                    "verdict": "same",
-                    "leaning": null,
-                    "text": "same agent time",
-                    "needed": null,
-                    "unit": "cases"
+                    "verdict": "leans",
+                    "leaning": "better",
+                    "text": "1.6× faster",
+                    "needed": 17,
+                    "unit": "cases",
+                    "short": {
+                      "now": 2,
+                      "at": 5
+                    }
                   }
                 ]
               }
@@ -1133,11 +1157,15 @@
                     "lo": -0.122,
                     "hi": 1,
                     "p": null,
-                    "verdict": "same",
-                    "leaning": null,
+                    "verdict": "leans",
+                    "leaning": "better",
                     "text": "pass rate +100 pts",
-                    "needed": null,
-                    "unit": "runs"
+                    "needed": 4,
+                    "unit": "runs",
+                    "short": {
+                      "now": 1,
+                      "at": 4
+                    }
                   },
                   {
                     "measure": "tools",
@@ -1152,7 +1180,8 @@
                     "leaning": null,
                     "text": "same tool calls",
                     "needed": null,
-                    "unit": "runs"
+                    "unit": "runs",
+                    "short": null
                   },
                   {
                     "measure": "agentMs",
@@ -1163,11 +1192,15 @@
                     "lo": null,
                     "hi": null,
                     "p": 1,
-                    "verdict": "same",
-                    "leaning": null,
-                    "text": "same agent time",
+                    "verdict": "leans",
+                    "leaning": "better",
+                    "text": "2.1× faster",
                     "needed": null,
-                    "unit": "runs"
+                    "unit": "runs",
+                    "short": {
+                      "now": 1,
+                      "at": 4
+                    }
                   }
                 ],
                 "errors": [],
@@ -1348,7 +1381,8 @@
                     "leaning": null,
                     "text": "same pass rate",
                     "needed": null,
-                    "unit": "runs"
+                    "unit": "runs",
+                    "short": null
                   },
                   {
                     "measure": "tools",
@@ -1363,7 +1397,8 @@
                     "leaning": null,
                     "text": "same tool calls",
                     "needed": null,
-                    "unit": "runs"
+                    "unit": "runs",
+                    "short": null
                   },
                   {
                     "measure": "agentMs",
@@ -1374,11 +1409,15 @@
                     "lo": null,
                     "hi": null,
                     "p": 1,
-                    "verdict": "same",
-                    "leaning": null,
-                    "text": "same agent time",
+                    "verdict": "leans",
+                    "leaning": "better",
+                    "text": "2.2× faster",
                     "needed": null,
-                    "unit": "runs"
+                    "unit": "runs",
+                    "short": {
+                      "now": 1,
+                      "at": 4
+                    }
                   },
                   {
                     "measure": "question",
@@ -1391,9 +1430,10 @@
                     "p": 1,
                     "verdict": "same",
                     "leaning": null,
-                    "text": "\"Which greeting reads more like our house style?\" picked the variant 1 of 1",
+                    "text": "\"Which greeting reads more like our house style?\" picked the variant in 2 of 2 votes (1 of 1 decisive pair)",
                     "needed": null,
-                    "unit": "runs"
+                    "unit": "runs",
+                    "short": null
                   }
                 ],
                 "errors": [],

@@ -17,7 +17,7 @@ import {
   smallSample,
 } from '../stats.ts'
 import { clip } from '../text.ts'
-import { boundOf, type Reading, tieOf } from '../view/measures.ts'
+import { boundOf, leanText, type Measure, type Reading, tieOf } from '../view/measures.ts'
 import type { Remark } from '../view/remarks.ts'
 import type { CellResult, EvalResult, SuiteResult } from '../view/suite.ts'
 
@@ -126,6 +126,17 @@ const listed = (items: string[]) =>
   items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
 
 /**
+ * ` It looks 12× faster, but 3 runs a side can't confirm it; 4 is the least that can.`: leans too
+ * few runs can test, beside a pass-rate remark, which already counts the runs a rate needs.
+ */
+const shortLeans = (measures: readonly Measure[] | null | undefined) => {
+  const short = (measures ?? []).filter(
+    (m) => m.measure !== 'pass' && m.measure !== 'check' && m.short,
+  )
+  return short.length ? ` It looks ${listed(short.map(leanText))}.` : ''
+}
+
+/**
  * too-few-tries on a ceiling (concern): a variant and its baseline both passed every run and no
  * measure is better or worse, but some lean (`readMeasures`): the variant looks different, on too
  * few runs to say. It names the first such variant's leans, counting the others, and the runs (or
@@ -154,7 +165,7 @@ function looksDifferent(
       : unit === 'cases'
         ? `about ${needed} cases would confirm it`
         : `about ${runs(needed)} ${cases ? 'a case' : 'a side'} would confirm it`
-  const text = `The ${armOf(variant)} variant${on} and the baseline passed every run (${counts}), but the variant looks different: ${listed(reading.measures.map((m) => m.text))}; ${about}.${more}`
+  const text = `The ${armOf(variant)} variant${on} and the baseline passed every run (${counts}), but the variant looks different: ${listed(reading.measures.map(leanText))}; ${about}.${more}`
   const edit =
     needed === null
       ? "if a difference this faint doesn't matter, make the task harder, so the baseline can fail"
@@ -282,11 +293,12 @@ function tooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext): Candi
   const margin = Math.round(SMALL_SAMPLE_MARGIN * 100)
   const direction = rate(variant) > rate(base) ? 'better' : 'worse'
   const fewest = runs(Math.min(counted(variant), counted(base)))
+  const also = shortLeans(variant.measures)
   const text = held
-    ? `${counts}: ${direction} by ${Math.round(gap * 100)} points, on only ${fewest} a side.${more}`
+    ? `${counts}: ${direction} by ${Math.round(gap * 100)} points, on only ${fewest} a side.${also}${more}`
     : gap
-      ? `${counts}: ${direction} by ${Math.round(gap * 100)} points, but on too few runs for the difference to hold.${more}`
-      : `${counts}: the same, but ${fewest} a side can't rule out a difference of up to ${reach} points.${more}`
+      ? `${counts}: ${direction} by ${Math.round(gap * 100)} points, but on too few runs for the difference to hold.${also}${more}`
+      : `${counts}: the same, but ${fewest} a side can't rule out a difference of up to ${reach} points.${also}${more}`
   const edit = held
     ? `set runs: ${COMPARE_RUNS} or more, so a split this wide is less likely by chance`
     : !gap
@@ -352,7 +364,7 @@ function pooledTooFewTries(e: EvalResult, entry: EvalEntry, ctx: RemarkContext):
     : arm.effect === 'same'
       ? `it can't rule out a difference of up to ${reach} points`
       : "the difference doesn't hold"
-  const text = `The ${variant ? armOf(variant) : arm.key} variant${on}, pooled over ${arm.pairs} ${arm.pairs === 1 ? 'case' : 'cases'}: ${direction}, but ${why}.${more}`
+  const text = `The ${variant ? armOf(variant) : arm.key} variant${on}, pooled over ${arm.pairs} ${arm.pairs === 1 ? 'case' : 'cases'}: ${direction}, but ${why}.${shortLeans(arm.measures)}${more}`
   return [
     ...apart,
     {

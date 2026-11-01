@@ -72,10 +72,23 @@ export type Measure = {
    */
   needed: number | null
   unit: 'runs' | 'cases'
+  /**
+   * On a lean whose test can't reach its lean p at this sample at all (two runs a side, or three,
+   * for a rank test): the runs a side or cases (`unit`) it has (`now`) and the fewest at which it
+   * can (`at`). Null otherwise.
+   */
+  short: { now: number; at: number } | null
 }
 
 type Side = { pass: number; counted: number }
-type Wins = { variant: number; control: number; voted: number }
+/** Decisive pairs each side won, the pairs voted, and each side's votes (both orders of a pair). */
+type Wins = {
+  variant: number
+  control: number
+  voted: number
+  variantVotes: number
+  controlVotes: number
+}
 
 const LABEL_CHARS = 60
 
@@ -95,15 +108,42 @@ export const LEAN_P = 0.1
 export const QUESTION_LEAN_P = 0.2
 export const QUESTION_PAIRS_MIN = 4
 
-/** A lean below its measure's smallest effect, or at a p of `leanP` or more, is `same`. */
+/**
+ * A lean below its measure's smallest effect, or at a p of `leanP` or more, is `same`; unless a
+ * sample this size can't reach `leanP` at all (`floor`, the test's smallest p at these sizes, ties
+ * aside), when it stays a lean on too few runs, since its p says nothing.
+ */
 const screened = (
   verdict: MeasureVerdict,
   size: number,
   min: number,
   p: number | null,
+  floor: number,
   leanP = LEAN_P,
 ): MeasureVerdict =>
-  verdict === 'leans' && (size < min - 1e-9 || p === null || p >= leanP) ? 'same' : verdict
+  verdict === 'leans' && (size < min - 1e-9 || p === null || (p >= leanP && floor < leanP))
+    ? 'same'
+    : verdict
+
+/** On a lean its test can't reach `LEAN_P` on, the sample it has and the fewest that can. */
+const shortOf = (
+  verdict: MeasureVerdict,
+  floor: number,
+  now: number,
+  reaches: (n: number) => boolean,
+): Measure['short'] =>
+  verdict === 'leans' && floor >= LEAN_P ? { now, at: smallestFrom(now + 1, reaches) } : null
+
+/** `12× faster, but 3 runs a side can't confirm it; 4 is the least that can`: a lean's text. */
+export function leanText(m: Measure): string {
+  if (!m.short) return m.text
+  const { now, at } = m.short
+  const has =
+    m.unit === 'cases'
+      ? `${now} ${now === 1 ? 'case' : 'cases'}`
+      : `${now} ${now === 1 ? 'run' : 'runs'} a side`
+  return `${m.text}, but ${has} can't confirm it; ${at} is the least that can`
+}
 
 /** Two-sided p of a pooled two-proportion z test: it screens a rate's lean, never its verdict. */
 function proportionP(v: Side, c: Side): number {
@@ -140,11 +180,19 @@ function zOf(p: number): number {
   return (lo + hi) / 2
 }
 
-const smallest = (reaches: (n: number) => boolean) => {
-  let n = 1
+const smallestFrom = (from: number, reaches: (n: number) => boolean) => {
+  let n = from
   while (!reaches(n)) n++
   return n
 }
+const smallest = (reaches: (n: number) => boolean) => smallestFrom(1, reaches)
+/** Whether a sample of `n` a side (or `n` cases) can reach `LEAN_P` on each test. */
+const rankReaches = (n: number) => minimumP(n, n) < LEAN_P
+const signedReaches = (n: number) => 2 / 2 ** n < LEAN_P
+const rateFloor = (nv: number, nc: number) =>
+  proportionP({ pass: nv, counted: nv }, { pass: 0, counted: nc })
+/** A rate confirms only from `COMPARE_RUNS` a side, where lift's interval can hold. */
+const rateReaches = (n: number) => n >= COMPARE_RUNS && rateFloor(n, n) < LEAN_P
 
 /**
  * The sample at which a rank test's lean would hold at `EFFORT_ALPHA`: at a fixed effect a z grows
@@ -199,11 +247,13 @@ function rateMeasure(
   const holds = !containsZero(lo, hi) && Math.min(v.counted, c.counted) >= COMPARE_RUNS
   const way = vr > cr ? 'better' : 'worse'
   const p = proportionP(v, c)
+  const floor = rateFloor(v.counted, c.counted)
   const verdict = screened(
     vr === cr ? 'same' : holds ? way : 'leans',
     Math.abs(vr - cr),
     RATE_MIN,
     p,
+    floor,
   )
   const name = measure === 'pass' ? 'pass rate' : `"${clip(label ?? '', LABEL_CHARS)}"`
   const from = Math.max(v.counted, c.counted, COMPARE_RUNS - 1) + 1
@@ -226,6 +276,7 @@ function rateMeasure(
           ? runsToHold(vr, cr, from)
           : Math.max(from, COMPARE_RUNS),
     unit: 'runs',
+    short: shortOf(verdict, floor, Math.min(v.counted, c.counted), rateReaches),
   }
 }
 
@@ -295,6 +346,9 @@ function effortMeasures(input: Input, runs: number): Measure[] {
     const ratio = cm === 0 ? null : vm / cm
     let p: number
     let s: number
+    let floor: number
+    let now: number
+    let reaches: (n: number) => boolean
     let verdict: MeasureVerdict
     let needed: number | null = null
     let unit: 'runs' | 'cases' = 'runs'
@@ -309,6 +363,9 @@ function effortMeasures(input: Input, runs: number): Measure[] {
       const test = signedRank(cases.map(([a, b]) => a - b))
       s = test?.sign ?? 0
       p = test?.p ?? 1
+      now = cases.length
+      floor = Math.min(1, 2 / 2 ** now)
+      reaches = signedReaches
       verdict =
         metric.verdict === 'fewer'
           ? 'better'
@@ -325,6 +382,9 @@ function effortMeasures(input: Input, runs: number): Measure[] {
       const printed = effortVerdict(v, c).verdict
       s = test.sign
       p = test.p
+      floor = minimumP(v.length, c.length)
+      now = Math.min(v.length, c.length)
+      reaches = rankReaches
       verdict =
         printed === 'fewer' ? 'better' : printed === 'more' ? 'worse' : s === 0 ? 'same' : 'leans'
       if (verdict === 'leans') needed = scaled(p, runs, RANK_FLOOR)
@@ -337,6 +397,7 @@ function effortMeasures(input: Input, runs: number): Measure[] {
             ratio === null ? (vm === 0 ? 0 : Number.POSITIVE_INFINITY) : Math.abs(ratio - 1),
             EFFORT_MIN,
             p,
+            floor,
           )
     if (verdict !== 'leans') needed = null
     const fewer = s < 0
@@ -361,6 +422,7 @@ function effortMeasures(input: Input, runs: number): Measure[] {
           : `${shown === null ? '' : factor(shown, fewer)}${m.words(fewer)}`,
       needed,
       unit,
+      short: shortOf(verdict, floor, now, reaches),
     })
   }
   return out
@@ -404,7 +466,13 @@ function judgeMeasures(input: Input, runs: number): Measure[] {
     const test = ys && mannWhitney(xs, ys)
     if (!ys || !test) return []
     const diff = mean(xs) - mean(ys)
-    const verdict = screened(tested(test.p, test.sign, true), Math.abs(diff), JUDGE_MIN, test.p)
+    const verdict = screened(
+      tested(test.p, test.sign, true),
+      Math.abs(diff),
+      JUDGE_MIN,
+      test.p,
+      minimumP(xs.length, ys.length),
+    )
     const name = `judge "${clip(label, LABEL_CHARS)}"`
     return [
       {
@@ -422,6 +490,12 @@ function judgeMeasures(input: Input, runs: number): Measure[] {
           verdict === 'same' ? `same ${name}` : `${name} ${sign(diff)}${Math.abs(diff).toFixed(2)}`,
         needed: verdict === 'leans' ? scaled(test.p, runs, RANK_FLOOR) : null,
         unit: 'runs',
+        short: shortOf(
+          verdict,
+          minimumP(xs.length, ys.length),
+          Math.min(xs.length, ys.length),
+          rankReaches,
+        ),
       } satisfies Measure,
     ]
   })
@@ -438,10 +512,13 @@ function questionMeasures(input: Input, cases: number): Measure[] {
       decisive >= QUESTION_PAIRS_MIN ? Math.max(wins.variant, wins.control) / decisive : 0,
       QUESTION_MIN,
       p,
+      0,
       QUESTION_LEAN_P,
     )
     const name = `"${clip(question, LABEL_CHARS)}"`
     const lead = s > 0 ? 'the variant' : 'the baseline'
+    const votes = wins.variantVotes + wins.controlVotes
+    const pairs = `${Math.max(wins.variant, wins.control)} of ${decisive} decisive ${decisive === 1 ? 'pair' : 'pairs'}`
     return [
       {
         measure: 'question',
@@ -457,9 +534,10 @@ function questionMeasures(input: Input, cases: number): Measure[] {
         text:
           s === 0
             ? `${name} picked ${decisive ? 'each side as often' : 'neither'}`
-            : `${name} picked ${lead} ${Math.max(wins.variant, wins.control)} of ${decisive}`,
+            : `${name} picked ${lead} in ${s > 0 ? wins.variantVotes : wins.controlVotes} of ${votes} votes (${pairs})`,
         needed: verdict === 'leans' ? signRuns(wins, cases) : null,
         unit: 'runs',
+        short: null,
       },
     ]
   })
@@ -499,11 +577,25 @@ function questionWins(
         const forward = t.a === v.environment && t.b === c.environment
         const back = t.a === c.environment && t.b === v.environment
         if (!forward && !back) continue
-        const wins = out.get(answer.question) ?? { variant: 0, control: 0, voted: 0 }
+        const wins = out.get(answer.question) ?? {
+          variant: 0,
+          control: 0,
+          voted: 0,
+          variantVotes: 0,
+          controlVotes: 0,
+        }
         wins.variant += forward ? t.aWins : t.bWins
         wins.control += forward ? t.bWins : t.aWins
         wins.voted += t.pairs
         out.set(answer.question, wins)
+      }
+      for (const vote of answer.votes) {
+        const wins = out.get(answer.question)
+        if (!wins || vote.cut !== 'within' || vote.harness !== v.harness) continue
+        const sides = new Set([vote.a, vote.b])
+        if (!sides.has(v.environment) || !sides.has(c.environment)) continue
+        if (vote.winner === v.environment) wins.variantVotes++
+        else if (vote.winner === c.environment) wins.controlVotes++
       }
     }
   }
@@ -563,6 +655,7 @@ export function familyMeasures(cases: readonly EvalEntry[], lift: FamilyLift): M
     Math.abs(lift.points),
     RATE_MIN,
     lift.p,
+    0,
   )
   return measuresOf({
     variant: paired.map((e) => armOf(e, lift.variant)),
@@ -581,6 +674,7 @@ export function familyMeasures(cases: readonly EvalEntry[], lift: FamilyLift): M
       text: same ? 'same pass rate' : `pass rate ${pts(lift.points)}`,
       needed: null,
       unit: 'cases',
+      short: null,
     },
     questions: questionWins(
       paired.map((entry) => ({ entry, variant: lift.variant, control: lift.vs })),

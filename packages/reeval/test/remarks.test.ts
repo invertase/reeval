@@ -306,15 +306,17 @@ describe('remark thresholds', () => {
           {
             question: 'Which is clearer?',
             model: 'fake',
-            votes: winners.map((winner, i) => ({
-              cut: 'within' as const,
-              harness,
-              run: i + 1,
-              a: 'plain',
-              b: 'marked',
-              winner,
-              swapped: false,
-            })),
+            votes: winners.flatMap((winner, i) =>
+              [false, true].map((swapped) => ({
+                cut: 'within' as const,
+                harness,
+                run: i + 1,
+                a: 'plain',
+                b: 'marked',
+                winner,
+                swapped,
+              })),
+            ),
             rates: [],
           },
         ]
@@ -334,7 +336,7 @@ describe('remark thresholds', () => {
     )
     assert.equal(
       looks?.text,
-      'The marked variant and the baseline passed every run (16 of 16 and 16 of 16), but the variant looks different: "Which is clearer?" picked the variant 4 of 4; about 6 runs a side would confirm it.',
+      'The marked variant and the baseline passed every run (16 of 16 and 16 of 16), but the variant looks different: "Which is clearer?" picked the variant in 8 of 8 votes (4 of 4 decisive pairs); about 6 runs a side would confirm it.',
     )
     assert.equal(looks?.fix?.edit, 'set runs: 6, where the soonest of these would hold')
     assert.deepEqual(

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import { fakeConfig, project, runCli } from './helpers.ts'
 import { copyOut } from './support/examples.ts'
@@ -172,7 +174,20 @@ test('with-compare-questions, whose question picked the variant 4 of 4, names th
   assert.equal(run.code, 0, run.stdout + run.stderr)
   assert.match(
     run.stdout,
-    /but the variant looks different: (.+ and )?"Which divide\(\) says more clearly what went wrong when b is…" picked the variant 4 of 4; about \d+ runs a side would confirm it\./,
+    /but the variant looks different: (.+ and )?"Which divide\(\) says more clearly what went wrong when b is…" picked the variant in 8 of 8 votes \(4 of 4 decisive pairs\); about \d+ runs a side would confirm it\./,
   )
+  assert.match(run.stdout, / won 8 of 8$/m, 'the standings count the same votes')
   assert.doesNotMatch(run.stdout, /make the task harder/)
+})
+
+test('with-effort at runs: 3, too few for a rank test, still names its speedup', async () => {
+  const dir = await copyOut('with-effort')
+  const file = join(dir, 'with-effort.eval.ts')
+  writeFileSync(file, readFileSync(file, 'utf8').replace('runs: 4', 'runs: 3'))
+  const run = await runCli(dir, ['run', '--ui', 'plain'], { timeoutMs: 300_000 })
+  assert.equal(run.code, 0, run.stdout + run.stderr)
+  assert.match(
+    run.stdout,
+    /It looks (.+ and )?[\d.]+× faster, but 3 runs a side can't confirm it; 4 is the least that can\./,
+  )
 })

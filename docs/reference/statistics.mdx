@@ -33,6 +33,7 @@ When both sides pass every attempt, or both fail every attempt, on four runs a s
 | 2 of 2 against 0 of 2 | better by 100 points, on only 2 runs a side |
 | 1 of 1 against 1 of 1 | the same, but 1 run a side can't rule out a difference of up to 79 points |
 | 2 of 4 against 2 of 4 | the same, but 4 runs a side can't rule out a difference of up to 49 points |
+| 3 of 3 against 3 of 3, 12× faster | the same, but 3 runs a side can't rule out…; it looks 12× faster, but 3 runs a side can't confirm it; 4 is the least that can |
 | 4 of 4 against 4 of 4, some measure better or worse | none: the comparison is the result |
 | 4 of 4 against 4 of 4, some measure leans | `too-few-tries`: the variant looks different, and about N runs a side would confirm it |
 | 4 of 4 against 4 of 4, every measure the same | `cant-tell-apart`: both always pass, so make the task harder |
@@ -57,7 +58,7 @@ reeval compares each variant with its baseline on every measure the run has, eac
 |---|---|---|
 | Pass rate, and each check's own pass rate | Newcombe's interval, as lift: holds when it excludes zero with four counted attempts a side | `+25 pts` |
 | Each judge's scores | Mann-Whitney at p below 0.05 | the mean score's difference, `judge "tidy" +0.12` |
-| Each compare question's votes | exact sign test on the decisive pairs, at p below 0.05 | `picked the variant 6 of 6` |
+| Each compare question's votes | exact sign test on the decisive pairs, at p below 0.05 | `picked the variant in 12 of 12 votes (6 of 6 decisive pairs)`: votes count both orders of each pair, as the question's standings do |
 | Tool calls, agent time, tokens | the effort verdict above (paired by case in a family) | the medians' ratio, `5× faster`, `10× fewer tokens` |
 
 Each measure is `better` or `worse` when its test holds, at any size. A difference the test doesn't hold `leans` only when it reaches the measure's minimum effect and its test's p is below 0.1, or 0.2 for a compare question; anything weaker is `same`, so run-to-run noise doesn't read as a difference. A lean names the runs a side (or the cases) at which a difference that size would hold, at most 200.
@@ -69,7 +70,9 @@ Each measure is `better` or `worse` when its test holds, at any size. A differen
 | A compare question | 4 decisive pairs, 60% of them for one side | 0.2 |
 | Tool calls, agent time, tokens | 10% between the medians; agent times that both print `<0.1s` are the same | 0.1 |
 
-A compare question is asked deliberately, so a run has few pairs: its looser p lets a unanimous 4 of 4 (p 0.125) lean, while 3 of 3 or a single pair doesn't. With identical arms and no compare question, about 1 run in 10 still shows some measure leaning.
+A compare question is asked deliberately, so a run has few pairs: its looser p lets a unanimous 4 of 4 (p 0.125) lean, while 3 of 3 or a single pair doesn't.
+
+A sample too small for its test to reach that p at all never reads `same`: at three runs a side a rank test's smallest p is 0.1, so a 12× speedup leans, and reads "12× faster, but 3 runs a side can't confirm it; 4 is the least that can". A pass rate or check that the screen leaves `same` keeps its points in its text (`pass rate +100 pts`), as lift prints them. With identical arms and no compare question, about 1 run in 10 still shows some measure leaning.
 
 Each measure's test stands alone at p below 0.05, with no correction across measures, so a 10× speedup on four runs a side still reads `better`. The cost is chance results.
 

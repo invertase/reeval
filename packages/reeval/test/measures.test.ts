@@ -4,6 +4,7 @@ import type { EvalEntry } from '../src/history/types.ts'
 import {
   boundOf,
   cellMeasures,
+  leanText,
   type Measure,
   measuresLine,
   readMeasures,
@@ -33,15 +34,17 @@ const attempt = (cell: string, t: Try, i: number) => ({
   assertions: [],
 })
 
-const vote = (winner: string, i: number) => ({
-  cut: 'within',
-  harness: 'fake',
-  run: i + 1,
-  a: 'plain',
-  b: 'marked',
-  winner,
-  swapped: false,
-})
+/** A pair's two votes, one in each order. */
+const vote = (winner: string, i: number) =>
+  [false, true].map((swapped) => ({
+    cut: 'within',
+    harness: 'fake',
+    run: i + 1,
+    a: 'plain',
+    b: 'marked',
+    winner,
+    swapped,
+  }))
 
 /** One entry: `marked` (the variant) against `plain`, with each side's tries and a question's winners. */
 function entry(
@@ -79,7 +82,14 @@ function entry(
       ...control.map((t, i) => attempt('plain', t, i)),
     ],
     answers: opts.winners
-      ? [{ question: 'Which is clearer?', model: 'fake', votes: opts.winners.map(vote), rates: [] }]
+      ? [
+          {
+            question: 'Which is clearer?',
+            model: 'fake',
+            votes: opts.winners.flatMap(vote),
+            rates: [],
+          },
+        ]
       : [],
   } as unknown as EvalEntry
 }
@@ -178,7 +188,10 @@ describe('one comparison over every measure', () => {
       )
     const faint = asked([...times(5, 'marked'), ...times(4, 'plain')])
     assert.equal(faint.verdict, 'same', '5 of 9 decisive is under 60/40')
-    assert.equal(faint.text, '"Which is clearer?" picked the variant 5 of 9')
+    assert.equal(
+      faint.text,
+      '"Which is clearer?" picked the variant in 10 of 18 votes (5 of 9 decisive pairs)',
+    )
     assert.equal(asked(times(4, 'marked')).verdict, 'leans', '4 of 4: enough pairs, p 0.125')
     assert.equal(asked(times(3, 'marked')).verdict, 'same', '3 decisive pairs are fewer than 4')
     assert.equal(
@@ -188,7 +201,10 @@ describe('one comparison over every measure', () => {
     )
     const single = asked(['marked'])
     assert.equal(single.verdict, 'same', 'one decisive pair is fewer than 4')
-    assert.equal(single.text, '"Which is clearer?" picked the variant 1 of 1')
+    assert.equal(
+      single.text,
+      '"Which is clearer?" picked the variant in 2 of 2 votes (1 of 1 decisive pair)',
+    )
     const checked = (pass: number) =>
       of(
         cellMeasures(
@@ -220,14 +236,17 @@ describe('one comparison over every measure', () => {
       )
     const held = asked(times(8, 'marked'))
     assert.equal(held.verdict, 'better')
-    assert.equal(held.text, '"Which is clearer?" picked the variant 8 of 8')
+    assert.equal(
+      held.text,
+      '"Which is clearer?" picked the variant in 16 of 16 votes (8 of 8 decisive pairs)',
+    )
     assert.equal(asked(times(3, 'marked')).verdict, 'same', '3 decisive pairs are fewer than 4')
     const four = asked(times(4, 'marked'))
     assert.equal(four.verdict, 'leans', '4 of 4 is p 0.125, under 0.2')
     assert.equal(four.needed, 6, 'the fewest runs at which 6 of 6 decisive pairs hold (p 0.031)')
     assert.equal(
       asked(['plain', 'plain', 'plain']).text,
-      '"Which is clearer?" picked the baseline 3 of 3',
+      '"Which is clearer?" picked the baseline in 6 of 6 votes (3 of 3 decisive pairs)',
     )
     assert.equal(asked(['plain', 'marked', 'tie']).verdict, 'same')
     assert.equal(asked(['tie', 'tie']).text, '"Which is clearer?" picked neither')
@@ -274,6 +293,45 @@ describe('one comparison over every measure', () => {
     const held = cellMeasures(entry(times(4, {}), times(4, { pass: false })), 'marked', 'plain')
     assert.equal(of(held, 'pass').verdict, 'better')
     assert.equal(readMeasures(held ?? []).told, 'same', 'the reading leaves pass rate out')
+  })
+
+  test('a difference too few runs can test is short of runs, never the same', () => {
+    const fast = [50, 55, 60].map((ms) => ({ ms: ms * 10 }))
+    const slow = [600, 650, 700].map((ms) => ({ ms: ms * 10 }))
+    const time = of(cellMeasures(entry(fast, slow), 'marked', 'plain'), 'agentMs')
+    assert.equal(time.verdict, 'leans', '3 a side: a rank test can reach no p below 0.1')
+    assert.deepEqual(time.short, { now: 3, at: 4 })
+    assert.equal(
+      leanText(time),
+      "12× faster, but 3 runs a side can't confirm it; 4 is the least that can",
+    )
+    const scored = (xs: number[]) => xs.map((score) => ({ score }))
+    const judge = of(
+      cellMeasures(entry(scored([0.9, 0.9, 0.9]), scored([0.4, 0.4, 0.4])), 'marked', 'plain'),
+      'judge',
+    )
+    assert.notEqual(judge.verdict, 'same', 'judge 0.9 against 0.4 at 3 a side')
+    assert.deepEqual(judge.short, { now: 3, at: 4 })
+    const reading = tieOf('pass', cellMeasures(entry(fast, slow), 'marked', 'plain'))
+    assert.ok(
+      reading && reading !== 'tie' && reading.told === 'leans',
+      'a ceiling it shows on is no tie',
+    )
+    const wide = cellMeasures(
+      entry(
+        [700, 800, 1100, 1200].map((ms) => ({ ms })),
+        [1000, 1050, 1100, 1150].map((ms) => ({ ms })),
+      ),
+      'marked',
+      'plain',
+    )
+    assert.equal(of(wide, 'agentMs').short, null, '4 a side can reach 0.1, so p 0.49 is the same')
+    const one = cellMeasures(entry([{}], [{ pass: false }]), 'marked', 'plain')
+    assert.deepEqual(
+      of(one, 'pass').short,
+      { now: 1, at: 4 },
+      '1 against 0 can reach no p below 0.1, and a rate holds from 4 a side',
+    )
   })
 
   test('agent times that both print <0.1s are the same, whatever their test says', () => {
