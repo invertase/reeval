@@ -28,10 +28,11 @@ one profile you need.
 **What to look at:** only the tagged eval runs:
 
 ```text
-plan  run … · 1 eval · 1 cell · 1 attempt · ~1s serial
+…
+  ➜  Scope:     1 eval file · 1 eval · 1 cell · 1 attempt
 …
 with-tags.eval.ts
-  ✓ adds multiply  1 of 1 run passed
+└─ ✓ adds multiply  1 of 1 run passed
 
 Done in 1s · 1 passed
 ```

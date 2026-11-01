@@ -28,19 +28,28 @@ one profile you need.
 **What to look at:** the plan's estimate and the wall time, at four and then at one:
 
 ```text
-plan  run … · 1 eval · 1 cell · 8 attempts · ~8s serial (~2s at concurrency 4)
-…
-with-concurrency.eval.ts
-  ✓ adds a tested multiply function  8 of 8 runs passed
+REEVAL v0.17.2
 
-Done in 6s · 1 passed
+  ➜  Run:       20261101T221836Z_…
+  ➜  Harness:   fake
+  ➜  Sandbox:   fake
+  ➜  Scope:     1 eval file · 1 eval · 1 cell · 8 attempts
+  ➜  Est. Time: ~4s (concurrency: 4) · ~17s (serial)
+  ➜  Record:    .reeval/runs/20261101T221836Z_….json
+
+  ◆  Running...
+
+with-concurrency.eval.ts
+└─ ✓ adds a tested multiply function  8 of 8 runs passed
+
+Done in 7s · 1 passed
 ```
 
 ```text
 $ pnpm reeval run --concurrency 1
 …
 with-concurrency.eval.ts
-  ✓ adds a tested multiply function  8 of 8 runs passed
+└─ ✓ adds a tested multiply function  8 of 8 runs passed
 
 Done in 18s · 1 passed
 ```

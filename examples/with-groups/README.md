@@ -42,10 +42,10 @@ The run's status list ends:
 
 ```text
 with-groups.eval.ts
-  ✓ math › adds multiply  2 of 2 runs passed
-  ✓ math › adds subtract  1 of 1 run passed
-  – math › adds divide    skipped
-  – math › adds power     todo
+├─ ✓ math › adds multiply  2 of 2 runs passed
+├─ ✓ math › adds subtract  1 of 1 run passed
+├─ – math › adds divide    skipped
+└─ – math › adds power     todo
 
 Done in 1s · 2 passed · 2 skipped
 ```
