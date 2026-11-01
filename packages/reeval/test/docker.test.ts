@@ -221,7 +221,7 @@ evaluate('stays unprivileged', async (c) => {
         'running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))'
       const warned = (stdout: string, run: RunRecord, summary: string) => {
         const lines = stdout.split('\n')
-        const at = lines.indexOf(`WARNING: ${message}`)
+        const at = lines.indexOf(`  ⚠  Warning: ${message}`)
         assert.ok(at >= 0, `no root warning in:\n${stdout}`)
         assert.ok(
           at < lines.findIndex((l) => l.includes('▶')),

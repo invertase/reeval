@@ -2889,7 +2889,7 @@ export type SandboxWarning = {
   file: string | null
   /** The capabilities added back, for `capabilities`. */
   capabilities?: string[]
-  /** The line reeval prints, after `WARNING: ` (root) or `warning: ` (capabilities). */
+  /** The line reeval prints after `⚠  Warning:`, in red for root and orange for capabilities. */
   message: string
 }
 
