@@ -176,8 +176,8 @@ container as the same user, which suits AX evals but isn't a sealed verifier.
   and a read doesn't. Strings are globs (a directory matches everything under it), RegExps work,
   and a turn means up to that turn. `toHaveEdited` counts the files that changed while the agent
   ran the turn (a turn only its own), so a shell write counts, but its string matches any path
-  containing it; guard with `toHaveChanged`'s globs. Both follow the environment's `.gitignore`:
-  check a shell write to an ignored path (`.env`, `dist/`) with `toHaveFile`.
+  containing it; guard with `toHaveChanged`'s globs. `toHaveEdited()` counts files that appear
+  in the workspace diff. Gitignored files don't appear there, so use `toHaveFile()` to check them.
 - Checks don't stop the eval: a failed `expect` is recorded and the body carries on, so every
   later check and judge still runs; the attempt fails at its end. Use `expect.require` for gates:
   its failure ends the body there (`await expect.require(c.exec('npm run build'), 'builds')

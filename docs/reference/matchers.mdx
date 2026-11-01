@@ -142,7 +142,7 @@ The assertion passes when at least one changed file matches one of the patterns.
     expect(turn, 'edited the test').toHaveEdited('src/user.test.ts')
 ```
 
-The workspace files follow the environment's `.gitignore`, as `toHaveChanged` does: a shell write to an ignored path such as `.env` or `dist/` isn't seen, so check it with `toHaveFile`. A rename counts both paths, and a deletion or `chmod` counts. A file changed back within the turn doesn't, and a `c.exec` running alongside `c.send` counts as the turn's.
+`toHaveEdited()` counts files that appear in the workspace diff. Gitignored files don't appear there, so use `toHaveFile()` to check them. A rename counts both paths, and a deletion or `chmod` counts. A file changed back within the turn doesn't, and a `c.exec` running alongside `c.send` counts as the turn's.
 
 <Property name="path" type="string | RegExp" optional>
   Text the edited path contains, or a regular expression it matches. Without a path, any `file-edit` event or changed file passes.

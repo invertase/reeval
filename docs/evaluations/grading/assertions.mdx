@@ -49,7 +49,7 @@ For more information about `c.exec`, see [the `c.exec` method](/reference/attemp
 
 ## Check what the agent did
 
-`toHaveEdited` checks files the agent edited, with its edit tools or from the shell. `toHaveRun` checks shell commands the harness ran. Pass `c` or the turn that `c.send` returns:
+`toHaveEdited` checks files the agent edited, with its edit tools or from the shell. It counts files that appear in the workspace diff; gitignored files don't appear there, so use `toHaveFile()` to check them. `toHaveRun` checks shell commands the harness ran. Pass `c` or the turn that `c.send` returns:
 
 ```ts title="with-transcript-matchers.eval.ts"
 expect(turn, 'edited math.js').toHaveEdited('src/math.js')

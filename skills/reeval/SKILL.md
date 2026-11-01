@@ -237,7 +237,9 @@ group('hello', () => {
   `toHaveFetched(url?)`. `toHaveEdited` counts edit tools' events and the files that changed
   while the agent ran the turn, so a shell write counts and a read doesn't. Guard files with
   `expect(c).not.toHaveChanged(globs)`: its globs are exact, while `toHaveEdited`'s string
-  matches any path containing it. Label requirements with
+  matches any path containing it. `toHaveEdited()` counts files that appear in the workspace
+  diff. Gitignored files don't appear there, so use `toHaveFile()` to check them. Label
+  requirements with
   `expect`'s second argument: `await expect(c, 'exports greet').toHaveFile('greet.js', /export/)`.
 - Checks don't stop the eval: a failed `expect` is recorded, the body carries on, and the attempt
   fails at its end, with every failed check listed by label and line. Use `expect.require` for
